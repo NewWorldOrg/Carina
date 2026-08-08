@@ -1,0 +1,58 @@
+services:
+  app:
+    image: mcr.microsoft.com/dotnet/sdk:10.0
+    working_dir: /code
+    volumes:
+      - .:/code
+      - nuget:/root/.nuget/packages
+      - driver-run:/run/carina
+    tty: true
+    ports:
+      - 8080:8080
+    environment:
+      ASPNETCORE_URLS: http://0.0.0.0:8080
+      # Configuration is read once at startup; nothing reloads it in place.
+      DOTNET_hostBuilder__reloadConfigOnChange: 'false'
+      ConnectionStrings__Carina: Host=db;Port=5432;Database=carina;Username=carina;Password=${POSTGRES_PASSWORD:-carina}
+      CARINA_DB_CONNECTION: Host=db;Port=5432;Database=carina;Username=carina;Password=${POSTGRES_PASSWORD:-carina}
+      CARINA_DRIVER_SOCKET: /run/carina/driver.sock
+    depends_on:
+      db:
+        condition: service_healthy
+
+  # No tuner device is mapped: development runs against the synthetic backend.
+  # The grace period has to stay longer than the driver's recording linger cap,
+  # otherwise stopping the container kills a recording that was about to finish.
+  driver:
+    image: mcr.microsoft.com/dotnet/sdk:10.0
+    working_dir: /code
+    volumes:
+      - .:/code
+      - nuget:/root/.nuget/packages
+      - driver-run:/run/carina
+    tty: true
+    stop_grace_period: 30s
+    environment:
+      CARINA_DRIVER_SOCKET: /run/carina/driver.sock
+      DOTNET_hostBuilder__reloadConfigOnChange: 'false'
+
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: carina
+      POSTGRES_USER: carina
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-carina}
+    ports:
+      - 5432:5432
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U carina -d carina']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  nuget:
+  driver-run:
+  pgdata:

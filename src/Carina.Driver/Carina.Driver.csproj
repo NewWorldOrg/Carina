@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!--
+    Privileged, self-contained process. It may only reference Carina.Contracts:
+    referencing the app's layers would couple the two release streams together.
+    Enforced by Carina.Architecture.Tests.
+  -->
+
+  <ItemGroup>
+    <ProjectReference Include="../Carina.Contracts/Carina.Contracts.csproj" />
+  </ItemGroup>
+
+</Project>

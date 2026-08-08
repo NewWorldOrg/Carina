@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Carina.Domain/Carina.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Migration-only entry point. Nothing references this project: it is a leaf that
+    the deployment runs on its own. Enforced by Carina.Architecture.Tests.
+  -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Carina.Infrastructure/Carina.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>none</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+</Project>

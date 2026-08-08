@@ -1,0 +1,33 @@
+# Build output
+bin/
+obj/
+artifacts/
+[Dd]ebug/
+[Rr]elease/
+*.user
+*.suo
+
+# Test output
+TestResults/
+*.trx
+coverage*.json
+coverage*.xml
+coverage*.info
+
+# Editors
+.vs/
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Claude Code
+CLAUDE.local.md

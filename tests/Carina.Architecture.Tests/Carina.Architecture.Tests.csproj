@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Deliberately references no production project: the rules are checked against the
+    project files themselves, so that a reference which is declared but not yet used
+    is still caught.
+  -->
+
+</Project>

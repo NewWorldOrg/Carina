@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The only artifact shared between the driver and the app process.
+    It must stay free of project references so that the two processes can be
+    built, tagged and deployed independently of each other.
+  -->
+
+</Project>

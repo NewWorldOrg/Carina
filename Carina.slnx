@@ -1,0 +1,21 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Carina.Api/Carina.Api.csproj" />
+    <Project Path="src/Carina.Broadcast/Carina.Broadcast.csproj" />
+    <Project Path="src/Carina.Contracts/Carina.Contracts.csproj" />
+    <Project Path="src/Carina.Db/Carina.Db.csproj" />
+    <Project Path="src/Carina.Domain/Carina.Domain.csproj" />
+    <Project Path="src/Carina.Driver/Carina.Driver.csproj" />
+    <Project Path="src/Carina.Infrastructure/Carina.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Carina.Api.Tests/Carina.Api.Tests.csproj" />
+    <Project Path="tests/Carina.Architecture.Tests/Carina.Architecture.Tests.csproj" />
+    <Project Path="tests/Carina.Broadcast.Tests/Carina.Broadcast.Tests.csproj" />
+    <Project Path="tests/Carina.Contracts.Tests/Carina.Contracts.Tests.csproj" />
+    <Project Path="tests/Carina.Db.Tests/Carina.Db.Tests.csproj" />
+    <Project Path="tests/Carina.Domain.Tests/Carina.Domain.Tests.csproj" />
+    <Project Path="tests/Carina.Driver.Tests/Carina.Driver.Tests.csproj" />
+    <Project Path="tests/Carina.Infrastructure.Tests/Carina.Infrastructure.Tests.csproj" />
+  </Folder>
+</Solution>
