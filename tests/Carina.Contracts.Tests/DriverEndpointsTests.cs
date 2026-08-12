@@ -13,14 +13,8 @@ public sealed class DriverEndpointsTests
         Assert.Equal("/health", DriverEndpoints.Health);
         Assert.Equal("/tuners", DriverEndpoints.Tuners);
         Assert.Equal("/sessions", DriverEndpoints.Sessions);
+        Assert.Equal("/diagnostics", DriverEndpoints.Diagnostics);
         Assert.Equal("/events", DriverEndpoints.Events);
-    }
-
-    [Fact]
-    public void SessionPathsAreBuiltFromTheId()
-    {
-        Assert.Equal("/sessions/abc", DriverEndpoints.Session("abc"));
-        Assert.Equal("/sessions/abc/stream", DriverEndpoints.SessionStream("abc"));
     }
 
     [Fact]

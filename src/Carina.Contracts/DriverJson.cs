@@ -33,7 +33,6 @@ public static class DriverJson
 /// <summary>Generated serialisation metadata for every message on the driver socket.</summary>
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
-    UseStringEnumConverter = true,
     // A member left out of the JSON keeps its default; a null stays visible so that
     // "no session" and "field not sent by this driver" do not read the same.
     DefaultIgnoreCondition = JsonIgnoreCondition.Never
@@ -43,6 +42,13 @@ public static class DriverJson
 [JsonSerializable(typeof(TuningRequest))]
 [JsonSerializable(typeof(SessionSnapshot))]
 [JsonSerializable(typeof(TunerSnapshot))]
+[JsonSerializable(typeof(DiagnosticSnapshot))]
 [JsonSerializable(typeof(IReadOnlyList<SessionSnapshot>))]
 [JsonSerializable(typeof(IReadOnlyList<TunerSnapshot>))]
+[JsonSerializable(typeof(IReadOnlyList<DiagnosticSnapshot>))]
+[JsonSerializable(typeof(SessionPurpose))]
+[JsonSerializable(typeof(TunerKind))]
+[JsonSerializable(typeof(TunerState))]
+[JsonSerializable(typeof(SessionState))]
+[JsonSerializable(typeof(DiagnosticReason))]
 public sealed partial class DriverJsonContext : JsonSerializerContext;

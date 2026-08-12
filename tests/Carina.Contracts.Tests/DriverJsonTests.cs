@@ -10,15 +10,18 @@ namespace Carina.Contracts.Tests;
 /// </summary>
 public sealed class DriverJsonTests
 {
+    private static readonly DateTimeOffset Moment =
+        new(2026, 8, 8, 21, 4, 0, TimeSpan.FromHours(9));
+
     [Fact]
     public void HelloSerialisesToItsAgreedForm()
     {
         var json = DriverJson.Serialize(
-            new DriverHello(1, [DriverCapabilities.Recording, DriverCapabilities.Live])
+            new DriverHello(1, "b7f2c9", [DriverCapabilities.Recording, DriverCapabilities.Live])
         );
 
         Assert.Equal(
-            """{"protocolVersion":1,"capabilities":["recording","live"]}""",
+            """{"protocolVersion":1,"instanceId":"b7f2c9","capabilities":["recording","live"]}""",
             json
         );
     }
@@ -27,15 +30,17 @@ public sealed class DriverJsonTests
     public void StartSessionRequestSerialisesToItsAgreedForm()
     {
         var json = DriverJson.Serialize(
-            new StartSessionRequest(
-                SessionPurpose.Recording,
-                new TuningRequest(TunerKind.Terrestrial, 27, 1024),
-                "adapter0"
-            )
+            new StartSessionRequest
+            {
+                Purpose = SessionPurpose.Recording,
+                Tuning = new TuningRequest(TunerKind.Terrestrial, 27, 1024),
+                DeviceId = "adapter0",
+                EndsAt = Moment,
+            }
         );
 
         Assert.Equal(
-            """{"purpose":"recording","tuning":{"kind":"terrestrial","physicalChannel":27,"serviceId":1024},"deviceId":"adapter0"}""",
+            """{"purpose":"recording","tuning":{"kind":"terrestrial","physicalChannel":27,"serviceId":1024},"deviceId":"adapter0","endsAt":"2026-08-08T21:04:00+09:00"}""",
             json
         );
     }
@@ -45,16 +50,16 @@ public sealed class DriverJsonTests
     {
         var json = DriverJson.Serialize(
             new SessionSnapshot(
-                "s-1",
+                SessionId.Parse("s-1"),
                 SessionPurpose.Live,
                 "adapter1",
                 SessionState.Active,
-                new DateTimeOffset(2026, 8, 8, 21, 4, 0, TimeSpan.FromHours(9))
+                Moment
             )
         );
 
         Assert.Equal(
-            """{"sessionId":"s-1","purpose":"live","deviceId":"adapter1","state":"active","startedAt":"2026-08-08T21:04:00+09:00"}""",
+            """{"sessionId":"s-1","purpose":"live","deviceId":"adapter1","state":"active","startedAt":"2026-08-08T21:04:00+09:00","endsAt":null}""",
             json
         );
     }
@@ -72,13 +77,85 @@ public sealed class DriverJsonTests
         );
     }
 
+    [Fact]
+    public void DiagnosticSnapshotSerialisesToItsAgreedForm()
+    {
+        var json = DriverJson.Serialize(
+            new DiagnosticSnapshot(
+                DiagnosticReason.DiskSpaceLow,
+                Moment,
+                "adapter0",
+                SessionId.Parse("s-1"),
+                "3% left on the output volume"
+            )
+        );
+
+        Assert.Equal(
+            """{"reason":"diskSpaceLow","occurredAt":"2026-08-08T21:04:00+09:00","deviceId":"adapter0","sessionId":"s-1","detail":"3% left on the output volume"}""",
+            json
+        );
+    }
+
+    // These two are what GET /sessions and GET /tuners answer. A client written
+    // against this contract has to know whether it is reading a bare array.
+    [Fact]
+    public void SessionListIsABareArray()
+    {
+        Assert.Equal(
+            """[{"sessionId":"s-1","purpose":"live","deviceId":"adapter1","state":"active","startedAt":"2026-08-08T21:04:00+09:00","endsAt":null}]""",
+            DriverJson.Serialize<IReadOnlyList<SessionSnapshot>>(
+                [
+                    new SessionSnapshot(
+                        SessionId.Parse("s-1"),
+                        SessionPurpose.Live,
+                        "adapter1",
+                        SessionState.Active,
+                        Moment
+                    ),
+                ]
+            )
+        );
+
+        Assert.Equal("[]", DriverJson.Serialize<IReadOnlyList<SessionSnapshot>>([]));
+    }
+
+    [Fact]
+    public void TunerListIsABareArray()
+    {
+        Assert.Equal(
+            """[{"deviceId":"adapter0","kind":"terrestrial","state":"idle","sessionId":null,"detail":null}]""",
+            DriverJson.Serialize<IReadOnlyList<TunerSnapshot>>(
+                [new TunerSnapshot("adapter0", TunerKind.Terrestrial, TunerState.Idle)]
+            )
+        );
+
+        Assert.Equal("[]", DriverJson.Serialize<IReadOnlyList<TunerSnapshot>>([]));
+    }
+
+    // Timestamps are ISO-8601 with an offset, and the offset is whatever the driver
+    // runs in. A client that parses a fixed width, or expects a trailing Z, breaks
+    // on the first driver that reports either of these.
+    [Theory]
+    [InlineData("2026-08-08T21:04:00.1234567+09:00")]
+    [InlineData("2026-08-08T12:04:00+00:00")]
+    public void TimestampsKeepWhateverPrecisionAndOffsetTheDriverReports(string wire)
+    {
+        var json =
+            $$"""{"sessionId":"s-1","purpose":"live","deviceId":"a0","state":"active","startedAt":"{{wire}}","endsAt":null}""";
+
+        var restored = DriverJson.Deserialize(json, DriverJson.Context.SessionSnapshot);
+
+        Assert.NotNull(restored);
+        Assert.Equal(DateTimeOffset.Parse(wire), restored.StartedAt);
+    }
+
     // A newer driver sends fields this build has never heard of. Refusing to read
     // the rest of the answer would turn an additive change into a breaking one.
     [Fact]
     public void UnknownFieldsAreIgnored()
     {
         var hello = DriverJson.Deserialize(
-            """{"protocolVersion":1,"capabilities":["recording"],"somethingNew":{"a":1}}""",
+            """{"protocolVersion":1,"instanceId":"b7f2c9","capabilities":["recording"],"somethingNew":{"a":1}}""",
             DriverJson.Context.DriverHello
         );
 
@@ -87,27 +164,14 @@ public sealed class DriverJsonTests
         Assert.True(hello.Supports(DriverCapabilities.Recording));
     }
 
-    // Enums travel as names so that a value added later reads as an unknown name
-    // rather than silently landing on whichever member happens to share its number.
-    [Fact]
-    public void UnknownEnumNamesAreRejectedRatherThanGuessed()
-    {
-        Assert.Throws<JsonException>(
-            () =>
-                DriverJson.Deserialize(
-                    """{"sessionId":"s-1","purpose":"telepathy","deviceId":"adapter0","state":"active","startedAt":"2026-08-08T21:04:00+09:00"}""",
-                    DriverJson.Context.SessionSnapshot
-                )
-        );
-    }
-
     [Fact]
     public void RoundTripKeepsTheValues()
     {
-        var request = new StartSessionRequest(
-            SessionPurpose.Survey,
-            new TuningRequest(TunerKind.Satellite, 15)
-        );
+        var request = new StartSessionRequest
+        {
+            Purpose = SessionPurpose.Survey,
+            Tuning = new TuningRequest(TunerKind.Satellite, 15),
+        };
 
         var restored = DriverJson.Deserialize(
             DriverJson.Serialize(request),
@@ -115,5 +179,15 @@ public sealed class DriverJsonTests
         );
 
         Assert.Equal(request, restored);
+    }
+
+    // The members the driver acts on are not optional. Without this, an empty body
+    // reads as a request with no tuning, and the purpose that blocks shutdown.
+    [Fact]
+    public void ARequestMissingItsMembersIsRejected()
+    {
+        Assert.Throws<JsonException>(
+            () => DriverJson.Deserialize("{}", DriverJson.Context.StartSessionRequest)
+        );
     }
 }

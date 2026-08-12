@@ -8,7 +8,7 @@ namespace Carina.Contracts.Tests;
 public sealed class DriverHelloTests
 {
     private static DriverHello Hello(params string[] capabilities) =>
-        new(DriverProtocol.Version, capabilities);
+        new(DriverProtocol.Version, "b7f2c9", capabilities);
 
     [Fact]
     public void ReportedCapabilitiesAreSupported()
@@ -36,6 +36,6 @@ public sealed class DriverHelloTests
     [Fact]
     public void CapabilitiesAreNeverNull()
     {
-        Assert.Empty(new DriverHello(DriverProtocol.Version, null!).Capabilities);
+        Assert.Empty(new DriverHello(DriverProtocol.Version, "b7f2c9", null!).Capabilities);
     }
 }
