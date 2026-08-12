@@ -8,6 +8,12 @@ namespace Carina.Contracts.Tests;
 /// where it is a deliberate edit, rather than in production against a driver that
 /// was built months earlier.
 /// </summary>
+/// <remarks>
+/// The key order is whatever the records produce — `deviceId` sits last because it
+/// is redeclared in the record body to normalise null. JSON objects are unordered,
+/// so nothing depends on it; if the redeclaration goes, these strings move with it
+/// and that is not a contract change.
+/// </remarks>
 public sealed class DriverJsonTests
 {
     private static readonly DateTimeOffset Moment =

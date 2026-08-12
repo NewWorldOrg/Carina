@@ -59,7 +59,7 @@ public abstract class TolerantEnumConverter<TEnum> : JsonConverter<TEnum>
                 if (!reader.TrySkip())
                 {
                     throw new JsonException(
-                        $"Expected a name for {typeof(TEnum).Name}, got {reader.TokenType}."
+                        $"A structured value for {typeof(TEnum).Name} could not be consumed within one buffer."
                     );
                 }
 

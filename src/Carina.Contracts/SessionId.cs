@@ -94,7 +94,9 @@ public sealed class SessionIdJsonConverter : JsonConverter<SessionId>
             && !reader.TrySkip()
         )
         {
-            throw new JsonException("Expected a session id, got a structure.");
+            throw new JsonException(
+                "A structured session id could not be consumed within one buffer."
+            );
         }
 
         return default;

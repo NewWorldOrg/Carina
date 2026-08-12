@@ -52,6 +52,17 @@ public sealed class StartSessionRequestTests
         );
     }
 
+    // Both ends of the bound, so that widening the check to reject everything
+    // outside a narrower band cannot pass by rejecting more than it should.
+    [Theory]
+    [InlineData(1)]
+    [InlineData(27)]
+    [InlineData(255)]
+    public void APhysicalChannelInsideTheBoundIsAccepted(int channel)
+    {
+        Assert.Empty(Request(physicalChannel: channel).Validate(Now));
+    }
+
     // The name reaches the privileged process, so it is constrained the same way a
     // session id is rather than trusted to be used only as a lookup key.
     [Theory]
