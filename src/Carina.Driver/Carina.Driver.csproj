@@ -6,6 +6,15 @@
     Enforced by Carina.Architecture.Tests.
   -->
 
+  <!--
+    The driver is meant to be published ahead of time. The analysers are on from the
+    first commit so that a reflective call fails the build on the day it is written,
+    rather than at publish time long after the design ruled reflection out.
+  -->
+  <PropertyGroup>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="../Carina.Contracts/Carina.Contracts.csproj" />
   </ItemGroup>

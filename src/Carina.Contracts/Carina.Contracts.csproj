@@ -4,6 +4,13 @@
     The only artifact shared between the driver and the app process.
     It must stay free of project references so that the two processes can be
     built, tagged and deployed independently of each other.
+
+    It is compiled into the driver, which is published ahead of time, so the same
+    analysers apply here: the hand-written wire spellings exist precisely because
+    nothing in this assembly may read type metadata at runtime.
   -->
+  <PropertyGroup>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
 
 </Project>

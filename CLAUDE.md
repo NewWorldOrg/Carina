@@ -99,8 +99,9 @@ GitHub Actions runs build, test and format verification on push and pull request
 
 ## UI Hostname
 
-This repository serves the API only, published at http://localhost:8080 in
-development. The web frontend lives in its own repository and consumes the OpenAPI
+This repository serves the API only. In development the container listens on port
+8080 and compose publishes it on host port 8081; `API_PORT` overrides the host
+side. The web frontend lives in its own repository and consumes the OpenAPI
 document generated here.
 
 ## Implementation Phases
