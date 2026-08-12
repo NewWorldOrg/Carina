@@ -126,12 +126,19 @@ public sealed record TuningRequest(TunerKind Kind, int PhysicalChannel, int? Ser
 /// </summary>
 public sealed record StartSessionRequest
 {
-    /// <summary>The lowest and highest physical channel any Japanese terrestrial or satellite plan uses.</summary>
-    private const int MinPhysicalChannel = 1;
-    private const int MaxPhysicalChannel = 62;
+    /// <summary>UHF carries the terrestrial plan.</summary>
+    private const int MinTerrestrialChannel = 13;
+    private const int MaxTerrestrialChannel = 62;
+
+    /// <summary>The satellite plans are numbered from one, per band.</summary>
+    private const int MinSatelliteChannel = 1;
+    private const int MaxSatelliteChannel = 24;
 
     /// <summary>Service ids are 16 bit on the wire.</summary>
     private const int MaxServiceId = 65535;
+
+    /// <summary>The longest device name the driver's configuration can hold.</summary>
+    private const int MaxDeviceIdLength = 64;
 
     /// <summary>What the session is for.</summary>
     public required SessionPurpose Purpose { get; init; }
@@ -152,8 +159,14 @@ public sealed record StartSessionRequest
     /// </remarks>
     public DateTimeOffset? EndsAt { get; init; }
 
-    /// <summary>Everything wrong with this request, in the order the fields are declared.</summary>
-    public IReadOnlyList<string> Validate()
+    /// <summary>
+    /// Everything wrong with this request, in the order the fields are declared.
+    /// </summary>
+    /// <param name="now">
+    /// The driver's clock, passed in rather than read here so that the check is the
+    /// same one every time it runs.
+    /// </param>
+    public IReadOnlyList<string> Validate(DateTimeOffset now)
     {
         var problems = new List<string>();
 
@@ -162,22 +175,32 @@ public sealed record StartSessionRequest
             problems.Add("purpose: missing, or a value this driver does not know.");
         }
 
+        if (DeviceId is not null && !IsUsableDeviceName(DeviceId))
+        {
+            problems.Add(
+                $"deviceId: expected 1 to {MaxDeviceIdLength} characters of A-Z, a-z, 0-9, '-', '_' or '.'; got '{DeviceId}'."
+            );
+        }
+
         if (Tuning is null)
         {
             problems.Add("tuning: missing.");
             return problems;
         }
 
-        if (Tuning.Kind is TunerKind.Unspecified)
+        switch (Tuning.Kind)
         {
-            problems.Add("tuning.kind: missing, or a value this driver does not know.");
-        }
+            case TunerKind.Unspecified:
+                problems.Add("tuning.kind: missing, or a value this driver does not know.");
+                break;
 
-        if (Tuning.PhysicalChannel is < MinPhysicalChannel or > MaxPhysicalChannel)
-        {
-            problems.Add(
-                $"tuning.physicalChannel: expected {MinPhysicalChannel} to {MaxPhysicalChannel}, got {Tuning.PhysicalChannel}."
-            );
+            case TunerKind.Terrestrial:
+                AddChannelProblem(MinTerrestrialChannel, MaxTerrestrialChannel);
+                break;
+
+            case TunerKind.Satellite:
+                AddChannelProblem(MinSatelliteChannel, MaxSatelliteChannel);
+                break;
         }
 
         if (Tuning.ServiceId is < 0 or > MaxServiceId)
@@ -187,12 +210,62 @@ public sealed record StartSessionRequest
             );
         }
 
-        if (Purpose is SessionPurpose.Recording && EndsAt is null)
+        if (Purpose is SessionPurpose.Recording)
         {
-            problems.Add("endsAt: a recording session has to carry its own end time.");
+            if (EndsAt is null)
+            {
+                problems.Add("endsAt: a recording session has to carry its own end time.");
+            }
+            else if (EndsAt <= now)
+            {
+                problems.Add($"endsAt: expected a time after {now:O}, got {EndsAt:O}.");
+            }
         }
 
         return problems;
+
+        void AddChannelProblem(int min, int max)
+        {
+            if (Tuning.PhysicalChannel < min || Tuning.PhysicalChannel > max)
+            {
+                problems.Add(
+                    $"tuning.physicalChannel: expected {min} to {max} for {Tuning.Kind}, got {Tuning.PhysicalChannel}."
+                );
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether the name is one the driver could look up in its own configuration.
+    /// </summary>
+    /// <remarks>
+    /// The device name crosses into the privileged process the same way a session
+    /// id does, so it is constrained the same way rather than trusted to be used
+    /// only as a lookup key.
+    /// </remarks>
+    private static bool IsUsableDeviceName(string value)
+    {
+        if (value.Length is 0 or > MaxDeviceIdLength)
+        {
+            return false;
+        }
+
+        foreach (var c in value)
+        {
+            var allowed =
+                c is >= 'a' and <= 'z'
+                    or >= 'A' and <= 'Z'
+                    or >= '0' and <= '9'
+                    or '-'
+                    or '_'
+                    or '.';
+            if (!allowed)
+            {
+                return false;
+            }
+        }
+
+        return !value.Contains("..", StringComparison.Ordinal);
     }
 }
 

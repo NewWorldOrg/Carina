@@ -8,20 +8,28 @@ namespace Carina.Contracts;
 /// </summary>
 /// <remarks>
 /// The value goes into a request path on the privileged process, so the shape is
-/// constrained rather than trusted: anything outside the allowed characters is
-/// rejected where it enters, not escaped where it is used. That keeps a hostile or
-/// merely careless value from turning one endpoint's request into another's.
+/// constrained: anything outside the allowed characters can never be turned into a
+/// path, which is what keeps one endpoint's request from becoming another's.
+///
+/// Reading is separate from using. A driver may mint an identifier this build would
+/// not have minted, and losing the whole answer over one such value would break the
+/// rule that neither side fails on what the other says — so an identifier outside
+/// the shape reads as <see cref="IsUnset"/> and the rest of the message survives.
+/// What it cannot do is become a path.
 /// </remarks>
 [JsonConverter(typeof(SessionIdJsonConverter))]
 public readonly record struct SessionId
 {
-    /// <summary>The longest value the driver will mint or accept.</summary>
+    /// <summary>The longest value this build can put in a path.</summary>
     public const int MaxLength = 64;
 
     private SessionId(string value) => Value = value;
 
-    /// <summary>The identifier itself.</summary>
-    public string Value { get; }
+    /// <summary>The identifier itself, or null when this build could not take it.</summary>
+    public string? Value { get; }
+
+    /// <summary>Whether there is no identifier this build can act on.</summary>
+    public bool IsUnset => Value is null;
 
     /// <summary>Reads <paramref name="value"/>, rejecting anything outside <c>[A-Za-z0-9-]</c>.</summary>
     public static SessionId Parse(string? value) =>
@@ -58,7 +66,13 @@ public readonly record struct SessionId
     public override string ToString() => Value ?? string.Empty;
 }
 
-/// <summary>Carries <see cref="SessionId"/> as a plain JSON string.</summary>
+/// <summary>
+/// Carries <see cref="SessionId"/> as a plain JSON string.
+/// </summary>
+/// <remarks>
+/// Anything that is not an identifier this build can act on — absent, null, or
+/// outside the shape — reads as unset rather than failing the message it sits in.
+/// </remarks>
 public sealed class SessionIdJsonConverter : JsonConverter<SessionId>
 {
     /// <inheritdoc />
@@ -67,14 +81,24 @@ public sealed class SessionIdJsonConverter : JsonConverter<SessionId>
         Type typeToConvert,
         JsonSerializerOptions options
     ) =>
-        SessionId.TryParse(reader.GetString(), out var id)
+        reader.TokenType is JsonTokenType.String
+        && SessionId.TryParse(reader.GetString(), out var id)
             ? id
-            : throw new JsonException("The session id is not in the allowed shape.");
+            : default;
 
     /// <inheritdoc />
     public override void Write(
         Utf8JsonWriter writer,
         SessionId value,
         JsonSerializerOptions options
-    ) => writer.WriteStringValue(value.Value);
+    )
+    {
+        if (value.Value is null)
+        {
+            writer.WriteNullValue();
+            return;
+        }
+
+        writer.WriteStringValue(value.Value);
+    }
 }

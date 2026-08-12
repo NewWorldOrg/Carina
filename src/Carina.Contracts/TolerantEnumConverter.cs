@@ -19,8 +19,9 @@ namespace Carina.Contracts;
 /// it would land a future value on today's member — silently, and wrongly.
 ///
 /// The spellings are written out in each converter rather than derived from the
-/// members, because the driver is published ahead of time and cannot read its own
-/// metadata at runtime.
+/// members, so that nothing here reads type metadata at runtime: the driver is
+/// meant to be published ahead of time, and reflection over enum fields is the
+/// first thing that stops working there.
 /// </remarks>
 public abstract class TolerantEnumConverter<TEnum> : JsonConverter<TEnum>
     where TEnum : struct, Enum
@@ -38,14 +39,32 @@ public abstract class TolerantEnumConverter<TEnum> : JsonConverter<TEnum>
         JsonSerializerOptions options
     )
     {
-        if (reader.TokenType is not JsonTokenType.String)
+        switch (reader.TokenType)
         {
-            reader.Skip();
-            return default;
-        }
+            case JsonTokenType.String:
+                var name = reader.GetString();
+                return name is null ? default : ValueOf(name) ?? default;
 
-        var name = reader.GetString();
-        return name is null ? default : ValueOf(name) ?? default;
+            // The reader already sits on the whole of a scalar, so there is nothing
+            // to skip. Skipping would be the wrong instruction anyway: over a socket
+            // the reader is mid-stream, and skipping there throws — which would turn
+            // the degradation this converter exists for back into a hard failure.
+            case JsonTokenType.Number:
+            case JsonTokenType.Null:
+            case JsonTokenType.True:
+            case JsonTokenType.False:
+                return default;
+
+            default:
+                if (!reader.TrySkip())
+                {
+                    throw new JsonException(
+                        $"Expected a name for {typeof(TEnum).Name}, got {reader.TokenType}."
+                    );
+                }
+
+                return default;
+        }
     }
 
     /// <inheritdoc />

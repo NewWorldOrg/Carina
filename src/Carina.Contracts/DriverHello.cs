@@ -19,10 +19,21 @@ namespace Carina.Contracts;
 /// </remarks>
 public sealed record DriverHello(
     int ProtocolVersion,
-    string InstanceId,
+    string? InstanceId,
     IReadOnlyList<string> Capabilities
 )
 {
+    /// <summary>
+    /// Identifies this run of the driver process, when the driver names one.
+    /// </summary>
+    /// <remarks>
+    /// A driver built before the field existed sends nothing, which is not the same
+    /// as sending the same value as last time. It reads as unknown so that the app
+    /// takes the restart path rather than assuming its sessions survived.
+    /// </remarks>
+    public string? InstanceId { get; init; } =
+        string.IsNullOrEmpty(InstanceId) ? null : InstanceId;
+
     /// <summary>What this build can do. Never null, so a terse driver reads as "nothing extra".</summary>
     public IReadOnlyList<string> Capabilities { get; init; } = Capabilities ?? [];
 
@@ -30,7 +41,16 @@ public sealed record DriverHello(
     public bool Supports(string capability) =>
         Capabilities.Contains(capability, StringComparer.Ordinal);
 
-    /// <summary>Whether <paramref name="other"/> is a different run of the driver.</summary>
+    /// <summary>
+    /// Whether this is a different run of the driver from <paramref name="other"/>.
+    /// </summary>
+    /// <remarks>
+    /// Unknown counts as different. Answering "same" for a driver that does not name
+    /// its instance would leave the app believing sessions it can no longer see are
+    /// still running, which is the one mistake this question exists to prevent.
+    /// </remarks>
     public bool IsDifferentInstanceFrom(DriverHello? other) =>
-        other is null || !string.Equals(InstanceId, other.InstanceId, StringComparison.Ordinal);
+        InstanceId is null
+        || other?.InstanceId is null
+        || !string.Equals(InstanceId, other.InstanceId, StringComparison.Ordinal);
 }

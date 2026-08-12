@@ -53,18 +53,30 @@ public sealed class SessionIdTests
         Assert.Equal("/sessions/abc/stream", DriverEndpoints.SessionStream(id));
     }
 
-    // A driver that minted an identifier this build would not have minted is still
-    // reporting something; refusing to read it would lose the whole answer. It is
-    // rejected instead of carried, because carrying it means putting it in a path.
     [Fact]
-    public void AnIdentifierOutsideTheShapeIsRejectedOnRead()
+    public void AnIdentifierThisBuildCannotTakeReadsAsUnset()
     {
-        Assert.Throws<System.Text.Json.JsonException>(
-            () =>
-                DriverJson.Deserialize(
-                    """{"sessionId":"../x","purpose":"live","deviceId":"a0","state":"active","startedAt":"2026-08-08T21:04:00+09:00","endsAt":null}""",
-                    DriverJson.Context.SessionSnapshot
-                )
+        Assert.True(default(SessionId).IsUnset);
+        Assert.False(SessionId.Parse("abc").IsUnset);
+    }
+
+    // What this build writes, it has to be able to read back.
+    [Fact]
+    public void AnUnsetIdentifierSurvivesARoundTrip()
+    {
+        var snapshot = new SessionSnapshot(
+            default,
+            SessionPurpose.Live,
+            "a0",
+            SessionState.Active,
+            new DateTimeOffset(2026, 8, 8, 21, 4, 0, TimeSpan.FromHours(9))
         );
+
+        var restored = DriverJson.Deserialize(
+            DriverJson.Serialize(snapshot),
+            DriverJson.Context.SessionSnapshot
+        );
+
+        Assert.Equal(snapshot, restored);
     }
 }

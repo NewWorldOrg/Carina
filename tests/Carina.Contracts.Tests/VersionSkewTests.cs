@@ -98,4 +98,46 @@ public sealed class VersionSkewTests
         Assert.True(restarted.IsDifferentInstanceFrom(first));
         Assert.True(first.IsDifferentInstanceFrom(null));
     }
+
+    // A driver built before the field existed sends no instance at all. Reading two
+    // absences as the same run would tell the app its sessions survived a restart
+    // it cannot see — the one answer that must never be given by default.
+    [Fact]
+    public void ADriverThatNamesNoInstanceIsAlwaysTreatedAsARestart()
+    {
+        var older = DriverJson.Deserialize(
+            """{"protocolVersion":1,"capabilities":["recording"]}""",
+            DriverJson.Context.DriverHello
+        );
+
+        Assert.NotNull(older);
+        Assert.Null(older.InstanceId);
+        Assert.True(older.IsDifferentInstanceFrom(older));
+        Assert.True(older.IsDifferentInstanceFrom(new DriverHello(1, "b7f2c9", [])));
+        Assert.True(new DriverHello(1, "b7f2c9", []).IsDifferentInstanceFrom(older));
+    }
+
+    // An identifier this build would not have minted is still readable: losing the
+    // whole answer over one session would take every other session with it.
+    [Fact]
+    public void AnIdentifierOutsideTheShapeLeavesTheRestOfTheAnswerReadable()
+    {
+        var session = DriverJson.Deserialize(
+            """{"sessionId":"../x","purpose":"live","deviceId":"a0","state":"active","startedAt":"2026-08-08T21:04:00+09:00"}""",
+            DriverJson.Context.SessionSnapshot
+        );
+
+        Assert.NotNull(session);
+        Assert.True(session.SessionId.IsUnset);
+        Assert.Equal("a0", session.DeviceId);
+        Assert.Equal(SessionState.Active, session.State);
+    }
+
+    // What it cannot do is become a path: an unset id would address the collection.
+    [Fact]
+    public void AnUnsetIdentifierHasNoPath()
+    {
+        Assert.Throws<ArgumentException>(() => DriverEndpoints.Session(default));
+        Assert.Throws<ArgumentException>(() => DriverEndpoints.SessionStream(default));
+    }
 }

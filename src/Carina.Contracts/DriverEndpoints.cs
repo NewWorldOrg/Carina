@@ -26,7 +26,8 @@ public static class DriverEndpoints
     public const string Events = "/events";
 
     /// <summary>The path of one session, for stopping it.</summary>
-    public static string Session(SessionId sessionId) => $"{Sessions}/{sessionId.Value}";
+    public static string Session(SessionId sessionId) =>
+        $"{Sessions}/{Segment(sessionId)}";
 
     /// <summary>
     /// The transport stream of one session, chunked and unwrapped.
@@ -37,7 +38,22 @@ public static class DriverEndpoints
     /// close would let a recording that stopped early read as one that finished.
     /// </remarks>
     public static string SessionStream(SessionId sessionId) =>
-        $"{Sessions}/{sessionId.Value}/stream";
+        $"{Sessions}/{Segment(sessionId)}/stream";
+
+    /// <summary>
+    /// The identifier as a path segment, refusing one this build cannot act on.
+    /// </summary>
+    /// <remarks>
+    /// An unset identifier would interpolate to nothing and quietly address the
+    /// collection instead of a member — a stop request that stops nothing, or a
+    /// stream request that reads the list.
+    /// </remarks>
+    private static string Segment(SessionId sessionId) =>
+        sessionId.Value
+        ?? throw new ArgumentException(
+            "The session id is unset; there is no path for it.",
+            nameof(sessionId)
+        );
 
     /// <summary>The fixed paths, for tests and diagnostics.</summary>
     public static readonly IReadOnlyList<string> All =
