@@ -80,11 +80,25 @@ public sealed class SessionIdJsonConverter : JsonConverter<SessionId>
         ref Utf8JsonReader reader,
         Type typeToConvert,
         JsonSerializerOptions options
-    ) =>
-        reader.TokenType is JsonTokenType.String
-        && SessionId.TryParse(reader.GetString(), out var id)
-            ? id
-            : default;
+    )
+    {
+        if (reader.TokenType is JsonTokenType.String)
+        {
+            return SessionId.TryParse(reader.GetString(), out var id) ? id : default;
+        }
+
+        // A scalar is already read in full. Anything structured has to be consumed,
+        // or the reader is left mid-value and the whole message fails after all.
+        if (
+            reader.TokenType is JsonTokenType.StartObject or JsonTokenType.StartArray
+            && !reader.TrySkip()
+        )
+        {
+            throw new JsonException("Expected a session id, got a structure.");
+        }
+
+        return default;
+    }
 
     /// <inheritdoc />
     public override void Write(

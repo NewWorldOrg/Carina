@@ -35,39 +35,21 @@ public sealed class StartSessionRequestTests
         Assert.Empty(Request().Validate(Now));
     }
 
+    // The last-line check the privileged process owes every value that crosses into
+    // it. Which channels actually exist, per band, is the tuner domain's to state,
+    // and it states it with a type rather than with a rejection here.
     [Theory]
-    [InlineData(12)]
     [InlineData(0)]
     [InlineData(-1)]
-    [InlineData(63)]
+    [InlineData(256)]
     [InlineData(int.MinValue)]
     [InlineData(int.MaxValue)]
-    public void ATerrestrialChannelOutsideUhfIsReported(int channel)
+    public void APhysicalChannelNoDeviceCouldTakeIsReported(int channel)
     {
         Assert.Contains(
             Request(physicalChannel: channel).Validate(Now),
             problem => problem.StartsWith("tuning.physicalChannel:")
         );
-    }
-
-    // The two plans do not share a numbering, so one range for both would let a
-    // terrestrial channel number pass as a satellite one and fail down at the ioctl.
-    [Theory]
-    [InlineData(TunerKind.Satellite, 27)]
-    [InlineData(TunerKind.Satellite, 25)]
-    [InlineData(TunerKind.Terrestrial, 5)]
-    public void AChannelFromTheOtherPlanIsReported(TunerKind kind, int channel)
-    {
-        Assert.Contains(
-            Request(kind: kind, physicalChannel: channel).Validate(Now),
-            problem => problem.StartsWith("tuning.physicalChannel:")
-        );
-    }
-
-    [Fact]
-    public void ASatelliteChannelInItsOwnPlanIsAccepted()
-    {
-        Assert.Empty(Request(kind: TunerKind.Satellite, physicalChannel: 15).Validate(Now));
     }
 
     // The name reaches the privileged process, so it is constrained the same way a

@@ -59,7 +59,7 @@ public sealed class DriverJsonTests
         );
 
         Assert.Equal(
-            """{"sessionId":"s-1","purpose":"live","deviceId":"adapter1","state":"active","startedAt":"2026-08-08T21:04:00+09:00","endsAt":null}""",
+            """{"sessionId":"s-1","purpose":"live","state":"active","startedAt":"2026-08-08T21:04:00+09:00","endsAt":null,"deviceId":"adapter1"}""",
             json
         );
     }
@@ -68,11 +68,16 @@ public sealed class DriverJsonTests
     public void TunerSnapshotSerialisesToItsAgreedForm()
     {
         var json = DriverJson.Serialize(
-            new TunerSnapshot("adapter2", TunerKind.Satellite, TunerState.Faulted, null, "kind mismatch")
+            new TunerSnapshot(
+                "adapter2",
+                TunerKind.Satellite,
+                TunerState.Faulted,
+                Detail: "kind mismatch"
+            )
         );
 
         Assert.Equal(
-            """{"deviceId":"adapter2","kind":"satellite","state":"faulted","sessionId":null,"detail":"kind mismatch"}""",
+            """{"kind":"satellite","state":"faulted","sessionId":null,"detail":"kind mismatch","deviceId":"adapter2"}""",
             json
         );
     }
@@ -102,7 +107,7 @@ public sealed class DriverJsonTests
     public void SessionListIsABareArray()
     {
         Assert.Equal(
-            """[{"sessionId":"s-1","purpose":"live","deviceId":"adapter1","state":"active","startedAt":"2026-08-08T21:04:00+09:00","endsAt":null}]""",
+            """[{"sessionId":"s-1","purpose":"live","state":"active","startedAt":"2026-08-08T21:04:00+09:00","endsAt":null,"deviceId":"adapter1"}]""",
             DriverJson.Serialize<IReadOnlyList<SessionSnapshot>>(
                 [
                     new SessionSnapshot(
@@ -123,7 +128,7 @@ public sealed class DriverJsonTests
     public void TunerListIsABareArray()
     {
         Assert.Equal(
-            """[{"deviceId":"adapter0","kind":"terrestrial","state":"idle","sessionId":null,"detail":null}]""",
+            """[{"kind":"terrestrial","state":"idle","sessionId":null,"detail":null,"deviceId":"adapter0"}]""",
             DriverJson.Serialize<IReadOnlyList<TunerSnapshot>>(
                 [new TunerSnapshot("adapter0", TunerKind.Terrestrial, TunerState.Idle)]
             )

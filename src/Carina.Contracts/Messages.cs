@@ -126,13 +126,18 @@ public sealed record TuningRequest(TunerKind Kind, int PhysicalChannel, int? Ser
 /// </summary>
 public sealed record StartSessionRequest
 {
-    /// <summary>UHF carries the terrestrial plan.</summary>
-    private const int MinTerrestrialChannel = 13;
-    private const int MaxTerrestrialChannel = 62;
-
-    /// <summary>The satellite plans are numbered from one, per band.</summary>
-    private const int MinSatelliteChannel = 1;
-    private const int MaxSatelliteChannel = 24;
+    /// <summary>
+    /// A bound wide enough to hold any broadcast plan, and narrow enough that a
+    /// number outside it never reaches a device.
+    /// </summary>
+    /// <remarks>
+    /// Which channels exist, per band, is the tuner domain's to say — and it says
+    /// it with a type, so that an impossible channel cannot be written down rather
+    /// than being written down and rejected. This is only the last-line check the
+    /// privileged process owes every value that crosses into it.
+    /// </remarks>
+    private const int MinPhysicalChannel = 1;
+    private const int MaxPhysicalChannel = 255;
 
     /// <summary>Service ids are 16 bit on the wire.</summary>
     private const int MaxServiceId = 65535;
@@ -188,19 +193,16 @@ public sealed record StartSessionRequest
             return problems;
         }
 
-        switch (Tuning.Kind)
+        if (Tuning.Kind is TunerKind.Unspecified)
         {
-            case TunerKind.Unspecified:
-                problems.Add("tuning.kind: missing, or a value this driver does not know.");
-                break;
+            problems.Add("tuning.kind: missing, or a value this driver does not know.");
+        }
 
-            case TunerKind.Terrestrial:
-                AddChannelProblem(MinTerrestrialChannel, MaxTerrestrialChannel);
-                break;
-
-            case TunerKind.Satellite:
-                AddChannelProblem(MinSatelliteChannel, MaxSatelliteChannel);
-                break;
+        if (Tuning.PhysicalChannel is < MinPhysicalChannel or > MaxPhysicalChannel)
+        {
+            problems.Add(
+                $"tuning.physicalChannel: expected {MinPhysicalChannel} to {MaxPhysicalChannel}, got {Tuning.PhysicalChannel}."
+            );
         }
 
         if (Tuning.ServiceId is < 0 or > MaxServiceId)
@@ -223,16 +225,6 @@ public sealed record StartSessionRequest
         }
 
         return problems;
-
-        void AddChannelProblem(int min, int max)
-        {
-            if (Tuning.PhysicalChannel < min || Tuning.PhysicalChannel > max)
-            {
-                problems.Add(
-                    $"tuning.physicalChannel: expected {min} to {max} for {Tuning.Kind}, got {Tuning.PhysicalChannel}."
-                );
-            }
-        }
     }
 
     /// <summary>
@@ -285,7 +277,11 @@ public sealed record SessionSnapshot(
     SessionState State,
     DateTimeOffset StartedAt,
     DateTimeOffset? EndsAt = null
-);
+)
+{
+    /// <summary>The device it holds. Empty when the driver named none.</summary>
+    public string DeviceId { get; init; } = DeviceId ?? string.Empty;
+}
 
 /// <summary>
 /// One tuner device as the driver sees it.
@@ -293,15 +289,19 @@ public sealed record SessionSnapshot(
 /// <param name="DeviceId">Stable name from the driver's configuration.</param>
 /// <param name="Kind">Which side of the hardware it serves.</param>
 /// <param name="State">What it is doing.</param>
-/// <param name="SessionId">The session holding it, when it is busy.</param>
+/// <param name="SessionId">The session holding it; unset when it is not busy.</param>
 /// <param name="Detail">Why it is faulted, when it is.</param>
 public sealed record TunerSnapshot(
     string DeviceId,
     TunerKind Kind,
     TunerState State,
-    SessionId? SessionId = null,
+    SessionId SessionId = default,
     string? Detail = null
-);
+)
+{
+    /// <summary>Stable name from the driver's configuration. Empty when it named none.</summary>
+    public string DeviceId { get; init; } = DeviceId ?? string.Empty;
+}
 
 /// <summary>
 /// Something the driver wants the app to record a reason for.
@@ -309,12 +309,12 @@ public sealed record TunerSnapshot(
 /// <param name="Reason">Which cause this was.</param>
 /// <param name="OccurredAt">When the driver noticed.</param>
 /// <param name="DeviceId">The device involved, when there was one.</param>
-/// <param name="SessionId">The session involved, when there was one.</param>
+/// <param name="SessionId">The session involved; unset when there was none.</param>
 /// <param name="Detail">Free text for a human reading the ledger. Never parsed.</param>
 public sealed record DiagnosticSnapshot(
     DiagnosticReason Reason,
     DateTimeOffset OccurredAt,
     string? DeviceId = null,
-    SessionId? SessionId = null,
+    SessionId SessionId = default,
     string? Detail = null
 );

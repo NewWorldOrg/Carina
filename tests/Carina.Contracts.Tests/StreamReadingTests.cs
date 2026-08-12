@@ -37,6 +37,8 @@ public sealed class StreamReadingTests
     [InlineData("1")]
     [InlineData("null")]
     [InlineData("true")]
+    [InlineData("{\"band\":\"bs\"}")]
+    [InlineData("[\"bs\"]")]
     public async Task AValueThisBuildDoesNotKnowStillReadsOverAStream(string enumToken)
     {
         var tuner = await ReadOverAStreamAsync(
@@ -48,6 +50,29 @@ public sealed class StreamReadingTests
         Assert.Equal(TunerKind.Unspecified, tuner.Kind);
         Assert.Equal(TunerState.Idle, tuner.State);
         Assert.Equal("a0", tuner.DeviceId);
+    }
+
+    // Same rule for the identifier: a shape this build cannot take must not cost the
+    // message it sits in, whether it arrives as a scalar or as a structure.
+    [Theory]
+    [InlineData("\"../x\"")]
+    [InlineData("123")]
+    [InlineData("null")]
+    [InlineData("{\"v\":\"x\"}")]
+    [InlineData("[\"x\"]")]
+    public async Task AnIdentifierThisBuildCannotTakeStillReadsOverAStream(string idToken)
+    {
+        var detail = new string('x', 64 * 1024);
+        var json =
+            $$"""
+            {"deviceId":"a0","kind":"terrestrial","state":"busy","sessionId":{{idToken}},"detail":"{{detail}}"}
+            """;
+
+        var tuner = await ReadOverAStreamAsync(json, DriverJson.Context.TunerSnapshot);
+
+        Assert.NotNull(tuner);
+        Assert.True(tuner.SessionId.IsUnset);
+        Assert.Equal(TunerState.Busy, tuner.State);
     }
 
     [Fact]
