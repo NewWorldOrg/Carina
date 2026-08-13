@@ -8,6 +8,7 @@ namespace Carina.Db;
 public sealed class CarinaDbContextFactory : IDesignTimeDbContextFactory<CarinaDbContext>
 {
     public const string ConnectionStringVariable = "CARINA_DB_CONNECTION";
+    public const string MigrationsAssemblyName = "Carina.Db";
 
     public CarinaDbContext CreateDbContext(string[] args)
         => Create(Environment.GetEnvironmentVariable(ConnectionStringVariable));
@@ -20,10 +21,9 @@ public sealed class CarinaDbContextFactory : IDesignTimeDbContextFactory<CarinaD
                 $"No database connection string: expected environment variable {ConnectionStringVariable} to be set, but it was empty.");
         }
 
-        var options = new DbContextOptionsBuilder<CarinaDbContext>()
-            .UseNpgsql(connectionString)
-            .Options;
+        var builder = new DbContextOptionsBuilder<CarinaDbContext>();
+        builder.UseCarinaDatabase(connectionString, npgsql => npgsql.MigrationsAssembly(MigrationsAssemblyName));
 
-        return new CarinaDbContext(options);
+        return new CarinaDbContext(builder.Options);
     }
 }
