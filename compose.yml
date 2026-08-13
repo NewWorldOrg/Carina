@@ -35,7 +35,10 @@ services:
     tty: true
     stop_grace_period: 30s
     environment:
-      CARINA_DRIVER_SOCKET: /run/carina/driver.sock
+      # Everything the driver reads comes from this file, so pointing at a
+      # different one and restarting is all it takes to change where it writes,
+      # which devices it owns and where its socket goes.
+      CARINA_DRIVER_CONFIG: /code/docker/driver.development.json
       DOTNET_hostBuilder__reloadConfigOnChange: 'false'
 
   db:

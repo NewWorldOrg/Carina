@@ -1,0 +1,11 @@
+{
+  "socketPath": "/run/carina/driver.sock",
+  "recordingsDirectory": "/srv/recordings",
+  "shutdownGraceHours": 6,
+  "tuner": { "backend": "fake" },
+  "devices": [
+    { "id": "adapter0", "kind": "terrestrial", "enabled": true },
+    { "id": "adapter1", "kind": "terrestrial", "enabled": true },
+    { "id": "adapter2", "kind": "satellite", "enabled": true, "lnbPower": true }
+  ]
+}
