@@ -32,7 +32,17 @@ src/Carina.Infrastructure  persistence, IPC client, external boundaries
 src/Carina.Db              migration entry point (leaf; nothing references it)
 src/Carina.Api             HTTP surface; publishes the OpenAPI document
 tests/                     one test project per production project + architecture tests
+openapi/                   the published HTTP contract, generated and checked in
 ```
+
+The web frontend generates its client from `openapi/Carina.Api.json` rather than from a
+running instance: `GET /openapi/v1.json` is behind the default-deny seam, and that repository
+has its own CI and cannot start this application. `task openapi` regenerates the file, a
+feature test fails when it drifts from what the app serves, and CI deletes it, regenerates
+it on the runner and fails on a difference. Generation starts the host, so it needs the
+same settings a run needs. Three surfaces cannot be expressed in it — the transport
+stream, the event hub and the bulk programme guide — and are declared in
+`openapi/non-rest-contracts.md`.
 
 Reference direction is one-way and enforced by `tests/Carina.Architecture.Tests`:
 
@@ -72,9 +82,15 @@ rules hold rather than that they inspected nothing.
 
 ### Boundaries that must not be broken
 
-- Reservations persist by their broadcast identifiers and hold no foreign key to the
-  channel definitions. Editing a channel definition must never delete a reservation.
-- The programme cache is disposable: dropping it is recoverable by collecting again.
+- Reservations persist by their broadcast identifiers (nid + sid) and hold no foreign
+  key to the channel definitions. Editing a channel definition must never delete a
+  reservation.
+- The programme cache is disposable: dropping it is recoverable by collecting again,
+  so no table outside the cache may hold a foreign key into it.
+- Both persistence boundaries are enforced against the EF Core model by
+  `PersistenceBoundaryRuleTests` in `tests/Carina.Infrastructure.Tests`, self-checked
+  against a deliberately violating model. The real columns of the three aggregates are
+  out of the foundation's scope and belong to their own domains.
 - Contract changes are additive only. Removing or renaming an endpoint or an event
   breaks the "old driver + new app" combination, which is the normal state.
 - Configuration is validated at startup and the process fails fast with a message
@@ -92,7 +108,7 @@ docker compose exec app dotnet test
 docker compose exec app dotnet format --verify-no-changes
 ```
 
-`task` shortcuts: `task build`, `task test`, `task lint`, `task format`.
+`task` shortcuts: `task build`, `task test`, `task lint`, `task format`, `task openapi`.
 
 GitHub Actions runs build, test and format verification on push and pull request to
 `master`.
