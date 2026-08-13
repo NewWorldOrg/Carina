@@ -75,6 +75,23 @@ public static class DriverStartup
         return StoppedEarlyExitCode;
     }
 
+    public static void Announce(DriverConfiguration configuration, TextWriter output)
+    {
+        output.WriteLine(DriverShutdownBudget.From(configuration).Describe());
+
+        if (configuration.Tuner?.Backend is not TunerBackend.Fake)
+        {
+            return;
+        }
+
+        output.WriteLine(
+            "tuner.backend = fake: this driver produces synthetic transport stream, not broadcast."
+        );
+        output.WriteLine(
+            "Nothing recorded here is a television programme. Set tuner.backend to dvb for real tuners."
+        );
+    }
+
     public static int ExitCodeFor(bool stopWasAsked) =>
         stopWasAsked ? 0 : StoppedEarlyExitCode;
 }
