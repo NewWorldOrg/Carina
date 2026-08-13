@@ -16,8 +16,13 @@ file is the same document `GET /openapi/v1.json` serves; `OpenApiArtifactTests` 
 when the two drift apart, so a contract change that is not regenerated fails the test
 run rather than reaching a consumer as a surprise.
 
-CI regenerates the document on the runner and fails if the working tree differs, then
-publishes the file as a build artifact.
+Generation starts the application host, so the settings it validates at startup have to
+be present. The development containers already carry them; the CI job passes placeholder
+values of its own. Nothing is connected to — the host is built, described and dropped.
+
+CI deletes this file first, regenerates it on the runner, and fails if the working tree
+differs, so the check cannot pass by a generation that quietly did nothing. The file is
+published as a build artifact of that job.
 
 ## Why a file and not an endpoint
 

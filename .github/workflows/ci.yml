@@ -33,6 +33,9 @@ jobs:
 
   openapi:
     runs-on: ubuntu-latest
+    env:
+      ConnectionStrings__Carina: Host=db;Port=5432;Database=carina;Username=carina;Password=placeholder
+      CARINA_DRIVER_SOCKET: /run/carina/driver.sock
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -40,7 +43,10 @@ jobs:
           dotnet-version: '10.0.x'
       - run: dotnet restore
       - run: dotnet build src/Carina.Api --no-restore -warnaserror
-      - run: dotnet msbuild src/Carina.Api/Carina.Api.csproj -t:GenerateOpenApiDocuments
+      - name: Delete the document so the check below cannot pass without generating it
+        run: rm openapi/Carina.Api.json
+      - name: Generate the document, which starts the host and so needs the settings present
+        run: dotnet msbuild src/Carina.Api/Carina.Api.csproj -t:GenerateOpenApiDocuments
       - name: The checked-in document is the generated one
         run: git diff --exit-code openapi
       - uses: actions/upload-artifact@v4
