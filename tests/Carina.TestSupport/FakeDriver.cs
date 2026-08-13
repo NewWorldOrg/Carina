@@ -39,6 +39,8 @@ public sealed class FakeDriver : IAsyncDisposable
 
     public Dictionary<string, Refusal> RefusalsByPath { get; } = new(StringComparer.Ordinal);
 
+    public Dictionary<string, string> RawBodyByPath { get; } = new(StringComparer.Ordinal);
+
     public bool TruncateHealth { get; set; }
 
     public SemaphoreSlim StreamAbortGate { get; } = new(0);
@@ -132,7 +134,7 @@ public sealed class FakeDriver : IAsyncDisposable
 
     private async Task HealthAsync(HttpContext context)
     {
-        if (await RefusedAsync(context))
+        if (await HandledAsync(context))
         {
             return;
         }
@@ -153,7 +155,7 @@ public sealed class FakeDriver : IAsyncDisposable
 
     private async Task CannedAsync<T>(HttpContext context, T value, JsonTypeInfo<T> typeInfo)
     {
-        if (await RefusedAsync(context))
+        if (await HandledAsync(context))
         {
             return;
         }
@@ -163,7 +165,7 @@ public sealed class FakeDriver : IAsyncDisposable
 
     private async Task StartSessionAsync(HttpContext context)
     {
-        if (await RefusedAsync(context))
+        if (await HandledAsync(context))
         {
             return;
         }
@@ -189,7 +191,7 @@ public sealed class FakeDriver : IAsyncDisposable
 
     private async Task StopSessionAsync(HttpContext context)
     {
-        if (await RefusedAsync(context))
+        if (await HandledAsync(context))
         {
             return;
         }
@@ -209,7 +211,7 @@ public sealed class FakeDriver : IAsyncDisposable
 
     private async Task EventsAsync(HttpContext context)
     {
-        if (await RefusedAsync(context))
+        if (await HandledAsync(context))
         {
             return;
         }
@@ -249,14 +251,29 @@ public sealed class FakeDriver : IAsyncDisposable
         }
     }
 
-    private async Task<bool> RefusedAsync(HttpContext context)
+    private async Task<bool> HandledAsync(HttpContext context)
     {
-        if (RefusalFor(context.Request.Path.Value) is not { } refusal)
+        var path = context.Request.Path.Value;
+
+        if (RefusalFor(path) is { } refusal)
+        {
+            await WriteAsync(
+                context,
+                refusal.Status,
+                refusal.Problem,
+                DriverJson.Context.DriverProblem);
+
+            return true;
+        }
+
+        if (path is null || !RawBodyByPath.TryGetValue(path, out var body))
         {
             return false;
         }
 
-        await WriteAsync(context, refusal.Status, refusal.Problem, DriverJson.Context.DriverProblem);
+        context.Response.StatusCode = StatusCodes.Status200OK;
+        context.Response.ContentType = "application/json";
+        await context.Response.WriteAsync(body, context.RequestAborted);
 
         return true;
     }
