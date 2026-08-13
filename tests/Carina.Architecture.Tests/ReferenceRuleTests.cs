@@ -11,12 +11,22 @@ public sealed class ReferenceRuleTests
     }
 
     [Fact]
-    public void DomainDependsOnNothing()
+    public void DomainReferencesTheIpcContractOnly()
     {
-        var domain = Graph.Node("Carina.Domain");
+        Assert.Empty(Graph.ForbiddenReferencesOf("Carina.Domain", "Carina.Contracts"));
+        Assert.Empty(Graph.Node("Carina.Domain").PackageReferences);
+    }
 
-        Assert.Empty(domain.ProjectReferences);
-        Assert.Empty(domain.PackageReferences);
+    [Fact]
+    public void TheDomainNamesNoTransportDetail()
+    {
+        Assert.Empty(SourceScan.FilesMentioning(
+            Path.Combine(RepositoryLayout.SourceDirectory, "Carina.Domain"),
+            "DriverEndpoints",
+            "DriverJson",
+            "HttpClient",
+            "HttpRequestException",
+            "StatusCode"));
     }
 
     [Fact]
@@ -29,9 +39,12 @@ public sealed class ReferenceRuleTests
     }
 
     [Fact]
-    public void ContractsHasNoProjectReferences()
+    public void ContractsDependsOnNothing()
     {
-        Assert.Empty(Graph.Node("Carina.Contracts").ProjectReferences);
+        var contracts = Graph.Node("Carina.Contracts");
+
+        Assert.Empty(contracts.ProjectReferences);
+        Assert.Empty(contracts.PackageReferences);
     }
 
     [Fact]

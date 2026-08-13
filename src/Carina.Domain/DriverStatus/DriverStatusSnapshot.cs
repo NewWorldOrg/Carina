@@ -2,22 +2,28 @@ namespace Carina.Domain.DriverStatus;
 
 public sealed class DriverStatusSnapshot
 {
-    private DriverStatusSnapshot(DriverConnection connection, DateTimeOffset observedAt)
+    private DriverStatusSnapshot(DriverObservation observation, DateTimeOffset observedAt)
     {
-        Connection = connection;
+        Observation = observation;
         ObservedAt = observedAt;
     }
 
-    public DriverConnection Connection { get; }
+    public DriverObservation Observation { get; }
 
     public DateTimeOffset ObservedAt { get; }
 
-    public static DriverStatusSnapshot Observe(DriverConnection connection, TimeProvider timeProvider)
+    public static DriverStatusSnapshot Observe(DriverObservation observation, TimeProvider timeProvider)
     {
+        ArgumentNullException.ThrowIfNull(observation);
         ArgumentNullException.ThrowIfNull(timeProvider);
-        return new DriverStatusSnapshot(connection, timeProvider.GetUtcNow());
+
+        return new DriverStatusSnapshot(observation, timeProvider.GetUtcNow());
     }
 
-    public static DriverStatusSnapshot Rehydrate(DriverConnection connection, DateTimeOffset observedAt)
-        => new(connection, observedAt);
+    public static DriverStatusSnapshot Rehydrate(DriverObservation observation, DateTimeOffset observedAt)
+    {
+        ArgumentNullException.ThrowIfNull(observation);
+
+        return new DriverStatusSnapshot(observation, observedAt);
+    }
 }

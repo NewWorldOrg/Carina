@@ -2,9 +2,16 @@ using Carina.Domain.DriverStatus;
 
 namespace Carina.Api.Tests.Unit;
 
-internal sealed class StubDriverStatusReader(DriverConnection connection) : IDriverStatusReader
+internal sealed class StubDriverStatusReader(DriverObservation observation) : IDriverStatusReader
 {
-    public Task<DriverConnection> ReadAsync(CancellationToken cancellationToken) => Task.FromResult(connection);
+    public Task<DriverObservation> ReadAsync(CancellationToken cancellationToken)
+        => Task.FromResult(observation);
+}
+
+internal sealed class ThrowingDriverStatusReader : IDriverStatusReader
+{
+    public Task<DriverObservation> ReadAsync(CancellationToken cancellationToken)
+        => throw new InvalidOperationException("The monitor is broken.");
 }
 
 internal sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
