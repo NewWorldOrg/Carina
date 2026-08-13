@@ -14,6 +14,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Carina.Driver;
 
@@ -95,10 +96,12 @@ public static class DriverHost
             options.ListenUnixSocket(socketPath);
         });
 
-        builder.Services.Configure<HostOptions>(options =>
-            options.ShutdownTimeout =
-                TimeSpan.FromHours(configuration.ShutdownGraceHours) + TimeSpan.FromMinutes(1)
-        );
+        builder
+            .Services.AddOptions<HostOptions>()
+            .Configure<TunerSessionManager>(
+                (options, manager) =>
+                    options.ShutdownTimeout = manager.ShutdownBudget + TimeSpan.FromMinutes(1)
+            );
         builder.Services.ConfigureHttpJsonOptions(options =>
             options.SerializerOptions.TypeInfoResolverChain.Insert(0, DriverJson.Context)
         );
@@ -123,7 +126,10 @@ public static class DriverHost
             recordingWriters: provider.GetRequiredService<IRecordingWriterFactory>()
         ));
 
-        builder.Services.AddHostedService<DriverEventHubService>();
+        builder.Services.AddSingleton<DriverLifecycle>();
+        builder.Services.AddHostedService(provider =>
+            provider.GetRequiredService<DriverLifecycle>()
+        );
         builder.Services.AddHostedService(provider =>
             provider.GetRequiredService<TunerSessionManager>()
         );

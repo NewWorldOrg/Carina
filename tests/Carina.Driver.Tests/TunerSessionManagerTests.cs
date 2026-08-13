@@ -419,23 +419,24 @@ public sealed class TunerSessionManagerTests : IDisposable
     }
 
     [Fact]
-    public async Task ShutdownStopsAViewerButWaitsForARecording()
+    public async Task TheDrainStopsAViewerButWaitsForARecordingWithItsStreamsAttached()
     {
         var manager = Manager();
         var recording = Begin(manager, "s-1", "adapter0");
         var live = Begin(manager, "s-2", "adapter1", SessionPurpose.Live, TunerKind.Satellite);
 
-        var shuttingDown = manager.StopAsync(CancellationToken.None);
+        var draining = manager.DrainAsync(CancellationToken.None);
 
         live.WaitForEnd(TimeSpan.FromSeconds(10));
 
         Assert.Equal(SessionState.Stopped, live.State);
-        Assert.False(shuttingDown.IsCompleted);
+        Assert.False(draining.IsCompleted);
         Assert.Equal(SessionState.Active, recording.State);
+        Assert.False(recording.Broadcaster.IsClosed);
 
         clock.Advance(TimeSpan.FromHours(2));
 
-        await shuttingDown;
+        await draining;
 
         Assert.Equal(SessionState.Stopped, recording.State);
         Assert.Equal(SessionStopReason.EndTimeReached, recording.StopReason);
@@ -447,12 +448,28 @@ public sealed class TunerSessionManagerTests : IDisposable
         var manager = Manager(Configuration with { ShutdownGraceHours = 0 });
         var recording = Begin(manager, "s-1", "adapter0");
 
-        await manager.StopAsync(CancellationToken.None);
+        await manager.DrainAsync(CancellationToken.None);
 
         Assert.Equal(SessionState.Failed, recording.State);
         Assert.Equal(SessionStopReason.DrainCapReached, recording.StopReason);
         Assert.NotNull(recording.FailureCause);
         Assert.False(manager.IsFaulted("adapter0", out _));
+    }
+
+    [Fact]
+    public async Task TheDrainRunsOnceAndStopAsyncJoinsIt()
+    {
+        var manager = Manager(Configuration with { ShutdownGraceHours = 0 });
+        var recording = Begin(manager, "s-1", "adapter0");
+
+        var draining = manager.DrainAsync(CancellationToken.None);
+
+        Assert.Same(draining, manager.DrainAsync(CancellationToken.None));
+        Assert.Same(draining, manager.StopAsync(CancellationToken.None));
+
+        await draining;
+
+        Assert.Equal(SessionStopReason.DrainCapReached, recording.StopReason);
     }
 
     [Fact]
@@ -469,7 +486,7 @@ public sealed class TunerSessionManagerTests : IDisposable
         var recording = Begin(manager, "s-1", "adapter0");
         var started = DateTime.UtcNow;
 
-        await manager.StopAsync(CancellationToken.None);
+        await manager.DrainAsync(CancellationToken.None);
 
         Assert.True(DateTime.UtcNow - started < TimeSpan.FromSeconds(10));
         Assert.False(recording.Completion.IsCompleted);

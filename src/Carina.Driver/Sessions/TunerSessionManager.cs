@@ -41,13 +41,18 @@ public sealed class TunerSessionManager(
     private readonly IRecordingWriterFactory writerFactory =
         recordingWriters ?? new RecordingWriterFactory();
 
+    private readonly Lock drainGate = new();
+
     private volatile bool draining;
+    private Task? drain;
 
     public IReadOnlyCollection<TunerSession> Sessions => [.. sessions.Values];
 
     public IReadOnlyCollection<TunerSession> Recent => [.. ended];
 
     public bool IsDraining => draining;
+
+    public TimeSpan ShutdownBudget => drainCap + hardStop;
 
     public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
@@ -69,7 +74,19 @@ public sealed class TunerSessionManager(
         }
     }
 
-    public async Task StopAsync(CancellationToken cancellationToken)
+    public Task DrainAsync(CancellationToken cancellationToken)
+    {
+        lock (drainGate)
+        {
+            drain ??= Drain(cancellationToken);
+
+            return drain;
+        }
+    }
+
+    public Task StopAsync(CancellationToken cancellationToken) => DrainAsync(cancellationToken);
+
+    private async Task Drain(CancellationToken cancellationToken)
     {
         EnterDraining();
 

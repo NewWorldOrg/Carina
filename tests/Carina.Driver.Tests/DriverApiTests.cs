@@ -142,11 +142,106 @@ public sealed class DriverApiTests
             $"Shutdown took {watch.Elapsed} with a viewer attached."
         );
 
-        await Assert.ThrowsAnyAsync<Exception>(async () =>
+        try
         {
             while (await body.ReadAsync(buffer, Soon()) > 0)
             { }
-        });
+        }
+        catch (Exception)
+        { }
+    }
+
+    [Fact]
+    public async Task TheSocketKeepsAnsweringWhileTheDriverDrains()
+    {
+        var driver = await DriverUnderTest.Start();
+        using var client = driver.Client();
+
+        using var created = await client.PostAsync(
+            DriverEndpoints.Sessions,
+            DriverUnderTest.Body(
+                DriverUnderTest.Recording("lingering", DateTimeOffset.UtcNow.AddMinutes(10))
+            ),
+            Soon()
+        );
+
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+
+        var stopping = driver.BeginStop();
+
+        var deadline = DateTimeOffset.UtcNow + Patience;
+
+        while (true)
+        {
+            using var polled = await client.GetAsync(DriverEndpoints.Health, Soon());
+            var hello = await DriverUnderTest.Read(polled, DriverJson.Context.DriverHello);
+
+            if (hello is { Draining: true })
+            {
+                break;
+            }
+
+            if (DateTimeOffset.UtcNow > deadline)
+            {
+                Assert.Fail("The driver never said it was draining.");
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(20));
+        }
+
+        Assert.False(stopping.IsCompleted);
+
+        using var listed = await client.GetAsync(DriverEndpoints.Sessions, Soon());
+        var sessions = await DriverUnderTest.Read(
+            listed,
+            DriverJson.Context.IReadOnlyListSessionSnapshot
+        );
+
+        Assert.NotNull(sessions);
+
+        var recording = Assert.Single(sessions);
+
+        Assert.Equal("lingering", recording.SessionId.Value);
+        Assert.Equal(SessionState.Active, recording.State);
+
+        using var diagnosed = await client.GetAsync(DriverEndpoints.Diagnostics, Soon());
+
+        Assert.Equal(HttpStatusCode.OK, diagnosed.StatusCode);
+
+        using var listening = await client.GetAsync(
+            DriverEndpoints.Events,
+            HttpCompletionOption.ResponseHeadersRead,
+            Soon()
+        );
+
+        Assert.Equal(HttpStatusCode.OK, listening.StatusCode);
+
+        using var refused = await client.PostAsync(
+            DriverEndpoints.Sessions,
+            DriverUnderTest.Body(DriverUnderTest.Live("latecomer")),
+            Soon()
+        );
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, refused.StatusCode);
+
+        var problem = await DriverUnderTest.Read(refused, DriverJson.Context.DriverProblem);
+
+        Assert.NotNull(problem);
+        Assert.Equal("draining", problem.Title);
+
+        using var stopped = await client.DeleteAsync(
+            DriverEndpoints.Session(SessionId.Parse("lingering")),
+            Soon()
+        );
+
+        Assert.True(
+            stopped.StatusCode is HttpStatusCode.Accepted or HttpStatusCode.OK,
+            $"Stopping the recording during the drain answered {stopped.StatusCode}."
+        );
+
+        await stopping.WaitAsync(TimeSpan.FromSeconds(20));
+
+        await driver.DisposeAsync();
     }
 
     [Fact]

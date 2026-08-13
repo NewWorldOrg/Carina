@@ -79,6 +79,8 @@ public sealed class DriverUnderTest : IAsyncDisposable
     public T Service<T>()
         where T : notnull => (T)host.Services.GetService(typeof(T))!;
 
+    public Task BeginStop() => host.StopAsync(CancellationToken.None);
+
     public HttpClient Client()
     {
         var path = SocketPath;

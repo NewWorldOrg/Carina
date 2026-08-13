@@ -54,10 +54,14 @@ public static class DriverApi
 
         RequestDelegate stopSession = context => StopSession(context, manager, hello);
 
-        var stopping = app.Lifetime.ApplicationStopping;
+        var lifecycle = app.Services.GetRequiredService<DriverLifecycle>();
 
         RequestDelegate stream = context =>
-            SessionStreamHandler.Invoke(context, manager, driverStopping: stopping);
+            SessionStreamHandler.Invoke(
+                context,
+                manager,
+                streamsDetaching: lifecycle.StreamsDetaching
+            );
 
         RequestDelegate events = context => DriverEventStream.Invoke(context, hub);
 

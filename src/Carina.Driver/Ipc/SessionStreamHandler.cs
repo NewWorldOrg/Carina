@@ -15,7 +15,7 @@ public static class SessionStreamHandler
         HttpContext context,
         TunerSessionManager manager,
         TimeSpan? conclusionGrace = null,
-        CancellationToken driverStopping = default
+        CancellationToken streamsDetaching = default
     )
     {
         if (!SessionId.TryParse(context.Request.RouteValues["id"] as string, out var sessionId))
@@ -97,7 +97,7 @@ public static class SessionStreamHandler
                 session,
                 subscription,
                 conclusionGrace ?? DefaultConclusionGrace,
-                driverStopping
+                streamsDetaching
             );
         }
         finally
@@ -111,7 +111,7 @@ public static class SessionStreamHandler
         TunerSession session,
         SessionSubscription subscription,
         TimeSpan conclusionGrace,
-        CancellationToken driverStopping
+        CancellationToken streamsDetaching
     )
     {
         context.Response.StatusCode = StatusCodes.Status200OK;
@@ -119,7 +119,7 @@ public static class SessionStreamHandler
 
         using var leash = CancellationTokenSource.CreateLinkedTokenSource(
             context.RequestAborted,
-            driverStopping
+            streamsDetaching
         );
 
         try
