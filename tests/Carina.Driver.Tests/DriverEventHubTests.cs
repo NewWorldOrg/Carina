@@ -152,4 +152,20 @@ public sealed class DriverEventHubTests
 
         Assert.Equal(0, hub.ListenerCount);
     }
+
+    [Fact]
+    public async Task ASignalSentJustBeforeTheCloseStillArrives()
+    {
+        var hub = new DriverEventHub();
+
+        Assert.True(hub.TryListen(out var listener));
+
+        hub.Signal(DriverEvents.Draining);
+        hub.CloseAll();
+
+        Assert.Equal([DriverEvents.Draining], await Next(listener));
+        await Assert.ThrowsAsync<System.Threading.Channels.ChannelClosedException>(
+            () => Next(listener)
+        );
+    }
 }

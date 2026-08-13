@@ -70,6 +70,61 @@ public sealed class DriverApiTests
     }
 
     [Fact]
+    public async Task TheLocationOfACreatedSessionCanBeFetched()
+    {
+        await using var driver = await DriverUnderTest.Start();
+        using var client = driver.Client();
+
+        using var created = await client.PostAsync(
+            DriverEndpoints.Sessions,
+            DriverUnderTest.Body(DriverUnderTest.Live("located-one")),
+            Soon()
+        );
+
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+
+        using var fetched = await client.GetAsync(
+            created.Headers.Location?.ToString(),
+            Soon()
+        );
+
+        Assert.Equal(HttpStatusCode.OK, fetched.StatusCode);
+
+        var snapshot = await DriverUnderTest.Read(fetched, DriverJson.Context.SessionSnapshot);
+
+        Assert.NotNull(snapshot);
+        Assert.Equal("located-one", snapshot.SessionId.Value);
+
+        using var missing = await client.GetAsync(
+            DriverEndpoints.Session(SessionId.Parse("nobody")),
+            Soon()
+        );
+
+        Assert.Equal(HttpStatusCode.NotFound, missing.StatusCode);
+    }
+
+    [Fact]
+    public async Task HealthSaysWhetherTheDriverIsDraining()
+    {
+        await using var driver = await DriverUnderTest.Start();
+        using var client = driver.Client();
+
+        using var before = await client.GetAsync(DriverEndpoints.Health, Soon());
+        var serving = await DriverUnderTest.Read(before, DriverJson.Context.DriverHello);
+
+        Assert.NotNull(serving);
+        Assert.False(serving.Draining);
+
+        driver.Service<TunerSessionManager>().EnterDraining();
+
+        using var after = await client.GetAsync(DriverEndpoints.Health, Soon());
+        var draining = await DriverUnderTest.Read(after, DriverJson.Context.DriverHello);
+
+        Assert.NotNull(draining);
+        Assert.True(draining.Draining);
+    }
+
+    [Fact]
     public async Task AStartedSessionIsCreatedAndThenListed()
     {
         await using var driver = await DriverUnderTest.Start();

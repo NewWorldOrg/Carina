@@ -84,6 +84,34 @@ public sealed class DriverConfigurationFileTests : IDisposable
     }
 
     [Fact]
+    public void ASocketDirectoryAnyoneCanWriteInIsAFinding()
+    {
+        var recordings = Directory.CreateDirectory(Path.Combine(root, "recordings")).FullName;
+        var sockets = Directory.CreateDirectory(Path.Combine(root, "sockets")).FullName;
+        File.SetUnixFileMode(
+            sockets,
+            UnixFileMode.UserRead
+                | UnixFileMode.UserWrite
+                | UnixFileMode.UserExecute
+                | UnixFileMode.OtherWrite
+                | UnixFileMode.OtherExecute
+        );
+
+        var configuration = new DriverConfiguration(
+            Path.Combine(sockets, "driver.sock"),
+            [new OutputRootSettings("primary", recordings)],
+            6,
+            new TunerSettings(TunerBackend.Fake),
+            [new DeviceSettings("adapter0", DeviceKind.Terrestrial)]
+        );
+
+        Assert.Contains(
+            DriverConfigurationReader.CheckTheFilesystem(configuration).Problems,
+            problem => problem.Contains("anyone may write")
+        );
+    }
+
+    [Fact]
     public void TheShippedDevelopmentConfigurationIsUsable()
     {
         var path = Path.Combine(

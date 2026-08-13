@@ -168,6 +168,72 @@ public sealed class SessionStreamHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task AReaderArrivingWhileTheSessionConcludesIsRefusedNotHandedAnEmptySuccess()
+    {
+        var manager = Manager();
+        var session = Begin(manager, "closing-one");
+
+        session.Broadcaster.Close(null);
+
+        var (context, lifetime, body) = Ask("closing-one");
+
+        await SessionStreamHandler.Invoke(context, manager);
+
+        Assert.Equal(StatusCodes.Status409Conflict, context.Response.StatusCode);
+        Assert.False(lifetime.Aborted);
+
+        session.Stop();
+        session.WaitForEnd(TimeSpan.FromSeconds(10));
+    }
+
+    [Fact]
+    public async Task AStreamWhoseEndTheDriverCannotVouchForIsAborted()
+    {
+        var manager = Manager();
+        var session = Begin(manager, "unvouched-one");
+        var (context, lifetime, body) = Ask("unvouched-one");
+
+        var streaming = SessionStreamHandler.Invoke(
+            context,
+            manager,
+            TimeSpan.FromMilliseconds(200)
+        );
+
+        await WaitForBytes(body);
+
+        session.Broadcaster.Close(null);
+
+        await streaming.WaitAsync(Patience);
+
+        Assert.True(lifetime.Aborted);
+
+        session.Stop();
+        session.WaitForEnd(TimeSpan.FromSeconds(10));
+    }
+
+    [Fact]
+    public async Task AStreamCutShortByTheDrainCapIsAbortedAndNotClosedCleanly()
+    {
+        var manager = Manager();
+        var session = Begin(manager, "drained-one");
+        var (context, lifetime, body) = Ask("drained-one");
+
+        var streaming = SessionStreamHandler.Invoke(context, manager);
+
+        await WaitForBytes(body);
+
+        session.Broadcaster.Close(
+            new OperationCanceledException(
+                "The shutdown grace period ran out while 'drained-one' was still recording."
+            )
+        );
+
+        await streaming.WaitAsync(Patience);
+
+        Assert.True(lifetime.Aborted);
+    }
+
+    [Fact]
     public async Task ASurveyReaderThatWasCutShortIsAborted()
     {
         var manager = Manager();

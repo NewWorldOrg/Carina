@@ -112,6 +112,15 @@ public static class DriverConfigurationReader
         {
             problems.Add($"socketPath: '{socketDirectory}' does not exist.");
         }
+        else if (
+            (File.GetUnixFileMode(socketDirectory!) & UnixFileMode.OtherWrite)
+            is not UnixFileMode.None
+        )
+        {
+            problems.Add(
+                $"socketPath: anyone may write in '{socketDirectory}', so anyone could replace the socket. Tighten the directory before the driver serves on it."
+            );
+        }
 
         return problems.Count is 0
             ? DriverConfigurationResult.Usable(configuration)

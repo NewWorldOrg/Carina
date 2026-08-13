@@ -11,6 +11,8 @@ public sealed record DriverHello(
 
     public IReadOnlyList<string> Capabilities { get; init; } = Capabilities ?? [];
 
+    public bool Draining { get; init; }
+
     public bool Supports(string capability) =>
         Capabilities.Contains(capability, StringComparer.Ordinal);
 

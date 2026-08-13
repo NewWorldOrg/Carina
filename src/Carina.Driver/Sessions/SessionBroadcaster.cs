@@ -64,8 +64,24 @@ public sealed class SessionBroadcaster(
 
     private bool closed;
     private Exception? closedBecause;
+    private long droppedChunks;
 
     public int SubscriberCount => subscriptions.Count;
+
+    public bool IsClosed
+    {
+        get
+        {
+            lock (gate)
+            {
+                return closed;
+            }
+        }
+    }
+
+    public long DroppedChunks => Interlocked.Read(ref droppedChunks);
+
+    private void Tally() => Interlocked.Increment(ref droppedChunks);
 
     public int SubscriberLimit => subscriberLimit;
 
@@ -74,14 +90,15 @@ public sealed class SessionBroadcaster(
         [NotNullWhen(true)] out SessionSubscription? subscription
     )
     {
-        subscription = Attach(kind, subscriberLimit);
+        subscription = Attach(kind, subscriberLimit, acceptClosed: false);
 
         return subscription is not null;
     }
 
-    public SessionSubscription Subscribe(SubscriberKind kind) => Attach(kind, int.MaxValue)!;
+    public SessionSubscription Subscribe(SubscriberKind kind) =>
+        Attach(kind, int.MaxValue, acceptClosed: true)!;
 
-    private SessionSubscription? Attach(SubscriberKind kind, int limit)
+    private SessionSubscription? Attach(SubscriberKind kind, int limit, bool acceptClosed)
     {
         SessionSubscription? subscription = null;
 
@@ -97,7 +114,11 @@ public sealed class SessionBroadcaster(
                 {
                     FullMode = BoundedChannelFullMode.DropOldest,
                 },
-                _ => subscription?.CountDrop()
+                _ =>
+                {
+                    subscription?.CountDrop();
+                    Tally();
+                }
             );
 
         subscription = new SessionSubscription(kind, channel);
@@ -106,6 +127,11 @@ public sealed class SessionBroadcaster(
         {
             if (closed)
             {
+                if (!acceptClosed)
+                {
+                    return null;
+                }
+
                 subscription.IsDisconnected = true;
                 subscription.Channel.Writer.TryComplete(closedBecause);
 
@@ -198,6 +224,7 @@ public sealed class SessionBroadcaster(
             case Delivery.Abandoned:
                 subscription.IsTruncated = true;
                 subscription.CountDrop();
+                Tally();
 
                 return;
 

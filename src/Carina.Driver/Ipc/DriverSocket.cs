@@ -11,6 +11,8 @@ public static class DriverSocket
 {
     public const int MaxPathBytes = 107;
 
+    public static readonly TimeSpan ProbePatience = TimeSpan.FromSeconds(2);
+
     public const UnixFileMode RequiredPermissions =
         UnixFileMode.UserRead
         | UnixFileMode.UserWrite
@@ -134,15 +136,26 @@ public static class DriverSocket
             ProtocolType.Unspecified
         );
 
+        var connecting = probe.ConnectAsync(new UnixDomainSocketEndPoint(path));
+
         try
         {
-            probe.Connect(new UnixDomainSocketEndPoint(path));
+            if (!connecting.Wait(ProbePatience))
+            {
+                _ = connecting.ContinueWith(
+                    finished => _ = finished.Exception,
+                    TaskScheduler.Default
+                );
+
+                return true;
+            }
 
             return true;
         }
-        catch (SocketException)
+        catch (AggregateException gathered)
+            when (gathered.InnerException is SocketException refusal)
         {
-            return false;
+            return refusal.SocketErrorCode is SocketError.AccessDenied;
         }
     }
 }

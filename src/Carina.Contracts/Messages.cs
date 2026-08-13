@@ -248,6 +248,8 @@ public sealed record SessionSnapshot(
 
     public long FaultCount { get; init; }
 
+    public long DroppedChunks { get; init; }
+
     public string? FirstFault { get; init; }
 
     public string? FailureCause { get; init; }

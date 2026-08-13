@@ -9,7 +9,13 @@ public static class SessionStreamHandler
 {
     public const string ContentType = "video/mp2t";
 
-    public static async Task Invoke(HttpContext context, TunerSessionManager manager)
+    public static readonly TimeSpan DefaultConclusionGrace = TimeSpan.FromSeconds(5);
+
+    public static async Task Invoke(
+        HttpContext context,
+        TunerSessionManager manager,
+        TimeSpan? conclusionGrace = null
+    )
     {
         if (!SessionId.TryParse(context.Request.RouteValues["id"] as string, out var sessionId))
         {
@@ -61,6 +67,18 @@ public static class SessionStreamHandler
 
         if (!session.Broadcaster.TrySubscribe(kind, out var subscription))
         {
+            if (session.Broadcaster.IsClosed)
+            {
+                await DriverApi.Problem(
+                    context,
+                    StatusCodes.Status409Conflict,
+                    "sessionEnded",
+                    $"The session '{sessionId}' has ended; the driver keeps no stream to replay."
+                );
+
+                return;
+            }
+
             await DriverApi.Problem(
                 context,
                 StatusCodes.Status429TooManyRequests,
@@ -73,7 +91,7 @@ public static class SessionStreamHandler
 
         try
         {
-            await Pump(context, session, subscription);
+            await Pump(context, session, subscription, conclusionGrace ?? DefaultConclusionGrace);
         }
         finally
         {
@@ -84,17 +102,18 @@ public static class SessionStreamHandler
     private static async Task Pump(
         HttpContext context,
         TunerSession session,
-        SessionSubscription subscription
+        SessionSubscription subscription,
+        TimeSpan conclusionGrace
     )
     {
         context.Response.StatusCode = StatusCodes.Status200OK;
         context.Response.ContentType = ContentType;
 
-        await context.Response.StartAsync(context.RequestAborted);
-        await context.Response.Body.FlushAsync(context.RequestAborted);
-
         try
         {
+            await context.Response.StartAsync(context.RequestAborted);
+            await context.Response.Body.FlushAsync(context.RequestAborted);
+
             await foreach (
                 var chunk in subscription.Reader.ReadAllAsync(context.RequestAborted)
             )
@@ -102,7 +121,7 @@ public static class SessionStreamHandler
                 await context.Response.Body.WriteAsync(chunk, context.RequestAborted);
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
         {
             return;
         }
@@ -113,14 +132,44 @@ public static class SessionStreamHandler
             return;
         }
 
-        if (subscription.IsTruncated || session.State is SessionState.Failed)
+        if (!await EndedCleanly(session, subscription, conclusionGrace))
         {
             context.Abort();
 
             return;
         }
 
-        await context.Response.Body.FlushAsync(CancellationToken.None);
+        try
+        {
+            await context.Response.Body.FlushAsync(CancellationToken.None);
+        }
+        catch (Exception)
+        {
+            context.Abort();
+        }
+    }
+
+    private static async Task<bool> EndedCleanly(
+        TunerSession session,
+        SessionSubscription subscription,
+        TimeSpan conclusionGrace
+    )
+    {
+        if (subscription.IsTruncated)
+        {
+            return false;
+        }
+
+        try
+        {
+            await session.Completion.WaitAsync(conclusionGrace);
+        }
+        catch (TimeoutException)
+        {
+            return false;
+        }
+
+        return session.State is SessionState.Stopped && !subscription.IsTruncated;
     }
 
     private static bool TryReadKind(HttpContext context, out SubscriberKind kind)

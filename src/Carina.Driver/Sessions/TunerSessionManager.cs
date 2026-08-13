@@ -43,10 +43,15 @@ public sealed class TunerSessionManager(
 
     public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
-    public async Task StopAsync(CancellationToken cancellationToken)
+    public void EnterDraining()
     {
         draining = true;
         events?.Signal(DriverEvents.Draining);
+    }
+
+    public async Task StopAsync(CancellationToken cancellationToken)
+    {
+        EnterDraining();
 
         var running = sessions.Values.ToArray();
         if (running.Length is 0)

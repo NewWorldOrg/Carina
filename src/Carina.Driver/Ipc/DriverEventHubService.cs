@@ -1,13 +1,16 @@
 using Carina.Driver.Events;
+using Carina.Driver.Sessions;
 
 using Microsoft.Extensions.Hosting;
 
 namespace Carina.Driver.Ipc;
 
-public sealed class DriverEventHubService(DriverEventHub hub) : IHostedLifecycleService
+public sealed class DriverEventHubService(DriverEventHub hub, TunerSessionManager manager)
+    : IHostedLifecycleService
 {
     public Task StoppingAsync(CancellationToken cancellationToken)
     {
+        manager.EnterDraining();
         hub.CloseAll();
 
         return Task.CompletedTask;

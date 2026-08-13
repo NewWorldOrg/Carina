@@ -23,7 +23,12 @@ public static class DriverApi
         var hub = app.Services.GetRequiredService<DriverEventHub>();
 
         RequestDelegate health = context =>
-            Write(context, StatusCodes.Status200OK, hello, DriverJson.Context.DriverHello);
+            Write(
+                context,
+                StatusCodes.Status200OK,
+                hello with { Draining = manager.IsDraining },
+                DriverJson.Context.DriverHello
+            );
 
         RequestDelegate tuners = context =>
             Write(
@@ -41,6 +46,8 @@ public static class DriverApi
                 DriverJson.Context.IReadOnlyListSessionSnapshot
             );
 
+        RequestDelegate session = context => ShowSession(context, manager, hello);
+
         RequestDelegate startSession = context => StartSession(context, manager, hello);
 
         RequestDelegate stopSession = context => StopSession(context, manager, hello);
@@ -53,6 +60,7 @@ public static class DriverApi
         app.MapGet(DriverEndpoints.Tuners, tuners);
         app.MapGet(DriverEndpoints.Sessions, sessions);
         app.MapPost(DriverEndpoints.Sessions, startSession);
+        app.MapGet($"{DriverEndpoints.Sessions}/{{id}}", session);
         app.MapDelete($"{DriverEndpoints.Sessions}/{{id}}", stopSession);
         app.MapGet($"{DriverEndpoints.Sessions}/{{id}}/stream", stream);
         app.MapGet(DriverEndpoints.Events, events);
@@ -98,6 +106,10 @@ public static class DriverApi
                 context.RequestAborted
             );
         }
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        {
+            return;
+        }
         catch (Exception error)
             when (error is JsonException or InvalidOperationException or BadHttpRequestException)
         {
@@ -139,6 +151,44 @@ public static class DriverApi
         await Write(
             context,
             StatusCodes.Status201Created,
+            SessionViews.Of(session, hello),
+            DriverJson.Context.SessionSnapshot
+        );
+    }
+
+    private static async Task ShowSession(
+        HttpContext context,
+        TunerSessionManager manager,
+        DriverHello hello
+    )
+    {
+        if (!SessionId.TryParse(context.Request.RouteValues["id"] as string, out var sessionId))
+        {
+            await Problem(
+                context,
+                StatusCodes.Status400BadRequest,
+                "badSessionId",
+                $"A session id is 1 to {SessionId.MaxLength} characters of A-Z, a-z, 0-9 or '-'."
+            );
+
+            return;
+        }
+
+        if (!manager.TryGet(sessionId, out var session))
+        {
+            await Problem(
+                context,
+                StatusCodes.Status404NotFound,
+                "noSuchSession",
+                $"This driver holds no session called '{sessionId}'."
+            );
+
+            return;
+        }
+
+        await Write(
+            context,
+            StatusCodes.Status200OK,
             SessionViews.Of(session, hello),
             DriverJson.Context.SessionSnapshot
         );

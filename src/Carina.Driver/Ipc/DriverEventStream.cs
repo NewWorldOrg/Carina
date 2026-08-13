@@ -30,11 +30,11 @@ public static class DriverEventStream
             context.Response.ContentType = ContentType;
             context.Response.Headers.CacheControl = "no-cache";
 
-            await context.Response.StartAsync(context.RequestAborted);
-            await context.Response.Body.FlushAsync(context.RequestAborted);
-
             try
             {
+                await context.Response.StartAsync(context.RequestAborted);
+                await context.Response.Body.FlushAsync(context.RequestAborted);
+
                 while (true)
                 {
                     foreach (var name in await listener.Take(context.RequestAborted))
@@ -49,7 +49,7 @@ public static class DriverEventStream
                 }
             }
             catch (Exception error)
-                when (error is OperationCanceledException or ChannelClosedException)
+                when (error is OperationCanceledException or ChannelClosedException or IOException)
             { }
         }
     }
