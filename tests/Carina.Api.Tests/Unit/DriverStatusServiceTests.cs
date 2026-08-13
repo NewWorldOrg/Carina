@@ -2,6 +2,8 @@ using Carina.Api.Services;
 using Carina.Contracts;
 using Carina.Domain.DriverStatus;
 
+using Microsoft.Extensions.Logging.Abstractions;
+
 namespace Carina.Api.Tests.Unit;
 
 public sealed class DriverStatusServiceTests
@@ -16,7 +18,8 @@ public sealed class DriverStatusServiceTests
             []);
         var service = new DriverStatusService(
             new StubDriverStatusReader(observation),
-            new FixedTimeProvider(ObservedAt));
+            new FixedTimeProvider(ObservedAt),
+            NullLogger<DriverStatusService>.Instance);
 
         var result = await service.GetStatusAsync(CancellationToken.None);
 
@@ -31,11 +34,13 @@ public sealed class DriverStatusServiceTests
     {
         var service = new DriverStatusService(
             new ThrowingDriverStatusReader(),
-            new FixedTimeProvider(ObservedAt));
+            new FixedTimeProvider(ObservedAt),
+            NullLogger<DriverStatusService>.Instance);
 
         var result = await service.GetStatusAsync(CancellationToken.None);
 
         Assert.False(result.IsSuccess);
-        Assert.Contains("The monitor is broken.", result.ErrorMessage, StringComparison.Ordinal);
+        Assert.Equal("The driver status is unavailable.", result.ErrorMessage);
+        Assert.DoesNotContain("The monitor is broken.", result.ErrorMessage, StringComparison.Ordinal);
     }
 }

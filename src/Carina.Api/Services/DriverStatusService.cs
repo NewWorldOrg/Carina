@@ -3,7 +3,10 @@ using Carina.Domain.DriverStatus;
 
 namespace Carina.Api.Services;
 
-public sealed class DriverStatusService(IDriverStatusReader driverStatusReader, TimeProvider timeProvider)
+public sealed class DriverStatusService(
+    IDriverStatusReader driverStatusReader,
+    TimeProvider timeProvider,
+    ILogger<DriverStatusService> logger)
 {
     public async Task<ServiceResult<DriverStatusSnapshot>> GetStatusAsync(CancellationToken cancellationToken)
     {
@@ -20,8 +23,9 @@ public sealed class DriverStatusService(IDriverStatusReader driverStatusReader, 
         }
         catch (Exception error)
         {
-            return ServiceResult<DriverStatusSnapshot>.Failure(
-                $"The driver status reader failed: {error.Message}");
+            logger.LogError(error, "Reading the driver status failed.");
+
+            return ServiceResult<DriverStatusSnapshot>.Failure("The driver status is unavailable.");
         }
     }
 }

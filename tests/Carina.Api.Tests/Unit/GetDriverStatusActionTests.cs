@@ -7,6 +7,7 @@ using Carina.Domain.DriverStatus;
 
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Carina.Api.Tests.Unit;
 
@@ -22,7 +23,8 @@ public sealed class GetDriverStatusActionTests
             []);
         var action = new GetDriverStatusAction(new DriverStatusService(
             new StubDriverStatusReader(observation),
-            new FixedTimeProvider(ObservedAt)));
+            new FixedTimeProvider(ObservedAt),
+            NullLogger<DriverStatusService>.Instance));
 
         var response = await action.Invoke(CancellationToken.None);
 
@@ -42,7 +44,8 @@ public sealed class GetDriverStatusActionTests
     {
         var action = new GetDriverStatusAction(new DriverStatusService(
             new ThrowingDriverStatusReader(),
-            new FixedTimeProvider(ObservedAt)));
+            new FixedTimeProvider(ObservedAt),
+            NullLogger<DriverStatusService>.Instance));
 
         var response = await action.Invoke(CancellationToken.None);
 
@@ -50,7 +53,7 @@ public sealed class GetDriverStatusActionTests
         Assert.Equal(StatusCodes.Status503ServiceUnavailable, faulted.StatusCode);
         var responder = Assert.IsType<BaseResponder<DriverStatusResponder>>(faulted.Value);
         Assert.False(responder.Status);
-        Assert.Contains("The monitor is broken.", responder.Message, StringComparison.Ordinal);
+        Assert.Equal("The driver status is unavailable.", responder.Message);
         Assert.Null(responder.Data);
     }
 }

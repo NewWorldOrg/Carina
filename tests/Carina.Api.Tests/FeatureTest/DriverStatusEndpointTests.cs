@@ -153,9 +153,8 @@ public sealed class DriverStatusEndpointTests
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
         Assert.False(body.RootElement.GetProperty("status").GetBoolean());
-        Assert.Contains(
-            "The monitor is broken.",
-            body.RootElement.GetProperty("message").GetString(),
-            StringComparison.Ordinal);
+        Assert.Equal(
+            "The driver status is unavailable.",
+            body.RootElement.GetProperty("message").GetString());
     }
 }
