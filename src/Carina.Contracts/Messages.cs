@@ -66,6 +66,10 @@ public enum DiagnosticReason
     DeviceFaulted = 3,
 
     TuningLost = 4,
+
+    RecordingCutShort = 5,
+
+    MeasurementFaulted = 6,
 }
 
 public sealed record TuningRequest(TunerKind Kind, int PhysicalChannel, int? ServiceId = null);

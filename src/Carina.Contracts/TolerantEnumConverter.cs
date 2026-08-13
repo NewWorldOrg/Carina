@@ -138,7 +138,7 @@ public sealed class SessionStateConverter : TolerantEnumConverter<SessionState>
 
 public sealed class SessionStopReasonConverter : TolerantEnumConverter<SessionStopReason>
 {
-    protected override string NameOf(SessionStopReason value) =>
+    public static string WireName(SessionStopReason value) =>
         value switch
         {
             SessionStopReason.Running => "running",
@@ -149,6 +149,8 @@ public sealed class SessionStopReasonConverter : TolerantEnumConverter<SessionSt
             SessionStopReason.RecordingFailed => "recordingFailed",
             _ => "unspecified",
         };
+
+    protected override string NameOf(SessionStopReason value) => WireName(value);
 
     protected override SessionStopReason? ValueOf(string name) =>
         name switch
@@ -173,6 +175,8 @@ public sealed class DiagnosticReasonConverter : TolerantEnumConverter<Diagnostic
             DiagnosticReason.DiskSpaceLow => "diskSpaceLow",
             DiagnosticReason.DeviceFaulted => "deviceFaulted",
             DiagnosticReason.TuningLost => "tuningLost",
+            DiagnosticReason.RecordingCutShort => "recordingCutShort",
+            DiagnosticReason.MeasurementFaulted => "measurementFaulted",
             _ => "unspecified",
         };
 
@@ -183,6 +187,8 @@ public sealed class DiagnosticReasonConverter : TolerantEnumConverter<Diagnostic
             "diskSpaceLow" => DiagnosticReason.DiskSpaceLow,
             "deviceFaulted" => DiagnosticReason.DeviceFaulted,
             "tuningLost" => DiagnosticReason.TuningLost,
+            "recordingCutShort" => DiagnosticReason.RecordingCutShort,
+            "measurementFaulted" => DiagnosticReason.MeasurementFaulted,
             "unspecified" => DiagnosticReason.Unspecified,
             _ => null,
         };

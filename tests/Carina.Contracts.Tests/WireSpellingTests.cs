@@ -50,6 +50,8 @@ public sealed class WireSpellingTests
     [InlineData(DiagnosticReason.DiskSpaceLow, "diskSpaceLow")]
     [InlineData(DiagnosticReason.DeviceFaulted, "deviceFaulted")]
     [InlineData(DiagnosticReason.TuningLost, "tuningLost")]
+    [InlineData(DiagnosticReason.RecordingCutShort, "recordingCutShort")]
+    [InlineData(DiagnosticReason.MeasurementFaulted, "measurementFaulted")]
     public void DiagnosticReasonIsSpelledThisWay(DiagnosticReason value, string wire)
     {
         AssertRoundTrip(value, wire, DriverJson.Context.DiagnosticReason);
@@ -74,6 +76,20 @@ public sealed class WireSpellingTests
         Assert.Equal(
             SessionStopReason.Unspecified,
             DriverJson.Deserialize("\"tunerStolen\"", DriverJson.Context.SessionStopReason)
+        );
+    }
+
+    [Fact]
+    public void TheStopReasonWireNameIsReadableWithoutSerializing()
+    {
+        Assert.Equal("requested", SessionStopReasonConverter.WireName(SessionStopReason.Requested));
+        Assert.Equal(
+            "drainCapReached",
+            SessionStopReasonConverter.WireName(SessionStopReason.DrainCapReached)
+        );
+        Assert.Equal(
+            "unspecified",
+            SessionStopReasonConverter.WireName((SessionStopReason)99)
         );
     }
 
