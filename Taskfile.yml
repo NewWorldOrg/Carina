@@ -19,6 +19,10 @@ tasks:
     cmd: docker compose exec app dotnet format
   lint:
     cmd: docker compose exec app dotnet format --verify-no-changes
+  openapi:
+    cmds:
+      - docker compose exec app dotnet build src/Carina.Api
+      - docker compose exec app dotnet msbuild src/Carina.Api/Carina.Api.csproj -t:GenerateOpenApiDocuments
   run:app:
     cmd: docker compose exec app dotnet run --project src/Carina.Api
   run:driver:
