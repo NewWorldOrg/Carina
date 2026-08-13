@@ -14,6 +14,7 @@ public sealed class FakeDriver : IAsyncDisposable
 {
     private readonly WebApplication app;
     private readonly List<Channel<string>> listeners = [];
+    private readonly Dictionary<string, int> requests = new(StringComparer.Ordinal);
     private readonly Lock gate = new();
 
     private FakeDriver(WebApplication app, string socketPath, DriverHello hello)
@@ -86,6 +87,12 @@ public sealed class FakeDriver : IAsyncDisposable
         arrange?.Invoke(driver);
         app.Lifetime.ApplicationStopping.Register(driver.CloseAllListeners);
 
+        app.Use(async (context, next) =>
+        {
+            driver.Count(context.Request.Path.Value);
+            await next(context);
+        });
+
         app.MapGet(DriverEndpoints.Health, driver.HealthAsync);
         app.MapGet(DriverEndpoints.Tuners, context =>
             driver.CannedAsync(context, driver.Tuners, DriverJson.Context.IReadOnlyListTunerSnapshot));
@@ -101,6 +108,14 @@ public sealed class FakeDriver : IAsyncDisposable
         await app.StartAsync();
 
         return driver;
+    }
+
+    public int RequestsFor(string path)
+    {
+        lock (gate)
+        {
+            return requests.TryGetValue(path, out var count) ? count : 0;
+        }
     }
 
     public void Signal(string name)
@@ -119,6 +134,19 @@ public sealed class FakeDriver : IAsyncDisposable
         using var patience = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         await app.StopAsync(patience.Token);
         await app.DisposeAsync();
+    }
+
+    private void Count(string? path)
+    {
+        if (path is null)
+        {
+            return;
+        }
+
+        lock (gate)
+        {
+            requests[path] = requests.TryGetValue(path, out var count) ? count + 1 : 1;
+        }
     }
 
     private void CloseAllListeners()

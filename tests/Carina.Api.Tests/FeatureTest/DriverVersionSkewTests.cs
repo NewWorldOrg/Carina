@@ -83,9 +83,13 @@ public sealed class DriverVersionSkewTests
             FakeDriver.HelloFor("instance-a"),
             driver => driver.RawBodyByPath[DriverEndpoints.Sessions] = SessionsThatAreNotJson);
 
-        await feature.UntilConnectionIs("connected");
+        await Eventually.Happens(
+            () => feature.Driver.RequestsFor(DriverEndpoints.Sessions) >= 2,
+            "the supervisor asks a second time, so the first round is past its readoption");
 
         Assert.Equal(0, feature.Hook.CallCount);
+
+        await feature.StatusAsync();
     }
 
     [Fact]
