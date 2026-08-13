@@ -91,6 +91,7 @@ public static class SessionStreamHandler
         context.Response.ContentType = ContentType;
 
         await context.Response.StartAsync(context.RequestAborted);
+        await context.Response.Body.FlushAsync(context.RequestAborted);
 
         try
         {

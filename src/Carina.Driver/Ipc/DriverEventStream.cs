@@ -31,6 +31,7 @@ public static class DriverEventStream
             context.Response.Headers.CacheControl = "no-cache";
 
             await context.Response.StartAsync(context.RequestAborted);
+            await context.Response.Body.FlushAsync(context.RequestAborted);
 
             try
             {
