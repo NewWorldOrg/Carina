@@ -55,6 +55,28 @@ public sealed class WireSpellingTests
         AssertRoundTrip(value, wire, DriverJson.Context.DiagnosticReason);
     }
 
+    [Theory]
+    [InlineData(SessionStopReason.Unspecified, "unspecified")]
+    [InlineData(SessionStopReason.Running, "running")]
+    [InlineData(SessionStopReason.Requested, "requested")]
+    [InlineData(SessionStopReason.EndTimeReached, "endTimeReached")]
+    [InlineData(SessionStopReason.DrainCapReached, "drainCapReached")]
+    [InlineData(SessionStopReason.DeviceFailed, "deviceFailed")]
+    [InlineData(SessionStopReason.RecordingFailed, "recordingFailed")]
+    public void SessionStopReasonIsSpelledThisWay(SessionStopReason value, string wire)
+    {
+        AssertRoundTrip(value, wire, DriverJson.Context.SessionStopReason);
+    }
+
+    [Fact]
+    public void AStopReasonThisBuildDoesNotKnowIsNotMistakenForARequestedStop()
+    {
+        Assert.Equal(
+            SessionStopReason.Unspecified,
+            DriverJson.Deserialize("\"tunerStolen\"", DriverJson.Context.SessionStopReason)
+        );
+    }
+
     [Fact]
     public void CapabilityNamesAreSpelledThisWay()
     {

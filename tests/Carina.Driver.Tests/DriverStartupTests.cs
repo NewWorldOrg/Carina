@@ -19,7 +19,7 @@ public sealed class DriverStartupTests
             DriverConfigurationResult.Usable(
                 new DriverConfiguration(
                     "/run/carina/driver.sock",
-                    "/srv/recordings",
+                    [new OutputRootSettings("primary", "/srv/recordings")],
                     6,
                     new TunerSettings(TunerBackend.Fake),
                     [new DeviceSettings("adapter0", DeviceKind.Terrestrial)]

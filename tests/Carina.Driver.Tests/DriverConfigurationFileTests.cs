@@ -20,7 +20,7 @@ public sealed class DriverConfigurationFileTests : IDisposable
         $$"""
         {
           "socketPath": "{{socketDirectory}}/driver.sock",
-          "recordingsDirectory": "{{recordings}}",
+          "outputRoots": [{ "name": "primary", "path": "{{recordings}}" }],
           "shutdownGraceHours": 6,
           "tuner": { "backend": "fake" },
           "devices": [
@@ -58,7 +58,7 @@ public sealed class DriverConfigurationFileTests : IDisposable
     }
 
     [Fact]
-    public void ARecordingsDirectoryThatIsNotThereIsAFinding()
+    public void AnOutputRootThatIsNotThereIsAFinding()
     {
         var path = Write(
             "driver.json",
@@ -67,7 +67,7 @@ public sealed class DriverConfigurationFileTests : IDisposable
 
         Assert.Contains(
             DriverConfigurationReader.ReadFile(path).Problems,
-            problem => problem.StartsWith("recordingsDirectory:")
+            problem => problem.StartsWith("outputRoots[0].path:")
         );
     }
 

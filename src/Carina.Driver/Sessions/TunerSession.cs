@@ -31,6 +31,8 @@ public sealed class TunerSession : IDisposable
     private Exception? firstFault;
     private long faultCount;
     private long endsAtTicks;
+    private long discardedBytes;
+    private long resyncs;
     private int finished;
 
     public TunerSession(
@@ -43,7 +45,8 @@ public sealed class TunerSession : IDisposable
         TimeProvider timeProvider,
         IRecordingWriter? recordingWriter = null,
         int chunkSize = DefaultChunkSize,
-        ILogger? logger = null
+        ILogger? logger = null,
+        string? outputRoot = null
     )
     {
         if (endsAt <= startedAt)
@@ -57,6 +60,7 @@ public sealed class TunerSession : IDisposable
         SessionId = sessionId;
         Purpose = purpose;
         DeviceId = deviceId;
+        OutputRoot = outputRoot;
         StartedAt = startedAt;
         endsAtTicks = endsAt.UtcTicks;
         this.device = device;
@@ -79,6 +83,8 @@ public sealed class TunerSession : IDisposable
     public SessionPurpose Purpose { get; }
 
     public string DeviceId { get; }
+
+    public string? OutputRoot { get; }
 
     public DateTimeOffset StartedAt { get; }
 
@@ -129,6 +135,12 @@ public sealed class TunerSession : IDisposable
     }
 
     public long FaultCount => Interlocked.Read(ref faultCount);
+
+    public long DiscardedBytes => Interlocked.Read(ref discardedBytes);
+
+    public long Resyncs => Interlocked.Read(ref resyncs);
+
+    public bool Concluded => completion.Task.IsCompleted;
 
     public SessionBroadcaster Broadcaster { get; }
 
@@ -305,6 +317,9 @@ public sealed class TunerSession : IDisposable
             {
                 Counters.Observe(packet);
             }
+
+            Interlocked.Exchange(ref discardedBytes, packetReader.DiscardedBytes);
+            Interlocked.Exchange(ref resyncs, packetReader.ResyncCount);
 
             Broadcaster.Publish(chunk, stopping.Token);
         }

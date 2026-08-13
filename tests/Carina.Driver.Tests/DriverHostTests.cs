@@ -11,7 +11,7 @@ public sealed class DriverHostTests
     private static readonly DriverConfiguration Configuration =
         new(
             "/run/carina/driver.sock",
-            "/srv/recordings",
+            [new OutputRootSettings("primary", "/srv/recordings")],
             6,
             new TunerSettings(TunerBackend.Fake),
             [new DeviceSettings("adapter0", DeviceKind.Terrestrial)]

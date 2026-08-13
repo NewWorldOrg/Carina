@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Serialization;
 
 namespace Carina.Driver.Configuration;
@@ -32,13 +33,48 @@ public sealed record DeviceSettings(
     bool LnbPower = false
 );
 
+public sealed record OutputRootSettings(string? Name, string? Path);
+
 public sealed record DriverConfiguration(
     string? SocketPath,
-    string? RecordingsDirectory,
+    IReadOnlyList<OutputRootSettings>? OutputRoots,
     int ShutdownGraceHours,
     TunerSettings? Tuner,
-    IReadOnlyList<DeviceSettings>? Devices
-);
+    IReadOnlyList<DeviceSettings>? Devices,
+    int SocketGroupId = DriverConfiguration.DefaultSocketGroupId,
+    int LiveSessionMinutes = DriverConfiguration.DefaultLiveSessionMinutes
+)
+{
+    public const string SocketGroupName = "carina";
+
+    public const int DefaultSocketGroupId = 10001;
+
+    public const int DefaultLiveSessionMinutes = 240;
+
+    public bool TryResolveOutputRoot(string? name, [NotNullWhen(true)] out string? path)
+    {
+        path = null;
+
+        if (string.IsNullOrEmpty(name))
+        {
+            return false;
+        }
+
+        foreach (var root in OutputRoots ?? [])
+        {
+            if (root?.Name is null || !string.Equals(root.Name, name, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            path = root.Path;
+
+            return path is not null;
+        }
+
+        return false;
+    }
+}
 
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,

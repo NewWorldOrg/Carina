@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading.Channels;
 
 namespace Carina.Driver.Sessions;
@@ -40,11 +41,13 @@ public sealed class SessionBroadcaster(
     int viewerCapacity = SessionBroadcaster.DefaultViewerCapacity,
     int surveyCapacity = SessionBroadcaster.DefaultSurveyCapacity,
     TimeSpan? surveyBlockLimit = null,
-    Action<Exception>? report = null
+    Action<Exception>? report = null,
+    int subscriberLimit = SessionBroadcaster.DefaultSubscriberLimit
 ) : IDisposable
 {
     public const int DefaultViewerCapacity = 64;
     public const int DefaultSurveyCapacity = 256;
+    public const int DefaultSubscriberLimit = 8;
 
     public static readonly TimeSpan DefaultSurveyBlockLimit = TimeSpan.FromSeconds(5);
 
@@ -64,7 +67,21 @@ public sealed class SessionBroadcaster(
 
     public int SubscriberCount => subscriptions.Count;
 
-    public SessionSubscription Subscribe(SubscriberKind kind)
+    public int SubscriberLimit => subscriberLimit;
+
+    public bool TrySubscribe(
+        SubscriberKind kind,
+        [NotNullWhen(true)] out SessionSubscription? subscription
+    )
+    {
+        subscription = Attach(kind, subscriberLimit);
+
+        return subscription is not null;
+    }
+
+    public SessionSubscription Subscribe(SubscriberKind kind) => Attach(kind, int.MaxValue)!;
+
+    private SessionSubscription? Attach(SubscriberKind kind, int limit)
     {
         SessionSubscription? subscription = null;
 
@@ -93,6 +110,11 @@ public sealed class SessionBroadcaster(
                 subscription.Channel.Writer.TryComplete(closedBecause);
 
                 return subscription;
+            }
+
+            if (subscriptions.Count >= limit)
+            {
+                return null;
             }
 
             subscriptions[subscription] = 0;

@@ -7,7 +7,7 @@ public sealed class DriverConfigurationTests
     private const string Complete = """
         {
           "socketPath": "/run/carina/driver.sock",
-          "recordingsDirectory": "/srv/recordings",
+          "outputRoots": [{ "name": "primary", "path": "/srv/recordings" }],
           "shutdownGraceHours": 6,
           "tuner": { "backend": "fake" },
           "devices": [
@@ -42,7 +42,7 @@ public sealed class DriverConfigurationTests
         var result = Read("""
             {
               "socketPath": "run/carina/driver.sock",
-              "recordingsDirectory": "",
+              "outputRoots": [],
               "shutdownGraceHours": 0,
               "tuner": { "backend": "telepathy" },
               "devices": []
@@ -57,7 +57,6 @@ public sealed class DriverConfigurationTests
     [Theory]
     [InlineData("socketPath", "\"\"")]
     [InlineData("socketPath", "\"driver.sock\"")]
-    [InlineData("recordingsDirectory", "\"srv/recordings\"")]
     [InlineData("shutdownGraceHours", "0")]
     [InlineData("shutdownGraceHours", "-1")]
     [InlineData("shutdownGraceHours", "169")]
@@ -87,10 +86,7 @@ public sealed class DriverConfigurationTests
         var result = Read("""{ "tuner": { "backend": "fake" } }""");
 
         Assert.Contains(result.Problems, problem => problem.StartsWith("socketPath:"));
-        Assert.Contains(
-            result.Problems,
-            problem => problem.StartsWith("recordingsDirectory:")
-        );
+        Assert.Contains(result.Problems, problem => problem.StartsWith("outputRoots:"));
         Assert.Contains(result.Problems, problem => problem.StartsWith("devices:"));
     }
 

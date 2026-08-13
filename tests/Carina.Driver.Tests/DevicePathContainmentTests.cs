@@ -98,7 +98,7 @@ public sealed class DevicePathContainmentTests : IDisposable
             .Read($$"""
                 {
                   "socketPath": "/run/carina/driver.sock",
-                  "recordingsDirectory": "/srv/recordings",
+                  "outputRoots": [{ "name": "primary", "path": "/srv/recordings" }],
                   "shutdownGraceHours": 6,
                   "tuner": { "backend": "dvb" },
                   "devices": [

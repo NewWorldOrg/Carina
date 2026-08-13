@@ -42,7 +42,9 @@ public static class DriverConfigurationReader
 
     private const int MinShutdownGraceHours = 1;
     private const int MaxShutdownGraceHours = 168;
-    private const int MaxDeviceIdLength = 64;
+    private const int MinLiveSessionMinutes = 1;
+    private const int MaxLiveSessionMinutes = 1440;
+    private const int MaxNameLength = 64;
 
     public static DriverConfigurationResult ReadFile(string? path)
     {
@@ -89,15 +91,20 @@ public static class DriverConfigurationReader
     )
     {
         var problems = new List<string>();
-        var recordings = configuration.RecordingsDirectory!;
+        var roots = configuration.OutputRoots ?? [];
 
-        if (!Directory.Exists(recordings))
+        for (var index = 0; index < roots.Count; index++)
         {
-            problems.Add($"recordingsDirectory: '{recordings}' does not exist.");
-        }
-        else if (!IsWritable(recordings))
-        {
-            problems.Add($"recordingsDirectory: '{recordings}' cannot be written to.");
+            var path = roots[index]!.Path!;
+
+            if (!Directory.Exists(path))
+            {
+                problems.Add($"outputRoots[{index}].path: '{path}' does not exist.");
+            }
+            else if (!IsWritable(path))
+            {
+                problems.Add($"outputRoots[{index}].path: '{path}' cannot be written to.");
+            }
         }
 
         var socketDirectory = Path.GetDirectoryName(configuration.SocketPath!);
@@ -171,13 +178,17 @@ public static class DriverConfigurationReader
     private static readonly string[] KnownRootKeys =
     [
         "socketPath",
-        "recordingsDirectory",
+        "socketGroupId",
+        "outputRoots",
         "shutdownGraceHours",
+        "liveSessionMinutes",
         "tuner",
         "devices",
     ];
 
     private static readonly string[] KnownTunerKeys = ["backend"];
+
+    private static readonly string[] KnownOutputRootKeys = ["name", "path"];
 
     private static readonly string[] KnownDeviceKeys =
     [
@@ -228,32 +239,47 @@ public static class DriverConfigurationReader
             }
         }
 
-        if (
-            document.RootElement.TryGetProperty("devices", out var devices)
-            && devices.ValueKind is JsonValueKind.Array
-        )
-        {
-            var index = 0;
-            foreach (var device in devices.EnumerateArray())
-            {
-                if (device.ValueKind is JsonValueKind.Object)
-                {
-                    foreach (var property in device.EnumerateObject())
-                    {
-                        if (!KnownDeviceKeys.Contains(property.Name, StringComparer.Ordinal))
-                        {
-                            problems.Add(
-                                $"devices[{index}].{property.Name}: this driver has no such setting."
-                            );
-                        }
-                    }
-                }
-
-                index++;
-            }
-        }
+        CheckArrayKeys(document.RootElement, "devices", KnownDeviceKeys, problems);
+        CheckArrayKeys(document.RootElement, "outputRoots", KnownOutputRootKeys, problems);
 
         return problems;
+    }
+
+    private static void CheckArrayKeys(
+        JsonElement root,
+        string arrayName,
+        string[] knownKeys,
+        List<string> problems
+    )
+    {
+        if (!root.TryGetProperty(arrayName, out var array))
+        {
+            return;
+        }
+
+        if (array.ValueKind is not JsonValueKind.Array)
+        {
+            return;
+        }
+
+        var index = 0;
+        foreach (var entry in array.EnumerateArray())
+        {
+            if (entry.ValueKind is JsonValueKind.Object)
+            {
+                foreach (var property in entry.EnumerateObject())
+                {
+                    if (!knownKeys.Contains(property.Name, StringComparer.Ordinal))
+                    {
+                        problems.Add(
+                            $"{arrayName}[{index}].{property.Name}: this driver has no such setting."
+                        );
+                    }
+                }
+            }
+
+            index++;
+        }
     }
 
     private static IReadOnlyList<string> Validate(DriverConfiguration configuration)
@@ -267,13 +293,14 @@ public static class DriverConfigurationReader
             );
         }
 
-        if (!IsAbsolutePath(configuration.RecordingsDirectory))
+        if (configuration.SocketGroupId <= 0)
         {
             problems.Add(
-                $"recordingsDirectory: expected an absolute path, got '{configuration.RecordingsDirectory}'."
+                $"socketGroupId: expected the id of the '{DriverConfiguration.SocketGroupName}' group, which is above 0; got {configuration.SocketGroupId}."
             );
         }
 
+        problems.AddRange(OutputRootProblems(configuration));
 
         if (
             configuration.ShutdownGraceHours is < MinShutdownGraceHours
@@ -282,6 +309,16 @@ public static class DriverConfigurationReader
         {
             problems.Add(
                 $"shutdownGraceHours: expected {MinShutdownGraceHours} to {MaxShutdownGraceHours}, got {configuration.ShutdownGraceHours}."
+            );
+        }
+
+        if (
+            configuration.LiveSessionMinutes is < MinLiveSessionMinutes
+                or > MaxLiveSessionMinutes
+        )
+        {
+            problems.Add(
+                $"liveSessionMinutes: expected {MinLiveSessionMinutes} to {MaxLiveSessionMinutes}, got {configuration.LiveSessionMinutes}."
             );
         }
 
@@ -313,6 +350,55 @@ public static class DriverConfigurationReader
         return problems;
     }
 
+    private static IReadOnlyList<string> OutputRootProblems(DriverConfiguration configuration)
+    {
+        var problems = new List<string>();
+        var roots = configuration.OutputRoots ?? [];
+
+        if (roots.Count is 0)
+        {
+            problems.Add(
+                "outputRoots: expected at least one named output root for recordings to be written under."
+            );
+
+            return problems;
+        }
+
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        for (var index = 0; index < roots.Count; index++)
+        {
+            var root = roots[index];
+
+            if (root is null)
+            {
+                problems.Add($"outputRoots[{index}]: expected an output root, got nothing.");
+                continue;
+            }
+
+            if (!IsUsableName(root.Name))
+            {
+                problems.Add(
+                    $"outputRoots[{index}].name: expected 1 to {MaxNameLength} characters of A-Z, a-z, 0-9, '-', '_' or '.'; got '{root.Name}'."
+                );
+            }
+            else if (!names.Add(root.Name!))
+            {
+                problems.Add(
+                    $"outputRoots[{index}].name: '{root.Name}' is used by more than one output root."
+                );
+            }
+
+            if (!IsAbsolutePath(root.Path))
+            {
+                problems.Add(
+                    $"outputRoots[{index}].path: expected an absolute path, got '{root.Path}'."
+                );
+            }
+        }
+
+        return problems;
+    }
+
     private static void ValidateDevice(
         DeviceSettings? device,
         int index,
@@ -328,10 +414,10 @@ public static class DriverConfigurationReader
             return;
         }
 
-        if (!IsUsableDeviceName(device.Id))
+        if (!IsUsableName(device.Id))
         {
             problems.Add(
-                $"devices[{index}].id: expected 1 to {MaxDeviceIdLength} characters of A-Z, a-z, 0-9, '-', '_' or '.'; got '{device.Id}'."
+                $"devices[{index}].id: expected 1 to {MaxNameLength} characters of A-Z, a-z, 0-9, '-', '_' or '.'; got '{device.Id}'."
             );
         }
         else if (!seen.Add(device.Id!))
@@ -432,9 +518,9 @@ public static class DriverConfigurationReader
         && value.StartsWith('/')
         && !value.Contains("..", StringComparison.Ordinal);
 
-    private static bool IsUsableDeviceName(string? value)
+    private static bool IsUsableName(string? value)
     {
-        if (string.IsNullOrEmpty(value) || value.Length > MaxDeviceIdLength)
+        if (string.IsNullOrEmpty(value) || value.Length > MaxNameLength)
         {
             return false;
         }

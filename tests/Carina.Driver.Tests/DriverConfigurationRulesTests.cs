@@ -7,7 +7,7 @@ public sealed class DriverConfigurationRulesTests
     private const string Complete = """
         {
           "socketPath": "/run/carina/driver.sock",
-          "recordingsDirectory": "/srv/recordings",
+          "outputRoots": [{ "name": "primary", "path": "/srv/recordings" }],
           "shutdownGraceHours": 6,
           "tuner": { "backend": "fake" },
           "devices": [

@@ -12,6 +12,12 @@ public static class DriverEndpoints
 
     public const string Events = "/events";
 
+    public const string SubscriberQuery = "as";
+
+    public const string ViewerSubscriber = "viewer";
+
+    public const string SurveySubscriber = "survey";
+
     public static string Session(SessionId sessionId) =>
         $"{Sessions}/{Segment(sessionId)}";
 

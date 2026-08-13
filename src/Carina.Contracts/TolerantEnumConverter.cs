@@ -136,6 +136,34 @@ public sealed class SessionStateConverter : TolerantEnumConverter<SessionState>
         };
 }
 
+public sealed class SessionStopReasonConverter : TolerantEnumConverter<SessionStopReason>
+{
+    protected override string NameOf(SessionStopReason value) =>
+        value switch
+        {
+            SessionStopReason.Running => "running",
+            SessionStopReason.Requested => "requested",
+            SessionStopReason.EndTimeReached => "endTimeReached",
+            SessionStopReason.DrainCapReached => "drainCapReached",
+            SessionStopReason.DeviceFailed => "deviceFailed",
+            SessionStopReason.RecordingFailed => "recordingFailed",
+            _ => "unspecified",
+        };
+
+    protected override SessionStopReason? ValueOf(string name) =>
+        name switch
+        {
+            "running" => SessionStopReason.Running,
+            "requested" => SessionStopReason.Requested,
+            "endTimeReached" => SessionStopReason.EndTimeReached,
+            "drainCapReached" => SessionStopReason.DrainCapReached,
+            "deviceFailed" => SessionStopReason.DeviceFailed,
+            "recordingFailed" => SessionStopReason.RecordingFailed,
+            "unspecified" => SessionStopReason.Unspecified,
+            _ => null,
+        };
+}
+
 public sealed class DiagnosticReasonConverter : TolerantEnumConverter<DiagnosticReason>
 {
     protected override string NameOf(DiagnosticReason value) =>
