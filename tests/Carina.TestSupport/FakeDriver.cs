@@ -64,7 +64,10 @@ public sealed class FakeDriver : IAsyncDisposable
             Draining = draining,
         };
 
-    public static async Task<FakeDriver> StartAsync(string socketPath, DriverHello hello)
+    public static async Task<FakeDriver> StartAsync(
+        string socketPath,
+        DriverHello hello,
+        Action<FakeDriver>? arrange = null)
     {
         if (File.Exists(socketPath))
         {
@@ -78,6 +81,7 @@ public sealed class FakeDriver : IAsyncDisposable
 
         var app = builder.Build();
         var driver = new FakeDriver(app, socketPath, hello);
+        arrange?.Invoke(driver);
         app.Lifetime.ApplicationStopping.Register(driver.CloseAllListeners);
 
         app.MapGet(DriverEndpoints.Health, driver.HealthAsync);
