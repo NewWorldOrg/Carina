@@ -50,6 +50,11 @@ rules hold rather than that they inspected nothing.
 
 - Controllers are one class per action: `{Verb}{Entity}Action.cs`, method `Invoke`.
 - Use cases are `{Entity}Service`, returning `ServiceResult<T>` rendered by `BaseResponder`.
+  The one exception is `/api/health`, which answers a probe with bare JSON and no envelope;
+  do not copy that shape into a business endpoint.
+- App-layer conventions are enforced by reflection in `tests/Carina.Conventions.Tests`,
+  kept apart from `Carina.Architecture.Tests` so the latter can keep referencing no
+  production assembly.
 - Repository interfaces belong to `Carina.Domain`, implementations to `Carina.Infrastructure`.
 - Value objects — identifiers included — derive from `CommonValueObject<T>`.
 - Entities have a private constructor and a static `Rehydrate`.

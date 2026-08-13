@@ -27,7 +27,8 @@ public static class ServiceCollectionExtensions
             .Configure(options => options.SocketPath = configuration[DriverOptions.SocketPathKey])
             .ValidateDataAnnotations()
             .Validate(
-                options => options.SocketPath is null || options.SocketPath.StartsWith('/'),
+                options => string.IsNullOrEmpty(options.SocketPath)
+                    || options.SocketPath.StartsWith('/'),
                 $"{DriverOptions.SocketPathKey} must be an absolute path.")
             .ValidateOnStart();
 

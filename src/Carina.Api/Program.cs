@@ -13,10 +13,12 @@ builder.Services
         new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)));
 builder.Services.AddApplicationServices();
 builder.Services.AddCarinaInfrastructure(builder.Configuration);
+builder.Services.AddAuthentication();
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
+app.UseAuthentication();
 app.UseMiddleware<DefaultDenyAuthenticationMiddleware>();
 
 app.MapOpenApi();

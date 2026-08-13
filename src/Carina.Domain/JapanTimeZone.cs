@@ -17,7 +17,7 @@ public static class JapanTimeZone
     public static DateOnly Today(TimeProvider timeProvider) => DateOnly.FromDateTime(Now(timeProvider).DateTime);
 
     public static DateTime FromUtc(DateTime utc)
-        => TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(utc, DateTimeKind.Unspecified), Instance);
+        => TimeZoneInfo.ConvertTimeFromUtc(utc, Instance);
 
     private static TimeZoneInfo Resolve()
     {
