@@ -104,6 +104,16 @@ GitHub Actions runs build, test and format verification on push and pull request
 - The two processes share `/run/carina`, where the driver socket lives.
 - `driver` has a stop grace period longer than the driver's recording linger cap;
   shortening it would kill a recording that was about to finish.
+- `compose.deploy.yml` is the deployment-shaped stack: the built image as separate
+  `driver` and `app` services sharing `/run/carina`, a one-shot `migrate` the app
+  waits for, and `db`. It is a second file rather than a profile so that
+  `docker compose up` with no argument stays the development stack. The driver's
+  health probe is `GET /health` over the socket, which is why the runtime image
+  carries `curl`.
+- `docker/check-grace-period.sh` reads `stop_grace_period` from that file and
+  `shutdownGraceHours` from the driver configuration it mounts, and fails unless the
+  first is strictly greater. CI runs it, so the relationship is checked rather than
+  assumed. Nothing enforces it at runtime: exceeding it means SIGKILL mid-recording.
 - `Dockerfile` builds the single role-switched image (`driver`, `app`, `web`, `all`,
   plus `migrate`) via `docker/entrypoint.sh`. Routing between app and web is the job
   of a reverse proxy outside the image; the image contains no proxy.

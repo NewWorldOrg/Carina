@@ -33,3 +33,13 @@ tasks:
     cmds:
       - docker build -t carina .
       - docker/verify-image.sh carina
+  deploy:check:
+    cmd: docker/check-grace-period.sh
+  deploy:up:
+    cmds:
+      - docker/check-grace-period.sh
+      - docker compose -f compose.deploy.yml up -d
+  deploy:down:
+    cmd: docker compose -f compose.deploy.yml down
+  deploy:logs:
+    cmd: docker compose -f compose.deploy.yml logs -f

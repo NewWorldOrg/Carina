@@ -69,6 +69,27 @@ docker compose exec app dotnet test
 
 API はコンテナの 8080 番で待ち受け、ホストの 8081 番に出ます（`API_PORT` で変えられます）。
 
+### 配布と同じ形で動かす
+
+`compose.yml` は開発用です。SDK イメージにソースをマウントし、`docker compose exec`
+で中に入って使います。配布イメージを driver / app の別サービスとして動かす形は
+`compose.deploy.yml` にあります。
+
+```bash
+task image        # docker build -t carina .
+task deploy:up    # docker compose -f compose.deploy.yml up -d
+task deploy:down
+```
+
+API はホストの 8082 番に出ます（`CARINA_API_PORT`）。driver のヘルスチェックは
+ソケット越しの `GET /health` で、app は uid 10001 で動きます。マイグレーションは
+`migrate` サービスが1回だけ適用し、app はその正常終了を待って起動します。
+
+driver の `stop_grace_period` は録画の居座り上限（設定の `shutdownGraceHours`）より
+長くなければなりません。短いとランタイムが録画の途中で SIGKILL します。この関係は
+`task deploy:check`（`docker/check-grace-period.sh`）が両方を実際に読んで検査し、
+CI でも走ります。
+
 ## 設定
 
 環境依存のものは何ひとつ埋め込みません。デバイスの一覧、録画の出力先、ソケットの
@@ -84,6 +105,11 @@ API はコンテナの 8080 番で待ち受け、ホストの 8081 番に出ま�
 | `ConnectionStrings__Carina` | API が使う PostgreSQL の接続文字列 |
 | `CARINA_DB_CONNECTION` | マイグレーション実行時の接続文字列 |
 | `CARINA_ROLE` | イメージが起動する役割（`driver` / `app` / `web` / `all` / `migrate`） |
+| `CARINA_IMAGE` | `compose.deploy.yml` が動かすイメージ（既定 `carina`） |
+| `CARINA_DRIVER_CONFIG_FILE` | `compose.deploy.yml` が driver へマウントする設定ファイル |
+| `CARINA_STOP_GRACE` | driver の `stop_grace_period`。`shutdownGraceHours` より長くする |
+| `CARINA_API_PORT` | 配布形の API のホスト側ポート（既定 8082） |
+| `CARINA_UID` / `CARINA_GID` | app と migrate の実行 uid / gid（既定 10001） |
 
 ## イメージの役割
 

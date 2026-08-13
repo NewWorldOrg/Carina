@@ -40,3 +40,11 @@ jobs:
           dotnet-version: '10.0.x'
       - run: dotnet restore
       - run: dotnet format --no-restore --verify-no-changes
+
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose config --quiet
+      - run: docker compose -f compose.deploy.yml config --quiet
+      - run: docker/check-grace-period.sh
