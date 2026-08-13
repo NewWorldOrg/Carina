@@ -163,6 +163,36 @@ jobs:
           echo "${output}"
         env:
           CARINA_DRIVER_CONFIG_FILE: ''
+      - name: Each role takes its own image reference, so a release of one does not recreate the other
+        run: |
+          rendered_images() {
+            docker compose -f compose.deploy.yml config --format json \
+              | python3 -c 'import json, sys; services = json.load(sys.stdin)["services"]; print(services["driver"]["image"], services["app"]["image"])'
+          }
+          base="$(rendered_images)"
+          export CARINA_APP_IMAGE=carina:app-sha-000000000000
+          app_bumped="$(rendered_images)"
+          unset CARINA_APP_IMAGE
+          export CARINA_DRIVER_IMAGE=carina:driver-sha-000000000000
+          driver_bumped="$(rendered_images)"
+          unset CARINA_DRIVER_IMAGE
+          if [ "${app_bumped%% *}" != "${base%% *}" ]; then
+            echo "an app release moved the driver service from ${base%% *} to ${app_bumped%% *}, which would recreate the container holding a recording" >&2
+            exit 1
+          fi
+          if [ "${app_bumped##* }" = "${base##* }" ]; then
+            echo "the app release did not reach the app service either, so the driver holding still proves nothing" >&2
+            exit 1
+          fi
+          if [ "${driver_bumped##* }" != "${base##* }" ]; then
+            echo "a driver release moved the app service from ${base##* } to ${driver_bumped##* }" >&2
+            exit 1
+          fi
+          if [ "${driver_bumped%% *}" = "${base%% *}" ]; then
+            echo "the driver release did not reach the driver service either" >&2
+            exit 1
+          fi
+          echo "driver ${base%% *} / app ${base##* }; each moves alone."
 
   image:
     runs-on: ubuntu-latest

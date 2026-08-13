@@ -2,7 +2,7 @@ name: carina-deploy
 
 services:
   driver:
-    image: ${CARINA_IMAGE:-carina}
+    image: ${CARINA_DRIVER_IMAGE:-${CARINA_IMAGE:-carina}}
     environment:
       CARINA_ROLE: driver
       CARINA_DRIVER_CONFIG: /etc/carina/driver.json
@@ -20,7 +20,7 @@ services:
       start_period: 10s
 
   migrate:
-    image: ${CARINA_IMAGE:-carina}
+    image: ${CARINA_APP_IMAGE:-${CARINA_IMAGE:-carina}}
     user: ${CARINA_UID:-10001}:${CARINA_GID:-10001}
     environment:
       CARINA_ROLE: migrate
@@ -31,7 +31,7 @@ services:
         condition: service_healthy
 
   app:
-    image: ${CARINA_IMAGE:-carina}
+    image: ${CARINA_APP_IMAGE:-${CARINA_IMAGE:-carina}}
     user: ${CARINA_UID:-10001}:${CARINA_GID:-10001}
     environment:
       CARINA_ROLE: app
