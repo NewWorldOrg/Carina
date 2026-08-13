@@ -37,6 +37,44 @@ public static class DriverStartup
         return ConfigurationExitCode;
     }
 
+    public static int ReportUnusableConfiguration(
+        IReadOnlyList<string> problems,
+        TextWriter error
+    )
+    {
+        error.WriteLine("The driver may not serve what this configuration asks of it:");
+
+        foreach (var problem in problems)
+        {
+            error.WriteLine($"  {problem}");
+        }
+
+        error.WriteLine("No socket was bound and no device was opened.");
+
+        return ConfigurationExitCode;
+    }
+
+    public static int ReportUnusableSocket(IReadOnlyList<string> problems, TextWriter error)
+    {
+        error.WriteLine("The driver could not take the socket it answers on:");
+
+        foreach (var problem in problems)
+        {
+            error.WriteLine($"  {problem}");
+        }
+
+        error.WriteLine("No socket was bound and no device was opened.");
+
+        return StoppedEarlyExitCode;
+    }
+
+    public static int ReportFailure(Exception failure, TextWriter error)
+    {
+        error.WriteLine($"The driver stopped: {failure.Message}");
+
+        return StoppedEarlyExitCode;
+    }
+
     public static int ExitCodeFor(bool stopWasAsked) =>
         stopWasAsked ? 0 : StoppedEarlyExitCode;
 }

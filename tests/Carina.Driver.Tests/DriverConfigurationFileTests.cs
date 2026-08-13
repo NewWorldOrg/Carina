@@ -20,7 +20,7 @@ public sealed class DriverConfigurationFileTests : IDisposable
         $$"""
         {
           "socketPath": "{{socketDirectory}}/driver.sock",
-          "recordingsDirectory": "{{recordings}}",
+          "outputRoots": [{ "name": "primary", "path": "{{recordings}}" }],
           "shutdownGraceHours": 6,
           "tuner": { "backend": "fake" },
           "devices": [
@@ -58,7 +58,7 @@ public sealed class DriverConfigurationFileTests : IDisposable
     }
 
     [Fact]
-    public void ARecordingsDirectoryThatIsNotThereIsAFinding()
+    public void AnOutputRootThatIsNotThereIsAFinding()
     {
         var path = Write(
             "driver.json",
@@ -67,7 +67,7 @@ public sealed class DriverConfigurationFileTests : IDisposable
 
         Assert.Contains(
             DriverConfigurationReader.ReadFile(path).Problems,
-            problem => problem.StartsWith("recordingsDirectory:")
+            problem => problem.StartsWith("outputRoots[0].path:")
         );
     }
 
@@ -80,6 +80,34 @@ public sealed class DriverConfigurationFileTests : IDisposable
         Assert.Contains(
             DriverConfigurationReader.ReadFile(path).Problems,
             problem => problem.StartsWith("socketPath:")
+        );
+    }
+
+    [Fact]
+    public void ASocketDirectoryAnyoneCanWriteInIsAFinding()
+    {
+        var recordings = Directory.CreateDirectory(Path.Combine(root, "recordings")).FullName;
+        var sockets = Directory.CreateDirectory(Path.Combine(root, "sockets")).FullName;
+        File.SetUnixFileMode(
+            sockets,
+            UnixFileMode.UserRead
+                | UnixFileMode.UserWrite
+                | UnixFileMode.UserExecute
+                | UnixFileMode.OtherWrite
+                | UnixFileMode.OtherExecute
+        );
+
+        var configuration = new DriverConfiguration(
+            Path.Combine(sockets, "driver.sock"),
+            [new OutputRootSettings("primary", recordings)],
+            6,
+            new TunerSettings(TunerBackend.Fake),
+            [new DeviceSettings("adapter0", DeviceKind.Terrestrial)]
+        );
+
+        Assert.Contains(
+            DriverConfigurationReader.CheckTheFilesystem(configuration).Problems,
+            problem => problem.Contains("anyone may write")
         );
     }
 

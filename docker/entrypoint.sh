@@ -4,8 +4,18 @@ set -euo pipefail
 readonly driver_entry=/opt/carina/driver/Carina.Driver.dll
 readonly app_entry=/opt/carina/app/Carina.Api.dll
 
+drop_web_server_variables() {
+    local name
+    for name in ASPNETCORE_URLS ASPNETCORE_HTTP_PORTS ASPNETCORE_HTTPS_PORTS; do
+        if [ -n "${!name:-}" ]; then
+            echo "role=driver ignores ${name}=${!name}; the driver answers on a Unix socket only." >&2
+        fi
+        unset "${name}"
+    done
+}
+
 run_all() {
-    dotnet "${driver_entry}" &
+    ( drop_web_server_variables; exec dotnet "${driver_entry}" ) &
     local driver_pid=$!
 
     dotnet "${app_entry}" &
@@ -28,7 +38,10 @@ main() {
     local role="${1:-${CARINA_ROLE:-app}}"
 
     case "${role}" in
-        driver) exec dotnet "${driver_entry}" ;;
+        driver)
+            drop_web_server_variables
+            exec dotnet "${driver_entry}"
+            ;;
         app) exec dotnet "${app_entry}" ;;
         migrate) exec dotnet /opt/carina/db/Carina.Db.dll --migrate ;;
         web)

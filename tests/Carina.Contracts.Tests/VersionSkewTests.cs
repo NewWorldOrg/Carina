@@ -13,6 +13,22 @@ public sealed class VersionSkewTests
         Assert.NotNull(session);
         Assert.Null(session.EndsAt);
         Assert.Equal(SessionPurpose.Recording, session.Purpose);
+        Assert.Equal(SessionStopReason.Unspecified, session.StopReason);
+        Assert.False(session.Concluded);
+        Assert.Equal(SessionCounters.Nothing, session.Counters);
+    }
+
+    [Fact]
+    public void ASessionWithoutCountersIsStillReadable()
+    {
+        var session = DriverJson.Deserialize(
+            """{"sessionId":"s-1","purpose":"recording","deviceId":"a0","state":"stopped","startedAt":"2026-08-08T21:04:00+09:00","counters":null}""",
+            DriverJson.Context.SessionSnapshot
+        );
+
+        Assert.NotNull(session);
+        Assert.NotNull(session.Counters);
+        Assert.False(session.Concluded);
     }
 
     [Fact]

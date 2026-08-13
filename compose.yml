@@ -32,6 +32,8 @@ services:
     environment:
       CARINA_DRIVER_CONFIG: /code/docker/driver.development.json
       DOTNET_hostBuilder__reloadConfigOnChange: 'false'
+      ASPNETCORE_HTTP_PORTS: ''
+      ASPNETCORE_HTTPS_PORTS: ''
 
   db:
     image: postgres:18-alpine

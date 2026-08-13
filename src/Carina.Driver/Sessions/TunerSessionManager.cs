@@ -3,6 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 
 using Carina.Contracts;
 using Carina.Driver.Configuration;
+using Carina.Driver.Events;
 using Carina.Driver.Recording;
 using Carina.Driver.Tuning;
 
@@ -16,7 +17,8 @@ public sealed class TunerSessionManager(
     ITunerDeviceFactory deviceFactory,
     TimeProvider timeProvider,
     ILogger<TunerSessionManager> logger,
-    TimeSpan? hardStopLimit = null
+    TimeSpan? hardStopLimit = null,
+    DriverEventHub? events = null
 ) : IHostedService
 {
     public const int RetainedSessions = 64;
@@ -37,11 +39,31 @@ public sealed class TunerSessionManager(
 
     public IReadOnlyCollection<TunerSession> Recent => [.. ended];
 
+    public bool IsDraining => draining;
+
     public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+    public void EnterDraining()
+    {
+        draining = true;
+        events?.Signal(DriverEvents.Draining);
+    }
+
+    public void DetachEverySubscriber()
+    {
+        foreach (var session in sessions.Values)
+        {
+            session.Broadcaster.Close(
+                new OperationCanceledException(
+                    $"The driver is shutting down; the stream of '{session.SessionId}' ends here and is incomplete."
+                )
+            );
+        }
+    }
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        draining = true;
+        EnterDraining();
 
         var running = sessions.Values.ToArray();
         if (running.Length is 0)
@@ -120,128 +142,291 @@ public sealed class TunerSessionManager(
         }
     }
 
-    public TunerSession Begin(
-        SessionId sessionId,
-        StartSessionRequest request,
-        string deviceId,
-        DateTimeOffset endsAt
-    )
+    public SessionStart Begin(StartSessionRequest request)
     {
+        var now = timeProvider.GetUtcNow();
+
+        var problems = request.Validate(now);
+        if (problems.Count > 0)
+        {
+            return SessionStart.Refused(SessionRefusal.Rejected, string.Join(" ", problems));
+        }
+
         if (draining)
         {
-            throw new InvalidOperationException(
+            return SessionStart.Refused(
+                SessionRefusal.Draining,
                 "The driver is shutting down, so no session can start."
             );
         }
 
-        if (sessionId.IsUnset)
+        if (TryGet(request.SessionId, out _))
         {
-            throw new ArgumentException("A session needs an identifier.", nameof(sessionId));
-        }
-
-        if (request.EndsAt is { } requested && requested != endsAt)
-        {
-            throw new ArgumentException(
-                $"The request ends at {requested:O} and the session was told to end at {endsAt:O}.",
-                nameof(endsAt)
+            return SessionStart.Refused(
+                SessionRefusal.DuplicateSession,
+                $"The session '{request.SessionId}' already exists."
             );
         }
 
-        var device =
-            (configuration.Devices ?? []).FirstOrDefault(candidate => candidate.Id == deviceId)
-            ?? throw new ArgumentException($"No device is called '{deviceId}'.", nameof(deviceId));
-
-        if (!device.Enabled)
+        if (!TryResolveOutput(request, out var directory, out var outputRefusal))
         {
-            throw new ArgumentException($"The device '{deviceId}' is disabled.", nameof(deviceId));
+            return outputRefusal;
         }
 
-        if (!Matches(device.Kind, request.Tuning.Kind))
+        if (!TryClaimDevice(request, out var device, out var deviceRefusal))
         {
-            throw new ArgumentException(
-                $"The device '{deviceId}' serves {device.Kind}, and the request asks for {request.Tuning.Kind}.",
-                nameof(deviceId)
+            return deviceRefusal;
+        }
+
+        return Open(request, device, directory, now, EndOf(request, now));
+    }
+
+    private DateTimeOffset EndOf(StartSessionRequest request, DateTimeOffset now) =>
+        request.EndsAt ?? now.AddMinutes(configuration.LiveSessionMinutes);
+
+    private bool TryResolveOutput(
+        StartSessionRequest request,
+        out string? directory,
+        [NotNullWhen(false)] out SessionStart? refusal
+    )
+    {
+        directory = null;
+        refusal = null;
+
+        if (request.Purpose is not SessionPurpose.Recording)
+        {
+            return true;
+        }
+
+        if (configuration.TryResolveOutputRoot(request.OutputRoot, out var resolved))
+        {
+            directory = resolved;
+
+            return true;
+        }
+
+        var declared = string.Join(
+            ", ",
+            (configuration.OutputRoots ?? []).Select(root => root.Name)
+        );
+
+        refusal = SessionStart.Refused(
+            SessionRefusal.UnknownOutputRoot,
+            $"This driver declares no output root called '{request.OutputRoot}'; it declares {declared}."
+        );
+
+        return false;
+    }
+
+    private bool TryClaimDevice(
+        StartSessionRequest request,
+        [NotNullWhen(true)] out DeviceSettings? device,
+        [NotNullWhen(false)] out SessionStart? refusal
+    )
+    {
+        device = null;
+        refusal = null;
+
+        var declared = configuration.Devices ?? [];
+
+        if (request.DeviceId is { } named)
+        {
+            var candidate = declared.FirstOrDefault(entry => entry.Id == named);
+
+            if (candidate is null)
+            {
+                refusal = SessionStart.Refused(
+                    SessionRefusal.UnknownDevice,
+                    $"No device is called '{named}'."
+                );
+
+                return false;
+            }
+
+            if (!candidate.Enabled)
+            {
+                refusal = SessionStart.Refused(
+                    SessionRefusal.DisabledDevice,
+                    $"The device '{named}' is disabled."
+                );
+
+                return false;
+            }
+
+            if (!Matches(candidate.Kind, request.Tuning.Kind))
+            {
+                refusal = SessionStart.Refused(
+                    SessionRefusal.WrongDeviceKind,
+                    $"The device '{named}' serves {candidate.Kind}, and the request asks for {request.Tuning.Kind}."
+                );
+
+                return false;
+            }
+
+            if (!claimedDevices.TryAdd(named, request.SessionId))
+            {
+                refusal = SessionStart.Refused(
+                    SessionRefusal.DeviceBusy,
+                    $"The device '{named}' is already serving a session."
+                );
+
+                return false;
+            }
+
+            device = candidate;
+
+            return true;
+        }
+
+        var usable = declared
+            .Where(entry => entry.Enabled && Matches(entry.Kind, request.Tuning.Kind))
+            .ToArray();
+
+        if (usable.Length is 0)
+        {
+            refusal = SessionStart.Refused(
+                SessionRefusal.NoDeviceOfThatKind,
+                $"This driver has no enabled device that serves {request.Tuning.Kind}."
             );
+
+            return false;
         }
 
-        if (TryGet(sessionId, out _))
+        foreach (var candidate in usable)
         {
-            throw new ArgumentException(
-                $"The session '{sessionId}' already exists.",
-                nameof(sessionId)
-            );
+            if (claimedDevices.TryAdd(candidate.Id!, request.SessionId))
+            {
+                device = candidate;
+
+                return true;
+            }
         }
 
-        if (!claimedDevices.TryAdd(deviceId, sessionId))
-        {
-            throw new ArgumentException(
-                $"The device '{deviceId}' is already serving a session.",
-                nameof(deviceId)
-            );
-        }
+        refusal = SessionStart.Refused(
+            SessionRefusal.NoDeviceFree,
+            $"Every device that serves {request.Tuning.Kind} is already serving a session."
+        );
 
-        var now = timeProvider.GetUtcNow();
-        ITunerDevice? tunerDevice = null;
-        RecordingWriter? writer = null;
-        TunerSession? session = null;
+        return false;
+    }
 
+    private SessionStart Open(
+        StartSessionRequest request,
+        DeviceSettings device,
+        string? directory,
+        DateTimeOffset now,
+        DateTimeOffset endsAt
+    )
+    {
+        var deviceId = device.Id!;
+        var sessionId = request.SessionId;
+
+        ITunerDevice tunerDevice;
         try
         {
             tunerDevice = deviceFactory.Create(device, request.Tuning);
-
-            if (request.Purpose is SessionPurpose.Recording)
-            {
-                writer = new RecordingWriter(
-                    configuration.RecordingsDirectory
-                        ?? throw new InvalidOperationException(
-                            "A recording needs a recordings directory, and the configuration has none."
-                        ),
-                    sessionId
-                );
-            }
-
-            session = new TunerSession(
-                sessionId,
-                request.Purpose,
-                deviceId,
-                tunerDevice,
-                now,
-                endsAt,
-                timeProvider,
-                writer,
-                logger: logger
-            );
-
-            if (!sessions.TryAdd(sessionId, session))
-            {
-                throw new ArgumentException(
-                    $"The session '{sessionId}' already exists.",
-                    nameof(sessionId)
-                );
-            }
-
-            session.Ended += Forget;
-            session.Start();
-
-            return session;
         }
-        catch
+        catch (Exception error)
         {
-            claimedDevices.TryRemove(new KeyValuePair<string, SessionId>(deviceId, sessionId));
+            Release(deviceId, sessionId);
 
-            if (session is not null)
-            {
-                sessions.TryRemove(new KeyValuePair<SessionId, TunerSession>(sessionId, session));
-                session.Ended -= Forget;
-                session.Dispose();
-            }
-            else
-            {
-                writer?.Dispose();
-                tunerDevice?.Dispose();
-            }
+            return SessionStart.Refused(
+                SessionRefusal.DeviceUnavailable,
+                $"The device '{deviceId}' could not be opened: {error.Message}"
+            );
+        }
 
-            throw;
+        RecordingWriter? writer = null;
+        if (directory is not null)
+        {
+            var refusal = TryOpenRecording(directory, sessionId, deviceId, out writer);
+            if (refusal is not null)
+            {
+                tunerDevice.Dispose();
+
+                return refusal;
+            }
+        }
+
+        var session = new TunerSession(
+            sessionId,
+            request.Purpose,
+            deviceId,
+            tunerDevice,
+            now,
+            endsAt,
+            timeProvider,
+            writer,
+            logger: logger,
+            outputRoot: request.OutputRoot
+        );
+
+        if (!sessions.TryAdd(sessionId, session))
+        {
+            Release(deviceId, sessionId);
+            session.Dispose();
+
+            return SessionStart.Refused(
+                SessionRefusal.DuplicateSession,
+                $"The session '{sessionId}' already exists."
+            );
+        }
+
+        session.Ended += Forget;
+
+        try
+        {
+            session.Start();
+        }
+        catch (Exception error)
+        {
+            sessions.TryRemove(new KeyValuePair<SessionId, TunerSession>(sessionId, session));
+            session.Ended -= Forget;
+            Release(deviceId, sessionId);
+
+            return SessionStart.Refused(
+                SessionRefusal.DeviceUnavailable,
+                $"The session '{sessionId}' could not be started: {error.Message}"
+            );
+        }
+
+        Announce();
+
+        return SessionStart.Started(session);
+    }
+
+    private SessionStart? TryOpenRecording(
+        string directory,
+        SessionId sessionId,
+        string deviceId,
+        out RecordingWriter? writer
+    )
+    {
+        writer = null;
+
+        try
+        {
+            writer = new RecordingWriter(directory, sessionId);
+
+            return null;
+        }
+        catch (IOException error) when (File.Exists(Path.Combine(directory, $"{sessionId}.ts")))
+        {
+            Release(deviceId, sessionId);
+
+            return SessionStart.Refused(
+                SessionRefusal.RecordingAlreadyExists,
+                $"A recording for '{sessionId}' is already on disk, and this driver never appends to one: {error.Message}"
+            );
+        }
+        catch (Exception error)
+        {
+            Release(deviceId, sessionId);
+
+            return SessionStart.Refused(
+                SessionRefusal.OutputUnavailable,
+                $"The recording for '{sessionId}' could not be opened: {error.Message}"
+            );
         }
     }
 
@@ -257,30 +442,42 @@ public sealed class TunerSessionManager(
         return session is not null;
     }
 
-    public bool Stop(SessionId sessionId)
+    public SessionStopOutcome Stop(SessionId sessionId)
     {
-        if (!sessions.TryGetValue(sessionId, out var session))
+        if (sessions.TryGetValue(sessionId, out var session))
         {
-            return false;
+            session.Stop();
+
+            return SessionStopOutcome.Stopping;
         }
 
-        session.Stop();
-
-        return true;
+        return ended.Any(candidate => candidate.SessionId == sessionId)
+            ? SessionStopOutcome.AlreadyEnded
+            : SessionStopOutcome.NoSuchSession;
     }
+
+    private void Release(string deviceId, SessionId sessionId) =>
+        claimedDevices.TryRemove(new KeyValuePair<string, SessionId>(deviceId, sessionId));
 
     private void Forget(TunerSession session)
     {
         sessions.TryRemove(new KeyValuePair<SessionId, TunerSession>(session.SessionId, session));
-        claimedDevices.TryRemove(
-            new KeyValuePair<string, SessionId>(session.DeviceId, session.SessionId)
-        );
+        Release(session.DeviceId, session.SessionId);
         ended.Enqueue(session);
 
         while (ended.Count > RetainedSessions && ended.TryDequeue(out _))
         { }
+
+        Announce();
     }
 
+    private void Announce()
+    {
+        events?.Signal(DriverEvents.Sessions);
+        events?.Signal(DriverEvents.Tuners);
+    }
+
+    public bool IsClaimed(string deviceId) => claimedDevices.ContainsKey(deviceId);
 
     private static bool Matches(DeviceKind device, TunerKind requested) =>
         (device, requested) switch

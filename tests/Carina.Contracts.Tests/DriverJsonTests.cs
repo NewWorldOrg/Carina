@@ -15,7 +15,7 @@ public sealed class DriverJsonTests
         );
 
         Assert.Equal(
-            """{"protocolVersion":1,"instanceId":"b7f2c9","capabilities":["recording","live"]}""",
+            """{"protocolVersion":1,"instanceId":"b7f2c9","capabilities":["recording","live"],"draining":false}""",
             json
         );
     }
@@ -26,36 +26,67 @@ public sealed class DriverJsonTests
         var json = DriverJson.Serialize(
             new StartSessionRequest
             {
+                SessionId = SessionId.Parse("rec-1"),
                 Purpose = SessionPurpose.Recording,
                 Tuning = new TuningRequest(TunerKind.Terrestrial, 27, 1024),
                 DeviceId = "adapter0",
+                OutputRoot = "primary",
                 EndsAt = Moment,
             }
         );
 
         Assert.Equal(
-            """{"purpose":"recording","tuning":{"kind":"terrestrial","physicalChannel":27,"serviceId":1024},"deviceId":"adapter0","endsAt":"2026-08-08T21:04:00+09:00"}""",
+            """{"sessionId":"rec-1","purpose":"recording","tuning":{"kind":"terrestrial","physicalChannel":27,"serviceId":1024},"deviceId":"adapter0","outputRoot":"primary","endsAt":"2026-08-08T21:04:00+09:00"}""",
             json
         );
     }
 
+    private const string LiveSessionForm =
+        """{"sessionId":"s-1","purpose":"live","state":"active","startedAt":"2026-08-08T21:04:00+09:00","endsAt":null,"deviceId":"adapter1","stopReason":"unspecified","concluded":false,"instanceId":null,"outputRoot":null,"bytesRecorded":0,"faultCount":0,"droppedChunks":0,"firstFault":null,"failureCause":null,"counters":{"packets":0,"drops":0,"duplicates":0,"discontinuities":0,"transportErrors":0,"scrambledPackets":0,"provisionalPackets":0,"discardedBytes":0,"resyncs":0}}""";
+
+    private static SessionSnapshot LiveSession =>
+        new(SessionId.Parse("s-1"), SessionPurpose.Live, "adapter1", SessionState.Active, Moment);
+
     [Fact]
     public void SessionSnapshotSerialisesToItsAgreedForm()
     {
+        Assert.Equal(LiveSessionForm, DriverJson.Serialize(LiveSession));
+    }
+
+    [Fact]
+    public void ASessionCarriesWhatItsQualityLookedLike()
+    {
         var json = DriverJson.Serialize(
-            new SessionSnapshot(
-                SessionId.Parse("s-1"),
-                SessionPurpose.Live,
-                "adapter1",
-                SessionState.Active,
-                Moment
-            )
+            LiveSession with
+            {
+                FaultCount = 3,
+                FirstFault = "the subscriber did not take the stream",
+                Counters = new SessionCounters(Packets: 1000, Drops: 7, Resyncs: 2),
+            }
         );
 
-        Assert.Equal(
-            """{"sessionId":"s-1","purpose":"live","state":"active","startedAt":"2026-08-08T21:04:00+09:00","endsAt":null,"deviceId":"adapter1"}""",
-            json
+        Assert.Contains("\"faultCount\":3", json);
+        Assert.Contains("\"firstFault\":\"the subscriber did not take the stream\"", json);
+        Assert.Contains("\"drops\":7", json);
+        Assert.Contains("\"resyncs\":2", json);
+    }
+
+    [Fact]
+    public void ASessionSaysWhetherTheDriverSawItFinish()
+    {
+        var json = DriverJson.Serialize(
+            LiveSession with
+            {
+                State = SessionState.Stopping,
+                StopReason = SessionStopReason.DrainCapReached,
+                Concluded = false,
+                InstanceId = "b7f2c9",
+            }
         );
+
+        Assert.Contains("\"stopReason\":\"drainCapReached\"", json);
+        Assert.Contains("\"concluded\":false", json);
+        Assert.Contains("\"instanceId\":\"b7f2c9\"", json);
     }
 
     [Fact]
@@ -99,18 +130,8 @@ public sealed class DriverJsonTests
     public void SessionListIsABareArray()
     {
         Assert.Equal(
-            """[{"sessionId":"s-1","purpose":"live","state":"active","startedAt":"2026-08-08T21:04:00+09:00","endsAt":null,"deviceId":"adapter1"}]""",
-            DriverJson.Serialize<IReadOnlyList<SessionSnapshot>>(
-                [
-                    new SessionSnapshot(
-                        SessionId.Parse("s-1"),
-                        SessionPurpose.Live,
-                        "adapter1",
-                        SessionState.Active,
-                        Moment
-                    ),
-                ]
-            )
+            $"[{LiveSessionForm}]",
+            DriverJson.Serialize<IReadOnlyList<SessionSnapshot>>([LiveSession])
         );
 
         Assert.Equal("[]", DriverJson.Serialize<IReadOnlyList<SessionSnapshot>>([]));
@@ -161,6 +182,7 @@ public sealed class DriverJsonTests
     {
         var request = new StartSessionRequest
         {
+            SessionId = SessionId.Parse("s-1"),
             Purpose = SessionPurpose.Survey,
             Tuning = new TuningRequest(TunerKind.Satellite, 15),
         };
@@ -178,6 +200,33 @@ public sealed class DriverJsonTests
     {
         Assert.Throws<JsonException>(
             () => DriverJson.Deserialize("{}", DriverJson.Context.StartSessionRequest)
+        );
+    }
+
+    [Fact]
+    public void ARequestThatNamesNoSessionIsRejected()
+    {
+        Assert.Throws<JsonException>(
+            () =>
+                DriverJson.Deserialize(
+                    """{"purpose":"live","tuning":{"kind":"terrestrial","physicalChannel":27}}""",
+                    DriverJson.Context.StartSessionRequest
+                )
+        );
+    }
+
+    [Fact]
+    public void ARequestMayNotSmuggleAPathThroughTheOutputRoot()
+    {
+        var request = DriverJson.Deserialize(
+            """{"sessionId":"rec-1","purpose":"recording","tuning":{"kind":"terrestrial","physicalChannel":27},"outputRoot":"/etc","endsAt":"2026-08-08T22:04:00+09:00"}""",
+            DriverJson.Context.StartSessionRequest
+        );
+
+        Assert.NotNull(request);
+        Assert.Contains(
+            request.Validate(Moment),
+            problem => problem.StartsWith("outputRoot:")
         );
     }
 }

@@ -11,15 +11,81 @@ public sealed class StartSessionRequestTests
         int physicalChannel = 27,
         int? serviceId = null,
         DateTimeOffset? endsAt = null,
-        string? deviceId = null
+        string? deviceId = null,
+        string? outputRoot = null,
+        string sessionId = "s-1"
     ) =>
         new()
         {
+            SessionId = SessionId.TryParse(sessionId, out var parsed) ? parsed : default,
             Purpose = purpose,
             Tuning = new TuningRequest(kind, physicalChannel, serviceId),
             EndsAt = endsAt,
             DeviceId = deviceId,
+            OutputRoot = outputRoot,
         };
+
+    private static StartSessionRequest Recording(
+        string? outputRoot = "primary",
+        DateTimeOffset? endsAt = null
+    ) =>
+        Request(
+            purpose: SessionPurpose.Recording,
+            endsAt: endsAt ?? Now.AddHours(1),
+            outputRoot: outputRoot
+        );
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("../../etc/passwd")]
+    [InlineData("s 1")]
+    public void ARequestWithoutAUsableIdentifierIsReported(string sessionId)
+    {
+        Assert.Contains(
+            Request(sessionId: sessionId).Validate(Now),
+            problem => problem.StartsWith("sessionId:")
+        );
+    }
+
+    [Fact]
+    public void ARecordingWithoutAnOutputRootIsReported()
+    {
+        Assert.Contains(
+            Recording(outputRoot: null).Validate(Now),
+            problem => problem.StartsWith("outputRoot:")
+        );
+    }
+
+    [Theory]
+    [InlineData("/srv/recordings")]
+    [InlineData("../../etc")]
+    [InlineData("primary/nested")]
+    [InlineData("")]
+    public void AnOutputRootThatIsAPathRatherThanANameIsReported(string outputRoot)
+    {
+        Assert.Contains(
+            Recording(outputRoot: outputRoot).Validate(Now),
+            problem => problem.StartsWith("outputRoot:")
+        );
+    }
+
+    [Theory]
+    [InlineData("primary")]
+    [InlineData("slow-disk")]
+    [InlineData("volume_2")]
+    public void AnOutputRootThatIsANameIsAccepted(string outputRoot)
+    {
+        Assert.Empty(Recording(outputRoot: outputRoot).Validate(Now));
+    }
+
+    [Fact]
+    public void ASessionThatWritesNoFileMayNotNameAnOutputRoot()
+    {
+        Assert.Contains(
+            Request(purpose: SessionPurpose.Live, outputRoot: "primary").Validate(Now),
+            problem => problem.StartsWith("outputRoot:")
+        );
+    }
 
     [Fact]
     public void AnOrdinaryRequestHasNothingWrongWithIt()
@@ -126,9 +192,7 @@ public sealed class StartSessionRequestTests
     [Fact]
     public void ARecordingWithAnEndTimeAheadIsAccepted()
     {
-        Assert.Empty(
-            Request(purpose: SessionPurpose.Recording, endsAt: Now.AddHours(1)).Validate(Now)
-        );
+        Assert.Empty(Recording(endsAt: Now.AddHours(1)).Validate(Now));
     }
 
     [Fact]

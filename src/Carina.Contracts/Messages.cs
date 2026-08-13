@@ -77,7 +77,9 @@ public sealed record StartSessionRequest
 
     private const int MaxServiceId = 65535;
 
-    private const int MaxDeviceIdLength = 64;
+    private const int MaxNameLength = 64;
+
+    public required SessionId SessionId { get; init; }
 
     public required SessionPurpose Purpose { get; init; }
 
@@ -85,23 +87,34 @@ public sealed record StartSessionRequest
 
     public string? DeviceId { get; init; }
 
+    public string? OutputRoot { get; init; }
+
     public DateTimeOffset? EndsAt { get; init; }
 
     public IReadOnlyList<string> Validate(DateTimeOffset now)
     {
         var problems = new List<string>();
 
+        if (SessionId.IsUnset)
+        {
+            problems.Add(
+                $"sessionId: expected 1 to {SessionId.MaxLength} characters of A-Z, a-z, 0-9 or '-'."
+            );
+        }
+
         if (Purpose is SessionPurpose.Unspecified)
         {
             problems.Add("purpose: missing, or a value this driver does not know.");
         }
 
-        if (DeviceId is not null && !IsUsableDeviceName(DeviceId))
+        if (DeviceId is not null && !IsUsableName(DeviceId))
         {
             problems.Add(
-                $"deviceId: expected 1 to {MaxDeviceIdLength} characters of A-Z, a-z, 0-9, '-', '_' or '.'; got '{DeviceId}'."
+                $"deviceId: expected 1 to {MaxNameLength} characters of A-Z, a-z, 0-9, '-', '_' or '.'; got '{DeviceId}'."
             );
         }
+
+        problems.AddRange(OutputRootProblems());
 
         if (Tuning is null)
         {
@@ -128,24 +141,50 @@ public sealed record StartSessionRequest
             );
         }
 
-        if (Purpose is SessionPurpose.Recording)
+        if (Purpose is SessionPurpose.Recording && EndsAt is null)
         {
-            if (EndsAt is null)
-            {
-                problems.Add("endsAt: a recording session has to carry its own end time.");
-            }
-            else if (EndsAt <= now)
-            {
-                problems.Add($"endsAt: expected a time after {now:O}, got {EndsAt:O}.");
-            }
+            problems.Add("endsAt: a recording session has to carry its own end time.");
+        }
+
+        if (EndsAt is { } endsAt && endsAt <= now)
+        {
+            problems.Add($"endsAt: expected a time after {now:O}, got {endsAt:O}.");
         }
 
         return problems;
     }
 
-    private static bool IsUsableDeviceName(string value)
+    private IReadOnlyList<string> OutputRootProblems()
     {
-        if (value.Length is 0 or > MaxDeviceIdLength)
+        if (Purpose is not SessionPurpose.Recording)
+        {
+            return OutputRoot is null
+                ? []
+                :
+                [
+                    $"outputRoot: only a recording writes a file, and this request is a {Purpose.ToString().ToLowerInvariant()} one; got '{OutputRoot}'.",
+                ];
+        }
+
+        if (OutputRoot is null)
+        {
+            return
+            [
+                "outputRoot: a recording names one of the output roots this driver declares.",
+            ];
+        }
+
+        return IsUsableName(OutputRoot)
+            ? []
+            :
+            [
+                $"outputRoot: expected 1 to {MaxNameLength} characters of A-Z, a-z, 0-9, '-', '_' or '.'; got '{OutputRoot}'.",
+            ];
+    }
+
+    private static bool IsUsableName(string value)
+    {
+        if (value.Length is 0 or > MaxNameLength)
         {
             return false;
         }
@@ -169,6 +208,21 @@ public sealed record StartSessionRequest
     }
 }
 
+public sealed record SessionCounters(
+    long Packets = 0,
+    long Drops = 0,
+    long Duplicates = 0,
+    long Discontinuities = 0,
+    long TransportErrors = 0,
+    long ScrambledPackets = 0,
+    long ProvisionalPackets = 0,
+    long DiscardedBytes = 0,
+    long Resyncs = 0
+)
+{
+    public static readonly SessionCounters Nothing = new();
+}
+
 public sealed record SessionSnapshot(
     SessionId SessionId,
     SessionPurpose Purpose,
@@ -178,7 +232,40 @@ public sealed record SessionSnapshot(
     DateTimeOffset? EndsAt = null
 )
 {
+    private readonly SessionCounters counters = SessionCounters.Nothing;
+
     public string DeviceId { get; init; } = DeviceId ?? string.Empty;
+
+    public SessionStopReason StopReason { get; init; }
+
+    public bool Concluded { get; init; }
+
+    public string? InstanceId { get; init; }
+
+    public string? OutputRoot { get; init; }
+
+    public long BytesRecorded { get; init; }
+
+    public long FaultCount { get; init; }
+
+    public long DroppedChunks { get; init; }
+
+    public string? FirstFault { get; init; }
+
+    public string? FailureCause { get; init; }
+
+    public SessionCounters Counters
+    {
+        get => counters;
+        init => counters = value ?? SessionCounters.Nothing;
+    }
+}
+
+public sealed record DriverProblem(string Title, IReadOnlyList<string> Problems)
+{
+    public string Title { get; init; } = Title ?? string.Empty;
+
+    public IReadOnlyList<string> Problems { get; init; } = Problems ?? [];
 }
 
 public sealed record TunerSnapshot(

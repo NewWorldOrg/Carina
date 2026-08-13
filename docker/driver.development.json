@@ -1,7 +1,9 @@
 {
   "socketPath": "/run/carina/driver.sock",
-  "recordingsDirectory": "/srv/recordings",
+  "socketGroupId": 10001,
+  "outputRoots": [{ "name": "primary", "path": "/srv/recordings" }],
   "shutdownGraceHours": 6,
+  "liveSessionMinutes": 240,
   "tuner": { "backend": "fake" },
   "devices": [
     { "id": "fake-terrestrial", "kind": "terrestrial", "enabled": true },

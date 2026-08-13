@@ -26,8 +26,10 @@ public static class DriverJson
 [JsonSerializable(typeof(StartSessionRequest))]
 [JsonSerializable(typeof(TuningRequest))]
 [JsonSerializable(typeof(SessionSnapshot))]
+[JsonSerializable(typeof(SessionCounters))]
 [JsonSerializable(typeof(TunerSnapshot))]
 [JsonSerializable(typeof(DiagnosticSnapshot))]
+[JsonSerializable(typeof(DriverProblem))]
 [JsonSerializable(typeof(IReadOnlyList<SessionSnapshot>))]
 [JsonSerializable(typeof(IReadOnlyList<TunerSnapshot>))]
 [JsonSerializable(typeof(IReadOnlyList<DiagnosticSnapshot>))]
@@ -35,5 +37,6 @@ public static class DriverJson
 [JsonSerializable(typeof(TunerKind))]
 [JsonSerializable(typeof(TunerState))]
 [JsonSerializable(typeof(SessionState))]
+[JsonSerializable(typeof(SessionStopReason))]
 [JsonSerializable(typeof(DiagnosticReason))]
 public sealed partial class DriverJsonContext : JsonSerializerContext;
