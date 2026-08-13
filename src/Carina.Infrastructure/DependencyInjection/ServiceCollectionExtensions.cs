@@ -3,7 +3,6 @@ using Carina.Infrastructure.Configuration;
 using Carina.Infrastructure.DriverStatus;
 using Carina.Infrastructure.Persistence;
 
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -33,7 +32,7 @@ public static class ServiceCollectionExtensions
             .ValidateOnStart();
 
         services.AddDbContext<CarinaDbContext>((provider, options) =>
-            options.UseNpgsql(provider.GetRequiredService<IOptions<DatabaseOptions>>().Value.ConnectionString));
+            options.UseCarinaDatabase(provider.GetRequiredService<IOptions<DatabaseOptions>>().Value.ConnectionString));
 
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IDriverStatusReader, NotConnectedDriverStatusReader>();

@@ -65,9 +65,15 @@ rules hold rather than that they inspected nothing.
 
 ### Boundaries that must not be broken
 
-- Reservations persist by their broadcast identifiers and hold no foreign key to the
-  channel definitions. Editing a channel definition must never delete a reservation.
-- The programme cache is disposable: dropping it is recoverable by collecting again.
+- Reservations persist by their broadcast identifiers (nid + sid) and hold no foreign
+  key to the channel definitions. Editing a channel definition must never delete a
+  reservation.
+- The programme cache is disposable: dropping it is recoverable by collecting again,
+  so no table outside the cache may hold a foreign key into it.
+- Both persistence boundaries are enforced against the EF Core model by
+  `PersistenceBoundaryRuleTests` in `tests/Carina.Infrastructure.Tests`, self-checked
+  against a deliberately violating model. The real columns of the three aggregates are
+  out of the foundation's scope and belong to their own domains.
 - Contract changes are additive only. Removing or renaming an endpoint or an event
   breaks the "old driver + new app" combination, which is the normal state.
 - Configuration is validated at startup and the process fails fast with a message
