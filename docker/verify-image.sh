@@ -77,6 +77,10 @@ wait_for driver_curl http://localhost/health || fail "the driver did not serve /
 echo "driver /health: $(driver_curl http://localhost/health)"
 pass "driver role serves /health over the Unix socket"
 
+docker exec "${prefix}-driver" curl -fsS --max-time 4 --unix-socket /run/carina/driver.sock http://localhost/health >/dev/null \
+    || fail "the image cannot probe its own socket, so the compose healthcheck could never run"
+pass "the image carries the probe the compose healthcheck runs"
+
 perms="$(docker exec "${prefix}-driver" stat -c '%a %U %G' /run/carina/driver.sock)"
 [ "${perms}" = "660 root carina" ] || fail "the driver socket is '${perms}', expected '660 root carina'"
 pass "driver socket is 0660 root:carina"
