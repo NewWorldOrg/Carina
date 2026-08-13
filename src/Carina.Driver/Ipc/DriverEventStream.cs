@@ -20,6 +20,18 @@ public static class DriverEventStream
     {
         if (!hub.TryListen(out var listener))
         {
+            if (hub.IsClosed)
+            {
+                await DriverApi.Problem(
+                    context,
+                    StatusCodes.Status503ServiceUnavailable,
+                    "draining",
+                    "The driver is shutting down and sends no further events."
+                );
+
+                return;
+            }
+
             await DriverApi.Problem(
                 context,
                 StatusCodes.Status429TooManyRequests,

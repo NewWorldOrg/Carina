@@ -50,6 +50,17 @@ public sealed class DriverEventHub
 
     private bool closed;
 
+    public bool IsClosed
+    {
+        get
+        {
+            lock (gate)
+            {
+                return closed;
+            }
+        }
+    }
+
     public DriverEventHub(int listenerLimit = DefaultListenerLimit) =>
         this.listenerLimit = listenerLimit;
 

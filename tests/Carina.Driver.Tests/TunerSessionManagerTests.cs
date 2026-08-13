@@ -494,6 +494,84 @@ public sealed class TunerSessionManagerTests : IDisposable
     }
 
     [Fact]
+    public async Task AWedgedLiveSessionDoesNotHoldTheDrainOnceEveryRecordingIsDone()
+    {
+        var manager = new TunerSessionManager(
+            Configuration,
+            new StubbornForOneDeviceFactory("adapter1", TimeSpan.FromSeconds(10)),
+            clock,
+            NullLogger<TunerSessionManager>.Instance,
+            hardStopLimit: TimeSpan.FromSeconds(1)
+        );
+
+        var recording = Begin(manager, "s-1", "adapter0");
+        var wedged = Begin(manager, "s-2", "adapter1", SessionPurpose.Live, TunerKind.Satellite);
+
+        var draining = manager.DrainAsync(CancellationToken.None);
+        var started = DateTime.UtcNow;
+
+        recording.Stop();
+
+        await draining;
+
+        Assert.True(
+            DateTime.UtcNow - started < TimeSpan.FromSeconds(15),
+            $"The drain took {DateTime.UtcNow - started} although the only recording had finished."
+        );
+        Assert.Equal(SessionState.Stopped, recording.State);
+        Assert.False(wedged.Completion.IsCompleted);
+    }
+
+    [Fact]
+    public async Task ASessionThatBeginsWhileTheDrainSnapshotsIsRefusedNotOrphaned()
+    {
+        var manager = Manager();
+        var refusals = 0;
+        var orphans = 0;
+
+        var beginning = Task.Run(() =>
+        {
+            for (var index = 0; index < 200; index++)
+            {
+                var start = manager.Begin(
+                    new StartSessionRequest
+                    {
+                        SessionId = SessionId.Parse($"s-{index}"),
+                        Purpose = SessionPurpose.Live,
+                        Tuning = new TuningRequest(TunerKind.Terrestrial, 27),
+                    }
+                );
+
+                if (start.TryGetSession(out var session))
+                {
+                    if (manager.IsDraining && !manager.Sessions.Contains(session) && !session.Concluded)
+                    {
+                        Interlocked.Increment(ref orphans);
+                    }
+
+                    StopAndWait(session);
+                }
+                else
+                {
+                    Interlocked.Increment(ref refusals);
+
+                    if (start.Refusal is SessionRefusal.Draining)
+                    {
+                        break;
+                    }
+                }
+            }
+        });
+
+        await Task.Delay(TimeSpan.FromMilliseconds(30));
+        await manager.DrainAsync(CancellationToken.None);
+        await beginning;
+
+        Assert.Equal(0, orphans);
+        Assert.True(refusals > 0);
+    }
+
+    [Fact]
     public async Task ShutdownDoesNotReturnBeforeEverySessionOutcomeIsWrittenDown()
     {
         var log = new CapturingLogger<TunerSessionManager>();

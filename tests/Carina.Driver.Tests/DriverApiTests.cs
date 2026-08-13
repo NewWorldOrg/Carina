@@ -343,7 +343,8 @@ public sealed class DriverApiTests
 
         var body = await WaitUntil(
             client,
-            sessions => sessions.Single().BytesRecorded > 0
+            sessions =>
+                sessions.Single() is { BytesRecorded: > 0, Counters.Packets: > 0 }
         );
 
         var only = body.Single();

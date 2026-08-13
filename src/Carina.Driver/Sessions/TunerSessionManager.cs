@@ -88,9 +88,14 @@ public sealed class TunerSessionManager(
 
     private async Task Drain(CancellationToken cancellationToken)
     {
-        EnterDraining();
+        TunerSession[] running;
 
-        var running = sessions.Values.ToArray();
+        lock (drainGate)
+        {
+            EnterDraining();
+            running = [.. sessions.Values];
+        }
+
         if (running.Length is 0)
         {
             return;
@@ -115,8 +120,17 @@ public sealed class TunerSessionManager(
                 drainCap
             );
 
-            if (await Settles(everyone, drainCap, cancellationToken))
+            var theRecordings = Task.WhenAll(recordings.Select(session => session.Completion));
+
+            if (await Settles(theRecordings, drainCap, cancellationToken))
             {
+                if (await Settles(everyone, hardStop, CancellationToken.None))
+                {
+                    return;
+                }
+
+                GiveUpOn(running);
+
                 return;
             }
 
@@ -138,6 +152,11 @@ public sealed class TunerSessionManager(
             return;
         }
 
+        GiveUpOn(running);
+    }
+
+    private void GiveUpOn(TunerSession[] running)
+    {
         foreach (var session in running.Where(session => !session.Completion.IsCompleted))
         {
             logger.LogError(
@@ -411,15 +430,29 @@ public sealed class TunerSessionManager(
             diagnostics: diagnostics
         );
 
-        if (!sessions.TryAdd(sessionId, session))
+        lock (drainGate)
         {
-            Release(deviceId, sessionId);
-            session.Dispose();
+            if (draining)
+            {
+                Release(deviceId, sessionId);
+                session.Dispose();
 
-            return SessionStart.Refused(
-                SessionRefusal.DuplicateSession,
-                $"The session '{sessionId}' already exists."
-            );
+                return SessionStart.Refused(
+                    SessionRefusal.Draining,
+                    "The driver is shutting down, so no session can start."
+                );
+            }
+
+            if (!sessions.TryAdd(sessionId, session))
+            {
+                Release(deviceId, sessionId);
+                session.Dispose();
+
+                return SessionStart.Refused(
+                    SessionRefusal.DuplicateSession,
+                    $"The session '{sessionId}' already exists."
+                );
+            }
         }
 
         session.Ended += Forget;
@@ -512,7 +545,6 @@ public sealed class TunerSessionManager(
     private void Forget(TunerSession session)
     {
         sessions.TryRemove(new KeyValuePair<SessionId, TunerSession>(session.SessionId, session));
-        Release(session.DeviceId, session.SessionId);
 
         if (session.StopReason is SessionStopReason.DeviceFailed)
         {
@@ -520,6 +552,8 @@ public sealed class TunerSessionManager(
                 $"The device failed while serving '{session.SessionId}': "
                 + (session.FailureCause?.Message ?? "no cause was recorded.");
         }
+
+        Release(session.DeviceId, session.SessionId);
 
         ended.Enqueue(session);
 

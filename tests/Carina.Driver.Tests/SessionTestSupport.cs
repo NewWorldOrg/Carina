@@ -84,6 +84,15 @@ public sealed class StubbornTunerDeviceFactory(TimeSpan readTakes) : ITunerDevic
         new StubbornTunerDevice(readTakes);
 }
 
+public sealed class StubbornForOneDeviceFactory(string stubbornDeviceId, TimeSpan readTakes)
+    : ITunerDeviceFactory
+{
+    public ITunerDevice Create(DeviceSettings device, TuningRequest tuning) =>
+        device.Id == stubbornDeviceId
+            ? new StubbornTunerDevice(readTakes)
+            : new ScriptedTunerDevice();
+}
+
 public sealed class SelectiveTunerDeviceFactory(string failingDeviceId, int failAfterReads = 1)
     : ITunerDeviceFactory
 {
