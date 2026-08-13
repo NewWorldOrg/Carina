@@ -901,6 +901,10 @@ public sealed class DriverApiTests
 
         Assert.NotNull(problem);
         Assert.Equal("sessionEnded", problem.Title);
+
+        var detail = Assert.Single(problem.Problems);
+
+        Assert.Contains("(requested)", detail, StringComparison.Ordinal);
     }
 
     [Fact]

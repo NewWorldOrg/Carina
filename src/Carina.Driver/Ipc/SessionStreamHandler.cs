@@ -60,7 +60,7 @@ public static class SessionStreamHandler
                 context,
                 StatusCodes.Status409Conflict,
                 "sessionEnded",
-                $"The session '{sessionId}' has ended ({session.StopReason}); the driver keeps no stream to replay."
+                $"The session '{sessionId}' has ended ({SessionStopReasonConverter.WireName(session.StopReason)}); the driver keeps no stream to replay."
             );
 
             return;

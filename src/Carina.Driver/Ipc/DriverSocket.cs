@@ -155,7 +155,7 @@ public static class DriverSocket
         catch (AggregateException gathered)
             when (gathered.InnerException is SocketException refusal)
         {
-            return refusal.SocketErrorCode is SocketError.AccessDenied;
+            return refusal.SocketErrorCode is not SocketError.ConnectionRefused;
         }
     }
 }
