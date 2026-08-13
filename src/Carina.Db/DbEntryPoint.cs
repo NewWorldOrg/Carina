@@ -35,6 +35,8 @@ public static class DbEntryPoint
         {
             await using (context)
             {
+                await using var lease = await MigrationLock.TakeAsync(context, error);
+
                 await context.Database.MigrateAsync();
             }
 
