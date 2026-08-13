@@ -12,6 +12,13 @@ task acceptance -- 01 07   # a subset, by number
 `docker/acceptance/run.sh` prints a PASS/FAIL table and exits non-zero if any scenario failed.
 Every scenario cleans up its own containers, volumes, networks and images.
 
+To reproduce what a small CI runner does to a scenario, point
+`CARINA_ACCEPTANCE_COMPOSE_OVERRIDE` at a compose file giving the services a CPU limit; it
+is added on top of `compose.deploy.yml` and changes nothing when unset. A runner also starts
+with an empty image cache, which is worth reproducing on its own — `docker rmi
+curlimages/curl python:3.13-alpine` before a run — because that is what broke the first CI
+run of this suite.
+
 ## Why this shape
 
 These are container lifecycle facts: replace a container, signal a process, kill it outright,
