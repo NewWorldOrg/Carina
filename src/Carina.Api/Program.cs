@@ -19,6 +19,7 @@ builder.Services.AddAuthentication();
 builder.Services.AddOpenApi(options =>
 {
     options.AddDocumentTransformer<DocumentInfoTransformer>();
+    options.AddSchemaTransformer<StringEnumSchemaTransformer>();
     options.AddOperationTransformer<DefaultDenyResponseTransformer>();
 });
 

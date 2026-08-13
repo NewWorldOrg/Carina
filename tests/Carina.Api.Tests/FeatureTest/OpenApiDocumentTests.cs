@@ -84,6 +84,21 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task EveryEnumSaysWhatItsValuesAre()
+    {
+        var document = await ServedOpenApi.FetchAsync(factory);
+
+        var untyped = document["components"]!["schemas"]!
+            .AsObject()
+            .Where(schema => schema.Value!["enum"] is not null)
+            .Where(schema => schema.Value!["type"]?.GetValue<string>() != "string")
+            .Select(schema => schema.Key)
+            .ToArray();
+
+        Assert.Empty(untyped);
+    }
+
+    [Fact]
     public async Task TheEnvelopeIsDescribedRatherThanLeftOpaque()
     {
         var document = await ServedOpenApi.FetchAsync(factory);
