@@ -1,10 +1,5 @@
 namespace Carina.Contracts.Tests;
 
-/// <summary>
-/// Paths are part of the contract: an old driver keeps serving the paths it was
-/// built with, so renaming one here silently breaks the pairing that is the normal
-/// state of a deployment. Adding a path is the only safe change.
-/// </summary>
 public sealed class DriverEndpointsTests
 {
     [Fact]

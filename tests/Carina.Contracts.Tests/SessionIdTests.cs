@@ -1,10 +1,5 @@
 namespace Carina.Contracts.Tests;
 
-/// <summary>
-/// The identifier ends up in a request path on the privileged process, so the shape
-/// is checked where the value enters. These are the inputs that would otherwise
-/// change which endpoint a request reaches.
-/// </summary>
 public sealed class SessionIdTests
 {
     [Theory]
@@ -60,7 +55,6 @@ public sealed class SessionIdTests
         Assert.False(SessionId.Parse("abc").IsUnset);
     }
 
-    // What this build writes, it has to be able to read back.
     [Fact]
     public void AnUnsetIdentifierSurvivesARoundTrip()
     {

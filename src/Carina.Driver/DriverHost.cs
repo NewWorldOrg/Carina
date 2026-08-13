@@ -1,17 +1,14 @@
+using Carina.Driver.Configuration;
+
 namespace Carina.Driver;
 
-/// <summary>
-/// Composition root of the driver process.
-/// </summary>
 public static class DriverHost
 {
-    /// <summary>
-    /// Builds the driver host. The tuner, IPC and session services are added here
-    /// as they are implemented; the skeleton only establishes the process shape.
-    /// </summary>
-    public static IHost Create(string[] args)
+    public static IHost Create(string[] args, DriverConfiguration configuration)
     {
         var builder = Host.CreateApplicationBuilder(args);
+        builder.Services.AddSingleton(configuration);
+
         return builder.Build();
     }
 }

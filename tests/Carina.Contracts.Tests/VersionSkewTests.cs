@@ -1,17 +1,7 @@
 namespace Carina.Contracts.Tests;
 
-/// <summary>
-/// Both pairings a deployment produces, in both directions.
-/// </summary>
-/// <remarks>
-/// The two processes are released on independent tags, so an old driver talking to
-/// a new app is the normal state, and the reverse happens for as long as it takes
-/// to roll the app. Neither side may fail on what the other says; the contract only
-/// grows, and what a build does not recognise it has to be able to ignore.
-/// </remarks>
 public sealed class VersionSkewTests
 {
-    // Old driver, new app: fields the newer build added are simply absent.
     [Fact]
     public void AnAnswerWithoutTheNewerFieldsStillReads()
     {
@@ -25,9 +15,6 @@ public sealed class VersionSkewTests
         Assert.Equal(SessionPurpose.Recording, session.Purpose);
     }
 
-    // New driver, old app: fields and enum values the older build never heard of.
-    // The message stays readable and the unknown value degrades to "unspecified"
-    // instead of landing on whichever member shares its position.
     [Fact]
     public void AnAnswerWithNewerFieldsAndValuesStillReads()
     {
@@ -55,8 +42,6 @@ public sealed class VersionSkewTests
         Assert.NotEqual(TunerState.Idle, tuner.State);
     }
 
-    // An ordinal says nothing about which member was meant. Honouring it would make
-    // a value added later read as a value that exists today.
     [Fact]
     public void NumericEnumValuesAreNotHonoured()
     {
@@ -70,8 +55,6 @@ public sealed class VersionSkewTests
         Assert.Equal(TunerState.Unspecified, tuner.State);
     }
 
-    // A driver older than the capability answers hello without it, and the app has
-    // to carry on rather than treat the pairing as broken.
     [Fact]
     public void ADriverWithoutACapabilityIsUsableForEverythingElse()
     {
@@ -85,8 +68,6 @@ public sealed class VersionSkewTests
         Assert.False(hello.Supports(DriverCapabilities.QualityMetering));
     }
 
-    // Only the instance identifies a run. A reconnection to the same process must
-    // not look like a restart, or the app re-adopts sessions it should have kept.
     [Fact]
     public void ARestartIsTheChangeOfInstanceAndNothingElse()
     {
@@ -99,9 +80,6 @@ public sealed class VersionSkewTests
         Assert.True(first.IsDifferentInstanceFrom(null));
     }
 
-    // A driver built before the field existed sends no instance at all. Reading two
-    // absences as the same run would tell the app its sessions survived a restart
-    // it cannot see — the one answer that must never be given by default.
     [Fact]
     public void ADriverThatNamesNoInstanceIsAlwaysTreatedAsARestart()
     {
@@ -117,8 +95,6 @@ public sealed class VersionSkewTests
         Assert.True(new DriverHello(1, "b7f2c9", []).IsDifferentInstanceFrom(older));
     }
 
-    // An identifier this build would not have minted is still readable: losing the
-    // whole answer over one session would take every other session with it.
     [Fact]
     public void AnIdentifierOutsideTheShapeLeavesTheRestOfTheAnswerReadable()
     {
@@ -133,7 +109,6 @@ public sealed class VersionSkewTests
         Assert.Equal(SessionState.Active, session.State);
     }
 
-    // What it cannot do is become a path: an unset id would address the collection.
     [Fact]
     public void AnUnsetIdentifierHasNoPath()
     {

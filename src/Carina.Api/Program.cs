@@ -17,16 +17,12 @@ var app = builder.Build();
 
 app.MapOpenApi();
 
-// Liveness only: the single endpoint that stays reachable without authentication.
 app.MapGet("/api/health", () => Results.Ok(new HealthResponse("ok")));
 
 app.Run();
 
-/// <summary>Payload of the liveness endpoint.</summary>
-/// <param name="Status">Constant marker that the process is serving.</param>
 public sealed record HealthResponse(string Status);
 
-/// <summary>Entry point, exposed so that feature tests can host the application.</summary>
 public partial class Program
 {
     internal const string ConnectionStringName = "Carina";

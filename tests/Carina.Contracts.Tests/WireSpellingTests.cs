@@ -1,13 +1,5 @@
 namespace Carina.Contracts.Tests;
 
-/// <summary>
-/// Every enum member and every capability name, spelled out.
-/// </summary>
-/// <remarks>
-/// Each spelling is hand-written in a converter, so a typo compiles cleanly and
-/// ships. A member that appears only in a round-trip test proves nothing about how
-/// it looks on the wire: both directions would agree on the same typo.
-/// </remarks>
 public sealed class WireSpellingTests
 {
     [Theory]

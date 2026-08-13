@@ -1,10 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    Migration-only entry point. Nothing references this project: it is a leaf that
-    the deployment runs on its own. Enforced by Carina.Architecture.Tests.
-  -->
-
   <PropertyGroup>
     <OutputType>Exe</OutputType>
   </PropertyGroup>

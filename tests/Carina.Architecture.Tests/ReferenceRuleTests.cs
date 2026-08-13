@@ -1,15 +1,9 @@
 namespace Carina.Architecture.Tests;
 
-/// <summary>
-/// Structural rules that the two release streams and the layering depend on.
-/// A violation here is a build break, not a review comment.
-/// </summary>
 public sealed class ReferenceRuleTests
 {
     private static readonly ProjectGraph Graph = ProjectGraph.Load(RepositoryLayout.SourceDirectory);
 
-    // The privileged process ships on its own tag and must keep running while the app
-    // is replaced. Reaching into the app's layers would tie the two together again.
     [Fact]
     public void DriverReferencesContractsOnly()
     {
@@ -25,8 +19,6 @@ public sealed class ReferenceRuleTests
         Assert.Empty(domain.PackageReferences);
     }
 
-    // The parsing library is exercised by large table-driven tests over fixed
-    // fixtures, which only stays possible while it has nothing to wire up.
     [Fact]
     public void BroadcastDependsOnNothing()
     {
@@ -63,8 +55,6 @@ public sealed class ReferenceRuleTests
             "Carina.Contracts"));
     }
 
-    // Migrations are applied by their own process; nothing may take a dependency on
-    // that entry point and drag the tooling into the served processes.
     [Fact]
     public void DbIsALeaf()
     {
