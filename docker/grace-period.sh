@@ -97,7 +97,13 @@ case "${mode}" in
         ;;
     check)
         budget="$(budget_seconds)"
-        read -r kind value rendered <<<"$(compose_grace_seconds)"
+        answer=""
+
+        if ! answer="$(compose_grace_seconds)"; then
+            exit 1
+        fi
+
+        read -r kind value rendered <<<"${answer}"
 
         if [ "${kind}" = "no-driver-service" ]; then
             fail "${compose_file} has no 'driver' service; it declares: ${value}"
@@ -112,6 +118,14 @@ case "${mode}" in
         fi
 
         grace="${value%.*}"
+
+        if ! [[ "${budget}" =~ ^[0-9]+$ ]]; then
+            fail "the driver reported '${budget}' as its shutdown budget, which is not a number of seconds."
+        fi
+
+        if ! [[ "${grace}" =~ ^[0-9]+$ ]]; then
+            fail "${compose_file} yielded '${value}' as its stop_grace_period, which is not a number of seconds."
+        fi
 
         if [ "${grace}" -le "${budget}" ]; then
             fail "stop_grace_period ${rendered} (${grace}s) does not exceed the driver's own shutdown budget of ${budget}s; the runtime would SIGKILL the driver while it was still closing a recording. 'grace-period.sh derive' prints a value that does."
