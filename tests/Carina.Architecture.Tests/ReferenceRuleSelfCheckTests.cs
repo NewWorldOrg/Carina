@@ -63,6 +63,20 @@ public sealed class ReferenceRuleSelfCheckTests
     }
 
     [Fact]
+    public void DetectsATestProjectThatBorrowsFromAnotherTestProject()
+    {
+        var graph = ProjectGraph.FromNodes(
+            new ProjectNode("Carina.TestSupport", ["Carina.Domain"], []),
+            new ProjectNode("Carina.Domain", [], []),
+            new ProjectNode("Carina.Api.Tests", ["Carina.Infrastructure.Tests"], []),
+            new ProjectNode("Carina.Infrastructure.Tests", ["Carina.TestSupport"], []));
+
+        Assert.Equal(
+            ["Carina.Api.Tests -> Carina.Infrastructure.Tests"],
+            graph.TestProjectsReferencingAnotherTestProject());
+    }
+
+    [Fact]
     public void DetectsAMigrationProjectThatIsReferenced()
     {
         Assert.Equal(["Carina.Api"], ViolatingGraph().DependentsOf("Carina.Db"));

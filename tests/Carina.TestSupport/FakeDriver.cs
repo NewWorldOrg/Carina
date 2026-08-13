@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 
-namespace Carina.Infrastructure.Tests;
+namespace Carina.TestSupport;
 
 public sealed class FakeDriver : IAsyncDisposable
 {

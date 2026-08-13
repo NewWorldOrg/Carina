@@ -18,5 +18,6 @@
     <Project Path="tests/Carina.Domain.Tests/Carina.Domain.Tests.csproj" />
     <Project Path="tests/Carina.Driver.Tests/Carina.Driver.Tests.csproj" />
     <Project Path="tests/Carina.Infrastructure.Tests/Carina.Infrastructure.Tests.csproj" />
+    <Project Path="tests/Carina.TestSupport/Carina.TestSupport.csproj" />
   </Folder>
 </Solution>

@@ -11,9 +11,10 @@ public sealed class ProjectGraph
 
     public IReadOnlyCollection<string> ProjectNames => nodes.Keys;
 
-    public static ProjectGraph Load(string directory)
-        => new(Directory
-            .EnumerateFiles(directory, "*.csproj", SearchOption.AllDirectories)
+    public static ProjectGraph Load(params string[] directories)
+        => new(directories
+            .SelectMany(directory =>
+                Directory.EnumerateFiles(directory, "*.csproj", SearchOption.AllDirectories))
             .Select(Read));
 
     public static ProjectGraph FromNodes(params ProjectNode[] projects) => new(projects);
@@ -52,12 +53,24 @@ public sealed class ProjectGraph
             .Order(StringComparer.Ordinal)
             .ToArray();
 
+    public IReadOnlyList<string> TestProjectsReferencingAnotherTestProject()
+        => nodes.Values
+            .Where(node => IsATestProject(node.Name))
+            .SelectMany(node => node.ProjectReferences
+                .Where(IsATestProject)
+                .Select(reference => $"{node.Name} -> {reference}"))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
     public IReadOnlyList<string> DependentsOf(string name)
         => nodes.Values
             .Where(node => node.ProjectReferences.Contains(name, StringComparer.Ordinal))
             .Select(node => node.Name)
             .Order(StringComparer.Ordinal)
             .ToArray();
+
+    private static bool IsATestProject(string name)
+        => name.EndsWith(".Tests", StringComparison.Ordinal);
 
     private static ProjectNode Read(string path)
     {
