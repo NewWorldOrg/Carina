@@ -527,7 +527,7 @@ public sealed class TunerSessionManagerTests : IDisposable
     {
         var manager = Manager();
         var refusals = 0;
-        var orphans = 0;
+        var granted = new ConcurrentBag<TunerSession>();
 
         var beginning = Task.Run(() =>
         {
@@ -544,12 +544,12 @@ public sealed class TunerSessionManagerTests : IDisposable
 
                 if (start.TryGetSession(out var session))
                 {
-                    if (manager.IsDraining && !manager.Sessions.Contains(session) && !session.Concluded)
-                    {
-                        Interlocked.Increment(ref orphans);
-                    }
+                    granted.Add(session);
 
-                    StopAndWait(session);
+                    if (!manager.IsDraining)
+                    {
+                        session.Stop();
+                    }
                 }
                 else
                 {
@@ -567,7 +567,16 @@ public sealed class TunerSessionManagerTests : IDisposable
         await manager.DrainAsync(CancellationToken.None);
         await beginning;
 
-        Assert.Equal(0, orphans);
+        foreach (var session in granted)
+        {
+            session.WaitForEnd(TimeSpan.FromSeconds(10));
+
+            Assert.True(
+                session.Concluded,
+                $"'{session.SessionId}' was granted but nobody concluded it."
+            );
+        }
+
         Assert.True(refusals > 0);
     }
 
