@@ -41,6 +41,11 @@ Reference direction is one-way and enforced by `tests/Carina.Architecture.Tests`
 - `Carina.Domain` may reference `Carina.Contracts` and nothing else — the driver client
   interface speaks the wire types, and mirroring them would duplicate every additive
   contract change. `Carina.Broadcast` has no project and no package references.
+- `Carina.Contracts` itself has neither project nor package references. The domain's
+  framework-freeness now runs through it, so a package added here would reach the domain
+  transitively. What the contract carries is shared vocabulary — message records, enums,
+  identifiers; the domain knows nothing of HTTP, URLs or JSON, and a source rule keeps
+  `DriverEndpoints` and `DriverJson` out of it even though both compile against it.
 - `Carina.Db` is a leaf: no project may reference the migration entry point.
 
 The architecture tests read the project files rather than the compiled output, so a

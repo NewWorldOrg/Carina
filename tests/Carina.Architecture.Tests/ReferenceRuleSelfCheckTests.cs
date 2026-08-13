@@ -3,7 +3,7 @@ namespace Carina.Architecture.Tests;
 public sealed class ReferenceRuleSelfCheckTests
 {
     private static ProjectGraph ViolatingGraph() => ProjectGraph.FromNodes(
-        new ProjectNode("Carina.Contracts", [], []),
+        new ProjectNode("Carina.Contracts", [], ["Microsoft.EntityFrameworkCore"]),
         new ProjectNode("Carina.Domain", ["Carina.Infrastructure"], ["Microsoft.EntityFrameworkCore"]),
         new ProjectNode("Carina.Infrastructure", ["Carina.Domain"], []),
         new ProjectNode("Carina.Db", [], []),
@@ -27,6 +27,15 @@ public sealed class ReferenceRuleSelfCheckTests
             ["Carina.Domain", "Carina.Infrastructure"],
             graph.ForbiddenReferencesOf("Carina.Domain", "Carina.Contracts"));
         Assert.NotEmpty(graph.Node("Carina.Domain").PackageReferences);
+    }
+
+    [Fact]
+    public void DetectsAContractThatTakesOnAPackage()
+    {
+        var contracts = ViolatingGraph().Node("Carina.Contracts");
+
+        Assert.Empty(contracts.ProjectReferences);
+        Assert.NotEmpty(contracts.PackageReferences);
     }
 
     [Fact]

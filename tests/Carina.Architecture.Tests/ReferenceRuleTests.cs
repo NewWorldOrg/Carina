@@ -39,9 +39,12 @@ public sealed class ReferenceRuleTests
     }
 
     [Fact]
-    public void ContractsHasNoProjectReferences()
+    public void ContractsDependsOnNothing()
     {
-        Assert.Empty(Graph.Node("Carina.Contracts").ProjectReferences);
+        var contracts = Graph.Node("Carina.Contracts");
+
+        Assert.Empty(contracts.ProjectReferences);
+        Assert.Empty(contracts.PackageReferences);
     }
 
     [Fact]
