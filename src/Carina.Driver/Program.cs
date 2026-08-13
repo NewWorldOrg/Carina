@@ -2,16 +2,40 @@ using System.Runtime.InteropServices;
 
 using Carina.Driver;
 using Carina.Driver.Configuration;
+using Carina.Driver.Ipc;
 
 var configurationPath = Environment.GetEnvironmentVariable(
     DriverStartup.ConfigurationPathVariable
 );
+
+if (args is ["--shutdown-budget"])
+{
+    var declared = DriverConfigurationReader.ReadFile(
+        configurationPath,
+        checkTheFilesystem: false
+    );
+
+    if (!declared.TryGetConfiguration(out var planned, out _))
+    {
+        return DriverStartup.Report(declared, Console.Error, configurationPath);
+    }
+
+    Console.Out.WriteLine(DriverShutdownBudget.From(planned).TotalSeconds);
+    return 0;
+}
 
 var result = DriverConfigurationReader.ReadFile(configurationPath);
 if (!result.TryGetConfiguration(out var configuration, out _))
 {
     return DriverStartup.Report(result, Console.Error, configurationPath);
 }
+
+if (args is ["--probe"])
+{
+    return await DriverProbe.RunAsync(configuration, Console.Out);
+}
+
+DriverStartup.Announce(configuration, Console.Out);
 
 var stopWasAsked = false;
 using var sigterm = PosixSignalRegistration.Create(

@@ -63,3 +63,66 @@ jobs:
           dotnet-version: '10.0.x'
       - run: dotnet restore
       - run: dotnet format --no-restore --verify-no-changes
+
+  compose:
+    runs-on: ubuntu-latest
+    env:
+      CARINA_DRIVER_CONFIG_FILE: ./docker/driver.development.json
+      CARINA_STOP_GRACE: 7h
+      POSTGRES_PASSWORD: ci-only-not-a-deployment
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose config --quiet
+      - run: docker compose -f compose.deploy.yml config --quiet
+      - name: An unset database password stops the deployment file, naming itself
+        run: |
+          if output="$(docker compose -f compose.deploy.yml config --quiet 2>&1)"; then
+            echo "the deployment file rendered without POSTGRES_PASSWORD" >&2
+            exit 1
+          fi
+          if ! grep -q 'POSTGRES_PASSWORD' <<<"${output}"; then
+            echo "it failed for another reason: ${output}" >&2
+            exit 1
+          fi
+          echo "${output}"
+        env:
+          POSTGRES_PASSWORD: ''
+      - name: An unset driver configuration stops the deployment file, naming itself
+        run: |
+          if output="$(docker compose -f compose.deploy.yml config --quiet 2>&1)"; then
+            echo "the deployment file rendered without CARINA_DRIVER_CONFIG_FILE" >&2
+            exit 1
+          fi
+          if ! grep -q 'CARINA_DRIVER_CONFIG_FILE' <<<"${output}"; then
+            echo "it failed for another reason: ${output}" >&2
+            exit 1
+          fi
+          echo "${output}"
+        env:
+          CARINA_DRIVER_CONFIG_FILE: ''
+
+  image:
+    runs-on: ubuntu-latest
+    env:
+      CARINA_IMAGE: carina:ci
+      CARINA_DRIVER_CONFIG_FILE: ./docker/driver.development.json
+      CARINA_STOP_GRACE: 7h
+      POSTGRES_PASSWORD: ci-only-not-a-deployment
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t carina:ci .
+      - run: docker/verify-image.sh carina:ci
+      - run: CARINA_STOP_GRACE="$(docker/grace-period.sh derive)" docker/grace-period.sh check
+      - name: A grace period inside the driver's budget is refused, for that reason
+        run: |
+          if output="$(CARINA_STOP_GRACE=6h docker/grace-period.sh check 2>&1)"; then
+            echo "a 6h grace period was accepted against a 6h linger cap" >&2
+            echo "${output}" >&2
+            exit 1
+          fi
+          if ! grep -q "does not exceed the driver's own shutdown budget" <<<"${output}"; then
+            echo "the check refused it, but not for the reason under test:" >&2
+            echo "${output}" >&2
+            exit 1
+          fi
+          echo "${output}"

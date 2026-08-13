@@ -100,7 +100,8 @@ public static class DriverHost
             .Services.AddOptions<HostOptions>()
             .Configure<TunerSessionManager>(
                 (options, manager) =>
-                    options.ShutdownTimeout = manager.ShutdownBudget + TimeSpan.FromMinutes(1)
+                    options.ShutdownTimeout =
+                        manager.ShutdownBudget + DriverShutdownBudget.DefaultHostSlack
             );
         builder.Services.ConfigureHttpJsonOptions(options =>
             options.SerializerOptions.TypeInfoResolverChain.Insert(0, DriverJson.Context)

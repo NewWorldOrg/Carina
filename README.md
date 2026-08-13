@@ -69,6 +69,50 @@ docker compose exec app dotnet test
 
 API はコンテナの 8080 番で待ち受け、ホストの 8081 番に出ます（`API_PORT` で変えられます）。
 
+### 配布と同じ形で動かす
+
+`compose.yml` は開発用です。SDK イメージにソースをマウントし、`docker compose exec`
+で中に入って使います。配布イメージを driver / app の別サービスとして動かす形は
+`compose.deploy.yml` にあります。
+
+```bash
+task image        # docker build -t carina .
+export CARINA_DRIVER_CONFIG_FILE=./docker/driver.development.json
+export POSTGRES_PASSWORD=...
+task deploy:up    # stop_grace_period を driver から導出して up -d --wait
+task deploy:down
+```
+
+**既定値はありません。** driver の設定ファイル・DB パスワード・`stop_grace_period` は
+どれも未設定なら起動しません。`docker/driver.development.json` は合成チューナーの
+設定で、放送ではなく試験用の TS を録ります。driver は fake バックエンドで起動すると
+その旨を起動ログに書きます。
+
+API はホストの 8082 番に出ます（`CARINA_API_PORT`）。app は uid 10001 で動きます。
+マイグレーションは `migrate` サービスが1回だけ適用し、app はその正常終了を待って
+起動します。`migrate` は PostgreSQL の advisory lock を取るので、2本目は待ちます。
+
+driver のヘルスチェックは driver 自身です。
+
+```bash
+docker compose -f compose.deploy.yml exec driver /opt/carina/driver/Carina.Driver --probe
+```
+
+排水中、あるいは使えるチューナーが全て故障している場合は unhealthy を返します。
+イメージに HTTP クライアントは入れていません。
+
+`stop_grace_period` は driver が申告する予算（録画の居座り上限＋ハードストップ＋
+ホストの余裕）より長くなければならず、短いとランタイムが録画の後始末の途中で
+SIGKILL します。予算は driver 自身が出します。
+
+```bash
+docker/grace-period.sh derive   # 予算+余裕を stop_grace_period の形で出す
+docker/grace-period.sh check    # compose の値が予算を超えているか検査する
+```
+
+録画がギャップ無く伸びたことは `docker/check-recording-continuity.py` が
+録画ファイルを読んで確かめます（合成チューナーの TS 専用）。
+
 ## 設定
 
 環境依存のものは何ひとつ埋め込みません。デバイスの一覧、録画の出力先、ソケットの
@@ -84,6 +128,12 @@ API はコンテナの 8080 番で待ち受け、ホストの 8081 番に出ま�
 | `ConnectionStrings__Carina` | API が使う PostgreSQL の接続文字列 |
 | `CARINA_DB_CONNECTION` | マイグレーション実行時の接続文字列 |
 | `CARINA_ROLE` | イメージが起動する役割（`driver` / `app` / `web` / `all` / `migrate`） |
+| `CARINA_IMAGE` | `compose.deploy.yml` が動かすイメージ（既定 `carina`） |
+| `CARINA_DRIVER_CONFIG_FILE` | driver へマウントする設定ファイル。**必須** |
+| `CARINA_STOP_GRACE` | driver の `stop_grace_period`。**必須**、`grace-period.sh derive` の出力 |
+| `CARINA_API_PORT` | 配布形の API のホスト側ポート（既定 8082） |
+| `CARINA_UID` / `CARINA_GID` | app と migrate の実行 uid / gid（既定 10001） |
+| `POSTGRES_PASSWORD` | 配布形の DB パスワード。**必須**、既定値は置きません |
 
 ## イメージの役割
 
