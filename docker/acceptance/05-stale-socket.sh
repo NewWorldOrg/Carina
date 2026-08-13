@@ -96,16 +96,13 @@ if ! wait_until 60 bash -c "test \"\$(docker inspect -f '{{.State.Running}}' ${d
 fi
 
 socket_inode
-inode_after="${text_value}"
-
-if [ "${inode_after}" = "${inode_before}" ]; then
-    fail "the socket is still inode ${inode_before}; the driver bound the file it found rather than unlinking it."
-fi
-pass "the restarted driver replaced the stale socket: ${inode_before} -> ${inode_after}"
+note "after the restart the socket is ${text_value} (it was ${inode_before}; the filesystem may reuse a number, so this is a note and not the proof)"
 
 if ! wait_until 60 bash -c "docker run --rm --user 100:10001 -v ${socket_volume}:/run/carina ${curl_image} -sf --max-time 5 --unix-socket /run/carina/driver.sock http://localhost/health"; then
-    fail "the restarted driver never answered on the replaced socket."
+    docker logs "${driver_container}" 2>&1 | tail -20
+    fail "the restarted driver never answered on the path its predecessor left a socket file at; binding over a stale socket is what this criterion is about."
 fi
+pass "the restarted driver serves on the path the dead one left a socket file at, which it could only do by unlinking it first"
 
 perms="$(docker exec "${driver_container}" stat -c '%a %U %G' /run/carina/driver.sock)"
 if [ "${perms}" != "660 root carina" ]; then

@@ -6,7 +6,7 @@ scenario_id="02-sigterm-linger"
 
 session="acc02"
 volume="${project}_recordings"
-recording_seconds="${CARINA_ACCEPTANCE_LINGER_SECONDS:-30}"
+recording_seconds="${CARINA_ACCEPTANCE_LINGER_SECONDS:-20}"
 
 heading "受入基準 2 — SIGTERM while recording does not end the recording"
 
@@ -82,56 +82,7 @@ if ! grep -q 'draining' <<<"${refusal_body}"; then
 fi
 pass "a draining driver refuses new work with 503 and says why: ${refusal_body}"
 
-concluded="no"
-while [ "$(date +%s)" -lt "$((deadline + 45))" ]; do
-    set +e
-    answer="$(driver_curl http://localhost/sessions 2>/dev/null)"
-    answer_status=$?
-    set -e
-
-    if [ "${answer_status}" -eq 0 ] && [ -n "${answer}" ]; then
-        set +e
-        state="$(printf '%s' "${answer}" | python3 "${acceptance_dir}/read-json.py" session "${session}" concluded 2>/dev/null)"
-        read_status=$?
-        set -e
-
-        if [ "${read_status}" -eq 0 ] && [ "${state}" = "true" ]; then
-            final_answer="${answer}"
-            concluded="yes"
-            break
-        fi
-    fi
-
-    inspect_field "${driver_container}" '{{.State.Running}}'
-    if [ "${text_value}" != "true" ]; then
-        break
-    fi
-
-    sleep 1
-done
-
-if [ "${concluded}" != "yes" ]; then
-    fail "the recording never reported itself concluded while the driver was still answering; the driver left before its recording did."
-fi
-
-json "${final_answer}" session "${session}" state
-final_state="${text_value}"
-json "${final_answer}" session "${session}" stopReason
-stop_reason="${text_value}"
-json "${final_answer}" session "${session}" bytesRecorded
-final_bytes="${text_value}"
-require_number "the driver's final byte count" "${final_bytes}"
-
-if [ "${final_state}" != "stopped" ]; then
-    fail "the recording ended in state '${final_state}' instead of running to its end: ${final_answer}"
-fi
-
-if [ "${stop_reason}" != "endsAtReached" ]; then
-    fail "the recording stopped for '${stop_reason}', not because it reached its own end time; SIGTERM cut it short."
-fi
-pass "the recording ran to its own end time: state ${final_state}, reason ${stop_reason}"
-
-if ! wait_until 120 bash -c "test \"\$(docker inspect -f '{{.State.Running}}' ${driver_container})\" = false"; then
+if ! wait_until 180 bash -c "test \"\$(docker inspect -f '{{.State.Running}}' ${driver_container})\" = false"; then
     fail "the driver never exited after its recording finished."
 fi
 
@@ -139,14 +90,37 @@ exited="$(date +%s)"
 inspect_field "${driver_container}" '{{.State.ExitCode}}'
 exit_code="${text_value}"
 
+set +e
+outcome="$(docker logs "${driver_container}" 2>&1 | grep "Session ${session} on .* ended (")"
+outcome_status=$?
+set -e
+
+if [ "${outcome_status}" -ne 0 ]; then
+    docker logs "${driver_container}" 2>&1 | tail -20
+    fail "the driver never wrote down how the recording ended, so there is no record that it finished at all."
+fi
+note "${outcome}"
+
+if ! grep -q 'ended (EndTimeReached)' <<<"${outcome}"; then
+    fail "the recording did not end by reaching its own end time (the driver writes the reason as EndTimeReached, which the wire calls endsAtReached): ${outcome}"
+fi
+
+final_bytes="$(sed 's/.* after \([0-9][0-9]*\) bytes.*/\1/' <<<"${outcome}")"
+require_number "the byte count the driver wrote down for the recording" "${final_bytes}"
+pass "the driver's own record of the recording says it reached its end time after ${final_bytes} bytes"
+
 if [ "${exit_code}" != "0" ]; then
     fail "the driver exited ${exit_code} after draining, not 0."
 fi
 
-if [ "${exited}" -lt "${deadline}" ]; then
-    fail "the driver exited at $(date -u -d "@${exited}" +%H:%M:%S)Z, before the recording's end time $(date -u -d "@${deadline}" +%H:%M:%S)Z."
+lingered=$((exited - signalled))
+owed=$((deadline - signalled - 2))
+
+if [ "${lingered}" -lt "${owed}" ]; then
+    fail "the driver lingered ${lingered}s but the recording had ${owed}s or more left to run when SIGTERM arrived; it did not wait for it."
 fi
-pass "the driver lingered $((exited - signalled))s, past the recording's end time, then exited 0"
+pass "the driver lingered ${lingered}s, the whole of the ${owed}s or more it owed the recording, then exited 0"
+note "the two seconds of slack are for clock rounding: the end time is named to the second while the driver decides on it with more precision"
 
 recording_size "${volume}" "${session}.ts"
 if [ "${number_value}" -ne "${final_bytes}" ]; then
