@@ -1,11 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    Adapters for the app process: persistence, IPC client, external boundaries.
-    Depends inwards only (Domain, Broadcast, Contracts) and is never referenced by
-    Domain. Enforced by Carina.Architecture.Tests.
-  -->
-
   <ItemGroup>
     <ProjectReference Include="../Carina.Domain/Carina.Domain.csproj" />
     <ProjectReference Include="../Carina.Broadcast/Carina.Broadcast.csproj" />

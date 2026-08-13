@@ -21,8 +21,6 @@ public sealed class ServiceCollectionExtensionsTests
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<CarinaDbContext>());
     }
 
-    // Time is never read from the ambient clock: everything that needs "now" takes
-    // this abstraction so recording windows can be driven deterministically in tests.
     [Fact]
     public void RegistersTheTimeProvider()
     {

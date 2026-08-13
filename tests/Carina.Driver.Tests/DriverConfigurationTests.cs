@@ -2,15 +2,6 @@ using Carina.Driver.Configuration;
 
 namespace Carina.Driver.Tests;
 
-/// <summary>
-/// Everything the driver refuses to start with.
-/// </summary>
-/// <remarks>
-/// The check runs before the socket is bound and before any device is opened, and
-/// it reports every problem at once: a driver that fails on the first mistake makes
-/// the operator restart it once per typo. Nothing here throws — a bad configuration
-/// is an exit code and a message, not a stack trace from somewhere deeper.
-/// </remarks>
 public sealed class DriverConfigurationTests
 {
     private const string Complete = """
@@ -77,8 +68,6 @@ public sealed class DriverConfigurationTests
         Assert.Contains(result.Problems, problem => problem.StartsWith($"{setting}:"));
     }
 
-    // The message has to say which setting, what was expected and what was there,
-    // because the operator reading it has only the message and the file.
     [Fact]
     public void AProblemCarriesTheExpectationAndTheValue()
     {
@@ -172,8 +161,6 @@ public sealed class DriverConfigurationTests
         );
     }
 
-    // The synthetic backend has no device nodes to name, so requiring one would make
-    // the configuration that CI uses impossible to write.
     [Fact]
     public void TheSyntheticBackendDoesNotNeedADevicePath()
     {
@@ -199,9 +186,6 @@ public sealed class DriverConfigurationTests
         );
     }
 
-    // Nothing in the shape can ask the driver to listen on a port: the socket is the
-    // only way in, and a setting that could open a second one would make that a
-    // matter of configuration rather than of construction.
     [Fact]
     public void ThereIsNoSettingThatCouldOpenAPort()
     {

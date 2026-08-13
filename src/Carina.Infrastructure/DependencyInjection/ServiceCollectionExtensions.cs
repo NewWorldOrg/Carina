@@ -5,16 +5,8 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Carina.Infrastructure.DependencyInjection;
 
-/// <summary>
-/// Registration of the app process' adapters.
-/// </summary>
 public static class ServiceCollectionExtensions
 {
-    /// <summary>
-    /// Registers the infrastructure services.
-    /// </summary>
-    /// <param name="services">The service collection.</param>
-    /// <param name="connectionString">PostgreSQL connection string, supplied by configuration.</param>
     public static IServiceCollection AddCarinaInfrastructure(this IServiceCollection services, string connectionString)
     {
         ArgumentNullException.ThrowIfNull(services);

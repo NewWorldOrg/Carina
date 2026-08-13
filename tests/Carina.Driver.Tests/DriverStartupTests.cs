@@ -2,15 +2,6 @@ using Carina.Driver.Configuration;
 
 namespace Carina.Driver.Tests;
 
-/// <summary>
-/// What the process does with a configuration it cannot use.
-/// </summary>
-/// <remarks>
-/// The decision belongs before anything is opened: a driver that binds its socket
-/// and then discovers a bad device path has already told the app it is available.
-/// So the answer is an exit code and a list of findings on standard error, which is
-/// all an operator has when a container refuses to come up.
-/// </remarks>
 public sealed class DriverStartupTests
 {
     private static readonly string[] TwoProblems =
@@ -55,8 +46,6 @@ public sealed class DriverStartupTests
         Assert.NotEqual(0, exitCode);
     }
 
-    // Every finding, not the first: otherwise the operator fixes one line, restarts,
-    // and learns about the next one.
     [Fact]
     public void EveryFindingIsPrinted()
     {

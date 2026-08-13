@@ -2,35 +2,17 @@ using System.Text.Json;
 
 namespace Carina.Driver.Configuration;
 
-/// <summary>
-/// A configuration, or the reasons there is not one.
-/// </summary>
-/// <param name="Configuration">The settings, when every check passed.</param>
-/// <param name="Problems">Everything wrong, each naming its setting.</param>
 public sealed record DriverConfigurationResult(
     DriverConfiguration? Configuration,
     IReadOnlyList<string> Problems
 );
 
-/// <summary>
-/// Reads the driver's configuration file and says whether it is usable.
-/// </summary>
-/// <remarks>
-/// This runs before the socket is bound and before a device is opened, so that a
-/// mistake in the file costs a message and an exit code rather than a half-started
-/// process holding a tuner. Every problem is collected: failing on the first one
-/// makes the operator restart once per typo.
-///
-/// Nothing here throws for bad input. A malformed file is a finding like any other,
-/// because the caller's job is to print findings and exit, not to catch.
-/// </remarks>
 public static class DriverConfigurationReader
 {
     private const int MinShutdownGraceHours = 1;
     private const int MaxShutdownGraceHours = 168;
     private const int MaxDeviceIdLength = 64;
 
-    /// <summary>Reads the file at <paramref name="path"/>.</summary>
     public static DriverConfigurationResult ReadFile(string? path)
     {
         if (string.IsNullOrWhiteSpace(path))
@@ -57,7 +39,6 @@ public static class DriverConfigurationReader
         }
     }
 
-    /// <summary>Reads a configuration document that is already in hand.</summary>
     public static DriverConfigurationResult Read(string json)
     {
         DriverConfiguration? configuration;
@@ -161,8 +142,6 @@ public static class DriverConfigurationReader
             );
         }
 
-        // The synthetic backend has no device nodes, so a path there would be a
-        // value nothing could open.
         if (backend is TunerBackend.Dvb && !IsAbsolutePath(device.DevicePath))
         {
             problems.Add(

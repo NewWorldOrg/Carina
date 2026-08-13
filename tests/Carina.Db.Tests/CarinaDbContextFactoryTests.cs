@@ -13,8 +13,6 @@ public sealed class CarinaDbContextFactoryTests
         Assert.Equal("Npgsql.EntityFrameworkCore.PostgreSQL", context.Database.ProviderName);
     }
 
-    // Configuration errors have to surface at startup with a message naming the
-    // missing setting, not as a connection failure somewhere deeper.
     [Theory]
     [InlineData(null)]
     [InlineData("")]

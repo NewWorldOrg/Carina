@@ -1,9 +1,6 @@
 using Carina.Driver;
 using Carina.Driver.Configuration;
 
-// Read and check the configuration before anything is opened. A driver that bound
-// its socket first would have told the app it was available before finding out it
-// could not serve.
 var configurationPath = Environment.GetEnvironmentVariable(
     DriverStartup.ConfigurationPathVariable
 );

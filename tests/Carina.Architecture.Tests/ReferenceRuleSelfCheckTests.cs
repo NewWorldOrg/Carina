@@ -1,10 +1,5 @@
 namespace Carina.Architecture.Tests;
 
-/// <summary>
-/// Checks the rule engine itself against a graph that violates the rules, so that
-/// the green result of <see cref="ReferenceRuleTests"/> means the rules hold rather
-/// than that the checks silently inspect nothing.
-/// </summary>
 public sealed class ReferenceRuleSelfCheckTests
 {
     private static ProjectGraph ViolatingGraph() => ProjectGraph.FromNodes(

@@ -2,11 +2,6 @@ using System.Text.RegularExpressions;
 
 namespace Carina.Contracts.Tests;
 
-/// <summary>
-/// The driver's event names are as permanent as the app's: a driver already in the
-/// field keeps sending the names it was built with. Renaming one here would leave
-/// the app listening for something nobody sends.
-/// </summary>
 public sealed class DriverEventsTests
 {
     private static readonly string[] Expected =

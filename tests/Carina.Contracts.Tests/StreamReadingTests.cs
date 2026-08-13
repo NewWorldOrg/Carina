@@ -3,16 +3,6 @@ using System.Text.Json;
 
 namespace Carina.Contracts.Tests;
 
-/// <summary>
-/// The same messages, read the way the socket reads them.
-/// </summary>
-/// <remarks>
-/// A body arrives over a stream, in buffer-sized pieces. Anything that only works
-/// when the whole document is in hand — skipping a token, for one — fails there and
-/// nowhere else, so the tolerance the contract promises has to be proven on this
-/// path and not just on a string. The padding pushes the message past the reader's
-/// default buffer so the interesting token lands in a partial block.
-/// </remarks>
 public sealed class StreamReadingTests
 {
     private static async Task<T?> ReadOverAStreamAsync<T>(
@@ -52,8 +42,6 @@ public sealed class StreamReadingTests
         Assert.Equal("a0", tuner.DeviceId);
     }
 
-    // Same rule for the identifier: a shape this build cannot take must not cost the
-    // message it sits in, whether it arrives as a scalar or as a structure.
     [Theory]
     [InlineData("\"../x\"")]
     [InlineData("123")]

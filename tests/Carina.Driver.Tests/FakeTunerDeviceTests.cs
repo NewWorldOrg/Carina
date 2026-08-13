@@ -3,15 +3,6 @@ using Carina.Driver.Tuning;
 
 namespace Carina.Driver.Tests;
 
-/// <summary>
-/// The stream that stands in for hardware.
-/// </summary>
-/// <remarks>
-/// Development, CI and the acceptance run all need a tuner that produces a stream
-/// nobody has to own a card to get. It has to be the same stream every time, or a
-/// test that fails once and passes next time teaches nothing — so the bytes come
-/// from the request, not from a clock or a random source.
-/// </remarks>
 public sealed class FakeTunerDeviceTests
 {
     private static byte[] Read(FakeTunerDevice device, int packets) =>
@@ -47,8 +38,6 @@ public sealed class FakeTunerDeviceTests
         Assert.NotEqual(Read(terrestrial, 20), Read(other, 20));
     }
 
-    // The stream exists to exercise the measurement, so its counter has to be the
-    // one the measurement expects: unbroken, and wrapping at sixteen.
     [Fact]
     public void ItsContinuityCountersNeverBreak()
     {
@@ -82,8 +71,6 @@ public sealed class FakeTunerDeviceTests
         Assert.Equal(1, second[0].ContinuityCounter);
     }
 
-    // A read that is not a whole number of packets is what a real device does when
-    // the buffer runs out mid-packet, and the reader has to survive it.
     [Fact]
     public void ReadsThatStopMidPacketStillLineUp()
     {

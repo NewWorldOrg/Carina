@@ -23,8 +23,6 @@ public sealed class DriverHostTests
         Assert.NotNull(host.Services.GetService(typeof(IHostApplicationLifetime)));
     }
 
-    // Everything the driver does is driven by the file, so the settings have to be
-    // reachable from the services rather than read again wherever they are needed.
     [Fact]
     public void TheConfigurationIsAvailableToTheServices()
     {

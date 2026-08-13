@@ -1,13 +1,5 @@
 namespace Carina.Contracts.Tests;
 
-/// <summary>
-/// What the driver checks before a value reaches a device.
-/// </summary>
-/// <remarks>
-/// The request crosses a process boundary into the privileged side, so the numbers
-/// are checked rather than trusted. The check reports rather than throws: a bad
-/// request has to become an answer, not a crash.
-/// </remarks>
 public sealed class StartSessionRequestTests
 {
     private static readonly DateTimeOffset Now =
@@ -35,9 +27,6 @@ public sealed class StartSessionRequestTests
         Assert.Empty(Request().Validate(Now));
     }
 
-    // The last-line check the privileged process owes every value that crosses into
-    // it. Which channels actually exist, per band, is the tuner domain's to state,
-    // and it states it with a type rather than with a rejection here.
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]
@@ -52,8 +41,6 @@ public sealed class StartSessionRequestTests
         );
     }
 
-    // Both ends of the bound, so that widening the check to reject everything
-    // outside a narrower band cannot pass by rejecting more than it should.
     [Theory]
     [InlineData(1)]
     [InlineData(27)]
@@ -63,8 +50,6 @@ public sealed class StartSessionRequestTests
         Assert.Empty(Request(physicalChannel: channel).Validate(Now));
     }
 
-    // The name reaches the privileged process, so it is constrained the same way a
-    // session id is rather than trusted to be used only as a lookup key.
     [Theory]
     [InlineData("../../../dev/mem")]
     [InlineData("adapter0;reboot")]
@@ -87,8 +72,6 @@ public sealed class StartSessionRequestTests
         Assert.Empty(Request(deviceId: deviceId).Validate(Now));
     }
 
-    // A recording that carries an end already behind it would stop the moment it
-    // started, which is worse than not starting: it books a tuner and writes nothing.
     [Fact]
     public void ARecordingEndingInThePastIsReported()
     {
@@ -131,8 +114,6 @@ public sealed class StartSessionRequestTests
         );
     }
 
-    // The recording has to be able to finish while the app is being replaced, which
-    // it can only do if it knows when to stop.
     [Fact]
     public void ARecordingWithoutAnEndTimeIsReported()
     {

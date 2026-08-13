@@ -1,10 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
-  <!--
-    HTTP surface of the app process. The OpenAPI document generated here is the
-    source of truth for the web frontend's generated client.
-  -->
-
   <ItemGroup>
     <ProjectReference Include="../Carina.Domain/Carina.Domain.csproj" />
     <ProjectReference Include="../Carina.Infrastructure/Carina.Infrastructure.csproj" />

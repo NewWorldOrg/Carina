@@ -3,36 +3,13 @@ using System.Text.Json.Serialization;
 
 namespace Carina.Contracts;
 
-/// <summary>
-/// Reads an enum by its pinned name, and reads anything else as the zero value.
-/// </summary>
-/// <remarks>
-/// Enum values grow: the priority ladder alone already needs more session purposes
-/// than exist today. A driver may therefore report a name an older app has never
-/// heard of, and the answer has to stay readable — the contract promises additive
-/// change and no exceptions, so an unknown name degrades to the type's "unspecified"
-/// member instead of failing the whole message. Every such enum keeps that member at
-/// zero, which also makes an absent field read as "not stated" rather than as
-/// whichever member happened to be declared first.
-///
-/// Numbers are read the same way. An ordinal carries no name to check, so honouring
-/// it would land a future value on today's member — silently, and wrongly.
-///
-/// The spellings are written out in each converter rather than derived from the
-/// members, so that nothing here reads type metadata at runtime: the driver is
-/// meant to be published ahead of time, and reflection over enum fields is the
-/// first thing that stops working there.
-/// </remarks>
 public abstract class TolerantEnumConverter<TEnum> : JsonConverter<TEnum>
     where TEnum : struct, Enum
 {
-    /// <summary>The wire spelling of <paramref name="value"/>.</summary>
     protected abstract string NameOf(TEnum value);
 
-    /// <summary>The member <paramref name="name"/> spells, if this build knows it.</summary>
     protected abstract TEnum? ValueOf(string name);
 
-    /// <inheritdoc />
     public override TEnum Read(
         ref Utf8JsonReader reader,
         Type typeToConvert,
@@ -45,10 +22,6 @@ public abstract class TolerantEnumConverter<TEnum> : JsonConverter<TEnum>
                 var name = reader.GetString();
                 return name is null ? default : ValueOf(name) ?? default;
 
-            // The reader already sits on the whole of a scalar, so there is nothing
-            // to skip. Skipping would be the wrong instruction anyway: over a socket
-            // the reader is mid-stream, and skipping there throws — which would turn
-            // the degradation this converter exists for back into a hard failure.
             case JsonTokenType.Number:
             case JsonTokenType.Null:
             case JsonTokenType.True:
@@ -67,15 +40,12 @@ public abstract class TolerantEnumConverter<TEnum> : JsonConverter<TEnum>
         }
     }
 
-    /// <inheritdoc />
     public override void Write(Utf8JsonWriter writer, TEnum value, JsonSerializerOptions options) =>
         writer.WriteStringValue(NameOf(value));
 }
 
-/// <summary>Wire spelling of <see cref="SessionPurpose"/>.</summary>
 public sealed class SessionPurposeConverter : TolerantEnumConverter<SessionPurpose>
 {
-    /// <inheritdoc />
     protected override string NameOf(SessionPurpose value) =>
         value switch
         {
@@ -85,7 +55,6 @@ public sealed class SessionPurposeConverter : TolerantEnumConverter<SessionPurpo
             _ => "unspecified",
         };
 
-    /// <inheritdoc />
     protected override SessionPurpose? ValueOf(string name) =>
         name switch
         {
@@ -97,10 +66,8 @@ public sealed class SessionPurposeConverter : TolerantEnumConverter<SessionPurpo
         };
 }
 
-/// <summary>Wire spelling of <see cref="TunerKind"/>.</summary>
 public sealed class TunerKindConverter : TolerantEnumConverter<TunerKind>
 {
-    /// <inheritdoc />
     protected override string NameOf(TunerKind value) =>
         value switch
         {
@@ -109,7 +76,6 @@ public sealed class TunerKindConverter : TolerantEnumConverter<TunerKind>
             _ => "unspecified",
         };
 
-    /// <inheritdoc />
     protected override TunerKind? ValueOf(string name) =>
         name switch
         {
@@ -120,10 +86,8 @@ public sealed class TunerKindConverter : TolerantEnumConverter<TunerKind>
         };
 }
 
-/// <summary>Wire spelling of <see cref="TunerState"/>.</summary>
 public sealed class TunerStateConverter : TolerantEnumConverter<TunerState>
 {
-    /// <inheritdoc />
     protected override string NameOf(TunerState value) =>
         value switch
         {
@@ -134,7 +98,6 @@ public sealed class TunerStateConverter : TolerantEnumConverter<TunerState>
             _ => "unspecified",
         };
 
-    /// <inheritdoc />
     protected override TunerState? ValueOf(string name) =>
         name switch
         {
@@ -147,10 +110,8 @@ public sealed class TunerStateConverter : TolerantEnumConverter<TunerState>
         };
 }
 
-/// <summary>Wire spelling of <see cref="SessionState"/>.</summary>
 public sealed class SessionStateConverter : TolerantEnumConverter<SessionState>
 {
-    /// <inheritdoc />
     protected override string NameOf(SessionState value) =>
         value switch
         {
@@ -162,7 +123,6 @@ public sealed class SessionStateConverter : TolerantEnumConverter<SessionState>
             _ => "unspecified",
         };
 
-    /// <inheritdoc />
     protected override SessionState? ValueOf(string name) =>
         name switch
         {
@@ -176,10 +136,8 @@ public sealed class SessionStateConverter : TolerantEnumConverter<SessionState>
         };
 }
 
-/// <summary>Wire spelling of <see cref="DiagnosticReason"/>.</summary>
 public sealed class DiagnosticReasonConverter : TolerantEnumConverter<DiagnosticReason>
 {
-    /// <inheritdoc />
     protected override string NameOf(DiagnosticReason value) =>
         value switch
         {
@@ -190,7 +148,6 @@ public sealed class DiagnosticReasonConverter : TolerantEnumConverter<Diagnostic
             _ => "unspecified",
         };
 
-    /// <inheritdoc />
     protected override DiagnosticReason? ValueOf(string name) =>
         name switch
         {

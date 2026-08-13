@@ -1,9 +1,3 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!--
-    Pure broadcast-standard parsing library: no project references and no package
-    references, so it can be exercised by large table-driven unit tests against
-    fixed transport stream fixtures. Enforced by Carina.Architecture.Tests.
-  -->
-
 </Project>

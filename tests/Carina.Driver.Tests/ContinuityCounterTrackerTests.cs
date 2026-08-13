@@ -2,15 +2,6 @@ using Carina.Driver.Transport;
 
 namespace Carina.Driver.Tests;
 
-/// <summary>
-/// Counting what the stream lost, while it is being recorded.
-/// </summary>
-/// <remarks>
-/// This is the measurement the whole quality story rests on: a recording that lost
-/// packets looks exactly like one that did not, until someone plays it. Counting
-/// during the recording is what lets a broken one be found by searching rather than
-/// by watching.
-/// </remarks>
 public sealed class ContinuityCounterTrackerTests
 {
     private static TsPacket Packet(int pid, int continuityCounter, bool hasPayload = true) =>
@@ -41,8 +32,6 @@ public sealed class ContinuityCounterTrackerTests
         Assert.Equal(0, tracker.Drops);
     }
 
-    // The counter is four bits, so a gap says how many packets went missing only up
-    // to fifteen. Beyond that the count is a floor, not a total.
     [Theory]
     [InlineData(0, 2, 1)]
     [InlineData(0, 5, 4)]
@@ -57,8 +46,6 @@ public sealed class ContinuityCounterTrackerTests
         Assert.Equal(expected, tracker.Drops);
     }
 
-    // Each stream inside the multiplex counts on its own. Sharing one counter would
-    // report a loss on every switch between them.
     [Fact]
     public void EachStreamIsCountedSeparately()
     {
@@ -87,8 +74,6 @@ public sealed class ContinuityCounterTrackerTests
         Assert.Equal(0, tracker.DropsFor(0x200));
     }
 
-    // Padding exists to fill the multiplex to a constant rate; its counter does not
-    // advance in any dependable way, so counting it would invent losses.
     [Fact]
     public void PaddingIsNotMeasured()
     {
@@ -101,8 +86,6 @@ public sealed class ContinuityCounterTrackerTests
         Assert.Equal(0, tracker.Packets);
     }
 
-    // A packet with no payload does not advance the counter, so seeing the same
-    // value twice is correct behaviour rather than a duplicate.
     [Fact]
     public void ARepeatedCounterWithoutPayloadIsNotALoss()
     {
@@ -114,9 +97,6 @@ public sealed class ContinuityCounterTrackerTests
         Assert.Equal(0, tracker.Drops);
     }
 
-    // The same value twice with payload both times is the sender repeating itself.
-    // It is not a loss, and counting it as one would make a duplicated packet look
-    // like fifteen missing ones.
     [Fact]
     public void ARepeatedPacketIsNotCountedAsFifteenLosses()
     {

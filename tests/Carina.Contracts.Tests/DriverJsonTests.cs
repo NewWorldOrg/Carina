@@ -2,18 +2,6 @@ using System.Text.Json;
 
 namespace Carina.Contracts.Tests;
 
-/// <summary>
-/// The wire form is the contract. These expectations are written out in full so
-/// that a change to a property name, a casing rule or an enum spelling fails here,
-/// where it is a deliberate edit, rather than in production against a driver that
-/// was built months earlier.
-/// </summary>
-/// <remarks>
-/// The key order is whatever the records produce — `deviceId` sits last because it
-/// is redeclared in the record body to normalise null. JSON objects are unordered,
-/// so nothing depends on it; if the redeclaration goes, these strings move with it
-/// and that is not a contract change.
-/// </remarks>
 public sealed class DriverJsonTests
 {
     private static readonly DateTimeOffset Moment =
@@ -107,8 +95,6 @@ public sealed class DriverJsonTests
         );
     }
 
-    // These two are what GET /sessions and GET /tuners answer. A client written
-    // against this contract has to know whether it is reading a bare array.
     [Fact]
     public void SessionListIsABareArray()
     {
@@ -143,9 +129,6 @@ public sealed class DriverJsonTests
         Assert.Equal("[]", DriverJson.Serialize<IReadOnlyList<TunerSnapshot>>([]));
     }
 
-    // Timestamps are ISO-8601 with an offset, and the offset is whatever the driver
-    // runs in. A client that parses a fixed width, or expects a trailing Z, breaks
-    // on the first driver that reports either of these.
     [Theory]
     [InlineData("2026-08-08T21:04:00.1234567+09:00")]
     [InlineData("2026-08-08T12:04:00+00:00")]
@@ -160,8 +143,6 @@ public sealed class DriverJsonTests
         Assert.Equal(DateTimeOffset.Parse(wire), restored.StartedAt);
     }
 
-    // A newer driver sends fields this build has never heard of. Refusing to read
-    // the rest of the answer would turn an additive change into a breaking one.
     [Fact]
     public void UnknownFieldsAreIgnored()
     {
@@ -192,8 +173,6 @@ public sealed class DriverJsonTests
         Assert.Equal(request, restored);
     }
 
-    // The members the driver acts on are not optional. Without this, an empty body
-    // reads as a request with no tuning, and the purpose that blocks shutdown.
     [Fact]
     public void ARequestMissingItsMembersIsRejected()
     {

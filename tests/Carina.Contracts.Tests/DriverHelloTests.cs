@@ -1,10 +1,5 @@
 namespace Carina.Contracts.Tests;
 
-/// <summary>
-/// The app decides what it may ask for by capability, not by version number: a
-/// driver two releases old still answers hello, and the app has to keep working
-/// with whatever subset it reports.
-/// </summary>
 public sealed class DriverHelloTests
 {
     private static DriverHello Hello(params string[] capabilities) =>
@@ -22,8 +17,6 @@ public sealed class DriverHelloTests
         Assert.False(Hello(DriverCapabilities.Recording).Supports(DriverCapabilities.Live));
     }
 
-    // A driver newer than the app reports names the app has never heard of. That is
-    // not an error, and it must not make the answer unreadable.
     [Fact]
     public void UnknownCapabilityNamesAreCarriedWithoutComplaint()
     {

@@ -2,15 +2,6 @@ using Carina.Driver.Transport;
 
 namespace Carina.Driver.Tests;
 
-/// <summary>
-/// Finding packet boundaries in a stream that may start anywhere.
-/// </summary>
-/// <remarks>
-/// A tuner hands over bytes, not packets: the first read can land mid-packet, and a
-/// hardware hiccup can leave a gap. Everything downstream — the continuity count,
-/// the recording, the quality figure — is measured per packet, so a reader that
-/// loses alignment silently would report a healthy stream while writing rubbish.
-/// </remarks>
 public sealed class TsPacketReaderTests
 {
     private const int PacketLength = 188;
@@ -43,7 +34,6 @@ public sealed class TsPacketReaderTests
         Assert.Equal(1, packets[1].ContinuityCounter);
     }
 
-    // A read that arrives split across buffers is the normal case, not an edge one.
     [Fact]
     public void KeepsAPartialPacketUntilTheRestArrives()
     {
@@ -58,7 +48,6 @@ public sealed class TsPacketReaderTests
         Assert.Equal(3, completed[0].ContinuityCounter);
     }
 
-    // The first bytes off a tuner are rarely a packet boundary.
     [Fact]
     public void FindsTheFirstBoundaryInAStreamThatStartsMidPacket()
     {
@@ -72,8 +61,6 @@ public sealed class TsPacketReaderTests
         Assert.Equal(5, packets[0].ContinuityCounter);
     }
 
-    // A sync byte inside the payload is not a boundary. Only the byte that repeats
-    // every 188 is, which is why alignment is confirmed against the next packet.
     [Fact]
     public void DoesNotMistakeAPayloadByteForABoundary()
     {
