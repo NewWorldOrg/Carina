@@ -4,8 +4,7 @@
   "shutdownGraceHours": 6,
   "tuner": { "backend": "fake" },
   "devices": [
-    { "id": "adapter0", "kind": "terrestrial", "enabled": true },
-    { "id": "adapter1", "kind": "terrestrial", "enabled": true },
-    { "id": "adapter2", "kind": "satellite", "enabled": true, "lnbPower": true }
+    { "id": "fake-terrestrial", "kind": "terrestrial", "enabled": true },
+    { "id": "fake-satellite", "kind": "satellite", "enabled": true }
   ]
 }
