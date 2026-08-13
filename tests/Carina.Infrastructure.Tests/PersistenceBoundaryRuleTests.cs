@@ -6,13 +6,27 @@ namespace Carina.Infrastructure.Tests;
 
 public sealed class PersistenceBoundaryRuleTests
 {
-    [Fact]
-    public void TheCarinaModelDeclaresNoBoundaryBreakingForeignKeys()
+    private static CarinaDbContext Carina()
     {
         var builder = new DbContextOptionsBuilder<CarinaDbContext>();
         builder.UseCarinaDatabase("Host=db;Port=5432;Database=carina;Username=carina;Password=placeholder");
-        using var context = new CarinaDbContext(builder.Options);
+
+        return new CarinaDbContext(builder.Options);
+    }
+
+    [Fact]
+    public void TheCarinaModelDeclaresNoBoundaryBreakingForeignKeys()
+    {
+        using var context = Carina();
 
         Assert.Empty(PersistenceBoundaryRules.BoundaryBreakingForeignKeys(context.Model));
+    }
+
+    [Fact]
+    public void EveryEntityInTheCarinaModelDeclaresWhichFamilyItBelongsTo()
+    {
+        using var context = Carina();
+
+        Assert.Empty(PersistenceBoundaryRules.UnclassifiedEntityTypes(context.Model));
     }
 }
