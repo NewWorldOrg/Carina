@@ -2,6 +2,7 @@ using System.Net;
 
 namespace Carina.Api.Tests.FeatureTest;
 
+[Collection(FeatureTestCollection.Name)]
 public sealed class DefaultDenyTests(TestingWebApplicationFactory factory)
     : IClassFixture<TestingWebApplicationFactory>
 {

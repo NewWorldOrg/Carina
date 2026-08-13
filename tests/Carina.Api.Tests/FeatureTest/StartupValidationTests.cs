@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Options;
 
 namespace Carina.Api.Tests.FeatureTest;
 
+[Collection(FeatureTestCollection.Name)]
 public sealed class StartupValidationTests
 {
     [Fact]
@@ -10,10 +12,10 @@ public sealed class StartupValidationTests
         using var factory = new TestingWebApplicationFactory()
             .WithWebHostBuilder(builder => builder.UseSetting("ConnectionStrings:Carina", ""));
 
-        var exception = Record.Exception(() => factory.CreateClient());
+        var validation = Innermost(Record.Exception(() => factory.CreateClient()));
 
-        Assert.NotNull(exception);
-        Assert.Contains("ConnectionStrings:Carina", exception.ToString(), StringComparison.Ordinal);
+        var failure = Assert.IsType<OptionsValidationException>(validation);
+        Assert.Contains("ConnectionStrings:Carina", failure.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -22,10 +24,10 @@ public sealed class StartupValidationTests
         using var factory = new TestingWebApplicationFactory()
             .WithWebHostBuilder(builder => builder.UseSetting("CARINA_DRIVER_SOCKET", ""));
 
-        var exception = Record.Exception(() => factory.CreateClient());
+        var validation = Innermost(Record.Exception(() => factory.CreateClient()));
 
-        Assert.NotNull(exception);
-        Assert.Contains("CARINA_DRIVER_SOCKET", exception.ToString(), StringComparison.Ordinal);
+        var failure = Assert.IsType<OptionsValidationException>(validation);
+        Assert.Contains("CARINA_DRIVER_SOCKET", failure.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -34,9 +36,19 @@ public sealed class StartupValidationTests
         using var factory = new TestingWebApplicationFactory()
             .WithWebHostBuilder(builder => builder.UseSetting("CARINA_DRIVER_SOCKET", "driver.sock"));
 
-        var exception = Record.Exception(() => factory.CreateClient());
+        var validation = Innermost(Record.Exception(() => factory.CreateClient()));
 
-        Assert.NotNull(exception);
-        Assert.Contains("absolute path", exception.ToString(), StringComparison.Ordinal);
+        var failure = Assert.IsType<OptionsValidationException>(validation);
+        Assert.Contains("absolute path", failure.Message, StringComparison.Ordinal);
+    }
+
+    private static Exception? Innermost(Exception? exception)
+    {
+        while (exception?.InnerException is { } inner)
+        {
+            exception = inner;
+        }
+
+        return exception;
     }
 }

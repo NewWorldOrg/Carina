@@ -42,6 +42,14 @@ public sealed class AppConventionRuleTests
     }
 
     [Fact]
+    public void ControllersTakeTheirDependenciesFromTheServicesNamespace()
+    {
+        Assert.Empty(
+            ConventionRules.ControllerDependenciesOutsideTheServicesNamespace(ProductionTypes)
+        );
+    }
+
+    [Fact]
     public void TheRulesHaveProductionInstancesToBiteOn()
     {
         Assert.Contains(typeof(GetDriverStatusAction), ProductionTypes);

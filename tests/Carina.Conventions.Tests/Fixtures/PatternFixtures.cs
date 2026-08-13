@@ -21,6 +21,13 @@ internal sealed class SingleActionController : ControllerBase
     public IActionResult Invoke() => Ok();
 }
 
+internal sealed class StrayDependency;
+
+internal sealed class SmugglingController(StrayDependency stray) : ControllerBase
+{
+    public IActionResult Invoke() => Ok(stray.ToString());
+}
+
 internal sealed class MutableTag : CommonValueObject<string>
 {
     public MutableTag(string value)

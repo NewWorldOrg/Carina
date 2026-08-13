@@ -53,6 +53,35 @@ public static class ConventionRules
             .Order(StringComparer.Ordinal)
             .ToArray();
 
+    public static IReadOnlyList<string> ControllerDependenciesOutsideTheServicesNamespace(
+        IEnumerable<Type> types
+    )
+        => types
+            .Where(type => typeof(ControllerBase).IsAssignableFrom(type) && !type.IsAbstract)
+            .SelectMany(type =>
+                type.GetConstructors(BindingFlags.Public | BindingFlags.Instance)
+                    .SelectMany(constructor => constructor.GetParameters())
+                    .Where(parameter => IsAnApplicationDependency(parameter.ParameterType))
+                    .Where(parameter =>
+                        parameter.ParameterType.Namespace?.EndsWith(
+                            ".Services",
+                            StringComparison.Ordinal
+                        ) != true
+                    )
+                    .Select(parameter =>
+                        $"{type.FullName}({parameter.ParameterType.FullName})"
+                    )
+            )
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+    private static bool IsAnApplicationDependency(Type type)
+    {
+        var space = type.Namespace ?? string.Empty;
+
+        return space.StartsWith("Carina.", StringComparison.Ordinal);
+    }
+
     private static MethodInfo[] PublicDeclaredInstanceMethods(Type type)
         => type
             .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)

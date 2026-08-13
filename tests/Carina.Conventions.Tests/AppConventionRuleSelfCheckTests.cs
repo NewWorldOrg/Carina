@@ -41,6 +41,17 @@ public sealed class AppConventionRuleSelfCheckTests
     }
 
     [Fact]
+    public void DetectsAControllerDependencyFromOutsideTheServicesNamespace()
+    {
+        var violations = ConventionRules.ControllerDependenciesOutsideTheServicesNamespace(
+            [typeof(SmugglingController), typeof(SingleActionController)]);
+
+        Assert.Equal(
+            [$"{typeof(SmugglingController).FullName}({typeof(StrayDependency).FullName})"],
+            violations);
+    }
+
+    [Fact]
     public void DetectsARehydratableTypeWithAPublicConstructor()
     {
         var violations = ConventionRules.RehydratableTypesWithAPublicConstructor(

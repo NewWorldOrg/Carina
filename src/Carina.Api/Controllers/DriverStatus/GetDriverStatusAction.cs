@@ -19,7 +19,7 @@ public sealed class GetDriverStatusAction(DriverStatusService driverStatusServic
         {
             return StatusCode(
                 StatusCodes.Status503ServiceUnavailable,
-                BaseResponder<DriverStatusResponder>.Error(result.ErrorMessage ?? string.Empty));
+                BaseResponder<DriverStatusResponder>.Error(result.ErrorMessage!));
         }
 
         var snapshot = result.Data!;
