@@ -37,6 +37,11 @@ tasks:
     cmds:
       - docker build -t carina .
       - docker/verify-image.sh carina
+  image:tags:
+    cmds:
+      - docker/image-tags.sh check
+      - docker/image-tags.sh tag driver
+      - docker/image-tags.sh tag app
   deploy:grace:
     cmd: docker/grace-period.sh derive
   deploy:check:
