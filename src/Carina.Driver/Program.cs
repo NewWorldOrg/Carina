@@ -27,7 +27,24 @@ using var sigquit = PosixSignalRegistration.Create(
     _ => stopWasAsked = true
 );
 
-using var host = DriverHost.Create(args, configuration);
-await host.RunAsync();
+var built = DriverHost.Create(args, configuration);
+if (!built.TryGetHost(out var host))
+{
+    return built.Refusal is DriverHostRefusal.Configuration
+        ? DriverStartup.ReportUnusableConfiguration(built.Problems, Console.Error)
+        : DriverStartup.ReportUnusableSocket(built.Problems, Console.Error);
+}
+
+using (host)
+{
+    try
+    {
+        await host.RunAsync();
+    }
+    catch (Exception error)
+    {
+        return DriverStartup.ReportFailure(error, Console.Error);
+    }
+}
 
 return DriverStartup.ExitCodeFor(stopWasAsked);
