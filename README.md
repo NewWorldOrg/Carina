@@ -1,45 +1,65 @@
 # Carina
 
-Backend of a self-hosted recording system for Japanese digital broadcasting.
+テレビ録画システムの裏側です。チューナーを掴んで放送を受け、録画ファイルを書き、
+番組表・予約・録画の記録を持ち、画面へ API を出します。
 
-It runs as two processes built from this one repository:
+画面は別のリポジトリにあり、ここが出す OpenAPI から生成したクライアントで繋ぎます。
 
-- **driver** — privileged. Owns the tuner devices, descrambles, handles the transport
-  stream and writes recording files. It talks to nothing but a Unix domain socket and
-  holds no secrets.
-- **app** — unprivileged. Interprets the stream, keeps the programme guide,
-  reservations, rules and recordings, and serves the HTTP API.
+## 何を守るために作っているか
 
-They are released on independent tags so that replacing the app leaves a recording in
-progress running.
+既存の録画システムを使っていて困った2つのことが、設計のすべての理由です。
 
-## Layout
+**録画中にアプリを更新すると録画が死ぬ。** だからチューナーを掴む部分を別のプロセス
+に切り出し、独立したタグで出しています。API 側を何度入れ替えても、録画している
+プロセスには触れません。録画セッションは自分の終了時刻を持っていて、API が1つも
+繋がっていなくても最後まで走り切ります。
 
-```
-src/Carina.Driver               privileged process
-src/Carina.Contracts            IPC contract shared by both processes
-src/Carina.Domain               entities, value objects, repository interfaces
-src/Carina.Broadcast            broadcast-standard parsing (dependency free)
-src/Carina.Infrastructure       persistence, IPC client, external boundaries
-src/Carina.Db                   migration entry point
-src/Carina.Api                  HTTP surface and OpenAPI document
-tests/                          one test project per production project
-tests/Carina.Architecture.Tests reference rules, checked against the project files
-```
+**壊れた録画が、再生するまで壊れていると分からない。** だから録画しながら測ります。
+パケットの取りこぼしを PID ごとに数え、復調器が「訂正できなかった」と告げた
+パケットを数え、スクランブルが残ったままのものを数えます。あとから「壊れている録画」
+を検索で見つけられる状態にするためです。
 
-## Getting started
+測るのは録画を書くのと同じ1本の読み出しからで、そのためにコピーを増やしたり、
+2本目の経路を作ったりはしません。読み手が遅くても、録画の書き込みは待ちません。
 
-Requires Docker and, optionally, [Task](https://taskfile.dev).
+## 2つのプロセス
+
+| | driver | app |
+| --- | --- | --- |
+| 権限 | 特権 | 非特権 |
+| 持ち物 | チューナー、選局、スクランブル解除、TS の扱い、録画ファイルの書き込み | 番組表、予約、ルール、録画の記録、HTTP API |
+| 外との口 | Unix ドメインソケット1本のみ。TCP は開かない | HTTP |
+| 秘密情報 | 持たない | DB 接続情報など |
+
+driver が理解するのはバイトの層まで、放送規格の解釈は app 側です。特権プロセスに
+持たせるものを増やさないための線引きです。
+
+## いまの状態
+
+できているもの:
+
+- 2プロセス間の契約（エンドポイント、メッセージ、能力交換、イベント名）
+- driver の設定読み込み。ソケットを開く前・デバイスを触る前に全部検証して、
+  問題があれば項目名と期待値と実値を並べて終了する
+- TS の同期・再同期、パケット取りこぼし・不連続・訂正不能・スクランブル残存の計測
+- 実機なしで開発と CI が回る合成チューナー
+- セッションと録画ファイルへの直書き、読み手ごとの背圧
+
+まだ無いもの: ソケット上の HTTP、実機の DVB、番組表、予約、エンコード。
+
+## 動かす
+
+Docker があれば足ります。チューナーも B-CAS カードも要りません。合成チューナーが
+決まった中身の放送波を作ります。
 
 ```bash
-task up                 # docker compose up -d  (app, driver, PostgreSQL)
-task build              # dotnet build
-task test               # dotnet test
-task lint               # dotnet format --verify-no-changes
-task run:app            # serves http://localhost:8080
+task up      # docker compose up -d   driver / app / PostgreSQL
+task build
+task test
+task lint    # dotnet format --verify-no-changes
 ```
 
-Without Task:
+Task を使わない場合:
 
 ```bash
 docker compose up -d
@@ -47,43 +67,45 @@ docker compose exec app dotnet build
 docker compose exec app dotnet test
 ```
 
-The development environment needs no tuner hardware: the driver runs a synthetic
-tuner backend that produces a deterministic transport stream.
+API はコンテナの 8080 番で待ち受け、ホストの 8081 番に出ます（`API_PORT` で変えられます）。
 
-## Configuration
+## 設定
 
-Nothing environment-specific is compiled in. Device inventory, recording output
-directory, socket path, database connection and ports all come from configuration,
-and an invalid setting fails the process at startup with a message naming it.
+環境依存のものは何ひとつ埋め込みません。デバイスの一覧、録画の出力先、ソケットの
+パス、DB 接続、ポートはすべて設定から読み、不正なら起動時にその項目を名指しして
+終了します。
 
-Committed configuration files contain placeholders only. Real values come from the
-environment:
+コミットされている設定ファイルにはプレースホルダしか入れません。実値は環境変数から
+渡します。
 
-| Variable | Meaning |
+| 変数 | 意味 |
 | --- | --- |
-| `ConnectionStrings__Carina` | PostgreSQL connection string used by the API |
-| `CARINA_DB_CONNECTION` | PostgreSQL connection string used by the migration entry point |
-| `CARINA_DRIVER_SOCKET` | Path of the driver's Unix domain socket |
-| `CARINA_ROLE` | Role the container image starts (`driver`, `app`, `web`, `all`, `migrate`) |
+| `CARINA_DRIVER_CONFIG` | driver の設定ファイルのパス |
+| `ConnectionStrings__Carina` | API が使う PostgreSQL の接続文字列 |
+| `CARINA_DB_CONNECTION` | マイグレーション実行時の接続文字列 |
+| `CARINA_ROLE` | イメージが起動する役割（`driver` / `app` / `web` / `all` / `migrate`） |
 
-## Image roles
+## イメージの役割
 
-`Dockerfile` produces a single image; `docker/entrypoint.sh` selects the role:
+`Dockerfile` が作るイメージは1つで、`docker/entrypoint.sh` が役割を選びます。
 
-| Role | Starts |
+| 役割 | 起動するもの |
 | --- | --- |
-| `driver` | the privileged process |
-| `app` | the HTTP process |
-| `migrate` | applies database migrations and exits |
-| `web` | placeholder; the web asset is supplied by the distribution image build |
-| `all` | driver and app in one container, for development only |
+| `driver` | 特権プロセス |
+| `app` | HTTP プロセス |
+| `migrate` | マイグレーションを適用して終了 |
+| `web` | 画面。成果物は配布用のイメージビルドが差し込む |
+| `all` | driver と app を1つのコンテナで。開発用 |
 
-Routing (`/api/*` to the app, everything else to the web asset) is the job of a
-reverse proxy outside the image. The image contains no proxy.
+`/api/*` を app へ、それ以外を画面へ振り分けるのはイメージの外のリバースプロキシの
+仕事です。イメージにプロキシは入れません。
 
-## Tests
+## テスト
 
-`dotnet test` runs the unit tests, the API feature tests and the architecture tests.
-The architecture tests enforce the reference rules the two-process split depends on —
-notably that the driver reaches nothing but the shared contract, and that the domain
-and the parsing library stay dependency free.
+`dotnet test` で単体テスト・API のフィーチャテスト・アーキテクチャテストが走ります。
+
+アーキテクチャテストは、2プロセスに分けた意味を守るための参照ルールを機械的に
+確かめます。driver が共有の契約以外に手を伸ばしていないこと、ドメインと放送規格の
+解析が何にも依存していないこと、マイグレーション用のプロジェクトを誰も参照して
+いないこと。コンパイル結果ではなくプロジェクトファイルを読むので、宣言しただけで
+まだ使っていない参照も捕まえます。
