@@ -120,8 +120,11 @@ docker compose exec app dotnet format --verify-no-changes
 
 `task` shortcuts: `task build`, `task test`, `task lint`, `task format`, `task openapi`.
 
-GitHub Actions runs build, test and format verification on push and pull request to
-`master`.
+GitHub Actions runs build, format verification, the OpenAPI round trip, the compose
+render, the image and its role checks, and two test jobs: one for everything except
+`Category=DbIntegration`, one for those against a PostgreSQL service container. The
+second job counts the tests it ran, because `dotnet test` exits 0 when a filter matches
+nothing and a mistyped category would otherwise be green having verified nothing.
 
 ## Docker Config
 
@@ -156,6 +159,27 @@ GitHub Actions runs build, test and format verification on push and pull request
   point are framework-dependent. The driver role runs as root, `app` and `migrate`
   drop to the unprivileged `carina` user, and `all` supervises both processes as a
   reaping PID 1. `task image:verify` builds the image and exercises every role.
+- The two roles are released on independent tag streams, `driver-sha-<commit>` and
+  `app-sha-<commit>`, each naming the commit that last touched the inputs that build
+  that role. `docker/image-tags.sh` derives those inputs from the project graph — the
+  role's entry projects and everything they reference — plus what both builds read:
+  `Dockerfile`, `docker/entrypoint.sh`, `.dockerignore` and the two `Directory.*`
+  files. `check` refuses a project that belongs to no stream, and a Dockerfile build
+  stage that copies a different set of projects than its stream is keyed on. `prove`
+  makes an app-only change and then a driver-only change in a scratch worktree and
+  fails unless one tag moves while the other stays. A shallow clone is refused, since
+  "the commit that last touched these paths" collapses onto HEAD there.
+- The image is one artifact carrying both roles, so both tags name the same image
+  whenever both streams move together. `docker/publish-image.sh` pushes a tag only if
+  the registry does not already have it: re-pushing would change what an existing tag
+  means, and a driver that is not being released must keep resolving to the image it
+  was deployed from. A registry that cannot be read is reported as unknown rather than
+  assumed empty. Publishing waits on a decision about the registry and its visibility
+  and is off until the repository variable `CARINA_PUBLISH` is set.
+- `compose.deploy.yml` takes `CARINA_DRIVER_IMAGE` and `CARINA_APP_IMAGE` separately,
+  both falling back to `CARINA_IMAGE`. Releasing the app by bumping one shared
+  variable recreates the driver container too, which is the deployment that kills a
+  recording in progress.
 
 ## UI Hostname
 
