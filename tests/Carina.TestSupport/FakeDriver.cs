@@ -8,12 +8,13 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 
-namespace Carina.Infrastructure.Tests;
+namespace Carina.TestSupport;
 
 public sealed class FakeDriver : IAsyncDisposable
 {
     private readonly WebApplication app;
     private readonly List<Channel<string>> listeners = [];
+    private readonly Dictionary<string, int> requests = new(StringComparer.Ordinal);
     private readonly Lock gate = new();
 
     private FakeDriver(WebApplication app, string socketPath, DriverHello hello)
@@ -38,6 +39,8 @@ public sealed class FakeDriver : IAsyncDisposable
     public int RefusalStatus { get; set; } = StatusCodes.Status503ServiceUnavailable;
 
     public Dictionary<string, Refusal> RefusalsByPath { get; } = new(StringComparer.Ordinal);
+
+    public Dictionary<string, string> RawBodyByPath { get; } = new(StringComparer.Ordinal);
 
     public bool TruncateHealth { get; set; }
 
@@ -64,7 +67,10 @@ public sealed class FakeDriver : IAsyncDisposable
             Draining = draining,
         };
 
-    public static async Task<FakeDriver> StartAsync(string socketPath, DriverHello hello)
+    public static async Task<FakeDriver> StartAsync(
+        string socketPath,
+        DriverHello hello,
+        Action<FakeDriver>? arrange = null)
     {
         if (File.Exists(socketPath))
         {
@@ -78,7 +84,14 @@ public sealed class FakeDriver : IAsyncDisposable
 
         var app = builder.Build();
         var driver = new FakeDriver(app, socketPath, hello);
+        arrange?.Invoke(driver);
         app.Lifetime.ApplicationStopping.Register(driver.CloseAllListeners);
+
+        app.Use(async (context, next) =>
+        {
+            driver.Count(context.Request.Path.Value);
+            await next(context);
+        });
 
         app.MapGet(DriverEndpoints.Health, driver.HealthAsync);
         app.MapGet(DriverEndpoints.Tuners, context =>
@@ -95,6 +108,14 @@ public sealed class FakeDriver : IAsyncDisposable
         await app.StartAsync();
 
         return driver;
+    }
+
+    public int RequestsFor(string path)
+    {
+        lock (gate)
+        {
+            return requests.TryGetValue(path, out var count) ? count : 0;
+        }
     }
 
     public void Signal(string name)
@@ -115,6 +136,19 @@ public sealed class FakeDriver : IAsyncDisposable
         await app.DisposeAsync();
     }
 
+    private void Count(string? path)
+    {
+        if (path is null)
+        {
+            return;
+        }
+
+        lock (gate)
+        {
+            requests[path] = requests.TryGetValue(path, out var count) ? count + 1 : 1;
+        }
+    }
+
     private void CloseAllListeners()
     {
         lock (gate)
@@ -128,7 +162,7 @@ public sealed class FakeDriver : IAsyncDisposable
 
     private async Task HealthAsync(HttpContext context)
     {
-        if (await RefusedAsync(context))
+        if (await HandledAsync(context))
         {
             return;
         }
@@ -149,7 +183,7 @@ public sealed class FakeDriver : IAsyncDisposable
 
     private async Task CannedAsync<T>(HttpContext context, T value, JsonTypeInfo<T> typeInfo)
     {
-        if (await RefusedAsync(context))
+        if (await HandledAsync(context))
         {
             return;
         }
@@ -159,7 +193,7 @@ public sealed class FakeDriver : IAsyncDisposable
 
     private async Task StartSessionAsync(HttpContext context)
     {
-        if (await RefusedAsync(context))
+        if (await HandledAsync(context))
         {
             return;
         }
@@ -185,7 +219,7 @@ public sealed class FakeDriver : IAsyncDisposable
 
     private async Task StopSessionAsync(HttpContext context)
     {
-        if (await RefusedAsync(context))
+        if (await HandledAsync(context))
         {
             return;
         }
@@ -205,7 +239,7 @@ public sealed class FakeDriver : IAsyncDisposable
 
     private async Task EventsAsync(HttpContext context)
     {
-        if (await RefusedAsync(context))
+        if (await HandledAsync(context))
         {
             return;
         }
@@ -245,14 +279,29 @@ public sealed class FakeDriver : IAsyncDisposable
         }
     }
 
-    private async Task<bool> RefusedAsync(HttpContext context)
+    private async Task<bool> HandledAsync(HttpContext context)
     {
-        if (RefusalFor(context.Request.Path.Value) is not { } refusal)
+        var path = context.Request.Path.Value;
+
+        if (RefusalFor(path) is { } refusal)
+        {
+            await WriteAsync(
+                context,
+                refusal.Status,
+                refusal.Problem,
+                DriverJson.Context.DriverProblem);
+
+            return true;
+        }
+
+        if (path is null || !RawBodyByPath.TryGetValue(path, out var body))
         {
             return false;
         }
 
-        await WriteAsync(context, refusal.Status, refusal.Problem, DriverJson.Context.DriverProblem);
+        context.Response.StatusCode = StatusCodes.Status200OK;
+        context.Response.ContentType = "application/json";
+        await context.Response.WriteAsync(body, context.RequestAborted);
 
         return true;
     }

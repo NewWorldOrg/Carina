@@ -2,6 +2,7 @@ using Carina.Contracts;
 using Carina.Domain.Driver;
 using Carina.Infrastructure.Configuration;
 using Carina.Infrastructure.Driver;
+using Carina.TestSupport;
 
 using Microsoft.Extensions.Options;
 

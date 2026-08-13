@@ -3,17 +3,18 @@
   <Import Project="$(MSBuildThisFileDirectory)../Directory.Build.props" />
 
   <PropertyGroup>
-    <IsTestProject>true</IsTestProject>
+    <CarinaIsTestProject>$(MSBuildProjectName.EndsWith('.Tests'))</CarinaIsTestProject>
+    <IsTestProject>$(CarinaIsTestProject)</IsTestProject>
   </PropertyGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="'$(CarinaIsTestProject)' == 'true'">
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="coverlet.collector" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.visualstudio" />
   </ItemGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="'$(CarinaIsTestProject)' == 'true'">
     <Using Include="Xunit" />
   </ItemGroup>
 

@@ -5,6 +5,7 @@ using Carina.Domain.Driver;
 using Carina.Domain.DriverStatus;
 using Carina.Infrastructure.Configuration;
 using Carina.Infrastructure.Driver;
+using Carina.TestSupport;
 
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -13,55 +14,6 @@ namespace Carina.Infrastructure.Tests;
 
 public sealed class DriverConnectionSupervisorTests
 {
-    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(15);
-
-    private sealed class RecordingResyncHook : IDriverSessionResyncHook
-    {
-        private readonly List<IReadOnlyList<SessionSnapshot>> calls = [];
-        private readonly Lock gate = new();
-
-        public int CallCount
-        {
-            get
-            {
-                lock (gate)
-                {
-                    return calls.Count;
-                }
-            }
-        }
-
-        public IReadOnlyList<SessionSnapshot>? LastSessions
-        {
-            get
-            {
-                lock (gate)
-                {
-                    return calls.Count > 0 ? calls[^1] : null;
-                }
-            }
-        }
-
-        public Exception? Failure { get; set; }
-
-        public Task ReadoptAsync(
-            IReadOnlyList<SessionSnapshot> sessions,
-            CancellationToken cancellationToken)
-        {
-            if (Failure is { } failure)
-            {
-                throw failure;
-            }
-
-            lock (gate)
-            {
-                calls.Add(sessions);
-            }
-
-            return Task.CompletedTask;
-        }
-    }
-
     private sealed class Harness : IAsyncDisposable
     {
         private Harness(string socketPath, DriverIpcClient client, DriverConnectionSupervisor supervisor)
@@ -136,23 +88,6 @@ public sealed class DriverConnectionSupervisorTests
             Directory.CreateTempSubdirectory("carina-supervisor-").FullName,
             "driver.sock");
 
-    private static async Task Eventually(Func<bool> condition, string what)
-    {
-        var start = Environment.TickCount64;
-
-        while (Environment.TickCount64 - start < Patience.TotalMilliseconds)
-        {
-            if (condition())
-            {
-                return;
-            }
-
-            await Task.Delay(10);
-        }
-
-        Assert.Fail($"Did not happen within {Patience.TotalSeconds}s: {what}");
-    }
-
     [Fact]
     public async Task ConnectsAndSurfacesTheHelloAndReadopts()
     {
@@ -172,10 +107,10 @@ public sealed class DriverConnectionSupervisorTests
 
         await using var harness = await Harness.StartAsync(socketPath);
 
-        await Eventually(
+        await Eventually.Happens(
             () => harness.Monitor.Current.Connection is DriverConnection.Connected,
             "the supervisor connects");
-        await Eventually(() => harness.Hook.CallCount == 1, "the readoption");
+        await Eventually.Happens(() => harness.Hook.CallCount == 1, "the readoption");
 
         Assert.Equal("instance-a", harness.Monitor.Current.Hello?.InstanceId);
         Assert.Empty(harness.Monitor.Current.MissingCapabilities);
@@ -201,13 +136,13 @@ public sealed class DriverConnectionSupervisorTests
         var driver = await FakeDriver.StartAsync(socketPath, FakeDriver.HelloFor("instance-a"));
         await using var harness = await Harness.StartAsync(socketPath);
 
-        await Eventually(
+        await Eventually.Happens(
             () => harness.Monitor.Current.Connection is DriverConnection.Connected,
             "the supervisor connects");
 
         await driver.DisposeAsync();
 
-        await Eventually(
+        await Eventually.Happens(
             () => harness.Monitor.Current.Connection is DriverConnection.NotConnected,
             "the loss is noticed");
     }
@@ -219,10 +154,10 @@ public sealed class DriverConnectionSupervisorTests
         var first = await FakeDriver.StartAsync(socketPath, FakeDriver.HelloFor("instance-a"));
         await using var harness = await Harness.StartAsync(socketPath);
 
-        await Eventually(() => harness.Hook.CallCount == 1, "the first adoption");
+        await Eventually.Happens(() => harness.Hook.CallCount == 1, "the first adoption");
 
         await first.DisposeAsync();
-        await Eventually(
+        await Eventually.Happens(
             () => harness.Monitor.Current.Connection is DriverConnection.NotConnected,
             "the loss is noticed");
 
@@ -239,7 +174,7 @@ public sealed class DriverConnectionSupervisorTests
                 DateTimeOffset.UtcNow),
         ];
 
-        await Eventually(() => harness.Hook.CallCount == 2, "the re-adoption");
+        await Eventually.Happens(() => harness.Hook.CallCount == 2, "the re-adoption");
 
         Assert.Equal("rec-2", Assert.Single(harness.Hook.LastSessions!).SessionId.Value);
         Assert.Equal("instance-b", harness.Monitor.Current.Hello?.InstanceId);
@@ -252,10 +187,10 @@ public sealed class DriverConnectionSupervisorTests
         var first = await FakeDriver.StartAsync(socketPath, FakeDriver.HelloFor("instance-a"));
         await using var harness = await Harness.StartAsync(socketPath);
 
-        await Eventually(() => harness.Hook.CallCount == 1, "the first adoption");
+        await Eventually.Happens(() => harness.Hook.CallCount == 1, "the first adoption");
 
         await first.DisposeAsync();
-        await Eventually(
+        await Eventually.Happens(
             () => harness.Monitor.Current.Connection is DriverConnection.NotConnected,
             "the loss is noticed");
 
@@ -263,7 +198,7 @@ public sealed class DriverConnectionSupervisorTests
             socketPath,
             FakeDriver.HelloFor("instance-a"));
 
-        await Eventually(
+        await Eventually.Happens(
             () => harness.Monitor.Current.Connection is DriverConnection.Connected,
             "the reconnection");
 
@@ -282,17 +217,17 @@ public sealed class DriverConnectionSupervisorTests
         var received = new ConcurrentQueue<string>();
         using var subscription = harness.Signals.Subscribe(received.Enqueue);
 
-        await Eventually(
+        await Eventually.Happens(
             () => harness.Monitor.Current.Connection is DriverConnection.Connected,
             "the supervisor connects");
-        await Eventually(() => driver.ListenerCount > 0, "the event feed is subscribed");
+        await Eventually.Happens(() => driver.ListenerCount > 0, "the event feed is subscribed");
 
         driver.Signal("draining");
 
-        await Eventually(
+        await Eventually.Happens(
             () => harness.Monitor.Current.Connection is DriverConnection.Draining,
             "the draining flip");
-        await Eventually(
+        await Eventually.Happens(
             () => received.Contains("draining"),
             "the draining signal reaches subscribers");
 
@@ -308,7 +243,7 @@ public sealed class DriverConnectionSupervisorTests
             FakeDriver.HelloFor("instance-a", draining: true));
         await using var harness = await Harness.StartAsync(socketPath);
 
-        await Eventually(
+        await Eventually.Happens(
             () => harness.Monitor.Current.Connection is DriverConnection.Draining,
             "the draining hello is surfaced");
     }
@@ -325,16 +260,16 @@ public sealed class DriverConnectionSupervisorTests
         var received = new ConcurrentQueue<string>();
         using var subscription = harness.Signals.Subscribe(received.Enqueue);
 
-        await Eventually(
+        await Eventually.Happens(
             () => harness.Monitor.Current.Connection is DriverConnection.Connected,
             "the supervisor connects");
-        await Eventually(() => driver.ListenerCount > 0, "the event feed is subscribed");
+        await Eventually.Happens(() => driver.ListenerCount > 0, "the event feed is subscribed");
 
         driver.Signal("somethingFromTheFuture");
         driver.Signal("tuners");
         driver.Signal("sessions");
 
-        await Eventually(
+        await Eventually.Happens(
             () => received.Contains("sessions"),
             "the signals arrive");
 
@@ -350,7 +285,7 @@ public sealed class DriverConnectionSupervisorTests
             FakeDriver.HelloFor("instance-a", capabilities: ["recording"]));
         await using var harness = await Harness.StartAsync(socketPath);
 
-        await Eventually(
+        await Eventually.Happens(
             () => harness.Monitor.Current.Connection is DriverConnection.Connected,
             "the supervisor connects");
 
@@ -373,7 +308,7 @@ public sealed class DriverConnectionSupervisorTests
 
         await using var harness = await Harness.StartAsync(socketPath);
 
-        await Eventually(
+        await Eventually.Happens(
             () => harness.Monitor.Current.Connection is DriverConnection.Connected,
             "the driver that answers its hello is reported as connected");
 
@@ -405,7 +340,7 @@ public sealed class DriverConnectionSupervisorTests
             socketPath,
             resyncFailure: new InvalidOperationException("The recording store is unavailable."));
 
-        await Eventually(
+        await Eventually.Happens(
             () => harness.Monitor.Current.Connection is DriverConnection.Connected,
             "the driver stays connected while readoption fails");
 
@@ -417,7 +352,7 @@ public sealed class DriverConnectionSupervisorTests
 
         harness.Hook.Failure = null;
 
-        await Eventually(() => harness.Hook.CallCount == 1, "the readoption retries and succeeds");
+        await Eventually.Happens(() => harness.Hook.CallCount == 1, "the readoption retries and succeeds");
 
         Assert.Equal(DriverConnection.Connected, harness.Monitor.Current.Connection);
     }
