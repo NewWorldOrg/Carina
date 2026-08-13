@@ -466,7 +466,8 @@ public sealed class TunerSession : IDisposable
 
         diagnostics.Report(
             reason,
-            FailureCause?.Message ?? $"The session '{SessionId}' ended ({StopReason}).",
+            FailureCause?.Message
+                ?? $"The session '{SessionId}' ended ({SessionStopReasonConverter.WireName(StopReason)}).",
             DeviceId,
             SessionId
         );

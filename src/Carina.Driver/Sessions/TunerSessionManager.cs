@@ -574,18 +574,6 @@ public sealed class TunerSessionManager(
     public bool IsFaulted(string deviceId, [NotNullWhen(true)] out string? detail) =>
         faultedDevices.TryGetValue(deviceId, out detail);
 
-    public bool ClearFault(string deviceId)
-    {
-        if (!faultedDevices.TryRemove(deviceId, out _))
-        {
-            return false;
-        }
-
-        Announce();
-
-        return true;
-    }
-
     private static bool Matches(DeviceKind device, TunerKind requested) =>
         (device, requested) switch
         {

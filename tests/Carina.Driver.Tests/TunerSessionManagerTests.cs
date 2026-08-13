@@ -707,11 +707,12 @@ public sealed class TunerSessionManagerTests : IDisposable
         Begin(manager, "s-1", "adapter0", SessionPurpose.Live).WaitForEnd(TimeSpan.FromSeconds(10));
 
         Assert.True(manager.IsFaulted("adapter0", out _));
-        Assert.True(manager.ClearFault("adapter0"));
-        Assert.False(manager.ClearFault("adapter0"));
-        Assert.False(manager.IsFaulted("adapter0", out _));
 
-        Begin(manager, "s-2", "adapter0", SessionPurpose.Live).WaitForEnd(TimeSpan.FromSeconds(10));
+        var restarted = Manager();
+
+        Assert.False(restarted.IsFaulted("adapter0", out _));
+
+        StopAndWait(Begin(restarted, "s-2", "adapter0", SessionPurpose.Live));
     }
 
     [Fact]
