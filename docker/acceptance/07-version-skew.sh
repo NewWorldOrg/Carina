@@ -72,6 +72,7 @@ docker run -d --name "${driver_container}" \
     -v "${recordings_volume}:/srv/recordings" \
     "${old_image}" >/dev/null
 track_container "${driver_container}"
+diagnostics_container="${driver_container}"
 
 if ! wait_until 60 bash -c "docker run --rm --user 100:10001 -v ${socket_volume}:/run/carina ${curl_image} -sf --max-time 5 --unix-socket /run/carina/driver.sock http://localhost/health"; then
     docker logs "${driver_container}" 2>&1 | tail -20

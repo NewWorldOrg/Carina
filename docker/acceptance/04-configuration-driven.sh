@@ -74,6 +74,7 @@ start_driver() {
         -v "${output_volume}:${output_path}" \
         "${image}" >/dev/null
     track_container "${name}"
+    diagnostics_container="${name}"
 }
 
 socket_answers() {

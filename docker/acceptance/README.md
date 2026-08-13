@@ -34,6 +34,15 @@ Two rules the scenarios follow, both learned here:
   printing, numbers are checked with `require_number` before any comparison, and command
   substitutions capture the status explicitly. `docker/grace-period.sh` was once green while
   comparing empty strings; that is the trap being avoided.
+- **An answer is checked before it is read.** Every request through `driver_request` yields a
+  status code and a body separately, and the callers assert the status — and that a body
+  arrived at all — before anything parses it. `capture` keeps standard error out of the
+  captured value, and `fetch_tools` pulls `curlimages/curl` and the Python image before the
+  first measurement, so that Docker's own progress output can never become part of an answer.
+  The first CI run failed exactly there: the first use of `curlimages/curl` on the runner
+  printed `Unable to find image ... locally` into a body that was captured with `2>&1`, and
+  the harness reported it as a JSON parse error at `line 1 column 1` with the offending text
+  nowhere in the message.
 
 ## Where each criterion stands
 

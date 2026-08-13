@@ -10,6 +10,7 @@ deploy_file="${repo_root}/compose.deploy.yml"
 driver_config_file="${CARINA_ACCEPTANCE_DRIVER_CONFIG:-${repo_root}/docker/driver.development.json}"
 postgres_password="acceptance-throwaway-not-a-deployment"
 api_port="${CARINA_ACCEPTANCE_API_PORT:-0}"
+compose_override="${CARINA_ACCEPTANCE_COMPOSE_OVERRIDE:-}"
 
 prefix="carina-acc-${scenario_id}-$$"
 project="${prefix}"
@@ -17,9 +18,13 @@ socket_volume="${prefix}_driver-run"
 workdir="$(mktemp -d)"
 stop_grace=""
 reply=""
+http_status=""
+curl_status=""
+diagnostics_container=""
 count_value=""
 number_value=""
 text_value=""
+error_text=""
 
 created_containers=()
 created_volumes=()
@@ -64,6 +69,35 @@ track_container() { created_containers+=("$1"); }
 track_volume() { created_volumes+=("$1"); }
 track_image() { created_images+=("$1"); }
 
+capture() {
+    local status
+
+    set +e
+    text_value="$("$@" 2>"${workdir}/stderr")"
+    status=$?
+    set -e
+
+    error_text="$(cat "${workdir}/stderr" 2>/dev/null)"
+
+    return "${status}"
+}
+
+fetch_tools() {
+    local tool
+
+    for tool in "${curl_image}" "${python_image}"; do
+        if docker image inspect "${tool}" >/dev/null 2>&1; then
+            continue
+        fi
+
+        note "fetching ${tool} before anything is measured, so that no pull lands in an answer"
+
+        if ! docker pull "${tool}"; then
+            fail "the harness needs ${tool} and it could not be fetched."
+        fi
+    done
+}
+
 is_number() {
     case "${1}" in
         '' | *[!0-9]*) return 1 ;;
@@ -80,8 +114,14 @@ require_number() {
 json() {
     local document="$1"
     local status
+    local complaint
 
     shift
+
+    if [ -z "${document}" ]; then
+        show_driver_log
+        fail "there is no answer to read ${*} out of: the body was empty."
+    fi
 
     set +e
     text_value="$(printf '%s' "${document}" | python3 "${acceptance_dir}/read-json.py" "$@" 2>&1)"
@@ -89,8 +129,29 @@ json() {
     set -e
 
     if [ "${status}" -ne 0 ]; then
-        fail "reading ${*} out of the answer failed: ${text_value}"
+        complaint="$(printf '%s' "${text_value}" | tail -n 1)"
+        show_driver_log
+        fail "reading ${*} out of the answer failed (${complaint}). The answer was: ${document}"
     fi
+}
+
+show_driver_log() {
+    if [ -z "${diagnostics_container}" ]; then
+        return 0
+    fi
+
+    echo "     the driver's last words:" >&2
+    docker logs --tail 40 "${diagnostics_container}" 2>&1 | sed 's/^/     /' >&2 || true
+}
+
+body_or_nothing() {
+    if [ -z "${reply}" ]; then
+        printf '(no body at all)'
+
+        return 0
+    fi
+
+    printf '%s' "${reply}"
 }
 
 require_image_present() {
@@ -118,12 +179,18 @@ derive_stop_grace() {
 }
 
 stack() {
+    local extra=()
+
+    if [ -n "${compose_override}" ]; then
+        extra=(-f "${compose_override}")
+    fi
+
     CARINA_IMAGE="${image}" \
         CARINA_DRIVER_CONFIG_FILE="${driver_config_file}" \
         POSTGRES_PASSWORD="${postgres_password}" \
         CARINA_API_PORT="${api_port}" \
         CARINA_STOP_GRACE="${stop_grace}" \
-        docker compose -p "${project}" -f "${deploy_file}" "$@"
+        docker compose -p "${project}" -f "${deploy_file}" "${extra[@]}" "$@"
 }
 
 stack_up() {
@@ -140,35 +207,30 @@ stack_up() {
         fail "the deployment stack did not come up healthy."
     fi
 
+    container_of driver
+    diagnostics_container="${text_value}"
+
     note "deployment stack up as project ${project}, stop_grace_period ${stop_grace}"
 }
 
 container_of() {
     local service="$1"
-    local status
 
-    set +e
-    text_value="$(stack ps -q "${service}" 2>&1)"
-    status=$?
-    set -e
+    if ! capture stack ps -q "${service}"; then
+        fail "the ${service} container could not be found: ${error_text}"
+    fi
 
-    if [ "${status}" -ne 0 ] || [ -z "${text_value}" ]; then
-        fail "the ${service} container could not be found: ${text_value}"
+    if [ -z "${text_value}" ]; then
+        fail "the ${service} container could not be found; compose named none. ${error_text}"
     fi
 }
 
 inspect_field() {
     local container="$1"
     local template="$2"
-    local status
 
-    set +e
-    text_value="$(docker inspect -f "${template}" "${container}" 2>&1)"
-    status=$?
-    set -e
-
-    if [ "${status}" -ne 0 ]; then
-        fail "docker inspect ${template} on ${container} failed: ${text_value}"
+    if ! capture docker inspect -f "${template}" "${container}"; then
+        fail "docker inspect ${template} on ${container} failed: ${error_text}"
     fi
 }
 
@@ -177,30 +239,56 @@ driver_curl() {
         -s --max-time 15 --unix-socket /run/carina/driver.sock "$@"
 }
 
+driver_request() {
+    local answer
+
+    if ! capture driver_curl -w '\n%{http_code}' "$@"; then
+        curl_status=$?
+        reply="${text_value}"
+        http_status=""
+
+        return 1
+    fi
+
+    answer="${text_value}"
+    curl_status=0
+    http_status="$(printf '%s' "${answer}" | tail -n 1)"
+    reply="$(printf '%s' "${answer}" | sed '$d')"
+
+    if ! is_number "${http_status}"; then
+        reply="${answer}"
+        http_status=""
+
+        return 1
+    fi
+
+    return 0
+}
+
 driver_get() {
-    local status
+    if ! driver_request "http://localhost$1"; then
+        show_driver_log
+        fail "GET $1 over the driver socket did not complete (curl ${curl_status}): $(body_or_nothing)"
+    fi
 
-    set +e
-    reply="$(driver_curl "http://localhost$1" 2>&1)"
-    status=$?
-    set -e
+    if [ "${http_status}" != "200" ]; then
+        show_driver_log
+        fail "GET $1 answered ${http_status}, not 200. Body: $(body_or_nothing)"
+    fi
 
-    if [ "${status}" -ne 0 ]; then
-        fail "GET $1 on the driver socket failed (curl ${status}): ${reply}"
+    if [ -z "${reply}" ]; then
+        show_driver_log
+        fail "GET $1 answered ${http_status} with no body at all, so there is nothing to read."
     fi
 }
 
 driver_status_code() {
-    local status
-
-    set +e
-    text_value="$(driver_curl -o /dev/null -w '%{http_code}' "http://localhost$1" 2>&1)"
-    status=$?
-    set -e
-
-    if [ "${status}" -ne 0 ]; then
-        fail "GET $1 on the driver socket failed (curl ${status}): ${text_value}"
+    if ! driver_request "http://localhost$1"; then
+        show_driver_log
+        fail "GET $1 over the driver socket did not complete (curl ${curl_status}): $(body_or_nothing)"
     fi
+
+    text_value="${http_status}"
 }
 
 ends_at() {
@@ -223,19 +311,24 @@ start_recording() {
     local seconds="$4"
     local kind="${5:-terrestrial}"
     local channel="${6:-27}"
-    local status
 
     ends_at "${seconds}"
 
-    set +e
-    reply="$(driver_curl -X POST -H 'Content-Type: application/json' \
+    if ! driver_request -X POST -H 'Content-Type: application/json' \
         -d "{\"sessionId\":\"${session}\",\"purpose\":\"recording\",\"tuning\":{\"kind\":\"${kind}\",\"physicalChannel\":${channel}},\"deviceId\":\"${device}\",\"outputRoot\":\"${root}\",\"endsAt\":\"${text_value}\"}" \
-        http://localhost/sessions 2>&1)"
-    status=$?
-    set -e
+        http://localhost/sessions; then
+        show_driver_log
+        fail "starting recording ${session} did not complete (curl ${curl_status}): $(body_or_nothing)"
+    fi
 
-    if [ "${status}" -ne 0 ]; then
-        fail "starting recording ${session} failed (curl ${status}): ${reply}"
+    if [ "${http_status}" != "201" ]; then
+        show_driver_log
+        fail "starting recording ${session} answered ${http_status}, not 201. Body: $(body_or_nothing)"
+    fi
+
+    if [ -z "${reply}" ]; then
+        show_driver_log
+        fail "starting recording ${session} answered ${http_status} with no body at all; the driver accepted nothing and said nothing."
     fi
 
     json "${reply}" field sessionId
@@ -252,7 +345,13 @@ start_recording() {
 }
 
 stop_recording() {
-    driver_curl -o /dev/null -X DELETE "http://localhost/sessions/$1" || true
+    if ! driver_request -X DELETE "http://localhost/sessions/$1"; then
+        note "asking the driver to stop $1 did not complete (curl ${curl_status}): $(body_or_nothing)"
+
+        return 0
+    fi
+
+    note "asking the driver to stop $1 answered ${http_status}"
 }
 
 recorded_bytes() {
@@ -267,16 +366,10 @@ recorded_bytes() {
 recording_size() {
     local volume="$1"
     local file="$2"
-    local status
 
-    set +e
-    text_value="$(docker run --rm -v "${volume}:/rec" "${python_image}" \
-        stat -c '%s' "/rec/${file}" 2>&1)"
-    status=$?
-    set -e
-
-    if [ "${status}" -ne 0 ]; then
-        fail "the recording file ${file} could not be measured: ${text_value}"
+    if ! capture docker run --rm -v "${volume}:/rec" "${python_image}" \
+        stat -c '%s' "/rec/${file}"; then
+        fail "the recording file ${file} could not be measured: ${error_text}"
     fi
 
     require_number "the size of ${file}" "${text_value}"
@@ -286,18 +379,12 @@ recording_size() {
 check_continuity() {
     local volume="$1"
     local file="$2"
-    local status
 
-    set +e
-    text_value="$(docker run --rm \
+    if ! capture docker run --rm \
         -v "${volume}:/rec" \
         -v "${repo_root}/docker/check-recording-continuity.py:/check.py:ro" \
-        "${python_image}" python /check.py "/rec/${file}" 2>&1)"
-    status=$?
-    set -e
-
-    if [ "${status}" -ne 0 ]; then
-        fail "the recording ${file} is not continuous: ${text_value}"
+        "${python_image}" python /check.py "/rec/${file}"; then
+        fail "the recording ${file} is not continuous: ${text_value} ${error_text}"
     fi
 
     echo "${text_value}" | sed 's/^/     /'
@@ -343,3 +430,5 @@ heading() {
     echo
     echo "### ${scenario_id}: $*"
 }
+
+fetch_tools

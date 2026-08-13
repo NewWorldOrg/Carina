@@ -59,28 +59,21 @@ pass "the driver's own probe reports the draining driver as unhealthy (exit ${pr
 note "${probe_output}"
 
 ends_at 600
-set +e
-answer="$(driver_curl -w '\n%{http_code}' -X POST -H 'Content-Type: application/json' \
+if ! driver_request -X POST -H 'Content-Type: application/json' \
     -d "{\"sessionId\":\"acc02late\",\"purpose\":\"recording\",\"tuning\":{\"kind\":\"satellite\",\"physicalChannel\":31},\"deviceId\":\"fake-satellite\",\"outputRoot\":\"primary\",\"endsAt\":\"${text_value}\"}" \
-    http://localhost/sessions 2>&1)"
-refusal_status=$?
-set -e
-
-if [ "${refusal_status}" -ne 0 ]; then
-    fail "asking a draining driver for new work failed at the transport (curl ${refusal_status}): ${answer}"
+    http://localhost/sessions; then
+    show_driver_log
+    fail "asking a draining driver for new work did not complete (curl ${curl_status}): $(body_or_nothing)"
 fi
 
-refusal="$(printf '%s' "${answer}" | tail -1)"
-refusal_body="$(printf '%s' "${answer}" | sed '$d')"
-
-if [ "${refusal}" != "503" ]; then
-    fail "a draining driver answered ${refusal} to a new recording request; it should refuse with 503. Body: ${refusal_body}"
+if [ "${http_status}" != "503" ]; then
+    fail "a draining driver answered ${http_status} to a new recording request; it should refuse with 503. Body: $(body_or_nothing)"
 fi
 
-if ! grep -q 'draining' <<<"${refusal_body}"; then
-    fail "the refusal does not say it is draining: ${refusal_body}"
+if ! grep -q 'draining' <<<"${reply}"; then
+    fail "the refusal does not say it is draining: $(body_or_nothing)"
 fi
-pass "a draining driver refuses new work with 503 and says why: ${refusal_body}"
+pass "a draining driver refuses new work with 503 and says why: ${reply}"
 
 if ! wait_until 180 bash -c "test \"\$(docker inspect -f '{{.State.Running}}' ${driver_container})\" = false"; then
     fail "the driver never exited after its recording finished."
