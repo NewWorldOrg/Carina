@@ -1,19 +1,41 @@
+using Carina.Domain.DriverStatus;
+using Carina.Infrastructure.Configuration;
+using Carina.Infrastructure.DriverStatus;
 using Carina.Infrastructure.Persistence;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Carina.Infrastructure.DependencyInjection;
 
 public static class ServiceCollectionExtensions
 {
-    public static IServiceCollection AddCarinaInfrastructure(this IServiceCollection services, string connectionString)
+    public static IServiceCollection AddCarinaInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(services);
-        ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
+        ArgumentNullException.ThrowIfNull(configuration);
 
-        services.AddDbContext<CarinaDbContext>(options => options.UseNpgsql(connectionString));
+        services.AddOptions<DatabaseOptions>()
+            .Configure(options => options.ConnectionString =
+                configuration.GetConnectionString(DatabaseOptions.ConnectionStringName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
+        services.AddOptions<DriverOptions>()
+            .Configure(options => options.SocketPath = configuration[DriverOptions.SocketPathKey])
+            .ValidateDataAnnotations()
+            .Validate(
+                options => options.SocketPath is null || options.SocketPath.StartsWith('/'),
+                $"{DriverOptions.SocketPathKey} must be an absolute path.")
+            .ValidateOnStart();
+
+        services.AddDbContext<CarinaDbContext>((provider, options) =>
+            options.UseNpgsql(provider.GetRequiredService<IOptions<DatabaseOptions>>().Value.ConnectionString));
+
         services.AddSingleton(TimeProvider.System);
+        services.AddSingleton<IDriverStatusReader, NotConnectedDriverStatusReader>();
 
         return services;
     }
