@@ -99,6 +99,10 @@ rules hold rather than that they inspected nothing.
   which side of the boundary they are on rather than escaping it by naming.
 - Contract changes are additive only. Removing or renaming an endpoint or an event
   breaks the "old driver + new app" combination, which is the normal state.
+- App events are signals, not messages. A producer signals through `IAppEventPublisher`
+  with a `Carina.Contracts.AppEventName` and nothing beside it — the nine names are the
+  only instances there are and none is reachable from a string. `AppEventRuleTests` and
+  `EventStreamRuleTests` hold both halves of that before the hub itself is built.
 - Configuration is validated at startup and the process fails fast with a message
   naming the offending setting. There is no hot reload.
 - Secrets never enter committed configuration — placeholders only, real values from

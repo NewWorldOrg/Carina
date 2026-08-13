@@ -54,8 +54,11 @@ because a player follows neither.
 Nothing else. The receiver re-fetches the affected resource over the REST surface that this
 document does describe.
 
-**Shape.** Event names only, no payload. The set is closed and lives in code as
-`Carina.Contracts.AppEvents`:
+**Shape.** Event names only, no payload. A producer signals through
+`Carina.Domain.Events.IAppEventPublisher`, which takes a `Carina.Contracts.AppEventName` and
+nothing else: the nine names are the only instances that exist and none can be built from a
+string, so a name outside the set and a payload beside it are both unsayable rather than
+merely forbidden. The set is closed and lives in code as `Carina.Contracts.AppEvents`:
 
 `tuners` · `programs` · `epgCollection` · `reservations` · `rules` · `recordings` ·
 `quality` · `live` · `encodeJobs`
@@ -80,6 +83,12 @@ the receiver starts trusting a diff it cannot verify.
 per message. A consumer that receives `401` closes explicitly instead of reconnecting
 forever, so a dead session shows as a dead session rather than a screen that quietly stops
 updating. Comment lines keep the connection alive through proxies that drop idle traffic.
+
+Both halves of the rule are held by tests before any producer exists: `AppEventRuleTests` in
+`tests/Carina.Conventions.Tests` rejects a signal that takes a raw name or carries anything
+beside it, and `EventStreamRuleTests` in `tests/Carina.Architecture.Tests` rejects an
+app-side event stream that writes a `data:` field. Each is self-checked against a
+deliberately violating publisher and a deliberately leaking stream.
 
 **Status.** The name set is fixed in `Carina.Contracts`; the hub endpoint is not built yet.
 The path is written here as `/api/events` because the deploy contract routes `/api/*` to
