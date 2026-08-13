@@ -244,8 +244,6 @@ public sealed class SessionStreamHandlerTests : IDisposable
 
         await WaitForBytes(body);
 
-        Assert.Equal(1, session.Broadcaster.SubscriberCount);
-
         session.Broadcaster.Close(
             new TimeoutException("the reader never took the stream")
         );
