@@ -84,6 +84,19 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task TheDocumentPointsAtTheSameOriginRatherThanAHost()
+    {
+        var document = await ServedOpenApi.FetchAsync(factory);
+
+        var servers = document["servers"]!
+            .AsArray()
+            .Select(server => server!["url"]!.GetValue<string>())
+            .ToArray();
+
+        Assert.Equal(["/"], servers);
+    }
+
+    [Fact]
     public async Task EveryEnumSaysWhatItsValuesAre()
     {
         var document = await ServedOpenApi.FetchAsync(factory);

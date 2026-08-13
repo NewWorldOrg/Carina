@@ -18,7 +18,7 @@ builder.Services.AddCarinaInfrastructure(builder.Configuration);
 builder.Services.AddAuthentication();
 builder.Services.AddOpenApi(options =>
 {
-    options.AddDocumentTransformer<DocumentInfoTransformer>();
+    options.AddDocumentTransformer<ApiDocumentTransformer>();
     options.AddSchemaTransformer<StringEnumSchemaTransformer>();
     options.AddOperationTransformer<DefaultDenyResponseTransformer>();
 });

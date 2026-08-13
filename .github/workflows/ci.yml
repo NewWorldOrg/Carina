@@ -31,6 +31,23 @@ jobs:
       - run: dotnet restore
       - run: dotnet test --no-restore --filter "Category!=DbIntegration"
 
+  openapi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet restore
+      - run: dotnet build src/Carina.Api --no-restore -warnaserror
+      - run: dotnet msbuild src/Carina.Api/Carina.Api.csproj -t:GenerateOpenApiDocuments
+      - name: The checked-in document is the generated one
+        run: git diff --exit-code openapi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openapi
+          path: openapi/Carina.Api.json
+
   format:
     runs-on: ubuntu-latest
     steps:
