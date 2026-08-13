@@ -31,6 +31,69 @@ jobs:
       - run: dotnet restore
       - run: dotnet test --no-restore --filter "Category!=DbIntegration"
 
+  test-db:
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: carina
+          POSTGRES_USER: carina
+          POSTGRES_PASSWORD: ci-only-not-a-deployment
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U carina -d carina"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      CARINA_DB_CONNECTION: Host=127.0.0.1;Port=5432;Database=carina;Username=carina;Password=ci-only-not-a-deployment
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet restore
+      - name: Run the tests the other job excludes, against a real PostgreSQL
+        run: |
+          set -o pipefail
+          dotnet test --no-restore --filter "Category=DbIntegration" | tee integration.log
+      - name: The filter selected tests, rather than passing by selecting none
+        run: |
+          passed="$(sed -n 's/.*Passed: *\([0-9]\+\).*/\1/p' integration.log | awk '{ total += $1 } END { print total + 0 }')"
+          if [ "${passed}" -lt 1 ]; then
+            echo "the filter ran ${passed} tests: dotnet test exits 0 when a filter matches nothing, so this job would be green having verified nothing" >&2
+            exit 1
+          fi
+          echo "${passed} DbIntegration tests ran against the service container."
+
+  tags:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: docker/image-tags.sh check
+      - run: docker/image-tags.sh prove
+      - name: A shallow checkout is refused, naming the reason
+        run: |
+          rm -rf /tmp/shallow
+          git clone --quiet --depth 1 "file://${PWD}" /tmp/shallow
+          if output="$(/tmp/shallow/docker/image-tags.sh tag driver 2>&1)"; then
+            echo "a shallow clone produced the tag ${output}, where every stream collapses onto HEAD" >&2
+            exit 1
+          fi
+          if ! grep -q 'shallow' <<<"${output}"; then
+            echo "it failed for another reason: ${output}" >&2
+            exit 1
+          fi
+          echo "${output}"
+      - name: The tags this commit stands for
+        run: |
+          echo "driver: $(docker/image-tags.sh tag driver)"
+          echo "app: $(docker/image-tags.sh tag app)"
+
   openapi:
     runs-on: ubuntu-latest
     env:
