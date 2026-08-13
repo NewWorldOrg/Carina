@@ -1,11 +1,14 @@
+using Carina.Domain.Driver;
 using Carina.Domain.DriverStatus;
 using Carina.Infrastructure.Configuration;
+using Carina.Infrastructure.Driver;
 using Carina.Infrastructure.DriverStatus;
 using Carina.Infrastructure.Persistence;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
 namespace Carina.Infrastructure.DependencyInjection;
@@ -37,6 +40,14 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IDriverStatusReader, NotConnectedDriverStatusReader>();
+        services.AddSingleton<IDriverClient, DriverIpcClient>();
+        services.AddSingleton<DriverConnectionMonitor>();
+        services.AddSingleton<DriverSignalRelay>();
+        services.AddSingleton<IDriverSignals>(provider =>
+            provider.GetRequiredService<DriverSignalRelay>());
+        services.TryAddSingleton<IDriverSessionResyncHook, NoopDriverSessionResyncHook>();
+        services.TryAddSingleton(DriverSupervisionSettings.Default);
+        services.AddHostedService<DriverConnectionSupervisor>();
 
         return services;
     }

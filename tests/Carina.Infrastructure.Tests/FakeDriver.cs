@@ -53,6 +53,11 @@ public sealed class FakeDriver : IAsyncDisposable
 
     public static async Task<FakeDriver> StartAsync(string socketPath, DriverHello hello)
     {
+        if (File.Exists(socketPath))
+        {
+            File.Delete(socketPath);
+        }
+
         var builder = WebApplication.CreateBuilder();
         builder.WebHost.UseSetting(WebHostDefaults.ServerUrlsKey, string.Empty);
         builder.Logging.ClearProviders();
@@ -60,6 +65,7 @@ public sealed class FakeDriver : IAsyncDisposable
 
         var app = builder.Build();
         var driver = new FakeDriver(app, socketPath, hello);
+        app.Lifetime.ApplicationStopping.Register(driver.CloseAllListeners);
 
         app.MapGet(DriverEndpoints.Health, driver.HealthAsync);
         app.MapGet(DriverEndpoints.Tuners, context =>
@@ -91,8 +97,20 @@ public sealed class FakeDriver : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        await app.StopAsync();
+        using var patience = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        await app.StopAsync(patience.Token);
         await app.DisposeAsync();
+    }
+
+    private void CloseAllListeners()
+    {
+        lock (gate)
+        {
+            foreach (var listener in listeners)
+            {
+                listener.Writer.TryComplete();
+            }
+        }
     }
 
     private async Task HealthAsync(HttpContext context)
