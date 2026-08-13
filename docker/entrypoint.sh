@@ -1,12 +1,4 @@
 #!/usr/bin/env bash
-# Role switch for the single image.
-#
-#   driver  privileged process that owns the tuners and writes recordings
-#   app     unprivileged HTTP process
-#   web     placeholder; the web asset is added by the distribution image build
-#   all     driver + app in one container, for development only
-#
-# Routing between app and web is the job of a reverse proxy outside this image.
 set -euo pipefail
 
 readonly driver_entry=/opt/carina/driver/Carina.Driver.dll
@@ -21,8 +13,6 @@ run_all() {
 
     trap 'kill -TERM "${driver_pid}" "${app_pid}" 2>/dev/null || true' TERM INT
 
-    # This shell is PID 1, so it reaps the children it started as well as anything
-    # reparented onto it. The container is expected to die with its first child.
     set +e
     wait -n
     local status=$?

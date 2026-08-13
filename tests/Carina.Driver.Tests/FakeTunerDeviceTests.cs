@@ -6,7 +6,7 @@ namespace Carina.Driver.Tests;
 public sealed class FakeTunerDeviceTests
 {
     private static byte[] Read(FakeTunerDevice device, int packets) =>
-        device.Read(packets * TsPacketReader.PacketLength);
+        device.Read(packets * TsPacketReader.PacketLength, CancellationToken.None);
 
     [Fact]
     public void ProducesPacketsAReaderCanRead()
@@ -78,8 +78,8 @@ public sealed class FakeTunerDeviceTests
         var reader = new TsPacketReader();
 
         var packets = reader
-            .Read(device.Read(100))
-            .Concat(reader.Read(device.Read(276)))
+            .Read(device.Read(100, CancellationToken.None))
+            .Concat(reader.Read(device.Read(276, CancellationToken.None)))
             .ToList();
 
         Assert.Equal([0, 1], packets.Select(packet => packet.ContinuityCounter));

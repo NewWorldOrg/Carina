@@ -5,34 +5,68 @@ public sealed class ContinuityCounterTracker
     private readonly Dictionary<int, int> lastCounter = [];
     private readonly Dictionary<int, int> lastPayloadHash = [];
     private readonly Dictionary<int, long> dropsByPid = [];
+    private readonly Lock gate = new();
 
-    public long Packets { get; private set; }
+    private long packets;
+    private long drops;
+    private long duplicates;
+    private long discontinuities;
+    private long transportErrors;
+    private long scrambledPackets;
+    private long provisionalPackets;
 
-    public long Drops { get; private set; }
+    public long Packets => Read(ref packets);
 
-    public long Duplicates { get; private set; }
+    public long Drops => Read(ref drops);
 
-    public long Discontinuities { get; private set; }
+    public long Duplicates => Read(ref duplicates);
 
-    public long TransportErrors { get; private set; }
+    public long Discontinuities => Read(ref discontinuities);
 
-    public long ScrambledPackets { get; private set; }
+    public long TransportErrors => Read(ref transportErrors);
 
-    public long DropsFor(int pid) => dropsByPid.GetValueOrDefault(pid);
+    public long ScrambledPackets => Read(ref scrambledPackets);
+
+    public long ProvisionalPackets => Read(ref provisionalPackets);
+
+    public long DropsFor(int pid)
+    {
+        lock (gate)
+        {
+            return dropsByPid.GetValueOrDefault(pid);
+        }
+    }
 
     public void Retuned()
     {
-        lastCounter.Clear();
-        lastPayloadHash.Clear();
+        lock (gate)
+        {
+            lastCounter.Clear();
+            lastPayloadHash.Clear();
+        }
     }
-
-    public long ProvisionalPackets { get; private set; }
 
     public void Observe(TsPacket packet)
     {
+        lock (gate)
+        {
+            Record(packet);
+        }
+    }
+
+    private long Read(ref long counter)
+    {
+        lock (gate)
+        {
+            return counter;
+        }
+    }
+
+    private void Record(TsPacket packet)
+    {
         if (packet.Provisional)
         {
-            ProvisionalPackets++;
+            provisionalPackets++;
             return;
         }
 
@@ -53,20 +87,20 @@ public sealed class ContinuityCounterTracker
 
         if (packet.TransportError)
         {
-            TransportErrors++;
+            transportErrors++;
             return;
         }
 
-        Packets++;
+        packets++;
 
         if (packet.Scrambled)
         {
-            ScrambledPackets++;
+            scrambledPackets++;
         }
 
         if (packet.Discontinuity)
         {
-            Discontinuities++;
+            discontinuities++;
             Remember(packet);
             return;
         }
@@ -86,7 +120,7 @@ public sealed class ContinuityCounterTracker
         {
             if (lastPayloadHash.GetValueOrDefault(packet.Pid) == packet.PayloadHash)
             {
-                Duplicates++;
+                duplicates++;
                 return;
             }
 
@@ -115,7 +149,7 @@ public sealed class ContinuityCounterTracker
 
     private void Count(int pid, long missing)
     {
-        Drops += missing;
-        dropsByPid[pid] = DropsFor(pid) + missing;
+        drops += missing;
+        dropsByPid[pid] = dropsByPid.GetValueOrDefault(pid) + missing;
     }
 }

@@ -19,7 +19,6 @@ services:
       db:
         condition: service_healthy
 
-  # stop_grace_period must stay above shutdownGraceHours in docker/driver.development.json.
   driver:
     image: mcr.microsoft.com/dotnet/sdk:10.0
     working_dir: /code
@@ -43,7 +42,6 @@ services:
     ports:
       - 5432:5432
     volumes:
-      # postgres:18 refuses to start when the mount is /var/lib/postgresql/data.
       - pgdata:/var/lib/postgresql
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U carina -d carina']

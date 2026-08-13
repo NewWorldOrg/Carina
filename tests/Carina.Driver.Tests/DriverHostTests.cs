@@ -1,4 +1,6 @@
 using Carina.Driver.Configuration;
+using Carina.Driver.Sessions;
+using Carina.Driver.Tuning;
 
 using Microsoft.Extensions.Hosting;
 
@@ -32,5 +34,26 @@ public sealed class DriverHostTests
             Configuration,
             host.Services.GetService(typeof(DriverConfiguration))
         );
+    }
+
+    [Fact]
+    public void TheSessionManagerIsAvailableToTheServices()
+    {
+        using var host = DriverHost.Create([], Configuration);
+
+        Assert.NotNull(host.Services.GetService(typeof(TunerSessionManager)));
+        Assert.NotNull(host.Services.GetService(typeof(ITunerDeviceFactory)));
+        Assert.NotNull(host.Services.GetService(typeof(TimeProvider)));
+    }
+
+    [Fact]
+    public void TheSessionManagerRunsWithTheHost()
+    {
+        using var host = DriverHost.Create([], Configuration);
+
+        var hosted = (IEnumerable<IHostedService>)
+            host.Services.GetService(typeof(IEnumerable<IHostedService>))!;
+
+        Assert.Contains(hosted, service => service is TunerSessionManager);
     }
 }

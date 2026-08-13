@@ -57,6 +57,22 @@ public sealed class DriverStartupTests
     }
 
     [Fact]
+    public void AStopThatWasAskedForIsASuccess()
+    {
+        Assert.Equal(0, DriverStartup.ExitCodeFor(stopWasAsked: true));
+    }
+
+    [Fact]
+    public void AHostThatStoppedByItselfIsAFailure()
+    {
+        Assert.NotEqual(0, DriverStartup.ExitCodeFor(stopWasAsked: false));
+        Assert.Equal(
+            DriverStartup.StoppedEarlyExitCode,
+            DriverStartup.ExitCodeFor(stopWasAsked: false)
+        );
+    }
+
+    [Fact]
     public void TheOutputSaysWhichFileItWasReading()
     {
         var writer = new StringWriter();

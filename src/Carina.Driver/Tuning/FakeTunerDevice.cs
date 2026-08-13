@@ -2,7 +2,7 @@ using Carina.Driver.Transport;
 
 namespace Carina.Driver.Tuning;
 
-public sealed class FakeTunerDevice
+public sealed class FakeTunerDevice : ITunerDevice
 {
     private const byte SyncByte = 0x47;
     private const int VideoPid = 0x0100;
@@ -17,7 +17,7 @@ public sealed class FakeTunerDevice
         seed = unchecked((byte)((physicalChannel * 31) + (serviceId ?? 0)));
     }
 
-    public byte[] Read(int count)
+    public byte[] Read(int count, CancellationToken cancellationToken)
     {
         var bytes = new byte[count];
 
@@ -46,4 +46,6 @@ public sealed class FakeTunerDevice
             3 => (byte)(0x10 | continuityCounter),
             _ => unchecked((byte)(seed + offset + packetsProduced)),
         };
+
+    public void Dispose() { }
 }
