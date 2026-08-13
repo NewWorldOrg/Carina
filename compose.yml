@@ -19,7 +19,7 @@ services:
       db:
         condition: service_healthy
 
-  # stop_grace_period must stay above the driver's recording linger cap.
+  # stop_grace_period must stay above shutdownGraceHours in docker/driver.development.json.
   driver:
     image: mcr.microsoft.com/dotnet/sdk:10.0
     working_dir: /code
@@ -27,8 +27,9 @@ services:
       - .:/code
       - nuget:/root/.nuget/packages
       - driver-run:/run/carina
+      - recordings:/srv/recordings
     tty: true
-    stop_grace_period: 30s
+    stop_grace_period: 7h
     environment:
       CARINA_DRIVER_CONFIG: /code/docker/driver.development.json
       DOTNET_hostBuilder__reloadConfigOnChange: 'false'
@@ -53,4 +54,5 @@ services:
 volumes:
   nuget:
   driver-run:
+  recordings:
   pgdata:

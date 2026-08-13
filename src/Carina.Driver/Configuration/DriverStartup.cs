@@ -6,24 +6,26 @@ public static class DriverStartup
 
     public const int ConfigurationExitCode = 78;
 
+    public const int StoppedEarlyExitCode = 70;
+
     public static int Report(
         DriverConfigurationResult result,
         TextWriter error,
         string? path = null
     )
     {
-        if (result.Configuration is not null)
+        if (result.TryGetConfiguration(out _, out var problems))
         {
             return 0;
         }
 
         error.WriteLine(
             path is null
-                ? "The driver configuration is not usable:"
+                ? $"{ConfigurationPathVariable} names no configuration file:"
                 : $"The driver configuration at '{path}' is not usable:"
         );
 
-        foreach (var problem in result.Problems)
+        foreach (var problem in problems)
         {
             error.WriteLine($"  {problem}");
         }
@@ -34,4 +36,7 @@ public static class DriverStartup
 
         return ConfigurationExitCode;
     }
+
+    public static int ExitCodeFor(bool stopWasAsked) =>
+        stopWasAsked ? 0 : StoppedEarlyExitCode;
 }

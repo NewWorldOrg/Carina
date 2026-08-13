@@ -16,15 +16,14 @@ public sealed class DriverStartupTests
         var writer = new StringWriter();
 
         var exitCode = DriverStartup.Report(
-            new DriverConfigurationResult(
+            DriverConfigurationResult.Usable(
                 new DriverConfiguration(
                     "/run/carina/driver.sock",
                     "/srv/recordings",
                     6,
                     new TunerSettings(TunerBackend.Fake),
                     [new DeviceSettings("adapter0", DeviceKind.Terrestrial)]
-                ),
-                []
+                )
             ),
             writer
         );
@@ -39,7 +38,7 @@ public sealed class DriverStartupTests
         var writer = new StringWriter();
 
         var exitCode = DriverStartup.Report(
-            new DriverConfigurationResult(null, TwoProblems),
+            DriverConfigurationResult.Unusable(TwoProblems),
             writer
         );
 
@@ -51,7 +50,7 @@ public sealed class DriverStartupTests
     {
         var writer = new StringWriter();
 
-        DriverStartup.Report(new DriverConfigurationResult(null, TwoProblems), writer);
+        DriverStartup.Report(DriverConfigurationResult.Unusable(TwoProblems), writer);
 
         var written = writer.ToString();
         Assert.All(TwoProblems, problem => Assert.Contains(problem, written));
@@ -63,11 +62,21 @@ public sealed class DriverStartupTests
         var writer = new StringWriter();
 
         DriverStartup.Report(
-            new DriverConfigurationResult(null, TwoProblems),
+            DriverConfigurationResult.Unusable(TwoProblems),
             writer,
             "/etc/carina/driver.json"
         );
 
         Assert.Contains("/etc/carina/driver.json", writer.ToString());
+    }
+
+    [Fact]
+    public void TheOutputNamesTheVariableWhenThereIsNoPath()
+    {
+        var writer = new StringWriter();
+
+        DriverStartup.Report(DriverConfigurationResult.Unusable(TwoProblems), writer);
+
+        Assert.Contains(DriverStartup.ConfigurationPathVariable, writer.ToString());
     }
 }

@@ -6,13 +6,18 @@ var configurationPath = Environment.GetEnvironmentVariable(
 );
 
 var result = DriverConfigurationReader.ReadFile(configurationPath);
-var exitCode = DriverStartup.Report(result, Console.Error, configurationPath);
-if (exitCode is not 0)
+if (!result.TryGetConfiguration(out var configuration, out _))
 {
-    return exitCode;
+    return DriverStartup.Report(result, Console.Error, configurationPath);
 }
 
-using var host = DriverHost.Create(args, result.Configuration!);
+using var host = DriverHost.Create(args, configuration);
+
+var lifetime = (IHostApplicationLifetime)
+    host.Services.GetService(typeof(IHostApplicationLifetime))!;
+var stopWasAsked = false;
+lifetime.ApplicationStopping.Register(() => stopWasAsked = true);
+
 await host.RunAsync();
 
-return 0;
+return DriverStartup.ExitCodeFor(stopWasAsked);

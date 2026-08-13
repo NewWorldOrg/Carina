@@ -4,8 +4,25 @@ namespace Carina.Driver.Tests;
 
 public sealed class ContinuityCounterTrackerTests
 {
-    private static TsPacket Packet(int pid, int continuityCounter, bool hasPayload = true) =>
-        new(pid, continuityCounter, hasPayload);
+    private static TsPacket Packet(
+        int pid,
+        int continuityCounter,
+        bool hasPayload = true,
+        int payloadHash = 1,
+        bool transportError = false,
+        bool scrambled = false,
+        bool discontinuity = false
+    ) =>
+        new(
+            pid,
+            continuityCounter,
+            hasPayload,
+            transportError,
+            scrambled,
+            discontinuity,
+            PayloadUnitStart: false,
+            payloadHash
+        );
 
     [Fact]
     public void AnUninterruptedStreamLosesNothing()
@@ -102,11 +119,89 @@ public sealed class ContinuityCounterTrackerTests
     {
         var tracker = new ContinuityCounterTracker();
 
-        tracker.Observe(Packet(0x100, 4));
-        tracker.Observe(Packet(0x100, 4));
+        tracker.Observe(Packet(0x100, 4, payloadHash: 99));
+        tracker.Observe(Packet(0x100, 4, payloadHash: 99));
 
         Assert.Equal(0, tracker.Drops);
         Assert.Equal(1, tracker.Duplicates);
+    }
+
+    [Fact]
+    public void ACounterThatCameBackAroundIsSixteenLossesAndNotARepeat()
+    {
+        var tracker = new ContinuityCounterTracker();
+
+        tracker.Observe(Packet(0x100, 4, payloadHash: 99));
+        tracker.Observe(Packet(0x100, 4, payloadHash: 12345));
+
+        Assert.Equal(16, tracker.Drops);
+        Assert.Equal(0, tracker.Duplicates);
+    }
+
+    [Fact]
+    public void AMarkedDiscontinuityIsNotALoss()
+    {
+        var tracker = new ContinuityCounterTracker();
+
+        tracker.Observe(Packet(0x100, 4));
+        tracker.Observe(Packet(0x100, 9, discontinuity: true));
+
+        Assert.Equal(0, tracker.Drops);
+        Assert.Equal(1, tracker.Discontinuities);
+    }
+
+    [Fact]
+    public void APacketTheHardwareFlaggedIsNotMeasured()
+    {
+        var tracker = new ContinuityCounterTracker();
+
+        tracker.Observe(Packet(0x100, 4));
+        tracker.Observe(Packet(0x100, 12, transportError: true));
+        tracker.Observe(Packet(0x100, 5));
+
+        Assert.Equal(0, tracker.Drops);
+        Assert.Equal(1, tracker.TransportErrors);
+        Assert.Equal(2, tracker.Packets);
+    }
+
+    [Fact]
+    public void StillScrambledPacketsAreCountedInTheSamePass()
+    {
+        var tracker = new ContinuityCounterTracker();
+
+        tracker.Observe(Packet(0x100, 0, scrambled: true));
+        tracker.Observe(Packet(0x100, 1));
+
+        Assert.Equal(1, tracker.ScrambledPackets);
+        Assert.Equal(2, tracker.Packets);
+    }
+
+    [Fact]
+    public void ARetuneDoesNotCarryTheOldCountersIntoTheNewStream()
+    {
+        var tracker = new ContinuityCounterTracker();
+
+        tracker.Observe(Packet(0x100, 2));
+        tracker.Retuned();
+        tracker.Observe(Packet(0x100, 11));
+
+        Assert.Equal(0, tracker.Drops);
+    }
+
+    [Theory]
+    [InlineData(-1, 0)]
+    [InlineData(0x2000, 0)]
+    [InlineData(0x100, 16)]
+    [InlineData(0x100, -1)]
+    public void APacketOutsideTheHeaderRangesIsIgnored(int pid, int continuityCounter)
+    {
+        var tracker = new ContinuityCounterTracker();
+
+        tracker.Observe(Packet(0x100, 0));
+        tracker.Observe(Packet(pid, continuityCounter));
+
+        Assert.Equal(0, tracker.Drops);
+        Assert.Equal(1, tracker.Packets);
     }
 
     [Fact]

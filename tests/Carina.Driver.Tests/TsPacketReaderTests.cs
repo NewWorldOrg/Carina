@@ -41,10 +41,11 @@ public sealed class TsPacketReaderTests
         var packet = Packet(0x100, 3);
 
         Assert.Empty(reader.Read(packet.AsSpan(0, 100).ToArray()));
+        Assert.Empty(reader.Read(packet.AsSpan(100).ToArray()));
 
-        var completed = reader.Read(packet.AsSpan(100).ToArray()).ToList();
+        var completed = reader.Read(Packet(0x100, 4)).ToList();
 
-        Assert.Single(completed);
+        Assert.Equal(2, completed.Count);
         Assert.Equal(3, completed[0].ContinuityCounter);
     }
 
@@ -79,7 +80,7 @@ public sealed class TsPacketReaderTests
     public void RegainsAlignmentAfterTheStreamBreaks()
     {
         var reader = new TsPacketReader();
-        reader.Read(Packet(0x103, 0));
+        reader.Read(Concat(Packet(0x103, 0), Packet(0x103, 1)));
 
         var stream = Concat([0xFF, 0xFF, 0xFF], Packet(0x103, 4), Packet(0x103, 5));
         var packets = reader.Read(stream).ToList();
@@ -100,13 +101,50 @@ public sealed class TsPacketReaderTests
     }
 
     [Fact]
+    public void AStreamWithNoBoundaryIsNotKeptForever()
+    {
+        var reader = new TsPacketReader();
+
+        for (var read = 0; read < 64; read++)
+        {
+            Assert.Empty(reader.Read(new byte[4096]));
+        }
+
+        Assert.True(reader.DiscardedBytes > 4096 * 60);
+    }
+
+    [Fact]
+    public void APacketIsNotEmittedFromAnAlignmentNothingConfirmed()
+    {
+        var reader = new TsPacketReader();
+        var decoy = new byte[PacketLength];
+        decoy[13] = 0x47;
+
+        Assert.Empty(reader.Read(decoy));
+    }
+
+    [Fact]
+    public void AStrideThisReaderCannotParseIsVisible()
+    {
+        var reader = new TsPacketReader();
+        var packet = Packet(0x100, 0);
+
+        for (var count = 0; count < 20; count++)
+        {
+            reader.Read([.. packet, .. new byte[16]]);
+        }
+
+        Assert.True(reader.LooksLikeAnotherStride);
+    }
+
+    [Fact]
     public void ReadsTheNullPacketPid()
     {
         var reader = new TsPacketReader();
 
-        var packet = Assert.Single(reader.Read(Packet(0x1FFF, 0)));
+        var packets = reader.Read(Concat(Packet(0x1FFF, 0), Packet(0x1FFF, 1)));
 
-        Assert.Equal(0x1FFF, packet.Pid);
-        Assert.True(packet.IsNull);
+        Assert.Equal(0x1FFF, packets[0].Pid);
+        Assert.True(packets[0].IsNull);
     }
 }
