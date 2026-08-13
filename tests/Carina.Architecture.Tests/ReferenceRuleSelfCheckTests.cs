@@ -19,6 +19,18 @@ public sealed class ReferenceRuleSelfCheckTests
     }
 
     [Fact]
+    public void DetectsADriverThatTakesTheDomainsOwnAllowanceForItsOwn()
+    {
+        var graph = ProjectGraph.FromNodes(
+            new ProjectNode("Carina.Contracts", [], []),
+            new ProjectNode("Carina.Domain", ["Carina.Contracts"], []),
+            new ProjectNode("Carina.Driver", ["Carina.Contracts", "Carina.Domain"], []));
+
+        Assert.Empty(graph.ForbiddenReferencesOf("Carina.Domain", "Carina.Contracts"));
+        Assert.Equal(["Carina.Domain"], graph.ForbiddenReferencesOf("Carina.Driver", "Carina.Contracts"));
+    }
+
+    [Fact]
     public void DetectsADomainThatDependsOnAnythingBeyondTheContract()
     {
         var graph = ViolatingGraph();
