@@ -3,6 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 
 using Carina.Contracts;
 using Carina.Driver.Configuration;
+using Carina.Driver.Diagnostics;
 using Carina.Driver.Events;
 using Carina.Driver.Recording;
 using Carina.Driver.Tuning;
@@ -18,7 +19,9 @@ public sealed class TunerSessionManager(
     TimeProvider timeProvider,
     ILogger<TunerSessionManager> logger,
     TimeSpan? hardStopLimit = null,
-    DriverEventHub? events = null
+    DriverEventHub? events = null,
+    DiagnosticsStore? diagnostics = null,
+    IRecordingWriterFactory? recordingWriters = null
 ) : IHostedService
 {
     public const int RetainedSessions = 64;
@@ -32,6 +35,8 @@ public sealed class TunerSessionManager(
         Math.Max(0, configuration.ShutdownGraceHours)
     );
     private readonly TimeSpan hardStop = hardStopLimit ?? DefaultHardStopLimit;
+    private readonly IRecordingWriterFactory writerFactory =
+        recordingWriters ?? new RecordingWriterFactory();
 
     private volatile bool draining;
 
@@ -336,7 +341,7 @@ public sealed class TunerSessionManager(
             );
         }
 
-        RecordingWriter? writer = null;
+        IRecordingWriter? writer = null;
         if (directory is not null)
         {
             var refusal = TryOpenRecording(directory, sessionId, deviceId, out writer);
@@ -358,7 +363,8 @@ public sealed class TunerSessionManager(
             timeProvider,
             writer,
             logger: logger,
-            outputRoot: request.OutputRoot
+            outputRoot: request.OutputRoot,
+            diagnostics: diagnostics
         );
 
         if (!sessions.TryAdd(sessionId, session))
@@ -399,14 +405,14 @@ public sealed class TunerSessionManager(
         string directory,
         SessionId sessionId,
         string deviceId,
-        out RecordingWriter? writer
+        out IRecordingWriter? writer
     )
     {
         writer = null;
 
         try
         {
-            writer = new RecordingWriter(directory, sessionId);
+            writer = writerFactory.Open(directory, sessionId);
 
             return null;
         }

@@ -3,6 +3,7 @@ using System.Text.Json.Serialization.Metadata;
 
 using Carina.Contracts;
 using Carina.Driver.Configuration;
+using Carina.Driver.Diagnostics;
 using Carina.Driver.Events;
 using Carina.Driver.Sessions;
 
@@ -21,6 +22,7 @@ public static class DriverApi
         var manager = app.Services.GetRequiredService<TunerSessionManager>();
         var hello = app.Services.GetRequiredService<DriverHello>();
         var hub = app.Services.GetRequiredService<DriverEventHub>();
+        var diagnosticsStore = app.Services.GetRequiredService<DiagnosticsStore>();
 
         RequestDelegate health = context =>
             Write(
@@ -59,7 +61,16 @@ public static class DriverApi
 
         RequestDelegate events = context => DriverEventStream.Invoke(context, hub);
 
+        RequestDelegate diagnostics = context =>
+            Write(
+                context,
+                StatusCodes.Status200OK,
+                diagnosticsStore.Snapshot(),
+                DriverJson.Context.IReadOnlyListDiagnosticSnapshot
+            );
+
         app.MapGet(DriverEndpoints.Health, health);
+        app.MapGet(DriverEndpoints.Diagnostics, diagnostics);
         app.MapGet(DriverEndpoints.Tuners, tuners);
         app.MapGet(DriverEndpoints.Sessions, sessions);
         app.MapPost(DriverEndpoints.Sessions, startSession);

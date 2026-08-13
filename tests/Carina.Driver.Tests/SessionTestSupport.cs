@@ -115,6 +115,40 @@ public sealed class CountingRecordingWriter : IRecordingWriter
     }
 }
 
+public sealed class BrittleRecordingWriter(string path, long failAfterBytes = 0)
+    : IRecordingWriter
+{
+    private long bytesWritten;
+
+    public string Path { get; } = path;
+
+    public bool Disposed { get; private set; }
+
+    public long BytesWritten => Interlocked.Read(ref bytesWritten);
+
+    public void Write(ReadOnlySpan<byte> bytes)
+    {
+        if (BytesWritten + bytes.Length > failAfterBytes)
+        {
+            throw new IOException("No space left on device");
+        }
+
+        Interlocked.Add(ref bytesWritten, bytes.Length);
+    }
+
+    public void Dispose() => Disposed = true;
+}
+
+public sealed class BrittleRecordingWriterFactory(long failAfterBytes = 0)
+    : IRecordingWriterFactory
+{
+    public IRecordingWriter Open(string recordingsDirectory, SessionId sessionId) =>
+        new BrittleRecordingWriter(
+            System.IO.Path.Combine(recordingsDirectory, $"{sessionId.Value}.ts"),
+            failAfterBytes
+        );
+}
+
 public sealed class CapturingLogger<T> : ILogger<T>
 {
     private readonly ConcurrentQueue<string> lines = new();

@@ -5,7 +5,10 @@ using System.Text;
 using Carina.Contracts;
 using Carina.Driver.Events;
 using Carina.Driver.Ipc;
+using Carina.Driver.Recording;
 using Carina.Driver.Sessions;
+
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Carina.Driver.Tests;
 
@@ -279,6 +282,80 @@ public sealed class DriverApiTests
         Assert.Contains("\"bytesRecorded\":", raw, StringComparison.Ordinal);
         Assert.Contains("\"stopReason\":", raw, StringComparison.Ordinal);
         Assert.Contains("\"counters\":", raw, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheDiagnosticsOfAnUntroubledDriverAreEmpty()
+    {
+        await using var driver = await DriverUnderTest.Start();
+        using var client = driver.Client();
+
+        using var response = await client.GetAsync(DriverEndpoints.Diagnostics, Soon());
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var entries = await DriverUnderTest.Read(
+            response,
+            DriverJson.Context.IReadOnlyListDiagnosticSnapshot
+        );
+
+        Assert.NotNull(entries);
+        Assert.Empty(entries);
+    }
+
+    [Fact]
+    public async Task AWriteFailureIsDiagnosedMarkedFailedAndDoesNotKillTheDriver()
+    {
+        await using var driver = await DriverUnderTest.Start(reshapeServices: services =>
+            services.AddSingleton<IRecordingWriterFactory>(new BrittleRecordingWriterFactory())
+        );
+        using var client = driver.Client();
+
+        using var created = await client.PostAsync(
+            DriverEndpoints.Sessions,
+            DriverUnderTest.Body(
+                DriverUnderTest.Recording("starved", DateTimeOffset.UtcNow.AddMinutes(5))
+            ),
+            Soon()
+        );
+
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+
+        var settled = await WaitUntil(
+            client,
+            sessions => sessions.Single().State is SessionState.Failed
+        );
+
+        Assert.Equal(SessionStopReason.RecordingFailed, settled.Single().StopReason);
+
+        using var diagnosed = await client.GetAsync(DriverEndpoints.Diagnostics, Soon());
+        var entries = await DriverUnderTest.Read(
+            diagnosed,
+            DriverJson.Context.IReadOnlyListDiagnosticSnapshot
+        );
+
+        Assert.NotNull(entries);
+
+        var entry = Assert.Single(
+            entries,
+            candidate => candidate.Reason is DiagnosticReason.RecordingWriteFailed
+        );
+
+        Assert.Equal("starved", entry.SessionId.Value);
+        Assert.Equal("fake-terrestrial", entry.DeviceId);
+        Assert.Contains("No space left on device", entry.Detail, StringComparison.Ordinal);
+
+        using var onward = await client.PostAsync(
+            DriverEndpoints.Sessions,
+            DriverUnderTest.Body(DriverUnderTest.Live("onward")),
+            Soon()
+        );
+
+        Assert.Equal(HttpStatusCode.Created, onward.StatusCode);
+
+        using var health = await client.GetAsync(DriverEndpoints.Health, Soon());
+
+        Assert.Equal(HttpStatusCode.OK, health.StatusCode);
     }
 
     [Fact]
