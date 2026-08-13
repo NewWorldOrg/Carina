@@ -66,6 +66,8 @@ public sealed class DriverUnderTest : IAsyncDisposable
     public static void ClearTheInheritedUrls()
     {
         Environment.SetEnvironmentVariable(TcpBindingGate.UrlsVariable, null);
+        Environment.SetEnvironmentVariable(TcpBindingGate.HttpPortsVariable, null);
+        Environment.SetEnvironmentVariable(TcpBindingGate.HttpsPortsVariable, null);
         Environment.SetEnvironmentVariable("DOTNET_URLS", null);
         Environment.SetEnvironmentVariable("URLS", null);
     }

@@ -48,6 +48,50 @@ public sealed class TcpBindingGateTests
         );
     }
 
+    [Theory]
+    [InlineData(TcpBindingGate.HttpPortsVariable)]
+    [InlineData(TcpBindingGate.HttpsPortsVariable)]
+    public void APortTheImageHandedDownIsNamed(string variable)
+    {
+        var findings = TcpBindingGate.Inspect(
+            Settings(),
+            [],
+            name => name == variable ? "8080" : null
+        );
+
+        Assert.Contains(
+            findings,
+            finding =>
+                finding.Contains(variable, StringComparison.Ordinal)
+                && finding.Contains("8080", StringComparison.Ordinal)
+        );
+    }
+
+    [Theory]
+    [InlineData("http_ports")]
+    [InlineData("https_ports")]
+    public void APortSettingIsNamed(string setting)
+    {
+        var findings = TcpBindingGate.Inspect(Settings((setting, "8080")), [], Nothing);
+
+        Assert.Contains(
+            findings,
+            finding => finding.Contains(setting, StringComparison.Ordinal)
+        );
+    }
+
+    [Fact]
+    public void AnEmptiedPortVariableIsNotAFinding()
+    {
+        Assert.Empty(
+            TcpBindingGate.Inspect(
+                Settings((TcpBindingGate.HttpPortsVariable, string.Empty)),
+                [],
+                name => name is TcpBindingGate.HttpPortsVariable ? string.Empty : null
+            )
+        );
+    }
+
     [Fact]
     public void TheUrlArgumentIsNamed()
     {
