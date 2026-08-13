@@ -26,7 +26,7 @@ Two processes, one repository.
 ```
 src/Carina.Driver          privileged; tuning, descrambling, TS handling, recording files
 src/Carina.Contracts       the only artifact both processes share (IPC contract)
-src/Carina.Domain          entities, value objects, repository interfaces — no dependencies
+src/Carina.Domain          entities, value objects, repository interfaces — references Contracts only
 src/Carina.Broadcast       broadcast-standard parsing — no dependencies
 src/Carina.Infrastructure  persistence, IPC client, external boundaries
 src/Carina.Db              migration entry point (leaf; nothing references it)
@@ -38,7 +38,9 @@ Reference direction is one-way and enforced by `tests/Carina.Architecture.Tests`
 
 - `Carina.Driver` may reference `Carina.Contracts` and nothing else. Reaching into
   the app's layers would tie the two release streams back together.
-- `Carina.Domain` and `Carina.Broadcast` have no project and no package references.
+- `Carina.Domain` may reference `Carina.Contracts` and nothing else — the driver client
+  interface speaks the wire types, and mirroring them would duplicate every additive
+  contract change. `Carina.Broadcast` has no project and no package references.
 - `Carina.Db` is a leaf: no project may reference the migration entry point.
 
 The architecture tests read the project files rather than the compiled output, so a

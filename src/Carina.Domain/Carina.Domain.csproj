@@ -1,3 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
+  <ItemGroup>
+    <ProjectReference Include="../Carina.Contracts/Carina.Contracts.csproj" />
+  </ItemGroup>
+
 </Project>

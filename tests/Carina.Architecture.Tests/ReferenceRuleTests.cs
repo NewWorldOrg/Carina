@@ -11,12 +11,10 @@ public sealed class ReferenceRuleTests
     }
 
     [Fact]
-    public void DomainDependsOnNothing()
+    public void DomainReferencesTheIpcContractOnly()
     {
-        var domain = Graph.Node("Carina.Domain");
-
-        Assert.Empty(domain.ProjectReferences);
-        Assert.Empty(domain.PackageReferences);
+        Assert.Empty(Graph.ForbiddenReferencesOf("Carina.Domain", "Carina.Contracts"));
+        Assert.Empty(Graph.Node("Carina.Domain").PackageReferences);
     }
 
     [Fact]

@@ -19,12 +19,14 @@ public sealed class ReferenceRuleSelfCheckTests
     }
 
     [Fact]
-    public void DetectsADomainThatDependsOnAnything()
+    public void DetectsADomainThatDependsOnAnythingBeyondTheContract()
     {
-        var domain = ViolatingGraph().Node("Carina.Domain");
+        var graph = ViolatingGraph();
 
-        Assert.NotEmpty(domain.ProjectReferences);
-        Assert.NotEmpty(domain.PackageReferences);
+        Assert.Equal(
+            ["Carina.Domain", "Carina.Infrastructure"],
+            graph.ForbiddenReferencesOf("Carina.Domain", "Carina.Contracts"));
+        Assert.NotEmpty(graph.Node("Carina.Domain").PackageReferences);
     }
 
     [Fact]
