@@ -118,13 +118,15 @@ docker compose exec app dotnet test
 docker compose exec app dotnet format --verify-no-changes
 ```
 
-`task` shortcuts: `task build`, `task test`, `task lint`, `task format`, `task openapi`.
+`task` shortcuts: `task build`, `task test`, `task lint`, `task format`, `task openapi`,
+`task acceptance`.
 
 GitHub Actions runs build, format verification, the OpenAPI round trip, the compose
-render, the image and its role checks, and two test jobs: one for everything except
-`Category=DbIntegration`, one for those against a PostgreSQL service container. The
-second job counts the tests it ran, because `dotnet test` exits 0 when a filter matches
-nothing and a mistyped category would otherwise be green having verified nothing.
+render, the image and its role checks, the acceptance scenarios, and two test jobs: one
+for everything except `Category=DbIntegration`, one for those against a PostgreSQL
+service container. The second job counts the tests it ran, because `dotnet test` exits 0
+when a filter matches nothing and a mistyped category would otherwise be green having
+verified nothing.
 
 ## Docker Config
 
