@@ -5,6 +5,8 @@ using Carina.Api.Authentication;
 using Carina.Api.Extensions;
 using Carina.Infrastructure.DependencyInjection;
 
+using Microsoft.Extensions.Options;
+
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services
@@ -24,6 +26,18 @@ app.UseMiddleware<DefaultDenyAuthenticationMiddleware>();
 app.MapOpenApi();
 app.MapControllers();
 
-app.Run();
+try
+{
+    app.Run();
+}
+catch (OptionsValidationException failure)
+{
+    Console.Error.WriteLine(failure.Message);
+    Console.Error.WriteLine("Nothing was served. Fix the settings above and start again.");
+
+    return 78;
+}
+
+return 0;
 
 public partial class Program;

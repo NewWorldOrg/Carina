@@ -10,7 +10,8 @@ workdir="$(mktemp -d)"
 connection="Host=localhost;Database=carina;Username=verify;Password=verify"
 
 cleanup() {
-    docker rm -f "${prefix}-driver" "${prefix}-app" "${prefix}-web" "${prefix}-all" >/dev/null 2>&1 || true
+    docker rm -f "${prefix}-driver" "${prefix}-app" "${prefix}-web" "${prefix}-all" "${prefix}-db" >/dev/null 2>&1 || true
+    docker network rm "${prefix}-net" >/dev/null 2>&1 || true
     docker volume rm "${run_volume}" "${rec_volume}" >/dev/null 2>&1 || true
     rm -rf "${workdir}"
 }
@@ -58,9 +59,15 @@ process_uid() {
     docker exec "$1" awk '/^Uid:/ { print $2 }' /proc/1/status
 }
 
+environ_of() {
+    docker exec "$1" bash -c "tr '\0' '\n' < /proc/$2/environ"
+}
+
 docker run -d --name "${prefix}-driver" \
     -e CARINA_ROLE=driver \
     -e CARINA_DRIVER_CONFIG=/etc/carina/driver.json \
+    -e "ConnectionStrings__Carina=${connection}" \
+    -e "CARINA_DB_CONNECTION=${connection}" \
     -v "${workdir}/driver.json:/etc/carina/driver.json:ro" \
     -v "${run_volume}:/run/carina" \
     -v "${rec_volume}:/srv/recordings" \
@@ -82,6 +89,11 @@ pass "a user outside the carina group is denied by the socket permissions"
 [ "$(process_uid "${prefix}-driver")" = "0" ] || fail "the driver does not run as root"
 echo "driver binary: $(docker exec "${prefix}-driver" ls -l /opt/carina/driver/Carina.Driver)"
 pass "driver role runs the native binary as root"
+
+if environ_of "${prefix}-driver" 1 | grep -qE '^(ConnectionStrings__Carina|CARINA_DB_CONNECTION)='; then
+    fail "the driver process carries a database secret in its environment"
+fi
+pass "driver role strips the database secrets from its environment"
 
 docker stop -t 30 "${prefix}-driver" >/dev/null
 rc="$(docker inspect -f '{{.State.ExitCode}}' "${prefix}-driver")"
@@ -121,12 +133,40 @@ pass "app role denies an unauthenticated business endpoint with 401"
 docker rm -f "${prefix}-app" >/dev/null
 
 set +e
+output="$(docker run --rm -e CARINA_ROLE=app "${image}" 2>&1)"
+rc=$?
+set -e
+[ "${rc}" = "78" ] || fail "the app exited ${rc} without a connection string, expected 78"
+echo "${output}"
+echo "${output}" | grep -q "ConnectionString" || fail "the app failure does not name the missing setting"
+pass "app role refuses a missing connection string with exit 78 and a diagnosis"
+
+set +e
 output="$(docker run --rm -e CARINA_ROLE=migrate "${image}" 2>&1)"
 rc=$?
 set -e
 [ "${rc}" = "78" ] || fail "migrate without CARINA_DB_CONNECTION exited ${rc}, expected 78"
 echo "${output}" | grep -q "CARINA_DB_CONNECTION" || fail "the migrate failure does not name CARINA_DB_CONNECTION"
 pass "migrate role fails without CARINA_DB_CONNECTION (exit ${rc}) and names the variable"
+
+docker network create "${prefix}-net" >/dev/null
+docker run -d --name "${prefix}-db" --network "${prefix}-net" \
+    -e POSTGRES_DB=carina -e POSTGRES_USER=carina -e POSTGRES_PASSWORD=verify \
+    postgres:18-alpine >/dev/null
+wait_for docker exec "${prefix}-db" pg_isready -h 127.0.0.1 -U carina -d carina \
+    || fail "the throwaway postgres did not come up"
+
+set +e
+output="$(docker run --rm --network "${prefix}-net" \
+    -e CARINA_ROLE=migrate \
+    -e "ConnectionStrings__Carina=Host=${prefix}-db;Port=5432;Database=carina;Username=carina;Password=verify" \
+    "${image}" 2>&1)"
+rc=$?
+set -e
+[ "${rc}" = "0" ] || fail "migrate against a live database exited ${rc}: ${output}"
+pass "migrate role succeeds against a live database with only ConnectionStrings__Carina set"
+docker rm -f "${prefix}-db" >/dev/null
+docker network rm "${prefix}-net" >/dev/null
 
 docker run -d --name "${prefix}-web" -e CARINA_ROLE=web "${image}" >/dev/null
 sleep 1
@@ -157,14 +197,22 @@ wait_for driver_curl http://localhost/health || fail "the all role did not bring
 wait_for curl -sf "http://127.0.0.1:${port}/api/health" || fail "the all role did not bring up the app"
 pass "all role runs both children"
 
+driver_pid="$(docker exec "${prefix}-all" bash -c 'for f in /proc/[0-9]*/comm; do read -r c < "$f"; if [ "$c" = "Carina.Driver" ]; then basename "$(dirname "$f")"; fi; done')"
+[ -n "${driver_pid}" ] || fail "no Carina.Driver process was found in the all role"
+
+environ_of "${prefix}-all" 1 | grep -q '^ConnectionStrings__Carina=' \
+    || fail "the database secret never reached the all-role container, so the stripping check would prove nothing"
+if environ_of "${prefix}-all" "${driver_pid}" | grep -qE '^(ConnectionStrings__Carina|CARINA_DB_CONNECTION)='; then
+    fail "the all-role driver child carries a database secret in its environment"
+fi
+pass "all role: the driver child's environment carries no database secret"
+
 docker exec "${prefix}-all" bash -c '( sleep 1 & )'
 sleep 3
 zombies="$(docker exec "${prefix}-all" bash -c 'grep -l "^State:.*zombie" /proc/[0-9]*/status' 2>/dev/null || true)"
 [ -z "${zombies}" ] || fail "zombie processes remain: ${zombies}"
 pass "all role reaps an orphaned child; no zombie remains"
 
-driver_pid="$(docker exec "${prefix}-all" bash -c 'for f in /proc/[0-9]*/comm; do read -r c < "$f"; if [ "$c" = "Carina.Driver" ]; then basename "$(dirname "$f")"; fi; done')"
-[ -n "${driver_pid}" ] || fail "no Carina.Driver process was found in the all role"
 docker exec "${prefix}-all" kill -KILL "${driver_pid}"
 rc="$(timeout 60 docker wait "${prefix}-all")"
 [ "${rc}" = "137" ] || fail "the all role exited ${rc} after its driver child was killed, expected 137"

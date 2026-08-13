@@ -15,15 +15,31 @@ drop_web_server_variables() {
     done
 }
 
+drop_database_variables() {
+    local name
+    for name in ConnectionStrings__Carina CARINA_DB_CONNECTION; do
+        if [ -n "${!name:-}" ]; then
+            echo "role=driver ignores ${name}; the driver holds no secrets." >&2
+        fi
+        unset "${name}"
+    done
+}
+
+adopt_shared_connection_string() {
+    if [ -z "${CARINA_DB_CONNECTION:-}" ] && [ -n "${ConnectionStrings__Carina:-}" ]; then
+        export CARINA_DB_CONNECTION="${ConnectionStrings__Carina}"
+    fi
+}
+
 run_as_carina() {
     if [ "$(id -u)" = 0 ]; then
-        exec setpriv --reuid carina --regid carina --init-groups "$@"
+        exec setpriv --reuid carina --regid carina --init-groups --no-new-privs "$@"
     fi
     exec "$@"
 }
 
 run_all() {
-    ( drop_web_server_variables; exec "${driver_entry}" ) &
+    ( drop_web_server_variables; drop_database_variables; exec "${driver_entry}" ) &
     local driver_pid=$!
 
     ( run_as_carina dotnet "${app_entry}" ) &
@@ -48,10 +64,14 @@ main() {
     case "${role}" in
         driver)
             drop_web_server_variables
+            drop_database_variables
             exec "${driver_entry}"
             ;;
         app) run_as_carina dotnet "${app_entry}" ;;
-        migrate) run_as_carina dotnet "${migrate_entry}" --migrate ;;
+        migrate)
+            adopt_shared_connection_string
+            run_as_carina dotnet "${migrate_entry}" --migrate
+            ;;
         web)
             echo "role=web carries no asset in this image; the distribution image build supplies it." >&2
             exec sleep infinity

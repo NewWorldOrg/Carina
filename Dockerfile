@@ -13,7 +13,7 @@ RUN dotnet restore src/Carina.Driver/Carina.Driver.csproj -r ${RID} -p:PublishAo
 COPY src/Carina.Contracts/ src/Carina.Contracts/
 COPY src/Carina.Driver/ src/Carina.Driver/
 RUN dotnet publish src/Carina.Driver/Carina.Driver.csproj -c Release -r ${RID} -p:PublishAot=true --no-restore -o /out/driver \
-    && rm -f /out/driver/*.dbg
+    && rm -f /out/driver/*.dbg /out/driver/*.pdb
 
 FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS app-build
 WORKDIR /src
