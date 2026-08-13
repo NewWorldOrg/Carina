@@ -32,7 +32,16 @@ src/Carina.Infrastructure  persistence, IPC client, external boundaries
 src/Carina.Db              migration entry point (leaf; nothing references it)
 src/Carina.Api             HTTP surface; publishes the OpenAPI document
 tests/                     one test project per production project + architecture tests
+openapi/                   the published HTTP contract, generated and checked in
 ```
+
+The web frontend generates its client from `openapi/Carina.Api.json` rather than from a
+running instance: `GET /openapi/v1.json` is behind the default-deny seam, and that repository
+has its own CI and cannot start this application. `task openapi` regenerates the file, a
+feature test fails when it drifts from what the app serves, and CI regenerates it on the
+runner and fails on a difference. Three surfaces cannot be expressed in it — the transport
+stream, the event hub and the bulk programme guide — and are declared in
+`openapi/non-rest-contracts.md`.
 
 Reference direction is one-way and enforced by `tests/Carina.Architecture.Tests`:
 
@@ -91,7 +100,7 @@ docker compose exec app dotnet test
 docker compose exec app dotnet format --verify-no-changes
 ```
 
-`task` shortcuts: `task build`, `task test`, `task lint`, `task format`.
+`task` shortcuts: `task build`, `task test`, `task lint`, `task format`, `task openapi`.
 
 GitHub Actions runs build, test and format verification on push and pull request to
 `master`.
