@@ -48,6 +48,8 @@ public sealed class DriverEventHub
     private readonly int listenerLimit;
     private readonly Lock gate = new();
 
+    private bool closed;
+
     public DriverEventHub(int listenerLimit = DefaultListenerLimit) =>
         this.listenerLimit = listenerLimit;
 
@@ -71,7 +73,7 @@ public sealed class DriverEventHub
 
         lock (gate)
         {
-            if (listeners.Count >= listenerLimit)
+            if (closed || listeners.Count >= listenerLimit)
             {
                 listener = null;
 
@@ -86,6 +88,11 @@ public sealed class DriverEventHub
 
     public void CloseAll()
     {
+        lock (gate)
+        {
+            closed = true;
+        }
+
         foreach (var listener in listeners.Keys)
         {
             Forget(listener);

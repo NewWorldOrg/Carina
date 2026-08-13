@@ -154,6 +154,17 @@ public sealed class DriverEventHubTests
     }
 
     [Fact]
+    public void AListenerArrivingAfterTheCloseIsRefused()
+    {
+        var hub = new DriverEventHub();
+
+        hub.CloseAll();
+
+        Assert.False(hub.TryListen(out _));
+        Assert.Equal(0, hub.ListenerCount);
+    }
+
+    [Fact]
     public async Task ASignalSentJustBeforeTheCloseStillArrives()
     {
         var hub = new DriverEventHub();
