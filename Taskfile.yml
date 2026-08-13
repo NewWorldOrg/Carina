@@ -42,6 +42,8 @@ tasks:
       - docker/image-tags.sh check
       - docker/image-tags.sh tag driver
       - docker/image-tags.sh tag app
+  image:publish:plan:
+    cmd: docker/publish-image.sh ${CARINA_IMAGE:-carina} --dry-run
   deploy:grace:
     cmd: docker/grace-period.sh derive
   deploy:check:

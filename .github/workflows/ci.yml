@@ -94,6 +94,42 @@ jobs:
           echo "driver: $(docker/image-tags.sh tag driver)"
           echo "app: $(docker/image-tags.sh tag app)"
 
+  publish:
+    needs: [build, test, test-db, format, openapi, compose, image, tags]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Resolve the repository the streams would be published to
+        env:
+          CONFIGURED_REGISTRY: ${{ vars.CARINA_REGISTRY }}
+        run: |
+          configured="${CONFIGURED_REGISTRY}"
+          if [ -z "${configured}" ]; then
+            configured="ghcr.io/$(tr '[:upper:]' '[:lower:]' <<<"${GITHUB_REPOSITORY}")"
+          fi
+          echo "CARINA_REGISTRY=${configured}" >>"${GITHUB_ENV}"
+      - if: vars.CARINA_PUBLISH == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - if: vars.CARINA_PUBLISH == 'true'
+        run: docker build -t carina:publish .
+      - if: vars.CARINA_PUBLISH == 'true'
+        run: docker/publish-image.sh carina:publish --push
+      - if: vars.CARINA_PUBLISH != 'true'
+        name: Without CARINA_PUBLISH this run publishes nothing and says so
+        run: |
+          docker/publish-image.sh carina:publish --dry-run
+          echo "planned only: set the repository variable CARINA_PUBLISH to true once the registry and its visibility are decided."
+
   openapi:
     runs-on: ubuntu-latest
     env:
