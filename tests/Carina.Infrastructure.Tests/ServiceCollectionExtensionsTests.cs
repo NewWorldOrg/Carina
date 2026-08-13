@@ -3,7 +3,6 @@ using Carina.Domain.DriverStatus;
 using Carina.Infrastructure.Configuration;
 using Carina.Infrastructure.DependencyInjection;
 using Carina.Infrastructure.Driver;
-using Carina.Infrastructure.DriverStatus;
 using Carina.Infrastructure.Persistence;
 
 using Microsoft.Extensions.Configuration;
@@ -47,12 +46,11 @@ public sealed class ServiceCollectionExtensionsTests
     }
 
     [Fact]
-    public void RegistersTheDriverStatusReaderWithItsSocketPath()
+    public void RegistersTheMonitorBackedDriverStatusReader()
     {
         using var provider = Build(ValidSettings());
 
-        var reader = Assert.IsType<NotConnectedDriverStatusReader>(provider.GetRequiredService<IDriverStatusReader>());
-        Assert.Equal(new DriverSocketPath("/run/carina/driver.sock"), reader.SocketPath);
+        Assert.IsType<MonitoredDriverStatusReader>(provider.GetRequiredService<IDriverStatusReader>());
     }
 
     [Fact]

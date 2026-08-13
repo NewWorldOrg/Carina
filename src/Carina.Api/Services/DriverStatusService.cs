@@ -7,7 +7,21 @@ public sealed class DriverStatusService(IDriverStatusReader driverStatusReader, 
 {
     public async Task<ServiceResult<DriverStatusSnapshot>> GetStatusAsync(CancellationToken cancellationToken)
     {
-        var connection = await driverStatusReader.ReadAsync(cancellationToken);
-        return ServiceResult<DriverStatusSnapshot>.Success(DriverStatusSnapshot.Observe(connection, timeProvider));
+        try
+        {
+            var observation = await driverStatusReader.ReadAsync(cancellationToken);
+
+            return ServiceResult<DriverStatusSnapshot>.Success(
+                DriverStatusSnapshot.Observe(observation, timeProvider));
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception error)
+        {
+            return ServiceResult<DriverStatusSnapshot>.Failure(
+                $"The driver status reader failed: {error.Message}");
+        }
     }
 }

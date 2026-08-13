@@ -1,23 +1,41 @@
 using Carina.Api.Services;
+using Carina.Contracts;
 using Carina.Domain.DriverStatus;
 
 namespace Carina.Api.Tests.Unit;
 
 public sealed class DriverStatusServiceTests
 {
+    private static readonly DateTimeOffset ObservedAt = new(2026, 8, 14, 3, 0, 0, TimeSpan.Zero);
+
     [Fact]
-    public async Task ReportsTheConnectionSeenByTheReader()
+    public async Task ReportsTheObservationSeenByTheReader()
     {
-        var observedAt = new DateTimeOffset(2026, 8, 13, 3, 0, 0, TimeSpan.Zero);
+        var observation = DriverObservation.Of(
+            new DriverHello(DriverProtocol.Version, "instance-a", ["recording", "live"]),
+            []);
         var service = new DriverStatusService(
-            new StubDriverStatusReader(DriverConnection.NotConnected),
-            new FixedTimeProvider(observedAt));
+            new StubDriverStatusReader(observation),
+            new FixedTimeProvider(ObservedAt));
 
         var result = await service.GetStatusAsync(CancellationToken.None);
 
         Assert.True(result.IsSuccess);
         Assert.NotNull(result.Data);
-        Assert.Equal(DriverConnection.NotConnected, result.Data.Connection);
-        Assert.Equal(observedAt, result.Data.ObservedAt);
+        Assert.Same(observation, result.Data.Observation);
+        Assert.Equal(ObservedAt, result.Data.ObservedAt);
+    }
+
+    [Fact]
+    public async Task ABrokenReaderBecomesAFailureNotAnException()
+    {
+        var service = new DriverStatusService(
+            new ThrowingDriverStatusReader(),
+            new FixedTimeProvider(ObservedAt));
+
+        var result = await service.GetStatusAsync(CancellationToken.None);
+
+        Assert.False(result.IsSuccess);
+        Assert.Contains("The monitor is broken.", result.ErrorMessage, StringComparison.Ordinal);
     }
 }

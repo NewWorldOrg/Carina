@@ -10,6 +10,8 @@ public class TestingWebApplicationFactory : WebApplicationFactory<Program>
         builder.UseSetting(
             "ConnectionStrings:Carina",
             "Host=db;Port=5432;Database=carina;Username=carina;Password=placeholder");
-        builder.UseSetting("CARINA_DRIVER_SOCKET", "/run/carina/driver.sock");
+        builder.UseSetting(
+            "CARINA_DRIVER_SOCKET",
+            Path.Combine(Path.GetTempPath(), "carina-feature-tests", "no-driver.sock"));
     }
 }
