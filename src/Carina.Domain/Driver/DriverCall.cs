@@ -16,13 +16,11 @@ public sealed class DriverCall<T>
     private DriverCall(
         DriverCallOutcome outcome,
         T? value,
-        int statusCode,
         DriverProblem? problem,
         string? failure)
     {
         Outcome = outcome;
         Value = value;
-        StatusCode = statusCode;
         Problem = problem;
         Failure = failure;
     }
@@ -30,8 +28,6 @@ public sealed class DriverCall<T>
     public DriverCallOutcome Outcome { get; }
 
     public T? Value { get; }
-
-    public int StatusCode { get; }
 
     public DriverProblem? Problem { get; }
 
@@ -44,20 +40,20 @@ public sealed class DriverCall<T>
         return Outcome is DriverCallOutcome.Reached && value is not null;
     }
 
-    public static DriverCall<T> Reached(T? value, int statusCode)
-        => new(DriverCallOutcome.Reached, value, statusCode, null, null);
+    public static DriverCall<T> Reached(T? value)
+        => new(DriverCallOutcome.Reached, value, null, null);
 
-    public static DriverCall<T> Refused(int statusCode, DriverProblem problem)
+    public static DriverCall<T> Refused(DriverProblem problem)
     {
         ArgumentNullException.ThrowIfNull(problem);
 
-        return new DriverCall<T>(DriverCallOutcome.Refused, default, statusCode, problem, null);
+        return new DriverCall<T>(DriverCallOutcome.Refused, default, problem, null);
     }
 
     public static DriverCall<T> Unreachable(string failure)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(failure);
 
-        return new DriverCall<T>(DriverCallOutcome.Unreachable, default, 0, null, failure);
+        return new DriverCall<T>(DriverCallOutcome.Unreachable, default, null, failure);
     }
 }

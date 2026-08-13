@@ -18,6 +18,18 @@ public sealed class ReferenceRuleTests
     }
 
     [Fact]
+    public void TheDomainNamesNoTransportDetail()
+    {
+        Assert.Empty(SourceScan.FilesMentioning(
+            Path.Combine(RepositoryLayout.SourceDirectory, "Carina.Domain"),
+            "DriverEndpoints",
+            "DriverJson",
+            "HttpClient",
+            "HttpRequestException",
+            "StatusCode"));
+    }
+
+    [Fact]
     public void BroadcastDependsOnNothing()
     {
         var broadcast = Graph.Node("Carina.Broadcast");

@@ -32,7 +32,6 @@ public sealed class DriverIpcClientTests
         Assert.Equal(DriverProtocol.Version, hello.ProtocolVersion);
         Assert.Equal("instance-a", hello.InstanceId);
         Assert.Equal(["recording", "live"], hello.Capabilities);
-        Assert.Equal(200, call.StatusCode);
     }
 
     [Fact]
@@ -48,7 +47,6 @@ public sealed class DriverIpcClientTests
         var call = await client.GetHealthAsync(CancellationToken.None);
 
         Assert.Equal(DriverCallOutcome.Refused, call.Outcome);
-        Assert.Equal(503, call.StatusCode);
         Assert.Equal("draining", call.Problem?.Title);
     }
 
@@ -169,7 +167,6 @@ public sealed class DriverIpcClientTests
             CancellationToken.None);
 
         Assert.True(call.TryGetValue(out var snapshot));
-        Assert.Equal(201, call.StatusCode);
         Assert.Equal("rec-1", snapshot.SessionId.Value);
     }
 
@@ -187,7 +184,6 @@ public sealed class DriverIpcClientTests
             CancellationToken.None);
 
         Assert.Equal(DriverCallOutcome.Reached, call.Outcome);
-        Assert.Equal(202, call.StatusCode);
         Assert.False(call.TryGetValue(out _));
     }
 

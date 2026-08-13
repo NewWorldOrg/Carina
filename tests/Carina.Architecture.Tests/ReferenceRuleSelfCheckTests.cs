@@ -30,6 +30,30 @@ public sealed class ReferenceRuleSelfCheckTests
     }
 
     [Fact]
+    public void DetectsASourceFileThatNamesATransportDetail()
+    {
+        var directory = Directory.CreateTempSubdirectory("carina-source-scan-");
+
+        try
+        {
+            File.WriteAllText(
+                Path.Combine(directory.FullName, "Clean.cs"),
+                "namespace Sample; public sealed record Vocabulary(string Name);");
+            File.WriteAllText(
+                Path.Combine(directory.FullName, "Leaky.cs"),
+                "namespace Sample; public static class Leak { public const string P = DriverEndpoints.Health; }");
+
+            Assert.Equal(
+                ["Leaky.cs"],
+                SourceScan.FilesMentioning(directory.FullName, "DriverEndpoints", "StatusCode"));
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public void DetectsAMigrationProjectThatIsReferenced()
     {
         Assert.Equal(["Carina.Api"], ViolatingGraph().DependentsOf("Carina.Db"));

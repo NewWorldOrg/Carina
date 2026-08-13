@@ -6,12 +6,11 @@ namespace Carina.Domain.Tests;
 public sealed class DriverCallTests
 {
     [Fact]
-    public void AReachedCallCarriesItsValueAndStatus()
+    public void AReachedCallCarriesItsValue()
     {
-        var call = DriverCall<string>.Reached("hello", 200);
+        var call = DriverCall<string>.Reached("hello");
 
         Assert.Equal(DriverCallOutcome.Reached, call.Outcome);
-        Assert.Equal(200, call.StatusCode);
         Assert.True(call.TryGetValue(out var value));
         Assert.Equal("hello", value);
     }
@@ -19,19 +18,18 @@ public sealed class DriverCallTests
     [Fact]
     public void AReachedCallMayCarryNoBody()
     {
-        var call = DriverCall<string>.Reached(null, 202);
+        var call = DriverCall<string>.Reached(null);
 
         Assert.Equal(DriverCallOutcome.Reached, call.Outcome);
         Assert.False(call.TryGetValue(out _));
     }
 
     [Fact]
-    public void ARefusalCarriesTheProblemAndStatus()
+    public void ARefusalCarriesTheProblem()
     {
-        var call = DriverCall<string>.Refused(409, new DriverProblem("deviceBusy", ["taken"]));
+        var call = DriverCall<string>.Refused(new DriverProblem("deviceBusy", ["taken"]));
 
         Assert.Equal(DriverCallOutcome.Refused, call.Outcome);
-        Assert.Equal(409, call.StatusCode);
         Assert.Equal("deviceBusy", call.Problem?.Title);
         Assert.False(call.TryGetValue(out _));
     }
@@ -39,7 +37,7 @@ public sealed class DriverCallTests
     [Fact]
     public void ARefusalRequiresAProblem()
     {
-        Assert.Throws<ArgumentNullException>(() => DriverCall<string>.Refused(409, null!));
+        Assert.Throws<ArgumentNullException>(() => DriverCall<string>.Refused(null!));
     }
 
     [Fact]

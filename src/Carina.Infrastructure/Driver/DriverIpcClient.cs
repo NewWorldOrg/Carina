@@ -188,9 +188,7 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
             {
                 using (response)
                 {
-                    return DriverCall<Stream>.Refused(
-                        (int)response.StatusCode,
-                        await ProblemIn(response, patience.Token));
+                    return DriverCall<Stream>.Refused(await ProblemIn(response, patience.Token));
                 }
             }
 
@@ -199,9 +197,7 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
             var stream = await response.Content.ReadAsStreamAsync(patience.Token);
             handedOver = true;
 
-            return DriverCall<Stream>.Reached(
-                new OwnedStream(stream, response, patience),
-                (int)response.StatusCode);
+            return DriverCall<Stream>.Reached(new OwnedStream(stream, response, patience));
         }
         catch (Exception error) when (IsTransport(error, cancellationToken))
         {
@@ -227,7 +223,7 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
 
         if (!response.IsSuccessStatusCode)
         {
-            return DriverCall<T>.Refused(status, await ProblemIn(response, cancellationToken));
+            return DriverCall<T>.Refused(await ProblemIn(response, cancellationToken));
         }
 
         var body = await response.Content.ReadAsByteArrayAsync(cancellationToken);
@@ -237,14 +233,14 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
             return bodyRequired
                 ? DriverCall<T>.Unreachable(
                     $"The driver answered {status} with no body for a call that needs one.")
-                : DriverCall<T>.Reached(null, status);
+                : DriverCall<T>.Reached(null);
         }
 
         var value = JsonSerializer.Deserialize(body, typeInfo);
 
         return value is null
             ? DriverCall<T>.Unreachable($"The driver answered {status} with a body that reads as nothing.")
-            : DriverCall<T>.Reached(value, status);
+            : DriverCall<T>.Reached(value);
     }
 
     private static async Task<DriverProblem> ProblemIn(
