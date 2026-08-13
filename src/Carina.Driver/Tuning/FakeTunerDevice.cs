@@ -17,7 +17,7 @@ public sealed class FakeTunerDevice : ITunerDevice
         seed = unchecked((byte)((physicalChannel * 31) + (serviceId ?? 0)));
     }
 
-    public byte[] Read(int count)
+    public byte[] Read(int count, CancellationToken cancellationToken)
     {
         var bytes = new byte[count];
 

@@ -5,7 +5,7 @@ namespace Carina.Driver.Tuning;
 
 public interface ITunerDevice : IDisposable
 {
-    byte[] Read(int count);
+    byte[] Read(int count, CancellationToken cancellationToken);
 }
 
 public interface ITunerDeviceFactory

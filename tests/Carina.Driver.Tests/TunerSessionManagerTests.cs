@@ -3,16 +3,15 @@ using Carina.Driver.Configuration;
 using Carina.Driver.Sessions;
 using Carina.Driver.Tuning;
 
+using Microsoft.Extensions.Logging.Abstractions;
+
 namespace Carina.Driver.Tests;
 
 public sealed class TunerSessionManagerTests : IDisposable
 {
-    private static readonly DateTimeOffset Start =
-        new(2026, 8, 13, 21, 0, 0, TimeSpan.Zero);
+    private static readonly DateTimeOffset Start = new(2026, 8, 13, 21, 0, 0, TimeSpan.Zero);
 
-    private readonly string root = Directory
-        .CreateTempSubdirectory("carina-manager-")
-        .FullName;
+    private readonly string root = Directory.CreateTempSubdirectory("carina-manager-").FullName;
 
     private readonly ManualTimeProvider clock = new(Start);
 
@@ -28,11 +27,19 @@ public sealed class TunerSessionManagerTests : IDisposable
                 new DeviceSettings("adapter0", DeviceKind.Terrestrial),
                 new DeviceSettings("adapter1", DeviceKind.Satellite),
                 new DeviceSettings("adapter2", DeviceKind.Terrestrial, Enabled: false),
+                new DeviceSettings("adapter3", DeviceKind.Terrestrial),
             ]
         );
 
-    private TunerSessionManager Manager() =>
-        new(Configuration, new TunerDeviceFactory(Configuration), clock);
+    private TunerSessionManager Manager() => Manager(Configuration);
+
+    private TunerSessionManager Manager(DriverConfiguration configuration) =>
+        new(
+            configuration,
+            new TunerDeviceFactory(configuration),
+            clock,
+            NullLogger<TunerSessionManager>.Instance
+        );
 
     private static StartSessionRequest Request(
         SessionPurpose purpose = SessionPurpose.Recording,
@@ -44,6 +51,34 @@ public sealed class TunerSessionManagerTests : IDisposable
             Tuning = new TuningRequest(kind, 27, 1024),
             EndsAt = Start.AddHours(1),
         };
+
+    private TunerSession Begin(
+        TunerSessionManager manager,
+        string sessionId,
+        string deviceId,
+        SessionPurpose purpose = SessionPurpose.Recording,
+        TunerKind kind = TunerKind.Terrestrial
+    ) =>
+        manager.Begin(
+            SessionId.Parse(sessionId),
+            Request(purpose, kind),
+            deviceId,
+            Start.AddHours(1)
+        );
+
+    private static TunerSession WaitForBytes(TunerSession session)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+
+        while (session.BytesRecorded is 0 && DateTime.UtcNow < deadline)
+        {
+            Thread.Sleep(1);
+        }
+
+        Assert.True(session.BytesRecorded > 0);
+
+        return session;
+    }
 
     private static TunerSession StopAndWait(TunerSession session)
     {
@@ -58,12 +93,7 @@ public sealed class TunerSessionManagerTests : IDisposable
     {
         var manager = Manager();
 
-        var session = manager.Begin(
-            SessionId.Parse("s-1"),
-            Request(),
-            "adapter0",
-            Start.AddHours(1)
-        );
+        var session = Begin(manager, "s-1", "adapter0");
 
         Assert.Equal(SessionState.Active, session.State);
         Assert.True(manager.TryGet(SessionId.Parse("s-1"), out _));
@@ -76,12 +106,10 @@ public sealed class TunerSessionManagerTests : IDisposable
     {
         var manager = Manager();
 
-        var session = StopAndWait(
-            manager.Begin(SessionId.Parse("s-1"), Request(), "adapter0", Start.AddHours(1))
-        );
+        var session = StopAndWait(WaitForBytes(Begin(manager, "s-1", "adapter0")));
 
-        Assert.True(File.Exists(Path.Combine(root, "s-1.ts")));
         Assert.True(session.BytesRecorded > 0);
+        Assert.Equal(new FileInfo(Path.Combine(root, "s-1.ts")).Length, session.BytesRecorded);
     }
 
     [Fact]
@@ -89,14 +117,7 @@ public sealed class TunerSessionManagerTests : IDisposable
     {
         var manager = Manager();
 
-        StopAndWait(
-            manager.Begin(
-                SessionId.Parse("s-2"),
-                Request(SessionPurpose.Live),
-                "adapter0",
-                Start.AddHours(1)
-            )
-        );
+        StopAndWait(Begin(manager, "s-2", "adapter0", SessionPurpose.Live));
 
         Assert.False(File.Exists(Path.Combine(root, "s-2.ts")));
     }
@@ -106,15 +127,7 @@ public sealed class TunerSessionManagerTests : IDisposable
     {
         var manager = Manager();
 
-        Assert.Throws<ArgumentException>(
-            () =>
-                manager.Begin(
-                    SessionId.Parse("s-1"),
-                    Request(),
-                    "adapter9",
-                    Start.AddHours(1)
-                )
-        );
+        Assert.Throws<ArgumentException>(() => Begin(manager, "s-1", "adapter9"));
     }
 
     [Fact]
@@ -122,15 +135,7 @@ public sealed class TunerSessionManagerTests : IDisposable
     {
         var manager = Manager();
 
-        Assert.Throws<ArgumentException>(
-            () =>
-                manager.Begin(
-                    SessionId.Parse("s-1"),
-                    Request(),
-                    "adapter2",
-                    Start.AddHours(1)
-                )
-        );
+        Assert.Throws<ArgumentException>(() => Begin(manager, "s-1", "adapter2"));
     }
 
     [Fact]
@@ -139,93 +144,148 @@ public sealed class TunerSessionManagerTests : IDisposable
         var manager = Manager();
 
         Assert.Throws<ArgumentException>(
-            () =>
-                manager.Begin(
-                    SessionId.Parse("s-1"),
-                    Request(kind: TunerKind.Satellite),
-                    "adapter0",
-                    Start.AddHours(1)
-                )
+            () => Begin(manager, "s-1", "adapter0", kind: TunerKind.Satellite)
         );
+    }
+
+    [Fact]
+    public void ADeviceAlreadyServingASessionIsNotHandedOutTwice()
+    {
+        var manager = Manager();
+        var first = Begin(manager, "s-1", "adapter0");
+
+        Assert.Throws<ArgumentException>(() => Begin(manager, "s-2", "adapter0"));
+
+        StopAndWait(first);
+    }
+
+    [Fact]
+    public void ADeviceIsFreeAgainOnceItsSessionEnds()
+    {
+        var manager = Manager();
+
+        StopAndWait(Begin(manager, "s-1", "adapter0"));
+
+        StopAndWait(Begin(manager, "s-2", "adapter0"));
+    }
+
+    [Fact]
+    public void AnEndTimeThatContradictsTheRequestIsRefused()
+    {
+        var manager = Manager();
+
+        Assert.Throws<ArgumentException>(
+            () => manager.Begin(SessionId.Parse("s-1"), Request(), "adapter0", Start.AddHours(3))
+        );
+        Assert.Empty(manager.Sessions);
     }
 
     [Fact]
     public void TheSameIdentifierIsNotUsedTwice()
     {
         var manager = Manager();
-        var first = manager.Begin(
-            SessionId.Parse("s-1"),
-            Request(),
-            "adapter0",
-            Start.AddHours(1)
-        );
+        var first = Begin(manager, "s-1", "adapter0");
 
         Assert.Throws<ArgumentException>(
-            () =>
-                manager.Begin(
-                    SessionId.Parse("s-1"),
-                    Request(),
-                    "adapter1",
-                    Start.AddHours(1)
-                )
+            () => Begin(manager, "s-1", "adapter1", kind: TunerKind.Satellite)
         );
 
         StopAndWait(first);
     }
 
     [Fact]
-    public void AnEndedSessionLeavesTheActiveSet()
+    public void TheIdentifierOfAFinishedSessionIsNotReused()
     {
         var manager = Manager();
-        var session = manager.Begin(
-            SessionId.Parse("s-1"),
-            Request(),
-            "adapter0",
-            Start.AddHours(1)
-        );
 
-        StopAndWait(session);
+        StopAndWait(Begin(manager, "s-1", "adapter0"));
 
-        Assert.False(manager.TryGet(SessionId.Parse("s-1"), out _));
-        Assert.Empty(manager.Sessions);
+        Assert.Throws<ArgumentException>(() => Begin(manager, "s-1", "adapter3"));
     }
 
     [Fact]
-    public async Task StoppingTheHostAsksEverySessionToStopDeliberately()
+    public void AnEndedSessionLeavesTheActiveSetButStaysAvailable()
     {
         var manager = Manager();
-        var first = manager.Begin(
-            SessionId.Parse("s-1"),
-            Request(),
-            "adapter0",
-            Start.AddHours(1)
+
+        var session = StopAndWait(Begin(manager, "s-1", "adapter0"));
+
+        Assert.Empty(manager.Sessions);
+        Assert.True(manager.TryGet(SessionId.Parse("s-1"), out var found));
+        Assert.Same(session, found);
+        Assert.Equal(SessionStopReason.Requested, found.StopReason);
+    }
+
+    [Fact]
+    public void AFailedSessionKeepsItsCauseWhereItCanBeRead()
+    {
+        var manager = new TunerSessionManager(
+            Configuration,
+            new ScriptedTunerDeviceFactory(failAfterReads: 1),
+            clock,
+            NullLogger<TunerSessionManager>.Instance
         );
-        var second = manager.Begin(
-            SessionId.Parse("s-2"),
-            Request(kind: TunerKind.Satellite),
-            "adapter1",
-            Start.AddHours(1)
-        );
+
+        var session = Begin(manager, "s-1", "adapter0", SessionPurpose.Live);
+
+        session.WaitForEnd(TimeSpan.FromSeconds(10));
+
+        Assert.Empty(manager.Sessions);
+        Assert.True(manager.TryGet(SessionId.Parse("s-1"), out var found));
+        Assert.Equal(SessionState.Failed, found.State);
+        Assert.IsType<IOException>(found.FailureCause);
+    }
+
+    [Fact]
+    public async Task ShutdownStopsAViewerButWaitsForARecording()
+    {
+        var manager = Manager();
+        var recording = Begin(manager, "s-1", "adapter0");
+        var live = Begin(manager, "s-2", "adapter1", SessionPurpose.Live, TunerKind.Satellite);
+
+        var shuttingDown = manager.StopAsync(CancellationToken.None);
+
+        live.WaitForEnd(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(SessionState.Stopped, live.State);
+        Assert.False(shuttingDown.IsCompleted);
+        Assert.Equal(SessionState.Active, recording.State);
+
+        clock.Advance(TimeSpan.FromHours(2));
+
+        await shuttingDown;
+
+        Assert.Equal(SessionState.Stopped, recording.State);
+        Assert.Equal(SessionStopReason.EndTimeReached, recording.StopReason);
+    }
+
+    [Fact]
+    public async Task ARecordingThatOutlastsTheGraceCapIsStoppedAndSaysWhy()
+    {
+        var manager = Manager(Configuration with { ShutdownGraceHours = 0 });
+        var recording = Begin(manager, "s-1", "adapter0");
 
         await manager.StopAsync(CancellationToken.None);
 
-        first.WaitForEnd(TimeSpan.FromSeconds(10));
-        second.WaitForEnd(TimeSpan.FromSeconds(10));
+        Assert.Equal(SessionState.Stopped, recording.State);
+        Assert.Equal(SessionStopReason.DrainCapReached, recording.StopReason);
+    }
 
-        Assert.Equal(SessionState.Stopped, first.State);
-        Assert.Equal(SessionState.Stopped, second.State);
+    [Fact]
+    public async Task NoSessionStartsOnceShutdownHasBegun()
+    {
+        var manager = Manager();
+
+        await manager.StopAsync(CancellationToken.None);
+
+        Assert.Throws<InvalidOperationException>(() => Begin(manager, "s-1", "adapter0"));
     }
 
     [Fact]
     public void OneDeviceFailingLeavesTheOtherSessionAlone()
     {
         var manager = Manager();
-        var healthy = manager.Begin(
-            SessionId.Parse("s-1"),
-            Request(),
-            "adapter0",
-            Start.AddHours(1)
-        );
+        var healthy = Begin(manager, "s-1", "adapter0");
 
         using var failing = new TunerSession(
             SessionId.Parse("s-9"),
@@ -249,22 +309,22 @@ public sealed class TunerSessionManagerTests : IDisposable
     [Fact]
     public void ADriverConfiguredForRealHardwareSaysSoRatherThanPretending()
     {
-        var configuration = Configuration with { Tuner = new TunerSettings(TunerBackend.Dvb) };
-        var manager = new TunerSessionManager(
-            configuration,
-            new TunerDeviceFactory(configuration),
-            clock
-        );
+        var manager = Manager(Configuration with { Tuner = new TunerSettings(TunerBackend.Dvb) });
 
-        Assert.Throws<NotSupportedException>(
-            () =>
-                manager.Begin(
-                    SessionId.Parse("s-1"),
-                    Request(),
-                    "adapter0",
-                    Start.AddHours(1)
-                )
-        );
+        Assert.Throws<NotSupportedException>(() => Begin(manager, "s-1", "adapter0"));
+        Assert.Empty(manager.Sessions);
+    }
+
+    [Fact]
+    public void ARecordingIsNeverAppendedToAnExistingFile()
+    {
+        var manager = Manager();
+
+        StopAndWait(WaitForBytes(Begin(manager, "s-1", "adapter0")));
+
+        File.Copy(Path.Combine(root, "s-1.ts"), Path.Combine(root, "s-5.ts"));
+
+        Assert.Throws<IOException>(() => Begin(manager, "s-5", "adapter0"));
         Assert.Empty(manager.Sessions);
     }
 }

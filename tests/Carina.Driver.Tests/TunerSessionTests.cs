@@ -7,8 +7,9 @@ namespace Carina.Driver.Tests;
 
 public sealed class TunerSessionTests : IDisposable
 {
-    private static readonly DateTimeOffset Start =
-        new(2026, 8, 13, 21, 0, 0, TimeSpan.Zero);
+    private const int ChunkSize = TsPacketReader.PacketLength * 4;
+
+    private static readonly DateTimeOffset Start = new(2026, 8, 13, 21, 0, 0, TimeSpan.Zero);
 
     private readonly string root = Directory.CreateTempSubdirectory("carina-session-").FullName;
 
@@ -17,7 +18,7 @@ public sealed class TunerSessionTests : IDisposable
     private TunerSession Session(
         ScriptedTunerDevice device,
         ManualTimeProvider clock,
-        RecordingWriter? writer = null,
+        IRecordingWriter? writer = null,
         SessionPurpose purpose = SessionPurpose.Recording,
         TimeSpan? runsFor = null
     ) =>
@@ -30,27 +31,39 @@ public sealed class TunerSessionTests : IDisposable
             Start + (runsFor ?? TimeSpan.FromHours(1)),
             clock,
             writer,
-            TsPacketReader.PacketLength * 4
+            ChunkSize
         );
 
-    private RecordingWriter Writer(string name = "s-1") =>
-        new(root, SessionId.Parse(name));
+    private RecordingWriter Writer(string name = "s-1") => new(root, SessionId.Parse(name));
 
     private static void WaitForEnd(TunerSession session) =>
         session.WaitForEnd(TimeSpan.FromSeconds(10));
 
+    private static void WaitUntilRecording(TunerSession session)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+
+        while (session.BytesRecorded is 0 && DateTime.UtcNow < deadline)
+        {
+            Thread.Sleep(1);
+        }
+
+        Assert.True(session.BytesRecorded > 0);
+    }
+
     [Fact]
-    public void ASessionEndsItselfAtItsEndTimeWithNoAppConnected()
+    public void ASessionEndsItselfWhenItsEndTimeArrives()
     {
         var clock = new ManualTimeProvider(Start);
         using var session = Session(new ScriptedTunerDevice(), clock, Writer());
 
         session.Start();
+        WaitUntilRecording(session);
         clock.Advance(TimeSpan.FromHours(2));
         WaitForEnd(session);
 
         Assert.Equal(SessionState.Stopped, session.State);
-        Assert.Equal(0, session.Broadcaster.SubscriberCount);
+        Assert.Equal(SessionStopReason.EndTimeReached, session.StopReason);
     }
 
     [Fact]
@@ -64,6 +77,21 @@ public sealed class TunerSessionTests : IDisposable
         WaitForEnd(session);
 
         Assert.Equal(SessionState.Stopped, session.State);
+        Assert.Equal(SessionStopReason.Requested, session.StopReason);
+    }
+
+    [Fact]
+    public void ADrainCapStopIsNotMistakenForADeliberateStop()
+    {
+        var clock = new ManualTimeProvider(Start);
+        using var session = Session(new ScriptedTunerDevice(), clock, Writer());
+
+        session.Start();
+        session.Stop(SessionStopReason.DrainCapReached);
+        WaitForEnd(session);
+
+        Assert.Equal(SessionState.Stopped, session.State);
+        Assert.Equal(SessionStopReason.DrainCapReached, session.StopReason);
     }
 
     [Fact]
@@ -76,7 +104,21 @@ public sealed class TunerSessionTests : IDisposable
         WaitForEnd(session);
 
         Assert.Equal(SessionState.Failed, session.State);
+        Assert.Equal(SessionStopReason.DeviceFailed, session.StopReason);
         Assert.IsType<IOException>(session.FailureCause);
+    }
+
+    [Fact]
+    public void ADeviceThatStopsProducingBytesIsAFailureAndNotAnEnding()
+    {
+        var clock = new ManualTimeProvider(Start);
+        using var session = Session(new ScriptedTunerDevice(emptyAfterReads: 3), clock, Writer());
+
+        session.Start();
+        WaitForEnd(session);
+
+        Assert.Equal(SessionState.Failed, session.State);
+        Assert.IsType<EndOfStreamException>(session.FailureCause);
     }
 
     [Fact]
@@ -95,6 +137,67 @@ public sealed class TunerSessionTests : IDisposable
     }
 
     [Fact]
+    public void AFailureToCloseTheRecordingIsAFailedSessionAndNotASilentSuccess()
+    {
+        var clock = new ManualTimeProvider(Start);
+        var writer = new CountingRecordingWriter(
+            Path.Combine(root, "s-1.ts"),
+            failOnClose: true
+        );
+        var device = new ScriptedTunerDevice();
+        var session = Session(device, clock, writer);
+
+        session.Start();
+        session.Stop();
+        WaitForEnd(session);
+
+        Assert.Equal(SessionState.Failed, session.State);
+        Assert.IsType<IOException>(session.FailureCause);
+        Assert.True(device.Disposed);
+    }
+
+    [Fact]
+    public void AFailureToCloseTheRecordingStillReleasesTheDeviceAndAnnouncesTheEnd()
+    {
+        var clock = new ManualTimeProvider(Start);
+        var writer = new CountingRecordingWriter(
+            Path.Combine(root, "s-1.ts"),
+            failOnClose: true
+        );
+        var device = new ScriptedTunerDevice();
+        var session = Session(device, clock, writer);
+        var announced = 0;
+
+        session.Ended += _ => Interlocked.Increment(ref announced);
+        session.Start();
+        session.Stop();
+        WaitForEnd(session);
+
+        Assert.True(device.Disposed);
+        Assert.Equal(1, announced);
+    }
+
+    [Fact]
+    public void AHandlerThatThrowsDoesNotUnsettleTheSessionOrTheOtherHandlers()
+    {
+        var clock = new ManualTimeProvider(Start);
+        var device = new ScriptedTunerDevice();
+        var session = Session(device, clock, Writer());
+        var announced = 0;
+
+        session.Ended += _ => throw new InvalidOperationException("the listener is broken");
+        session.Ended += _ => Interlocked.Increment(ref announced);
+        session.Start();
+        session.Stop();
+        WaitForEnd(session);
+
+        Assert.Equal(SessionState.Stopped, session.State);
+        Assert.Equal(1, announced);
+        Assert.Equal(1, session.FaultCount);
+        Assert.True(device.Disposed);
+    }
+
+    [Fact]
     public void TheBytesThatWereReadAreTheBytesThatWereWritten()
     {
         var clock = new ManualTimeProvider(Start);
@@ -103,12 +206,13 @@ public sealed class TunerSessionTests : IDisposable
         using var session = Session(device, clock, writer);
 
         session.Start();
+        WaitUntilPast(device, 0);
         session.Stop();
         WaitForEnd(session);
 
         var written = new FileInfo(Path.Combine(root, "s-1.ts")).Length;
 
-        Assert.Equal(device.Reads * TsPacketReader.PacketLength * 4L, written);
+        Assert.Equal(device.Reads * ChunkSize, written);
         Assert.Equal(written, session.BytesRecorded);
     }
 
@@ -120,6 +224,7 @@ public sealed class TunerSessionTests : IDisposable
         using var session = Session(device, clock, Writer());
 
         session.Start();
+        WaitUntilPast(device, 0);
         session.Stop();
         WaitForEnd(session);
 
@@ -140,17 +245,20 @@ public sealed class TunerSessionTests : IDisposable
         var stalled = session.Broadcaster.Subscribe(SubscriberKind.Viewer);
 
         session.Start();
-        Thread.Sleep(50);
+        WaitUntilPast(device, SessionBroadcaster.DefaultViewerCapacity);
         session.Stop();
         WaitForEnd(session);
 
-        Assert.Equal(device.Reads * TsPacketReader.PacketLength * 4L, session.BytesRecorded);
+        var written = new FileInfo(Path.Combine(root, "s-1.ts")).Length;
+
+        Assert.True(device.Reads > SessionBroadcaster.DefaultViewerCapacity);
+        Assert.Equal(device.Reads * ChunkSize, written);
         Assert.True(stalled.DroppedChunks > 0);
         Assert.False(stalled.IsDisconnected);
     }
 
     [Fact]
-    public void AStalledSurveyReaderIsDisconnectedRatherThanSlowingTheRecording()
+    public void ARecordingNeverBlocksForASurveyReader()
     {
         var clock = new ManualTimeProvider(Start);
         var device = new ScriptedTunerDevice();
@@ -160,12 +268,118 @@ public sealed class TunerSessionTests : IDisposable
         var stalled = session.Broadcaster.Subscribe(SubscriberKind.Survey);
 
         session.Start();
-        Thread.Sleep(50);
+        WaitUntilPast(device, SessionBroadcaster.DefaultSurveyCapacity);
         session.Stop();
         WaitForEnd(session);
 
+        var written = new FileInfo(Path.Combine(root, "s-1.ts")).Length;
+
         Assert.True(stalled.IsDisconnected);
-        Assert.Equal(device.Reads * TsPacketReader.PacketLength * 4L, session.BytesRecorded);
+        Assert.Equal(device.Reads * ChunkSize, written);
+    }
+
+    [Fact]
+    public void ASurveySessionWaitsForItsReaderInsteadOfDroppingTheStream()
+    {
+        var clock = new ManualTimeProvider(Start);
+        var device = new ScriptedTunerDevice();
+        using var session = Session(device, clock, purpose: SessionPurpose.Survey);
+
+        var reader = session.Broadcaster.Subscribe(SubscriberKind.Survey);
+
+        session.Start();
+        WaitUntilPast(device, SessionBroadcaster.DefaultSurveyCapacity);
+
+        Assert.False(reader.IsDisconnected);
+        Assert.Equal(0, reader.DroppedChunks);
+
+        var taken = 0;
+        while (taken < SessionBroadcaster.DefaultSurveyCapacity && reader.Reader.TryRead(out _))
+        {
+            taken++;
+        }
+
+        Assert.Equal(SessionBroadcaster.DefaultSurveyCapacity, taken);
+
+        session.Stop();
+        WaitForEnd(session);
+    }
+
+    [Fact]
+    public void APiggybackReaderIsDropTolerantLikeAViewer()
+    {
+        var clock = new ManualTimeProvider(Start);
+        var device = new ScriptedTunerDevice();
+        using var session = Session(device, clock, Writer());
+
+        var stalled = session.Broadcaster.Subscribe(SubscriberKind.Piggyback);
+
+        session.Start();
+        WaitUntilPast(device, SessionBroadcaster.DefaultViewerCapacity);
+        session.Stop();
+        WaitForEnd(session);
+
+        Assert.False(stalled.IsDisconnected);
+        Assert.True(stalled.DroppedChunks > 0);
+    }
+
+    [Fact]
+    public async Task AFailedSessionAbortsItsReadersRatherThanClosingCleanly()
+    {
+        var clock = new ManualTimeProvider(Start);
+        using var session = Session(
+            new ScriptedTunerDevice(failAfterReads: 3),
+            clock,
+            Writer()
+        );
+
+        var viewer = session.Broadcaster.Subscribe(SubscriberKind.Viewer);
+
+        session.Start();
+        WaitForEnd(session);
+
+        var reading = async () =>
+        {
+            await foreach (var _ in viewer.Reader.ReadAllAsync())
+            { }
+        };
+
+        await Assert.ThrowsAsync<IOException>(reading);
+    }
+
+    [Fact]
+    public async Task AStoppedSessionClosesItsReadersCleanly()
+    {
+        var clock = new ManualTimeProvider(Start);
+        using var session = Session(new ScriptedTunerDevice(), clock, Writer());
+
+        var viewer = session.Broadcaster.Subscribe(SubscriberKind.Viewer);
+
+        session.Start();
+        session.Stop();
+        WaitForEnd(session);
+
+        await foreach (var _ in viewer.Reader.ReadAllAsync())
+        { }
+    }
+
+    [Fact]
+    public async Task AReaderArrivingAfterTheEndIsClosedRatherThanLeftWaiting()
+    {
+        var clock = new ManualTimeProvider(Start);
+        using var session = Session(new ScriptedTunerDevice(), clock, Writer());
+
+        session.Start();
+        session.Stop();
+        WaitForEnd(session);
+
+        var late = session.Broadcaster.Subscribe(SubscriberKind.Viewer);
+
+        await foreach (var _ in late.Reader.ReadAllAsync())
+        { }
+
+        Assert.True(late.IsDisconnected);
+        Assert.Equal(0, session.Broadcaster.SubscriberCount);
     }
 
     [Fact]
@@ -191,10 +405,11 @@ public sealed class TunerSessionTests : IDisposable
     public void MeasurementCarriesOnAcrossReadsWithinOneSession()
     {
         var clock = new ManualTimeProvider(Start);
-        using var session = Session(new ScriptedTunerDevice(), clock, Writer());
+        var device = new ScriptedTunerDevice();
+        using var session = Session(device, clock, Writer());
 
         session.Start();
-        Thread.Sleep(50);
+        WaitUntilPast(device, 8);
         session.Stop();
         WaitForEnd(session);
 
@@ -213,6 +428,20 @@ public sealed class TunerSessionTests : IDisposable
 
         Assert.False(session.Extend(Start.AddHours(2)));
         Assert.Equal(Start.AddHours(3), session.EndsAt);
+    }
+
+    [Fact]
+    public void AnEndedSessionCannotBeExtended()
+    {
+        var clock = new ManualTimeProvider(Start);
+        using var session = Session(new ScriptedTunerDevice(), clock, Writer());
+
+        session.Start();
+        session.Stop();
+        WaitForEnd(session);
+
+        Assert.False(session.Extend(Start.AddHours(3)));
+        Assert.Equal(Start.AddHours(1), session.EndsAt);
     }
 
     [Fact]
@@ -258,5 +487,31 @@ public sealed class TunerSessionTests : IDisposable
         WaitForEnd(session);
 
         Assert.True(device.Disposed);
+    }
+
+    [Fact]
+    public void ASessionThatNeverStartedStillReleasesWhatItWasGiven()
+    {
+        var clock = new ManualTimeProvider(Start);
+        var device = new ScriptedTunerDevice();
+        var writer = new CountingRecordingWriter(Path.Combine(root, "s-1.ts"));
+
+        var session = Session(device, clock, writer);
+        session.Dispose();
+
+        Assert.True(device.Disposed);
+        Assert.True(writer.Disposed);
+    }
+
+    private static void WaitUntilPast(ScriptedTunerDevice device, long reads)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+
+        while (device.Reads <= reads && DateTime.UtcNow < deadline)
+        {
+            Thread.Sleep(1);
+        }
+
+        Assert.True(device.Reads > reads);
     }
 }

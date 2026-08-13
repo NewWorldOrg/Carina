@@ -10,15 +10,24 @@ public sealed class TunerSession : IDisposable
     public const int DefaultChunkSize = TsPacketReader.PacketLength * 100;
 
     private readonly ITunerDevice device;
-    private readonly RecordingWriter? recordingWriter;
+    private readonly IRecordingWriter? recordingWriter;
     private readonly TimeProvider timeProvider;
     private readonly TsPacketReader packetReader = new();
     private readonly int chunkSize;
     private readonly Lock gate = new();
+    private readonly CancellationTokenSource stopping = new();
+    private readonly TaskCompletionSource completion = new(
+        TaskCreationOptions.RunContinuationsAsynchronously
+    );
 
     private Thread? loop;
-    private volatile bool stopRequested;
+    private SessionState state;
+    private SessionStopReason stopReason;
+    private Exception? failureCause;
+    private Exception? firstFault;
+    private long faultCount;
     private long endsAtTicks;
+    private int finished;
 
     public TunerSession(
         SessionId sessionId,
@@ -28,7 +37,7 @@ public sealed class TunerSession : IDisposable
         DateTimeOffset startedAt,
         DateTimeOffset endsAt,
         TimeProvider timeProvider,
-        RecordingWriter? recordingWriter = null,
+        IRecordingWriter? recordingWriter = null,
         int chunkSize = DefaultChunkSize
     )
     {
@@ -49,7 +58,13 @@ public sealed class TunerSession : IDisposable
         this.recordingWriter = recordingWriter;
         this.timeProvider = timeProvider;
         this.chunkSize = chunkSize;
-        State = SessionState.Requested;
+        state = SessionState.Requested;
+        stopReason = SessionStopReason.Running;
+        Broadcaster = new SessionBroadcaster(
+            surveyBlockLimit: purpose is SessionPurpose.Recording
+                ? TimeSpan.Zero
+                : SessionBroadcaster.DefaultSurveyBlockLimit
+        );
     }
 
     public SessionId SessionId { get; }
@@ -60,18 +75,63 @@ public sealed class TunerSession : IDisposable
 
     public DateTimeOffset StartedAt { get; }
 
-    public DateTimeOffset EndsAt =>
-        new(Interlocked.Read(ref endsAtTicks), TimeSpan.Zero);
+    public DateTimeOffset EndsAt => new(Interlocked.Read(ref endsAtTicks), TimeSpan.Zero);
 
-    public SessionState State { get; private set; }
+    public SessionState State
+    {
+        get
+        {
+            lock (gate)
+            {
+                return state;
+            }
+        }
+    }
 
-    public SessionBroadcaster Broadcaster { get; } = new();
+    public SessionStopReason StopReason
+    {
+        get
+        {
+            lock (gate)
+            {
+                return stopReason;
+            }
+        }
+    }
+
+    public Exception? FailureCause
+    {
+        get
+        {
+            lock (gate)
+            {
+                return failureCause;
+            }
+        }
+    }
+
+    public Exception? FirstFault
+    {
+        get
+        {
+            lock (gate)
+            {
+                return firstFault;
+            }
+        }
+    }
+
+    public long FaultCount => Interlocked.Read(ref faultCount);
+
+    public SessionBroadcaster Broadcaster { get; }
 
     public ContinuityCounterTracker Counters { get; } = new();
 
     public long BytesRecorded => recordingWriter?.BytesWritten ?? 0;
 
-    public Exception? FailureCause { get; private set; }
+    public string? RecordingPath => recordingWriter?.Path;
+
+    public Task Completion => completion.Task;
 
     public event Action<TunerSession>? Ended;
 
@@ -79,51 +139,61 @@ public sealed class TunerSession : IDisposable
     {
         lock (gate)
         {
-            if (State is not SessionState.Requested)
+            if (state is not SessionState.Requested)
             {
                 throw new InvalidOperationException(
-                    $"A session starts once; '{SessionId}' is already {State}."
+                    $"A session starts once; '{SessionId}' is already {state}."
                 );
             }
 
-            State = SessionState.Active;
+            state = SessionState.Active;
         }
 
         loop = new Thread(Run) { IsBackground = true, Name = $"session-{SessionId}" };
-        loop.Start();
+
+        try
+        {
+            loop.Start();
+        }
+        catch (Exception error)
+        {
+            Finish(SessionState.Failed, SessionStopReason.DeviceFailed, error);
+            throw;
+        }
     }
 
     public bool Extend(DateTimeOffset newEndsAt)
     {
-        while (true)
+        lock (gate)
         {
-            var current = Interlocked.Read(ref endsAtTicks);
-            if (newEndsAt.UtcTicks <= current)
+            if (state is not (SessionState.Requested or SessionState.Active))
             {
                 return false;
             }
 
-            if (
-                Interlocked.CompareExchange(ref endsAtTicks, newEndsAt.UtcTicks, current)
-                == current
-            )
+            if (newEndsAt.UtcTicks <= endsAtTicks)
             {
-                return true;
+                return false;
             }
+
+            Interlocked.Exchange(ref endsAtTicks, newEndsAt.UtcTicks);
+
+            return true;
         }
     }
 
-    public void Stop()
+    public void Stop(SessionStopReason reason = SessionStopReason.Requested)
     {
         lock (gate)
         {
-            if (State is SessionState.Active)
+            if (state is SessionState.Active)
             {
-                State = SessionState.Stopping;
+                state = SessionState.Stopping;
+                stopReason = reason;
             }
         }
 
-        stopRequested = true;
+        stopping.Cancel();
     }
 
     public void WaitForEnd(TimeSpan timeout) => loop?.Join(timeout);
@@ -132,46 +202,147 @@ public sealed class TunerSession : IDisposable
     {
         Stop();
         loop?.Join(TimeSpan.FromSeconds(5));
+        Finish(SessionState.Stopped, SessionStopReason.Requested, null);
     }
 
     private void Run()
     {
+        var token = stopping.Token;
+
         try
         {
-            while (!stopRequested && timeProvider.GetUtcNow() < EndsAt)
+            while (!token.IsCancellationRequested && timeProvider.GetUtcNow() < EndsAt)
             {
-                var chunk = device.Read(chunkSize);
+                var chunk = device.Read(chunkSize, token);
+
+                if (chunk.Length is 0)
+                {
+                    throw new EndOfStreamException(
+                        $"The device '{DeviceId}' returned no bytes, so the stream is incomplete."
+                    );
+                }
 
                 recordingWriter?.Write(chunk);
 
-                foreach (var packet in packetReader.Read(chunk))
-                {
-                    Counters.Observe(packet);
-                }
-
-                Broadcaster.Publish(chunk);
+                Measure(chunk);
             }
 
-            Finish(SessionState.Stopped, null);
+            Finish(SessionState.Stopped, ReasonForEnd(token), null);
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+            Finish(SessionState.Stopped, ReasonForEnd(token), null);
         }
         catch (Exception error)
         {
-            Finish(SessionState.Failed, error);
+            Finish(SessionState.Failed, SessionStopReason.DeviceFailed, error);
         }
     }
 
-    private void Finish(SessionState state, Exception? cause)
+    private SessionStopReason ReasonForEnd(CancellationToken token)
     {
+        if (!token.IsCancellationRequested)
+        {
+            return SessionStopReason.EndTimeReached;
+        }
+
         lock (gate)
         {
-            State = state;
-            FailureCause = cause;
+            return stopReason is SessionStopReason.Running
+                ? SessionStopReason.Requested
+                : stopReason;
+        }
+    }
+
+    private void Measure(byte[] chunk)
+    {
+        try
+        {
+            foreach (var packet in packetReader.Read(chunk))
+            {
+                Counters.Observe(packet);
+            }
+
+            Broadcaster.Publish(chunk, stopping.Token);
+        }
+        catch (Exception error)
+        {
+            RecordFault(error);
+        }
+    }
+
+    private void RecordFault(Exception error)
+    {
+        Interlocked.Increment(ref faultCount);
+
+        lock (gate)
+        {
+            firstFault ??= error;
+        }
+    }
+
+    private void Finish(SessionState outcome, SessionStopReason reason, Exception? cause)
+    {
+        if (Interlocked.Exchange(ref finished, 1) is 1)
+        {
+            return;
         }
 
-        Broadcaster.Dispose();
-        recordingWriter?.Dispose();
-        device.Dispose();
+        var causes = new List<Exception>();
+        if (cause is not null)
+        {
+            causes.Add(cause);
+        }
 
-        Ended?.Invoke(this);
+        Close(() => recordingWriter?.Dispose(), causes);
+        Close(() => Broadcaster.Close(causes.Count > 0 ? Combine(causes) : null), causes);
+        Close(device.Dispose, causes);
+
+        lock (gate)
+        {
+            state = causes.Count > 0 ? SessionState.Failed : outcome;
+            stopReason = causes.Count > 0 ? SessionStopReason.DeviceFailed : reason;
+            failureCause = causes.Count > 0 ? Combine(causes) : null;
+        }
+
+        RaiseEnded();
+
+        completion.TrySetResult();
     }
+
+    private void RaiseEnded()
+    {
+        var handlers = Ended;
+        if (handlers is null)
+        {
+            return;
+        }
+
+        foreach (var handler in handlers.GetInvocationList())
+        {
+            try
+            {
+                ((Action<TunerSession>)handler)(this);
+            }
+            catch (Exception error)
+            {
+                RecordFault(error);
+            }
+        }
+    }
+
+    private static void Close(Action close, List<Exception> causes)
+    {
+        try
+        {
+            close();
+        }
+        catch (Exception error)
+        {
+            causes.Add(error);
+        }
+    }
+
+    private static Exception Combine(List<Exception> causes) =>
+        causes.Count is 1 ? causes[0] : new AggregateException(causes);
 }

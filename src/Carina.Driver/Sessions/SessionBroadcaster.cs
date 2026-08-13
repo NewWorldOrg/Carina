@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Threading.Channels;
 
 namespace Carina.Driver.Sessions;
@@ -6,11 +7,14 @@ namespace Carina.Driver.Sessions;
 public enum SubscriberKind
 {
     Viewer,
+    Piggyback,
     Survey,
 }
 
 public sealed class SessionSubscription
 {
+    private long droppedChunks;
+
     internal SessionSubscription(SubscriberKind kind, Channel<byte[]> channel)
     {
         Kind = kind;
@@ -25,81 +29,165 @@ public sealed class SessionSubscription
 
     public bool IsDisconnected { get; internal set; }
 
-    public long DroppedChunks { get; internal set; }
+    public long DroppedChunks => Interlocked.Read(ref droppedChunks);
+
+    internal void CountDrop() => Interlocked.Increment(ref droppedChunks);
 }
 
 public sealed class SessionBroadcaster(
     int viewerCapacity = SessionBroadcaster.DefaultViewerCapacity,
-    int surveyCapacity = SessionBroadcaster.DefaultSurveyCapacity
+    int surveyCapacity = SessionBroadcaster.DefaultSurveyCapacity,
+    TimeSpan? surveyBlockLimit = null
 ) : IDisposable
 {
     public const int DefaultViewerCapacity = 64;
     public const int DefaultSurveyCapacity = 256;
 
+    public static readonly TimeSpan DefaultSurveyBlockLimit = TimeSpan.FromSeconds(5);
+
     private readonly ConcurrentDictionary<SessionSubscription, byte> subscriptions = [];
+    private readonly TimeSpan blockLimit = surveyBlockLimit ?? DefaultSurveyBlockLimit;
+    private readonly Lock gate = new();
+
+    private bool closed;
+    private Exception? closedBecause;
 
     public int SubscriberCount => subscriptions.Count;
 
     public SessionSubscription Subscribe(SubscriberKind kind)
     {
-        var options = kind switch
-        {
-            SubscriberKind.Viewer => new BoundedChannelOptions(viewerCapacity)
-            {
-                FullMode = BoundedChannelFullMode.DropOldest,
-                SingleWriter = true,
-            },
-            _ => new BoundedChannelOptions(surveyCapacity)
+        var options = kind is SubscriberKind.Survey
+            ? new BoundedChannelOptions(surveyCapacity)
             {
                 FullMode = BoundedChannelFullMode.Wait,
                 SingleWriter = true,
-            },
-        };
+            }
+            : new BoundedChannelOptions(viewerCapacity)
+            {
+                FullMode = BoundedChannelFullMode.DropOldest,
+                SingleWriter = true,
+            };
 
         var subscription = new SessionSubscription(kind, Channel.CreateBounded<byte[]>(options));
-        subscriptions[subscription] = 0;
+
+        lock (gate)
+        {
+            if (closed)
+            {
+                subscription.IsDisconnected = true;
+                subscription.Channel.Writer.TryComplete(closedBecause);
+
+                return subscription;
+            }
+
+            subscriptions[subscription] = 0;
+        }
 
         return subscription;
     }
 
-    public void Unsubscribe(SessionSubscription subscription)
+    public void Unsubscribe(SessionSubscription subscription, Exception? because = null)
     {
         if (subscriptions.TryRemove(subscription, out _))
         {
-            subscription.Channel.Writer.TryComplete();
+            subscription.Channel.Writer.TryComplete(because);
         }
     }
 
-    public void Publish(byte[] chunk)
+    public void Publish(ReadOnlySpan<byte> chunk, CancellationToken cancellationToken = default)
     {
-        foreach (var subscription in subscriptions.Keys)
+        if (subscriptions.IsEmpty)
         {
-            if (subscription.Kind is SubscriberKind.Viewer)
+            return;
+        }
+
+        var copy = chunk.ToArray();
+
+        foreach (var entry in subscriptions)
+        {
+            var subscription = entry.Key;
+
+            if (subscription.Kind is not SubscriberKind.Survey)
             {
                 if (subscription.Channel.Reader.Count >= viewerCapacity)
                 {
-                    subscription.DroppedChunks++;
+                    subscription.CountDrop();
                 }
 
-                subscription.Channel.Writer.TryWrite(chunk);
+                subscription.Channel.Writer.TryWrite(copy);
                 continue;
             }
 
-            if (subscription.Channel.Writer.TryWrite(chunk))
+            if (DeliverWithinLimit(subscription, copy, cancellationToken))
             {
                 continue;
             }
 
             subscription.IsDisconnected = true;
-            Unsubscribe(subscription);
+            Unsubscribe(
+                subscription,
+                new TimeoutException(
+                    $"The subscriber did not take the stream within {blockLimit}, so it was disconnected."
+                )
+            );
         }
     }
 
-    public void Dispose()
+    public void Dispose() => Close(null);
+
+    public void Close(Exception? because)
     {
-        foreach (var subscription in subscriptions.Keys)
+        lock (gate)
         {
-            Unsubscribe(subscription);
+            if (closed)
+            {
+                return;
+            }
+
+            closed = true;
+            closedBecause = because;
+        }
+
+        foreach (var entry in subscriptions)
+        {
+            Unsubscribe(entry.Key, because);
+        }
+    }
+
+    private bool DeliverWithinLimit(
+        SessionSubscription subscription,
+        byte[] chunk,
+        CancellationToken cancellationToken
+    )
+    {
+        var start = Stopwatch.GetTimestamp();
+
+        while (true)
+        {
+            if (subscription.Channel.Writer.TryWrite(chunk))
+            {
+                return true;
+            }
+
+            var left = blockLimit - Stopwatch.GetElapsedTime(start);
+            if (left <= TimeSpan.Zero)
+            {
+                return false;
+            }
+
+            var room = subscription.Channel.Writer.WaitToWriteAsync().AsTask();
+
+            try
+            {
+                if (!room.Wait((int)left.TotalMilliseconds, cancellationToken) || !room.Result)
+                {
+                    return false;
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                return true;
+            }
         }
     }
 }
