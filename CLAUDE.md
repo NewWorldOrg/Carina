@@ -91,8 +91,18 @@ rules hold rather than that they inspected nothing.
   `PersistenceBoundaryRuleTests` in `tests/Carina.Infrastructure.Tests`, self-checked
   against a deliberately violating model. The real columns of the three aggregates are
   out of the foundation's scope and belong to their own domains.
+- Which family a table belongs to is read from the feature namespace of its entity type,
+  never from the table's name: a reservation called `booking` is still a reservation.
+  The map from feature namespace to family lives in `PersistenceBoundaryRules`, owned
+  types are judged as their aggregate root, and an entity whose namespace is not in the
+  map fails the rule instead of passing as unrelated — a domain adding tables declares
+  which side of the boundary they are on rather than escaping it by naming.
 - Contract changes are additive only. Removing or renaming an endpoint or an event
   breaks the "old driver + new app" combination, which is the normal state.
+- App events are signals, not messages. A producer signals through `IAppEventPublisher`
+  with a `Carina.Contracts.AppEventName` and nothing beside it — the nine names are the
+  only instances there are and none is reachable from a string. `AppEventRuleTests` and
+  `EventStreamRuleTests` hold both halves of that before the hub itself is built.
 - Configuration is validated at startup and the process fails fast with a message
   naming the offending setting. There is no hot reload.
 - Secrets never enter committed configuration — placeholders only, real values from

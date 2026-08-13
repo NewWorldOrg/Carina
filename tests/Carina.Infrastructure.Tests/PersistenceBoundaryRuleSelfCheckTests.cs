@@ -1,55 +1,36 @@
 using Carina.Infrastructure.Persistence;
+using Carina.Infrastructure.Tests.Fixtures.Channels;
+using Carina.Infrastructure.Tests.Fixtures.Library;
+using Carina.Infrastructure.Tests.Fixtures.Programmes;
+using Carina.Infrastructure.Tests.Fixtures.Recordings;
+using Carina.Infrastructure.Tests.Fixtures.Reservations;
+using Carina.Infrastructure.Tests.Fixtures.Rules;
 
 using Microsoft.EntityFrameworkCore;
 
 namespace Carina.Infrastructure.Tests;
 
-internal sealed class ChannelDefinition
-{
-    public int Id { get; set; }
-}
-
-internal sealed class Reservation
-{
-    public int Id { get; set; }
-    public int ChannelDefinitionId { get; set; }
-    public int ReservationRuleId { get; set; }
-}
-
-internal sealed class ReservationRule
-{
-    public int Id { get; set; }
-}
-
-internal sealed class EpgProgramme
-{
-    public int Id { get; set; }
-}
-
-internal sealed class RecordingJob
-{
-    public int Id { get; set; }
-    public int EpgProgrammeId { get; set; }
-}
-
 public sealed class PersistenceBoundaryRuleSelfCheckTests
 {
+    private static readonly string[] FamilyPrefixes = ["reservation", "channel", "programme", "epg"];
+
     private sealed class ViolatingDbContext(DbContextOptions<CarinaDbContext> options) : CarinaDbContext(options)
     {
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            modelBuilder.Entity<ChannelDefinition>();
-            modelBuilder.Entity<ReservationRule>();
-            modelBuilder.Entity<Reservation>(reservation =>
+            modelBuilder.Entity<ChannelLineup>();
+            modelBuilder.Entity<BookingRule>();
+            modelBuilder.Entity<Booking>(booking =>
             {
-                reservation.HasOne<ChannelDefinition>().WithMany()
-                    .HasForeignKey(entity => entity.ChannelDefinitionId);
-                reservation.HasOne<ReservationRule>().WithMany()
-                    .HasForeignKey(entity => entity.ReservationRuleId);
+                booking.HasOne<ChannelLineup>().WithMany()
+                    .HasForeignKey(entity => entity.ChannelLineupId);
+                booking.HasOne<BookingRule>().WithMany()
+                    .HasForeignKey(entity => entity.BookingRuleId);
             });
-            modelBuilder.Entity<EpgProgramme>();
+            modelBuilder.Entity<GuideEntry>();
             modelBuilder.Entity<RecordingJob>(job =>
-                job.HasOne<EpgProgramme>().WithMany().HasForeignKey(entity => entity.EpgProgrammeId));
+                job.HasOne<GuideEntry>().WithMany().HasForeignKey(entity => entity.GuideEntryId));
+            modelBuilder.Entity<ShelfItem>();
         }
     }
 
@@ -67,7 +48,7 @@ public sealed class PersistenceBoundaryRuleSelfCheckTests
         using var context = Violating();
 
         Assert.Contains(
-            "reservation -> channel_definition",
+            "booking -> channel_lineup",
             PersistenceBoundaryRules.BoundaryBreakingForeignKeys(context.Model));
     }
 
@@ -77,7 +58,7 @@ public sealed class PersistenceBoundaryRuleSelfCheckTests
         using var context = Violating();
 
         Assert.Contains(
-            "recording_job -> epg_programme",
+            "recording_job -> guide_entry",
             PersistenceBoundaryRules.BoundaryBreakingForeignKeys(context.Model));
     }
 
@@ -87,7 +68,30 @@ public sealed class PersistenceBoundaryRuleSelfCheckTests
         using var context = Violating();
 
         Assert.Equal(
-            ["recording_job -> epg_programme", "reservation -> channel_definition"],
+            ["booking -> channel_lineup", "recording_job -> guide_entry"],
             PersistenceBoundaryRules.BoundaryBreakingForeignKeys(context.Model));
+    }
+
+    [Fact]
+    public void CatchesBreaksThatNoTableNameRevealsAsBelongingToTheirFamily()
+    {
+        using var context = Violating();
+
+        Assert.DoesNotContain(
+            new[] { "booking", "guide_entry", "recording_job" },
+            table => FamilyPrefixes.Any(prefix => table.StartsWith(prefix, StringComparison.Ordinal)));
+        Assert.Equal(
+            ["booking -> channel_lineup", "recording_job -> guide_entry"],
+            PersistenceBoundaryRules.BoundaryBreakingForeignKeys(context.Model));
+    }
+
+    [Fact]
+    public void DetectsAnEntityThatBelongsToNoDeclaredFamily()
+    {
+        using var context = Violating();
+
+        Assert.Equal(
+            [$"{typeof(ShelfItem).FullName} (shelf_item)"],
+            PersistenceBoundaryRules.UnclassifiedEntityTypes(context.Model));
     }
 }

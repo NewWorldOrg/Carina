@@ -5,7 +5,7 @@ public sealed class ReferenceRuleTests
     private static readonly ProjectGraph Graph = ProjectGraph.Load(RepositoryLayout.SourceDirectory);
 
     [Fact]
-    public void DriverReferencesContractsOnly()
+    public void DriverHasNoDomainReferenceAndNothingBeyondTheContract()
     {
         Assert.Empty(Graph.ForbiddenReferencesOf("Carina.Driver", "Carina.Contracts"));
     }
