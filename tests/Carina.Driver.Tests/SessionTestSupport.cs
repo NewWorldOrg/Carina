@@ -84,6 +84,24 @@ public sealed class StubbornTunerDeviceFactory(TimeSpan readTakes) : ITunerDevic
         new StubbornTunerDevice(readTakes);
 }
 
+public sealed class StubbornForOneDeviceFactory(string stubbornDeviceId, TimeSpan readTakes)
+    : ITunerDeviceFactory
+{
+    public ITunerDevice Create(DeviceSettings device, TuningRequest tuning) =>
+        device.Id == stubbornDeviceId
+            ? new StubbornTunerDevice(readTakes)
+            : new ScriptedTunerDevice();
+}
+
+public sealed class SelectiveTunerDeviceFactory(string failingDeviceId, int failAfterReads = 1)
+    : ITunerDeviceFactory
+{
+    public ITunerDevice Create(DeviceSettings device, TuningRequest tuning) =>
+        device.Id == failingDeviceId
+            ? new ScriptedTunerDevice(failAfterReads)
+            : new ScriptedTunerDevice();
+}
+
 public sealed class CountingRecordingWriter : IRecordingWriter
 {
     private long bytesWritten;
@@ -113,6 +131,40 @@ public sealed class CountingRecordingWriter : IRecordingWriter
             throw new IOException("the recording could not be closed");
         }
     }
+}
+
+public sealed class BrittleRecordingWriter(string path, long failAfterBytes = 0)
+    : IRecordingWriter
+{
+    private long bytesWritten;
+
+    public string Path { get; } = path;
+
+    public bool Disposed { get; private set; }
+
+    public long BytesWritten => Interlocked.Read(ref bytesWritten);
+
+    public void Write(ReadOnlySpan<byte> bytes)
+    {
+        if (BytesWritten + bytes.Length > failAfterBytes)
+        {
+            throw new IOException("No space left on device");
+        }
+
+        Interlocked.Add(ref bytesWritten, bytes.Length);
+    }
+
+    public void Dispose() => Disposed = true;
+}
+
+public sealed class BrittleRecordingWriterFactory(long failAfterBytes = 0)
+    : IRecordingWriterFactory
+{
+    public IRecordingWriter Open(string recordingsDirectory, SessionId sessionId) =>
+        new BrittleRecordingWriter(
+            System.IO.Path.Combine(recordingsDirectory, $"{sessionId.Value}.ts"),
+            failAfterBytes
+        );
 }
 
 public sealed class CapturingLogger<T> : ILogger<T>

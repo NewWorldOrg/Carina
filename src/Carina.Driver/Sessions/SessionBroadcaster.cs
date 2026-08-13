@@ -231,6 +231,8 @@ public sealed class SessionBroadcaster(
             default:
                 subscription.IsDisconnected = true;
                 subscription.IsTruncated = true;
+                subscription.CountDrop();
+                Tally();
                 Unsubscribe(subscription, TooSlow());
 
                 return;

@@ -8,6 +8,7 @@ using Carina.Driver.Tuning;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 
 namespace Carina.Driver.Tests;
 
@@ -68,6 +69,26 @@ public sealed class DriverHostTests : IDisposable
 
         Assert.Contains(hosted, service => service is TunerSessionManager);
         Assert.Contains(hosted, service => service is SocketPermissionGuard);
+        Assert.Contains(hosted, service => service is DriverLifecycle);
+    }
+
+    [Fact]
+    public void TheShutdownTimeoutCoversTheDrainAndTheHardStop()
+    {
+        using var host = HostOf(Build());
+
+        var manager = (TunerSessionManager)host.Services.GetService(typeof(TunerSessionManager))!;
+        var options = (IOptions<HostOptions>)
+            host.Services.GetService(typeof(IOptions<HostOptions>))!;
+
+        Assert.Equal(
+            TimeSpan.FromHours(6) + TunerSessionManager.DefaultHardStopLimit,
+            manager.ShutdownBudget
+        );
+        Assert.Equal(
+            manager.ShutdownBudget + TimeSpan.FromMinutes(1),
+            options.Value.ShutdownTimeout
+        );
     }
 
     [Fact]

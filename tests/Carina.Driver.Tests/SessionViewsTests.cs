@@ -180,6 +180,26 @@ public sealed class SessionViewsTests : IDisposable
     }
 
     [Fact]
+    public void AFaultedTunerSaysSoAndNamesItsFault()
+    {
+        var manager = Manager(new SelectiveTunerDeviceFactory("adapter0"));
+        var doomed = Begin(manager, "doomed", "adapter0");
+
+        doomed.WaitForEnd(TimeSpan.FromSeconds(5));
+
+        var tuners = SessionViews.Tuners(Configuration, manager);
+        var faulted = tuners.Single(tuner => tuner.DeviceId == "adapter0");
+
+        Assert.Equal(TunerState.Faulted, faulted.State);
+        Assert.NotNull(faulted.Detail);
+        Assert.Contains("doomed", faulted.Detail, StringComparison.Ordinal);
+        Assert.Equal(
+            TunerState.Idle,
+            tuners.Single(tuner => tuner.DeviceId == "adapter1").State
+        );
+    }
+
+    [Fact]
     public void ATunerIsIdleAgainOnceItsSessionEnds()
     {
         var manager = Manager();

@@ -2,6 +2,9 @@ using Carina.Contracts;
 
 namespace Carina.Driver.Recording;
 
+public sealed class RecordingWriteException(Exception cause)
+    : Exception(cause.Message, cause);
+
 public interface IRecordingWriter : IDisposable
 {
     string Path { get; }

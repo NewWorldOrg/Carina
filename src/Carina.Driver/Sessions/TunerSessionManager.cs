@@ -3,6 +3,7 @@ using System.Diagnostics.CodeAnalysis;
 
 using Carina.Contracts;
 using Carina.Driver.Configuration;
+using Carina.Driver.Diagnostics;
 using Carina.Driver.Events;
 using Carina.Driver.Recording;
 using Carina.Driver.Tuning;
@@ -18,7 +19,9 @@ public sealed class TunerSessionManager(
     TimeProvider timeProvider,
     ILogger<TunerSessionManager> logger,
     TimeSpan? hardStopLimit = null,
-    DriverEventHub? events = null
+    DriverEventHub? events = null,
+    DiagnosticsStore? diagnostics = null,
+    IRecordingWriterFactory? recordingWriters = null
 ) : IHostedService
 {
     public const int RetainedSessions = 64;
@@ -27,19 +30,29 @@ public sealed class TunerSessionManager(
 
     private readonly ConcurrentDictionary<SessionId, TunerSession> sessions = [];
     private readonly ConcurrentDictionary<string, SessionId> claimedDevices = [];
+    private readonly ConcurrentDictionary<string, string> faultedDevices = new(
+        StringComparer.Ordinal
+    );
     private readonly ConcurrentQueue<TunerSession> ended = new();
     private readonly TimeSpan drainCap = TimeSpan.FromHours(
         Math.Max(0, configuration.ShutdownGraceHours)
     );
     private readonly TimeSpan hardStop = hardStopLimit ?? DefaultHardStopLimit;
+    private readonly IRecordingWriterFactory writerFactory =
+        recordingWriters ?? new RecordingWriterFactory();
+
+    private readonly Lock drainGate = new();
 
     private volatile bool draining;
+    private Task? drain;
 
     public IReadOnlyCollection<TunerSession> Sessions => [.. sessions.Values];
 
     public IReadOnlyCollection<TunerSession> Recent => [.. ended];
 
     public bool IsDraining => draining;
+
+    public TimeSpan ShutdownBudget => drainCap + hardStop;
 
     public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
@@ -61,11 +74,28 @@ public sealed class TunerSessionManager(
         }
     }
 
-    public async Task StopAsync(CancellationToken cancellationToken)
+    public Task DrainAsync(CancellationToken cancellationToken)
     {
-        EnterDraining();
+        lock (drainGate)
+        {
+            drain ??= Drain(cancellationToken);
 
-        var running = sessions.Values.ToArray();
+            return drain;
+        }
+    }
+
+    public Task StopAsync(CancellationToken cancellationToken) => DrainAsync(cancellationToken);
+
+    private async Task Drain(CancellationToken cancellationToken)
+    {
+        TunerSession[] running;
+
+        lock (drainGate)
+        {
+            EnterDraining();
+            running = [.. sessions.Values];
+        }
+
         if (running.Length is 0)
         {
             return;
@@ -90,8 +120,17 @@ public sealed class TunerSessionManager(
                 drainCap
             );
 
-            if (await Settles(everyone, drainCap, cancellationToken))
+            var theRecordings = Task.WhenAll(recordings.Select(session => session.Completion));
+
+            if (await Settles(theRecordings, drainCap, cancellationToken))
             {
+                if (await Settles(everyone, hardStop, CancellationToken.None))
+                {
+                    return;
+                }
+
+                GiveUpOn(running);
+
                 return;
             }
 
@@ -113,6 +152,11 @@ public sealed class TunerSessionManager(
             return;
         }
 
+        GiveUpOn(running);
+    }
+
+    private void GiveUpOn(TunerSession[] running)
+    {
         foreach (var session in running.Where(session => !session.Completion.IsCompleted))
         {
             logger.LogError(
@@ -253,6 +297,16 @@ public sealed class TunerSessionManager(
                 return false;
             }
 
+            if (faultedDevices.TryGetValue(named, out var fault))
+            {
+                refusal = SessionStart.Refused(
+                    SessionRefusal.FaultedDevice,
+                    $"The device '{named}' is faulted and is not handed out until the driver restarts: {fault}"
+                );
+
+                return false;
+            }
+
             if (!Matches(candidate.Kind, request.Tuning.Kind))
             {
                 refusal = SessionStart.Refused(
@@ -292,7 +346,21 @@ public sealed class TunerSessionManager(
             return false;
         }
 
-        foreach (var candidate in usable)
+        var healthy = usable
+            .Where(entry => !faultedDevices.ContainsKey(entry.Id!))
+            .ToArray();
+
+        if (healthy.Length is 0)
+        {
+            refusal = SessionStart.Refused(
+                SessionRefusal.FaultedDevice,
+                $"Every device that serves {request.Tuning.Kind} is faulted."
+            );
+
+            return false;
+        }
+
+        foreach (var candidate in healthy)
         {
             if (claimedDevices.TryAdd(candidate.Id!, request.SessionId))
             {
@@ -336,7 +404,7 @@ public sealed class TunerSessionManager(
             );
         }
 
-        RecordingWriter? writer = null;
+        IRecordingWriter? writer = null;
         if (directory is not null)
         {
             var refusal = TryOpenRecording(directory, sessionId, deviceId, out writer);
@@ -358,18 +426,33 @@ public sealed class TunerSessionManager(
             timeProvider,
             writer,
             logger: logger,
-            outputRoot: request.OutputRoot
+            outputRoot: request.OutputRoot,
+            diagnostics: diagnostics
         );
 
-        if (!sessions.TryAdd(sessionId, session))
+        lock (drainGate)
         {
-            Release(deviceId, sessionId);
-            session.Dispose();
+            if (draining)
+            {
+                Release(deviceId, sessionId);
+                session.Dispose();
 
-            return SessionStart.Refused(
-                SessionRefusal.DuplicateSession,
-                $"The session '{sessionId}' already exists."
-            );
+                return SessionStart.Refused(
+                    SessionRefusal.Draining,
+                    "The driver is shutting down, so no session can start."
+                );
+            }
+
+            if (!sessions.TryAdd(sessionId, session))
+            {
+                Release(deviceId, sessionId);
+                session.Dispose();
+
+                return SessionStart.Refused(
+                    SessionRefusal.DuplicateSession,
+                    $"The session '{sessionId}' already exists."
+                );
+            }
         }
 
         session.Ended += Forget;
@@ -399,14 +482,14 @@ public sealed class TunerSessionManager(
         string directory,
         SessionId sessionId,
         string deviceId,
-        out RecordingWriter? writer
+        out IRecordingWriter? writer
     )
     {
         writer = null;
 
         try
         {
-            writer = new RecordingWriter(directory, sessionId);
+            writer = writerFactory.Open(directory, sessionId);
 
             return null;
         }
@@ -462,7 +545,16 @@ public sealed class TunerSessionManager(
     private void Forget(TunerSession session)
     {
         sessions.TryRemove(new KeyValuePair<SessionId, TunerSession>(session.SessionId, session));
+
+        if (session.StopReason is SessionStopReason.DeviceFailed)
+        {
+            faultedDevices[session.DeviceId] =
+                $"The device failed while serving '{session.SessionId}': "
+                + (session.FailureCause?.Message ?? "no cause was recorded.");
+        }
+
         Release(session.DeviceId, session.SessionId);
+
         ended.Enqueue(session);
 
         while (ended.Count > RetainedSessions && ended.TryDequeue(out _))
@@ -478,6 +570,9 @@ public sealed class TunerSessionManager(
     }
 
     public bool IsClaimed(string deviceId) => claimedDevices.ContainsKey(deviceId);
+
+    public bool IsFaulted(string deviceId, [NotNullWhen(true)] out string? detail) =>
+        faultedDevices.TryGetValue(deviceId, out detail);
 
     private static bool Matches(DeviceKind device, TunerKind requested) =>
         (device, requested) switch

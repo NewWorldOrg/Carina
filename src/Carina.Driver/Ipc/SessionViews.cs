@@ -93,6 +93,15 @@ public static class SessionViews
                 continue;
             }
 
+            if (manager.IsFaulted(deviceId, out var fault))
+            {
+                snapshots.Add(
+                    new TunerSnapshot(deviceId, kind, TunerState.Faulted, Detail: fault)
+                );
+
+                continue;
+            }
+
             snapshots.Add(
                 busy.TryGetValue(deviceId, out var sessionId)
                     ? new TunerSnapshot(deviceId, kind, TunerState.Busy, sessionId)

@@ -6,6 +6,7 @@ using Carina.Contracts;
 using Carina.Driver.Configuration;
 using Carina.Driver.Ipc;
 
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
 namespace Carina.Driver.Tests;
@@ -48,13 +49,16 @@ public sealed class DriverUnderTest : IAsyncDisposable
     public static string NewRoot() =>
         Directory.CreateTempSubdirectory("carina-driver-").FullName;
 
-    public static async Task<DriverUnderTest> Start(string[]? args = null)
+    public static async Task<DriverUnderTest> Start(
+        string[]? args = null,
+        Action<IServiceCollection>? reshapeServices = null
+    )
     {
         ClearTheInheritedUrls();
 
         var root = NewRoot();
         var configuration = ConfigurationIn(root);
-        var built = DriverHost.Create(args ?? [], configuration);
+        var built = DriverHost.Create(args ?? [], configuration, reshapeServices);
 
         Assert.True(built.TryGetHost(out var host), string.Join(" ", built.Problems));
 
@@ -74,6 +78,8 @@ public sealed class DriverUnderTest : IAsyncDisposable
 
     public T Service<T>()
         where T : notnull => (T)host.Services.GetService(typeof(T))!;
+
+    public Task BeginStop() => host.StopAsync(CancellationToken.None);
 
     public HttpClient Client()
     {

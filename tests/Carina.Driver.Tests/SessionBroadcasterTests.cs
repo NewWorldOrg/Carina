@@ -53,6 +53,26 @@ public sealed class SessionBroadcasterTests
     }
 
     [Fact]
+    public void ASurveyReaderThatIsCutOffHasItsMissingChunkCounted()
+    {
+        using var broadcaster = new SessionBroadcaster(
+            surveyCapacity: 1,
+            surveyBlockLimit: TimeSpan.FromMilliseconds(50)
+        );
+
+        Assert.True(broadcaster.TrySubscribe(SubscriberKind.Survey, out var subscription));
+
+        broadcaster.Publish(new byte[188]);
+        broadcaster.Publish(new byte[188]);
+
+        Assert.Equal(1, subscription.DroppedChunks);
+        Assert.Equal(1, broadcaster.DroppedChunks);
+        Assert.True(subscription.IsDisconnected);
+        Assert.True(subscription.IsTruncated);
+        Assert.Equal(0, broadcaster.SubscriberCount);
+    }
+
+    [Fact]
     public void TheSurveyBufferIsBoundedByTheLimitAndNotByTheNumberOfCallers()
     {
         using var broadcaster = new SessionBroadcaster(

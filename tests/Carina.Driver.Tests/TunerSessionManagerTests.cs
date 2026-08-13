@@ -419,23 +419,24 @@ public sealed class TunerSessionManagerTests : IDisposable
     }
 
     [Fact]
-    public async Task ShutdownStopsAViewerButWaitsForARecording()
+    public async Task TheDrainStopsAViewerButWaitsForARecordingWithItsStreamsAttached()
     {
         var manager = Manager();
         var recording = Begin(manager, "s-1", "adapter0");
         var live = Begin(manager, "s-2", "adapter1", SessionPurpose.Live, TunerKind.Satellite);
 
-        var shuttingDown = manager.StopAsync(CancellationToken.None);
+        var draining = manager.DrainAsync(CancellationToken.None);
 
         live.WaitForEnd(TimeSpan.FromSeconds(10));
 
         Assert.Equal(SessionState.Stopped, live.State);
-        Assert.False(shuttingDown.IsCompleted);
+        Assert.False(draining.IsCompleted);
         Assert.Equal(SessionState.Active, recording.State);
+        Assert.False(recording.Broadcaster.IsClosed);
 
         clock.Advance(TimeSpan.FromHours(2));
 
-        await shuttingDown;
+        await draining;
 
         Assert.Equal(SessionState.Stopped, recording.State);
         Assert.Equal(SessionStopReason.EndTimeReached, recording.StopReason);
@@ -447,11 +448,28 @@ public sealed class TunerSessionManagerTests : IDisposable
         var manager = Manager(Configuration with { ShutdownGraceHours = 0 });
         var recording = Begin(manager, "s-1", "adapter0");
 
-        await manager.StopAsync(CancellationToken.None);
+        await manager.DrainAsync(CancellationToken.None);
 
         Assert.Equal(SessionState.Failed, recording.State);
         Assert.Equal(SessionStopReason.DrainCapReached, recording.StopReason);
         Assert.NotNull(recording.FailureCause);
+        Assert.False(manager.IsFaulted("adapter0", out _));
+    }
+
+    [Fact]
+    public async Task TheDrainRunsOnceAndStopAsyncJoinsIt()
+    {
+        var manager = Manager(Configuration with { ShutdownGraceHours = 0 });
+        var recording = Begin(manager, "s-1", "adapter0");
+
+        var draining = manager.DrainAsync(CancellationToken.None);
+
+        Assert.Same(draining, manager.DrainAsync(CancellationToken.None));
+        Assert.Same(draining, manager.StopAsync(CancellationToken.None));
+
+        await draining;
+
+        Assert.Equal(SessionStopReason.DrainCapReached, recording.StopReason);
     }
 
     [Fact]
@@ -468,11 +486,98 @@ public sealed class TunerSessionManagerTests : IDisposable
         var recording = Begin(manager, "s-1", "adapter0");
         var started = DateTime.UtcNow;
 
-        await manager.StopAsync(CancellationToken.None);
+        await manager.DrainAsync(CancellationToken.None);
 
         Assert.True(DateTime.UtcNow - started < TimeSpan.FromSeconds(10));
         Assert.False(recording.Completion.IsCompleted);
         Assert.False(recording.Concluded);
+    }
+
+    [Fact]
+    public async Task AWedgedLiveSessionDoesNotHoldTheDrainOnceEveryRecordingIsDone()
+    {
+        var manager = new TunerSessionManager(
+            Configuration,
+            new StubbornForOneDeviceFactory("adapter1", TimeSpan.FromSeconds(10)),
+            clock,
+            NullLogger<TunerSessionManager>.Instance,
+            hardStopLimit: TimeSpan.FromSeconds(1)
+        );
+
+        var recording = Begin(manager, "s-1", "adapter0");
+        var wedged = Begin(manager, "s-2", "adapter1", SessionPurpose.Live, TunerKind.Satellite);
+
+        var draining = manager.DrainAsync(CancellationToken.None);
+        var started = DateTime.UtcNow;
+
+        recording.Stop();
+
+        await draining;
+
+        Assert.True(
+            DateTime.UtcNow - started < TimeSpan.FromSeconds(15),
+            $"The drain took {DateTime.UtcNow - started} although the only recording had finished."
+        );
+        Assert.Equal(SessionState.Stopped, recording.State);
+        Assert.False(wedged.Completion.IsCompleted);
+    }
+
+    [Fact]
+    public async Task ASessionThatBeginsWhileTheDrainSnapshotsIsRefusedNotOrphaned()
+    {
+        var manager = Manager();
+        var refusals = 0;
+        var granted = new ConcurrentBag<TunerSession>();
+
+        var beginning = Task.Run(() =>
+        {
+            for (var index = 0; index < 200; index++)
+            {
+                var start = manager.Begin(
+                    new StartSessionRequest
+                    {
+                        SessionId = SessionId.Parse($"s-{index}"),
+                        Purpose = SessionPurpose.Live,
+                        Tuning = new TuningRequest(TunerKind.Terrestrial, 27),
+                    }
+                );
+
+                if (start.TryGetSession(out var session))
+                {
+                    granted.Add(session);
+
+                    if (!manager.IsDraining)
+                    {
+                        session.Stop();
+                    }
+                }
+                else
+                {
+                    Interlocked.Increment(ref refusals);
+
+                    if (start.Refusal is SessionRefusal.Draining)
+                    {
+                        break;
+                    }
+                }
+            }
+        });
+
+        await Task.Delay(TimeSpan.FromMilliseconds(30));
+        await manager.DrainAsync(CancellationToken.None);
+        await beginning;
+
+        foreach (var session in granted)
+        {
+            session.WaitForEnd(TimeSpan.FromSeconds(10));
+
+            Assert.True(
+                session.Concluded,
+                $"'{session.SessionId}' was granted but nobody concluded it."
+            );
+        }
+
+        Assert.True(refusals > 0);
     }
 
     [Fact]
@@ -507,6 +612,107 @@ public sealed class TunerSessionManagerTests : IDisposable
             RefusalFor(manager, Request("s-1", "adapter0"))
         );
         Assert.True(manager.IsDraining);
+    }
+
+    [Fact]
+    public void ADeviceThatFailedItsSessionIsFaultedAndNotHandedOutAgain()
+    {
+        var manager = new TunerSessionManager(
+            Configuration,
+            new SelectiveTunerDeviceFactory("adapter0"),
+            clock,
+            NullLogger<TunerSessionManager>.Instance
+        );
+
+        var doomed = Begin(manager, "s-1", "adapter0", SessionPurpose.Live);
+
+        doomed.WaitForEnd(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(SessionState.Failed, doomed.State);
+        Assert.True(manager.IsFaulted("adapter0", out var detail));
+        Assert.Contains("s-1", detail, StringComparison.Ordinal);
+
+        Assert.Equal(
+            SessionRefusal.FaultedDevice,
+            RefusalFor(manager, Request("s-2", "adapter0", purpose: SessionPurpose.Live))
+        );
+
+        var rerouted = Begin(manager, "s-3", purpose: SessionPurpose.Live);
+
+        Assert.Equal("adapter3", rerouted.DeviceId);
+
+        StopAndWait(rerouted);
+    }
+
+    [Fact]
+    public void WhenEveryDeviceOfAKindIsFaultedTheCallerHearsWhy()
+    {
+        var manager = new TunerSessionManager(
+            Configuration,
+            new ScriptedTunerDeviceFactory(failAfterReads: 1),
+            clock,
+            NullLogger<TunerSessionManager>.Instance
+        );
+
+        Begin(manager, "s-1", "adapter0", SessionPurpose.Live).WaitForEnd(TimeSpan.FromSeconds(10));
+        Begin(manager, "s-2", "adapter3", SessionPurpose.Live).WaitForEnd(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(
+            SessionRefusal.FaultedDevice,
+            RefusalFor(manager, Request("s-3", purpose: SessionPurpose.Live))
+        );
+    }
+
+    [Fact]
+    public void ADeliberateStopDoesNotFaultTheDevice()
+    {
+        var manager = Manager();
+
+        StopAndWait(Begin(manager, "s-1", "adapter0"));
+
+        Assert.False(manager.IsFaulted("adapter0", out _));
+    }
+
+    [Fact]
+    public void ARecordingWriteFailureDoesNotFaultTheDevice()
+    {
+        var manager = new TunerSessionManager(
+            Configuration,
+            new TunerDeviceFactory(Configuration),
+            clock,
+            NullLogger<TunerSessionManager>.Instance,
+            recordingWriters: new BrittleRecordingWriterFactory()
+        );
+
+        var starved = Begin(manager, "s-1", "adapter0");
+
+        starved.WaitForEnd(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(SessionStopReason.RecordingFailed, starved.StopReason);
+        Assert.False(manager.IsFaulted("adapter0", out _));
+
+        StopAndWait(Begin(manager, "s-2", "adapter0", SessionPurpose.Live));
+    }
+
+    [Fact]
+    public void ClearingAFaultMakesTheDeviceUsableAgain()
+    {
+        var manager = new TunerSessionManager(
+            Configuration,
+            new SelectiveTunerDeviceFactory("adapter0"),
+            clock,
+            NullLogger<TunerSessionManager>.Instance
+        );
+
+        Begin(manager, "s-1", "adapter0", SessionPurpose.Live).WaitForEnd(TimeSpan.FromSeconds(10));
+
+        Assert.True(manager.IsFaulted("adapter0", out _));
+
+        var restarted = Manager();
+
+        Assert.False(restarted.IsFaulted("adapter0", out _));
+
+        StopAndWait(Begin(restarted, "s-2", "adapter0", SessionPurpose.Live));
     }
 
     [Fact]

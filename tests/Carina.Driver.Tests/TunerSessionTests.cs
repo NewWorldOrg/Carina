@@ -1,4 +1,5 @@
 using Carina.Contracts;
+using Carina.Driver.Diagnostics;
 using Carina.Driver.Recording;
 using Carina.Driver.Sessions;
 using Carina.Driver.Transport;
@@ -20,7 +21,8 @@ public sealed class TunerSessionTests : IDisposable
         ManualTimeProvider clock,
         IRecordingWriter? writer = null,
         SessionPurpose purpose = SessionPurpose.Recording,
-        TimeSpan? runsFor = null
+        TimeSpan? runsFor = null,
+        DiagnosticsStore? diagnostics = null
     ) =>
         new(
             SessionId.Parse("s-1"),
@@ -31,7 +33,8 @@ public sealed class TunerSessionTests : IDisposable
             Start + (runsFor ?? TimeSpan.FromHours(1)),
             clock,
             writer,
-            ChunkSize
+            ChunkSize,
+            diagnostics: diagnostics
         );
 
     private RecordingWriter Writer(string name = "s-1") => new(root, SessionId.Parse(name));
@@ -135,6 +138,147 @@ public sealed class TunerSessionTests : IDisposable
         WaitForEnd(session);
 
         Assert.Equal(SessionState.Failed, session.State);
+        Assert.Equal(SessionStopReason.RecordingFailed, session.StopReason);
+    }
+
+    [Fact]
+    public void AWriteFailureIsARecordingFailureAndNotADeviceOne()
+    {
+        var clock = new ManualTimeProvider(Start);
+        var store = new DiagnosticsStore(clock);
+        var device = new ScriptedTunerDevice();
+
+        using var session = Session(
+            device,
+            clock,
+            new BrittleRecordingWriter(Path.Combine(root, "s-1.ts")),
+            diagnostics: store
+        );
+
+        session.Start();
+        WaitForEnd(session);
+
+        Assert.Equal(SessionState.Failed, session.State);
+        Assert.Equal(SessionStopReason.RecordingFailed, session.StopReason);
+        Assert.IsType<IOException>(session.FailureCause);
+        Assert.True(device.Disposed);
+
+        var entry = Assert.Single(
+            store.Snapshot(),
+            candidate => candidate.Reason is DiagnosticReason.RecordingWriteFailed
+        );
+
+        Assert.Equal("s-1", entry.SessionId.Value);
+        Assert.Equal("adapter0", entry.DeviceId);
+        Assert.Contains("No space left on device", entry.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AFailureToCloseTheRecordingIsWrittenToTheDiagnostics()
+    {
+        var clock = new ManualTimeProvider(Start);
+        var store = new DiagnosticsStore(clock);
+        var writer = new CountingRecordingWriter(
+            Path.Combine(root, "s-1.ts"),
+            failOnClose: true
+        );
+
+        var session = Session(new ScriptedTunerDevice(), clock, writer, diagnostics: store);
+
+        session.Start();
+        session.Stop();
+        WaitForEnd(session);
+
+        Assert.Contains(
+            store.Snapshot(),
+            candidate => candidate.Reason is DiagnosticReason.RecordingWriteFailed
+                && candidate.SessionId.Value is "s-1"
+        );
+    }
+
+    [Fact]
+    public void ADeviceFailureLeavesADeviceFaultedDiagnostic()
+    {
+        var clock = new ManualTimeProvider(Start);
+        var store = new DiagnosticsStore(clock);
+
+        using var session = Session(
+            new ScriptedTunerDevice(failAfterReads: 3),
+            clock,
+            diagnostics: store
+        );
+
+        session.Start();
+        WaitForEnd(session);
+
+        var entry = Assert.Single(
+            store.Snapshot(),
+            candidate => candidate.Reason is DiagnosticReason.DeviceFaulted
+        );
+
+        Assert.Equal("adapter0", entry.DeviceId);
+        Assert.Equal("s-1", entry.SessionId.Value);
+    }
+
+    [Fact]
+    public void ADrainCapStopLeavesARecordingCutShortDiagnostic()
+    {
+        var clock = new ManualTimeProvider(Start);
+        var store = new DiagnosticsStore(clock);
+
+        using var session = Session(
+            new ScriptedTunerDevice(),
+            clock,
+            Writer(),
+            diagnostics: store
+        );
+
+        session.Start();
+        session.Stop(SessionStopReason.DrainCapReached);
+        WaitForEnd(session);
+
+        var entry = Assert.Single(
+            store.Snapshot(),
+            candidate => candidate.Reason is DiagnosticReason.RecordingCutShort
+        );
+
+        Assert.Equal("s-1", entry.SessionId.Value);
+    }
+
+    [Fact]
+    public void ACleanEndLeavesNoDiagnostic()
+    {
+        var clock = new ManualTimeProvider(Start);
+        var store = new DiagnosticsStore(clock);
+
+        using var session = Session(new ScriptedTunerDevice(), clock, Writer(), diagnostics: store);
+
+        session.Start();
+        session.Stop();
+        WaitForEnd(session);
+
+        Assert.Equal(SessionState.Stopped, session.State);
+        Assert.Empty(store.Snapshot());
+    }
+
+    [Fact]
+    public void TheFirstMeasurementFaultIsADiagnosticAndTheRestAreNot()
+    {
+        var clock = new ManualTimeProvider(Start);
+        var store = new DiagnosticsStore(clock);
+        var session = Session(new ScriptedTunerDevice(), clock, Writer(), diagnostics: store);
+
+        session.Ended += _ => throw new InvalidOperationException("the first listener is broken");
+        session.Ended += _ => throw new InvalidOperationException("the second listener is broken");
+        session.Start();
+        session.Stop();
+        WaitForEnd(session);
+
+        Assert.Equal(2, session.FaultCount);
+        Assert.Single(
+            store.Snapshot(),
+            candidate => candidate.Reason is DiagnosticReason.MeasurementFaulted
+        );
     }
 
     [Fact]

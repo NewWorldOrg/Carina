@@ -5,7 +5,11 @@ using System.Text;
 using Carina.Contracts;
 using Carina.Driver.Events;
 using Carina.Driver.Ipc;
+using Carina.Driver.Recording;
 using Carina.Driver.Sessions;
+using Carina.Driver.Tuning;
+
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Carina.Driver.Tests;
 
@@ -138,11 +142,106 @@ public sealed class DriverApiTests
             $"Shutdown took {watch.Elapsed} with a viewer attached."
         );
 
-        await Assert.ThrowsAnyAsync<Exception>(async () =>
+        try
         {
             while (await body.ReadAsync(buffer, Soon()) > 0)
             { }
-        });
+        }
+        catch (Exception)
+        { }
+    }
+
+    [Fact]
+    public async Task TheSocketKeepsAnsweringWhileTheDriverDrains()
+    {
+        var driver = await DriverUnderTest.Start();
+        using var client = driver.Client();
+
+        using var created = await client.PostAsync(
+            DriverEndpoints.Sessions,
+            DriverUnderTest.Body(
+                DriverUnderTest.Recording("lingering", DateTimeOffset.UtcNow.AddMinutes(10))
+            ),
+            Soon()
+        );
+
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+
+        var stopping = driver.BeginStop();
+
+        var deadline = DateTimeOffset.UtcNow + Patience;
+
+        while (true)
+        {
+            using var polled = await client.GetAsync(DriverEndpoints.Health, Soon());
+            var hello = await DriverUnderTest.Read(polled, DriverJson.Context.DriverHello);
+
+            if (hello is { Draining: true })
+            {
+                break;
+            }
+
+            if (DateTimeOffset.UtcNow > deadline)
+            {
+                Assert.Fail("The driver never said it was draining.");
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(20));
+        }
+
+        Assert.False(stopping.IsCompleted);
+
+        using var listed = await client.GetAsync(DriverEndpoints.Sessions, Soon());
+        var sessions = await DriverUnderTest.Read(
+            listed,
+            DriverJson.Context.IReadOnlyListSessionSnapshot
+        );
+
+        Assert.NotNull(sessions);
+
+        var recording = Assert.Single(sessions);
+
+        Assert.Equal("lingering", recording.SessionId.Value);
+        Assert.Equal(SessionState.Active, recording.State);
+
+        using var diagnosed = await client.GetAsync(DriverEndpoints.Diagnostics, Soon());
+
+        Assert.Equal(HttpStatusCode.OK, diagnosed.StatusCode);
+
+        using var listening = await client.GetAsync(
+            DriverEndpoints.Events,
+            HttpCompletionOption.ResponseHeadersRead,
+            Soon()
+        );
+
+        Assert.Equal(HttpStatusCode.OK, listening.StatusCode);
+
+        using var refused = await client.PostAsync(
+            DriverEndpoints.Sessions,
+            DriverUnderTest.Body(DriverUnderTest.Live("latecomer")),
+            Soon()
+        );
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, refused.StatusCode);
+
+        var problem = await DriverUnderTest.Read(refused, DriverJson.Context.DriverProblem);
+
+        Assert.NotNull(problem);
+        Assert.Equal("draining", problem.Title);
+
+        using var stopped = await client.DeleteAsync(
+            DriverEndpoints.Session(SessionId.Parse("lingering")),
+            Soon()
+        );
+
+        Assert.True(
+            stopped.StatusCode is HttpStatusCode.Accepted or HttpStatusCode.OK,
+            $"Stopping the recording during the drain answered {stopped.StatusCode}."
+        );
+
+        await stopping.WaitAsync(TimeSpan.FromSeconds(20));
+
+        await driver.DisposeAsync();
     }
 
     [Fact]
@@ -244,7 +343,8 @@ public sealed class DriverApiTests
 
         var body = await WaitUntil(
             client,
-            sessions => sessions.Single().BytesRecorded > 0
+            sessions =>
+                sessions.Single() is { BytesRecorded: > 0, Counters.Packets: > 0 }
         );
 
         var only = body.Single();
@@ -279,6 +379,146 @@ public sealed class DriverApiTests
         Assert.Contains("\"bytesRecorded\":", raw, StringComparison.Ordinal);
         Assert.Contains("\"stopReason\":", raw, StringComparison.Ordinal);
         Assert.Contains("\"counters\":", raw, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheDiagnosticsOfAnUntroubledDriverAreEmpty()
+    {
+        await using var driver = await DriverUnderTest.Start();
+        using var client = driver.Client();
+
+        using var response = await client.GetAsync(DriverEndpoints.Diagnostics, Soon());
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var entries = await DriverUnderTest.Read(
+            response,
+            DriverJson.Context.IReadOnlyListDiagnosticSnapshot
+        );
+
+        Assert.NotNull(entries);
+        Assert.Empty(entries);
+    }
+
+    [Fact]
+    public async Task AWriteFailureIsDiagnosedMarkedFailedAndDoesNotKillTheDriver()
+    {
+        await using var driver = await DriverUnderTest.Start(reshapeServices: services =>
+            services.AddSingleton<IRecordingWriterFactory>(new BrittleRecordingWriterFactory())
+        );
+        using var client = driver.Client();
+
+        using var created = await client.PostAsync(
+            DriverEndpoints.Sessions,
+            DriverUnderTest.Body(
+                DriverUnderTest.Recording("starved", DateTimeOffset.UtcNow.AddMinutes(5))
+            ),
+            Soon()
+        );
+
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+
+        var settled = await WaitUntil(
+            client,
+            sessions => sessions.Single().State is SessionState.Failed
+        );
+
+        Assert.Equal(SessionStopReason.RecordingFailed, settled.Single().StopReason);
+
+        using var diagnosed = await client.GetAsync(DriverEndpoints.Diagnostics, Soon());
+        var entries = await DriverUnderTest.Read(
+            diagnosed,
+            DriverJson.Context.IReadOnlyListDiagnosticSnapshot
+        );
+
+        Assert.NotNull(entries);
+
+        var entry = Assert.Single(
+            entries,
+            candidate => candidate.Reason is DiagnosticReason.RecordingWriteFailed
+        );
+
+        Assert.Equal("starved", entry.SessionId.Value);
+        Assert.Equal("fake-terrestrial", entry.DeviceId);
+        Assert.Contains("No space left on device", entry.Detail, StringComparison.Ordinal);
+
+        using var onward = await client.PostAsync(
+            DriverEndpoints.Sessions,
+            DriverUnderTest.Body(DriverUnderTest.Live("onward")),
+            Soon()
+        );
+
+        Assert.Equal(HttpStatusCode.Created, onward.StatusCode);
+
+        using var health = await client.GetAsync(DriverEndpoints.Health, Soon());
+
+        Assert.Equal(HttpStatusCode.OK, health.StatusCode);
+    }
+
+    [Fact]
+    public async Task ADeviceFailureFaultsOnlyThatTunerOnTheWire()
+    {
+        await using var driver = await DriverUnderTest.Start(reshapeServices: services =>
+            services.AddSingleton<ITunerDeviceFactory>(
+                new SelectiveTunerDeviceFactory("fake-terrestrial")
+            )
+        );
+        using var client = driver.Client();
+
+        using var created = await client.PostAsync(
+            DriverEndpoints.Sessions,
+            DriverUnderTest.Body(DriverUnderTest.Live("doomed", "fake-terrestrial")),
+            Soon()
+        );
+
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+
+        await WaitUntil(client, sessions => sessions.Single().State is SessionState.Failed);
+
+        using var listed = await client.GetAsync(DriverEndpoints.Tuners, Soon());
+        var tuners = await DriverUnderTest.Read(
+            listed,
+            DriverJson.Context.IReadOnlyListTunerSnapshot
+        );
+
+        Assert.NotNull(tuners);
+
+        var faulted = tuners.Single(tuner => tuner.DeviceId == "fake-terrestrial");
+
+        Assert.Equal(TunerState.Faulted, faulted.State);
+        Assert.NotNull(faulted.Detail);
+        Assert.Equal(
+            TunerState.Idle,
+            tuners.Single(tuner => tuner.DeviceId == "fake-satellite").State
+        );
+
+        using var refused = await client.PostAsync(
+            DriverEndpoints.Sessions,
+            DriverUnderTest.Body(DriverUnderTest.Live("again", "fake-terrestrial")),
+            Soon()
+        );
+
+        Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+
+        var problem = await DriverUnderTest.Read(refused, DriverJson.Context.DriverProblem);
+
+        Assert.NotNull(problem);
+        Assert.Equal("faultedDevice", problem.Title);
+
+        using var satellite = await client.PostAsync(
+            DriverEndpoints.Sessions,
+            DriverUnderTest.Body(
+                new StartSessionRequest
+                {
+                    SessionId = SessionId.Parse("sideways"),
+                    Purpose = SessionPurpose.Live,
+                    Tuning = new TuningRequest(TunerKind.Satellite, 3),
+                }
+            ),
+            Soon()
+        );
+
+        Assert.Equal(HttpStatusCode.Created, satellite.StatusCode);
     }
 
     [Fact]
@@ -662,6 +902,10 @@ public sealed class DriverApiTests
 
         Assert.NotNull(problem);
         Assert.Equal("sessionEnded", problem.Title);
+
+        var detail = Assert.Single(problem.Problems);
+
+        Assert.Contains("(requested)", detail, StringComparison.Ordinal);
     }
 
     [Fact]

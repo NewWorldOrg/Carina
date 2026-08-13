@@ -1,4 +1,5 @@
 using Carina.Contracts;
+using Carina.Driver.Diagnostics;
 using Carina.Driver.Recording;
 using Carina.Driver.Transport;
 using Carina.Driver.Tuning;
@@ -16,6 +17,7 @@ public sealed class TunerSession : IDisposable
     private readonly IRecordingWriter? recordingWriter;
     private readonly TimeProvider timeProvider;
     private readonly ILogger? logger;
+    private readonly DiagnosticsStore? diagnostics;
     private readonly TsPacketReader packetReader = new();
     private readonly int chunkSize;
     private readonly Lock gate = new();
@@ -46,7 +48,8 @@ public sealed class TunerSession : IDisposable
         IRecordingWriter? recordingWriter = null,
         int chunkSize = DefaultChunkSize,
         ILogger? logger = null,
-        string? outputRoot = null
+        string? outputRoot = null,
+        DiagnosticsStore? diagnostics = null
     )
     {
         if (endsAt <= startedAt)
@@ -68,6 +71,7 @@ public sealed class TunerSession : IDisposable
         this.timeProvider = timeProvider;
         this.chunkSize = chunkSize;
         this.logger = logger;
+        this.diagnostics = diagnostics;
         state = SessionState.Requested;
         stopReason = SessionStopReason.Running;
         Broadcaster = new SessionBroadcaster(
@@ -259,12 +263,20 @@ public sealed class TunerSession : IDisposable
                     );
                 }
 
-                recordingWriter?.Write(chunk);
+                WriteOut(chunk);
 
                 Measure(chunk);
             }
 
             Conclude(ReasonForEnd(token));
+        }
+        catch (RecordingWriteException error)
+        {
+            Finish(
+                SessionState.Failed,
+                SessionStopReason.RecordingFailed,
+                error.InnerException ?? error
+            );
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
@@ -273,6 +285,23 @@ public sealed class TunerSession : IDisposable
         catch (Exception error)
         {
             Finish(SessionState.Failed, SessionStopReason.DeviceFailed, error);
+        }
+    }
+
+    private void WriteOut(byte[] chunk)
+    {
+        if (recordingWriter is null)
+        {
+            return;
+        }
+
+        try
+        {
+            recordingWriter.Write(chunk);
+        }
+        catch (Exception error)
+        {
+            throw new RecordingWriteException(error);
         }
     }
 
@@ -338,6 +367,16 @@ public sealed class TunerSession : IDisposable
             firstFault ??= error;
         }
 
+        if (seen is 1)
+        {
+            diagnostics?.Report(
+                DiagnosticReason.MeasurementFaulted,
+                error.Message,
+                DeviceId,
+                SessionId
+            );
+        }
+
         if (seen is 1 || seen % FaultReportInterval is 0)
         {
             logger?.LogWarning(
@@ -396,11 +435,42 @@ public sealed class TunerSession : IDisposable
             RecordFault(closeFault);
         }
 
+        ReportDiagnostic();
+
         RaiseEnded();
 
         ReportOutcome();
 
         completion.TrySetResult();
+    }
+
+    private void ReportDiagnostic()
+    {
+        if (diagnostics is null)
+        {
+            return;
+        }
+
+        var reason = StopReason switch
+        {
+            SessionStopReason.RecordingFailed => DiagnosticReason.RecordingWriteFailed,
+            SessionStopReason.DeviceFailed => DiagnosticReason.DeviceFaulted,
+            SessionStopReason.DrainCapReached => DiagnosticReason.RecordingCutShort,
+            _ => DiagnosticReason.Unspecified,
+        };
+
+        if (reason is DiagnosticReason.Unspecified)
+        {
+            return;
+        }
+
+        diagnostics.Report(
+            reason,
+            FailureCause?.Message
+                ?? $"The session '{SessionId}' ended ({SessionStopReasonConverter.WireName(StopReason)}).",
+            DeviceId,
+            SessionId
+        );
     }
 
     private void ReportOutcome()

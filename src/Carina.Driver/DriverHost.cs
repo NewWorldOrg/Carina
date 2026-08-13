@@ -2,8 +2,10 @@ using System.Diagnostics.CodeAnalysis;
 
 using Carina.Contracts;
 using Carina.Driver.Configuration;
+using Carina.Driver.Diagnostics;
 using Carina.Driver.Events;
 using Carina.Driver.Ipc;
+using Carina.Driver.Recording;
 using Carina.Driver.Sessions;
 using Carina.Driver.Tuning;
 
@@ -12,6 +14,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace Carina.Driver;
 
@@ -61,7 +64,11 @@ public sealed record DriverHostResult
 
 public static class DriverHost
 {
-    public static DriverHostResult Create(string[] args, DriverConfiguration configuration)
+    public static DriverHostResult Create(
+        string[] args,
+        DriverConfiguration configuration,
+        Action<IServiceCollection>? reshapeServices = null
+    )
     {
         var builder = WebApplication.CreateSlimBuilder(args);
 
@@ -89,10 +96,12 @@ public static class DriverHost
             options.ListenUnixSocket(socketPath);
         });
 
-        builder.Services.Configure<HostOptions>(options =>
-            options.ShutdownTimeout =
-                TimeSpan.FromHours(configuration.ShutdownGraceHours) + TimeSpan.FromMinutes(1)
-        );
+        builder
+            .Services.AddOptions<HostOptions>()
+            .Configure<TunerSessionManager>(
+                (options, manager) =>
+                    options.ShutdownTimeout = manager.ShutdownBudget + TimeSpan.FromMinutes(1)
+            );
         builder.Services.ConfigureHttpJsonOptions(options =>
             options.SerializerOptions.TypeInfoResolverChain.Insert(0, DriverJson.Context)
         );
@@ -101,20 +110,32 @@ public static class DriverHost
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddSingleton(DriverGreeting.ForThisProcess());
         builder.Services.AddSingleton<ITunerDeviceFactory, TunerDeviceFactory>();
+        builder.Services.AddSingleton<IRecordingWriterFactory, RecordingWriterFactory>();
         builder.Services.AddSingleton<DriverEventHub>();
+        builder.Services.AddSingleton(provider => new DiagnosticsStore(
+            provider.GetRequiredService<TimeProvider>(),
+            provider.GetRequiredService<DriverEventHub>()
+        ));
         builder.Services.AddSingleton(provider => new TunerSessionManager(
             provider.GetRequiredService<DriverConfiguration>(),
             provider.GetRequiredService<ITunerDeviceFactory>(),
             provider.GetRequiredService<TimeProvider>(),
             provider.GetRequiredService<ILogger<TunerSessionManager>>(),
-            events: provider.GetRequiredService<DriverEventHub>()
+            events: provider.GetRequiredService<DriverEventHub>(),
+            diagnostics: provider.GetRequiredService<DiagnosticsStore>(),
+            recordingWriters: provider.GetRequiredService<IRecordingWriterFactory>()
         ));
 
-        builder.Services.AddHostedService<DriverEventHubService>();
+        builder.Services.AddSingleton<DriverLifecycle>();
+        builder.Services.AddHostedService(provider =>
+            provider.GetRequiredService<DriverLifecycle>()
+        );
         builder.Services.AddHostedService(provider =>
             provider.GetRequiredService<TunerSessionManager>()
         );
         builder.Services.AddHostedService<SocketPermissionGuard>();
+
+        reshapeServices?.Invoke(builder.Services);
 
         var app = builder.Build();
 
