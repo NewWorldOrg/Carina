@@ -43,8 +43,32 @@ jobs:
 
   compose:
     runs-on: ubuntu-latest
+    env:
+      CARINA_DRIVER_CONFIG_FILE: ./docker/driver.development.json
+      CARINA_STOP_GRACE: 7h
+      POSTGRES_PASSWORD: ci-only-not-a-deployment
     steps:
       - uses: actions/checkout@v4
       - run: docker compose config --quiet
       - run: docker compose -f compose.deploy.yml config --quiet
-      - run: docker/check-grace-period.sh
+      - run: |
+          ! docker compose -f compose.deploy.yml config --quiet
+        env:
+          POSTGRES_PASSWORD: ''
+      - run: |
+          ! docker compose -f compose.deploy.yml config --quiet
+        env:
+          CARINA_DRIVER_CONFIG_FILE: ''
+
+  image:
+    runs-on: ubuntu-latest
+    env:
+      CARINA_IMAGE: carina:ci
+      CARINA_DRIVER_CONFIG_FILE: ./docker/driver.development.json
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t carina:ci .
+      - run: docker/verify-image.sh carina:ci
+      - run: CARINA_STOP_GRACE="$(docker/grace-period.sh derive)" docker/grace-period.sh check
+      - run: |
+          ! CARINA_STOP_GRACE=6h docker/grace-period.sh check

@@ -107,13 +107,21 @@ GitHub Actions runs build, test and format verification on push and pull request
 - `compose.deploy.yml` is the deployment-shaped stack: the built image as separate
   `driver` and `app` services sharing `/run/carina`, a one-shot `migrate` the app
   waits for, and `db`. It is a second file rather than a profile so that
-  `docker compose up` with no argument stays the development stack. The driver's
-  health probe is `GET /health` over the socket, which is why the runtime image
-  carries `curl`.
-- `docker/check-grace-period.sh` reads `stop_grace_period` from that file and
-  `shutdownGraceHours` from the driver configuration it mounts, and fails unless the
-  first is strictly greater. CI runs it, so the relationship is checked rather than
-  assumed. Nothing enforces it at runtime: exceeding it means SIGKILL mid-recording.
+  `docker compose up` with no argument stays the development stack. It fails closed:
+  the driver configuration, the database password and the stop grace period have no
+  working defaults, because a default that happens to work hides the omission.
+- The driver's health probe is the driver itself — `Carina.Driver --probe` reads the
+  configured socket, asks `/health` and `/tuners`, and answers on what it finds:
+  draining, or every usable tuner faulted, is not healthy. The runtime image carries
+  no HTTP client for this; `verify-image.sh` fails if one appears.
+- `Carina.Driver --shutdown-budget` prints the seconds the runtime has to allow
+  before SIGKILL — the linger cap plus the hard stop plus the host's own slack. The
+  driver prints the same figure at startup. `docker/grace-period.sh derive` turns it
+  into `stop_grace_period` and `task deploy:up` applies it, so the compose value is
+  derived from the driver rather than guessed next to it; `check` re-verifies it.
+- `migrate` takes a PostgreSQL advisory lock, so a second one waits instead of
+  racing. Do not scale it: the lock serialises, but two migrations still make the
+  slower deploy wait on a lock it cannot see.
 - `Dockerfile` builds the single role-switched image (`driver`, `app`, `web`, `all`,
   plus `migrate`) via `docker/entrypoint.sh`. Routing between app and web is the job
   of a reverse proxy outside the image; the image contains no proxy.
