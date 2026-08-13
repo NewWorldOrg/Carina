@@ -10,6 +10,7 @@ public enum SessionRefusal
     DuplicateSession,
     UnknownDevice,
     DisabledDevice,
+    FaultedDevice,
     WrongDeviceKind,
     DeviceBusy,
     NoDeviceOfThatKind,

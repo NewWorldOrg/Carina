@@ -7,6 +7,7 @@ using Carina.Driver.Events;
 using Carina.Driver.Ipc;
 using Carina.Driver.Recording;
 using Carina.Driver.Sessions;
+using Carina.Driver.Tuning;
 
 using Microsoft.Extensions.DependencyInjection;
 
@@ -356,6 +357,72 @@ public sealed class DriverApiTests
         using var health = await client.GetAsync(DriverEndpoints.Health, Soon());
 
         Assert.Equal(HttpStatusCode.OK, health.StatusCode);
+    }
+
+    [Fact]
+    public async Task ADeviceFailureFaultsOnlyThatTunerOnTheWire()
+    {
+        await using var driver = await DriverUnderTest.Start(reshapeServices: services =>
+            services.AddSingleton<ITunerDeviceFactory>(
+                new SelectiveTunerDeviceFactory("fake-terrestrial")
+            )
+        );
+        using var client = driver.Client();
+
+        using var created = await client.PostAsync(
+            DriverEndpoints.Sessions,
+            DriverUnderTest.Body(DriverUnderTest.Live("doomed", "fake-terrestrial")),
+            Soon()
+        );
+
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+
+        await WaitUntil(client, sessions => sessions.Single().State is SessionState.Failed);
+
+        using var listed = await client.GetAsync(DriverEndpoints.Tuners, Soon());
+        var tuners = await DriverUnderTest.Read(
+            listed,
+            DriverJson.Context.IReadOnlyListTunerSnapshot
+        );
+
+        Assert.NotNull(tuners);
+
+        var faulted = tuners.Single(tuner => tuner.DeviceId == "fake-terrestrial");
+
+        Assert.Equal(TunerState.Faulted, faulted.State);
+        Assert.NotNull(faulted.Detail);
+        Assert.Equal(
+            TunerState.Idle,
+            tuners.Single(tuner => tuner.DeviceId == "fake-satellite").State
+        );
+
+        using var refused = await client.PostAsync(
+            DriverEndpoints.Sessions,
+            DriverUnderTest.Body(DriverUnderTest.Live("again", "fake-terrestrial")),
+            Soon()
+        );
+
+        Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+
+        var problem = await DriverUnderTest.Read(refused, DriverJson.Context.DriverProblem);
+
+        Assert.NotNull(problem);
+        Assert.Equal("faultedDevice", problem.Title);
+
+        using var satellite = await client.PostAsync(
+            DriverEndpoints.Sessions,
+            DriverUnderTest.Body(
+                new StartSessionRequest
+                {
+                    SessionId = SessionId.Parse("sideways"),
+                    Purpose = SessionPurpose.Live,
+                    Tuning = new TuningRequest(TunerKind.Satellite, 3),
+                }
+            ),
+            Soon()
+        );
+
+        Assert.Equal(HttpStatusCode.Created, satellite.StatusCode);
     }
 
     [Fact]

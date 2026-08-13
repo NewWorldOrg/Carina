@@ -30,6 +30,9 @@ public sealed class TunerSessionManager(
 
     private readonly ConcurrentDictionary<SessionId, TunerSession> sessions = [];
     private readonly ConcurrentDictionary<string, SessionId> claimedDevices = [];
+    private readonly ConcurrentDictionary<string, string> faultedDevices = new(
+        StringComparer.Ordinal
+    );
     private readonly ConcurrentQueue<TunerSession> ended = new();
     private readonly TimeSpan drainCap = TimeSpan.FromHours(
         Math.Max(0, configuration.ShutdownGraceHours)
@@ -258,6 +261,16 @@ public sealed class TunerSessionManager(
                 return false;
             }
 
+            if (faultedDevices.TryGetValue(named, out var fault))
+            {
+                refusal = SessionStart.Refused(
+                    SessionRefusal.FaultedDevice,
+                    $"The device '{named}' is faulted and is not handed out until the driver restarts: {fault}"
+                );
+
+                return false;
+            }
+
             if (!Matches(candidate.Kind, request.Tuning.Kind))
             {
                 refusal = SessionStart.Refused(
@@ -297,7 +310,21 @@ public sealed class TunerSessionManager(
             return false;
         }
 
-        foreach (var candidate in usable)
+        var healthy = usable
+            .Where(entry => !faultedDevices.ContainsKey(entry.Id!))
+            .ToArray();
+
+        if (healthy.Length is 0)
+        {
+            refusal = SessionStart.Refused(
+                SessionRefusal.FaultedDevice,
+                $"Every device that serves {request.Tuning.Kind} is faulted."
+            );
+
+            return false;
+        }
+
+        foreach (var candidate in healthy)
         {
             if (claimedDevices.TryAdd(candidate.Id!, request.SessionId))
             {
@@ -469,6 +496,14 @@ public sealed class TunerSessionManager(
     {
         sessions.TryRemove(new KeyValuePair<SessionId, TunerSession>(session.SessionId, session));
         Release(session.DeviceId, session.SessionId);
+
+        if (session.StopReason is SessionStopReason.DeviceFailed)
+        {
+            faultedDevices[session.DeviceId] =
+                $"The device failed while serving '{session.SessionId}': "
+                + (session.FailureCause?.Message ?? "no cause was recorded.");
+        }
+
         ended.Enqueue(session);
 
         while (ended.Count > RetainedSessions && ended.TryDequeue(out _))
@@ -484,6 +519,21 @@ public sealed class TunerSessionManager(
     }
 
     public bool IsClaimed(string deviceId) => claimedDevices.ContainsKey(deviceId);
+
+    public bool IsFaulted(string deviceId, [NotNullWhen(true)] out string? detail) =>
+        faultedDevices.TryGetValue(deviceId, out detail);
+
+    public bool ClearFault(string deviceId)
+    {
+        if (!faultedDevices.TryRemove(deviceId, out _))
+        {
+            return false;
+        }
+
+        Announce();
+
+        return true;
+    }
 
     private static bool Matches(DeviceKind device, TunerKind requested) =>
         (device, requested) switch

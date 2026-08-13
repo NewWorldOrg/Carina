@@ -84,6 +84,15 @@ public sealed class StubbornTunerDeviceFactory(TimeSpan readTakes) : ITunerDevic
         new StubbornTunerDevice(readTakes);
 }
 
+public sealed class SelectiveTunerDeviceFactory(string failingDeviceId, int failAfterReads = 1)
+    : ITunerDeviceFactory
+{
+    public ITunerDevice Create(DeviceSettings device, TuningRequest tuning) =>
+        device.Id == failingDeviceId
+            ? new ScriptedTunerDevice(failAfterReads)
+            : new ScriptedTunerDevice();
+}
+
 public sealed class CountingRecordingWriter : IRecordingWriter
 {
     private long bytesWritten;

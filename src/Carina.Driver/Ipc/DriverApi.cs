@@ -281,6 +281,7 @@ public static class DriverApi
                 "duplicateSession"
             ),
             SessionRefusal.DisabledDevice => (StatusCodes.Status409Conflict, "disabledDevice"),
+            SessionRefusal.FaultedDevice => (StatusCodes.Status409Conflict, "faultedDevice"),
             SessionRefusal.DeviceBusy => (StatusCodes.Status409Conflict, "deviceBusy"),
             SessionRefusal.NoDeviceFree => (StatusCodes.Status409Conflict, "noDeviceFree"),
             SessionRefusal.RecordingAlreadyExists => (
