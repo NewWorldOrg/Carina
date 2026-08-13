@@ -113,3 +113,19 @@ longer explain the difference between what the consumer has and what is true.
 **Guards.** A row cap per response, a concurrency cap, and a statement timeout. A long
 chunked connection is the easiest surface on which to hold a database open, and it is
 authenticated like everything else.
+
+## What the document does not tell you about itself
+
+**Everything off the described paths answers `401`.** An unknown path and a wrong method
+on a known path both answer `401` rather than `404` or `405`, because the default-deny
+middleware refuses before routing has resolved an endpoint to talk about. That is the
+fail-closed behaviour the seam exists for and it is not going to change, so a generated
+client sees `401` for its own routing mistakes as well as for missing credentials. When
+a call fails with `401` that should not have needed credentials at all, check the path
+before checking the session.
+
+**The `401` responses are declared, but no security scheme is.** There is no
+`securitySchemes` and no `security` in the document, because there is no scheme yet: the
+seam refuses everything and the authentication domain is what will register one. Until
+then a generator produces a client with no auth wiring, which is correct — there is
+nothing for it to send.
