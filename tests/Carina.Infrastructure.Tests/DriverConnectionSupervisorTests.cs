@@ -42,10 +42,17 @@ public sealed class DriverConnectionSupervisorTests
             }
         }
 
+        public Exception? Failure { get; set; }
+
         public Task ReadoptAsync(
             IReadOnlyList<SessionSnapshot> sessions,
             CancellationToken cancellationToken)
         {
+            if (Failure is { } failure)
+            {
+                throw failure;
+            }
+
             lock (gate)
             {
                 calls.Add(sessions);
@@ -78,7 +85,8 @@ public sealed class DriverConnectionSupervisorTests
 
         public static async Task<Harness> StartAsync(
             string? socketPath = null,
-            string[]? expectedCapabilities = null)
+            string[]? expectedCapabilities = null,
+            Exception? resyncFailure = null)
         {
             socketPath ??= NewSocketPath();
 
@@ -86,7 +94,7 @@ public sealed class DriverConnectionSupervisorTests
                 Options.Create(new DriverOptions { SocketPath = socketPath }));
             var monitor = new DriverConnectionMonitor();
             var signals = new DriverSignalRelay(NullLogger<DriverSignalRelay>.Instance);
-            var hook = new RecordingResyncHook();
+            var hook = new RecordingResyncHook { Failure = resyncFailure };
             var settings = new DriverSupervisionSettings(
                 TimeSpan.FromMilliseconds(20),
                 TimeSpan.FromMilliseconds(200),
@@ -276,6 +284,7 @@ public sealed class DriverConnectionSupervisorTests
         await Eventually(
             () => harness.Monitor.Current.Connection is DriverConnection.Connected,
             "the supervisor connects");
+        await Eventually(() => driver.ListenerCount > 0, "the event feed is subscribed");
 
         driver.Signal("draining");
 
@@ -316,6 +325,7 @@ public sealed class DriverConnectionSupervisorTests
         await Eventually(
             () => harness.Monitor.Current.Connection is DriverConnection.Connected,
             "the supervisor connects");
+        await Eventually(() => driver.ListenerCount > 0, "the event feed is subscribed");
 
         driver.Signal("somethingFromTheFuture");
         driver.Signal("tuners");
@@ -343,5 +353,69 @@ public sealed class DriverConnectionSupervisorTests
 
         Assert.Equal(["live"], harness.Monitor.Current.MissingCapabilities);
         Assert.True(harness.Monitor.Current.DriverUpdateRequired);
+    }
+
+    [Theory]
+    [InlineData(404)]
+    [InlineData(503)]
+    public async Task ADriverThatRefusesItsSessionListStaysConnected(int status)
+    {
+        var socketPath = NewSocketPath();
+        await using var driver = await FakeDriver.StartAsync(
+            socketPath,
+            FakeDriver.HelloFor("instance-a"));
+        driver.RefusalsByPath[DriverEndpoints.Sessions] = new FakeDriver.Refusal(
+            status,
+            new DriverProblem("sessionsUnavailable", ["The session list is not being served."]));
+
+        await using var harness = await Harness.StartAsync(socketPath);
+
+        await Eventually(
+            () => harness.Monitor.Current.Connection is DriverConnection.Connected,
+            "the driver that answers its hello is reported as connected");
+
+        await Task.Delay(200);
+
+        Assert.Equal(DriverConnection.Connected, harness.Monitor.Current.Connection);
+        Assert.Equal("instance-a", harness.Monitor.Current.Hello?.InstanceId);
+        Assert.Equal(0, harness.Hook.CallCount);
+    }
+
+    [Fact]
+    public async Task AFailingResyncHookIsNotReportedAsAMissingDriver()
+    {
+        var socketPath = NewSocketPath();
+        await using var driver = await FakeDriver.StartAsync(
+            socketPath,
+            FakeDriver.HelloFor("instance-a"));
+        driver.Sessions =
+        [
+            new SessionSnapshot(
+                SessionId.Parse("rec-1"),
+                SessionPurpose.Recording,
+                "fake-terrestrial",
+                SessionState.Active,
+                DateTimeOffset.UtcNow),
+        ];
+
+        await using var harness = await Harness.StartAsync(
+            socketPath,
+            resyncFailure: new InvalidOperationException("The recording store is unavailable."));
+
+        await Eventually(
+            () => harness.Monitor.Current.Connection is DriverConnection.Connected,
+            "the driver stays connected while readoption fails");
+
+        await Task.Delay(200);
+
+        Assert.Equal(DriverConnection.Connected, harness.Monitor.Current.Connection);
+        Assert.NotNull(harness.Monitor.Current.Hello);
+        Assert.Equal(0, harness.Hook.CallCount);
+
+        harness.Hook.Failure = null;
+
+        await Eventually(() => harness.Hook.CallCount == 1, "the readoption retries and succeeds");
+
+        Assert.Equal(DriverConnection.Connected, harness.Monitor.Current.Connection);
     }
 }

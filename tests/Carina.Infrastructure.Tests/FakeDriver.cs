@@ -37,9 +37,22 @@ public sealed class FakeDriver : IAsyncDisposable
 
     public int RefusalStatus { get; set; } = StatusCodes.Status503ServiceUnavailable;
 
+    public Dictionary<string, Refusal> RefusalsByPath { get; } = new(StringComparer.Ordinal);
+
     public bool TruncateHealth { get; set; }
 
     public SemaphoreSlim StreamAbortGate { get; } = new(0);
+
+    public int ListenerCount
+    {
+        get
+        {
+            lock (gate)
+            {
+                return listeners.Count;
+            }
+        }
+    }
 
     public static DriverHello HelloFor(
         string instanceId,
@@ -234,14 +247,24 @@ public sealed class FakeDriver : IAsyncDisposable
 
     private async Task<bool> RefusedAsync(HttpContext context)
     {
-        if (RefuseEverythingWith is not { } problem)
+        if (RefusalFor(context.Request.Path.Value) is not { } refusal)
         {
             return false;
         }
 
-        await WriteAsync(context, RefusalStatus, problem, DriverJson.Context.DriverProblem);
+        await WriteAsync(context, refusal.Status, refusal.Problem, DriverJson.Context.DriverProblem);
 
         return true;
+    }
+
+    private Refusal? RefusalFor(string? path)
+    {
+        if (path is not null && RefusalsByPath.TryGetValue(path, out var refusal))
+        {
+            return refusal;
+        }
+
+        return RefuseEverythingWith is { } problem ? new Refusal(RefusalStatus, problem) : null;
     }
 
     private static Task WriteAsync<T>(
@@ -258,4 +281,6 @@ public sealed class FakeDriver : IAsyncDisposable
             contentType: null,
             cancellationToken: context.RequestAborted);
     }
+
+    public sealed record Refusal(int Status, DriverProblem Problem);
 }

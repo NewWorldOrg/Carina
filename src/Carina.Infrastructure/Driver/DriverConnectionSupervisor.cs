@@ -80,21 +80,38 @@ public sealed class DriverConnectionSupervisor(
             .Where(capability => !hello.Supports(capability))
             .ToArray();
 
+        var observation = DriverObservation.Of(hello, missing);
+        monitor.Record(observation);
+
         if (hello.IsDifferentInstanceFrom(adopted))
         {
             var sessions = await client.GetActiveSessionsAsync(stoppingToken);
 
-            if (!sessions.TryGetValue(out var held))
+            if (sessions.Outcome is DriverCallOutcome.Unreachable)
             {
-                return ServeOutcome.NeverReached;
+                logger.LogWarning(
+                    "The driver answered its hello but its session list did not arrive: {Failure}",
+                    sessions.Failure);
+
+                return ServeOutcome.Lost;
             }
 
-            await resyncHook.ReadoptAsync(held, stoppingToken);
+            if (!sessions.TryGetValue(out var held))
+            {
+                logger.LogWarning(
+                    "The driver refused its session list ({Problem}); it stays connected and readoption retries.",
+                    sessions.Problem?.Title);
+
+                return ServeOutcome.Alive;
+            }
+
+            if (!await ReadoptAsync(held, stoppingToken))
+            {
+                return ServeOutcome.Alive;
+            }
+
             adopted = hello;
         }
-
-        var observation = DriverObservation.Of(hello, missing);
-        monitor.Record(observation);
 
         var feed = await client.OpenEventsAsync(stoppingToken);
 
@@ -136,5 +153,29 @@ public sealed class DriverConnectionSupervisor(
         }
 
         return ServeOutcome.Lost;
+    }
+
+    private async Task<bool> ReadoptAsync(
+        IReadOnlyList<SessionSnapshot> held,
+        CancellationToken stoppingToken)
+    {
+        try
+        {
+            await resyncHook.ReadoptAsync(held, stoppingToken);
+
+            return true;
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception error)
+        {
+            logger.LogError(
+                error,
+                "Readopting the sessions held by the driver failed; it stays connected and readoption retries.");
+
+            return false;
+        }
     }
 }
