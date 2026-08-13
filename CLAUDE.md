@@ -103,6 +103,10 @@ GitHub Actions runs build, test and format verification on push and pull request
 - `Dockerfile` builds the single role-switched image (`driver`, `app`, `web`, `all`,
   plus `migrate`) via `docker/entrypoint.sh`. Routing between app and web is the job
   of a reverse proxy outside the image; the image contains no proxy.
+- In that image the driver is published Native AOT; the app and the migration entry
+  point are framework-dependent. The driver role runs as root, `app` and `migrate`
+  drop to the unprivileged `carina` user, and `all` supervises both processes as a
+  reaping PID 1. `task image:verify` builds the image and exercises every role.
 
 ## UI Hostname
 
