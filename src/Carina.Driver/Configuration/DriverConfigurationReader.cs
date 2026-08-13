@@ -260,7 +260,7 @@ public static class DriverConfigurationReader
     {
         var problems = new List<string>();
 
-        if (!IsUnder(configuration.SocketPath, SocketRoot))
+        if (!IsUnderRoot(configuration.SocketPath, SocketRoot))
         {
             problems.Add(
                 $"socketPath: expected a path under {SocketRoot}, got '{configuration.SocketPath}'."
@@ -348,7 +348,7 @@ public static class DriverConfigurationReader
 
         if (backend is not TunerBackend.Fake)
         {
-            if (!IsUnder(device.DevicePath, DeviceRoot))
+            if (!IsUnderRoot(device.DevicePath, DeviceRoot))
             {
                 problems.Add(
                     $"devices[{index}].devicePath: expected a path under {DeviceRoot} when the backend is 'dvb', got '{device.DevicePath}'."
@@ -370,7 +370,7 @@ public static class DriverConfigurationReader
         }
     }
 
-    private static bool IsUnder(string? value, string root)
+    public static bool IsUnderRoot(string? value, string root)
     {
         if (!IsAbsolutePath(value))
         {

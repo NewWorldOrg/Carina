@@ -4,29 +4,93 @@ namespace Carina.Driver.Tests;
 
 public sealed class DevicePathContainmentTests : IDisposable
 {
-    private readonly string outside = Directory
-        .CreateTempSubdirectory("carina-outside-")
-        .FullName;
+    private readonly string work = Directory.CreateTempSubdirectory("carina-paths-").FullName;
 
-    private readonly List<string> links = [];
+    private readonly string root;
+    private readonly string outside;
 
-    public void Dispose()
+    public DevicePathContainmentTests()
     {
-        foreach (var link in links)
-        {
-            File.Delete(link);
-        }
+        root = Path.Combine(work, "root");
+        outside = Path.Combine(work, "outside");
 
-        Directory.Delete(outside, recursive: true);
+        Directory.CreateDirectory(root);
+        Directory.CreateDirectory(outside);
+        File.WriteAllBytes(Path.Combine(outside, "target"), []);
     }
 
-    private string LinkUnder(string root, string name, string target)
-    {
-        var link = Path.Combine(root, name);
-        File.CreateSymbolicLink(link, target);
-        links.Add(link);
+    public void Dispose() => Directory.Delete(work, recursive: true);
 
-        return link;
+    private string Root => root + Path.DirectorySeparatorChar;
+
+    [Fact]
+    public void AnHonestNodeUnderTheRootIsAccepted()
+    {
+        Directory.CreateDirectory(Path.Combine(root, "adapter0"));
+        File.WriteAllBytes(Path.Combine(root, "adapter0", "frontend0"), []);
+
+        Assert.True(
+            DriverConfigurationReader.IsUnderRoot(
+                Path.Combine(root, "adapter0", "frontend0"),
+                Root
+            )
+        );
+    }
+
+    [Fact]
+    public void ALeafSymbolicLinkOutOfTheRootIsRejected()
+    {
+        var link = Path.Combine(root, "frontend0");
+        File.CreateSymbolicLink(link, Path.Combine(outside, "target"));
+
+        Assert.False(DriverConfigurationReader.IsUnderRoot(link, Root));
+    }
+
+    [Fact]
+    public void ASymbolicLinkAnyLevelAboveTheNodeIsRejected()
+    {
+        var branch = Path.Combine(root, "adapter0");
+        Directory.CreateSymbolicLink(branch, outside);
+
+        Assert.False(
+            DriverConfigurationReader.IsUnderRoot(Path.Combine(branch, "frontend0"), Root)
+        );
+    }
+
+    [Fact]
+    public void ARelativePathIsRejected()
+    {
+        Assert.False(DriverConfigurationReader.IsUnderRoot("adapter0/frontend0", Root));
+    }
+
+    [Fact]
+    public void TheRootItselfIsNotANode()
+    {
+        Assert.False(DriverConfigurationReader.IsUnderRoot(root, Root));
+    }
+
+    [Fact]
+    public void APathOutsideTheRootIsRejected()
+    {
+        Assert.False(DriverConfigurationReader.IsUnderRoot(Path.Combine(outside, "target"), Root));
+    }
+
+    [Fact]
+    public void ADeviceNodeUnderDevIsAcceptedByTheReader()
+    {
+        Assert.DoesNotContain(
+            Problems("/dev/dvb/adapter0/frontend0"),
+            problem => problem.StartsWith("devices[0].devicePath:")
+        );
+    }
+
+    [Fact]
+    public void ADeviceNodeOutsideDevIsRejectedByTheReader()
+    {
+        Assert.Contains(
+            Problems(Path.Combine(outside, "target")),
+            problem => problem.StartsWith("devices[0].devicePath:")
+        );
     }
 
     private static IReadOnlyList<string> Problems(string devicePath) =>
@@ -48,62 +112,4 @@ public sealed class DevicePathContainmentTests : IDisposable
                 }
                 """)
             .Problems;
-
-    [Fact]
-    public void AnHonestDeviceNodeIsAccepted()
-    {
-        Assert.Empty(Problems("/dev/dvb/adapter0/frontend0"));
-    }
-
-    [Fact]
-    public void ALeafSymbolicLinkOutOfDevIsRejected()
-    {
-        Assert.True(
-            CanWriteToDev(),
-            "This check needs to create a symbolic link under /dev, so it has to run in the container."
-        );
-
-        var link = LinkUnder("/dev", "carina-test-leaf", Path.Combine(outside, "target"));
-
-        Assert.Contains(
-            Problems(link),
-            problem => problem.StartsWith("devices[0].devicePath:")
-        );
-    }
-
-    [Fact]
-    public void ASymbolicLinkAnyLevelAboveTheDeviceIsRejected()
-    {
-        Assert.True(
-            CanWriteToDev(),
-            "This check needs to create a symbolic link under /dev, so it has to run in the container."
-        );
-
-        var link = LinkUnder("/dev", "carina-test-branch", outside);
-
-        Assert.Contains(
-            Problems($"{link}/adapter0/frontend0"),
-            problem => problem.StartsWith("devices[0].devicePath:")
-        );
-    }
-
-    private static bool CanWriteToDev()
-    {
-        try
-        {
-            var probe = Path.Combine("/dev", $"carina-probe-{Guid.NewGuid():N}");
-            File.CreateSymbolicLink(probe, "/tmp");
-            File.Delete(probe);
-
-            return true;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return false;
-        }
-        catch (IOException)
-        {
-            return false;
-        }
-    }
 }
