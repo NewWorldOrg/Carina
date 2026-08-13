@@ -32,10 +32,6 @@ RUN dotnet publish src/Carina.Api/Carina.Api.csproj -c Release --no-restore -o /
 
 FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS runtime
 
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/*
-
 ARG CARINA_UID=10001
 ARG CARINA_GID=10001
 RUN groupadd --gid ${CARINA_GID} carina \
