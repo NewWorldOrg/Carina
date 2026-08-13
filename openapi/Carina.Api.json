@@ -14,8 +14,9 @@
     "/api/health": {
       "get": {
         "tags": [
-          "GetHealthAction"
+          "health"
         ],
+        "operationId": "getHealth",
         "responses": {
           "200": {
             "description": "OK",
@@ -33,8 +34,9 @@
     "/api/driver/status": {
       "get": {
         "tags": [
-          "GetDriverStatusAction"
+          "driver"
         ],
+        "operationId": "getDriverStatus",
         "responses": {
           "200": {
             "description": "OK",
@@ -119,10 +121,10 @@
   },
   "tags": [
     {
-      "name": "GetHealthAction"
+      "name": "health"
     },
     {
-      "name": "GetDriverStatusAction"
+      "name": "driver"
     }
   ]
 }

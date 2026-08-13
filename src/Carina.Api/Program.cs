@@ -21,6 +21,7 @@ builder.Services.AddOpenApi(options =>
     options.AddDocumentTransformer<ApiDocumentTransformer>();
     options.AddSchemaTransformer<StringEnumSchemaTransformer>();
     options.AddOperationTransformer<DefaultDenyResponseTransformer>();
+    options.AddOperationTransformer<OperationNamingTransformer>();
 });
 
 var app = builder.Build();

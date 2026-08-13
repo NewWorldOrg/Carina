@@ -84,6 +84,40 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task EveryOperationCarriesTheNameItsClientWillBeGeneratedFrom()
+    {
+        var document = await ServedOpenApi.FetchAsync(factory);
+
+        var named = ServedOpenApi.Operations(document)
+            .Select(operation => operation.Value["operationId"]?.GetValue<string>() ?? string.Empty)
+            .ToArray();
+
+        Assert.Equal(["getHealth", "getDriverStatus"], named);
+        Assert.Equal(named.Length, named.Distinct(StringComparer.Ordinal).Count());
+    }
+
+    [Fact]
+    public async Task NoNameInTheDocumentIsAnInternalClassName()
+    {
+        var document = await ServedOpenApi.FetchAsync(factory);
+
+        var tags = ServedOpenApi.Operations(document)
+            .SelectMany(operation => operation.Value["tags"]!.AsArray())
+            .Select(tag => tag!.GetValue<string>())
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+
+        var declared = document["tags"]!
+            .AsArray()
+            .Select(tag => tag!["name"]!.GetValue<string>())
+            .ToArray();
+
+        Assert.Equal(["health", "driver"], tags);
+        Assert.Equal(tags, declared);
+        Assert.DoesNotContain(tags, tag => tag.EndsWith("Action", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task TheDocumentPointsAtTheSameOriginRatherThanAHost()
     {
         var document = await ServedOpenApi.FetchAsync(factory);
