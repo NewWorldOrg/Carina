@@ -175,6 +175,7 @@ public sealed class DriverConnectionSupervisorTests
         await Eventually(
             () => harness.Monitor.Current.Connection is DriverConnection.Connected,
             "the supervisor connects");
+        await Eventually(() => harness.Hook.CallCount == 1, "the readoption");
 
         Assert.Equal("instance-a", harness.Monitor.Current.Hello?.InstanceId);
         Assert.Empty(harness.Monitor.Current.MissingCapabilities);
@@ -291,8 +292,10 @@ public sealed class DriverConnectionSupervisorTests
         await Eventually(
             () => harness.Monitor.Current.Connection is DriverConnection.Draining,
             "the draining flip");
+        await Eventually(
+            () => received.Contains("draining"),
+            "the draining signal reaches subscribers");
 
-        Assert.Contains("draining", received);
         Assert.NotNull(harness.Monitor.Current.Hello);
     }
 
