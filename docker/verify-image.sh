@@ -77,6 +77,23 @@ wait_for driver_curl http://localhost/health || fail "the driver did not serve /
 echo "driver /health: $(driver_curl http://localhost/health)"
 pass "driver role serves /health over the Unix socket"
 
+docker exec "${prefix}-driver" /opt/carina/driver/Carina.Driver --probe \
+    || fail "the driver could not probe its own socket, so the compose healthcheck could never pass"
+pass "the driver binary probes its own socket, which is what the compose healthcheck runs"
+
+if docker run --rm --entrypoint sh "${image}" -c 'command -v curl wget' >/dev/null 2>&1; then
+    fail "the runtime image carries a general-purpose HTTP client; --probe exists so that it does not have to"
+fi
+pass "the runtime image carries no general-purpose HTTP client"
+
+budget="$(docker run --rm \
+    --entrypoint /opt/carina/driver/Carina.Driver \
+    -e CARINA_DRIVER_CONFIG=/etc/carina/driver.json \
+    -v "${workdir}/driver.json:/etc/carina/driver.json:ro" \
+    "${image}" --shutdown-budget)"
+[ "${budget}" = "21690" ] || fail "the driver reports a shutdown budget of '${budget}', expected 21690 for a 6 hour linger cap"
+pass "the driver reports the shutdown budget the runtime has to outlive (${budget}s)"
+
 perms="$(docker exec "${prefix}-driver" stat -c '%a %U %G' /run/carina/driver.sock)"
 [ "${perms}" = "660 root carina" ] || fail "the driver socket is '${perms}', expected '660 root carina'"
 pass "driver socket is 0660 root:carina"

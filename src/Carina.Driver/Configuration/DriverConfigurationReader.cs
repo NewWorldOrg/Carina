@@ -46,7 +46,10 @@ public static class DriverConfigurationReader
     private const int MaxLiveSessionMinutes = 1440;
     private const int MaxNameLength = 64;
 
-    public static DriverConfigurationResult ReadFile(string? path)
+    public static DriverConfigurationResult ReadFile(
+        string? path,
+        bool checkTheFilesystem = true
+    )
     {
         if (string.IsNullOrWhiteSpace(path))
         {
@@ -61,6 +64,11 @@ public static class DriverConfigurationReader
         try
         {
             var result = Read(File.ReadAllText(path));
+
+            if (!checkTheFilesystem)
+            {
+                return result;
+            }
 
             return result.TryGetConfiguration(out var configuration, out _)
                 ? CheckTheFilesystem(configuration)
