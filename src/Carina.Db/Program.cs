@@ -1,4 +1,5 @@
 using Carina.Db;
+using Carina.Infrastructure.Persistence;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -8,7 +9,20 @@ if (args is not ["--migrate"])
     return 64;
 }
 
-using var context = new CarinaDbContextFactory().CreateDbContext(args);
-await context.Database.MigrateAsync();
+CarinaDbContext context;
+try
+{
+    context = new CarinaDbContextFactory().CreateDbContext(args);
+}
+catch (InvalidOperationException error)
+{
+    Console.Error.WriteLine(error.Message);
+    return 78;
+}
+
+await using (context)
+{
+    await context.Database.MigrateAsync();
+}
 
 return 0;
