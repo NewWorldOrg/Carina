@@ -385,33 +385,45 @@ public static class DriverConfigurationReader
 
     private static string ResolveLinks(string value)
     {
+        var resolved = LinkTarget(value) ?? Path.GetFullPath(value);
+        var trailing = new Stack<string>();
+
+        while (true)
+        {
+            var parent = Path.GetDirectoryName(resolved);
+            if (string.IsNullOrEmpty(parent))
+            {
+                break;
+            }
+
+            var target = LinkTarget(parent);
+            trailing.Push(Path.GetFileName(resolved));
+            resolved = target ?? parent;
+
+            if (target is null && parent.Length <= 1)
+            {
+                break;
+            }
+        }
+
+        return Path.GetFullPath(Path.Combine([resolved, .. trailing]));
+    }
+
+    private static string? LinkTarget(string path)
+    {
         try
         {
-            var leaf = File.ResolveLinkTarget(value, returnFinalTarget: true);
-            if (leaf is not null)
-            {
-                return Path.GetFullPath(leaf.FullName);
-            }
-
-            var directory = Path.GetDirectoryName(value);
-            if (string.IsNullOrEmpty(directory))
-            {
-                return value;
-            }
-
-            var target = Directory.ResolveLinkTarget(directory, returnFinalTarget: true);
-
-            return target is null
-                ? Path.GetFullPath(value)
-                : Path.GetFullPath(Path.Combine(target.FullName, Path.GetFileName(value)));
+            return Directory.Exists(path)
+                ? Directory.ResolveLinkTarget(path, returnFinalTarget: true)?.FullName
+                : File.ResolveLinkTarget(path, returnFinalTarget: true)?.FullName;
         }
         catch (IOException)
         {
-            return value;
+            return null;
         }
         catch (UnauthorizedAccessException)
         {
-            return value;
+            return null;
         }
     }
 

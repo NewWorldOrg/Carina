@@ -205,6 +205,20 @@ public sealed class ContinuityCounterTrackerTests
     }
 
     [Fact]
+    public void APacketFromAnUnprovenBoundaryIsNotMeasured()
+    {
+        var tracker = new ContinuityCounterTracker();
+
+        tracker.Observe(Packet(0x100, 0));
+        tracker.Observe(Packet(0x100, 9) with { Provisional = true });
+        tracker.Observe(Packet(0x100, 1));
+
+        Assert.Equal(0, tracker.Drops);
+        Assert.Equal(2, tracker.Packets);
+        Assert.Equal(1, tracker.ProvisionalPackets);
+    }
+
+    [Fact]
     public void TheFirstPacketOfAStreamIsNotALoss()
     {
         var tracker = new ContinuityCounterTracker();
