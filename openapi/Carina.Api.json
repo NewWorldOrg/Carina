@@ -1,0 +1,206 @@
+{
+  "openapi": "3.1.1",
+  "info": {
+    "title": "Carina",
+    "description": "The HTTP surface of the app process. Three contract surfaces do not fit a request/response schema and are absent from this document: the transport stream (`/sessions/{id}/stream` on the driver socket), the event hub (`GET /api/events`) and the bulk programme guide (`GET /api/programs/bulk`). They are declared in openapi/non-rest-contracts.md.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "/"
+    }
+  ],
+  "paths": {
+    "/api/health": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "operationId": "getHealth",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponder"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/driver/status": {
+      "get": {
+        "tags": [
+          "driver"
+        ],
+        "operationId": "getDriverStatus",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponderOfDriverStatusResponder"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponderOfDriverStatusResponder"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated. The default-deny middleware answers with an empty body."
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BaseResponderOfDriverStatusResponder": {
+        "required": [
+          "status",
+          "message",
+          "data"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DriverStatusResponder"
+              }
+            ]
+          }
+        }
+      },
+      "DriverConnection": {
+        "enum": [
+          "notConnected",
+          "connected",
+          "draining"
+        ],
+        "type": "string"
+      },
+      "DriverHelloResponder": {
+        "required": [
+          "protocolVersion",
+          "instanceId",
+          "capabilities",
+          "draining"
+        ],
+        "type": "object",
+        "properties": {
+          "protocolVersion": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "instanceId": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "draining": {
+            "type": "boolean"
+          }
+        }
+      },
+      "DriverStatusResponder": {
+        "required": [
+          "connection",
+          "hello",
+          "appProtocolVersion",
+          "missingCapabilities",
+          "driverUpdateRequired",
+          "observedAt"
+        ],
+        "type": "object",
+        "properties": {
+          "connection": {
+            "$ref": "#/components/schemas/DriverConnection"
+          },
+          "hello": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DriverHelloResponder"
+              }
+            ]
+          },
+          "appProtocolVersion": {
+            "pattern": "^-?(?:0|[1-9]\\d*)$",
+            "type": [
+              "integer",
+              "string"
+            ],
+            "format": "int32"
+          },
+          "missingCapabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "driverUpdateRequired": {
+            "type": "boolean"
+          },
+          "observedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "HealthResponder": {
+        "required": [
+          "status"
+        ],
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "health"
+    },
+    {
+      "name": "driver"
+    }
+  ]
+}

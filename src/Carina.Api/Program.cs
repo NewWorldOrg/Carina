@@ -1,22 +1,28 @@
-using System.Text.Json;
-using System.Text.Json.Serialization;
-
 using Carina.Api.Authentication;
+using Carina.Api.Common;
 using Carina.Api.Extensions;
+using Carina.Api.OpenApi;
 using Carina.Infrastructure.DependencyInjection;
 
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services
-    .AddControllers()
-    .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(
-        new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)));
+    .AddControllers(options => options.Filters.Add(new ProducesAttribute("application/json")))
+    .AddJsonOptions(options => WireJson.Configure(options.JsonSerializerOptions));
+builder.Services.ConfigureHttpJsonOptions(options => WireJson.Configure(options.SerializerOptions));
 builder.Services.AddApplicationServices();
 builder.Services.AddCarinaInfrastructure(builder.Configuration);
 builder.Services.AddAuthentication();
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options =>
+{
+    options.AddDocumentTransformer<ApiDocumentTransformer>();
+    options.AddSchemaTransformer<StringEnumSchemaTransformer>();
+    options.AddOperationTransformer<DefaultDenyResponseTransformer>();
+    options.AddOperationTransformer<OperationNamingTransformer>();
+});
 
 var app = builder.Build();
 

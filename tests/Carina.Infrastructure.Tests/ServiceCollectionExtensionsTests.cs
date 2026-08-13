@@ -1,11 +1,13 @@
+using Carina.Domain.Driver;
 using Carina.Domain.DriverStatus;
 using Carina.Infrastructure.Configuration;
 using Carina.Infrastructure.DependencyInjection;
-using Carina.Infrastructure.DriverStatus;
+using Carina.Infrastructure.Driver;
 using Carina.Infrastructure.Persistence;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 namespace Carina.Infrastructure.Tests;
@@ -16,6 +18,7 @@ public sealed class ServiceCollectionExtensionsTests
 
     private static ServiceProvider Build(Dictionary<string, string?> settings)
         => new ServiceCollection()
+            .AddLogging()
             .AddCarinaInfrastructure(new ConfigurationBuilder().AddInMemoryCollection(settings).Build())
             .BuildServiceProvider();
 
@@ -43,12 +46,31 @@ public sealed class ServiceCollectionExtensionsTests
     }
 
     [Fact]
-    public void RegistersTheDriverStatusReaderWithItsSocketPath()
+    public void RegistersTheMonitorBackedDriverStatusReader()
     {
         using var provider = Build(ValidSettings());
 
-        var reader = Assert.IsType<NotConnectedDriverStatusReader>(provider.GetRequiredService<IDriverStatusReader>());
-        Assert.Equal(new DriverSocketPath("/run/carina/driver.sock"), reader.SocketPath);
+        Assert.IsType<MonitoredDriverStatusReader>(provider.GetRequiredService<IDriverStatusReader>());
+    }
+
+    [Fact]
+    public void RegistersTheDriverClientAndItsSupervision()
+    {
+        using var provider = Build(ValidSettings());
+
+        Assert.IsType<DriverIpcClient>(provider.GetRequiredService<IDriverClient>());
+        Assert.NotNull(provider.GetRequiredService<DriverConnectionMonitor>());
+        Assert.Same(
+            provider.GetRequiredService<DriverSignalRelay>(),
+            provider.GetRequiredService<IDriverSignals>());
+        Assert.IsType<NoopDriverSessionResyncHook>(
+            provider.GetRequiredService<IDriverSessionResyncHook>());
+        Assert.Same(
+            DriverSupervisionSettings.Default,
+            provider.GetRequiredService<DriverSupervisionSettings>());
+        Assert.Contains(
+            provider.GetServices<IHostedService>(),
+            service => service is DriverConnectionSupervisor);
     }
 
     [Fact]

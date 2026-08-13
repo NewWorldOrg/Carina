@@ -4,4 +4,5 @@ public enum DriverConnection
 {
     NotConnected,
     Connected,
+    Draining,
 }

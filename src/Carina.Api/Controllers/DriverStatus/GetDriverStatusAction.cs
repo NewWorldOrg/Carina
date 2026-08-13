@@ -12,6 +12,7 @@ public sealed class GetDriverStatusAction(DriverStatusService driverStatusServic
 {
     [HttpGet]
     [ProducesResponseType<BaseResponder<DriverStatusResponder>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<BaseResponder<DriverStatusResponder>>(StatusCodes.Status503ServiceUnavailable)]
     public async Task<IActionResult> Invoke(CancellationToken cancellationToken)
     {
         var result = await driverStatusService.GetStatusAsync(cancellationToken);
@@ -22,8 +23,7 @@ public sealed class GetDriverStatusAction(DriverStatusService driverStatusServic
                 BaseResponder<DriverStatusResponder>.Error(result.ErrorMessage!));
         }
 
-        var snapshot = result.Data!;
         return Ok(BaseResponder<DriverStatusResponder>.Success(
-            new DriverStatusResponder(snapshot.Connection, snapshot.ObservedAt)));
+            DriverStatusResponder.Of(result.Data!)));
     }
 }
