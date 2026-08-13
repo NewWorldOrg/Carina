@@ -41,11 +41,10 @@ public sealed class TsPacketReaderTests
         var packet = Packet(0x100, 3);
 
         Assert.Empty(reader.Read(packet.AsSpan(0, 100).ToArray()));
-        Assert.Empty(reader.Read(packet.AsSpan(100).ToArray()));
 
-        var completed = reader.Read(Packet(0x100, 4)).ToList();
+        var completed = reader.Read(packet.AsSpan(100).ToArray()).ToList();
 
-        Assert.Equal(2, completed.Count);
+        Assert.Single(completed);
         Assert.Equal(3, completed[0].ContinuityCounter);
     }
 
@@ -121,6 +120,54 @@ public sealed class TsPacketReaderTests
         decoy[13] = 0x47;
 
         Assert.Empty(reader.Read(decoy));
+    }
+
+    [Fact]
+    public void APacketFromAnUnconfirmedBoundaryIsMarked()
+    {
+        var reader = new TsPacketReader();
+
+        var packet = Assert.Single(reader.Read(Packet(0x100, 0)));
+
+        Assert.True(packet.Provisional);
+    }
+
+    [Fact]
+    public void APacketFromAConfirmedBoundaryIsNotMarked()
+    {
+        var reader = new TsPacketReader();
+
+        var packets = reader.Read(Concat(Packet(0x100, 0), Packet(0x100, 1)));
+
+        Assert.All(packets, packet => Assert.False(packet.Provisional));
+    }
+
+    [Fact]
+    public void AByteThatDisprovesTheBoundaryDropsTheAlignment()
+    {
+        var reader = new TsPacketReader();
+        var first = new byte[PacketLength];
+        first[0] = 0x47;
+        var second = new byte[PacketLength];
+
+        Assert.True(reader.Read(first)[0].Provisional);
+        Assert.Empty(reader.Read(second));
+        Assert.True(reader.DiscardedBytes > 0);
+    }
+
+    [Fact]
+    public void ARealBoundaryStillReadsAfterAFalseOne()
+    {
+        var reader = new TsPacketReader();
+        var noise = new byte[40];
+        noise[0] = 0x47;
+
+        var packets = reader
+            .Read(Concat(noise, Packet(0x105, 0), Packet(0x105, 1)))
+            .ToList();
+
+        Assert.Equal(2, packets.Count);
+        Assert.Equal(0x105, packets[0].Pid);
     }
 
     [Fact]

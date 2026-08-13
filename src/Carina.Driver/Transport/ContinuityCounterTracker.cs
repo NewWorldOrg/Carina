@@ -26,8 +26,16 @@ public sealed class ContinuityCounterTracker
         lastPayloadHash.Clear();
     }
 
+    public long ProvisionalPackets { get; private set; }
+
     public void Observe(TsPacket packet)
     {
+        if (packet.Provisional)
+        {
+            ProvisionalPackets++;
+            return;
+        }
+
         if (packet.Pid is < 0 or > TsPacket.MaxPid)
         {
             return;

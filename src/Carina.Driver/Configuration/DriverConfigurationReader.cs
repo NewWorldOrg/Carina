@@ -51,6 +51,11 @@ public static class DriverConfigurationReader
             return Failed("file: no configuration path was given.");
         }
 
+        if (Directory.Exists(path))
+        {
+            return Failed($"file: '{path}' is a directory, not a configuration file.");
+        }
+
         try
         {
             var result = Read(File.ReadAllText(path));
@@ -382,6 +387,12 @@ public static class DriverConfigurationReader
     {
         try
         {
+            var leaf = File.ResolveLinkTarget(value, returnFinalTarget: true);
+            if (leaf is not null)
+            {
+                return Path.GetFullPath(leaf.FullName);
+            }
+
             var directory = Path.GetDirectoryName(value);
             if (string.IsNullOrEmpty(directory))
             {

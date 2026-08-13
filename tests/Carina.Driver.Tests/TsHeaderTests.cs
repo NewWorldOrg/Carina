@@ -22,8 +22,9 @@ public sealed class TsHeaderTests
 
         if ((byte3High & 0x20) is not 0)
         {
-            packet[4] = 1;
-            packet[5] = discontinuity ? (byte)0x80 : (byte)0x00;
+            packet[4] = 7;
+            packet[5] = (byte)((discontinuity ? 0x80 : 0x00) | 0x10);
+            Array.Fill(packet, (byte)0x5A, 6, 6);
         }
 
         return packet;
@@ -100,6 +101,16 @@ public sealed class TsHeaderTests
         );
 
         Assert.Equal(expected, packet.Discontinuity);
+    }
+
+    [Fact]
+    public void ARewrittenAdaptationFieldDoesNotChangeTheHash()
+    {
+        var first = Packet(byte3High: 0x30, fill: 0x11);
+        var second = (byte[])first.Clone();
+        second[8] = 0x99;
+
+        Assert.Equal(ReadOne(first).PayloadHash, ReadOne(second).PayloadHash);
     }
 
     [Fact]

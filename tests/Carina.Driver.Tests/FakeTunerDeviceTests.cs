@@ -64,11 +64,11 @@ public sealed class FakeTunerDeviceTests
         var device = new FakeTunerDevice(27, 1024);
         var reader = new TsPacketReader();
 
-        Assert.Empty(reader.Read(Read(device, 1)));
+        var first = reader.Read(Read(device, 1));
+        var second = reader.Read(Read(device, 1));
 
-        var packets = reader.Read(Read(device, 2));
-
-        Assert.Equal([0, 1, 2], packets.Select(packet => packet.ContinuityCounter));
+        Assert.Equal(0, first[0].ContinuityCounter);
+        Assert.Equal(1, second[0].ContinuityCounter);
     }
 
     [Fact]
@@ -80,9 +80,8 @@ public sealed class FakeTunerDeviceTests
         var packets = reader
             .Read(device.Read(100))
             .Concat(reader.Read(device.Read(276)))
-            .Concat(reader.Read(device.Read(188)))
             .ToList();
 
-        Assert.Equal([0, 1, 2], packets.Select(packet => packet.ContinuityCounter));
+        Assert.Equal([0, 1], packets.Select(packet => packet.ContinuityCounter));
     }
 }

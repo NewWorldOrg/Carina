@@ -8,7 +8,8 @@ public readonly record struct TsPacket(
     bool Scrambled = false,
     bool Discontinuity = false,
     bool PayloadUnitStart = false,
-    int PayloadHash = 0
+    int PayloadHash = 0,
+    bool Provisional = false
 )
 {
     public const int NullPid = 0x1FFF;
@@ -59,12 +60,20 @@ public sealed class TsPacketReader
                 continue;
             }
 
-            if (!confirmed && buffer.Count < PacketLength * 2)
+            if (!confirmed && buffer.Count >= PacketLength * 2)
             {
-                break;
+                if (buffer[PacketLength] is not SyncByte)
+                {
+                    buffer.RemoveRange(0, 1);
+                    DiscardedBytes++;
+                    aligned = false;
+                    continue;
+                }
+
+                confirmed = true;
             }
 
-            packets.Add(ReadHeader());
+            packets.Add(ReadHeader() with { Provisional = !confirmed });
             PacketsRead++;
             buffer.RemoveRange(0, PacketLength);
             confirmed = true;
@@ -136,14 +145,20 @@ public sealed class TsPacketReader
             Scrambled: scrambling is not 0,
             discontinuity,
             payloadUnitStart,
-            PayloadHash: HashPayload()
+            PayloadHash: HashPayload(hasAdaptation)
         );
     }
 
-    private int HashPayload()
+    private int HashPayload(bool hasAdaptation)
     {
+        var start = HeaderLength;
+        if (hasAdaptation)
+        {
+            start += 1 + buffer[HeaderLength];
+        }
+
         var hash = 17;
-        for (var index = HeaderLength; index < PacketLength; index++)
+        for (var index = Math.Min(start, PacketLength); index < PacketLength; index++)
         {
             hash = (hash * 31) + buffer[index];
         }
