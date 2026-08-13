@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly driver_entry=/opt/carina/driver/Carina.Driver.dll
+readonly driver_entry=/opt/carina/driver/Carina.Driver
 readonly app_entry=/opt/carina/app/Carina.Api.dll
+readonly migrate_entry=/opt/carina/db/Carina.Db.dll
 
 drop_web_server_variables() {
     local name
@@ -14,17 +15,24 @@ drop_web_server_variables() {
     done
 }
 
+run_as_carina() {
+    if [ "$(id -u)" = 0 ]; then
+        exec setpriv --reuid carina --regid carina --init-groups "$@"
+    fi
+    exec "$@"
+}
+
 run_all() {
-    ( drop_web_server_variables; exec dotnet "${driver_entry}" ) &
+    ( drop_web_server_variables; exec "${driver_entry}" ) &
     local driver_pid=$!
 
-    dotnet "${app_entry}" &
+    ( run_as_carina dotnet "${app_entry}" ) &
     local app_pid=$!
 
     trap 'kill -TERM "${driver_pid}" "${app_pid}" 2>/dev/null || true' TERM INT
 
     set +e
-    wait -n
+    wait -n "${driver_pid}" "${app_pid}"
     local status=$?
     set -e
 
@@ -40,10 +48,10 @@ main() {
     case "${role}" in
         driver)
             drop_web_server_variables
-            exec dotnet "${driver_entry}"
+            exec "${driver_entry}"
             ;;
-        app) exec dotnet "${app_entry}" ;;
-        migrate) exec dotnet /opt/carina/db/Carina.Db.dll --migrate ;;
+        app) run_as_carina dotnet "${app_entry}" ;;
+        migrate) run_as_carina dotnet "${migrate_entry}" --migrate ;;
         web)
             echo "role=web carries no asset in this image; the distribution image build supplies it." >&2
             exec sleep infinity
