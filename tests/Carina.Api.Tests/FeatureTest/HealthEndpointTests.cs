@@ -1,9 +1,13 @@
 using System.Net;
 using System.Net.Http.Json;
 
-namespace Carina.Api.Tests;
+using Carina.Api.Responder.Health;
 
-public sealed class HealthEndpointTests(CarinaApiFactory factory) : IClassFixture<CarinaApiFactory>
+namespace Carina.Api.Tests.FeatureTest;
+
+[Collection(FeatureTestCollection.Name)]
+public sealed class HealthEndpointTests(TestingWebApplicationFactory factory)
+    : IClassFixture<TestingWebApplicationFactory>
 {
     [Fact]
     public async Task HealthIsServedWithoutAuthentication()
@@ -14,7 +18,7 @@ public sealed class HealthEndpointTests(CarinaApiFactory factory) : IClassFixtur
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var payload = await response.Content.ReadFromJsonAsync<HealthResponse>();
+        var payload = await response.Content.ReadFromJsonAsync<HealthResponder>();
         Assert.Equal("ok", payload?.Status);
     }
 }

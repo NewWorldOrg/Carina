@@ -1,7 +1,12 @@
+using Carina.Domain.DriverStatus;
+using Carina.Infrastructure.Configuration;
 using Carina.Infrastructure.DependencyInjection;
+using Carina.Infrastructure.DriverStatus;
 using Carina.Infrastructure.Persistence;
 
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Carina.Infrastructure.Tests;
 
@@ -9,13 +14,21 @@ public sealed class ServiceCollectionExtensionsTests
 {
     private const string ConnectionString = "Host=db;Port=5432;Database=carina;Username=carina;Password=placeholder";
 
+    private static ServiceProvider Build(Dictionary<string, string?> settings)
+        => new ServiceCollection()
+            .AddCarinaInfrastructure(new ConfigurationBuilder().AddInMemoryCollection(settings).Build())
+            .BuildServiceProvider();
+
+    private static Dictionary<string, string?> ValidSettings() => new()
+    {
+        ["ConnectionStrings:Carina"] = ConnectionString,
+        ["CARINA_DRIVER_SOCKET"] = "/run/carina/driver.sock",
+    };
+
     [Fact]
     public void RegistersThePersistenceContext()
     {
-        using var provider = new ServiceCollection()
-            .AddCarinaInfrastructure(ConnectionString)
-            .BuildServiceProvider();
-
+        using var provider = Build(ValidSettings());
         using var scope = provider.CreateScope();
 
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<CarinaDbContext>());
@@ -24,16 +37,56 @@ public sealed class ServiceCollectionExtensionsTests
     [Fact]
     public void RegistersTheTimeProvider()
     {
-        using var provider = new ServiceCollection()
-            .AddCarinaInfrastructure(ConnectionString)
-            .BuildServiceProvider();
+        using var provider = Build(ValidSettings());
 
         Assert.Same(TimeProvider.System, provider.GetRequiredService<TimeProvider>());
     }
 
     [Fact]
-    public void RejectsAnEmptyConnectionString()
+    public void RegistersTheDriverStatusReaderWithItsSocketPath()
     {
-        Assert.Throws<ArgumentException>(() => new ServiceCollection().AddCarinaInfrastructure("  "));
+        using var provider = Build(ValidSettings());
+
+        var reader = Assert.IsType<NotConnectedDriverStatusReader>(provider.GetRequiredService<IDriverStatusReader>());
+        Assert.Equal(new DriverSocketPath("/run/carina/driver.sock"), reader.SocketPath);
+    }
+
+    [Fact]
+    public void RejectsAMissingConnectionString()
+    {
+        var settings = ValidSettings();
+        settings["ConnectionStrings:Carina"] = "";
+        using var provider = Build(settings);
+
+        var exception = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<DatabaseOptions>>().Value);
+
+        Assert.Contains("ConnectionStrings:Carina", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RejectsAMissingDriverSocketPath()
+    {
+        var settings = ValidSettings();
+        settings.Remove("CARINA_DRIVER_SOCKET");
+        using var provider = Build(settings);
+
+        var exception = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<DriverOptions>>().Value);
+
+        Assert.Contains("CARINA_DRIVER_SOCKET", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RejectsARelativeDriverSocketPath()
+    {
+        var settings = ValidSettings();
+        settings["CARINA_DRIVER_SOCKET"] = "driver.sock";
+        using var provider = Build(settings);
+
+        var exception = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<DriverOptions>>().Value);
+
+        Assert.Contains("absolute path", exception.Message, StringComparison.Ordinal);
     }
 }
