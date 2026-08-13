@@ -29,3 +29,7 @@ tasks:
     cmd: docker compose exec db psql -U carina -d carina
   image:
     cmd: docker build -t carina .
+  image:verify:
+    cmds:
+      - docker build -t carina .
+      - docker/verify-image.sh carina
