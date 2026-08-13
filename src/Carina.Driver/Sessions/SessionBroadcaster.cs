@@ -39,7 +39,8 @@ public sealed class SessionSubscription
 public sealed class SessionBroadcaster(
     int viewerCapacity = SessionBroadcaster.DefaultViewerCapacity,
     int surveyCapacity = SessionBroadcaster.DefaultSurveyCapacity,
-    TimeSpan? surveyBlockLimit = null
+    TimeSpan? surveyBlockLimit = null,
+    Action<Exception>? report = null
 ) : IDisposable
 {
     public const int DefaultViewerCapacity = 64;
@@ -72,14 +73,12 @@ public sealed class SessionBroadcaster(
                 new BoundedChannelOptions(surveyCapacity)
                 {
                     FullMode = BoundedChannelFullMode.Wait,
-                    SingleWriter = true,
                 }
             )
             : Channel.CreateBounded<byte[]>(
                 new BoundedChannelOptions(viewerCapacity)
                 {
                     FullMode = BoundedChannelFullMode.DropOldest,
-                    SingleWriter = true,
                 },
                 _ => subscription?.CountDrop()
             );
@@ -130,6 +129,7 @@ public sealed class SessionBroadcaster(
                 entry.Key.IsDisconnected = true;
                 entry.Key.IsTruncated = true;
                 Unsubscribe(entry.Key, error);
+                report?.Invoke(error);
             }
         }
     }
@@ -230,7 +230,7 @@ public sealed class SessionBroadcaster(
 
             if (!room.Result)
             {
-                return Delivery.Delivered;
+                return Delivery.Abandoned;
             }
         }
     }

@@ -189,11 +189,13 @@ public sealed class TunerSessionManagerTests : IDisposable
     [Fact]
     public void ARefusedRequestLeavesTheDeviceFreeForTheNext()
     {
-        var refusing = Manager(Configuration with { Tuner = new TunerSettings(TunerBackend.Dvb) });
+        var manager = Manager();
 
-        Assert.Throws<NotSupportedException>(() => Begin(refusing, "s-1", "adapter0"));
+        File.WriteAllBytes(Path.Combine(root, "s-1.ts"), [0x47]);
 
-        StopAndWait(Begin(Manager(), "s-2", "adapter0"));
+        Assert.Throws<IOException>(() => Begin(manager, "s-1", "adapter0"));
+
+        StopAndWait(Begin(manager, "s-2", "adapter0"));
     }
 
     [Fact]
@@ -327,6 +329,26 @@ public sealed class TunerSessionManagerTests : IDisposable
 
         Assert.True(DateTime.UtcNow - started < TimeSpan.FromSeconds(10));
         Assert.False(recording.Completion.IsCompleted);
+    }
+
+    [Fact]
+    public async Task ShutdownDoesNotReturnBeforeEverySessionOutcomeIsWrittenDown()
+    {
+        var log = new CapturingLogger<TunerSessionManager>();
+        var manager = new TunerSessionManager(
+            Configuration,
+            new TunerDeviceFactory(Configuration),
+            clock,
+            log
+        );
+
+        Begin(manager, "s-1", "adapter0", SessionPurpose.Live);
+        Begin(manager, "s-2", "adapter1", SessionPurpose.Live, TunerKind.Satellite);
+
+        await manager.StopAsync(CancellationToken.None);
+
+        Assert.Contains(log.Lines, line => line.Contains("s-1") && line.Contains("ended"));
+        Assert.Contains(log.Lines, line => line.Contains("s-2") && line.Contains("ended"));
     }
 
     [Fact]

@@ -1,7 +1,11 @@
+using System.Collections.Concurrent;
+
 using Carina.Contracts;
 using Carina.Driver.Configuration;
 using Carina.Driver.Recording;
 using Carina.Driver.Tuning;
+
+using Microsoft.Extensions.Logging;
 
 namespace Carina.Driver.Tests;
 
@@ -109,4 +113,24 @@ public sealed class CountingRecordingWriter : IRecordingWriter
             throw new IOException("the recording could not be closed");
         }
     }
+}
+
+public sealed class CapturingLogger<T> : ILogger<T>
+{
+    private readonly ConcurrentQueue<string> lines = new();
+
+    public IReadOnlyCollection<string> Lines => [.. lines];
+
+    public IDisposable? BeginScope<TState>(TState state)
+        where TState : notnull => null;
+
+    public bool IsEnabled(LogLevel logLevel) => true;
+
+    public void Log<TState>(
+        LogLevel logLevel,
+        EventId eventId,
+        TState state,
+        Exception? exception,
+        Func<TState, Exception?, string> formatter
+    ) => lines.Enqueue($"{logLevel} {formatter(state, exception)}");
 }

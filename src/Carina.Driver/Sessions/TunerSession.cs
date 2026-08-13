@@ -69,7 +69,8 @@ public sealed class TunerSession : IDisposable
         Broadcaster = new SessionBroadcaster(
             surveyBlockLimit: purpose is SessionPurpose.Survey
                 ? SessionBroadcaster.DefaultSurveyBlockLimit
-                : TimeSpan.Zero
+                : TimeSpan.Zero,
+            report: RecordFault
         );
     }
 
@@ -155,17 +156,19 @@ public sealed class TunerSession : IDisposable
             state = SessionState.Active;
         }
 
-        loop = new Thread(Run) { IsBackground = true, Name = $"session-{SessionId}" };
+        var thread = new Thread(Run) { IsBackground = true, Name = $"session-{SessionId}" };
 
         try
         {
-            loop.Start();
+            thread.Start();
         }
         catch (Exception error)
         {
             Finish(SessionState.Failed, SessionStopReason.DeviceFailed, error);
             throw;
         }
+
+        loop = thread;
     }
 
     public bool Extend(DateTimeOffset newEndsAt)
@@ -364,7 +367,7 @@ public sealed class TunerSession : IDisposable
 
         var failed = causes.Count > 0;
 
-        Close(() => Broadcaster.Close(failed ? Combine(causes) : null));
+        var closeFault = Close(() => Broadcaster.Close(failed ? Combine(causes) : null));
 
         lock (gate)
         {
@@ -373,9 +376,65 @@ public sealed class TunerSession : IDisposable
             failureCause = failed ? Combine(causes) : null;
         }
 
+        if (closeFault is not null)
+        {
+            RecordFault(closeFault);
+        }
+
         RaiseEnded();
 
+        ReportOutcome();
+
         completion.TrySetResult();
+    }
+
+    private void ReportOutcome()
+    {
+        if (logger is null)
+        {
+            return;
+        }
+
+        if (StopReason is SessionStopReason.DrainCapReached)
+        {
+            logger.LogError(
+                FailureCause,
+                "Session {SessionId} on {DeviceId} was cut short by shutdown after {BytesRecorded} bytes and is marked failed.",
+                SessionId.Value,
+                DeviceId,
+                BytesRecorded
+            );
+        }
+        else if (State is SessionState.Failed)
+        {
+            logger.LogError(
+                FailureCause,
+                "Session {SessionId} on {DeviceId} failed after {BytesRecorded} bytes.",
+                SessionId.Value,
+                DeviceId,
+                BytesRecorded
+            );
+        }
+        else
+        {
+            logger.LogInformation(
+                "Session {SessionId} on {DeviceId} ended ({StopReason}) after {BytesRecorded} bytes.",
+                SessionId.Value,
+                DeviceId,
+                StopReason,
+                BytesRecorded
+            );
+        }
+
+        if (FaultCount > 0)
+        {
+            logger.LogWarning(
+                FirstFault,
+                "Session {SessionId} met {FaultCount} faults that did not stop it.",
+                SessionId.Value,
+                FaultCount
+            );
+        }
     }
 
     private static SessionStopReason ReasonFor(

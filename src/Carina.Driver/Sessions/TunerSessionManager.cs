@@ -279,57 +279,8 @@ public sealed class TunerSessionManager(
 
         while (ended.Count > RetainedSessions && ended.TryDequeue(out _))
         { }
-
-        _ = session.Completion.ContinueWith(
-            _ => Report(session),
-            CancellationToken.None,
-            TaskContinuationOptions.ExecuteSynchronously,
-            TaskScheduler.Default
-        );
     }
 
-    private void Report(TunerSession session)
-    {
-        if (session.StopReason is SessionStopReason.DrainCapReached)
-        {
-            logger.LogError(
-                "Session {SessionId} on {DeviceId} was cut short by shutdown after {BytesRecorded} bytes and is marked failed.",
-                session.SessionId.Value,
-                session.DeviceId,
-                session.BytesRecorded
-            );
-        }
-        else if (session.State is SessionState.Failed)
-        {
-            logger.LogError(
-                session.FailureCause,
-                "Session {SessionId} on {DeviceId} failed after {BytesRecorded} bytes.",
-                session.SessionId.Value,
-                session.DeviceId,
-                session.BytesRecorded
-            );
-        }
-        else
-        {
-            logger.LogInformation(
-                "Session {SessionId} on {DeviceId} ended ({StopReason}) after {BytesRecorded} bytes.",
-                session.SessionId.Value,
-                session.DeviceId,
-                session.StopReason,
-                session.BytesRecorded
-            );
-        }
-
-        if (session.FaultCount > 0)
-        {
-            logger.LogWarning(
-                session.FirstFault,
-                "Session {SessionId} met {FaultCount} faults that did not stop it.",
-                session.SessionId.Value,
-                session.FaultCount
-            );
-        }
-    }
 
     private static bool Matches(DeviceKind device, TunerKind requested) =>
         (device, requested) switch
