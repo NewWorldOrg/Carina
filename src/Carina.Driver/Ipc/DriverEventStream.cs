@@ -10,7 +10,13 @@ public static class DriverEventStream
 {
     public const string ContentType = "text/event-stream";
 
-    public static async Task Invoke(HttpContext context, DriverEventHub hub)
+    public static readonly TimeSpan WritePatience = TimeSpan.FromSeconds(5);
+
+    public static async Task Invoke(
+        HttpContext context,
+        DriverEventHub hub,
+        TimeSpan? writePatience = null
+    )
     {
         if (!hub.TryListen(out var listener))
         {
@@ -30,6 +36,8 @@ public static class DriverEventStream
             context.Response.ContentType = ContentType;
             context.Response.Headers.CacheControl = "no-cache";
 
+            var patience = writePatience ?? WritePatience;
+
             try
             {
                 await context.Response.StartAsync(context.RequestAborted);
@@ -37,15 +45,22 @@ public static class DriverEventStream
 
                 while (true)
                 {
-                    foreach (var name in await listener.Take(context.RequestAborted))
+                    var names = await listener.Take(context.RequestAborted);
+
+                    using var leash = CancellationTokenSource.CreateLinkedTokenSource(
+                        context.RequestAborted
+                    );
+                    leash.CancelAfter(patience);
+
+                    foreach (var name in names)
                     {
                         await context.Response.WriteAsync(
                             $"event: {name}\ndata: {name}\n\n",
-                            context.RequestAborted
+                            leash.Token
                         );
                     }
 
-                    await context.Response.Body.FlushAsync(context.RequestAborted);
+                    await context.Response.Body.FlushAsync(leash.Token);
                 }
             }
             catch (Exception error)

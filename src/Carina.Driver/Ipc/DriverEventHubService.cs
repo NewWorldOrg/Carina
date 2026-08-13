@@ -12,6 +12,7 @@ public sealed class DriverEventHubService(DriverEventHub hub, TunerSessionManage
     {
         manager.EnterDraining();
         hub.CloseAll();
+        manager.DetachEverySubscriber();
 
         return Task.CompletedTask;
     }

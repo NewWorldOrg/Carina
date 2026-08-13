@@ -49,6 +49,18 @@ public sealed class TunerSessionManager(
         events?.Signal(DriverEvents.Draining);
     }
 
+    public void DetachEverySubscriber()
+    {
+        foreach (var session in sessions.Values)
+        {
+            session.Broadcaster.Close(
+                new OperationCanceledException(
+                    $"The driver is shutting down; the stream of '{session.SessionId}' ends here and is incomplete."
+                )
+            );
+        }
+    }
+
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         EnterDraining();

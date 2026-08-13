@@ -104,6 +104,72 @@ public sealed class DriverApiTests
     }
 
     [Fact]
+    public async Task ShutdownDoesNotWaitForAnAttachedViewer()
+    {
+        var driver = await DriverUnderTest.Start();
+        using var client = driver.Client();
+
+        using var created = await client.PostAsync(
+            DriverEndpoints.Sessions,
+            DriverUnderTest.Body(DriverUnderTest.Live("watched-one")),
+            Soon()
+        );
+
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+
+        using var streaming = await client.GetAsync(
+            $"{DriverEndpoints.Session(SessionId.Parse("watched-one"))}/stream",
+            HttpCompletionOption.ResponseHeadersRead,
+            Soon()
+        );
+
+        Assert.Equal(HttpStatusCode.OK, streaming.StatusCode);
+
+        var body = await streaming.Content.ReadAsStreamAsync(Soon());
+        var buffer = new byte[188];
+        Assert.True(await body.ReadAsync(buffer, Soon()) > 0);
+
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        await driver.DisposeAsync();
+        watch.Stop();
+
+        Assert.True(
+            watch.Elapsed < TimeSpan.FromSeconds(15),
+            $"Shutdown took {watch.Elapsed} with a viewer attached."
+        );
+
+        await Assert.ThrowsAnyAsync<Exception>(async () =>
+        {
+            while (await body.ReadAsync(buffer, Soon()) > 0)
+            { }
+        });
+    }
+
+    [Fact]
+    public async Task AnEventsListenerHearsDrainingWhenTheDriverShutsDown()
+    {
+        var driver = await DriverUnderTest.Start();
+        using var client = driver.Client();
+
+        using var listening = await client.GetAsync(
+            DriverEndpoints.Events,
+            HttpCompletionOption.ResponseHeadersRead,
+            Soon()
+        );
+
+        Assert.Equal(HttpStatusCode.OK, listening.StatusCode);
+
+        var body = await listening.Content.ReadAsStreamAsync(Soon());
+        var reading = new StreamReader(body).ReadToEndAsync(Soon());
+
+        await driver.DisposeAsync();
+
+        var heard = await reading.WaitAsync(TimeSpan.FromSeconds(15));
+
+        Assert.Contains("event: draining", heard);
+    }
+
+    [Fact]
     public async Task HealthSaysWhetherTheDriverIsDraining()
     {
         await using var driver = await DriverUnderTest.Start();

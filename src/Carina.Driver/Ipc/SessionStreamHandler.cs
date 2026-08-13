@@ -14,7 +14,8 @@ public static class SessionStreamHandler
     public static async Task Invoke(
         HttpContext context,
         TunerSessionManager manager,
-        TimeSpan? conclusionGrace = null
+        TimeSpan? conclusionGrace = null,
+        CancellationToken driverStopping = default
     )
     {
         if (!SessionId.TryParse(context.Request.RouteValues["id"] as string, out var sessionId))
@@ -91,7 +92,13 @@ public static class SessionStreamHandler
 
         try
         {
-            await Pump(context, session, subscription, conclusionGrace ?? DefaultConclusionGrace);
+            await Pump(
+                context,
+                session,
+                subscription,
+                conclusionGrace ?? DefaultConclusionGrace,
+                driverStopping
+            );
         }
         finally
         {
@@ -103,22 +110,26 @@ public static class SessionStreamHandler
         HttpContext context,
         TunerSession session,
         SessionSubscription subscription,
-        TimeSpan conclusionGrace
+        TimeSpan conclusionGrace,
+        CancellationToken driverStopping
     )
     {
         context.Response.StatusCode = StatusCodes.Status200OK;
         context.Response.ContentType = ContentType;
 
+        using var leash = CancellationTokenSource.CreateLinkedTokenSource(
+            context.RequestAborted,
+            driverStopping
+        );
+
         try
         {
-            await context.Response.StartAsync(context.RequestAborted);
-            await context.Response.Body.FlushAsync(context.RequestAborted);
+            await context.Response.StartAsync(leash.Token);
+            await context.Response.Body.FlushAsync(leash.Token);
 
-            await foreach (
-                var chunk in subscription.Reader.ReadAllAsync(context.RequestAborted)
-            )
+            await foreach (var chunk in subscription.Reader.ReadAllAsync(leash.Token))
             {
-                await context.Response.Body.WriteAsync(chunk, context.RequestAborted);
+                await context.Response.Body.WriteAsync(chunk, leash.Token);
             }
         }
         catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
