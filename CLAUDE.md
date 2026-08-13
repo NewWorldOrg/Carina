@@ -118,9 +118,11 @@ docker compose exec app dotnet test
 docker compose exec app dotnet format --verify-no-changes
 ```
 
-`task` shortcuts: `task build`, `task test`, `task lint`, `task format`, `task openapi`.
+`task` shortcuts: `task build`, `task test`, `task lint`, `task format`, `task openapi`,
+`task acceptance`.
 
-GitHub Actions runs build, test and format verification on push and pull request to
+GitHub Actions runs build, test and format verification, the OpenAPI document check, both
+compose files, the image checks and the acceptance scenarios on push and pull request to
 `master`.
 
 ## Docker Config

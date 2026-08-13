@@ -126,3 +126,17 @@ jobs:
             exit 1
           fi
           echo "${output}"
+
+  acceptance:
+    runs-on: ubuntu-latest
+    env:
+      CARINA_ACCEPTANCE_IMAGE: carina:ci
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: docker build -t carina:ci .
+      - run: docker/acceptance/run.sh
+      - name: What is left on the runner
+        if: always()
+        run: docker ps -a && docker volume ls

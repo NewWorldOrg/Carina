@@ -45,6 +45,10 @@ tasks:
     cmds:
       - CARINA_STOP_GRACE="$(docker/grace-period.sh derive)" docker compose -f compose.deploy.yml up -d --wait
       - CARINA_STOP_GRACE="$(docker/grace-period.sh derive)" docker/grace-period.sh check
+  acceptance:
+    cmds:
+      - docker build -t carina .
+      - docker/acceptance/run.sh {{.CLI_ARGS}}
   deploy:down:
     cmd: docker compose -f compose.deploy.yml down
   deploy:logs:
