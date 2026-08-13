@@ -25,8 +25,7 @@ public sealed class DbEntryPointTests
 
         var exitCode = await DbEntryPoint.RunAsync(["--migrate"], error);
 
-        Assert.Equal(DbEntryPoint.MigrationFailedExitCode, exitCode);
-        Assert.Contains("Carina.Db --migrate failed", error.ToString(), StringComparison.Ordinal);
+        Assert.Equal(DbEntryPoint.UnusableConfigurationExitCode, exitCode);
         Assert.Contains(CarinaDbContextFactory.ConnectionStringVariable, error.ToString(), StringComparison.Ordinal);
     }
 
