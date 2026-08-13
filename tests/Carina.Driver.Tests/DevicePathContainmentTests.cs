@@ -58,10 +58,10 @@ public sealed class DevicePathContainmentTests : IDisposable
     [Fact]
     public void ALeafSymbolicLinkOutOfDevIsRejected()
     {
-        if (!CanWriteToDev())
-        {
-            return;
-        }
+        Assert.True(
+            CanWriteToDev(),
+            "This check needs to create a symbolic link under /dev, so it has to run in the container."
+        );
 
         var link = LinkUnder("/dev", "carina-test-leaf", Path.Combine(outside, "target"));
 
@@ -74,10 +74,10 @@ public sealed class DevicePathContainmentTests : IDisposable
     [Fact]
     public void ASymbolicLinkAnyLevelAboveTheDeviceIsRejected()
     {
-        if (!CanWriteToDev())
-        {
-            return;
-        }
+        Assert.True(
+            CanWriteToDev(),
+            "This check needs to create a symbolic link under /dev, so it has to run in the container."
+        );
 
         var link = LinkUnder("/dev", "carina-test-branch", outside);
 

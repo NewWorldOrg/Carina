@@ -90,8 +90,9 @@ public sealed class TunerSessionTests : IDisposable
         session.Stop(SessionStopReason.DrainCapReached);
         WaitForEnd(session);
 
-        Assert.Equal(SessionState.Stopped, session.State);
+        Assert.Equal(SessionState.Failed, session.State);
         Assert.Equal(SessionStopReason.DrainCapReached, session.StopReason);
+        Assert.NotNull(session.FailureCause);
     }
 
     [Fact]
@@ -152,6 +153,7 @@ public sealed class TunerSessionTests : IDisposable
         WaitForEnd(session);
 
         Assert.Equal(SessionState.Failed, session.State);
+        Assert.Equal(SessionStopReason.RecordingFailed, session.StopReason);
         Assert.IsType<IOException>(session.FailureCause);
         Assert.True(device.Disposed);
     }
@@ -501,6 +503,85 @@ public sealed class TunerSessionTests : IDisposable
 
         Assert.True(device.Disposed);
         Assert.True(writer.Disposed);
+    }
+
+    [Fact]
+    public void DisposingASessionThatWillNotStopDoesNotReportACleanStop()
+    {
+        var clock = new ManualTimeProvider(Start);
+        var device = new StubbornTunerDevice(TimeSpan.FromSeconds(7));
+        var writer = new CountingRecordingWriter(Path.Combine(root, "s-1.ts"));
+
+        var session = new TunerSession(
+            SessionId.Parse("s-1"),
+            SessionPurpose.Recording,
+            "adapter0",
+            device,
+            Start,
+            Start + TimeSpan.FromHours(1),
+            clock,
+            writer,
+            ChunkSize
+        );
+
+        session.Start();
+
+        Assert.True(device.Reading.Wait(TimeSpan.FromSeconds(10)));
+
+        session.Dispose();
+
+        Assert.NotEqual(SessionState.Stopped, session.State);
+        Assert.False(session.Completion.IsCompleted);
+        Assert.False(device.Disposed);
+        Assert.False(writer.Disposed);
+        Assert.Equal(1, session.FaultCount);
+
+        session.WaitForEnd(TimeSpan.FromSeconds(20));
+    }
+
+    [Fact]
+    public async Task ASubscriberLosingAChunkToAStopIsNotToldTheStreamFinished()
+    {
+        using var broadcaster = new SessionBroadcaster(
+            surveyCapacity: 1,
+            surveyBlockLimit: TimeSpan.FromSeconds(5)
+        );
+        var survey = broadcaster.Subscribe(SubscriberKind.Survey);
+        using var stopping = new CancellationTokenSource();
+
+        broadcaster.Publish(new byte[] { 1 }, stopping.Token);
+        stopping.Cancel();
+        broadcaster.Publish(new byte[] { 2 }, stopping.Token);
+        broadcaster.Close(null);
+
+        var reading = async () =>
+        {
+            await foreach (var _ in survey.Reader.ReadAllAsync())
+            { }
+        };
+
+        await Assert.ThrowsAsync<IOException>(reading);
+        Assert.True(survey.IsTruncated);
+        Assert.Equal(1, survey.DroppedChunks);
+    }
+
+    [Fact]
+    public async Task ASubscriberThatSawEveryChunkIsToldTheStreamFinished()
+    {
+        using var broadcaster = new SessionBroadcaster(surveyCapacity: 4);
+        var survey = broadcaster.Subscribe(SubscriberKind.Survey);
+
+        broadcaster.Publish(new byte[] { 1 });
+        broadcaster.Close(null);
+
+        var taken = 0;
+        await foreach (var _ in survey.Reader.ReadAllAsync())
+        {
+            taken++;
+        }
+
+        Assert.Equal(1, taken);
+        Assert.False(survey.IsTruncated);
     }
 
     private static void WaitUntilPast(ScriptedTunerDevice device, long reads)

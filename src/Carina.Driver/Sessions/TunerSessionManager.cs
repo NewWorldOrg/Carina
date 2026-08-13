@@ -15,14 +15,21 @@ public sealed class TunerSessionManager(
     DriverConfiguration configuration,
     ITunerDeviceFactory deviceFactory,
     TimeProvider timeProvider,
-    ILogger<TunerSessionManager> logger
+    ILogger<TunerSessionManager> logger,
+    TimeSpan? hardStopLimit = null
 ) : IHostedService
 {
     public const int RetainedSessions = 64;
 
+    public static readonly TimeSpan DefaultHardStopLimit = TimeSpan.FromSeconds(30);
+
     private readonly ConcurrentDictionary<SessionId, TunerSession> sessions = [];
+    private readonly ConcurrentDictionary<string, SessionId> claimedDevices = [];
     private readonly ConcurrentQueue<TunerSession> ended = new();
-    private readonly TimeSpan drainCap = TimeSpan.FromHours(configuration.ShutdownGraceHours);
+    private readonly TimeSpan drainCap = TimeSpan.FromHours(
+        Math.Max(0, configuration.ShutdownGraceHours)
+    );
+    private readonly TimeSpan hardStop = hardStopLimit ?? DefaultHardStopLimit;
 
     private volatile bool draining;
 
@@ -37,6 +44,11 @@ public sealed class TunerSessionManager(
         draining = true;
 
         var running = sessions.Values.ToArray();
+        if (running.Length is 0)
+        {
+            return;
+        }
+
         var recordings = running
             .Where(session => session.Purpose is SessionPurpose.Recording)
             .ToArray();
@@ -46,39 +58,65 @@ public sealed class TunerSessionManager(
             session.Stop();
         }
 
-        if (recordings.Length is 0)
-        {
-            await Task.WhenAll(running.Select(session => session.Completion))
-                .WaitAsync(cancellationToken);
+        var everyone = Task.WhenAll(running.Select(session => session.Completion));
 
+        if (recordings.Length > 0)
+        {
+            logger.LogInformation(
+                "Shutdown was asked for while {Count} recordings were running; staying up for up to {DrainCap}.",
+                recordings.Length,
+                drainCap
+            );
+
+            if (await Settles(everyone, drainCap, cancellationToken))
+            {
+                return;
+            }
+
+            foreach (var session in recordings.Where(session => !session.Completion.IsCompleted))
+            {
+                logger.LogWarning(
+                    "Recording {SessionId} on {DeviceId} is being cut short after {BytesRecorded} bytes because shutdown could not wait any longer.",
+                    session.SessionId.Value,
+                    session.DeviceId,
+                    session.BytesRecorded
+                );
+
+                session.Stop(SessionStopReason.DrainCapReached);
+            }
+        }
+
+        if (await Settles(everyone, hardStop, CancellationToken.None))
+        {
             return;
         }
 
-        logger.LogInformation(
-            "Shutdown was asked for while {Count} recordings were running; staying up for up to {DrainCap}.",
-            recordings.Length,
-            drainCap
-        );
+        foreach (var session in running.Where(session => !session.Completion.IsCompleted))
+        {
+            logger.LogError(
+                "Session {SessionId} on {DeviceId} did not let go within {HardStopLimit}; the driver is exiting without it.",
+                session.SessionId.Value,
+                session.DeviceId,
+                hardStop
+            );
+        }
+    }
 
-        var everyone = Task.WhenAll(running.Select(session => session.Completion));
-
+    private static async Task<bool> Settles(
+        Task everyone,
+        TimeSpan limit,
+        CancellationToken cancellationToken
+    )
+    {
         try
         {
-            await everyone.WaitAsync(drainCap, cancellationToken);
+            await everyone.WaitAsync(limit, cancellationToken);
+
+            return true;
         }
         catch (Exception error) when (error is TimeoutException or OperationCanceledException)
         {
-            logger.LogWarning(
-                error,
-                "The recordings did not finish within the grace period, so they are being stopped."
-            );
-
-            foreach (var session in recordings)
-            {
-                session.Stop(SessionStopReason.DrainCapReached);
-            }
-
-            await everyone;
+            return false;
         }
     }
 
@@ -126,14 +164,6 @@ public sealed class TunerSessionManager(
             );
         }
 
-        if (sessions.Values.Any(existing => existing.DeviceId == deviceId))
-        {
-            throw new ArgumentException(
-                $"The device '{deviceId}' is already serving a session.",
-                nameof(deviceId)
-            );
-        }
-
         if (TryGet(sessionId, out _))
         {
             throw new ArgumentException(
@@ -142,14 +172,23 @@ public sealed class TunerSessionManager(
             );
         }
 
-        var now = timeProvider.GetUtcNow();
-        var tunerDevice = deviceFactory.Create(device, request.Tuning);
+        if (!claimedDevices.TryAdd(deviceId, sessionId))
+        {
+            throw new ArgumentException(
+                $"The device '{deviceId}' is already serving a session.",
+                nameof(deviceId)
+            );
+        }
 
+        var now = timeProvider.GetUtcNow();
+        ITunerDevice? tunerDevice = null;
         RecordingWriter? writer = null;
         TunerSession? session = null;
 
         try
         {
+            tunerDevice = deviceFactory.Create(device, request.Tuning);
+
             if (request.Purpose is SessionPurpose.Recording)
             {
                 writer = new RecordingWriter(
@@ -169,7 +208,8 @@ public sealed class TunerSessionManager(
                 now,
                 endsAt,
                 timeProvider,
-                writer
+                writer,
+                logger: logger
             );
 
             if (!sessions.TryAdd(sessionId, session))
@@ -187,14 +227,19 @@ public sealed class TunerSessionManager(
         }
         catch
         {
+            claimedDevices.TryRemove(new KeyValuePair<string, SessionId>(deviceId, sessionId));
+
             if (session is not null)
             {
-                sessions.TryRemove(sessionId, out _);
+                sessions.TryRemove(new KeyValuePair<SessionId, TunerSession>(sessionId, session));
                 session.Ended -= Forget;
+                session.Dispose();
             }
-
-            writer?.Dispose();
-            tunerDevice.Dispose();
+            else
+            {
+                writer?.Dispose();
+                tunerDevice?.Dispose();
+            }
 
             throw;
         }
@@ -226,18 +271,35 @@ public sealed class TunerSessionManager(
 
     private void Forget(TunerSession session)
     {
-        sessions.TryRemove(session.SessionId, out _);
+        sessions.TryRemove(new KeyValuePair<SessionId, TunerSession>(session.SessionId, session));
+        claimedDevices.TryRemove(
+            new KeyValuePair<string, SessionId>(session.DeviceId, session.SessionId)
+        );
         ended.Enqueue(session);
 
         while (ended.Count > RetainedSessions && ended.TryDequeue(out _))
         { }
 
-        Report(session);
+        _ = session.Completion.ContinueWith(
+            _ => Report(session),
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default
+        );
     }
 
     private void Report(TunerSession session)
     {
-        if (session.State is SessionState.Failed)
+        if (session.StopReason is SessionStopReason.DrainCapReached)
+        {
+            logger.LogError(
+                "Session {SessionId} on {DeviceId} was cut short by shutdown after {BytesRecorded} bytes and is marked failed.",
+                session.SessionId.Value,
+                session.DeviceId,
+                session.BytesRecorded
+            );
+        }
+        else if (session.State is SessionState.Failed)
         {
             logger.LogError(
                 session.FailureCause,

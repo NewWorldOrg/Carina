@@ -29,6 +29,8 @@ public sealed class SessionSubscription
 
     public bool IsDisconnected { get; internal set; }
 
+    public bool IsTruncated { get; internal set; }
+
     public long DroppedChunks => Interlocked.Read(ref droppedChunks);
 
     internal void CountDrop() => Interlocked.Increment(ref droppedChunks);
@@ -45,6 +47,13 @@ public sealed class SessionBroadcaster(
 
     public static readonly TimeSpan DefaultSurveyBlockLimit = TimeSpan.FromSeconds(5);
 
+    private enum Delivery
+    {
+        Delivered,
+        Abandoned,
+        Refused,
+    }
+
     private readonly ConcurrentDictionary<SessionSubscription, byte> subscriptions = [];
     private readonly TimeSpan blockLimit = surveyBlockLimit ?? DefaultSurveyBlockLimit;
     private readonly Lock gate = new();
@@ -56,19 +65,26 @@ public sealed class SessionBroadcaster(
 
     public SessionSubscription Subscribe(SubscriberKind kind)
     {
-        var options = kind is SubscriberKind.Survey
-            ? new BoundedChannelOptions(surveyCapacity)
-            {
-                FullMode = BoundedChannelFullMode.Wait,
-                SingleWriter = true,
-            }
-            : new BoundedChannelOptions(viewerCapacity)
-            {
-                FullMode = BoundedChannelFullMode.DropOldest,
-                SingleWriter = true,
-            };
+        SessionSubscription? subscription = null;
 
-        var subscription = new SessionSubscription(kind, Channel.CreateBounded<byte[]>(options));
+        var channel = kind is SubscriberKind.Survey
+            ? Channel.CreateBounded<byte[]>(
+                new BoundedChannelOptions(surveyCapacity)
+                {
+                    FullMode = BoundedChannelFullMode.Wait,
+                    SingleWriter = true,
+                }
+            )
+            : Channel.CreateBounded<byte[]>(
+                new BoundedChannelOptions(viewerCapacity)
+                {
+                    FullMode = BoundedChannelFullMode.DropOldest,
+                    SingleWriter = true,
+                },
+                _ => subscription?.CountDrop()
+            );
+
+        subscription = new SessionSubscription(kind, channel);
 
         lock (gate)
         {
@@ -105,31 +121,16 @@ public sealed class SessionBroadcaster(
 
         foreach (var entry in subscriptions)
         {
-            var subscription = entry.Key;
-
-            if (subscription.Kind is not SubscriberKind.Survey)
+            try
             {
-                if (subscription.Channel.Reader.Count >= viewerCapacity)
-                {
-                    subscription.CountDrop();
-                }
-
-                subscription.Channel.Writer.TryWrite(copy);
-                continue;
+                Deliver(entry.Key, copy, cancellationToken);
             }
-
-            if (DeliverWithinLimit(subscription, copy, cancellationToken))
+            catch (Exception error)
             {
-                continue;
+                entry.Key.IsDisconnected = true;
+                entry.Key.IsTruncated = true;
+                Unsubscribe(entry.Key, error);
             }
-
-            subscription.IsDisconnected = true;
-            Unsubscribe(
-                subscription,
-                new TimeoutException(
-                    $"The subscriber did not take the stream within {blockLimit}, so it was disconnected."
-                )
-            );
         }
     }
 
@@ -150,11 +151,44 @@ public sealed class SessionBroadcaster(
 
         foreach (var entry in subscriptions)
         {
-            Unsubscribe(entry.Key, because);
+            Unsubscribe(entry.Key, because ?? Truncation(entry.Key));
         }
     }
 
-    private bool DeliverWithinLimit(
+    private void Deliver(
+        SessionSubscription subscription,
+        byte[] chunk,
+        CancellationToken cancellationToken
+    )
+    {
+        if (subscription.Kind is not SubscriberKind.Survey)
+        {
+            subscription.Channel.Writer.TryWrite(chunk);
+
+            return;
+        }
+
+        switch (DeliverWithinLimit(subscription, chunk, cancellationToken))
+        {
+            case Delivery.Delivered:
+                return;
+
+            case Delivery.Abandoned:
+                subscription.IsTruncated = true;
+                subscription.CountDrop();
+
+                return;
+
+            default:
+                subscription.IsDisconnected = true;
+                subscription.IsTruncated = true;
+                Unsubscribe(subscription, TooSlow());
+
+                return;
+        }
+    }
+
+    private Delivery DeliverWithinLimit(
         SessionSubscription subscription,
         byte[] chunk,
         CancellationToken cancellationToken
@@ -166,28 +200,52 @@ public sealed class SessionBroadcaster(
         {
             if (subscription.Channel.Writer.TryWrite(chunk))
             {
-                return true;
+                return Delivery.Delivered;
+            }
+
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return Delivery.Abandoned;
             }
 
             var left = blockLimit - Stopwatch.GetElapsedTime(start);
             if (left <= TimeSpan.Zero)
             {
-                return false;
+                return Delivery.Refused;
             }
 
             var room = subscription.Channel.Writer.WaitToWriteAsync().AsTask();
 
             try
             {
-                if (!room.Wait((int)left.TotalMilliseconds, cancellationToken) || !room.Result)
+                if (!room.Wait((int)left.TotalMilliseconds, cancellationToken))
                 {
-                    return false;
+                    return Delivery.Refused;
                 }
             }
             catch (OperationCanceledException)
             {
-                return true;
+                return Delivery.Abandoned;
+            }
+
+            if (!room.Result)
+            {
+                return Delivery.Delivered;
             }
         }
     }
+
+    private Exception TooSlow() =>
+        blockLimit <= TimeSpan.Zero
+            ? new IOException(
+                "The subscriber's buffer filled up, and this session never waits for a subscriber, so it was disconnected."
+            )
+            : new TimeoutException(
+                $"The subscriber did not take the stream within {blockLimit}, so it was disconnected."
+            );
+
+    private static Exception? Truncation(SessionSubscription subscription) =>
+        subscription.IsTruncated
+            ? new IOException("The stream ended before every chunk reached this subscriber.")
+            : null;
 }

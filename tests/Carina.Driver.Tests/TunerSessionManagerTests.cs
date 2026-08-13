@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+
 using Carina.Contracts;
 using Carina.Driver.Configuration;
 using Carina.Driver.Sessions;
@@ -160,6 +162,41 @@ public sealed class TunerSessionManagerTests : IDisposable
     }
 
     [Fact]
+    public void OnlyOneOfManySimultaneousRequestsGetsTheDevice()
+    {
+        var manager = Manager();
+        var granted = new ConcurrentBag<TunerSession>();
+
+        Parallel.For(
+            0,
+            16,
+            index =>
+            {
+                try
+                {
+                    granted.Add(Begin(manager, $"s-{index}", "adapter0"));
+                }
+                catch (ArgumentException) { }
+            }
+        );
+
+        Assert.Single(granted);
+        Assert.Single(manager.Sessions);
+
+        StopAndWait(granted.Single());
+    }
+
+    [Fact]
+    public void ARefusedRequestLeavesTheDeviceFreeForTheNext()
+    {
+        var refusing = Manager(Configuration with { Tuner = new TunerSettings(TunerBackend.Dvb) });
+
+        Assert.Throws<NotSupportedException>(() => Begin(refusing, "s-1", "adapter0"));
+
+        StopAndWait(Begin(Manager(), "s-2", "adapter0"));
+    }
+
+    [Fact]
     public void ADeviceIsFreeAgainOnceItsSessionEnds()
     {
         var manager = Manager();
@@ -267,8 +304,29 @@ public sealed class TunerSessionManagerTests : IDisposable
 
         await manager.StopAsync(CancellationToken.None);
 
-        Assert.Equal(SessionState.Stopped, recording.State);
+        Assert.Equal(SessionState.Failed, recording.State);
         Assert.Equal(SessionStopReason.DrainCapReached, recording.StopReason);
+        Assert.NotNull(recording.FailureCause);
+    }
+
+    [Fact]
+    public async Task ShutdownGivesUpOnASessionThatWillNotLetGo()
+    {
+        var manager = new TunerSessionManager(
+            Configuration with { ShutdownGraceHours = 0 },
+            new StubbornTunerDeviceFactory(TimeSpan.FromSeconds(20)),
+            clock,
+            NullLogger<TunerSessionManager>.Instance,
+            hardStopLimit: TimeSpan.FromSeconds(1)
+        );
+
+        var recording = Begin(manager, "s-1", "adapter0");
+        var started = DateTime.UtcNow;
+
+        await manager.StopAsync(CancellationToken.None);
+
+        Assert.True(DateTime.UtcNow - started < TimeSpan.FromSeconds(10));
+        Assert.False(recording.Completion.IsCompleted);
     }
 
     [Fact]

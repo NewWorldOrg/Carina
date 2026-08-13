@@ -48,11 +48,36 @@ public sealed class ScriptedTunerDevice(
     public void Dispose() => Disposed = true;
 }
 
+public sealed class StubbornTunerDevice(TimeSpan readTakes) : ITunerDevice
+{
+    private readonly FakeTunerDevice inner = new(27, 1024);
+
+    public ManualResetEventSlim Reading { get; } = new();
+
+    public bool Disposed { get; private set; }
+
+    public byte[] Read(int count, CancellationToken cancellationToken)
+    {
+        Reading.Set();
+        Thread.Sleep(readTakes);
+
+        return inner.Read(count, cancellationToken);
+    }
+
+    public void Dispose() => Disposed = true;
+}
+
 public sealed class ScriptedTunerDeviceFactory(int failAfterReads = int.MaxValue)
     : ITunerDeviceFactory
 {
     public ITunerDevice Create(DeviceSettings device, TuningRequest tuning) =>
         new ScriptedTunerDevice(failAfterReads);
+}
+
+public sealed class StubbornTunerDeviceFactory(TimeSpan readTakes) : ITunerDeviceFactory
+{
+    public ITunerDevice Create(DeviceSettings device, TuningRequest tuning) =>
+        new StubbornTunerDevice(readTakes);
 }
 
 public sealed class CountingRecordingWriter : IRecordingWriter

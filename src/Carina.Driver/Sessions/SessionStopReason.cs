@@ -7,4 +7,5 @@ public enum SessionStopReason
     EndTimeReached,
     DrainCapReached,
     DeviceFailed,
+    RecordingFailed,
 }

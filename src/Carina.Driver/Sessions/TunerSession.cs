@@ -3,15 +3,19 @@ using Carina.Driver.Recording;
 using Carina.Driver.Transport;
 using Carina.Driver.Tuning;
 
+using Microsoft.Extensions.Logging;
+
 namespace Carina.Driver.Sessions;
 
 public sealed class TunerSession : IDisposable
 {
     public const int DefaultChunkSize = TsPacketReader.PacketLength * 100;
+    public const long FaultReportInterval = 1000;
 
     private readonly ITunerDevice device;
     private readonly IRecordingWriter? recordingWriter;
     private readonly TimeProvider timeProvider;
+    private readonly ILogger? logger;
     private readonly TsPacketReader packetReader = new();
     private readonly int chunkSize;
     private readonly Lock gate = new();
@@ -38,7 +42,8 @@ public sealed class TunerSession : IDisposable
         DateTimeOffset endsAt,
         TimeProvider timeProvider,
         IRecordingWriter? recordingWriter = null,
-        int chunkSize = DefaultChunkSize
+        int chunkSize = DefaultChunkSize,
+        ILogger? logger = null
     )
     {
         if (endsAt <= startedAt)
@@ -58,12 +63,13 @@ public sealed class TunerSession : IDisposable
         this.recordingWriter = recordingWriter;
         this.timeProvider = timeProvider;
         this.chunkSize = chunkSize;
+        this.logger = logger;
         state = SessionState.Requested;
         stopReason = SessionStopReason.Running;
         Broadcaster = new SessionBroadcaster(
-            surveyBlockLimit: purpose is SessionPurpose.Recording
-                ? TimeSpan.Zero
-                : SessionBroadcaster.DefaultSurveyBlockLimit
+            surveyBlockLimit: purpose is SessionPurpose.Survey
+                ? SessionBroadcaster.DefaultSurveyBlockLimit
+                : TimeSpan.Zero
         );
     }
 
@@ -201,8 +207,24 @@ public sealed class TunerSession : IDisposable
     public void Dispose()
     {
         Stop();
-        loop?.Join(TimeSpan.FromSeconds(5));
-        Finish(SessionState.Stopped, SessionStopReason.Requested, null);
+
+        if (loop is null)
+        {
+            Finish(SessionState.Stopped, SessionStopReason.Requested, null);
+
+            return;
+        }
+
+        if (loop.Join(TimeSpan.FromSeconds(5)))
+        {
+            return;
+        }
+
+        RecordFault(
+            new TimeoutException(
+                $"The session '{SessionId}' had not released the device '{DeviceId}' five seconds after it was asked to stop."
+            )
+        );
     }
 
     private void Run()
@@ -227,11 +249,11 @@ public sealed class TunerSession : IDisposable
                 Measure(chunk);
             }
 
-            Finish(SessionState.Stopped, ReasonForEnd(token), null);
+            Conclude(ReasonForEnd(token));
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
-            Finish(SessionState.Stopped, ReasonForEnd(token), null);
+            Conclude(ReasonForEnd(token));
         }
         catch (Exception error)
         {
@@ -254,6 +276,24 @@ public sealed class TunerSession : IDisposable
         }
     }
 
+    private void Conclude(SessionStopReason reason)
+    {
+        if (reason is SessionStopReason.DrainCapReached)
+        {
+            Finish(
+                SessionState.Failed,
+                reason,
+                new OperationCanceledException(
+                    $"The shutdown grace period ran out while '{SessionId}' was still recording."
+                )
+            );
+
+            return;
+        }
+
+        Finish(SessionState.Stopped, reason, null);
+    }
+
     private void Measure(byte[] chunk)
     {
         try
@@ -273,11 +313,22 @@ public sealed class TunerSession : IDisposable
 
     private void RecordFault(Exception error)
     {
-        Interlocked.Increment(ref faultCount);
+        var seen = Interlocked.Increment(ref faultCount);
 
         lock (gate)
         {
             firstFault ??= error;
+        }
+
+        if (seen is 1 || seen % FaultReportInterval is 0)
+        {
+            logger?.LogWarning(
+                error,
+                "Session {SessionId} on {DeviceId} has met {FaultCount} faults that did not stop it; its measurements are unreliable.",
+                SessionId.Value,
+                DeviceId,
+                seen
+            );
         }
     }
 
@@ -288,26 +339,63 @@ public sealed class TunerSession : IDisposable
             return;
         }
 
+        lock (gate)
+        {
+            state = SessionState.Stopping;
+        }
+
         var causes = new List<Exception>();
         if (cause is not null)
         {
             causes.Add(cause);
         }
 
-        Close(() => recordingWriter?.Dispose(), causes);
-        Close(() => Broadcaster.Close(causes.Count > 0 ? Combine(causes) : null), causes);
-        Close(device.Dispose, causes);
+        var writerFault = Close(() => recordingWriter?.Dispose());
+        if (writerFault is not null)
+        {
+            causes.Add(writerFault);
+        }
+
+        var deviceFault = Close(device.Dispose);
+        if (deviceFault is not null)
+        {
+            causes.Add(deviceFault);
+        }
+
+        var failed = causes.Count > 0;
+
+        Close(() => Broadcaster.Close(failed ? Combine(causes) : null));
 
         lock (gate)
         {
-            state = causes.Count > 0 ? SessionState.Failed : outcome;
-            stopReason = causes.Count > 0 ? SessionStopReason.DeviceFailed : reason;
-            failureCause = causes.Count > 0 ? Combine(causes) : null;
+            state = failed ? SessionState.Failed : outcome;
+            stopReason = ReasonFor(reason, cause, writerFault, deviceFault);
+            failureCause = failed ? Combine(causes) : null;
         }
 
         RaiseEnded();
 
         completion.TrySetResult();
+    }
+
+    private static SessionStopReason ReasonFor(
+        SessionStopReason reason,
+        Exception? cause,
+        Exception? writerFault,
+        Exception? deviceFault
+    )
+    {
+        if (cause is not null)
+        {
+            return reason;
+        }
+
+        if (writerFault is not null)
+        {
+            return SessionStopReason.RecordingFailed;
+        }
+
+        return deviceFault is not null ? SessionStopReason.DeviceFailed : reason;
     }
 
     private void RaiseEnded()
@@ -331,15 +419,17 @@ public sealed class TunerSession : IDisposable
         }
     }
 
-    private static void Close(Action close, List<Exception> causes)
+    private static Exception? Close(Action close)
     {
         try
         {
             close();
+
+            return null;
         }
         catch (Exception error)
         {
-            causes.Add(error);
+            return error;
         }
     }
 
