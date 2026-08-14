@@ -1,3 +1,5 @@
+using System.Text.Json.Nodes;
+
 namespace Carina.Contracts.Tests;
 
 public sealed class VersionSkewTests
@@ -131,4 +133,167 @@ public sealed class VersionSkewTests
         Assert.Throws<ArgumentException>(() => DriverEndpoints.Session(default));
         Assert.Throws<ArgumentException>(() => DriverEndpoints.SessionStream(default));
     }
+
+    [Fact]
+    public void ATerrestrialTuneReachesADriverThatNeverHeardOfTheTypedShape()
+    {
+        var request = AsOlderDriverReadsIt(TuneParams.Terrestrial(27));
+
+        Assert.NotNull(request);
+        Assert.Null(request.Tune);
+        Assert.Equal(27, request.Tuning.PhysicalChannel);
+        Assert.Empty(request.Validate(Moment));
+    }
+
+    [Theory]
+    [InlineData(TuneSystem.IsdbSBs)]
+    [InlineData(TuneSystem.IsdbSCs110)]
+    public void ASatelliteTuneIsRefusedByADriverThatCannotTellTheTwoApart(TuneSystem system)
+    {
+        var tune = system is TuneSystem.IsdbSBs ? TuneParams.Bs(15, 16625) : TuneParams.Cs110(24);
+
+        var request = AsOlderDriverReadsIt(tune);
+
+        Assert.NotNull(request);
+        Assert.Contains(
+            request.Validate(Moment),
+            problem => problem.StartsWith("tuning.kind:", StringComparison.Ordinal)
+        );
+    }
+
+    [Fact]
+    public void ATunerAnsweredByADriverWithoutAnyOfThisIsStillReadable()
+    {
+        var tuner = DriverJson.Deserialize(
+            """{"deviceId":"a0","kind":"terrestrial","state":"busy","sessionId":"s-1"}""",
+            DriverJson.Context.TunerSnapshot
+        );
+
+        Assert.NotNull(tuner);
+        Assert.Null(tuner.Health);
+        Assert.Null(tuner.SignalQuality);
+        Assert.Null(tuner.CurrentSession);
+        Assert.Equal(TunerState.Busy, tuner.State);
+    }
+
+    [Fact]
+    public void ADriverThatMeasuresNothingDegradesOneMetricAtATime()
+    {
+        var hello = DriverJson.Deserialize(
+            """{"protocolVersion":1,"instanceId":"old","capabilities":["recording","signalQuality","signalQuality.cnr"]}""",
+            DriverJson.Context.DriverHello
+        );
+
+        Assert.NotNull(hello);
+        Assert.True(hello.Supports(DriverCapabilities.SignalQuality));
+        Assert.True(hello.SupportsSignalQualityMetric(SignalQualityMetrics.Cnr));
+        Assert.False(
+            hello.SupportsSignalQualityMetric(SignalQualityMetrics.PostViterbiBitError)
+        );
+        Assert.False(hello.SupportsSignalQualityMetric("signalStrength"));
+    }
+
+    [Fact]
+    public void ATunerToggleIsNotAttemptedAgainstADriverThatCannotDoIt()
+    {
+        var hello = DriverJson.Deserialize(
+            """{"protocolVersion":1,"instanceId":"old","capabilities":["recording"]}""",
+            DriverJson.Context.DriverHello
+        );
+
+        Assert.NotNull(hello);
+        Assert.False(hello.Supports(DriverCapabilities.LiveTunerToggle));
+        Assert.False(hello.Supports(DriverCapabilities.SignalQuality));
+        Assert.Empty(hello.DeclaredSignalQualityMetrics());
+    }
+
+    [Fact]
+    public void APurposeThisBuildDoesNotKnowIsNotMistakenForAScan()
+    {
+        Assert.Equal(
+            SessionPurpose.Unspecified,
+            DriverJson.Deserialize("\"logo\"", DriverJson.Context.SessionPurpose)
+        );
+        Assert.Equal(
+            SessionPurpose.Scan,
+            DriverJson.Deserialize("\"scan\"", DriverJson.Context.SessionPurpose)
+        );
+    }
+
+    [Fact]
+    public void AnEventNameThisBuildDoesNotKnowIsHarmless()
+    {
+        Assert.False(DriverEvents.IsKnown("tunerRetired"));
+        Assert.True(DriverEvents.IsKnown(DriverEvents.SessionLockLost));
+    }
+
+    [Fact]
+    public void ALedgerEntryFromANewerAppKeepsWhatThisBuildUnderstands()
+    {
+        var entry = DriverJson.Deserialize(
+            """{"deviceId":"adapter0","disabled":true,"lnbPower":true,"lnbVoltage":15}""",
+            DriverJson.Context.TunerConfigEntry
+        );
+
+        Assert.NotNull(entry);
+        Assert.True(entry.Disabled);
+        Assert.True(entry.LnbPower);
+        Assert.Empty(entry.Validate());
+    }
+
+    [Fact]
+    public void ATuneArmThisBuildDoesNotKnowLeavesNothingToActOn()
+    {
+        var tune = DriverJson.Deserialize(
+            """{"system":"isdbSSky","isdbSSky":{"transponder":3}}""",
+            DriverJson.Context.TuneParams
+        );
+
+        Assert.NotNull(tune);
+        Assert.Equal(TuneSystem.Unspecified, tune.System);
+        Assert.Null(tune.IsdbT);
+        Assert.Null(tune.IsdbSBs);
+        Assert.Null(tune.IsdbSCs110);
+        Assert.Equal(
+            ["system: missing, or a value this driver does not know."],
+            tune.Validate()
+        );
+    }
+
+    [Fact]
+    public void AQualitySubtreeFromANewerDriverIsReadForWhatThisBuildKnows()
+    {
+        var reading = DriverJson.Deserialize(
+            """{"lock":"locked","cnrMilliDecibels":21500,"signalStrengthMilliDecibels":-40000,"postViterbiBitErrors":[{"layer":0,"errorBits":12,"totalBits":1000000}]}""",
+            DriverJson.Context.SignalQualityDto
+        );
+
+        Assert.NotNull(reading);
+        Assert.Equal(21_500, reading.CnrMilliDecibels);
+        Assert.Single(reading.PostViterbiBitErrors);
+    }
+
+    private static StartSessionRequest? AsOlderDriverReadsIt(TuneParams tune)
+    {
+        var json = DriverJson.Serialize(
+            new StartSessionRequest
+            {
+                SessionId = SessionId.Parse("scan-1"),
+                Purpose = SessionPurpose.Live,
+                Tuning = tune.ToLegacyRequest(),
+                Tune = tune,
+            }
+        );
+
+        var body = JsonNode.Parse(json)!.AsObject();
+        body.Remove("tune");
+
+        return DriverJson.Deserialize(
+            body.ToJsonString(),
+            DriverJson.Context.StartSessionRequest
+        );
+    }
+
+    private static readonly DateTimeOffset Moment =
+        new(2026, 8, 8, 21, 4, 0, TimeSpan.FromHours(9));
 }
