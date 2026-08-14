@@ -60,7 +60,7 @@ note "${probe_output}"
 
 ends_at 600
 if ! driver_request -X POST -H 'Content-Type: application/json' \
-    -d "{\"sessionId\":\"acc02late\",\"purpose\":\"recording\",\"tuning\":{\"kind\":\"satellite\",\"physicalChannel\":214},\"deviceId\":\"fake-satellite\",\"outputRoot\":\"primary\",\"endsAt\":\"${text_value}\"}" \
+    -d "{\"sessionId\":\"acc02late\",\"purpose\":\"recording\",\"tuning\":{\"kind\":\"satellite\",\"physicalChannel\":23},\"deviceId\":\"fake-satellite\",\"outputRoot\":\"primary\",\"endsAt\":\"${text_value}\"}" \
     http://localhost/sessions; then
     show_driver_log
     fail "asking a draining driver for new work did not complete (curl ${curl_status}): $(body_or_nothing)"

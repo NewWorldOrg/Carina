@@ -310,7 +310,7 @@ start_recording() {
     local root="$3"
     local seconds="$4"
     local kind="${5:-terrestrial}"
-    local channel="${6:-200}"
+    local channel="${6:-55}"
 
     ends_at "${seconds}"
 

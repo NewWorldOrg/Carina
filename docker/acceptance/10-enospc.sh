@@ -60,7 +60,7 @@ require_number "the driver's boot tick" "${boot_before}"
 free_bytes="$(docker exec "${driver_container}" stat -f -c '%a * %S' /srv/tiny)"
 note "the small output root reports $((free_bytes)) bytes free, and the synthetic tuner writes that in well under a second"
 
-start_recording "${roomy}" fake-satellite roomy 240 satellite 214
+start_recording "${roomy}" fake-satellite roomy 240 satellite 23
 start_recording "${tiny}" fake-terrestrial tiny 240
 
 if ! wait_until 60 bash -c "docker run --rm --user 100:10001 -v ${socket_volume}:/run/carina ${curl_image} -s --max-time 15 --unix-socket /run/carina/driver.sock http://localhost/sessions | python3 ${acceptance_dir}/read-json.py session ${tiny} state | grep -qx failed"; then
