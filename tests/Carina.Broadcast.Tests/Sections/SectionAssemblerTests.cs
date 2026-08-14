@@ -108,7 +108,7 @@ public sealed class SectionAssemblerTests
         var carrier = new TransportStreamWriter(Pid).Sections(section);
 
         writer.Packet(0, carrier.Packets[0].AsSpan(5, 183));
-        writer.AdaptationOnlyPacket(continuityCounter: 0);
+        writer.AdaptationOnlyPacket(continuityCounter: 9);
         writer.Packet(null, carrier.Packets[1].AsSpan(4, 184), continuityCounter: 1);
         writer.Packet(null, carrier.Packets[2].AsSpan(4, 184), continuityCounter: 2);
 
@@ -145,6 +145,40 @@ public sealed class SectionAssemblerTests
 
         var assembled = Assert.IsType<SectionRead.Assembled>(Assert.Single(read)).Section;
         Assert.Equal<byte[]>(body, assembled.Body.ToArray());
+    }
+
+    [Fact]
+    public void ARepeatedCounterCarryingDifferentBytesIsAContinuityBreak()
+    {
+        var first = new SectionWriter { TableId = SomeTableId, TableIdExtension = 1, Body = SectionWriter.Filler(20) }
+            .ToBytes();
+        var second = new SectionWriter { TableId = SomeTableId, TableIdExtension = 2, Body = SectionWriter.Filler(30) }
+            .ToBytes();
+
+        var writer = new TransportStreamWriter(Pid)
+            .Packet(0, first, continuityCounter: 6)
+            .Packet(0, second, continuityCounter: 6);
+
+        var read = Assemble(writer);
+
+        Assert.Equal(1, Assert.IsType<SectionRead.Assembled>(read[0]).Section.TableIdExtension);
+        Assert.Equal(SectionDefect.ContinuityBroken, Assert.IsType<SectionRead.Rejected>(read[1]).Defect);
+        Assert.Equal(2, Assert.IsType<SectionRead.Assembled>(read[2]).Section.TableIdExtension);
+    }
+
+    [Fact]
+    public void OnlyOneRepeatOfAPacketIsPermittedBeforeItCountsAsABreak()
+    {
+        var section = new SectionWriter { TableId = SomeTableId, Body = SectionWriter.Filler(400) }.ToBytes();
+        var writer = new TransportStreamWriter(Pid).Sections(section);
+        var assembler = new SectionAssembler(Pid);
+        var read = new List<SectionRead>();
+
+        read.AddRange(assembler.Push(writer.Packets[0]));
+        read.AddRange(assembler.Push(writer.Packets[0]));
+        read.AddRange(assembler.Push(writer.Packets[0]));
+
+        Assert.Equal(SectionDefect.ContinuityBroken, Assert.IsType<SectionRead.Rejected>(Assert.Single(read)).Defect);
     }
 
     [Fact]

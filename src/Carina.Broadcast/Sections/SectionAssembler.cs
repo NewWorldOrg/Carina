@@ -7,10 +7,13 @@ public sealed class SectionAssembler
     private static readonly IReadOnlyList<SectionRead> Nothing = [];
 
     private readonly byte[] pending = new byte[Section.LengthPrefixSize + Section.MaximumDeclaredLength];
+    private readonly byte[] lastPayload = new byte[TransportPacket.Size];
 
     private int pendingCount;
     private int pendingTotal = -1;
     private int lastContinuityCounter = -1;
+    private int lastPayloadLength;
+    private bool alreadyRepeated;
     private bool awaitingStart = true;
 
     public SectionAssembler(int pid)
@@ -65,26 +68,30 @@ public sealed class SectionAssembler
 
         if (lastContinuityCounter >= 0)
         {
-            if (read.ContinuityCounter == lastContinuityCounter)
+            var repeats = read.ContinuityCounter == lastContinuityCounter;
+
+            if (repeats && !alreadyRepeated && read.Payload.SequenceEqual(lastPayload.AsSpan(0, lastPayloadLength)))
             {
+                alreadyRepeated = true;
+
                 return Nothing;
             }
 
-            if (read.ContinuityCounter != ((lastContinuityCounter + 1) & 0x0F))
+            if (repeats || read.ContinuityCounter != ((lastContinuityCounter + 1) & 0x0F))
             {
                 Abandon();
                 outcomes.Add(Rejected(SectionDefect.ContinuityBroken));
 
                 if (!read.PayloadUnitStart)
                 {
-                    lastContinuityCounter = read.ContinuityCounter;
+                    Remember(read);
 
                     return outcomes;
                 }
             }
         }
 
-        lastContinuityCounter = read.ContinuityCounter;
+        Remember(read);
 
         if (read.PayloadUnitStart)
         {
@@ -116,6 +123,16 @@ public sealed class SectionAssembler
     {
         Abandon();
         lastContinuityCounter = -1;
+        lastPayloadLength = 0;
+        alreadyRepeated = false;
+    }
+
+    private void Remember(in TransportPacket read)
+    {
+        lastContinuityCounter = read.ContinuityCounter;
+        read.Payload.CopyTo(lastPayload);
+        lastPayloadLength = read.Payload.Length;
+        alreadyRepeated = false;
     }
 
     private void StartAndContinue(ReadOnlySpan<byte> payload, List<SectionRead> outcomes)
