@@ -29,7 +29,13 @@ var app = builder.Build();
 app.UseAuthentication();
 app.UseMiddleware<DefaultDenyAuthenticationMiddleware>();
 
-app.MapOpenApi();
+var document = app.MapOpenApi();
+
+if (app.Environment.IsDevelopment())
+{
+    document.AllowAnonymous();
+}
+
 app.MapControllers();
 
 try
