@@ -9,6 +9,8 @@ public static class DriverGreeting
         DriverCapabilities.Recording,
         DriverCapabilities.Live,
         DriverCapabilities.QualityMetering,
+        DriverCapabilities.DeviceDetection,
+        DriverCapabilities.TunerLedger,
         DriverCapabilities.LiveTunerToggle,
         DriverCapabilities.TypedTuning,
         DriverCapabilities.SignalQuality,

@@ -16,6 +16,10 @@ public static class DriverCapabilities
 
     public const string TypedTuning = "typedTuning";
 
+    public const string DeviceDetection = "deviceDetection";
+
+    public const string TunerLedger = "tunerLedger";
+
     public const string SignalQualityMetricPrefix = "signalQuality.";
 
     public static string SignalQualityMetric(string metric) =>

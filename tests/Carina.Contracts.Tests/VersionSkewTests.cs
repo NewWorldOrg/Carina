@@ -227,6 +227,19 @@ public sealed class VersionSkewTests
     }
 
     [Fact]
+    public void DetectionAndTheLedgerAreNotAskedOfADriverThatDoesNotDeclareThem()
+    {
+        var hello = DriverJson.Deserialize(
+            """{"protocolVersion":1,"instanceId":"old","capabilities":["recording","live"]}""",
+            DriverJson.Context.DriverHello
+        );
+
+        Assert.NotNull(hello);
+        Assert.False(hello.Supports(DriverCapabilities.DeviceDetection));
+        Assert.False(hello.Supports(DriverCapabilities.TunerLedger));
+    }
+
+    [Fact]
     public void APurposeThisBuildDoesNotKnowIsNotMistakenForAScan()
     {
         Assert.Equal(
