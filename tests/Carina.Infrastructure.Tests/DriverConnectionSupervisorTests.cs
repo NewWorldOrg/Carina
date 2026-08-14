@@ -319,6 +319,36 @@ public sealed class DriverConnectionSupervisorTests
     }
 
     [Fact]
+    public async Task TheTuningLockAndHealthEventNamesAreRecognisedAndReachSubscribers()
+    {
+        var socketPath = NewSocketPath();
+        await using var driver = await FakeDriver.StartAsync(
+            socketPath,
+            FakeDriver.HelloFor("instance-a"));
+        await using var harness = await Harness.StartAsync(socketPath);
+
+        var received = new ConcurrentQueue<string>();
+        using var subscription = harness.Signals.Subscribe(received.Enqueue);
+
+        await Eventually.Happens(
+            () => harness.Monitor.Current.Connection is DriverConnection.Connected,
+            "the supervisor connects");
+        await Eventually.Happens(() => driver.ListenerCount > 0, "the event feed is subscribed");
+
+        driver.Signal(DriverEvents.SessionTuned);
+        driver.Signal(DriverEvents.SessionLockLost);
+        driver.Signal(DriverEvents.TunerHealthChanged);
+
+        await Eventually.Happens(
+            () => received.Contains(DriverEvents.TunerHealthChanged),
+            "the signals arrive");
+
+        Assert.Equal(
+            [DriverEvents.SessionTuned, DriverEvents.SessionLockLost, DriverEvents.TunerHealthChanged],
+            [.. received]);
+    }
+
+    [Fact]
     public async Task AMissingCapabilityIsSurfacedAsDegradation()
     {
         var socketPath = NewSocketPath();
