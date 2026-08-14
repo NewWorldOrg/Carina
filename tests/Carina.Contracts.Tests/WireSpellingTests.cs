@@ -7,9 +7,65 @@ public sealed class WireSpellingTests
     [InlineData(SessionPurpose.Recording, "recording")]
     [InlineData(SessionPurpose.Live, "live")]
     [InlineData(SessionPurpose.Survey, "survey")]
+    [InlineData(SessionPurpose.Scan, "scan")]
     public void SessionPurposeIsSpelledThisWay(SessionPurpose value, string wire)
     {
         AssertRoundTrip(value, wire, DriverJson.Context.SessionPurpose);
+    }
+
+    [Theory]
+    [InlineData(TuneSystem.Unspecified, "unspecified")]
+    [InlineData(TuneSystem.IsdbT, "isdbT")]
+    [InlineData(TuneSystem.IsdbSBs, "isdbSBs")]
+    [InlineData(TuneSystem.IsdbSCs110, "isdbSCs110")]
+    public void TuneSystemIsSpelledThisWay(TuneSystem value, string wire)
+    {
+        AssertRoundTrip(value, wire, DriverJson.Context.TuneSystem);
+    }
+
+    [Fact]
+    public void TheSystemsAreExactlyTheThreeThatCanBeReceived()
+    {
+        Assert.Equal(
+            new[]
+            {
+                TuneSystem.Unspecified,
+                TuneSystem.IsdbT,
+                TuneSystem.IsdbSBs,
+                TuneSystem.IsdbSCs110,
+            },
+            Enum.GetValues<TuneSystem>()
+        );
+    }
+
+    [Theory]
+    [InlineData(SignalLock.Unspecified, "unspecified")]
+    [InlineData(SignalLock.NotLocked, "notLocked")]
+    [InlineData(SignalLock.Locked, "locked")]
+    public void SignalLockIsSpelledThisWay(SignalLock value, string wire)
+    {
+        AssertRoundTrip(value, wire, DriverJson.Context.SignalLock);
+    }
+
+    [Theory]
+    [InlineData(TunerHealthLevel.Unspecified, "unspecified")]
+    [InlineData(TunerHealthLevel.Healthy, "healthy")]
+    [InlineData(TunerHealthLevel.Degraded, "degraded")]
+    [InlineData(TunerHealthLevel.Faulted, "faulted")]
+    public void TunerHealthLevelIsSpelledThisWay(TunerHealthLevel value, string wire)
+    {
+        AssertRoundTrip(value, wire, DriverJson.Context.TunerHealthLevel);
+    }
+
+    [Theory]
+    [InlineData(DeviceDetection.Unspecified, "unspecified")]
+    [InlineData(DeviceDetection.Detected, "detected")]
+    [InlineData(DeviceDetection.Busy, "busy")]
+    [InlineData(DeviceDetection.PermissionDenied, "permissionDenied")]
+    [InlineData(DeviceDetection.Unreadable, "unreadable")]
+    public void DeviceDetectionIsSpelledThisWay(DeviceDetection value, string wire)
+    {
+        AssertRoundTrip(value, wire, DriverJson.Context.DeviceDetection);
     }
 
     [Theory]
@@ -100,6 +156,26 @@ public sealed class WireSpellingTests
         Assert.Equal("live", DriverCapabilities.Live);
         Assert.Equal("qualityMetering", DriverCapabilities.QualityMetering);
         Assert.Equal("descrambling", DriverCapabilities.Descrambling);
+        Assert.Equal("signalQuality", DriverCapabilities.SignalQuality);
+        Assert.Equal("liveTunerToggle", DriverCapabilities.LiveTunerToggle);
+        Assert.Equal("typedTuning", DriverCapabilities.TypedTuning);
+    }
+
+    [Fact]
+    public void AMetricIsNamedUnderTheCapabilityItBelongsTo()
+    {
+        Assert.Equal(
+            "signalQuality.cnr",
+            DriverCapabilities.SignalQualityMetric(SignalQualityMetrics.Cnr)
+        );
+        Assert.Equal(
+            "signalQuality.postViterbiBitError",
+            DriverCapabilities.SignalQualityMetric(SignalQualityMetrics.PostViterbiBitError)
+        );
+        Assert.Equal("cnr", DriverCapabilities.MetricIn("signalQuality.cnr"));
+        Assert.Null(DriverCapabilities.MetricIn("signalQuality"));
+        Assert.Null(DriverCapabilities.MetricIn("signalQuality."));
+        Assert.Null(DriverCapabilities.MetricIn("recording"));
     }
 
     private static void AssertRoundTrip<T>(

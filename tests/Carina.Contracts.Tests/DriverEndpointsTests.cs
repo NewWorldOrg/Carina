@@ -10,11 +10,27 @@ public sealed class DriverEndpointsTests
         Assert.Equal("/sessions", DriverEndpoints.Sessions);
         Assert.Equal("/diagnostics", DriverEndpoints.Diagnostics);
         Assert.Equal("/events", DriverEndpoints.Events);
+        Assert.Equal("/devices/detected", DriverEndpoints.DevicesDetected);
     }
 
     [Fact]
     public void EveryPathIsRooted()
     {
         Assert.All(DriverEndpoints.All, path => Assert.StartsWith("/", path));
+    }
+
+    [Fact]
+    public void ATunerHasAPathUnderTheLedger()
+    {
+        Assert.Equal("/tuners/adapter0", DriverEndpoints.Tuner("adapter0"));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("../secrets")]
+    [InlineData("/dev/dvb/adapter0/frontend0")]
+    public void ADeviceIdOutsideTheShapeHasNoPath(string deviceId)
+    {
+        Assert.Throws<ArgumentException>(() => DriverEndpoints.Tuner(deviceId));
     }
 }

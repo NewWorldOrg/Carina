@@ -28,7 +28,7 @@ public sealed class DriverJsonTests
             {
                 SessionId = SessionId.Parse("rec-1"),
                 Purpose = SessionPurpose.Recording,
-                Tuning = new TuningRequest(TunerKind.Terrestrial, 200, 50001),
+                Tuning = new TuningRequest(TunerKind.Terrestrial, 27, 1024),
                 DeviceId = "adapter0",
                 OutputRoot = "primary",
                 EndsAt = Moment,
@@ -36,7 +36,7 @@ public sealed class DriverJsonTests
         );
 
         Assert.Equal(
-            """{"sessionId":"rec-1","purpose":"recording","tuning":{"kind":"terrestrial","physicalChannel":200,"serviceId":50001},"deviceId":"adapter0","outputRoot":"primary","endsAt":"2026-08-08T21:04:00+09:00"}""",
+            """{"sessionId":"rec-1","purpose":"recording","tuning":{"kind":"terrestrial","physicalChannel":27,"serviceId":1024},"deviceId":"adapter0","outputRoot":"primary","endsAt":"2026-08-08T21:04:00+09:00","tune":null}""",
             json
         );
     }
@@ -102,7 +102,7 @@ public sealed class DriverJsonTests
         );
 
         Assert.Equal(
-            """{"kind":"satellite","state":"faulted","sessionId":null,"detail":"kind mismatch","deviceId":"adapter2"}""",
+            """{"kind":"satellite","state":"faulted","sessionId":null,"detail":"kind mismatch","deviceId":"adapter2","health":null,"signalQuality":null,"currentSession":null}""",
             json
         );
     }
@@ -141,13 +141,140 @@ public sealed class DriverJsonTests
     public void TunerListIsABareArray()
     {
         Assert.Equal(
-            """[{"kind":"terrestrial","state":"idle","sessionId":null,"detail":null,"deviceId":"adapter0"}]""",
+            """[{"kind":"terrestrial","state":"idle","sessionId":null,"detail":null,"deviceId":"adapter0","health":null,"signalQuality":null,"currentSession":null}]""",
             DriverJson.Serialize<IReadOnlyList<TunerSnapshot>>(
                 [new TunerSnapshot("adapter0", TunerKind.Terrestrial, TunerState.Idle)]
             )
         );
 
         Assert.Equal("[]", DriverJson.Serialize<IReadOnlyList<TunerSnapshot>>([]));
+    }
+
+    [Fact]
+    public void ATerrestrialTuneSerialisesToItsAgreedForm()
+    {
+        Assert.Equal(
+            """{"system":"isdbT","isdbT":{"physicalChannel":27},"isdbSBs":null,"isdbSCs110":null}""",
+            DriverJson.Serialize(TuneParams.Terrestrial(27))
+        );
+    }
+
+    [Fact]
+    public void ABsTuneSerialisesToItsAgreedForm()
+    {
+        Assert.Equal(
+            """{"system":"isdbSBs","isdbT":null,"isdbSBs":{"bsChannel":15,"tsid":16625},"isdbSCs110":null}""",
+            DriverJson.Serialize(TuneParams.Bs(15, 16625))
+        );
+    }
+
+    [Fact]
+    public void ACs110TuneSerialisesToItsAgreedForm()
+    {
+        Assert.Equal(
+            """{"system":"isdbSCs110","isdbT":null,"isdbSBs":null,"isdbSCs110":{"csChannel":24}}""",
+            DriverJson.Serialize(TuneParams.Cs110(24))
+        );
+    }
+
+    [Fact]
+    public void ATypedSessionRequestSerialisesToItsAgreedForm()
+    {
+        var json = DriverJson.Serialize(
+            new StartSessionRequest
+            {
+                SessionId = SessionId.Parse("scan-1"),
+                Purpose = SessionPurpose.Scan,
+                Tuning = TuneParams.Terrestrial(27).ToLegacyRequest(),
+                Tune = TuneParams.Terrestrial(27),
+            }
+        );
+
+        Assert.Equal(
+            """{"sessionId":"scan-1","purpose":"scan","tuning":{"kind":"terrestrial","physicalChannel":27,"serviceId":null},"deviceId":null,"outputRoot":null,"endsAt":null,"tune":{"system":"isdbT","isdbT":{"physicalChannel":27},"isdbSBs":null,"isdbSCs110":null}}""",
+            json
+        );
+    }
+
+    [Fact]
+    public void ALockedQualityReadingSerialisesToItsAgreedForm()
+    {
+        var json = DriverJson.Serialize(
+            new SignalQualityDto
+            {
+                Lock = SignalLock.Locked,
+                CnrMilliDecibels = 21_500,
+                PostViterbiBitErrors =
+                [
+                    new LayerBitErrorCounts(0, 12, 1_000_000),
+                    new LayerBitErrorCounts(1, 0, 500_000),
+                ],
+                MeasuredAt = Moment,
+            }
+        );
+
+        Assert.Equal(
+            """{"lock":"locked","cnrMilliDecibels":21500,"postViterbiBitErrors":[{"layer":0,"errorBits":12,"totalBits":1000000},{"layer":1,"errorBits":0,"totalBits":500000}],"measuredAt":"2026-08-08T21:04:00+09:00"}""",
+            json
+        );
+    }
+
+    [Fact]
+    public void AnUnlockedQualityReadingSerialisesToItsAgreedForm()
+    {
+        Assert.Equal(
+            """{"lock":"notLocked","cnrMilliDecibels":null,"postViterbiBitErrors":[],"measuredAt":"2026-08-08T21:04:00+09:00"}""",
+            DriverJson.Serialize(SignalQualityDto.NotLocked(Moment))
+        );
+    }
+
+    [Fact]
+    public void ATunerCarryingEverythingSerialisesToItsAgreedForm()
+    {
+        var json = DriverJson.Serialize(
+            new TunerSnapshot("adapter0", TunerKind.Satellite, TunerState.Busy)
+            {
+                SessionId = SessionId.Parse("scan-1"),
+                Health = new TunerHealthDto
+                {
+                    Level = TunerHealthLevel.Healthy,
+                    DisablePending = true,
+                    LnbPowered = true,
+                    ChangedAt = Moment,
+                },
+                SignalQuality = SignalQualityDto.NotLocked(Moment),
+                CurrentSession = new CurrentSessionDto
+                {
+                    SessionId = SessionId.Parse("scan-1"),
+                    Purpose = SessionPurpose.Scan,
+                    StartedAt = Moment,
+                    Tune = TuneParams.Cs110(24),
+                },
+            }
+        );
+
+        Assert.Equal(
+            """{"kind":"satellite","state":"busy","sessionId":"scan-1","detail":null,"deviceId":"adapter0","health":{"level":"healthy","disablePending":true,"lnbPowered":true,"detail":null,"changedAt":"2026-08-08T21:04:00+09:00"},"signalQuality":{"lock":"notLocked","cnrMilliDecibels":null,"postViterbiBitErrors":[],"measuredAt":"2026-08-08T21:04:00+09:00"},"currentSession":{"sessionId":"scan-1","purpose":"scan","startedAt":"2026-08-08T21:04:00+09:00","tune":{"system":"isdbSCs110","isdbT":null,"isdbSBs":null,"isdbSCs110":{"csChannel":24}}}}""",
+            json
+        );
+    }
+
+    [Fact]
+    public void ADetectedDeviceListIsABareArray()
+    {
+        Assert.Equal(
+            """[{"deviceId":"adapter0","detection":"detected","kinds":["terrestrial"],"detail":null}]""",
+            DriverJson.Serialize<IReadOnlyList<DetectedDeviceDto>>(
+                [
+                    new DetectedDeviceDto
+                    {
+                        DeviceId = "adapter0",
+                        Detection = DeviceDetection.Detected,
+                        Kinds = [TunerKind.Terrestrial],
+                    },
+                ]
+            )
+        );
     }
 
     [Theory]
@@ -184,7 +311,7 @@ public sealed class DriverJsonTests
         {
             SessionId = SessionId.Parse("s-1"),
             Purpose = SessionPurpose.Survey,
-            Tuning = new TuningRequest(TunerKind.Satellite, 212),
+            Tuning = new TuningRequest(TunerKind.Satellite, 15),
         };
 
         var restored = DriverJson.Deserialize(
@@ -209,7 +336,7 @@ public sealed class DriverJsonTests
         Assert.Throws<JsonException>(
             () =>
                 DriverJson.Deserialize(
-                    """{"purpose":"live","tuning":{"kind":"terrestrial","physicalChannel":200}}""",
+                    """{"purpose":"live","tuning":{"kind":"terrestrial","physicalChannel":27}}""",
                     DriverJson.Context.StartSessionRequest
                 )
         );
@@ -219,7 +346,7 @@ public sealed class DriverJsonTests
     public void ARequestMayNotSmuggleAPathThroughTheOutputRoot()
     {
         var request = DriverJson.Deserialize(
-            """{"sessionId":"rec-1","purpose":"recording","tuning":{"kind":"terrestrial","physicalChannel":200},"outputRoot":"/etc","endsAt":"2026-08-08T22:04:00+09:00"}""",
+            """{"sessionId":"rec-1","purpose":"recording","tuning":{"kind":"terrestrial","physicalChannel":27},"outputRoot":"/etc","endsAt":"2026-08-08T22:04:00+09:00"}""",
             DriverJson.Context.StartSessionRequest
         );
 

@@ -292,6 +292,10 @@ public static class DriverApi
                 StatusCodes.Status409Conflict,
                 "recordingAlreadyExists"
             ),
+            SessionRefusal.CapabilityMissing => (
+                StatusCodes.Status501NotImplemented,
+                "capabilityMissing"
+            ),
             SessionRefusal.Draining => (StatusCodes.Status503ServiceUnavailable, "draining"),
             SessionRefusal.OutputUnavailable => (
                 StatusCodes.Status503ServiceUnavailable,

@@ -52,6 +52,7 @@ public sealed class SessionPurposeConverter : TolerantEnumConverter<SessionPurpo
             SessionPurpose.Recording => "recording",
             SessionPurpose.Live => "live",
             SessionPurpose.Survey => "survey",
+            SessionPurpose.Scan => "scan",
             _ => "unspecified",
         };
 
@@ -61,14 +62,39 @@ public sealed class SessionPurposeConverter : TolerantEnumConverter<SessionPurpo
             "recording" => SessionPurpose.Recording,
             "live" => SessionPurpose.Live,
             "survey" => SessionPurpose.Survey,
+            "scan" => SessionPurpose.Scan,
             "unspecified" => SessionPurpose.Unspecified,
+            _ => null,
+        };
+}
+
+public sealed class TuneSystemConverter : TolerantEnumConverter<TuneSystem>
+{
+    public static string WireName(TuneSystem value) =>
+        value switch
+        {
+            TuneSystem.IsdbT => "isdbT",
+            TuneSystem.IsdbSBs => "isdbSBs",
+            TuneSystem.IsdbSCs110 => "isdbSCs110",
+            _ => "unspecified",
+        };
+
+    protected override string NameOf(TuneSystem value) => WireName(value);
+
+    protected override TuneSystem? ValueOf(string name) =>
+        name switch
+        {
+            "isdbT" => TuneSystem.IsdbT,
+            "isdbSBs" => TuneSystem.IsdbSBs,
+            "isdbSCs110" => TuneSystem.IsdbSCs110,
+            "unspecified" => TuneSystem.Unspecified,
             _ => null,
         };
 }
 
 public sealed class TunerKindConverter : TolerantEnumConverter<TunerKind>
 {
-    protected override string NameOf(TunerKind value) =>
+    public static string WireName(TunerKind value) =>
         value switch
         {
             TunerKind.Terrestrial => "terrestrial",
@@ -76,12 +102,34 @@ public sealed class TunerKindConverter : TolerantEnumConverter<TunerKind>
             _ => "unspecified",
         };
 
+    protected override string NameOf(TunerKind value) => WireName(value);
+
     protected override TunerKind? ValueOf(string name) =>
         name switch
         {
             "terrestrial" => TunerKind.Terrestrial,
             "satellite" => TunerKind.Satellite,
             "unspecified" => TunerKind.Unspecified,
+            _ => null,
+        };
+}
+
+public sealed class SignalLockConverter : TolerantEnumConverter<SignalLock>
+{
+    protected override string NameOf(SignalLock value) =>
+        value switch
+        {
+            SignalLock.NotLocked => "notLocked",
+            SignalLock.Locked => "locked",
+            _ => "unspecified",
+        };
+
+    protected override SignalLock? ValueOf(string name) =>
+        name switch
+        {
+            "notLocked" => SignalLock.NotLocked,
+            "locked" => SignalLock.Locked,
+            "unspecified" => SignalLock.Unspecified,
             _ => null,
         };
 }
@@ -106,6 +154,52 @@ public sealed class TunerStateConverter : TolerantEnumConverter<TunerState>
             "disabled" => TunerState.Disabled,
             "faulted" => TunerState.Faulted,
             "unspecified" => TunerState.Unspecified,
+            _ => null,
+        };
+}
+
+public sealed class TunerHealthLevelConverter : TolerantEnumConverter<TunerHealthLevel>
+{
+    protected override string NameOf(TunerHealthLevel value) =>
+        value switch
+        {
+            TunerHealthLevel.Healthy => "healthy",
+            TunerHealthLevel.Degraded => "degraded",
+            TunerHealthLevel.Faulted => "faulted",
+            _ => "unspecified",
+        };
+
+    protected override TunerHealthLevel? ValueOf(string name) =>
+        name switch
+        {
+            "healthy" => TunerHealthLevel.Healthy,
+            "degraded" => TunerHealthLevel.Degraded,
+            "faulted" => TunerHealthLevel.Faulted,
+            "unspecified" => TunerHealthLevel.Unspecified,
+            _ => null,
+        };
+}
+
+public sealed class DeviceDetectionConverter : TolerantEnumConverter<DeviceDetection>
+{
+    protected override string NameOf(DeviceDetection value) =>
+        value switch
+        {
+            DeviceDetection.Detected => "detected",
+            DeviceDetection.Busy => "busy",
+            DeviceDetection.PermissionDenied => "permissionDenied",
+            DeviceDetection.Unreadable => "unreadable",
+            _ => "unspecified",
+        };
+
+    protected override DeviceDetection? ValueOf(string name) =>
+        name switch
+        {
+            "detected" => DeviceDetection.Detected,
+            "busy" => DeviceDetection.Busy,
+            "permissionDenied" => DeviceDetection.PermissionDenied,
+            "unreadable" => DeviceDetection.Unreadable,
+            "unspecified" => DeviceDetection.Unspecified,
             _ => null,
         };
 }
