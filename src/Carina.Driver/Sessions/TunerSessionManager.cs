@@ -204,6 +204,14 @@ public sealed class TunerSessionManager(
             );
         }
 
+        if (request.Tune is not null && request.Tuning.Kind is TunerKind.Unspecified)
+        {
+            return SessionStart.Refused(
+                SessionRefusal.CapabilityMissing,
+                $"This driver tunes from the older parameters, which cannot name {TuneSystemConverter.WireName(request.Tune.System)}; serving it needs a driver that declares '{DriverCapabilities.TypedTuning}'."
+            );
+        }
+
         if (TryGet(request.SessionId, out _))
         {
             return SessionStart.Refused(
