@@ -26,7 +26,7 @@ public sealed class TunerDeviceFactoryDvbTests
 
         using var device = factory.Create(
             new DeviceSettings("fake-terrestrial", DeviceKind.Terrestrial),
-            new TuningRequest(TunerKind.Terrestrial, 27)
+            new TuningRequest(TunerKind.Terrestrial, 55)
         );
 
         Assert.IsType<FakeTunerDevice>(device);
@@ -39,7 +39,7 @@ public sealed class TunerDeviceFactoryDvbTests
         var (calls, clock) = Ready();
         var factory = TunerDeviceFactory.Using(Configured(TunerBackend.Dvb), clock, calls);
 
-        using var device = factory.Create(Terrestrial(), new TuningRequest(TunerKind.Terrestrial, 27));
+        using var device = factory.Create(Terrestrial(), new TuningRequest(TunerKind.Terrestrial, 55));
 
         Assert.IsType<DvbTunerDevice>(device);
         Assert.Equal("/dev/dvb/adapter0/frontend0", calls.Opened[0].Path);
@@ -55,7 +55,7 @@ public sealed class TunerDeviceFactoryDvbTests
             () =>
                 factory.Create(
                     new DeviceSettings("pt3-0", DeviceKind.Terrestrial, "/dev/video0"),
-                    new TuningRequest(TunerKind.Terrestrial, 27)
+                    new TuningRequest(TunerKind.Terrestrial, 55)
                 )
         );
 
@@ -72,7 +72,7 @@ public sealed class TunerDeviceFactoryDvbTests
         var factory = TunerDeviceFactory.Using(Configured(TunerBackend.Dvb), clock, calls);
 
         var refusal = Assert.Throws<DvbDeviceException>(
-            () => factory.Create(Terrestrial(), new TuningRequest(TunerKind.Terrestrial, 27))
+            () => factory.Create(Terrestrial(), new TuningRequest(TunerKind.Terrestrial, 55))
         );
 
         Assert.Contains("/dev/dvb/adapter0/frontend0", refusal.Message, StringComparison.Ordinal);
@@ -127,7 +127,7 @@ public sealed class TunerDeviceFactoryDvbTests
     public void ASatelliteSlotIsNotGivenAStreamBecauseAServiceIdIsNotATransportStreamId()
     {
         var channel = Assert.IsType<BroadcastSatelliteChannel>(
-            DvbTuneRequest.Resolve(new TuningRequest(TunerKind.Satellite, 15, ServiceId: 1024))
+            DvbTuneRequest.Resolve(new TuningRequest(TunerKind.Satellite, 15, ServiceId: 50001))
         );
 
         Assert.Null(channel.TransportStreamId);
@@ -137,7 +137,7 @@ public sealed class TunerDeviceFactoryDvbTests
     public void ARequestThatDoesNotSayWhichAerialItNeedsIsRefused()
     {
         var refusal = Assert.Throws<DvbDeviceException>(
-            () => DvbTuneRequest.Resolve(new TuningRequest(TunerKind.Unspecified, 27))
+            () => DvbTuneRequest.Resolve(new TuningRequest(TunerKind.Unspecified, 55))
         );
 
         Assert.Contains("terrestrial or satellite", refusal.Message, StringComparison.Ordinal);

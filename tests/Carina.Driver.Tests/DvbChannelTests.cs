@@ -89,12 +89,12 @@ public sealed class DvbChannelTests
     [Fact]
     public void ABroadcastSatelliteChannelRemembersWhetherAStreamWasNamed()
     {
-        var named = Assert.IsType<BroadcastSatelliteChannel>(DvbChannel.BroadcastSatellite(1, 16_400));
+        var named = Assert.IsType<BroadcastSatelliteChannel>(DvbChannel.BroadcastSatellite(1, 50_001));
         var unnamed = Assert.IsType<BroadcastSatelliteChannel>(
             DvbChannel.BroadcastSatellite(1, transportStreamId: null)
         );
 
-        Assert.Equal(16_400, named.TransportStreamId);
+        Assert.Equal(50_001, named.TransportStreamId);
         Assert.Null(unnamed.TransportStreamId);
     }
 
@@ -108,7 +108,7 @@ public sealed class DvbChannelTests
     [Fact]
     public void EveryChannelCanSayWhichAerialItNeeds()
     {
-        Assert.False(DvbChannel.Terrestrial(13).NeedsSatelliteAerial);
+        Assert.False(DvbChannel.Terrestrial(55).NeedsSatelliteAerial);
         Assert.True(DvbChannel.BroadcastSatellite(1, null).NeedsSatelliteAerial);
         Assert.True(DvbChannel.CommunicationSatellite(2).NeedsSatelliteAerial);
     }

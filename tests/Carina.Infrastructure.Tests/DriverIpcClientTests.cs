@@ -161,7 +161,7 @@ public sealed class DriverIpcClientTests
             {
                 SessionId = SessionId.Parse("rec-1"),
                 Purpose = SessionPurpose.Recording,
-                Tuning = new TuningRequest(TunerKind.Terrestrial, 27),
+                Tuning = new TuningRequest(TunerKind.Terrestrial, 55),
                 OutputRoot = "primary",
                 EndsAt = DateTimeOffset.UtcNow.AddHours(1),
             },
