@@ -31,6 +31,7 @@ public sealed class TunerSession : IDisposable
     private SessionStopReason stopReason;
     private Exception? failureCause;
     private Exception? firstFault;
+    private string? takenBecause;
     private long faultCount;
     private long endsAtTicks;
     private long discardedBytes;
@@ -209,6 +210,16 @@ public sealed class TunerSession : IDisposable
         }
     }
 
+    public void Preempt(string because)
+    {
+        lock (gate)
+        {
+            takenBecause = because;
+        }
+
+        Stop(SessionStopReason.Preempted);
+    }
+
     public void Stop(SessionStopReason reason = SessionStopReason.Requested)
     {
         lock (gate)
@@ -284,6 +295,16 @@ public sealed class TunerSession : IDisposable
         {
             Conclude(ReasonForEnd(token));
         }
+        catch (StreamCutException cut)
+        {
+            Finish(
+                SessionState.Failed,
+                cut.Reason is SessionStopReason.Running
+                    ? SessionStopReason.Unspecified
+                    : cut.Reason,
+                cut
+            );
+        }
         catch (Exception error)
         {
             Finish(SessionState.Failed, SessionStopReason.DeviceFailed, error);
@@ -324,20 +345,37 @@ public sealed class TunerSession : IDisposable
 
     private void Conclude(SessionStopReason reason)
     {
-        if (reason is SessionStopReason.DrainCapReached)
+        if (CutShort(reason) is { } cause)
         {
-            Finish(
-                SessionState.Failed,
-                reason,
-                new OperationCanceledException(
-                    $"The shutdown grace period ran out while '{SessionId}' was still recording."
-                )
-            );
+            Finish(SessionState.Failed, reason, cause);
 
             return;
         }
 
         Finish(SessionState.Stopped, reason, null);
+    }
+
+    private Exception? CutShort(SessionStopReason reason)
+    {
+        if (reason is SessionStopReason.DrainCapReached)
+        {
+            return new OperationCanceledException(
+                $"The shutdown grace period ran out while '{SessionId}' was still recording."
+            );
+        }
+
+        if (reason is not SessionStopReason.Preempted)
+        {
+            return null;
+        }
+
+        lock (gate)
+        {
+            return new OperationCanceledException(
+                takenBecause
+                    ?? $"The tuner '{DeviceId}' was taken from '{SessionId}' for something more important, so its stream ends here and is incomplete."
+            );
+        }
     }
 
     private void Measure(byte[] chunk)

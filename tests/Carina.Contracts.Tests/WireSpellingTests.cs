@@ -122,6 +122,7 @@ public sealed class WireSpellingTests
     [InlineData(SessionStopReason.DrainCapReached, "drainCapReached")]
     [InlineData(SessionStopReason.DeviceFailed, "deviceFailed")]
     [InlineData(SessionStopReason.RecordingFailed, "recordingFailed")]
+    [InlineData(SessionStopReason.Preempted, "preempted")]
     public void SessionStopReasonIsSpelledThisWay(SessionStopReason value, string wire)
     {
         AssertRoundTrip(value, wire, DriverJson.Context.SessionStopReason);

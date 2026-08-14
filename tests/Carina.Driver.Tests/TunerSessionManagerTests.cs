@@ -49,13 +49,14 @@ public sealed class TunerSessionManagerTests : IDisposable
         SessionPurpose purpose = SessionPurpose.Recording,
         TunerKind kind = TunerKind.Terrestrial,
         string? outputRoot = "primary",
-        DateTimeOffset? endsAt = null
+        DateTimeOffset? endsAt = null,
+        int channel = 55
     ) =>
         new()
         {
             SessionId = SessionId.Parse(sessionId),
             Purpose = purpose,
-            Tuning = new TuningRequest(kind, 55, 50001),
+            Tuning = new TuningRequest(kind, channel, 50001),
             DeviceId = deviceId,
             OutputRoot = purpose is SessionPurpose.Recording ? outputRoot : null,
             EndsAt = endsAt ?? (purpose is SessionPurpose.Recording ? Start.AddHours(1) : null),
@@ -66,10 +67,13 @@ public sealed class TunerSessionManagerTests : IDisposable
         string sessionId,
         string? deviceId = null,
         SessionPurpose purpose = SessionPurpose.Recording,
-        TunerKind kind = TunerKind.Terrestrial
+        TunerKind kind = TunerKind.Terrestrial,
+        int channel = 55
     )
     {
-        var start = manager.Begin(Request(sessionId, deviceId, purpose, kind));
+        var start = manager.Begin(
+            Request(sessionId, deviceId, purpose, kind, channel: channel)
+        );
 
         Assert.Equal(SessionRefusal.None, start.Refusal);
         Assert.True(start.TryGetSession(out var session));
@@ -192,7 +196,7 @@ public sealed class TunerSessionManagerTests : IDisposable
 
         Assert.Equal("adapter0", session.DeviceId);
 
-        var second = Begin(manager, "s-2", purpose: SessionPurpose.Live);
+        var second = Begin(manager, "s-2", purpose: SessionPurpose.Live, channel: 57);
 
         Assert.Equal("adapter3", second.DeviceId);
 
@@ -206,11 +210,11 @@ public sealed class TunerSessionManagerTests : IDisposable
         var manager = Manager();
 
         var first = Begin(manager, "s-1", purpose: SessionPurpose.Live);
-        var second = Begin(manager, "s-2", purpose: SessionPurpose.Live);
+        var second = Begin(manager, "s-2", purpose: SessionPurpose.Live, channel: 57);
 
         Assert.Equal(
             SessionRefusal.NoDeviceFree,
-            RefusalFor(manager, Request("s-3", purpose: SessionPurpose.Live))
+            RefusalFor(manager, Request("s-3", purpose: SessionPurpose.Live, channel: 53))
         );
 
         StopAndWait(first);
@@ -277,14 +281,43 @@ public sealed class TunerSessionManagerTests : IDisposable
 
         Assert.Equal(
             SessionRefusal.DeviceBusy,
-            RefusalFor(manager, Request("s-2", "adapter0"))
+            RefusalFor(manager, Request("s-2", "adapter0", channel: 57))
         );
 
         StopAndWait(first);
     }
 
     [Fact]
-    public void OnlyOneOfManySimultaneousRequestsGetsTheDevice()
+    public void OnlyOneTuningWinsWhenManySimultaneousRequestsRaceForOneDevice()
+    {
+        var manager = Manager();
+        var granted = new ConcurrentBag<TunerSession>();
+
+        Parallel.For(
+            0,
+            16,
+            index =>
+            {
+                var request = Request($"s-{index}", "adapter0", channel: index % 2 is 0 ? 55 : 57);
+
+                if (manager.Begin(request).TryGetSession(out var session))
+                {
+                    granted.Add(session);
+                }
+            }
+        );
+
+        Assert.Equal(8, granted.Count);
+        Assert.All(granted, session => Assert.Equal("adapter0", session.DeviceId));
+
+        foreach (var session in granted)
+        {
+            StopAndWait(session);
+        }
+    }
+
+    [Fact]
+    public void ManySimultaneousRequestsForOneTuningAllEndUpOnTheOneDevice()
     {
         var manager = Manager();
         var granted = new ConcurrentBag<TunerSession>();
@@ -301,10 +334,13 @@ public sealed class TunerSessionManagerTests : IDisposable
             }
         );
 
-        Assert.Single(granted);
-        Assert.Single(manager.Sessions);
+        Assert.Equal(1 + SessionBroadcaster.DefaultSubscriberLimit, granted.Count);
+        Assert.All(granted, session => Assert.Equal("adapter0", session.DeviceId));
 
-        StopAndWait(granted.Single());
+        foreach (var session in granted)
+        {
+            StopAndWait(session);
+        }
     }
 
     [Fact]
