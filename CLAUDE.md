@@ -121,19 +121,12 @@ docker compose exec app dotnet format --verify-no-changes
 `task` shortcuts: `task build`, `task test`, `task lint`, `task format`, `task openapi`,
 `task acceptance`.
 
-GitHub Actions runs two workflows. `Build` is everything that runs on the SDK: one job
-restores once and carries the solution build, the format verification and the OpenAPI
-round trip, plus three test jobs — unit, feature, and database integration against a
-PostgreSQL service container. `Image` builds the image once and then runs the role
-checks, the tag streams, the compose render and the acceptance scenarios against that
-one build, and publishes from master.
-
-The test jobs select by folder — `Unit`, `FeatureTest`, `DbIntegration` — and, until
-every test lives in one of them, also by what today's traits and the leftover namespaces
-say. Each job counts the tests it ran, because `dotnet test` exits 0 when a filter
-matches nothing and a filter that selects none would otherwise be green having verified
-nothing. `needs` does not reach across workflows, so publishing asks the API whether the
-build workflow passed for the same commit before it pushes anything.
+GitHub Actions runs build, format verification, the OpenAPI round trip, the compose
+render, the image and its role checks, the acceptance scenarios, and two test jobs: one
+for everything except `Category=DbIntegration`, one for those against a PostgreSQL
+service container. The second job counts the tests it ran, because `dotnet test` exits 0
+when a filter matches nothing and a mistyped category would otherwise be green having
+verified nothing.
 
 ## Docker Config
 
