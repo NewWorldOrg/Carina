@@ -45,8 +45,49 @@ public sealed class HurriedClock : TimeProvider
     }
 }
 
-public sealed class PatientClock : TimeProvider
+public sealed class HeldClock : TimeProvider
 {
+    private readonly ConcurrentQueue<Action> pending = new();
+
+    public override ITimer CreateTimer(
+        TimerCallback callback,
+        object? state,
+        TimeSpan dueTime,
+        TimeSpan period)
+    {
+        if (dueTime > TimeSpan.Zero && dueTime != Timeout.InfiniteTimeSpan)
+        {
+            pending.Enqueue(() => callback(state));
+        }
+
+        return new Held();
+    }
+
+    public void FireOnePending(string what)
+    {
+        Assert.True(pending.TryDequeue(out var fire), $"No timer was waiting to be fired: {what}.");
+
+        fire!();
+    }
+
+    private sealed class Held : ITimer
+    {
+        public bool Change(TimeSpan dueTime, TimeSpan period) => true;
+
+        public void Dispose()
+        {
+        }
+
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+}
+
+public sealed class StillClock : TimeProvider
+{
+    public static readonly DateTimeOffset Now = new(2026, 8, 15, 0, 0, 0, TimeSpan.Zero);
+
+    public override DateTimeOffset GetUtcNow() => Now;
+
     public override ITimer CreateTimer(
         TimerCallback callback,
         object? state,
@@ -60,7 +101,7 @@ public sealed class ScanHarness
     public ScanHarness(ScriptedDriverClient driver, TimeProvider? clock = null, ScanSettings? settings = null)
     {
         Driver = driver;
-        Clock = clock ?? new PatientClock();
+        Clock = clock ?? new StillClock();
         Settings = settings ?? ScanSettings.Default;
 
         Orchestrator = new ChannelScanOrchestrator(

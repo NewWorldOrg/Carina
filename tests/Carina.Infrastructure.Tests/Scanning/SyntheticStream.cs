@@ -57,6 +57,9 @@ public sealed class SyntheticStream
         return [.. packets.SelectMany(packet => packet)];
     }
 
+    private static byte[] Text(string text)
+        => new AribTextWriter().DesignateAlphanumericToG0().Ascii(text).ToArray();
+
     private byte[] NetworkSection()
     {
         var listed = TransportStreamIdInNetwork ?? TransportStreamId;
@@ -91,7 +94,7 @@ public sealed class SyntheticStream
             Body = new NitWriter
             {
                 NetworkDescriptors = SiDescriptorWriter.NetworkName(
-                    new AribTextWriter().Ascii("Carina").ToArray()),
+                    Text("Carina")),
                 TransportStreams = [.. streams],
             }.ToBody(),
         }.ToBytes();
@@ -111,8 +114,8 @@ public sealed class SyntheticStream
                         service.ServiceId,
                         SiDescriptorWriter.Service(
                             (int)service.Kind,
-                            new AribTextWriter().Ascii("Carina").ToArray(),
-                            new AribTextWriter().Ascii(service.Name).ToArray()))),
+                            Text("Carina"),
+                            Text(service.Name)))),
                 ],
             }.ToBody(),
         }.ToBytes();

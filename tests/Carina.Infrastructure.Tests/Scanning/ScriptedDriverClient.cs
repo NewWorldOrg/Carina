@@ -46,6 +46,8 @@ public sealed class ScriptedDriverClient : IDriverClient
 
     public string? UnreachableFrom { get; set; }
 
+    public string? GreetingFailure { get; set; }
+
     public List<TuningParameters> Started { get; } = [];
 
     public List<SessionId> Stopped { get; } = [];
@@ -58,8 +60,10 @@ public sealed class ScriptedDriverClient : IDriverClient
     }
 
     public Task<DriverCall<DriverHello>> GetHealthAsync(CancellationToken cancellationToken)
-        => Task.FromResult(DriverCall<DriverHello>.Reached(
-            new DriverHello(DriverProtocol.Version, InstanceId, [DriverCapabilities.TypedTuning])));
+        => Task.FromResult(GreetingFailure is { } failure
+            ? DriverCall<DriverHello>.Unreachable(failure)
+            : DriverCall<DriverHello>.Reached(
+                new DriverHello(DriverProtocol.Version, InstanceId, [DriverCapabilities.TypedTuning])));
 
     public Task<DriverCall<IReadOnlyList<TunerSnapshot>>> GetTunersAsync(CancellationToken cancellationToken)
     {
