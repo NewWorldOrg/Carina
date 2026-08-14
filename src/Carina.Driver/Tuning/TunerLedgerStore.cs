@@ -99,11 +99,20 @@ public sealed class TunerLedgerStore(DriverConfiguration configuration, string? 
         return detail;
     }
 
-    private DriverConfiguration? Saved() =>
-        path is not null
-        && DriverConfigurationReader
-            .ReadFile(path, checkTheFilesystem: false)
-            .TryGetConfiguration(out var saved, out _)
-            ? saved
-            : null;
+    private DriverConfiguration? Saved()
+    {
+        if (path is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return DriverConfigurationReader.Parse(File.ReadAllText(path));
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
 }

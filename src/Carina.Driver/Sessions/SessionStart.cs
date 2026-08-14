@@ -22,6 +22,13 @@ public enum SessionRefusal
     CapabilityMissing,
 }
 
+public enum TunerToggleOutcome
+{
+    NoSuchTuner,
+    Immediate,
+    Draining,
+}
+
 public enum SessionStopOutcome
 {
     NoSuchSession,

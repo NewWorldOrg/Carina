@@ -157,6 +157,21 @@ public static class DriverConfigurationReader
         }
     }
 
+    public static DriverConfiguration? Parse(string json)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize(
+                json,
+                DriverConfigurationJsonContext.Default.DriverConfiguration
+            );
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
     public static DriverConfigurationResult Read(string json)
     {
         DriverConfiguration? configuration;

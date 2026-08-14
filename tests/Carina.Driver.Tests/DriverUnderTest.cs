@@ -16,14 +16,31 @@ public sealed class DriverUnderTest : IAsyncDisposable
     private readonly IHost host;
     private readonly string root;
 
-    private DriverUnderTest(IHost host, string root, DriverConfiguration configuration)
+    private DriverUnderTest(
+        IHost host,
+        string root,
+        DriverConfiguration configuration,
+        string configurationPath
+    )
     {
         this.host = host;
         this.root = root;
         Configuration = configuration;
+        ConfigurationPath = configurationPath;
     }
 
     public DriverConfiguration Configuration { get; }
+
+    public string ConfigurationPath { get; }
+
+    public void RewriteLedger(DriverConfiguration configuration) =>
+        File.WriteAllText(
+            ConfigurationPath,
+            DriverConfigurationWriter.Serialize(configuration)
+        );
+
+    public void CorruptLedger() =>
+        File.WriteAllText(ConfigurationPath, "{ not the configuration at all }");
 
     public string SocketPath => Configuration.SocketPath!;
 
@@ -79,7 +96,7 @@ public sealed class DriverUnderTest : IAsyncDisposable
 
         await host.StartAsync();
 
-        return new DriverUnderTest(host, root, configuration);
+        return new DriverUnderTest(host, root, configuration, configurationPath);
     }
 
     public static void ClearTheInheritedUrls()

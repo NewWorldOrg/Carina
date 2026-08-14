@@ -36,7 +36,9 @@ public static class DriverProbe
             return new ProbeVerdict(false, "the driver declares no tuner.");
         }
 
-        var enabled = tuners.Where(tuner => tuner.State is not TunerState.Disabled).ToList();
+        var enabled = tuners
+            .Where(tuner => tuner.State is not (TunerState.Disabled or TunerState.Draining))
+            .ToList();
 
         if (enabled.Count is 0)
         {

@@ -79,15 +79,23 @@ public static class SessionViews
 
             var kind = DeviceViews.Wire(device.Kind);
 
-            if (!device.Enabled)
+            if (!manager.IsEnabled(device))
             {
                 snapshots.Add(
-                    new TunerSnapshot(
-                        deviceId,
-                        kind,
-                        TunerState.Disabled,
-                        Detail: "This device is turned off in the driver configuration."
-                    )
+                    busy.TryGetValue(deviceId, out var draining)
+                        ? new TunerSnapshot(
+                            deviceId,
+                            kind,
+                            TunerState.Draining,
+                            draining,
+                            "This device was turned off and comes out of service as soon as the session it holds ends."
+                        )
+                        : new TunerSnapshot(
+                            deviceId,
+                            kind,
+                            TunerState.Disabled,
+                            Detail: "This device is turned off in the driver configuration."
+                        )
                 );
 
                 continue;
