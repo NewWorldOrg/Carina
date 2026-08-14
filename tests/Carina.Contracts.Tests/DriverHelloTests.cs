@@ -27,6 +27,69 @@ public sealed class DriverHelloTests
     }
 
     [Fact]
+    public void ADriverThatMeasuresOneMetricButNotAnotherSaysSo()
+    {
+        var hello = Hello(
+            DriverCapabilities.SignalQuality,
+            DriverCapabilities.SignalQualityMetric(SignalQualityMetrics.Cnr)
+        );
+
+        Assert.True(hello.Supports(DriverCapabilities.SignalQuality));
+        Assert.True(hello.SupportsSignalQualityMetric(SignalQualityMetrics.Cnr));
+        Assert.False(hello.SupportsSignalQualityMetric("signalStrength"));
+        Assert.False(
+            hello.SupportsSignalQualityMetric(SignalQualityMetrics.PostViterbiBitError)
+        );
+    }
+
+    [Fact]
+    public void ADriverThatMeasuresNothingLeavesEveryMetricUnsupported()
+    {
+        var hello = Hello(DriverCapabilities.Recording);
+
+        Assert.False(hello.Supports(DriverCapabilities.SignalQuality));
+        Assert.Empty(hello.DeclaredSignalQualityMetrics());
+        Assert.All(
+            SignalQualityMetrics.All,
+            metric => Assert.False(hello.SupportsSignalQualityMetric(metric))
+        );
+    }
+
+    [Fact]
+    public void EveryMetricADriverDeclaresIsListedEvenTheOnesThisBuildDoesNotKnow()
+    {
+        var hello = Hello(
+            DriverCapabilities.SignalQuality,
+            DriverCapabilities.SignalQualityMetric(SignalQualityMetrics.Cnr),
+            DriverCapabilities.SignalQualityMetric("somethingMeasuredLater")
+        );
+
+        Assert.Equal(
+            new[] { SignalQualityMetrics.Cnr, "somethingMeasuredLater" },
+            hello.DeclaredSignalQualityMetrics()
+        );
+        Assert.True(hello.SupportsSignalQualityMetric("somethingMeasuredLater"));
+    }
+
+    [Fact]
+    public void TheCoarseCapabilityDoesNotStandInForAMetric()
+    {
+        var hello = Hello(DriverCapabilities.SignalQuality);
+
+        Assert.True(hello.Supports(DriverCapabilities.SignalQuality));
+        Assert.False(hello.SupportsSignalQualityMetric(SignalQualityMetrics.Cnr));
+    }
+
+    [Fact]
+    public void ATunerMayBeToggledWhileTheDriverRunsOnlyWhenItSaysSo()
+    {
+        Assert.True(
+            Hello(DriverCapabilities.LiveTunerToggle).Supports(DriverCapabilities.LiveTunerToggle)
+        );
+        Assert.False(Hello(DriverCapabilities.Live).Supports(DriverCapabilities.LiveTunerToggle));
+    }
+
+    [Fact]
     public void CapabilitiesAreNeverNull()
     {
         Assert.Empty(new DriverHello(DriverProtocol.Version, "b7f2c9", null!).Capabilities);

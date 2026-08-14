@@ -75,7 +75,7 @@ public sealed class TunerSession : IDisposable
         state = SessionState.Requested;
         stopReason = SessionStopReason.Running;
         Broadcaster = new SessionBroadcaster(
-            surveyBlockLimit: purpose is SessionPurpose.Survey
+            surveyBlockLimit: SessionPurposes.ReadsEveryPacket(purpose)
                 ? SessionBroadcaster.DefaultSurveyBlockLimit
                 : TimeSpan.Zero,
             report: RecordFault
