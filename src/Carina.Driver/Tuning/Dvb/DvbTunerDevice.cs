@@ -184,15 +184,15 @@ public sealed class DvbTunerDevice : ITunerDevice
 
         if (!frontend.TryStatus(out var status))
         {
-            return DvbFailure.LockedWithoutData(
-                $"{paths.Dvr}: no transport stream bytes arrived within {waited}, and the frontend would not say whether it is still locked, so this is recorded as a delivery fault without claiming the tuner is synchronised."
+            return DvbFailure.Refused(
+                $"{paths.Dvr}: no transport stream bytes arrived within {waited}, and the frontend would not say whether it is still locked. This is left unclassified rather than recorded as a tuner that was locked and delivering nothing."
             );
         }
 
         if (!status.HasFlag(FrontendStatus.Lock))
         {
             return DvbFailure.NoLock(
-                $"{paths.Dvr}: no transport stream bytes arrived within {waited} because the frontend lost lock while the session was reading; its status is now {status}."
+                $"{paths.Dvr}: no transport stream bytes arrived within {waited}, and the frontend is no longer locked; its status is now {status}."
             );
         }
 

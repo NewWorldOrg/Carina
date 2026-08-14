@@ -178,12 +178,13 @@ public sealed class DvbTunerDeviceTests
         );
 
         Assert.Equal(TuningFailure.NoLock, refusal.Failure);
-        Assert.Contains("lost lock", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("no longer locked", refusal.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("because", refusal.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("The tuner is synchronised", refusal.Message, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void AStatusThatCannotBeReReadNeverClaimsTheTunerIsSynchronised()
+    public void AStatusThatCannotBeReReadIsLeftUnclassifiedRatherThanFiledAsLockedWithoutData()
     {
         var (calls, clock) = Ready();
         using var device = Open(calls, clock);
@@ -193,7 +194,7 @@ public sealed class DvbTunerDeviceTests
             () => device.Read(188, CancellationToken.None)
         );
 
-        Assert.Equal(TuningFailure.LockedWithoutData, refusal.Failure);
+        Assert.Equal(TuningFailure.Unspecified, refusal.Failure);
         Assert.DoesNotContain("The tuner is synchronised", refusal.Message, StringComparison.Ordinal);
         Assert.Contains("would not say", refusal.Message, StringComparison.Ordinal);
     }
@@ -215,6 +216,14 @@ public sealed class DvbTunerDeviceTests
         );
 
         Assert.Equal(TuningFailure.LockedWithoutData, refusal.Failure);
+        Assert.True(
+            calls.RestedFor > TimeSpan.Zero,
+            "The read loop consumed the ready-with-nothing-to-read attempts without ever resting between them."
+        );
+        Assert.True(
+            calls.Polls.Count > 400,
+            $"The read loop drained {500 - calls.Polls.Count} of the 500 queued attempts, so it was spinning rather than resting."
+        );
     }
 
     [Fact]
