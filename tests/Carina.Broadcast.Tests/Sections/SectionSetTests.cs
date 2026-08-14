@@ -79,6 +79,36 @@ public sealed class SectionSetTests
 
         Assert.False(set.Add(SectionOf(version: 1, sectionNumber: 3, lastSectionNumber: 1)));
         Assert.Equal(0, set.HeldCount);
+        Assert.False(set.IsComplete);
+        Assert.False(set.TryComplete(out _));
+        Assert.Null(set.VersionNumber);
+    }
+
+    [Fact]
+    public void ARefusedSectionDoesNotShrinkTheTableItWasRefusedAgainst()
+    {
+        var set = new SectionSet(SomeTableId, SomeExtension);
+
+        Assert.True(set.Add(SectionOf(version: 1, sectionNumber: 0, lastSectionNumber: 2)));
+        Assert.False(set.Add(SectionOf(version: 1, sectionNumber: 5, lastSectionNumber: 0)));
+
+        Assert.False(set.IsComplete);
+        Assert.False(set.TryComplete(out var sections));
+        Assert.Empty(sections);
+        Assert.Equal(1, set.HeldCount);
+    }
+
+    [Fact]
+    public void ARepeatAnnouncingAShorterTableDoesNotCompleteTheLongerOne()
+    {
+        var set = new SectionSet(SomeTableId, SomeExtension);
+
+        Assert.True(set.Add(SectionOf(version: 1, sectionNumber: 0, lastSectionNumber: 2)));
+        Assert.True(set.Add(SectionOf(version: 1, sectionNumber: 1, lastSectionNumber: 2)));
+        Assert.False(set.Add(SectionOf(version: 1, sectionNumber: 0, lastSectionNumber: 1)));
+
+        Assert.False(set.IsComplete);
+        Assert.False(set.TryComplete(out _));
     }
 
     [Fact]

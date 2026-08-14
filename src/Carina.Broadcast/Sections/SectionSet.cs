@@ -22,7 +22,7 @@ public sealed class SectionSet
 
     public int HeldCount => held.Count;
 
-    public bool IsComplete => VersionNumber is not null && held.Count == expectedCount;
+    public bool IsComplete => expectedCount > 0 && held.Count == expectedCount;
 
     public bool Add(Section section)
     {
@@ -33,18 +33,28 @@ public sealed class SectionSet
             return false;
         }
 
-        if (VersionNumber != section.VersionNumber)
+        var announced = section.LastSectionNumber + 1;
+
+        if (section.SectionNumber >= announced)
+        {
+            return false;
+        }
+
+        var replacesWhatIsHeld = VersionNumber != section.VersionNumber;
+
+        if (!replacesWhatIsHeld && held.ContainsKey(section.SectionNumber))
+        {
+            return false;
+        }
+
+        if (replacesWhatIsHeld)
         {
             held.Clear();
             VersionNumber = section.VersionNumber;
         }
 
-        expectedCount = section.LastSectionNumber + 1;
-
-        if (section.SectionNumber >= expectedCount || !held.TryAdd(section.SectionNumber, section))
-        {
-            return false;
-        }
+        expectedCount = announced;
+        held[section.SectionNumber] = section;
 
         return true;
     }
