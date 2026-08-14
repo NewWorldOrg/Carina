@@ -1,3 +1,4 @@
+using Carina.Contracts;
 using Carina.Driver.Configuration;
 using Carina.Driver.Tuning.Dvb;
 
@@ -197,6 +198,95 @@ public sealed class DvbDeviceProbeTests : IDisposable
         Assert.Equal(DeviceKind.Unspecified, detected.Kind);
         Assert.NotNull(detected.Problem);
     }
+
+    [Fact]
+    public void ATunerThatEnumeratesBothDeliverySystemsReceivesBoth()
+    {
+        Assert.Equal(
+            [DeviceKind.Terrestrial, DeviceKind.Satellite],
+            DvbDeviceProbe.KindsOf(
+                [DeliverySystem.IsdbTerrestrial, DeliverySystem.IsdbSatellite],
+                "PT3 ISDB-S"
+            )
+        );
+    }
+
+    [Fact]
+    public void WhatATunerReceivesComesFromTheEnumerationWhenItAnswersIt()
+    {
+        Assert.Equal(
+            [DeviceKind.Satellite],
+            DvbDeviceProbe.KindsOf([DeliverySystem.IsdbSatellite], "some other card")
+        );
+    }
+
+    [Fact]
+    public void WhatATunerReceivesFallsBackToItsOwnNameWhenItWillNotEnumerate()
+    {
+        Assert.Equal([DeviceKind.Terrestrial], DvbDeviceProbe.KindsOf([], "isdbt demodulator"));
+    }
+
+    [Fact]
+    public void ADeliverySystemThisDriverDoesNotServeIsNotCountedAsSomethingReceived()
+    {
+        Assert.Empty(DvbDeviceProbe.KindsOf([new DeliverySystem(3)], string.Empty));
+    }
+
+    [Fact]
+    public void ATunerThatAnsweredForItselfIsDetected()
+    {
+        var calls = new ScriptedDvbSystemCalls
+        {
+            DeliverySystems = [DeliverySystem.IsdbTerrestrial],
+            HardwareName = "synthetic terrestrial demodulator",
+        };
+
+        Assert.Equal(DeviceDetection.Detected, Only(calls).Detection);
+    }
+
+    [Fact]
+    public void AFrontendAnotherProcessHoldsIsDetectedAsBusyRatherThanAsAbsent()
+    {
+        var calls = new ScriptedDvbSystemCalls();
+        calls.RefuseToOpen("/dev/dvb/adapter0/frontend0", Errno.Busy);
+
+        Assert.Equal(DeviceDetection.Busy, Only(calls).Detection);
+    }
+
+    [Theory]
+    [InlineData(Errno.PermissionDenied)]
+    [InlineData(Errno.NotPermitted)]
+    public void AFrontendThisProcessMayNotOpenIsToldApartFromOneThatIsNotThere(int error)
+    {
+        var calls = new ScriptedDvbSystemCalls();
+        calls.RefuseToOpen("/dev/dvb/adapter0/frontend0", error);
+
+        Assert.Equal(DeviceDetection.PermissionDenied, Only(calls).Detection);
+    }
+
+    [Fact]
+    public void AFrontendThatIsNoLongerThereIsDetectedAsUnreadable()
+    {
+        var calls = new ScriptedDvbSystemCalls();
+        calls.RefuseToOpen("/dev/dvb/adapter0/frontend0", Errno.NoSuchDevice);
+
+        Assert.Equal(DeviceDetection.Unreadable, Only(calls).Detection);
+    }
+
+    [Fact]
+    public void ATunerThatOpensButNamesNothingItReceivesIsUnreadableRatherThanDetected()
+    {
+        var calls = new ScriptedDvbSystemCalls
+        {
+            DeliverySystems = [],
+            HardwareName = "some other card",
+        };
+
+        Assert.Equal(DeviceDetection.Unreadable, Only(calls).Detection);
+    }
+
+    private static DetectedTuner Only(ScriptedDvbSystemCalls calls) =>
+        Assert.Single(new DvbDeviceProbe(calls).Inspect(["/dev/dvb/adapter0/frontend0"]));
 
     private void Node(string adapter, string node)
     {

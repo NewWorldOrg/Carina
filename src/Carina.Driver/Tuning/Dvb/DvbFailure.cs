@@ -13,15 +13,20 @@ public enum TuningFailure
     LockedWithoutData = 3,
 }
 
-public sealed class DvbDeviceException(string message, TuningFailure failure) : Exception(message)
+public sealed class DvbDeviceException(string message, TuningFailure failure, int error = 0)
+    : Exception(message)
 {
     public TuningFailure Failure { get; } = failure;
+
+    public int Error { get; } = error;
 }
 
 public static class Errno
 {
+    public const int NotPermitted = 1;
     public const int Interrupted = 4;
     public const int WouldBlock = 11;
+    public const int PermissionDenied = 13;
     public const int Busy = 16;
     public const int NoSuchDevice = 19;
     public const int Overflowed = 75;
@@ -45,7 +50,8 @@ public static class DvbFailure
     ) =>
         new(
             $"{devicePath}: {operation} failed — {Describe(error)}. {consequence}",
-            TuningFailure.DeviceUnusable
+            TuningFailure.DeviceUnusable,
+            error
         );
 
     public static string Describe(int error) =>

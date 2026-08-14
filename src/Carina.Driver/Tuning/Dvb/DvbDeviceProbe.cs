@@ -1,3 +1,4 @@
+using Carina.Contracts;
 using Carina.Driver.Configuration;
 
 namespace Carina.Driver.Tuning.Dvb;
@@ -7,7 +8,9 @@ public sealed record DetectedTuner(
     string Name,
     IReadOnlyList<DeliverySystem> DeliverySystems,
     DeviceKind Kind,
-    string? Problem
+    string? Problem,
+    DeviceDetection Detection,
+    IReadOnlyList<DeviceKind> Receives
 );
 
 public sealed class DvbDeviceProbe(IDvbSystemCalls calls)
@@ -52,6 +55,35 @@ public sealed class DvbDeviceProbe(IDvbSystemCalls calls)
         return KindFromName(name);
     }
 
+    public static IReadOnlyList<DeviceKind> KindsOf(
+        IReadOnlyList<DeliverySystem> systems,
+        string name
+    )
+    {
+        var enumerated = new List<DeviceKind>();
+
+        foreach (var system in systems)
+        {
+            var kind = KindFromDeliverySystem(system);
+
+            if (kind is not DeviceKind.Unspecified && !enumerated.Contains(kind))
+            {
+                enumerated.Add(kind);
+            }
+        }
+
+        if (enumerated.Count > 0)
+        {
+            return enumerated;
+        }
+
+        return KindFromName(name) switch
+        {
+            DeviceKind.Unspecified => [],
+            var kind => [kind],
+        };
+    }
+
     private DetectedTuner InspectOne(string frontendPath)
     {
         DvbFrontend? frontend = null;
@@ -63,6 +95,7 @@ public sealed class DvbDeviceProbe(IDvbSystemCalls calls)
             var named = frontend.TryReadHardwareName(out var name, out var nameProblem);
             var enumerated = frontend.TryReadDeliverySystems(out var systems, out var systemProblem);
             var kind = KindOf(systems, name);
+            var receives = KindsOf(systems, name);
             var problems = new List<string>();
 
             if (!enumerated)
@@ -87,7 +120,9 @@ public sealed class DvbDeviceProbe(IDvbSystemCalls calls)
                 name,
                 systems,
                 kind,
-                problems.Count is 0 ? null : string.Join("; ", problems)
+                problems.Count is 0 ? null : string.Join("; ", problems),
+                receives.Count is 0 ? DeviceDetection.Unreadable : DeviceDetection.Detected,
+                receives
             );
         }
         catch (DvbDeviceException error)
@@ -97,13 +132,35 @@ public sealed class DvbDeviceProbe(IDvbSystemCalls calls)
                 string.Empty,
                 [],
                 DeviceKind.Unspecified,
-                error.Message
+                error.Message,
+                DetectionFrom(error.Error),
+                []
             );
         }
         finally
         {
             frontend?.Dispose();
         }
+    }
+
+    private static DeviceDetection DetectionFrom(int error) =>
+        error switch
+        {
+            Errno.Busy => DeviceDetection.Busy,
+            Errno.PermissionDenied or Errno.NotPermitted => DeviceDetection.PermissionDenied,
+            _ => DeviceDetection.Unreadable,
+        };
+
+    private static DeviceKind KindFromDeliverySystem(DeliverySystem system)
+    {
+        if (system == DeliverySystem.IsdbTerrestrial)
+        {
+            return DeviceKind.Terrestrial;
+        }
+
+        return system == DeliverySystem.IsdbSatellite
+            ? DeviceKind.Satellite
+            : DeviceKind.Unspecified;
     }
 
     private static DeviceKind KindFromName(string name)
