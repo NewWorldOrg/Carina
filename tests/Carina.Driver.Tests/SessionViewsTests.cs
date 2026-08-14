@@ -3,6 +3,7 @@ using Carina.Driver.Configuration;
 using Carina.Driver.Ipc;
 using Carina.Driver.Sessions;
 using Carina.Driver.Tuning;
+using Carina.Driver.Tuning.Dvb;
 
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -197,6 +198,165 @@ public sealed class SessionViewsTests : IDisposable
             TunerState.Idle,
             tuners.Single(tuner => tuner.DeviceId == "adapter1").State
         );
+    }
+
+    [Fact]
+    public void ATunerBeingReadCarriesTheQualityOfWhatItIsReceiving()
+    {
+        var factory = new PacedTunerDeviceFactory(
+            new ScriptedQualitySource().Answer(
+                Readings.Measured(
+                    20.5,
+                    new LayerBitErrors(0, 12, 1_000_000),
+                    new LayerBitErrors(1, 3, 500_000)
+                )
+            )
+        );
+        var manager = Manager(factory);
+        Begin(manager, "reading", "adapter0");
+        ReadOneChunk(factory);
+
+        var reading = Quality(manager, "adapter0");
+
+        Assert.Equal(SignalLock.Locked, reading.Lock);
+        Assert.Equal(20_500, reading.CnrMilliDecibels);
+        Assert.Equal(
+            [new LayerBitErrorCounts(0, 12, 1_000_000), new LayerBitErrorCounts(1, 3, 500_000)],
+            reading.PostViterbiBitErrors
+        );
+    }
+
+    [Fact]
+    public void ATunerThatLostItsLockCarriesNoCarrierToNoiseForTheViewToShow()
+    {
+        var factory = new PacedTunerDeviceFactory(
+            new ScriptedQualitySource().Answer(Readings.WithoutLock())
+        );
+        var manager = Manager(factory);
+        Begin(manager, "unlocked", "adapter0");
+        ReadOneChunk(factory);
+
+        var reading = Quality(manager, "adapter0");
+
+        Assert.Equal(SignalLock.NotLocked, reading.Lock);
+        Assert.Null(reading.CnrMilliDecibels);
+        Assert.Empty(reading.PostViterbiBitErrors);
+    }
+
+    [Fact]
+    public void ALostLockIsCountedOnTheSessionItHappenedTo()
+    {
+        var factory = new PacedTunerDeviceFactory(
+            new ScriptedQualitySource().Answer(Readings.WithoutLock())
+        );
+        var manager = Manager(factory);
+        var session = Begin(manager, "unlocked", "adapter0");
+        ReadOneChunk(factory);
+
+        var snapshot = SessionViews.Of(session, Hello);
+
+        Assert.Equal(1, snapshot.Counters.LockLosses);
+    }
+
+    [Fact]
+    public void AMetricTheTunerDoesNotImplementIsNamedRatherThanLookingLikeAFailedReading()
+    {
+        var factory = new PacedTunerDeviceFactory(
+            new ScriptedQualitySource().Answer(Readings.WithoutCarrierToNoise())
+        );
+        var manager = Manager(factory);
+        Begin(manager, "partial", "adapter0");
+        ReadOneChunk(factory);
+
+        var reading = Quality(manager, "adapter0");
+
+        Assert.Equal([SignalQualityMetrics.Cnr], reading.NotImplementedMetrics);
+        Assert.False(reading.Implements(SignalQualityMetrics.Cnr));
+        Assert.True(reading.Implements(SignalQualityMetrics.PostViterbiBitError));
+        Assert.NotEmpty(reading.PostViterbiBitErrors);
+    }
+
+    [Fact]
+    public void AReadingTheFrontendRefusedIsNeitherLockedNorUnlocked()
+    {
+        var factory = new PacedTunerDeviceFactory(
+            new ScriptedQualitySource { RefuseFromReadNumber = 1 }
+        );
+        var manager = Manager(factory);
+        Begin(manager, "refused", "adapter0");
+        ReadOneChunk(factory);
+
+        var reading = Quality(manager, "adapter0");
+
+        Assert.Equal(SignalLock.Unspecified, reading.Lock);
+        Assert.Null(reading.CnrMilliDecibels);
+        Assert.NotNull(reading.MeasuredAt);
+    }
+
+    [Fact]
+    public void TheStatusAndTheStatisticsReachTheViewWithTheTimesTheyWereRead()
+    {
+        var factory = new PacedTunerDeviceFactory(
+            () => new ScriptedQualitySource(clock) { ReadingTakes = TimeSpan.FromMilliseconds(4) }
+        );
+        var manager = Manager(factory);
+        Begin(manager, "timed", "adapter0");
+        ReadOneChunk(factory);
+
+        var reading = Quality(manager, "adapter0");
+
+        Assert.Equal(Start, reading.MeasuredAt);
+        Assert.Equal(Start.AddMilliseconds(4), reading.LockReadAt);
+    }
+
+    [Fact]
+    public void ATunerNobodyIsReadingCarriesNoReadingAtAll()
+    {
+        var manager = Manager();
+
+        Assert.All(
+            SessionViews.Tuners(Configuration, manager),
+            tuner => Assert.Null(tuner.SignalQuality)
+        );
+    }
+
+    [Fact]
+    public void TheOverrunsCountedAtTheDeviceReachWhoeverAsksAboutTheSession()
+    {
+        var factory = new PacedTunerDeviceFactory();
+        var manager = Manager(factory);
+        var session = Begin(manager, "overrun", "adapter0");
+        ReadOneChunk(factory);
+
+        factory.Last.Overflows = 2;
+
+        Assert.Equal(2, SessionViews.Of(session, Hello).Counters.DeviceOverflows);
+    }
+
+    private static SignalQualityDto Quality(TunerSessionManager manager, string deviceId)
+    {
+        var tuner = SessionViews
+            .Tuners(
+                new DriverConfiguration(
+                    "/run/carina/driver.sock",
+                    null,
+                    6,
+                    new TunerSettings(TunerBackend.Fake),
+                    [new DeviceSettings(deviceId, DeviceKind.Terrestrial)]
+                ),
+                manager
+            )
+            .Single(tuner => tuner.DeviceId == deviceId);
+
+        Assert.NotNull(tuner.SignalQuality);
+
+        return tuner.SignalQuality;
+    }
+
+    private static void ReadOneChunk(PacedTunerDeviceFactory factory)
+    {
+        factory.Last.Allow(1);
+        factory.Last.AwaitParkedBefore(2);
     }
 
     [Fact]

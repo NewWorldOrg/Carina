@@ -140,6 +140,48 @@ public sealed class TunerPoolSessionTests : IDisposable
     }
 
     [Fact]
+    public void ARiderIsToldOfTheOverrunsAtTheTunerItsBytesCameFrom()
+    {
+        var device = new PacedTunerDevice();
+        var manager = Manager(new OneDeviceFactory(device));
+
+        var holder = Started(manager, Request("s-1", SessionPurpose.Recording));
+        var rider = Started(manager, Request("s-2", SessionPurpose.Recording));
+
+        device.Allow(2);
+        device.AwaitParkedBefore(3);
+        device.Overflows = 4;
+
+        Assert.Equal(4, holder.DeviceOverflows);
+        Assert.Equal(4, rider.DeviceOverflows);
+
+        holder.Stop();
+        holder.WaitForEnd(Deadlock);
+        rider.WaitForEnd(Deadlock);
+    }
+
+    [Fact]
+    public void ARiderDoesNotAskTheFrontendItDoesNotHold()
+    {
+        var device = new PacedTunerDevice { Signal = new ScriptedQualitySource() };
+        var manager = Manager(new OneDeviceFactory(device));
+
+        var holder = Started(manager, Request("s-1", SessionPurpose.Recording));
+        var rider = Started(manager, Request("s-2", SessionPurpose.Recording));
+
+        device.Allow(2);
+        device.AwaitParkedBefore(3);
+
+        Assert.Equal(1, device.Signal!.Reads);
+        Assert.NotNull(holder.Quality);
+        Assert.Null(rider.Quality);
+
+        holder.Stop();
+        holder.WaitForEnd(Deadlock);
+        rider.WaitForEnd(Deadlock);
+    }
+
+    [Fact]
     public void ARiderWhoseHolderStoppedIsNeverMistakenForOneThatFinished()
     {
         var device = new PacedTunerDevice();

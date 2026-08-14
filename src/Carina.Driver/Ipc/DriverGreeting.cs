@@ -11,6 +11,8 @@ public static class DriverGreeting
         DriverCapabilities.QualityMetering,
         DriverCapabilities.LiveTunerToggle,
         DriverCapabilities.TypedTuning,
+        DriverCapabilities.SignalQuality,
+        .. SignalQualityMetrics.All.Select(DriverCapabilities.SignalQualityMetric),
     ];
 
     public static DriverHello ForThisProcess() =>

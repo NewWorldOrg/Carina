@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 
 using Carina.Contracts;
 using Carina.Driver.Configuration;
+using Carina.Driver.Events;
 using Carina.Driver.Sessions;
 using Carina.Driver.Tuning;
 
@@ -36,11 +37,19 @@ public sealed class TunerSessionManagerTests : IDisposable
     private TunerSessionManager Manager() => Manager(Configuration);
 
     private TunerSessionManager Manager(DriverConfiguration configuration) =>
+        Manager(configuration, new TunerDeviceFactory(configuration, TimeProvider.System));
+
+    private TunerSessionManager Manager(
+        DriverConfiguration configuration,
+        ITunerDeviceFactory factory,
+        DriverEventHub? events = null
+    ) =>
         new(
             configuration,
-            new TunerDeviceFactory(configuration, TimeProvider.System),
+            factory,
             clock,
-            NullLogger<TunerSessionManager>.Instance
+            NullLogger<TunerSessionManager>.Instance,
+            events: events
         );
 
     private static StartSessionRequest Request(
@@ -944,6 +953,62 @@ public sealed class TunerSessionManagerTests : IDisposable
     }
 
     [Fact]
+    public async Task ASessionThatLosesItsLockRingsTheSignalTheAppListensFor()
+    {
+        var hub = new DriverEventHub();
+        var factory = new PacedTunerDeviceFactory(
+            new ScriptedQualitySource().Answer(Readings.WithoutLock())
+        );
+        var manager = Manager(Configuration, factory, hub);
+
+        Assert.True(hub.TryListen(out var listener));
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var session = Begin(manager, "losing", "adapter0");
+
+        factory.Last.Allow(1);
+        factory.Last.AwaitParkedBefore(2);
+
+        var signalled = new List<string>();
+        while (!signalled.Contains(DriverEvents.SessionLockLost, StringComparer.Ordinal))
+        {
+            signalled.AddRange(await listener.Take(deadline.Token));
+        }
+
+        Assert.Equal(1, session.LockLosses);
+
+        listener.Dispose();
+        session.Stop();
+    }
+
+    [Fact]
+    public void TheIntervalTheConfigurationNamesIsTheOneASessionReadsOn()
+    {
+        var signal = new ScriptedQualitySource();
+        var factory = new PacedTunerDeviceFactory(signal);
+        var manager = Manager(
+            Configuration with
+            {
+                Tuner = new TunerSettings(TunerBackend.Fake, SignalQualitySeconds: 30),
+            },
+            factory
+        );
+        var session = Begin(manager, "spaced", "adapter0");
+
+        factory.Last.Allow(3);
+        factory.Last.AwaitParkedBefore(4);
+
+        Assert.Equal(1, signal.Reads);
+
+        clock.Advance(TimeSpan.FromSeconds(30));
+        factory.Last.Allow(1);
+        factory.Last.AwaitParkedBefore(5);
+
+        Assert.Equal(2, signal.Reads);
+
+        session.Stop();
+    }
+
+    [Fact]
     public void ADriverThatTunesFromTypedParametersSaysSo()
     {
         Assert.Contains(
@@ -962,8 +1027,32 @@ public sealed class TunerSessionManagerTests : IDisposable
                 DriverCapabilities.QualityMetering,
                 DriverCapabilities.LiveTunerToggle,
                 DriverCapabilities.TypedTuning,
+                DriverCapabilities.SignalQuality,
+                "signalQuality.cnr",
+                "signalQuality.postViterbiBitError",
             ],
             Carina.Driver.Ipc.DriverGreeting.Capabilities
+        );
+    }
+
+    [Fact]
+    public void TheGreetingNamesTheMetricsItCanReadRatherThanQualityAsOneThing()
+    {
+        var hello = Carina.Driver.Ipc.DriverGreeting.ForThisProcess();
+
+        Assert.Equal(SignalQualityMetrics.All, hello.DeclaredSignalQualityMetrics());
+        Assert.True(hello.SupportsSignalQualityMetric(SignalQualityMetrics.Cnr));
+        Assert.True(
+            hello.SupportsSignalQualityMetric(SignalQualityMetrics.PostViterbiBitError)
+        );
+    }
+
+    [Fact]
+    public void TheGreetingDoesNotClaimAMetricNoTunerHereReports()
+    {
+        Assert.False(
+            Carina.Driver.Ipc.DriverGreeting.ForThisProcess()
+                .SupportsSignalQualityMetric("signalStrength")
         );
     }
 
