@@ -118,11 +118,10 @@ docker compose exec app dotnet test
 docker compose exec app dotnet format --verify-no-changes
 ```
 
-`task` shortcuts: `task build`, `task test`, `task lint`, `task format`, `task openapi`,
-`task acceptance`.
+`task` shortcuts: `task build`, `task test`, `task lint`, `task format`, `task openapi`.
 
 GitHub Actions runs build, format verification, the OpenAPI round trip, the compose
-render, the image and its role checks, the acceptance scenarios, and two test jobs: one
+render, the image and its role checks, and two test jobs: one
 for everything except `Category=DbIntegration`, one for those against a PostgreSQL
 service container. The second job counts the tests it ran, because `dotnet test` exits 0
 when a filter matches nothing and a mistyped category would otherwise be green having
@@ -136,21 +135,15 @@ verified nothing.
 - The two processes share `/run/carina`, where the driver socket lives.
 - `driver` has a stop grace period longer than the driver's recording linger cap;
   shortening it would kill a recording that was about to finish.
-- `compose.deploy.yml` is the deployment-shaped stack: the built image as separate
-  `driver` and `app` services sharing `/run/carina`, a one-shot `migrate` the app
-  waits for, and `db`. It is a second file rather than a profile so that
-  `docker compose up` with no argument stays the development stack. It fails closed:
-  the driver configuration, the database password and the stop grace period have no
-  working defaults, because a default that happens to work hides the omission.
 - The driver's health probe is the driver itself — `Carina.Driver --probe` reads the
   configured socket, asks `/health` and `/tuners`, and answers on what it finds:
   draining, or every usable tuner faulted, is not healthy. The runtime image carries
-  no HTTP client for this; `verify-image.sh` fails if one appears.
+  no HTTP client for this.
 - `Carina.Driver --shutdown-budget` prints the seconds the runtime has to allow
   before SIGKILL — the linger cap plus the hard stop plus the host's own slack. The
-  driver prints the same figure at startup. `docker/grace-period.sh derive` turns it
-  into `stop_grace_period` and `task deploy:up` applies it, so the compose value is
-  derived from the driver rather than guessed next to it; `check` re-verifies it.
+  driver prints the same figure at startup. Whatever runs the image has to allow at
+  least that long before killing the driver, or a recording that was about to finish
+  is lost.
 - `migrate` takes a PostgreSQL advisory lock, so a second one waits instead of
   racing. Do not scale it: the lock serialises, but two migrations still make the
   slower deploy wait on a lock it cannot see.
@@ -160,28 +153,11 @@ verified nothing.
 - In that image the driver is published Native AOT; the app and the migration entry
   point are framework-dependent. The driver role runs as root, `app` and `migrate`
   drop to the unprivileged `carina` user, and `all` supervises both processes as a
-  reaping PID 1. `task image:verify` builds the image and exercises every role.
-- The two roles are released on independent tag streams, `driver-sha-<commit>` and
-  `app-sha-<commit>`, each naming the commit that last touched the inputs that build
-  that role. `docker/image-tags.sh` derives those inputs from the project graph — the
-  role's entry projects and everything they reference — plus what both builds read:
-  `Dockerfile`, `docker/entrypoint.sh`, `.dockerignore` and the two `Directory.*`
-  files. `check` refuses a project that belongs to no stream, and a Dockerfile build
-  stage that copies a different set of projects than its stream is keyed on. `prove`
-  makes an app-only change and then a driver-only change in a scratch worktree and
-  fails unless one tag moves while the other stays. A shallow clone is refused, since
-  "the commit that last touched these paths" collapses onto HEAD there.
-- The image is one artifact carrying both roles, so both tags name the same image
-  whenever both streams move together. `docker/publish-image.sh` pushes a tag only if
-  the registry does not already have it: re-pushing would change what an existing tag
-  means, and a driver that is not being released must keep resolving to the image it
-  was deployed from. A registry that cannot be read is reported as unknown rather than
-  assumed empty. Publishing waits on a decision about the registry and its visibility
-  and is off until the repository variable `CARINA_PUBLISH` is set.
-- `compose.deploy.yml` takes `CARINA_DRIVER_IMAGE` and `CARINA_APP_IMAGE` separately,
-  both falling back to `CARINA_IMAGE`. Releasing the app by bumping one shared
-  variable recreates the driver container too, which is the deployment that kills a
-  recording in progress.
+  reaping PID 1.
+- Releasing one role must not recreate the container running the other: replacing the
+  app while the driver holds a recording ends that recording. Whatever builds and
+  publishes the image owns that guarantee; this repository builds the image and does
+  not publish it.
 
 ## UI Hostname
 
