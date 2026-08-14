@@ -326,6 +326,39 @@ public sealed class WireStabilityTests
         Assert.Equal(value, (int)state);
     }
 
+    [Fact]
+    public void TheStateATunerGainedTookTheNextNumberRatherThanOneOfTheAgreedOnes()
+    {
+        Assert.Equal(5, (int)TunerState.Draining);
+    }
+
+    [Fact]
+    public void ALedgerAnswerKeepsExactlyTheFieldsItWasGiven()
+    {
+        Assert.Equal(
+            ["tuners", "loadedHash", "savedHash"],
+            FieldsOf(DriverJson.Serialize(new TunerLedgerDto()))
+        );
+    }
+
+    [Fact]
+    public void AToggleKeepsExactlyTheFieldsItWasGiven()
+    {
+        Assert.Equal(
+            ["disabled"],
+            FieldsOf(DriverJson.Serialize(new TunerToggleRequest { Disabled = true }))
+        );
+    }
+
+    [Fact]
+    public void TheLedgerPathsTakeTheirPlaceAfterTheOnesThatWereAlreadyAnswered()
+    {
+        Assert.Equal(
+            ["/devices/detected", "/tuners/ledger"],
+            DriverEndpoints.All.Skip(EndpointsTheFrontendReaches.Length)
+        );
+    }
+
     private static StartSessionRequest LegacyRequest =>
         new()
         {

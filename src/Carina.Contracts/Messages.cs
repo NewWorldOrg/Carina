@@ -38,6 +38,8 @@ public enum TunerState
     Disabled = 3,
 
     Faulted = 4,
+
+    Draining = 5,
 }
 
 [JsonConverter(typeof(SessionStateConverter))]

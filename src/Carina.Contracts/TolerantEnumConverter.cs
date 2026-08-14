@@ -143,6 +143,7 @@ public sealed class TunerStateConverter : TolerantEnumConverter<TunerState>
             TunerState.Busy => "busy",
             TunerState.Disabled => "disabled",
             TunerState.Faulted => "faulted",
+            TunerState.Draining => "draining",
             _ => "unspecified",
         };
 
@@ -153,6 +154,7 @@ public sealed class TunerStateConverter : TolerantEnumConverter<TunerState>
             "busy" => TunerState.Busy,
             "disabled" => TunerState.Disabled,
             "faulted" => TunerState.Faulted,
+            "draining" => TunerState.Draining,
             "unspecified" => TunerState.Unspecified,
             _ => null,
         };

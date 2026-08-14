@@ -83,6 +83,7 @@ public sealed class WireSpellingTests
     [InlineData(TunerState.Busy, "busy")]
     [InlineData(TunerState.Disabled, "disabled")]
     [InlineData(TunerState.Faulted, "faulted")]
+    [InlineData(TunerState.Draining, "draining")]
     public void TunerStateIsSpelledThisWay(TunerState value, string wire)
     {
         AssertRoundTrip(value, wire, DriverJson.Context.TunerState);
