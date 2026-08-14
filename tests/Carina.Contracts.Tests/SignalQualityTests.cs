@@ -134,6 +134,55 @@ public sealed class SignalQualityTests
     }
 
     [Fact]
+    public void AReadingTakenWhileUnlockedIsNotPromotedByChangingTheLock()
+    {
+        var whileUnlocked = new SignalQualityDto
+        {
+            Lock = SignalLock.NotLocked,
+            CnrMilliDecibels = 21_500,
+            PostViterbiBitErrors = [new LayerBitErrorCounts(0, 12, 1_000_000)],
+        };
+
+        var promoted = whileUnlocked with { Lock = SignalLock.Locked };
+
+        Assert.Null(promoted.CnrMilliDecibels);
+        Assert.Empty(promoted.PostViterbiBitErrors);
+        Assert.DoesNotContain("21500", DriverJson.Serialize(promoted), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AReadingThatLostItsLockDoesNotKeepTheValueItHad()
+    {
+        var lost = Locked with { Lock = SignalLock.NotLocked };
+
+        Assert.Null(lost.CnrMilliDecibels);
+        Assert.Null((lost with { Lock = SignalLock.Locked }).CnrMilliDecibels);
+    }
+
+    [Fact]
+    public void ALockedReadingSurvivesBeingCopiedForSomethingElse()
+    {
+        var copied = Locked with { MeasuredAt = null };
+
+        Assert.Equal(21_500, copied.CnrMilliDecibels);
+        Assert.Equal(2, copied.PostViterbiBitErrors.Count);
+    }
+
+    [Fact]
+    public void TwoReadingsThatSayTheSameThingAreTheSameReading()
+    {
+        Assert.Equal(
+            new SignalQualityDto { Lock = SignalLock.NotLocked },
+            new SignalQualityDto { Lock = SignalLock.NotLocked, CnrMilliDecibels = 21_500 }
+        );
+
+        Assert.Equal(
+            Locked,
+            Locked with { PostViterbiBitErrors = [.. Locked.PostViterbiBitErrors] }
+        );
+    }
+
+    [Fact]
     public void CountersAreNeverNull()
     {
         Assert.Empty(

@@ -23,6 +23,16 @@ public sealed record SignalQualityDto
     private readonly int? cnrMilliDecibels;
     private readonly IReadOnlyList<LayerBitErrorCounts> postViterbiBitErrors = [];
 
+    public SignalQualityDto() { }
+
+    private SignalQualityDto(SignalQualityDto other)
+    {
+        Lock = other.Lock;
+        cnrMilliDecibels = other.CnrMilliDecibels;
+        postViterbiBitErrors = other.PostViterbiBitErrors;
+        MeasuredAt = other.MeasuredAt;
+    }
+
     public SignalLock Lock { get; init; }
 
     public int? CnrMilliDecibels
@@ -44,6 +54,16 @@ public sealed record SignalQualityDto
 
     public static SignalQualityDto NotLocked(DateTimeOffset? measuredAt = null) =>
         new() { Lock = SignalLock.NotLocked, MeasuredAt = measuredAt };
+
+    public bool Equals(SignalQualityDto? other) =>
+        other is not null
+        && Lock == other.Lock
+        && CnrMilliDecibels == other.CnrMilliDecibels
+        && MeasuredAt == other.MeasuredAt
+        && PostViterbiBitErrors.SequenceEqual(other.PostViterbiBitErrors);
+
+    public override int GetHashCode() =>
+        HashCode.Combine(Lock, CnrMilliDecibels, MeasuredAt, PostViterbiBitErrors.Count);
 }
 
 public static class SignalQualityMetrics
