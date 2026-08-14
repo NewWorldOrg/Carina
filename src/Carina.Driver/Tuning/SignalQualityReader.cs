@@ -59,8 +59,6 @@ public sealed class SignalQualityReader
         this.problem = problem;
     }
 
-    public TimeSpan Interval => interval;
-
     public long LockLosses => Interlocked.Read(ref lockLosses);
 
     public SignalQualitySample? Latest
