@@ -15,6 +15,10 @@ public sealed class ScriptedScanOrchestrator(HeldScanRuns runs) : IChannelScanOr
 
     public bool HoldsOpen { get; set; }
 
+    public string? ThrowsAfterAnnouncing { get; set; }
+
+    public bool EveryAttemptFails { get; set; }
+
     public ScanDifference Difference { get; set; } = ScanDifference.Nothing;
 
     public List<TuningParameters> Walked { get; } = [];
@@ -52,6 +56,11 @@ public sealed class ScriptedScanOrchestrator(HeldScanRuns runs) : IChannelScanOr
         observer.Started(run);
         Announced.TrySetResult();
 
+        if (ThrowsAfterAnnouncing is { } failure)
+        {
+            throw new InvalidOperationException(failure);
+        }
+
         var attempts = new List<ScanRunAttempt>();
 
         foreach (var target in Walked)
@@ -60,8 +69,8 @@ public sealed class ScriptedScanOrchestrator(HeldScanRuns runs) : IChannelScanOr
                 ScanRunAttemptId.New(),
                 run.Id,
                 target,
-                ScanAttemptOutcome.Succeeded,
-                SignalMeasurement.WithLock(At, 21_500),
+                EveryAttemptFails ? ScanAttemptOutcome.NoLock : ScanAttemptOutcome.Succeeded,
+                EveryAttemptFails ? SignalMeasurement.WithoutLock(At) : SignalMeasurement.WithLock(At, 21_500),
                 null,
                 null,
                 At,
@@ -86,7 +95,7 @@ public sealed class ScriptedScanOrchestrator(HeldScanRuns runs) : IChannelScanOr
 
         if (cancelled)
         {
-            run.Cancel("the scan was cancelled", At);
+            ScanConclusion.Stop(run, observer.Stop, At);
         }
         else
         {
