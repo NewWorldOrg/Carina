@@ -65,12 +65,12 @@ public static class SessionViews
         TunerSessionManager manager
     )
     {
-        var busy = new Dictionary<string, SessionId>(StringComparer.Ordinal);
+        var busy = new Dictionary<string, TunerSession>(StringComparer.Ordinal);
         var readings = new Dictionary<string, SignalQualitySample>(StringComparer.Ordinal);
 
         foreach (var session in manager.Sessions)
         {
-            busy.TryAdd(session.DeviceId, session.SessionId);
+            busy.TryAdd(session.DeviceId, session);
 
             if (session.Quality is not { } sample)
             {
@@ -96,14 +96,17 @@ public static class SessionViews
             }
 
             var toggled = manager.IsToggled(device);
+            var snapshot = Of(device, deviceId, manager, busy, toggled);
 
             snapshots.Add(
-                Of(device, deviceId, manager, busy, toggled) with
+                snapshot with
                 {
                     Toggled = toggled,
                     SignalQuality = readings.TryGetValue(deviceId, out var reading)
                         ? SignalQualityViews.Of(reading)
                         : null,
+                    CurrentSession = Held(snapshot, busy, deviceId),
+                    Health = HealthOf(device, deviceId, manager, snapshot.State),
                 }
             );
         }
@@ -111,11 +114,44 @@ public static class SessionViews
         return snapshots;
     }
 
+    private static CurrentSessionDto? Held(
+        TunerSnapshot snapshot,
+        Dictionary<string, TunerSession> busy,
+        string deviceId
+    ) =>
+        busy.TryGetValue(deviceId, out var session)
+        && snapshot.SessionId.Equals(session.SessionId)
+            ? new CurrentSessionDto
+            {
+                SessionId = session.SessionId,
+                Purpose = session.Purpose,
+                StartedAt = session.StartedAt,
+                Tune = session.Tune,
+            }
+            : null;
+
+    private static TunerHealthDto HealthOf(
+        DeviceSettings device,
+        string deviceId,
+        TunerSessionManager manager,
+        TunerState state
+    ) =>
+        new()
+        {
+            Level = manager.IsFaulted(deviceId, out var fault)
+                ? TunerHealthLevel.Faulted
+                : TunerHealthLevel.Healthy,
+            DisablePending = state is TunerState.Draining,
+            LnbPowered = device.Kind is DeviceKind.Satellite && device.LnbPower,
+            Detail = fault,
+            ChangedAt = manager.HealthChangedAt(deviceId),
+        };
+
     private static TunerSnapshot Of(
         DeviceSettings device,
         string deviceId,
         TunerSessionManager manager,
-        Dictionary<string, SessionId> busy,
+        Dictionary<string, TunerSession> busy,
         bool toggled
     )
     {
@@ -128,7 +164,7 @@ public static class SessionViews
                     deviceId,
                     kind,
                     TunerState.Draining,
-                    draining,
+                    draining.SessionId,
                     "This device was turned off and comes out of service as soon as the session it holds ends."
                 )
                 : new TunerSnapshot(
@@ -146,8 +182,8 @@ public static class SessionViews
             return new TunerSnapshot(deviceId, kind, TunerState.Faulted, Detail: fault);
         }
 
-        return busy.TryGetValue(deviceId, out var sessionId)
-            ? new TunerSnapshot(deviceId, kind, TunerState.Busy, sessionId)
+        return busy.TryGetValue(deviceId, out var session)
+            ? new TunerSnapshot(deviceId, kind, TunerState.Busy, session.SessionId)
             : new TunerSnapshot(deviceId, kind, TunerState.Idle);
     }
 

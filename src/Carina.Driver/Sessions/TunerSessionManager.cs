@@ -39,6 +39,9 @@ public sealed class TunerSessionManager(
     private readonly ConcurrentDictionary<string, bool> toggledDevices = new(
         StringComparer.Ordinal
     );
+    private readonly ConcurrentDictionary<string, DateTimeOffset> healthChangedAt = new(
+        StringComparer.Ordinal
+    );
     private readonly ConcurrentQueue<TunerSession> ended = new();
     private readonly TimeSpan drainCap = TimeSpan.FromHours(
         Math.Max(0, configuration.ShutdownGraceHours)
@@ -588,7 +591,8 @@ public sealed class TunerSessionManager(
             logger: logger,
             outputRoot: request.OutputRoot,
             diagnostics: diagnostics,
-            watch: Watch()
+            watch: Watch(),
+            tune: request.Tune
         );
 
         lock (drainGate)
@@ -713,6 +717,7 @@ public sealed class TunerSessionManager(
             faultedDevices[session.DeviceId] =
                 $"The device failed while serving '{session.SessionId}': "
                 + (session.FailureCause?.Message ?? "no cause was recorded.");
+            healthChangedAt[session.DeviceId] = timeProvider.GetUtcNow();
 
             pool.Discard(session.DeviceId);
         }
@@ -747,6 +752,7 @@ public sealed class TunerSessionManager(
     public void Fault(string deviceId, string detail)
     {
         faultedDevices[deviceId] = detail;
+        healthChangedAt[deviceId] = timeProvider.GetUtcNow();
 
         events?.Signal(DriverEvents.TunerHealthChanged);
         events?.Signal(DriverEvents.Tuners);
@@ -776,12 +782,16 @@ public sealed class TunerSessionManager(
         }
 
         toggledDevices[deviceId] = !disabled;
+        healthChangedAt[deviceId] = timeProvider.GetUtcNow();
 
         events?.Signal(DriverEvents.TunerHealthChanged);
         events?.Signal(DriverEvents.Tuners);
 
         return true;
     }
+
+    public DateTimeOffset? HealthChangedAt(string deviceId) =>
+        healthChangedAt.TryGetValue(deviceId, out var changed) ? changed : null;
 
     public bool IsFaulted(string deviceId, [NotNullWhen(true)] out string? detail) =>
         faultedDevices.TryGetValue(deviceId, out detail);
