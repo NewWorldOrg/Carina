@@ -36,7 +36,7 @@ jobs:
           name: openapi
           path: openapi/Carina.Api.json
 
-  test:
+  unit-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -44,9 +44,41 @@ jobs:
         with:
           dotnet-version: '10.0.x'
       - run: dotnet restore
-      - run: dotnet test --no-restore --filter "Category!=DbIntegration"
+      - name: Unit tests, taken from the Unit folders and from everything not yet moved into one
+        run: |
+          set -o pipefail
+          dotnet test --no-restore --filter "FullyQualifiedName~Unit|(FullyQualifiedName!~FeatureTest&FullyQualifiedName!~DbIntegration&Category!=DbIntegration)" | tee unit.log
+      - name: The filter selected tests, rather than passing by selecting none
+        run: |
+          passed="$(sed -n 's/.*Passed: *\([0-9]\+\).*/\1/p' unit.log | awk '{ total += $1 } END { print total + 0 }')"
+          if [ "${passed}" -lt 1 ]; then
+            echo "the filter ran ${passed} tests: dotnet test exits 0 when a filter matches nothing, so this job would be green having verified nothing" >&2
+            exit 1
+          fi
+          echo "${passed} unit tests ran."
 
-  test-db:
+  feature-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet restore
+      - name: The tests that drive the application through its HTTP surface
+        run: |
+          set -o pipefail
+          dotnet test --no-restore --filter "FullyQualifiedName~FeatureTest" | tee feature.log
+      - name: The filter selected tests, rather than passing by selecting none
+        run: |
+          passed="$(sed -n 's/.*Passed: *\([0-9]\+\).*/\1/p' feature.log | awk '{ total += $1 } END { print total + 0 }')"
+          if [ "${passed}" -lt 1 ]; then
+            echo "the filter ran ${passed} tests: dotnet test exits 0 when a filter matches nothing, so this job would be green having verified nothing" >&2
+            exit 1
+          fi
+          echo "${passed} feature tests ran."
+
+  db-integration-test:
     runs-on: ubuntu-latest
     services:
       db:
@@ -70,10 +102,10 @@ jobs:
         with:
           dotnet-version: '10.0.x'
       - run: dotnet restore
-      - name: Run the tests the other job excludes, against a real PostgreSQL
+      - name: The tests the other two jobs exclude, against a real PostgreSQL
         run: |
           set -o pipefail
-          dotnet test --no-restore --filter "Category=DbIntegration" | tee integration.log
+          dotnet test --no-restore --filter "FullyQualifiedName~DbIntegration|Category=DbIntegration" | tee integration.log
       - name: The filter selected tests, rather than passing by selecting none
         run: |
           passed="$(sed -n 's/.*Passed: *\([0-9]\+\).*/\1/p' integration.log | awk '{ total += $1 } END { print total + 0 }')"
