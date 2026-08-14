@@ -12,6 +12,7 @@
     <Project Path="tests/Carina.Api.Tests/Carina.Api.Tests.csproj" />
     <Project Path="tests/Carina.Architecture.Tests/Carina.Architecture.Tests.csproj" />
     <Project Path="tests/Carina.Broadcast.Tests/Carina.Broadcast.Tests.csproj" />
+    <Project Path="tests/Carina.BroadcastTestSupport/Carina.BroadcastTestSupport.csproj" />
     <Project Path="tests/Carina.Conventions.Tests/Carina.Conventions.Tests.csproj" />
     <Project Path="tests/Carina.Contracts.Tests/Carina.Contracts.Tests.csproj" />
     <Project Path="tests/Carina.Db.Tests/Carina.Db.Tests.csproj" />

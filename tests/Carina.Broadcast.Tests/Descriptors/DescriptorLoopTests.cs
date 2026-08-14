@@ -1,5 +1,5 @@
 using Carina.Broadcast.Descriptors;
-using Carina.Broadcast.Tests.Building;
+using Carina.BroadcastTestSupport;
 
 namespace Carina.Broadcast.Tests.Descriptors;
 

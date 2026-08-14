@@ -1,6 +1,6 @@
 using Carina.Broadcast.Text;
 
-namespace Carina.Broadcast.Tests.Building;
+namespace Carina.BroadcastTestSupport;
 
 public sealed class AribTextWriter
 {

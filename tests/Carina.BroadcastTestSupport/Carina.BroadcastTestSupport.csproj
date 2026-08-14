@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The writers that build broadcast tables byte by byte are shared: the parser tests read
+    back what they write, and the scan tests feed the same tables through a fake driver.
+    They live outside both test projects because no test project may reference another.
+  -->
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Carina.Broadcast/Carina.Broadcast.csproj" />
+  </ItemGroup>
+
+</Project>

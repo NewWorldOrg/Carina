@@ -1,6 +1,6 @@
 using Carina.Broadcast.Descriptors;
 
-namespace Carina.Broadcast.Tests.Building;
+namespace Carina.BroadcastTestSupport;
 
 public static class SiDescriptorWriter
 {

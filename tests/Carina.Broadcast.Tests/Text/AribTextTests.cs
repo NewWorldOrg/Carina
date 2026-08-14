@@ -1,5 +1,5 @@
-using Carina.Broadcast.Tests.Building;
 using Carina.Broadcast.Text;
+using Carina.BroadcastTestSupport;
 
 namespace Carina.Broadcast.Tests.Text;
 

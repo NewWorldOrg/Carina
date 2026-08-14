@@ -1,9 +1,13 @@
 using Carina.Domain.Driver;
 using Carina.Domain.DriverStatus;
+using Carina.Domain.Events;
+using Carina.Domain.Scans;
 using Carina.Infrastructure.Configuration;
 using Carina.Infrastructure.DependencyInjection;
 using Carina.Infrastructure.Driver;
+using Carina.Infrastructure.Events;
 using Carina.Infrastructure.Persistence;
+using Carina.Infrastructure.Scanning;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -35,6 +39,24 @@ public sealed class ServiceCollectionExtensionsTests
         using var scope = provider.CreateScope();
 
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<CarinaDbContext>());
+    }
+
+    [Fact]
+    public void RegistersTheScanOrchestratorAlongsideTheRepositoriesItWalksWith()
+    {
+        using var provider = Build(ValidSettings());
+        using var scope = provider.CreateScope();
+
+        Assert.IsType<ChannelScanOrchestrator>(
+            scope.ServiceProvider.GetRequiredService<IChannelScanOrchestrator>());
+    }
+
+    [Fact]
+    public void RegistersAnAppEventPublisherTheHubCanReplaceOnceItExists()
+    {
+        using var provider = Build(ValidSettings());
+
+        Assert.IsType<NoopAppEventPublisher>(provider.GetRequiredService<IAppEventPublisher>());
     }
 
     [Fact]

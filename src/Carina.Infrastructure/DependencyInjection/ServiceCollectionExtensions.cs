@@ -1,11 +1,14 @@
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.DriverStatus;
+using Carina.Domain.Events;
 using Carina.Domain.Scans;
 using Carina.Infrastructure.Configuration;
 using Carina.Infrastructure.Driver;
+using Carina.Infrastructure.Events;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
+using Carina.Infrastructure.Scanning;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -43,6 +46,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICandidateChannelRepository, CandidateChannelRepository>();
         services.AddScoped<ISatelliteTransportStreamRepository, SatelliteTransportStreamRepository>();
         services.AddScoped<IScanRunRepository, ScanRunRepository>();
+        services.AddScoped<IChannelScanOrchestrator, ChannelScanOrchestrator>();
 
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IDriverStatusReader, MonitoredDriverStatusReader>();
@@ -53,6 +57,8 @@ public static class ServiceCollectionExtensions
             provider.GetRequiredService<DriverSignalRelay>());
         services.TryAddSingleton<IDriverSessionResyncHook, NoopDriverSessionResyncHook>();
         services.TryAddSingleton(DriverSupervisionSettings.Default);
+        services.TryAddSingleton(ScanSettings.Default);
+        services.TryAddSingleton<IAppEventPublisher, NoopAppEventPublisher>();
         services.AddHostedService<DriverConnectionSupervisor>();
 
         return services;
