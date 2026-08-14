@@ -12,6 +12,21 @@ public sealed class LinuxDvbSystemCallsTests
 
     private readonly LinuxDvbSystemCalls calls = new();
 
+    private static void MakePipe(string path)
+    {
+        using var making = System.Diagnostics.Process.Start("mkfifo", [path]);
+
+        Assert.NotNull(making);
+        making.WaitForExit();
+
+        if (making.ExitCode is not 0 || !File.Exists(path))
+        {
+            throw new InvalidOperationException(
+                $"This test needs a named pipe at '{path}' to prove the streaming access mode does not block, and mkfifo did not make one."
+            );
+        }
+    }
+
     public LinuxDvbSystemCallsTests()
     {
         if (!File.Exists(AlwaysThere) || !File.Exists(AlwaysReadable))
@@ -50,7 +65,7 @@ public sealed class LinuxDvbSystemCallsTests
     }
 
     [Fact]
-    public void ATuningCallToSomethingThatIsNotAFrontendComesBackRefused()
+    public void ThePropertySettingCallLinksAndBringsBackTheErrnoTheKernelSet()
     {
         var opened = calls.Open(AlwaysThere, DvbAccess.Control);
 
@@ -69,7 +84,7 @@ public sealed class LinuxDvbSystemCallsTests
     }
 
     [Fact]
-    public void AStatusReadFromSomethingThatIsNotAFrontendComesBackRefused()
+    public void TheStatusReadCallLinksAndBringsBackTheErrnoTheKernelSet()
     {
         var opened = calls.Open(AlwaysThere, DvbAccess.Control);
 
@@ -88,7 +103,7 @@ public sealed class LinuxDvbSystemCallsTests
     }
 
     [Fact]
-    public void AVoltageCallToSomethingThatIsNotAFrontendComesBackRefused()
+    public void TheVoltageCallLinksAndBringsBackTheErrnoTheKernelSet()
     {
         var opened = calls.Open(AlwaysThere, DvbAccess.Control);
 
@@ -106,7 +121,7 @@ public sealed class LinuxDvbSystemCallsTests
     }
 
     [Fact]
-    public void AFilterCallToSomethingThatIsNotADemuxComesBackRefused()
+    public void TheFilterCallLinksAndBringsBackTheErrnoTheKernelSet()
     {
         var opened = calls.Open(AlwaysThere, DvbAccess.Control);
 
@@ -170,6 +185,35 @@ public sealed class LinuxDvbSystemCallsTests
 
         Assert.False(ready.Refused);
         Assert.Equal(0, ready.Value);
+    }
+
+    [Fact]
+    public async Task StreamingAccessDoesNotBlockOnAPipeThatNobodyIsWritingTo()
+    {
+        var work = Directory.CreateTempSubdirectory("carina-fifo-").FullName;
+
+        try
+        {
+            var pipe = Path.Combine(work, "dvr");
+            MakePipe(pipe);
+
+            var opening = Task.Run(() => calls.Open(pipe, DvbAccess.Stream));
+            var settled = await Task.WhenAny(opening, Task.Delay(TimeSpan.FromSeconds(5)));
+
+            Assert.True(
+                settled == opening,
+                "Opening a pipe with no writer never returned, so the streaming access mode is not passing the non-blocking flag."
+            );
+
+            var opened = await opening;
+
+            Assert.False(opened.Refused);
+            calls.Close(opened.Value);
+        }
+        finally
+        {
+            Directory.Delete(work, recursive: true);
+        }
     }
 
     [Fact]
