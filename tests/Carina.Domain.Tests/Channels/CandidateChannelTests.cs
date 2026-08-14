@@ -29,6 +29,33 @@ public sealed class CandidateChannelTests
     }
 
     [Fact]
+    public void SelectingRecordsWhatChoseItAndWhatWasMeasuredAtThatMoment()
+    {
+        var candidate = Discovered();
+
+        candidate.Select(SelectionSource.AutoSwitch, SignalMeasurement.WithLock(At, 20_500), At);
+
+        Assert.True(candidate.IsSelected);
+        Assert.Equal(SelectionSource.AutoSwitch, candidate.SelectionSource);
+        Assert.Equal(At, candidate.SelectedAt);
+        Assert.Equal(20_500, candidate.SelectionMeasurement?.CnrMilliDecibels);
+    }
+
+    [Fact]
+    public void DroppingASelectionLeavesNothingBehindThatLooksLikeOne()
+    {
+        var candidate = Discovered();
+        candidate.Select(SelectionSource.Manual, SignalMeasurement.WithLock(At, 20_500), At);
+
+        candidate.Deselect();
+
+        Assert.False(candidate.IsSelected);
+        Assert.Null(candidate.SelectionSource);
+        Assert.Null(candidate.SelectedAt);
+        Assert.Null(candidate.SelectionMeasurement);
+    }
+
+    [Fact]
     public void NoPublicSetterOnACandidateCanTurnSelectionOn()
     {
         Assert.DoesNotContain(

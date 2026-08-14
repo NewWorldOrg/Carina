@@ -116,6 +116,22 @@ public sealed class CandidateChannel
         };
     }
 
+    public void Select(SelectionSource source, SignalMeasurement? measuredAtSelection, DateTime at)
+    {
+        IsSelected = true;
+        SelectionSource = source;
+        SelectedAt = UtcTimes.Required(at, nameof(at));
+        SelectionMeasurement = measuredAtSelection;
+    }
+
+    public void Deselect()
+    {
+        IsSelected = false;
+        SelectionSource = null;
+        SelectedAt = null;
+        SelectionMeasurement = null;
+    }
+
     public void RecordTuningSuccess(SignalMeasurement measurement, DateTime at)
     {
         ArgumentNullException.ThrowIfNull(measurement);

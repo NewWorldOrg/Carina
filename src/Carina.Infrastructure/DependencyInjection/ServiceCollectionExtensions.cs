@@ -1,8 +1,11 @@
+using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.DriverStatus;
+using Carina.Domain.Scans;
 using Carina.Infrastructure.Configuration;
 using Carina.Infrastructure.Driver;
 using Carina.Infrastructure.Persistence;
+using Carina.Infrastructure.Persistence.Repositories;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -35,6 +38,11 @@ public static class ServiceCollectionExtensions
 
         services.AddDbContext<CarinaDbContext>((provider, options) =>
             options.UseCarinaDatabase(provider.GetRequiredService<IOptions<DatabaseOptions>>().Value.ConnectionString));
+
+        services.AddScoped<IBroadcastServiceRepository, BroadcastServiceRepository>();
+        services.AddScoped<ICandidateChannelRepository, CandidateChannelRepository>();
+        services.AddScoped<ISatelliteTransportStreamRepository, SatelliteTransportStreamRepository>();
+        services.AddScoped<IScanRunRepository, ScanRunRepository>();
 
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IDriverStatusReader, MonitoredDriverStatusReader>();
