@@ -60,6 +60,13 @@ public sealed class DvbPropertyList
         bytes = new byte[count * DvbLayout.PropertyBytes];
     }
 
+    private DvbPropertyList(byte[] records)
+    {
+        bytes = records;
+    }
+
+    public static DvbPropertyList Over(byte[] records) => new(records);
+
     public byte[] Bytes => bytes;
 
     public int Count => bytes.Length / DvbLayout.PropertyBytes;
