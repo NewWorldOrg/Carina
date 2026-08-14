@@ -18,4 +18,6 @@ public enum SessionStopReason
     DeviceFailed = 5,
 
     RecordingFailed = 6,
+
+    Preempted = 7,
 }

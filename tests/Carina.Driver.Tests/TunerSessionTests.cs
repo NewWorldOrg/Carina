@@ -784,6 +784,70 @@ public sealed class TunerSessionTests : IDisposable
         Assert.False(survey.IsTruncated);
     }
 
+    [Fact]
+    public void ASessionWhoseTunerWasTakenIsNeverMistakenForOneThatFinished()
+    {
+        var clock = new ManualTimeProvider(Start);
+        var device = new PacedTunerDevice();
+        using var session = Session(device, clock, Writer());
+
+        session.Start();
+        ReadExactly(device, 2);
+        session.Preempt("a recording took this tuner");
+        WaitForEnd(session);
+
+        Assert.Equal(SessionState.Failed, session.State);
+        Assert.Equal(SessionStopReason.Preempted, session.StopReason);
+        Assert.NotEqual(SessionStopReason.Requested, session.StopReason);
+        Assert.NotNull(session.FailureCause);
+    }
+
+    [Fact]
+    public async Task AReaderWhoseTunerWasTakenIsCutOffAndToldWhatTookIt()
+    {
+        var clock = new ManualTimeProvider(Start);
+        var device = new PacedTunerDevice();
+        using var session = Session(device, clock, Writer());
+
+        var viewer = session.Broadcaster.Subscribe(SubscriberKind.Viewer);
+
+        session.Start();
+        ReadExactly(device, 2);
+        session.Preempt("a recording of another channel took this tuner");
+        WaitForEnd(session);
+
+        var taken = 0;
+        var reading = async () =>
+        {
+            await foreach (var _ in viewer.Reader.ReadAllAsync())
+            {
+                taken++;
+            }
+        };
+
+        var cut = await Record.ExceptionAsync(reading);
+
+        Assert.Equal(2, taken);
+        Assert.NotNull(cut);
+        Assert.Contains("took this tuner", cut.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ASessionThatWasNotToldWhyStillSaysItsStreamIsIncomplete()
+    {
+        var clock = new ManualTimeProvider(Start);
+        var device = new PacedTunerDevice();
+        using var session = Session(device, clock, Writer());
+
+        session.Start();
+        ReadExactly(device, 1);
+        session.Stop(SessionStopReason.Preempted);
+        WaitForEnd(session);
+
+        Assert.Equal(SessionState.Failed, session.State);
+        Assert.Contains("incomplete", session.FailureCause!.Message, StringComparison.Ordinal);
+    }
+
     private static void ReadExactly(PacedTunerDevice device, int chunks)
     {
         device.Allow(chunks);

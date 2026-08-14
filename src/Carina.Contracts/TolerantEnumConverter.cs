@@ -243,6 +243,7 @@ public sealed class SessionStopReasonConverter : TolerantEnumConverter<SessionSt
             SessionStopReason.DrainCapReached => "drainCapReached",
             SessionStopReason.DeviceFailed => "deviceFailed",
             SessionStopReason.RecordingFailed => "recordingFailed",
+            SessionStopReason.Preempted => "preempted",
             _ => "unspecified",
         };
 
@@ -257,6 +258,7 @@ public sealed class SessionStopReasonConverter : TolerantEnumConverter<SessionSt
             "drainCapReached" => SessionStopReason.DrainCapReached,
             "deviceFailed" => SessionStopReason.DeviceFailed,
             "recordingFailed" => SessionStopReason.RecordingFailed,
+            "preempted" => SessionStopReason.Preempted,
             "unspecified" => SessionStopReason.Unspecified,
             _ => null,
         };
