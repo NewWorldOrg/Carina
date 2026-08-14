@@ -47,11 +47,13 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISatelliteTransportStreamRepository, SatelliteTransportStreamRepository>();
         services.AddScoped<IScanRunRepository, ScanRunRepository>();
         services.AddScoped<IChannelScanOrchestrator, ChannelScanOrchestrator>();
+        services.AddScoped<ScanApplier>();
 
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IDriverStatusReader, MonitoredDriverStatusReader>();
         services.AddSingleton<IDriverClient, DriverIpcClient>();
         services.AddSingleton<DriverConnectionMonitor>();
+        services.AddSingleton<ScanRunner>();
         services.AddSingleton<DriverSignalRelay>();
         services.AddSingleton<IDriverSignals>(provider =>
             provider.GetRequiredService<DriverSignalRelay>());

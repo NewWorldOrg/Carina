@@ -52,9 +52,16 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
 
     private DateTime Now => clock.GetUtcNow().UtcDateTime;
 
-    public async Task<ScanOutcome> RunAsync(ScanScope scope, CancellationToken cancellationToken)
+    public Task<ScanOutcome> RunAsync(ScanScope scope, CancellationToken cancellationToken)
+        => RunAsync(scope, UnwatchedScanRun.Instance, cancellationToken);
+
+    public async Task<ScanOutcome> RunAsync(
+        ScanScope scope,
+        IScanRunObserver observer,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(scope);
+        ArgumentNullException.ThrowIfNull(observer);
 
         var greeting = await driver.GetHealthAsync(cancellationToken);
 
@@ -72,6 +79,8 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
         {
             return ScanOutcome.RefusedBecauseOneIsRunning(start.AlreadyRunning);
         }
+
+        observer.Started(run);
 
         using var interruption = new CancellationTokenSource();
         using var subscription = signals.Subscribe(name =>
