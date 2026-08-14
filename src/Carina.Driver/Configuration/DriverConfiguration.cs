@@ -79,7 +79,8 @@ public sealed record DriverConfiguration(
 [JsonSourceGenerationOptions(
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     AllowTrailingCommas = true,
-    ReadCommentHandling = System.Text.Json.JsonCommentHandling.Skip
+    ReadCommentHandling = System.Text.Json.JsonCommentHandling.Skip,
+    WriteIndented = true
 )]
 [JsonSerializable(typeof(DriverConfiguration))]
 internal sealed partial class DriverConfigurationJsonContext : JsonSerializerContext;

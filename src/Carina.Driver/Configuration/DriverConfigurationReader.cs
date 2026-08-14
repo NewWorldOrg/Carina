@@ -345,10 +345,23 @@ public static class DriverConfigurationReader
             problems.Add("tuner.backend: expected 'dvb' or 'fake'.");
         }
 
-        var devices = configuration.Devices ?? [];
+        problems.AddRange(DeviceProblems(configuration.Devices, backend));
+
+        return problems;
+    }
+
+    public static IReadOnlyList<string> DeviceProblems(
+        IReadOnlyList<DeviceSettings>? declared,
+        TunerBackend backend
+    )
+    {
+        var problems = new List<string>();
+        var devices = declared ?? [];
+
         if (devices.Count is 0)
         {
             problems.Add("devices: expected at least one device.");
+
             return problems;
         }
 

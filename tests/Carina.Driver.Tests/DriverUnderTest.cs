@@ -46,6 +46,15 @@ public sealed class DriverUnderTest : IAsyncDisposable
         );
     }
 
+    public static string LedgerIn(string root, DriverConfiguration configuration)
+    {
+        var path = Path.Combine(root, "driver.json");
+
+        File.WriteAllText(path, DriverConfigurationWriter.Serialize(configuration));
+
+        return path;
+    }
+
     public static string NewRoot() =>
         Directory.CreateTempSubdirectory("carina-driver-").FullName;
 
@@ -58,7 +67,13 @@ public sealed class DriverUnderTest : IAsyncDisposable
 
         var root = NewRoot();
         var configuration = ConfigurationIn(root);
-        var built = DriverHost.Create(args ?? [], configuration, reshapeServices);
+        var configurationPath = LedgerIn(root, configuration);
+        var built = DriverHost.Create(
+            args ?? [],
+            configuration,
+            reshapeServices,
+            configurationPath
+        );
 
         Assert.True(built.TryGetHost(out var host), string.Join(" ", built.Problems));
 

@@ -67,7 +67,8 @@ public static class DriverHost
     public static DriverHostResult Create(
         string[] args,
         DriverConfiguration configuration,
-        Action<IServiceCollection>? reshapeServices = null
+        Action<IServiceCollection>? reshapeServices = null,
+        string? configurationPath = null
     )
     {
         var builder = WebApplication.CreateSlimBuilder(args);
@@ -112,6 +113,7 @@ public static class DriverHost
         builder.Services.AddSingleton(DriverGreeting.ForThisProcess());
         builder.Services.AddSingleton<ITunerDeviceFactory, TunerDeviceFactory>();
         builder.Services.AddSingleton(_ => TunerDetectors.For(configuration));
+        builder.Services.AddSingleton(_ => new TunerLedgerStore(configuration, configurationPath));
         builder.Services.AddSingleton<IRecordingWriterFactory, RecordingWriterFactory>();
         builder.Services.AddSingleton<DriverEventHub>();
         builder.Services.AddSingleton(provider => new DiagnosticsStore(
