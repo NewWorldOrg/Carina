@@ -55,7 +55,7 @@ public sealed class TunerSessionManagerTests : IDisposable
         {
             SessionId = SessionId.Parse(sessionId),
             Purpose = purpose,
-            Tuning = new TuningRequest(kind, 27, 1024),
+            Tuning = new TuningRequest(kind, 55, 50001),
             DeviceId = deviceId,
             OutputRoot = purpose is SessionPurpose.Recording ? outputRoot : null,
             EndsAt = endsAt ?? (purpose is SessionPurpose.Recording ? Start.AddHours(1) : null),
@@ -538,7 +538,7 @@ public sealed class TunerSessionManagerTests : IDisposable
                     {
                         SessionId = SessionId.Parse($"s-{index}"),
                         Purpose = SessionPurpose.Live,
-                        Tuning = new TuningRequest(TunerKind.Terrestrial, 27),
+                        Tuning = new TuningRequest(TunerKind.Terrestrial, 55),
                     }
                 );
 
@@ -778,7 +778,7 @@ public sealed class TunerSessionManagerTests : IDisposable
             SessionId = SessionId.Parse("s-9"),
             Purpose = SessionPurpose.Live,
             Tuning = new TuningRequest(TunerKind.Terrestrial, 900, -5),
-            Tune = TuneParams.Terrestrial(27),
+            Tune = TuneParams.Terrestrial(55),
         };
 
         Assert.Equal(SessionRefusal.Rejected, RefusalFor(manager, request));
@@ -795,7 +795,7 @@ public sealed class TunerSessionManagerTests : IDisposable
             SessionId = SessionId.Parse("s-9"),
             Purpose = SessionPurpose.Live,
             Tuning = null!,
-            Tune = TuneParams.Terrestrial(27),
+            Tune = TuneParams.Terrestrial(55),
         };
 
         Assert.Equal(SessionRefusal.Rejected, RefusalFor(manager, request));
@@ -807,7 +807,7 @@ public sealed class TunerSessionManagerTests : IDisposable
     {
         var manager = Manager();
 
-        var tune = TuneParams.Bs(15, 16625);
+        var tune = TuneParams.Bs(15, 50001);
         var request = new StartSessionRequest
         {
             SessionId = SessionId.Parse("s-9"),

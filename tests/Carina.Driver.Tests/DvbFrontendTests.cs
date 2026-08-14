@@ -47,7 +47,7 @@ public sealed class DvbFrontendTests
         var calls = new ScriptedDvbSystemCalls();
         using var frontend = DvbFrontend.Open(calls, Path, DvbAccess.Control);
 
-        frontend.Tune(DvbChannel.Terrestrial(27));
+        frontend.Tune(DvbChannel.Terrestrial(55));
 
         var written = Assert.Single(calls.PropertiesSet);
         Assert.Equal(DvbProperty.Clear, written.PropertyAt(0));
@@ -61,11 +61,11 @@ public sealed class DvbFrontendTests
         using var frontend = DvbFrontend.Open(calls, Path, DvbAccess.Control);
 
         var refusal = Assert.Throws<DvbDeviceException>(
-            () => frontend.Tune(DvbChannel.Terrestrial(27))
+            () => frontend.Tune(DvbChannel.Terrestrial(55))
         );
 
         Assert.Contains(Path, refusal.Message, StringComparison.Ordinal);
-        Assert.Contains("27", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("55", refusal.Message, StringComparison.Ordinal);
         Assert.Contains("errno 19", refusal.Message, StringComparison.Ordinal);
     }
 

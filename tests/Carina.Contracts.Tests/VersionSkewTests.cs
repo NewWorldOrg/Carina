@@ -137,11 +137,11 @@ public sealed class VersionSkewTests
     [Fact]
     public void ATerrestrialTuneReachesADriverThatNeverHeardOfTheTypedShape()
     {
-        var request = AsOlderDriverReadsIt(TuneParams.Terrestrial(27));
+        var request = AsOlderDriverReadsIt(TuneParams.Terrestrial(55));
 
         Assert.NotNull(request);
         Assert.Null(request.Tune);
-        Assert.Equal(27, request.Tuning.PhysicalChannel);
+        Assert.Equal(55, request.Tuning.PhysicalChannel);
         Assert.Empty(request.Validate(Moment));
     }
 
@@ -150,7 +150,7 @@ public sealed class VersionSkewTests
     [InlineData(TuneSystem.IsdbSCs110)]
     public void ASatelliteTuneIsRefusedByADriverThatCannotTellTheTwoApart(TuneSystem system)
     {
-        var tune = system is TuneSystem.IsdbSBs ? TuneParams.Bs(15, 16625) : TuneParams.Cs110(24);
+        var tune = system is TuneSystem.IsdbSBs ? TuneParams.Bs(15, 50001) : TuneParams.Cs110(24);
 
         var request = AsOlderDriverReadsIt(tune);
 
@@ -165,7 +165,7 @@ public sealed class VersionSkewTests
     [Fact]
     public void BothFieldsTravelTogetherAndNameTheSameTune()
     {
-        var tune = TuneParams.Terrestrial(27);
+        var tune = TuneParams.Terrestrial(55);
         var request = new StartSessionRequest
         {
             SessionId = SessionId.Parse("scan-1"),
@@ -175,8 +175,8 @@ public sealed class VersionSkewTests
         };
 
         Assert.Equal(TunerKind.Terrestrial, request.Tuning.Kind);
-        Assert.Equal(27, request.Tuning.PhysicalChannel);
-        Assert.Equal(27, request.Tune?.IsdbT?.PhysicalChannel);
+        Assert.Equal(55, request.Tuning.PhysicalChannel);
+        Assert.Equal(55, request.Tune?.IsdbT?.PhysicalChannel);
         Assert.Empty(request.Validate(Moment));
     }
 

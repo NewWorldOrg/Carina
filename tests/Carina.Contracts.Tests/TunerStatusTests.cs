@@ -82,7 +82,7 @@ public sealed class TunerStatusTests
                 SessionId = SessionId.Parse("scan-1"),
                 Purpose = SessionPurpose.Scan,
                 StartedAt = Moment,
-                Tune = TuneParams.Terrestrial(27),
+                Tune = TuneParams.Terrestrial(55),
             },
         };
 
@@ -93,7 +93,7 @@ public sealed class TunerStatusTests
 
         Assert.NotNull(restored?.CurrentSession);
         Assert.Equal(SessionPurpose.Scan, restored.CurrentSession.Purpose);
-        Assert.Equal(27, restored.CurrentSession.Tune?.IsdbT?.PhysicalChannel);
+        Assert.Equal(55, restored.CurrentSession.Tune?.IsdbT?.PhysicalChannel);
         Assert.Equal(Moment, restored.CurrentSession.StartedAt);
     }
 
@@ -144,8 +144,8 @@ public sealed class TunerStatusTests
         {
             SessionId = SessionId.Parse("scan-1"),
             Purpose = SessionPurpose.Scan,
-            Tuning = TuneParams.Terrestrial(27).ToLegacyRequest(),
-            Tune = TuneParams.Terrestrial(27),
+            Tuning = TuneParams.Terrestrial(55).ToLegacyRequest(),
+            Tune = TuneParams.Terrestrial(55),
         };
 
         Assert.Empty(request.Validate(Moment));
@@ -159,8 +159,8 @@ public sealed class TunerStatusTests
         {
             SessionId = SessionId.Parse("scan-1"),
             Purpose = SessionPurpose.Scan,
-            Tuning = TuneParams.Bs(15, 16625).ToLegacyRequest(),
-            Tune = TuneParams.Bs(15, 16625),
+            Tuning = TuneParams.Bs(15, 50001).ToLegacyRequest(),
+            Tune = TuneParams.Bs(15, 50001),
         };
 
         Assert.Empty(request.Validate(Moment));

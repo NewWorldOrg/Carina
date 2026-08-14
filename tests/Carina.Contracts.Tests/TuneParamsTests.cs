@@ -5,10 +5,10 @@ public sealed class TuneParamsTests
     [Fact]
     public void ATerrestrialTuneNamesItsPhysicalChannel()
     {
-        var tune = TuneParams.Terrestrial(27);
+        var tune = TuneParams.Terrestrial(55);
 
         Assert.Equal(TuneSystem.IsdbT, tune.System);
-        Assert.Equal(27, tune.IsdbT?.PhysicalChannel);
+        Assert.Equal(55, tune.IsdbT?.PhysicalChannel);
         Assert.Null(tune.IsdbSBs);
         Assert.Null(tune.IsdbSCs110);
         Assert.Empty(tune.Validate());
@@ -17,11 +17,11 @@ public sealed class TuneParamsTests
     [Fact]
     public void ABsTuneCarriesTheStreamItExpects()
     {
-        var tune = TuneParams.Bs(15, 16625);
+        var tune = TuneParams.Bs(15, 50001);
 
         Assert.Equal(TuneSystem.IsdbSBs, tune.System);
         Assert.Equal(15, tune.IsdbSBs?.BsChannel);
-        Assert.Equal(16625, tune.IsdbSBs?.Tsid);
+        Assert.Equal(50001, tune.IsdbSBs?.Tsid);
         Assert.Empty(tune.Validate());
     }
 
@@ -134,7 +134,7 @@ public sealed class TuneParamsTests
     [Fact]
     public void OnlyTheArmTheSystemNamesMayBeFilled()
     {
-        var tune = TuneParams.Terrestrial(27) with { IsdbSCs110 = new IsdbSCs110Params(24) };
+        var tune = TuneParams.Terrestrial(55) with { IsdbSCs110 = new IsdbSCs110Params(24) };
 
         Assert.Contains(
             tune.Validate(),
@@ -145,7 +145,7 @@ public sealed class TuneParamsTests
     [Fact]
     public void EachSystemKnowsWhichTunerCanServeIt()
     {
-        Assert.Equal(TunerKind.Terrestrial, TuneParams.Terrestrial(27).Kind);
+        Assert.Equal(TunerKind.Terrestrial, TuneParams.Terrestrial(55).Kind);
         Assert.Equal(TunerKind.Satellite, TuneParams.Bs(15, 0).Kind);
         Assert.Equal(TunerKind.Satellite, TuneParams.Cs110(24).Kind);
         Assert.Equal(TunerKind.Unspecified, new TuneParams().Kind);
@@ -154,10 +154,10 @@ public sealed class TuneParamsTests
     [Fact]
     public void ATerrestrialTuneIsStillUnderstoodByADriverThatOnlyKnowsTheOlderShape()
     {
-        var legacy = TuneParams.Terrestrial(27).ToLegacyRequest();
+        var legacy = TuneParams.Terrestrial(55).ToLegacyRequest();
 
         Assert.Equal(TunerKind.Terrestrial, legacy.Kind);
-        Assert.Equal(27, legacy.PhysicalChannel);
+        Assert.Equal(55, legacy.PhysicalChannel);
         Assert.Null(legacy.ServiceId);
     }
 
@@ -168,7 +168,7 @@ public sealed class TuneParamsTests
         TuneSystem system
     )
     {
-        var tune = system is TuneSystem.IsdbSBs ? TuneParams.Bs(15, 16625) : TuneParams.Cs110(24);
+        var tune = system is TuneSystem.IsdbSBs ? TuneParams.Bs(15, 50001) : TuneParams.Cs110(24);
 
         var legacy = tune.ToLegacyRequest();
 
