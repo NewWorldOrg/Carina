@@ -64,8 +64,8 @@ public sealed class DvbDeviceProbeTests : IDisposable
     }
 
     [Theory]
-    [InlineData("PT3 ISDB-S", DeviceKind.Satellite)]
-    [InlineData("PT3 ISDB-T", DeviceKind.Terrestrial)]
+    [InlineData("Notional NT1 ISDB-S", DeviceKind.Satellite)]
+    [InlineData("Notional NT1 ISDB-T", DeviceKind.Terrestrial)]
     [InlineData("isdbt demodulator", DeviceKind.Terrestrial)]
     public void ATunerThatWillNotEnumerateFallsBackToWhatItCallsItself(
         string name,
@@ -82,7 +82,7 @@ public sealed class DvbDeviceProbeTests : IDisposable
             DeviceKind.Satellite,
             DvbDeviceProbe.KindOf(
                 [DeliverySystem.IsdbTerrestrial, DeliverySystem.IsdbSatellite],
-                "PT3 ISDB-S"
+                "Notional NT1 ISDB-S"
             )
         );
     }
@@ -100,14 +100,14 @@ public sealed class DvbDeviceProbeTests : IDisposable
         var calls = new ScriptedDvbSystemCalls
         {
             DeliverySystems = [DeliverySystem.IsdbSatellite],
-            HardwareName = "PT3 ISDB-S",
+            HardwareName = "Notional NT1 ISDB-S",
         };
         var probe = new DvbDeviceProbe(calls);
 
         var detected = Assert.Single(probe.Inspect(["/dev/dvb/adapter0/frontend0"]));
 
         Assert.Equal("/dev/dvb/adapter0/frontend0", detected.FrontendPath);
-        Assert.Equal("PT3 ISDB-S", detected.Name);
+        Assert.Equal("Notional NT1 ISDB-S", detected.Name);
         Assert.Equal(DeviceKind.Satellite, detected.Kind);
         Assert.Null(detected.Problem);
     }
@@ -172,7 +172,7 @@ public sealed class DvbDeviceProbeTests : IDisposable
         var calls = new ScriptedDvbSystemCalls
         {
             DeliverySystems = [DeliverySystem.IsdbTerrestrial],
-            HardwareName = "PT3 ISDB-T",
+            HardwareName = "Notional NT1 ISDB-T",
         };
         var probe = new DvbDeviceProbe(calls);
 

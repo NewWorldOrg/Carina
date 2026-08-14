@@ -54,12 +54,12 @@ public sealed class TunerDeviceFactoryDvbTests
         var refusal = Assert.Throws<DvbDeviceException>(
             () =>
                 factory.Create(
-                    new DeviceSettings("pt3-0", DeviceKind.Terrestrial, "/dev/video0"),
+                    new DeviceSettings("notional-0", DeviceKind.Terrestrial, "/dev/video0"),
                     new TuningRequest(TunerKind.Terrestrial, 55)
                 )
         );
 
-        Assert.Contains("pt3-0", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("notional-0", refusal.Message, StringComparison.Ordinal);
         Assert.Contains("/dev/dvb/", refusal.Message, StringComparison.Ordinal);
         Assert.Empty(calls.Opened);
     }
@@ -86,7 +86,7 @@ public sealed class TunerDeviceFactoryDvbTests
         var factory = TunerDeviceFactory.Using(Configured(TunerBackend.Dvb), clock, calls);
 
         using var device = factory.Create(
-            new DeviceSettings("pt3-2", DeviceKind.Satellite, "/dev/dvb/adapter2/frontend0"),
+            new DeviceSettings("notional-2", DeviceKind.Satellite, "/dev/dvb/adapter2/frontend0"),
             new TuningRequest(TunerKind.Satellite, 1)
         );
 
@@ -101,7 +101,7 @@ public sealed class TunerDeviceFactoryDvbTests
 
         using var device = factory.Create(
             new DeviceSettings(
-                "pt3-2",
+                "notional-2",
                 DeviceKind.Satellite,
                 "/dev/dvb/adapter2/frontend0",
                 LnbPower: true
@@ -147,7 +147,7 @@ public sealed class TunerDeviceFactoryDvbTests
         new(null, null, 0, new TunerSettings(backend), null);
 
     private static DeviceSettings Terrestrial() =>
-        new("pt3-0", DeviceKind.Terrestrial, "/dev/dvb/adapter0/frontend0");
+        new("notional-0", DeviceKind.Terrestrial, "/dev/dvb/adapter0/frontend0");
 
     private static (ScriptedDvbSystemCalls Calls, ManualTimeProvider Clock) Ready()
     {
