@@ -45,6 +45,10 @@ public static class DriverConfigurationReader
     private const int MinLiveSessionMinutes = 1;
     private const int MaxLiveSessionMinutes = 1440;
     private const int MaxNameLength = 64;
+    private const int MinSignalQualitySeconds = 1;
+    private const int MaxSignalQualitySeconds = 3600;
+    private const int MinDemuxBufferBytes = 1024 * 1024;
+    private const int MaxDemuxBufferBytes = 64 * 1024 * 1024;
 
     public static DriverConfigurationResult ReadFile(
         string? path,
@@ -218,7 +222,12 @@ public static class DriverConfigurationReader
         "devices",
     ];
 
-    private static readonly string[] KnownTunerKeys = ["backend"];
+    private static readonly string[] KnownTunerKeys =
+    [
+        "backend",
+        "signalQualitySeconds",
+        "demuxBufferBytes",
+    ];
 
     private static readonly string[] KnownOutputRootKeys = ["name", "path"];
 
@@ -360,7 +369,35 @@ public static class DriverConfigurationReader
             problems.Add("tuner.backend: expected 'dvb' or 'fake'.");
         }
 
+        problems.AddRange(TunerProblems(configuration.Tuner));
+
         problems.AddRange(DeviceProblems(configuration.Devices, backend));
+
+        return problems;
+    }
+
+    private static IReadOnlyList<string> TunerProblems(TunerSettings? tuner)
+    {
+        if (tuner is null)
+        {
+            return [];
+        }
+
+        var problems = new List<string>();
+
+        if (tuner.SignalQualitySeconds is < MinSignalQualitySeconds or > MaxSignalQualitySeconds)
+        {
+            problems.Add(
+                $"tuner.signalQualitySeconds: expected {MinSignalQualitySeconds} to {MaxSignalQualitySeconds}, got {tuner.SignalQualitySeconds}."
+            );
+        }
+
+        if (tuner.DemuxBufferBytes is < MinDemuxBufferBytes or > MaxDemuxBufferBytes)
+        {
+            problems.Add(
+                $"tuner.demuxBufferBytes: expected {MinDemuxBufferBytes} to {MaxDemuxBufferBytes}, got {tuner.DemuxBufferBytes}."
+            );
+        }
 
         return problems;
     }

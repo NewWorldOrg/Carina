@@ -33,7 +33,7 @@ public sealed class TunerLedgerStoreTests : IDisposable
             "/run/carina/driver.sock",
             [new OutputRootSettings("primary", "/srv/recordings")],
             6,
-            new TunerSettings(TunerBackend.Dvb),
+            new TunerSettings(TunerBackend.Dvb, 30, 8 * 1024 * 1024),
             [
                 new DeviceSettings(
                     "adapter0.frontend0",
@@ -174,6 +174,11 @@ public sealed class TunerLedgerStoreTests : IDisposable
             (configuration.OutputRoots ?? []).Select(rootSetting => rootSetting.Name),
             (written.OutputRoots ?? []).Select(rootSetting => rootSetting.Name)
         );
+        Assert.Equal(
+            configuration.Tuner?.SignalQualitySeconds,
+            written.Tuner?.SignalQualitySeconds
+        );
+        Assert.Equal(configuration.Tuner?.DemuxBufferBytes, written.Tuner?.DemuxBufferBytes);
     }
 
     [Fact]

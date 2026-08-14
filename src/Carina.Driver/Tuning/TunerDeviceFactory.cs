@@ -37,7 +37,11 @@ public sealed class TunerDeviceFactory : ITunerDeviceFactory
         backend = configuration.Tuner?.Backend ?? TunerBackend.Unspecified;
         this.time = time;
         this.systemCalls = systemCalls;
-        settings = DvbTunerSettings.Default;
+        settings = DvbTunerSettings.Default with
+        {
+            DemuxBufferBytes =
+                configuration.Tuner?.DemuxBufferBytes ?? TunerSettings.DefaultDemuxBufferBytes,
+        };
     }
 
     public static TunerDeviceFactory Using(
