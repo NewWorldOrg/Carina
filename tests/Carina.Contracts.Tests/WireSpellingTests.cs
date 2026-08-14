@@ -7,6 +7,7 @@ public sealed class WireSpellingTests
     [InlineData(SessionPurpose.Recording, "recording")]
     [InlineData(SessionPurpose.Live, "live")]
     [InlineData(SessionPurpose.Survey, "survey")]
+    [InlineData(SessionPurpose.Scan, "scan")]
     public void SessionPurposeIsSpelledThisWay(SessionPurpose value, string wire)
     {
         AssertRoundTrip(value, wire, DriverJson.Context.SessionPurpose);
@@ -38,21 +39,42 @@ public sealed class WireSpellingTests
     }
 
     [Theory]
-    [InlineData(TunerKind.Unspecified, "unspecified")]
-    [InlineData(TunerKind.Terrestrial, "terrestrial")]
-    [InlineData(TunerKind.Satellite, "satellite")]
-    public void TunerKindIsSpelledThisWay(TunerKind value, string wire)
-    {
-        AssertRoundTrip(value, wire, DriverJson.Context.TunerKind);
-    }
-
-    [Theory]
     [InlineData(SignalLock.Unspecified, "unspecified")]
     [InlineData(SignalLock.NotLocked, "notLocked")]
     [InlineData(SignalLock.Locked, "locked")]
     public void SignalLockIsSpelledThisWay(SignalLock value, string wire)
     {
         AssertRoundTrip(value, wire, DriverJson.Context.SignalLock);
+    }
+
+    [Theory]
+    [InlineData(TunerHealthLevel.Unspecified, "unspecified")]
+    [InlineData(TunerHealthLevel.Healthy, "healthy")]
+    [InlineData(TunerHealthLevel.Degraded, "degraded")]
+    [InlineData(TunerHealthLevel.Faulted, "faulted")]
+    public void TunerHealthLevelIsSpelledThisWay(TunerHealthLevel value, string wire)
+    {
+        AssertRoundTrip(value, wire, DriverJson.Context.TunerHealthLevel);
+    }
+
+    [Theory]
+    [InlineData(DeviceDetection.Unspecified, "unspecified")]
+    [InlineData(DeviceDetection.Detected, "detected")]
+    [InlineData(DeviceDetection.Busy, "busy")]
+    [InlineData(DeviceDetection.PermissionDenied, "permissionDenied")]
+    [InlineData(DeviceDetection.Unreadable, "unreadable")]
+    public void DeviceDetectionIsSpelledThisWay(DeviceDetection value, string wire)
+    {
+        AssertRoundTrip(value, wire, DriverJson.Context.DeviceDetection);
+    }
+
+    [Theory]
+    [InlineData(TunerKind.Unspecified, "unspecified")]
+    [InlineData(TunerKind.Terrestrial, "terrestrial")]
+    [InlineData(TunerKind.Satellite, "satellite")]
+    public void TunerKindIsSpelledThisWay(TunerKind value, string wire)
+    {
+        AssertRoundTrip(value, wire, DriverJson.Context.TunerKind);
     }
 
     [Theory]
@@ -154,7 +176,6 @@ public sealed class WireSpellingTests
         Assert.Null(DriverCapabilities.MetricIn("signalQuality."));
         Assert.Null(DriverCapabilities.MetricIn("recording"));
     }
-
 
     private static void AssertRoundTrip<T>(
         T value,

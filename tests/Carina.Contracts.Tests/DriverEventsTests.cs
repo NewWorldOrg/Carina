@@ -10,6 +10,9 @@ public sealed class DriverEventsTests
         "sessions",
         "draining",
         "diagnostics",
+        "sessionTuned",
+        "sessionLockLost",
+        "tunerHealthChanged",
     ];
 
     [Fact]
@@ -27,9 +30,21 @@ public sealed class DriverEventsTests
         );
     }
 
+    [Fact]
+    public void TheNamesTheFoundationAgreedComeFirstAndKeepTheirPlace()
+    {
+        Assert.Equal(
+            new[] { "tuners", "sessions", "draining", "diagnostics" },
+            DriverEvents.All.Take(4)
+        );
+    }
+
     [Theory]
     [InlineData("tuners")]
     [InlineData("draining")]
+    [InlineData("sessionTuned")]
+    [InlineData("sessionLockLost")]
+    [InlineData("tunerHealthChanged")]
     public void KnownNamesAreRecognised(string name)
     {
         Assert.True(DriverEvents.IsKnown(name));

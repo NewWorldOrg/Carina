@@ -52,6 +52,7 @@ public sealed class SessionPurposeConverter : TolerantEnumConverter<SessionPurpo
             SessionPurpose.Recording => "recording",
             SessionPurpose.Live => "live",
             SessionPurpose.Survey => "survey",
+            SessionPurpose.Scan => "scan",
             _ => "unspecified",
         };
 
@@ -61,6 +62,7 @@ public sealed class SessionPurposeConverter : TolerantEnumConverter<SessionPurpo
             "recording" => SessionPurpose.Recording,
             "live" => SessionPurpose.Live,
             "survey" => SessionPurpose.Survey,
+            "scan" => SessionPurpose.Scan,
             "unspecified" => SessionPurpose.Unspecified,
             _ => null,
         };
@@ -150,6 +152,52 @@ public sealed class TunerStateConverter : TolerantEnumConverter<TunerState>
             "disabled" => TunerState.Disabled,
             "faulted" => TunerState.Faulted,
             "unspecified" => TunerState.Unspecified,
+            _ => null,
+        };
+}
+
+public sealed class TunerHealthLevelConverter : TolerantEnumConverter<TunerHealthLevel>
+{
+    protected override string NameOf(TunerHealthLevel value) =>
+        value switch
+        {
+            TunerHealthLevel.Healthy => "healthy",
+            TunerHealthLevel.Degraded => "degraded",
+            TunerHealthLevel.Faulted => "faulted",
+            _ => "unspecified",
+        };
+
+    protected override TunerHealthLevel? ValueOf(string name) =>
+        name switch
+        {
+            "healthy" => TunerHealthLevel.Healthy,
+            "degraded" => TunerHealthLevel.Degraded,
+            "faulted" => TunerHealthLevel.Faulted,
+            "unspecified" => TunerHealthLevel.Unspecified,
+            _ => null,
+        };
+}
+
+public sealed class DeviceDetectionConverter : TolerantEnumConverter<DeviceDetection>
+{
+    protected override string NameOf(DeviceDetection value) =>
+        value switch
+        {
+            DeviceDetection.Detected => "detected",
+            DeviceDetection.Busy => "busy",
+            DeviceDetection.PermissionDenied => "permissionDenied",
+            DeviceDetection.Unreadable => "unreadable",
+            _ => "unspecified",
+        };
+
+    protected override DeviceDetection? ValueOf(string name) =>
+        name switch
+        {
+            "detected" => DeviceDetection.Detected,
+            "busy" => DeviceDetection.Busy,
+            "permissionDenied" => DeviceDetection.PermissionDenied,
+            "unreadable" => DeviceDetection.Unreadable,
+            "unspecified" => DeviceDetection.Unspecified,
             _ => null,
         };
 }

@@ -12,6 +12,8 @@ public static class DriverEndpoints
 
     public const string Events = "/events";
 
+    public const string DevicesDetected = "/devices/detected";
+
     public const string SubscriberQuery = "as";
 
     public const string ViewerSubscriber = "viewer";
@@ -23,6 +25,14 @@ public static class DriverEndpoints
 
     public static string SessionStream(SessionId sessionId) =>
         $"{Sessions}/{Segment(sessionId)}/stream";
+
+    public static string Tuner(string deviceId) =>
+        WireName.IsUsable(deviceId)
+            ? $"{Tuners}/{deviceId}"
+            : throw new ArgumentException(
+                $"A device id is {WireName.Description}; there is no path for '{deviceId}'.",
+                nameof(deviceId)
+            );
 
     private static string Segment(SessionId sessionId) =>
         sessionId.Value
@@ -38,5 +48,6 @@ public static class DriverEndpoints
         Sessions,
         Diagnostics,
         Events,
+        DevicesDetected,
     ];
 }

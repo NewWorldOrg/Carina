@@ -102,7 +102,7 @@ public sealed class DriverJsonTests
         );
 
         Assert.Equal(
-            """{"kind":"satellite","state":"faulted","sessionId":null,"detail":"kind mismatch","deviceId":"adapter2"}""",
+            """{"kind":"satellite","state":"faulted","sessionId":null,"detail":"kind mismatch","deviceId":"adapter2","health":null,"signalQuality":null,"currentSession":null}""",
             json
         );
     }
@@ -141,7 +141,7 @@ public sealed class DriverJsonTests
     public void TunerListIsABareArray()
     {
         Assert.Equal(
-            """[{"kind":"terrestrial","state":"idle","sessionId":null,"detail":null,"deviceId":"adapter0"}]""",
+            """[{"kind":"terrestrial","state":"idle","sessionId":null,"detail":null,"deviceId":"adapter0","health":null,"signalQuality":null,"currentSession":null}]""",
             DriverJson.Serialize<IReadOnlyList<TunerSnapshot>>(
                 [new TunerSnapshot("adapter0", TunerKind.Terrestrial, TunerState.Idle)]
             )
