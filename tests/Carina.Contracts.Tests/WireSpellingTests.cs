@@ -158,6 +158,7 @@ public sealed class WireSpellingTests
         Assert.Equal("descrambling", DriverCapabilities.Descrambling);
         Assert.Equal("signalQuality", DriverCapabilities.SignalQuality);
         Assert.Equal("liveTunerToggle", DriverCapabilities.LiveTunerToggle);
+        Assert.Equal("typedTuning", DriverCapabilities.TypedTuning);
     }
 
     [Fact]

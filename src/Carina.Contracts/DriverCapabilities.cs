@@ -14,6 +14,8 @@ public static class DriverCapabilities
 
     public const string LiveTunerToggle = "liveTunerToggle";
 
+    public const string TypedTuning = "typedTuning";
+
     public const string SignalQualityMetricPrefix = "signalQuality.";
 
     public static string SignalQualityMetric(string metric) =>

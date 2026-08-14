@@ -36,6 +36,39 @@ public sealed class DriverApiTests
         Assert.Equal(DriverProtocol.Version, hello.ProtocolVersion);
         Assert.True(hello.Supports(DriverCapabilities.Recording));
         Assert.True(hello.Supports(DriverCapabilities.Live));
+        Assert.False(hello.Supports(DriverCapabilities.TypedTuning));
+    }
+
+    [Fact]
+    public async Task ATuneThisDriverIsTooOldToServeIsNotAnsweredAsABadRequest()
+    {
+        await using var driver = await DriverUnderTest.Start();
+        using var client = driver.Client();
+
+        var tune = TuneParams.Bs(15, 16625);
+        var request = DriverUnderTest.Live("older-driver") with
+        {
+            Tuning = tune.ToLegacyRequest(),
+            Tune = tune,
+        };
+
+        using var refused = await client.PostAsync(
+            DriverEndpoints.Sessions,
+            DriverUnderTest.Body(request),
+            Soon()
+        );
+
+        Assert.Equal(HttpStatusCode.NotImplemented, refused.StatusCode);
+        Assert.NotEqual(HttpStatusCode.BadRequest, refused.StatusCode);
+
+        var problem = await DriverUnderTest.Read(refused, DriverJson.Context.DriverProblem);
+
+        Assert.NotNull(problem);
+        Assert.Equal("capabilityMissing", problem.Title);
+        Assert.Contains(
+            problem.Problems,
+            detail => detail.Contains(DriverCapabilities.TypedTuning, StringComparison.Ordinal)
+        );
     }
 
     [Fact]

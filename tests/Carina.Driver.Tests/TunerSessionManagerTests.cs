@@ -819,8 +819,20 @@ public sealed class TunerSessionManagerTests : IDisposable
         var start = manager.Begin(request);
 
         Assert.False(start.TryGetSession(out _));
+        Assert.Equal(SessionRefusal.CapabilityMissing, start.Refusal);
+        Assert.NotEqual(SessionRefusal.Rejected, start.Refusal);
         Assert.Contains("isdbSBs", start.Detail, StringComparison.Ordinal);
+        Assert.Contains(DriverCapabilities.TypedTuning, start.Detail, StringComparison.Ordinal);
         Assert.DoesNotContain("no enabled device", start.Detail, StringComparison.Ordinal);
         Assert.Empty(manager.Sessions);
+    }
+
+    [Fact]
+    public void ADriverThatCannotReadTypedParametersDoesNotClaimThatItCan()
+    {
+        Assert.DoesNotContain(
+            DriverCapabilities.TypedTuning,
+            Carina.Driver.Ipc.DriverGreeting.Capabilities
+        );
     }
 }
