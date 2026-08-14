@@ -7,7 +7,7 @@ mode="${1:-}"
 driver_roots=(src/Carina.Driver)
 app_roots=(src/Carina.Api src/Carina.Db)
 shared_inputs=(.dockerignore Directory.Build.props Directory.Packages.props Dockerfile docker/entrypoint.sh)
-workflow=.github/workflows/ci.yml
+declared_workflows=(.github/workflows/build.yml .github/workflows/image.yml)
 
 fail() {
     echo "FAIL: $*" >&2
@@ -101,7 +101,7 @@ tag_for() {
 check_declared_inputs_exist() {
     local path
 
-    for path in "${shared_inputs[@]}" "${workflow}"; do
+    for path in "${shared_inputs[@]}" "${declared_workflows[@]}"; do
         if [ ! -e "${repo_root}/${path}" ]; then
             fail "declared input '${path}' does not exist; a rename would drop it from the tag inputs without anything failing."
         fi
@@ -191,13 +191,16 @@ check_the_image_build_copies_what_the_stream_hashes() {
 }
 
 check_the_build_takes_no_arguments_the_inputs_miss() {
+    local file
     local offending
 
-    offending="$(grep -n -- '--build-arg' "${repo_root}/${workflow}" || true)"
+    for file in "${declared_workflows[@]}"; do
+        offending="$(grep -n -- '--build-arg' "${repo_root}/${file}" || true)"
 
-    if [ -n "${offending}" ]; then
-        fail "${workflow} passes build arguments the tag inputs cannot see, so two different images could share one tag:"$'\n'"${offending}"
-    fi
+        if [ -n "${offending}" ]; then
+            fail "${file} passes build arguments the tag inputs cannot see, so two different images could share one tag:"$'\n'"${offending}"
+        fi
+    done
 }
 
 probe_file() {
