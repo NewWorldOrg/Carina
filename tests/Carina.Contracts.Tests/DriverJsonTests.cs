@@ -28,7 +28,7 @@ public sealed class DriverJsonTests
             {
                 SessionId = SessionId.Parse("rec-1"),
                 Purpose = SessionPurpose.Recording,
-                Tuning = new TuningRequest(TunerKind.Terrestrial, 27, 1024),
+                Tuning = new TuningRequest(TunerKind.Terrestrial, 200, 50001),
                 DeviceId = "adapter0",
                 OutputRoot = "primary",
                 EndsAt = Moment,
@@ -36,7 +36,7 @@ public sealed class DriverJsonTests
         );
 
         Assert.Equal(
-            """{"sessionId":"rec-1","purpose":"recording","tuning":{"kind":"terrestrial","physicalChannel":27,"serviceId":1024},"deviceId":"adapter0","outputRoot":"primary","endsAt":"2026-08-08T21:04:00+09:00"}""",
+            """{"sessionId":"rec-1","purpose":"recording","tuning":{"kind":"terrestrial","physicalChannel":200,"serviceId":50001},"deviceId":"adapter0","outputRoot":"primary","endsAt":"2026-08-08T21:04:00+09:00"}""",
             json
         );
     }
@@ -184,7 +184,7 @@ public sealed class DriverJsonTests
         {
             SessionId = SessionId.Parse("s-1"),
             Purpose = SessionPurpose.Survey,
-            Tuning = new TuningRequest(TunerKind.Satellite, 15),
+            Tuning = new TuningRequest(TunerKind.Satellite, 212),
         };
 
         var restored = DriverJson.Deserialize(
@@ -209,7 +209,7 @@ public sealed class DriverJsonTests
         Assert.Throws<JsonException>(
             () =>
                 DriverJson.Deserialize(
-                    """{"purpose":"live","tuning":{"kind":"terrestrial","physicalChannel":27}}""",
+                    """{"purpose":"live","tuning":{"kind":"terrestrial","physicalChannel":200}}""",
                     DriverJson.Context.StartSessionRequest
                 )
         );
@@ -219,7 +219,7 @@ public sealed class DriverJsonTests
     public void ARequestMayNotSmuggleAPathThroughTheOutputRoot()
     {
         var request = DriverJson.Deserialize(
-            """{"sessionId":"rec-1","purpose":"recording","tuning":{"kind":"terrestrial","physicalChannel":27},"outputRoot":"/etc","endsAt":"2026-08-08T22:04:00+09:00"}""",
+            """{"sessionId":"rec-1","purpose":"recording","tuning":{"kind":"terrestrial","physicalChannel":200},"outputRoot":"/etc","endsAt":"2026-08-08T22:04:00+09:00"}""",
             DriverJson.Context.StartSessionRequest
         );
 
