@@ -8,7 +8,8 @@ public sealed record TunerDetection(
     string DeviceId,
     IReadOnlyList<DeviceKind> Receives,
     DeviceDetection Detection,
-    string? Detail
+    string? Detail,
+    string? DevicePath = null
 );
 
 public interface ITunerDetector
@@ -36,7 +37,8 @@ public sealed class FakeTunerDetector(DriverConfiguration configuration) : ITune
             receives.Count is 0 ? DeviceDetection.Unreadable : DeviceDetection.Detected,
             receives.Count is 0
                 ? "The configuration does not say what this synthetic tuner receives."
-                : null
+                : null,
+            device.DevicePath
         );
     }
 }

@@ -50,6 +50,21 @@ public static class DriverApi
                 DriverJson.Context.IReadOnlyListDetectedDeviceDto
             );
 
+        var ledger = app.Services.GetRequiredService<TunerLedgerStore>();
+
+        RequestDelegate showLedger = context =>
+            Write(
+                context,
+                StatusCodes.Status200OK,
+                ledger.View(),
+                DriverJson.Context.TunerLedgerDto
+            );
+
+        RequestDelegate saveLedger = context => SaveLedger(context, ledger, detector);
+
+        RequestDelegate toggleTuner = context =>
+            ToggleTuner(context, configuration, manager);
+
         RequestDelegate sessions = context =>
             Write(
                 context,
@@ -86,6 +101,9 @@ public static class DriverApi
         app.MapGet(DriverEndpoints.Health, health);
         app.MapGet(DriverEndpoints.Diagnostics, diagnostics);
         app.MapGet(DriverEndpoints.Tuners, tuners);
+        app.MapPut(DriverEndpoints.Tuners, saveLedger);
+        app.MapGet(DriverEndpoints.TunerLedger, showLedger);
+        app.MapPatch($"{DriverEndpoints.Tuners}/{{id}}", toggleTuner);
         app.MapGet(DriverEndpoints.DevicesDetected, detected);
         app.MapGet(DriverEndpoints.Sessions, sessions);
         app.MapPost(DriverEndpoints.Sessions, startSession);
@@ -185,6 +203,154 @@ public static class DriverApi
         );
     }
 
+    private static async Task SaveLedger(
+        HttpContext context,
+        TunerLedgerStore ledger,
+        ITunerDetector detector
+    )
+    {
+        IReadOnlyList<TunerConfigEntry>? requested;
+
+        try
+        {
+            requested = await context.Request.ReadFromJsonAsync(
+                DriverJson.Context.IReadOnlyListTunerConfigEntry,
+                context.RequestAborted
+            );
+        }
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception error)
+            when (error is JsonException or InvalidOperationException or BadHttpRequestException)
+        {
+            await Problem(
+                context,
+                StatusCodes.Status400BadRequest,
+                "malformedRequest",
+                $"The body is not the JSON this driver reads: {error.Message}"
+            );
+
+            return;
+        }
+
+        if (requested is null)
+        {
+            await Problem(
+                context,
+                StatusCodes.Status400BadRequest,
+                "malformedRequest",
+                "The body was empty; a ledger names every tuner it wants kept."
+            );
+
+            return;
+        }
+
+        var revision = ledger.Save(requested, detector.Detect());
+
+        if (revision.Refusal is not LedgerRefusal.None)
+        {
+            var (status, title) = Outcome(revision.Refusal);
+
+            await Problem(context, status, title, revision.Detail);
+
+            return;
+        }
+
+        await Write(
+            context,
+            StatusCodes.Status200OK,
+            ledger.View(),
+            DriverJson.Context.TunerLedgerDto
+        );
+    }
+
+    private static async Task ToggleTuner(
+        HttpContext context,
+        DriverConfiguration configuration,
+        TunerSessionManager manager
+    )
+    {
+        var deviceId = context.Request.RouteValues["id"] as string ?? string.Empty;
+
+        if (new TunerConfigEntry { DeviceId = deviceId }.Validate() is { Count: > 0 } malformed)
+        {
+            await Problem(
+                context,
+                StatusCodes.Status400BadRequest,
+                "badDeviceId",
+                string.Join(" ", malformed)
+            );
+
+            return;
+        }
+
+        TunerToggleRequest? request;
+
+        try
+        {
+            request = await context.Request.ReadFromJsonAsync(
+                DriverJson.Context.TunerToggleRequest,
+                context.RequestAborted
+            );
+        }
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception error)
+            when (error is JsonException or InvalidOperationException or BadHttpRequestException)
+        {
+            await Problem(
+                context,
+                StatusCodes.Status400BadRequest,
+                "malformedRequest",
+                $"The body is not the JSON this driver reads: {error.Message}"
+            );
+
+            return;
+        }
+
+        var problems = request?.Validate() ?? ["disabled: the body was empty."];
+
+        if (problems.Count > 0)
+        {
+            await Problem(
+                context,
+                StatusCodes.Status400BadRequest,
+                "rejected",
+                string.Join(" ", problems)
+            );
+
+            return;
+        }
+
+        if (!manager.Turn(deviceId, request!.Disabled!.Value))
+        {
+            await NoSuchTuner(context, deviceId);
+
+            return;
+        }
+
+        var tuners = SessionViews.Tuners(configuration, manager);
+
+        await Write(
+            context,
+            StatusCodes.Status200OK,
+            tuners.First(tuner => string.Equals(tuner.DeviceId, deviceId, StringComparison.Ordinal)),
+            DriverJson.Context.TunerSnapshot
+        );
+    }
+
+    private static Task NoSuchTuner(HttpContext context, string deviceId) =>
+        Problem(
+            context,
+            StatusCodes.Status404NotFound,
+            "noSuchTuner",
+            $"This driver holds no tuner called '{deviceId}'."
+        );
+
     private static async Task ShowSession(
         HttpContext context,
         TunerSessionManager manager,
@@ -273,6 +439,22 @@ public static class DriverApi
             DriverJson.Context.SessionSnapshot
         );
     }
+
+    private static (int Status, string Title) Outcome(LedgerRefusal refusal) =>
+        refusal switch
+        {
+            LedgerRefusal.Empty => (StatusCodes.Status400BadRequest, "emptyLedger"),
+            LedgerRefusal.Malformed => (StatusCodes.Status400BadRequest, "rejected"),
+            LedgerRefusal.UnknownDevice => (
+                StatusCodes.Status400BadRequest,
+                "unknownDevice"
+            ),
+            LedgerRefusal.UndeterminedKind => (
+                StatusCodes.Status409Conflict,
+                "undeterminedKind"
+            ),
+            _ => (StatusCodes.Status503ServiceUnavailable, "ledgerUnwritable"),
+        };
 
     private static (int Status, string Title) Outcome(SessionRefusal refusal) =>
         refusal switch

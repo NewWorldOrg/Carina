@@ -33,6 +33,9 @@ public sealed class TunerSessionManager(
     private readonly ConcurrentDictionary<string, string> faultedDevices = new(
         StringComparer.Ordinal
     );
+    private readonly ConcurrentDictionary<string, bool> toggledDevices = new(
+        StringComparer.Ordinal
+    );
     private readonly ConcurrentQueue<TunerSession> ended = new();
     private readonly TimeSpan drainCap = TimeSpan.FromHours(
         Math.Max(0, configuration.ShutdownGraceHours)
@@ -295,11 +298,13 @@ public sealed class TunerSessionManager(
                 return false;
             }
 
-            if (!candidate.Enabled)
+            if (!IsEnabled(candidate))
             {
                 refusal = SessionStart.Refused(
                     SessionRefusal.DisabledDevice,
-                    $"The device '{named}' is disabled."
+                    IsClaimed(named)
+                        ? $"The device '{named}' is being taken out of service and is finishing the session it holds."
+                        : $"The device '{named}' is disabled."
                 );
 
                 return false;
@@ -341,7 +346,7 @@ public sealed class TunerSessionManager(
         }
 
         var usable = declared
-            .Where(entry => entry.Enabled && Matches(entry.Kind, request.Tuning.Kind))
+            .Where(entry => IsEnabled(entry) && Matches(entry.Kind, request.Tuning.Kind))
             .ToArray();
 
         if (usable.Length is 0)
@@ -586,6 +591,35 @@ public sealed class TunerSessionManager(
     }
 
     public bool IsClaimed(string deviceId) => claimedDevices.ContainsKey(deviceId);
+
+    public bool IsEnabled(DeviceSettings device) =>
+        device.Id is { } deviceId && toggledDevices.TryGetValue(deviceId, out var enabled)
+            ? enabled
+            : device.Enabled;
+
+    public bool IsToggled(DeviceSettings device) =>
+        device.Id is { } deviceId
+        && toggledDevices.TryGetValue(deviceId, out var enabled)
+        && enabled != device.Enabled;
+
+    public bool Turn(string deviceId, bool disabled)
+    {
+        var device = (configuration.Devices ?? []).FirstOrDefault(candidate =>
+            string.Equals(candidate?.Id, deviceId, StringComparison.Ordinal)
+        );
+
+        if (device is null)
+        {
+            return false;
+        }
+
+        toggledDevices[deviceId] = !disabled;
+
+        events?.Signal(DriverEvents.TunerHealthChanged);
+        events?.Signal(DriverEvents.Tuners);
+
+        return true;
+    }
 
     public bool IsFaulted(string deviceId, [NotNullWhen(true)] out string? detail) =>
         faultedDevices.TryGetValue(deviceId, out detail);
