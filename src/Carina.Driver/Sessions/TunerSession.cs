@@ -8,12 +8,18 @@ using Microsoft.Extensions.Logging;
 
 namespace Carina.Driver.Sessions;
 
+public sealed record SignalQualityWatch(
+    TimeSpan Interval,
+    Action<TunerSession, SignalQualitySample>? LockLost = null
+);
+
 public sealed class TunerSession : IDisposable
 {
     public const int DefaultChunkSize = TsPacketReader.PacketLength * 100;
     public const long FaultReportInterval = 1000;
 
     private readonly ITunerDevice device;
+    private readonly SignalQualityReader? quality;
     private readonly IRecordingWriter? recordingWriter;
     private readonly TimeProvider timeProvider;
     private readonly ILogger? logger;
@@ -50,7 +56,8 @@ public sealed class TunerSession : IDisposable
         int chunkSize = DefaultChunkSize,
         ILogger? logger = null,
         string? outputRoot = null,
-        DiagnosticsStore? diagnostics = null
+        DiagnosticsStore? diagnostics = null,
+        SignalQualityWatch? watch = null
     )
     {
         if (endsAt <= startedAt)
@@ -81,6 +88,17 @@ public sealed class TunerSession : IDisposable
                 : TimeSpan.Zero,
             report: RecordFault
         );
+
+        if (watch is not null && device.Quality is { } source)
+        {
+            quality = new SignalQualityReader(
+                source,
+                timeProvider,
+                watch.Interval,
+                sample => ReportLostLock(sample, watch.LockLost),
+                RecordFault
+            );
+        }
     }
 
     public SessionId SessionId { get; }
@@ -146,6 +164,10 @@ public sealed class TunerSession : IDisposable
     public long Resyncs => Interlocked.Read(ref resyncs);
 
     public long DeviceOverflows => device.Overflows;
+
+    public SignalQualitySample? Quality => quality?.Latest;
+
+    public long LockLosses => quality?.LockLosses ?? 0;
 
     public bool Concluded => completion.Task.IsCompleted;
 
@@ -279,6 +301,8 @@ public sealed class TunerSession : IDisposable
                 WriteOut(chunk);
 
                 Measure(chunk);
+
+                quality?.ReadIfDue();
             }
 
             Conclude(ReasonForEnd(token));
@@ -396,6 +420,27 @@ public sealed class TunerSession : IDisposable
         {
             RecordFault(error);
         }
+    }
+
+    private void ReportLostLock(
+        SignalQualitySample sample,
+        Action<TunerSession, SignalQualitySample>? tell
+    )
+    {
+        diagnostics?.Report(
+            DiagnosticReason.TuningLost,
+            $"The frontend serving '{SessionId}' on '{DeviceId}' is no longer locked as of {sample.LockReadAt:O}, so what this session is reading is no longer the channel it asked for.",
+            DeviceId,
+            SessionId
+        );
+
+        logger?.LogWarning(
+            "Session {SessionId} on {DeviceId} lost the lock on its frontend and is still running.",
+            SessionId.Value,
+            DeviceId
+        );
+
+        tell?.Invoke(this, sample);
     }
 
     private void RecordFault(Exception error)

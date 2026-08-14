@@ -25,7 +25,7 @@ public static class LnbPower
             : LnbVoltage.Off;
 }
 
-public sealed class DvbTunerDevice : ITunerDevice
+public sealed class DvbTunerDevice : ITunerDevice, ISignalQualitySource
 {
     private readonly IDvbSystemCalls calls;
     private readonly TimeProvider time;
@@ -58,6 +58,10 @@ public sealed class DvbTunerDevice : ITunerDevice
     }
 
     public long Overflows => Interlocked.Read(ref overflows);
+
+    public ISignalQualitySource? Quality => this;
+
+    public SignalQuality Measure() => frontend.Quality();
 
     public static DvbTunerDevice Open(
         IDvbSystemCalls calls,

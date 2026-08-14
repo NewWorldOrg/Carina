@@ -1,4 +1,6 @@
 using Carina.Driver.Configuration;
+using Carina.Driver.Sessions;
+using Carina.Driver.Tuning;
 using Carina.Driver.Tuning.Dvb;
 
 namespace Carina.Driver.Tests;
@@ -302,6 +304,53 @@ public sealed class DvbTunerDeviceTests
         Assert.Equal(LnbVoltage.Eighteen, LnbPower.For(DeviceKind.Satellite, true));
         Assert.Equal(LnbVoltage.Off, LnbPower.For(DeviceKind.Terrestrial, true));
         Assert.Equal(LnbVoltage.Off, LnbPower.For(DeviceKind.Unspecified, true));
+    }
+
+    [Fact]
+    public void ATunerHoldingAFrontendCanBeAskedForTheQualityOfWhatItIsReceiving()
+    {
+        var (calls, clock) = Ready();
+        calls.AnswerWith(
+            DvbProperty.CarrierToNoise,
+            [new DvbStatisticLayer(StatisticScale.Decibel, 20_500)]
+        );
+        calls.AnswerWith(
+            DvbProperty.PostErrorBitCount,
+            [
+                new DvbStatisticLayer(StatisticScale.Counter, 12),
+                new DvbStatisticLayer(StatisticScale.Counter, 0),
+            ]
+        );
+        calls.AnswerWith(
+            DvbProperty.PostTotalBitCount,
+            [
+                new DvbStatisticLayer(StatisticScale.Counter, 1_000_000),
+                new DvbStatisticLayer(StatisticScale.Counter, 500_000),
+            ]
+        );
+
+        using var device = Open(calls, clock);
+        var quality = Assert.IsAssignableFrom<ISignalQualitySource>(device.Quality).Measure();
+
+        Assert.True(quality.HasLock);
+        Assert.True(quality.CarrierToNoise.TryGetDecibels(out var decibels));
+        Assert.Equal(20.5, decibels, 3);
+        Assert.Equal(2, quality.PostViterbiErrors.Layers.Count);
+    }
+
+    [Fact]
+    public void ATunerTakenOverByAnotherSessionIsStillTheOneThatAnswersForQuality()
+    {
+        var (calls, clock) = Ready();
+        calls.AnswerWith(
+            DvbProperty.CarrierToNoise,
+            [new DvbStatisticLayer(StatisticScale.Decibel, 20_500)]
+        );
+
+        using var device = Open(calls, clock);
+        var leased = new LeasedTunerDevice(device);
+
+        Assert.Same(device.Quality, leased.Quality);
     }
 
     private static (ScriptedDvbSystemCalls Calls, ManualTimeProvider Clock) Ready()

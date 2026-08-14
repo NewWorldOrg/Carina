@@ -96,21 +96,3 @@ public sealed class ScriptedQualitySource(ManualTimeProvider? clock = null) : IS
         return readings.Count > 0 ? readings.Dequeue() : Standing;
     }
 }
-
-public sealed class QualityTunerDevice(ScriptedQualitySource source)
-    : ITunerDevice,
-        ISignalQualitySource
-{
-    private readonly FakeTunerDevice inner = new(55, 50001);
-
-    public long Overflows { get; set; }
-
-    public bool Disposed { get; private set; }
-
-    public byte[] Read(int count, CancellationToken cancellationToken) =>
-        inner.Read(count, cancellationToken);
-
-    public SignalQuality Measure() => source.Measure();
-
-    public void Dispose() => Disposed = true;
-}

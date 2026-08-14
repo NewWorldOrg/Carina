@@ -67,7 +67,11 @@ public sealed class PacedTunerDevice : ITunerDevice
 
     public long Reads => Interlocked.Read(ref reads);
 
-    public long Overflows => 0;
+    public long Overflows { get; set; }
+
+    public ScriptedQualitySource? Signal { get; init; }
+
+    public ISignalQualitySource? Quality => Signal;
 
     public bool Disposed { get; private set; }
 

@@ -8,6 +8,8 @@ public interface ITunerDevice : IDisposable
 {
     long Overflows { get; }
 
+    ISignalQualitySource? Quality => null;
+
     byte[] Read(int count, CancellationToken cancellationToken);
 }
 

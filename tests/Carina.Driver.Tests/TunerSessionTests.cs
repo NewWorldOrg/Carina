@@ -23,7 +23,8 @@ public sealed class TunerSessionTests : IDisposable
         IRecordingWriter? writer = null,
         SessionPurpose purpose = SessionPurpose.Recording,
         TimeSpan? runsFor = null,
-        DiagnosticsStore? diagnostics = null
+        DiagnosticsStore? diagnostics = null,
+        SignalQualityWatch? watch = null
     ) =>
         new(
             SessionId.Parse("s-1"),
@@ -35,7 +36,8 @@ public sealed class TunerSessionTests : IDisposable
             clock,
             writer,
             ChunkSize,
-            diagnostics: diagnostics
+            diagnostics: diagnostics,
+            watch: watch
         );
 
     private RecordingWriter Writer(string name = "s-1") => new(root, SessionId.Parse(name));
@@ -51,6 +53,177 @@ public sealed class TunerSessionTests : IDisposable
         device.Overflows = 3;
 
         Assert.Equal(3, session.DeviceOverflows);
+    }
+
+    [Fact]
+    public void TheQualityIsReadWhileTheSessionRunsAndNotOnlyWhenItWasTuned()
+    {
+        var clock = new ManualTimeProvider(Start);
+        var signal = new ScriptedQualitySource();
+        var device = new PacedTunerDevice { Signal = signal };
+        using var session = Session(device, clock, Writer(), watch: Watch());
+
+        var steps = new Pacer(device);
+
+        session.Start();
+        steps.Read(1);
+
+        Assert.Equal(1, signal.Reads);
+
+        clock.Advance(WatchInterval);
+        steps.Read(1);
+
+        Assert.Equal(2, signal.Reads);
+
+        session.Stop();
+        WaitForEnd(session);
+    }
+
+    [Fact]
+    public void HoweverManyChunksArriveTheQualityIsReadOnlyOncePerInterval()
+    {
+        var clock = new ManualTimeProvider(Start);
+        var signal = new ScriptedQualitySource();
+        var device = new PacedTunerDevice { Signal = signal };
+        using var session = Session(device, clock, Writer(), watch: Watch());
+
+        var steps = new Pacer(device);
+
+        session.Start();
+        steps.Read(6);
+
+        Assert.Equal(6, device.Reads);
+        Assert.Equal(1, signal.Reads);
+
+        session.Stop();
+        WaitForEnd(session);
+    }
+
+    [Fact]
+    public void ASessionWhoseFrontendLosesTheLockSaysSoWhileItIsStillRunning()
+    {
+        var clock = new ManualTimeProvider(Start);
+        var signal = new ScriptedQualitySource().Answer(
+            Readings.Measured(),
+            Readings.WithoutLock()
+        );
+        var device = new PacedTunerDevice { Signal = signal };
+        var told = new List<SignalQualitySample>();
+        using var session = Session(
+            device,
+            clock,
+            Writer(),
+            watch: Watch((_, sample) => told.Add(sample))
+        );
+
+        var steps = new Pacer(device);
+
+        session.Start();
+        steps.Read(1);
+        clock.Advance(WatchInterval);
+        steps.Read(1);
+
+        Assert.Single(told);
+        Assert.Equal(1, session.LockLosses);
+        Assert.Equal(SessionState.Active, session.State);
+
+        session.Stop();
+        WaitForEnd(session);
+    }
+
+    [Fact]
+    public void ARecordingThatLostTheLockIsStillWritingWhenTheLossIsReported()
+    {
+        var clock = new ManualTimeProvider(Start);
+        var signal = new ScriptedQualitySource().Answer(
+            Readings.Measured(),
+            Readings.WithoutLock()
+        );
+        var device = new PacedTunerDevice { Signal = signal };
+        using var session = Session(device, clock, Writer(), watch: Watch());
+
+        var steps = new Pacer(device);
+
+        session.Start();
+        steps.Read(1);
+        clock.Advance(WatchInterval);
+        steps.Read(2);
+
+        Assert.Equal(1, session.LockLosses);
+        Assert.Equal(3 * ChunkSize, session.BytesRecorded);
+
+        session.Stop();
+        WaitForEnd(session);
+    }
+
+    [Fact]
+    public void ALostLockIsWrittenIntoTheLedgerRatherThanOnlyIntoTheLog()
+    {
+        var clock = new ManualTimeProvider(Start);
+        var diagnostics = new DiagnosticsStore(clock);
+        var signal = new ScriptedQualitySource().Answer(Readings.WithoutLock());
+        var device = new PacedTunerDevice { Signal = signal };
+        using var session = Session(
+            device,
+            clock,
+            Writer(),
+            diagnostics: diagnostics,
+            watch: Watch()
+        );
+
+        var steps = new Pacer(device);
+
+        session.Start();
+        steps.Read(1);
+
+        var reported = Assert.Single(diagnostics.Snapshot());
+
+        Assert.Equal(DiagnosticReason.TuningLost, reported.Reason);
+        Assert.Equal("adapter0", reported.DeviceId);
+        Assert.Equal(SessionId.Parse("s-1"), reported.SessionId);
+
+        session.Stop();
+        WaitForEnd(session);
+    }
+
+    [Fact]
+    public void AFrontendThatWillNotAnswerCostsAFaultAndNotTheSession()
+    {
+        var clock = new ManualTimeProvider(Start);
+        var signal = new ScriptedQualitySource { RefuseFromReadNumber = 1 };
+        var device = new PacedTunerDevice { Signal = signal };
+        using var session = Session(device, clock, Writer(), watch: Watch());
+
+        var steps = new Pacer(device);
+
+        session.Start();
+        steps.Read(1);
+
+        Assert.Equal(SessionState.Active, session.State);
+        Assert.True(session.FaultCount > 0);
+        Assert.False(session.Quality?.Readable);
+
+        session.Stop();
+        WaitForEnd(session);
+    }
+
+    [Fact]
+    public void ASessionOnATunerThatMeasuresNothingReadsNoQualityAtAll()
+    {
+        var clock = new ManualTimeProvider(Start);
+        var device = new PacedTunerDevice();
+        using var session = Session(device, clock, Writer(), watch: Watch());
+
+        var steps = new Pacer(device);
+
+        session.Start();
+        steps.Read(2);
+
+        Assert.Null(session.Quality);
+        Assert.Equal(0, session.LockLosses);
+
+        session.Stop();
+        WaitForEnd(session);
     }
 
     private static void WaitForEnd(TunerSession session) =>
@@ -846,6 +1019,24 @@ public sealed class TunerSessionTests : IDisposable
 
         Assert.Equal(SessionState.Failed, session.State);
         Assert.Contains("incomplete", session.FailureCause!.Message, StringComparison.Ordinal);
+    }
+
+    private static readonly TimeSpan WatchInterval = TimeSpan.FromSeconds(10);
+
+    private static SignalQualityWatch Watch(
+        Action<TunerSession, SignalQualitySample>? lockLost = null
+    ) => new(WatchInterval, lockLost);
+
+    private sealed class Pacer(PacedTunerDevice device)
+    {
+        private int taken;
+
+        public void Read(int chunks)
+        {
+            device.Allow(chunks);
+            taken += chunks;
+            device.AwaitParkedBefore(taken + 1);
+        }
     }
 
     private static void ReadExactly(PacedTunerDevice device, int chunks)
