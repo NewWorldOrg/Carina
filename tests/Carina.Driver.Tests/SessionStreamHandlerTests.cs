@@ -103,7 +103,7 @@ public sealed class SessionStreamHandlerTests : IDisposable
             {
                 SessionId = SessionId.Parse(sessionId),
                 Purpose = SessionPurpose.Live,
-                Tuning = new TuningRequest(TunerKind.Terrestrial, 200),
+                Tuning = new TuningRequest(TunerKind.Terrestrial, 55),
             }
         );
 

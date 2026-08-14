@@ -71,7 +71,7 @@ public sealed class LinuxDvbSystemCallsTests
 
         try
         {
-            var properties = DvbTuning.PropertiesFor(DvbChannel.Terrestrial(27));
+            var properties = DvbTuning.PropertiesFor(DvbChannel.Terrestrial(55));
             var set = calls.SetProperties(opened.Value, properties.Bytes);
 
             Assert.True(set.Refused);
