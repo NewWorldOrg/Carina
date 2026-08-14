@@ -6,6 +6,7 @@ using Carina.Driver.Configuration;
 using Carina.Driver.Diagnostics;
 using Carina.Driver.Events;
 using Carina.Driver.Sessions;
+using Carina.Driver.Tuning;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -23,6 +24,7 @@ public static class DriverApi
         var hello = app.Services.GetRequiredService<DriverHello>();
         var hub = app.Services.GetRequiredService<DriverEventHub>();
         var diagnosticsStore = app.Services.GetRequiredService<DiagnosticsStore>();
+        var detector = app.Services.GetRequiredService<ITunerDetector>();
 
         RequestDelegate health = context =>
             Write(
@@ -38,6 +40,14 @@ public static class DriverApi
                 StatusCodes.Status200OK,
                 SessionViews.Tuners(configuration, manager),
                 DriverJson.Context.IReadOnlyListTunerSnapshot
+            );
+
+        RequestDelegate detected = context =>
+            Write(
+                context,
+                StatusCodes.Status200OK,
+                DeviceViews.Detected(detector.Detect()),
+                DriverJson.Context.IReadOnlyListDetectedDeviceDto
             );
 
         RequestDelegate sessions = context =>
@@ -76,6 +86,7 @@ public static class DriverApi
         app.MapGet(DriverEndpoints.Health, health);
         app.MapGet(DriverEndpoints.Diagnostics, diagnostics);
         app.MapGet(DriverEndpoints.Tuners, tuners);
+        app.MapGet(DriverEndpoints.DevicesDetected, detected);
         app.MapGet(DriverEndpoints.Sessions, sessions);
         app.MapPost(DriverEndpoints.Sessions, startSession);
         app.MapGet($"{DriverEndpoints.Sessions}/{{id}}", session);
