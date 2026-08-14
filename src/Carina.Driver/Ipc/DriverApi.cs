@@ -326,7 +326,7 @@ public static class DriverApi
             return;
         }
 
-        if (manager.Turn(deviceId, request!.Disabled!.Value) is TunerToggleOutcome.NoSuchTuner)
+        if (!manager.Turn(deviceId, request!.Disabled!.Value))
         {
             await NoSuchTuner(context, deviceId);
 

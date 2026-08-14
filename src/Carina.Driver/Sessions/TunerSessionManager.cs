@@ -597,7 +597,7 @@ public sealed class TunerSessionManager(
             ? enabled
             : device.Enabled;
 
-    public TunerToggleOutcome Turn(string deviceId, bool disabled)
+    public bool Turn(string deviceId, bool disabled)
     {
         var device = (configuration.Devices ?? []).FirstOrDefault(candidate =>
             string.Equals(candidate?.Id, deviceId, StringComparison.Ordinal)
@@ -605,7 +605,7 @@ public sealed class TunerSessionManager(
 
         if (device is null)
         {
-            return TunerToggleOutcome.NoSuchTuner;
+            return false;
         }
 
         switchedDevices[deviceId] = !disabled;
@@ -613,9 +613,7 @@ public sealed class TunerSessionManager(
         events?.Signal(DriverEvents.TunerHealthChanged);
         events?.Signal(DriverEvents.Tuners);
 
-        return disabled && IsClaimed(deviceId)
-            ? TunerToggleOutcome.Draining
-            : TunerToggleOutcome.Immediate;
+        return true;
     }
 
     public bool IsFaulted(string deviceId, [NotNullWhen(true)] out string? detail) =>
