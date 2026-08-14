@@ -230,6 +230,23 @@ public sealed class WireStabilityTests
     }
 
     [Fact]
+    public void TheProjectionIntoTheOlderFieldIsWireSurfaceBecauseEachProcessCompilesItsOwnCopy()
+    {
+        Assert.Equal(
+            new TuningRequest(TunerKind.Terrestrial, 27),
+            TuneParams.Terrestrial(27).ToLegacyRequest()
+        );
+        Assert.Equal(
+            new TuningRequest(TunerKind.Unspecified, 15),
+            TuneParams.Bs(15, 16625).ToLegacyRequest()
+        );
+        Assert.Equal(
+            new TuningRequest(TunerKind.Unspecified, 24),
+            TuneParams.Cs110(24).ToLegacyRequest()
+        );
+    }
+
+    [Fact]
     public void TheTypedTuneKeepsExactlyTheFieldsItWasGiven()
     {
         Assert.Equal(
