@@ -336,6 +336,34 @@ public sealed class TunerPoolSessionTests : IDisposable
     }
 
     [Fact]
+    public void AConsumerThatCameStraightBackIsNotHandedTheLossesOfTheOneBeforeIt()
+    {
+        var device = new PacedTunerDevice();
+        var manager = Manager(new OneDeviceFactory(device), grace: TimeSpan.FromSeconds(5));
+
+        var first = Started(manager, Request("s-1", SessionPurpose.Live));
+        device.Allow(1);
+        device.AwaitParkedBefore(2);
+        device.Overflows = 3;
+        first.Stop();
+        first.WaitForEnd(Deadlock);
+
+        clock.Advance(TimeSpan.FromSeconds(4));
+
+        var second = Started(manager, Request("s-2", SessionPurpose.Live));
+
+        Assert.Equal(3, first.DeviceOverflows);
+        Assert.Equal(0, second.DeviceOverflows);
+
+        device.Overflows = 5;
+
+        Assert.Equal(2, second.DeviceOverflows);
+
+        second.Stop();
+        second.WaitForEnd(Deadlock);
+    }
+
+    [Fact]
     public void ATunerHeldPastItsGraceIsTunedAgainForTheNextConsumer()
     {
         var factory = new CountingDeviceFactory();

@@ -20,6 +20,7 @@ public sealed class TunerSession : IDisposable
 
     private readonly ITunerDevice device;
     private readonly SignalQualityReader? quality;
+    private readonly long overflowsBefore;
     private readonly IRecordingWriter? recordingWriter;
     private readonly TimeProvider timeProvider;
     private readonly ILogger? logger;
@@ -75,6 +76,7 @@ public sealed class TunerSession : IDisposable
         StartedAt = startedAt;
         endsAtTicks = endsAt.UtcTicks;
         this.device = device;
+        overflowsBefore = device.Overflows;
         this.recordingWriter = recordingWriter;
         this.timeProvider = timeProvider;
         this.chunkSize = chunkSize;
@@ -163,7 +165,7 @@ public sealed class TunerSession : IDisposable
 
     public long Resyncs => Interlocked.Read(ref resyncs);
 
-    public long DeviceOverflows => device.Overflows;
+    public long DeviceOverflows => Math.Max(0, device.Overflows - overflowsBefore);
 
     public SignalQualitySample? Quality => quality?.Latest;
 

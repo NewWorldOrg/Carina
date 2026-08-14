@@ -56,6 +56,19 @@ public sealed class TunerSessionTests : IDisposable
     }
 
     [Fact]
+    public void ASessionOnATunerThatWasAlreadyOverrunCountsOnlyItsOwnLosses()
+    {
+        var device = new ScriptedTunerDevice { Overflows = 5 };
+        using var session = Session(device, new ManualTimeProvider(Start));
+
+        Assert.Equal(0, session.DeviceOverflows);
+
+        device.Overflows = 7;
+
+        Assert.Equal(2, session.DeviceOverflows);
+    }
+
+    [Fact]
     public void TheQualityIsReadWhileTheSessionRunsAndNotOnlyWhenItWasTuned()
     {
         var clock = new ManualTimeProvider(Start);
