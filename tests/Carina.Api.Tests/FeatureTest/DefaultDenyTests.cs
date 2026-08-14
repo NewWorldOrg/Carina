@@ -23,6 +23,20 @@ public sealed class DefaultDenyTests(TestingWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task AWrongMethodOnAKnownPathIsRefusedBeforeRoutingHasAnEndpointToAnswer405About()
+    {
+        using var client = factory.CreateClient();
+
+        using var response = await client.PostAsync(
+            new Uri("/api/driver/status", UriKind.Relative),
+            content: null
+        );
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Empty(await response.Content.ReadAsByteArrayAsync());
+    }
+
+    [Fact]
     public async Task TheDocumentIsHandedOutWithoutCredentialsInDevelopmentBecauseTheClientIsGeneratedFromIt()
     {
         using var client = factory.CreateClient();
