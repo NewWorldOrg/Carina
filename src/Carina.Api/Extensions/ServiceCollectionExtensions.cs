@@ -11,6 +11,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<DriverStatusService>();
         services.AddScoped<TunerLedgerService>();
         services.AddScoped<ScanService>();
+        services.AddScoped<ChannelCatalogService>();
 
         return services;
     }

@@ -94,19 +94,24 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
 
         Assert.Equal(
             [
-                "getDetectedTuners",
-                "getTuners",
-                "putTuners",
-                "patchTuner",
+                "addCandidateChannel",
                 "applyScan",
                 "cancelScan",
-                "getScan",
-                "listScanRuns",
-                "startScan",
-                "getHealth",
+                "deleteCandidateChannel",
+                "getDetectedTuners",
                 "getDriverStatus",
+                "getHealth",
+                "getScan",
+                "getService",
+                "getTuners",
+                "listScanRuns",
+                "listServices",
+                "patchTuner",
+                "putSelectedChannel",
+                "putTuners",
+                "startScan",
             ],
-            named);
+            named.Order(StringComparer.Ordinal).ToArray());
         Assert.Equal(named.Length, named.Distinct(StringComparer.Ordinal).Count());
     }
 
@@ -126,7 +131,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
             .Select(tag => tag!["name"]!.GetValue<string>())
             .ToArray();
 
-        Assert.Equal(["tuners", "health", "driver"], tags);
+        Assert.Equal(["tuners", "services", "health", "driver"], tags);
         Assert.Equal(tags, declared);
         Assert.DoesNotContain(tags, tag => tag.EndsWith("Action", StringComparison.Ordinal));
     }
