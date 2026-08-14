@@ -512,7 +512,7 @@ public sealed class DriverApiTests
                 {
                     SessionId = SessionId.Parse("sideways"),
                     Purpose = SessionPurpose.Live,
-                    Tuning = new TuningRequest(TunerKind.Satellite, 3),
+                    Tuning = new TuningRequest(TunerKind.Satellite, 210),
                 }
             ),
             Soon()

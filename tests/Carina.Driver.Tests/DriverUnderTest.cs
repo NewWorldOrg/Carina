@@ -119,7 +119,7 @@ public sealed class DriverUnderTest : IAsyncDisposable
         {
             SessionId = SessionId.Parse(sessionId),
             Purpose = SessionPurpose.Live,
-            Tuning = new TuningRequest(TunerKind.Terrestrial, 27),
+            Tuning = new TuningRequest(TunerKind.Terrestrial, 200),
             DeviceId = deviceId,
         };
 
@@ -132,7 +132,7 @@ public sealed class DriverUnderTest : IAsyncDisposable
         {
             SessionId = SessionId.Parse(sessionId),
             Purpose = SessionPurpose.Recording,
-            Tuning = new TuningRequest(TunerKind.Terrestrial, 27),
+            Tuning = new TuningRequest(TunerKind.Terrestrial, 200),
             OutputRoot = outputRoot,
             EndsAt = endsAt,
         };

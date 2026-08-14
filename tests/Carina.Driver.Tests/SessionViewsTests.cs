@@ -71,7 +71,7 @@ public sealed class SessionViewsTests : IDisposable
             {
                 SessionId = SessionId.Parse(sessionId),
                 Purpose = SessionPurpose.Live,
-                Tuning = new TuningRequest(kind, 27),
+                Tuning = new TuningRequest(kind, 200),
                 DeviceId = deviceId,
             }
         );

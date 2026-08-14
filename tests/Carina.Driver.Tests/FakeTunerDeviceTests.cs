@@ -11,7 +11,7 @@ public sealed class FakeTunerDeviceTests
     [Fact]
     public void ProducesPacketsAReaderCanRead()
     {
-        var device = new FakeTunerDevice(physicalChannel: 27, serviceId: 1024);
+        var device = new FakeTunerDevice(physicalChannel: 200, serviceId: 50001);
         var reader = new TsPacketReader();
 
         var packets = reader.Read(Read(device, 10));
@@ -23,8 +23,8 @@ public sealed class FakeTunerDeviceTests
     [Fact]
     public void TheSameRequestProducesTheSameBytes()
     {
-        var first = new FakeTunerDevice(27, 1024);
-        var second = new FakeTunerDevice(27, 1024);
+        var first = new FakeTunerDevice(200, 50001);
+        var second = new FakeTunerDevice(200, 50001);
 
         Assert.Equal(Read(first, 20), Read(second, 20));
     }
@@ -32,8 +32,8 @@ public sealed class FakeTunerDeviceTests
     [Fact]
     public void ADifferentRequestProducesADifferentStream()
     {
-        var terrestrial = new FakeTunerDevice(27, 1024);
-        var other = new FakeTunerDevice(21, 1024);
+        var terrestrial = new FakeTunerDevice(200, 50001);
+        var other = new FakeTunerDevice(201, 50001);
 
         Assert.NotEqual(Read(terrestrial, 20), Read(other, 20));
     }
@@ -41,7 +41,7 @@ public sealed class FakeTunerDeviceTests
     [Fact]
     public void ItsContinuityCountersNeverBreak()
     {
-        var device = new FakeTunerDevice(27, 1024);
+        var device = new FakeTunerDevice(200, 50001);
         var reader = new TsPacketReader();
         var tracker = new ContinuityCounterTracker();
 
@@ -61,7 +61,7 @@ public sealed class FakeTunerDeviceTests
     [Fact]
     public void ReadingContinuesWhereTheLastReadStopped()
     {
-        var device = new FakeTunerDevice(27, 1024);
+        var device = new FakeTunerDevice(200, 50001);
         var reader = new TsPacketReader();
 
         var first = reader.Read(Read(device, 1));
@@ -74,7 +74,7 @@ public sealed class FakeTunerDeviceTests
     [Fact]
     public void ReadsThatStopMidPacketStillLineUp()
     {
-        var device = new FakeTunerDevice(27, 1024);
+        var device = new FakeTunerDevice(200, 50001);
         var reader = new TsPacketReader();
 
         var packets = reader

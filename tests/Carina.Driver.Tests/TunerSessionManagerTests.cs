@@ -55,7 +55,7 @@ public sealed class TunerSessionManagerTests : IDisposable
         {
             SessionId = SessionId.Parse(sessionId),
             Purpose = purpose,
-            Tuning = new TuningRequest(kind, 27, 1024),
+            Tuning = new TuningRequest(kind, 200, 50001),
             DeviceId = deviceId,
             OutputRoot = purpose is SessionPurpose.Recording ? outputRoot : null,
             EndsAt = endsAt ?? (purpose is SessionPurpose.Recording ? Start.AddHours(1) : null),
@@ -538,7 +538,7 @@ public sealed class TunerSessionManagerTests : IDisposable
                     {
                         SessionId = SessionId.Parse($"s-{index}"),
                         Purpose = SessionPurpose.Live,
-                        Tuning = new TuningRequest(TunerKind.Terrestrial, 27),
+                        Tuning = new TuningRequest(TunerKind.Terrestrial, 200),
                     }
                 );
 

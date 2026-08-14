@@ -23,7 +23,7 @@ public sealed class ScriptedTunerDevice(
     int emptyAfterReads = int.MaxValue
 ) : ITunerDevice
 {
-    private readonly FakeTunerDevice inner = new(27, 1024);
+    private readonly FakeTunerDevice inner = new(200, 50001);
     private long reads;
 
     public long Reads => Interlocked.Read(ref reads);
@@ -54,7 +54,7 @@ public sealed class ScriptedTunerDevice(
 
 public sealed class StubbornTunerDevice(TimeSpan readTakes) : ITunerDevice
 {
-    private readonly FakeTunerDevice inner = new(27, 1024);
+    private readonly FakeTunerDevice inner = new(200, 50001);
 
     public ManualResetEventSlim Reading { get; } = new();
 
