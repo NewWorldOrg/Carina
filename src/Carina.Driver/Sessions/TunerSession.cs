@@ -75,7 +75,7 @@ public sealed class TunerSession : IDisposable
         state = SessionState.Requested;
         stopReason = SessionStopReason.Running;
         Broadcaster = new SessionBroadcaster(
-            surveyBlockLimit: purpose is SessionPurpose.Survey
+            surveyBlockLimit: SessionPurposes.ReadsEveryPacket(purpose)
                 ? SessionBroadcaster.DefaultSurveyBlockLimit
                 : TimeSpan.Zero,
             report: RecordFault
@@ -143,6 +143,8 @@ public sealed class TunerSession : IDisposable
     public long DiscardedBytes => Interlocked.Read(ref discardedBytes);
 
     public long Resyncs => Interlocked.Read(ref resyncs);
+
+    public long DeviceOverflows => device.Overflows;
 
     public bool Concluded => completion.Task.IsCompleted;
 

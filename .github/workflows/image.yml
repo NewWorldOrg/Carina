@@ -1,0 +1,105 @@
+name: Image
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+    types: [opened, reopened, ready_for_review]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  image:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    env:
+      CARINA_IMAGE: carina:ci
+      CARINA_ACCEPTANCE_IMAGE: carina:ci
+      CARINA_DRIVER_CONFIG_FILE: ./docker/driver.development.json
+      CARINA_STOP_GRACE: 7h
+      POSTGRES_PASSWORD: ci-only-not-a-deployment
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: docker build -t carina:ci .
+      - run: docker/verify-image.sh carina:ci
+      - run: CARINA_STOP_GRACE="$(docker/grace-period.sh derive)" docker/grace-period.sh check
+      - name: A grace period inside the driver's budget is refused, for that reason
+        run: |
+          if output="$(CARINA_STOP_GRACE=6h docker/grace-period.sh check 2>&1)"; then
+            echo "a 6h grace period was accepted against a 6h linger cap" >&2
+            echo "${output}" >&2
+            exit 1
+          fi
+          if ! grep -q "does not exceed the driver's own shutdown budget" <<<"${output}"; then
+            echo "the check refused it, but not for the reason under test:" >&2
+            echo "${output}" >&2
+            exit 1
+          fi
+          echo "${output}"
+      - run: docker/image-tags.sh check
+      - run: docker/image-tags.sh prove
+      - name: A shallow checkout is refused, naming the reason
+        run: |
+          rm -rf /tmp/shallow
+          git clone --quiet --depth 1 "file://${PWD}" /tmp/shallow
+          if output="$(/tmp/shallow/docker/image-tags.sh tag driver 2>&1)"; then
+            echo "a shallow clone produced the tag ${output}, where every stream collapses onto HEAD" >&2
+            exit 1
+          fi
+          if ! grep -q 'shallow' <<<"${output}"; then
+            echo "it failed for another reason: ${output}" >&2
+            exit 1
+          fi
+          echo "${output}"
+      - name: The tags this commit stands for
+        run: |
+          echo "driver: $(docker/image-tags.sh tag driver)"
+          echo "app: $(docker/image-tags.sh tag app)"
+      - run: docker compose config --quiet
+      - name: The two-process harness the scenarios below drive renders
+        run: docker compose -f compose.deploy.yml config --quiet
+      - run: docker/acceptance/run.sh
+      - name: What is left on the runner
+        if: always()
+        run: docker ps -a && docker volume ls
+
+  publish:
+    needs: [image]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Resolve the repository the streams would be published to
+        env:
+          CONFIGURED_REGISTRY: ${{ vars.CARINA_REGISTRY }}
+        run: |
+          configured="${CONFIGURED_REGISTRY}"
+          if [ -z "${configured}" ]; then
+            configured="ghcr.io/$(tr '[:upper:]' '[:lower:]' <<<"${GITHUB_REPOSITORY}")"
+          fi
+          echo "CARINA_REGISTRY=${configured}" >>"${GITHUB_ENV}"
+      - if: vars.CARINA_PUBLISH == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - if: vars.CARINA_PUBLISH == 'true'
+        run: docker build -t carina:publish .
+      - if: vars.CARINA_PUBLISH == 'true'
+        run: docker/publish-image.sh carina:publish --push
+      - if: vars.CARINA_PUBLISH != 'true'
+        name: Without CARINA_PUBLISH this run publishes nothing and says so
+        run: |
+          docker/publish-image.sh carina:publish --dry-run
+          echo "planned only: set the repository variable CARINA_PUBLISH to true once the registry and its visibility are decided."

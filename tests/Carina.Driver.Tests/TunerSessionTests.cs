@@ -39,6 +39,19 @@ public sealed class TunerSessionTests : IDisposable
 
     private RecordingWriter Writer(string name = "s-1") => new(root, SessionId.Parse(name));
 
+    [Fact]
+    public void TheSessionPassesOnWhatTheDeviceLostToRingBufferOverruns()
+    {
+        var device = new ScriptedTunerDevice();
+        using var session = Session(device, new ManualTimeProvider(Start));
+
+        Assert.Equal(0, session.DeviceOverflows);
+
+        device.Overflows = 3;
+
+        Assert.Equal(3, session.DeviceOverflows);
+    }
+
     private static void WaitForEnd(TunerSession session) =>
         session.WaitForEnd(TimeSpan.FromSeconds(10));
 

@@ -10,12 +10,21 @@ public static class DriverEvents
 
     public const string Diagnostics = "diagnostics";
 
+    public const string SessionTuned = "sessionTuned";
+
+    public const string SessionLockLost = "sessionLockLost";
+
+    public const string TunerHealthChanged = "tunerHealthChanged";
+
     public static readonly IReadOnlyList<string> All =
     [
         Tuners,
         Sessions,
         Draining,
         Diagnostics,
+        SessionTuned,
+        SessionLockLost,
+        TunerHealthChanged,
     ];
 
     public static bool IsKnown(string? name) =>
