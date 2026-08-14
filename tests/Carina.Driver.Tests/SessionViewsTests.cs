@@ -291,6 +291,7 @@ public sealed class SessionViewsTests : IDisposable
         Assert.Equal(SignalLock.Unspecified, reading.Lock);
         Assert.Null(reading.CnrMilliDecibels);
         Assert.NotNull(reading.MeasuredAt);
+        Assert.Null(reading.LockReadAt);
     }
 
     [Fact]

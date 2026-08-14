@@ -16,7 +16,6 @@ public static class SignalQualityViews
             {
                 Lock = SignalLock.Unspecified,
                 MeasuredAt = sample.MeasuredAt,
-                LockReadAt = sample.LockReadAt,
             };
         }
 
