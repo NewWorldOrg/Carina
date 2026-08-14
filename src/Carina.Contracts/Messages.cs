@@ -95,6 +95,8 @@ public sealed record StartSessionRequest
 
     public DateTimeOffset? EndsAt { get; init; }
 
+    public TuneParams? Tune { get; init; }
+
     public IReadOnlyList<string> Validate(DateTimeOffset now)
     {
         var problems = new List<string>();
@@ -120,29 +122,35 @@ public sealed record StartSessionRequest
 
         problems.AddRange(OutputRootProblems());
 
-        if (Tuning is null)
+        if (Tune is not null)
+        {
+            problems.AddRange(Tune.Validate().Select(problem => $"tune.{problem}"));
+        }
+        else if (Tuning is null)
         {
             problems.Add("tuning: missing.");
             return problems;
         }
-
-        if (Tuning.Kind is TunerKind.Unspecified)
+        else
         {
-            problems.Add("tuning.kind: missing, or a value this driver does not know.");
-        }
+            if (Tuning.Kind is TunerKind.Unspecified)
+            {
+                problems.Add("tuning.kind: missing, or a value this driver does not know.");
+            }
 
-        if (Tuning.PhysicalChannel is < MinPhysicalChannel or > MaxPhysicalChannel)
-        {
-            problems.Add(
-                $"tuning.physicalChannel: expected {MinPhysicalChannel} to {MaxPhysicalChannel}, got {Tuning.PhysicalChannel}."
-            );
-        }
+            if (Tuning.PhysicalChannel is < MinPhysicalChannel or > MaxPhysicalChannel)
+            {
+                problems.Add(
+                    $"tuning.physicalChannel: expected {MinPhysicalChannel} to {MaxPhysicalChannel}, got {Tuning.PhysicalChannel}."
+                );
+            }
 
-        if (Tuning.ServiceId is < 0 or > MaxServiceId)
-        {
-            problems.Add(
-                $"tuning.serviceId: expected 0 to {MaxServiceId}, got {Tuning.ServiceId}."
-            );
+            if (Tuning.ServiceId is < 0 or > MaxServiceId)
+            {
+                problems.Add(
+                    $"tuning.serviceId: expected 0 to {MaxServiceId}, got {Tuning.ServiceId}."
+                );
+            }
         }
 
         if (Purpose is SessionPurpose.Recording && EndsAt is null)

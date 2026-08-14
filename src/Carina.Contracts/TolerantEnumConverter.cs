@@ -66,6 +66,30 @@ public sealed class SessionPurposeConverter : TolerantEnumConverter<SessionPurpo
         };
 }
 
+public sealed class TuneSystemConverter : TolerantEnumConverter<TuneSystem>
+{
+    public static string WireName(TuneSystem value) =>
+        value switch
+        {
+            TuneSystem.IsdbT => "isdbT",
+            TuneSystem.IsdbSBs => "isdbSBs",
+            TuneSystem.IsdbSCs110 => "isdbSCs110",
+            _ => "unspecified",
+        };
+
+    protected override string NameOf(TuneSystem value) => WireName(value);
+
+    protected override TuneSystem? ValueOf(string name) =>
+        name switch
+        {
+            "isdbT" => TuneSystem.IsdbT,
+            "isdbSBs" => TuneSystem.IsdbSBs,
+            "isdbSCs110" => TuneSystem.IsdbSCs110,
+            "unspecified" => TuneSystem.Unspecified,
+            _ => null,
+        };
+}
+
 public sealed class TunerKindConverter : TolerantEnumConverter<TunerKind>
 {
     protected override string NameOf(TunerKind value) =>

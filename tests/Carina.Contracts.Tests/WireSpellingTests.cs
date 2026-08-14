@@ -13,6 +13,31 @@ public sealed class WireSpellingTests
     }
 
     [Theory]
+    [InlineData(TuneSystem.Unspecified, "unspecified")]
+    [InlineData(TuneSystem.IsdbT, "isdbT")]
+    [InlineData(TuneSystem.IsdbSBs, "isdbSBs")]
+    [InlineData(TuneSystem.IsdbSCs110, "isdbSCs110")]
+    public void TuneSystemIsSpelledThisWay(TuneSystem value, string wire)
+    {
+        AssertRoundTrip(value, wire, DriverJson.Context.TuneSystem);
+    }
+
+    [Fact]
+    public void TheSystemsAreExactlyTheThreeThatCanBeReceived()
+    {
+        Assert.Equal(
+            new[]
+            {
+                TuneSystem.Unspecified,
+                TuneSystem.IsdbT,
+                TuneSystem.IsdbSBs,
+                TuneSystem.IsdbSCs110,
+            },
+            Enum.GetValues<TuneSystem>()
+        );
+    }
+
+    [Theory]
     [InlineData(TunerKind.Unspecified, "unspecified")]
     [InlineData(TunerKind.Terrestrial, "terrestrial")]
     [InlineData(TunerKind.Satellite, "satellite")]
