@@ -159,6 +159,25 @@ public sealed class NetworkInformationTableTests
     }
 
     [Fact]
+    public void AStreamLoopStoppingShortOfTheSectionRefusesTheWholeTableRatherThanReportingAShortList()
+    {
+        var streams = new[]
+        {
+            NitWriter.TransportStream(SomeTransportStreamId, SomeNetworkId, []),
+            NitWriter.TransportStream(AnotherTransportStreamId, SomeNetworkId, []),
+            NitWriter.TransportStream(50004, SomeNetworkId, []),
+        };
+
+        var rejected = Read(new NitWriter
+        {
+            TransportStreams = streams,
+            DeclaredTransportStreamLoopLength = streams[0].Length,
+        });
+
+        Assert.Equal(TableDefect.LoopOverrun, Rejection(rejected));
+    }
+
+    [Fact]
     public void AStreamLoopEndingPartWayThroughAnEntryRefusesTheWholeTable()
     {
         var rejected = Read(new NitWriter

@@ -81,7 +81,7 @@ public sealed class NetworkInformationTable
         var loopLength = ((span[at] & 0x0F) << 8) | span[at + 1];
         at += 2;
 
-        if (at + loopLength > body.Length)
+        if (at + loopLength != body.Length)
         {
             return Rejected(TableDefect.LoopOverrun);
         }
