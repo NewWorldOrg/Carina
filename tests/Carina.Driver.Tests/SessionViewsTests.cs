@@ -49,7 +49,7 @@ public sealed class SessionViewsTests : IDisposable
         var configuration = Configuration;
         var manager = new TunerSessionManager(
             configuration,
-            factory ?? new TunerDeviceFactory(configuration),
+            factory ?? new TunerDeviceFactory(configuration, TimeProvider.System),
             clock,
             NullLogger<TunerSessionManager>.Instance
         );

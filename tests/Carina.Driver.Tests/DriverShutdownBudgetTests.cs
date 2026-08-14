@@ -42,7 +42,7 @@ public sealed class DriverShutdownBudgetTests
         var configuration = Configuration(3);
         var manager = new TunerSessionManager(
             configuration,
-            new TunerDeviceFactory(configuration),
+            new TunerDeviceFactory(configuration, TimeProvider.System),
             TimeProvider.System,
             NullLogger<TunerSessionManager>.Instance
         );

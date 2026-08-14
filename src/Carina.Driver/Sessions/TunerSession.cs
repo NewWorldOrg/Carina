@@ -144,6 +144,8 @@ public sealed class TunerSession : IDisposable
 
     public long Resyncs => Interlocked.Read(ref resyncs);
 
+    public long DeviceOverflows => device.Overflows;
+
     public bool Concluded => completion.Task.IsCompleted;
 
     public SessionBroadcaster Broadcaster { get; }

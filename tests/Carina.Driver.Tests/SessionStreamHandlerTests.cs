@@ -90,7 +90,7 @@ public sealed class SessionStreamHandlerTests : IDisposable
 
         return new TunerSessionManager(
             configuration,
-            new TunerDeviceFactory(configuration),
+            new TunerDeviceFactory(configuration, TimeProvider.System),
             clock,
             NullLogger<TunerSessionManager>.Instance
         );
