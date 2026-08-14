@@ -79,6 +79,8 @@ public sealed class AribTextWriter
 
     public AribTextWriter DesignateCustomGlyphsToG0() => Raw(0x1B, 0x28, 0x20, 0x41);
 
+    public AribTextWriter DesignateTwoByteCustomGlyphsToG0() => Raw(0x1B, 0x24, 0x20, 0x40);
+
     public AribTextWriter DesignateAdditionalSymbolsToG0() => Raw(0x1B, 0x24, 0x3B);
 
     public AribTextWriter DesignateKatakanaToG1() => Raw(0x1B, 0x29, 0x31);

@@ -232,6 +232,18 @@ public static class AribText
             return bytes.Length;
         }
 
+        if (bytes[at] == 0x20)
+        {
+            if (at + 1 >= bytes.Length)
+            {
+                return bytes.Length;
+            }
+
+            designated[0] = GraphicSet.TwoByteDrcs;
+
+            return at + 2;
+        }
+
         if (bytes[at] is < 0x29 or > 0x2B)
         {
             designated[0] = AribGraphicSets.TwoByteSet(bytes[at]);

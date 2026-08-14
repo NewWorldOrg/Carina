@@ -132,29 +132,43 @@ public sealed class AribTextTests
     }
 
     [Fact]
-    public void MosaicCellsAreOutOfScopeAndBecomeASubstitute()
+    public void CustomGlyphsDesignatedTwoBytesWideAreDroppedWithoutShiftingWhatFollows()
     {
         var bytes = new AribTextWriter()
-            .DesignateMosaicToG0()
-            .Raw(0x21)
+            .Kanji("局")
+            .DesignateTwoByteCustomGlyphsToG0()
+            .Raw(0x21, 0x22)
             .DesignateKanjiToG0()
             .Kanji("局")
             .ToArray();
 
-        Assert.Equal($"{AribText.UnknownCharacter}局", AribText.Decode(bytes));
+        Assert.Equal("局局", AribText.Decode(bytes));
     }
 
     [Fact]
-    public void TheAdditionalSymbolSetIsOutOfScopeAndBecomesASubstitute()
+    public void AMosaicCellIsOneByteWideSoOutOfScopeCellsCostOneSubstituteEach()
     {
         var bytes = new AribTextWriter()
-            .DesignateAdditionalSymbolsToG0()
-            .Raw(0x7A, 0x50)
+            .DesignateMosaicToG0()
+            .Raw(0x21, 0x22, 0x23)
             .DesignateKanjiToG0()
             .Kanji("局")
             .ToArray();
 
-        Assert.Equal($"{AribText.UnknownCharacter}局", AribText.Decode(bytes));
+        Assert.Equal($"{new string(AribText.UnknownCharacter, 3)}局", AribText.Decode(bytes));
+    }
+
+    [Fact]
+    public void AnAdditionalSymbolIsTwoBytesWideSoFourBytesCostTwoSubstitutes()
+    {
+        var bytes = new AribTextWriter()
+            .DesignateAdditionalSymbolsToG0()
+            .Raw(0x7A, 0x50, 0x7A, 0x51)
+            .DesignateKanjiToG0()
+            .Kanji("局")
+            .ToArray();
+
+        Assert.Equal($"{new string(AribText.UnknownCharacter, 2)}局", AribText.Decode(bytes));
     }
 
     [Fact]
