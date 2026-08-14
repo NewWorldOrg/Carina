@@ -19,6 +19,7 @@ public enum SessionRefusal
     RecordingAlreadyExists,
     OutputUnavailable,
     DeviceUnavailable,
+    CapabilityMissing,
 }
 
 public enum SessionStopOutcome

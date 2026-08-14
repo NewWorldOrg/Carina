@@ -12,6 +12,8 @@ public enum SessionPurpose
     Live = 2,
 
     Survey = 3,
+
+    Scan = 4,
 }
 
 [JsonConverter(typeof(TunerKindConverter))]
@@ -81,8 +83,6 @@ public sealed record StartSessionRequest
 
     private const int MaxServiceId = 65535;
 
-    private const int MaxNameLength = 64;
-
     public required SessionId SessionId { get; init; }
 
     public required SessionPurpose Purpose { get; init; }
@@ -94,6 +94,8 @@ public sealed record StartSessionRequest
     public string? OutputRoot { get; init; }
 
     public DateTimeOffset? EndsAt { get; init; }
+
+    public TuneParams? Tune { get; init; }
 
     public IReadOnlyList<string> Validate(DateTimeOffset now)
     {
@@ -111,11 +113,9 @@ public sealed record StartSessionRequest
             problems.Add("purpose: missing, or a value this driver does not know.");
         }
 
-        if (DeviceId is not null && !IsUsableName(DeviceId))
+        if (DeviceId is not null && !WireName.IsUsable(DeviceId))
         {
-            problems.Add(
-                $"deviceId: expected 1 to {MaxNameLength} characters of A-Z, a-z, 0-9, '-', '_' or '.'; got '{DeviceId}'."
-            );
+            problems.Add($"deviceId: expected {WireName.Description}; got '{DeviceId}'.");
         }
 
         problems.AddRange(OutputRootProblems());
@@ -126,7 +126,10 @@ public sealed record StartSessionRequest
             return problems;
         }
 
-        if (Tuning.Kind is TunerKind.Unspecified)
+        var tuneProblems = Tune?.Validate() ?? [];
+        problems.AddRange(tuneProblems.Select(problem => $"tune.{problem}"));
+
+        if (Tune is null && Tuning.Kind is TunerKind.Unspecified)
         {
             problems.Add("tuning.kind: missing, or a value this driver does not know.");
         }
@@ -138,11 +141,23 @@ public sealed record StartSessionRequest
             );
         }
 
-        if (Tuning.ServiceId is < 0 or > MaxServiceId)
+        if (Tune is null && Tuning.ServiceId is < 0 or > MaxServiceId)
         {
             problems.Add(
                 $"tuning.serviceId: expected 0 to {MaxServiceId}, got {Tuning.ServiceId}."
             );
+        }
+
+        if (Tune is not null && Tuning.ServiceId is not null)
+        {
+            problems.Add(
+                $"tuning.serviceId: a typed tune names no service and the driver filters no PIDs by service, so a service id here would mean something to one driver and nothing to another; got {Tuning.ServiceId}."
+            );
+        }
+
+        if (Tune is not null && tuneProblems.Count is 0)
+        {
+            problems.AddRange(AgreementProblems(Tune.ToLegacyRequest()));
         }
 
         if (Purpose is SessionPurpose.Recording && EndsAt is null)
@@ -157,6 +172,30 @@ public sealed record StartSessionRequest
 
         return problems;
     }
+
+    private IReadOnlyList<string> AgreementProblems(TuningRequest expected)
+    {
+        if (
+            Tuning.Kind == expected.Kind
+            && Tuning.PhysicalChannel == expected.PhysicalChannel
+        )
+        {
+            return [];
+        }
+
+        return expected.Kind is TunerKind.Unspecified
+            ?
+            [
+                $"tuning: the older field cannot name a tune on {TuneSystemConverter.WireName(Tune!.System)}, so it has to be left without a kind on physical channel {expected.PhysicalChannel}, which a driver that reads only that field refuses instead of tuning; got {Describe(Tuning)}.",
+            ]
+            :
+            [
+                $"tuning: expected {Describe(expected)} to match tune, so that a driver reading either field tunes the same way; got {Describe(Tuning)}.",
+            ];
+    }
+
+    private static string Describe(TuningRequest tuning) =>
+        $"kind {TunerKindConverter.WireName(tuning.Kind)} on physical channel {tuning.PhysicalChannel}";
 
     private IReadOnlyList<string> OutputRootProblems()
     {
@@ -178,37 +217,9 @@ public sealed record StartSessionRequest
             ];
         }
 
-        return IsUsableName(OutputRoot)
+        return WireName.IsUsable(OutputRoot)
             ? []
-            :
-            [
-                $"outputRoot: expected 1 to {MaxNameLength} characters of A-Z, a-z, 0-9, '-', '_' or '.'; got '{OutputRoot}'.",
-            ];
-    }
-
-    private static bool IsUsableName(string value)
-    {
-        if (value.Length is 0 or > MaxNameLength)
-        {
-            return false;
-        }
-
-        foreach (var c in value)
-        {
-            var allowed =
-                c is >= 'a' and <= 'z'
-                    or >= 'A' and <= 'Z'
-                    or >= '0' and <= '9'
-                    or '-'
-                    or '_'
-                    or '.';
-            if (!allowed)
-            {
-                return false;
-            }
-        }
-
-        return !value.Contains("..", StringComparison.Ordinal);
+            : [$"outputRoot: expected {WireName.Description}; got '{OutputRoot}'."];
     }
 }
 
@@ -281,6 +292,12 @@ public sealed record TunerSnapshot(
 )
 {
     public string DeviceId { get; init; } = DeviceId ?? string.Empty;
+
+    public TunerHealthDto? Health { get; init; }
+
+    public SignalQualityDto? SignalQuality { get; init; }
+
+    public CurrentSessionDto? CurrentSession { get; init; }
 }
 
 public sealed record DiagnosticSnapshot(

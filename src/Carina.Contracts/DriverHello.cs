@@ -16,6 +16,12 @@ public sealed record DriverHello(
     public bool Supports(string capability) =>
         Capabilities.Contains(capability, StringComparer.Ordinal);
 
+    public bool SupportsSignalQualityMetric(string metric) =>
+        Supports(DriverCapabilities.SignalQualityMetric(metric));
+
+    public IReadOnlyList<string> DeclaredSignalQualityMetrics() =>
+        [.. Capabilities.Select(DriverCapabilities.MetricIn).OfType<string>()];
+
     public bool IsDifferentInstanceFrom(DriverHello? other) =>
         InstanceId is null
         || other?.InstanceId is null
