@@ -1,3 +1,5 @@
+using Carina.Contracts;
+
 namespace Carina.Driver.Tuning.Dvb;
 
 public abstract record DvbChannel
@@ -8,13 +10,10 @@ public abstract record DvbChannel
 
     public static DvbChannel Terrestrial(int physicalChannel)
     {
-        if (
-            physicalChannel < DvbFrequency.LowestTerrestrialChannel
-            || physicalChannel > DvbFrequency.HighestTerrestrialChannel
-        )
+        if (!BroadcastStandards.IsTerrestrialChannel(physicalChannel))
         {
             throw DvbFailure.Refused(
-                $"physicalChannel: terrestrial broadcasting occupies channels {DvbFrequency.LowestTerrestrialChannel} to {DvbFrequency.HighestTerrestrialChannel}, and {physicalChannel} is outside that plan, so no frequency can be derived for it."
+                $"physicalChannel: terrestrial broadcasting occupies channels {BroadcastStandards.TerrestrialFirstChannel} to {BroadcastStandards.TerrestrialLastChannel}, and {physicalChannel} is outside that plan, so no frequency can be derived for it."
             );
         }
 
@@ -23,21 +22,12 @@ public abstract record DvbChannel
 
     public static DvbChannel BroadcastSatellite(int slot, int? transportStreamId)
     {
-        if (
-            slot < DvbFrequency.LowestBroadcastSatelliteSlot
-            || slot > DvbFrequency.HighestBroadcastSatelliteSlot
-            || slot % 2 is 0
-        )
+        if (!BroadcastStandards.IsBsChannel(slot))
         {
             throw DvbFailure.Refused(
-                $"slot: broadcast satellite occupies the odd slots {DvbFrequency.LowestBroadcastSatelliteSlot} to {DvbFrequency.HighestBroadcastSatelliteSlot}, and {slot} is not one of them."
-            );
-        }
-
-        if (DvbFrequency.UndemodulatableBroadcastSatelliteSlots.Contains(slot))
-        {
-            throw DvbFailure.Refused(
-                $"slot: broadcast satellite slot {slot} cannot be demodulated by this class of tuner, so it is not a channel this driver will tune."
+                BroadcastStandards.BsChannelsWithoutDemodulation.Contains(slot)
+                    ? $"slot: broadcast satellite slot {slot} cannot be demodulated by this class of tuner, so it is not a channel this driver will tune."
+                    : $"slot: broadcast satellite occupies the odd slots {BroadcastStandards.BsFirstChannel} to {BroadcastStandards.BsLastChannel}, and {slot} is not one of them."
             );
         }
 
@@ -48,10 +38,10 @@ public abstract record DvbChannel
             );
         }
 
-        if (stream is < 0 or > ushort.MaxValue)
+        if (!BroadcastStandards.IsTransportStreamId(stream))
         {
             throw DvbFailure.Refused(
-                $"transportStreamId: a transport stream identifier is a sixteen bit number, and {stream} is not one."
+                $"transportStreamId: a transport stream identifier runs from {BroadcastStandards.MinTransportStreamId} to {BroadcastStandards.MaxTransportStreamId}, and {stream} is outside it."
             );
         }
 
@@ -60,14 +50,10 @@ public abstract record DvbChannel
 
     public static DvbChannel CommunicationSatellite(int slot)
     {
-        if (
-            slot < DvbFrequency.LowestCommunicationSatelliteSlot
-            || slot > DvbFrequency.HighestCommunicationSatelliteSlot
-            || slot % 2 is not 0
-        )
+        if (!BroadcastStandards.IsCs110Channel(slot))
         {
             throw DvbFailure.Refused(
-                $"slot: communication satellite occupies the even slots {DvbFrequency.LowestCommunicationSatelliteSlot} to {DvbFrequency.HighestCommunicationSatelliteSlot}, and {slot} is not one of them."
+                $"slot: communication satellite occupies the even slots {BroadcastStandards.Cs110FirstChannel} to {BroadcastStandards.Cs110LastChannel}, and {slot} is not one of them."
             );
         }
 

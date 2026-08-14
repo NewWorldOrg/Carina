@@ -1,3 +1,4 @@
+using Carina.Contracts;
 using Carina.Driver.Tuning.Dvb;
 
 namespace Carina.Driver.Tests;
@@ -47,6 +48,61 @@ public sealed class DvbFrequencyTests
     {
         Assert.True(DvbFrequency.BroadcastSatelliteKilohertz(23) < 1_500_000u);
         Assert.True(DvbFrequency.CommunicationSatelliteKilohertz(24) < 3_000_000u);
+    }
+
+    [Fact]
+    public void EveryFrequencyIsTheOneTheSharedBroadcastStandardsDerive()
+    {
+        for (
+            var channel = BroadcastStandards.TerrestrialFirstChannel;
+            channel <= BroadcastStandards.TerrestrialLastChannel;
+            channel++
+        )
+        {
+            Assert.Equal(
+                (uint)BroadcastStandards.TerrestrialCentreHz(channel),
+                DvbFrequency.TerrestrialHertz(channel)
+            );
+        }
+
+        for (
+            var slot = BroadcastStandards.BsFirstChannel;
+            slot <= BroadcastStandards.BsLastChannel;
+            slot += 2
+        )
+        {
+            if (BroadcastStandards.IsBsChannel(slot))
+            {
+                Assert.Equal(
+                    (uint)BroadcastStandards.BsCentreKHz(slot),
+                    DvbFrequency.BroadcastSatelliteKilohertz(slot)
+                );
+            }
+        }
+
+        for (
+            var slot = BroadcastStandards.Cs110FirstChannel;
+            slot <= BroadcastStandards.Cs110LastChannel;
+            slot += 2
+        )
+        {
+            Assert.Equal(
+                (uint)BroadcastStandards.Cs110CentreKHz(slot),
+                DvbFrequency.CommunicationSatelliteKilohertz(slot)
+            );
+        }
+    }
+
+    [Fact]
+    public void NoFrequencyIsDerivedForAChannelTheStandardsDoNotDefine()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => DvbFrequency.TerrestrialHertz(63));
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => DvbFrequency.BroadcastSatelliteKilohertz(7)
+        );
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => DvbFrequency.CommunicationSatelliteKilohertz(3)
+        );
     }
 
     [Fact]
