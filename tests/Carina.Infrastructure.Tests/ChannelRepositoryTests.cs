@@ -129,6 +129,30 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
     }
 
     [Fact]
+    public async Task RecordingAFailureDoesNotUndoASelectionMadeMeanwhile()
+    {
+        var network = NextNetwork();
+        await using var context = database.Open();
+        await new BroadcastServiceRepository(context).AddAsync(Service(network, 1), Cancel);
+        var candidate = Candidate(network, 1, 27);
+        await new CandidateChannelRepository(context).AddAsync(candidate, Cancel);
+
+        await using var elsewhere = database.Open();
+        await new CandidateChannelRepository(elsewhere)
+            .SelectAsync(candidate.Id, SelectionSource.AutoSwitch, null, At, Cancel);
+
+        candidate.RecordTuningFailure(RotationBackoff.Default, At.AddMinutes(1));
+        await using var stale = database.Open();
+        await new CandidateChannelRepository(stale).SaveAsync(candidate, Cancel);
+
+        await using var reading = database.Open();
+        var stored = await new CandidateChannelRepository(reading).FindAsync(candidate.Id, Cancel);
+        Assert.True(stored!.IsSelected);
+        Assert.Equal(SelectionSource.AutoSwitch, stored.SelectionSource);
+        Assert.Equal(RotationState.BackingOff, stored.RotationState);
+    }
+
+    [Fact]
     public async Task AChangedTunerLedgerMarksEveryCandidateForRevalidation()
     {
         var network = NextNetwork();

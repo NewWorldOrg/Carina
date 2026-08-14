@@ -6,6 +6,16 @@ namespace Carina.Infrastructure.Persistence.Repositories;
 
 public sealed class CandidateChannelRepository(CarinaDbContext context) : ICandidateChannelRepository
 {
+    private static readonly string[] RotationProperties =
+    [
+        nameof(CandidateChannel.NeedsRevalidation),
+        nameof(CandidateChannel.RotationState),
+        nameof(CandidateChannel.ConsecutiveFailures),
+        nameof(CandidateChannel.NextAttemptAt),
+        nameof(CandidateChannel.NeedsAttentionSince),
+        nameof(CandidateChannel.LastSeenAt),
+    ];
+
     public async Task<CandidateChannel?> FindAsync(CandidateChannelId id, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(id);
@@ -65,7 +75,19 @@ public sealed class CandidateChannelRepository(CarinaDbContext context) : ICandi
 
     public async Task SaveAsync(CandidateChannel candidate, CancellationToken cancellationToken)
     {
-        context.Update(candidate);
+        ArgumentNullException.ThrowIfNull(candidate);
+
+        var entry = context.Entry(candidate);
+
+        if (entry.State is EntityState.Detached)
+        {
+            entry = context.Attach(candidate);
+
+            foreach (var property in RotationProperties)
+            {
+                entry.Property(property).IsModified = true;
+            }
+        }
 
         await context.SaveChangesAsync(cancellationToken);
     }
