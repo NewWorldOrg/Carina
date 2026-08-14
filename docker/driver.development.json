@@ -4,7 +4,11 @@
   "outputRoots": [{ "name": "primary", "path": "/srv/recordings" }],
   "shutdownGraceHours": 6,
   "liveSessionMinutes": 240,
-  "tuner": { "backend": "fake" },
+  "tuner": {
+    "backend": "fake",
+    "signalQualitySeconds": 10,
+    "demuxBufferBytes": 16777216
+  },
   "devices": [
     { "id": "fake-terrestrial", "kind": "terrestrial", "enabled": true },
     { "id": "fake-satellite", "kind": "satellite", "enabled": true }
