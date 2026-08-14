@@ -18,6 +18,16 @@ public sealed class DriverIpcClientTests
     private static DriverIpcClient ClientFor(string socketPath)
         => new(Options.Create(new DriverOptions { SocketPath = socketPath }));
 
+    private static string[] TunerKeepingCapabilities =>
+    [
+        DriverCapabilities.Recording,
+        DriverCapabilities.Live,
+        DriverCapabilities.DeviceDetection,
+        DriverCapabilities.TunerLedger,
+        DriverCapabilities.LiveTunerToggle,
+        DriverCapabilities.TypedTuning,
+    ];
+
     [Fact]
     public async Task ReadsTheDriversHello()
     {
@@ -146,6 +156,249 @@ public sealed class DriverIpcClientTests
         Assert.Equal(DiagnosticReason.RecordingWriteFailed, entry.Reason);
         Assert.Equal("rec-1", entry.SessionId.Value);
     }
+
+    [Fact]
+    public async Task ReadsTheDetectedDevices()
+    {
+        var socketPath = NewSocketPath();
+        await using var driver = await FakeDriver.StartAsync(
+            socketPath,
+            FakeDriver.HelloFor("instance-a", capabilities: TunerKeepingCapabilities));
+        driver.DetectedDevices =
+        [
+            new DetectedDeviceDto
+            {
+                DeviceId = "adapter0",
+                Detection = DeviceDetection.Detected,
+                Kinds = [TunerKind.Terrestrial],
+            },
+            new DetectedDeviceDto
+            {
+                DeviceId = "adapter1",
+                Detection = DeviceDetection.Busy,
+                Detail = "held by another process",
+            },
+        ];
+        using var client = ClientFor(socketPath);
+
+        var call = await client.GetDetectedDevicesAsync(CancellationToken.None);
+
+        Assert.True(call.TryGetValue(out var devices));
+        Assert.Equal(2, devices.Count);
+        Assert.Equal("adapter0", devices[0].DeviceId);
+        Assert.Equal([TunerKind.Terrestrial], devices[0].Kinds);
+        Assert.Equal(DeviceDetection.Busy, devices[1].Detection);
+    }
+
+    [Fact]
+    public async Task ReadsTheLedgerWithItsDriftHashes()
+    {
+        var socketPath = NewSocketPath();
+        await using var driver = await FakeDriver.StartAsync(
+            socketPath,
+            FakeDriver.HelloFor("instance-a", capabilities: TunerKeepingCapabilities));
+        driver.Ledger = new TunerLedgerDto
+        {
+            Tuners = [new TunerConfigEntry { DeviceId = "adapter0", LnbPower = true }],
+            LoadedHash = "aaaa",
+            SavedHash = "bbbb",
+        };
+        using var client = ClientFor(socketPath);
+
+        var call = await client.GetTunerLedgerAsync(CancellationToken.None);
+
+        Assert.True(call.TryGetValue(out var ledger));
+        Assert.Equal("adapter0", Assert.Single(ledger.Tuners).DeviceId);
+        Assert.True(ledger.HasDrifted());
+    }
+
+    [Fact]
+    public async Task ReplacesTheLedgerAndReadsTheAnswerBack()
+    {
+        var socketPath = NewSocketPath();
+        await using var driver = await FakeDriver.StartAsync(
+            socketPath,
+            FakeDriver.HelloFor("instance-a", capabilities: TunerKeepingCapabilities));
+        driver.Ledger = new TunerLedgerDto
+        {
+            Tuners = [new TunerConfigEntry { DeviceId = "adapter0", Disabled = true }],
+            LoadedHash = "cccc",
+            SavedHash = "cccc",
+        };
+        using var client = ClientFor(socketPath);
+
+        var call = await client.ReplaceTunerLedgerAsync(
+            [new TunerConfigEntry { DeviceId = "adapter0", Disabled = true }],
+            CancellationToken.None);
+
+        Assert.True(call.TryGetValue(out var ledger));
+        Assert.False(ledger.HasDrifted());
+        Assert.Equal("adapter0", Assert.Single(driver.LastReplacedLedger!).DeviceId);
+        Assert.True(driver.LastReplacedLedger![0].Disabled);
+    }
+
+    [Fact]
+    public async Task AnEmptyLedgerReplacementSurfacesTheDriversRefusal()
+    {
+        var socketPath = NewSocketPath();
+        await using var driver = await FakeDriver.StartAsync(
+            socketPath,
+            FakeDriver.HelloFor("instance-a", capabilities: TunerKeepingCapabilities));
+        using var client = ClientFor(socketPath);
+
+        var call = await client.ReplaceTunerLedgerAsync([], CancellationToken.None);
+
+        Assert.Equal(DriverCallOutcome.Refused, call.Outcome);
+        Assert.Equal("emptyLedger", call.Problem?.Title);
+    }
+
+    [Fact]
+    public async Task ALedgerNamingAnUnknownDeviceSurfacesTheDriversRefusal()
+    {
+        var socketPath = NewSocketPath();
+        await using var driver = await FakeDriver.StartAsync(
+            socketPath,
+            FakeDriver.HelloFor("instance-a", capabilities: TunerKeepingCapabilities));
+        driver.RefusalsByPath[DriverEndpoints.Tuners] = new FakeDriver.Refusal(
+            400,
+            new DriverProblem("unknownDevice", ["This driver detected no device called 'adapter9'."]));
+        using var client = ClientFor(socketPath);
+
+        var call = await client.ReplaceTunerLedgerAsync(
+            [new TunerConfigEntry { DeviceId = "adapter9" }],
+            CancellationToken.None);
+
+        Assert.Equal(DriverCallOutcome.Refused, call.Outcome);
+        Assert.Equal("unknownDevice", call.Problem?.Title);
+    }
+
+    [Fact]
+    public async Task TogglesATunerAndReadsTheAnsweredSnapshot()
+    {
+        var socketPath = NewSocketPath();
+        await using var driver = await FakeDriver.StartAsync(
+            socketPath,
+            FakeDriver.HelloFor("instance-a", capabilities: TunerKeepingCapabilities));
+        driver.Tuners =
+        [
+            new TunerSnapshot("adapter0", TunerKind.Terrestrial, TunerState.Disabled),
+        ];
+        using var client = ClientFor(socketPath);
+
+        var call = await client.ToggleTunerAsync("adapter0", disabled: true, CancellationToken.None);
+
+        Assert.True(call.TryGetValue(out var tuner));
+        Assert.Equal("adapter0", tuner.DeviceId);
+        Assert.True(tuner.Toggled);
+        Assert.Equal("adapter0", driver.LastToggledDeviceId);
+        Assert.True(driver.LastToggle?.Disabled);
+    }
+
+    [Fact]
+    public async Task AToggleForATunerTheDriverDoesNotHoldSurfacesTheProblem()
+    {
+        var socketPath = NewSocketPath();
+        await using var driver = await FakeDriver.StartAsync(
+            socketPath,
+            FakeDriver.HelloFor("instance-a", capabilities: TunerKeepingCapabilities));
+        using var client = ClientFor(socketPath);
+
+        var call = await client.ToggleTunerAsync("adapter9", disabled: false, CancellationToken.None);
+
+        Assert.Equal(DriverCallOutcome.Refused, call.Outcome);
+        Assert.Equal("noSuchTuner", call.Problem?.Title);
+    }
+
+    [Fact]
+    public async Task ADeviceIdOutsideTheShapeIsRefusedWithoutReachingTheDriver()
+    {
+        var socketPath = NewSocketPath();
+        await using var driver = await FakeDriver.StartAsync(
+            socketPath,
+            FakeDriver.HelloFor("instance-a", capabilities: TunerKeepingCapabilities));
+        using var client = ClientFor(socketPath);
+
+        var call = await client.ToggleTunerAsync("../etc/shadow", disabled: true, CancellationToken.None);
+
+        Assert.Equal(DriverCallOutcome.Refused, call.Outcome);
+        Assert.Equal("badDeviceId", call.Problem?.Title);
+        Assert.Equal(0, driver.RequestsFor(DriverEndpoints.Health));
+    }
+
+    [Theory]
+    [InlineData("detected")]
+    [InlineData("ledgerRead")]
+    [InlineData("ledgerReplace")]
+    [InlineData("toggle")]
+    public async Task ACallTheDriverDoesNotDeclareIsRefusedLocallyInsteadOfAsARawNotFound(string surface)
+    {
+        var socketPath = NewSocketPath();
+        await using var driver = await FakeDriver.StartAsync(
+            socketPath,
+            FakeDriver.HelloFor("instance-old"));
+        using var client = ClientFor(socketPath);
+
+        var outcome = surface switch
+        {
+            "detected" => Of(await client.GetDetectedDevicesAsync(CancellationToken.None)),
+            "ledgerRead" => Of(await client.GetTunerLedgerAsync(CancellationToken.None)),
+            "ledgerReplace" => Of(await client.ReplaceTunerLedgerAsync(
+                [new TunerConfigEntry { DeviceId = "adapter0" }],
+                CancellationToken.None)),
+            _ => Of(await client.ToggleTunerAsync("adapter0", disabled: true, CancellationToken.None)),
+        };
+
+        Assert.Equal(DriverCallOutcome.Refused, outcome.Outcome);
+        Assert.Equal("capabilityMissing", outcome.Problem?.Title);
+        Assert.NotEmpty(outcome.Problem!.Problems);
+        Assert.Equal(0, driver.RequestsFor(DriverEndpoints.DevicesDetected));
+        Assert.Equal(0, driver.RequestsFor(DriverEndpoints.TunerLedger));
+        Assert.Equal(0, driver.RequestsFor(DriverEndpoints.Tuners));
+        Assert.Equal(0, driver.RequestsFor(DriverEndpoints.Tuner("adapter0")));
+    }
+
+    [Fact]
+    public async Task AMissingSocketMakesTheNewCallsUnreachableNotAnException()
+    {
+        using var client = ClientFor(NewSocketPath());
+
+        var call = await client.GetTunerLedgerAsync(CancellationToken.None);
+
+        Assert.Equal(DriverCallOutcome.Unreachable, call.Outcome);
+        Assert.NotNull(call.Failure);
+    }
+
+    [Fact]
+    public async Task ATypedTuneTravelsToTheDriverBesideTheOlderFields()
+    {
+        var socketPath = NewSocketPath();
+        await using var driver = await FakeDriver.StartAsync(
+            socketPath,
+            FakeDriver.HelloFor("instance-a", capabilities: TunerKeepingCapabilities));
+        using var client = ClientFor(socketPath);
+
+        var tune = TuneParams.Bs(15, 50001);
+
+        var call = await client.StartSessionAsync(
+            new StartSessionRequest
+            {
+                SessionId = SessionId.Parse("scan-1"),
+                Purpose = SessionPurpose.Scan,
+                Tuning = tune.ToLegacyRequest(),
+                Tune = tune,
+            },
+            CancellationToken.None);
+
+        Assert.True(call.TryGetValue(out var snapshot));
+        Assert.Equal("scan-1", snapshot.SessionId.Value);
+        Assert.Equal(TuneSystem.IsdbSBs, driver.LastStartRequest?.Tune?.System);
+        Assert.Equal(15, driver.LastStartRequest?.Tune?.IsdbSBs?.BsChannel);
+        Assert.Equal(50001, driver.LastStartRequest?.Tune?.IsdbSBs?.Tsid);
+        Assert.Equal(15, driver.LastStartRequest?.Tuning.PhysicalChannel);
+    }
+
+    private static (DriverCallOutcome Outcome, DriverProblem? Problem) Of<T>(DriverCall<T> call)
+        => (call.Outcome, call.Problem);
 
     [Fact]
     public async Task StartsASessionAndReadsTheCreatedSnapshot()
