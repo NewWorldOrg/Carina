@@ -114,7 +114,13 @@ public sealed class DriverConnectionSupervisor(
                 return Serve.Of(ServeOutcome.Alive);
             }
 
+            var previous = adopted;
             adopted = hello;
+
+            if (previous is not null)
+            {
+                signals.Publish(DriverClientSignals.InstanceChanged);
+            }
         }
 
         if (observation.Connection is DriverConnection.Draining)
