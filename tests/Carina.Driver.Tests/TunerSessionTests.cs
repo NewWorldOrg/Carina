@@ -3,6 +3,7 @@ using Carina.Driver.Diagnostics;
 using Carina.Driver.Recording;
 using Carina.Driver.Sessions;
 using Carina.Driver.Transport;
+using Carina.Driver.Tuning;
 
 namespace Carina.Driver.Tests;
 
@@ -17,7 +18,7 @@ public sealed class TunerSessionTests : IDisposable
     public void Dispose() => Directory.Delete(root, recursive: true);
 
     private TunerSession Session(
-        ScriptedTunerDevice device,
+        ITunerDevice device,
         ManualTimeProvider clock,
         IRecordingWriter? writer = null,
         SessionPurpose purpose = SessionPurpose.Recording,
@@ -360,17 +361,18 @@ public sealed class TunerSessionTests : IDisposable
     public void TheBytesThatWereReadAreTheBytesThatWereWritten()
     {
         var clock = new ManualTimeProvider(Start);
-        var device = new ScriptedTunerDevice();
+        var device = new PacedTunerDevice();
         var writer = Writer();
         using var session = Session(device, clock, writer);
 
         session.Start();
-        WaitUntilPast(device, 0);
+        ReadExactly(device, 4);
         session.Stop();
         WaitForEnd(session);
 
         var written = new FileInfo(Path.Combine(root, "s-1.ts")).Length;
 
+        Assert.Equal(4, device.Reads);
         Assert.Equal(device.Reads * ChunkSize, written);
         Assert.Equal(written, session.BytesRecorded);
     }
@@ -379,40 +381,41 @@ public sealed class TunerSessionTests : IDisposable
     public void TheDeviceIsReadOncePerChunk()
     {
         var clock = new ManualTimeProvider(Start);
-        var device = new ScriptedTunerDevice();
+        var device = new PacedTunerDevice();
         using var session = Session(device, clock, Writer());
 
         session.Start();
-        WaitUntilPast(device, 0);
+        ReadExactly(device, 4);
         session.Stop();
         WaitForEnd(session);
 
         var seen = session.Counters.Packets + session.Counters.ProvisionalPackets;
 
-        Assert.True(device.Reads > 0);
-        Assert.InRange(seen, (device.Reads - 1) * 4L, device.Reads * 4L);
+        Assert.Equal(4, device.Reads);
+        Assert.Equal(device.Reads * 4L, seen);
     }
 
     [Fact]
     public void AStalledViewerDoesNotCostTheRecordingAByte()
     {
         var clock = new ManualTimeProvider(Start);
-        var device = new ScriptedTunerDevice();
+        var device = new PacedTunerDevice();
         var writer = Writer();
         using var session = Session(device, clock, writer);
+        var chunks = SessionBroadcaster.DefaultViewerCapacity + 1;
 
         var stalled = session.Broadcaster.Subscribe(SubscriberKind.Viewer);
 
         session.Start();
-        WaitUntilPast(device, SessionBroadcaster.DefaultViewerCapacity);
+        ReadExactly(device, chunks);
         session.Stop();
         WaitForEnd(session);
 
         var written = new FileInfo(Path.Combine(root, "s-1.ts")).Length;
 
-        Assert.True(device.Reads > SessionBroadcaster.DefaultViewerCapacity);
+        Assert.Equal(chunks, device.Reads);
         Assert.Equal(device.Reads * ChunkSize, written);
-        Assert.True(stalled.DroppedChunks > 0);
+        Assert.Equal(1, stalled.DroppedChunks);
         Assert.False(stalled.IsDisconnected);
     }
 
@@ -420,45 +423,84 @@ public sealed class TunerSessionTests : IDisposable
     public void ARecordingNeverBlocksForASurveyReader()
     {
         var clock = new ManualTimeProvider(Start);
-        var device = new ScriptedTunerDevice();
+        var device = new PacedTunerDevice();
         var writer = Writer();
         using var session = Session(device, clock, writer);
+        var chunks = SessionBroadcaster.DefaultSurveyCapacity + 1;
 
         var stalled = session.Broadcaster.Subscribe(SubscriberKind.Survey);
 
         session.Start();
-        WaitUntilPast(device, SessionBroadcaster.DefaultSurveyCapacity);
+        ReadExactly(device, chunks);
+
+        Assert.True(stalled.IsDisconnected);
+
         session.Stop();
         WaitForEnd(session);
 
         var written = new FileInfo(Path.Combine(root, "s-1.ts")).Length;
 
-        Assert.True(stalled.IsDisconnected);
+        Assert.Equal(chunks, device.Reads);
         Assert.Equal(device.Reads * ChunkSize, written);
+    }
+
+    [Fact]
+    public async Task ASurveyReaderOnARecordingIsRefusedOutrightAndNotAfterAWait()
+    {
+        var clock = new ManualTimeProvider(Start);
+        var device = new PacedTunerDevice();
+        using var session = Session(device, clock, Writer());
+
+        var stalled = session.Broadcaster.Subscribe(SubscriberKind.Survey);
+
+        session.Start();
+        ReadExactly(device, SessionBroadcaster.DefaultSurveyCapacity + 1);
+        session.Stop();
+        WaitForEnd(session);
+
+        var reading = async () =>
+        {
+            await foreach (var _ in stalled.Reader.ReadAllAsync())
+            { }
+        };
+
+        var refusal = await Record.ExceptionAsync(reading);
+
+        Assert.IsType<IOException>(refusal);
+        Assert.True(stalled.IsTruncated);
     }
 
     [Fact]
     public void ASurveySessionWaitsForItsReaderInsteadOfDroppingTheStream()
     {
         var clock = new ManualTimeProvider(Start);
-        var device = new ScriptedTunerDevice();
+        var device = new PacedTunerDevice();
         using var session = Session(device, clock, purpose: SessionPurpose.Survey);
+        var capacity = SessionBroadcaster.DefaultSurveyCapacity;
 
         var reader = session.Broadcaster.Subscribe(SubscriberKind.Survey);
 
         session.Start();
-        WaitUntilPast(device, SessionBroadcaster.DefaultSurveyCapacity);
+        ReadExactly(device, capacity);
 
         Assert.False(reader.IsDisconnected);
         Assert.Equal(0, reader.DroppedChunks);
 
-        var taken = 0;
-        while (taken < SessionBroadcaster.DefaultSurveyCapacity && reader.Reader.TryRead(out _))
+        device.Allow(1);
+
+        Assert.True(reader.Reader.TryRead(out _));
+
+        device.AwaitParkedBefore(capacity + 2);
+
+        var taken = 1;
+        while (reader.Reader.TryRead(out _))
         {
             taken++;
         }
 
-        Assert.Equal(SessionBroadcaster.DefaultSurveyCapacity, taken);
+        Assert.Equal(capacity + 1, taken);
+        Assert.False(reader.IsDisconnected);
+        Assert.Equal(0, reader.DroppedChunks);
 
         session.Stop();
         WaitForEnd(session);
@@ -468,18 +510,19 @@ public sealed class TunerSessionTests : IDisposable
     public void APiggybackReaderIsDropTolerantLikeAViewer()
     {
         var clock = new ManualTimeProvider(Start);
-        var device = new ScriptedTunerDevice();
+        var device = new PacedTunerDevice();
         using var session = Session(device, clock, Writer());
+        var chunks = SessionBroadcaster.DefaultViewerCapacity + 1;
 
         var stalled = session.Broadcaster.Subscribe(SubscriberKind.Piggyback);
 
         session.Start();
-        WaitUntilPast(device, SessionBroadcaster.DefaultViewerCapacity);
+        ReadExactly(device, chunks);
         session.Stop();
         WaitForEnd(session);
 
         Assert.False(stalled.IsDisconnected);
-        Assert.True(stalled.DroppedChunks > 0);
+        Assert.Equal(1, stalled.DroppedChunks);
     }
 
     [Fact]
@@ -564,16 +607,16 @@ public sealed class TunerSessionTests : IDisposable
     public void MeasurementCarriesOnAcrossReadsWithinOneSession()
     {
         var clock = new ManualTimeProvider(Start);
-        var device = new ScriptedTunerDevice();
+        var device = new PacedTunerDevice();
         using var session = Session(device, clock, Writer());
 
         session.Start();
-        WaitUntilPast(device, 8);
+        ReadExactly(device, 8);
         session.Stop();
         WaitForEnd(session);
 
         Assert.Equal(0, session.Counters.Drops);
-        Assert.True(session.Counters.Packets > 4);
+        Assert.Equal(8 * 4L, session.Counters.Packets + session.Counters.ProvisionalPackets);
     }
 
     [Fact]
@@ -741,15 +784,9 @@ public sealed class TunerSessionTests : IDisposable
         Assert.False(survey.IsTruncated);
     }
 
-    private static void WaitUntilPast(ScriptedTunerDevice device, long reads)
+    private static void ReadExactly(PacedTunerDevice device, int chunks)
     {
-        var deadline = DateTime.UtcNow.AddSeconds(10);
-
-        while (device.Reads <= reads && DateTime.UtcNow < deadline)
-        {
-            Thread.Sleep(1);
-        }
-
-        Assert.True(device.Reads > reads);
+        device.Allow(chunks);
+        device.AwaitParkedBefore(chunks + 1);
     }
 }
