@@ -207,6 +207,41 @@ public sealed class TunerLedgerStoreTests : IDisposable
     }
 
     [Fact]
+    public void AReaderHoldingTheLedgerOpenAcrossASaveReadsTheWholeOldOneRatherThanAMixture()
+    {
+        var before = File.ReadAllText(path);
+
+        using var reader = new FileStream(
+            path,
+            FileMode.Open,
+            FileAccess.Read,
+            FileShare.ReadWrite | FileShare.Delete
+        );
+
+        Store()
+            .Save(
+                [
+                    new TunerConfigEntry { DeviceId = "adapter0.frontend0" },
+                    new TunerConfigEntry { DeviceId = "adapter1.frontend0" },
+                ],
+                [Terrestrial, Satellite]
+            );
+
+        using var held = new StreamReader(reader);
+
+        Assert.Equal(before, held.ReadToEnd());
+        Assert.NotEqual(before, File.ReadAllText(path));
+    }
+
+    [Fact]
+    public void ASaveLeavesNothingBesideTheLedgerForTheNextStartToTripOver()
+    {
+        Store().Save([new TunerConfigEntry { DeviceId = "adapter0.frontend0" }], [Terrestrial]);
+
+        Assert.Equal([path], Directory.EnumerateFileSystemEntries(root));
+    }
+
+    [Fact]
     public void ARefusedSaveLeavesTheLedgerOnDiskExactlyAsItWas()
     {
         var before = File.ReadAllBytes(path);
