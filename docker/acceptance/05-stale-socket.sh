@@ -4,7 +4,7 @@ set -euo pipefail
 scenario_id="05-stale-socket"
 . "$(cd "$(dirname "$0")" && pwd)/lib.sh"
 
-heading "受入基準 5 — a killed driver leaves a stale socket and the app survives it"
+heading "a killed driver leaves a stale socket and the app survives it"
 
 stack_up
 

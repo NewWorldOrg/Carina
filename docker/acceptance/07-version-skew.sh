@@ -13,7 +13,7 @@ socket_volume="${prefix}-run"
 recordings_volume="${prefix}-rec"
 session="acc07"
 
-heading "受入基準 7 — today's app against a driver built from an older commit"
+heading "today's app against a driver built from an older commit"
 
 require_image_present
 
@@ -211,6 +211,6 @@ pass "today's app logged no error against the old driver"
 
 note "what this does not cover: no driver that ever existed advertises fewer capabilities or a lower protocol"
 note "version than today's app expects, so a real old image cannot produce the degraded case. That half of the"
-note "criterion is held by the FeatureTests of A-基盤-025 against a driver double."
+note "criterion is held by DriverVersionSkewTests in tests/Carina.Api.Tests/FeatureTest against a driver double."
 note "the app's own 'driver update required' surface is GET /api/driver/status, which answers 401 until the"
 note "authentication domain registers a scheme, so it cannot be read from outside a test host."

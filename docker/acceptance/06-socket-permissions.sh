@@ -4,7 +4,7 @@ set -euo pipefail
 scenario_id="06-socket-permissions"
 . "$(cd "$(dirname "$0")" && pwd)/lib.sh"
 
-heading "受入基準 6 — the socket is 0660 and the group is the whole access control"
+heading "the socket is 0660 and the group is the whole access control"
 
 stack_up
 

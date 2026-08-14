@@ -10,7 +10,7 @@ roomy_volume="${prefix}-rec"
 tiny="acc10tiny"
 roomy="acc10roomy"
 
-heading "受入基準 10 — a full disk fails one recording, diagnoses it, and leaves the driver running"
+heading "a full disk fails one recording, diagnoses it, and leaves the driver running"
 
 require_image_present
 

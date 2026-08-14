@@ -4,7 +4,7 @@ set -euo pipefail
 scenario_id="09-fail-closed"
 . "$(cd "$(dirname "$0")" && pwd)/lib.sh"
 
-heading "受入基準 9 — everything the app publishes is denied until authentication exists"
+heading "everything the app publishes is denied until authentication exists"
 
 stack_up
 

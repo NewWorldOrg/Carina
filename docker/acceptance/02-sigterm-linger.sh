@@ -8,7 +8,7 @@ session="acc02"
 volume="${project}_recordings"
 recording_seconds="${CARINA_ACCEPTANCE_LINGER_SECONDS:-20}"
 
-heading "受入基準 2 — SIGTERM while recording does not end the recording"
+heading "SIGTERM while recording does not end the recording"
 
 stack_up
 

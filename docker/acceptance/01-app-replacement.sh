@@ -7,7 +7,7 @@ scenario_id="01-app-replacement"
 session="acc01"
 volume="${project}_recordings"
 
-heading "受入基準 1 — replacing the app leaves the driver and the recording alone"
+heading "replacing the app leaves the driver and the recording alone"
 
 stack_up
 

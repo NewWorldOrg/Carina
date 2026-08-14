@@ -88,7 +88,7 @@ publish_stream() {
     state="$(remote_state "${ref}")"
 
     if [ "${state}" = present ]; then
-        echo "skip ${ref}: already published. The tag is immutable (BR-D-005), so this build is not pushed over it."
+        echo "skip ${ref}: already published. The tag is immutable — it names one exact build — so this build is not pushed over it."
         return
     fi
 

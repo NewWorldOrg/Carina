@@ -4,7 +4,7 @@ set -euo pipefail
 scenario_id="04-configuration-driven"
 . "$(cd "$(dirname "$0")" && pwd)/lib.sh"
 
-heading "受入基準 4 — swapping the configuration file moves the socket, the output and the devices"
+heading "swapping the configuration file moves the socket, the output and the devices"
 
 require_image_present
 

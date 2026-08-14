@@ -74,4 +74,4 @@ if [ "${failures}" -ne 0 ]; then
     exit 1
 fi
 
-echo "${#names[@]} scenarios passed. Criteria 3, 11 and 12 are not in this suite; docker/acceptance/README.md says where they live."
+echo "${#names[@]} scenarios passed. The two tag streams, the architecture test self-check and all-role zombie reaping are not in this suite; docker/acceptance/README.md says where they live."

@@ -76,7 +76,7 @@ require_full_history() {
     fi
 
     if [ "$(git -C "${repo_root}" rev-parse --is-shallow-repository)" = "true" ]; then
-        fail "this clone is shallow: 'the commit that last touched these paths' collapses onto HEAD, so both streams would move on every push and 受入基準 3 would silently be lost. Check out with fetch-depth: 0."
+        fail "this clone is shallow: 'the commit that last touched these paths' collapses onto HEAD, so both streams would move on every push and the two roles would silently stop being releasable one at a time. Check out with fetch-depth: 0."
     fi
 }
 
@@ -130,7 +130,7 @@ check_the_streams_are_separable() {
     app_projects="$(project_closure "${app_roots[@]}")"
 
     if grep -qxF "${app_roots[0]}" <<<"${driver_projects}"; then
-        fail "the driver stream reaches ${app_roots[0]}; every app change would move the driver tag and 受入基準 3 could not hold."
+        fail "the driver stream reaches ${app_roots[0]}; every app change would move the driver tag, so releasing the app would recreate the driver and end a recording in progress."
     fi
 
     if grep -qxF "${driver_roots[0]}" <<<"${app_projects}"; then
@@ -222,7 +222,7 @@ remove_scratch_worktree() {
     fi
 }
 
-prove_acceptance_criterion_3() {
+prove_the_streams_move_independently() {
     local driver_probe
     local app_probe
     local before_driver
@@ -282,7 +282,7 @@ prove_acceptance_criterion_3() {
     fi
 
     echo "after Directory.Build.props: both move, to ${after_driver} and ${after_app}"
-    echo "OK: 受入基準 3 holds in both directions, and the shared build settings move both streams."
+    echo "OK: an app-only change moves only the app tag and a driver-only change only the driver tag, and the shared build settings move both streams."
 }
 
 commit_probe() {
@@ -315,7 +315,7 @@ case "${mode}" in
         echo "OK: every project under src belongs to a stream, the two streams are separable, and each Dockerfile build stage copies exactly the projects its stream is keyed on."
         ;;
     prove)
-        prove_acceptance_criterion_3
+        prove_the_streams_move_independently
         ;;
     *)
         usage

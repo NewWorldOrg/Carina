@@ -9,7 +9,7 @@ volume="${project}_recordings"
 reader="${prefix}-slow-reader"
 window="${CARINA_ACCEPTANCE_BACKPRESSURE_WINDOW:-3}"
 
-heading "受入基準 8 — a live reader that cannot keep up does not slow the recording down"
+heading "a live reader that cannot keep up does not slow the recording down"
 
 stack_up
 

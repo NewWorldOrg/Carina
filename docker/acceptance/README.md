@@ -53,47 +53,50 @@ Two rules the scenarios follow, both learned here:
 
 ## Where each criterion stands
 
-| # | Criterion | Automated by | Runs in CI |
-|---|---|---|---|
-| 1 | app replacement | `01-app-replacement.sh` | yes |
-| 2 | SIGTERM linger | `02-sigterm-linger.sh` | yes |
-| 3 | CI tag behaviour | **not here** — `docker/image-tags.sh prove` on `feature/ci-tagging` (C-基盤-003) owns it | — |
-| 4 | configuration driven | `04-configuration-driven.sh` | yes |
-| 5 | stale socket | `05-stale-socket.sh` | yes |
-| 6 | socket permissions | `06-socket-permissions.sh` | yes |
-| 7 | version skew | `07-version-skew.sh` for the live combination; the degraded case stays with the double | yes |
-| 8 | backpressure independence | `08-backpressure.sh` | yes |
-| 9 | fail-closed | `09-fail-closed.sh` | yes |
-| 10 | ENOSPC | `10-enospc.sh` | yes |
-| 11 | architecture test self-check | **not here** — `ReferenceRuleSelfCheckTests` in `tests/Carina.Architecture.Tests` | yes, in the `test` job |
-| 12 | all-role zombie reaping | **not here** — `docker/verify-image.sh` | yes, in the `image` job |
+| Criterion | Automated by | Runs in CI |
+|---|---|---|
+| app replacement | `01-app-replacement.sh` | yes |
+| SIGTERM linger | `02-sigterm-linger.sh` | yes |
+| CI tag behaviour | **not here** — `docker/image-tags.sh prove` on `feature/ci-tagging` owns it | — |
+| configuration driven | `04-configuration-driven.sh` | yes |
+| stale socket | `05-stale-socket.sh` | yes |
+| socket permissions | `06-socket-permissions.sh` | yes |
+| version skew | `07-version-skew.sh` for the live combination; the degraded case stays with the double | yes |
+| backpressure independence | `08-backpressure.sh` | yes |
+| fail-closed | `09-fail-closed.sh` | yes |
+| ENOSPC | `10-enospc.sh` | yes |
+| architecture test self-check | **not here** — `ReferenceRuleSelfCheckTests` in `tests/Carina.Architecture.Tests` | yes, in the `test` job |
+| all-role zombie reaping | **not here** — `docker/verify-image.sh` | yes, in the `image` job |
 
-Criteria 3, 11 and 12 are automated elsewhere and are not duplicated here. They are listed so that
-reading this table tells you where every criterion lives, not only the ones this suite runs.
+CI tag behaviour, the architecture test self-check and all-role zombie reaping are automated
+elsewhere and are not duplicated here. They are listed so that reading this table tells you where
+every criterion lives, not only the ones this suite runs.
 
 ## What is not automated, and what it would take
 
-- **The linger cap itself (part of criterion 2).** `02` proves the driver stays up until its
-  recording ends. It does not prove the driver gives up at the cap, because
+- **The linger cap itself (part of the SIGTERM linger scenario).** `02` proves the driver stays
+  up until its recording ends. It does not prove the driver gives up at the cap, because
   `shutdownGraceHours` has a floor of 1 hour (`DriverConfigurationReader`), so a recording that
   outlives the cap has to run for over an hour. Automating it needs either a configuration floor
   below an hour or a scenario allowed to take that long; neither belongs on a shared runner.
   The `DrainCapReached` path has unit coverage in `tests/Carina.Driver.Tests`.
-- **A driver that advertises less than today's app expects (part of criterion 7).** No driver
-  that has ever existed advertises fewer capabilities than `recording`, `live`,
+- **A driver that advertises less than today's app expects (part of the version skew scenario).**
+  No driver that has ever existed advertises fewer capabilities than `recording`, `live`,
   `qualityMetering`, or a protocol version below 1, so no real old image can produce the
   degraded case. `07` proves the live combination — today's app against a driver binary built
-  from `fb89e7d` (A-基盤-013, before A-基盤-014 existed). The degraded case is held by the
-  FeatureTests of A-基盤-025 against the driver double, which is the only way to produce it.
+  from `fb89e7d`, the commit that first put the driver's HTTP on the Unix socket, before the
+  lifecycle work that added draining and `/diagnostics` existed. The degraded case is held by
+  `DriverVersionSkewTests` in `tests/Carina.Api.Tests/FeatureTest` against the driver double,
+  which is the only way to produce it.
 - **The app's own report of the skew.** `driverUpdateRequired` and `missingCapabilities` are
   fields of `GET /api/driver/status`, which answers 401 until the authentication domain
   registers a scheme. Nothing outside a test host can read them, so `07` observes the
   combination from the driver's side (the app's requests, served without a refusal) and from
   the app's liveness. When authentication lands, `07` should read the status body directly.
-- **Criterion 3.** The two tag streams are the subject of C-基盤-003, whose
+- **CI tag behaviour.** The two tag streams are the subject of the CI tagging work, whose
   `docker/image-tags.sh prove` measures it on a scratch worktree every CI run. It is not on
-  `master` yet; when it merges, that is where criterion 3 is proven, and nothing here needs to
-  change.
+  `master` yet; when it merges, that is where the two streams are proven, and nothing here needs
+  to change.
 
 ## Residual risk in the continuity check
 
