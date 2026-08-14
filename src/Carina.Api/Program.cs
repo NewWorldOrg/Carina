@@ -18,6 +18,7 @@ builder.Services.ConfigureHttpJsonOptions(options => WireJson.Configure(options.
 builder.Services.AddApplicationServices();
 builder.Services.AddCarinaInfrastructure(builder.Configuration);
 builder.Services.AddAuthentication();
+builder.Services.AddReverseProxyTrust(builder.Configuration);
 builder.Services.AddOpenApi(options =>
 {
     options.AddDocumentTransformer<ApiDocumentTransformer>();
