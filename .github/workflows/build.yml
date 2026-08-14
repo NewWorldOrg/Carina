@@ -1,0 +1,120 @@
+name: Build
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    env:
+      ConnectionStrings__Carina: Host=db;Port=5432;Database=carina;Username=carina;Password=placeholder
+      CARINA_DRIVER_SOCKET: /run/carina/driver.sock
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet restore
+      - run: dotnet build --no-restore -warnaserror
+      - run: dotnet format --no-restore --verify-no-changes
+      - run: dotnet build src/Carina.Api --no-restore -warnaserror
+      - name: Delete the document so the check below cannot pass without generating it
+        run: rm openapi/Carina.Api.json
+      - name: Generate the document, which starts the host and so needs the settings present
+        run: dotnet msbuild src/Carina.Api/Carina.Api.csproj -t:GenerateOpenApiDocuments
+      - name: The checked-in document is the generated one
+        run: git diff --exit-code openapi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: openapi
+          path: openapi/Carina.Api.json
+
+  unit-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet restore
+      - name: Unit tests, taken from the Unit folders and from everything not yet moved into one
+        run: |
+          set -o pipefail
+          dotnet test --no-restore --filter "FullyQualifiedName~Unit|(FullyQualifiedName!~FeatureTest&FullyQualifiedName!~DbIntegration&Category!=DbIntegration)" | tee unit.log
+      - name: The filter selected tests, rather than passing by selecting none
+        run: |
+          passed="$(sed -n 's/.*Passed: *\([0-9]\+\).*/\1/p' unit.log | awk '{ total += $1 } END { print total + 0 }')"
+          if [ "${passed}" -lt 1 ]; then
+            echo "the filter ran ${passed} tests: dotnet test exits 0 when a filter matches nothing, so this job would be green having verified nothing" >&2
+            exit 1
+          fi
+          echo "${passed} unit tests ran."
+
+  feature-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet restore
+      - name: The tests that drive the application through its HTTP surface
+        run: |
+          set -o pipefail
+          dotnet test --no-restore --filter "FullyQualifiedName~FeatureTest" | tee feature.log
+      - name: The filter selected tests, rather than passing by selecting none
+        run: |
+          passed="$(sed -n 's/.*Passed: *\([0-9]\+\).*/\1/p' feature.log | awk '{ total += $1 } END { print total + 0 }')"
+          if [ "${passed}" -lt 1 ]; then
+            echo "the filter ran ${passed} tests: dotnet test exits 0 when a filter matches nothing, so this job would be green having verified nothing" >&2
+            exit 1
+          fi
+          echo "${passed} feature tests ran."
+
+  db-integration-test:
+    runs-on: ubuntu-latest
+    services:
+      db:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: carina
+          POSTGRES_USER: carina
+          POSTGRES_PASSWORD: ci-only-not-a-deployment
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U carina -d carina"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      CARINA_DB_CONNECTION: Host=127.0.0.1;Port=5432;Database=carina;Username=carina;Password=ci-only-not-a-deployment
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet restore
+      - name: The tests the other two jobs exclude, against a real PostgreSQL
+        run: |
+          set -o pipefail
+          dotnet test --no-restore --filter "FullyQualifiedName~DbIntegration|Category=DbIntegration" | tee integration.log
+      - name: The filter selected tests, rather than passing by selecting none
+        run: |
+          passed="$(sed -n 's/.*Passed: *\([0-9]\+\).*/\1/p' integration.log | awk '{ total += $1 } END { print total + 0 }')"
+          if [ "${passed}" -lt 1 ]; then
+            echo "the filter ran ${passed} tests: dotnet test exits 0 when a filter matches nothing, so this job would be green having verified nothing" >&2
+            exit 1
+          fi
+          echo "${passed} DbIntegration tests ran against the service container."
