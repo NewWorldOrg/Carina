@@ -1,3 +1,4 @@
+using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Scans;
 using Carina.Infrastructure.Persistence.Repositories;

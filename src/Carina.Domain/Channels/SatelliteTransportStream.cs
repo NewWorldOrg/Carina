@@ -1,3 +1,5 @@
+using Carina.Contracts;
+
 namespace Carina.Domain.Channels;
 
 public sealed class SatelliteTransportStream
@@ -22,12 +24,12 @@ public sealed class SatelliteTransportStream
     {
         ArgumentNullException.ThrowIfNull(transportStreamId);
 
-        if (!TuningParameters.IsBsChannel(bsChannel))
+        if (!BroadcastStandards.IsBsChannel(bsChannel))
         {
             throw new ArgumentOutOfRangeException(
                 nameof(bsChannel),
                 bsChannel,
-                $"A BS slot is an odd {TuningParameters.BsFirstChannel} to {TuningParameters.BsLastChannel}, less {string.Join(" and ", TuningParameters.BsChannelsWithoutDemodulation)}.");
+                $"A BS slot is an odd {BroadcastStandards.BsFirstChannel} to {BroadcastStandards.BsLastChannel}, less {string.Join(" and ", BroadcastStandards.BsChannelsWithoutDemodulation)}.");
         }
 
         if (relativeStreamNumber is < FirstRelativeStreamNumber or > LastRelativeStreamNumber)

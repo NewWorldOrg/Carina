@@ -1,3 +1,4 @@
+using Carina.Contracts;
 using Carina.Domain.Channels;
 
 namespace Carina.Domain.Tests.Channels;
