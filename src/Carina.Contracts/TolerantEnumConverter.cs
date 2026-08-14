@@ -110,6 +110,26 @@ public sealed class TunerKindConverter : TolerantEnumConverter<TunerKind>
         };
 }
 
+public sealed class SignalLockConverter : TolerantEnumConverter<SignalLock>
+{
+    protected override string NameOf(SignalLock value) =>
+        value switch
+        {
+            SignalLock.NotLocked => "notLocked",
+            SignalLock.Locked => "locked",
+            _ => "unspecified",
+        };
+
+    protected override SignalLock? ValueOf(string name) =>
+        name switch
+        {
+            "notLocked" => SignalLock.NotLocked,
+            "locked" => SignalLock.Locked,
+            "unspecified" => SignalLock.Unspecified,
+            _ => null,
+        };
+}
+
 public sealed class TunerStateConverter : TolerantEnumConverter<TunerState>
 {
     protected override string NameOf(TunerState value) =>

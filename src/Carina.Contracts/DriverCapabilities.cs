@@ -9,4 +9,19 @@ public static class DriverCapabilities
     public const string QualityMetering = "qualityMetering";
 
     public const string Descrambling = "descrambling";
+
+    public const string SignalQuality = "signalQuality";
+
+    public const string LiveTunerToggle = "liveTunerToggle";
+
+    public const string SignalQualityMetricPrefix = "signalQuality.";
+
+    public static string SignalQualityMetric(string metric) =>
+        SignalQualityMetricPrefix + metric;
+
+    public static string? MetricIn(string capability) =>
+        capability.StartsWith(SignalQualityMetricPrefix, StringComparison.Ordinal)
+        && capability.Length > SignalQualityMetricPrefix.Length
+            ? capability[SignalQualityMetricPrefix.Length..]
+            : null;
 }

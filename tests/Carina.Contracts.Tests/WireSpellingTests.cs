@@ -47,6 +47,15 @@ public sealed class WireSpellingTests
     }
 
     [Theory]
+    [InlineData(SignalLock.Unspecified, "unspecified")]
+    [InlineData(SignalLock.NotLocked, "notLocked")]
+    [InlineData(SignalLock.Locked, "locked")]
+    public void SignalLockIsSpelledThisWay(SignalLock value, string wire)
+    {
+        AssertRoundTrip(value, wire, DriverJson.Context.SignalLock);
+    }
+
+    [Theory]
     [InlineData(TunerState.Unspecified, "unspecified")]
     [InlineData(TunerState.Idle, "idle")]
     [InlineData(TunerState.Busy, "busy")]
@@ -125,7 +134,27 @@ public sealed class WireSpellingTests
         Assert.Equal("live", DriverCapabilities.Live);
         Assert.Equal("qualityMetering", DriverCapabilities.QualityMetering);
         Assert.Equal("descrambling", DriverCapabilities.Descrambling);
+        Assert.Equal("signalQuality", DriverCapabilities.SignalQuality);
+        Assert.Equal("liveTunerToggle", DriverCapabilities.LiveTunerToggle);
     }
+
+    [Fact]
+    public void AMetricIsNamedUnderTheCapabilityItBelongsTo()
+    {
+        Assert.Equal(
+            "signalQuality.cnr",
+            DriverCapabilities.SignalQualityMetric(SignalQualityMetrics.Cnr)
+        );
+        Assert.Equal(
+            "signalQuality.postViterbiBitError",
+            DriverCapabilities.SignalQualityMetric(SignalQualityMetrics.PostViterbiBitError)
+        );
+        Assert.Equal("cnr", DriverCapabilities.MetricIn("signalQuality.cnr"));
+        Assert.Null(DriverCapabilities.MetricIn("signalQuality"));
+        Assert.Null(DriverCapabilities.MetricIn("signalQuality."));
+        Assert.Null(DriverCapabilities.MetricIn("recording"));
+    }
+
 
     private static void AssertRoundTrip<T>(
         T value,
