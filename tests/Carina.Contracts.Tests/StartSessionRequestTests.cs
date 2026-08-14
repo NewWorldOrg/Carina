@@ -8,7 +8,7 @@ public sealed class StartSessionRequestTests
     private static StartSessionRequest Request(
         SessionPurpose purpose = SessionPurpose.Live,
         TunerKind kind = TunerKind.Terrestrial,
-        int physicalChannel = 200,
+        int physicalChannel = 55,
         int? serviceId = null,
         DateTimeOffset? endsAt = null,
         string? deviceId = null,
