@@ -112,8 +112,6 @@ public sealed record SignalQuality(
 )
 {
     public bool HasLock => Locked.HeldThroughout;
-
-    public FrontendStatus Status => Locked.After;
 }
 
 public static class SignalQualityReading

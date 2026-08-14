@@ -113,6 +113,46 @@ public sealed class DvbDeviceProbeTests : IDisposable
     }
 
     [Fact]
+    public void ATunerWithAProblemIsStillUsableWhenItSaidWhatItReceives()
+    {
+        var calls = new ScriptedDvbSystemCalls
+        {
+            DeliverySystems = [DeliverySystem.IsdbTerrestrial],
+            RefuseInfoWith = Errno.NoSuchDevice,
+        };
+        var probe = new DvbDeviceProbe(calls);
+
+        var detected = Assert.Single(probe.Inspect(["/dev/dvb/adapter0/frontend0"]));
+
+        Assert.Equal(DeviceKind.Terrestrial, detected.Kind);
+        Assert.NotNull(detected.Problem);
+        Assert.Empty(detected.Name);
+    }
+
+    [Fact]
+    public void WhetherATunerCanBeUsedIsTheKindNotThePresenceOfAProblem()
+    {
+        var usable = new ScriptedDvbSystemCalls
+        {
+            DeliverySystems = [DeliverySystem.IsdbTerrestrial],
+            RefuseInfoWith = Errno.NoSuchDevice,
+        };
+        var unusable = new ScriptedDvbSystemCalls { DeliverySystems = [], HardwareName = "mystery" };
+
+        var withProblem = Assert.Single(
+            new DvbDeviceProbe(usable).Inspect(["/dev/dvb/adapter0/frontend0"])
+        );
+        var withoutKind = Assert.Single(
+            new DvbDeviceProbe(unusable).Inspect(["/dev/dvb/adapter0/frontend0"])
+        );
+
+        Assert.NotNull(withProblem.Problem);
+        Assert.NotNull(withoutKind.Problem);
+        Assert.NotEqual(DeviceKind.Unspecified, withProblem.Kind);
+        Assert.Equal(DeviceKind.Unspecified, withoutKind.Kind);
+    }
+
+    [Fact]
     public void AFrontendAnotherProcessHoldsIsReportedWithItsReasonRatherThanDropped()
     {
         var calls = new ScriptedDvbSystemCalls();

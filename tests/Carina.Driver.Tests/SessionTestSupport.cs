@@ -28,7 +28,7 @@ public sealed class ScriptedTunerDevice(
 
     public long Reads => Interlocked.Read(ref reads);
 
-    public long Overflows => 0;
+    public long Overflows { get; set; }
 
     public bool Disposed { get; private set; }
 
