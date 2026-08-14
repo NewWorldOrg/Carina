@@ -77,7 +77,7 @@ public static class SessionViews
                 continue;
             }
 
-            var kind = KindOf(device.Kind);
+            var kind = DeviceViews.Wire(device.Kind);
 
             if (!device.Enabled)
             {
@@ -114,12 +114,4 @@ public static class SessionViews
 
     private static IEnumerable<TunerSession> Ordered(IReadOnlyCollection<TunerSession> sessions) =>
         sessions.OrderBy(session => session.StartedAt).ThenBy(session => session.SessionId.Value, StringComparer.Ordinal);
-
-    private static TunerKind KindOf(DeviceKind kind) =>
-        kind switch
-        {
-            DeviceKind.Terrestrial => TunerKind.Terrestrial,
-            DeviceKind.Satellite => TunerKind.Satellite,
-            _ => TunerKind.Unspecified,
-        };
 }
