@@ -8,6 +8,19 @@ public interface IDriverClient
 
     Task<DriverCall<IReadOnlyList<TunerSnapshot>>> GetTunersAsync(CancellationToken cancellationToken);
 
+    Task<DriverCall<IReadOnlyList<DetectedDeviceDto>>> GetDetectedDevicesAsync(CancellationToken cancellationToken);
+
+    Task<DriverCall<TunerLedgerDto>> GetTunerLedgerAsync(CancellationToken cancellationToken);
+
+    Task<DriverCall<TunerLedgerDto>> ReplaceTunerLedgerAsync(
+        IReadOnlyList<TunerConfigEntry> tuners,
+        CancellationToken cancellationToken);
+
+    Task<DriverCall<TunerSnapshot>> ToggleTunerAsync(
+        string deviceId,
+        bool disabled,
+        CancellationToken cancellationToken);
+
     Task<DriverCall<IReadOnlyList<SessionSnapshot>>> GetActiveSessionsAsync(CancellationToken cancellationToken);
 
     Task<DriverCall<SessionSnapshot>> GetSessionAsync(SessionId sessionId, CancellationToken cancellationToken);

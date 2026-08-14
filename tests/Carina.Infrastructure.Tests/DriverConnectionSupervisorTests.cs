@@ -319,6 +319,111 @@ public sealed class DriverConnectionSupervisorTests
     }
 
     [Fact]
+    public async Task TheTuningLockAndHealthEventNamesAreRecognisedAndReachSubscribers()
+    {
+        var socketPath = NewSocketPath();
+        await using var driver = await FakeDriver.StartAsync(
+            socketPath,
+            FakeDriver.HelloFor("instance-a"));
+        await using var harness = await Harness.StartAsync(socketPath);
+
+        var received = new ConcurrentQueue<string>();
+        using var subscription = harness.Signals.Subscribe(received.Enqueue);
+
+        await Eventually.Happens(
+            () => harness.Monitor.Current.Connection is DriverConnection.Connected,
+            "the supervisor connects");
+        await Eventually.Happens(() => driver.ListenerCount > 0, "the event feed is subscribed");
+
+        driver.Signal(DriverEvents.SessionTuned);
+        driver.Signal(DriverEvents.SessionLockLost);
+        driver.Signal(DriverEvents.TunerHealthChanged);
+
+        await Eventually.Happens(
+            () => received.Contains(DriverEvents.TunerHealthChanged),
+            "the signals arrive");
+
+        Assert.Equal(
+            [DriverEvents.SessionTuned, DriverEvents.SessionLockLost, DriverEvents.TunerHealthChanged],
+            [.. received]);
+    }
+
+    [Fact]
+    public async Task AReconnectToADifferentInstanceIsAnnouncedToSubscribers()
+    {
+        var socketPath = NewSocketPath();
+        var first = await FakeDriver.StartAsync(socketPath, FakeDriver.HelloFor("instance-a"));
+        await using var harness = await Harness.StartAsync(socketPath);
+
+        await Eventually.Happens(() => harness.Hook.CallCount == 1, "the first adoption");
+
+        var received = new ConcurrentQueue<string>();
+        using var subscription = harness.Signals.Subscribe(received.Enqueue);
+
+        await first.DisposeAsync();
+        await Eventually.Happens(
+            () => harness.Monitor.Current.Connection is DriverConnection.NotConnected,
+            "the loss is noticed");
+
+        await using var second = await FakeDriver.StartAsync(
+            socketPath,
+            FakeDriver.HelloFor("instance-b"));
+
+        await Eventually.Happens(
+            () => received.Contains(DriverClientSignals.InstanceChanged),
+            "the instance change is announced");
+    }
+
+    [Fact]
+    public async Task TheFirstAdoptionIsNotAnnouncedAsAnInstanceChange()
+    {
+        var socketPath = NewSocketPath();
+        await using var harness = await Harness.StartAsync(socketPath);
+
+        var received = new ConcurrentQueue<string>();
+        using var subscription = harness.Signals.Subscribe(received.Enqueue);
+
+        await using var driver = await FakeDriver.StartAsync(
+            socketPath,
+            FakeDriver.HelloFor("instance-a"));
+
+        await Eventually.Happens(() => harness.Hook.CallCount == 1, "the first adoption");
+
+        Assert.DoesNotContain(DriverClientSignals.InstanceChanged, received);
+    }
+
+    [Fact]
+    public async Task AReconnectToTheSameInstanceIsNotAnnouncedAsAnInstanceChange()
+    {
+        var socketPath = NewSocketPath();
+        var first = await FakeDriver.StartAsync(socketPath, FakeDriver.HelloFor("instance-a"));
+        await using var harness = await Harness.StartAsync(socketPath);
+
+        await Eventually.Happens(() => harness.Hook.CallCount == 1, "the first adoption");
+
+        var received = new ConcurrentQueue<string>();
+        using var subscription = harness.Signals.Subscribe(received.Enqueue);
+
+        await first.DisposeAsync();
+        await Eventually.Happens(
+            () => harness.Monitor.Current.Connection is DriverConnection.NotConnected,
+            "the loss is noticed");
+
+        await using var second = await FakeDriver.StartAsync(
+            socketPath,
+            FakeDriver.HelloFor("instance-a"));
+
+        await Eventually.Happens(
+            () => harness.Monitor.Current.Connection is DriverConnection.Connected,
+            "the reconnection");
+
+        await Task.Delay(200);
+
+        Assert.DoesNotContain(DriverClientSignals.InstanceChanged, received);
+        Assert.Equal(1, harness.Hook.CallCount);
+    }
+
+    [Fact]
     public async Task AMissingCapabilityIsSurfacedAsDegradation()
     {
         var socketPath = NewSocketPath();

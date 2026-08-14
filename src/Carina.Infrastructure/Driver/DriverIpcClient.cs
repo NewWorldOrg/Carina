@@ -64,6 +64,85 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
             DriverJson.Context.IReadOnlyListTunerSnapshot,
             cancellationToken);
 
+    public Task<DriverCall<IReadOnlyList<DetectedDeviceDto>>> GetDetectedDevicesAsync(
+        CancellationToken cancellationToken)
+        => DeclaredGetAsync(
+            DriverCapabilities.DeviceDetection,
+            DriverEndpoints.DevicesDetected,
+            DriverJson.Context.IReadOnlyListDetectedDeviceDto,
+            cancellationToken);
+
+    public Task<DriverCall<TunerLedgerDto>> GetTunerLedgerAsync(CancellationToken cancellationToken)
+        => DeclaredGetAsync(
+            DriverCapabilities.TunerLedger,
+            DriverEndpoints.TunerLedger,
+            DriverJson.Context.TunerLedgerDto,
+            cancellationToken);
+
+    public async Task<DriverCall<TunerLedgerDto>> ReplaceTunerLedgerAsync(
+        IReadOnlyList<TunerConfigEntry> tuners,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(tuners);
+
+        if (await UndeclaredAsync(DriverCapabilities.TunerLedger, cancellationToken) is { } undeclared)
+        {
+            return DriverCall<TunerLedgerDto>.Refused(undeclared);
+        }
+
+        try
+        {
+            using var patience = Patience(cancellationToken);
+            using var body = JsonContent.Create(tuners, DriverJson.Context.IReadOnlyListTunerConfigEntry);
+            using var response = await http.PutAsync(DriverEndpoints.Tuners, body, patience.Token);
+
+            return await ReadAsync(
+                response,
+                DriverJson.Context.TunerLedgerDto,
+                bodyRequired: true,
+                patience.Token);
+        }
+        catch (Exception error) when (IsTransport(error, cancellationToken))
+        {
+            return DriverCall<TunerLedgerDto>.Unreachable(Describe(error));
+        }
+    }
+
+    public async Task<DriverCall<TunerSnapshot>> ToggleTunerAsync(
+        string deviceId,
+        bool disabled,
+        CancellationToken cancellationToken)
+    {
+        if (new TunerConfigEntry { DeviceId = deviceId }.Validate() is { Count: > 0 } malformed)
+        {
+            return DriverCall<TunerSnapshot>.Refused(new DriverProblem("badDeviceId", malformed));
+        }
+
+        if (await UndeclaredAsync(DriverCapabilities.LiveTunerToggle, cancellationToken) is { } undeclared)
+        {
+            return DriverCall<TunerSnapshot>.Refused(undeclared);
+        }
+
+        try
+        {
+            using var patience = Patience(cancellationToken);
+            using var body = JsonContent.Create(
+                new TunerToggleRequest { Disabled = disabled },
+                DriverJson.Context.TunerToggleRequest);
+            using var response = await http.PatchAsync(DriverEndpoints.Tuner(deviceId), body, patience.Token);
+
+            return await ReadAsync(
+                response,
+                DriverJson.Context.TunerSnapshot,
+                bodyRequired: true,
+                patience.Token);
+        }
+        catch (Exception error) when (IsTransport(error, cancellationToken))
+        {
+            return DriverCall<TunerSnapshot>.Unreachable(Describe(error));
+        }
+    }
+
     public Task<DriverCall<IReadOnlyList<SessionSnapshot>>> GetActiveSessionsAsync(
         CancellationToken cancellationToken)
         => GetAsync(
@@ -150,6 +229,37 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
         => OpenAsync(DriverEndpoints.Events, cancellationToken);
 
     public void Dispose() => http.Dispose();
+
+    private async Task<DriverCall<T>> DeclaredGetAsync<T>(
+        string capability,
+        string path,
+        JsonTypeInfo<T> typeInfo,
+        CancellationToken cancellationToken)
+        where T : class
+    {
+        if (await UndeclaredAsync(capability, cancellationToken) is { } undeclared)
+        {
+            return DriverCall<T>.Refused(undeclared);
+        }
+
+        return await GetAsync(path, typeInfo, cancellationToken);
+    }
+
+    private async Task<DriverProblem?> UndeclaredAsync(
+        string capability,
+        CancellationToken cancellationToken)
+    {
+        var health = await GetHealthAsync(cancellationToken);
+
+        if (health.TryGetValue(out var hello) && !hello.Supports(capability))
+        {
+            return new DriverProblem(
+                "capabilityMissing",
+                [$"This driver does not declare '{capability}'; update the driver to use it."]);
+        }
+
+        return null;
+    }
 
     private async Task<DriverCall<T>> GetAsync<T>(
         string path,

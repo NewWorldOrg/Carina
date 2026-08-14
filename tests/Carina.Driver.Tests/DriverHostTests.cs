@@ -125,6 +125,8 @@ public sealed class DriverHostTests : IDisposable
         Assert.True(hello.Supports(DriverCapabilities.Recording));
         Assert.True(hello.Supports(DriverCapabilities.Live));
         Assert.True(hello.Supports(DriverCapabilities.QualityMetering));
+        Assert.True(hello.Supports(DriverCapabilities.DeviceDetection));
+        Assert.True(hello.Supports(DriverCapabilities.TunerLedger));
     }
 
     [Fact]
