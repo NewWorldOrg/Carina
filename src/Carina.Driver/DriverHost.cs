@@ -135,6 +135,7 @@ public static class DriverHost
         builder.Services.AddHostedService(provider =>
             provider.GetRequiredService<TunerSessionManager>()
         );
+        builder.Services.AddHostedService<TunerLedgerReconciler>();
         builder.Services.AddHostedService<SocketPermissionGuard>();
 
         reshapeServices?.Invoke(builder.Services);

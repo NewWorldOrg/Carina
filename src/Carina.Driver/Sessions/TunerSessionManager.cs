@@ -577,6 +577,14 @@ public sealed class TunerSessionManager(
         events?.Signal(DriverEvents.Tuners);
     }
 
+    public void Fault(string deviceId, string detail)
+    {
+        faultedDevices[deviceId] = detail;
+
+        events?.Signal(DriverEvents.TunerHealthChanged);
+        events?.Signal(DriverEvents.Tuners);
+    }
+
     public bool IsClaimed(string deviceId) => claimedDevices.ContainsKey(deviceId);
 
     public bool IsFaulted(string deviceId, [NotNullWhen(true)] out string? detail) =>
