@@ -119,7 +119,7 @@ public sealed class DvbTunerDeviceTests
             calls,
             clock,
             Paths,
-            DvbChannel.BroadcastSatellite(1, 16_400),
+            DvbChannel.BroadcastSatellite(1, 50_001),
             LnbPower.For(DeviceKind.Satellite, enabledInTheLedger: false),
             Settings,
             CancellationToken.None

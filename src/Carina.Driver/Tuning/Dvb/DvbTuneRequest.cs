@@ -51,5 +51,7 @@ public static class DvbTuneRequest
     private static DvbChannel Satellite(int slot) =>
         slot % 2 is 0
             ? DvbChannel.CommunicationSatellite(slot)
-            : DvbChannel.BroadcastSatellite(slot, transportStreamId: null);
+            : throw DvbFailure.Refused(
+                $"tuning.physicalChannel: broadcast satellite slot {slot} is tunable only when the request names the transport stream it wants, and the older parameters carry no transport stream identifier, so this tune needs the typed ones."
+            );
 }

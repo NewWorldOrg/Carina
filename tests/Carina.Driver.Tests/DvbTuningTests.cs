@@ -4,14 +4,17 @@ namespace Carina.Driver.Tests;
 
 public sealed class DvbTuningTests
 {
+    private const int SyntheticStream = 50_001;
+
+
     [Fact]
     public void EveryTunePropertyListEndsByAskingTheFrontendToTune()
     {
         DvbChannel[] channels =
         [
             DvbChannel.Terrestrial(27),
-            DvbChannel.BroadcastSatellite(1, 16_400),
-            DvbChannel.BroadcastSatellite(9, transportStreamId: null),
+            DvbChannel.BroadcastSatellite(1, SyntheticStream),
+            DvbChannel.BroadcastSatellite(9, SyntheticStream),
             DvbChannel.CommunicationSatellite(24),
         ];
 
@@ -32,7 +35,7 @@ public sealed class DvbTuningTests
         DvbChannel[] channels =
         [
             DvbChannel.Terrestrial(27),
-            DvbChannel.BroadcastSatellite(1, 16_400),
+            DvbChannel.BroadcastSatellite(1, SyntheticStream),
             DvbChannel.CommunicationSatellite(24),
         ];
 
@@ -64,7 +67,7 @@ public sealed class DvbTuningTests
     [Fact]
     public void ABroadcastSatelliteTuneNamesTheSatelliteSystemAndItsFrequencyInKilohertz()
     {
-        var list = DvbTuning.PropertiesFor(DvbChannel.BroadcastSatellite(15, 16_625));
+        var list = DvbTuning.PropertiesFor(DvbChannel.BroadcastSatellite(15, SyntheticStream));
 
         Assert.Equal(
             (uint)DeliverySystem.IsdbSatellite.Code,
@@ -76,19 +79,29 @@ public sealed class DvbTuningTests
     [Fact]
     public void ABroadcastSatelliteTuneNamesTheStreamWhenOneWasChosen()
     {
-        var list = DvbTuning.PropertiesFor(DvbChannel.BroadcastSatellite(15, 16_625));
+        var list = DvbTuning.PropertiesFor(DvbChannel.BroadcastSatellite(15, SyntheticStream));
 
-        Assert.Equal(16_625u, ValueOf(list, DvbProperty.StreamId));
+        Assert.Equal((uint)SyntheticStream, ValueOf(list, DvbProperty.StreamId));
     }
 
     [Fact]
-    public void ABroadcastSatelliteTuneWithoutAChosenStreamDoesNotInventOne()
+    public void EveryBroadcastSatelliteTuneNamesTheStreamSoASharedSlotCannotAnswerForAnother()
     {
-        var list = DvbTuning.PropertiesFor(
-            DvbChannel.BroadcastSatellite(15, transportStreamId: null)
-        );
+        int[] slots = [1, 9, 15, 23];
 
-        Assert.False(Names(list, DvbProperty.StreamId));
+        Assert.All(
+            slots,
+            slot =>
+                Assert.Equal(
+                    (uint)SyntheticStream,
+                    ValueOf(
+                        DvbTuning.PropertiesFor(
+                            DvbChannel.BroadcastSatellite(slot, SyntheticStream)
+                        ),
+                        DvbProperty.StreamId
+                    )
+                )
+        );
     }
 
     [Fact]
@@ -105,7 +118,7 @@ public sealed class DvbTuningTests
     {
         Assert.False(
             Names(
-                DvbTuning.PropertiesFor(DvbChannel.BroadcastSatellite(1, null)),
+                DvbTuning.PropertiesFor(DvbChannel.BroadcastSatellite(1, SyntheticStream)),
                 DvbProperty.BandwidthHertz
             )
         );
@@ -122,7 +135,7 @@ public sealed class DvbTuningTests
     [Fact]
     public void ClearingFirstMeansAStreamFromAnEarlierTuneCannotSurviveIntoTheNext()
     {
-        var satellite = DvbTuning.PropertiesFor(DvbChannel.BroadcastSatellite(15, 16_625));
+        var satellite = DvbTuning.PropertiesFor(DvbChannel.BroadcastSatellite(15, SyntheticStream));
         var afterwards = DvbTuning.PropertiesFor(DvbChannel.CommunicationSatellite(24));
 
         Assert.True(Names(satellite, DvbProperty.StreamId));

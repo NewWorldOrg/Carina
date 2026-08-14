@@ -47,10 +47,12 @@ public static class DvbTuning
                     )
                 );
 
-                if (broadcast.TransportStreamId is { } stream)
-                {
-                    settings.Add(new DvbPropertySetting(DvbProperty.StreamId, (uint)stream));
-                }
+                settings.Add(
+                    new DvbPropertySetting(
+                        DvbProperty.StreamId,
+                        (uint)broadcast.TransportStreamId
+                    )
+                );
 
                 break;
 

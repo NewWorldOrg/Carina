@@ -41,14 +41,21 @@ public abstract record DvbChannel
             );
         }
 
-        if (transportStreamId is { } stream && stream is < 0 or > ushort.MaxValue)
+        if (transportStreamId is not { } stream)
+        {
+            throw DvbFailure.Refused(
+                $"transportStreamId: broadcast satellite slot {slot} can carry more than one transport stream, and a slot carrying none of its own answers with the first stream on the transponder, so a tune that does not name the transport stream it wants cannot tell what it received from what it asked for."
+            );
+        }
+
+        if (stream is < 0 or > ushort.MaxValue)
         {
             throw DvbFailure.Refused(
                 $"transportStreamId: a transport stream identifier is a sixteen bit number, and {stream} is not one."
             );
         }
 
-        return new BroadcastSatelliteChannel(slot, transportStreamId);
+        return new BroadcastSatelliteChannel(slot, stream);
     }
 
     public static DvbChannel CommunicationSatellite(int slot)
@@ -73,7 +80,7 @@ public sealed record TerrestrialChannel(int PhysicalChannel) : DvbChannel
     public override bool NeedsSatelliteAerial => false;
 }
 
-public sealed record BroadcastSatelliteChannel(int Slot, int? TransportStreamId) : DvbChannel
+public sealed record BroadcastSatelliteChannel(int Slot, int TransportStreamId) : DvbChannel
 {
     public override bool NeedsSatelliteAerial => true;
 }
