@@ -262,6 +262,41 @@ public sealed class TypedTuneTests
     }
 
     [Fact]
+    public void ATypedSatelliteTuneLeavesTheAerialUnfedUnlessTheLedgerSaysOtherwise()
+    {
+        var (calls, clock) = Ready();
+        var tune = TuneParams.Cs110(24);
+
+        using var device = Factory(calls, clock).Create(Satellite(), tune.ToLegacyRequest(), tune);
+
+        Assert.Equal(LnbVoltage.Off, Assert.Single(calls.VoltagesSet));
+    }
+
+    [Fact]
+    public void ATypedSatelliteTuneFeedsTheAerialWhenTheLedgerSaysTo()
+    {
+        var (calls, clock) = Ready();
+        var tune = TuneParams.Cs110(24);
+
+        using var device = Factory(calls, clock)
+            .Create(Satellite() with { LnbPower = true }, tune.ToLegacyRequest(), tune);
+
+        Assert.Equal(LnbVoltage.Eighteen, Assert.Single(calls.VoltagesSet));
+    }
+
+    [Fact]
+    public void ATypedTerrestrialTuneNeverPutsAnythingOnTheAerial()
+    {
+        var (calls, clock) = Ready();
+        var tune = TuneParams.Terrestrial(UnassignedTerrestrialChannel);
+
+        using var device = Factory(calls, clock)
+            .Create(Terrestrial(), tune.ToLegacyRequest(), tune);
+
+        Assert.Empty(calls.VoltagesSet);
+    }
+
+    [Fact]
     public void TheThreeSystemsDifferOnlyInWhatTheyPutInThePropertyList()
     {
         var (calls, clock) = Ready();
