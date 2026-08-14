@@ -1,7 +1,7 @@
 using System.Text;
 
 using Carina.Broadcast.Sections;
-using Carina.Broadcast.Tests.Building;
+using Carina.BroadcastTestSupport;
 
 namespace Carina.Broadcast.Tests.Sections;
 

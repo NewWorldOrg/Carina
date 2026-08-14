@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/Carina.Broadcast/Carina.Broadcast.csproj" />
+    <ProjectReference Include="../Carina.BroadcastTestSupport/Carina.BroadcastTestSupport.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,4 +1,4 @@
-namespace Carina.Broadcast.Tests.Building;
+namespace Carina.BroadcastTestSupport;
 
 public sealed class ByteWriter
 {

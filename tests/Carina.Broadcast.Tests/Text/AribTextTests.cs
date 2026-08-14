@@ -1,4 +1,4 @@
-using Carina.Broadcast.Tests.Building;
+using Carina.BroadcastTestSupport;
 using Carina.Broadcast.Text;
 
 namespace Carina.Broadcast.Tests.Text;
