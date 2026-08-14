@@ -41,7 +41,8 @@ public sealed class DvbTunerDetector : ITunerDetector
             deviceId,
             tuner.Receives,
             tuner.Detection,
-            tuner.Problem?.Replace(tuner.FrontendPath, deviceId, StringComparison.Ordinal)
+            tuner.Problem?.Replace(tuner.FrontendPath, deviceId, StringComparison.Ordinal),
+            tuner.FrontendPath
         );
     }
 
