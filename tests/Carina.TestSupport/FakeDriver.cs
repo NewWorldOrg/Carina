@@ -34,6 +34,18 @@ public sealed class FakeDriver : IAsyncDisposable
 
     public IReadOnlyList<DiagnosticSnapshot> Diagnostics { get; set; } = [];
 
+    public IReadOnlyList<DetectedDeviceDto> DetectedDevices { get; set; } = [];
+
+    public TunerLedgerDto Ledger { get; set; } = new();
+
+    public IReadOnlyList<TunerConfigEntry>? LastReplacedLedger { get; private set; }
+
+    public string? LastToggledDeviceId { get; private set; }
+
+    public TunerToggleRequest? LastToggle { get; private set; }
+
+    public StartSessionRequest? LastStartRequest { get; private set; }
+
     public DriverProblem? RefuseEverythingWith { get; set; }
 
     public int RefusalStatus { get; set; } = StatusCodes.Status503ServiceUnavailable;
@@ -102,6 +114,12 @@ public sealed class FakeDriver : IAsyncDisposable
             driver.CannedAsync(context, driver.Sessions, DriverJson.Context.IReadOnlyListSessionSnapshot));
         app.MapGet(DriverEndpoints.Diagnostics, context =>
             driver.CannedAsync(context, driver.Diagnostics, DriverJson.Context.IReadOnlyListDiagnosticSnapshot));
+        app.MapGet(DriverEndpoints.DevicesDetected, context =>
+            driver.CannedAsync(context, driver.DetectedDevices, DriverJson.Context.IReadOnlyListDetectedDeviceDto));
+        app.MapGet(DriverEndpoints.TunerLedger, context =>
+            driver.CannedAsync(context, driver.Ledger, DriverJson.Context.TunerLedgerDto));
+        app.MapPut(DriverEndpoints.Tuners, driver.ReplaceLedgerAsync);
+        app.MapPatch($"{DriverEndpoints.Tuners}/{{id}}", driver.ToggleTunerAsync);
         app.MapPost(DriverEndpoints.Sessions, driver.StartSessionAsync);
         app.MapDelete($"{DriverEndpoints.Sessions}/{{id}}", driver.StopSessionAsync);
         app.MapGet($"{DriverEndpoints.Sessions}/{{id}}/stream", driver.AbortedStreamAsync);
@@ -204,6 +222,8 @@ public sealed class FakeDriver : IAsyncDisposable
             DriverJson.Context.StartSessionRequest,
             context.RequestAborted);
 
+        LastStartRequest = request;
+
         var snapshot = new SessionSnapshot(
             request!.SessionId,
             request.Purpose,
@@ -227,6 +247,68 @@ public sealed class FakeDriver : IAsyncDisposable
         }
 
         context.Response.StatusCode = StatusCodes.Status202Accepted;
+    }
+
+    private async Task ReplaceLedgerAsync(HttpContext context)
+    {
+        if (await HandledAsync(context))
+        {
+            return;
+        }
+
+        var entries = await context.Request.ReadFromJsonAsync(
+            DriverJson.Context.IReadOnlyListTunerConfigEntry,
+            context.RequestAborted);
+
+        LastReplacedLedger = entries;
+
+        if (entries is not { Count: > 0 })
+        {
+            await WriteAsync(
+                context,
+                StatusCodes.Status400BadRequest,
+                new DriverProblem("emptyLedger", ["A ledger names every tuner it wants kept."]),
+                DriverJson.Context.DriverProblem);
+
+            return;
+        }
+
+        await WriteAsync(context, StatusCodes.Status200OK, Ledger, DriverJson.Context.TunerLedgerDto);
+    }
+
+    private async Task ToggleTunerAsync(HttpContext context)
+    {
+        if (await HandledAsync(context))
+        {
+            return;
+        }
+
+        var deviceId = context.Request.RouteValues["id"] as string ?? string.Empty;
+
+        LastToggledDeviceId = deviceId;
+        LastToggle = await context.Request.ReadFromJsonAsync(
+            DriverJson.Context.TunerToggleRequest,
+            context.RequestAborted);
+
+        var tuner = Tuners.FirstOrDefault(snapshot =>
+            string.Equals(snapshot.DeviceId, deviceId, StringComparison.Ordinal));
+
+        if (tuner is null)
+        {
+            await WriteAsync(
+                context,
+                StatusCodes.Status404NotFound,
+                new DriverProblem("noSuchTuner", [$"This driver holds no tuner called '{deviceId}'."]),
+                DriverJson.Context.DriverProblem);
+
+            return;
+        }
+
+        await WriteAsync(
+            context,
+            StatusCodes.Status200OK,
+            tuner with { Toggled = true },
+            DriverJson.Context.TunerSnapshot);
     }
 
     private async Task AbortedStreamAsync(HttpContext context)
