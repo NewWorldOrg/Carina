@@ -21,21 +21,23 @@ public sealed class DriverConnectionSupervisor(
         NeverReached,
         Lost,
         Alive,
+        Draining,
+        FeedEnded,
     }
+
+    private readonly DriverReconnectCadence cadence = new(settings);
 
     private DriverHello? adopted;
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var backoff = new ReconnectBackoff(settings.FirstDelay, settings.DelayCap, settings.Chance);
-
         while (!stoppingToken.IsCancellationRequested)
         {
-            var outcome = ServeOutcome.NeverReached;
+            var serve = Serve.Of(ServeOutcome.NeverReached);
 
             try
             {
-                outcome = await ServeOnceAsync(stoppingToken);
+                serve = await ServeOnceAsync(stoppingToken);
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -46,19 +48,21 @@ public sealed class DriverConnectionSupervisor(
                 logger.LogWarning(error, "The driver connection loop failed; it will retry.");
             }
 
-            if (outcome is not ServeOutcome.Alive)
+            if (serve.Outcome is not (ServeOutcome.Alive or ServeOutcome.Draining))
             {
                 monitor.Record(DriverObservation.NotConnected);
             }
 
-            if (outcome is not ServeOutcome.NeverReached)
+            var pause = serve.Outcome switch
             {
-                backoff.Reset();
-            }
+                ServeOutcome.Draining => cadence.WhileDraining(),
+                ServeOutcome.FeedEnded => cadence.AfterFeed(serve.Held),
+                _ => cadence.AfterSetback(),
+            };
 
             try
             {
-                await Task.Delay(backoff.Next(), timeProvider, stoppingToken);
+                await Task.Delay(pause, timeProvider, stoppingToken);
             }
             catch (OperationCanceledException)
             {
@@ -67,13 +71,13 @@ public sealed class DriverConnectionSupervisor(
         }
     }
 
-    private async Task<ServeOutcome> ServeOnceAsync(CancellationToken stoppingToken)
+    private async Task<Serve> ServeOnceAsync(CancellationToken stoppingToken)
     {
         var health = await client.GetHealthAsync(stoppingToken);
 
         if (!health.TryGetValue(out var hello))
         {
-            return ServeOutcome.NeverReached;
+            return Serve.Of(ServeOutcome.NeverReached);
         }
 
         var missing = settings.ExpectedCapabilities
@@ -93,7 +97,7 @@ public sealed class DriverConnectionSupervisor(
                     "The driver answered its hello but its session list did not arrive: {Failure}",
                     sessions.Failure);
 
-                return ServeOutcome.Lost;
+                return Serve.Of(ServeOutcome.Lost);
             }
 
             if (!sessions.TryGetValue(out var held))
@@ -102,28 +106,35 @@ public sealed class DriverConnectionSupervisor(
                     "The driver refused its session list ({Problem}); it stays connected and readoption retries.",
                     sessions.Problem?.Title);
 
-                return ServeOutcome.Alive;
+                return Serve.Of(ServeOutcome.Alive);
             }
 
             if (!await ReadoptAsync(held, stoppingToken))
             {
-                return ServeOutcome.Alive;
+                return Serve.Of(ServeOutcome.Alive);
             }
 
             adopted = hello;
+        }
+
+        if (observation.Connection is DriverConnection.Draining)
+        {
+            return Serve.Of(ServeOutcome.Draining);
         }
 
         var feed = await client.OpenEventsAsync(stoppingToken);
 
         if (feed.Outcome is DriverCallOutcome.Refused)
         {
-            return ServeOutcome.Alive;
+            return Serve.Of(ServeOutcome.Alive);
         }
 
         if (!feed.TryGetValue(out var stream))
         {
-            return ServeOutcome.Lost;
+            return Serve.Of(ServeOutcome.Lost);
         }
+
+        var opened = timeProvider.GetTimestamp();
 
         try
         {
@@ -149,10 +160,10 @@ public sealed class DriverConnectionSupervisor(
         }
         catch (Exception error) when (error is IOException or HttpRequestException)
         {
-            return ServeOutcome.Lost;
+            return new Serve(ServeOutcome.FeedEnded, timeProvider.GetElapsedTime(opened));
         }
 
-        return ServeOutcome.Lost;
+        return new Serve(ServeOutcome.FeedEnded, timeProvider.GetElapsedTime(opened));
     }
 
     private async Task<bool> ReadoptAsync(
@@ -177,5 +188,10 @@ public sealed class DriverConnectionSupervisor(
 
             return false;
         }
+    }
+
+    private readonly record struct Serve(ServeOutcome Outcome, TimeSpan Held)
+    {
+        public static Serve Of(ServeOutcome outcome) => new(outcome, TimeSpan.Zero);
     }
 }

@@ -44,6 +44,8 @@ public sealed class FakeDriver : IAsyncDisposable
 
     public bool TruncateHealth { get; set; }
 
+    public bool DropEventFeed { get; set; }
+
     public SemaphoreSlim StreamAbortGate { get; } = new(0);
 
     public int ListenerCount
@@ -241,6 +243,16 @@ public sealed class FakeDriver : IAsyncDisposable
     {
         if (await HandledAsync(context))
         {
+            return;
+        }
+
+        if (DropEventFeed)
+        {
+            context.Response.StatusCode = StatusCodes.Status200OK;
+            context.Response.ContentType = "text/event-stream";
+            await context.Response.StartAsync(context.RequestAborted);
+            await context.Response.Body.FlushAsync(context.RequestAborted);
+
             return;
         }
 

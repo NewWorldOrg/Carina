@@ -14,6 +14,44 @@ namespace Carina.Infrastructure.Tests;
 
 public sealed class DriverConnectionSupervisorTests
 {
+    private static readonly TimeSpan DrainPoll = TimeSpan.FromSeconds(1);
+
+    private sealed class HurriedClock : TimeProvider
+    {
+        private readonly ConcurrentQueue<TimeSpan> waits = new();
+
+        public IReadOnlyCollection<TimeSpan> Waits => waits;
+
+        public override ITimer CreateTimer(
+            TimerCallback callback,
+            object? state,
+            TimeSpan dueTime,
+            TimeSpan period)
+            => new Hurried(this, base.CreateTimer(callback, state, Remember(dueTime), period));
+
+        private TimeSpan Remember(TimeSpan dueTime)
+        {
+            if (dueTime <= TimeSpan.Zero)
+            {
+                return dueTime;
+            }
+
+            waits.Enqueue(dueTime);
+
+            return TimeSpan.Zero;
+        }
+
+        private sealed class Hurried(HurriedClock clock, ITimer inner) : ITimer
+        {
+            public bool Change(TimeSpan dueTime, TimeSpan period)
+                => inner.Change(clock.Remember(dueTime), period);
+
+            public void Dispose() => inner.Dispose();
+
+            public ValueTask DisposeAsync() => inner.DisposeAsync();
+        }
+    }
+
     private sealed class Harness : IAsyncDisposable
     {
         private Harness(string socketPath, DriverIpcClient client, DriverConnectionSupervisor supervisor)
@@ -38,7 +76,8 @@ public sealed class DriverConnectionSupervisorTests
         public static async Task<Harness> StartAsync(
             string? socketPath = null,
             string[]? expectedCapabilities = null,
-            Exception? resyncFailure = null)
+            Exception? resyncFailure = null,
+            TimeProvider? clock = null)
         {
             socketPath ??= NewSocketPath();
 
@@ -51,7 +90,10 @@ public sealed class DriverConnectionSupervisorTests
                 TimeSpan.FromMilliseconds(20),
                 TimeSpan.FromMilliseconds(200),
                 expectedCapabilities ?? ["recording", "live"],
-                () => 1.0);
+                () => 1.0)
+            {
+                DrainPoll = DrainPoll,
+            };
 
             var supervisor = new DriverConnectionSupervisor(
                 client,
@@ -59,7 +101,7 @@ public sealed class DriverConnectionSupervisorTests
                 signals,
                 hook,
                 settings,
-                TimeProvider.System,
+                clock ?? TimeProvider.System,
                 NullLogger<DriverConnectionSupervisor>.Instance);
 
             var harness = new Harness(socketPath, client, supervisor)
@@ -356,4 +398,64 @@ public sealed class DriverConnectionSupervisorTests
 
         Assert.Equal(DriverConnection.Connected, harness.Monitor.Current.Connection);
     }
+
+    [Fact]
+    public async Task ADrainingDriverIsPolledOnItsOwnCadenceAndItsFeedIsLeftAlone()
+    {
+        var socketPath = NewSocketPath();
+        await using var driver = await FakeDriver.StartAsync(
+            socketPath,
+            FakeDriver.HelloFor("instance-a", draining: true));
+        driver.RefusalsByPath[DriverEndpoints.Events] = new FakeDriver.Refusal(
+            503,
+            new DriverProblem("draining", ["The driver is shutting down and sends no further events."]));
+
+        var clock = new HurriedClock();
+        await using var harness = await Harness.StartAsync(socketPath, clock: clock);
+
+        await Eventually.Happens(() => clock.Waits.Count >= 5, "five supervision rounds");
+
+        Assert.Equal(0, driver.RequestsFor(DriverEndpoints.Events));
+        Assert.All(clock.Waits.Take(5), wait => Assert.Equal(DrainPoll, wait));
+    }
+
+    [Fact]
+    public async Task ARefusedEventFeedBacksOffInsteadOfRestartingAtTheFirstDelay()
+    {
+        var socketPath = NewSocketPath();
+        await using var driver = await FakeDriver.StartAsync(
+            socketPath,
+            FakeDriver.HelloFor("instance-a"));
+        driver.RefusalsByPath[DriverEndpoints.Events] = new FakeDriver.Refusal(
+            429,
+            new DriverProblem("tooManyListeners", ["This driver carries 1 event listener at a time."]));
+
+        var clock = new HurriedClock();
+        await using var harness = await Harness.StartAsync(socketPath, clock: clock);
+
+        await Eventually.Happens(() => clock.Waits.Count >= 5, "five supervision rounds");
+
+        Assert.Equal([20d, 40, 80, 160, 200], MillisecondsOf(clock.Waits, 5));
+        Assert.Equal(DriverConnection.Connected, harness.Monitor.Current.Connection);
+    }
+
+    [Fact]
+    public async Task AnEventFeedThatIsDroppedAtOnceBacksOffInsteadOfRestarting()
+    {
+        var socketPath = NewSocketPath();
+        await using var driver = await FakeDriver.StartAsync(
+            socketPath,
+            FakeDriver.HelloFor("instance-a"));
+        driver.DropEventFeed = true;
+
+        var clock = new HurriedClock();
+        await using var harness = await Harness.StartAsync(socketPath, clock: clock);
+
+        await Eventually.Happens(() => clock.Waits.Count >= 5, "five supervision rounds");
+
+        Assert.Equal([20d, 40, 80, 160, 200], MillisecondsOf(clock.Waits, 5));
+    }
+
+    private static double[] MillisecondsOf(IReadOnlyCollection<TimeSpan> waits, int count)
+        => [.. waits.Take(count).Select(wait => wait.TotalMilliseconds)];
 }
