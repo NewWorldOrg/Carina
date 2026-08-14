@@ -4,7 +4,7 @@ namespace Carina.Driver.Tuning.Dvb;
 
 public sealed record DvbTunerSettings(
     TimeSpan LockPatience,
-    TimeSpan LockPollInterval,
+    TimeSpan RetryInterval,
     TimeSpan BytePatience,
     int DemuxBufferBytes
 )
@@ -86,13 +86,14 @@ public sealed class DvbTunerDevice : ITunerDevice
                 !frontend.WaitForLock(
                     time,
                     settings.LockPatience,
-                    settings.LockPollInterval,
-                    cancellationToken
+                    settings.RetryInterval,
+                    cancellationToken,
+                    out var lastSeen
                 )
             )
             {
-                throw DvbFailure.Refused(
-                    $"{paths.Frontend}: the frontend did not lock onto {channel} within {settings.LockPatience.TotalSeconds:0.#} seconds, and its last status was {frontend.Status()}. Nothing was received, so no bytes will follow."
+                throw DvbFailure.NoLock(
+                    $"{paths.Frontend}: the frontend did not lock onto {channel} within {settings.LockPatience.TotalSeconds:0.#} seconds, and the last status it reported while waiting was {lastSeen}. Nothing was received, so no bytes will follow."
                 );
             }
 
@@ -164,15 +165,40 @@ public sealed class DvbTunerDevice : ITunerDevice
                         "The session cannot continue on a reader that has stopped answering."
                     );
                 }
+                else
+                {
+                    calls.Rest(settings.RetryInterval, cancellationToken);
+                }
             }
 
             if (time.GetUtcNow() >= deadline)
             {
-                throw DvbFailure.Refused(
-                    $"{paths.Dvr}: the frontend is locked but no transport stream bytes arrived within {settings.BytePatience.TotalSeconds:0.#} seconds. The tuner is synchronised and the demux is delivering nothing, which is a different fault from failing to lock."
-                );
+                throw NothingArrived();
             }
         }
+    }
+
+    private DvbDeviceException NothingArrived()
+    {
+        var waited = $"{settings.BytePatience.TotalSeconds:0.#} seconds";
+
+        if (!frontend.TryStatus(out var status))
+        {
+            return DvbFailure.LockedWithoutData(
+                $"{paths.Dvr}: no transport stream bytes arrived within {waited}, and the frontend would not say whether it is still locked, so this is recorded as a delivery fault without claiming the tuner is synchronised."
+            );
+        }
+
+        if (!status.HasFlag(FrontendStatus.Lock))
+        {
+            return DvbFailure.NoLock(
+                $"{paths.Dvr}: no transport stream bytes arrived within {waited} because the frontend lost lock while the session was reading; its status is now {status}."
+            );
+        }
+
+        return DvbFailure.LockedWithoutData(
+            $"{paths.Dvr}: the frontend is still locked ({status}) and no transport stream bytes arrived within {waited}. The tuner is synchronised and the demux is delivering nothing, which is a different fault from failing to lock."
+        );
     }
 
     public void Dispose()

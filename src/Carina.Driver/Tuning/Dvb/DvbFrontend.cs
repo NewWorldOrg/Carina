@@ -53,6 +53,14 @@ public sealed class DvbFrontend : IDisposable
         return (FrontendStatus)flags;
     }
 
+    public bool TryStatus(out FrontendStatus status)
+    {
+        var read = calls.ReadStatus(descriptor, out var flags);
+        status = (FrontendStatus)flags;
+
+        return !read.Refused;
+    }
+
     public void Tune(DvbChannel channel)
     {
         var properties = DvbTuning.PropertiesFor(channel);
@@ -88,7 +96,8 @@ public sealed class DvbFrontend : IDisposable
         TimeProvider time,
         TimeSpan patience,
         TimeSpan interval,
-        CancellationToken cancellationToken
+        CancellationToken cancellationToken,
+        out FrontendStatus lastSeen
     )
     {
         var deadline = time.GetUtcNow() + patience;
@@ -97,7 +106,9 @@ public sealed class DvbFrontend : IDisposable
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (Status().HasFlag(FrontendStatus.Lock))
+            lastSeen = Status();
+
+            if (lastSeen.HasFlag(FrontendStatus.Lock))
             {
                 return true;
             }
@@ -113,7 +124,7 @@ public sealed class DvbFrontend : IDisposable
 
     public SignalQuality Quality()
     {
-        var status = Status();
+        var before = Status();
         var asked = new[]
         {
             DvbProperty.CarrierToNoise,
@@ -151,10 +162,12 @@ public sealed class DvbFrontend : IDisposable
             );
         }
 
+        var locked = new LockWindow(before, Status());
+
         return new SignalQuality(
-            status,
-            SignalQualityReading.CarrierToNoiseFrom(status, carrier),
-            SignalQualityReading.PostViterbiFrom(status, errorBits, totalBits)
+            locked,
+            SignalQualityReading.CarrierToNoiseFrom(locked, carrier),
+            SignalQualityReading.PostViterbiFrom(locked, errorBits, totalBits)
         );
     }
 

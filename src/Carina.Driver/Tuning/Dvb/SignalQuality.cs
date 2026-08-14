@@ -33,6 +33,19 @@ public enum SignalReading
     UnavailableRightNow = 4,
 }
 
+public readonly record struct LockWindow(FrontendStatus Before, FrontendStatus After)
+{
+    public static LockWindow Throughout(FrontendStatus status) => new(status, status);
+
+    public bool HeldThroughout => Held(Before) && Held(After);
+
+    public bool HeldAtNeitherEnd => !Held(Before) && !Held(After);
+
+    public bool Wavered => !HeldThroughout && !HeldAtNeitherEnd;
+
+    private static bool Held(FrontendStatus status) => status.HasFlag(FrontendStatus.Lock);
+}
+
 public readonly struct CarrierToNoise : IEquatable<CarrierToNoise>
 {
     private readonly double decibels;
@@ -53,8 +66,7 @@ public readonly struct CarrierToNoise : IEquatable<CarrierToNoise>
 
     public static readonly CarrierToNoise Unavailable = Nothing(SignalReading.UnavailableRightNow);
 
-    public static CarrierToNoise Measured(double decibels) =>
-        new(SignalReading.Measured, decibels);
+    public static CarrierToNoise Measured(double decibels) => new(SignalReading.Measured, decibels);
 
     public bool TryGetDecibels(out double value)
     {
@@ -81,9 +93,10 @@ public readonly record struct LayerBitErrors(int Layer, ulong ErrorBits, ulong T
 {
     public bool TryGetErrorRate(out double rate)
     {
-        rate = TotalBits is 0 ? double.NaN : (double)ErrorBits / TotalBits;
+        var countable = TotalBits is not 0 && ErrorBits <= TotalBits;
+        rate = countable ? (double)ErrorBits / TotalBits : double.NaN;
 
-        return TotalBits is not 0;
+        return countable;
     }
 }
 
@@ -93,18 +106,22 @@ public sealed record PostViterbiErrors(SignalReading Reading, IReadOnlyList<Laye
 }
 
 public sealed record SignalQuality(
-    FrontendStatus Status,
+    LockWindow Locked,
     CarrierToNoise CarrierToNoise,
     PostViterbiErrors PostViterbiErrors
 )
 {
-    public bool HasLock => Status.HasFlag(FrontendStatus.Lock);
+    public bool HasLock => Locked.HeldThroughout;
+
+    public FrontendStatus Status => Locked.After;
 }
 
 public static class SignalQualityReading
 {
+    private const int MillidecibelsPerDecibel = 1_000;
+
     public static CarrierToNoise CarrierToNoiseFrom(
-        FrontendStatus status,
+        LockWindow locked,
         IReadOnlyList<DvbStatisticLayer> layers
     )
     {
@@ -113,9 +130,14 @@ public static class SignalQualityReading
             return CarrierToNoise.NotImplemented;
         }
 
-        if (!status.HasFlag(FrontendStatus.Lock))
+        if (locked.HeldAtNeitherEnd)
         {
             return CarrierToNoise.WithoutLock;
+        }
+
+        if (locked.Wavered)
+        {
+            return CarrierToNoise.Unavailable;
         }
 
         if (layers[0].Scale is not StatisticScale.Decibel)
@@ -127,7 +149,7 @@ public static class SignalQualityReading
     }
 
     public static PostViterbiErrors PostViterbiFrom(
-        FrontendStatus status,
+        LockWindow locked,
         IReadOnlyList<DvbStatisticLayer> errorBits,
         IReadOnlyList<DvbStatisticLayer> totalBits
     )
@@ -137,12 +159,12 @@ public static class SignalQualityReading
             return new PostViterbiErrors(SignalReading.NotImplementedByThisTuner, []);
         }
 
-        if (!status.HasFlag(FrontendStatus.Lock))
+        if (locked.HeldAtNeitherEnd)
         {
             return new PostViterbiErrors(SignalReading.FrontendNotLocked, []);
         }
 
-        if (errorBits.Count != totalBits.Count)
+        if (locked.Wavered || errorBits.Count != totalBits.Count)
         {
             return new PostViterbiErrors(SignalReading.UnavailableRightNow, []);
         }
@@ -151,23 +173,26 @@ public static class SignalQualityReading
 
         for (var layer = 0; layer < errorBits.Count; layer++)
         {
-            if (
-                errorBits[layer].Scale is not StatisticScale.Counter
-                || totalBits[layer].Scale is not StatisticScale.Counter
-            )
+            if (!Countable(errorBits[layer]) || !Countable(totalBits[layer]))
+            {
+                return new PostViterbiErrors(SignalReading.UnavailableRightNow, []);
+            }
+
+            if (errorBits[layer].Value > totalBits[layer].Value)
             {
                 return new PostViterbiErrors(SignalReading.UnavailableRightNow, []);
             }
 
             layers[layer] = new LayerBitErrors(
                 layer,
-                unchecked((ulong)errorBits[layer].Value),
-                unchecked((ulong)totalBits[layer].Value)
+                (ulong)errorBits[layer].Value,
+                (ulong)totalBits[layer].Value
             );
         }
 
         return new PostViterbiErrors(SignalReading.Measured, layers);
     }
 
-    private const int MillidecibelsPerDecibel = 1_000;
+    private static bool Countable(DvbStatisticLayer layer) =>
+        layer.Scale is StatisticScale.Counter && layer.Value >= 0;
 }

@@ -28,6 +28,8 @@ public sealed class ScriptedTunerDevice(
 
     public long Reads => Interlocked.Read(ref reads);
 
+    public long Overflows => 0;
+
     public bool Disposed { get; private set; }
 
     public byte[] Read(int count, CancellationToken cancellationToken)
@@ -57,6 +59,8 @@ public sealed class StubbornTunerDevice(TimeSpan readTakes) : ITunerDevice
     private readonly FakeTunerDevice inner = new(27, 1024);
 
     public ManualResetEventSlim Reading { get; } = new();
+
+    public long Overflows => 0;
 
     public bool Disposed { get; private set; }
 

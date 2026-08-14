@@ -109,7 +109,7 @@ public sealed class DvbDeviceProbeTests : IDisposable
         Assert.Equal("/dev/dvb/adapter0/frontend0", detected.FrontendPath);
         Assert.Equal("PT3 ISDB-S", detected.Name);
         Assert.Equal(DeviceKind.Satellite, detected.Kind);
-        Assert.Null(detected.Unavailable);
+        Assert.Null(detected.Problem);
     }
 
     [Fact]
@@ -122,8 +122,8 @@ public sealed class DvbDeviceProbeTests : IDisposable
         var detected = Assert.Single(probe.Inspect(["/dev/dvb/adapter0/frontend0"]));
 
         Assert.Equal(DeviceKind.Unspecified, detected.Kind);
-        Assert.NotNull(detected.Unavailable);
-        Assert.Contains("already holding this tuner", detected.Unavailable, StringComparison.Ordinal);
+        Assert.NotNull(detected.Problem);
+        Assert.Contains("already holding this tuner", detected.Problem, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -155,7 +155,7 @@ public sealed class DvbDeviceProbeTests : IDisposable
         var detected = Assert.Single(probe.Inspect(["/dev/dvb/adapter0/frontend0"]));
 
         Assert.Equal(DeviceKind.Unspecified, detected.Kind);
-        Assert.NotNull(detected.Unavailable);
+        Assert.NotNull(detected.Problem);
     }
 
     private void Node(string adapter, string node)

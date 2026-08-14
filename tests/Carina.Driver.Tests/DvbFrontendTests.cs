@@ -107,7 +107,8 @@ public sealed class DvbFrontendTests
                 clock,
                 TimeSpan.FromSeconds(5),
                 TimeSpan.FromMilliseconds(100),
-                CancellationToken.None
+                CancellationToken.None,
+                out _
             )
         );
         Assert.Equal(TimeSpan.FromMilliseconds(200), calls.RestedFor);
@@ -127,7 +128,8 @@ public sealed class DvbFrontendTests
                 clock,
                 TimeSpan.FromSeconds(1),
                 TimeSpan.FromMilliseconds(100),
-                CancellationToken.None
+                CancellationToken.None,
+                out _
             )
         );
         Assert.True(calls.RestedFor >= TimeSpan.FromSeconds(1));
@@ -150,7 +152,8 @@ public sealed class DvbFrontendTests
                     clock,
                     TimeSpan.FromSeconds(5),
                     TimeSpan.FromMilliseconds(100),
-                    cancellation.Token
+                    cancellation.Token,
+                    out _
                 )
         );
     }
@@ -198,6 +201,62 @@ public sealed class DvbFrontendTests
         Assert.False(quality.HasLock);
         Assert.Equal(SignalReading.FrontendNotLocked, quality.CarrierToNoise.Reading);
         Assert.False(quality.CarrierToNoise.TryGetDecibels(out _));
+    }
+
+    [Fact]
+    public void AFrontendThatDropsLockBetweenTheTwoStatusReadsYieldsNoMeasurement()
+    {
+        var calls = new ScriptedDvbSystemCalls();
+        calls.ReportStatusesInTurn(Locked, FrontendStatus.Signal);
+        calls.AnswerWith(
+            DvbProperty.CarrierToNoise,
+            [new DvbStatisticLayer(StatisticScale.Decibel, -33_674)]
+        );
+        calls.AnswerWith(
+            DvbProperty.PostErrorBitCount,
+            [new DvbStatisticLayer(StatisticScale.Counter, 3)]
+        );
+        calls.AnswerWith(
+            DvbProperty.PostTotalBitCount,
+            [new DvbStatisticLayer(StatisticScale.Counter, 30_000)]
+        );
+
+        using var frontend = DvbFrontend.Open(calls, Path, DvbAccess.Control);
+        var quality = frontend.Quality();
+
+        Assert.False(quality.HasLock);
+        Assert.Equal(SignalReading.UnavailableRightNow, quality.CarrierToNoise.Reading);
+        Assert.False(quality.CarrierToNoise.TryGetDecibels(out _));
+        Assert.Equal(SignalReading.UnavailableRightNow, quality.PostViterbiErrors.Reading);
+    }
+
+    [Fact]
+    public void AFrontendThatGainsLockBetweenTheTwoStatusReadsYieldsNoMeasurement()
+    {
+        var calls = new ScriptedDvbSystemCalls();
+        calls.ReportStatusesInTurn(FrontendStatus.Signal, Locked);
+        calls.AnswerWith(
+            DvbProperty.CarrierToNoise,
+            [new DvbStatisticLayer(StatisticScale.Decibel, 20_500)]
+        );
+
+        using var frontend = DvbFrontend.Open(calls, Path, DvbAccess.Control);
+        var quality = frontend.Quality();
+
+        Assert.False(quality.HasLock);
+        Assert.Equal(SignalReading.UnavailableRightNow, quality.CarrierToNoise.Reading);
+    }
+
+    [Fact]
+    public void ReadingQualityAsksForTheStatusOnBothSidesOfTheStatistics()
+    {
+        var calls = new ScriptedDvbSystemCalls();
+        calls.ReportStatus(Locked);
+
+        using var frontend = DvbFrontend.Open(calls, Path, DvbAccess.Control);
+        frontend.Quality();
+
+        Assert.Equal(2, calls.StatusReads);
     }
 
     [Fact]

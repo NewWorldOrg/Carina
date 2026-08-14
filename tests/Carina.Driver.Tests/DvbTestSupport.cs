@@ -140,9 +140,12 @@ public sealed class ScriptedDvbSystemCalls : IDvbSystemCalls
         return SyscallOutcome.Ok(0);
     }
 
+    public int StatusReads { get; private set; }
+
     public SyscallOutcome ReadStatus(int descriptor, out uint flags)
     {
         flags = 0;
+        StatusReads++;
 
         if (RefuseStatusWith is { } error)
         {
@@ -191,8 +194,15 @@ public sealed class ScriptedDvbSystemCalls : IDvbSystemCalls
         return SyscallOutcome.Ok(0);
     }
 
+    public int? RefuseBufferSizeWith { get; set; }
+
     public SyscallOutcome SetBufferSize(int descriptor, int bytes)
     {
+        if (RefuseBufferSizeWith is { } error)
+        {
+            return SyscallOutcome.Failed(error);
+        }
+
         BufferSizesSet.Add(bytes);
 
         return SyscallOutcome.Ok(0);

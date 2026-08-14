@@ -62,6 +62,20 @@ public sealed class DvbTunerDeviceTests
 
         Assert.Contains("did not lock", refusal.Message, StringComparison.Ordinal);
         Assert.Contains("no bytes will follow", refusal.Message, StringComparison.Ordinal);
+        Assert.Equal(TuningFailure.NoLock, refusal.Failure);
+    }
+
+    [Fact]
+    public void TheDidNotLockDiagnosisQuotesTheStatusSeenWhileWaiting()
+    {
+        var (calls, clock) = Ready();
+        calls.ReportStatus(FrontendStatus.Signal | FrontendStatus.Carrier);
+
+        var refusal = Assert.Throws<DvbDeviceException>(() => Open(calls, clock));
+
+        Assert.Equal(TuningFailure.NoLock, refusal.Failure);
+        Assert.Contains("last status it reported while waiting", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("Carrier", refusal.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -147,8 +161,73 @@ public sealed class DvbTunerDeviceTests
             () => device.Read(188, CancellationToken.None)
         );
 
-        Assert.Contains("locked but no transport stream bytes", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("still locked", refusal.Message, StringComparison.Ordinal);
         Assert.Contains("/dev/dvb/adapter0/dvr0", refusal.Message, StringComparison.Ordinal);
+        Assert.Equal(TuningFailure.LockedWithoutData, refusal.Failure);
+    }
+
+    [Fact]
+    public void LosingLockWhileReadingIsFiledAsAFailureToLockNotAsADeliveryFault()
+    {
+        var (calls, clock) = Ready();
+        using var device = Open(calls, clock);
+        calls.ReportStatus(FrontendStatus.Signal);
+
+        var refusal = Assert.Throws<DvbDeviceException>(
+            () => device.Read(188, CancellationToken.None)
+        );
+
+        Assert.Equal(TuningFailure.NoLock, refusal.Failure);
+        Assert.Contains("lost lock", refusal.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("The tuner is synchronised", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AStatusThatCannotBeReReadNeverClaimsTheTunerIsSynchronised()
+    {
+        var (calls, clock) = Ready();
+        using var device = Open(calls, clock);
+        calls.RefuseStatusWith = Errno.NoSuchDevice;
+
+        var refusal = Assert.Throws<DvbDeviceException>(
+            () => device.Read(188, CancellationToken.None)
+        );
+
+        Assert.Equal(TuningFailure.LockedWithoutData, refusal.Failure);
+        Assert.DoesNotContain("The tuner is synchronised", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("would not say", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void APollThatKeepsReportingReadableWithNothingToReadStillGivesUp()
+    {
+        var (calls, clock) = Ready();
+        using var device = Open(calls, clock);
+
+        for (var attempt = 0; attempt < 500; attempt++)
+        {
+            calls.Polls.Enqueue(SyscallOutcome.Ok(1));
+            calls.Reads.Enqueue(SyscallOutcome.Failed(Errno.WouldBlock));
+        }
+
+        var refusal = Assert.Throws<DvbDeviceException>(
+            () => device.Read(188, CancellationToken.None)
+        );
+
+        Assert.Equal(TuningFailure.LockedWithoutData, refusal.Failure);
+    }
+
+    [Fact]
+    public void ARingBufferTheKernelWillNotGrantStopsTheSessionRatherThanShrinkingQuietly()
+    {
+        var (calls, clock) = Ready();
+        calls.RefuseBufferSizeWith = Errno.NoSuchDevice;
+
+        var refusal = Assert.Throws<DvbDeviceException>(() => Open(calls, clock));
+
+        Assert.Contains("ring buffer", refusal.Message, StringComparison.Ordinal);
+        Assert.Equal(TuningFailure.DeviceUnusable, refusal.Failure);
+        Assert.Equal(calls.Opened.Select(node => node.Descriptor).Order(), calls.Closed.Order());
     }
 
     [Fact]

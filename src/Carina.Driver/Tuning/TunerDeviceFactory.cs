@@ -6,6 +6,8 @@ namespace Carina.Driver.Tuning;
 
 public interface ITunerDevice : IDisposable
 {
+    long Overflows { get; }
+
     byte[] Read(int count, CancellationToken cancellationToken);
 }
 

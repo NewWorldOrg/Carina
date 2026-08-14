@@ -7,7 +7,7 @@ public sealed record DetectedTuner(
     string Name,
     IReadOnlyList<DeliverySystem> DeliverySystems,
     DeviceKind Kind,
-    string? Unavailable
+    string? Problem
 );
 
 public sealed class DvbDeviceProbe(IDvbSystemCalls calls)
@@ -62,28 +62,32 @@ public sealed class DvbDeviceProbe(IDvbSystemCalls calls)
 
             var named = frontend.TryReadHardwareName(out var name, out var nameProblem);
             var enumerated = frontend.TryReadDeliverySystems(out var systems, out var systemProblem);
+            var kind = KindOf(systems, name);
+            var problems = new List<string>();
 
-            if (!enumerated && !named)
+            if (!enumerated)
             {
-                return new DetectedTuner(
-                    frontendPath,
-                    string.Empty,
-                    [],
-                    DeviceKind.Unspecified,
-                    $"{systemProblem}, and {nameProblem}"
-                );
+                problems.Add(systemProblem);
             }
 
-            var kind = KindOf(systems, name);
+            if (!named)
+            {
+                problems.Add(nameProblem);
+            }
+
+            if (kind is DeviceKind.Unspecified)
+            {
+                problems.Add(
+                    "nothing it reported says whether it receives terrestrial or satellite"
+                );
+            }
 
             return new DetectedTuner(
                 frontendPath,
                 name,
                 systems,
                 kind,
-                kind is DeviceKind.Unspecified
-                    ? $"the tuner did not say what it can receive ({(enumerated ? $"it named {systems.Count} delivery systems that are neither terrestrial nor satellite" : systemProblem)}, and its name '{name}' does not say either)"
-                    : null
+                problems.Count is 0 ? null : string.Join("; ", problems)
             );
         }
         catch (DvbDeviceException error)

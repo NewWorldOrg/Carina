@@ -2,7 +2,21 @@ using System.Runtime.InteropServices;
 
 namespace Carina.Driver.Tuning.Dvb;
 
-public sealed class DvbDeviceException(string message) : Exception(message);
+public enum TuningFailure
+{
+    Unspecified = 0,
+
+    DeviceUnusable = 1,
+
+    NoLock = 2,
+
+    LockedWithoutData = 3,
+}
+
+public sealed class DvbDeviceException(string message, TuningFailure failure) : Exception(message)
+{
+    public TuningFailure Failure { get; } = failure;
+}
 
 public static class Errno
 {
@@ -15,14 +29,24 @@ public static class Errno
 
 public static class DvbFailure
 {
-    public static DvbDeviceException Refused(string what) => new(what);
+    public static DvbDeviceException Refused(string what) =>
+        new(what, TuningFailure.Unspecified);
+
+    public static DvbDeviceException NoLock(string what) => new(what, TuningFailure.NoLock);
+
+    public static DvbDeviceException LockedWithoutData(string what) =>
+        new(what, TuningFailure.LockedWithoutData);
 
     public static DvbDeviceException AtDevice(
         string devicePath,
         string operation,
         int error,
         string consequence
-    ) => new($"{devicePath}: {operation} failed — {Describe(error)}. {consequence}");
+    ) =>
+        new(
+            $"{devicePath}: {operation} failed — {Describe(error)}. {consequence}",
+            TuningFailure.DeviceUnusable
+        );
 
     public static string Describe(int error) =>
         $"errno {error} ({Marshal.GetPInvokeErrorMessage(error)})";
