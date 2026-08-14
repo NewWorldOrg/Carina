@@ -124,11 +124,47 @@ public sealed class SessionRequestAgreementTests
     }
 
     [Fact]
-    public void AServiceIdMayStillRideAlongsideTypedParameters()
+    public void AServiceIdHasNoMeaningBesideTypedParametersAndIsRefused()
+    {
+        Assert.Contains(
+            Request(new TuningRequest(TunerKind.Terrestrial, 27, 1024), TuneParams.Terrestrial(27))
+                .Validate(Moment),
+            problem => problem.StartsWith("tuning.serviceId:", StringComparison.Ordinal)
+        );
+    }
+
+    [Fact]
+    public void AServiceIdOnItsOwnIsStillAcceptedTheWayItAlwaysWas()
     {
         Assert.Empty(
-            Request(new TuningRequest(TunerKind.Terrestrial, 27, 1024), TuneParams.Terrestrial(27))
+            Request(new TuningRequest(TunerKind.Terrestrial, 27, 1024), null).Validate(Moment)
+        );
+    }
+
+    [Fact]
+    public void TheReasonGivenForASatelliteTuneDoesNotPromiseTheOlderFieldWouldWork()
+    {
+        var problem = Assert.Single(
+            Request(new TuningRequest(TunerKind.Satellite, 15), TuneParams.Bs(15, 16625))
                 .Validate(Moment)
         );
+
+        Assert.StartsWith("tuning:", problem, StringComparison.Ordinal);
+        Assert.Contains("cannot name a tune on isdbSBs", problem, StringComparison.Ordinal);
+        Assert.Contains("refuses instead of tuning", problem, StringComparison.Ordinal);
+        Assert.DoesNotContain("tunes the same way", problem, StringComparison.Ordinal);
+        Assert.DoesNotContain("expected kind unspecified", problem, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheReasonGivenForATerrestrialTuneIsThatBothFieldsTuneAlike()
+    {
+        var problem = Assert.Single(
+            Request(new TuningRequest(TunerKind.Terrestrial, 42), TuneParams.Terrestrial(27))
+                .Validate(Moment)
+        );
+
+        Assert.Contains("tunes the same way", problem, StringComparison.Ordinal);
+        Assert.Contains("physical channel 27", problem, StringComparison.Ordinal);
     }
 }

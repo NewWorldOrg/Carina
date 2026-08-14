@@ -141,25 +141,23 @@ public sealed record StartSessionRequest
             );
         }
 
-        if (Tuning.ServiceId is < 0 or > MaxServiceId)
+        if (Tune is null && Tuning.ServiceId is < 0 or > MaxServiceId)
         {
             problems.Add(
                 $"tuning.serviceId: expected 0 to {MaxServiceId}, got {Tuning.ServiceId}."
             );
         }
 
+        if (Tune is not null && Tuning.ServiceId is not null)
+        {
+            problems.Add(
+                $"tuning.serviceId: a typed tune names no service and the driver filters no PIDs by service, so a service id here would mean something to one driver and nothing to another; got {Tuning.ServiceId}."
+            );
+        }
+
         if (Tune is not null && tuneProblems.Count is 0)
         {
-            var expected = Tune.ToLegacyRequest();
-            if (
-                Tuning.Kind != expected.Kind
-                || Tuning.PhysicalChannel != expected.PhysicalChannel
-            )
-            {
-                problems.Add(
-                    $"tuning: expected {Describe(expected)} to match tune, so that a driver reading either field tunes the same way; got {Describe(Tuning)}."
-                );
-            }
+            problems.AddRange(AgreementProblems(Tune.ToLegacyRequest()));
         }
 
         if (Purpose is SessionPurpose.Recording && EndsAt is null)
@@ -173,6 +171,27 @@ public sealed record StartSessionRequest
         }
 
         return problems;
+    }
+
+    private IReadOnlyList<string> AgreementProblems(TuningRequest expected)
+    {
+        if (
+            Tuning.Kind == expected.Kind
+            && Tuning.PhysicalChannel == expected.PhysicalChannel
+        )
+        {
+            return [];
+        }
+
+        return expected.Kind is TunerKind.Unspecified
+            ?
+            [
+                $"tuning: the older field cannot name a tune on {TuneSystemConverter.WireName(Tune!.System)}, so it has to be left without a kind on physical channel {expected.PhysicalChannel}, which a driver that reads only that field refuses instead of tuning; got {Describe(Tuning)}.",
+            ]
+            :
+            [
+                $"tuning: expected {Describe(expected)} to match tune, so that a driver reading either field tunes the same way; got {Describe(Tuning)}.",
+            ];
     }
 
     private static string Describe(TuningRequest tuning) =>
