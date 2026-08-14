@@ -38,7 +38,7 @@ public sealed class TunerSessionManagerTests : IDisposable
     private TunerSessionManager Manager(DriverConfiguration configuration) =>
         new(
             configuration,
-            new TunerDeviceFactory(configuration),
+            new TunerDeviceFactory(configuration, TimeProvider.System),
             clock,
             NullLogger<TunerSessionManager>.Instance
         );
@@ -586,7 +586,7 @@ public sealed class TunerSessionManagerTests : IDisposable
         var log = new CapturingLogger<TunerSessionManager>();
         var manager = new TunerSessionManager(
             Configuration,
-            new TunerDeviceFactory(Configuration),
+            new TunerDeviceFactory(Configuration, TimeProvider.System),
             clock,
             log
         );
@@ -678,7 +678,7 @@ public sealed class TunerSessionManagerTests : IDisposable
     {
         var manager = new TunerSessionManager(
             Configuration,
-            new TunerDeviceFactory(Configuration),
+            new TunerDeviceFactory(Configuration, TimeProvider.System),
             clock,
             NullLogger<TunerSessionManager>.Instance,
             recordingWriters: new BrittleRecordingWriterFactory()
