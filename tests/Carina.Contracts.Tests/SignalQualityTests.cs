@@ -16,7 +16,68 @@ public sealed class SignalQualityTests
                 new LayerBitErrorCounts(1, 0, 500_000),
             ],
             MeasuredAt = Moment,
+            LockReadAt = Moment.AddMilliseconds(3),
         };
+
+    [Fact]
+    public void TheLockStateAndTheStatisticsEachCarryTheTimeTheyWereRead()
+    {
+        var restored = DriverJson.Deserialize(
+            DriverJson.Serialize(Locked),
+            DriverJson.Context.SignalQualityDto
+        );
+
+        Assert.NotNull(restored);
+        Assert.Equal(Moment, restored.MeasuredAt);
+        Assert.Equal(Moment.AddMilliseconds(3), restored.LockReadAt);
+        Assert.NotEqual(restored.MeasuredAt, restored.LockReadAt);
+    }
+
+    [Fact]
+    public void AMetricThisTunerDoesNotImplementIsNamedInsteadOfLookingLikeOneThatFailed()
+    {
+        var reading = new SignalQualityDto
+        {
+            Lock = SignalLock.Locked,
+            CnrMilliDecibels = 21_500,
+            NotImplementedMetrics = [SignalQualityMetrics.PostViterbiBitError],
+        };
+
+        Assert.True(reading.Implements(SignalQualityMetrics.Cnr));
+        Assert.False(reading.Implements(SignalQualityMetrics.PostViterbiBitError));
+    }
+
+    [Fact]
+    public void AMetricThisTunerDoesNotImplementIsStillNamedWhileTheTunerIsUnlocked()
+    {
+        var reading = new SignalQualityDto
+        {
+            Lock = SignalLock.NotLocked,
+            NotImplementedMetrics = [SignalQualityMetrics.Cnr],
+        };
+
+        Assert.False(reading.Implements(SignalQualityMetrics.Cnr));
+    }
+
+    [Fact]
+    public void AReadingFromADriverThatNamedNoMetricsClaimsNoneAreMissing()
+    {
+        var reading = DriverJson.Deserialize(
+            """{"lock":"locked","cnrMilliDecibels":21500}""",
+            DriverJson.Context.SignalQualityDto
+        );
+
+        Assert.NotNull(reading);
+        Assert.Empty(reading.NotImplementedMetrics);
+        Assert.Null(reading.LockReadAt);
+        Assert.All(SignalQualityMetrics.All, metric => Assert.True(reading.Implements(metric)));
+    }
+
+    [Fact]
+    public void TheNamesOfMissingMetricsAreNeverNull()
+    {
+        Assert.Empty(new SignalQualityDto { NotImplementedMetrics = null! }.NotImplementedMetrics);
+    }
 
     [Fact]
     public void ALockedReadingCarriesWhatWasMeasured()
