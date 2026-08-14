@@ -33,7 +33,7 @@ public sealed class TunerSessionManager(
     private readonly ConcurrentDictionary<string, string> faultedDevices = new(
         StringComparer.Ordinal
     );
-    private readonly ConcurrentDictionary<string, bool> switchedDevices = new(
+    private readonly ConcurrentDictionary<string, bool> toggledDevices = new(
         StringComparer.Ordinal
     );
     private readonly ConcurrentQueue<TunerSession> ended = new();
@@ -593,9 +593,14 @@ public sealed class TunerSessionManager(
     public bool IsClaimed(string deviceId) => claimedDevices.ContainsKey(deviceId);
 
     public bool IsEnabled(DeviceSettings device) =>
-        device.Id is { } deviceId && switchedDevices.TryGetValue(deviceId, out var enabled)
+        device.Id is { } deviceId && toggledDevices.TryGetValue(deviceId, out var enabled)
             ? enabled
             : device.Enabled;
+
+    public bool IsToggled(DeviceSettings device) =>
+        device.Id is { } deviceId
+        && toggledDevices.TryGetValue(deviceId, out var enabled)
+        && enabled != device.Enabled;
 
     public bool Turn(string deviceId, bool disabled)
     {
@@ -608,7 +613,7 @@ public sealed class TunerSessionManager(
             return false;
         }
 
-        switchedDevices[deviceId] = !disabled;
+        toggledDevices[deviceId] = !disabled;
 
         events?.Signal(DriverEvents.TunerHealthChanged);
         events?.Signal(DriverEvents.Tuners);

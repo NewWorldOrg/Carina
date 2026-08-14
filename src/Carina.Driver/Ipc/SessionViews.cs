@@ -77,47 +77,57 @@ public static class SessionViews
                 continue;
             }
 
-            var kind = DeviceViews.Wire(device.Kind);
-
-            if (!manager.IsEnabled(device))
-            {
-                snapshots.Add(
-                    busy.TryGetValue(deviceId, out var draining)
-                        ? new TunerSnapshot(
-                            deviceId,
-                            kind,
-                            TunerState.Draining,
-                            draining,
-                            "This device was turned off and comes out of service as soon as the session it holds ends."
-                        )
-                        : new TunerSnapshot(
-                            deviceId,
-                            kind,
-                            TunerState.Disabled,
-                            Detail: "This device is turned off in the driver configuration."
-                        )
-                );
-
-                continue;
-            }
-
-            if (manager.IsFaulted(deviceId, out var fault))
-            {
-                snapshots.Add(
-                    new TunerSnapshot(deviceId, kind, TunerState.Faulted, Detail: fault)
-                );
-
-                continue;
-            }
+            var toggled = manager.IsToggled(device);
 
             snapshots.Add(
-                busy.TryGetValue(deviceId, out var sessionId)
-                    ? new TunerSnapshot(deviceId, kind, TunerState.Busy, sessionId)
-                    : new TunerSnapshot(deviceId, kind, TunerState.Idle)
+                Of(device, deviceId, manager, busy, toggled) with
+                {
+                    Toggled = toggled,
+                }
             );
         }
 
         return snapshots;
+    }
+
+    private static TunerSnapshot Of(
+        DeviceSettings device,
+        string deviceId,
+        TunerSessionManager manager,
+        Dictionary<string, SessionId> busy,
+        bool toggled
+    )
+    {
+        var kind = DeviceViews.Wire(device.Kind);
+
+        if (!manager.IsEnabled(device))
+        {
+            return busy.TryGetValue(deviceId, out var draining)
+                ? new TunerSnapshot(
+                    deviceId,
+                    kind,
+                    TunerState.Draining,
+                    draining,
+                    "This device was turned off and comes out of service as soon as the session it holds ends."
+                )
+                : new TunerSnapshot(
+                    deviceId,
+                    kind,
+                    TunerState.Disabled,
+                    Detail: toggled
+                        ? "This device was turned off while the driver was running, and a restart puts it back the way the ledger has it."
+                        : "This device is turned off in the driver configuration."
+                );
+        }
+
+        if (manager.IsFaulted(deviceId, out var fault))
+        {
+            return new TunerSnapshot(deviceId, kind, TunerState.Faulted, Detail: fault);
+        }
+
+        return busy.TryGetValue(deviceId, out var sessionId)
+            ? new TunerSnapshot(deviceId, kind, TunerState.Busy, sessionId)
+            : new TunerSnapshot(deviceId, kind, TunerState.Idle);
     }
 
     private static IEnumerable<TunerSession> Ordered(IReadOnlyCollection<TunerSession> sessions) =>

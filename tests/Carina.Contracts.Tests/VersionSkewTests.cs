@@ -274,6 +274,19 @@ public sealed class VersionSkewTests
     }
 
     [Fact]
+    public void ATunerFromADriverThatCannotTurnOneOffAtRuntimeIsNotReadAsHavingBeenToggled()
+    {
+        var tuner = DriverJson.Deserialize(
+            """{"deviceId":"adapter0","kind":"terrestrial","state":"disabled"}""",
+            DriverJson.Context.TunerSnapshot
+        );
+
+        Assert.NotNull(tuner);
+        Assert.Equal(TunerState.Disabled, tuner.State);
+        Assert.False(tuner.Toggled);
+    }
+
+    [Fact]
     public void ALedgerAnswerWithFieldsThisBuildDoesNotKnowStillReadsItsHashes()
     {
         var ledger = DriverJson.Deserialize(

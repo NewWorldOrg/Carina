@@ -143,7 +143,7 @@ public sealed class WireStabilityTests
 
         Assert.Equal(TunerSnapshotFields, fields.Take(TunerSnapshotFields.Length));
         Assert.Equal(
-            ["health", "signalQuality", "currentSession"],
+            ["health", "signalQuality", "currentSession", "toggled"],
             fields.Skip(TunerSnapshotFields.Length)
         );
     }

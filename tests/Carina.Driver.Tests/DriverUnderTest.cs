@@ -13,8 +13,9 @@ namespace Carina.Driver.Tests;
 
 public sealed class DriverUnderTest : IAsyncDisposable
 {
-    private readonly IHost host;
     private readonly string root;
+
+    private IHost host;
 
     private DriverUnderTest(
         IHost host,
@@ -41,6 +42,26 @@ public sealed class DriverUnderTest : IAsyncDisposable
 
     public void CorruptLedger() =>
         File.WriteAllText(ConfigurationPath, "{ not the configuration at all }");
+
+    public async Task RestartOnTheSameLedger()
+    {
+        await host.StopAsync(TimeSpan.FromSeconds(20));
+        host.Dispose();
+
+        ClearTheInheritedUrls();
+
+        var saved = DriverConfigurationReader.Parse(File.ReadAllText(ConfigurationPath));
+
+        Assert.NotNull(saved);
+
+        var built = DriverHost.Create([], saved, configurationPath: ConfigurationPath);
+
+        Assert.True(built.TryGetHost(out var restarted), string.Join(" ", built.Problems));
+
+        host = restarted;
+
+        await host.StartAsync();
+    }
 
     public string SocketPath => Configuration.SocketPath!;
 

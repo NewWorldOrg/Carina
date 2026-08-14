@@ -300,6 +300,8 @@ public sealed record TunerSnapshot(
     public SignalQualityDto? SignalQuality { get; init; }
 
     public CurrentSessionDto? CurrentSession { get; init; }
+
+    public bool Toggled { get; init; }
 }
 
 public sealed record DiagnosticSnapshot(
