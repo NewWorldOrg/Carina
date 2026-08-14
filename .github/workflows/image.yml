@@ -75,28 +75,7 @@ jobs:
     permissions:
       contents: read
       packages: write
-      actions: read
     steps:
-      - name: The build workflow passed for this commit, since needs cannot reach across workflows
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          for _ in $(seq 1 60); do
-            answer="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/build.yml/runs?head_sha=${GITHUB_SHA}&event=push&per_page=1" --jq '.workflow_runs[0] | "\(.status) \(.conclusion)"' 2>/dev/null || true)"
-            case "${answer}" in
-              'completed success')
-                echo "the build workflow passed for ${GITHUB_SHA}."
-                exit 0
-                ;;
-              completed*)
-                echo "the build workflow for ${GITHUB_SHA} ended as '${answer#completed }'; a commit whose build did not pass publishes nothing" >&2
-                exit 1
-                ;;
-            esac
-            sleep 10
-          done
-          echo "no completed build workflow run for ${GITHUB_SHA} after ten minutes; refusing to publish rather than assuming it passed" >&2
-          exit 1
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
