@@ -206,7 +206,7 @@ public sealed class DvbDeviceProbeTests : IDisposable
             [DeviceKind.Terrestrial, DeviceKind.Satellite],
             DvbDeviceProbe.KindsOf(
                 [DeliverySystem.IsdbTerrestrial, DeliverySystem.IsdbSatellite],
-                "PT3 ISDB-S"
+                "synthetic ISDB-S demodulator"
             )
         );
     }
