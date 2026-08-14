@@ -28,7 +28,7 @@ public sealed class DriverJsonTests
             {
                 SessionId = SessionId.Parse("rec-1"),
                 Purpose = SessionPurpose.Recording,
-                Tuning = new TuningRequest(TunerKind.Terrestrial, 27, 1024),
+                Tuning = new TuningRequest(TunerKind.Terrestrial, 55, 50001),
                 DeviceId = "adapter0",
                 OutputRoot = "primary",
                 EndsAt = Moment,
@@ -36,7 +36,7 @@ public sealed class DriverJsonTests
         );
 
         Assert.Equal(
-            """{"sessionId":"rec-1","purpose":"recording","tuning":{"kind":"terrestrial","physicalChannel":27,"serviceId":1024},"deviceId":"adapter0","outputRoot":"primary","endsAt":"2026-08-08T21:04:00+09:00","tune":null}""",
+            """{"sessionId":"rec-1","purpose":"recording","tuning":{"kind":"terrestrial","physicalChannel":55,"serviceId":50001},"deviceId":"adapter0","outputRoot":"primary","endsAt":"2026-08-08T21:04:00+09:00","tune":null}""",
             json
         );
     }
@@ -154,8 +154,8 @@ public sealed class DriverJsonTests
     public void ATerrestrialTuneSerialisesToItsAgreedForm()
     {
         Assert.Equal(
-            """{"system":"isdbT","isdbT":{"physicalChannel":27},"isdbSBs":null,"isdbSCs110":null}""",
-            DriverJson.Serialize(TuneParams.Terrestrial(27))
+            """{"system":"isdbT","isdbT":{"physicalChannel":55},"isdbSBs":null,"isdbSCs110":null}""",
+            DriverJson.Serialize(TuneParams.Terrestrial(55))
         );
     }
 
@@ -163,8 +163,8 @@ public sealed class DriverJsonTests
     public void ABsTuneSerialisesToItsAgreedForm()
     {
         Assert.Equal(
-            """{"system":"isdbSBs","isdbT":null,"isdbSBs":{"bsChannel":15,"tsid":16625},"isdbSCs110":null}""",
-            DriverJson.Serialize(TuneParams.Bs(15, 16625))
+            """{"system":"isdbSBs","isdbT":null,"isdbSBs":{"bsChannel":15,"tsid":50001},"isdbSCs110":null}""",
+            DriverJson.Serialize(TuneParams.Bs(15, 50001))
         );
     }
 
@@ -185,13 +185,13 @@ public sealed class DriverJsonTests
             {
                 SessionId = SessionId.Parse("scan-1"),
                 Purpose = SessionPurpose.Scan,
-                Tuning = TuneParams.Terrestrial(27).ToLegacyRequest(),
-                Tune = TuneParams.Terrestrial(27),
+                Tuning = TuneParams.Terrestrial(55).ToLegacyRequest(),
+                Tune = TuneParams.Terrestrial(55),
             }
         );
 
         Assert.Equal(
-            """{"sessionId":"scan-1","purpose":"scan","tuning":{"kind":"terrestrial","physicalChannel":27,"serviceId":null},"deviceId":null,"outputRoot":null,"endsAt":null,"tune":{"system":"isdbT","isdbT":{"physicalChannel":27},"isdbSBs":null,"isdbSCs110":null}}""",
+            """{"sessionId":"scan-1","purpose":"scan","tuning":{"kind":"terrestrial","physicalChannel":55,"serviceId":null},"deviceId":null,"outputRoot":null,"endsAt":null,"tune":{"system":"isdbT","isdbT":{"physicalChannel":55},"isdbSBs":null,"isdbSCs110":null}}""",
             json
         );
     }
@@ -336,7 +336,7 @@ public sealed class DriverJsonTests
         Assert.Throws<JsonException>(
             () =>
                 DriverJson.Deserialize(
-                    """{"purpose":"live","tuning":{"kind":"terrestrial","physicalChannel":27}}""",
+                    """{"purpose":"live","tuning":{"kind":"terrestrial","physicalChannel":55}}""",
                     DriverJson.Context.StartSessionRequest
                 )
         );
@@ -346,7 +346,7 @@ public sealed class DriverJsonTests
     public void ARequestMayNotSmuggleAPathThroughTheOutputRoot()
     {
         var request = DriverJson.Deserialize(
-            """{"sessionId":"rec-1","purpose":"recording","tuning":{"kind":"terrestrial","physicalChannel":27},"outputRoot":"/etc","endsAt":"2026-08-08T22:04:00+09:00"}""",
+            """{"sessionId":"rec-1","purpose":"recording","tuning":{"kind":"terrestrial","physicalChannel":55},"outputRoot":"/etc","endsAt":"2026-08-08T22:04:00+09:00"}""",
             DriverJson.Context.StartSessionRequest
         );
 

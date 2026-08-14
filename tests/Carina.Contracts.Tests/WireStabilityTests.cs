@@ -106,7 +106,7 @@ public sealed class WireStabilityTests
     {
         Assert.Equal(
             TuningRequestFields,
-            FieldsOf(DriverJson.Serialize(new TuningRequest(TunerKind.Terrestrial, 27, 1024)))
+            FieldsOf(DriverJson.Serialize(new TuningRequest(TunerKind.Terrestrial, 55, 50001)))
         );
     }
 
@@ -175,7 +175,7 @@ public sealed class WireStabilityTests
     public void TheValuesOfASessionRequestAreUntouchedByTheNewField()
     {
         Assert.Equal(
-            """{"sessionId":"rec-1","purpose":"recording","tuning":{"kind":"terrestrial","physicalChannel":27,"serviceId":1024},"deviceId":"adapter0","outputRoot":"primary","endsAt":"2026-08-08T21:04:00+09:00","tune":null}""",
+            """{"sessionId":"rec-1","purpose":"recording","tuning":{"kind":"terrestrial","physicalChannel":55,"serviceId":50001},"deviceId":"adapter0","outputRoot":"primary","endsAt":"2026-08-08T21:04:00+09:00","tune":null}""",
             DriverJson.Serialize(LegacyRequest)
         );
     }
@@ -184,7 +184,7 @@ public sealed class WireStabilityTests
     public void ARequestWrittenBeforeAnyOfThisStillValidatesTheSameWay()
     {
         var request = DriverJson.Deserialize(
-            """{"sessionId":"rec-1","purpose":"recording","tuning":{"kind":"terrestrial","physicalChannel":27},"outputRoot":"primary","endsAt":"2026-08-08T22:04:00+09:00"}""",
+            """{"sessionId":"rec-1","purpose":"recording","tuning":{"kind":"terrestrial","physicalChannel":55},"outputRoot":"primary","endsAt":"2026-08-08T22:04:00+09:00"}""",
             DriverJson.Context.StartSessionRequest
         );
 
@@ -233,12 +233,12 @@ public sealed class WireStabilityTests
     public void TheProjectionIntoTheOlderFieldIsWireSurfaceBecauseEachProcessCompilesItsOwnCopy()
     {
         Assert.Equal(
-            new TuningRequest(TunerKind.Terrestrial, 27),
-            TuneParams.Terrestrial(27).ToLegacyRequest()
+            new TuningRequest(TunerKind.Terrestrial, 55),
+            TuneParams.Terrestrial(55).ToLegacyRequest()
         );
         Assert.Equal(
             new TuningRequest(TunerKind.Unspecified, 15),
-            TuneParams.Bs(15, 16625).ToLegacyRequest()
+            TuneParams.Bs(15, 50001).ToLegacyRequest()
         );
         Assert.Equal(
             new TuningRequest(TunerKind.Unspecified, 24),
@@ -251,15 +251,15 @@ public sealed class WireStabilityTests
     {
         Assert.Equal(
             ["system", "isdbT", "isdbSBs", "isdbSCs110"],
-            FieldsOf(DriverJson.Serialize(TuneParams.Terrestrial(27)))
+            FieldsOf(DriverJson.Serialize(TuneParams.Terrestrial(55)))
         );
         Assert.Equal(
             ["physicalChannel"],
-            FieldsOf(DriverJson.Serialize(new IsdbTParams(27)))
+            FieldsOf(DriverJson.Serialize(new IsdbTParams(55)))
         );
         Assert.Equal(
             ["bsChannel", "tsid"],
-            FieldsOf(DriverJson.Serialize(new IsdbSBsParams(15, 16625)))
+            FieldsOf(DriverJson.Serialize(new IsdbSBsParams(15, 50001)))
         );
         Assert.Equal(
             ["csChannel"],
@@ -331,7 +331,7 @@ public sealed class WireStabilityTests
         {
             SessionId = SessionId.Parse("rec-1"),
             Purpose = SessionPurpose.Recording,
-            Tuning = new TuningRequest(TunerKind.Terrestrial, 27, 1024),
+            Tuning = new TuningRequest(TunerKind.Terrestrial, 55, 50001),
             DeviceId = "adapter0",
             OutputRoot = "primary",
             EndsAt = Moment,

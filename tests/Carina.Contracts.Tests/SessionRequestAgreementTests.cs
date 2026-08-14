@@ -19,7 +19,7 @@ public sealed class SessionRequestAgreementTests
     {
         var problems = Request(
             new TuningRequest(TunerKind.Terrestrial, 900, -5),
-            TuneParams.Terrestrial(27)
+            TuneParams.Terrestrial(55)
         ).Validate(Moment);
 
         Assert.Contains(
@@ -37,7 +37,7 @@ public sealed class SessionRequestAgreementTests
     {
         var problems = Request(
             new TuningRequest(TunerKind.Terrestrial, 42),
-            TuneParams.Terrestrial(27)
+            TuneParams.Terrestrial(55)
         ).Validate(Moment);
 
         Assert.Contains(
@@ -50,8 +50,8 @@ public sealed class SessionRequestAgreementTests
     public void AKindThatDisagreesWithTheTypedParametersIsRefused()
     {
         var problems = Request(
-            new TuningRequest(TunerKind.Satellite, 27),
-            TuneParams.Terrestrial(27)
+            new TuningRequest(TunerKind.Satellite, 55),
+            TuneParams.Terrestrial(55)
         ).Validate(Moment);
 
         Assert.Contains(
@@ -63,7 +63,7 @@ public sealed class SessionRequestAgreementTests
     [Fact]
     public void TheTwoFieldsSayingTheSameThingIsAccepted()
     {
-        var tune = TuneParams.Terrestrial(27);
+        var tune = TuneParams.Terrestrial(55);
 
         Assert.Empty(Request(tune.ToLegacyRequest(), tune).Validate(Moment));
     }
@@ -73,7 +73,7 @@ public sealed class SessionRequestAgreementTests
     [InlineData(TuneSystem.IsdbSCs110)]
     public void ASatelliteTuneStaysUsableEvenThoughTheOlderFieldCannotNameIt(TuneSystem system)
     {
-        var tune = system is TuneSystem.IsdbSBs ? TuneParams.Bs(15, 16625) : TuneParams.Cs110(24);
+        var tune = system is TuneSystem.IsdbSBs ? TuneParams.Bs(15, 50001) : TuneParams.Cs110(24);
 
         Assert.Empty(Request(tune.ToLegacyRequest(), tune).Validate(Moment));
     }
@@ -83,7 +83,7 @@ public sealed class SessionRequestAgreementTests
     {
         Assert.Equal(
             ["tuning: missing."],
-            Request(null, TuneParams.Terrestrial(27)).Validate(Moment)
+            Request(null, TuneParams.Terrestrial(55)).Validate(Moment)
         );
     }
 
@@ -91,7 +91,7 @@ public sealed class SessionRequestAgreementTests
     public void AMissingOlderFieldFromTheWireIsRefusedEvenWhenTypedParametersAreThere()
     {
         var request = DriverJson.Deserialize(
-            """{"sessionId":"scan-1","purpose":"scan","tuning":null,"tune":{"system":"isdbT","isdbT":{"physicalChannel":27}}}""",
+            """{"sessionId":"scan-1","purpose":"scan","tuning":null,"tune":{"system":"isdbT","isdbT":{"physicalChannel":55}}}""",
             DriverJson.Context.StartSessionRequest
         );
 
@@ -119,7 +119,7 @@ public sealed class SessionRequestAgreementTests
     public void ARequestCarryingOnlyTheOlderFieldIsUnaffected()
     {
         Assert.Empty(
-            Request(new TuningRequest(TunerKind.Terrestrial, 27, 1024), null).Validate(Moment)
+            Request(new TuningRequest(TunerKind.Terrestrial, 55, 50001), null).Validate(Moment)
         );
     }
 
@@ -127,7 +127,7 @@ public sealed class SessionRequestAgreementTests
     public void AServiceIdHasNoMeaningBesideTypedParametersAndIsRefused()
     {
         Assert.Contains(
-            Request(new TuningRequest(TunerKind.Terrestrial, 27, 1024), TuneParams.Terrestrial(27))
+            Request(new TuningRequest(TunerKind.Terrestrial, 55, 50001), TuneParams.Terrestrial(55))
                 .Validate(Moment),
             problem => problem.StartsWith("tuning.serviceId:", StringComparison.Ordinal)
         );
@@ -137,7 +137,7 @@ public sealed class SessionRequestAgreementTests
     public void AServiceIdOnItsOwnIsStillAcceptedTheWayItAlwaysWas()
     {
         Assert.Empty(
-            Request(new TuningRequest(TunerKind.Terrestrial, 27, 1024), null).Validate(Moment)
+            Request(new TuningRequest(TunerKind.Terrestrial, 55, 50001), null).Validate(Moment)
         );
     }
 
@@ -145,7 +145,7 @@ public sealed class SessionRequestAgreementTests
     public void TheReasonGivenForASatelliteTuneDoesNotPromiseTheOlderFieldWouldWork()
     {
         var problem = Assert.Single(
-            Request(new TuningRequest(TunerKind.Satellite, 15), TuneParams.Bs(15, 16625))
+            Request(new TuningRequest(TunerKind.Satellite, 15), TuneParams.Bs(15, 50001))
                 .Validate(Moment)
         );
 
@@ -160,11 +160,11 @@ public sealed class SessionRequestAgreementTests
     public void TheReasonGivenForATerrestrialTuneIsThatBothFieldsTuneAlike()
     {
         var problem = Assert.Single(
-            Request(new TuningRequest(TunerKind.Terrestrial, 42), TuneParams.Terrestrial(27))
+            Request(new TuningRequest(TunerKind.Terrestrial, 42), TuneParams.Terrestrial(55))
                 .Validate(Moment)
         );
 
         Assert.Contains("tunes the same way", problem, StringComparison.Ordinal);
-        Assert.Contains("physical channel 27", problem, StringComparison.Ordinal);
+        Assert.Contains("physical channel 55", problem, StringComparison.Ordinal);
     }
 }
