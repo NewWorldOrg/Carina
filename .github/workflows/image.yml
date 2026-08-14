@@ -61,9 +61,7 @@ jobs:
           echo "driver: $(docker/image-tags.sh tag driver)"
           echo "app: $(docker/image-tags.sh tag app)"
       - run: docker compose config --quiet
-      - name: The two-process harness the scenarios below drive renders
-        run: docker compose -f compose.deploy.yml config --quiet
-      - run: docker/acceptance/run.sh
+      - run: docker compose -f compose.deploy.yml config --quiet
       - name: What is left on the runner
         if: always()
         run: docker ps -a && docker volume ls

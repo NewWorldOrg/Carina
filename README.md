@@ -110,9 +110,6 @@ docker/grace-period.sh derive   # 予算+余裕を stop_grace_period の形で�
 docker/grace-period.sh check    # compose の値が予算を超えているか検査する
 ```
 
-録画がギャップ無く伸びたことは `docker/check-recording-continuity.py` が
-録画ファイルを読んで確かめます（合成チューナーの TS 専用）。
-
 ## 設定
 
 環境依存のものは何ひとつ埋め込みません。デバイスの一覧、録画の出力先、ソケットの
