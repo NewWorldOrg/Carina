@@ -160,7 +160,7 @@ public sealed class WireStabilityTests
     }
 
     [Fact]
-    public void TheSubtreesAddedToATunerAreAbsentUntilADriverFillsThem()
+    public void TheSubtreesATunerGainedAreExplicitNullsUntilADriverFillsThem()
     {
         var json = DriverJson.Serialize(
             new TunerSnapshot("adapter0", TunerKind.Terrestrial, TunerState.Idle)
@@ -223,9 +223,80 @@ public sealed class WireStabilityTests
     [InlineData(SessionPurpose.Recording, 1)]
     [InlineData(SessionPurpose.Live, 2)]
     [InlineData(SessionPurpose.Survey, 3)]
+    [InlineData(SessionPurpose.Scan, 4)]
     public void TheAgreedPurposesKeepTheirPlace(SessionPurpose purpose, int value)
     {
         Assert.Equal(value, (int)purpose);
+    }
+
+    [Fact]
+    public void TheTypedTuneKeepsExactlyTheFieldsItWasGiven()
+    {
+        Assert.Equal(
+            ["system", "isdbT", "isdbSBs", "isdbSCs110"],
+            FieldsOf(DriverJson.Serialize(TuneParams.Terrestrial(27)))
+        );
+        Assert.Equal(
+            ["physicalChannel"],
+            FieldsOf(DriverJson.Serialize(new IsdbTParams(27)))
+        );
+        Assert.Equal(
+            ["bsChannel", "tsid"],
+            FieldsOf(DriverJson.Serialize(new IsdbSBsParams(15, 16625)))
+        );
+        Assert.Equal(
+            ["csChannel"],
+            FieldsOf(DriverJson.Serialize(new IsdbSCs110Params(24)))
+        );
+    }
+
+    [Fact]
+    public void AQualityReadingKeepsExactlyTheFieldsItWasGiven()
+    {
+        Assert.Equal(
+            ["lock", "cnrMilliDecibels", "postViterbiBitErrors", "measuredAt"],
+            FieldsOf(DriverJson.Serialize(SignalQualityDto.NotLocked(Moment)))
+        );
+        Assert.Equal(
+            ["layer", "errorBits", "totalBits"],
+            FieldsOf(DriverJson.Serialize(new LayerBitErrorCounts(0, 12, 1_000_000)))
+        );
+    }
+
+    [Fact]
+    public void ATunerHealthKeepsExactlyTheFieldsItWasGiven()
+    {
+        Assert.Equal(
+            ["level", "disablePending", "lnbPowered", "detail", "changedAt"],
+            FieldsOf(DriverJson.Serialize(new TunerHealthDto()))
+        );
+    }
+
+    [Fact]
+    public void ACurrentSessionKeepsExactlyTheFieldsItWasGiven()
+    {
+        Assert.Equal(
+            ["sessionId", "purpose", "startedAt", "tune"],
+            FieldsOf(DriverJson.Serialize(new CurrentSessionDto()))
+        );
+    }
+
+    [Fact]
+    public void ALedgerEntryKeepsExactlyTheFieldsItWasGiven()
+    {
+        Assert.Equal(
+            ["deviceId", "disabled", "lnbPower"],
+            FieldsOf(DriverJson.Serialize(new TunerConfigEntry { DeviceId = "adapter0" }))
+        );
+    }
+
+    [Fact]
+    public void ADetectedDeviceKeepsExactlyTheFieldsItWasGiven()
+    {
+        Assert.Equal(
+            ["deviceId", "detection", "kinds", "detail"],
+            FieldsOf(DriverJson.Serialize(new DetectedDeviceDto { DeviceId = "adapter0" }))
+        );
     }
 
     [Theory]
