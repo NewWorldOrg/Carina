@@ -7,7 +7,8 @@ mode="${1:-}"
 driver_roots=(src/Carina.Driver)
 app_roots=(src/Carina.Api src/Carina.Db)
 shared_inputs=(.dockerignore Directory.Build.props Directory.Packages.props Dockerfile docker/entrypoint.sh)
-workflow=.github/workflows/ci.yml
+workflow=.github/workflows/image.yml
+declared_workflows=(.github/workflows/build.yml "${workflow}")
 
 fail() {
     echo "FAIL: $*" >&2
@@ -101,7 +102,7 @@ tag_for() {
 check_declared_inputs_exist() {
     local path
 
-    for path in "${shared_inputs[@]}" "${workflow}"; do
+    for path in "${shared_inputs[@]}" "${declared_workflows[@]}"; do
         if [ ! -e "${repo_root}/${path}" ]; then
             fail "declared input '${path}' does not exist; a rename would drop it from the tag inputs without anything failing."
         fi
