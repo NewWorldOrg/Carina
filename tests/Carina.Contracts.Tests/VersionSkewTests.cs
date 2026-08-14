@@ -155,10 +155,29 @@ public sealed class VersionSkewTests
         var request = AsOlderDriverReadsIt(tune);
 
         Assert.NotNull(request);
+        Assert.Equal(TunerKind.Unspecified, request.Tuning.Kind);
         Assert.Contains(
             request.Validate(Moment),
             problem => problem.StartsWith("tuning.kind:", StringComparison.Ordinal)
         );
+    }
+
+    [Fact]
+    public void BothFieldsTravelTogetherAndNameTheSameTune()
+    {
+        var tune = TuneParams.Terrestrial(27);
+        var request = new StartSessionRequest
+        {
+            SessionId = SessionId.Parse("scan-1"),
+            Purpose = SessionPurpose.Scan,
+            Tuning = tune.ToLegacyRequest(),
+            Tune = tune,
+        };
+
+        Assert.Equal(TunerKind.Terrestrial, request.Tuning.Kind);
+        Assert.Equal(27, request.Tuning.PhysicalChannel);
+        Assert.Equal(27, request.Tune?.IsdbT?.PhysicalChannel);
+        Assert.Empty(request.Validate(Moment));
     }
 
     [Fact]

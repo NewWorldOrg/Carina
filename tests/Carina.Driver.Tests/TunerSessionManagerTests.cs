@@ -767,4 +767,60 @@ public sealed class TunerSessionManagerTests : IDisposable
         );
         Assert.Empty(manager.Sessions);
     }
+
+    [Fact]
+    public void AChannelTheTypedParametersDoNotNameNeverReachesTheHardware()
+    {
+        var manager = Manager();
+
+        var request = new StartSessionRequest
+        {
+            SessionId = SessionId.Parse("s-9"),
+            Purpose = SessionPurpose.Live,
+            Tuning = new TuningRequest(TunerKind.Terrestrial, 900, -5),
+            Tune = TuneParams.Terrestrial(27),
+        };
+
+        Assert.Equal(SessionRefusal.Rejected, RefusalFor(manager, request));
+        Assert.Empty(manager.Sessions);
+    }
+
+    [Fact]
+    public void ARequestWhoseOlderFieldIsNullIsRefusedInsteadOfEndingTheProcess()
+    {
+        var manager = Manager();
+
+        var request = new StartSessionRequest
+        {
+            SessionId = SessionId.Parse("s-9"),
+            Purpose = SessionPurpose.Live,
+            Tuning = null!,
+            Tune = TuneParams.Terrestrial(27),
+        };
+
+        Assert.Equal(SessionRefusal.Rejected, RefusalFor(manager, request));
+        Assert.Empty(manager.Sessions);
+    }
+
+    [Fact]
+    public void ATuneThisDriverCannotExpressSaysSoRatherThanBlamingTheDevices()
+    {
+        var manager = Manager();
+
+        var tune = TuneParams.Bs(15, 16625);
+        var request = new StartSessionRequest
+        {
+            SessionId = SessionId.Parse("s-9"),
+            Purpose = SessionPurpose.Scan,
+            Tuning = tune.ToLegacyRequest(),
+            Tune = tune,
+        };
+
+        var start = manager.Begin(request);
+
+        Assert.False(start.TryGetSession(out _));
+        Assert.Contains("isdbSBs", start.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("no enabled device", start.Detail, StringComparison.Ordinal);
+        Assert.Empty(manager.Sessions);
+    }
 }

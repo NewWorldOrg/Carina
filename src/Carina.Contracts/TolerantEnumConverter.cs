@@ -94,13 +94,15 @@ public sealed class TuneSystemConverter : TolerantEnumConverter<TuneSystem>
 
 public sealed class TunerKindConverter : TolerantEnumConverter<TunerKind>
 {
-    protected override string NameOf(TunerKind value) =>
+    public static string WireName(TunerKind value) =>
         value switch
         {
             TunerKind.Terrestrial => "terrestrial",
             TunerKind.Satellite => "satellite",
             _ => "unspecified",
         };
+
+    protected override string NameOf(TunerKind value) => WireName(value);
 
     protected override TunerKind? ValueOf(string name) =>
         name switch

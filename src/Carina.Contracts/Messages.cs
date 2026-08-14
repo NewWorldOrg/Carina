@@ -120,33 +120,44 @@ public sealed record StartSessionRequest
 
         problems.AddRange(OutputRootProblems());
 
-        if (Tune is not null)
-        {
-            problems.AddRange(Tune.Validate().Select(problem => $"tune.{problem}"));
-        }
-        else if (Tuning is null)
+        if (Tuning is null)
         {
             problems.Add("tuning: missing.");
             return problems;
         }
-        else
+
+        var tuneProblems = Tune?.Validate() ?? [];
+        problems.AddRange(tuneProblems.Select(problem => $"tune.{problem}"));
+
+        if (Tune is null && Tuning.Kind is TunerKind.Unspecified)
         {
-            if (Tuning.Kind is TunerKind.Unspecified)
-            {
-                problems.Add("tuning.kind: missing, or a value this driver does not know.");
-            }
+            problems.Add("tuning.kind: missing, or a value this driver does not know.");
+        }
 
-            if (Tuning.PhysicalChannel is < MinPhysicalChannel or > MaxPhysicalChannel)
+        if (Tuning.PhysicalChannel is < MinPhysicalChannel or > MaxPhysicalChannel)
+        {
+            problems.Add(
+                $"tuning.physicalChannel: expected {MinPhysicalChannel} to {MaxPhysicalChannel}, got {Tuning.PhysicalChannel}."
+            );
+        }
+
+        if (Tuning.ServiceId is < 0 or > MaxServiceId)
+        {
+            problems.Add(
+                $"tuning.serviceId: expected 0 to {MaxServiceId}, got {Tuning.ServiceId}."
+            );
+        }
+
+        if (Tune is not null && tuneProblems.Count is 0)
+        {
+            var expected = Tune.ToLegacyRequest();
+            if (
+                Tuning.Kind != expected.Kind
+                || Tuning.PhysicalChannel != expected.PhysicalChannel
+            )
             {
                 problems.Add(
-                    $"tuning.physicalChannel: expected {MinPhysicalChannel} to {MaxPhysicalChannel}, got {Tuning.PhysicalChannel}."
-                );
-            }
-
-            if (Tuning.ServiceId is < 0 or > MaxServiceId)
-            {
-                problems.Add(
-                    $"tuning.serviceId: expected 0 to {MaxServiceId}, got {Tuning.ServiceId}."
+                    $"tuning: expected {Describe(expected)} to match tune, so that a driver reading either field tunes the same way; got {Describe(Tuning)}."
                 );
             }
         }
@@ -163,6 +174,9 @@ public sealed record StartSessionRequest
 
         return problems;
     }
+
+    private static string Describe(TuningRequest tuning) =>
+        $"kind {TunerKindConverter.WireName(tuning.Kind)} on physical channel {tuning.PhysicalChannel}";
 
     private IReadOnlyList<string> OutputRootProblems()
     {
