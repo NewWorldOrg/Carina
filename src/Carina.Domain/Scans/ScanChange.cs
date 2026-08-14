@@ -14,7 +14,7 @@ public enum ScanChangeKind
 public sealed record ScanChannelChange(
     ScanChangeKind Kind,
     TuningParameters Tuning,
-    TransportStreamId TransportStreamId,
+    TransportStreamId? TransportStreamId,
     SignalMeasurement? Measurement);
 
 public sealed record ScanServiceChange(
