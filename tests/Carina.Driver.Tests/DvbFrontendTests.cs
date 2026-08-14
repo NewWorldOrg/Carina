@@ -302,12 +302,12 @@ public sealed class DvbFrontendTests
     [Fact]
     public void TheHardwareNameStopsAtItsTerminator()
     {
-        var calls = new ScriptedDvbSystemCalls { HardwareName = "Notional NT1 ISDB-S" };
+        var calls = new ScriptedDvbSystemCalls { HardwareName = "PT3 ISDB-S" };
 
         using var frontend = DvbFrontend.Open(calls, Path, DvbAccess.Inspect);
 
         Assert.True(frontend.TryReadHardwareName(out var name, out _));
-        Assert.Equal("Notional NT1 ISDB-S", name);
+        Assert.Equal("PT3 ISDB-S", name);
     }
 
     [Fact]
