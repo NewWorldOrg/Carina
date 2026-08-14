@@ -852,11 +852,96 @@ public sealed class TunerSessionManagerTests : IDisposable
     }
 
     [Fact]
+    public void ATunerTurnedOffWhileRunningIsNotHandedToATypedTune()
+    {
+        var manager = Manager();
+
+        Assert.True(manager.Turn("adapter1", disabled: true));
+
+        Assert.Equal(
+            SessionRefusal.NoDeviceOfThatKind,
+            RefusalFor(manager, TypedSatellite("s-9"))
+        );
+        Assert.Empty(manager.Sessions);
+    }
+
+    [Fact]
+    public void AFaultedTunerIsRefusedAsFaultedRatherThanAsAKindNoDeviceServes()
+    {
+        var manager = Manager();
+
+        manager.Fault("adapter1", "the delivery systems it reports are not the ones recorded");
+
+        var start = manager.Begin(TypedSatellite("s-9"));
+
+        Assert.Equal(SessionRefusal.FaultedDevice, start.Refusal);
+        Assert.NotEqual(SessionRefusal.NoDeviceOfThatKind, start.Refusal);
+        Assert.Empty(manager.Sessions);
+    }
+
+    [Fact]
+    public void ANamedTunerTurnedOffWhileRunningSaysSoRatherThanBlamingTheTypedTune()
+    {
+        var manager = Manager();
+
+        Assert.True(manager.Turn("adapter1", disabled: true));
+
+        var start = manager.Begin(TypedSatellite("s-9", "adapter1"));
+
+        Assert.Equal(SessionRefusal.DisabledDevice, start.Refusal);
+        Assert.NotEqual(SessionRefusal.WrongDeviceKind, start.Refusal);
+    }
+
+    [Fact]
+    public void ANamedTunerOfTheOtherKindIsJudgedAgainstTheSystemTheTypedParametersName()
+    {
+        var manager = Manager();
+
+        var start = manager.Begin(TypedSatellite("s-9", "adapter0"));
+
+        Assert.Equal(SessionRefusal.WrongDeviceKind, start.Refusal);
+        Assert.Contains(
+            TunerKind.Satellite.ToString(),
+            start.Detail,
+            StringComparison.Ordinal
+        );
+    }
+
+    [Fact]
     public void ADriverThatTunesFromTypedParametersSaysSo()
     {
         Assert.Contains(
             DriverCapabilities.TypedTuning,
             Carina.Driver.Ipc.DriverGreeting.Capabilities
         );
+    }
+
+    [Fact]
+    public void TheGreetingAdvertisesEverythingThisDriverCanDo()
+    {
+        Assert.Equal(
+            [
+                DriverCapabilities.Recording,
+                DriverCapabilities.Live,
+                DriverCapabilities.QualityMetering,
+                DriverCapabilities.LiveTunerToggle,
+                DriverCapabilities.TypedTuning,
+            ],
+            Carina.Driver.Ipc.DriverGreeting.Capabilities
+        );
+    }
+
+    private static StartSessionRequest TypedSatellite(string sessionId, string? deviceId = null)
+    {
+        var tune = TuneParams.Bs(15, 50001);
+
+        return new StartSessionRequest
+        {
+            SessionId = SessionId.Parse(sessionId),
+            Purpose = SessionPurpose.Scan,
+            Tuning = tune.ToLegacyRequest(),
+            Tune = tune,
+            DeviceId = deviceId,
+        };
     }
 }

@@ -51,7 +51,7 @@ using var sigquit = PosixSignalRegistration.Create(
     _ => stopWasAsked = true
 );
 
-var built = DriverHost.Create(args, configuration);
+var built = DriverHost.Create(args, configuration, configurationPath: configurationPath);
 if (!built.TryGetHost(out var host))
 {
     return built.Refusal is DriverHostRefusal.Configuration

@@ -261,6 +261,46 @@ public sealed class VersionSkewTests
     }
 
     [Fact]
+    public void ADrainingTunerIsNotReadAsAWorkingOneByABuildThatPredatesTheState()
+    {
+        var tuner = DriverJson.Deserialize(
+            """{"deviceId":"adapter0","kind":"terrestrial","state":"draining"}""",
+            DriverJson.Context.TunerSnapshot
+        );
+
+        Assert.NotNull(tuner);
+        Assert.Equal(TunerState.Draining, tuner.State);
+        Assert.NotEqual(TunerState.Idle, tuner.State);
+    }
+
+    [Fact]
+    public void ATunerFromADriverThatCannotTurnOneOffAtRuntimeIsNotReadAsHavingBeenToggled()
+    {
+        var tuner = DriverJson.Deserialize(
+            """{"deviceId":"adapter0","kind":"terrestrial","state":"disabled"}""",
+            DriverJson.Context.TunerSnapshot
+        );
+
+        Assert.NotNull(tuner);
+        Assert.Equal(TunerState.Disabled, tuner.State);
+        Assert.False(tuner.Toggled);
+    }
+
+    [Fact]
+    public void ALedgerAnswerWithFieldsThisBuildDoesNotKnowStillReadsItsHashes()
+    {
+        var ledger = DriverJson.Deserialize(
+            """{"tuners":[],"loadedHash":"aaaa","savedHash":"bbbb","savedAt":"2026-08-08T21:04:00+09:00"}""",
+            DriverJson.Context.TunerLedgerDto
+        );
+
+        Assert.NotNull(ledger);
+        Assert.Equal("aaaa", ledger.LoadedHash);
+        Assert.Equal("bbbb", ledger.SavedHash);
+        Assert.True(ledger.HasDrifted());
+    }
+
+    [Fact]
     public void ATuneArmThisBuildDoesNotKnowLeavesNothingToActOn()
     {
         var tune = DriverJson.Deserialize(

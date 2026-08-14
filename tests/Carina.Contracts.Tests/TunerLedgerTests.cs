@@ -161,4 +161,127 @@ public sealed class TunerLedgerTests
     {
         Assert.Equal("[]", DriverJson.Serialize<IReadOnlyList<DetectedDeviceDto>>([]));
     }
+
+    [Fact]
+    public void ASavedLedgerAnswersWithWhatWasWrittenAndWhatIsRunning()
+    {
+        Assert.Equal(
+            """{"tuners":[{"deviceId":"adapter0","disabled":false,"lnbPower":false}],"loadedHash":"aaaa","savedHash":"bbbb"}""",
+            DriverJson.Serialize(
+                new TunerLedgerDto
+                {
+                    Tuners = [new TunerConfigEntry { DeviceId = "adapter0" }],
+                    LoadedHash = "aaaa",
+                    SavedHash = "bbbb",
+                }
+            )
+        );
+    }
+
+    [Fact]
+    public void TheLedgerOnDiskAndTheLedgerInMemoryAgreeingIsTheAbsenceOfDrift()
+    {
+        Assert.False(
+            new TunerLedgerDto { LoadedHash = "aaaa", SavedHash = "aaaa" }.HasDrifted()
+        );
+    }
+
+    [Fact]
+    public void ASaveThatHasNotBeenLoadedYetIsDrift()
+    {
+        Assert.True(
+            new TunerLedgerDto { LoadedHash = "aaaa", SavedHash = "bbbb" }.HasDrifted()
+        );
+    }
+
+    [Fact]
+    public void ALedgerOnDiskThatCannotBeReadCountsAsDriftRatherThanAsAgreement()
+    {
+        Assert.True(new TunerLedgerDto { LoadedHash = "aaaa", SavedHash = null }.HasDrifted());
+    }
+
+    [Fact]
+    public void DriftIsAComparisonTheReaderMakesRatherThanAFieldOnTheWire()
+    {
+        var json = DriverJson.Serialize(
+            new TunerLedgerDto { LoadedHash = "aaaa", SavedHash = "aaaa" }
+        );
+
+        Assert.DoesNotContain("drift", json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ALedgerAnswerCarriesNoDevicePath()
+    {
+        var json = DriverJson.Serialize(
+            new TunerLedgerDto
+            {
+                Tuners = [new TunerConfigEntry { DeviceId = "adapter0.frontend0" }],
+                LoadedHash = "aaaa",
+                SavedHash = "aaaa",
+            }
+        );
+
+        Assert.DoesNotContain("/dev", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("devicePath", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ALedgerAnswerFromAnOlderDriverStillReads()
+    {
+        var ledger = DriverJson.Deserialize(
+            """{"tuners":[{"deviceId":"adapter0"}]}""",
+            DriverJson.Context.TunerLedgerDto
+        );
+
+        Assert.NotNull(ledger);
+        Assert.Equal("adapter0", Assert.Single(ledger.Tuners).DeviceId);
+        Assert.Null(ledger.LoadedHash);
+        Assert.Null(ledger.SavedHash);
+    }
+
+    [Fact]
+    public void TunersAreNeverNull()
+    {
+        Assert.Empty(new TunerLedgerDto { Tuners = null! }.Tuners);
+
+        var ledger = DriverJson.Deserialize(
+            """{"tuners":null}""",
+            DriverJson.Context.TunerLedgerDto
+        );
+
+        Assert.NotNull(ledger);
+        Assert.Empty(ledger.Tuners);
+    }
+
+    [Fact]
+    public void ATogglePutsATunerBackInServiceOrTakesItOut()
+    {
+        Assert.Equal(
+            """{"disabled":true}""",
+            DriverJson.Serialize(new TunerToggleRequest { Disabled = true })
+        );
+
+        var request = DriverJson.Deserialize(
+            """{"disabled":false}""",
+            DriverJson.Context.TunerToggleRequest
+        );
+
+        Assert.NotNull(request);
+        Assert.False(request.Disabled);
+        Assert.Empty(request.Validate());
+    }
+
+    [Fact]
+    public void AToggleThatSaysNothingIsRefusedRatherThanReadAsPuttingATunerBackInService()
+    {
+        var request = DriverJson.Deserialize("{}", DriverJson.Context.TunerToggleRequest);
+
+        Assert.NotNull(request);
+        Assert.Null(request.Disabled);
+        Assert.Contains(
+            request.Validate(),
+            problem => problem.StartsWith("disabled:", StringComparison.Ordinal)
+        );
+    }
 }

@@ -13,17 +13,55 @@ namespace Carina.Driver.Tests;
 
 public sealed class DriverUnderTest : IAsyncDisposable
 {
-    private readonly IHost host;
     private readonly string root;
 
-    private DriverUnderTest(IHost host, string root, DriverConfiguration configuration)
+    private IHost host;
+
+    private DriverUnderTest(
+        IHost host,
+        string root,
+        DriverConfiguration configuration,
+        string configurationPath
+    )
     {
         this.host = host;
         this.root = root;
         Configuration = configuration;
+        ConfigurationPath = configurationPath;
     }
 
     public DriverConfiguration Configuration { get; }
+
+    public string ConfigurationPath { get; }
+
+    public void RewriteLedger(DriverConfiguration configuration) =>
+        File.WriteAllText(
+            ConfigurationPath,
+            DriverConfigurationWriter.Serialize(configuration)
+        );
+
+    public void CorruptLedger() =>
+        File.WriteAllText(ConfigurationPath, "{ not the configuration at all }");
+
+    public async Task RestartOnTheSameLedger()
+    {
+        await host.StopAsync(TimeSpan.FromSeconds(20));
+        host.Dispose();
+
+        ClearTheInheritedUrls();
+
+        var saved = DriverConfigurationReader.Parse(File.ReadAllText(ConfigurationPath));
+
+        Assert.NotNull(saved);
+
+        var built = DriverHost.Create([], saved, configurationPath: ConfigurationPath);
+
+        Assert.True(built.TryGetHost(out var restarted), string.Join(" ", built.Problems));
+
+        host = restarted;
+
+        await host.StartAsync();
+    }
 
     public string SocketPath => Configuration.SocketPath!;
 
@@ -46,6 +84,15 @@ public sealed class DriverUnderTest : IAsyncDisposable
         );
     }
 
+    public static string LedgerIn(string root, DriverConfiguration configuration)
+    {
+        var path = Path.Combine(root, "driver.json");
+
+        File.WriteAllText(path, DriverConfigurationWriter.Serialize(configuration));
+
+        return path;
+    }
+
     public static string NewRoot() =>
         Directory.CreateTempSubdirectory("carina-driver-").FullName;
 
@@ -58,13 +105,19 @@ public sealed class DriverUnderTest : IAsyncDisposable
 
         var root = NewRoot();
         var configuration = ConfigurationIn(root);
-        var built = DriverHost.Create(args ?? [], configuration, reshapeServices);
+        var configurationPath = LedgerIn(root, configuration);
+        var built = DriverHost.Create(
+            args ?? [],
+            configuration,
+            reshapeServices,
+            configurationPath
+        );
 
         Assert.True(built.TryGetHost(out var host), string.Join(" ", built.Problems));
 
         await host.StartAsync();
 
-        return new DriverUnderTest(host, root, configuration);
+        return new DriverUnderTest(host, root, configuration, configurationPath);
     }
 
     public static void ClearTheInheritedUrls()

@@ -54,6 +54,50 @@ public sealed class ScriptedTunerDevice(
     public void Dispose() => Disposed = true;
 }
 
+public sealed class PacedTunerDevice : ITunerDevice
+{
+    private static readonly TimeSpan Deadlock = TimeSpan.FromSeconds(30);
+
+    private readonly FakeTunerDevice inner = new(55, 50001);
+    private readonly SemaphoreSlim allowed = new(0);
+    private readonly SemaphoreSlim parked = new(0);
+
+    private long reads;
+    private int seen;
+
+    public long Reads => Interlocked.Read(ref reads);
+
+    public long Overflows => 0;
+
+    public bool Disposed { get; private set; }
+
+    public byte[] Read(int count, CancellationToken cancellationToken)
+    {
+        parked.Release();
+        allowed.Wait(cancellationToken);
+        Interlocked.Increment(ref reads);
+
+        return inner.Read(count, cancellationToken);
+    }
+
+    public void Allow(int chunks) => allowed.Release(chunks);
+
+    public void AwaitParkedBefore(int read)
+    {
+        while (seen < read)
+        {
+            Assert.True(
+                parked.Wait(Deadlock),
+                $"The session never settled before read {seen + 1}; it is stuck on a subscriber."
+            );
+
+            seen++;
+        }
+    }
+
+    public void Dispose() => Disposed = true;
+}
+
 public sealed class StubbornTunerDevice(TimeSpan readTakes) : ITunerDevice
 {
     private readonly FakeTunerDevice inner = new(55, 50001);

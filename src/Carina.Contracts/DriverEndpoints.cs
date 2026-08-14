@@ -14,6 +14,8 @@ public static class DriverEndpoints
 
     public const string DevicesDetected = "/devices/detected";
 
+    public const string TunerLedger = "/tuners/ledger";
+
     public const string SubscriberQuery = "as";
 
     public const string ViewerSubscriber = "viewer";
@@ -49,5 +51,6 @@ public static class DriverEndpoints
         Diagnostics,
         Events,
         DevicesDetected,
+        TunerLedger,
     ];
 }
