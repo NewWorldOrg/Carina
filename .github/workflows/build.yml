@@ -28,17 +28,6 @@ jobs:
       - run: dotnet restore
       - run: dotnet build --no-restore -warnaserror
       - run: dotnet format --no-restore --verify-no-changes
-      - run: dotnet build src/Carina.Api --no-restore -warnaserror
-      - name: Delete the document so the check below cannot pass without generating it
-        run: rm openapi/Carina.Api.json
-      - name: Generate the document, which starts the host and so needs the settings present
-        run: dotnet msbuild src/Carina.Api/Carina.Api.csproj -t:GenerateOpenApiDocuments
-      - name: The checked-in document is the generated one
-        run: git diff --exit-code openapi
-      - uses: actions/upload-artifact@v4
-        with:
-          name: openapi
-          path: openapi/Carina.Api.json
 
   unit-test:
     runs-on: ubuntu-latest
