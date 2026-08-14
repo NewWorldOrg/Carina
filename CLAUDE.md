@@ -30,19 +30,17 @@ src/Carina.Domain          entities, value objects, repository interfaces — re
 src/Carina.Broadcast       broadcast-standard parsing — no dependencies
 src/Carina.Infrastructure  persistence, IPC client, external boundaries
 src/Carina.Db              migration entry point (leaf; nothing references it)
-src/Carina.Api             HTTP surface; publishes the OpenAPI document
+src/Carina.Api             HTTP surface; serves the OpenAPI document
 tests/                     one test project per production project + architecture tests
-openapi/                   the published HTTP contract, generated and checked in
 ```
 
-The web frontend generates its client from `openapi/Carina.Api.json` rather than from a
-running instance: `GET /openapi/v1.json` is behind the default-deny seam, and that repository
-has its own CI and cannot start this application. `task openapi` regenerates the file, a
-feature test fails when it drifts from what the app serves, and CI deletes it, regenerates
-it on the runner and fails on a difference. Generation starts the host, so it needs the
-same settings a run needs. Three surfaces cannot be expressed in it — the transport
-stream, the event hub and the bulk programme guide — and are declared in
-`openapi/non-rest-contracts.md`.
+The running application is the only source of the OpenAPI document: it is served at
+`GET /openapi/v1.json` and nothing is checked in. The seam denies it like everything
+else outside Development, and in Development it is anonymous, which is where the web
+frontend fetches it from to generate its client. Three surfaces cannot be expressed in
+the document — the transport stream, the event hub and the bulk programme guide — and
+its description names all three so a consumer reading only the generated client learns
+they exist.
 
 Reference direction is one-way and enforced by `tests/Carina.Architecture.Tests`:
 
@@ -118,9 +116,9 @@ docker compose exec app dotnet test
 docker compose exec app dotnet format --verify-no-changes
 ```
 
-`task` shortcuts: `task build`, `task test`, `task lint`, `task format`, `task openapi`.
+`task` shortcuts: `task build`, `task test`, `task lint`, `task format`.
 
-GitHub Actions runs build, format verification, the OpenAPI round trip, the compose
+GitHub Actions runs build, format verification, the compose
 render, the image and its role checks, and two test jobs: one
 for everything except `Category=DbIntegration`, one for those against a PostgreSQL
 service container. The second job counts the tests it ran, because `dotnet test` exits 0
@@ -163,8 +161,8 @@ verified nothing.
 
 This repository serves the API only. In development the container listens on port
 8080 and compose publishes it on host port 8081; `API_PORT` overrides the host
-side. The web frontend lives in its own repository and consumes the OpenAPI
-document generated here.
+side. The web frontend lives in its own repository and fetches the OpenAPI
+document this process serves.
 
 ## Implementation Phases
 
