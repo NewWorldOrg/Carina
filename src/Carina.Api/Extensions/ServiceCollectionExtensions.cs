@@ -9,6 +9,7 @@ public static class ServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
 
         services.AddScoped<DriverStatusService>();
+        services.AddScoped<TunerLedgerService>();
 
         return services;
     }
