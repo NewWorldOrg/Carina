@@ -8,9 +8,9 @@ public sealed class AribTextTests
     [Fact]
     public void WithoutAnyEscapeTheLeftHalfIsKanjiAndTheRightHalfIsHiragana()
     {
-        var bytes = new AribTextWriter().Kanji("総合").Hiragana("てすと").ToArray();
+        var bytes = new AribTextWriter().Kanji("文字").Hiragana("てすと").ToArray();
 
-        Assert.Equal("総合てすと", AribText.Decode(bytes));
+        Assert.Equal("文字てすと", AribText.Decode(bytes));
     }
 
     [Fact]
@@ -192,9 +192,9 @@ public sealed class AribTextTests
     [Fact]
     public void ATwoByteCharacterCutInHalfIsDroppedRatherThanGuessed()
     {
-        var bytes = new AribTextWriter().Kanji("総合").Raw(0x40).ToArray();
+        var bytes = new AribTextWriter().Kanji("文字").Raw(0x40).ToArray();
 
-        Assert.Equal("総合", AribText.Decode(bytes));
+        Assert.Equal("文字", AribText.Decode(bytes));
     }
 
     [Fact]
