@@ -17,7 +17,7 @@ public sealed class StreamCutException(
 public sealed class PiggybackTunerDevice(TunerSession host, SessionSubscription seat)
     : ITunerDevice
 {
-    public long Overflows => 0;
+    public long Overflows => host.DeviceOverflows;
 
     public byte[] Read(int count, CancellationToken cancellationToken)
     {

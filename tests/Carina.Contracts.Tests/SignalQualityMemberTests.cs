@@ -14,6 +14,8 @@ public sealed class SignalQualityMemberTests
             CnrMilliDecibels = 21_500,
             PostViterbiBitErrors = [new LayerBitErrorCounts(0, 12, 1_000_000)],
             MeasuredAt = Moment,
+            LockReadAt = Moment.AddMilliseconds(3),
+            NotImplementedMetrics = [SignalQualityMetrics.PostViterbiBitError],
         };
 
     private static IReadOnlyList<PropertyInfo> Settable =>
@@ -82,6 +84,8 @@ public sealed class SignalQualityMemberTests
                 ((DateTimeOffset?)value ?? Moment).AddMinutes(1),
             var type when type == typeof(IReadOnlyList<LayerBitErrorCounts>) =>
                 (IReadOnlyList<LayerBitErrorCounts>)[new LayerBitErrorCounts(9, 9, 9)],
+            var type when type == typeof(IReadOnlyList<string>) =>
+                (IReadOnlyList<string>)[SignalQualityMetrics.Cnr],
             _ => throw new NotSupportedException(
                 $"{property.Name} is a {property.PropertyType.Name}, which this suite does not know how to vary."
             ),

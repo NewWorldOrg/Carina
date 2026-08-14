@@ -140,6 +140,48 @@ public sealed class TunerPoolSessionTests : IDisposable
     }
 
     [Fact]
+    public void ARiderIsToldOfTheOverrunsAtTheTunerItsBytesCameFrom()
+    {
+        var device = new PacedTunerDevice();
+        var manager = Manager(new OneDeviceFactory(device));
+
+        var holder = Started(manager, Request("s-1", SessionPurpose.Recording));
+        var rider = Started(manager, Request("s-2", SessionPurpose.Recording));
+
+        device.Allow(2);
+        device.AwaitParkedBefore(3);
+        device.Overflows = 4;
+
+        Assert.Equal(4, holder.DeviceOverflows);
+        Assert.Equal(4, rider.DeviceOverflows);
+
+        holder.Stop();
+        holder.WaitForEnd(Deadlock);
+        rider.WaitForEnd(Deadlock);
+    }
+
+    [Fact]
+    public void ARiderDoesNotAskTheFrontendItDoesNotHold()
+    {
+        var device = new PacedTunerDevice { Signal = new ScriptedQualitySource() };
+        var manager = Manager(new OneDeviceFactory(device));
+
+        var holder = Started(manager, Request("s-1", SessionPurpose.Recording));
+        var rider = Started(manager, Request("s-2", SessionPurpose.Recording));
+
+        device.Allow(2);
+        device.AwaitParkedBefore(3);
+
+        Assert.Equal(1, device.Signal!.Reads);
+        Assert.NotNull(holder.Quality);
+        Assert.Null(rider.Quality);
+
+        holder.Stop();
+        holder.WaitForEnd(Deadlock);
+        rider.WaitForEnd(Deadlock);
+    }
+
+    [Fact]
     public void ARiderWhoseHolderStoppedIsNeverMistakenForOneThatFinished()
     {
         var device = new PacedTunerDevice();
@@ -288,6 +330,34 @@ public sealed class TunerPoolSessionTests : IDisposable
         var second = Started(manager, Request("s-2", SessionPurpose.Live));
 
         Assert.Equal(["adapter0"], factory.Opened);
+
+        second.Stop();
+        second.WaitForEnd(Deadlock);
+    }
+
+    [Fact]
+    public void AConsumerThatCameStraightBackIsNotHandedTheLossesOfTheOneBeforeIt()
+    {
+        var device = new PacedTunerDevice();
+        var manager = Manager(new OneDeviceFactory(device), grace: TimeSpan.FromSeconds(5));
+
+        var first = Started(manager, Request("s-1", SessionPurpose.Live));
+        device.Allow(1);
+        device.AwaitParkedBefore(2);
+        device.Overflows = 3;
+        first.Stop();
+        first.WaitForEnd(Deadlock);
+
+        clock.Advance(TimeSpan.FromSeconds(4));
+
+        var second = Started(manager, Request("s-2", SessionPurpose.Live));
+
+        Assert.Equal(3, first.DeviceOverflows);
+        Assert.Equal(0, second.DeviceOverflows);
+
+        device.Overflows = 5;
+
+        Assert.Equal(2, second.DeviceOverflows);
 
         second.Stop();
         second.WaitForEnd(Deadlock);

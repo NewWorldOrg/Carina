@@ -42,7 +42,7 @@ public sealed class DriverJsonTests
     }
 
     private const string LiveSessionForm =
-        """{"sessionId":"s-1","purpose":"live","state":"active","startedAt":"2026-08-08T21:04:00+09:00","endsAt":null,"deviceId":"adapter1","stopReason":"unspecified","concluded":false,"instanceId":null,"outputRoot":null,"bytesRecorded":0,"faultCount":0,"droppedChunks":0,"firstFault":null,"failureCause":null,"counters":{"packets":0,"drops":0,"duplicates":0,"discontinuities":0,"transportErrors":0,"scrambledPackets":0,"provisionalPackets":0,"discardedBytes":0,"resyncs":0}}""";
+        """{"sessionId":"s-1","purpose":"live","state":"active","startedAt":"2026-08-08T21:04:00+09:00","endsAt":null,"deviceId":"adapter1","stopReason":"unspecified","concluded":false,"instanceId":null,"outputRoot":null,"bytesRecorded":0,"faultCount":0,"droppedChunks":0,"firstFault":null,"failureCause":null,"counters":{"packets":0,"drops":0,"duplicates":0,"discontinuities":0,"transportErrors":0,"scrambledPackets":0,"provisionalPackets":0,"discardedBytes":0,"resyncs":0,"deviceOverflows":0,"lockLosses":0}}""";
 
     private static SessionSnapshot LiveSession =>
         new(SessionId.Parse("s-1"), SessionPurpose.Live, "adapter1", SessionState.Active, Moment);
@@ -214,7 +214,7 @@ public sealed class DriverJsonTests
         );
 
         Assert.Equal(
-            """{"lock":"locked","cnrMilliDecibels":21500,"postViterbiBitErrors":[{"layer":0,"errorBits":12,"totalBits":1000000},{"layer":1,"errorBits":0,"totalBits":500000}],"measuredAt":"2026-08-08T21:04:00+09:00"}""",
+            """{"lock":"locked","cnrMilliDecibels":21500,"postViterbiBitErrors":[{"layer":0,"errorBits":12,"totalBits":1000000},{"layer":1,"errorBits":0,"totalBits":500000}],"measuredAt":"2026-08-08T21:04:00+09:00","lockReadAt":null,"notImplementedMetrics":[]}""",
             json
         );
     }
@@ -223,7 +223,7 @@ public sealed class DriverJsonTests
     public void AnUnlockedQualityReadingSerialisesToItsAgreedForm()
     {
         Assert.Equal(
-            """{"lock":"notLocked","cnrMilliDecibels":null,"postViterbiBitErrors":[],"measuredAt":"2026-08-08T21:04:00+09:00"}""",
+            """{"lock":"notLocked","cnrMilliDecibels":null,"postViterbiBitErrors":[],"measuredAt":"2026-08-08T21:04:00+09:00","lockReadAt":null,"notImplementedMetrics":[]}""",
             DriverJson.Serialize(SignalQualityDto.NotLocked(Moment))
         );
     }
@@ -254,7 +254,7 @@ public sealed class DriverJsonTests
         );
 
         Assert.Equal(
-            """{"kind":"satellite","state":"busy","sessionId":"scan-1","detail":null,"deviceId":"adapter0","health":{"level":"healthy","disablePending":true,"lnbPowered":true,"detail":null,"changedAt":"2026-08-08T21:04:00+09:00"},"signalQuality":{"lock":"notLocked","cnrMilliDecibels":null,"postViterbiBitErrors":[],"measuredAt":"2026-08-08T21:04:00+09:00"},"currentSession":{"sessionId":"scan-1","purpose":"scan","startedAt":"2026-08-08T21:04:00+09:00","tune":{"system":"isdbSCs110","isdbT":null,"isdbSBs":null,"isdbSCs110":{"csChannel":24}}},"toggled":false}""",
+            """{"kind":"satellite","state":"busy","sessionId":"scan-1","detail":null,"deviceId":"adapter0","health":{"level":"healthy","disablePending":true,"lnbPowered":true,"detail":null,"changedAt":"2026-08-08T21:04:00+09:00"},"signalQuality":{"lock":"notLocked","cnrMilliDecibels":null,"postViterbiBitErrors":[],"measuredAt":"2026-08-08T21:04:00+09:00","lockReadAt":null,"notImplementedMetrics":[]},"currentSession":{"sessionId":"scan-1","purpose":"scan","startedAt":"2026-08-08T21:04:00+09:00","tune":{"system":"isdbSCs110","isdbT":null,"isdbSBs":null,"isdbSCs110":{"csChannel":24}}},"toggled":false}""",
             json
         );
     }

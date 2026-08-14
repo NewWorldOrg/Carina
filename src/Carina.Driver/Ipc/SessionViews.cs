@@ -1,6 +1,7 @@
 using Carina.Contracts;
 using Carina.Driver.Configuration;
 using Carina.Driver.Sessions;
+using Carina.Driver.Tuning;
 
 namespace Carina.Driver.Ipc;
 
@@ -34,7 +35,9 @@ public static class SessionViews
                 session.Counters.ScrambledPackets,
                 session.Counters.ProvisionalPackets,
                 session.DiscardedBytes,
-                session.Resyncs
+                session.Resyncs,
+                session.DeviceOverflows,
+                session.LockLosses
             ),
         };
 
@@ -63,9 +66,24 @@ public static class SessionViews
     )
     {
         var busy = new Dictionary<string, SessionId>(StringComparer.Ordinal);
+        var readings = new Dictionary<string, SignalQualitySample>(StringComparer.Ordinal);
+
         foreach (var session in manager.Sessions)
         {
             busy.TryAdd(session.DeviceId, session.SessionId);
+
+            if (session.Quality is not { } sample)
+            {
+                continue;
+            }
+
+            if (
+                !readings.TryGetValue(session.DeviceId, out var seen)
+                || seen.MeasuredAt < sample.MeasuredAt
+            )
+            {
+                readings[session.DeviceId] = sample;
+            }
         }
 
         var snapshots = new List<TunerSnapshot>();
@@ -83,6 +101,9 @@ public static class SessionViews
                 Of(device, deviceId, manager, busy, toggled) with
                 {
                     Toggled = toggled,
+                    SignalQuality = readings.TryGetValue(deviceId, out var reading)
+                        ? SignalQualityViews.Of(reading)
+                        : null,
                 }
             );
         }

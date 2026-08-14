@@ -74,6 +74,66 @@ public sealed class DriverConfigurationRulesTests
         Assert.Contains(Problems(json), problem => problem.StartsWith("tuner.bakcend:"));
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(3601)]
+    public void AQualityReadingIntervalOutsideWhatTheDriverWillRunIsAFinding(int seconds)
+    {
+        var json = Complete.Replace(
+            "\"tuner\": { \"backend\": \"fake\" }",
+            $"\"tuner\": {{ \"backend\": \"fake\", \"signalQualitySeconds\": {seconds} }}"
+        );
+
+        Assert.Contains(
+            Problems(json),
+            problem => problem.StartsWith("tuner.signalQualitySeconds:")
+        );
+    }
+
+    [Theory]
+    [InlineData(1024)]
+    [InlineData(268_435_456)]
+    public void ARingBufferOutsideWhatTheDriverWillAskForIsAFinding(int bytes)
+    {
+        var json = Complete.Replace(
+            "\"tuner\": { \"backend\": \"fake\" }",
+            $"\"tuner\": {{ \"backend\": \"fake\", \"demuxBufferBytes\": {bytes} }}"
+        );
+
+        Assert.Contains(Problems(json), problem => problem.StartsWith("tuner.demuxBufferBytes:"));
+    }
+
+    [Fact]
+    public void AConfigurationThatSaysNothingAboutQualityKeepsTheIntervalAndBufferItShipsWith()
+    {
+        var configuration = DriverConfigurationReader.Parse(Complete);
+
+        Assert.NotNull(configuration);
+        Assert.Equal(
+            TunerSettings.DefaultSignalQualitySeconds,
+            configuration.Tuner?.SignalQualitySeconds
+        );
+        Assert.Equal(
+            TunerSettings.DefaultDemuxBufferBytes,
+            configuration.Tuner?.DemuxBufferBytes
+        );
+    }
+
+    [Fact]
+    public void TheIntervalAndTheBufferAreReadFromTheFileWhenTheyAreThere()
+    {
+        var json = Complete.Replace(
+            "\"tuner\": { \"backend\": \"fake\" }",
+            "\"tuner\": { \"backend\": \"fake\", \"signalQualitySeconds\": 30, \"demuxBufferBytes\": 8388608 }"
+        );
+
+        var configuration = DriverConfigurationReader.Parse(json);
+
+        Assert.Empty(Problems(json));
+        Assert.Equal(30, configuration?.Tuner?.SignalQualitySeconds);
+        Assert.Equal(8 * 1024 * 1024, configuration?.Tuner?.DemuxBufferBytes);
+    }
+
     [Fact]
     public void TwoDevicesOnOneNodeAreAFinding()
     {

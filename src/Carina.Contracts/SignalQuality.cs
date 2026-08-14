@@ -22,6 +22,7 @@ public sealed record SignalQualityDto
 {
     private readonly int? cnrMilliDecibels;
     private readonly IReadOnlyList<LayerBitErrorCounts> postViterbiBitErrors = [];
+    private readonly IReadOnlyList<string> notImplementedMetrics = [];
 
     public SignalQualityDto() { }
 
@@ -31,6 +32,8 @@ public sealed record SignalQualityDto
         cnrMilliDecibels = other.CnrMilliDecibels;
         postViterbiBitErrors = other.PostViterbiBitErrors;
         MeasuredAt = other.MeasuredAt;
+        LockReadAt = other.LockReadAt;
+        notImplementedMetrics = other.NotImplementedMetrics;
     }
 
     public SignalLock Lock { get; init; }
@@ -49,8 +52,19 @@ public sealed record SignalQualityDto
 
     public DateTimeOffset? MeasuredAt { get; init; }
 
+    public DateTimeOffset? LockReadAt { get; init; }
+
+    public IReadOnlyList<string> NotImplementedMetrics
+    {
+        get => notImplementedMetrics;
+        init => notImplementedMetrics = value ?? [];
+    }
+
     [JsonIgnore]
     public decimal? CnrDecibels => CnrMilliDecibels / 1000m;
+
+    public bool Implements(string metric) =>
+        !NotImplementedMetrics.Contains(metric, StringComparer.Ordinal);
 
     public static SignalQualityDto NotLocked(DateTimeOffset? measuredAt = null) =>
         new() { Lock = SignalLock.NotLocked, MeasuredAt = measuredAt };
@@ -60,10 +74,19 @@ public sealed record SignalQualityDto
         && Lock == other.Lock
         && CnrMilliDecibels == other.CnrMilliDecibels
         && MeasuredAt == other.MeasuredAt
-        && PostViterbiBitErrors.SequenceEqual(other.PostViterbiBitErrors);
+        && LockReadAt == other.LockReadAt
+        && PostViterbiBitErrors.SequenceEqual(other.PostViterbiBitErrors)
+        && NotImplementedMetrics.SequenceEqual(other.NotImplementedMetrics, StringComparer.Ordinal);
 
     public override int GetHashCode() =>
-        HashCode.Combine(Lock, CnrMilliDecibels, MeasuredAt, PostViterbiBitErrors.Count);
+        HashCode.Combine(
+            Lock,
+            CnrMilliDecibels,
+            MeasuredAt,
+            LockReadAt,
+            PostViterbiBitErrors.Count,
+            NotImplementedMetrics.Count
+        );
 }
 
 public static class SignalQualityMetrics

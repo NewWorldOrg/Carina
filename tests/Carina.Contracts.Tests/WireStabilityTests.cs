@@ -126,12 +126,29 @@ public sealed class WireStabilityTests
     }
 
     [Fact]
-    public void TheCountersKeepExactlyTheFieldsTheyHad()
+    public void TheCountersKeepTheirFieldsAndTakeTheNewOnesAtTheEnd()
     {
+        var fields = FieldsOf(DriverJson.Serialize(SessionCounters.Nothing));
+
+        Assert.Equal(SessionCountersFields, fields.Take(SessionCountersFields.Length));
         Assert.Equal(
-            SessionCountersFields,
-            FieldsOf(DriverJson.Serialize(SessionCounters.Nothing))
+            ["deviceOverflows", "lockLosses"],
+            fields.Skip(SessionCountersFields.Length)
         );
+    }
+
+    [Fact]
+    public void CountersFromADriverThatCountedNeitherOfTheNewOnesStillRead()
+    {
+        var counters = DriverJson.Deserialize(
+            """{"packets":1000,"drops":7,"discardedBytes":188,"resyncs":2}""",
+            DriverJson.Context.SessionCounters
+        );
+
+        Assert.NotNull(counters);
+        Assert.Equal(1000, counters.Packets);
+        Assert.Equal(0, counters.DeviceOverflows);
+        Assert.Equal(0, counters.LockLosses);
     }
 
     [Fact]
@@ -268,12 +285,15 @@ public sealed class WireStabilityTests
     }
 
     [Fact]
-    public void AQualityReadingKeepsExactlyTheFieldsItWasGiven()
+    public void AQualityReadingKeepsItsFieldsAndTakesTheNewOnesAtTheEnd()
     {
+        var fields = FieldsOf(DriverJson.Serialize(SignalQualityDto.NotLocked(Moment)));
+
         Assert.Equal(
             ["lock", "cnrMilliDecibels", "postViterbiBitErrors", "measuredAt"],
-            FieldsOf(DriverJson.Serialize(SignalQualityDto.NotLocked(Moment)))
+            fields.Take(4)
         );
+        Assert.Equal(["lockReadAt", "notImplementedMetrics"], fields.Skip(4));
         Assert.Equal(
             ["layer", "errorBits", "totalBits"],
             FieldsOf(DriverJson.Serialize(new LayerBitErrorCounts(0, 12, 1_000_000)))

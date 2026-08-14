@@ -23,7 +23,19 @@ public enum DeviceKind
     Satellite = 2,
 }
 
-public sealed record TunerSettings(TunerBackend Backend);
+public sealed record TunerSettings(
+    TunerBackend Backend,
+    int SignalQualitySeconds = TunerSettings.DefaultSignalQualitySeconds,
+    int DemuxBufferBytes = TunerSettings.DefaultDemuxBufferBytes
+)
+{
+    public const int DefaultSignalQualitySeconds = 10;
+
+    public const int DefaultDemuxBufferBytes = 16 * 1024 * 1024;
+
+    [JsonIgnore]
+    public TimeSpan SignalQualityInterval => TimeSpan.FromSeconds(SignalQualitySeconds);
+}
 
 public sealed record DeviceSettings(
     string? Id,

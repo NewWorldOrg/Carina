@@ -170,6 +170,46 @@ public sealed class TunerDeviceFactoryDvbTests
         Assert.Contains("terrestrial or satellite", refusal.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void TheRingBufferTheConfigurationAsksForIsTheOneTheDemuxIsGiven()
+    {
+        var (calls, clock) = Ready();
+        var factory = TunerDeviceFactory.Using(
+            new DriverConfiguration(
+                null,
+                null,
+                0,
+                new TunerSettings(TunerBackend.Dvb, DemuxBufferBytes: 4 * 1024 * 1024),
+                null
+            ),
+            clock,
+            calls
+        );
+
+        using var device = factory.Create(
+            Terrestrial(),
+            new TuningRequest(TunerKind.Terrestrial, 55),
+            tune: null
+        );
+
+        Assert.Equal(4 * 1024 * 1024, Assert.Single(calls.BufferSizesSet));
+    }
+
+    [Fact]
+    public void ADvbTunerCanBeAskedForItsQualityWhileTheSessionHoldsIt()
+    {
+        var (calls, clock) = Ready();
+        var factory = TunerDeviceFactory.Using(Configured(TunerBackend.Dvb), clock, calls);
+
+        using var device = factory.Create(
+            Terrestrial(),
+            new TuningRequest(TunerKind.Terrestrial, 55),
+            tune: null
+        );
+
+        Assert.NotNull(device.Quality);
+    }
+
     private static DriverConfiguration Configured(TunerBackend backend) =>
         new(null, null, 0, new TunerSettings(backend), null);
 

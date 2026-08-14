@@ -84,4 +84,34 @@ public sealed class FakeTunerDeviceTests
 
         Assert.Equal([0, 1], packets.Select(packet => packet.ContinuityCounter));
     }
+
+    [Fact]
+    public void TheSyntheticTunerAnswersAsALockedFrontendSoTheQualityFaceIsNotEmptyInDevelopment()
+    {
+        var device = new FakeTunerDevice(53, 50001);
+
+        var quality = Assert.IsAssignableFrom<ISignalQualitySource>(device.Quality).Measure();
+
+        Assert.True(quality.HasLock);
+        Assert.True(quality.CarrierToNoise.TryGetDecibels(out _));
+        Assert.Equal(2, quality.PostViterbiErrors.Layers.Count);
+        Assert.Equal([0, 1], quality.PostViterbiErrors.Layers.Select(layer => layer.Layer));
+    }
+
+    [Fact]
+    public void TheSyntheticTunerCountsNoBitErrorsSoNothingLooksLikeARealMeasurement()
+    {
+        var device = new FakeTunerDevice(53, 50001);
+
+        var quality = Assert.IsAssignableFrom<ISignalQualitySource>(device.Quality).Measure();
+
+        Assert.All(
+            quality.PostViterbiErrors.Layers,
+            layer =>
+            {
+                Assert.Equal(0ul, layer.ErrorBits);
+                Assert.True(layer.TotalBits > 0);
+            }
+        );
+    }
 }

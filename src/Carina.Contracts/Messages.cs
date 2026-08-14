@@ -234,7 +234,9 @@ public sealed record SessionCounters(
     long ScrambledPackets = 0,
     long ProvisionalPackets = 0,
     long DiscardedBytes = 0,
-    long Resyncs = 0
+    long Resyncs = 0,
+    long DeviceOverflows = 0,
+    long LockLosses = 0
 )
 {
     public static readonly SessionCounters Nothing = new();

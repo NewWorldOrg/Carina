@@ -587,7 +587,8 @@ public sealed class TunerSessionManager(
             writer,
             logger: logger,
             outputRoot: request.OutputRoot,
-            diagnostics: diagnostics
+            diagnostics: diagnostics,
+            watch: Watch()
         );
 
         lock (drainGate)
@@ -726,6 +727,16 @@ public sealed class TunerSessionManager(
 
         Announce();
     }
+
+    private SignalQualityWatch Watch() =>
+        new(
+            configuration.Tuner?.SignalQualityInterval ?? SignalQualityReader.DefaultInterval,
+            (_, _) =>
+            {
+                events?.Signal(DriverEvents.SessionLockLost);
+                events?.Signal(DriverEvents.Tuners);
+            }
+        );
 
     private void Announce()
     {
