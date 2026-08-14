@@ -114,6 +114,21 @@ public sealed class AppEventHubTests
     }
 
     [Fact]
+    public async Task StoppingTheAppClosesTheHubSoNoListenerIsLeftHanging()
+    {
+        var hub = new AppEventHub();
+        var lifetime = new AppEventHubLifetime(hub);
+
+        Assert.True(hub.TryListen(out var listener));
+
+        var waiting = Next(listener);
+        await lifetime.StopAsync(CancellationToken.None);
+
+        Assert.True(hub.IsClosed);
+        await Assert.ThrowsAnyAsync<Exception>(() => waiting);
+    }
+
+    [Fact]
     public async Task ClosingTheHubEndsTheWaitOfAListenerAlreadyInside()
     {
         var hub = new AppEventHub();

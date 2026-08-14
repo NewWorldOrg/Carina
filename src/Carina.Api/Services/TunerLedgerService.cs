@@ -66,7 +66,7 @@ public sealed class TunerLedgerService(IDriverClient driver, TimeProvider clock)
         {
             return ServiceResult<TunerLedgerView, TunerLedgerFailure>.Failure(
                 string.Join(" ", malformed),
-                TunerLedgerFailure.DriverRefused);
+                TunerLedgerFailure.Malformed);
         }
 
         var replaced = await driver.ReplaceTunerLedgerAsync(wanted, cancellationToken);
