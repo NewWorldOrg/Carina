@@ -45,7 +45,7 @@ public sealed class DriverApiTests
         await using var driver = await DriverUnderTest.Start();
         using var client = driver.Client();
 
-        var tune = TuneParams.Bs(15, 50_001);
+        var tune = TuneParams.Bs(15, 50001);
         var request = DriverUnderTest.Live("typed-tune") with
         {
             Tuning = tune.ToLegacyRequest(),
@@ -540,7 +540,7 @@ public sealed class DriverApiTests
                 {
                     SessionId = SessionId.Parse("sideways"),
                     Purpose = SessionPurpose.Live,
-                    Tuning = new TuningRequest(TunerKind.Satellite, 3),
+                    Tuning = new TuningRequest(TunerKind.Satellite, 23),
                 }
             ),
             Soon()

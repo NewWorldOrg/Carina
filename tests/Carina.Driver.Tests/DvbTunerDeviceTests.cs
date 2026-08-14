@@ -318,7 +318,7 @@ public sealed class DvbTunerDeviceTests
             calls,
             clock,
             Paths,
-            DvbChannel.Terrestrial(27),
+            DvbChannel.Terrestrial(55),
             LnbVoltage.Off,
             Settings,
             CancellationToken.None

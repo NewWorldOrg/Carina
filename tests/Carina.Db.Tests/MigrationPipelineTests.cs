@@ -23,15 +23,16 @@ public sealed class MigrationPipelineTests
     }
 
     [Fact]
-    public async Task AppliesTheInitialMigrationToAnEmptyDatabase()
+    public async Task AppliesEveryMigrationToAnEmptyDatabase()
     {
         await using var context = CarinaDbContextFactory.Create(ScratchConnectionString());
         await context.Database.EnsureDeletedAsync();
 
         await context.Database.MigrateAsync();
 
-        var applied = Assert.Single(await context.Database.GetAppliedMigrationsAsync());
-        Assert.EndsWith("_Initial", applied, StringComparison.Ordinal);
+        var applied = (await context.Database.GetAppliedMigrationsAsync()).ToArray();
+        Assert.EndsWith("_Initial", applied[0], StringComparison.Ordinal);
+        Assert.Equal(context.Database.GetMigrations(), applied);
         Assert.Empty(await context.Database.GetPendingMigrationsAsync());
     }
 

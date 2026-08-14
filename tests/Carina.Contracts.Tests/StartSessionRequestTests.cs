@@ -8,7 +8,7 @@ public sealed class StartSessionRequestTests
     private static StartSessionRequest Request(
         SessionPurpose purpose = SessionPurpose.Live,
         TunerKind kind = TunerKind.Terrestrial,
-        int physicalChannel = 27,
+        int physicalChannel = 55,
         int? serviceId = null,
         DateTimeOffset? endsAt = null,
         string? deviceId = null,
@@ -109,7 +109,7 @@ public sealed class StartSessionRequestTests
 
     [Theory]
     [InlineData(1)]
-    [InlineData(27)]
+    [InlineData(200)]
     [InlineData(255)]
     public void APhysicalChannelInsideTheBoundIsAccepted(int channel)
     {

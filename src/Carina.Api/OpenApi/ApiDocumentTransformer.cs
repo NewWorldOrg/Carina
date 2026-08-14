@@ -9,8 +9,7 @@ public sealed class ApiDocumentTransformer : IOpenApiDocumentTransformer
         "The HTTP surface of the app process. Three contract surfaces do not fit a "
         + "request/response schema and are absent from this document: the transport stream "
         + "(`/sessions/{id}/stream` on the driver socket), the event hub (`GET /api/events`) "
-        + "and the bulk programme guide (`GET /api/programs/bulk`). They are declared in "
-        + "openapi/non-rest-contracts.md.";
+        + "and the bulk programme guide (`GET /api/programs/bulk`).";
 
     public Task TransformAsync(
         OpenApiDocument document,

@@ -7,7 +7,9 @@ namespace Carina.Driver.Tests;
 
 public sealed class TypedTuneTests
 {
-    private const int UnassignedTerrestrialChannel = 53;
+    private const int UnassignedTerrestrialChannel = 55;
+
+    private const int AnotherUnassignedTerrestrialChannel = 57;
 
     private const int SyntheticStream = 50_001;
 
@@ -61,7 +63,7 @@ public sealed class TypedTuneTests
         var channel = Assert.IsType<TerrestrialChannel>(
             DvbTuneRequest.Resolve(
                 TuneParams.Terrestrial(UnassignedTerrestrialChannel),
-                new TuningRequest(TunerKind.Terrestrial, 27)
+                new TuningRequest(TunerKind.Terrestrial, AnotherUnassignedTerrestrialChannel)
             )
         );
 
@@ -75,7 +77,7 @@ public sealed class TypedTuneTests
             () =>
                 DvbTuneRequest.Resolve(
                     new TuneParams(),
-                    new TuningRequest(TunerKind.Terrestrial, 27)
+                    new TuningRequest(TunerKind.Terrestrial, AnotherUnassignedTerrestrialChannel)
                 )
         );
 
@@ -94,7 +96,7 @@ public sealed class TypedTuneTests
             () =>
                 DvbTuneRequest.Resolve(
                     new TuneParams { System = system },
-                    new TuningRequest(TunerKind.Terrestrial, 27)
+                    new TuningRequest(TunerKind.Terrestrial, AnotherUnassignedTerrestrialChannel)
                 )
         );
 

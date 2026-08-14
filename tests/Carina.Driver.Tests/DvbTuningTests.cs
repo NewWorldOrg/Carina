@@ -12,7 +12,7 @@ public sealed class DvbTuningTests
     {
         DvbChannel[] channels =
         [
-            DvbChannel.Terrestrial(27),
+            DvbChannel.Terrestrial(55),
             DvbChannel.BroadcastSatellite(1, SyntheticStream),
             DvbChannel.BroadcastSatellite(9, SyntheticStream),
             DvbChannel.CommunicationSatellite(24),
@@ -34,7 +34,7 @@ public sealed class DvbTuningTests
     {
         DvbChannel[] channels =
         [
-            DvbChannel.Terrestrial(27),
+            DvbChannel.Terrestrial(55),
             DvbChannel.BroadcastSatellite(1, SyntheticStream),
             DvbChannel.CommunicationSatellite(24),
         ];
@@ -48,20 +48,20 @@ public sealed class DvbTuningTests
     [Fact]
     public void ATerrestrialTuneNamesTheTerrestrialSystemItsFrequencyInHertzAndItsBandwidth()
     {
-        var list = DvbTuning.PropertiesFor(DvbChannel.Terrestrial(27));
+        var list = DvbTuning.PropertiesFor(DvbChannel.Terrestrial(55));
 
         Assert.Equal(
             (uint)DeliverySystem.IsdbTerrestrial.Code,
             ValueOf(list, DvbProperty.DeliverySystem)
         );
-        Assert.Equal(557_142_857u, ValueOf(list, DvbProperty.Frequency));
+        Assert.Equal(725_142_857u, ValueOf(list, DvbProperty.Frequency));
         Assert.Equal(6_000_000u, ValueOf(list, DvbProperty.BandwidthHertz));
     }
 
     [Fact]
     public void ATerrestrialTuneNeverNamesAStream()
     {
-        Assert.False(Names(DvbTuning.PropertiesFor(DvbChannel.Terrestrial(27)), DvbProperty.StreamId));
+        Assert.False(Names(DvbTuning.PropertiesFor(DvbChannel.Terrestrial(55)), DvbProperty.StreamId));
     }
 
     [Fact]
@@ -127,7 +127,7 @@ public sealed class DvbTuningTests
     [Fact]
     public void TheDeliverySystemIsNamedBeforeTheFrequencyItAppliesTo()
     {
-        var list = DvbTuning.PropertiesFor(DvbChannel.Terrestrial(27));
+        var list = DvbTuning.PropertiesFor(DvbChannel.Terrestrial(55));
 
         Assert.True(IndexOf(list, DvbProperty.DeliverySystem) < IndexOf(list, DvbProperty.Frequency));
     }

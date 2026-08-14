@@ -135,7 +135,7 @@ public sealed class DvbChannelTests
     [Fact]
     public void EveryChannelCanSayWhichAerialItNeeds()
     {
-        Assert.False(DvbChannel.Terrestrial(13).NeedsSatelliteAerial);
+        Assert.False(DvbChannel.Terrestrial(55).NeedsSatelliteAerial);
         Assert.True(DvbChannel.BroadcastSatellite(1, SyntheticStream).NeedsSatelliteAerial);
         Assert.True(DvbChannel.CommunicationSatellite(2).NeedsSatelliteAerial);
     }
