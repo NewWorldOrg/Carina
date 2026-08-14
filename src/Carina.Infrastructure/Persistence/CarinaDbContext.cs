@@ -4,6 +4,13 @@ namespace Carina.Infrastructure.Persistence;
 
 public class CarinaDbContext(DbContextOptions<CarinaDbContext> options) : DbContext(options)
 {
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        ArgumentNullException.ThrowIfNull(modelBuilder);
+
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(CarinaDbContext).Assembly);
+    }
+
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
         configurationBuilder.Properties<DateTime>().HaveConversion<UtcDateTimeConverter>();
