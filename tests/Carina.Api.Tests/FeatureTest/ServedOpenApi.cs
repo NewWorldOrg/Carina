@@ -9,8 +9,6 @@ internal static class ServedOpenApi
 {
     public const string Route = "/openapi/v1.json";
 
-    public const string DeclarationFile = "openapi/non-rest-contracts.md";
-
     public static async Task<JsonNode> FetchAsync(WebApplicationFactory<Program> factory)
     {
         ArgumentNullException.ThrowIfNull(factory);
@@ -33,24 +31,5 @@ internal static class ServedOpenApi
             .AsObject()
             .SelectMany(path => path.Value!.AsObject().Select(operation =>
                 (path.Key, operation.Key, operation.Value!.AsObject())));
-    }
-
-    public static string RepositoryFile(string relativePath)
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null
-            && !File.Exists(Path.Combine(directory.FullName, "Carina.slnx")))
-        {
-            directory = directory.Parent;
-        }
-
-        if (directory is null)
-        {
-            throw new InvalidOperationException(
-                $"No directory above {AppContext.BaseDirectory} holds Carina.slnx."
-            );
-        }
-
-        return Path.Combine(directory.FullName, relativePath);
     }
 }
