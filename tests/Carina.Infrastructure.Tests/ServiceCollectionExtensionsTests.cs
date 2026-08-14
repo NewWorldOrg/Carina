@@ -52,11 +52,13 @@ public sealed class ServiceCollectionExtensionsTests
     }
 
     [Fact]
-    public void RegistersAnAppEventPublisherTheHubCanReplaceOnceItExists()
+    public void RegistersTheHubItselfAsTheAppEventPublisherSoNoSignalIsDropped()
     {
         using var provider = Build(ValidSettings());
 
-        Assert.IsType<NoopAppEventPublisher>(provider.GetRequiredService<IAppEventPublisher>());
+        Assert.Same(
+            provider.GetRequiredService<AppEventHub>(),
+            provider.GetRequiredService<IAppEventPublisher>());
     }
 
     [Fact]
