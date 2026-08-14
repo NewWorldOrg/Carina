@@ -149,7 +149,7 @@ if [ "${text_value}" != "fake-satellite" ]; then
 fi
 pass "the second configuration produces exactly the device it declares: fake-satellite"
 
-start_recording acc04second fake-satellite archive 120 satellite 31
+start_recording acc04second fake-satellite archive 120 satellite 214
 
 if ! wait_until 30 bash -c "docker run --rm -v ${second_volume}:/rec ${python_image} test -s /rec/acc04second.ts"; then
     fail "the second configuration's output root received nothing."
