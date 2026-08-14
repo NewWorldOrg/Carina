@@ -19,6 +19,7 @@ public static class PersistenceBoundaryRules
             ["Reservations"] = PersistenceFamily.Reservations,
             ["Rules"] = PersistenceFamily.Reservations,
             ["Channels"] = PersistenceFamily.ChannelDefinitions,
+            ["Scans"] = PersistenceFamily.ChannelDefinitions,
             ["Programmes"] = PersistenceFamily.ProgrammeCache,
             ["Recordings"] = PersistenceFamily.Unrelated,
         };
