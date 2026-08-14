@@ -64,7 +64,7 @@ public sealed class DvbTuningTests
     [Fact]
     public void ABroadcastSatelliteTuneNamesTheSatelliteSystemAndItsFrequencyInKilohertz()
     {
-        var list = DvbTuning.PropertiesFor(DvbChannel.BroadcastSatellite(15, 16_625));
+        var list = DvbTuning.PropertiesFor(DvbChannel.BroadcastSatellite(15, 50_001));
 
         Assert.Equal(
             (uint)DeliverySystem.IsdbSatellite.Code,
@@ -76,9 +76,9 @@ public sealed class DvbTuningTests
     [Fact]
     public void ABroadcastSatelliteTuneNamesTheStreamWhenOneWasChosen()
     {
-        var list = DvbTuning.PropertiesFor(DvbChannel.BroadcastSatellite(15, 16_625));
+        var list = DvbTuning.PropertiesFor(DvbChannel.BroadcastSatellite(15, 50_001));
 
-        Assert.Equal(16_625u, ValueOf(list, DvbProperty.StreamId));
+        Assert.Equal(50_001u, ValueOf(list, DvbProperty.StreamId));
     }
 
     [Fact]
@@ -122,7 +122,7 @@ public sealed class DvbTuningTests
     [Fact]
     public void ClearingFirstMeansAStreamFromAnEarlierTuneCannotSurviveIntoTheNext()
     {
-        var satellite = DvbTuning.PropertiesFor(DvbChannel.BroadcastSatellite(15, 16_625));
+        var satellite = DvbTuning.PropertiesFor(DvbChannel.BroadcastSatellite(15, 50_001));
         var afterwards = DvbTuning.PropertiesFor(DvbChannel.CommunicationSatellite(24));
 
         Assert.True(Names(satellite, DvbProperty.StreamId));
