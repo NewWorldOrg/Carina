@@ -5,6 +5,7 @@ using Carina.Contracts;
 using Carina.Domain.Scans;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Carina.Infrastructure.Scanning;
@@ -49,15 +50,60 @@ public sealed record ScanLaunch
     }
 }
 
-public sealed class ScanRunner(IServiceScopeFactory scopes, ILogger<ScanRunner> logger) : IDisposable
+public sealed class ScanRunner(IServiceScopeFactory scopes, ILogger<ScanRunner> logger) : IHostedService
 {
     public const int ProposalsKept = 8;
 
-    public const string UnexpectedEnd = "The scan ended in a way it did not plan for; the log names the failure.";
+    public const string UnexpectedEnd = "the scan ended without concluding; the app log names the failure";
 
     private readonly ConcurrentDictionary<ScanRunId, CancellationTokenSource> live = [];
     private readonly ConcurrentDictionary<ScanRunId, ScanProposal> proposals = [];
+    private readonly ConcurrentDictionary<Task, byte> walks = [];
     private readonly ConcurrentQueue<ScanRunId> order = new();
+
+    private volatile bool stopping;
+
+    public async Task StartAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await AbandonWhatAnEarlierProcessLeftAsync(cancellationToken);
+        }
+        catch (Exception error)
+        {
+            logger.LogError(
+                error,
+                "A scan left behind by an earlier process could not be settled at startup.");
+        }
+    }
+
+    public async Task StopAsync(CancellationToken cancellationToken)
+    {
+        stopping = true;
+
+        foreach (var id in live.Keys)
+        {
+            TryCancel(id);
+        }
+
+        var pending = walks.Keys.ToArray();
+
+        if (pending.Length == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            await Task.WhenAll(pending).WaitAsync(cancellationToken);
+        }
+        catch (Exception error) when (error is OperationCanceledException or TimeoutException)
+        {
+            logger.LogWarning(
+                "The app stopped before {Count} scan walk(s) had finished settling.",
+                pending.Length);
+        }
+    }
 
     public async Task<ScanLaunch> LaunchAsync(ScanScope scope, CancellationToken cancellationToken)
     {
@@ -66,9 +112,17 @@ public sealed class ScanRunner(IServiceScopeFactory scopes, ILogger<ScanRunner> 
         var announced = new TaskCompletionSource<ScanRunId>(
             TaskCreationOptions.RunContinuationsAsynchronously);
         var cancellation = new CancellationTokenSource();
+        var announcement = new Announcement(this, announced, cancellation);
         var walking = Task.Run(
-            () => WalkAsync(scope, new Announcement(this, announced, cancellation), cancellation),
+            () => WalkAsync(scope, announcement, cancellation),
             CancellationToken.None);
+
+        walks[walking] = 0;
+        _ = walking.ContinueWith(
+            finished => walks.TryRemove(finished, out _),
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
 
         await Task.WhenAny(announced.Task, walking).WaitAsync(cancellationToken);
 
@@ -111,20 +165,33 @@ public sealed class ScanRunner(IServiceScopeFactory scopes, ILogger<ScanRunner> 
     public bool TryTakeProposal(ScanRunId id, [NotNullWhen(true)] out ScanProposal? proposal)
         => proposals.TryRemove(id, out proposal);
 
-    public void Dispose()
+    private async Task AbandonWhatAnEarlierProcessLeftAsync(CancellationToken cancellationToken)
     {
-        foreach (var id in live.Keys)
+        using var scoped = scopes.CreateScope();
+
+        var runs = scoped.ServiceProvider.GetRequiredService<IScanRunRepository>();
+
+        if (await runs.FindRunningAsync(cancellationToken) is not { } abandoned)
         {
-            TryCancel(id);
+            return;
         }
+
+        ScanConclusion.Abandon(
+            abandoned,
+            scoped.ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow().UtcDateTime);
+
+        await runs.SaveAsync(abandoned, cancellationToken);
+
+        logger.LogWarning(
+            "A scan left running by an earlier process was settled so that scanning is possible again.");
     }
 
     private async Task<ScanOutcome> WalkAsync(
         ScanScope scope,
-        IScanRunObserver observer,
+        Announcement announcement,
         CancellationTokenSource cancellation)
     {
-        using (cancellation)
+        try
         {
             using var scoped = scopes.CreateScope();
 
@@ -132,9 +199,9 @@ public sealed class ScanRunner(IServiceScopeFactory scopes, ILogger<ScanRunner> 
             {
                 var outcome = await scoped.ServiceProvider
                     .GetRequiredService<IChannelScanOrchestrator>()
-                    .RunAsync(scope, observer, cancellation.Token);
+                    .RunAsync(scope, announcement, cancellation.Token);
 
-                Conclude(outcome);
+                Remember(outcome);
 
                 return outcome;
             }
@@ -142,21 +209,57 @@ public sealed class ScanRunner(IServiceScopeFactory scopes, ILogger<ScanRunner> 
             {
                 logger.LogError(error, "A channel scan ended without concluding.");
 
+                await SettleAsync(announcement.Run);
+
                 return ScanOutcome.CouldNotStart(UnexpectedEnd);
             }
         }
+        finally
+        {
+            if (announcement.Run is { } run)
+            {
+                live.TryRemove(run.Id, out _);
+            }
+
+            cancellation.Dispose();
+        }
     }
 
-    private void Conclude(ScanOutcome outcome)
+    private async Task SettleAsync(ScanRun? started)
     {
-        if (outcome.Run is not { } run)
+        if (started is null)
         {
             return;
         }
 
-        live.TryRemove(run.Id, out _);
+        try
+        {
+            using var scoped = scopes.CreateScope();
 
-        if (run.State is not ScanRunState.Completed)
+            var runs = scoped.ServiceProvider.GetRequiredService<IScanRunRepository>();
+
+            if (await runs.FindAsync(started.Id, CancellationToken.None) is not { IsRunning: true } stuck)
+            {
+                return;
+            }
+
+            stuck.Fail(
+                UnexpectedEnd,
+                scoped.ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow().UtcDateTime);
+
+            await runs.SaveAsync(stuck, CancellationToken.None);
+        }
+        catch (Exception error)
+        {
+            logger.LogError(
+                error,
+                "A scan that ended without concluding could not be settled; scanning stays blocked until it is.");
+        }
+    }
+
+    private void Remember(ScanOutcome outcome)
+    {
+        if (outcome.Run is not { State: ScanRunState.Completed } run)
         {
             return;
         }
@@ -178,8 +281,15 @@ public sealed class ScanRunner(IServiceScopeFactory scopes, ILogger<ScanRunner> 
         TaskCompletionSource<ScanRunId> announced,
         CancellationTokenSource cancellation) : IScanRunObserver
     {
+        public ScanRun? Run { get; private set; }
+
+        public ScanStop Stop => runner.stopping
+            ? ScanStop.BecauseTheAppIsStopping
+            : ScanStop.AsRequested;
+
         public void Started(ScanRun run)
         {
+            Run = run;
             runner.live[run.Id] = cancellation;
             announced.TrySetResult(run.Id);
         }

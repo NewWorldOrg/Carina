@@ -9,7 +9,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Carina.Infrastructure.Tests.Scanning;
 
-public sealed class ScanRunnerTests : IDisposable
+public sealed class ScanRunnerTests : IAsyncLifetime
 {
     private readonly HeldScanRuns runs = new();
     private readonly ServiceProvider provider;
@@ -19,6 +19,8 @@ public sealed class ScanRunnerTests : IDisposable
         Orchestrator = new ScriptedScanOrchestrator(runs);
         provider = new ServiceCollection()
             .AddSingleton<IChannelScanOrchestrator>(Orchestrator)
+            .AddSingleton<IScanRunRepository>(runs)
+            .AddSingleton(TimeProvider.System)
             .BuildServiceProvider();
         Runner = new ScanRunner(
             provider.GetRequiredService<IServiceScopeFactory>(),
@@ -29,10 +31,12 @@ public sealed class ScanRunnerTests : IDisposable
 
     private ScanRunner Runner { get; }
 
-    public void Dispose()
+    public Task InitializeAsync() => Task.CompletedTask;
+
+    public async Task DisposeAsync()
     {
-        Runner.Dispose();
-        provider.Dispose();
+        await Runner.StopAsync(CancellationToken.None);
+        await provider.DisposeAsync();
     }
 
     [Fact]
@@ -173,6 +177,98 @@ public sealed class ScanRunnerTests : IDisposable
             "the orchestrator was handed a scope");
 
         Assert.Equal([TuneSystem.IsdbSCs110], Orchestrator.Scopes[0].Systems);
+    }
+
+    [Fact]
+    public async Task AWalkThatThrowsAfterAnnouncingSettlesTheRunInsteadOfLeavingItRunning()
+    {
+        Orchestrator.ThrowsAfterAnnouncing = "the database went away mid-walk";
+
+        var launch = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
+
+        await Eventually.Happens(
+            () => !Runner.IsWalking(launch.Started!),
+            "the runner lets go of the scan that threw");
+
+        Assert.Equal(ScanRunState.Failed, runs.Runs[0].State);
+        Assert.False(string.IsNullOrWhiteSpace(runs.Runs[0].Reason));
+    }
+
+    [Fact]
+    public async Task AWalkThatThrowsAfterAnnouncingDoesNotWedgeEveryLaterScan()
+    {
+        Orchestrator.ThrowsAfterAnnouncing = "the database went away mid-walk";
+
+        var wedged = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
+
+        await Eventually.Happens(
+            () => !Runner.IsWalking(wedged.Started!),
+            "the runner lets go of the scan that threw");
+
+        Orchestrator.ThrowsAfterAnnouncing = null;
+
+        var next = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
+
+        Assert.True(next.WasStarted);
+        Assert.Null(next.AlreadyRunning);
+    }
+
+    [Fact]
+    public async Task StoppingTheAppWaitsForTheWalkRatherThanLeavingItToRaceTeardown()
+    {
+        Orchestrator.HoldsOpen = true;
+
+        var launch = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
+
+        await Runner.StopAsync(CancellationToken.None);
+
+        Assert.False(Runner.IsWalking(launch.Started!));
+        Assert.False(runs.Runs[0].IsRunning);
+    }
+
+    [Fact]
+    public async Task AScanStoppedByTheAppIsNotRecordedAsSomethingTheOperatorDid()
+    {
+        Orchestrator.HoldsOpen = true;
+
+        await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
+        await Runner.StopAsync(CancellationToken.None);
+
+        Assert.Equal(ScanRunState.Failed, runs.Runs[0].State);
+        Assert.Equal(ScanConclusion.AppStoppingReason, runs.Runs[0].Reason);
+    }
+
+    [Fact]
+    public async Task AScanLeftRunningByAHardKillIsSettledWhenTheAppComesBack()
+    {
+        var orphan = ScanRun.Start(ScanRunId.New(), "instance-a", ScriptedScanOrchestrator.At);
+        await runs.StartAsync(orphan, CancellationToken.None);
+
+        await Runner.StartAsync(CancellationToken.None);
+
+        Assert.Equal(ScanRunState.Failed, orphan.State);
+        Assert.Equal(ScanConclusion.AbandonedReason, orphan.Reason);
+
+        var next = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
+
+        Assert.True(next.WasStarted);
+    }
+
+    [Fact]
+    public async Task TheProposalCountsASystemAsWalkedEvenWhenEveryAttemptOnItFailed()
+    {
+        Orchestrator.Walked.Add(TuningParameters.Terrestrial(53));
+        Orchestrator.EveryAttemptFails = true;
+        Orchestrator.Difference = ProposedDifference();
+
+        var launch = await Runner.LaunchAsync(ScanScope.Of(TuneSystem.IsdbT), CancellationToken.None);
+
+        await Eventually.Happens(
+            () => Runner.TryPeekProposal(launch.Started!, out _),
+            "the proposal is held");
+
+        Assert.True(Runner.TryPeekProposal(launch.Started!, out var proposal));
+        Assert.Equal([TuneSystem.IsdbT], proposal.Systems);
     }
 
     private static ScanDifference ProposedDifference()

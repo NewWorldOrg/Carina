@@ -77,9 +77,12 @@ public sealed class ScanApplier(
             }
         }
 
-        var left = stored.Count - leaving.Length + arriving.Length;
+        var left = await candidates.ListForServiceAsync(
+            change.NetworkId,
+            change.ServiceId,
+            cancellationToken);
 
-        if (change.Kind is ScanChangeKind.Missing && left <= 0)
+        if (change.Kind is ScanChangeKind.Missing && arriving.Length == 0 && left.Count == 0)
         {
             await services.RemoveAsync(change.NetworkId, change.ServiceId, cancellationToken);
             tally.ServicesRemoved++;
@@ -145,7 +148,7 @@ public sealed class ScanApplier(
         {
             await candidates.SelectAsync(
                 best.Id,
-                SelectionSource.Manual,
+                SelectionSource.Scan,
                 best.LastMeasurement,
                 at,
                 cancellationToken);

@@ -62,6 +62,26 @@ public sealed class ServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public void RegistersSomethingToCloseTheHubWhenTheAppStops()
+    {
+        using var provider = Build(ValidSettings());
+
+        Assert.Contains(
+            provider.GetServices<IHostedService>(),
+            service => service is AppEventHubLifetime);
+    }
+
+    [Fact]
+    public void RegistersTheScanRunnerAsTheSameThingThatIsStoppedWithTheApp()
+    {
+        using var provider = Build(ValidSettings());
+
+        Assert.Contains(
+            provider.GetServices<IHostedService>(),
+            service => ReferenceEquals(service, provider.GetRequiredService<ScanRunner>()));
+    }
+
+    [Fact]
     public void RegistersTheTimeProvider()
     {
         using var provider = Build(ValidSettings());

@@ -15,6 +15,8 @@ public enum ScanFailure
     ProposalGone = 4,
 
     NotWalkingHere = 5,
+
+    AlreadyEnded = 6,
 }
 
 public sealed record ScanProgress(
@@ -59,7 +61,7 @@ public sealed class ScanService(ScanRunner runner, IScanRunRepository runs, Scan
                 run.IsRunning
                     ? "This scan is not being walked by this process, so there is nothing here to stop."
                     : $"This scan already ended as {run.State}.",
-                run.IsRunning ? ScanFailure.NotWalkingHere : ScanFailure.NeverCompleted);
+                run.IsRunning ? ScanFailure.NotWalkingHere : ScanFailure.AlreadyEnded);
         }
 
         return ServiceResult<ScanProgress, ScanFailure>.Success(

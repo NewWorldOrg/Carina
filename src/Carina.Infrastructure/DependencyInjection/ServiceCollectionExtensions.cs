@@ -64,6 +64,8 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IAppEventPublisher>(provider =>
             provider.GetRequiredService<AppEventHub>());
         services.AddHostedService<DriverConnectionSupervisor>();
+        services.AddHostedService<AppEventHubLifetime>();
+        services.AddHostedService(provider => provider.GetRequiredService<ScanRunner>());
 
         return services;
     }

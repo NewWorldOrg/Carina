@@ -28,6 +28,15 @@ public sealed class ScanEndpointTests
             ServiceCategory.Television,
             [new ScanChannelChange(ScanChangeKind.Added, tuning, tuning.TransportStreamId, null)]);
 
+    private static ScanServiceChange Leaving(int serviceId, string name, TuningParameters tuning)
+        => new(
+            ScanChangeKind.Missing,
+            new NetworkId(1),
+            new ServiceId(serviceId),
+            name,
+            ServiceCategory.Television,
+            [new ScanChannelChange(ScanChangeKind.Missing, tuning, tuning.TransportStreamId, null)]);
+
     private static TuningParameters Satellite()
         => TuningParameters.Bs(SatelliteSlot, new TransportStreamId(SatelliteStream));
 
@@ -294,7 +303,8 @@ public sealed class ScanEndpointTests
             {
                 Walked = { TuningParameters.Terrestrial(Terrestrial) },
                 Difference = Proposing(
-                    Arriving(101, "Arrived", TuningParameters.Terrestrial(OtherTerrestrial))),
+                    Arriving(101, "Arrived", TuningParameters.Terrestrial(OtherTerrestrial)),
+                    Leaving(201, "Satellite one", Satellite())),
             },
         };
 
@@ -321,8 +331,46 @@ public sealed class ScanEndpointTests
             ["isdbT"],
             body.GetProperty("data").GetProperty("systems").EnumerateArray()
                 .Select(system => system.GetString()));
+        Assert.Equal(0, body.GetProperty("data").GetProperty("servicesRemoved").GetInt32());
         Assert.Contains(feature.Services.Services, service => service.ServiceId.Value == 201);
         Assert.Contains(feature.Candidates.Candidates, candidate => candidate.Tuning.Equals(Satellite()));
+    }
+
+    [Fact]
+    public async Task AScanWhoseEveryAttemptFailedStillAppliesTheRemovalsItProposed()
+    {
+        await using var feature = new ScanFeature
+        {
+            Orchestrator =
+            {
+                Walked = { TuningParameters.Terrestrial(Terrestrial) },
+                EveryAttemptFails = true,
+                Difference = Proposing(
+                    Leaving(101, "Gone dark", TuningParameters.Terrestrial(Terrestrial))),
+            },
+        };
+
+        feature.Services.Services.Add(BroadcastService.Discover(
+            new NetworkId(1),
+            new ServiceId(101),
+            "Gone dark",
+            ServiceCategory.Television,
+            At));
+        feature.Candidates.Candidates.Add(CandidateChannel.Discover(
+            CandidateChannelId.New(),
+            new NetworkId(1),
+            new ServiceId(101),
+            TuningParameters.Terrestrial(Terrestrial),
+            At));
+
+        var scanId = await feature.StartAsync(new { systems = new[] { "isdbT" } });
+        await feature.UntilSettled(scanId);
+
+        var (status, body) = await feature.PostAsync($"/api/tuners/scan/{scanId}/apply");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(1, body.GetProperty("data").GetProperty("servicesRemoved").GetInt32());
+        Assert.Empty(feature.Services.Services);
     }
 
     [Fact]

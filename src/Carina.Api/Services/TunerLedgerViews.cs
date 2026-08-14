@@ -13,6 +13,8 @@ public enum TunerLedgerFailure
     NoSuchTuner = 4,
 
     EmptyLedger = 5,
+
+    Malformed = 6,
 }
 
 public sealed record TunerObservations(IReadOnlyList<TunerSnapshot> Tuners, DateTimeOffset ObservedAt);

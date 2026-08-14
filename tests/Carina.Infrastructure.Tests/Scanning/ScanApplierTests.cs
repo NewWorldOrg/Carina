@@ -72,14 +72,81 @@ public sealed class ScanApplierTests
                         102,
                         "Terrestrial two",
                         Channel(ScanChangeKind.Added, TuningParameters.Terrestrial(OtherTerrestrial))),
+                    Change(
+                        ScanChangeKind.Missing,
+                        201,
+                        "Satellite one",
+                        Channel(ScanChangeKind.Missing, Satellite(), cnr: null)),
                 ],
                 []),
             [TuneSystem.IsdbT],
             CancellationToken.None);
 
         Assert.Equal(1, applied.ServicesAdded);
+        Assert.Equal(0, applied.ServicesRemoved);
+        Assert.Equal(0, applied.ChannelsRemoved);
         Assert.Contains(services.Services, service => service.ServiceId.Value == 201);
         Assert.Contains(candidates.Candidates, candidate => candidate.Tuning.Equals(Satellite()));
+    }
+
+    [Fact]
+    public async Task AServiceKeepsChannelsThatWentAwayBetweenTheProposalAndTheApply()
+    {
+        Seed(101, "Two ways in",
+            TuningParameters.Terrestrial(Terrestrial),
+            TuningParameters.Terrestrial(OtherTerrestrial));
+
+        await candidates.RemoveAsync(candidates.Candidates[0].Id, CancellationToken.None);
+
+        candidates.Candidates.Add(CandidateChannel.Discover(
+            CandidateChannelId.New(),
+            new NetworkId(1),
+            new ServiceId(101),
+            Satellite(),
+            At));
+
+        var applied = await Applier.ApplyAsync(
+            new ScanDifference(
+                [
+                    Change(
+                        ScanChangeKind.Missing,
+                        101,
+                        "Two ways in",
+                        Channel(ScanChangeKind.Missing, TuningParameters.Terrestrial(Terrestrial), cnr: null),
+                        Channel(ScanChangeKind.Missing, TuningParameters.Terrestrial(OtherTerrestrial), cnr: null)),
+                ],
+                []),
+            [TuneSystem.IsdbT],
+            CancellationToken.None);
+
+        Assert.Equal(0, applied.ServicesRemoved);
+        Assert.Single(services.Services);
+        Assert.Single(candidates.Candidates, candidate => candidate.Tuning.Equals(Satellite()));
+    }
+
+    [Fact]
+    public async Task AChannelTheProposalNeverNamedSurvivesARemovalOfItsSiblings()
+    {
+        Seed(101, "Two ways in",
+            TuningParameters.Terrestrial(Terrestrial),
+            TuningParameters.Terrestrial(OtherTerrestrial));
+
+        var applied = await Applier.ApplyAsync(
+            new ScanDifference(
+                [
+                    Change(
+                        ScanChangeKind.Updated,
+                        101,
+                        "Two ways in",
+                        Channel(ScanChangeKind.Missing, TuningParameters.Terrestrial(Terrestrial), cnr: null)),
+                ],
+                []),
+            [TuneSystem.IsdbT],
+            CancellationToken.None);
+
+        Assert.Equal(1, applied.ChannelsRemoved);
+        Assert.Equal(0, applied.ServicesRemoved);
+        Assert.Single(candidates.Candidates);
     }
 
     [Fact]
@@ -106,7 +173,7 @@ public sealed class ScanApplierTests
     }
 
     [Fact]
-    public async Task ANewServiceArrivesWithItsChannelAndSomethingToTuneFrom()
+    public async Task ANewServiceArrivesWithItsChannelAndASelectionAttributedToTheScan()
     {
         var applied = await Applier.ApplyAsync(
             new ScanDifference(
@@ -125,7 +192,7 @@ public sealed class ScanApplierTests
         Assert.Equal(1, applied.ChannelsAdded);
         Assert.Single(candidates.Candidates);
         Assert.True(candidates.Candidates[0].IsSelected);
-        Assert.Equal(SelectionSource.Manual, candidates.Candidates[0].SelectionSource);
+        Assert.Equal(SelectionSource.Scan, candidates.Candidates[0].SelectionSource);
     }
 
     [Fact]
