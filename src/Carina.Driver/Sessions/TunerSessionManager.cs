@@ -204,14 +204,6 @@ public sealed class TunerSessionManager(
             );
         }
 
-        if (request.Tune is not null && request.Tuning.Kind is TunerKind.Unspecified)
-        {
-            return SessionStart.Refused(
-                SessionRefusal.CapabilityMissing,
-                $"This driver tunes from the older parameters, which cannot name {TuneSystemConverter.WireName(request.Tune.System)}; serving it needs a driver that declares '{DriverCapabilities.TypedTuning}'."
-            );
-        }
-
         if (TryGet(request.SessionId, out _))
         {
             return SessionStart.Refused(
@@ -315,11 +307,11 @@ public sealed class TunerSessionManager(
                 return false;
             }
 
-            if (!Matches(candidate.Kind, request.Tuning.Kind))
+            if (!Matches(candidate.Kind, KindOf(request)))
             {
                 refusal = SessionStart.Refused(
                     SessionRefusal.WrongDeviceKind,
-                    $"The device '{named}' serves {candidate.Kind}, and the request asks for {request.Tuning.Kind}."
+                    $"The device '{named}' serves {candidate.Kind}, and the request asks for {KindOf(request)}."
                 );
 
                 return false;
@@ -341,14 +333,14 @@ public sealed class TunerSessionManager(
         }
 
         var usable = declared
-            .Where(entry => entry.Enabled && Matches(entry.Kind, request.Tuning.Kind))
+            .Where(entry => entry.Enabled && Matches(entry.Kind, KindOf(request)))
             .ToArray();
 
         if (usable.Length is 0)
         {
             refusal = SessionStart.Refused(
                 SessionRefusal.NoDeviceOfThatKind,
-                $"This driver has no enabled device that serves {request.Tuning.Kind}."
+                $"This driver has no enabled device that serves {KindOf(request)}."
             );
 
             return false;
@@ -362,7 +354,7 @@ public sealed class TunerSessionManager(
         {
             refusal = SessionStart.Refused(
                 SessionRefusal.FaultedDevice,
-                $"Every device that serves {request.Tuning.Kind} is faulted."
+                $"Every device that serves {KindOf(request)} is faulted."
             );
 
             return false;
@@ -380,7 +372,7 @@ public sealed class TunerSessionManager(
 
         refusal = SessionStart.Refused(
             SessionRefusal.NoDeviceFree,
-            $"Every device that serves {request.Tuning.Kind} is already serving a session."
+            $"Every device that serves {KindOf(request)} is already serving a session."
         );
 
         return false;
@@ -400,7 +392,7 @@ public sealed class TunerSessionManager(
         ITunerDevice tunerDevice;
         try
         {
-            tunerDevice = deviceFactory.Create(device, request.Tuning);
+            tunerDevice = deviceFactory.Create(device, request.Tuning, request.Tune);
         }
         catch (Exception error)
         {
@@ -589,6 +581,9 @@ public sealed class TunerSessionManager(
 
     public bool IsFaulted(string deviceId, [NotNullWhen(true)] out string? detail) =>
         faultedDevices.TryGetValue(deviceId, out detail);
+
+    private static TunerKind KindOf(StartSessionRequest request) =>
+        request.Tune?.Kind ?? request.Tuning.Kind;
 
     private static bool Matches(DeviceKind device, TunerKind requested) =>
         (device, requested) switch

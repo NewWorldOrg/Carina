@@ -803,11 +803,11 @@ public sealed class TunerSessionManagerTests : IDisposable
     }
 
     [Fact]
-    public void ATuneThisDriverCannotExpressSaysSoRatherThanBlamingTheDevices()
+    public void ATunePhrasedOnlyInTypedParametersReachesTheDeviceThatServesThatSystem()
     {
         var manager = Manager();
 
-        var tune = TuneParams.Bs(15, 16625);
+        var tune = TuneParams.Bs(15, 50_001);
         var request = new StartSessionRequest
         {
             SessionId = SessionId.Parse("s-9"),
@@ -818,19 +818,43 @@ public sealed class TunerSessionManagerTests : IDisposable
 
         var start = manager.Begin(request);
 
-        Assert.False(start.TryGetSession(out _));
-        Assert.Equal(SessionRefusal.CapabilityMissing, start.Refusal);
-        Assert.NotEqual(SessionRefusal.Rejected, start.Refusal);
-        Assert.Contains("isdbSBs", start.Detail, StringComparison.Ordinal);
-        Assert.Contains(DriverCapabilities.TypedTuning, start.Detail, StringComparison.Ordinal);
-        Assert.DoesNotContain("no enabled device", start.Detail, StringComparison.Ordinal);
+        Assert.True(start.TryGetSession(out var session));
+        Assert.Equal(SessionRefusal.None, start.Refusal);
+        Assert.Equal("adapter1", session.DeviceId);
+
+        StopAndWait(session);
+    }
+
+    [Fact]
+    public void ATypedTuneOnASystemNoDeviceServesIsRefusedForTheDevicesRatherThanTheProtocol()
+    {
+        var manager = Manager(
+            Configuration with
+            {
+                Devices = [new DeviceSettings("adapter0", DeviceKind.Terrestrial)],
+            }
+        );
+
+        var tune = TuneParams.Cs110(24);
+        var request = new StartSessionRequest
+        {
+            SessionId = SessionId.Parse("s-9"),
+            Purpose = SessionPurpose.Scan,
+            Tuning = tune.ToLegacyRequest(),
+            Tune = tune,
+        };
+
+        var start = manager.Begin(request);
+
+        Assert.Equal(SessionRefusal.NoDeviceOfThatKind, start.Refusal);
+        Assert.NotEqual(SessionRefusal.CapabilityMissing, start.Refusal);
         Assert.Empty(manager.Sessions);
     }
 
     [Fact]
-    public void ADriverThatCannotReadTypedParametersDoesNotClaimThatItCan()
+    public void ADriverThatTunesFromTypedParametersSaysSo()
     {
-        Assert.DoesNotContain(
+        Assert.Contains(
             DriverCapabilities.TypedTuning,
             Carina.Driver.Ipc.DriverGreeting.Capabilities
         );

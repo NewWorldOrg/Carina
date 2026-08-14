@@ -78,20 +78,20 @@ public sealed class StubbornTunerDevice(TimeSpan readTakes) : ITunerDevice
 public sealed class ScriptedTunerDeviceFactory(int failAfterReads = int.MaxValue)
     : ITunerDeviceFactory
 {
-    public ITunerDevice Create(DeviceSettings device, TuningRequest tuning) =>
+    public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune) =>
         new ScriptedTunerDevice(failAfterReads);
 }
 
 public sealed class StubbornTunerDeviceFactory(TimeSpan readTakes) : ITunerDeviceFactory
 {
-    public ITunerDevice Create(DeviceSettings device, TuningRequest tuning) =>
+    public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune) =>
         new StubbornTunerDevice(readTakes);
 }
 
 public sealed class StubbornForOneDeviceFactory(string stubbornDeviceId, TimeSpan readTakes)
     : ITunerDeviceFactory
 {
-    public ITunerDevice Create(DeviceSettings device, TuningRequest tuning) =>
+    public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune) =>
         device.Id == stubbornDeviceId
             ? new StubbornTunerDevice(readTakes)
             : new ScriptedTunerDevice();
@@ -100,7 +100,7 @@ public sealed class StubbornForOneDeviceFactory(string stubbornDeviceId, TimeSpa
 public sealed class SelectiveTunerDeviceFactory(string failingDeviceId, int failAfterReads = 1)
     : ITunerDeviceFactory
 {
-    public ITunerDevice Create(DeviceSettings device, TuningRequest tuning) =>
+    public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune) =>
         device.Id == failingDeviceId
             ? new ScriptedTunerDevice(failAfterReads)
             : new ScriptedTunerDevice();
