@@ -36,39 +36,34 @@ public sealed class DriverApiTests
         Assert.Equal(DriverProtocol.Version, hello.ProtocolVersion);
         Assert.True(hello.Supports(DriverCapabilities.Recording));
         Assert.True(hello.Supports(DriverCapabilities.Live));
-        Assert.False(hello.Supports(DriverCapabilities.TypedTuning));
+        Assert.True(hello.Supports(DriverCapabilities.TypedTuning));
     }
 
     [Fact]
-    public async Task ATuneThisDriverIsTooOldToServeIsNotAnsweredAsABadRequest()
+    public async Task ATuneTheOlderParametersCannotNameIsServedFromTheTypedOnes()
     {
         await using var driver = await DriverUnderTest.Start();
         using var client = driver.Client();
 
         var tune = TuneParams.Bs(15, 50001);
-        var request = DriverUnderTest.Live("older-driver") with
+        var request = DriverUnderTest.Live("typed-tune") with
         {
             Tuning = tune.ToLegacyRequest(),
             Tune = tune,
         };
 
-        using var refused = await client.PostAsync(
+        using var created = await client.PostAsync(
             DriverEndpoints.Sessions,
             DriverUnderTest.Body(request),
             Soon()
         );
 
-        Assert.Equal(HttpStatusCode.NotImplemented, refused.StatusCode);
-        Assert.NotEqual(HttpStatusCode.BadRequest, refused.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
 
-        var problem = await DriverUnderTest.Read(refused, DriverJson.Context.DriverProblem);
+        var snapshot = await DriverUnderTest.Read(created, DriverJson.Context.SessionSnapshot);
 
-        Assert.NotNull(problem);
-        Assert.Equal("capabilityMissing", problem.Title);
-        Assert.Contains(
-            problem.Problems,
-            detail => detail.Contains(DriverCapabilities.TypedTuning, StringComparison.Ordinal)
-        );
+        Assert.NotNull(snapshot);
+        Assert.Equal("fake-satellite", snapshot.DeviceId);
     }
 
     [Fact]

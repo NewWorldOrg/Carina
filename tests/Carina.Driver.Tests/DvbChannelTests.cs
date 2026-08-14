@@ -4,6 +4,9 @@ namespace Carina.Driver.Tests;
 
 public sealed class DvbChannelTests
 {
+    private const int SyntheticStream = 50_001;
+
+
     [Theory]
     [InlineData(13)]
     [InlineData(40)]
@@ -37,7 +40,7 @@ public sealed class DvbChannelTests
     [InlineData(23)]
     public void OddBroadcastSatelliteSlotsAreAccepted(int slot)
     {
-        var channel = DvbChannel.BroadcastSatellite(slot, transportStreamId: null);
+        var channel = DvbChannel.BroadcastSatellite(slot, SyntheticStream);
 
         Assert.Equal(slot, Assert.IsType<BroadcastSatelliteChannel>(channel).Slot);
     }
@@ -48,7 +51,7 @@ public sealed class DvbChannelTests
     public void TheTwoBroadcastSatelliteSlotsTheDemodulatorCannotUseAreRefused(int slot)
     {
         var refusal = Assert.Throws<DvbDeviceException>(
-            () => DvbChannel.BroadcastSatellite(slot, transportStreamId: null)
+            () => DvbChannel.BroadcastSatellite(slot, SyntheticStream)
         );
 
         Assert.Contains(slot.ToString(), refusal.Message, StringComparison.Ordinal);
@@ -62,7 +65,7 @@ public sealed class DvbChannelTests
     public void EvenOrOutOfRangeBroadcastSatelliteSlotsAreRefused(int slot)
     {
         Assert.Throws<DvbDeviceException>(
-            () => DvbChannel.BroadcastSatellite(slot, transportStreamId: null)
+            () => DvbChannel.BroadcastSatellite(slot, SyntheticStream)
         );
     }
 
@@ -87,15 +90,39 @@ public sealed class DvbChannelTests
     }
 
     [Fact]
-    public void ABroadcastSatelliteChannelRemembersWhetherAStreamWasNamed()
+    public void ABroadcastSatelliteChannelCarriesTheStreamItWasToldToTake()
     {
-        var named = Assert.IsType<BroadcastSatelliteChannel>(DvbChannel.BroadcastSatellite(1, 50_001));
-        var unnamed = Assert.IsType<BroadcastSatelliteChannel>(
-            DvbChannel.BroadcastSatellite(1, transportStreamId: null)
+        var channel = Assert.IsType<BroadcastSatelliteChannel>(
+            DvbChannel.BroadcastSatellite(1, SyntheticStream)
         );
 
-        Assert.Equal(50_001, named.TransportStreamId);
-        Assert.Null(unnamed.TransportStreamId);
+        Assert.Equal(SyntheticStream, channel.TransportStreamId);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(15)]
+    [InlineData(23)]
+    public void ABroadcastSatelliteSlotThatNamesNoStreamIsRefusedBecauseTwoStreamsShareASlot(
+        int slot
+    )
+    {
+        var refusal = Assert.Throws<DvbDeviceException>(
+            () => DvbChannel.BroadcastSatellite(slot, transportStreamId: null)
+        );
+
+        Assert.Contains("transportStreamId", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains(slot.ToString(), refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheRefusalToTuneAnUnnamedStreamSaysWhatWouldOtherwiseComeBack()
+    {
+        var refusal = Assert.Throws<DvbDeviceException>(
+            () => DvbChannel.BroadcastSatellite(15, transportStreamId: null)
+        );
+
+        Assert.Contains("first", refusal.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -109,7 +136,7 @@ public sealed class DvbChannelTests
     public void EveryChannelCanSayWhichAerialItNeeds()
     {
         Assert.False(DvbChannel.Terrestrial(55).NeedsSatelliteAerial);
-        Assert.True(DvbChannel.BroadcastSatellite(1, null).NeedsSatelliteAerial);
+        Assert.True(DvbChannel.BroadcastSatellite(1, SyntheticStream).NeedsSatelliteAerial);
         Assert.True(DvbChannel.CommunicationSatellite(2).NeedsSatelliteAerial);
     }
 }

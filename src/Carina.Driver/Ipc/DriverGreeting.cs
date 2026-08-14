@@ -10,6 +10,7 @@ public static class DriverGreeting
         DriverCapabilities.Live,
         DriverCapabilities.QualityMetering,
         DriverCapabilities.LiveTunerToggle,
+        DriverCapabilities.TypedTuning,
     ];
 
     public static DriverHello ForThisProcess() =>

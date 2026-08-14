@@ -13,7 +13,7 @@ public interface ITunerDevice : IDisposable
 
 public interface ITunerDeviceFactory
 {
-    ITunerDevice Create(DeviceSettings device, TuningRequest tuning);
+    ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune);
 }
 
 public sealed class TunerDeviceFactory : ITunerDeviceFactory
@@ -44,17 +44,20 @@ public sealed class TunerDeviceFactory : ITunerDeviceFactory
         IDvbSystemCalls systemCalls
     ) => new(configuration, time, new Lazy<IDvbSystemCalls>(() => systemCalls));
 
-    public ITunerDevice Create(DeviceSettings device, TuningRequest tuning) =>
+    public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune) =>
         backend switch
         {
-            TunerBackend.Fake => new FakeTunerDevice(tuning.PhysicalChannel, tuning.ServiceId),
-            TunerBackend.Dvb => OpenDvb(device, tuning),
+            TunerBackend.Fake => Synthetic(tune?.ToLegacyRequest() ?? tuning),
+            TunerBackend.Dvb => OpenDvb(device, tuning, tune),
             _ => throw new InvalidOperationException(
                 "The tuner backend was never established; the configuration should have been rejected."
             ),
         };
 
-    private ITunerDevice OpenDvb(DeviceSettings device, TuningRequest tuning)
+    private static ITunerDevice Synthetic(TuningRequest tuning) =>
+        new FakeTunerDevice(tuning.PhysicalChannel, tuning.ServiceId);
+
+    private ITunerDevice OpenDvb(DeviceSettings device, TuningRequest tuning, TuneParams? tune)
     {
         if (!DvbDevicePaths.TryDerive(device.DevicePath, out var paths, out var problem))
         {
@@ -65,7 +68,7 @@ public sealed class TunerDeviceFactory : ITunerDeviceFactory
             systemCalls.Value,
             time,
             paths,
-            DvbTuneRequest.Resolve(tuning),
+            DvbTuneRequest.Resolve(tune, tuning),
             LnbPower.For(device.Kind, device.LnbPower),
             settings,
             CancellationToken.None
