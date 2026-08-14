@@ -1,0 +1,175 @@
+name: Image
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    env:
+      CARINA_IMAGE: carina:ci
+      CARINA_ACCEPTANCE_IMAGE: carina:ci
+      CARINA_DRIVER_CONFIG_FILE: ./docker/driver.development.json
+      CARINA_STOP_GRACE: 7h
+      POSTGRES_PASSWORD: ci-only-not-a-deployment
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: docker build -t carina:ci .
+      - run: docker/verify-image.sh carina:ci
+      - run: CARINA_STOP_GRACE="$(docker/grace-period.sh derive)" docker/grace-period.sh check
+      - name: A grace period inside the driver's budget is refused, for that reason
+        run: |
+          if output="$(CARINA_STOP_GRACE=6h docker/grace-period.sh check 2>&1)"; then
+            echo "a 6h grace period was accepted against a 6h linger cap" >&2
+            echo "${output}" >&2
+            exit 1
+          fi
+          if ! grep -q "does not exceed the driver's own shutdown budget" <<<"${output}"; then
+            echo "the check refused it, but not for the reason under test:" >&2
+            echo "${output}" >&2
+            exit 1
+          fi
+          echo "${output}"
+      - run: docker/image-tags.sh check
+      - run: docker/image-tags.sh prove
+      - name: A shallow checkout is refused, naming the reason
+        run: |
+          rm -rf /tmp/shallow
+          git clone --quiet --depth 1 "file://${PWD}" /tmp/shallow
+          if output="$(/tmp/shallow/docker/image-tags.sh tag driver 2>&1)"; then
+            echo "a shallow clone produced the tag ${output}, where every stream collapses onto HEAD" >&2
+            exit 1
+          fi
+          if ! grep -q 'shallow' <<<"${output}"; then
+            echo "it failed for another reason: ${output}" >&2
+            exit 1
+          fi
+          echo "${output}"
+      - name: The tags this commit stands for
+        run: |
+          echo "driver: $(docker/image-tags.sh tag driver)"
+          echo "app: $(docker/image-tags.sh tag app)"
+      - run: docker compose config --quiet
+      - run: docker compose -f compose.deploy.yml config --quiet
+      - name: An unset database password stops the deployment file, naming itself
+        run: |
+          if output="$(docker compose -f compose.deploy.yml config --quiet 2>&1)"; then
+            echo "the deployment file rendered without POSTGRES_PASSWORD" >&2
+            exit 1
+          fi
+          if ! grep -q 'POSTGRES_PASSWORD' <<<"${output}"; then
+            echo "it failed for another reason: ${output}" >&2
+            exit 1
+          fi
+          echo "${output}"
+        env:
+          POSTGRES_PASSWORD: ''
+      - name: An unset driver configuration stops the deployment file, naming itself
+        run: |
+          if output="$(docker compose -f compose.deploy.yml config --quiet 2>&1)"; then
+            echo "the deployment file rendered without CARINA_DRIVER_CONFIG_FILE" >&2
+            exit 1
+          fi
+          if ! grep -q 'CARINA_DRIVER_CONFIG_FILE' <<<"${output}"; then
+            echo "it failed for another reason: ${output}" >&2
+            exit 1
+          fi
+          echo "${output}"
+        env:
+          CARINA_DRIVER_CONFIG_FILE: ''
+      - name: Each role takes its own image reference, so a release of one does not recreate the other
+        run: |
+          rendered_images() {
+            docker compose -f compose.deploy.yml config --format json \
+              | python3 -c 'import json, sys; services = json.load(sys.stdin)["services"]; print(services["driver"]["image"], services["app"]["image"])'
+          }
+          base="$(rendered_images)"
+          export CARINA_APP_IMAGE=carina:app-sha-000000000000
+          app_bumped="$(rendered_images)"
+          unset CARINA_APP_IMAGE
+          export CARINA_DRIVER_IMAGE=carina:driver-sha-000000000000
+          driver_bumped="$(rendered_images)"
+          unset CARINA_DRIVER_IMAGE
+          if [ "${app_bumped%% *}" != "${base%% *}" ]; then
+            echo "an app release moved the driver service from ${base%% *} to ${app_bumped%% *}, which would recreate the container holding a recording" >&2
+            exit 1
+          fi
+          if [ "${app_bumped##* }" = "${base##* }" ]; then
+            echo "the app release did not reach the app service either, so the driver holding still proves nothing" >&2
+            exit 1
+          fi
+          if [ "${driver_bumped##* }" != "${base##* }" ]; then
+            echo "a driver release moved the app service from ${base##* } to ${driver_bumped##* }" >&2
+            exit 1
+          fi
+          if [ "${driver_bumped%% *}" = "${base%% *}" ]; then
+            echo "the driver release did not reach the driver service either" >&2
+            exit 1
+          fi
+          echo "driver ${base%% *} / app ${base##* }; each moves alone."
+      - run: docker/acceptance/run.sh
+      - name: What is left on the runner
+        if: always()
+        run: docker ps -a && docker volume ls
+
+  publish:
+    needs: [image]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      actions: read
+    steps:
+      - name: The build workflow passed for this commit, since needs cannot reach across workflows
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for _ in $(seq 1 60); do
+            answer="$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/build.yml/runs?head_sha=${GITHUB_SHA}&event=push&per_page=1" --jq '.workflow_runs[0] | "\(.status) \(.conclusion)"' 2>/dev/null || true)"
+            case "${answer}" in
+              'completed success')
+                echo "the build workflow passed for ${GITHUB_SHA}."
+                exit 0
+                ;;
+              completed*)
+                echo "the build workflow for ${GITHUB_SHA} ended as '${answer#completed }'; a commit whose build did not pass publishes nothing" >&2
+                exit 1
+                ;;
+            esac
+            sleep 10
+          done
+          echo "no completed build workflow run for ${GITHUB_SHA} after ten minutes; refusing to publish rather than assuming it passed" >&2
+          exit 1
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Resolve the repository the streams would be published to
+        env:
+          CONFIGURED_REGISTRY: ${{ vars.CARINA_REGISTRY }}
+        run: |
+          configured="${CONFIGURED_REGISTRY}"
+          if [ -z "${configured}" ]; then
+            configured="ghcr.io/$(tr '[:upper:]' '[:lower:]' <<<"${GITHUB_REPOSITORY}")"
+          fi
+          echo "CARINA_REGISTRY=${configured}" >>"${GITHUB_ENV}"
+      - if: vars.CARINA_PUBLISH == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - if: vars.CARINA_PUBLISH == 'true'
+        run: docker build -t carina:publish .
+      - if: vars.CARINA_PUBLISH == 'true'
+        run: docker/publish-image.sh carina:publish --push
+      - if: vars.CARINA_PUBLISH != 'true'
+        name: Without CARINA_PUBLISH this run publishes nothing and says so
+        run: |
+          docker/publish-image.sh carina:publish --dry-run
+          echo "planned only: set the repository variable CARINA_PUBLISH to true once the registry and its visibility are decided."
