@@ -295,6 +295,16 @@ public sealed class TunerSession : IDisposable
         {
             Conclude(ReasonForEnd(token));
         }
+        catch (StreamCutException cut)
+        {
+            Finish(
+                SessionState.Failed,
+                cut.Reason is SessionStopReason.Running
+                    ? SessionStopReason.Unspecified
+                    : cut.Reason,
+                cut
+            );
+        }
         catch (Exception error)
         {
             Finish(SessionState.Failed, SessionStopReason.DeviceFailed, error);
