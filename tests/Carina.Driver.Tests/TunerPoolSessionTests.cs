@@ -124,7 +124,7 @@ public sealed class TunerPoolSessionTests : IDisposable
         var device = new PacedTunerDevice();
         var manager = Manager(new OneDeviceFactory(device));
 
-        var holder = Started(manager, Request("s-1", SessionPurpose.Live));
+        var holder = Started(manager, Request("s-1", SessionPurpose.Recording));
         var rider = Started(manager, Request("s-2", SessionPurpose.Recording));
 
         device.Allow(4);
@@ -135,7 +135,8 @@ public sealed class TunerPoolSessionTests : IDisposable
         rider.WaitForEnd(Deadlock);
 
         Assert.Equal(4, device.Reads);
-        Assert.Equal(4L * TunerSession.DefaultChunkSize, rider.BytesRecorded);
+        Assert.Equal(4L * TunerSession.DefaultChunkSize, holder.BytesRecorded);
+        Assert.Equal(holder.BytesRecorded, rider.BytesRecorded);
     }
 
     [Fact]
@@ -144,7 +145,7 @@ public sealed class TunerPoolSessionTests : IDisposable
         var device = new PacedTunerDevice();
         var manager = Manager(new OneDeviceFactory(device));
 
-        var holder = Started(manager, Request("s-1", SessionPurpose.Live));
+        var holder = Started(manager, Request("s-1", SessionPurpose.Recording));
         var rider = Started(manager, Request("s-2", SessionPurpose.Recording));
 
         device.Allow(2);
@@ -374,16 +375,37 @@ public sealed class TunerPoolSessionTests : IDisposable
         );
         Assert.False(answered.IsSet);
 
-        var second = manager.Begin(Request("s-2", SessionPurpose.Live, channel: 57));
+        var taken = string.Empty;
+        var served = new ManualResetEventSlim(false);
+        var quick = new Thread(() =>
+        {
+            var start = manager.Begin(Request("s-2", SessionPurpose.Live, channel: 57));
 
-        Assert.Equal(SessionRefusal.None, second.Refusal);
-        Assert.True(second.TryGetSession(out var quick));
-        Assert.Equal("adapter1", quick.DeviceId);
+            if (start.TryGetSession(out var session))
+            {
+                taken = session.DeviceId;
+            }
+
+            served.Set();
+        })
+        {
+            IsBackground = true,
+        };
+
+        quick.Start();
+
+        Assert.True(
+            served.Wait(Deadlock),
+            "A request for another tuner waited behind a tune that had not finished."
+        );
+        Assert.Equal("adapter1", taken);
+        Assert.False(answered.IsSet);
 
         factory.Finish.Set();
 
         Assert.True(answered.Wait(Deadlock));
         Assert.True(slow.Join(Deadlock));
+        Assert.True(quick.Join(Deadlock));
 
         foreach (var session in manager.Sessions)
         {
