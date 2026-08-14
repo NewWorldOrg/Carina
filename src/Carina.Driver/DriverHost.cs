@@ -111,6 +111,7 @@ public static class DriverHost
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddSingleton(DriverGreeting.ForThisProcess());
         builder.Services.AddSingleton<ITunerDeviceFactory, TunerDeviceFactory>();
+        builder.Services.AddSingleton(_ => TunerDetectors.For(configuration));
         builder.Services.AddSingleton<IRecordingWriterFactory, RecordingWriterFactory>();
         builder.Services.AddSingleton<DriverEventHub>();
         builder.Services.AddSingleton(provider => new DiagnosticsStore(
@@ -134,6 +135,7 @@ public static class DriverHost
         builder.Services.AddHostedService(provider =>
             provider.GetRequiredService<TunerSessionManager>()
         );
+        builder.Services.AddHostedService<TunerLedgerReconciler>();
         builder.Services.AddHostedService<SocketPermissionGuard>();
 
         reshapeServices?.Invoke(builder.Services);
