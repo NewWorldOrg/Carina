@@ -50,6 +50,8 @@ public sealed record CurrentSessionDto
     public DateTimeOffset? StartedAt { get; init; }
 
     public TuneParams? Tune { get; init; }
+
+    public DateTimeOffset? EndsAt { get; init; }
 }
 
 public sealed record DetectedDeviceDto

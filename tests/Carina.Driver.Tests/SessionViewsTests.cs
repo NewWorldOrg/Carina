@@ -66,7 +66,8 @@ public sealed class SessionViewsTests : IDisposable
         string? deviceId = null,
         TunerKind kind = TunerKind.Terrestrial,
         SessionPurpose purpose = SessionPurpose.Live,
-        TuneParams? tune = null
+        TuneParams? tune = null,
+        DateTimeOffset? endsAt = null
     )
     {
         var start = manager.Begin(
@@ -77,6 +78,7 @@ public sealed class SessionViewsTests : IDisposable
                 Tuning = new TuningRequest(kind, 55),
                 Tune = tune,
                 DeviceId = deviceId,
+                EndsAt = endsAt,
             }
         );
 
@@ -382,6 +384,36 @@ public sealed class SessionViewsTests : IDisposable
         Assert.Equal(SessionPurpose.Scan, busy.CurrentSession.Purpose);
         Assert.Equal(session.StartedAt, busy.CurrentSession.StartedAt);
         Assert.Equal(TuneParams.Terrestrial(55), busy.CurrentSession.Tune);
+    }
+
+    [Fact]
+    public void TheMomentATunerComesFreeAgainTravelsWithTheSessionHoldingIt()
+    {
+        var manager = Manager();
+        var session = Begin(
+            manager,
+            "until-then",
+            "adapter0",
+            tune: TuneParams.Terrestrial(55),
+            endsAt: Start.AddMinutes(30)
+        );
+
+        var busy = Tuner(manager, "adapter0");
+
+        Assert.Equal(Start.AddMinutes(30), session.EndsAt);
+        Assert.Equal(session.EndsAt, busy.CurrentSession?.EndsAt);
+    }
+
+    [Fact]
+    public void ASessionThatNamedNoEndStillTellsTheSubtreeTheCapItWasGiven()
+    {
+        var manager = Manager();
+        var session = Begin(manager, "open-ended", "adapter0", tune: TuneParams.Terrestrial(55));
+
+        var held = Tuner(manager, "adapter0").CurrentSession;
+
+        Assert.NotNull(held?.EndsAt);
+        Assert.Equal(session.EndsAt, held.EndsAt);
     }
 
     [Fact]
