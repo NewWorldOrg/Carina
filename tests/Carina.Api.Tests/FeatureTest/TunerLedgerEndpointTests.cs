@@ -22,6 +22,11 @@ public sealed class TunerLedgerEndpointTests
         DriverCapabilities.LiveTunerToggle,
     ];
 
+    private static readonly DateTimeOffset Started =
+        new(2026, 8, 12, 21, 0, 0, TimeSpan.FromHours(9));
+
+    private static readonly DateTimeOffset Ends = Started.AddMinutes(30);
+
     private static DriverHello Capable(string[]? capabilities = null)
         => FakeDriver.HelloFor("instance-a", capabilities: capabilities ?? Everything);
 
@@ -59,6 +64,44 @@ public sealed class TunerLedgerEndpointTests
                 Kinds = [TunerKind.Satellite],
             },
         ];
+    }
+
+    private static void Holding(FakeDriver driver, SessionPurpose purpose, TuneParams tune, DateTimeOffset? endsAt)
+    {
+        Stocked(driver);
+
+        driver.Tuners =
+        [
+            new TunerSnapshot(
+                "adapter0",
+                tune.Kind,
+                TunerState.Busy,
+                SessionId.Parse("holding-one"))
+            {
+                CurrentSession = new CurrentSessionDto
+                {
+                    SessionId = SessionId.Parse("holding-one"),
+                    Purpose = purpose,
+                    StartedAt = Started,
+                    EndsAt = endsAt,
+                    Tune = tune,
+                },
+            },
+        ];
+    }
+
+    private static async Task<JsonElement> HeldSessionAsync(
+        SessionPurpose purpose,
+        TuneParams tune,
+        DateTimeOffset? endsAt = null)
+    {
+        await using var feature = await DriverFeature.StartAsync(
+            Capable(),
+            driver => Holding(driver, purpose, tune, endsAt));
+
+        var (_, body) = await ReadAsync(await feature.Client.GetAsync(Tuners));
+
+        return body.GetProperty("data").GetProperty("observed")[0].Clone();
     }
 
     private static async Task<(HttpStatusCode Status, JsonElement Body)> ReadAsync(
@@ -102,6 +145,68 @@ public sealed class TunerLedgerEndpointTests
         Assert.NotEqual(
             default,
             body.GetProperty("data").GetProperty("observedAt").GetDateTimeOffset());
+    }
+
+    [Fact]
+    public async Task TheChannelTheDriverSaysATunerIsOnReachesTheScreenAndNotOnlyThePurpose()
+    {
+        var observed = await HeldSessionAsync(SessionPurpose.Recording, TuneParams.Terrestrial(57));
+        var tuning = observed.GetProperty("sessionTuning");
+
+        Assert.Equal("recording", observed.GetProperty("sessionPurpose").GetString());
+        Assert.Equal("isdbT", tuning.GetProperty("system").GetString());
+        Assert.Equal(57, tuning.GetProperty("physicalChannel").GetInt32());
+    }
+
+    [Fact]
+    public async Task TheEndOfTheRecordingHoldingATunerReachesTheScreenThatHasToNameIt()
+    {
+        var observed = await HeldSessionAsync(
+            SessionPurpose.Recording,
+            TuneParams.Terrestrial(53),
+            Ends);
+
+        Assert.Equal(Ends, observed.GetProperty("sessionEndsAt").GetDateTimeOffset());
+    }
+
+    [Fact]
+    public async Task TheMomentASessionStartedSurvivesTheTripFromTheDriverToTheScreen()
+    {
+        var observed = await HeldSessionAsync(SessionPurpose.Live, TuneParams.Terrestrial(55));
+
+        Assert.Equal(Started, observed.GetProperty("sessionStartedAt").GetDateTimeOffset());
+    }
+
+    [Fact]
+    public async Task ASessionOnASatelliteSlotCarriesTheTransportStreamThatTellsItApart()
+    {
+        var observed = await HeldSessionAsync(SessionPurpose.Live, TuneParams.Bs(1, 50001));
+        var tuning = observed.GetProperty("sessionTuning");
+
+        Assert.Equal("isdbSBs", tuning.GetProperty("system").GetString());
+        Assert.Equal(1, tuning.GetProperty("physicalChannel").GetInt32());
+        Assert.Equal(50001, tuning.GetProperty("transportStreamId").GetInt32());
+    }
+
+    [Fact]
+    public async Task ADriverTooOldToNameWhenASessionEndsLeavesTheFieldEmptyRatherThanInventingAMoment()
+    {
+        var observed = await HeldSessionAsync(SessionPurpose.Live, TuneParams.Terrestrial(55));
+
+        Assert.Equal(JsonValueKind.Null, observed.GetProperty("sessionEndsAt").ValueKind);
+    }
+
+    [Fact]
+    public async Task ATunerHoldingNothingCarriesNoTuningRatherThanAChannelOfZero()
+    {
+        await using var feature = await DriverFeature.StartAsync(Capable(), Stocked);
+
+        var (_, body) = await ReadAsync(await feature.Client.GetAsync(Tuners));
+        var observed = body.GetProperty("data").GetProperty("observed")[0];
+
+        Assert.Equal(JsonValueKind.Null, observed.GetProperty("sessionTuning").ValueKind);
+        Assert.Equal(JsonValueKind.Null, observed.GetProperty("sessionStartedAt").ValueKind);
+        Assert.Equal(JsonValueKind.Null, observed.GetProperty("sessionEndsAt").ValueKind);
     }
 
     [Fact]

@@ -19,6 +19,14 @@ public sealed record ScanTargetResponder(
             tuning.PhysicalChannel,
             tuning.TransportStreamId?.Value);
     }
+
+    public static ScanTargetResponder? Of(TuneParams? tune)
+        => tune is null
+            ? null
+            : new ScanTargetResponder(
+                tune.System,
+                tune.ToLegacyRequest().PhysicalChannel,
+                tune.IsdbSBs?.Tsid);
 }
 
 public sealed record ScanMeasurementResponder(

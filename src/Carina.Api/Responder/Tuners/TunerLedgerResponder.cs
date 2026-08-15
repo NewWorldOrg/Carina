@@ -1,3 +1,4 @@
+using Carina.Api.Responder.Scans;
 using Carina.Api.Services;
 using Carina.Contracts;
 
@@ -24,7 +25,10 @@ public sealed record TunerObservationResponder(
     string? HealthDetail,
     DateTimeOffset? HealthChangedAt,
     string? SessionId,
-    SessionPurpose SessionPurpose)
+    SessionPurpose SessionPurpose,
+    DateTimeOffset? SessionStartedAt,
+    DateTimeOffset? SessionEndsAt,
+    ScanTargetResponder? SessionTuning)
 {
     public static TunerObservationResponder Of(TunerSnapshot snapshot)
     {
@@ -44,7 +48,10 @@ public sealed record TunerObservationResponder(
             health?.Detail,
             health?.ChangedAt,
             session is null ? null : session.SessionId.ToString(),
-            session?.Purpose ?? SessionPurpose.Unspecified);
+            session?.Purpose ?? SessionPurpose.Unspecified,
+            session?.StartedAt,
+            session?.EndsAt,
+            ScanTargetResponder.Of(session?.Tune));
     }
 }
 
