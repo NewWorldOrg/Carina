@@ -47,19 +47,25 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISatelliteTransportStreamRepository, SatelliteTransportStreamRepository>();
         services.AddScoped<IScanRunRepository, ScanRunRepository>();
         services.AddScoped<IChannelScanOrchestrator, ChannelScanOrchestrator>();
+        services.AddScoped<ScanApplier>();
 
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IDriverStatusReader, MonitoredDriverStatusReader>();
         services.AddSingleton<IDriverClient, DriverIpcClient>();
         services.AddSingleton<DriverConnectionMonitor>();
+        services.AddSingleton<ScanRunner>();
         services.AddSingleton<DriverSignalRelay>();
         services.AddSingleton<IDriverSignals>(provider =>
             provider.GetRequiredService<DriverSignalRelay>());
         services.TryAddSingleton<IDriverSessionResyncHook, NoopDriverSessionResyncHook>();
         services.TryAddSingleton(DriverSupervisionSettings.Default);
         services.TryAddSingleton(ScanSettings.Default);
-        services.TryAddSingleton<IAppEventPublisher, NoopAppEventPublisher>();
+        services.TryAddSingleton(new AppEventHub());
+        services.TryAddSingleton<IAppEventPublisher>(provider =>
+            provider.GetRequiredService<AppEventHub>());
         services.AddHostedService<DriverConnectionSupervisor>();
+        services.AddHostedService<AppEventHubLifetime>();
+        services.AddHostedService(provider => provider.GetRequiredService<ScanRunner>());
 
         return services;
     }

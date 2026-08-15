@@ -3,7 +3,7 @@ using Carina.Domain.Channels;
 using Carina.Domain.Events;
 using Carina.Domain.Scans;
 
-namespace Carina.Infrastructure.Tests.Scanning;
+namespace Carina.TestSupport;
 
 public sealed class HeldScanRuns : IScanRunRepository
 {
@@ -30,7 +30,8 @@ public sealed class HeldScanRuns : IScanRunRepository
         => Task.FromResult(Runs.FirstOrDefault(run => run.IsRunning));
 
     public Task<IReadOnlyList<ScanRun>> ListRecentAsync(int limit, CancellationToken cancellationToken)
-        => Task.FromResult<IReadOnlyList<ScanRun>>([.. Runs.TakeLast(limit)]);
+        => Task.FromResult<IReadOnlyList<ScanRun>>(
+            [.. Runs.OrderByDescending(run => run.StartedAt).Take(limit)]);
 
     public Task SaveAsync(ScanRun run, CancellationToken cancellationToken) => Task.CompletedTask;
 
@@ -94,17 +95,13 @@ public sealed class HeldCandidates : ICandidateChannelRepository
         NetworkId networkId,
         ServiceId serviceId,
         CancellationToken cancellationToken)
-        => Task.FromResult<IReadOnlyList<CandidateChannel>>([.. Candidates.Where(candidate =>
-            candidate.NetworkId.Equals(networkId) && candidate.ServiceId.Equals(serviceId))]);
+        => Task.FromResult<IReadOnlyList<CandidateChannel>>([.. Of(networkId, serviceId)]);
 
     public Task<CandidateChannel?> FindSelectedAsync(
         NetworkId networkId,
         ServiceId serviceId,
         CancellationToken cancellationToken)
-        => Task.FromResult(Candidates.FirstOrDefault(candidate =>
-            candidate.IsSelected
-            && candidate.NetworkId.Equals(networkId)
-            && candidate.ServiceId.Equals(serviceId)));
+        => Task.FromResult(Of(networkId, serviceId).FirstOrDefault(candidate => candidate.IsSelected));
 
     public Task<IReadOnlyList<CandidateChannel>> ListInRotationAsync(
         DateTime at,
@@ -137,19 +134,57 @@ public sealed class HeldCandidates : ICandidateChannelRepository
         SignalMeasurement? measuredAtSelection,
         DateTime at,
         CancellationToken cancellationToken)
-        => throw new NotSupportedException();
+    {
+        var chosen = Candidates.FirstOrDefault(candidate => candidate.Id.Equals(id));
+
+        if (chosen is null)
+        {
+            return Task.FromResult<CandidateChannel?>(null);
+        }
+
+        foreach (var candidate in Of(chosen.NetworkId, chosen.ServiceId).Where(held => held.IsSelected))
+        {
+            candidate.Deselect();
+        }
+
+        chosen.Select(source, measuredAtSelection, at);
+
+        return Task.FromResult<CandidateChannel?>(chosen);
+    }
 
     public Task ClearSelectionAsync(
         NetworkId networkId,
         ServiceId serviceId,
         CancellationToken cancellationToken)
-        => throw new NotSupportedException();
+    {
+        foreach (var candidate in Of(networkId, serviceId).Where(held => held.IsSelected))
+        {
+            candidate.Deselect();
+        }
+
+        return Task.CompletedTask;
+    }
 
     public Task RequireRevalidationAsync(CancellationToken cancellationToken)
-        => throw new NotSupportedException();
+    {
+        foreach (var candidate in Candidates)
+        {
+            candidate.RequireRevalidation();
+        }
+
+        return Task.CompletedTask;
+    }
 
     public Task RemoveAsync(CandidateChannelId id, CancellationToken cancellationToken)
-        => throw new NotSupportedException();
+    {
+        Candidates.RemoveAll(candidate => candidate.Id.Equals(id));
+
+        return Task.CompletedTask;
+    }
+
+    private IEnumerable<CandidateChannel> Of(NetworkId networkId, ServiceId serviceId)
+        => Candidates.Where(candidate =>
+            candidate.NetworkId.Equals(networkId) && candidate.ServiceId.Equals(serviceId));
 }
 
 public sealed class HeldSatelliteStreams : ISatelliteTransportStreamRepository
@@ -169,12 +204,35 @@ public sealed class HeldSatelliteStreams : ISatelliteTransportStreamRepository
         int bsChannel,
         IReadOnlyList<SatelliteTransportStream> streams,
         CancellationToken cancellationToken)
-        => throw new NotSupportedException();
+    {
+        Streams.RemoveAll(stream => stream.BsChannel == bsChannel);
+        Streams.AddRange(streams);
+
+        return Task.CompletedTask;
+    }
 }
 
 public sealed class RecordingAppEvents : IAppEventPublisher
 {
-    public List<string> Signalled { get; } = [];
+    private readonly Lock gate = new();
+    private readonly List<string> signalled = [];
 
-    public void Signal(AppEventName name) => Signalled.Add(name.Value);
+    public IReadOnlyList<string> Signalled
+    {
+        get
+        {
+            lock (gate)
+            {
+                return [.. signalled];
+            }
+        }
+    }
+
+    public void Signal(AppEventName name)
+    {
+        lock (gate)
+        {
+            signalled.Add(name.Value);
+        }
+    }
 }

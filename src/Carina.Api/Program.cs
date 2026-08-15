@@ -1,8 +1,10 @@
 using Carina.Api.Authentication;
 using Carina.Api.Common;
+using Carina.Api.Events;
 using Carina.Api.Extensions;
 using Carina.Api.OpenApi;
 using Carina.Infrastructure.DependencyInjection;
+using Carina.Infrastructure.Events;
 
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -37,6 +39,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapControllers();
+app.MapGet(AppEventStream.Path, (HttpContext context, AppEventHub hub) =>
+    AppEventStream.Invoke(context, hub)).ExcludeFromDescription();
 
 try
 {

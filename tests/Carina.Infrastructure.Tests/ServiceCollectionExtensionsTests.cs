@@ -52,11 +52,33 @@ public sealed class ServiceCollectionExtensionsTests
     }
 
     [Fact]
-    public void RegistersAnAppEventPublisherTheHubCanReplaceOnceItExists()
+    public void RegistersTheHubItselfAsTheAppEventPublisherSoNoSignalIsDropped()
     {
         using var provider = Build(ValidSettings());
 
-        Assert.IsType<NoopAppEventPublisher>(provider.GetRequiredService<IAppEventPublisher>());
+        Assert.Same(
+            provider.GetRequiredService<AppEventHub>(),
+            provider.GetRequiredService<IAppEventPublisher>());
+    }
+
+    [Fact]
+    public void RegistersSomethingToCloseTheHubWhenTheAppStops()
+    {
+        using var provider = Build(ValidSettings());
+
+        Assert.Contains(
+            provider.GetServices<IHostedService>(),
+            service => service is AppEventHubLifetime);
+    }
+
+    [Fact]
+    public void RegistersTheScanRunnerAsTheSameThingThatIsStoppedWithTheApp()
+    {
+        using var provider = Build(ValidSettings());
+
+        Assert.Contains(
+            provider.GetServices<IHostedService>(),
+            service => ReferenceEquals(service, provider.GetRequiredService<ScanRunner>()));
     }
 
     [Fact]

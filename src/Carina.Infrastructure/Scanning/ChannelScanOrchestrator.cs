@@ -10,7 +10,7 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
 {
     public const string BusyReason = "every tuner was busy for longer than the bounded wait";
 
-    public const string CancelledReason = "the scan was cancelled";
+    public const string CancelledReason = ScanConclusion.CancelledReason;
 
     private readonly IDriverSignals signals;
     private readonly IScanRunRepository runs;
@@ -52,9 +52,16 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
 
     private DateTime Now => clock.GetUtcNow().UtcDateTime;
 
-    public async Task<ScanOutcome> RunAsync(ScanScope scope, CancellationToken cancellationToken)
+    public Task<ScanOutcome> RunAsync(ScanScope scope, CancellationToken cancellationToken)
+        => RunAsync(scope, UnwatchedScanRun.Instance, cancellationToken);
+
+    public async Task<ScanOutcome> RunAsync(
+        ScanScope scope,
+        IScanRunObserver observer,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(scope);
+        ArgumentNullException.ThrowIfNull(observer);
 
         var greeting = await driver.GetHealthAsync(cancellationToken);
 
@@ -73,6 +80,8 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
             return ScanOutcome.RefusedBecauseOneIsRunning(start.AlreadyRunning);
         }
 
+        observer.Started(run);
+
         using var interruption = new CancellationTokenSource();
         using var subscription = signals.Subscribe(name =>
         {
@@ -82,12 +91,13 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
             }
         });
 
-        return await WalkAsync(run, scope, interruption, cancellationToken);
+        return await WalkAsync(run, scope, observer, interruption, cancellationToken);
     }
 
     private async Task<ScanOutcome> WalkAsync(
         ScanRun run,
         ScanScope scope,
+        IScanRunObserver observer,
         CancellationTokenSource interruption,
         CancellationToken cancellationToken)
     {
@@ -166,13 +176,15 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
             await runs.AddAttemptAsync(attempts[^1], CancellationToken.None);
         }
 
-        return await ConcludeAsync(run, attempts, carried, interruption, failure, cancellationToken);
+        return await ConcludeAsync(
+            run, attempts, carried, observer, interruption, failure, cancellationToken);
     }
 
     private async Task<ScanOutcome> ConcludeAsync(
         ScanRun run,
         IReadOnlyList<ScanRunAttempt> attempts,
         IReadOnlyDictionary<TuningParameters, StreamProbe> carried,
+        IScanRunObserver observer,
         CancellationTokenSource interruption,
         string? failure,
         CancellationToken cancellationToken)
@@ -185,7 +197,7 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
         }
         else if (cancellationToken.IsCancellationRequested)
         {
-            run.Cancel(CancelledReason, Now);
+            ScanConclusion.Stop(run, observer.Stop, Now);
         }
         else if (failure is { } reason)
         {

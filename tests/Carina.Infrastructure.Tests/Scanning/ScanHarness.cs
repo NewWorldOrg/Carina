@@ -4,6 +4,7 @@ using Carina.Domain.Driver;
 using Carina.Domain.Scans;
 using Carina.Infrastructure.Driver;
 using Carina.Infrastructure.Scanning;
+using Carina.TestSupport;
 
 using Microsoft.Extensions.Logging.Abstractions;
 
