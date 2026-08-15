@@ -375,8 +375,15 @@ public sealed class WireStabilityTests
     {
         Assert.Equal(
             ["/devices/detected", "/tuners/ledger"],
-            DriverEndpoints.All.Skip(EndpointsTheFrontendReaches.Length)
+            DriverEndpoints.All.Skip(EndpointsTheFrontendReaches.Length).Take(2)
         );
+    }
+
+    [Fact]
+    public void AskingTheDriverToStopTakesItsPlaceAfterEverythingThatCameBefore()
+    {
+        Assert.Equal("/shutdown", DriverEndpoints.All[^1]);
+        Assert.Equal(EndpointsTheFrontendReaches.Length + 3, DriverEndpoints.All.Count);
     }
 
     private static StartSessionRequest LegacyRequest =>

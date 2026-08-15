@@ -67,8 +67,42 @@ public sealed class TunerSessionManager(
 
     public void EnterDraining()
     {
+        if (draining)
+        {
+            return;
+        }
+
         draining = true;
         events?.Signal(DriverEvents.Draining);
+    }
+
+    public bool TryEnterDrainingUnlessRecording(out IReadOnlyList<TunerSession> recordings)
+    {
+        lock (drainGate)
+        {
+            if (draining)
+            {
+                recordings = [];
+
+                return true;
+            }
+
+            var held = sessions
+                .Values.Where(session => session.Purpose is SessionPurpose.Recording)
+                .ToArray();
+
+            if (held.Length > 0)
+            {
+                recordings = held;
+
+                return false;
+            }
+
+            EnterDraining();
+            recordings = [];
+
+            return true;
+        }
     }
 
     public void DetachEverySubscriber()

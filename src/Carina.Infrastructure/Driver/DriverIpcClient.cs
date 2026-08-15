@@ -108,6 +108,35 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
         }
     }
 
+    public async Task<DriverCall<DriverShutdownDto>> RequestShutdownAsync(
+        CancellationToken cancellationToken)
+    {
+        if (await UndeclaredAsync(DriverCapabilities.GracefulShutdown, cancellationToken)
+            is { } undeclared)
+        {
+            return DriverCall<DriverShutdownDto>.Refused(undeclared);
+        }
+
+        try
+        {
+            using var patience = Patience(cancellationToken);
+            using var response = await http.PostAsync(
+                DriverEndpoints.Shutdown,
+                content: null,
+                patience.Token);
+
+            return await ReadAsync(
+                response,
+                DriverJson.Context.DriverShutdownDto,
+                bodyRequired: true,
+                patience.Token);
+        }
+        catch (Exception error) when (IsTransport(error, cancellationToken))
+        {
+            return DriverCall<DriverShutdownDto>.Unreachable(Describe(error));
+        }
+    }
+
     public async Task<DriverCall<TunerSnapshot>> ToggleTunerAsync(
         string deviceId,
         bool disabled,

@@ -1030,6 +1030,7 @@ public sealed class TunerSessionManagerTests : IDisposable
                 DriverCapabilities.LiveTunerToggle,
                 DriverCapabilities.TypedTuning,
                 DriverCapabilities.SignalQuality,
+                DriverCapabilities.GracefulShutdown,
                 "signalQuality.cnr",
                 "signalQuality.postViterbiBitError",
             ],
