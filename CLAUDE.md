@@ -35,9 +35,9 @@ tests/                     one test project per production project + architectur
 ```
 
 The running application is the only source of the OpenAPI document: it is served at
-`GET /openapi/v1.json` and nothing is checked in. The seam denies it like everything
-else outside Development, and in Development it is anonymous, which is where the web
-frontend fetches it from to generate its client. Three surfaces cannot be expressed in
+`GET /openapi/v1.json` and nothing is checked in. It is mapped in Development only, so a
+deployment does not publish its own description, and there it is anonymous, which is
+where the web frontend fetches it from to generate its client. Three surfaces cannot be expressed in
 the document — the transport stream, the event hub and the bulk programme guide — and
 its description names all three so a consumer reading only the generated client learns
 they exist.
