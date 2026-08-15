@@ -423,10 +423,10 @@ public sealed class ScanEndpointTests
     }
 
     [Fact]
-    public async Task EveryScanSurfaceIsBehindTheSameDenialAsTheRest()
+    public async Task EveryScanSurfaceIsBehindTheSameDenialAsTheRestOnceASchemeIsRegistered()
     {
-        using var anonymous = new TestingWebApplicationFactory();
-        using var client = anonymous.CreateClient();
+        using var app = new TestingWebApplicationFactory();
+        using var client = app.WithTestScheme().CreateClient();
 
         Assert.Equal(
             HttpStatusCode.Unauthorized,

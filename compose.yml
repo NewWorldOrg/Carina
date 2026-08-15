@@ -16,7 +16,6 @@ services:
       ConnectionStrings__Carina: Host=db;Port=5432;Database=carina;Username=carina;Password=${POSTGRES_PASSWORD:-carina}
       CARINA_DB_CONNECTION: Host=db;Port=5432;Database=carina;Username=carina;Password=${POSTGRES_PASSWORD:-carina}
       CARINA_DRIVER_SOCKET: /run/carina/driver.sock
-      CARINA_TRUSTED_PROXY_NETWORKS: ${CARINA_TRUSTED_PROXY_NETWORKS:-10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
     depends_on:
       db:
         condition: service_healthy

@@ -365,11 +365,11 @@ public sealed class TunerLedgerEndpointTests
     }
 
     [Fact]
-    public async Task EveryLedgerSurfaceIsBehindTheSameDenialAsTheRest()
+    public async Task EveryLedgerSurfaceIsBehindTheSameDenialAsTheRestOnceASchemeIsRegistered()
     {
         await using var feature = await DriverFeature.StartAsync(Capable(), Stocked);
-        using var anonymous = new TestingWebApplicationFactory();
-        using var client = anonymous.CreateClient();
+        using var app = new TestingWebApplicationFactory();
+        using var client = app.WithTestScheme().CreateClient();
 
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync(Tuners)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync(Detected)).StatusCode);

@@ -5,16 +5,12 @@ namespace Carina.Api.Authentication;
 
 public sealed class DefaultDenyAuthenticationMiddleware(RequestDelegate next)
 {
-    public async Task InvokeAsync(
-        HttpContext context,
-        IAuthenticationSchemeProvider schemes,
-        TrustedProxyNetworks trustedProxies)
+    public async Task InvokeAsync(HttpContext context, IAuthenticationSchemeProvider schemes)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(schemes);
-        ArgumentNullException.ThrowIfNull(trustedProxies);
 
-        if (await AdmitsAsync(context, schemes, trustedProxies))
+        if (await AdmitsAsync(context, schemes))
         {
             await next(context);
 
@@ -26,8 +22,7 @@ public sealed class DefaultDenyAuthenticationMiddleware(RequestDelegate next)
 
     private static async Task<bool> AdmitsAsync(
         HttpContext context,
-        IAuthenticationSchemeProvider schemes,
-        TrustedProxyNetworks trustedProxies)
+        IAuthenticationSchemeProvider schemes)
     {
         if (context.GetEndpoint()?.Metadata.GetMetadata<IAllowAnonymous>() is not null)
         {
@@ -41,7 +36,6 @@ public sealed class DefaultDenyAuthenticationMiddleware(RequestDelegate next)
 
         var registered = await schemes.GetAllSchemesAsync();
 
-        return !registered.Any()
-            && trustedProxies.Admits(context.Connection.RemoteIpAddress);
+        return !registered.Any();
     }
 }
