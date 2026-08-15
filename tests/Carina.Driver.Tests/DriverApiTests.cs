@@ -158,25 +158,45 @@ public sealed class DriverApiTests
         Assert.Equal(HttpStatusCode.OK, streaming.StatusCode);
 
         var body = await streaming.Content.ReadAsStreamAsync(Soon());
-        var buffer = new byte[188];
+        var buffer = new byte[TsPacketLength];
         Assert.True(await body.ReadAsync(buffer, Soon()) > 0);
 
-        var watch = System.Diagnostics.Stopwatch.StartNew();
-        await driver.DisposeAsync();
-        watch.Stop();
+        var manager = driver.Service<TunerSessionManager>();
 
-        Assert.True(
-            watch.Elapsed < TimeSpan.FromSeconds(15),
-            $"Shutdown took {watch.Elapsed} with a viewer attached."
+        Assert.True(manager.TryGet(SessionId.Parse("watched-one"), out var session));
+
+        await Until(
+            () => session.Broadcaster.SubscriberCount is 1,
+            "The viewer never showed up on the session it asked to watch."
         );
 
-        try
-        {
-            while (await body.ReadAsync(buffer, Soon()) > 0)
-            { }
-        }
-        catch (Exception)
-        { }
+        var lifecycle = driver.Service<DriverLifecycle>();
+        var stopping = driver.BeginStop();
+
+        await Until(
+            () => session.Broadcaster.SubscriberCount is 0,
+            "The driver never let go of a viewer that had stopped reading, so shutdown is waiting for it."
+        );
+
+        await Until(
+            () => stopping.IsCompleted,
+            "Shutdown never finished, though the viewer it was serving had been let go."
+        );
+
+        await stopping;
+
+        Assert.True(
+            lifecycle.StreamsDetaching.IsCancellationRequested,
+            "Shutdown finished without telling the streams they are detaching."
+        );
+
+        Assert.True(
+            session.Concluded,
+            "Shutdown finished with the watched session still holding its tuner."
+        );
+
+        await TheStreamEnds(body, Soon());
+        await driver.DisposeAsync();
     }
 
     [Fact]
@@ -1055,6 +1075,34 @@ public sealed class DriverApiTests
     }
 
     private const int TsPacketLength = 188;
+
+    private static async Task TheStreamEnds(Stream body, CancellationToken cancellationToken)
+    {
+        var buffer = new byte[TsPacketLength];
+
+        try
+        {
+            while (await body.ReadAsync(buffer, cancellationToken) > 0)
+            { }
+        }
+        catch (IOException)
+        { }
+    }
+
+    private static async Task Until(Func<bool> fact, string otherwise)
+    {
+        var deadline = DateTimeOffset.UtcNow + Patience;
+
+        while (!fact())
+        {
+            if (DateTimeOffset.UtcNow > deadline)
+            {
+                Assert.Fail(otherwise);
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(20));
+        }
+    }
 
     private static async Task<IReadOnlyList<SessionSnapshot>> WaitUntil(
         HttpClient client,
