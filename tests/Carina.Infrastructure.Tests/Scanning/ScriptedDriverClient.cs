@@ -188,6 +188,10 @@ public sealed class ScriptedDriverClient : IDriverClient
         CancellationToken cancellationToken)
         => throw new NotSupportedException();
 
+    public Task<DriverCall<DriverRestartDto>> RequestRestartAsync(
+        CancellationToken cancellationToken)
+        => throw new NotSupportedException();
+
     public Task<DriverCall<TunerSnapshot>> ToggleTunerAsync(
         string deviceId,
         bool disabled,

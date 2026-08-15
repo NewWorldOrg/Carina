@@ -23,12 +23,14 @@ services:
   driver:
     image: mcr.microsoft.com/dotnet/sdk:10.0
     working_dir: /code
+    command: ['bash', 'docker/driver.dev.sh']
+    restart: unless-stopped
     volumes:
       - .:/code
       - nuget:/root/.nuget/packages
       - driver-run:/run/carina
       - recordings:/srv/recordings
-    tty: true
+      - driver-build:/driver
     stop_grace_period: 7h
     environment:
       CARINA_DRIVER_CONFIG: /code/docker/driver.development.json
@@ -55,5 +57,6 @@ services:
 volumes:
   nuget:
   driver-run:
+  driver-build:
   recordings:
   pgdata:

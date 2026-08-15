@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace Carina.Driver.Ipc;
 
@@ -88,6 +89,13 @@ public static class DriverApi
                 streamsDetaching: lifecycle.StreamsDetaching
             );
 
+        var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
+        var clock = app.Services.GetRequiredService<TimeProvider>();
+        var stopRequest = app.Services.GetRequiredService<DriverStopRequest>();
+
+        RequestDelegate restart = context =>
+            Restart(context, manager, hello, lifetime, clock, stopRequest);
+
         RequestDelegate events = context => DriverEventStream.Invoke(context, hub);
 
         RequestDelegate diagnostics = context =>
@@ -111,6 +119,7 @@ public static class DriverApi
         app.MapDelete($"{DriverEndpoints.Sessions}/{{id}}", stopSession);
         app.MapGet($"{DriverEndpoints.Sessions}/{{id}}/stream", stream);
         app.MapGet(DriverEndpoints.Events, events);
+        app.MapPost(DriverEndpoints.Restart, restart);
     }
 
     internal static Task Write<T>(
@@ -341,6 +350,56 @@ public static class DriverApi
             tuners.First(tuner => string.Equals(tuner.DeviceId, deviceId, StringComparison.Ordinal)),
             DriverJson.Context.TunerSnapshot
         );
+    }
+
+    private static async Task Restart(
+        HttpContext context,
+        TunerSessionManager manager,
+        DriverHello hello,
+        IHostApplicationLifetime lifetime,
+        TimeProvider clock,
+        DriverStopRequest stopRequest
+    )
+    {
+        if (!manager.TryEnterDrainingUnlessRecording(out var recordings))
+        {
+            await Problem(
+                context,
+                StatusCodes.Status409Conflict,
+                "recordingInProgress",
+                Holding(recordings)
+            );
+
+            return;
+        }
+
+        try
+        {
+            await Write(
+                context,
+                StatusCodes.Status202Accepted,
+                new DriverRestartDto
+                {
+                    InstanceId = hello.InstanceId,
+                    AcceptedAt = clock.GetUtcNow(),
+                    BudgetSeconds = (int)manager.HardStopBudget.TotalSeconds,
+                },
+                DriverJson.Context.DriverRestartDto
+            );
+        }
+        finally
+        {
+            stopRequest.Record();
+            lifetime.StopApplication();
+        }
+    }
+
+    private static string Holding(IReadOnlyList<TunerSession> recordings)
+    {
+        var names = string.Join(", ", recordings.Select(session => session.SessionId.Value));
+        var last = recordings.Max(session => session.EndsAt);
+
+        return $"{recordings.Count} recording(s) are running ({names}); the driver is not restarted until the last one ends at {last:O}.";
     }
 
     private static Task NoSuchTuner(HttpContext context, string deviceId) =>

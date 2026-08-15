@@ -73,7 +73,7 @@ API はコンテナの 8080 番で待ち受け、ホストの 8081 番に出ま�
 driver のヘルスチェックは driver 自身です。
 
 ```bash
-docker compose exec driver /opt/carina/driver/Carina.Driver --probe
+task probe:driver
 ```
 
 排水中、あるいは使えるチューナーが全て故障している場合は unhealthy を返します。
@@ -84,8 +84,35 @@ docker compose exec driver /opt/carina/driver/Carina.Driver --probe
 SIGKILL します。予算は driver 自身が出します。
 
 ```bash
-docker compose exec driver /opt/carina/driver/Carina.Driver --shutdown-budget
+docker compose exec driver dotnet /driver/bin/Carina.Driver/debug/Carina.Driver.dll --shutdown-budget
 ```
+
+driver は要求で入れ直せます（IPC の `POST /restart`、API 側は
+`POST /api/driver/restart`）。録画中は 409 で断り、受けたときは 202 を返して
+排水に入り、自分を落とします。起こし直すのはプロセスを監督する側の仕事です。
+
+要求されて止まったときの終了コードは 0、それ以外は 70 です。つまり `on-failure` は
+使えません（要求で止めたときに二度と起きてこない）。開発用 compose は
+`restart: unless-stopped` で、終了コードに関わらず起こし直します。`docker compose stop`
+は明示的な停止なので、この方針が邪魔をすることはありません。
+
+開発用 compose の `driver` サービスは driver 自身をメインプロセスとして走らせます
+（`docker/driver.dev.sh`）。コードを直したあと反映するには入れ直します。
+
+```bash
+task restart:driver   # docker compose restart driver
+task logs:driver      # driver が何を言ったか
+task probe:driver     # ヘルスチェック（ビルドし直さない）
+```
+
+録画を抱えているときの `task restart:driver` は、その録画が終わるまで返ってきません
+（SIGTERM を受けた driver は居座り上限まで録画を守り、`stop_grace_period` がそれを
+待つため）。`POST /api/driver/restart` なら 409 でそのことを先に教えてくれます。
+
+ビルドは `--artifacts-path /driver`（コンテナ内のボリューム）に出すので、app
+コンテナ側の `dotnet build` が走っている driver のアセンブリを上書きすることは
+ありません。コンパイルが通らない木では待ってから作り直すので、再起動ループには
+なりません。直せばそのまま拾います。
 
 ## 設定
 

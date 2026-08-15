@@ -12,6 +12,7 @@ public sealed class DriverEndpointsTests
         Assert.Equal("/events", DriverEndpoints.Events);
         Assert.Equal("/devices/detected", DriverEndpoints.DevicesDetected);
         Assert.Equal("/tuners/ledger", DriverEndpoints.TunerLedger);
+        Assert.Equal("/restart", DriverEndpoints.Restart);
     }
 
     [Fact]

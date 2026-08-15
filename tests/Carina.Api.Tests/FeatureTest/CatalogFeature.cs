@@ -44,6 +44,10 @@ internal sealed class TunerHoldingDriverClient : IDriverClient
         CancellationToken cancellationToken)
         => throw new NotSupportedException();
 
+    public Task<DriverCall<DriverRestartDto>> RequestRestartAsync(
+        CancellationToken cancellationToken)
+        => throw new NotSupportedException();
+
     public Task<DriverCall<TunerSnapshot>> ToggleTunerAsync(
         string deviceId,
         bool disabled,

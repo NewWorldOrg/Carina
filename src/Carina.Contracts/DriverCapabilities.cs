@@ -20,6 +20,8 @@ public static class DriverCapabilities
 
     public const string TunerLedger = "tunerLedger";
 
+    public const string GracefulRestart = "gracefulRestart";
+
     public const string SignalQualityMetricPrefix = "signalQuality.";
 
     public static string SignalQualityMetric(string metric) =>

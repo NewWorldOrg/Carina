@@ -16,6 +16,8 @@ public interface IDriverClient
         IReadOnlyList<TunerConfigEntry> tuners,
         CancellationToken cancellationToken);
 
+    Task<DriverCall<DriverRestartDto>> RequestRestartAsync(CancellationToken cancellationToken);
+
     Task<DriverCall<TunerSnapshot>> ToggleTunerAsync(
         string deviceId,
         bool disabled,

@@ -14,6 +14,7 @@ public static class DriverGreeting
         DriverCapabilities.LiveTunerToggle,
         DriverCapabilities.TypedTuning,
         DriverCapabilities.SignalQuality,
+        DriverCapabilities.GracefulRestart,
         .. SignalQualityMetrics.All.Select(DriverCapabilities.SignalQualityMetric),
     ];
 

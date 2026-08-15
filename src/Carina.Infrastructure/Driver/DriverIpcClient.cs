@@ -108,6 +108,35 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
         }
     }
 
+    public async Task<DriverCall<DriverRestartDto>> RequestRestartAsync(
+        CancellationToken cancellationToken)
+    {
+        if (await UndeclaredAsync(DriverCapabilities.GracefulRestart, cancellationToken)
+            is { } undeclared)
+        {
+            return DriverCall<DriverRestartDto>.Refused(undeclared);
+        }
+
+        try
+        {
+            using var patience = Patience(cancellationToken);
+            using var response = await http.PostAsync(
+                DriverEndpoints.Restart,
+                content: null,
+                patience.Token);
+
+            return await ReadAsync(
+                response,
+                DriverJson.Context.DriverRestartDto,
+                bodyRequired: true,
+                patience.Token);
+        }
+        catch (Exception error) when (IsTransport(error, cancellationToken))
+        {
+            return DriverCall<DriverRestartDto>.Unreachable(Describe(error));
+        }
+    }
+
     public async Task<DriverCall<TunerSnapshot>> ToggleTunerAsync(
         string deviceId,
         bool disabled,
@@ -375,7 +404,7 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
         {
         }
 
-        return new DriverProblem($"http{(int)response.StatusCode}", []);
+        return DriverProblem.ForStatus((int)response.StatusCode);
     }
 
     private static CancellationTokenSource Patience(CancellationToken cancellationToken)

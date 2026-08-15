@@ -38,6 +38,8 @@ public sealed class FakeDriver : IAsyncDisposable
 
     public TunerLedgerDto Ledger { get; set; } = new();
 
+    public DriverRestartDto Restart { get; set; } = new();
+
     public IReadOnlyList<TunerConfigEntry>? LastReplacedLedger { get; private set; }
 
     public string? LastToggledDeviceId { get; private set; }
@@ -123,6 +125,8 @@ public sealed class FakeDriver : IAsyncDisposable
         app.MapPost(DriverEndpoints.Sessions, driver.StartSessionAsync);
         app.MapDelete($"{DriverEndpoints.Sessions}/{{id}}", driver.StopSessionAsync);
         app.MapGet($"{DriverEndpoints.Sessions}/{{id}}/stream", driver.AbortedStreamAsync);
+        app.MapPost(DriverEndpoints.Restart, context =>
+            driver.AcceptedAsync(context, driver.Restart, DriverJson.Context.DriverRestartDto));
         app.MapGet(DriverEndpoints.Events, driver.EventsAsync);
 
         await app.StartAsync();
@@ -209,6 +213,16 @@ public sealed class FakeDriver : IAsyncDisposable
         }
 
         await WriteAsync(context, StatusCodes.Status200OK, value, typeInfo);
+    }
+
+    private async Task AcceptedAsync<T>(HttpContext context, T value, JsonTypeInfo<T> typeInfo)
+    {
+        if (await HandledAsync(context))
+        {
+            return;
+        }
+
+        await WriteAsync(context, StatusCodes.Status202Accepted, value, typeInfo);
     }
 
     private async Task StartSessionAsync(HttpContext context)
@@ -379,6 +393,13 @@ public sealed class FakeDriver : IAsyncDisposable
 
         if (RefusalFor(path) is { } refusal)
         {
+            if (refusal.Problem is null)
+            {
+                context.Response.StatusCode = refusal.Status;
+
+                return true;
+            }
+
             await WriteAsync(
                 context,
                 refusal.Status,
@@ -425,5 +446,5 @@ public sealed class FakeDriver : IAsyncDisposable
             cancellationToken: context.RequestAborted);
     }
 
-    public sealed record Refusal(int Status, DriverProblem Problem);
+    public sealed record Refusal(int Status, DriverProblem? Problem);
 }
