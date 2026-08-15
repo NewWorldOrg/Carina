@@ -1,6 +1,6 @@
 using Carina.Api.Controllers.DriverStatus;
 using Carina.Api.Services;
-using Carina.Domain;
+using Carina.Domain.Base;
 using Carina.Domain.DriverStatus;
 using Carina.Infrastructure.Persistence;
 

@@ -1,3 +1,5 @@
+using Carina.Domain.Base;
+
 namespace Carina.Domain.DriverStatus;
 
 public sealed class DriverSocketPath : CommonValueObject<string>

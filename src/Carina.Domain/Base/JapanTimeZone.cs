@@ -1,4 +1,4 @@
-namespace Carina.Domain;
+namespace Carina.Domain.Base;
 
 public static class JapanTimeZone
 {

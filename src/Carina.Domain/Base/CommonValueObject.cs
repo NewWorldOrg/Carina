@@ -1,4 +1,4 @@
-namespace Carina.Domain;
+namespace Carina.Domain.Base;
 
 public abstract class CommonValueObject<TValue> : IEquatable<CommonValueObject<TValue>>
     where TValue : notnull
