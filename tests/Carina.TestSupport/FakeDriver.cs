@@ -393,6 +393,13 @@ public sealed class FakeDriver : IAsyncDisposable
 
         if (RefusalFor(path) is { } refusal)
         {
+            if (refusal.Problem is null)
+            {
+                context.Response.StatusCode = refusal.Status;
+
+                return true;
+            }
+
             await WriteAsync(
                 context,
                 refusal.Status,
@@ -439,5 +446,5 @@ public sealed class FakeDriver : IAsyncDisposable
             cancellationToken: context.RequestAborted);
     }
 
-    public sealed record Refusal(int Status, DriverProblem Problem);
+    public sealed record Refusal(int Status, DriverProblem? Problem);
 }

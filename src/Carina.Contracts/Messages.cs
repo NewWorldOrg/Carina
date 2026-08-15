@@ -285,6 +285,10 @@ public sealed record DriverProblem(string Title, IReadOnlyList<string> Problems)
     public string Title { get; init; } = Title ?? string.Empty;
 
     public IReadOnlyList<string> Problems { get; init; } = Problems ?? [];
+
+    public static string TitleForStatus(int status) => $"http{status}";
+
+    public static DriverProblem ForStatus(int status) => new(TitleForStatus(status), []);
 }
 
 public sealed record TunerSnapshot(

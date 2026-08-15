@@ -404,7 +404,7 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
         {
         }
 
-        return new DriverProblem($"http{(int)response.StatusCode}", []);
+        return DriverProblem.ForStatus((int)response.StatusCode);
     }
 
     private static CancellationTokenSource Patience(CancellationToken cancellationToken)

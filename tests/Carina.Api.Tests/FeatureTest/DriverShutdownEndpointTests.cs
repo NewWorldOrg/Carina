@@ -9,9 +9,9 @@ using Microsoft.AspNetCore.Http;
 namespace Carina.Api.Tests.FeatureTest;
 
 [Collection(FeatureTestCollection.Name)]
-public sealed class DriverRestartEndpointTests
+public sealed class DriverShutdownEndpointTests
 {
-    private static readonly Uri Restart = new("/api/driver/restart", UriKind.Relative);
+    private static readonly Uri Shutdown = new("/api/driver/shutdown", UriKind.Relative);
 
     private static readonly DateTimeOffset Accepted =
         new(2026, 8, 15, 22, 30, 0, TimeSpan.FromHours(9));
@@ -26,7 +26,7 @@ public sealed class DriverRestartEndpointTests
         {
             InstanceId = "instance-a",
             AcceptedAt = Accepted,
-            BudgetSeconds = 21_630,
+            BudgetSeconds = 30,
         };
 
     private static void Recording(FakeDriver driver)
@@ -40,6 +40,15 @@ public sealed class DriverRestartEndpointTests
                 ["1 recording is running; the last one ends at 2026-08-15T23:00:00.0000000+09:00."]));
     }
 
+    private static void MissingTheEndpoint(FakeDriver driver)
+    {
+        Willing(driver);
+
+        driver.RefusalsByPath[DriverEndpoints.Shutdown] = new FakeDriver.Refusal(
+            StatusCodes.Status404NotFound,
+            null);
+    }
+
     private static async Task<(HttpStatusCode Status, JsonElement Body)> ReadAsync(
         HttpResponseMessage response)
     {
@@ -49,11 +58,11 @@ public sealed class DriverRestartEndpointTests
     }
 
     [Fact]
-    public async Task AskingForARestartReachesTheDriverAndCarriesBackWhatItAnswered()
+    public async Task AskingForAShutdownReachesTheDriverAndCarriesBackWhatItAnswered()
     {
         await using var feature = await DriverFeature.StartAsync(Capable(), Willing);
 
-        using var response = await feature.Client.PostAsync(Restart, null);
+        using var response = await feature.Client.PostAsync(Shutdown, null);
         var (status, body) = await ReadAsync(response);
 
         Assert.Equal(HttpStatusCode.Accepted, status);
@@ -63,15 +72,15 @@ public sealed class DriverRestartEndpointTests
 
         Assert.Equal("instance-a", data.GetProperty("instanceId").GetString());
         Assert.Equal(Accepted, data.GetProperty("acceptedAt").GetDateTimeOffset());
-        Assert.Equal(21_630, data.GetProperty("budgetSeconds").GetInt32());
+        Assert.Equal(30, data.GetProperty("budgetSeconds").GetInt32());
     }
 
     [Fact]
-    public async Task ARestartIsRefusedWhileTheDriverIsRecordingAndTheScreenIsToldWhy()
+    public async Task AShutdownIsRefusedWhileTheDriverIsRecordingAndTheScreenIsToldWhy()
     {
         await using var feature = await DriverFeature.StartAsync(Capable(), Recording);
 
-        using var response = await feature.Client.PostAsync(Restart, null);
+        using var response = await feature.Client.PostAsync(Shutdown, null);
         var (status, body) = await ReadAsync(response);
 
         Assert.Equal(HttpStatusCode.Conflict, status);
@@ -91,7 +100,7 @@ public sealed class DriverRestartEndpointTests
     {
         await using var feature = await DriverFeature.StartAsync();
 
-        using var response = await feature.Client.PostAsync(Restart, null);
+        using var response = await feature.Client.PostAsync(Shutdown, null);
         var (status, body) = await ReadAsync(response);
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, status);
@@ -106,7 +115,7 @@ public sealed class DriverRestartEndpointTests
             Capable([DriverCapabilities.Recording]),
             Willing);
 
-        using var response = await feature.Client.PostAsync(Restart, null);
+        using var response = await feature.Client.PostAsync(Shutdown, null);
         var (status, body) = await ReadAsync(response);
 
         Assert.Equal(HttpStatusCode.NotImplemented, status);
@@ -118,13 +127,29 @@ public sealed class DriverRestartEndpointTests
     }
 
     [Fact]
-    public async Task TheRestartSurfaceIsBehindTheSameDenialAsTheRestOnceASchemeIsRegistered()
+    public async Task ADriverThatPromisesTheEndpointAndThenHasNoneIsBlamedRatherThanTheCaller()
+    {
+        await using var feature = await DriverFeature.StartAsync(Capable(), MissingTheEndpoint);
+
+        using var response = await feature.Client.PostAsync(Shutdown, null);
+        var (status, body) = await ReadAsync(response);
+
+        Assert.Equal(HttpStatusCode.BadGateway, status);
+        Assert.False(body.GetProperty("status").GetBoolean());
+        Assert.Contains(
+            "not the same build",
+            body.GetProperty("message").GetString()!,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheShutdownSurfaceIsBehindTheSameDenialAsTheRestOnceASchemeIsRegistered()
     {
         await using var feature = await DriverFeature.StartAsync(Capable(), Willing);
         using var app = new TestingWebApplicationFactory();
         using var client = app.WithTestScheme().CreateClient();
 
-        using var response = await client.PostAsync(Restart, null);
+        using var response = await client.PostAsync(Shutdown, null);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }

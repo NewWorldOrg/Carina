@@ -109,7 +109,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "patchTuner",
                 "putSelectedChannel",
                 "putTuners",
-                "restartDriver",
+                "shutdownDriver",
                 "startScan",
             ],
             named.Order(StringComparer.Ordinal).ToArray());
