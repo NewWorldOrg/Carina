@@ -132,7 +132,8 @@ verified nothing.
   No tuner device is mapped; development runs against the synthetic tuner backend.
 - The two processes share `/run/carina`, where the driver socket lives.
 - `driver` has a stop grace period longer than the driver's recording linger cap;
-  shortening it would kill a recording that was about to finish.
+  shortening it would kill a recording that was about to finish. `docker compose stop`
+  is an explicit stop, so the restart policy does not fight it.
 - The driver's health probe is the driver itself — `Carina.Driver --probe` reads the
   configured socket, asks `/health` and `/tuners`, and answers on what it finds:
   draining, or every usable tuner faulted, is not healthy. The runtime image carries
@@ -142,13 +143,26 @@ verified nothing.
   driver prints the same figure at startup. Whatever runs the image has to allow at
   least that long before killing the driver, or a recording that was about to finish
   is lost.
-- The driver can be asked to stop over IPC (`POST /shutdown`, reached from the app as
-  `POST /api/driver/shutdown`); it refuses while a recording is running. A stop it was
-  asked for — by that call or by a signal — leaves exit code 0, and anything else leaves
-  70, so a supervisor's `on-failure` policy does not fire on an operator's stop. Starting
-  the driver again belongs to whatever supervises the process, not to the app: the
-  development `driver` service is an idle shell and the driver is run by hand there, so
-  nothing brings it back on its own.
+- The driver can be asked to restart over IPC (`POST /restart`, reached from the app as
+  `POST /api/driver/restart`); it refuses with 409 while a recording is running. The
+  driver only ever stops itself — coming back is the supervisor's half of the deal, and
+  a stop it was asked for, by that call or by a signal, leaves exit code 0 while anything
+  else leaves 70.
+- Because an asked-for stop exits 0, `on-failure` is the one restart policy that must not
+  be used for the driver: it would leave the process down exactly when it was asked to
+  come back. `compose.yml` uses `unless-stopped`, which restarts on both exit codes and
+  still leaves a driver the operator stopped by hand stopped across a daemon restart.
+- In development the `driver` service runs the driver as its own main process
+  (`docker/driver.dev.sh`), so it receives SIGTERM directly and `stop_grace_period` covers
+  the recording linger. That script builds into `--artifacts-path /driver`, a container-local
+  volume, so building from the `app` container never writes over the assembly the running
+  driver has open. A tree that does not compile costs one build attempt per cooldown rather
+  than a restart loop, and the container picks up the fix by itself.
+- Code changes reach the driver with `task restart:driver` (`docker compose restart driver`);
+  `task logs:driver` reads what it printed and `task probe:driver` runs the health probe
+  against the built assembly without rebuilding it. With a recording held, that restart
+  does not return until the recording ends — the same linger the grace period exists for.
+  `POST /api/driver/restart` says so up front with a 409 instead of blocking.
 - `migrate` takes a PostgreSQL advisory lock, so a second one waits instead of
   racing. Do not scale it: the lock serialises, but two migrations still make the
   slower deploy wait on a lock it cannot see.

@@ -21,8 +21,12 @@ tasks:
     cmd: docker compose exec app dotnet format --verify-no-changes
   run:app:
     cmd: docker compose exec app dotnet run --project src/Carina.Api
-  run:driver:
-    cmd: docker compose exec driver dotnet run --project src/Carina.Driver
+  restart:driver:
+    cmd: docker compose restart driver
+  logs:driver:
+    cmd: docker compose logs -f driver
+  probe:driver:
+    cmd: docker compose exec driver dotnet /driver/bin/Carina.Driver/debug/Carina.Driver.dll --probe
   migrate:
     cmd: docker compose exec app dotnet run --project src/Carina.Db -- --migrate
   psql:
