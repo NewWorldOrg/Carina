@@ -127,6 +127,7 @@ public static class SessionViews
                 Purpose = session.Purpose,
                 StartedAt = session.StartedAt,
                 Tune = session.Tune,
+                EndsAt = session.EndsAt,
             }
             : null;
 

@@ -310,12 +310,12 @@ public sealed class WireStabilityTests
     }
 
     [Fact]
-    public void ACurrentSessionKeepsExactlyTheFieldsItWasGiven()
+    public void ACurrentSessionKeepsItsFieldsAndTakesTheNewOnesAtTheEnd()
     {
-        Assert.Equal(
-            ["sessionId", "purpose", "startedAt", "tune"],
-            FieldsOf(DriverJson.Serialize(new CurrentSessionDto()))
-        );
+        var fields = FieldsOf(DriverJson.Serialize(new CurrentSessionDto()));
+
+        Assert.Equal(["sessionId", "purpose", "startedAt", "tune"], fields.Take(4));
+        Assert.Equal(["endsAt"], fields.Skip(4));
     }
 
     [Fact]
