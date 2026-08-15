@@ -188,7 +188,7 @@ public sealed class ScriptedDriverClient : IDriverClient
         CancellationToken cancellationToken)
         => throw new NotSupportedException();
 
-    public Task<DriverCall<DriverShutdownDto>> RequestShutdownAsync(
+    public Task<DriverCall<DriverRestartDto>> RequestRestartAsync(
         CancellationToken cancellationToken)
         => throw new NotSupportedException();
 

@@ -93,8 +93,8 @@ public static class DriverApi
         var clock = app.Services.GetRequiredService<TimeProvider>();
         var stopRequest = app.Services.GetRequiredService<DriverStopRequest>();
 
-        RequestDelegate shutdown = context =>
-            Shutdown(context, manager, hello, lifetime, clock, stopRequest);
+        RequestDelegate restart = context =>
+            Restart(context, manager, hello, lifetime, clock, stopRequest);
 
         RequestDelegate events = context => DriverEventStream.Invoke(context, hub);
 
@@ -119,7 +119,7 @@ public static class DriverApi
         app.MapDelete($"{DriverEndpoints.Sessions}/{{id}}", stopSession);
         app.MapGet($"{DriverEndpoints.Sessions}/{{id}}/stream", stream);
         app.MapGet(DriverEndpoints.Events, events);
-        app.MapPost(DriverEndpoints.Shutdown, shutdown);
+        app.MapPost(DriverEndpoints.Restart, restart);
     }
 
     internal static Task Write<T>(
@@ -352,7 +352,7 @@ public static class DriverApi
         );
     }
 
-    private static async Task Shutdown(
+    private static async Task Restart(
         HttpContext context,
         TunerSessionManager manager,
         DriverHello hello,
@@ -378,13 +378,13 @@ public static class DriverApi
             await Write(
                 context,
                 StatusCodes.Status202Accepted,
-                new DriverShutdownDto
+                new DriverRestartDto
                 {
                     InstanceId = hello.InstanceId,
                     AcceptedAt = clock.GetUtcNow(),
                     BudgetSeconds = (int)manager.HardStopBudget.TotalSeconds,
                 },
-                DriverJson.Context.DriverShutdownDto
+                DriverJson.Context.DriverRestartDto
             );
         }
         finally
@@ -399,7 +399,7 @@ public static class DriverApi
         var names = string.Join(", ", recordings.Select(session => session.SessionId.Value));
         var last = recordings.Max(session => session.EndsAt);
 
-        return $"{recordings.Count} recording(s) are running ({names}); the driver stays up until the last one ends at {last:O}.";
+        return $"{recordings.Count} recording(s) are running ({names}); the driver is not restarted until the last one ends at {last:O}.";
     }
 
     private static Task NoSuchTuner(HttpContext context, string deviceId) =>

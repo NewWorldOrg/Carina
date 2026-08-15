@@ -4,7 +4,7 @@ using Carina.Domain.Driver;
 
 namespace Carina.Api.Services;
 
-public sealed class DriverShutdownService(IDriverClient driver)
+public sealed class DriverRestartService(IDriverClient driver)
 {
     public const string CapabilityMissingTitle = "capabilityMissing";
 
@@ -13,44 +13,44 @@ public sealed class DriverShutdownService(IDriverClient driver)
     public static readonly string EndpointMissingTitle =
         DriverProblem.TitleForStatus(StatusCodes.Status404NotFound);
 
-    public async Task<ServiceResult<DriverShutdownView, DriverShutdownFailure>> RequestAsync(
+    public async Task<ServiceResult<DriverRestartView, DriverRestartFailure>> RequestAsync(
         CancellationToken cancellationToken)
     {
-        var call = await driver.RequestShutdownAsync(cancellationToken);
+        var call = await driver.RequestRestartAsync(cancellationToken);
 
         if (!call.TryGetValue(out var accepted))
         {
-            return ServiceResult<DriverShutdownView, DriverShutdownFailure>.Failure(
+            return ServiceResult<DriverRestartView, DriverRestartFailure>.Failure(
                 Describe(call),
                 FailureOf(call));
         }
 
-        return ServiceResult<DriverShutdownView, DriverShutdownFailure>.Success(
-            new DriverShutdownView(
+        return ServiceResult<DriverRestartView, DriverRestartFailure>.Success(
+            new DriverRestartView(
                 accepted.InstanceId,
                 accepted.AcceptedAt,
                 accepted.BudgetSeconds));
     }
 
-    private static DriverShutdownFailure FailureOf<T>(DriverCall<T> call)
+    private static DriverRestartFailure FailureOf<T>(DriverCall<T> call)
     {
         if (call.Outcome is DriverCallOutcome.Unreachable)
         {
-            return DriverShutdownFailure.DriverUnreachable;
+            return DriverRestartFailure.DriverUnreachable;
         }
 
         var title = call.Problem?.Title;
 
         if (string.Equals(title, EndpointMissingTitle, StringComparison.Ordinal))
         {
-            return DriverShutdownFailure.DriverInconsistent;
+            return DriverRestartFailure.DriverInconsistent;
         }
 
         return title switch
         {
-            CapabilityMissingTitle => DriverShutdownFailure.CapabilityMissing,
-            RecordingInProgressTitle => DriverShutdownFailure.RecordingInProgress,
-            _ => DriverShutdownFailure.DriverRefused,
+            CapabilityMissingTitle => DriverRestartFailure.CapabilityMissing,
+            RecordingInProgressTitle => DriverRestartFailure.RecordingInProgress,
+            _ => DriverRestartFailure.DriverRefused,
         };
     }
 
@@ -68,7 +68,7 @@ public sealed class DriverShutdownService(IDriverClient driver)
 
         if (string.Equals(problem.Title, EndpointMissingTitle, StringComparison.Ordinal))
         {
-            return $"The driver says it can be stopped on request but does not answer {DriverEndpoints.Shutdown}; the two halves of this pair are not the same build.";
+            return $"The driver says it can be restarted on request but does not answer {DriverEndpoints.Restart}; the two halves of this pair are not the same build.";
         }
 
         return problem.Problems.Count == 0

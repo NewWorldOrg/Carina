@@ -2,15 +2,15 @@ using Carina.Api.Services;
 
 namespace Carina.Api.Responder.DriverStatus;
 
-public sealed record DriverShutdownResponder(
+public sealed record DriverRestartResponder(
     string? InstanceId,
     DateTimeOffset AcceptedAt,
     int BudgetSeconds)
 {
-    public static DriverShutdownResponder Of(DriverShutdownView view)
+    public static DriverRestartResponder Of(DriverRestartView view)
     {
         ArgumentNullException.ThrowIfNull(view);
 
-        return new DriverShutdownResponder(view.InstanceId, view.AcceptedAt, view.BudgetSeconds);
+        return new DriverRestartResponder(view.InstanceId, view.AcceptedAt, view.BudgetSeconds);
     }
 }

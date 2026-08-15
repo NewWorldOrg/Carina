@@ -38,7 +38,7 @@ public sealed class FakeDriver : IAsyncDisposable
 
     public TunerLedgerDto Ledger { get; set; } = new();
 
-    public DriverShutdownDto Shutdown { get; set; } = new();
+    public DriverRestartDto Restart { get; set; } = new();
 
     public IReadOnlyList<TunerConfigEntry>? LastReplacedLedger { get; private set; }
 
@@ -125,8 +125,8 @@ public sealed class FakeDriver : IAsyncDisposable
         app.MapPost(DriverEndpoints.Sessions, driver.StartSessionAsync);
         app.MapDelete($"{DriverEndpoints.Sessions}/{{id}}", driver.StopSessionAsync);
         app.MapGet($"{DriverEndpoints.Sessions}/{{id}}/stream", driver.AbortedStreamAsync);
-        app.MapPost(DriverEndpoints.Shutdown, context =>
-            driver.AcceptedAsync(context, driver.Shutdown, DriverJson.Context.DriverShutdownDto));
+        app.MapPost(DriverEndpoints.Restart, context =>
+            driver.AcceptedAsync(context, driver.Restart, DriverJson.Context.DriverRestartDto));
         app.MapGet(DriverEndpoints.Events, driver.EventsAsync);
 
         await app.StartAsync();

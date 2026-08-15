@@ -1,6 +1,6 @@
 namespace Carina.Contracts;
 
-public sealed record DriverShutdownDto
+public sealed record DriverRestartDto
 {
     public string? InstanceId { get; init; }
 

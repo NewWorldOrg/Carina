@@ -1,6 +1,6 @@
 namespace Carina.Api.Services;
 
-public enum DriverShutdownFailure
+public enum DriverRestartFailure
 {
     DriverUnreachable = 1,
 
@@ -13,7 +13,7 @@ public enum DriverShutdownFailure
     DriverInconsistent = 5,
 }
 
-public sealed record DriverShutdownView(
+public sealed record DriverRestartView(
     string? InstanceId,
     DateTimeOffset AcceptedAt,
     int BudgetSeconds);

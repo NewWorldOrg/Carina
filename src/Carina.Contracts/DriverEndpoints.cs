@@ -16,7 +16,7 @@ public static class DriverEndpoints
 
     public const string TunerLedger = "/tuners/ledger";
 
-    public const string Shutdown = "/shutdown";
+    public const string Restart = "/restart";
 
     public const string SubscriberQuery = "as";
 
@@ -54,6 +54,6 @@ public static class DriverEndpoints
         Events,
         DevicesDetected,
         TunerLedger,
-        Shutdown,
+        Restart,
     ];
 }

@@ -6,7 +6,7 @@ using Carina.Driver.Sessions;
 
 namespace Carina.Driver.Tests;
 
-public sealed class DriverShutdownApiTests
+public sealed class DriverRestartApiTests
 {
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(20);
 
@@ -16,12 +16,12 @@ public sealed class DriverShutdownApiTests
         await DriverUnderTest.Read(response, DriverJson.Context.DriverProblem);
 
     [Fact]
-    public async Task AskingAnIdleDriverToStopIsAcceptedAndPutsItIntoDraining()
+    public async Task AskingAnIdleDriverToRestartIsAcceptedAndPutsItIntoDraining()
     {
         await using var driver = await DriverUnderTest.Start();
         using var client = driver.Client();
 
-        using var response = await client.PostAsync(DriverEndpoints.Shutdown, null, Soon());
+        using var response = await client.PostAsync(DriverEndpoints.Restart, null, Soon());
 
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         Assert.True(driver.Service<TunerSessionManager>().IsDraining);
@@ -36,10 +36,10 @@ public sealed class DriverShutdownApiTests
         using var greeted = await client.GetAsync(DriverEndpoints.Health, Soon());
         var hello = await DriverUnderTest.Read(greeted, DriverJson.Context.DriverHello);
 
-        using var response = await client.PostAsync(DriverEndpoints.Shutdown, null, Soon());
+        using var response = await client.PostAsync(DriverEndpoints.Restart, null, Soon());
         var accepted = await DriverUnderTest.Read(
             response,
-            DriverJson.Context.DriverShutdownDto
+            DriverJson.Context.DriverRestartDto
         );
 
         var manager = driver.Service<TunerSessionManager>();
@@ -52,7 +52,7 @@ public sealed class DriverShutdownApiTests
     }
 
     [Fact]
-    public async Task AStopTakenOnRequestLeavesWithTheCodeForAnOrderlyStopRatherThanAFault()
+    public async Task ARestartTakenOnRequestLeavesWithTheCodeForAnOrderlyStopRatherThanAFault()
     {
         await using var driver = await DriverUnderTest.Start();
         using var client = driver.Client();
@@ -65,7 +65,7 @@ public sealed class DriverShutdownApiTests
             DriverStartup.ExitCodeFor(stopRequest.WasAsked)
         );
 
-        using var response = await client.PostAsync(DriverEndpoints.Shutdown, null, Soon());
+        using var response = await client.PostAsync(DriverEndpoints.Restart, null, Soon());
 
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         Assert.True(stopRequest.WasAsked);
@@ -90,7 +90,7 @@ public sealed class DriverShutdownApiTests
 
         driver.Service<TunerSessionManager>().EnterDraining();
 
-        using var response = await client.PostAsync(DriverEndpoints.Shutdown, null, Soon());
+        using var response = await client.PostAsync(DriverEndpoints.Restart, null, Soon());
         var refusal = await Refusal(response);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
@@ -103,7 +103,7 @@ public sealed class DriverShutdownApiTests
     }
 
     [Fact]
-    public async Task ADriverHoldingARecordingRefusesToStopAndSaysWhichRecordingHoldsIt()
+    public async Task ADriverHoldingARecordingRefusesToRestartAndSaysWhichRecordingHoldsIt()
     {
         await using var driver = await DriverUnderTest.Start();
         using var client = driver.Client();
@@ -118,7 +118,7 @@ public sealed class DriverShutdownApiTests
 
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
 
-        using var response = await client.PostAsync(DriverEndpoints.Shutdown, null, Soon());
+        using var response = await client.PostAsync(DriverEndpoints.Restart, null, Soon());
         var refusal = await Refusal(response);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
@@ -129,7 +129,7 @@ public sealed class DriverShutdownApiTests
     }
 
     [Fact]
-    public async Task ARefusedShutdownLeavesTheRecordingItProtectedRunning()
+    public async Task ARefusedRestartLeavesTheRecordingItProtectedRunning()
     {
         await using var driver = await DriverUnderTest.Start();
         using var client = driver.Client();
@@ -144,7 +144,7 @@ public sealed class DriverShutdownApiTests
 
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
 
-        using var refused = await client.PostAsync(DriverEndpoints.Shutdown, null, Soon());
+        using var refused = await client.PostAsync(DriverEndpoints.Restart, null, Soon());
 
         Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
 
@@ -168,18 +168,18 @@ public sealed class DriverShutdownApiTests
 
         driver.Service<TunerSessionManager>().EnterDraining();
 
-        using var response = await client.PostAsync(DriverEndpoints.Shutdown, null, Soon());
+        using var response = await client.PostAsync(DriverEndpoints.Restart, null, Soon());
 
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
     }
 
     [Fact]
-    public async Task AnAcceptedShutdownStopsTakingNewSessionsBeforeItAnswers()
+    public async Task AnAcceptedRestartStopsTakingNewSessionsBeforeItAnswers()
     {
         await using var driver = await DriverUnderTest.Start();
         using var client = driver.Client();
 
-        using var accepted = await client.PostAsync(DriverEndpoints.Shutdown, null, Soon());
+        using var accepted = await client.PostAsync(DriverEndpoints.Restart, null, Soon());
 
         Assert.Equal(HttpStatusCode.Accepted, accepted.StatusCode);
 
@@ -192,10 +192,10 @@ public sealed class DriverShutdownApiTests
     }
 
     [Fact]
-    public void ADriverThatStopsOnRequestSaysSoInItsGreeting()
+    public void ADriverThatRestartsOnRequestSaysSoInItsGreeting()
     {
         Assert.Contains(
-            DriverCapabilities.GracefulShutdown,
+            DriverCapabilities.GracefulRestart,
             Carina.Driver.Ipc.DriverGreeting.Capabilities
         );
     }

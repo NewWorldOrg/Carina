@@ -108,32 +108,32 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
         }
     }
 
-    public async Task<DriverCall<DriverShutdownDto>> RequestShutdownAsync(
+    public async Task<DriverCall<DriverRestartDto>> RequestRestartAsync(
         CancellationToken cancellationToken)
     {
-        if (await UndeclaredAsync(DriverCapabilities.GracefulShutdown, cancellationToken)
+        if (await UndeclaredAsync(DriverCapabilities.GracefulRestart, cancellationToken)
             is { } undeclared)
         {
-            return DriverCall<DriverShutdownDto>.Refused(undeclared);
+            return DriverCall<DriverRestartDto>.Refused(undeclared);
         }
 
         try
         {
             using var patience = Patience(cancellationToken);
             using var response = await http.PostAsync(
-                DriverEndpoints.Shutdown,
+                DriverEndpoints.Restart,
                 content: null,
                 patience.Token);
 
             return await ReadAsync(
                 response,
-                DriverJson.Context.DriverShutdownDto,
+                DriverJson.Context.DriverRestartDto,
                 bodyRequired: true,
                 patience.Token);
         }
         catch (Exception error) when (IsTransport(error, cancellationToken))
         {
-            return DriverCall<DriverShutdownDto>.Unreachable(Describe(error));
+            return DriverCall<DriverRestartDto>.Unreachable(Describe(error));
         }
     }
 

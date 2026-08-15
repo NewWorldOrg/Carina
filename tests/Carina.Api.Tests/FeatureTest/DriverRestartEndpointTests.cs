@@ -9,9 +9,9 @@ using Microsoft.AspNetCore.Http;
 namespace Carina.Api.Tests.FeatureTest;
 
 [Collection(FeatureTestCollection.Name)]
-public sealed class DriverShutdownEndpointTests
+public sealed class DriverRestartEndpointTests
 {
-    private static readonly Uri Shutdown = new("/api/driver/shutdown", UriKind.Relative);
+    private static readonly Uri Restart = new("/api/driver/restart", UriKind.Relative);
 
     private static readonly DateTimeOffset Accepted =
         new(2026, 8, 15, 22, 30, 0, TimeSpan.FromHours(9));
@@ -19,10 +19,10 @@ public sealed class DriverShutdownEndpointTests
     private static DriverHello Capable(string[]? capabilities = null)
         => FakeDriver.HelloFor(
             "instance-a",
-            capabilities: capabilities ?? [DriverCapabilities.GracefulShutdown]);
+            capabilities: capabilities ?? [DriverCapabilities.GracefulRestart]);
 
     private static void Willing(FakeDriver driver)
-        => driver.Shutdown = new DriverShutdownDto
+        => driver.Restart = new DriverRestartDto
         {
             InstanceId = "instance-a",
             AcceptedAt = Accepted,
@@ -33,7 +33,7 @@ public sealed class DriverShutdownEndpointTests
     {
         Willing(driver);
 
-        driver.RefusalsByPath[DriverEndpoints.Shutdown] = new FakeDriver.Refusal(
+        driver.RefusalsByPath[DriverEndpoints.Restart] = new FakeDriver.Refusal(
             StatusCodes.Status409Conflict,
             new DriverProblem(
                 "recordingInProgress",
@@ -44,7 +44,7 @@ public sealed class DriverShutdownEndpointTests
     {
         Willing(driver);
 
-        driver.RefusalsByPath[DriverEndpoints.Shutdown] = new FakeDriver.Refusal(
+        driver.RefusalsByPath[DriverEndpoints.Restart] = new FakeDriver.Refusal(
             StatusCodes.Status404NotFound,
             null);
     }
@@ -58,15 +58,15 @@ public sealed class DriverShutdownEndpointTests
     }
 
     [Fact]
-    public async Task AskingForAShutdownReachesTheDriverAndCarriesBackWhatItAnswered()
+    public async Task AskingForARestartReachesTheDriverAndCarriesBackWhatItAnswered()
     {
         await using var feature = await DriverFeature.StartAsync(Capable(), Willing);
 
-        using var response = await feature.Client.PostAsync(Shutdown, null);
+        using var response = await feature.Client.PostAsync(Restart, null);
         var (status, body) = await ReadAsync(response);
 
         Assert.Equal(HttpStatusCode.Accepted, status);
-        Assert.Equal(1, feature.Driver.RequestsFor(DriverEndpoints.Shutdown));
+        Assert.Equal(1, feature.Driver.RequestsFor(DriverEndpoints.Restart));
 
         var data = body.GetProperty("data");
 
@@ -76,11 +76,11 @@ public sealed class DriverShutdownEndpointTests
     }
 
     [Fact]
-    public async Task AShutdownIsRefusedWhileTheDriverIsRecordingAndTheScreenIsToldWhy()
+    public async Task ARestartIsRefusedWhileTheDriverIsRecordingAndTheScreenIsToldWhy()
     {
         await using var feature = await DriverFeature.StartAsync(Capable(), Recording);
 
-        using var response = await feature.Client.PostAsync(Shutdown, null);
+        using var response = await feature.Client.PostAsync(Restart, null);
         var (status, body) = await ReadAsync(response);
 
         Assert.Equal(HttpStatusCode.Conflict, status);
@@ -100,7 +100,7 @@ public sealed class DriverShutdownEndpointTests
     {
         await using var feature = await DriverFeature.StartAsync();
 
-        using var response = await feature.Client.PostAsync(Shutdown, null);
+        using var response = await feature.Client.PostAsync(Restart, null);
         var (status, body) = await ReadAsync(response);
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, status);
@@ -109,19 +109,19 @@ public sealed class DriverShutdownEndpointTests
     }
 
     [Fact]
-    public async Task ADriverTooOldToStopOnRequestIsAnsweredAsUnimplementedRatherThanBroken()
+    public async Task ADriverTooOldToRestartOnRequestIsAnsweredAsUnimplementedRatherThanBroken()
     {
         await using var feature = await DriverFeature.StartAsync(
             Capable([DriverCapabilities.Recording]),
             Willing);
 
-        using var response = await feature.Client.PostAsync(Shutdown, null);
+        using var response = await feature.Client.PostAsync(Restart, null);
         var (status, body) = await ReadAsync(response);
 
         Assert.Equal(HttpStatusCode.NotImplemented, status);
-        Assert.Equal(0, feature.Driver.RequestsFor(DriverEndpoints.Shutdown));
+        Assert.Equal(0, feature.Driver.RequestsFor(DriverEndpoints.Restart));
         Assert.Contains(
-            DriverCapabilities.GracefulShutdown,
+            DriverCapabilities.GracefulRestart,
             body.GetProperty("message").GetString()!,
             StringComparison.Ordinal);
     }
@@ -131,7 +131,7 @@ public sealed class DriverShutdownEndpointTests
     {
         await using var feature = await DriverFeature.StartAsync(Capable(), MissingTheEndpoint);
 
-        using var response = await feature.Client.PostAsync(Shutdown, null);
+        using var response = await feature.Client.PostAsync(Restart, null);
         var (status, body) = await ReadAsync(response);
 
         Assert.Equal(HttpStatusCode.BadGateway, status);
@@ -143,13 +143,13 @@ public sealed class DriverShutdownEndpointTests
     }
 
     [Fact]
-    public async Task TheShutdownSurfaceIsBehindTheSameDenialAsTheRestOnceASchemeIsRegistered()
+    public async Task TheRestartSurfaceIsBehindTheSameDenialAsTheRestOnceASchemeIsRegistered()
     {
         await using var feature = await DriverFeature.StartAsync(Capable(), Willing);
         using var app = new TestingWebApplicationFactory();
         using var client = app.WithTestScheme().CreateClient();
 
-        using var response = await client.PostAsync(Shutdown, null);
+        using var response = await client.PostAsync(Restart, null);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }

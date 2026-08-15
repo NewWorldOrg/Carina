@@ -380,9 +380,9 @@ public sealed class WireStabilityTests
     }
 
     [Fact]
-    public void AskingTheDriverToStopTakesItsPlaceAfterEverythingThatCameBefore()
+    public void AskingTheDriverToRestartTakesItsPlaceAfterEverythingThatCameBefore()
     {
-        Assert.Equal("/shutdown", DriverEndpoints.All[^1]);
+        Assert.Equal("/restart", DriverEndpoints.All[^1]);
         Assert.Equal(EndpointsTheFrontendReaches.Length + 3, DriverEndpoints.All.Count);
     }
 

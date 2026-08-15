@@ -163,6 +163,7 @@ public sealed class WireSpellingTests
         Assert.Equal("typedTuning", DriverCapabilities.TypedTuning);
         Assert.Equal("deviceDetection", DriverCapabilities.DeviceDetection);
         Assert.Equal("tunerLedger", DriverCapabilities.TunerLedger);
+        Assert.Equal("gracefulRestart", DriverCapabilities.GracefulRestart);
     }
 
     [Fact]
