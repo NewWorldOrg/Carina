@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Threading.Channels;
 
 using Carina.Contracts;
 using Carina.Driver.Configuration;
@@ -1057,6 +1058,55 @@ public sealed class TunerSessionManagerTests : IDisposable
             Carina.Driver.Ipc.DriverGreeting.ForThisProcess()
                 .SupportsSignalQualityMetric("signalStrength")
         );
+    }
+
+    [Fact]
+    public async Task DrainingIsSignalledOnceHoweverOftenItIsEntered()
+    {
+        var hub = new DriverEventHub();
+        var manager = Manager(
+            Configuration,
+            new TunerDeviceFactory(Configuration, TimeProvider.System),
+            hub
+        );
+
+        Assert.True(hub.TryListen(out var listener));
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        manager.EnterDraining();
+
+        Assert.Equal([DriverEvents.Draining], await listener!.Take(deadline.Token));
+
+        manager.EnterDraining();
+        Assert.True(manager.TryEnterDrainingUnlessRecording(out _));
+        await manager.DrainAsync(CancellationToken.None);
+
+        hub.CloseAll();
+
+        await Assert.ThrowsAsync<ChannelClosedException>(() => listener.Take(deadline.Token));
+    }
+
+    [Fact]
+    public void ADrainingManagerStillNamesTheRecordingItIsWaitingFor()
+    {
+        var manager = Manager();
+        var held = Begin(manager, "still-going", "adapter0");
+
+        manager.EnterDraining();
+
+        Assert.False(manager.TryEnterDrainingUnlessRecording(out var recordings));
+        Assert.Equal([held.SessionId], recordings.Select(session => session.SessionId));
+
+        StopAndWait(held);
+    }
+
+    [Fact]
+    public void TheBudgetForAStopWithNothingToWaitForIsTheHardStopAlone()
+    {
+        var manager = Manager();
+
+        Assert.Equal(TunerSessionManager.DefaultHardStopLimit, manager.HardStopBudget);
+        Assert.True(manager.ShutdownBudget > manager.HardStopBudget);
     }
 
     private static StartSessionRequest TypedSatellite(string sessionId, string? deviceId = null)

@@ -37,21 +37,26 @@ if (args is ["--probe"])
 
 DriverStartup.Announce(configuration, Console.Out);
 
-var stopWasAsked = false;
+var stopRequest = new DriverStopRequest();
 using var sigterm = PosixSignalRegistration.Create(
     PosixSignal.SIGTERM,
-    _ => stopWasAsked = true
+    _ => stopRequest.Record()
 );
 using var sigint = PosixSignalRegistration.Create(
     PosixSignal.SIGINT,
-    _ => stopWasAsked = true
+    _ => stopRequest.Record()
 );
 using var sigquit = PosixSignalRegistration.Create(
     PosixSignal.SIGQUIT,
-    _ => stopWasAsked = true
+    _ => stopRequest.Record()
 );
 
-var built = DriverHost.Create(args, configuration, configurationPath: configurationPath);
+var built = DriverHost.Create(
+    args,
+    configuration,
+    configurationPath: configurationPath,
+    stopRequest: stopRequest
+);
 if (!built.TryGetHost(out var host))
 {
     return built.Refusal is DriverHostRefusal.Configuration
@@ -71,4 +76,4 @@ using (host)
     }
 }
 
-return DriverStartup.ExitCodeFor(stopWasAsked);
+return DriverStartup.ExitCodeFor(stopRequest.WasAsked);

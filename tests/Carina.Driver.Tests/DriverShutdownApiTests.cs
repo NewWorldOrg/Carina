@@ -1,6 +1,7 @@
 using System.Net;
 
 using Carina.Contracts;
+using Carina.Driver.Configuration;
 using Carina.Driver.Sessions;
 
 namespace Carina.Driver.Tests;
@@ -41,13 +42,64 @@ public sealed class DriverShutdownApiTests
             DriverJson.Context.DriverShutdownDto
         );
 
+        var manager = driver.Service<TunerSessionManager>();
+
         Assert.NotNull(accepted);
         Assert.Equal(hello!.InstanceId, accepted.InstanceId);
-        Assert.Equal(
-            (int)driver.Service<TunerSessionManager>().ShutdownBudget.TotalSeconds,
-            accepted.BudgetSeconds
-        );
+        Assert.Equal((int)manager.HardStopBudget.TotalSeconds, accepted.BudgetSeconds);
+        Assert.True(accepted.BudgetSeconds < (int)manager.ShutdownBudget.TotalSeconds);
         Assert.NotEqual(default, accepted.AcceptedAt);
+    }
+
+    [Fact]
+    public async Task AStopTakenOnRequestLeavesWithTheCodeForAnOrderlyStopRatherThanAFault()
+    {
+        await using var driver = await DriverUnderTest.Start();
+        using var client = driver.Client();
+
+        var stopRequest = driver.Service<DriverStopRequest>();
+
+        Assert.False(stopRequest.WasAsked);
+        Assert.Equal(
+            DriverStartup.StoppedEarlyExitCode,
+            DriverStartup.ExitCodeFor(stopRequest.WasAsked)
+        );
+
+        using var response = await client.PostAsync(DriverEndpoints.Shutdown, null, Soon());
+
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+        Assert.True(stopRequest.WasAsked);
+        Assert.Equal(0, DriverStartup.ExitCodeFor(stopRequest.WasAsked));
+    }
+
+    [Fact]
+    public async Task ADrainingDriverStillRefusesWhileARecordingItLingersForIsRunning()
+    {
+        await using var driver = await DriverUnderTest.Start();
+        using var client = driver.Client();
+
+        using var created = await client.PostAsync(
+            DriverEndpoints.Sessions,
+            DriverUnderTest.Body(
+                DriverUnderTest.Recording("lingered-for", DateTimeOffset.UtcNow.AddMinutes(10))
+            ),
+            Soon()
+        );
+
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+
+        driver.Service<TunerSessionManager>().EnterDraining();
+
+        using var response = await client.PostAsync(DriverEndpoints.Shutdown, null, Soon());
+        var refusal = await Refusal(response);
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal("recordingInProgress", refusal!.Title);
+        Assert.Contains(
+            "lingered-for",
+            string.Join(" ", refusal.Problems),
+            StringComparison.Ordinal
+        );
     }
 
     [Fact]
@@ -73,6 +125,7 @@ public sealed class DriverShutdownApiTests
         Assert.Equal("recordingInProgress", refusal!.Title);
         Assert.Contains("held", string.Join(" ", refusal.Problems), StringComparison.Ordinal);
         Assert.False(driver.Service<TunerSessionManager>().IsDraining);
+        Assert.False(driver.Service<DriverStopRequest>().WasAsked);
     }
 
     [Fact]

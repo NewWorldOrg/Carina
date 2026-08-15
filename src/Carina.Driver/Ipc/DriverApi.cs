@@ -91,9 +91,10 @@ public static class DriverApi
 
         var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
         var clock = app.Services.GetRequiredService<TimeProvider>();
+        var stopRequest = app.Services.GetRequiredService<DriverStopRequest>();
 
         RequestDelegate shutdown = context =>
-            Shutdown(context, manager, hello, lifetime, clock);
+            Shutdown(context, manager, hello, lifetime, clock, stopRequest);
 
         RequestDelegate events = context => DriverEventStream.Invoke(context, hub);
 
@@ -356,7 +357,8 @@ public static class DriverApi
         TunerSessionManager manager,
         DriverHello hello,
         IHostApplicationLifetime lifetime,
-        TimeProvider clock
+        TimeProvider clock,
+        DriverStopRequest stopRequest
     )
     {
         if (!manager.TryEnterDrainingUnlessRecording(out var recordings))
@@ -380,13 +382,14 @@ public static class DriverApi
                 {
                     InstanceId = hello.InstanceId,
                     AcceptedAt = clock.GetUtcNow(),
-                    BudgetSeconds = (int)manager.ShutdownBudget.TotalSeconds,
+                    BudgetSeconds = (int)manager.HardStopBudget.TotalSeconds,
                 },
                 DriverJson.Context.DriverShutdownDto
             );
         }
         finally
         {
+            stopRequest.Record();
             lifetime.StopApplication();
         }
     }

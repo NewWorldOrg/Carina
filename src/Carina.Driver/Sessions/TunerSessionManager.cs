@@ -63,30 +63,22 @@ public sealed class TunerSessionManager(
 
     public TimeSpan ShutdownBudget => drainCap + hardStop;
 
+    public TimeSpan HardStopBudget => hardStop;
+
     public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 
     public void EnterDraining()
     {
-        if (draining)
+        lock (drainGate)
         {
-            return;
+            EnterDrainingUnderGate();
         }
-
-        draining = true;
-        events?.Signal(DriverEvents.Draining);
     }
 
     public bool TryEnterDrainingUnlessRecording(out IReadOnlyList<TunerSession> recordings)
     {
         lock (drainGate)
         {
-            if (draining)
-            {
-                recordings = [];
-
-                return true;
-            }
-
             var held = sessions
                 .Values.Where(session => session.Purpose is SessionPurpose.Recording)
                 .ToArray();
@@ -98,11 +90,22 @@ public sealed class TunerSessionManager(
                 return false;
             }
 
-            EnterDraining();
+            EnterDrainingUnderGate();
             recordings = [];
 
             return true;
         }
+    }
+
+    private void EnterDrainingUnderGate()
+    {
+        if (draining)
+        {
+            return;
+        }
+
+        draining = true;
+        events?.Signal(DriverEvents.Draining);
     }
 
     public void DetachEverySubscriber()
@@ -135,7 +138,7 @@ public sealed class TunerSessionManager(
 
         lock (drainGate)
         {
-            EnterDraining();
+            EnterDrainingUnderGate();
             running = [.. sessions.Values];
         }
 

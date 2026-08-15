@@ -68,7 +68,8 @@ public static class DriverHost
         string[] args,
         DriverConfiguration configuration,
         Action<IServiceCollection>? reshapeServices = null,
-        string? configurationPath = null
+        string? configurationPath = null,
+        DriverStopRequest? stopRequest = null
     )
     {
         var builder = WebApplication.CreateSlimBuilder(args);
@@ -109,6 +110,7 @@ public static class DriverHost
         );
 
         builder.Services.AddSingleton(configuration);
+        builder.Services.AddSingleton(stopRequest ?? new DriverStopRequest());
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddSingleton(DriverGreeting.ForThisProcess());
         builder.Services.AddSingleton<ITunerDeviceFactory, TunerDeviceFactory>();
