@@ -58,7 +58,8 @@ public sealed class TunerSession : IDisposable
         ILogger? logger = null,
         string? outputRoot = null,
         DiagnosticsStore? diagnostics = null,
-        SignalQualityWatch? watch = null
+        SignalQualityWatch? watch = null,
+        TuneParams? tune = null
     )
     {
         if (endsAt <= startedAt)
@@ -72,6 +73,7 @@ public sealed class TunerSession : IDisposable
         SessionId = sessionId;
         Purpose = purpose;
         DeviceId = deviceId;
+        Tune = tune;
         OutputRoot = outputRoot;
         StartedAt = startedAt;
         endsAtTicks = endsAt.UtcTicks;
@@ -110,6 +112,8 @@ public sealed class TunerSession : IDisposable
     public string DeviceId { get; }
 
     public string? OutputRoot { get; }
+
+    public TuneParams? Tune { get; }
 
     public DateTimeOffset StartedAt { get; }
 

@@ -64,15 +64,18 @@ public sealed class SessionViewsTests : IDisposable
         TunerSessionManager manager,
         string sessionId,
         string? deviceId = null,
-        TunerKind kind = TunerKind.Terrestrial
+        TunerKind kind = TunerKind.Terrestrial,
+        SessionPurpose purpose = SessionPurpose.Live,
+        TuneParams? tune = null
     )
     {
         var start = manager.Begin(
             new StartSessionRequest
             {
                 SessionId = SessionId.Parse(sessionId),
-                Purpose = SessionPurpose.Live,
+                Purpose = purpose,
                 Tuning = new TuningRequest(kind, 55),
+                Tune = tune,
                 DeviceId = deviceId,
             }
         );
@@ -359,6 +362,157 @@ public sealed class SessionViewsTests : IDisposable
         factory.Last.Allow(1);
         factory.Last.AwaitParkedBefore(2);
     }
+
+    [Fact]
+    public void ATunerServingASessionSaysWhatItIsForAndWhatItIsTunedTo()
+    {
+        var manager = Manager();
+        var session = Begin(
+            manager,
+            "scanning-one",
+            "adapter0",
+            purpose: SessionPurpose.Scan,
+            tune: TuneParams.Terrestrial(55)
+        );
+
+        var busy = Tuner(manager, "adapter0");
+
+        Assert.NotNull(busy.CurrentSession);
+        Assert.Equal(session.SessionId, busy.CurrentSession.SessionId);
+        Assert.Equal(SessionPurpose.Scan, busy.CurrentSession.Purpose);
+        Assert.Equal(session.StartedAt, busy.CurrentSession.StartedAt);
+        Assert.Equal(TuneParams.Terrestrial(55), busy.CurrentSession.Tune);
+    }
+
+    [Fact]
+    public void TheSessionInTheSubtreeIsTheOneNamedBesideIt()
+    {
+        var manager = Manager();
+        Begin(manager, "matched", "adapter0", tune: TuneParams.Terrestrial(55));
+
+        var busy = Tuner(manager, "adapter0");
+
+        Assert.Equal(busy.SessionId, busy.CurrentSession?.SessionId);
+    }
+
+    [Fact]
+    public void ASessionStartedWithoutTypedParametersStillSaysWhoHoldsTheTunerAndWhatFor()
+    {
+        var manager = Manager();
+        var session = Begin(manager, "legacy", "adapter0");
+
+        var busy = Tuner(manager, "adapter0");
+
+        Assert.NotNull(busy.CurrentSession);
+        Assert.Equal(session.SessionId, busy.CurrentSession.SessionId);
+        Assert.Equal(SessionPurpose.Live, busy.CurrentSession.Purpose);
+        Assert.Null(busy.CurrentSession.Tune);
+    }
+
+    [Fact]
+    public void ATunerNobodyIsUsingCarriesNoSessionSubtree()
+    {
+        var manager = Manager();
+
+        Assert.All(
+            SessionViews.Tuners(Configuration, manager),
+            tuner => Assert.Null(tuner.CurrentSession)
+        );
+    }
+
+    [Fact]
+    public void ATunerNothingHasHappenedToIsHealthyAndSaysNothingChanged()
+    {
+        var manager = Manager();
+
+        var health = Tuner(manager, "adapter0").Health;
+
+        Assert.NotNull(health);
+        Assert.Equal(TunerHealthLevel.Healthy, health.Level);
+        Assert.False(health.DisablePending);
+        Assert.Null(health.Detail);
+        Assert.Null(health.ChangedAt);
+    }
+
+    [Fact]
+    public void AFaultedTunerCarriesTheFaultAndWhenItWasNoticed()
+    {
+        var manager = Manager();
+
+        manager.Fault("adapter0", "the frontend stopped answering");
+
+        var health = Tuner(manager, "adapter0").Health;
+
+        Assert.NotNull(health);
+        Assert.Equal(TunerHealthLevel.Faulted, health.Level);
+        Assert.Equal("the frontend stopped answering", health.Detail);
+        Assert.Equal(Start, health.ChangedAt);
+    }
+
+    [Fact]
+    public void ATunerTurnedOffWhileItHoldsASessionSaysTheDisableIsStillPending()
+    {
+        var manager = Manager();
+        Begin(manager, "draining-one", "adapter0");
+
+        Assert.True(manager.Turn("adapter0", disabled: true));
+
+        var tuner = Tuner(manager, "adapter0");
+
+        Assert.Equal(TunerState.Draining, tuner.State);
+        Assert.NotNull(tuner.Health);
+        Assert.True(tuner.Health.DisablePending);
+        Assert.Equal(Start, tuner.Health.ChangedAt);
+    }
+
+    [Fact]
+    public void ATunerTurnedOffWhileItHoldsNothingIsAlreadyOffRatherThanPending()
+    {
+        var manager = Manager();
+
+        Assert.True(manager.Turn("adapter0", disabled: true));
+
+        var tuner = Tuner(manager, "adapter0");
+
+        Assert.Equal(TunerState.Disabled, tuner.State);
+        Assert.NotNull(tuner.Health);
+        Assert.False(tuner.Health.DisablePending);
+    }
+
+    [Fact]
+    public void OnlyASatelliteTunerConfiguredToFeedTheAntennaReportsItsSupply()
+    {
+        var manager = Manager();
+        var configuration = Configuration with
+        {
+            Devices =
+            [
+                new DeviceSettings("adapter0", DeviceKind.Terrestrial),
+                new DeviceSettings("adapter1", DeviceKind.Satellite, LnbPower: true),
+                new DeviceSettings("adapter2", DeviceKind.Satellite),
+            ],
+        };
+
+        var tuners = SessionViews.Tuners(configuration, manager);
+
+        Assert.False(tuners[0].Health?.LnbPowered);
+        Assert.True(tuners[1].Health?.LnbPowered);
+        Assert.False(tuners[2].Health?.LnbPowered);
+    }
+
+    private static TunerSnapshot Tuner(TunerSessionManager manager, string deviceId) =>
+        SessionViews
+            .Tuners(
+                new DriverConfiguration(
+                    "/run/carina/driver.sock",
+                    null,
+                    6,
+                    new TunerSettings(TunerBackend.Fake),
+                    [new DeviceSettings(deviceId, DeviceKind.Terrestrial)]
+                ),
+                manager
+            )
+            .Single(tuner => tuner.DeviceId == deviceId);
 
     [Fact]
     public void ATunerIsIdleAgainOnceItsSessionEnds()
