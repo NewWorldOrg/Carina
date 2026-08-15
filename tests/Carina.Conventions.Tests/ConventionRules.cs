@@ -1,7 +1,7 @@
 using System.Reflection;
 
 using Carina.Api.Common;
-using Carina.Domain;
+using Carina.Domain.Base;
 
 using Microsoft.AspNetCore.Mvc;
 

@@ -1,3 +1,5 @@
+using Carina.Domain.Base;
+
 namespace Carina.Domain.Channels;
 
 public sealed class NetworkId : CommonValueObject<int>

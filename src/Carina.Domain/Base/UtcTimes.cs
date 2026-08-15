@@ -1,4 +1,4 @@
-namespace Carina.Domain;
+namespace Carina.Domain.Base;
 
 internal static class UtcTimes
 {

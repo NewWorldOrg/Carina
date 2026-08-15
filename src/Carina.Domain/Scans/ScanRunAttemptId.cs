@@ -1,3 +1,5 @@
+using Carina.Domain.Base;
+
 namespace Carina.Domain.Scans;
 
 public sealed class ScanRunAttemptId : CommonValueObject<Guid>

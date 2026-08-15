@@ -1,6 +1,6 @@
 using Carina.Api.Common;
 using Carina.Contracts;
-using Carina.Domain;
+using Carina.Domain.Base;
 using Carina.Domain.Events;
 using Carina.Infrastructure.Persistence;
 

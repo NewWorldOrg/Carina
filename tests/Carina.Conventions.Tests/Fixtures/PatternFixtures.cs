@@ -1,4 +1,4 @@
-using Carina.Domain;
+using Carina.Domain.Base;
 
 using Microsoft.AspNetCore.Mvc;
 

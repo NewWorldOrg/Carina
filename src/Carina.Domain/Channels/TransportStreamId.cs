@@ -1,4 +1,5 @@
 using Carina.Contracts;
+using Carina.Domain.Base;
 
 namespace Carina.Domain.Channels;
 

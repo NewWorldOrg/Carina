@@ -1,3 +1,5 @@
+using Carina.Domain.Base;
+
 namespace Carina.Domain.Tests;
 
 public sealed class JapanTimeZoneTests
