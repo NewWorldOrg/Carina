@@ -18,7 +18,6 @@ builder.Services.ConfigureHttpJsonOptions(options => WireJson.Configure(options.
 builder.Services.AddApplicationServices();
 builder.Services.AddCarinaInfrastructure(builder.Configuration);
 builder.Services.AddAuthentication();
-builder.Services.AddReverseProxyTrust(builder.Configuration);
 builder.Services.AddOpenApi(options =>
 {
     options.AddDocumentTransformer<ApiDocumentTransformer>();
@@ -32,11 +31,9 @@ var app = builder.Build();
 app.UseAuthentication();
 app.UseMiddleware<DefaultDenyAuthenticationMiddleware>();
 
-var document = app.MapOpenApi();
-
 if (app.Environment.IsDevelopment())
 {
-    document.AllowAnonymous();
+    app.MapOpenApi().AllowAnonymous();
 }
 
 app.MapControllers();

@@ -370,10 +370,10 @@ public sealed class ServiceCatalogEndpointTests
     }
 
     [Fact]
-    public async Task EveryCatalogSurfaceIsBehindTheSameDenialAsTheRest()
+    public async Task EveryCatalogSurfaceIsBehindTheSameDenialAsTheRestOnceASchemeIsRegistered()
     {
-        using var anonymous = new TestingWebApplicationFactory();
-        using var client = anonymous.CreateClient();
+        using var app = new TestingWebApplicationFactory();
+        using var client = app.WithTestScheme().CreateClient();
 
         Assert.Equal(
             HttpStatusCode.Unauthorized,

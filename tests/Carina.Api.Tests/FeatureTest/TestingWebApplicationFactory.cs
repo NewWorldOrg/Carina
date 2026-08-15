@@ -1,5 +1,3 @@
-using Carina.Api.Authentication;
-
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Hosting;
@@ -18,6 +16,5 @@ public class TestingWebApplicationFactory : WebApplicationFactory<Program>
             "ConnectionStrings:Carina",
             "Host=db;Port=5432;Database=carina;Username=carina;Password=placeholder");
         builder.UseSetting("CARINA_DRIVER_SOCKET", DriverSocketPath);
-        builder.UseSetting(TrustedProxyNetworks.SettingKey, RequestOrigin.ProxyNetwork);
     }
 }

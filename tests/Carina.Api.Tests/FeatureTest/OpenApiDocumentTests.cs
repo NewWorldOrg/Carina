@@ -53,7 +53,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
     {
         var document = await ServedOpenApi.FetchAsync(factory);
 
-        using var client = factory.CreateClient();
+        using var client = factory.WithTestScheme().CreateClient();
         using var response = await client.GetAsync(new Uri("/api/driver/status", UriKind.Relative));
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);

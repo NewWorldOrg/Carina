@@ -22,9 +22,9 @@ public sealed class AppEventStreamTests(TestingWebApplicationFactory factory)
     }
 
     [Fact]
-    public async Task TheStreamIsBehindTheSameDenialAsEveryOtherSurface()
+    public async Task TheStreamIsBehindTheSameDenialAsEveryOtherSurfaceOnceASchemeIsRegistered()
     {
-        using var client = factory.CreateClient();
+        using var client = factory.WithTestScheme().CreateClient();
         using var response = await client.GetAsync(Events);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
