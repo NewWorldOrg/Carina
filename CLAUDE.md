@@ -142,6 +142,13 @@ verified nothing.
   driver prints the same figure at startup. Whatever runs the image has to allow at
   least that long before killing the driver, or a recording that was about to finish
   is lost.
+- The driver can be asked to stop over IPC (`POST /shutdown`, reached from the app as
+  `POST /api/driver/shutdown`); it refuses while a recording is running. A stop it was
+  asked for — by that call or by a signal — leaves exit code 0, and anything else leaves
+  70, so a supervisor's `on-failure` policy does not fire on an operator's stop. Starting
+  the driver again belongs to whatever supervises the process, not to the app: the
+  development `driver` service is an idle shell and the driver is run by hand there, so
+  nothing brings it back on its own.
 - `migrate` takes a PostgreSQL advisory lock, so a second one waits instead of
   racing. Do not scale it: the lock serialises, but two migrations still make the
   slower deploy wait on a lock it cannot see.

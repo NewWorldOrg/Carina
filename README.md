@@ -87,6 +87,15 @@ SIGKILL します。予算は driver 自身が出します。
 docker compose exec driver /opt/carina/driver/Carina.Driver --shutdown-budget
 ```
 
+driver は要求で止められます（IPC の `POST /shutdown`、API 側は
+`POST /api/driver/shutdown`）。録画中は 409 で断り、受けたときは 202 を返して
+排水に入ります。要求されて止まったときの終了コードは 0、それ以外は 70 なので、
+監督する側の `on-failure` は運用者が止めた場合には発火しません。
+
+止めた driver を起動し直すのはプロセスを監督する側の仕事です。開発用 compose は
+それをしません（`driver` サービスは待機するだけのシェルで、driver は
+`task run:driver` で手動起動します）。
+
 ## 設定
 
 環境依存のものは何ひとつ埋め込みません。デバイスの一覧、録画の出力先、ソケットの
