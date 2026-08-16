@@ -3,6 +3,7 @@ using Carina.Driver.Diagnostics;
 using Carina.Driver.Recording;
 using Carina.Driver.Transport;
 using Carina.Driver.Tuning;
+using Carina.Driver.Tuning.Dvb;
 
 using Microsoft.Extensions.Logging;
 
@@ -334,6 +335,12 @@ public sealed class TunerSession : IDisposable
                     : cut.Reason,
                 cut
             );
+        }
+        catch (DvbDeviceException channel) when (
+            channel.Failure is TuningFailure.NoLock or TuningFailure.LockedWithoutData
+        )
+        {
+            Finish(SessionState.Failed, SessionStopReason.Unspecified, channel);
         }
         catch (Exception error)
         {

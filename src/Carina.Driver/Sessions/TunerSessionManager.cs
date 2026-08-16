@@ -29,6 +29,8 @@ public sealed class TunerSessionManager(
 {
     public const int RetainedSessions = 64;
 
+    public const int RepeatedTuneFailureCeiling = 3;
+
     public static readonly TimeSpan DefaultHardStopLimit = TimeSpan.FromSeconds(30);
 
     public static readonly TimeSpan HandOverLimit = TimeSpan.FromSeconds(10);
@@ -48,6 +50,11 @@ public sealed class TunerSessionManager(
         StringComparer.Ordinal
     );
     private readonly ConcurrentQueue<TunerSession> ended = new();
+    private readonly ConcurrentDictionary<SessionId, TuningKey> tunings = [];
+    private readonly Dictionary<string, Dictionary<TuningKey, int>> tuneFailureStreaks = new(
+        StringComparer.Ordinal
+    );
+    private readonly Lock streakGate = new();
     private readonly TimeSpan drainCap = TimeSpan.FromHours(
         Math.Max(0, configuration.ShutdownGraceHours)
     );
@@ -547,10 +554,25 @@ public sealed class TunerSessionManager(
         {
             pool.TuningFailed(deviceId, error);
 
-            refusal = SessionStart.Refused(
-                SessionRefusal.DeviceUnavailable,
-                $"The device '{deviceId}' could not be opened: {error.Message}"
-            );
+            if (
+                error is DvbDeviceException
+                {
+                    Failure: TuningFailure.NoLock or TuningFailure.LockedWithoutData
+                }
+            )
+            {
+                RecordTuneFailure(deviceId, TuningKey.Of(request), error.Message);
+            }
+
+            refusal = error is DvbDeviceException { Failure: TuningFailure.NoLock }
+                ? SessionStart.Refused(
+                    SessionRefusal.NoLock,
+                    $"The device '{deviceId}' opened but the frontend did not lock: {error.Message}"
+                )
+                : SessionStart.Refused(
+                    SessionRefusal.DeviceUnavailable,
+                    $"The device '{deviceId}' could not be opened: {error.Message}"
+                );
 
             return false;
         }
@@ -661,6 +683,8 @@ public sealed class TunerSessionManager(
                     $"The session '{sessionId}' already exists."
                 );
             }
+
+            tunings[sessionId] = TuningKey.Of(request);
         }
 
         session.Ended += Forget;
@@ -672,6 +696,7 @@ public sealed class TunerSessionManager(
         catch (Exception error)
         {
             sessions.TryRemove(new KeyValuePair<SessionId, TunerSession>(sessionId, session));
+            tunings.TryRemove(sessionId, out _);
             session.Ended -= Forget;
             pool.Leave(sessionId);
 
@@ -767,6 +792,23 @@ public sealed class TunerSessionManager(
     {
         sessions.TryRemove(new KeyValuePair<SessionId, TunerSession>(session.SessionId, session));
 
+        if (tunings.TryRemove(session.SessionId, out var tuning))
+        {
+            if (session.State is SessionState.Stopped)
+            {
+                ForgiveTuneFailures(session.DeviceId);
+            }
+            else if (
+                session.FailureCause is DvbDeviceException
+                {
+                    Failure: TuningFailure.NoLock or TuningFailure.LockedWithoutData
+                } channel
+            )
+            {
+                RecordTuneFailure(session.DeviceId, tuning, channel.Message);
+            }
+        }
+
         if (session.StopReason is SessionStopReason.DeviceFailed)
         {
             faultedDevices[session.DeviceId] =
@@ -802,6 +844,42 @@ public sealed class TunerSessionManager(
     {
         events?.Signal(DriverEvents.Sessions);
         events?.Signal(DriverEvents.Tuners);
+    }
+
+    private void RecordTuneFailure(string deviceId, TuningKey tuning, string cause)
+    {
+        int streak;
+
+        lock (streakGate)
+        {
+            if (!tuneFailureStreaks.TryGetValue(deviceId, out var perChannel))
+            {
+                perChannel = tuneFailureStreaks[deviceId] = [];
+            }
+
+            streak = perChannel[tuning] = perChannel.TryGetValue(tuning, out var seen)
+                ? seen + 1
+                : 1;
+        }
+
+        if (streak < RepeatedTuneFailureCeiling)
+        {
+            return;
+        }
+
+        Fault(
+            deviceId,
+            $"The device failed to receive {tuning} {streak} times in a row without delivering"
+                + $" anything in between; the last failure was: {cause}"
+        );
+    }
+
+    private void ForgiveTuneFailures(string deviceId)
+    {
+        lock (streakGate)
+        {
+            tuneFailureStreaks.Remove(deviceId);
+        }
     }
 
     public void Fault(string deviceId, string detail)

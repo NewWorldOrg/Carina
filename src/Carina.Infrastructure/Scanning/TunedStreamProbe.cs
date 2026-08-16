@@ -147,6 +147,9 @@ public sealed class TunedStreamProbe(IDriverClient driver, ScanSettings settings
         catch (OperationCanceledException) when (!abort.IsCancellationRequested)
         {
         }
+        catch (IOException)
+        {
+        }
         finally
         {
             ArrayPool<byte>.Shared.Return(buffer);

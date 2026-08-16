@@ -772,6 +772,46 @@ public sealed class DriverApiTests
     }
 
     [Fact]
+    public async Task AFrontendThatDidNotLockAnswersWithItsOwnProblemName()
+    {
+        await using var driver = await DriverUnderTest.Start(reshapeServices: services =>
+            services.AddSingleton<ITunerDeviceFactory>(new NoLockDeviceFactory())
+        );
+        using var client = driver.Client();
+
+        using var refused = await client.PostAsync(
+            DriverEndpoints.Sessions,
+            DriverUnderTest.Body(DriverUnderTest.Live("empty-channel")),
+            Soon()
+        );
+
+        Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
+
+        var problem = await DriverUnderTest.Read(refused, DriverJson.Context.DriverProblem);
+
+        Assert.NotNull(problem);
+        Assert.Equal("noLock", problem.Title);
+        Assert.Contains(
+            "did not lock",
+            string.Join(" ", problem.Problems),
+            StringComparison.Ordinal
+        );
+    }
+
+    private sealed class NoLockDeviceFactory : ITunerDeviceFactory
+    {
+        public ITunerDevice Create(
+            DeviceSettings device,
+            TuningRequest tuning,
+            TuneParams? tune
+        ) =>
+            throw Tuning.Dvb.DvbFailure.NoLock(
+                "/dev/dvb/adapter0/frontend0: the frontend did not lock within 5 seconds,"
+                + " and the last status it reported while waiting was None."
+            );
+    }
+
+    [Fact]
     public async Task StoppingASessionThatIsNotThereIsNotFound()
     {
         await using var driver = await DriverUnderTest.Start();

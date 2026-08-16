@@ -10,20 +10,25 @@ public sealed class PacedStream : Stream
     private readonly SemaphoreSlim allowed = new(0);
     private readonly SemaphoreSlim parked = new(0);
 
+    private readonly bool torn;
+
     private int at;
     private int reads;
     private int seen;
 
-    private PacedStream(byte[] bytes, int chunkSize, bool gated)
+    private PacedStream(byte[] bytes, int chunkSize, bool gated, bool torn = false)
     {
         this.bytes = bytes;
         this.chunkSize = chunkSize;
         this.gated = gated;
+        this.torn = torn;
     }
 
     public static PacedStream Ungated(byte[] bytes) => new(bytes, bytes.Length, gated: false);
 
     public static PacedStream InChunksOf(byte[] bytes, int chunkSize) => new(bytes, chunkSize, gated: true);
+
+    public static PacedStream Torn() => new([], 0, gated: false, torn: true);
 
     public int Reads => Volatile.Read(ref reads);
 
@@ -63,6 +68,11 @@ public sealed class PacedStream : Stream
         {
             parked.Release();
             await allowed.WaitAsync(cancellationToken);
+        }
+
+        if (torn)
+        {
+            throw new IOException("The driver tore the stream down before its end.");
         }
 
         Interlocked.Increment(ref reads);
