@@ -74,6 +74,129 @@ public sealed class TuneFailureClassificationTests
         next.WaitForEnd(Deadlock);
     }
 
+    [Fact]
+    public void AChannelThatKeepsFailingTheSameWayEndsInAFaultTheHealthSurfacesCanSee()
+    {
+        var manager = Manager(new ThrowingDeviceFactory(() => DvbFailure.NoLock(
+            "the frontend did not lock within 5 seconds."
+        )));
+
+        for (var attempt = 1; attempt <= TunerSessionManager.RepeatedTuneFailureCeiling; attempt++)
+        {
+            var start = manager.Begin(Request($"scan-{attempt}", 14));
+
+            Assert.Equal(SessionRefusal.NoLock, start.Refusal);
+
+            clock.Advance(TimeSpan.FromSeconds(6));
+        }
+
+        Assert.True(manager.IsFaulted("adapter0", out var detail));
+        Assert.Contains("channel 14", detail, StringComparison.Ordinal);
+        Assert.Contains(
+            TunerSessionManager.RepeatedTuneFailureCeiling.ToString(),
+            detail,
+            StringComparison.Ordinal
+        );
+
+        var refused = manager.Begin(Request("scan-after", 14));
+
+        Assert.Equal(SessionRefusal.FaultedDevice, refused.Refusal);
+    }
+
+    [Fact]
+    public void ASweepAcrossManyEmptyChannelsLeavesTheTunerInGoodStanding()
+    {
+        var manager = Manager(new ThrowingDeviceFactory(() => DvbFailure.NoLock(
+            "the frontend did not lock within 5 seconds."
+        )));
+
+        for (var channel = 13; channel <= 22; channel++)
+        {
+            var start = manager.Begin(Request($"scan-{channel}", channel));
+
+            Assert.Equal(SessionRefusal.NoLock, start.Refusal);
+
+            clock.Advance(TimeSpan.FromSeconds(6));
+        }
+
+        Assert.False(manager.IsFaulted("adapter0", out _));
+    }
+
+    [Fact]
+    public void ASessionThatDeliveredResetsTheFailureStreakOfItsDevice()
+    {
+        var manager = Manager(new FailingChannelDeviceFactory(deadChannel: 14));
+
+        for (var round = 1; round < TunerSessionManager.RepeatedTuneFailureCeiling; round++)
+        {
+            Assert.Equal(
+                SessionRefusal.NoLock,
+                manager.Begin(Request($"before-{round}", 14)).Refusal
+            );
+
+            clock.Advance(TimeSpan.FromSeconds(6));
+        }
+
+        var delivered = manager.Begin(Request("delivering", 20));
+
+        Assert.True(delivered.TryGetSession(out var session));
+
+        session.Stop();
+        session.WaitForEnd(Deadlock);
+
+        Assert.Equal(SessionState.Stopped, session.State);
+
+        for (var round = 1; round < TunerSessionManager.RepeatedTuneFailureCeiling; round++)
+        {
+            Assert.Equal(
+                SessionRefusal.NoLock,
+                manager.Begin(Request($"after-{round}", 14)).Refusal
+            );
+
+            clock.Advance(TimeSpan.FromSeconds(6));
+        }
+
+        Assert.False(manager.IsFaulted("adapter0", out _));
+
+        Assert.Equal(
+            SessionRefusal.NoLock,
+            manager.Begin(Request("the-last-straw", 14)).Refusal
+        );
+        Assert.True(manager.IsFaulted("adapter0", out _));
+    }
+
+    [Fact]
+    public void AChannelThatKeepsGoingSilentAfterLockAlsoEndsInAFault()
+    {
+        var manager = Manager(new QueuedDeviceFactory(new ConcurrentQueue<ITunerDevice>(
+            [new SilentAfterLockDevice(), new SilentAfterLockDevice(), new SilentAfterLockDevice()]
+        )));
+
+        for (var attempt = 1; attempt <= TunerSessionManager.RepeatedTuneFailureCeiling; attempt++)
+        {
+            var start = manager.Begin(Request($"scan-{attempt}", 14));
+
+            Assert.True(start.TryGetSession(out var session));
+
+            session.WaitForEnd(Deadlock);
+
+            Assert.Equal(SessionState.Failed, session.State);
+
+            clock.Advance(TimeSpan.FromSeconds(6));
+        }
+
+        Assert.True(manager.IsFaulted("adapter0", out var detail));
+        Assert.Contains("channel 14", detail, StringComparison.Ordinal);
+    }
+
+    private sealed class FailingChannelDeviceFactory(int deadChannel) : ITunerDeviceFactory
+    {
+        public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune) =>
+            tuning.PhysicalChannel == deadChannel
+                ? throw DvbFailure.NoLock("the frontend did not lock within 5 seconds.")
+                : new ScriptedTunerDevice();
+    }
+
     private TunerSessionManager Manager(ITunerDeviceFactory factory) =>
         new(
             new DriverConfiguration(
