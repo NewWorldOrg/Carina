@@ -672,7 +672,7 @@ public sealed class DriverApiTests
     }
 
     [Fact]
-    public async Task StoppingASessionIsAcceptedAndThenAlreadyDone()
+    public async Task StoppingASessionIsAnsweredOnceItHasLetGoAndThenSaysItIsDone()
     {
         await using var driver = await DriverUnderTest.Start();
         using var client = driver.Client();
@@ -687,7 +687,7 @@ public sealed class DriverApiTests
         var path = DriverEndpoints.Session(SessionId.Parse("stopped"));
 
         using var stopping = await client.DeleteAsync(path, Soon());
-        Assert.Equal(HttpStatusCode.Accepted, stopping.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, stopping.StatusCode);
 
         await WaitUntil(client, sessions => sessions.Single().Concluded);
 
@@ -807,7 +807,7 @@ public sealed class DriverApiTests
             DriverEndpoints.Session(SessionId.Parse("clean")),
             Soon()
         );
-        Assert.Equal(HttpStatusCode.Accepted, stopped.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, stopped.StatusCode);
 
         await using var sink = new MemoryStream();
         await body.CopyToAsync(sink, Soon());
@@ -915,7 +915,7 @@ public sealed class DriverApiTests
             DriverEndpoints.Session(SessionId.Parse("over")),
             Soon()
         );
-        Assert.Equal(HttpStatusCode.Accepted, stopped.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, stopped.StatusCode);
 
         await WaitUntil(client, sessions => sessions.Single().Concluded);
 

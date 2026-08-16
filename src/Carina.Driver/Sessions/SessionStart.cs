@@ -27,6 +27,7 @@ public enum SessionStopOutcome
     NoSuchSession,
     Stopping,
     AlreadyEnded,
+    Stopped,
 }
 
 public sealed record SessionStart

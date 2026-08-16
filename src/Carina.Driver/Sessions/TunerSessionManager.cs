@@ -31,6 +31,8 @@ public sealed class TunerSessionManager(
 
     public static readonly TimeSpan HandOverLimit = TimeSpan.FromSeconds(10);
 
+    public static readonly TimeSpan LetGoLimit = TimeSpan.FromSeconds(5);
+
     private readonly ConcurrentDictionary<SessionId, TunerSession> sessions = [];
     private readonly TunerPool pool = new(timeProvider, tunerGrace);
     private readonly ConcurrentDictionary<string, string> faultedDevices = new(
@@ -731,18 +733,30 @@ public sealed class TunerSessionManager(
         return session is not null;
     }
 
-    public SessionStopOutcome Stop(SessionId sessionId)
+    public async Task<SessionStopOutcome> StopAsync(
+        SessionId sessionId,
+        CancellationToken cancellationToken
+    )
     {
-        if (sessions.TryGetValue(sessionId, out var session))
+        if (!sessions.TryGetValue(sessionId, out var session))
         {
-            session.Stop();
-
-            return SessionStopOutcome.Stopping;
+            return ended.Any(candidate => candidate.SessionId == sessionId)
+                ? SessionStopOutcome.AlreadyEnded
+                : SessionStopOutcome.NoSuchSession;
         }
 
-        return ended.Any(candidate => candidate.SessionId == sessionId)
-            ? SessionStopOutcome.AlreadyEnded
-            : SessionStopOutcome.NoSuchSession;
+        session.Stop();
+
+        try
+        {
+            await session.Completion.WaitAsync(LetGoLimit, timeProvider, cancellationToken);
+
+            return SessionStopOutcome.Stopped;
+        }
+        catch (Exception error) when (error is TimeoutException or OperationCanceledException)
+        {
+            return SessionStopOutcome.Stopping;
+        }
     }
 
     private void Forget(TunerSession session)

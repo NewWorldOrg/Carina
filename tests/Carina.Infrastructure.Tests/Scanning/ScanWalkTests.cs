@@ -95,7 +95,8 @@ public sealed class ScanWalkTests
 
         Assert.Equal([2d, 4, 8, 16], clock.Waits.Select(wait => wait.TotalSeconds));
         Assert.Equal(ScanRunState.Failed, outcome.State);
-        Assert.Equal(ChannelScanOrchestrator.BusyReason, outcome.Run!.Reason);
+        Assert.StartsWith(ChannelScanOrchestrator.BusyReason, outcome.Run!.Reason, StringComparison.Ordinal);
+        Assert.Contains("Every usable tuner is busy.", outcome.Run.Reason, StringComparison.Ordinal);
         Assert.Empty(outcome.Attempts);
     }
 
