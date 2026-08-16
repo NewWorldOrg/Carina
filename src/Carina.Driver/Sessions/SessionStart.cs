@@ -20,6 +20,7 @@ public enum SessionRefusal
     OutputUnavailable,
     DeviceUnavailable,
     CapabilityMissing,
+    NoLock,
 }
 
 public enum SessionStopOutcome

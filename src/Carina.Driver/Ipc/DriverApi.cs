@@ -557,6 +557,7 @@ public static class DriverApi
                 StatusCodes.Status503ServiceUnavailable,
                 "deviceUnavailable"
             ),
+            SessionRefusal.NoLock => (StatusCodes.Status409Conflict, "noLock"),
             _ => (StatusCodes.Status503ServiceUnavailable, "refused"),
         };
 }

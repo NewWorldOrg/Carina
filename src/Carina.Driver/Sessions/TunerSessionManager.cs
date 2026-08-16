@@ -547,10 +547,15 @@ public sealed class TunerSessionManager(
         {
             pool.TuningFailed(deviceId, error);
 
-            refusal = SessionStart.Refused(
-                SessionRefusal.DeviceUnavailable,
-                $"The device '{deviceId}' could not be opened: {error.Message}"
-            );
+            refusal = error is DvbDeviceException { Failure: TuningFailure.NoLock }
+                ? SessionStart.Refused(
+                    SessionRefusal.NoLock,
+                    $"The device '{deviceId}' opened but the frontend did not lock: {error.Message}"
+                )
+                : SessionStart.Refused(
+                    SessionRefusal.DeviceUnavailable,
+                    $"The device '{deviceId}' could not be opened: {error.Message}"
+                );
 
             return false;
         }

@@ -101,6 +101,61 @@ public sealed class ScanWalkTests
     }
 
     [Fact]
+    public async Task AChannelThatDidNotLockIsRecordedAndTheSweepWalksOn()
+    {
+        var driver = new ScriptedDriverClient()
+            .Script(Channel53, ChannelScript.Carrying(SyntheticStream.Carrying(
+                SomeStreamId,
+                new SyntheticService(SomeServiceId, "Carina One"))))
+            .Script(Channel55, new ChannelScript
+            {
+                Refusal = new DriverProblem(
+                    "noLock",
+                    ["/dev/dvb/adapter0/frontend0: the frontend did not lock within 5 seconds."]),
+            })
+            .Script(Channel57, ChannelScript.Carrying(SyntheticStream.Carrying(
+                50003,
+                new SyntheticService(50102, "Carina Two"))));
+
+        var outcome = await new ScanHarness(driver).Orchestrator.RunAsync(
+            ScanScope.Over([Channel53, Channel55, Channel57]),
+            Cancel);
+
+        Assert.Equal(ScanRunState.Completed, outcome.State);
+        Assert.Equal(
+            [ScanAttemptOutcome.Succeeded, ScanAttemptOutcome.NoLock, ScanAttemptOutcome.Succeeded],
+            outcome.Attempts.Select(attempt => attempt.Outcome));
+        Assert.Contains("did not lock", outcome.Attempts[1].Detail!, StringComparison.Ordinal);
+        Assert.Equal(2, outcome.Difference.Added.Count);
+    }
+
+    [Fact]
+    public async Task AStreamTheDriverToreDownIsRecordedOnItsBytesAndTheSweepWalksOn()
+    {
+        var driver = new ScriptedDriverClient()
+            .Script(Channel53, ChannelScript.Carrying(SyntheticStream.Carrying(
+                SomeStreamId,
+                new SyntheticService(SomeServiceId, "Carina One"))))
+            .Script(Channel55, new ChannelScript { Paced = () => PacedStream.Torn() })
+            .Script(Channel57, ChannelScript.Carrying(SyntheticStream.Carrying(
+                50003,
+                new SyntheticService(50102, "Carina Two"))));
+
+        var outcome = await new ScanHarness(driver).Orchestrator.RunAsync(
+            ScanScope.Over([Channel53, Channel55, Channel57]),
+            Cancel);
+
+        Assert.Equal(ScanRunState.Completed, outcome.State);
+        Assert.Equal(
+            [
+                ScanAttemptOutcome.Succeeded,
+                ScanAttemptOutcome.LockedWithoutData,
+                ScanAttemptOutcome.Succeeded,
+            ],
+            outcome.Attempts.Select(attempt => attempt.Outcome));
+    }
+
+    [Fact]
     public async Task AnAttemptThatRunsOutOfPatienceIsRecordedOnWhatItManagedToRead()
     {
         var clock = new HeldClock();
