@@ -102,6 +102,37 @@ public sealed class PacedTunerDevice : ITunerDevice
     public void Dispose() => Disposed = true;
 }
 
+public sealed class HeldOpenTunerDevice : ITunerDevice
+{
+    private readonly FakeTunerDevice inner = new(55, 50001);
+    private readonly ManualResetEventSlim gate = new(false);
+
+    public ManualResetEventSlim Reading { get; } = new(false);
+
+    public long Overflows => 0;
+
+    public bool Disposed { get; private set; }
+
+    public byte[] Read(int count, CancellationToken cancellationToken)
+    {
+        Reading.Set();
+        gate.Wait(CancellationToken.None);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        return inner.Read(count, cancellationToken);
+    }
+
+    public void LetGo() => gate.Set();
+
+    public void Dispose() => Disposed = true;
+}
+
+public sealed class OneTunerDeviceFactory(ITunerDevice device) : ITunerDeviceFactory
+{
+    public ITunerDevice Create(DeviceSettings settings, TuningRequest tuning, TuneParams? tune) =>
+        device;
+}
+
 public sealed class StubbornTunerDevice(TimeSpan readTakes) : ITunerDevice
 {
     private readonly FakeTunerDevice inner = new(55, 50001);
