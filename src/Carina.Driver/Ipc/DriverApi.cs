@@ -466,7 +466,7 @@ public static class DriverApi
             return;
         }
 
-        var outcome = manager.Stop(sessionId);
+        var outcome = await manager.StopAsync(sessionId, context.RequestAborted);
 
         if (outcome is SessionStopOutcome.NoSuchSession)
         {

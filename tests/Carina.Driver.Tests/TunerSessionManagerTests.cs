@@ -431,17 +431,24 @@ public sealed class TunerSessionManagerTests : IDisposable
     }
 
     [Fact]
-    public void StoppingTellsApartASessionThatIsGoneFromOneThatNeverWas()
+    public async Task StoppingTellsApartASessionThatIsGoneFromOneThatNeverWas()
     {
         var manager = Manager();
         var session = Begin(manager, "s-1", "adapter0");
 
-        Assert.Equal(SessionStopOutcome.Stopping, manager.Stop(SessionId.Parse("s-1")));
-
-        session.WaitForEnd(TimeSpan.FromSeconds(10));
-
-        Assert.Equal(SessionStopOutcome.AlreadyEnded, manager.Stop(SessionId.Parse("s-1")));
-        Assert.Equal(SessionStopOutcome.NoSuchSession, manager.Stop(SessionId.Parse("s-9")));
+        Assert.Equal(
+            SessionStopOutcome.Stopped,
+            await manager.StopAsync(SessionId.Parse("s-1"), CancellationToken.None)
+        );
+        Assert.True(session.Concluded);
+        Assert.Equal(
+            SessionStopOutcome.AlreadyEnded,
+            await manager.StopAsync(SessionId.Parse("s-1"), CancellationToken.None)
+        );
+        Assert.Equal(
+            SessionStopOutcome.NoSuchSession,
+            await manager.StopAsync(SessionId.Parse("s-9"), CancellationToken.None)
+        );
     }
 
     [Fact]

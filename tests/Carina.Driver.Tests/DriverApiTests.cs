@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Text;
 
 using Carina.Contracts;
+using Carina.Driver.Configuration;
 using Carina.Driver.Events;
 using Carina.Driver.Ipc;
 using Carina.Driver.Recording;
@@ -10,6 +11,7 @@ using Carina.Driver.Sessions;
 using Carina.Driver.Tuning;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Carina.Driver.Tests;
 
@@ -692,7 +694,7 @@ public sealed class DriverApiTests
     }
 
     [Fact]
-    public async Task StoppingASessionIsAcceptedAndThenAlreadyDone()
+    public async Task StoppingASessionIsAnsweredOnceItHasLetGoAndThenSaysItIsDone()
     {
         await using var driver = await DriverUnderTest.Start();
         using var client = driver.Client();
@@ -707,7 +709,7 @@ public sealed class DriverApiTests
         var path = DriverEndpoints.Session(SessionId.Parse("stopped"));
 
         using var stopping = await client.DeleteAsync(path, Soon());
-        Assert.Equal(HttpStatusCode.Accepted, stopping.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, stopping.StatusCode);
 
         await WaitUntil(client, sessions => sessions.Single().Concluded);
 
@@ -720,6 +722,53 @@ public sealed class DriverApiTests
         Assert.NotNull(snapshot);
         Assert.True(snapshot.Concluded);
         Assert.Equal(SessionStopReason.Requested, snapshot.StopReason);
+    }
+
+    [Fact]
+    public async Task StoppingASessionThatCannotLetGoInTimeSaysItIsStillStopping()
+    {
+        var device = new HeldOpenTunerDevice();
+
+        await using var driver = await DriverUnderTest.Start(reshapeServices: services =>
+        {
+            services.AddSingleton<ITunerDeviceFactory>(new OneTunerDeviceFactory(device));
+            services.AddSingleton(provider => new TunerSessionManager(
+                provider.GetRequiredService<DriverConfiguration>(),
+                provider.GetRequiredService<ITunerDeviceFactory>(),
+                provider.GetRequiredService<TimeProvider>(),
+                provider.GetRequiredService<ILogger<TunerSessionManager>>(),
+                events: provider.GetRequiredService<DriverEventHub>(),
+                letGoLimit: TimeSpan.FromMilliseconds(50)
+            ));
+        });
+        using var client = driver.Client();
+
+        using var created = await client.PostAsync(
+            DriverEndpoints.Sessions,
+            DriverUnderTest.Body(DriverUnderTest.Live("stuck")),
+            Soon()
+        );
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        Assert.True(
+            device.Reading.Wait(Patience),
+            "The session never reached the read that cannot be interrupted."
+        );
+
+        using var stopping = await client.DeleteAsync(
+            DriverEndpoints.Session(SessionId.Parse("stuck")),
+            Soon()
+        );
+
+        Assert.Equal(HttpStatusCode.Accepted, stopping.StatusCode);
+
+        var snapshot = await DriverUnderTest.Read(stopping, DriverJson.Context.SessionSnapshot);
+
+        Assert.NotNull(snapshot);
+        Assert.NotEqual(SessionState.Stopped, snapshot.State);
+
+        device.LetGo();
+
+        await WaitUntil(client, sessions => sessions.Single().Concluded);
     }
 
     [Fact]
@@ -827,7 +876,7 @@ public sealed class DriverApiTests
             DriverEndpoints.Session(SessionId.Parse("clean")),
             Soon()
         );
-        Assert.Equal(HttpStatusCode.Accepted, stopped.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, stopped.StatusCode);
 
         await using var sink = new MemoryStream();
         await body.CopyToAsync(sink, Soon());
@@ -935,7 +984,7 @@ public sealed class DriverApiTests
             DriverEndpoints.Session(SessionId.Parse("over")),
             Soon()
         );
-        Assert.Equal(HttpStatusCode.Accepted, stopped.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, stopped.StatusCode);
 
         await WaitUntil(client, sessions => sessions.Single().Concluded);
 

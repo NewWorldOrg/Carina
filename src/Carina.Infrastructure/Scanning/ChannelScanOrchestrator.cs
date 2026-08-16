@@ -139,7 +139,7 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
 
             if (probe.Verdict is ProbeVerdict.TunersBusy)
             {
-                failure = BusyReason;
+                failure = Busy(probe.Detail);
 
                 break;
             }
@@ -422,6 +422,18 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
 
     private static bool Names(StreamProbe probe, ServiceId serviceId)
         => probe.Description!.Services.Any(service => service.ServiceId == serviceId.Value);
+
+    private static string Busy(string? detail)
+    {
+        if (string.IsNullOrWhiteSpace(detail))
+        {
+            return BusyReason;
+        }
+
+        var said = $"{BusyReason}. The driver said: {detail}";
+
+        return said.Length <= ScanRun.ReasonMaxLength ? said : said[..ScanRun.ReasonMaxLength];
+    }
 
     private static void Stop(CancellationTokenSource source)
     {

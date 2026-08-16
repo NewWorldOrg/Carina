@@ -7,6 +7,7 @@ using Carina.Driver.Diagnostics;
 using Carina.Driver.Events;
 using Carina.Driver.Recording;
 using Carina.Driver.Tuning;
+using Carina.Driver.Tuning.Dvb;
 
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -22,7 +23,8 @@ public sealed class TunerSessionManager(
     DriverEventHub? events = null,
     DiagnosticsStore? diagnostics = null,
     IRecordingWriterFactory? recordingWriters = null,
-    TimeSpan? tunerGrace = null
+    TimeSpan? tunerGrace = null,
+    TimeSpan? letGoLimit = null
 ) : IHostedService
 {
     public const int RetainedSessions = 64;
@@ -30,6 +32,9 @@ public sealed class TunerSessionManager(
     public static readonly TimeSpan DefaultHardStopLimit = TimeSpan.FromSeconds(30);
 
     public static readonly TimeSpan HandOverLimit = TimeSpan.FromSeconds(10);
+
+    public static readonly TimeSpan LetGoLimit =
+        DvbTunerSettings.Default.BytePatience + TimeSpan.FromSeconds(3);
 
     private readonly ConcurrentDictionary<SessionId, TunerSession> sessions = [];
     private readonly TunerPool pool = new(timeProvider, tunerGrace);
@@ -47,6 +52,7 @@ public sealed class TunerSessionManager(
         Math.Max(0, configuration.ShutdownGraceHours)
     );
     private readonly TimeSpan hardStop = hardStopLimit ?? DefaultHardStopLimit;
+    private readonly TimeSpan letGo = letGoLimit ?? LetGoLimit;
     private readonly IRecordingWriterFactory writerFactory =
         recordingWriters ?? new RecordingWriterFactory();
 
@@ -731,18 +737,30 @@ public sealed class TunerSessionManager(
         return session is not null;
     }
 
-    public SessionStopOutcome Stop(SessionId sessionId)
+    public async Task<SessionStopOutcome> StopAsync(
+        SessionId sessionId,
+        CancellationToken cancellationToken
+    )
     {
-        if (sessions.TryGetValue(sessionId, out var session))
+        if (!sessions.TryGetValue(sessionId, out var session))
         {
-            session.Stop();
-
-            return SessionStopOutcome.Stopping;
+            return ended.Any(candidate => candidate.SessionId == sessionId)
+                ? SessionStopOutcome.AlreadyEnded
+                : SessionStopOutcome.NoSuchSession;
         }
 
-        return ended.Any(candidate => candidate.SessionId == sessionId)
-            ? SessionStopOutcome.AlreadyEnded
-            : SessionStopOutcome.NoSuchSession;
+        session.Stop();
+
+        try
+        {
+            await session.Completion.WaitAsync(letGo, timeProvider, cancellationToken);
+
+            return SessionStopOutcome.Stopped;
+        }
+        catch (Exception error) when (error is TimeoutException or OperationCanceledException)
+        {
+            return SessionStopOutcome.Stopping;
+        }
     }
 
     private void Forget(TunerSession session)

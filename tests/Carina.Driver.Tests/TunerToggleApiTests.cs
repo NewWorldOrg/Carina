@@ -145,7 +145,7 @@ public sealed class TunerToggleApiTests
             var stopped = await client.DeleteAsync($"{DriverEndpoints.Sessions}/s-1", Soon())
         )
         {
-            Assert.Equal(HttpStatusCode.Accepted, stopped.StatusCode);
+            Assert.Equal(HttpStatusCode.OK, stopped.StatusCode);
         }
 
         await WaitUntil(
