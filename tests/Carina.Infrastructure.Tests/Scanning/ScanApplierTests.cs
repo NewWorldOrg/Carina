@@ -27,7 +27,22 @@ public sealed class ScanApplierTests
         int serviceId,
         string name,
         params ScanChannelChange[] channels)
-        => new(kind, new NetworkId(1), new ServiceId(serviceId), name, ServiceCategory.Television, channels);
+        => Change(kind, serviceId, name, seen: true, channels);
+
+    private static ScanServiceChange Change(
+        ScanChangeKind kind,
+        int serviceId,
+        string name,
+        bool seen,
+        params ScanChannelChange[] channels)
+        => new(
+            kind,
+            new NetworkId(1),
+            new ServiceId(serviceId),
+            name,
+            ServiceCategory.Television,
+            channels,
+            seen);
 
     private static ScanChannelChange Channel(ScanChangeKind kind, TuningParameters tuning, int? cnr = 21_500)
         => new(
@@ -271,21 +286,32 @@ public sealed class ScanApplierTests
     [Fact]
     public async Task AServiceTheScanDidNotReceiveIsNotStampedAsSeenJustNow()
     {
-        Seed(101, "Went quiet",
+        // Seeded before the clock the applier reads, so a stamp would be visible as a move.
+        var discovered = At.AddHours(-1);
+        services.Services.Add(BroadcastService.Discover(
+            new NetworkId(1), new ServiceId(101), "Went quiet", ServiceCategory.Television, discovered));
+        candidates.Candidates.Add(CandidateChannel.Discover(
+            CandidateChannelId.New(),
+            new NetworkId(1),
+            new ServiceId(101),
             TuningParameters.Terrestrial(Terrestrial),
-            TuningParameters.Terrestrial(OtherTerrestrial));
-        var lastSeen = services.Services[0].LastSeenAt;
+            discovered));
+        candidates.Candidates.Add(CandidateChannel.Discover(
+            CandidateChannelId.New(),
+            new NetworkId(1),
+            new ServiceId(101),
+            TuningParameters.Terrestrial(OtherTerrestrial),
+            discovered));
 
-        await Applier.ApplyAsync(
+        var applied = await Applier.ApplyAsync(
             new ScanDifference(
                 [
                     Change(
                         ScanChangeKind.Updated,
                         101,
                         "Went quiet",
-                        Channel(ScanChangeKind.Missing, TuningParameters.Terrestrial(Terrestrial), cnr: null))
-                        with
-                        { Seen = false },
+                        seen: false,
+                        Channel(ScanChangeKind.Missing, TuningParameters.Terrestrial(Terrestrial), cnr: null)),
                 ],
                 []),
             [TuneSystem.IsdbT],
@@ -293,10 +319,36 @@ public sealed class ScanApplierTests
 
         // The one channel it was reached on is gone, so the disappearance is what was applied.
         // Moving the clock here would have the service last seen by the scan that lost it.
-        Assert.Equal(lastSeen, services.Services[0].LastSeenAt);
+        Assert.Equal(discovered, services.Services[0].LastSeenAt);
+        Assert.Equal(0, applied.ServicesUpdated);
+        Assert.Equal(1, applied.ChannelsRemoved);
         Assert.Equal(
             [OtherTerrestrial],
             candidates.Candidates.Select(candidate => candidate.Tuning.PhysicalChannel));
+    }
+
+    [Fact]
+    public async Task AServiceTheScanDidNotReceiveIsNotEnteredWhenNothingHoldsItEither()
+    {
+        var applied = await Applier.ApplyAsync(
+            new ScanDifference(
+                [
+                    Change(
+                        ScanChangeKind.Missing,
+                        101,
+                        "Never here",
+                        seen: false,
+                        Channel(ScanChangeKind.Missing, TuningParameters.Terrestrial(Terrestrial), cnr: null)),
+                ],
+                []),
+            [TuneSystem.IsdbT],
+            CancellationToken.None);
+
+        // Entering it would date both its discovery and its last sighting to the scan that
+        // established it was not received.
+        Assert.Empty(services.Services);
+        Assert.Equal(0, applied.ServicesAdded);
+        Assert.Equal(0, applied.ServicesUpdated);
     }
 
     [Fact]

@@ -356,7 +356,8 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
                     service.ServiceId,
                     seen.Name,
                     seen.Category,
-                    [.. added, .. missing]));
+                    [.. added, .. missing],
+                    Seen: true));
             }
         }
 
@@ -366,7 +367,8 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
             seen.ServiceId,
             seen.Name,
             seen.Category,
-            seen.Channels)));
+            seen.Channels,
+            Seen: true)));
 
         return new ScanDifference(changes, departures);
     }

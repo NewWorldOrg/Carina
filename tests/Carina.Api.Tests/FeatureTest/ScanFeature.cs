@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Scans;
 using Carina.Infrastructure.Scanning;
@@ -96,7 +97,16 @@ internal sealed class ScanFeature : IAsyncDisposable
     private static async Task<(HttpStatusCode Status, JsonElement Body)> ReadAsync(
         HttpResponseMessage response)
     {
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var body = await response.Content.ReadAsStringAsync();
+
+        // An unhandled failure answers with a plain-text trace rather than the envelope. That is
+        // a status worth asserting on, not a reason for the reader itself to throw.
+        if (!body.StartsWith('{') && !body.StartsWith('['))
+        {
+            return (response.StatusCode, default);
+        }
+
+        using var document = JsonDocument.Parse(body);
 
         return (response.StatusCode, document.RootElement.Clone());
     }

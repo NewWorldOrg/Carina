@@ -148,23 +148,30 @@ public sealed class ScanApplierDatabaseTests(RepositoryDatabase database)
 
         await using var writing = database.Open();
         var arrived = 0;
+        var events = new RecordingAppEvents();
         var applier = new ScanApplier(
             new BroadcastServiceRepository(writing),
             new RefusingCandidates(new CandidateChannelRepository(writing), () => ++arrived > 1),
             new DatabaseAtomicWrite(writing),
-            new RecordingAppEvents(),
+            events,
             new StillClock());
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<StoreRefusedException>(
             () => applier.ApplyAsync(difference, [TuneSystem.IsdbT], Cancel));
 
         await using var reading = database.Open();
         var services = new BroadcastServiceRepository(reading);
+        var candidates = new CandidateChannelRepository(reading);
 
         foreach (var service in Services)
         {
             Assert.Null(await services.FindAsync(new NetworkId(network), new ServiceId(service), Cancel));
+            Assert.Empty(
+                await candidates.ListForServiceAsync(new NetworkId(network), new ServiceId(service), Cancel));
         }
+
+        // Telling the screen something changed would have it read a catalogue that did not.
+        Assert.Empty(events.Signalled);
     }
 
     private async Task<ScanApplication> ApplyAsync(ScanDifference difference)
@@ -190,12 +197,14 @@ public sealed class ScanApplierDatabaseTests(RepositoryDatabase database)
         int network,
         int service,
         string name,
-        ScanChannelChange channel)
+        ScanChannelChange channel,
+        bool seen = true)
         => new(
             kind,
             new NetworkId(network),
             new ServiceId(service),
             name,
             ServiceCategory.Television,
-            [channel]);
+            [channel],
+            seen);
 }

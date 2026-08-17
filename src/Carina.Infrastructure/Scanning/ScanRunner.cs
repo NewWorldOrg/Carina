@@ -10,14 +10,23 @@ using Microsoft.Extensions.Logging;
 
 namespace Carina.Infrastructure.Scanning;
 
-public enum ProposalClaim
+/// <summary>
+/// What came of asking for a proposal to apply. Only one of the three carries one, so a caller
+/// that has a proposal cannot be holding a refusal and a caller holding a refusal cannot reach
+/// for a proposal that is not there.
+/// </summary>
+public abstract record ProposalClaim
 {
-    Claimed = 1,
+    private ProposalClaim()
+    {
+    }
+
+    public sealed record Claimed(ScanProposal Proposal) : ProposalClaim;
 
     /// <summary>Another apply holds it. Waiting is the recovery, not walking again.</summary>
-    AlreadyBeingApplied = 2,
+    public sealed record AlreadyBeingApplied : ProposalClaim;
 
-    Gone = 3,
+    public sealed record Gone : ProposalClaim;
 }
 
 public sealed record ScanProposal(
@@ -180,23 +189,21 @@ public sealed class ScanRunner(IServiceScopeFactory scopes, ILogger<ScanRunner> 
     /// that never committed — and a caller told it cannot have the proposal is told which of
     /// the two reasons applies, because only one of them means walking again.
     /// </summary>
-    public ProposalClaim TryClaimProposal(ScanRunId id, out ScanProposal? proposal)
+    public ProposalClaim ClaimProposal(ScanRunId id)
     {
-        proposal = null;
-
         if (!claimed.TryAdd(id, 0))
         {
-            return ProposalClaim.AlreadyBeingApplied;
+            return new ProposalClaim.AlreadyBeingApplied();
         }
 
-        if (proposals.TryGetValue(id, out proposal))
+        if (proposals.TryGetValue(id, out var proposal))
         {
-            return ProposalClaim.Claimed;
+            return new ProposalClaim.Claimed(proposal);
         }
 
         claimed.TryRemove(id, out _);
 
-        return ProposalClaim.Gone;
+        return new ProposalClaim.Gone();
     }
 
     /// <summary>Forgets a proposal whose apply committed.</summary>

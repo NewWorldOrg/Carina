@@ -21,7 +21,8 @@ public sealed record ScanChannelChange(
 /// Whether this scan received the service. When it did not, the name and category are the
 /// service's own stored ones rather than anything observed, and applying the change must not
 /// stamp it as last seen now: that would make the clock say the service was received by the
-/// very scan that established it was not.
+/// very scan that established it was not. It carries no default, because the value that writes
+/// the clock is the one an omission would pick.
 /// </param>
 public sealed record ScanServiceChange(
     ScanChangeKind Kind,
@@ -30,7 +31,7 @@ public sealed record ScanServiceChange(
     string Name,
     ServiceCategory Category,
     IReadOnlyList<ScanChannelChange> Channels,
-    bool Seen = true);
+    bool Seen);
 
 public sealed record RotationDeparture(
     NetworkId NetworkId,

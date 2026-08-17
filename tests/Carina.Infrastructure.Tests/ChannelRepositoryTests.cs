@@ -1,6 +1,7 @@
 using Carina.Domain.Channels;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
+using Carina.TestSupport;
 
 namespace Carina.Infrastructure.Tests;
 
@@ -264,32 +265,35 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
     }
 
     [Fact]
-    public async Task ReplacingASatelliteSlotInsideALargerWriteLandsWithIt()
+    public async Task ASatelliteSlotReplacedInsideALargerWriteGoesBackWithIt()
     {
+        const int Slot = 21;
+
         await using var context = database.Open();
         var streams = new SatelliteTransportStreamRepository(context);
+        var before = await streams.ListForSlotAsync(Slot, Cancel);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<StoreRefusedException>(
             () => new DatabaseAtomicWrite(context).AllOrNothingAsync<int>(
                 async token =>
                 {
                     await streams.ReplaceSlotAsync(
-                        15,
-                        [SatelliteTransportStream.Rehydrate(15, 0, new TransportStreamId(0x40F0))],
+                        Slot,
+                        [SatelliteTransportStream.Rehydrate(Slot, 0, new TransportStreamId(0x40F0))],
                         token);
 
-                    throw new InvalidOperationException("whatever ends the write after the slot");
+                    throw new StoreRefusedException("whatever ends the write after the slot");
                 },
                 Cancel));
 
         // The slot replacement owns no boundary of its own inside a larger write, so it goes
         // back with it rather than standing while the rest is undone.
         await using var reading = database.Open();
-        var slot = await new SatelliteTransportStreamRepository(reading).ListForSlotAsync(15, Cancel);
+        var after = await new SatelliteTransportStreamRepository(reading).ListForSlotAsync(Slot, Cancel);
 
-        Assert.NotEqual(
-            [new TransportStreamId(0x40F0)],
-            slot.Select(stream => stream.TransportStreamId));
+        Assert.Equal(
+            before.Select(stream => stream.TransportStreamId),
+            after.Select(stream => stream.TransportStreamId));
     }
 
     private static int NextNetwork() => Interlocked.Increment(ref nextNetworkId);

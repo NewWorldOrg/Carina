@@ -3,6 +3,12 @@ using Carina.Domain.Channels;
 namespace Carina.TestSupport;
 
 /// <summary>
+/// Thrown by <see cref="RefusingCandidates"/> alone, so a test asserting that the store refused
+/// cannot be satisfied by some other failure that happens to share a type.
+/// </summary>
+public sealed class StoreRefusedException(string message) : Exception(message);
+
+/// <summary>
 /// The store it wraps, except that each arriving candidate is put to the gate first and refused
 /// when the gate says so. Stands in for whatever ends an apply half way — a dropped connection,
 /// a constraint, a cancelled request — and, by holding the gate, for one still in flight.
@@ -36,7 +42,7 @@ public sealed class RefusingCandidates(ICandidateChannelRepository candidates, F
 
     public Task AddAsync(CandidateChannel candidate, CancellationToken cancellationToken)
         => refuses()
-            ? throw new InvalidOperationException("This store stopped taking candidates part way through.")
+            ? throw new StoreRefusedException("This store stopped taking candidates part way through.")
             : candidates.AddAsync(candidate, cancellationToken);
 
     public Task SaveAsync(CandidateChannel candidate, CancellationToken cancellationToken)

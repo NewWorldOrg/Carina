@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 
 using Carina.Contracts;
 using Carina.Domain.Channels;
@@ -26,7 +27,8 @@ public sealed class ScanEndpointTests
             new ServiceId(serviceId),
             name,
             ServiceCategory.Television,
-            [new ScanChannelChange(ScanChangeKind.Added, tuning, tuning.TransportStreamId, null)]);
+            [new ScanChannelChange(ScanChangeKind.Added, tuning, tuning.TransportStreamId, null)],
+            Seen: true);
 
     private static ScanServiceChange Leaving(int serviceId, string name, TuningParameters tuning)
         => new(
@@ -35,7 +37,8 @@ public sealed class ScanEndpointTests
             new ServiceId(serviceId),
             name,
             ServiceCategory.Television,
-            [new ScanChannelChange(ScanChangeKind.Missing, tuning, tuning.TransportStreamId, null)]);
+            [new ScanChannelChange(ScanChangeKind.Missing, tuning, tuning.TransportStreamId, null)],
+            Seen: false);
 
     private static TuningParameters Satellite()
         => TuningParameters.Bs(SatelliteSlot, new TransportStreamId(SatelliteStream));
@@ -412,8 +415,9 @@ public sealed class ScanEndpointTests
         var scanId = await feature.StartAsync();
         await feature.UntilSettled(scanId);
 
-        await Assert.ThrowsAnyAsync<Exception>(
-            () => feature.PostAsync($"/api/tuners/scan/{scanId}/apply"));
+        var (refused, _) = await feature.PostAsync($"/api/tuners/scan/{scanId}/apply");
+
+        Assert.Equal(HttpStatusCode.InternalServerError, refused);
 
         // Walking again costs minutes on real hardware, so an apply that ended in a throw leaves
         // the difference applicable rather than spent. What the store is left holding is not the
@@ -454,13 +458,20 @@ public sealed class ScanEndpointTests
         };
 
         var held = feature.PostAsync($"/api/tuners/scan/{scanId}/apply");
-        await reached.Task;
+        HttpStatusCode status;
+        JsonElement body;
 
-        var (status, body) = await feature.PostAsync($"/api/tuners/scan/{scanId}/apply");
+        try
+        {
+            await reached.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            (status, body) = await feature.PostAsync($"/api/tuners/scan/{scanId}/apply");
+        }
+        finally
+        {
+            letGo.SetResult();
+        }
 
-        letGo.SetResult();
-        await held;
-
+        Assert.Equal(HttpStatusCode.OK, (await held).Status);
         Assert.Equal(HttpStatusCode.Conflict, status);
         Assert.Contains(
             "being applied",

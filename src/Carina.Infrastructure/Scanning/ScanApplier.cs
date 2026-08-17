@@ -1,4 +1,5 @@
 using Carina.Contracts;
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Events;
 using Carina.Domain.Scans;
@@ -29,23 +30,28 @@ public sealed class ScanApplier(
         ArgumentNullException.ThrowIfNull(systems);
 
         var covered = systems.ToHashSet();
-        var at = clock.GetUtcNow().UtcDateTime;
-        var tally = new Tally();
 
         // Half a difference is not a smaller difference. A service left without the candidate
         // channel that was to arrive with it cannot be told apart from one deliberately left
         // with no way to tune it, and a service never reached cannot be told apart from one the
         // scan did not find. A caller that goes away mid-apply therefore leaves nothing rather
         // than a prefix, and the difference it was applying stays applicable.
-        await writes.AllOrNothingAsync(
+        //
+        // What the write counted, and the moment it says the services were seen, are taken from
+        // the write rather than from around it: a write that ran twice would otherwise report
+        // the first run's clock and both runs' counts.
+        var tally = await writes.AllOrNothingAsync(
             async token =>
             {
+                var counted = new Tally();
+                var at = clock.GetUtcNow().UtcDateTime;
+
                 foreach (var change in difference.Services)
                 {
-                    await ApplyOneAsync(change, covered, at, tally, token);
+                    await ApplyOneAsync(change, covered, at, counted, token);
                 }
 
-                return tally;
+                return counted;
             },
             cancellationToken);
 
