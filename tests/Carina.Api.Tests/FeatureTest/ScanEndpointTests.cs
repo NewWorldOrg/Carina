@@ -1,6 +1,8 @@
 using System.Net;
 using System.Text.Json;
 
+using Carina.Api.Common;
+
 using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Scans;
@@ -415,9 +417,14 @@ public sealed class ScanEndpointTests
         var scanId = await feature.StartAsync();
         await feature.UntilSettled(scanId);
 
-        var (refused, _) = await feature.PostAsync($"/api/tuners/scan/{scanId}/apply");
+        var (refused, complaint) = await feature.PostAsync($"/api/tuners/scan/{scanId}/apply");
 
         Assert.Equal(HttpStatusCode.InternalServerError, refused);
+        Assert.False(complaint.GetProperty("status").GetBoolean());
+        Assert.Contains(
+            UnhandledFailureMiddleware.Message,
+            complaint.GetProperty("message").GetString()!,
+            StringComparison.Ordinal);
 
         feature.WhenACandidateArrives = () => false;
 
