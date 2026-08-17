@@ -7,7 +7,7 @@ public sealed class UnhandledFailureMiddleware(
     ILogger<UnhandledFailureMiddleware> logger)
 {
     public const string Message =
-        "The request failed and nothing it asked for was written. The app log names the failure.";
+        "The request failed before it could answer for itself. The app log names the failure.";
 
     public async Task InvokeAsync(HttpContext context)
     {
@@ -16,6 +16,10 @@ public sealed class UnhandledFailureMiddleware(
         try
         {
             await next(context);
+        }
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception failure) when (!context.Response.HasStarted)
         {

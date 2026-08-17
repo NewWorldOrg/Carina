@@ -1,6 +1,8 @@
 using System.Net;
 using System.Text.Json;
 
+using Carina.Api.Common;
+
 using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Scans;
@@ -420,7 +422,7 @@ public sealed class ScanEndpointTests
         Assert.Equal(HttpStatusCode.InternalServerError, refused);
         Assert.False(complaint.GetProperty("status").GetBoolean());
         Assert.Contains(
-            "nothing it asked for was written",
+            UnhandledFailureMiddleware.Message,
             complaint.GetProperty("message").GetString()!,
             StringComparison.Ordinal);
 
