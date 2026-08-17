@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
@@ -260,6 +261,40 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
 
         Assert.Equal(2, slot.Count);
         Assert.Equal(11, (await new SatelliteTransportStreamRepository(reading).ListAsync(Cancel)).Count);
+    }
+
+    [Fact]
+    public async Task AWriteInsideAnotherOneIsRefusedBeforeItWritesAnything()
+    {
+        var network = NextNetwork();
+        await using var context = database.Open();
+        var services = new BroadcastServiceRepository(context);
+        var writes = new DatabaseAtomicWrite(context);
+
+        await writes.AllOrNothingAsync<int>(
+            async outer =>
+            {
+                await services.AddAsync(Service(network, 1), outer);
+
+                await Assert.ThrowsAsync<NestedWriteRefusedException>(
+                    () => writes.AllOrNothingAsync<int>(
+                        async inner =>
+                        {
+                            await services.AddAsync(Service(network, 2), inner);
+
+                            return 0;
+                        },
+                        outer));
+
+                return 0;
+            },
+            Cancel);
+
+        await using var reading = database.Open();
+        var stored = new BroadcastServiceRepository(reading);
+
+        Assert.NotNull(await stored.FindAsync(new NetworkId(network), new ServiceId(1), Cancel));
+        Assert.Null(await stored.FindAsync(new NetworkId(network), new ServiceId(2), Cancel));
     }
 
     [Fact]
