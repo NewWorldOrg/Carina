@@ -78,8 +78,6 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
         var left = Assert.Single(
             await repository.ListForServiceAsync(new NetworkId(network), new ServiceId(1), Cancel));
 
-        // The reading taken at selection has to leave the row rather than linger in columns
-        // nothing reads back: an unselected candidate carrying one would rank as measured.
         Assert.Null(left.SelectionMeasurement);
         Assert.Null(left.LastMeasurement);
     }
@@ -286,8 +284,6 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
                 },
                 Cancel));
 
-        // The slot replacement owns no boundary of its own inside a larger write, so it goes
-        // back with it rather than standing while the rest is undone.
         await using var reading = database.Open();
         var after = await new SatelliteTransportStreamRepository(reading).ListForSlotAsync(Slot, Cancel);
 

@@ -107,8 +107,6 @@ public sealed class CandidateChannelRepository(CarinaDbContext context) : ICandi
             return null;
         }
 
-        // A selection is atomic on its own, but as one step of a larger write it joins that
-        // write instead of committing the deselect-then-select pair ahead of it.
         await using var transaction = context.Database.CurrentTransaction is null
             ? await context.Database.BeginTransactionAsync(cancellationToken)
             : null;

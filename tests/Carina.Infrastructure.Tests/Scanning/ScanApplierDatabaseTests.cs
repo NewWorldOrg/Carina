@@ -170,7 +170,6 @@ public sealed class ScanApplierDatabaseTests(RepositoryDatabase database)
                 await candidates.ListForServiceAsync(new NetworkId(network), new ServiceId(service), Cancel));
         }
 
-        // Telling the screen something changed would have it read a catalogue that did not.
         Assert.Empty(events.Signalled);
     }
 

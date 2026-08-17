@@ -419,10 +419,6 @@ public sealed class ScanEndpointTests
 
         Assert.Equal(HttpStatusCode.InternalServerError, refused);
 
-        // Walking again costs minutes on real hardware, so an apply that ended in a throw leaves
-        // the difference applicable rather than spent. What the store is left holding is not the
-        // subject here — these are held stores with no rollback; that is pinned against the
-        // database in ScanApplierDatabaseTests.
         feature.WhenACandidateArrives = () => false;
 
         var (status, _) = await feature.PostAsync($"/api/tuners/scan/{scanId}/apply");
@@ -473,8 +469,6 @@ public sealed class ScanEndpointTests
 
         Assert.Equal(HttpStatusCode.OK, (await held).Status);
 
-        // A conflict is waited out; the gone answer is the one that costs a walk. A caller has
-        // to be able to tell them apart without reading the sentence.
         Assert.Equal(HttpStatusCode.Conflict, status);
         Assert.Contains(
             "being applied",

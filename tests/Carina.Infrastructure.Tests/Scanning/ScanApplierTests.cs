@@ -286,7 +286,6 @@ public sealed class ScanApplierTests
     [Fact]
     public async Task AServiceTheScanDidNotReceiveIsNotStampedAsSeenJustNow()
     {
-        // Seeded before the clock the applier reads, so a stamp would be visible as a move.
         var discovered = At.AddHours(-1);
         services.Services.Add(BroadcastService.Discover(
             new NetworkId(1), new ServiceId(101), "Went quiet", ServiceCategory.Television, discovered));
@@ -317,8 +316,6 @@ public sealed class ScanApplierTests
             [TuneSystem.IsdbT],
             CancellationToken.None);
 
-        // The one channel it was reached on is gone, so the disappearance is what was applied.
-        // Moving the clock here would have the service last seen by the scan that lost it.
         Assert.Equal(discovered, services.Services[0].LastSeenAt);
         Assert.Equal(0, applied.ServicesUpdated);
         Assert.Equal(1, applied.ChannelsRemoved);
@@ -344,8 +341,6 @@ public sealed class ScanApplierTests
             [TuneSystem.IsdbT],
             CancellationToken.None);
 
-        // Entering it would date both its discovery and its last sighting to the scan that
-        // established it was not received.
         Assert.Empty(services.Services);
         Assert.Equal(0, applied.ServicesAdded);
         Assert.Equal(0, applied.ServicesUpdated);

@@ -35,7 +35,6 @@ public sealed class SatelliteTransportStreamRepository(CarinaDbContext context)
                 nameof(streams));
         }
 
-        // Replacing a slot is atomic on its own, and joins a larger write when it is part of one.
         await using var transaction = context.Database.CurrentTransaction is null
             ? await context.Database.BeginTransactionAsync(cancellationToken)
             : null;

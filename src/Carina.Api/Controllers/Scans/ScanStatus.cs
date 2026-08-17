@@ -8,8 +8,6 @@ public static class ScanStatus
     {
         ScanFailure.NoSuchRun => StatusCodes.Status404NotFound,
 
-        // Told apart from the conflicts, because this is the only refusal a caller cannot wait
-        // out: the difference is not coming back, and walking for it again costs minutes.
         ScanFailure.ProposalGone => StatusCodes.Status410Gone,
         _ => StatusCodes.Status409Conflict,
     };

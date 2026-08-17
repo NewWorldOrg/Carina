@@ -83,10 +83,6 @@ public sealed class HeldServices : IBroadcastServiceRepository
     }
 }
 
-/// <summary>
-/// Runs the write and keeps nothing back. A held store has no rollback, so a test that needs
-/// to see a failed write leave nothing behind belongs against the database.
-/// </summary>
 public sealed class UnguardedWrites : IAtomicWrite
 {
     public Task<T> AllOrNothingAsync<T>(
