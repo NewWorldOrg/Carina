@@ -10,6 +10,16 @@ using Microsoft.Extensions.Logging;
 
 namespace Carina.Infrastructure.Scanning;
 
+public enum ProposalClaim
+{
+    Claimed = 1,
+
+    /// <summary>Another apply holds it. Waiting is the recovery, not walking again.</summary>
+    AlreadyBeingApplied = 2,
+
+    Gone = 3,
+}
+
 public sealed record ScanProposal(
     ScanRunId ScanRunId,
     ScanDifference Difference,
@@ -167,25 +177,26 @@ public sealed class ScanRunner(IServiceScopeFactory scopes, ILogger<ScanRunner> 
     /// Claims a proposal for one apply. A second claim is refused while the first is out, which
     /// is what keeps two applies of one scan from both writing it. The proposal itself stays
     /// remembered until the write lands, so a walk that cost minutes is not spent by an apply
-    /// that never committed.
+    /// that never committed — and a caller told it cannot have the proposal is told which of
+    /// the two reasons applies, because only one of them means walking again.
     /// </summary>
-    public bool TryTakeProposal(ScanRunId id, [NotNullWhen(true)] out ScanProposal? proposal)
+    public ProposalClaim TryClaimProposal(ScanRunId id, out ScanProposal? proposal)
     {
         if (!claimed.TryAdd(id, 0))
         {
             proposal = null;
 
-            return false;
+            return ProposalClaim.AlreadyBeingApplied;
         }
 
         if (proposals.TryGetValue(id, out proposal))
         {
-            return true;
+            return ProposalClaim.Claimed;
         }
 
         claimed.TryRemove(id, out _);
 
-        return false;
+        return ProposalClaim.Gone;
     }
 
     /// <summary>Forgets a proposal whose apply committed.</summary>

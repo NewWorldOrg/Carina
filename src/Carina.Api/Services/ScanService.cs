@@ -14,6 +14,8 @@ public enum ScanFailure
 
     ProposalGone = 4,
 
+    ApplyInFlight = 7,
+
     NotWalkingHere = 5,
 
     AlreadyEnded = 6,
@@ -91,7 +93,16 @@ public sealed class ScanService(ScanRunner runner, IScanRunRepository runs, Scan
                 ScanFailure.NeverCompleted);
         }
 
-        if (!runner.TryTakeProposal(id, out var proposal))
+        var claim = runner.TryClaimProposal(id, out var proposal);
+
+        if (claim is ProposalClaim.AlreadyBeingApplied)
+        {
+            return ServiceResult<ScanApplication, ScanFailure>.Failure(
+                "This scan's difference is being applied; ask again once that has finished.",
+                ScanFailure.ApplyInFlight);
+        }
+
+        if (claim is ProposalClaim.Gone || proposal is null)
         {
             return ServiceResult<ScanApplication, ScanFailure>.Failure(
                 "The difference this scan proposed is no longer held; scan again to propose a fresh one.",

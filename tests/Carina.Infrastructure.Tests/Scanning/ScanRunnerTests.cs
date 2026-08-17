@@ -114,7 +114,8 @@ public sealed class ScanRunnerTests : IAsyncLifetime
             () => Runner.TryPeekProposal(launch.Started!, out _),
             "the proposal is held for the apply that follows");
 
-        Assert.True(Runner.TryTakeProposal(launch.Started!, out var proposal));
+        Assert.Equal(ProposalClaim.Claimed, Runner.TryClaimProposal(launch.Started!, out var proposal));
+        Assert.NotNull(proposal);
         Assert.Single(proposal.Difference.Added);
     }
 
@@ -129,8 +130,13 @@ public sealed class ScanRunnerTests : IAsyncLifetime
             () => Runner.TryPeekProposal(launch.Started!, out _),
             "the proposal is held");
 
-        Assert.True(Runner.TryTakeProposal(launch.Started!, out _));
-        Assert.False(Runner.TryTakeProposal(launch.Started!, out _));
+        Assert.Equal(ProposalClaim.Claimed, Runner.TryClaimProposal(launch.Started!, out _));
+
+        // Refused because one apply already holds it, which waiting undoes — not because the
+        // difference is gone, which only walking again undoes.
+        Assert.Equal(
+            ProposalClaim.AlreadyBeingApplied,
+            Runner.TryClaimProposal(launch.Started!, out _));
     }
 
     [Fact]
@@ -144,10 +150,11 @@ public sealed class ScanRunnerTests : IAsyncLifetime
             () => Runner.TryPeekProposal(launch.Started!, out _),
             "the proposal is held");
 
-        Assert.True(Runner.TryTakeProposal(launch.Started!, out _));
+        Assert.Equal(ProposalClaim.Claimed, Runner.TryClaimProposal(launch.Started!, out _));
         Runner.GiveBackProposal(launch.Started!);
 
-        Assert.True(Runner.TryTakeProposal(launch.Started!, out var again));
+        Assert.Equal(ProposalClaim.Claimed, Runner.TryClaimProposal(launch.Started!, out var again));
+        Assert.NotNull(again);
         Assert.Single(again.Difference.Added);
     }
 
@@ -162,10 +169,10 @@ public sealed class ScanRunnerTests : IAsyncLifetime
             () => Runner.TryPeekProposal(launch.Started!, out _),
             "the proposal is held");
 
-        Assert.True(Runner.TryTakeProposal(launch.Started!, out _));
+        Assert.Equal(ProposalClaim.Claimed, Runner.TryClaimProposal(launch.Started!, out _));
         Runner.ProposalApplied(launch.Started!);
 
-        Assert.False(Runner.TryTakeProposal(launch.Started!, out _));
+        Assert.Equal(ProposalClaim.Gone, Runner.TryClaimProposal(launch.Started!, out _));
         Assert.False(Runner.TryPeekProposal(launch.Started!, out _));
     }
 

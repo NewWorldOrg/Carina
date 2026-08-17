@@ -120,7 +120,7 @@ public sealed class CandidateChannelRepository(CarinaDbContext context) : ICandi
 
         if (transaction is not null)
         {
-            await transaction.CommitAsync(cancellationToken);
+            await transaction.CommitAsync(CancellationToken.None);
         }
 
         return chosen;

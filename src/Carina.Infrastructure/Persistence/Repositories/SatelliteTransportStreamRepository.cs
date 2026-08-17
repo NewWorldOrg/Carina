@@ -49,7 +49,7 @@ public sealed class SatelliteTransportStreamRepository(CarinaDbContext context)
 
         if (transaction is not null)
         {
-            await transaction.CommitAsync(cancellationToken);
+            await transaction.CommitAsync(CancellationToken.None);
         }
     }
 
