@@ -293,7 +293,9 @@ public sealed class WireStabilityTests
             ["lock", "cnrMilliDecibels", "postViterbiBitErrors", "measuredAt"],
             fields.Take(4)
         );
-        Assert.Equal(["lockReadAt", "notImplementedMetrics"], fields.Skip(4));
+        Assert.Equal(
+            ["lockReadAt", "notImplementedMetrics", "metricsOnAnotherScale"],
+            fields.Skip(4));
         Assert.Equal(
             ["layer", "errorBits", "totalBits"],
             FieldsOf(DriverJson.Serialize(new LayerBitErrorCounts(0, 12, 1_000_000)))

@@ -1017,6 +1017,90 @@ public sealed class TunerSessionManagerTests : IDisposable
     }
 
     [Fact]
+    public void AChannelWalkReadsTheSignalOftenEnoughForOneShortVisit()
+    {
+        var signal = new ScriptedQualitySource();
+        var factory = new PacedTunerDeviceFactory(signal);
+        var manager = Manager(
+            Configuration with
+            {
+                Tuner = new TunerSettings(TunerBackend.Fake, SignalQualitySeconds: 30),
+            },
+            factory
+        );
+        var session = Begin(manager, "walking", "adapter0", SessionPurpose.Scan);
+
+        factory.Last.Allow(3);
+        factory.Last.AwaitParkedBefore(4);
+
+        Assert.Equal(1, signal.Reads);
+
+        clock.Advance(TimeSpan.FromSeconds(2));
+        factory.Last.Allow(1);
+        factory.Last.AwaitParkedBefore(5);
+
+        Assert.Equal(2, signal.Reads);
+
+        session.Stop();
+    }
+
+    [Fact]
+    public void AChannelWalkDoesNotReadTheSignalMoreOftenThanTheConfigurationAsksFor()
+    {
+        var signal = new ScriptedQualitySource();
+        var factory = new PacedTunerDeviceFactory(signal);
+        var manager = Manager(
+            Configuration with
+            {
+                Tuner = new TunerSettings(TunerBackend.Fake, SignalQualitySeconds: 1),
+            },
+            factory
+        );
+        var session = Begin(manager, "walking-fast", "adapter0", SessionPurpose.Scan);
+
+        factory.Last.Allow(3);
+        factory.Last.AwaitParkedBefore(4);
+
+        Assert.Equal(1, signal.Reads);
+
+        clock.Advance(TimeSpan.FromSeconds(1));
+        factory.Last.Allow(1);
+        factory.Last.AwaitParkedBefore(5);
+
+        Assert.Equal(2, signal.Reads);
+
+        session.Stop();
+    }
+
+    [Fact]
+    public void GatheringTheGuideKeepsTheIntervalTheConfigurationNames()
+    {
+        var signal = new ScriptedQualitySource();
+        var factory = new PacedTunerDeviceFactory(signal);
+        var manager = Manager(
+            Configuration with
+            {
+                Tuner = new TunerSettings(TunerBackend.Fake, SignalQualitySeconds: 30),
+            },
+            factory
+        );
+        var session = Begin(manager, "surveying", "adapter0", SessionPurpose.Survey);
+
+        factory.Last.Allow(3);
+        factory.Last.AwaitParkedBefore(4);
+
+        Assert.Equal(1, signal.Reads);
+
+        clock.Advance(TimeSpan.FromSeconds(2));
+        factory.Last.Allow(1);
+        factory.Last.AwaitParkedBefore(5);
+
+        Assert.Equal(1, signal.Reads);
+
+        session.Stop();
+    }
+
+    [Fact]
     public void ADriverThatTunesFromTypedParametersSaysSo()
     {
         Assert.Contains(

@@ -656,7 +656,7 @@ public sealed class TunerSessionManager(
             logger: logger,
             outputRoot: request.OutputRoot,
             diagnostics: diagnostics,
-            watch: Watch(),
+            watch: Watch(request.Purpose),
             tune: request.Tune
         );
 
@@ -830,15 +830,24 @@ public sealed class TunerSessionManager(
         Announce();
     }
 
-    private SignalQualityWatch Watch() =>
+    private SignalQualityWatch Watch(SessionPurpose purpose) =>
         new(
-            configuration.Tuner?.SignalQualityInterval ?? SignalQualityReader.DefaultInterval,
+            Interval(purpose),
             (_, _) =>
             {
                 events?.Signal(DriverEvents.SessionLockLost);
                 events?.Signal(DriverEvents.Tuners);
             }
         );
+
+    private TimeSpan Interval(SessionPurpose purpose)
+    {
+        var configured = configuration.Tuner?.SignalQualityInterval ?? SignalQualityReader.DefaultInterval;
+
+        return purpose is SessionPurpose.Scan && SignalQualityReader.WhileWalkingChannels < configured
+            ? SignalQualityReader.WhileWalkingChannels
+            : configured;
+    }
 
     private void Announce()
     {

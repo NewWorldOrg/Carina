@@ -31,6 +31,8 @@ public enum SignalReading
     NotImplementedByThisTuner = 3,
 
     UnavailableRightNow = 4,
+
+    ReportedOnAnotherScale = 5,
 }
 
 public readonly record struct LockWindow(FrontendStatus Before, FrontendStatus After)
@@ -65,6 +67,10 @@ public readonly struct CarrierToNoise : IEquatable<CarrierToNoise>
     );
 
     public static readonly CarrierToNoise Unavailable = Nothing(SignalReading.UnavailableRightNow);
+
+    public static readonly CarrierToNoise OnAnotherScale = Nothing(
+        SignalReading.ReportedOnAnotherScale
+    );
 
     public static CarrierToNoise Measured(double decibels) => new(SignalReading.Measured, decibels);
 
@@ -138,9 +144,14 @@ public static class SignalQualityReading
             return CarrierToNoise.Unavailable;
         }
 
-        if (layers[0].Scale is not StatisticScale.Decibel)
+        if (layers[0].Scale is StatisticScale.NotAvailable)
         {
             return CarrierToNoise.Unavailable;
+        }
+
+        if (layers[0].Scale is not StatisticScale.Decibel)
+        {
+            return CarrierToNoise.OnAnotherScale;
         }
 
         return CarrierToNoise.Measured(layers[0].Value / (double)MillidecibelsPerDecibel);

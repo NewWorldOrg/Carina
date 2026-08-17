@@ -24,6 +24,8 @@ public sealed class SignalQualityReader
 {
     public static readonly TimeSpan DefaultInterval = TimeSpan.FromSeconds(10);
 
+    public static readonly TimeSpan WhileWalkingChannels = TimeSpan.FromSeconds(2);
+
     private readonly ISignalQualitySource source;
     private readonly TimeProvider time;
     private readonly TimeSpan interval;

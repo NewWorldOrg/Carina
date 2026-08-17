@@ -23,6 +23,7 @@ public sealed record SignalQualityDto
     private readonly int? cnrMilliDecibels;
     private readonly IReadOnlyList<LayerBitErrorCounts> postViterbiBitErrors = [];
     private readonly IReadOnlyList<string> notImplementedMetrics = [];
+    private readonly IReadOnlyList<string> metricsOnAnotherScale = [];
 
     public SignalQualityDto() { }
 
@@ -34,6 +35,7 @@ public sealed record SignalQualityDto
         MeasuredAt = other.MeasuredAt;
         LockReadAt = other.LockReadAt;
         notImplementedMetrics = other.NotImplementedMetrics;
+        metricsOnAnotherScale = other.MetricsOnAnotherScale;
     }
 
     public SignalLock Lock { get; init; }
@@ -60,6 +62,12 @@ public sealed record SignalQualityDto
         init => notImplementedMetrics = value ?? [];
     }
 
+    public IReadOnlyList<string> MetricsOnAnotherScale
+    {
+        get => metricsOnAnotherScale;
+        init => metricsOnAnotherScale = value ?? [];
+    }
+
     [JsonIgnore]
     public decimal? CnrDecibels => CnrMilliDecibels / 1000m;
 
@@ -76,7 +84,8 @@ public sealed record SignalQualityDto
         && MeasuredAt == other.MeasuredAt
         && LockReadAt == other.LockReadAt
         && PostViterbiBitErrors.SequenceEqual(other.PostViterbiBitErrors)
-        && NotImplementedMetrics.SequenceEqual(other.NotImplementedMetrics, StringComparer.Ordinal);
+        && NotImplementedMetrics.SequenceEqual(other.NotImplementedMetrics, StringComparer.Ordinal)
+        && MetricsOnAnotherScale.SequenceEqual(other.MetricsOnAnotherScale, StringComparer.Ordinal);
 
     public override int GetHashCode() =>
         HashCode.Combine(
@@ -85,7 +94,8 @@ public sealed record SignalQualityDto
             MeasuredAt,
             LockReadAt,
             PostViterbiBitErrors.Count,
-            NotImplementedMetrics.Count
+            NotImplementedMetrics.Count,
+            MetricsOnAnotherScale.Count
         );
 }
 
