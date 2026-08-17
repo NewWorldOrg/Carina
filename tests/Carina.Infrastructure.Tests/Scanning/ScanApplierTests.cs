@@ -92,6 +92,7 @@ public sealed class ScanApplierTests
                         ScanChangeKind.Missing,
                         201,
                         "Satellite one",
+                        seen: false,
                         Channel(ScanChangeKind.Missing, Satellite(), cnr: null)),
                 ],
                 []),
@@ -177,6 +178,7 @@ public sealed class ScanApplierTests
                         ScanChangeKind.Missing,
                         201,
                         "Satellite one",
+                        seen: false,
                         Channel(ScanChangeKind.Missing, Satellite(), cnr: null)),
                 ],
                 []),
@@ -185,6 +187,7 @@ public sealed class ScanApplierTests
 
         Assert.Equal(0, applied.ChannelsRemoved);
         Assert.Equal(0, applied.ServicesRemoved);
+        Assert.Equal(0, applied.ServicesUpdated);
         Assert.Single(candidates.Candidates);
     }
 
@@ -317,11 +320,52 @@ public sealed class ScanApplierTests
             CancellationToken.None);
 
         Assert.Equal(discovered, services.Services[0].LastSeenAt);
-        Assert.Equal(0, applied.ServicesUpdated);
+        Assert.Equal(1, applied.ServicesUpdated);
         Assert.Equal(1, applied.ChannelsRemoved);
         Assert.Equal(
             [OtherTerrestrial],
             candidates.Candidates.Select(candidate => candidate.Tuning.PhysicalChannel));
+    }
+
+    [Fact]
+    public async Task EveryConfirmedChangeIsAccountedForInWhatTheApplySaysItDid()
+    {
+        Seed(101, "Kept", TuningParameters.Terrestrial(Terrestrial));
+        Seed(102, "Quietened", TuningParameters.Terrestrial(Terrestrial), TuningParameters.Terrestrial(OtherTerrestrial));
+        Seed(103, "Left", TuningParameters.Terrestrial(Terrestrial));
+
+        var difference = new ScanDifference(
+            [
+                Change(
+                    ScanChangeKind.Added,
+                    104,
+                    "Arrived",
+                    Channel(ScanChangeKind.Added, TuningParameters.Terrestrial(Terrestrial))),
+                Change(
+                    ScanChangeKind.Updated,
+                    101,
+                    "Kept, renamed",
+                    Channel(ScanChangeKind.Added, TuningParameters.Terrestrial(OtherTerrestrial))),
+                Change(
+                    ScanChangeKind.Updated,
+                    102,
+                    "Quietened",
+                    seen: false,
+                    Channel(ScanChangeKind.Missing, TuningParameters.Terrestrial(Terrestrial), cnr: null)),
+                Change(
+                    ScanChangeKind.Missing,
+                    103,
+                    "Left",
+                    seen: false,
+                    Channel(ScanChangeKind.Missing, TuningParameters.Terrestrial(Terrestrial), cnr: null)),
+            ],
+            []);
+
+        var applied = await Applier.ApplyAsync(difference, [TuneSystem.IsdbT], CancellationToken.None);
+
+        Assert.Equal(difference.Added.Count, applied.ServicesAdded);
+        Assert.Equal(difference.Updated.Count, applied.ServicesUpdated);
+        Assert.Equal(difference.Missing.Count, applied.ServicesRemoved);
     }
 
     [Fact]
