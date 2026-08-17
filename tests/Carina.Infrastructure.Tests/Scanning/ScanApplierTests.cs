@@ -19,7 +19,8 @@ public sealed class ScanApplierTests
     private readonly HeldCandidates candidates = new();
     private readonly RecordingAppEvents events = new();
 
-    private ScanApplier Applier => new(services, candidates, events, new StillClock());
+    private ScanApplier Applier
+        => new(services, candidates, new UnguardedWrites(), events, new StillClock());
 
     private static ScanServiceChange Change(
         ScanChangeKind kind,
@@ -265,6 +266,37 @@ public sealed class ScanApplierTests
         Assert.Equal(1, applied.ChannelsRemoved);
         Assert.Empty(services.Services);
         Assert.Empty(candidates.Candidates);
+    }
+
+    [Fact]
+    public async Task AServiceTheScanDidNotReceiveIsNotStampedAsSeenJustNow()
+    {
+        Seed(101, "Went quiet",
+            TuningParameters.Terrestrial(Terrestrial),
+            TuningParameters.Terrestrial(OtherTerrestrial));
+        var lastSeen = services.Services[0].LastSeenAt;
+
+        await Applier.ApplyAsync(
+            new ScanDifference(
+                [
+                    Change(
+                        ScanChangeKind.Updated,
+                        101,
+                        "Went quiet",
+                        Channel(ScanChangeKind.Missing, TuningParameters.Terrestrial(Terrestrial), cnr: null))
+                        with
+                        { Seen = false },
+                ],
+                []),
+            [TuneSystem.IsdbT],
+            CancellationToken.None);
+
+        // The one channel it was reached on is gone, so the disappearance is what was applied.
+        // Moving the clock here is what the health rule reads to notice the service went quiet.
+        Assert.Equal(lastSeen, services.Services[0].LastSeenAt);
+        Assert.Equal(
+            [OtherTerrestrial],
+            candidates.Candidates.Select(candidate => candidate.Tuning.PhysicalChannel));
     }
 
     [Fact]

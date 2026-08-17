@@ -16,6 +16,7 @@ public sealed record ScanApplication(
 public sealed class ScanApplier(
     IBroadcastServiceRepository services,
     ICandidateChannelRepository candidates,
+    IAtomicWrite writes,
     IAppEventPublisher events,
     TimeProvider clock)
 {
@@ -31,10 +32,22 @@ public sealed class ScanApplier(
         var at = clock.GetUtcNow().UtcDateTime;
         var tally = new Tally();
 
-        foreach (var change in difference.Services)
-        {
-            await ApplyOneAsync(change, covered, at, tally, cancellationToken);
-        }
+        // Half a difference is not a smaller difference. A service left without the candidate
+        // channel that was to arrive with it cannot be told apart from one deliberately left
+        // with no way to tune it, and a service never reached cannot be told apart from one the
+        // scan did not find. A caller that goes away mid-apply therefore leaves nothing rather
+        // than a prefix, and the difference it was applying stays applicable.
+        await writes.AllOrNothingAsync(
+            async token =>
+            {
+                foreach (var change in difference.Services)
+                {
+                    await ApplyOneAsync(change, covered, at, tally, token);
+                }
+
+                return tally;
+            },
+            cancellationToken);
 
         events.Signal(AppEventName.Tuners);
 
@@ -104,10 +117,16 @@ public sealed class ScanApplier(
                 cancellationToken);
             tally.ServicesAdded++;
         }
-        else
+        else if (change.Seen)
         {
             known.Describe(change.Name, change.Category, at);
             await services.SaveAsync(known, cancellationToken);
+            tally.ServicesUpdated++;
+        }
+        else
+        {
+            // The scan did not receive this service, so its channels are what changed. Describing
+            // it would move the last-seen clock that a disappearance is detected by.
             tally.ServicesUpdated++;
         }
 

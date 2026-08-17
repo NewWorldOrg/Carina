@@ -134,6 +134,42 @@ public sealed class ScanRunnerTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task AProposalWhoseApplyDidNotLandCanBeAppliedAgainWithoutWalkingAgain()
+    {
+        Orchestrator.Difference = ProposedDifference();
+
+        var launch = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
+
+        await Eventually.Happens(
+            () => Runner.TryPeekProposal(launch.Started!, out _),
+            "the proposal is held");
+
+        Assert.True(Runner.TryTakeProposal(launch.Started!, out _));
+        Runner.GiveBackProposal(launch.Started!);
+
+        Assert.True(Runner.TryTakeProposal(launch.Started!, out var again));
+        Assert.Single(again.Difference.Added);
+    }
+
+    [Fact]
+    public async Task AProposalWhoseApplyLandedIsNotOfferedASecondTime()
+    {
+        Orchestrator.Difference = ProposedDifference();
+
+        var launch = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
+
+        await Eventually.Happens(
+            () => Runner.TryPeekProposal(launch.Started!, out _),
+            "the proposal is held");
+
+        Assert.True(Runner.TryTakeProposal(launch.Started!, out _));
+        Runner.ProposalApplied(launch.Started!);
+
+        Assert.False(Runner.TryTakeProposal(launch.Started!, out _));
+        Assert.False(Runner.TryPeekProposal(launch.Started!, out _));
+    }
+
+    [Fact]
     public async Task ACancelledScanProposesNothingToApply()
     {
         Orchestrator.HoldsOpen = true;

@@ -98,8 +98,25 @@ public sealed class ScanService(ScanRunner runner, IScanRunRepository runs, Scan
                 ScanFailure.ProposalGone);
         }
 
-        return ServiceResult<ScanApplication, ScanFailure>.Success(
-            await applier.ApplyAsync(proposal.Difference, proposal.Systems, cancellationToken));
+        try
+        {
+            var applied = await applier.ApplyAsync(
+                proposal.Difference,
+                proposal.Systems,
+                cancellationToken);
+
+            runner.ProposalApplied(id);
+
+            return ServiceResult<ScanApplication, ScanFailure>.Success(applied);
+        }
+        catch
+        {
+            // The write did not land, so the difference is still the difference. Recovering by
+            // walking again costs minutes on real hardware.
+            runner.GiveBackProposal(id);
+
+            throw;
+        }
     }
 
     public async Task<ServiceResult<IReadOnlyList<ScanRun>>> ListAsync(CancellationToken cancellationToken)

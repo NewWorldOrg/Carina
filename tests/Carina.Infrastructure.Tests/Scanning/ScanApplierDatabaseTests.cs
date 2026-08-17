@@ -1,6 +1,7 @@
 using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Scans;
+using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Scanning;
 using Carina.TestSupport;
@@ -131,6 +132,40 @@ public sealed class ScanApplierDatabaseTests(RepositoryDatabase database)
         }
     }
 
+    [Fact]
+    public async Task AnApplyThatFailsPartWayThroughLeavesNothingBehind()
+    {
+        var network = Interlocked.Increment(ref nextNetworkId);
+        var carrying = TuningParameters.Terrestrial(PhysicalChannel);
+        var difference = new ScanDifference(
+            [.. Services.Select(service => Change(
+                ScanChangeKind.Added,
+                network,
+                service,
+                $"Service {service}",
+                Channel(ScanChangeKind.Added, carrying, SignalMeasurement.WithLock(At, 21_000))))],
+            []);
+
+        await using var writing = database.Open();
+        var applier = new ScanApplier(
+            new BroadcastServiceRepository(writing),
+            new RefusingCandidates(new CandidateChannelRepository(writing), refuseFrom: 2),
+            new DatabaseAtomicWrite(writing),
+            new RecordingAppEvents(),
+            new StillClock());
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => applier.ApplyAsync(difference, [TuneSystem.IsdbT], Cancel));
+
+        await using var reading = database.Open();
+        var services = new BroadcastServiceRepository(reading);
+
+        foreach (var service in Services)
+        {
+            Assert.Null(await services.FindAsync(new NetworkId(network), new ServiceId(service), Cancel));
+        }
+    }
+
     private async Task<ScanApplication> ApplyAsync(ScanDifference difference)
     {
         await using var writing = database.Open();
@@ -138,6 +173,7 @@ public sealed class ScanApplierDatabaseTests(RepositoryDatabase database)
         return await new ScanApplier(
             new BroadcastServiceRepository(writing),
             new CandidateChannelRepository(writing),
+            new DatabaseAtomicWrite(writing),
             new RecordingAppEvents(),
             new StillClock()).ApplyAsync(difference, [TuneSystem.IsdbT], Cancel);
     }

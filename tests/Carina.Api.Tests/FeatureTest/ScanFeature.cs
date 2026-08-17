@@ -21,6 +21,9 @@ internal sealed class ScanFeature : IAsyncDisposable
         Client = factory
             .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
             {
+                // The held stores have no rollback, so the write is run as it comes. That a
+                // failed apply leaves nothing behind is pinned against the database instead.
+                services.AddSingleton<IAtomicWrite, UnguardedWrites>();
                 services.AddSingleton<IChannelScanOrchestrator>(Orchestrator);
                 services.AddSingleton<IScanRunRepository>(Runs);
                 services.AddSingleton<IBroadcastServiceRepository>(Services);

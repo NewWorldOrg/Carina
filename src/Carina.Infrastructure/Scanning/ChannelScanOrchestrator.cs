@@ -335,7 +335,8 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
                     service.ServiceId,
                     service.Name,
                     service.Category,
-                    gone));
+                    gone,
+                    Seen: false));
 
                 continue;
             }
