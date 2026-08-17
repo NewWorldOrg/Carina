@@ -415,9 +415,14 @@ public sealed class ScanEndpointTests
         var scanId = await feature.StartAsync();
         await feature.UntilSettled(scanId);
 
-        var (refused, _) = await feature.PostAsync($"/api/tuners/scan/{scanId}/apply");
+        var (refused, complaint) = await feature.PostAsync($"/api/tuners/scan/{scanId}/apply");
 
         Assert.Equal(HttpStatusCode.InternalServerError, refused);
+        Assert.False(complaint.GetProperty("status").GetBoolean());
+        Assert.Contains(
+            "nothing it asked for was written",
+            complaint.GetProperty("message").GetString()!,
+            StringComparison.Ordinal);
 
         feature.WhenACandidateArrives = () => false;
 

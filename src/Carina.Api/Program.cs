@@ -28,6 +28,8 @@ builder.Services.AddOpenApi(options =>
 
 var app = builder.Build();
 
+
+app.UseMiddleware<UnhandledFailureMiddleware>();
 app.UseAuthentication();
 app.UseMiddleware<DefaultDenyAuthenticationMiddleware>();
 
