@@ -82,13 +82,29 @@ public sealed class HeldServices : IBroadcastServiceRepository
 
 public sealed class UnguardedWrites : IAtomicWrite
 {
-    public Task<T> AllOrNothingAsync<T>(
+    private bool underway;
+
+    public async Task<T> AllOrNothingAsync<T>(
         Func<CancellationToken, Task<T>> write,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(write);
 
-        return write(cancellationToken);
+        if (underway)
+        {
+            throw new NestedWriteRefusedException();
+        }
+
+        underway = true;
+
+        try
+        {
+            return await write(cancellationToken);
+        }
+        finally
+        {
+            underway = false;
+        }
     }
 }
 
