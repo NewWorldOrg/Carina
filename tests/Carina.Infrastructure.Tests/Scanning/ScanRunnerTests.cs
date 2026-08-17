@@ -120,7 +120,7 @@ public sealed class ScanRunnerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task AProposalIsHandedOverOnlyOnceSoAnApplyCannotRunTwice()
+    public async Task AProposalIsHeldByOneApplyAtATimeSoTwoCannotWriteIt()
     {
         Orchestrator.Difference = ProposedDifference();
 

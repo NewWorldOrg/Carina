@@ -3,8 +3,9 @@ using Carina.Domain.Channels;
 namespace Carina.TestSupport;
 
 /// <summary>
-/// The store it wraps until the gate says so, and a refusal from then on. Stands in for
-/// whatever ends an apply half way — a dropped connection, a constraint, a cancelled request.
+/// The store it wraps, except that each arriving candidate is put to the gate first and refused
+/// when the gate says so. Stands in for whatever ends an apply half way — a dropped connection,
+/// a constraint, a cancelled request — and, by holding the gate, for one still in flight.
 /// </summary>
 public sealed class RefusingCandidates(ICandidateChannelRepository candidates, Func<bool> refuses)
     : ICandidateChannelRepository

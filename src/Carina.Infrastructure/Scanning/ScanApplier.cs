@@ -131,8 +131,8 @@ public sealed class ScanApplier(
             tally.ServicesUpdated++;
         }
         // Anything else here did not receive the service, so its channels are what changed and
-        // the service row is left alone: describing it would move the last-seen clock that a
-        // disappearance is detected by, and counting it would report an update nothing made.
+        // the service row is left alone: describing it would make the last-seen clock say the
+        // service was received, and counting it would report an update nothing made.
 
         foreach (var arrival in arriving)
         {

@@ -292,7 +292,7 @@ public sealed class ScanApplierTests
             CancellationToken.None);
 
         // The one channel it was reached on is gone, so the disappearance is what was applied.
-        // Moving the clock here is what the health rule reads to notice the service went quiet.
+        // Moving the clock here would have the service last seen by the scan that lost it.
         Assert.Equal(lastSeen, services.Services[0].LastSeenAt);
         Assert.Equal(
             [OtherTerrestrial],

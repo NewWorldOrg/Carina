@@ -104,8 +104,8 @@ public sealed class ScanService(ScanRunner runner, IScanRunRepository runs, Scan
 
         if (claim is ProposalClaim.Gone || proposal is null)
         {
-            // A claim taken without a proposal behind it would otherwise answer every later
-            // apply of this run with "wait", for an apply that is not happening.
+            // Claimed always carries a proposal, so this releases nothing today. It is here so
+            // that a claim can never outlive the apply it was taken for.
             runner.GiveBackProposal(id);
 
             return ServiceResult<ScanApplication, ScanFailure>.Failure(
@@ -126,8 +126,9 @@ public sealed class ScanService(ScanRunner runner, IScanRunRepository runs, Scan
         }
         catch
         {
-            // The write did not land, so the difference is still the difference. Recovering by
-            // walking again costs minutes on real hardware.
+            // Everything that can realistically throw here happens before the commit, so the
+            // difference is still the difference. Recovering by walking again costs minutes on
+            // real hardware.
             runner.GiveBackProposal(id);
 
             throw;

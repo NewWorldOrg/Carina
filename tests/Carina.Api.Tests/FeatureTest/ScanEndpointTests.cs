@@ -415,12 +415,15 @@ public sealed class ScanEndpointTests
         await Assert.ThrowsAnyAsync<Exception>(
             () => feature.PostAsync($"/api/tuners/scan/{scanId}/apply"));
 
-        // Walking again costs minutes on real hardware, so a difference that was never written
-        // stays the difference.
+        // Walking again costs minutes on real hardware, so an apply that ended in a throw leaves
+        // the difference applicable rather than spent. What the store is left holding is not the
+        // subject here — these are held stores with no rollback; that is pinned against the
+        // database in ScanApplierDatabaseTests.
         feature.WhenACandidateArrives = () => false;
 
-        Assert.Equal(HttpStatusCode.OK, (await feature.PostAsync($"/api/tuners/scan/{scanId}/apply")).Status);
-        Assert.Single(feature.Services.Services);
+        var (status, _) = await feature.PostAsync($"/api/tuners/scan/{scanId}/apply");
+
+        Assert.Equal(HttpStatusCode.OK, status);
         Assert.Single(feature.Candidates.Candidates);
     }
 

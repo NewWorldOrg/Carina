@@ -184,13 +184,6 @@ public sealed class ScanRunner(IServiceScopeFactory scopes, ILogger<ScanRunner> 
     {
         proposal = null;
 
-        // Asked before claiming, so that a run with nothing to apply is told to walk again
-        // rather than to wait for an apply that is not happening.
-        if (!proposals.ContainsKey(id))
-        {
-            return ProposalClaim.Gone;
-        }
-
         if (!claimed.TryAdd(id, 0))
         {
             return ProposalClaim.AlreadyBeingApplied;
