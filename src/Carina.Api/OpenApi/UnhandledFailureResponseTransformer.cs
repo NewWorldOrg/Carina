@@ -7,6 +7,8 @@ public sealed class UnhandledFailureResponseTransformer : IOpenApiOperationTrans
 {
     private const string Failure = "500";
 
+    private const string Json = "application/json";
+
     public Task TransformAsync(
         OpenApiOperation operation,
         OpenApiOperationTransformerContext context,
@@ -15,29 +17,24 @@ public sealed class UnhandledFailureResponseTransformer : IOpenApiOperationTrans
     {
         ArgumentNullException.ThrowIfNull(operation);
 
-        operation.Responses ??= [];
-        operation.Responses[Failure] = new OpenApiResponse
+        if (operation.Responses is not { } answers || EnvelopeOf(answers) is not { } envelope)
+        {
+            return Task.CompletedTask;
+        }
+
+        answers[Failure] = new OpenApiResponse
         {
             Description = "The request failed before it could answer for itself. The body carries the usual envelope with no data.",
-            Content = new Dictionary<string, OpenApiMediaType>
-            {
-                ["application/json"] = new()
-                {
-                    Schema = new OpenApiSchema
-                    {
-                        Type = JsonSchemaType.Object,
-                        Required = new HashSet<string> { "status", "message", "data" },
-                        Properties = new Dictionary<string, IOpenApiSchema>
-                        {
-                            ["status"] = new OpenApiSchema { Type = JsonSchemaType.Boolean },
-                            ["message"] = new OpenApiSchema { Type = JsonSchemaType.String },
-                            ["data"] = new OpenApiSchema { Type = JsonSchemaType.Null },
-                        },
-                    },
-                },
-            },
+            Content = new Dictionary<string, OpenApiMediaType> { [Json] = new() { Schema = envelope } },
         };
 
         return Task.CompletedTask;
     }
+
+    private static IOpenApiSchema? EnvelopeOf(IDictionary<string, IOpenApiResponse> answers)
+        => answers.Values
+            .Select(answer => answer.Content is { } content && content.TryGetValue(Json, out var body)
+                ? body.Schema
+                : null)
+            .FirstOrDefault(schema => schema is not null);
 }
