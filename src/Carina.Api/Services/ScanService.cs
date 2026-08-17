@@ -125,8 +125,6 @@ public sealed class ScanService(
         }
         catch (Exception error)
         {
-            // Nothing here reports a failed apply on its own, so the run it belonged to is the
-            // only way back to what was being written.
             logger.LogError(error, "Applying the difference of scan {ScanRunId} failed.", id.Value);
 
             runner.GiveBackProposal(id);

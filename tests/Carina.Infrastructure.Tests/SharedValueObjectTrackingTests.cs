@@ -6,12 +6,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Carina.Infrastructure.Tests;
 
-/// <summary>
-/// One transport stream carries several services, and the scan hands every one of them the
-/// same tuning and the same reading. Nothing may hold those as entities of their own: a
-/// second row pointing at an instance the tracker already holds would be read as moving it
-/// to a new owner. These reach no database — the tracker refuses long before any SQL.
-/// </summary>
 public sealed class SharedValueObjectTrackingTests
 {
     private static readonly DateTime At = new(2026, 8, 15, 0, 0, 0, DateTimeKind.Utc);
@@ -30,8 +24,6 @@ public sealed class SharedValueObjectTrackingTests
         using var context = Carina();
         var carrying = TuningParameters.Terrestrial(27);
 
-        // Attach stands in for a candidate already written: that is the state a second Add meets,
-        // because the repository saves on every add rather than batching them.
         context.Attach(Candidate(1, carrying));
 
         context.Add(Candidate(2, carrying));

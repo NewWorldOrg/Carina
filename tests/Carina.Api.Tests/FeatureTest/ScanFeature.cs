@@ -25,8 +25,6 @@ internal sealed class ScanFeature : IAsyncDisposable
         configured = factory
             .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
             {
-                // The held stores have no rollback, so the write is run as it comes. That a
-                // failed apply leaves nothing behind is pinned against the database instead.
                 services.AddSingleton<IAtomicWrite, UnguardedWrites>();
                 services.AddSingleton<IChannelScanOrchestrator>(Orchestrator);
                 services.AddSingleton<IScanRunRepository>(Runs);
@@ -40,10 +38,6 @@ internal sealed class ScanFeature : IAsyncDisposable
 
     public HttpClient Client { get; }
 
-    /// <summary>
-    /// Run as each candidate reaches the store: true refuses it, so an apply ends part way.
-    /// Blocking here holds an apply open, which is how a test gets one in flight.
-    /// </summary>
     public Func<bool> WhenACandidateArrives { get; set; } = () => false;
 
     public ScriptedScanOrchestrator Orchestrator { get; }
@@ -86,7 +80,6 @@ internal sealed class ScanFeature : IAsyncDisposable
             () => Runs.Runs.Any(run => run.Id.Value == scanId && !run.IsRunning),
             "the scan leaves Running");
 
-
     public async ValueTask DisposeAsync()
     {
         Orchestrator.Release();
@@ -99,8 +92,6 @@ internal sealed class ScanFeature : IAsyncDisposable
     {
         var body = await response.Content.ReadAsStringAsync();
 
-        // An unhandled failure answers with a plain-text trace rather than the envelope. That is
-        // a status worth asserting on, not a reason for the reader itself to throw.
         if (!body.StartsWith('{') && !body.StartsWith('['))
         {
             return (response.StatusCode, default);

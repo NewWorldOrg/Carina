@@ -31,15 +31,6 @@ public sealed class ScanApplier(
 
         var covered = systems.ToHashSet();
 
-        // Half a difference is not a smaller difference. A service left without the candidate
-        // channel that was to arrive with it cannot be told apart from one deliberately left
-        // with no way to tune it, and a service never reached cannot be told apart from one the
-        // scan did not find. A caller that goes away mid-apply therefore leaves nothing rather
-        // than a prefix, and the difference it was applying stays applicable.
-        //
-        // What the write counted, and the moment it says the services were seen, are taken from
-        // the write rather than from around it: a write that ran twice would otherwise report
-        // the first run's clock and both runs' counts.
         var tally = await writes.AllOrNothingAsync(
             async token =>
             {
@@ -113,8 +104,6 @@ public sealed class ScanApplier(
 
         if (known is null && !change.Seen)
         {
-            // Nothing received it and nothing holds it. Discovering it here would enter it as
-            // seen just now, which is the stamp this change exists to withhold.
             return;
         }
 
@@ -136,9 +125,6 @@ public sealed class ScanApplier(
             await services.SaveAsync(known, cancellationToken);
             tally.ServicesUpdated++;
         }
-        // Anything else here did not receive the service, so its channels are what changed and
-        // the service row is left alone: describing it would make the last-seen clock say the
-        // service was received, and counting it would report an update nothing made.
 
         foreach (var arrival in arriving)
         {

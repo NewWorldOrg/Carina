@@ -131,8 +131,6 @@ public sealed class ScanRunnerTests : IAsyncLifetime
 
         Assert.IsType<ProposalClaim.Claimed>(Runner.ClaimProposal(launch.Started!));
 
-        // Refused because one apply already holds it, which waiting undoes — not because the
-        // difference is gone, which only walking again undoes.
         Assert.IsType<ProposalClaim.AlreadyBeingApplied>(Runner.ClaimProposal(launch.Started!));
     }
 

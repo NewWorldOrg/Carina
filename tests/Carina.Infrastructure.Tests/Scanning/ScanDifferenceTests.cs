@@ -57,8 +57,6 @@ public sealed class ScanDifferenceTests
         Assert.Equal(AnotherServiceId, missing.ServiceId.Value);
         Assert.Equal(Channel53, Assert.Single(missing.Channels).Tuning);
 
-        // The name and category on it are the stored ones read back, not anything received, and
-        // applying it must not move the clock that says when the service last was.
         Assert.False(missing.Seen);
     }
 
