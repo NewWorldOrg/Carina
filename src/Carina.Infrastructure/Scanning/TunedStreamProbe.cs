@@ -77,18 +77,6 @@ public sealed class TunedStreamProbe(IDriverClient driver, ScanSettings settings
         CancellationToken deadline,
         CancellationToken abort)
     {
-        var measurement = await MeasureAsync(sessionId, abort);
-
-        if (measurement is { Locked: false })
-        {
-            return StreamProbe.Attempted(
-                ScanAttemptOutcome.NoLock,
-                "The frontend never reported a lock on this channel.") with
-            {
-                Measurement = measurement,
-            };
-        }
-
         var opened = await driver.OpenSessionStreamAsync(
             sessionId,
             DriverEndpoints.SurveySubscriber,
@@ -105,10 +93,7 @@ public sealed class TunedStreamProbe(IDriverClient driver, ScanSettings settings
                 ScanAttemptOutcome.LockedWithoutData,
                 opened.Problem is { } problem
                     ? $"{problem.Title}: {string.Join(" ", problem.Problems)}"
-                    : "The driver opened no transport stream for this session.") with
-            {
-                Measurement = measurement,
-            };
+                    : "The driver opened no transport stream for this session.");
         }
 
         var harvest = new TableHarvest();
@@ -116,6 +101,18 @@ public sealed class TunedStreamProbe(IDriverClient driver, ScanSettings settings
         await using (stream)
         {
             await HarvestAsync(stream, harvest, deadline, abort);
+        }
+
+        var measurement = await MeasureAsync(sessionId, abort);
+
+        if (measurement is { Locked: false })
+        {
+            return StreamProbe.Attempted(
+                ScanAttemptOutcome.NoLock,
+                "The frontend never reported a lock on this channel.") with
+            {
+                Measurement = measurement,
+            };
         }
 
         return Classify(tuning, harvest) with { Measurement = measurement };
