@@ -78,12 +78,15 @@ public sealed class ScanApplier(
             .Where(channel => covered.Contains(channel.Tuning.System))
             .ToArray();
 
+        var moved = 0;
+
         foreach (var gone in leaving)
         {
             if (stored.FirstOrDefault(candidate => candidate.Tuning.Equals(gone.Tuning)) is { } dropped)
             {
                 await candidates.RemoveAsync(dropped.Id, cancellationToken);
                 tally.ChannelsRemoved++;
+                moved++;
             }
         }
 
@@ -125,7 +128,6 @@ public sealed class ScanApplier(
         {
             known.Describe(change.Name, change.Category, at);
             await services.SaveAsync(known, cancellationToken);
-            tally.ServicesUpdated++;
         }
 
         foreach (var arrival in arriving)
@@ -149,10 +151,16 @@ public sealed class ScanApplier(
 
             await candidates.AddAsync(candidate, cancellationToken);
             tally.ChannelsAdded++;
+            moved++;
         }
 
         if (known is not null)
         {
+            if (change.Seen || moved > 0)
+            {
+                tally.ServicesUpdated++;
+            }
+
             return;
         }
 
