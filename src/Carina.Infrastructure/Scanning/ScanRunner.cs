@@ -16,7 +16,7 @@ public abstract record ProposalClaim
     {
     }
 
-    public sealed record Claimed(ScanProposal Proposal) : ProposalClaim;
+    public sealed record Claimed(ScanProposal Proposal, Guid Hold) : ProposalClaim;
 
     public sealed record AlreadyBeingApplied : ProposalClaim;
 
@@ -71,7 +71,7 @@ public sealed class ScanRunner(IServiceScopeFactory scopes, ILogger<ScanRunner> 
 
     private readonly ConcurrentDictionary<ScanRunId, CancellationTokenSource> live = [];
     private readonly ConcurrentDictionary<ScanRunId, ScanProposal> proposals = [];
-    private readonly ConcurrentDictionary<ScanRunId, byte> claimed = [];
+    private readonly ConcurrentDictionary<ScanRunId, Guid> claimed = [];
     private readonly ConcurrentDictionary<Task, byte> walks = [];
     private readonly ConcurrentQueue<ScanRunId> order = new();
 
@@ -178,34 +178,41 @@ public sealed class ScanRunner(IServiceScopeFactory scopes, ILogger<ScanRunner> 
 
     public ProposalClaim ClaimProposal(ScanRunId id)
     {
-        if (!claimed.TryAdd(id, 0))
+        var hold = Guid.NewGuid();
+
+        if (!claimed.TryAdd(id, hold))
         {
             return new ProposalClaim.AlreadyBeingApplied();
         }
 
         if (proposals.TryGetValue(id, out var proposal))
         {
-            return new ProposalClaim.Claimed(proposal);
+            return new ProposalClaim.Claimed(proposal, hold);
         }
 
-        claimed.TryRemove(id, out _);
+        claimed.TryRemove(new KeyValuePair<ScanRunId, Guid>(id, hold));
 
         return new ProposalClaim.Gone();
     }
 
-    public void ProposalApplied(ScanRunId id)
+    public void ProposalApplied(ScanRunId id, Guid hold)
     {
         ArgumentNullException.ThrowIfNull(id);
+
+        if (!claimed.TryGetValue(id, out var held) || held != hold)
+        {
+            return;
+        }
 
         proposals.TryRemove(id, out _);
-        claimed.TryRemove(id, out _);
+        claimed.TryRemove(new KeyValuePair<ScanRunId, Guid>(id, hold));
     }
 
-    public void GiveBackProposal(ScanRunId id)
+    public void GiveBackProposal(ScanRunId id, Guid hold)
     {
         ArgumentNullException.ThrowIfNull(id);
 
-        claimed.TryRemove(id, out _);
+        claimed.TryRemove(new KeyValuePair<ScanRunId, Guid>(id, hold));
     }
 
     private async Task AbandonWhatAnEarlierProcessLeftAsync(CancellationToken cancellationToken)
