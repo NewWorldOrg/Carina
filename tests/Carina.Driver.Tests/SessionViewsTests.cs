@@ -264,6 +264,24 @@ public sealed class SessionViewsTests : IDisposable
     }
 
     [Fact]
+    public void AMetricTheTunerReportsOnAnotherScaleIsNamedApartFromOneItDoesNotImplement()
+    {
+        var factory = new PacedTunerDeviceFactory(
+            new ScriptedQualitySource().Answer(Readings.WithCarrierToNoiseOnAnotherScale())
+        );
+        var manager = Manager(factory);
+        Begin(manager, "other-scale", "adapter0");
+        ReadOneChunk(factory);
+
+        var reading = Quality(manager, "adapter0");
+
+        Assert.Equal([SignalQualityMetrics.Cnr], reading.MetricsOnAnotherScale);
+        Assert.Empty(reading.NotImplementedMetrics);
+        Assert.True(reading.Implements(SignalQualityMetrics.Cnr));
+        Assert.Null(reading.CnrMilliDecibels);
+    }
+
+    [Fact]
     public void AMetricTheTunerDoesNotImplementIsNamedRatherThanLookingLikeAFailedReading()
     {
         var factory = new PacedTunerDeviceFactory(

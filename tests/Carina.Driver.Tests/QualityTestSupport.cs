@@ -47,6 +47,16 @@ public static class Readings
             new PostViterbiErrors(SignalReading.UnavailableRightNow, [])
         );
 
+    public static SignalQuality WithCarrierToNoiseOnAnotherScale() =>
+        new(
+            LockWindow.Throughout(Locked),
+            CarrierToNoise.OnAnotherScale,
+            new PostViterbiErrors(
+                SignalReading.Measured,
+                [new LayerBitErrors(0, 12, 1_000_000)]
+            )
+        );
+
     public static SignalQuality WithoutCarrierToNoise() =>
         new(
             LockWindow.Throughout(Locked),

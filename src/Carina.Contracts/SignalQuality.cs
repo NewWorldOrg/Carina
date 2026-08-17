@@ -94,7 +94,8 @@ public sealed record SignalQualityDto
             MeasuredAt,
             LockReadAt,
             PostViterbiBitErrors.Count,
-            NotImplementedMetrics.Count
+            NotImplementedMetrics.Count,
+            MetricsOnAnotherScale.Count
         );
 }
 
