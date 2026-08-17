@@ -26,6 +26,7 @@ public sealed class UnhandledFailureResponseTransformer : IOpenApiOperationTrans
                     Schema = new OpenApiSchema
                     {
                         Type = JsonSchemaType.Object,
+                        Required = new HashSet<string> { "status", "message", "data" },
                         Properties = new Dictionary<string, IOpenApiSchema>
                         {
                             ["status"] = new OpenApiSchema { Type = JsonSchemaType.Boolean },
