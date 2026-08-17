@@ -393,7 +393,7 @@ public sealed class ScanEndpointTests
 
         Assert.Equal(HttpStatusCode.OK, (await feature.PostAsync($"/api/tuners/scan/{scanId}/apply")).Status);
         Assert.Equal(
-            HttpStatusCode.Conflict,
+            HttpStatusCode.Gone,
             (await feature.PostAsync($"/api/tuners/scan/{scanId}/apply")).Status);
         Assert.Single(feature.Services.Services);
     }
@@ -472,6 +472,9 @@ public sealed class ScanEndpointTests
         }
 
         Assert.Equal(HttpStatusCode.OK, (await held).Status);
+
+        // A conflict is waited out; the gone answer is the one that costs a walk. A caller has
+        // to be able to tell them apart without reading the sentence.
         Assert.Equal(HttpStatusCode.Conflict, status);
         Assert.Contains(
             "being applied",

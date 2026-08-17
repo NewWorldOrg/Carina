@@ -15,6 +15,7 @@ public sealed class ApplyScanAction(ScanService scanService) : ControllerBase
     [ProducesResponseType<BaseResponder<ScanApplicationResponder>>(StatusCodes.Status200OK)]
     [ProducesResponseType<BaseResponder<ScanApplicationResponder>>(StatusCodes.Status404NotFound)]
     [ProducesResponseType<BaseResponder<ScanApplicationResponder>>(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<BaseResponder<ScanApplicationResponder>>(StatusCodes.Status410Gone)]
     public async Task<IActionResult> Invoke(Guid scanId, CancellationToken cancellationToken)
     {
         var result = await scanService.ApplyAsync(new ScanRunId(scanId), cancellationToken);
