@@ -74,13 +74,10 @@ public sealed class HeldServices : IBroadcastServiceRepository
     public Task SaveAsync(BroadcastService service, CancellationToken cancellationToken)
         => Task.CompletedTask;
 
-    public Task RemoveAsync(NetworkId networkId, ServiceId serviceId, CancellationToken cancellationToken)
-    {
-        Services.RemoveAll(service =>
-            service.NetworkId.Equals(networkId) && service.ServiceId.Equals(serviceId));
-
-        return Task.CompletedTask;
-    }
+    public Task<bool> RemoveAsync(NetworkId networkId, ServiceId serviceId, CancellationToken cancellationToken)
+        => Task.FromResult(
+            Services.RemoveAll(service =>
+                service.NetworkId.Equals(networkId) && service.ServiceId.Equals(serviceId)) > 0);
 }
 
 public sealed class UnguardedWrites : IAtomicWrite

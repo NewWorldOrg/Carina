@@ -325,6 +325,26 @@ public sealed class ScanApplierTests
     }
 
     [Fact]
+    public async Task AServiceThatWasAlreadyGoneIsNotCountedAsOneThisApplyRemoved()
+    {
+        var applied = await Applier.ApplyAsync(
+            new ScanDifference(
+                [
+                    Change(
+                        ScanChangeKind.Missing,
+                        101,
+                        "Already gone",
+                        seen: false,
+                        Channel(ScanChangeKind.Missing, TuningParameters.Terrestrial(Terrestrial), cnr: null)),
+                ],
+                []),
+            [TuneSystem.IsdbT],
+            CancellationToken.None);
+
+        Assert.Equal(0, applied.ServicesRemoved);
+    }
+
+    [Fact]
     public async Task AServiceTheScanDidNotReceiveIsNotEnteredWhenNothingHoldsItEither()
     {
         var applied = await Applier.ApplyAsync(

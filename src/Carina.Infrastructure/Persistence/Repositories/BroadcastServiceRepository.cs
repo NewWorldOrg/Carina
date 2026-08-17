@@ -40,7 +40,7 @@ public sealed class BroadcastServiceRepository(CarinaDbContext context) : IBroad
         await context.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task RemoveAsync(
+    public async Task<bool> RemoveAsync(
         NetworkId networkId,
         ServiceId serviceId,
         CancellationToken cancellationToken)
@@ -48,8 +48,8 @@ public sealed class BroadcastServiceRepository(CarinaDbContext context) : IBroad
         ArgumentNullException.ThrowIfNull(networkId);
         ArgumentNullException.ThrowIfNull(serviceId);
 
-        await context.Set<BroadcastService>()
+        return await context.Set<BroadcastService>()
             .Where(service => service.NetworkId == networkId && service.ServiceId == serviceId)
-            .ExecuteDeleteAsync(cancellationToken);
+            .ExecuteDeleteAsync(cancellationToken) > 0;
     }
 }

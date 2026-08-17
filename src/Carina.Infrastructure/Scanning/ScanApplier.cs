@@ -94,8 +94,10 @@ public sealed class ScanApplier(
 
         if (change.Kind is ScanChangeKind.Missing && arriving.Length == 0 && left.Count == 0)
         {
-            await services.RemoveAsync(change.NetworkId, change.ServiceId, cancellationToken);
-            tally.ServicesRemoved++;
+            if (await services.RemoveAsync(change.NetworkId, change.ServiceId, cancellationToken))
+            {
+                tally.ServicesRemoved++;
+            }
 
             return;
         }

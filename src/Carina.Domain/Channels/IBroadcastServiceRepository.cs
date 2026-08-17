@@ -13,5 +13,5 @@ public interface IBroadcastServiceRepository
 
     Task SaveAsync(BroadcastService service, CancellationToken cancellationToken);
 
-    Task RemoveAsync(NetworkId networkId, ServiceId serviceId, CancellationToken cancellationToken);
+    Task<bool> RemoveAsync(NetworkId networkId, ServiceId serviceId, CancellationToken cancellationToken);
 }
