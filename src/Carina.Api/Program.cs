@@ -23,11 +23,14 @@ builder.Services.AddOpenApi(options =>
     options.AddDocumentTransformer<ApiDocumentTransformer>();
     options.AddSchemaTransformer<StringEnumSchemaTransformer>();
     options.AddOperationTransformer<DefaultDenyResponseTransformer>();
+    options.AddOperationTransformer<UnhandledFailureResponseTransformer>();
     options.AddOperationTransformer<OperationNamingTransformer>();
 });
 
 var app = builder.Build();
 
+
+app.UseMiddleware<UnhandledFailureMiddleware>();
 app.UseAuthentication();
 app.UseMiddleware<DefaultDenyAuthenticationMiddleware>();
 
