@@ -147,9 +147,10 @@ public sealed class ScanApplierDatabaseTests(RepositoryDatabase database)
             []);
 
         await using var writing = database.Open();
+        var arrived = 0;
         var applier = new ScanApplier(
             new BroadcastServiceRepository(writing),
-            new RefusingCandidates(new CandidateChannelRepository(writing), refuseFrom: 2),
+            new RefusingCandidates(new CandidateChannelRepository(writing), () => ++arrived > 1),
             new DatabaseAtomicWrite(writing),
             new RecordingAppEvents(),
             new StillClock());

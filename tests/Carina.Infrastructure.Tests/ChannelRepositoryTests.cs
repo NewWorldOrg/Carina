@@ -1,4 +1,5 @@
 using Carina.Domain.Channels;
+using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
 
 namespace Carina.Infrastructure.Tests;
@@ -260,6 +261,35 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
 
         Assert.Equal(2, slot.Count);
         Assert.Equal(11, (await new SatelliteTransportStreamRepository(reading).ListAsync(Cancel)).Count);
+    }
+
+    [Fact]
+    public async Task ReplacingASatelliteSlotInsideALargerWriteLandsWithIt()
+    {
+        await using var context = database.Open();
+        var streams = new SatelliteTransportStreamRepository(context);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => new DatabaseAtomicWrite(context).AllOrNothingAsync<int>(
+                async token =>
+                {
+                    await streams.ReplaceSlotAsync(
+                        15,
+                        [SatelliteTransportStream.Rehydrate(15, 0, new TransportStreamId(0x40F0))],
+                        token);
+
+                    throw new InvalidOperationException("whatever ends the write after the slot");
+                },
+                Cancel));
+
+        // The slot replacement owns no boundary of its own inside a larger write, so it goes
+        // back with it rather than standing while the rest is undone.
+        await using var reading = database.Open();
+        var slot = await new SatelliteTransportStreamRepository(reading).ListForSlotAsync(15, Cancel);
+
+        Assert.NotEqual(
+            [new TransportStreamId(0x40F0)],
+            slot.Select(stream => stream.TransportStreamId));
     }
 
     private static int NextNetwork() => Interlocked.Increment(ref nextNetworkId);

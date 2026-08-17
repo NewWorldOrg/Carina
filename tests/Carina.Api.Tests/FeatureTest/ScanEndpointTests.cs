@@ -396,6 +396,76 @@ public sealed class ScanEndpointTests
     }
 
     [Fact]
+    public async Task AnApplyThatDidNotLandLeavesTheDifferenceStillApplicable()
+    {
+        await using var feature = new ScanFeature
+        {
+            Orchestrator =
+            {
+                Walked = { TuningParameters.Terrestrial(Terrestrial) },
+                Difference = Proposing(
+                    Arriving(101, "Arrived", TuningParameters.Terrestrial(Terrestrial))),
+            },
+            WhenACandidateArrives = () => true,
+        };
+
+        var scanId = await feature.StartAsync();
+        await feature.UntilSettled(scanId);
+
+        await Assert.ThrowsAnyAsync<Exception>(
+            () => feature.PostAsync($"/api/tuners/scan/{scanId}/apply"));
+
+        // Walking again costs minutes on real hardware, so a difference that was never written
+        // stays the difference.
+        feature.WhenACandidateArrives = () => false;
+
+        Assert.Equal(HttpStatusCode.OK, (await feature.PostAsync($"/api/tuners/scan/{scanId}/apply")).Status);
+        Assert.Single(feature.Services.Services);
+        Assert.Single(feature.Candidates.Candidates);
+    }
+
+    [Fact]
+    public async Task ApplyingWhileAnotherApplyHoldsTheDifferenceSaysToWaitRatherThanToWalkAgain()
+    {
+        await using var feature = new ScanFeature
+        {
+            Orchestrator =
+            {
+                Walked = { TuningParameters.Terrestrial(Terrestrial) },
+                Difference = Proposing(
+                    Arriving(101, "Arrived", TuningParameters.Terrestrial(Terrestrial))),
+            },
+        };
+
+        var scanId = await feature.StartAsync();
+        await feature.UntilSettled(scanId);
+
+        var reached = new TaskCompletionSource();
+        var letGo = new TaskCompletionSource();
+        feature.WhenACandidateArrives = () =>
+        {
+            reached.TrySetResult();
+            letGo.Task.Wait();
+
+            return false;
+        };
+
+        var held = feature.PostAsync($"/api/tuners/scan/{scanId}/apply");
+        await reached.Task;
+
+        var (status, body) = await feature.PostAsync($"/api/tuners/scan/{scanId}/apply");
+
+        letGo.SetResult();
+        await held;
+
+        Assert.Equal(HttpStatusCode.Conflict, status);
+        Assert.Contains(
+            "being applied",
+            body.GetProperty("message").GetString()!,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ApplyingAScanNobodyStartedIsAnsweredAsNotFound()
     {
         await using var feature = new ScanFeature();

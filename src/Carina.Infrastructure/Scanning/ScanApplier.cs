@@ -105,6 +105,13 @@ public sealed class ScanApplier(
 
         var known = await services.FindAsync(change.NetworkId, change.ServiceId, cancellationToken);
 
+        if (known is null && !change.Seen)
+        {
+            // Nothing received it and nothing holds it. Discovering it here would enter it as
+            // seen just now, which is the stamp this change exists to withhold.
+            return;
+        }
+
         if (known is null)
         {
             await services.AddAsync(
@@ -123,12 +130,9 @@ public sealed class ScanApplier(
             await services.SaveAsync(known, cancellationToken);
             tally.ServicesUpdated++;
         }
-        else
-        {
-            // The scan did not receive this service, so its channels are what changed. Describing
-            // it would move the last-seen clock that a disappearance is detected by.
-            tally.ServicesUpdated++;
-        }
+        // Anything else here did not receive the service, so its channels are what changed and
+        // the service row is left alone: describing it would move the last-seen clock that a
+        // disappearance is detected by, and counting it would report an update nothing made.
 
         foreach (var arrival in arriving)
         {

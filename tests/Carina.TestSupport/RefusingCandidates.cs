@@ -1,15 +1,14 @@
 using Carina.Domain.Channels;
 
-namespace Carina.Infrastructure.Tests.Scanning;
+namespace Carina.TestSupport;
 
 /// <summary>
-/// The real store until the nth candidate arrives, and a refusal from then on. Stands in for
+/// The store it wraps until the gate says so, and a refusal from then on. Stands in for
 /// whatever ends an apply half way — a dropped connection, a constraint, a cancelled request.
 /// </summary>
-public sealed class RefusingCandidates(ICandidateChannelRepository candidates, int refuseFrom)
+public sealed class RefusingCandidates(ICandidateChannelRepository candidates, Func<bool> refuses)
     : ICandidateChannelRepository
 {
-    private int arrived;
 
     public Task<CandidateChannel?> FindAsync(CandidateChannelId id, CancellationToken cancellationToken)
         => candidates.FindAsync(id, cancellationToken);
@@ -35,13 +34,9 @@ public sealed class RefusingCandidates(ICandidateChannelRepository candidates, i
         => candidates.ListNeedingAttentionAsync(cancellationToken);
 
     public Task AddAsync(CandidateChannel candidate, CancellationToken cancellationToken)
-    {
-        arrived++;
-
-        return arrived >= refuseFrom
+        => refuses()
             ? throw new InvalidOperationException("This store stopped taking candidates part way through.")
             : candidates.AddAsync(candidate, cancellationToken);
-    }
 
     public Task SaveAsync(CandidateChannel candidate, CancellationToken cancellationToken)
         => candidates.SaveAsync(candidate, cancellationToken);

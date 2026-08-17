@@ -104,6 +104,10 @@ public sealed class ScanService(ScanRunner runner, IScanRunRepository runs, Scan
 
         if (claim is ProposalClaim.Gone || proposal is null)
         {
+            // A claim taken without a proposal behind it would otherwise answer every later
+            // apply of this run with "wait", for an apply that is not happening.
+            runner.GiveBackProposal(id);
+
             return ServiceResult<ScanApplication, ScanFailure>.Failure(
                 "The difference this scan proposed is no longer held; scan again to propose a fresh one.",
                 ScanFailure.ProposalGone);
