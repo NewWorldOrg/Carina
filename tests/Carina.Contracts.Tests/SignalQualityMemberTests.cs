@@ -16,6 +16,7 @@ public sealed class SignalQualityMemberTests
             MeasuredAt = Moment,
             LockReadAt = Moment.AddMilliseconds(3),
             NotImplementedMetrics = [SignalQualityMetrics.PostViterbiBitError],
+            MetricsOnAnotherScale = [SignalQualityMetrics.PostViterbiBitError],
         };
 
     private static IReadOnlyList<PropertyInfo> Settable =>

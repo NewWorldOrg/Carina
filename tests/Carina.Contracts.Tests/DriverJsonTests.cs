@@ -214,7 +214,7 @@ public sealed class DriverJsonTests
         );
 
         Assert.Equal(
-            """{"lock":"locked","cnrMilliDecibels":21500,"postViterbiBitErrors":[{"layer":0,"errorBits":12,"totalBits":1000000},{"layer":1,"errorBits":0,"totalBits":500000}],"measuredAt":"2026-08-08T21:04:00+09:00","lockReadAt":null,"notImplementedMetrics":[]}""",
+            """{"lock":"locked","cnrMilliDecibels":21500,"postViterbiBitErrors":[{"layer":0,"errorBits":12,"totalBits":1000000},{"layer":1,"errorBits":0,"totalBits":500000}],"measuredAt":"2026-08-08T21:04:00+09:00","lockReadAt":null,"notImplementedMetrics":[],"metricsOnAnotherScale":[]}""",
             json
         );
     }
@@ -223,7 +223,7 @@ public sealed class DriverJsonTests
     public void AnUnlockedQualityReadingSerialisesToItsAgreedForm()
     {
         Assert.Equal(
-            """{"lock":"notLocked","cnrMilliDecibels":null,"postViterbiBitErrors":[],"measuredAt":"2026-08-08T21:04:00+09:00","lockReadAt":null,"notImplementedMetrics":[]}""",
+            """{"lock":"notLocked","cnrMilliDecibels":null,"postViterbiBitErrors":[],"measuredAt":"2026-08-08T21:04:00+09:00","lockReadAt":null,"notImplementedMetrics":[],"metricsOnAnotherScale":[]}""",
             DriverJson.Serialize(SignalQualityDto.NotLocked(Moment))
         );
     }
@@ -254,7 +254,7 @@ public sealed class DriverJsonTests
         );
 
         Assert.Equal(
-            """{"kind":"satellite","state":"busy","sessionId":"scan-1","detail":null,"deviceId":"adapter0","health":{"level":"healthy","disablePending":true,"lnbPowered":true,"detail":null,"changedAt":"2026-08-08T21:04:00+09:00"},"signalQuality":{"lock":"notLocked","cnrMilliDecibels":null,"postViterbiBitErrors":[],"measuredAt":"2026-08-08T21:04:00+09:00","lockReadAt":null,"notImplementedMetrics":[]},"currentSession":{"sessionId":"scan-1","purpose":"scan","startedAt":"2026-08-08T21:04:00+09:00","tune":{"system":"isdbSCs110","isdbT":null,"isdbSBs":null,"isdbSCs110":{"csChannel":24}},"endsAt":null},"toggled":false}""",
+            """{"kind":"satellite","state":"busy","sessionId":"scan-1","detail":null,"deviceId":"adapter0","health":{"level":"healthy","disablePending":true,"lnbPowered":true,"detail":null,"changedAt":"2026-08-08T21:04:00+09:00"},"signalQuality":{"lock":"notLocked","cnrMilliDecibels":null,"postViterbiBitErrors":[],"measuredAt":"2026-08-08T21:04:00+09:00","lockReadAt":null,"notImplementedMetrics":[],"metricsOnAnotherScale":[]},"currentSession":{"sessionId":"scan-1","purpose":"scan","startedAt":"2026-08-08T21:04:00+09:00","tune":{"system":"isdbSCs110","isdbT":null,"isdbSBs":null,"isdbSCs110":{"csChannel":24}},"endsAt":null},"toggled":false}""",
             json
         );
     }

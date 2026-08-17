@@ -25,6 +25,7 @@ public static class SignalQualityViews
             MeasuredAt = sample.MeasuredAt,
             LockReadAt = sample.LockReadAt,
             NotImplementedMetrics = NotImplementedIn(quality),
+            MetricsOnAnotherScale = OnAnotherScaleIn(quality),
         };
 
         if (quality.CarrierToNoise.TryGetDecibels(out var decibels))
@@ -62,6 +63,11 @@ public static class SignalQualityViews
 
         return quality.Locked.HeldAtNeitherEnd ? SignalLock.NotLocked : SignalLock.Unspecified;
     }
+
+    private static IReadOnlyList<string> OnAnotherScaleIn(SignalQuality quality) =>
+        quality.CarrierToNoise.Reading is SignalReading.ReportedOnAnotherScale
+            ? [SignalQualityMetrics.Cnr]
+            : [];
 
     private static IReadOnlyList<string> NotImplementedIn(SignalQuality quality)
     {

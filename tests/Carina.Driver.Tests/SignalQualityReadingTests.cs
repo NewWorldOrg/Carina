@@ -73,7 +73,7 @@ public sealed class SignalQualityReadingTests
             [new DvbStatisticLayer(StatisticScale.Relative, 40_000)]
         );
 
-        Assert.Equal(SignalReading.UnavailableRightNow, reading.Reading);
+        Assert.Equal(SignalReading.ReportedOnAnotherScale, reading.Reading);
         Assert.False(reading.TryGetDecibels(out _));
     }
 
