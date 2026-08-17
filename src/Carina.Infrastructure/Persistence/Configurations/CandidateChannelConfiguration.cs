@@ -52,8 +52,10 @@ public sealed class CandidateChannelConfiguration : IEntityTypeConfiguration<Can
             .HasConversion(id => id.Value, value => new ServiceId(value))
             .HasColumnName("service_id");
 
-        builder.OwnsOne(candidate => candidate.Tuning, tuning =>
+        builder.ComplexProperty(candidate => candidate.Tuning, tuning =>
         {
+            tuning.IsRequired();
+
             tuning.Property(parameters => parameters.System)
                 .HasConversion<string>()
                 .HasMaxLength(32)
@@ -69,16 +71,16 @@ public sealed class CandidateChannelConfiguration : IEntityTypeConfiguration<Can
                 .HasColumnName("transport_stream_id");
         });
 
-        builder.Navigation(candidate => candidate.Tuning).IsRequired();
-
         builder.Property(candidate => candidate.IsSelected).IsRequired();
 
         builder.Property(candidate => candidate.SelectionSource)
             .HasConversion<string>()
             .HasMaxLength(32);
 
-        builder.OwnsOne(candidate => candidate.SelectionMeasurement, measurement =>
+        builder.ComplexProperty(candidate => candidate.SelectionMeasurement, measurement =>
         {
+            measurement.IsRequired(false);
+
             measurement.Property(reading => reading.MeasuredAt).HasColumnName("selected_measured_at");
             measurement.Property(reading => reading.Locked).HasColumnName("selected_locked");
             measurement.Property(reading => reading.CnrMilliDecibels).HasColumnName("selected_cnr_milli_decibels");
@@ -88,8 +90,10 @@ public sealed class CandidateChannelConfiguration : IEntityTypeConfiguration<Can
                 .HasColumnName("selected_post_viterbi_total_bits");
         });
 
-        builder.OwnsOne(candidate => candidate.LastMeasurement, measurement =>
+        builder.ComplexProperty(candidate => candidate.LastMeasurement, measurement =>
         {
+            measurement.IsRequired(false);
+
             measurement.Property(reading => reading.MeasuredAt).HasColumnName("measured_at");
             measurement.Property(reading => reading.Locked).HasColumnName("locked");
             measurement.Property(reading => reading.CnrMilliDecibels).HasColumnName("cnr_milli_decibels");

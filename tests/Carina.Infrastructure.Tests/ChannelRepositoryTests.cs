@@ -65,14 +65,21 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
         var candidates = new CandidateChannelRepository(context);
         var only = Candidate(network, 1, 27);
         await candidates.AddAsync(only, Cancel);
-        await candidates.SelectAsync(only.Id, SelectionSource.Manual, null, At, Cancel);
+        await candidates.SelectAsync(
+            only.Id, SelectionSource.Manual, SignalMeasurement.WithLock(At, 21_000), At, Cancel);
 
         await candidates.ClearSelectionAsync(new NetworkId(network), new ServiceId(1), Cancel);
 
         await using var reading = database.Open();
         var repository = new CandidateChannelRepository(reading);
         Assert.Null(await repository.FindSelectedAsync(new NetworkId(network), new ServiceId(1), Cancel));
-        Assert.Single(await repository.ListForServiceAsync(new NetworkId(network), new ServiceId(1), Cancel));
+        var left = Assert.Single(
+            await repository.ListForServiceAsync(new NetworkId(network), new ServiceId(1), Cancel));
+
+        // The reading taken at selection has to leave the row rather than linger in columns
+        // nothing reads back: an unselected candidate carrying one would rank as measured.
+        Assert.Null(left.SelectionMeasurement);
+        Assert.Null(left.LastMeasurement);
     }
 
     [Fact]
@@ -189,6 +196,45 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
         var repository = new CandidateChannelRepository(reading);
         Assert.Null(await repository.FindAsync(doomed.Id, Cancel));
         Assert.NotNull(await repository.FindAsync(spared.Id, Cancel));
+    }
+
+    [Fact]
+    public async Task ServicesSharingOneChannelEachKeepACandidateOfTheirOwn()
+    {
+        var network = NextNetwork();
+        await using var context = database.Open();
+        var services = new BroadcastServiceRepository(context);
+        var candidates = new CandidateChannelRepository(context);
+        await services.AddAsync(Service(network, 1), Cancel);
+        await services.AddAsync(Service(network, 2), Cancel);
+
+        var carrying = TuningParameters.Terrestrial(27);
+        var measured = SignalMeasurement.WithLock(At, 21_000);
+
+        foreach (var service in (int[])[1, 2])
+        {
+            var candidate = CandidateChannel.Discover(
+                CandidateChannelId.New(),
+                new NetworkId(network),
+                new ServiceId(service),
+                carrying,
+                At);
+            candidate.RecordTuningSuccess(measured, At);
+
+            await candidates.AddAsync(candidate, Cancel);
+        }
+
+        await using var reading = database.Open();
+        var repository = new CandidateChannelRepository(reading);
+
+        foreach (var service in (int[])[1, 2])
+        {
+            var stored = Assert.Single(
+                await repository.ListForServiceAsync(new NetworkId(network), new ServiceId(service), Cancel));
+
+            Assert.Equal(27, stored.Tuning.PhysicalChannel);
+            Assert.Equal(21_000, stored.LastMeasurement?.CnrMilliDecibels);
+        }
     }
 
     [Fact]

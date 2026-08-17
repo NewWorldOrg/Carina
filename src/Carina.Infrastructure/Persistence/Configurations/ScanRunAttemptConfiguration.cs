@@ -34,8 +34,10 @@ public sealed class ScanRunAttemptConfiguration : IEntityTypeConfiguration<ScanR
             .HasConversion(id => id.Value, value => new ScanRunId(value))
             .HasColumnName("scan_run_id");
 
-        builder.OwnsOne(attempt => attempt.Tuning, tuning =>
+        builder.ComplexProperty(attempt => attempt.Tuning, tuning =>
         {
+            tuning.IsRequired();
+
             tuning.Property(parameters => parameters.System)
                 .HasConversion<string>()
                 .HasMaxLength(32)
@@ -51,15 +53,15 @@ public sealed class ScanRunAttemptConfiguration : IEntityTypeConfiguration<ScanR
                 .HasColumnName("transport_stream_id");
         });
 
-        builder.Navigation(attempt => attempt.Tuning).IsRequired();
-
         builder.Property(attempt => attempt.Outcome)
             .HasConversion<string>()
             .HasMaxLength(32)
             .IsRequired();
 
-        builder.OwnsOne(attempt => attempt.Measurement, measurement =>
+        builder.ComplexProperty(attempt => attempt.Measurement, measurement =>
         {
+            measurement.IsRequired(false);
+
             measurement.Property(reading => reading.MeasuredAt).HasColumnName("measured_at");
             measurement.Property(reading => reading.Locked).HasColumnName("locked");
             measurement.Property(reading => reading.CnrMilliDecibels).HasColumnName("cnr_milli_decibels");

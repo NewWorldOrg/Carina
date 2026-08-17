@@ -24,6 +24,20 @@ public sealed class ChannelSchemaTests
     private static IEntityType Entity<TEntity>(CarinaDbContext context)
         => Schema(context).FindEntityType(typeof(TEntity))!;
 
+    // Tuning and the signal readings are complex properties rather than owned entities:
+    // they carry no identity, so two rows may hold the very same instance.
+    private static IEnumerable<string> ColumnsOf(IEntityType entity, string valueObject)
+        => entity.GetComplexProperties()
+            .Single(property => property.Name == valueObject)
+            .ComplexType.GetProperties()
+            .Select(property => property.GetColumnName());
+
+    private static IEnumerable<IProperty> EveryProperty(ITypeBase type)
+        => [
+            .. type.GetProperties(),
+            .. type.GetComplexProperties().SelectMany(property => EveryProperty(property.ComplexType)),
+        ];
+
     [Fact]
     public void AServiceIsKeyedByItsBroadcastIdentifiersAlone()
     {
@@ -90,9 +104,7 @@ public sealed class ChannelSchemaTests
             ["scan_run"],
             attempt.GetForeignKeys().Select(key => key.PrincipalEntityType.GetTableName()));
         Assert.Contains(
-            attempt.GetNavigations().Single(navigation => navigation.Name == nameof(ScanRunAttempt.Tuning))
-                .TargetEntityType.GetProperties()
-                .Select(property => property.GetColumnName()),
+            ColumnsOf(attempt, nameof(ScanRunAttempt.Tuning)),
             column => column == "tune_system");
     }
 
@@ -136,14 +148,9 @@ public sealed class ChannelSchemaTests
     {
         using var context = Carina();
 
-        var columns = Entity<CandidateChannel>(context)
-            .GetNavigations()
-            .Single(navigation => navigation.Name == nameof(CandidateChannel.SelectionMeasurement))
-            .TargetEntityType.GetProperties()
-            .Select(property => property.GetColumnName())
-            .ToArray();
-
-        Assert.Contains("selected_cnr_milli_decibels", columns);
+        Assert.Contains(
+            "selected_cnr_milli_decibels",
+            ColumnsOf(Entity<CandidateChannel>(context), nameof(CandidateChannel.SelectionMeasurement)));
         Assert.Contains("selection_source", Entity<CandidateChannel>(context)
             .GetProperties()
             .Select(property => property.GetColumnName()));
@@ -164,6 +171,16 @@ public sealed class ChannelSchemaTests
         Assert.Contains("next_attempt_at", columns);
         Assert.Contains("needs_attention_since", columns);
         Assert.Contains("needs_revalidation", columns);
+    }
+
+    [Fact]
+    public void NoValueObjectOfThisDomainIsAnEntityInItsOwnRight()
+    {
+        using var context = Carina();
+
+        Assert.DoesNotContain(
+            Schema(context).GetEntityTypes(),
+            entity => entity.FindOwnership() is not null);
     }
 
     [Fact]
@@ -191,7 +208,7 @@ public sealed class ChannelSchemaTests
         using var context = Carina();
 
         var times = Schema(context).GetEntityTypes()
-            .SelectMany(entity => entity.GetProperties())
+            .SelectMany(EveryProperty)
             .Where(property => property.ClrType == typeof(DateTime) || property.ClrType == typeof(DateTime?))
             .ToArray();
 
