@@ -2,6 +2,8 @@ using Carina.Api.Common;
 using Carina.Domain.Scans;
 using Carina.Infrastructure.Scanning;
 
+using Microsoft.Extensions.Logging;
+
 namespace Carina.Api.Services;
 
 public enum ScanFailure
@@ -17,6 +19,8 @@ public enum ScanFailure
     NotWalkingHere = 5,
 
     AlreadyEnded = 6,
+
+    ApplyInFlight = 7,
 }
 
 public sealed record ScanProgress(
@@ -24,7 +28,11 @@ public sealed record ScanProgress(
     IReadOnlyList<ScanRunAttempt> Attempts,
     ScanDifference? Difference);
 
-public sealed class ScanService(ScanRunner runner, IScanRunRepository runs, ScanApplier applier)
+public sealed class ScanService(
+    ScanRunner runner,
+    IScanRunRepository runs,
+    ScanApplier applier,
+    ILogger<ScanService> logger)
 {
     public const int RecentRuns = 20;
 
@@ -91,15 +99,40 @@ public sealed class ScanService(ScanRunner runner, IScanRunRepository runs, Scan
                 ScanFailure.NeverCompleted);
         }
 
-        if (!runner.TryTakeProposal(id, out var proposal))
+        var claim = runner.ClaimProposal(id);
+
+        if (claim is not ProposalClaim.Claimed(var proposal))
         {
-            return ServiceResult<ScanApplication, ScanFailure>.Failure(
-                "The difference this scan proposed is no longer held; scan again to propose a fresh one.",
-                ScanFailure.ProposalGone);
+            return claim is ProposalClaim.AlreadyBeingApplied
+                ? ServiceResult<ScanApplication, ScanFailure>.Failure(
+                    "This scan's difference is being applied; ask again once that has finished.",
+                    ScanFailure.ApplyInFlight)
+                : ServiceResult<ScanApplication, ScanFailure>.Failure(
+                    "The difference this scan proposed is no longer held; scan again to propose a fresh one.",
+                    ScanFailure.ProposalGone);
         }
 
-        return ServiceResult<ScanApplication, ScanFailure>.Success(
-            await applier.ApplyAsync(proposal.Difference, proposal.Systems, cancellationToken));
+        try
+        {
+            var applied = await applier.ApplyAsync(
+                proposal.Difference,
+                proposal.Systems,
+                cancellationToken);
+
+            runner.ProposalApplied(id);
+
+            return ServiceResult<ScanApplication, ScanFailure>.Success(applied);
+        }
+        catch (Exception error)
+        {
+            // Nothing here reports a failed apply on its own, so the run it belonged to is the
+            // only way back to what was being written.
+            logger.LogError(error, "Applying the difference of scan {ScanRunId} failed.", id.Value);
+
+            runner.GiveBackProposal(id);
+
+            throw;
+        }
     }
 
     public async Task<ServiceResult<IReadOnlyList<ScanRun>>> ListAsync(CancellationToken cancellationToken)

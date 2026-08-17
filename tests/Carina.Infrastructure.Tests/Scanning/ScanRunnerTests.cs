@@ -114,12 +114,12 @@ public sealed class ScanRunnerTests : IAsyncLifetime
             () => Runner.TryPeekProposal(launch.Started!, out _),
             "the proposal is held for the apply that follows");
 
-        Assert.True(Runner.TryTakeProposal(launch.Started!, out var proposal));
-        Assert.Single(proposal.Difference.Added);
+        var claim = Assert.IsType<ProposalClaim.Claimed>(Runner.ClaimProposal(launch.Started!));
+        Assert.Single(claim.Proposal.Difference.Added);
     }
 
     [Fact]
-    public async Task AProposalIsHandedOverOnlyOnceSoAnApplyCannotRunTwice()
+    public async Task AProposalIsHeldByOneApplyAtATimeSoTwoCannotWriteIt()
     {
         Orchestrator.Difference = ProposedDifference();
 
@@ -129,8 +129,47 @@ public sealed class ScanRunnerTests : IAsyncLifetime
             () => Runner.TryPeekProposal(launch.Started!, out _),
             "the proposal is held");
 
-        Assert.True(Runner.TryTakeProposal(launch.Started!, out _));
-        Assert.False(Runner.TryTakeProposal(launch.Started!, out _));
+        Assert.IsType<ProposalClaim.Claimed>(Runner.ClaimProposal(launch.Started!));
+
+        // Refused because one apply already holds it, which waiting undoes — not because the
+        // difference is gone, which only walking again undoes.
+        Assert.IsType<ProposalClaim.AlreadyBeingApplied>(Runner.ClaimProposal(launch.Started!));
+    }
+
+    [Fact]
+    public async Task AProposalWhoseApplyDidNotLandCanBeAppliedAgainWithoutWalkingAgain()
+    {
+        Orchestrator.Difference = ProposedDifference();
+
+        var launch = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
+
+        await Eventually.Happens(
+            () => Runner.TryPeekProposal(launch.Started!, out _),
+            "the proposal is held");
+
+        Assert.IsType<ProposalClaim.Claimed>(Runner.ClaimProposal(launch.Started!));
+        Runner.GiveBackProposal(launch.Started!);
+
+        var again = Assert.IsType<ProposalClaim.Claimed>(Runner.ClaimProposal(launch.Started!));
+        Assert.Single(again.Proposal.Difference.Added);
+    }
+
+    [Fact]
+    public async Task AProposalWhoseApplyLandedIsNotOfferedASecondTime()
+    {
+        Orchestrator.Difference = ProposedDifference();
+
+        var launch = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
+
+        await Eventually.Happens(
+            () => Runner.TryPeekProposal(launch.Started!, out _),
+            "the proposal is held");
+
+        Assert.IsType<ProposalClaim.Claimed>(Runner.ClaimProposal(launch.Started!));
+        Runner.ProposalApplied(launch.Started!);
+
+        Assert.IsType<ProposalClaim.Gone>(Runner.ClaimProposal(launch.Started!));
+        Assert.False(Runner.TryPeekProposal(launch.Started!, out _));
     }
 
     [Fact]
@@ -286,7 +325,8 @@ public sealed class ScanRunnerTests : IAsyncLifetime
                             TuningParameters.Terrestrial(53),
                             null,
                             null),
-                    ]),
+                    ],
+                    Seen: true),
             ],
             []);
 }

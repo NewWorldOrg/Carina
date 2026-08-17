@@ -35,7 +35,10 @@ public sealed class SatelliteTransportStreamRepository(CarinaDbContext context)
                 nameof(streams));
         }
 
-        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        // Replacing a slot is atomic on its own, and joins a larger write when it is part of one.
+        await using var transaction = context.Database.CurrentTransaction is null
+            ? await context.Database.BeginTransactionAsync(cancellationToken)
+            : null;
 
         await context.Set<SatelliteTransportStream>()
             .Where(stream => stream.BsChannel == bsChannel)
@@ -44,7 +47,10 @@ public sealed class SatelliteTransportStreamRepository(CarinaDbContext context)
         context.AddRange(streams);
         await context.SaveChangesAsync(cancellationToken);
 
-        await transaction.CommitAsync(cancellationToken);
+        if (transaction is not null)
+        {
+            await transaction.CommitAsync(CancellationToken.None);
+        }
     }
 
     private IQueryable<SatelliteTransportStream> Streams()

@@ -2,10 +2,13 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Scans;
+using Carina.Infrastructure.Scanning;
 using Carina.TestSupport;
 
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -14,23 +17,34 @@ namespace Carina.Api.Tests.FeatureTest;
 internal sealed class ScanFeature : IAsyncDisposable
 {
     private readonly TestingWebApplicationFactory factory = new();
+    private readonly WebApplicationFactory<Program> configured;
 
     public ScanFeature()
     {
         Orchestrator = new ScriptedScanOrchestrator(Runs);
-        Client = factory
+        configured = factory
             .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
             {
+                // The held stores have no rollback, so the write is run as it comes. That a
+                // failed apply leaves nothing behind is pinned against the database instead.
+                services.AddSingleton<IAtomicWrite, UnguardedWrites>();
                 services.AddSingleton<IChannelScanOrchestrator>(Orchestrator);
                 services.AddSingleton<IScanRunRepository>(Runs);
                 services.AddSingleton<IBroadcastServiceRepository>(Services);
-                services.AddSingleton<ICandidateChannelRepository>(Candidates);
+                services.AddSingleton<ICandidateChannelRepository>(
+                    new RefusingCandidates(Candidates, () => WhenACandidateArrives()));
                 services.AddSingleton<ISatelliteTransportStreamRepository>(SatelliteStreams);
-            }))
-            .CreateAuthenticatedClient();
+            }));
+        Client = configured.CreateAuthenticatedClient();
     }
 
     public HttpClient Client { get; }
+
+    /// <summary>
+    /// Run as each candidate reaches the store: true refuses it, so an apply ends part way.
+    /// Blocking here holds an apply open, which is how a test gets one in flight.
+    /// </summary>
+    public Func<bool> WhenACandidateArrives { get; set; } = () => false;
 
     public ScriptedScanOrchestrator Orchestrator { get; }
 
@@ -72,6 +86,7 @@ internal sealed class ScanFeature : IAsyncDisposable
             () => Runs.Runs.Any(run => run.Id.Value == scanId && !run.IsRunning),
             "the scan leaves Running");
 
+
     public async ValueTask DisposeAsync()
     {
         Orchestrator.Release();
@@ -82,7 +97,16 @@ internal sealed class ScanFeature : IAsyncDisposable
     private static async Task<(HttpStatusCode Status, JsonElement Body)> ReadAsync(
         HttpResponseMessage response)
     {
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var body = await response.Content.ReadAsStringAsync();
+
+        // An unhandled failure answers with a plain-text trace rather than the envelope. That is
+        // a status worth asserting on, not a reason for the reader itself to throw.
+        if (!body.StartsWith('{') && !body.StartsWith('['))
+        {
+            return (response.StatusCode, default);
+        }
+
+        using var document = JsonDocument.Parse(body);
 
         return (response.StatusCode, document.RootElement.Clone());
     }

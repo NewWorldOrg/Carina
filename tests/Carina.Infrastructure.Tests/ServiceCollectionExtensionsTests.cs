@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Driver;
 using Carina.Domain.DriverStatus;
 using Carina.Domain.Events;
@@ -95,6 +96,15 @@ public sealed class ServiceCollectionExtensionsTests
         using var provider = Build(ValidSettings());
 
         Assert.IsType<MonitoredDriverStatusReader>(provider.GetRequiredService<IDriverStatusReader>());
+    }
+
+    [Fact]
+    public void RegistersTheWriteThatLandsWholeOrNotAtAll()
+    {
+        using var provider = Build(ValidSettings());
+        using var scope = provider.CreateScope();
+
+        Assert.IsType<DatabaseAtomicWrite>(scope.ServiceProvider.GetRequiredService<IAtomicWrite>());
     }
 
     [Fact]

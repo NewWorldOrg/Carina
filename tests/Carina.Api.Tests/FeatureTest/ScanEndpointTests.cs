@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 
 using Carina.Contracts;
 using Carina.Domain.Channels;
@@ -26,7 +27,8 @@ public sealed class ScanEndpointTests
             new ServiceId(serviceId),
             name,
             ServiceCategory.Television,
-            [new ScanChannelChange(ScanChangeKind.Added, tuning, tuning.TransportStreamId, null)]);
+            [new ScanChannelChange(ScanChangeKind.Added, tuning, tuning.TransportStreamId, null)],
+            Seen: true);
 
     private static ScanServiceChange Leaving(int serviceId, string name, TuningParameters tuning)
         => new(
@@ -35,7 +37,8 @@ public sealed class ScanEndpointTests
             new ServiceId(serviceId),
             name,
             ServiceCategory.Television,
-            [new ScanChannelChange(ScanChangeKind.Missing, tuning, tuning.TransportStreamId, null)]);
+            [new ScanChannelChange(ScanChangeKind.Missing, tuning, tuning.TransportStreamId, null)],
+            Seen: false);
 
     private static TuningParameters Satellite()
         => TuningParameters.Bs(SatelliteSlot, new TransportStreamId(SatelliteStream));
@@ -390,9 +393,93 @@ public sealed class ScanEndpointTests
 
         Assert.Equal(HttpStatusCode.OK, (await feature.PostAsync($"/api/tuners/scan/{scanId}/apply")).Status);
         Assert.Equal(
-            HttpStatusCode.Conflict,
+            HttpStatusCode.Gone,
             (await feature.PostAsync($"/api/tuners/scan/{scanId}/apply")).Status);
         Assert.Single(feature.Services.Services);
+    }
+
+    [Fact]
+    public async Task AnApplyThatDidNotLandLeavesTheDifferenceStillApplicable()
+    {
+        await using var feature = new ScanFeature
+        {
+            Orchestrator =
+            {
+                Walked = { TuningParameters.Terrestrial(Terrestrial) },
+                Difference = Proposing(
+                    Arriving(101, "Arrived", TuningParameters.Terrestrial(Terrestrial))),
+            },
+            WhenACandidateArrives = () => true,
+        };
+
+        var scanId = await feature.StartAsync();
+        await feature.UntilSettled(scanId);
+
+        var (refused, _) = await feature.PostAsync($"/api/tuners/scan/{scanId}/apply");
+
+        Assert.Equal(HttpStatusCode.InternalServerError, refused);
+
+        // Walking again costs minutes on real hardware, so an apply that ended in a throw leaves
+        // the difference applicable rather than spent. What the store is left holding is not the
+        // subject here — these are held stores with no rollback; that is pinned against the
+        // database in ScanApplierDatabaseTests.
+        feature.WhenACandidateArrives = () => false;
+
+        var (status, _) = await feature.PostAsync($"/api/tuners/scan/{scanId}/apply");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Single(feature.Candidates.Candidates);
+    }
+
+    [Fact]
+    public async Task ApplyingWhileAnotherApplyHoldsTheDifferenceSaysToWaitRatherThanToWalkAgain()
+    {
+        await using var feature = new ScanFeature
+        {
+            Orchestrator =
+            {
+                Walked = { TuningParameters.Terrestrial(Terrestrial) },
+                Difference = Proposing(
+                    Arriving(101, "Arrived", TuningParameters.Terrestrial(Terrestrial))),
+            },
+        };
+
+        var scanId = await feature.StartAsync();
+        await feature.UntilSettled(scanId);
+
+        var reached = new TaskCompletionSource();
+        var letGo = new TaskCompletionSource();
+        feature.WhenACandidateArrives = () =>
+        {
+            reached.TrySetResult();
+            letGo.Task.Wait();
+
+            return false;
+        };
+
+        var held = feature.PostAsync($"/api/tuners/scan/{scanId}/apply");
+        HttpStatusCode status;
+        JsonElement body;
+
+        try
+        {
+            await reached.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            (status, body) = await feature.PostAsync($"/api/tuners/scan/{scanId}/apply");
+        }
+        finally
+        {
+            letGo.SetResult();
+        }
+
+        Assert.Equal(HttpStatusCode.OK, (await held).Status);
+
+        // A conflict is waited out; the gone answer is the one that costs a walk. A caller has
+        // to be able to tell them apart without reading the sentence.
+        Assert.Equal(HttpStatusCode.Conflict, status);
+        Assert.Contains(
+            "being applied",
+            body.GetProperty("message").GetString()!,
+            StringComparison.Ordinal);
     }
 
     [Fact]

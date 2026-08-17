@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.DriverStatus;
@@ -42,6 +43,7 @@ public static class ServiceCollectionExtensions
         services.AddDbContext<CarinaDbContext>((provider, options) =>
             options.UseCarinaDatabase(provider.GetRequiredService<IOptions<DatabaseOptions>>().Value.ConnectionString));
 
+        services.AddScoped<IAtomicWrite, DatabaseAtomicWrite>();
         services.AddScoped<IBroadcastServiceRepository, BroadcastServiceRepository>();
         services.AddScoped<ICandidateChannelRepository, CandidateChannelRepository>();
         services.AddScoped<ISatelliteTransportStreamRepository, SatelliteTransportStreamRepository>();

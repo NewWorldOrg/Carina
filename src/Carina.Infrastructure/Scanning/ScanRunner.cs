@@ -10,6 +10,25 @@ using Microsoft.Extensions.Logging;
 
 namespace Carina.Infrastructure.Scanning;
 
+/// <summary>
+/// What came of asking for a proposal to apply. Only one of the three carries one, so a caller
+/// that has a proposal cannot be holding a refusal and a caller holding a refusal cannot reach
+/// for a proposal that is not there.
+/// </summary>
+public abstract record ProposalClaim
+{
+    private ProposalClaim()
+    {
+    }
+
+    public sealed record Claimed(ScanProposal Proposal) : ProposalClaim;
+
+    /// <summary>Another apply holds it. Waiting is the recovery, not walking again.</summary>
+    public sealed record AlreadyBeingApplied : ProposalClaim;
+
+    public sealed record Gone : ProposalClaim;
+}
+
 public sealed record ScanProposal(
     ScanRunId ScanRunId,
     ScanDifference Difference,
@@ -58,6 +77,7 @@ public sealed class ScanRunner(IServiceScopeFactory scopes, ILogger<ScanRunner> 
 
     private readonly ConcurrentDictionary<ScanRunId, CancellationTokenSource> live = [];
     private readonly ConcurrentDictionary<ScanRunId, ScanProposal> proposals = [];
+    private readonly ConcurrentDictionary<ScanRunId, byte> claimed = [];
     private readonly ConcurrentDictionary<Task, byte> walks = [];
     private readonly ConcurrentQueue<ScanRunId> order = new();
 
@@ -162,8 +182,49 @@ public sealed class ScanRunner(IServiceScopeFactory scopes, ILogger<ScanRunner> 
     public bool TryPeekProposal(ScanRunId id, [NotNullWhen(true)] out ScanProposal? proposal)
         => proposals.TryGetValue(id, out proposal);
 
-    public bool TryTakeProposal(ScanRunId id, [NotNullWhen(true)] out ScanProposal? proposal)
-        => proposals.TryRemove(id, out proposal);
+    /// <summary>
+    /// Claims a proposal for one apply. A second claim is refused while the first is out, which
+    /// is what keeps two applies of one scan from both writing it. The proposal itself stays
+    /// remembered until the write lands, so a walk that cost minutes is not spent by an apply
+    /// that never committed — and a caller told it cannot have the proposal is told which of
+    /// the two reasons applies, because only one of them means walking again.
+    /// </summary>
+    public ProposalClaim ClaimProposal(ScanRunId id)
+    {
+        if (!claimed.TryAdd(id, 0))
+        {
+            return new ProposalClaim.AlreadyBeingApplied();
+        }
+
+        if (proposals.TryGetValue(id, out var proposal))
+        {
+            return new ProposalClaim.Claimed(proposal);
+        }
+
+        claimed.TryRemove(id, out _);
+
+        return new ProposalClaim.Gone();
+    }
+
+    /// <summary>Forgets a proposal whose apply committed.</summary>
+    public void ProposalApplied(ScanRunId id)
+    {
+        ArgumentNullException.ThrowIfNull(id);
+
+        proposals.TryRemove(id, out _);
+        claimed.TryRemove(id, out _);
+    }
+
+    /// <summary>
+    /// Releases a claim whose apply did not commit. The proposal was never removed, so nothing
+    /// has to be put back and the eviction order is left as it was.
+    /// </summary>
+    public void GiveBackProposal(ScanRunId id)
+    {
+        ArgumentNullException.ThrowIfNull(id);
+
+        claimed.TryRemove(id, out _);
+    }
 
     private async Task AbandonWhatAnEarlierProcessLeftAsync(CancellationToken cancellationToken)
     {
