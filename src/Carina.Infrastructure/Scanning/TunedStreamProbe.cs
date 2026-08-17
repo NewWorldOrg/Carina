@@ -77,18 +77,6 @@ public sealed class TunedStreamProbe(IDriverClient driver, ScanSettings settings
         CancellationToken deadline,
         CancellationToken abort)
     {
-        var measurement = await MeasureAsync(sessionId, abort);
-
-        if (measurement is { Locked: false })
-        {
-            return StreamProbe.Attempted(
-                ScanAttemptOutcome.NoLock,
-                "The frontend never reported a lock on this channel.") with
-            {
-                Measurement = measurement,
-            };
-        }
-
         var opened = await driver.OpenSessionStreamAsync(
             sessionId,
             DriverEndpoints.SurveySubscriber,
@@ -107,7 +95,7 @@ public sealed class TunedStreamProbe(IDriverClient driver, ScanSettings settings
                     ? $"{problem.Title}: {string.Join(" ", problem.Problems)}"
                     : "The driver opened no transport stream for this session.") with
             {
-                Measurement = measurement,
+                Measurement = (await MeasureAsync(sessionId, abort)).Measurement,
             };
         }
 
@@ -116,6 +104,18 @@ public sealed class TunedStreamProbe(IDriverClient driver, ScanSettings settings
         await using (stream)
         {
             await HarvestAsync(stream, harvest, deadline, abort);
+        }
+
+        var (measurement, lostLock) = await MeasureAsync(sessionId, abort);
+
+        if (harvest.Bytes == 0 && lostLock)
+        {
+            return StreamProbe.Attempted(
+                ScanAttemptOutcome.NoLock,
+                "The frontend never reported a lock on this channel.") with
+            {
+                Measurement = measurement,
+            };
         }
 
         return Classify(tuning, harvest) with { Measurement = measurement };
@@ -205,13 +205,15 @@ public sealed class TunedStreamProbe(IDriverClient driver, ScanSettings settings
         };
     }
 
-    private async Task<SignalMeasurement?> MeasureAsync(SessionId sessionId, CancellationToken cancellationToken)
+    private async Task<(SignalMeasurement? Measurement, bool LostLock)> MeasureAsync(
+        SessionId sessionId,
+        CancellationToken cancellationToken)
     {
         var tuners = await driver.GetTunersAsync(cancellationToken);
 
         if (!tuners.TryGetValue(out var snapshots))
         {
-            return null;
+            return (null, false);
         }
 
         var quality = snapshots
@@ -220,23 +222,25 @@ public sealed class TunedStreamProbe(IDriverClient driver, ScanSettings settings
 
         if (quality is null)
         {
-            return null;
+            return (null, false);
         }
 
         var measuredAt = (quality.MeasuredAt ?? clock.GetUtcNow()).UtcDateTime;
 
         if (quality.Lock is not SignalLock.Locked)
         {
-            return SignalMeasurement.WithoutLock(measuredAt);
+            return (SignalMeasurement.WithoutLock(measuredAt), quality.Lock is SignalLock.NotLocked);
         }
 
         var layer = quality.PostViterbiBitErrors.OrderBy(counts => counts.Layer).FirstOrDefault();
 
-        return SignalMeasurement.WithLock(
-            measuredAt,
-            quality.CnrMilliDecibels,
-            layer?.ErrorBits,
-            layer?.TotalBits);
+        return (
+            SignalMeasurement.WithLock(
+                measuredAt,
+                quality.CnrMilliDecibels,
+                layer?.ErrorBits,
+                layer?.TotalBits),
+            false);
     }
 
     private static TuneParams TuneParamsOf(TuningParameters tuning)
