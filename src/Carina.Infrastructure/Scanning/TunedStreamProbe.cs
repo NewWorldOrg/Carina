@@ -105,7 +105,7 @@ public sealed class TunedStreamProbe(IDriverClient driver, ScanSettings settings
 
         var measurement = await MeasureAsync(sessionId, abort);
 
-        if (measurement is { Locked: false })
+        if (harvest.Bytes == 0 && measurement is { Locked: false })
         {
             return StreamProbe.Attempted(
                 ScanAttemptOutcome.NoLock,

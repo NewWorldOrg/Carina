@@ -186,6 +186,22 @@ public sealed class ScanFailureClassificationTests
     }
 
     [Fact]
+    public async Task AStreamThatArrivedWholeIsNotDemotedByALockLostAtTheEndOfIt()
+    {
+        var outcome = await ScanOne(ChannelScript.Carrying(SyntheticStream.Carrying(
+            SomeStreamId,
+            new SyntheticService(SomeServiceId, "Carina One"))) with
+        {
+            Lock = SignalLock.NotLocked,
+        });
+
+        var attempt = Single(outcome);
+
+        Assert.Equal(ScanAttemptOutcome.Succeeded, attempt.Outcome);
+        Assert.False(attempt.Measurement!.Locked);
+    }
+
+    [Fact]
     public async Task AOneSegServiceIsProposedUnderItsOwnCategoryRatherThanAsTelevision()
     {
         var outcome = await ScanOne(ChannelScript.Carrying(new SyntheticStream
