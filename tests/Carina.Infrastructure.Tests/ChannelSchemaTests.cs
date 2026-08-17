@@ -174,6 +174,16 @@ public sealed class ChannelSchemaTests
     }
 
     [Fact]
+    public void NoValueObjectOfThisDomainIsAnEntityInItsOwnRight()
+    {
+        using var context = Carina();
+
+        Assert.DoesNotContain(
+            Schema(context).GetEntityTypes(),
+            entity => entity.FindOwnership() is not null);
+    }
+
+    [Fact]
     public void EveryTableOfThisDomainIsNamedInSnakeCase()
     {
         using var context = Carina();

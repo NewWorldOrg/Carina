@@ -34,6 +34,10 @@ public sealed class MigrationPipelineTests
         Assert.EndsWith("_Initial", applied[0], StringComparison.Ordinal);
         Assert.Equal(context.Database.GetMigrations(), applied);
         Assert.Empty(await context.Database.GetPendingMigrationsAsync());
+
+        // A migration that writes no DDL is only correct while the model still agrees with the
+        // snapshot it was generated against. Without this the emptiness is taken on trust.
+        Assert.False(context.Database.HasPendingModelChanges());
     }
 
     [Fact]
