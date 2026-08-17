@@ -192,6 +192,45 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
     }
 
     [Fact]
+    public async Task ServicesSharingOneChannelEachKeepACandidateOfTheirOwn()
+    {
+        var network = NextNetwork();
+        await using var context = database.Open();
+        var services = new BroadcastServiceRepository(context);
+        var candidates = new CandidateChannelRepository(context);
+        await services.AddAsync(Service(network, 1), Cancel);
+        await services.AddAsync(Service(network, 2), Cancel);
+
+        var carrying = TuningParameters.Terrestrial(27);
+        var measured = SignalMeasurement.WithLock(At, 21_000);
+
+        foreach (var service in (int[])[1, 2])
+        {
+            var candidate = CandidateChannel.Discover(
+                CandidateChannelId.New(),
+                new NetworkId(network),
+                new ServiceId(service),
+                carrying,
+                At);
+            candidate.RecordTuningSuccess(measured, At);
+
+            await candidates.AddAsync(candidate, Cancel);
+        }
+
+        await using var reading = database.Open();
+        var repository = new CandidateChannelRepository(reading);
+
+        foreach (var service in (int[])[1, 2])
+        {
+            var stored = Assert.Single(
+                await repository.ListForServiceAsync(new NetworkId(network), new ServiceId(service), Cancel));
+
+            Assert.Equal(27, stored.Tuning.PhysicalChannel);
+            Assert.Equal(21_000, stored.LastMeasurement?.CnrMilliDecibels);
+        }
+    }
+
+    [Fact]
     public async Task TheSatelliteReferenceRowsAreReplacedOneSlotAtATime()
     {
         await using var context = database.Open();
