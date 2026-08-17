@@ -93,7 +93,10 @@ public sealed class TunedStreamProbe(IDriverClient driver, ScanSettings settings
                 ScanAttemptOutcome.LockedWithoutData,
                 opened.Problem is { } problem
                     ? $"{problem.Title}: {string.Join(" ", problem.Problems)}"
-                    : "The driver opened no transport stream for this session.");
+                    : "The driver opened no transport stream for this session.") with
+            {
+                Measurement = (await MeasureAsync(sessionId, abort)).Measurement,
+            };
         }
 
         var harvest = new TableHarvest();
@@ -103,9 +106,9 @@ public sealed class TunedStreamProbe(IDriverClient driver, ScanSettings settings
             await HarvestAsync(stream, harvest, deadline, abort);
         }
 
-        var measurement = await MeasureAsync(sessionId, abort);
+        var (measurement, lostLock) = await MeasureAsync(sessionId, abort);
 
-        if (harvest.Bytes == 0 && measurement is { Locked: false })
+        if (harvest.Bytes == 0 && lostLock)
         {
             return StreamProbe.Attempted(
                 ScanAttemptOutcome.NoLock,
@@ -202,13 +205,15 @@ public sealed class TunedStreamProbe(IDriverClient driver, ScanSettings settings
         };
     }
 
-    private async Task<SignalMeasurement?> MeasureAsync(SessionId sessionId, CancellationToken cancellationToken)
+    private async Task<(SignalMeasurement? Measurement, bool LostLock)> MeasureAsync(
+        SessionId sessionId,
+        CancellationToken cancellationToken)
     {
         var tuners = await driver.GetTunersAsync(cancellationToken);
 
         if (!tuners.TryGetValue(out var snapshots))
         {
-            return null;
+            return (null, false);
         }
 
         var quality = snapshots
@@ -217,23 +222,25 @@ public sealed class TunedStreamProbe(IDriverClient driver, ScanSettings settings
 
         if (quality is null)
         {
-            return null;
+            return (null, false);
         }
 
         var measuredAt = (quality.MeasuredAt ?? clock.GetUtcNow()).UtcDateTime;
 
         if (quality.Lock is not SignalLock.Locked)
         {
-            return SignalMeasurement.WithoutLock(measuredAt);
+            return (SignalMeasurement.WithoutLock(measuredAt), quality.Lock is SignalLock.NotLocked);
         }
 
         var layer = quality.PostViterbiBitErrors.OrderBy(counts => counts.Layer).FirstOrDefault();
 
-        return SignalMeasurement.WithLock(
-            measuredAt,
-            quality.CnrMilliDecibels,
-            layer?.ErrorBits,
-            layer?.TotalBits);
+        return (
+            SignalMeasurement.WithLock(
+                measuredAt,
+                quality.CnrMilliDecibels,
+                layer?.ErrorBits,
+                layer?.TotalBits),
+            false);
     }
 
     private static TuneParams TuneParamsOf(TuningParameters tuning)

@@ -36,7 +36,7 @@ public sealed class ScriptedDriverClient : IDriverClient
 {
     private readonly Dictionary<TuningParameters, ChannelScript> scripts = [];
     private readonly Dictionary<SessionId, TuningParameters> live = [];
-    private readonly HashSet<SessionId> streaming = [];
+    private readonly HashSet<SessionId> sampled = [];
     private readonly Lock gate = new();
 
     public string DeviceId { get; init; } = "adapter0";
@@ -78,7 +78,7 @@ public sealed class ScriptedDriverClient : IDriverClient
                         SessionId = entry.Key,
                         Purpose = SessionPurpose.Scan,
                     },
-                    SignalQuality = streaming.Contains(entry.Key)
+                    SignalQuality = sampled.Contains(entry.Key)
                         ? QualityOf(Script(entry.Value))
                         : null,
                 })
@@ -158,7 +158,7 @@ public sealed class ScriptedDriverClient : IDriverClient
                 return Task.FromResult(DriverCall<Stream>.Refused(refusal));
             }
 
-            streaming.Add(sessionId);
+            sampled.Add(sessionId);
 
             Stream stream = script.Paced is { } paced
                 ? paced()
@@ -176,7 +176,7 @@ public sealed class ScriptedDriverClient : IDriverClient
         {
             Stopped.Add(sessionId);
             live.Remove(sessionId);
-            streaming.Remove(sessionId);
+            sampled.Remove(sessionId);
         }
 
         return Task.FromResult(DriverCall<SessionSnapshot>.Reached(null));
