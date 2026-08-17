@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
@@ -263,7 +264,7 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
     }
 
     [Fact]
-    public async Task AWriteInsideAnotherOneGoesBackAloneWhenOnlyItFails()
+    public async Task AWriteInsideAnotherOneIsRefusedBeforeItWritesAnything()
     {
         var network = NextNetwork();
         await using var context = database.Open();
@@ -275,13 +276,13 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
             {
                 await services.AddAsync(Service(network, 1), outer);
 
-                await Assert.ThrowsAsync<StoreRefusedException>(
+                await Assert.ThrowsAsync<NestedWriteRefusedException>(
                     () => writes.AllOrNothingAsync<int>(
                         async inner =>
                         {
                             await services.AddAsync(Service(network, 2), inner);
 
-                            throw new StoreRefusedException("the inner write gives up");
+                            return 0;
                         },
                         outer));
 
