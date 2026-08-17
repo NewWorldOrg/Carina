@@ -199,10 +199,13 @@ public sealed class ScanRunner(IServiceScopeFactory scopes, ILogger<ScanRunner> 
     {
         ArgumentNullException.ThrowIfNull(id);
 
-        if (claimed.TryRemove(new KeyValuePair<ScanRunId, Guid>(id, hold)))
+        if (!claimed.TryGetValue(id, out var held) || held != hold)
         {
-            proposals.TryRemove(id, out _);
+            return;
         }
+
+        proposals.TryRemove(id, out _);
+        claimed.TryRemove(new KeyValuePair<ScanRunId, Guid>(id, hold));
     }
 
     public void GiveBackProposal(ScanRunId id, Guid hold)

@@ -167,6 +167,7 @@ public sealed class ScanRunnerTests : IAsyncLifetime
         Runner.ProposalApplied(launch.Started!, applied.Hold);
 
         Assert.IsType<ProposalClaim.Gone>(Runner.ClaimProposal(launch.Started!));
+        Assert.IsType<ProposalClaim.Gone>(Runner.ClaimProposal(launch.Started!));
         Assert.False(Runner.TryPeekProposal(launch.Started!, out _));
     }
 
