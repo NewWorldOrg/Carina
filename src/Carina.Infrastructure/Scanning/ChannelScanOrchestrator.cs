@@ -108,6 +108,7 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
         var targets = await ScanTargets.WalkAsync(scope, satelliteStreams, cancellationToken);
         var attempts = new List<ScanRunAttempt>();
         var carried = new Dictionary<TuningParameters, StreamProbe>();
+        var reached = new Dictionary<TuningParameters, StreamProbe>();
         var streamsSeen = new Dictionary<(int Network, int Stream), TuningParameters>();
         string? failure = null;
 
@@ -148,12 +149,15 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
 
             if (probe.Outcome is ScanAttemptOutcome.Succeeded && probe.Description is { } description)
             {
+                reached[target] = probe;
+
                 var stream = (description.OriginalNetworkId, description.TransportStreamId);
 
-                if (streamsSeen.TryGetValue(stream, out var first))
+                if (target.System is TuneSystem.IsdbSBs
+                    && streamsSeen.TryGetValue(stream, out var first))
                 {
-                    detail = $"This target carries the same stream as {ScanTargetNames.Of(first)},"
-                        + " so it is proposed once.";
+                    detail = $"This slot carries the same stream as {ScanTargetNames.Of(first)},"
+                        + " which is a slot that is not there; it is proposed once.";
                 }
                 else
                 {
@@ -177,13 +181,14 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
         }
 
         return await ConcludeAsync(
-            run, attempts, carried, observer, interruption, failure, cancellationToken);
+            run, attempts, carried, reached, observer, interruption, failure, cancellationToken);
     }
 
     private async Task<ScanOutcome> ConcludeAsync(
         ScanRun run,
         IReadOnlyList<ScanRunAttempt> attempts,
         IReadOnlyDictionary<TuningParameters, StreamProbe> carried,
+        IReadOnlyDictionary<TuningParameters, StreamProbe> reached,
         IScanRunObserver observer,
         CancellationTokenSource interruption,
         string? failure,
@@ -205,7 +210,7 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
         }
         else
         {
-            var departures = await TurnTheRotationAsync(attempts, carried);
+            var departures = await TurnTheRotationAsync(attempts, reached);
             difference = await DifferenceAsync(carried, departures);
             run.Complete(Now);
         }
@@ -251,7 +256,7 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
 
     private async Task<IReadOnlyList<RotationDeparture>> TurnTheRotationAsync(
         IReadOnlyList<ScanRunAttempt> attempts,
-        IReadOnlyDictionary<TuningParameters, StreamProbe> carried)
+        IReadOnlyDictionary<TuningParameters, StreamProbe> reached)
     {
         var walked = attempts.ToDictionary(attempt => attempt.Tuning, attempt => attempt);
         var departures = new List<RotationDeparture>();
@@ -274,7 +279,7 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
                 var wasInRotation = candidate.IsInRotation;
 
                 if (attempt.Outcome is ScanAttemptOutcome.Succeeded
-                    && carried.TryGetValue(candidate.Tuning, out var probe)
+                    && reached.TryGetValue(candidate.Tuning, out var probe)
                     && Names(probe, service.ServiceId))
                 {
                     candidate.RecordTuningSuccess(

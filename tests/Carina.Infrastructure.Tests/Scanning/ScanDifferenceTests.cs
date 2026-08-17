@@ -32,6 +32,41 @@ public sealed class ScanDifferenceTests
     }
 
     [Fact]
+    public async Task AServiceReachedOnTwoTerrestrialChannelsIsProposedWithBoth()
+    {
+        var script = Carrying(new SyntheticService(SomeServiceId, "Carina One"));
+        var harness = new ScanHarness(new ScriptedDriverClient()
+            .Script(Channel53, script)
+            .Script(Channel55, script));
+
+        var outcome = await harness.Orchestrator.RunAsync(
+            ScanScope.Over([Channel53, Channel55]),
+            Cancel);
+        var added = Assert.Single(outcome.Difference.Added);
+
+        Assert.Equal(
+            [Channel53, Channel55],
+            added.Channels.Select(channel => channel.Tuning));
+    }
+
+    [Fact]
+    public async Task ASatelliteSlotCarryingAStreamAlreadyReachedIsProposedOnceOnly()
+    {
+        var twin = TuningParameters.Bs(9, new TransportStreamId(50004));
+        var other = TuningParameters.Bs(11, new TransportStreamId(50004));
+        var script = ChannelScript.Carrying(
+            SyntheticStream.Carrying(50004, new SyntheticService(SomeServiceId, "Carina One")));
+        var harness = new ScanHarness(new ScriptedDriverClient()
+            .Script(twin, script)
+            .Script(other, script));
+
+        var outcome = await harness.Orchestrator.RunAsync(ScanScope.Over([twin, other]), Cancel);
+        var added = Assert.Single(outcome.Difference.Added);
+
+        Assert.Equal([twin], added.Channels.Select(channel => channel.Tuning));
+    }
+
+    [Fact]
     public async Task AServiceThatChangedItsNameIsProposedAsAnUpdateRatherThanAsANewOne()
     {
         var harness = Harness(Carrying(new SyntheticService(SomeServiceId, "Carina One Renamed")));

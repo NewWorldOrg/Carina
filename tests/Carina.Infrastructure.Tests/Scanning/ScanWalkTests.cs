@@ -13,20 +13,25 @@ public sealed class ScanWalkTests
     private static readonly TuningParameters Channel53 = TuningParameters.Terrestrial(53);
     private static readonly TuningParameters Channel55 = TuningParameters.Terrestrial(55);
     private static readonly TuningParameters Channel57 = TuningParameters.Terrestrial(57);
+    private static readonly TuningParameters Slot9 =
+        TuningParameters.Bs(9, new TransportStreamId(SomeStreamId));
+
+    private static readonly TuningParameters Slot11 =
+        TuningParameters.Bs(11, new TransportStreamId(SomeStreamId));
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
     [Fact]
-    public async Task TwoTargetsCarryingTheOneStreamProposeThatStreamOnce()
+    public async Task TwoSatelliteSlotsCarryingTheOneStreamProposeThatStreamOnce()
     {
         var carrying = ChannelScript.Carrying(SyntheticStream.Carrying(
             SomeStreamId,
             new SyntheticService(SomeServiceId, "Carina One")));
         var driver = new ScriptedDriverClient()
-            .Script(Channel53, carrying)
-            .Script(Channel55, carrying);
+            .Script(Slot9, carrying)
+            .Script(Slot11, carrying);
 
         var outcome = await new ScanHarness(driver).Orchestrator.RunAsync(
-            ScanScope.Over([Channel53, Channel55]),
+            ScanScope.Over([Slot9, Slot11]),
             Cancel);
 
         Assert.Equal(2, outcome.Attempts.Count);
@@ -34,9 +39,9 @@ public sealed class ScanWalkTests
 
         var added = Assert.Single(outcome.Difference.Added);
 
-        Assert.Equal(Channel53, Assert.Single(added.Channels).Tuning);
+        Assert.Equal(Slot9, Assert.Single(added.Channels).Tuning);
         Assert.Contains(
-            ScanTargetNames.Of(Channel53),
+            ScanTargetNames.Of(Slot9),
             outcome.Attempts[1].Detail!,
             StringComparison.Ordinal);
     }
