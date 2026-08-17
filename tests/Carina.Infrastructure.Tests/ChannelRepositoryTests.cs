@@ -263,6 +263,40 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
     }
 
     [Fact]
+    public async Task AWriteInsideAnotherOneGoesBackAloneWhenOnlyItFails()
+    {
+        var network = NextNetwork();
+        await using var context = database.Open();
+        var services = new BroadcastServiceRepository(context);
+        var writes = new DatabaseAtomicWrite(context);
+
+        await writes.AllOrNothingAsync<int>(
+            async outer =>
+            {
+                await services.AddAsync(Service(network, 1), outer);
+
+                await Assert.ThrowsAsync<StoreRefusedException>(
+                    () => writes.AllOrNothingAsync<int>(
+                        async inner =>
+                        {
+                            await services.AddAsync(Service(network, 2), inner);
+
+                            throw new StoreRefusedException("the inner write gives up");
+                        },
+                        outer));
+
+                return 0;
+            },
+            Cancel);
+
+        await using var reading = database.Open();
+        var stored = new BroadcastServiceRepository(reading);
+
+        Assert.NotNull(await stored.FindAsync(new NetworkId(network), new ServiceId(1), Cancel));
+        Assert.Null(await stored.FindAsync(new NetworkId(network), new ServiceId(2), Cancel));
+    }
+
+    [Fact]
     public async Task ASatelliteSlotReplacedInsideALargerWriteGoesBackWithIt()
     {
         const int Slot = 21;
