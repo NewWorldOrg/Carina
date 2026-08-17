@@ -145,8 +145,8 @@ public sealed class ScanRunnerTests : IAsyncLifetime
             () => Runner.TryPeekProposal(launch.Started!, out _),
             "the proposal is held");
 
-        Assert.IsType<ProposalClaim.Claimed>(Runner.ClaimProposal(launch.Started!));
-        Runner.GiveBackProposal(launch.Started!);
+        var held = Assert.IsType<ProposalClaim.Claimed>(Runner.ClaimProposal(launch.Started!));
+        Runner.GiveBackProposal(launch.Started!, held.Hold);
 
         var again = Assert.IsType<ProposalClaim.Claimed>(Runner.ClaimProposal(launch.Started!));
         Assert.Single(again.Proposal.Difference.Added);
@@ -163,11 +163,31 @@ public sealed class ScanRunnerTests : IAsyncLifetime
             () => Runner.TryPeekProposal(launch.Started!, out _),
             "the proposal is held");
 
-        Assert.IsType<ProposalClaim.Claimed>(Runner.ClaimProposal(launch.Started!));
-        Runner.ProposalApplied(launch.Started!);
+        var applied = Assert.IsType<ProposalClaim.Claimed>(Runner.ClaimProposal(launch.Started!));
+        Runner.ProposalApplied(launch.Started!, applied.Hold);
 
         Assert.IsType<ProposalClaim.Gone>(Runner.ClaimProposal(launch.Started!));
         Assert.False(Runner.TryPeekProposal(launch.Started!, out _));
+    }
+
+    [Fact]
+    public async Task AProposalIsNotReleasedByAnyoneOtherThanTheApplyHoldingIt()
+    {
+        Orchestrator.Difference = ProposedDifference();
+
+        var launch = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
+
+        await Eventually.Happens(
+            () => Runner.TryPeekProposal(launch.Started!, out _),
+            "the proposal is held");
+
+        Assert.IsType<ProposalClaim.Claimed>(Runner.ClaimProposal(launch.Started!));
+
+        Runner.GiveBackProposal(launch.Started!, Guid.NewGuid());
+        Runner.ProposalApplied(launch.Started!, Guid.NewGuid());
+
+        Assert.IsType<ProposalClaim.AlreadyBeingApplied>(Runner.ClaimProposal(launch.Started!));
+        Assert.True(Runner.TryPeekProposal(launch.Started!, out _));
     }
 
     [Fact]

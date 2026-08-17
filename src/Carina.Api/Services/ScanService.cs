@@ -101,7 +101,7 @@ public sealed class ScanService(
 
         var claim = runner.ClaimProposal(id);
 
-        if (claim is not ProposalClaim.Claimed(var proposal))
+        if (claim is not ProposalClaim.Claimed(var proposal, var hold))
         {
             return claim is ProposalClaim.AlreadyBeingApplied
                 ? ServiceResult<ScanApplication, ScanFailure>.Failure(
@@ -119,7 +119,7 @@ public sealed class ScanService(
                 proposal.Systems,
                 cancellationToken);
 
-            runner.ProposalApplied(id);
+            runner.ProposalApplied(id, hold);
 
             return ServiceResult<ScanApplication, ScanFailure>.Success(applied);
         }
@@ -127,7 +127,7 @@ public sealed class ScanService(
         {
             logger.LogError(error, "Applying the difference of scan {ScanRunId} failed.", id.Value);
 
-            runner.GiveBackProposal(id);
+            runner.GiveBackProposal(id, hold);
 
             throw;
         }
