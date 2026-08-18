@@ -24,6 +24,8 @@ public sealed class SyntheticStream
 
     public IReadOnlyList<int> OtherStreamsInNetwork { get; init; } = [];
 
+    public int? RemoteControlKeyId { get; init; }
+
     public bool WithoutNetwork { get; init; }
 
     public bool WithoutDescription { get; init; }
@@ -73,6 +75,11 @@ public sealed class SyntheticStream
             SiDescriptorWriter.ServiceList(
                 [.. Services.Select(service => (service.ServiceId, (int)service.Kind))]),
         };
+
+        if (RemoteControlKeyId is { } remoteControlKeyId)
+        {
+            descriptors.Add(SiDescriptorWriter.TransportStreamInformation(remoteControlKeyId, Text("TEST")));
+        }
 
         if (partiallyReceived.Length > 0)
         {

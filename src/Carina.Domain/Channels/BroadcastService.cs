@@ -18,6 +18,8 @@ public sealed class BroadcastService
 
     public ServiceCategory Category { get; private set; }
 
+    public int? RemoteControlKeyId { get; private set; }
+
     public DateTime DiscoveredAt { get; private set; }
 
     public DateTime LastSeenAt { get; private set; }
@@ -39,7 +41,8 @@ public sealed class BroadcastService
         string name,
         ServiceCategory category,
         DateTime discoveredAt,
-        DateTime lastSeenAt)
+        DateTime lastSeenAt,
+        int? remoteControlKeyId = null)
     {
         ArgumentNullException.ThrowIfNull(networkId);
         ArgumentNullException.ThrowIfNull(serviceId);
@@ -50,9 +53,20 @@ public sealed class BroadcastService
             ServiceId = serviceId,
             Name = ValidatedName(name),
             Category = category,
+            RemoteControlKeyId = remoteControlKeyId,
             DiscoveredAt = UtcTimes.Required(discoveredAt, nameof(discoveredAt)),
             LastSeenAt = UtcTimes.Required(lastSeenAt, nameof(lastSeenAt)),
         };
+    }
+
+    public void RemoteControlledBy(int? remoteControlKeyId)
+    {
+        if (remoteControlKeyId is null)
+        {
+            return;
+        }
+
+        RemoteControlKeyId = remoteControlKeyId;
     }
 
     public void Describe(string name, ServiceCategory category, DateTime at)
