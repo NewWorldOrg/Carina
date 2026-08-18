@@ -1,4 +1,5 @@
 using Carina.Domain.Channels;
+using Carina.Domain.Programmes;
 using Carina.Domain.Scans;
 using Carina.Infrastructure.Persistence;
 
@@ -106,6 +107,36 @@ public sealed class ChannelSchemaTests
         Assert.Contains(
             ColumnsOf(attempt, nameof(ScanRunAttempt.Tuning)),
             column => column == "tune_system");
+    }
+
+    [Fact]
+    public void EveryTableAProgrammeCanComeFromIsAValueTheDatabaseKnows()
+    {
+        using var context = Carina();
+
+        var check = Assert.Single(
+            Entity<Programme>(context).GetCheckConstraints(),
+            constraint => constraint.Name == "ck_programme_source");
+
+        foreach (var source in Enum.GetNames<ProgrammeSource>())
+        {
+            Assert.Contains($"'{source}'", check.Sql, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void EveryWayAVisitCanEndIsAValueTheDatabaseKnows()
+    {
+        using var context = Carina();
+
+        var check = Assert.Single(
+            Entity<StreamVisit>(context).GetCheckConstraints(),
+            constraint => constraint.Name == "ck_stream_visit_outcome");
+
+        foreach (var outcome in Enum.GetNames<VisitOutcome>())
+        {
+            Assert.Contains($"'{outcome}'", check.Sql, StringComparison.Ordinal);
+        }
     }
 
     [Fact]

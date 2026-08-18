@@ -90,7 +90,14 @@ public sealed class StreamVisit
             LastCompletedAt = at;
         }
 
-        ConsecutiveIncomplete = Counts(outcome) ? ConsecutiveIncomplete + 1 : 0;
+        if (Counts(outcome))
+        {
+            ConsecutiveIncomplete++;
+        }
+        else if (Settles(outcome))
+        {
+            ConsecutiveIncomplete = 0;
+        }
     }
 
     private static bool Settles(VisitOutcome outcome)

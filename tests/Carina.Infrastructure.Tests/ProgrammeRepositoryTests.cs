@@ -118,6 +118,58 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
     }
 
     [Fact]
+    public async Task WhatAProgrammeTookInLaterComesBackFromTheStore()
+    {
+        var network = NextNetwork();
+        await using var context = database.Open();
+        var programmes = new ProgrammeRepository(context);
+        var programme = Programme.Discover(Broadcast(network), At);
+
+        await programmes.AddAsync(programme, Cancel);
+
+        Assert.True(programme.Absorb(
+            Broadcast(network) with
+            {
+                Genres = [new ProgrammeGenre(7, 2)],
+                Items = [new ProgrammeItem("公式ページ", "https://example.invalid/")],
+                HasSubtitles = true,
+            },
+            At.AddHours(1)));
+
+        await programmes.SaveAsync(programme, Cancel);
+
+        await using var reading = database.Open();
+        var stored = await new ProgrammeRepository(reading).FindAsync(Id(network), Cancel);
+
+        Assert.Equal(new ProgrammeGenre(7, 2), Assert.Single(stored!.Genres));
+        Assert.Equal("公式ページ", Assert.Single(stored.Items).Heading);
+        Assert.True(stored.HasSubtitles);
+        Assert.Equal(At.AddHours(1), stored.UpdatedAt);
+    }
+
+    [Fact]
+    public async Task AProgrammeWhoseEndWasNeverToldIsForgottenOnceItsStartIsOldEnough()
+    {
+        var network = NextNetwork();
+        await using var context = database.Open();
+        var programmes = new ProgrammeRepository(context);
+
+        await programmes.AddAsync(
+            Programme.Discover(Broadcast(network, 1, At.AddHours(1)) with { EndsAt = null }, At),
+            Cancel);
+        await programmes.AddAsync(
+            Programme.Discover(Broadcast(network, 2, At.AddHours(40)) with { EndsAt = null }, At),
+            Cancel);
+
+        Assert.Equal(1, await programmes.ForgetEndedBeforeAsync(At.AddHours(10), Cancel));
+
+        await using var reading = database.Open();
+
+        Assert.Null(await new ProgrammeRepository(reading).FindAsync(Id(network, 1), Cancel));
+        Assert.NotNull(await new ProgrammeRepository(reading).FindAsync(Id(network, 2), Cancel));
+    }
+
+    [Fact]
     public async Task HowFarAServiceIsCoveredIgnoresTheProgrammesThatAreOnlyPlaceholders()
     {
         var network = NextNetwork();

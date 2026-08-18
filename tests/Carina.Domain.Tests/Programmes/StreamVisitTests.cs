@@ -53,17 +53,29 @@ public sealed class StreamVisitTests
     }
 
     [Fact]
-    public void AnInterruptionInTheMiddleClearsWhatCameBeforeRatherThanAddingToIt()
+    public void AnInterruptionLeavesWhatCameBeforeExactlyWhereItWas()
     {
         var visit = Visit(VisitOutcome.Incomplete);
+
+        visit.Record(VisitOutcome.Incomplete, At.AddHours(1), Took);
+        visit.Record(VisitOutcome.Interrupted, At.AddHours(2), Took);
+
+        Assert.Equal(2, visit.ConsecutiveIncomplete);
+
+        visit.Record(VisitOutcome.Interrupted, At.AddHours(3), Took);
+
+        Assert.Equal(2, visit.ConsecutiveIncomplete);
+    }
+
+    [Fact]
+    public void AnInterruptionOnAStreamThatWasFineLeavesItFine()
+    {
+        var visit = Visit(VisitOutcome.Complete);
 
         visit.Record(VisitOutcome.Interrupted, At.AddHours(1), Took);
 
         Assert.Equal(0, visit.ConsecutiveIncomplete);
-
-        visit.Record(VisitOutcome.Interrupted, At.AddHours(2), Took);
-
-        Assert.Equal(0, visit.ConsecutiveIncomplete);
+        Assert.Equal(At, visit.LastCompletedAt);
     }
 
     [Fact]
