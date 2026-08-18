@@ -58,6 +58,34 @@ public sealed class ProgrammeRepository(CarinaDbContext context) : IProgrammeRep
             .Where(programme => programme.EndsAt == null ? programme.StartsAt < at : programme.EndsAt < at)
             .ExecuteDeleteAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<Programme>> ListForServicesAsync(
+        IReadOnlyList<ProgrammeService> services,
+        DateTime from,
+        DateTime to,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        if (services.Count == 0)
+        {
+            return [];
+        }
+
+        int[] networks = [.. services.Select(service => service.NetworkId).Distinct()];
+        int[] carried = [.. services.Select(service => service.ServiceId).Distinct()];
+        List<Programme> found = await context.Set<Programme>()
+            .Where(programme => networks.Contains(programme.NetworkId.Value))
+            .Where(programme => carried.Contains(programme.ServiceId.Value))
+            .Where(programme => programme.StartsAt < to)
+            .Where(programme => programme.EndsAt == null || programme.EndsAt > from)
+            .OrderBy(programme => programme.StartsAt)
+            .ThenBy(programme => programme.EventId)
+            .ToListAsync(cancellationToken);
+        var wanted = services.Select(service => (service.NetworkId, service.ServiceId)).ToHashSet();
+
+        return [.. found.Where(programme => wanted.Contains((programme.NetworkId.Value, programme.ServiceId.Value)))];
+    }
+
     public async Task<int> ForgetEverythingAsync(CancellationToken cancellationToken)
         => await context.Set<Programme>().ExecuteDeleteAsync(cancellationToken);
 
