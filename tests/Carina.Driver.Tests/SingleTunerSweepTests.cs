@@ -37,7 +37,7 @@ public sealed class SingleTunerSweepTests
 
             reached.Add(channel);
 
-            await manager.StopAsync(session.SessionId, CancellationToken.None);
+            await manager.StopAsync(session.SessionId, "test", CancellationToken.None);
         }
 
         Assert.Equal(Sweep, reached);
@@ -51,7 +51,7 @@ public sealed class SingleTunerSweepTests
 
         Assert.True(start.TryGetSession(out var session));
 
-        var outcome = await manager.StopAsync(session.SessionId, CancellationToken.None);
+        var outcome = await manager.StopAsync(session.SessionId, "test", CancellationToken.None);
 
         Assert.Equal(SessionStopOutcome.Stopped, outcome);
         Assert.True(session.Concluded);
@@ -74,7 +74,7 @@ public sealed class SingleTunerSweepTests
             "The session never reached the read that cannot be interrupted."
         );
 
-        var outcome = await manager.StopAsync(session.SessionId, CancellationToken.None);
+        var outcome = await manager.StopAsync(session.SessionId, "test", CancellationToken.None);
 
         Assert.Equal(SessionStopOutcome.Stopping, outcome);
         Assert.False(session.Concluded);
@@ -85,7 +85,7 @@ public sealed class SingleTunerSweepTests
 
         Assert.Equal(
             SessionStopOutcome.AlreadyEnded,
-            await manager.StopAsync(session.SessionId, CancellationToken.None)
+            await manager.StopAsync(session.SessionId, "test", CancellationToken.None)
         );
     }
 

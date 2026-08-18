@@ -222,6 +222,36 @@ public sealed class DriverOutputRootTests
         );
     }
 
+    [Fact]
+    public void AWalkSessionLengthIsReadAndHasItsOwnDefault()
+    {
+        var configuration = DriverConfigurationReader
+            .Read(Complete.Replace("\"socketPath\"", "\"walkSessionMinutes\": 15,\n  \"socketPath\""))
+            .Configuration!;
+
+        Assert.Equal(15, configuration.WalkSessionMinutes);
+        Assert.Equal(
+            DriverConfiguration.DefaultWalkSessionMinutes,
+            DriverConfigurationReader.Read(Complete).Configuration!.WalkSessionMinutes
+        );
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(241)]
+    public void AWalkSessionLengthOutsideItsRangeIsAFinding(int minutes)
+    {
+        Assert.Contains(
+            Problems(
+                Complete.Replace(
+                    "\"socketPath\"",
+                    $"\"walkSessionMinutes\": {minutes},\n  \"socketPath\""
+                )
+            ),
+            problem => problem.StartsWith("walkSessionMinutes:")
+        );
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(1441)]

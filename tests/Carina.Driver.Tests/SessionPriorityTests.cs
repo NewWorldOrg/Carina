@@ -65,9 +65,24 @@ public sealed class SessionPriorityTests
     [InlineData(SessionPurpose.Live, SessionPriority.Live)]
     [InlineData(SessionPurpose.Scan, SessionPriority.Scan)]
     [InlineData(SessionPurpose.Survey, SessionPriority.Guide)]
+    [InlineData(SessionPurpose.SurveyNow, SessionPriority.GuideNow)]
     public void EveryPurposeThisContractNamesSitsOnItsRung(SessionPurpose purpose, int rung)
     {
         Assert.Equal(rung, SessionPriority.Of(purpose));
+    }
+
+    [Fact]
+    public void NoNamedPurposeIsLeftOffTheLadder()
+    {
+        foreach (var purpose in Enum.GetValues<SessionPurpose>())
+        {
+            if (purpose is SessionPurpose.Unspecified)
+            {
+                continue;
+            }
+
+            Assert.NotEqual(SessionPriority.Unknown, SessionPriority.Of(purpose));
+        }
     }
 
     [Fact]
