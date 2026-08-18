@@ -1,3 +1,6 @@
+using Carina.Domain.Base;
+using Carina.Domain.Channels;
+
 namespace Carina.Domain.Programmes;
 
 public sealed class Programme
@@ -12,7 +15,7 @@ public sealed class Programme
 
     public ProgrammeId Id { get; private set; } = null!;
 
-    public int TransportStreamId { get; private set; }
+    public TransportStreamId TransportStreamId { get; private set; } = null!;
 
     public DateTime StartsAt { get; private set; }
 
@@ -30,22 +33,20 @@ public sealed class Programme
     {
         ArgumentNullException.ThrowIfNull(broadcast);
 
-        return new Programme
-        {
-            Id = broadcast.Id,
-            TransportStreamId = broadcast.TransportStreamId,
-            StartsAt = broadcast.StartsAt,
-            EndsAt = broadcast.EndsAt,
-            Name = Clamped(broadcast.Name, NameMaxLength),
-            Summary = Clamped(broadcast.Summary, SummaryMaxLength),
-            IsShadow = broadcast.IsShadow,
-            UpdatedAt = at,
-        };
+        return Rehydrate(
+            broadcast.Id,
+            broadcast.TransportStreamId,
+            broadcast.StartsAt,
+            broadcast.EndsAt,
+            broadcast.Name,
+            broadcast.Summary,
+            broadcast.IsShadow,
+            at);
     }
 
     public static Programme Rehydrate(
         ProgrammeId id,
-        int transportStreamId,
+        TransportStreamId transportStreamId,
         DateTime startsAt,
         DateTime? endsAt,
         string name,
@@ -54,6 +55,7 @@ public sealed class Programme
         DateTime updatedAt)
     {
         ArgumentNullException.ThrowIfNull(id);
+        ArgumentNullException.ThrowIfNull(transportStreamId);
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(summary);
 
@@ -61,30 +63,32 @@ public sealed class Programme
         {
             Id = id,
             TransportStreamId = transportStreamId,
-            StartsAt = startsAt,
-            EndsAt = endsAt,
-            Name = name,
-            Summary = summary,
+            StartsAt = UtcTimes.Required(startsAt, nameof(startsAt)),
+            EndsAt = Settled(startsAt, UtcTimes.Optional(endsAt, nameof(endsAt))),
+            Name = Clamped(name, NameMaxLength),
+            Summary = Clamped(summary, SummaryMaxLength),
             IsShadow = isShadow,
-            UpdatedAt = updatedAt,
+            UpdatedAt = UtcTimes.Required(updatedAt, nameof(updatedAt)),
         };
     }
 
     public bool Absorb(ProgrammeBroadcast broadcast, DateTime at)
     {
         ArgumentNullException.ThrowIfNull(broadcast);
+        UtcTimes.Required(at, nameof(at));
 
         if (!Id.Equals(broadcast.Id))
         {
             throw new ArgumentException("That broadcast describes another programme.", nameof(broadcast));
         }
 
+        var startsAt = UtcTimes.Required(broadcast.StartsAt, nameof(broadcast));
         var name = Kept(Name, Clamped(broadcast.Name, NameMaxLength));
         var summary = Kept(Summary, Clamped(broadcast.Summary, SummaryMaxLength));
-        var endsAt = broadcast.EndsAt ?? EndsAt;
+        var endsAt = Settled(startsAt, UtcTimes.Optional(broadcast.EndsAt, nameof(broadcast)) ?? EndsAt);
 
-        if (TransportStreamId == broadcast.TransportStreamId
-            && StartsAt == broadcast.StartsAt
+        if (TransportStreamId.Equals(broadcast.TransportStreamId)
+            && StartsAt == startsAt
             && EndsAt == endsAt
             && Name == name
             && Summary == summary
@@ -94,7 +98,7 @@ public sealed class Programme
         }
 
         TransportStreamId = broadcast.TransportStreamId;
-        StartsAt = broadcast.StartsAt;
+        StartsAt = startsAt;
         EndsAt = endsAt;
         Name = name;
         Summary = summary;
@@ -103,6 +107,9 @@ public sealed class Programme
 
         return true;
     }
+
+    private static DateTime? Settled(DateTime startsAt, DateTime? endsAt)
+        => endsAt is { } ends && ends > startsAt ? ends : null;
 
     private static string Kept(string held, string arriving) => arriving.Length == 0 ? held : arriving;
 

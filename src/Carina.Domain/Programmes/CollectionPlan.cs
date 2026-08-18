@@ -1,15 +1,18 @@
+using Carina.Domain.Base;
+using Carina.Domain.Channels;
+
 namespace Carina.Domain.Programmes;
 
-public sealed record ServiceCoverage(int ServiceId, DateTime? CoveredUntil, bool WasEverCollected);
+public sealed record ServiceCoverage(ServiceId ServiceId, DateTime? CoveredUntil, bool WasEverCollected);
 
 public sealed record StreamCoverage(
-    int NetworkId,
-    int TransportStreamId,
+    NetworkId NetworkId,
+    TransportStreamId TransportStreamId,
     IReadOnlyList<ServiceCoverage> Services,
     DateTime? LastCompletedAt,
     DateTime? NotBefore);
 
-public sealed record PlannedVisit(int NetworkId, int TransportStreamId, VisitReason Reason);
+public sealed record PlannedVisit(NetworkId NetworkId, TransportStreamId TransportStreamId, VisitReason Reason);
 
 public enum VisitReason
 {
@@ -28,17 +31,20 @@ public static class CollectionPlan
         TimeSpan wanted)
     {
         ArgumentNullException.ThrowIfNull(streams);
+        UtcTimes.Required(now, nameof(now));
 
         var due = new List<(StreamCoverage Stream, VisitReason Reason, DateTime? Thinnest)>();
 
         foreach (var stream in streams)
         {
-            if (stream.NotBefore is { } notBefore && notBefore > now)
+            if (UtcTimes.Optional(stream.NotBefore, nameof(streams)) is { } notBefore && notBefore > now)
             {
                 continue;
             }
 
-            if (stream.LastCompletedAt is null || AwaitsAFirstCollection(stream))
+            var lastCompletedAt = UtcTimes.Optional(stream.LastCompletedAt, nameof(streams));
+
+            if (lastCompletedAt is null || AwaitsAFirstCollection(stream))
             {
                 due.Add((stream, VisitReason.NeverCollected, null));
 
@@ -57,10 +63,11 @@ public static class CollectionPlan
         [
             .. due
                 .OrderBy(entry => entry.Reason)
-                .ThenBy(entry => entry.Thinnest ?? DateTime.MaxValue)
-                .ThenBy(entry => entry.Stream.LastCompletedAt ?? DateTime.MinValue)
-                .ThenBy(entry => entry.Stream.NetworkId)
-                .ThenBy(entry => entry.Stream.TransportStreamId)
+                .ThenBy(entry => entry.Reason == VisitReason.Rotation
+                    ? entry.Stream.LastCompletedAt ?? DateTime.MinValue
+                    : entry.Thinnest ?? DateTime.MaxValue)
+                .ThenBy(entry => entry.Stream.NetworkId.Value)
+                .ThenBy(entry => entry.Stream.TransportStreamId.Value)
                 .Select(entry => new PlannedVisit(
                     entry.Stream.NetworkId,
                     entry.Stream.TransportStreamId,
@@ -91,7 +98,8 @@ public static class CollectionPlan
 
         foreach (var service in stream.Services)
         {
-            if (!service.WasEverCollected || service.CoveredUntil is not { } until)
+            if (!service.WasEverCollected
+                || UtcTimes.Optional(service.CoveredUntil, nameof(stream)) is not { } until)
             {
                 continue;
             }

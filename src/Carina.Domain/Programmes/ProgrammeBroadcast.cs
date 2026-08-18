@@ -1,8 +1,10 @@
+using Carina.Domain.Channels;
+
 namespace Carina.Domain.Programmes;
 
 public sealed record ProgrammeBroadcast(
     ProgrammeId Id,
-    int TransportStreamId,
+    TransportStreamId TransportStreamId,
     DateTime StartsAt,
     DateTime? EndsAt,
     string Name,
