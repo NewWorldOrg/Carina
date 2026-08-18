@@ -363,7 +363,10 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
                     seen.Name,
                     seen.Category,
                     [.. added, .. missing],
-                    Seen: true));
+                    Seen: true)
+                {
+                    RemoteControlKeyId = seen.RemoteControlKeyId,
+                });
             }
         }
 
@@ -374,7 +377,10 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
             seen.Name,
             seen.Category,
             seen.Channels,
-            Seen: true)));
+            Seen: true)
+        {
+            RemoteControlKeyId = seen.RemoteControlKeyId,
+        }));
 
         return new ScanDifference(changes, departures);
     }
@@ -391,6 +397,10 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
                 .PartiallyReceivedServicesOf(description.TransportStreamId);
             var networkId = new NetworkId(description.OriginalNetworkId);
             var streamId = new TransportStreamId(description.TransportStreamId);
+            int? remoteControlKeyId = probe.Network!
+                .TransportStreams
+                .FirstOrDefault(stream => stream.TransportStreamId == description.TransportStreamId)?
+                .RemoteControlKeyId;
 
             foreach (DescribedService described in description.Services)
             {
@@ -415,7 +425,10 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
                     ServiceCategories.Of(
                         described.Kind,
                         partiallyReceived.Contains(described.ServiceId)),
-                    [channel]);
+                    [channel])
+                {
+                    RemoteControlKeyId = remoteControlKeyId,
+                };
             }
         }
 
@@ -460,5 +473,8 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
         ServiceId ServiceId,
         string Name,
         ServiceCategory Category,
-        List<ScanChannelChange> Channels);
+        List<ScanChannelChange> Channels)
+    {
+        public int? RemoteControlKeyId { get; init; }
+    }
 }

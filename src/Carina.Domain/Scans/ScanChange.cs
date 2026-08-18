@@ -24,7 +24,10 @@ public sealed record ScanServiceChange(
     string Name,
     ServiceCategory Category,
     IReadOnlyList<ScanChannelChange> Channels,
-    bool Seen);
+    bool Seen)
+{
+    public int? RemoteControlKeyId { get; init; }
+}
 
 public sealed record RotationDeparture(
     NetworkId NetworkId,

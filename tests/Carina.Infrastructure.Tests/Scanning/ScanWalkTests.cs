@@ -21,6 +21,44 @@ public sealed class ScanWalkTests
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
     [Fact]
+    public async Task TheRemoteControlNumberTheStreamDeclaresRidesOnTheProposal()
+    {
+        ScriptedDriverClient driver = new ScriptedDriverClient().Script(
+            Channel53,
+            ChannelScript.Carrying(new SyntheticStream
+            {
+                NetworkId = SyntheticStream.SomeNetworkId,
+                TransportStreamId = SomeStreamId,
+                Services = [new SyntheticService(SomeServiceId, "Carina One")],
+                RemoteControlKeyId = 6,
+            }));
+
+        ScanOutcome outcome = await new ScanHarness(driver).Orchestrator.RunAsync(
+            ScanScope.Over([Channel53]),
+            Cancel);
+
+        ScanServiceChange added = Assert.Single(outcome.Difference.Added);
+
+        Assert.Equal(6, added.RemoteControlKeyId);
+    }
+
+    [Fact]
+    public async Task AStreamThatDeclaresNoNumberProposesNone()
+    {
+        ScriptedDriverClient driver = new ScriptedDriverClient().Script(
+            Channel53,
+            ChannelScript.Carrying(SyntheticStream.Carrying(
+                SomeStreamId,
+                new SyntheticService(SomeServiceId, "Carina One"))));
+
+        ScanOutcome outcome = await new ScanHarness(driver).Orchestrator.RunAsync(
+            ScanScope.Over([Channel53]),
+            Cancel);
+
+        Assert.Null(Assert.Single(outcome.Difference.Added).RemoteControlKeyId);
+    }
+
+    [Fact]
     public async Task TwoSatelliteSlotsCarryingTheOneStreamProposeThatStreamOnce()
     {
         var carrying = ChannelScript.Carrying(SyntheticStream.Carrying(

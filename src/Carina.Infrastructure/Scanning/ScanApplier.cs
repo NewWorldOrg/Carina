@@ -114,19 +114,23 @@ public sealed class ScanApplier(
 
         if (known is null)
         {
-            await services.AddAsync(
-                BroadcastService.Discover(
-                    change.NetworkId,
-                    change.ServiceId,
-                    change.Name,
-                    change.Category,
-                    at),
-                cancellationToken);
+            BroadcastService discovered = BroadcastService.Discover(
+                change.NetworkId,
+                change.ServiceId,
+                change.Name,
+                change.Category,
+                at);
+
+            discovered.RemoteControlledBy(change.RemoteControlKeyId);
+
+            await services.AddAsync(discovered, cancellationToken);
             tally.ServicesAdded++;
         }
         else if (change.Seen)
         {
             known.Describe(change.Name, change.Category, at);
+            known.RemoteControlledBy(change.RemoteControlKeyId);
+
             await services.SaveAsync(known, cancellationToken);
         }
 

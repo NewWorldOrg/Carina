@@ -54,6 +54,73 @@ public sealed class ScanApplierTests
     private static TuningParameters Satellite()
         => TuningParameters.Bs(SatelliteSlot, new TransportStreamId(SatelliteStream));
 
+    [Fact]
+    public async Task ANewServiceKeepsTheRemoteControlNumberTheStreamDeclared()
+    {
+        await Applier.ApplyAsync(
+            new ScanDifference(
+                [
+                    Change(
+                        ScanChangeKind.Added,
+                        101,
+                        "Terrestrial one",
+                        Channel(ScanChangeKind.Added, TuningParameters.Terrestrial(Terrestrial)))
+                        with
+                    { RemoteControlKeyId = 1 },
+                ],
+                []),
+            [TuneSystem.IsdbT],
+            CancellationToken.None);
+
+        Assert.Equal(1, Assert.Single(services.Services).RemoteControlKeyId);
+    }
+
+    [Fact]
+    public async Task AScanThatDidNotHearTheNumberDoesNotEraseTheOneWeHold()
+    {
+        Seed(101, "Terrestrial one", TuningParameters.Terrestrial(Terrestrial));
+        services.Services[0].RemoteControlledBy(4);
+
+        await Applier.ApplyAsync(
+            new ScanDifference(
+                [
+                    Change(
+                        ScanChangeKind.Updated,
+                        101,
+                        "Terrestrial one renamed",
+                        Channel(ScanChangeKind.Added, TuningParameters.Terrestrial(OtherTerrestrial))),
+                ],
+                []),
+            [TuneSystem.IsdbT],
+            CancellationToken.None);
+
+        Assert.Equal(4, Assert.Single(services.Services).RemoteControlKeyId);
+    }
+
+    [Fact]
+    public async Task ARenumberedStreamMovesTheServiceToItsNewNumber()
+    {
+        Seed(101, "Terrestrial one", TuningParameters.Terrestrial(Terrestrial));
+        services.Services[0].RemoteControlledBy(4);
+
+        await Applier.ApplyAsync(
+            new ScanDifference(
+                [
+                    Change(
+                        ScanChangeKind.Updated,
+                        101,
+                        "Terrestrial one renamed",
+                        Channel(ScanChangeKind.Added, TuningParameters.Terrestrial(OtherTerrestrial)))
+                        with
+                    { RemoteControlKeyId = 6 },
+                ],
+                []),
+            [TuneSystem.IsdbT],
+            CancellationToken.None);
+
+        Assert.Equal(6, Assert.Single(services.Services).RemoteControlKeyId);
+    }
+
     private void Seed(int serviceId, string name, params TuningParameters[] tunings)
     {
         services.Services.Add(BroadcastService.Discover(

@@ -36,6 +36,9 @@ public sealed class BroadcastServiceConfiguration : IEntityTypeConfiguration<Bro
             .HasMaxLength(32)
             .IsRequired();
 
+        builder.Property(service => service.RemoteControlKeyId)
+            .HasColumnName("remote_control_key_id");
+
         builder.Property(service => service.DiscoveredAt).IsRequired();
         builder.Property(service => service.LastSeenAt).IsRequired();
 
