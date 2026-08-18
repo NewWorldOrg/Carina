@@ -36,7 +36,7 @@ public static class SessionStreamHandler
                 context,
                 StatusCodes.Status400BadRequest,
                 "unknownSubscriber",
-                $"'{DriverEndpoints.SubscriberQuery}' is either '{DriverEndpoints.ViewerSubscriber}' or '{DriverEndpoints.SurveySubscriber}'."
+                $"'{DriverEndpoints.SubscriberQuery}' is '{DriverEndpoints.ViewerSubscriber}', '{DriverEndpoints.SurveySubscriber}' or '{DriverEndpoints.PiggybackSubscriber}'."
             );
 
             return;
@@ -197,6 +197,13 @@ public static class SessionStreamHandler
         if (string.Equals(asked, DriverEndpoints.SurveySubscriber, StringComparison.Ordinal))
         {
             kind = SubscriberKind.Survey;
+
+            return true;
+        }
+
+        if (string.Equals(asked, DriverEndpoints.PiggybackSubscriber, StringComparison.Ordinal))
+        {
+            kind = SubscriberKind.Piggyback;
 
             return true;
         }

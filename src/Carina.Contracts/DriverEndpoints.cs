@@ -24,6 +24,8 @@ public static class DriverEndpoints
 
     public const string SurveySubscriber = "survey";
 
+    public const string PiggybackSubscriber = "piggyback";
+
     public static string Session(SessionId sessionId) =>
         $"{Sessions}/{Segment(sessionId)}";
 

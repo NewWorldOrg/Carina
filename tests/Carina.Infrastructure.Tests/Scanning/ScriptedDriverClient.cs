@@ -55,6 +55,16 @@ public sealed class ScriptedDriverClient : IDriverClient
 
     public List<SessionId> Stopped { get; } = [];
 
+    public ScriptedDriverClient Hold(SessionId sessionId, TuningParameters tuning)
+    {
+        lock (gate)
+        {
+            live[sessionId] = tuning;
+        }
+
+        return this;
+    }
+
     public ScriptedDriverClient Script(TuningParameters tuning, ChannelScript script)
     {
         scripts[tuning] = script;
@@ -162,6 +172,7 @@ public sealed class ScriptedDriverClient : IDriverClient
             }
 
             sampled.Add(sessionId);
+            RiddenAs.Add(subscriber ?? string.Empty);
 
             Stream stream = script.Paced is { } paced
                 ? paced()
@@ -208,9 +219,18 @@ public sealed class ScriptedDriverClient : IDriverClient
         CancellationToken cancellationToken)
         => throw new NotSupportedException();
 
+    public List<SessionSnapshot> Open { get; } = [];
+
+    public List<string> RiddenAs { get; } = [];
+
     public Task<DriverCall<IReadOnlyList<SessionSnapshot>>> GetActiveSessionsAsync(
         CancellationToken cancellationToken)
-        => throw new NotSupportedException();
+    {
+        lock (gate)
+        {
+            return Task.FromResult(DriverCall<IReadOnlyList<SessionSnapshot>>.Reached([.. Open]));
+        }
+    }
 
     public Task<DriverCall<SessionSnapshot>> GetSessionAsync(
         SessionId sessionId,
