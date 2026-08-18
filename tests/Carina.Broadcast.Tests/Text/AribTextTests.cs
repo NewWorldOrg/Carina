@@ -159,7 +159,7 @@ public sealed class AribTextTests
     }
 
     [Fact]
-    public void AnAdditionalSymbolIsTwoBytesWideSoFourBytesCostTwoSubstitutes()
+    public void AnAdditionalSymbolIsTwoBytesWideSoFourBytesCarryTwoOfThem()
     {
         var bytes = new AribTextWriter()
             .DesignateAdditionalSymbolsToG0()
@@ -168,7 +168,18 @@ public sealed class AribTextTests
             .Kanji("局")
             .ToArray();
 
-        Assert.Equal($"{new string(AribText.UnknownCharacter, 2)}局", AribText.Decode(bytes));
+        Assert.Equal("\U0001F14A\U0001F14C局", AribText.Decode(bytes));
+    }
+
+    [Fact]
+    public void ARowTheStandardLeavesUnusedStillBecomesAVisibleSubstitute()
+    {
+        var bytes = new AribTextWriter()
+            .DesignateAdditionalSymbolsToG0()
+            .Raw(0x77, 0x21)
+            .ToArray();
+
+        Assert.Equal(AribText.UnknownCharacter.ToString(), AribText.Decode(bytes));
     }
 
     [Fact]

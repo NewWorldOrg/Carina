@@ -123,6 +123,25 @@ public static class AribText
         return text.ToString();
     }
 
+    private static void Append(StringBuilder text, int row, int cell)
+    {
+        if (JisX0208.TryMap(row, cell, out var kanji))
+        {
+            text.Append(kanji);
+
+            return;
+        }
+
+        if (AribSymbols.TryMap(row, cell, out var symbol))
+        {
+            text.Append(symbol);
+
+            return;
+        }
+
+        text.Append(UnknownCharacter);
+    }
+
     private static void Append(StringBuilder text, GraphicSet set, ReadOnlySpan<byte> code)
     {
         if (AribGraphicSets.IsDrcs(set))
@@ -135,10 +154,14 @@ public static class AribText
             var row = (code[0] & 0x7F) - 0x20;
             var cell = (code[1] & 0x7F) - 0x20;
 
-            text.Append(
-                set == GraphicSet.Kanji && JisX0208.TryMap(row, cell, out var kanji)
-                    ? kanji
-                    : UnknownCharacter);
+            if (set is GraphicSet.Kanji or GraphicSet.AdditionalSymbol)
+            {
+                Append(text, row, cell);
+
+                return;
+            }
+
+            text.Append(UnknownCharacter);
 
             return;
         }
@@ -312,7 +335,7 @@ public static class AribText
             case 0x95:
                 return Until(bytes, at + 1, terminator => terminator == 0x4F);
             case 0x9B:
-                return Until(bytes, at + 1, terminator => terminator is >= 0x40 and <= 0x6F);
+                return Until(bytes, at + 1, terminator => terminator is >= 0x40 and <= 0x7E);
             default:
                 return at + 1;
         }
