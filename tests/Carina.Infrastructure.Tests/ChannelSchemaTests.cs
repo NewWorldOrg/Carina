@@ -221,6 +221,7 @@ public sealed class ChannelSchemaTests
 
         Assert.Equal(
             [
+                "archived_programme",
                 "broadcast_service",
                 "candidate_channel",
                 "collection_epoch",

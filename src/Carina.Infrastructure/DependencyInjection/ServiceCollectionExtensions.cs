@@ -50,6 +50,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IProgrammeRepository, ProgrammeRepository>();
         services.AddScoped<IStreamVisitRepository, StreamVisitRepository>();
         services.AddScoped<ICollectionEpochRepository, CollectionEpochRepository>();
+        services.AddScoped<IArchivedProgrammeRepository, ArchivedProgrammeRepository>();
         services.AddScoped<ICandidateChannelRepository, CandidateChannelRepository>();
         services.AddScoped<ISatelliteTransportStreamRepository, SatelliteTransportStreamRepository>();
         services.AddScoped<IScanRunRepository, ScanRunRepository>();
