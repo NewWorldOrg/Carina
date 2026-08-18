@@ -223,6 +223,7 @@ public sealed class ChannelSchemaTests
             [
                 "broadcast_service",
                 "candidate_channel",
+                "collection_epoch",
                 "programme",
                 "satellite_transport_stream",
                 "scan_run",

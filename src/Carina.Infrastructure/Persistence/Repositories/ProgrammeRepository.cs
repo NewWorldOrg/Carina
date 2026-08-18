@@ -58,6 +58,9 @@ public sealed class ProgrammeRepository(CarinaDbContext context) : IProgrammeRep
             .Where(programme => programme.EndsAt == null ? programme.StartsAt < at : programme.EndsAt < at)
             .ExecuteDeleteAsync(cancellationToken);
 
+    public async Task<int> ForgetEverythingAsync(CancellationToken cancellationToken)
+        => await context.Set<Programme>().ExecuteDeleteAsync(cancellationToken);
+
     public async Task<DateTime?> CoveredUntilAsync(
         int networkId,
         int serviceId,

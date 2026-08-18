@@ -15,4 +15,6 @@ public interface IProgrammeRepository
     Task<int> ForgetEndedBeforeAsync(DateTime at, CancellationToken cancellationToken);
 
     Task<DateTime?> CoveredUntilAsync(int networkId, int serviceId, CancellationToken cancellationToken);
+
+    Task<int> ForgetEverythingAsync(CancellationToken cancellationToken);
 }

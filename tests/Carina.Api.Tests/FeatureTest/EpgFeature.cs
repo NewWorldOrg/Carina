@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Infrastructure.Collection;
@@ -11,6 +12,8 @@ using Carina.TestSupport;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 
 namespace Carina.Api.Tests.FeatureTest;
 
@@ -27,6 +30,10 @@ internal sealed class EpgFeature : IAsyncDisposable
             .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
             {
                 services.AddSingleton<IStreamVisitRepository>(Visits);
+                services.AddSingleton<IProgrammeRepository>(Programmes);
+                services.AddSingleton<ICollectionEpochRepository>(Epochs);
+                services.AddSingleton<IAtomicWrite, UnguardedWrites>();
+                services.RemoveAll<IHostedService>();
                 services.AddSingleton<IBroadcastStreamDirectory>(Streams);
             }));
         authenticated = configured.WithTestScheme();
@@ -39,6 +46,10 @@ internal sealed class EpgFeature : IAsyncDisposable
     public HttpClient Client { get; }
 
     public HeldStreamVisits Visits { get; } = new();
+
+    public HeldProgrammes Programmes { get; } = new();
+
+    public HeldEpochs Epochs { get; } = new();
 
     public HeldStreams Streams { get; }
 
