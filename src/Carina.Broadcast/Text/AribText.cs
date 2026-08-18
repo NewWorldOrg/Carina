@@ -116,11 +116,40 @@ public static class AribText
                 break;
             }
 
+            if (width == 2 && !IsGraphic(bytes[at + 1]))
+            {
+                text.Append(UnknownCharacter);
+                at++;
+
+                continue;
+            }
+
             Append(text, set, bytes.Slice(at, width));
             at += width;
         }
 
         return text.ToString();
+    }
+
+    private static bool IsGraphic(byte code) => (code & 0x7F) is >= 0x21 and <= 0x7E;
+
+    private static void Append(StringBuilder text, GraphicSet set, int row, int cell)
+    {
+        if (set is GraphicSet.Kanji && JisX0208.TryMap(row, cell, out var kanji))
+        {
+            text.Append(kanji);
+
+            return;
+        }
+
+        if (AribSymbols.TryMap(row, cell, out var symbol))
+        {
+            text.Append(symbol);
+
+            return;
+        }
+
+        text.Append(UnknownCharacter);
     }
 
     private static void Append(StringBuilder text, GraphicSet set, ReadOnlySpan<byte> code)
@@ -135,10 +164,14 @@ public static class AribText
             var row = (code[0] & 0x7F) - 0x20;
             var cell = (code[1] & 0x7F) - 0x20;
 
-            text.Append(
-                set == GraphicSet.Kanji && JisX0208.TryMap(row, cell, out var kanji)
-                    ? kanji
-                    : UnknownCharacter);
+            if (set is GraphicSet.Kanji or GraphicSet.AdditionalSymbol)
+            {
+                Append(text, set, row, cell);
+
+                return;
+            }
+
+            text.Append(UnknownCharacter);
 
             return;
         }
@@ -312,7 +345,7 @@ public static class AribText
             case 0x95:
                 return Until(bytes, at + 1, terminator => terminator == 0x4F);
             case 0x9B:
-                return Until(bytes, at + 1, terminator => terminator is >= 0x40 and <= 0x6F);
+                return Until(bytes, at + 1, terminator => terminator is >= 0x40 and <= 0x7E);
             default:
                 return at + 1;
         }

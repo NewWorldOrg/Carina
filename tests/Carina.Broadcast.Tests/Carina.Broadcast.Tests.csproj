@@ -5,4 +5,8 @@
     <ProjectReference Include="../Carina.BroadcastTestSupport/Carina.BroadcastTestSupport.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="Text/Broadcasts/eit-text-samples.tsv" />
+  </ItemGroup>
+
 </Project>
