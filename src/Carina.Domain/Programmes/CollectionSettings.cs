@@ -1,3 +1,5 @@
+using Carina.Domain.Channels;
+
 namespace Carina.Domain.Programmes;
 
 public sealed record CollectionSettings
@@ -15,4 +17,7 @@ public sealed record CollectionSettings
     public TimeSpan KeepEndedProgrammes { get; init; } = TimeSpan.FromHours(24);
 
     public TimeSpan LongestBackOff { get; init; } = TimeSpan.FromHours(24);
+
+    public RotationBackoff WhenTunersAreFull { get; init; } =
+        new(TimeSpan.FromSeconds(30), 2, TimeSpan.FromMinutes(5), 4);
 }

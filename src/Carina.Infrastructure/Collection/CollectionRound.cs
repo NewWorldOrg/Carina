@@ -39,20 +39,15 @@ public sealed class CollectionRound(
             }
 
             long began = clock.GetTimestamp();
-            VisitResult visit;
+            VisitResult visit = await VisitAsync(stream, abort);
 
-            try
+            if (visit.WorthWaitingOut)
             {
-                visit = await visitor.VisitAsync(stream.Tuning, hurried: false, abort);
-            }
-            catch (Exception failure) when (failure is not OperationCanceledException)
-            {
-                logger.LogWarning(
-                    failure,
-                    "Visiting {NetworkId}-{TransportStreamId} failed; the walk carries on.",
-                    stream.NetworkId.Value,
-                    stream.TransportStreamId.Value);
-                visit = new VisitResult(VisitOutcome.Interrupted, new ProgrammesWritten(0, 0, 0), failure.Message);
+                logger.LogInformation(
+                    "Every tuner stayed busy; the rest of this walk waits for the next sweep.");
+                await RecordAsync(stream, visit, clock.GetElapsedTime(began), abort);
+
+                break;
             }
 
             visited++;
@@ -70,6 +65,45 @@ public sealed class CollectionRound(
         }
 
         return new RoundResult(visited, gathered, cameBackShort);
+    }
+
+    private async Task<VisitResult> VisitAsync(BroadcastStream stream, CancellationToken abort)
+    {
+        int refusals = 0;
+
+        while (true)
+        {
+            VisitResult visit;
+
+            try
+            {
+                visit = await visitor.VisitAsync(stream.Tuning, hurried: false, abort);
+            }
+            catch (Exception failure) when (failure is not OperationCanceledException)
+            {
+                logger.LogWarning(
+                    failure,
+                    "Visiting {NetworkId}-{TransportStreamId} failed; the walk carries on.",
+                    stream.NetworkId.Value,
+                    stream.TransportStreamId.Value);
+
+                return new VisitResult(VisitOutcome.Interrupted, new ProgrammesWritten(0, 0, 0), failure.Message);
+            }
+
+            if (!visit.WorthWaitingOut)
+            {
+                return visit;
+            }
+
+            refusals++;
+
+            if (refusals >= settings.WhenTunersAreFull.FailureCeiling)
+            {
+                return visit;
+            }
+
+            await Task.Delay(settings.WhenTunersAreFull.DelayAfter(refusals), clock, abort);
+        }
     }
 
     private async Task RecordAsync(

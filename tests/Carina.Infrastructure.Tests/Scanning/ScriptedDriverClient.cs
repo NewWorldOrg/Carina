@@ -116,7 +116,7 @@ public sealed class ScriptedDriverClient : IDriverClient
                 Started.RemoveAt(Started.Count - 1);
 
                 return Task.FromResult(DriverCall<SessionSnapshot>.Refused(
-                    new DriverProblem("noDeviceFree", ["Every usable tuner is busy."])));
+                    new DriverProblem(SessionRefusalTitles.NoDeviceFree, ["Every usable tuner is busy."])));
             }
 
             ChannelScript script = Script(tuning);
