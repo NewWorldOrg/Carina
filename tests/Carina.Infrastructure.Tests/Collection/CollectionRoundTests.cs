@@ -320,10 +320,11 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
             programmes,
             new StreamVisitor(
                 driver,
-                new ProgrammeWriter(programmes, new UnguardedWrites(), new StillClock()),
+                new ProgrammeWriter(programmes, new UnguardedWrites(), new StillClock(), new SilentEvents()),
                 carried),
             board ?? new RescanNoticeBoard(new SilentEvents(), TimeProvider.System),
             reports ?? new RememberedTuneReports(),
+            new SilentEvents(),
             carried,
             clock ?? TimeProvider.System,
             NullLogger<CollectionRound>.Instance);

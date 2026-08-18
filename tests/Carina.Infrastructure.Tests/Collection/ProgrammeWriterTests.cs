@@ -1,6 +1,7 @@
 using Carina.Broadcast.Tables;
 using Carina.Broadcast.Text;
 using Carina.BroadcastTestSupport;
+using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Infrastructure.Collection;
@@ -142,7 +143,7 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
     }
 
     private static ProgrammeWriter Writer(CarinaDbContext context)
-        => new(new ProgrammeRepository(context), new UnguardedWrites(), new StillClock());
+        => new(new ProgrammeRepository(context), new UnguardedWrites(), new StillClock(), new SilentEvents());
 
     private static int NextNetwork() => BroadcastIds.NextNetwork();
 
@@ -174,6 +175,119 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
                     .. descriptor,
                 ],
             }))).Table;
+    }
+
+    [Fact]
+    public async Task AProgrammeThatRanLongTakesTheEndTheRunningTableGives()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        ProgrammeWriter writer = Writer(context);
+
+        await writer.WriteAsync([Scheduled(network, 1, minutes: 3)], Cancel);
+
+        ProgrammesWritten corrected = await writer.WriteAsync([Running(network, 1, minutes: 9)], Cancel);
+
+        Assert.Equal(new ProgrammesWritten(0, 1, 0), corrected);
+
+        await using CarinaDbContext reading = database.Open();
+        Programme? stored = await new ProgrammeRepository(reading).FindAsync(Id(network, 1), Cancel);
+
+        Assert.Equal(TimeSpan.FromMinutes(9), stored!.EndsAt - stored.StartsAt);
+        Assert.Equal(ProgrammeSource.PresentFollowing, stored.Source);
+    }
+
+    [Fact]
+    public async Task AnOpenEndedRunningTableDoesNotEraseAnEndWeAlreadyKnow()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        ProgrammeWriter writer = Writer(context);
+
+        await writer.WriteAsync([Scheduled(network, 1, minutes: 3)], Cancel);
+        await writer.WriteAsync([Running(network, 1, minutes: null)], Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        Programme? stored = await new ProgrammeRepository(reading).FindAsync(Id(network, 1), Cancel);
+
+        Assert.Equal(TimeSpan.FromMinutes(3), stored!.EndsAt - stored.StartsAt);
+    }
+
+    [Fact]
+    public async Task AWriteThatChangedSomethingTellsTheScreensToLookAgain()
+    {
+        int network = NextNetwork();
+        var events = new SilentEvents();
+        await using CarinaDbContext context = database.Open();
+        var writer = new ProgrammeWriter(
+            new ProgrammeRepository(context),
+            new UnguardedWrites(),
+            new StillClock(),
+            events);
+
+        await writer.WriteAsync([Table(network, 1)], Cancel);
+
+        Assert.Equal([AppEventName.Programs], events.Signalled);
+    }
+
+    [Fact]
+    public async Task AWriteThatChangedNothingSaysNothing()
+    {
+        int network = NextNetwork();
+        var events = new SilentEvents();
+        await using CarinaDbContext context = database.Open();
+        var writer = new ProgrammeWriter(
+            new ProgrammeRepository(context),
+            new UnguardedWrites(),
+            new StillClock(),
+            events);
+
+        await writer.WriteAsync([Table(network, 1)], Cancel);
+        events.Signalled.Clear();
+
+        await writer.WriteAsync([Table(network, 1)], Cancel);
+
+        Assert.Empty(events.Signalled);
+    }
+
+    private static EventInformationTable Scheduled(int network, int carried, int minutes)
+        => Timed(network, carried, EventInformationTable.FirstScheduleActualTableId, minutes);
+
+    private static EventInformationTable Running(int network, int carried, int? minutes)
+        => Timed(network, carried, EventInformationTable.PresentFollowingActualTableId, minutes);
+
+    private static EventInformationTable Timed(int network, int carried, int tableId, int? minutes)
+        => Assert.IsType<TableRead<EventInformationTable>.Parsed>(
+            EventInformationTable.Read(CarriedSection.Of(new SectionWriter
+            {
+                TableId = tableId,
+                TableIdExtension = 1049,
+                LastSectionNumber = 1,
+                Body =
+                [
+                    0x7F, 0xE3,
+                    (byte)(network >> 8), (byte)(network & 0xFF),
+                    0x00, (byte)tableId,
+                    .. TimedEvent(carried, minutes),
+                ],
+            }))).Table;
+
+    private static byte[] TimedEvent(int carried, int? minutes)
+    {
+        byte[] written = [.. "あさイチ".SelectMany(letter => Kanji(letter))];
+        byte[] descriptor = [0x4D, (byte)(5 + written.Length), 0x6A, 0x70, 0x6E, (byte)written.Length, .. written, 0x00];
+        byte[] duration = minutes is { } carriedMinutes
+            ? [0x00, (byte)(((carriedMinutes / 10) << 4) | (carriedMinutes % 10)), 0x00]
+            : [0xFF, 0xFF, 0xFF];
+
+        return
+        [
+            (byte)(carried >> 8), (byte)(carried & 0xFF),
+            0xEF, 0x55, 0x22, 0x57, 0x00,
+            .. duration,
+            0x00, (byte)descriptor.Length,
+            .. descriptor,
+        ];
     }
 
     private static EventInformationTable Table(

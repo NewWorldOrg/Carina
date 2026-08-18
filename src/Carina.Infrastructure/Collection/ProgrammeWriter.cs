@@ -1,14 +1,20 @@
 using Carina.Broadcast.Descriptors;
 using Carina.Broadcast.Tables;
+using Carina.Contracts;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
+using Carina.Domain.Events;
 using Carina.Domain.Programmes;
 
 namespace Carina.Infrastructure.Collection;
 
 public sealed record ProgrammesWritten(int Added, int Updated, int Discarded);
 
-public sealed class ProgrammeWriter(IProgrammeRepository programmes, IAtomicWrite writes, TimeProvider clock)
+public sealed class ProgrammeWriter(
+    IProgrammeRepository programmes,
+    IAtomicWrite writes,
+    TimeProvider clock,
+    IAppEventPublisher events)
 {
     public async Task<ProgrammesWritten> WriteAsync(
         IReadOnlyList<EventInformationTable> tables,
@@ -16,7 +22,7 @@ public sealed class ProgrammeWriter(IProgrammeRepository programmes, IAtomicWrit
     {
         ArgumentNullException.ThrowIfNull(tables);
 
-        return await writes.AllOrNothingAsync(
+        ProgrammesWritten written = await writes.AllOrNothingAsync(
             async token =>
             {
                 DateTime at = clock.GetUtcNow().UtcDateTime;
@@ -68,6 +74,13 @@ public sealed class ProgrammeWriter(IProgrammeRepository programmes, IAtomicWrit
                 return new ProgrammesWritten(added, updated, discarded);
             },
             cancellationToken);
+
+        if (written.Added > 0 || written.Updated > 0 || written.Discarded > 0)
+        {
+            events.Signal(AppEventName.Programs);
+        }
+
+        return written;
     }
 
     private static ProgrammeBroadcast Merged(ProgrammeBroadcast seen, ProgrammeBroadcast arriving)
