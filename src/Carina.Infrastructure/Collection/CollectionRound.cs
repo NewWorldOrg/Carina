@@ -17,10 +17,14 @@ public sealed class CollectionRound(
 {
     public async Task<RoundResult> WalkAsync(
         IReadOnlyList<BroadcastStream> streams,
+        CancellationToken interruption,
         CancellationToken abort)
     {
         ArgumentNullException.ThrowIfNull(streams);
 
+        using CancellationTokenSource walking = CancellationTokenSource.CreateLinkedTokenSource(
+            interruption,
+            abort);
         DateTime now = clock.GetUtcNow().UtcDateTime;
         IReadOnlyList<PlannedVisit> plan = CollectionPlan.Of(await CoverageAsync(streams, abort), now, settings.WantedCoverage);
         int visited = 0;
@@ -39,7 +43,26 @@ public sealed class CollectionRound(
             }
 
             long began = clock.GetTimestamp();
-            VisitResult visit = await VisitAsync(stream, abort);
+            VisitResult visit;
+
+            try
+            {
+                visit = await VisitAsync(stream, walking.Token);
+            }
+            catch (OperationCanceledException) when (!abort.IsCancellationRequested)
+            {
+                logger.LogInformation(
+                    "The driver went away mid-walk; {NetworkId}-{TransportStreamId} is recorded as interrupted.",
+                    stream.NetworkId.Value,
+                    stream.TransportStreamId.Value);
+                await RecordAsync(
+                    stream,
+                    new VisitResult(VisitOutcome.Interrupted, new ProgrammesWritten(0, 0, 0), null),
+                    clock.GetElapsedTime(began),
+                    abort);
+
+                break;
+            }
 
             if (visit.WorthWaitingOut)
             {

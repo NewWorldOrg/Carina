@@ -5,6 +5,7 @@ using Carina.Domain.DriverStatus;
 using Carina.Domain.Events;
 using Carina.Domain.Programmes;
 using Carina.Domain.Scans;
+using Carina.Infrastructure.Collection;
 using Carina.Infrastructure.Configuration;
 using Carina.Infrastructure.Driver;
 using Carina.Infrastructure.Events;
@@ -53,6 +54,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IScanRunRepository, ScanRunRepository>();
         services.AddScoped<IChannelScanOrchestrator, ChannelScanOrchestrator>();
         services.AddScoped<ScanApplier>();
+        services.AddScoped<IBroadcastStreamDirectory, BroadcastStreamDirectory>();
+        services.AddScoped<ProgrammeWriter>();
+        services.AddScoped<StreamVisitor>();
+        services.AddScoped<CollectionRound>();
 
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IDriverStatusReader, MonitoredDriverStatusReader>();
@@ -65,12 +70,14 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IDriverSessionResyncHook, NoopDriverSessionResyncHook>();
         services.TryAddSingleton(DriverSupervisionSettings.Default);
         services.TryAddSingleton(ScanSettings.Default);
+        services.TryAddSingleton(new CollectionSettings());
         services.TryAddSingleton(new AppEventHub());
         services.TryAddSingleton<IAppEventPublisher>(provider =>
             provider.GetRequiredService<AppEventHub>());
         services.AddHostedService<DriverConnectionSupervisor>();
         services.AddHostedService<AppEventHubLifetime>();
         services.AddHostedService(provider => provider.GetRequiredService<ScanRunner>());
+        services.AddHostedService<EpgCollector>();
 
         return services;
     }

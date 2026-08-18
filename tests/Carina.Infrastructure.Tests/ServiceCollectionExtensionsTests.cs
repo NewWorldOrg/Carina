@@ -1,8 +1,10 @@
 using Carina.Domain.Base;
+using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.DriverStatus;
 using Carina.Domain.Events;
 using Carina.Domain.Scans;
+using Carina.Infrastructure.Collection;
 using Carina.Infrastructure.Configuration;
 using Carina.Infrastructure.DependencyInjection;
 using Carina.Infrastructure.Driver;
@@ -50,6 +52,25 @@ public sealed class ServiceCollectionExtensionsTests
 
         Assert.IsType<ChannelScanOrchestrator>(
             scope.ServiceProvider.GetRequiredService<IChannelScanOrchestrator>());
+    }
+
+    [Fact]
+    public void RegistersEverythingACollectionSweepReachesFor()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.IsType<BroadcastStreamDirectory>(
+            scope.ServiceProvider.GetRequiredService<IBroadcastStreamDirectory>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<CollectionRound>());
+    }
+
+    [Fact]
+    public void TheCollectorRunsAlongsideTheOtherHostedServices()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        Assert.Single(provider.GetServices<IHostedService>().OfType<EpgCollector>());
     }
 
     [Fact]
