@@ -122,6 +122,30 @@ public sealed class RecordedEventInformationTests
     }
 
     [Fact]
+    public void AShortListeningLeavesTheScheduleUnfinishedAndSaysWhichSegmentsAreMissing()
+    {
+        var progress = new ScheduleProgress();
+
+        foreach (var section in Sections())
+        {
+            if (EventInformationTable.Read(section) is TableRead<EventInformationTable>.Parsed parsed)
+            {
+                progress.Saw(parsed.Table);
+            }
+        }
+
+        var service = Assert.Single(progress.Services);
+
+        Assert.Equal(new ScheduledService(32739, 32739, 1049), service);
+        Assert.Equal(ScheduleCompleteness.Incomplete, progress.Completeness);
+
+        var awaited = progress.SegmentsAwaited(service, EventInformationTable.FirstScheduleActualTableId);
+
+        Assert.Equal(31, awaited.Count);
+        Assert.DoesNotContain(9, awaited);
+    }
+
+    [Fact]
     public void ASectionOfADifferentTableIsRefusedRatherThanRead()
     {
         var refused = Assert.IsType<TableRead<EventInformationTable>.Rejected>(
