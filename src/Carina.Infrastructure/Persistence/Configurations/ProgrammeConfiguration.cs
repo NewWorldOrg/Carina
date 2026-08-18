@@ -91,9 +91,16 @@ public sealed class ProgrammeConfiguration : IEntityTypeConfiguration<Programme>
 
         builder.Property(programme => programme.UpdatedAt).HasColumnName("updated_at").IsRequired();
 
+        builder.Property(programme => programme.Revision)
+            .HasColumnName("revision")
+            .HasDefaultValueSql($"nextval('{ProgrammeRevisions.Sequence}')")
+            .IsRequired();
+
         builder.Property<string>(Searchable)
             .HasColumnName(Searchable)
             .HasComputedColumnSql("lower(name || ' ' || summary)", stored: true);
+
+        builder.HasIndex(programme => programme.Revision).IsUnique();
 
         builder.HasIndex(programme => programme.StartsAt);
         builder.HasIndex(programme => programme.UpdatedAt);

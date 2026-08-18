@@ -5,6 +5,7 @@ using Carina.Domain.Programmes;
 using Carina.Infrastructure.Persistence.Configurations;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Carina.Infrastructure.Persistence.Repositories;
 
@@ -126,6 +127,21 @@ public sealed class ProgrammeRepository(CarinaDbContext context) : IProgrammeRep
             .ToListAsync(cancellationToken);
 
         return new PaginatedList<Programme>(page, total, search.Page, search.PerPage);
+    }
+
+    public async Task<long> NextRevisionAsync(CancellationToken cancellationToken)
+    {
+        await using System.Data.Common.DbCommand command = context.Database.GetDbConnection().CreateCommand();
+
+        command.CommandText = $"SELECT nextval('{ProgrammeRevisions.Sequence}')";
+        command.Transaction = context.Database.CurrentTransaction?.GetDbTransaction();
+
+        if (command.Connection!.State is not System.Data.ConnectionState.Open)
+        {
+            await command.Connection.OpenAsync(cancellationToken);
+        }
+
+        return (long)(await command.ExecuteScalarAsync(cancellationToken))!;
     }
 
     public async Task<int> ForgetEverythingAsync(CancellationToken cancellationToken)

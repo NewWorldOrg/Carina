@@ -45,6 +45,8 @@ public sealed class Programme
 
     public DateTime UpdatedAt { get; private set; }
 
+    public long Revision { get; private set; }
+
     public static Programme Discover(ProgrammeBroadcast broadcast, DateTime at)
     {
         ArgumentNullException.ThrowIfNull(broadcast);
@@ -78,7 +80,8 @@ public sealed class Programme
         IReadOnlyList<ProgrammeItem>? items = null,
         IReadOnlyList<RelatedProgramme>? related = null,
         bool hasSubtitles = false,
-        ProgrammeSource source = ProgrammeSource.ScheduleBasic)
+        ProgrammeSource source = ProgrammeSource.ScheduleBasic,
+        long revision = 0)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(transportStreamId);
@@ -102,7 +105,15 @@ public sealed class Programme
             HasSubtitles = hasSubtitles,
             Source = source,
             UpdatedAt = UtcTimes.Required(updatedAt, nameof(updatedAt)),
+            Revision = revision,
         };
+    }
+
+    public void MarkRevision(long revision)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(revision, 1);
+
+        Revision = revision;
     }
 
     public bool Absorb(ProgrammeBroadcast broadcast, DateTime at)

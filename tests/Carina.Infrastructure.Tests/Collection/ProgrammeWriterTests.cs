@@ -250,6 +250,49 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
         Assert.Empty(events.Signalled);
     }
 
+    [Fact]
+    public async Task EveryChangeTakesTheNextRevisionAndNoChangeTakesNone()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        ProgrammeWriter writer = Writer(context);
+
+        await writer.WriteAsync([Table(network, 1)], Cancel);
+
+        await using CarinaDbContext first = database.Open();
+        long written = (await new ProgrammeRepository(first).FindAsync(Id(network, 1), Cancel))!.Revision;
+
+        Assert.True(written > 0);
+
+        await writer.WriteAsync([Table(network, 1)], Cancel);
+
+        await using CarinaDbContext again = database.Open();
+
+        Assert.Equal(written, (await new ProgrammeRepository(again).FindAsync(Id(network, 1), Cancel))!.Revision);
+
+        await writer.WriteAsync([Table(network, 1, name: "ひるまえほっと")], Cancel);
+
+        await using CarinaDbContext changed = database.Open();
+
+        Assert.True((await new ProgrammeRepository(changed).FindAsync(Id(network, 1), Cancel))!.Revision > written);
+    }
+
+    [Fact]
+    public async Task NoTwoProgrammesShareARevision()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+
+        await Writer(context).WriteAsync([Table(network, 1), Table(network, 2)], Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        var repository = new ProgrammeRepository(reading);
+        long one = (await repository.FindAsync(Id(network, 1), Cancel))!.Revision;
+        long two = (await repository.FindAsync(Id(network, 2), Cancel))!.Revision;
+
+        Assert.NotEqual(one, two);
+    }
+
     private static EventInformationTable Scheduled(int network, int carried, int minutes)
         => Timed(network, carried, EventInformationTable.FirstScheduleActualTableId, minutes);
 

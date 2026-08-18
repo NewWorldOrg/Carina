@@ -66,6 +66,8 @@ public sealed class ProgrammeWriter(
 
                     if (held.Absorb(broadcast, at))
                     {
+                        held.MarkRevision(await programmes.NextRevisionAsync(token));
+
                         await programmes.SaveAsync(held, token);
                         updated++;
                     }
