@@ -116,12 +116,22 @@ public static class AribText
                 break;
             }
 
+            if (width == 2 && !IsGraphic(bytes[at + 1]))
+            {
+                text.Append(UnknownCharacter);
+                at++;
+
+                continue;
+            }
+
             Append(text, set, bytes.Slice(at, width));
             at += width;
         }
 
         return text.ToString();
     }
+
+    private static bool IsGraphic(byte code) => (code & 0x7F) is >= 0x21 and <= 0x7E;
 
     private static void Append(StringBuilder text, int row, int cell)
     {

@@ -172,6 +172,19 @@ public sealed class AribTextTests
     }
 
     [Fact]
+    public void ATwoByteCellDoesNotEatTheShiftThatFollowsItsFirstHalf()
+    {
+        var bytes = new AribTextWriter()
+            .DesignateKanjiToG0()
+            .Raw(0x7A)
+            .DesignateAlphanumericToG0()
+            .Ascii("4000")
+            .ToArray();
+
+        Assert.Equal($"{AribText.UnknownCharacter}4000", AribText.Decode(bytes));
+    }
+
+    [Fact]
     public void ARowTheStandardLeavesUnusedStillBecomesAVisibleSubstitute()
     {
         var bytes = new AribTextWriter()
