@@ -435,6 +435,7 @@ public sealed class DriverIpcClientTests
 
         var call = await client.StopSessionAsync(
             SessionId.Parse("rec-1"),
+            "the test is done with it",
             CancellationToken.None);
 
         Assert.Equal(DriverCallOutcome.Reached, call.Outcome);

@@ -14,6 +14,8 @@ public enum SessionPurpose
     Survey = 3,
 
     Scan = 4,
+
+    SurveyNow = 5,
 }
 
 [JsonConverter(typeof(TunerKindConverter))]

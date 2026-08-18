@@ -9,6 +9,12 @@ public sealed class SessionPurposesTests
     }
 
     [Fact]
+    public void AHurriedSurveyIsFedTheSameWayAsAnOrdinaryOne()
+    {
+        Assert.True(SessionPurposes.ReadsEveryPacket(SessionPurpose.SurveyNow));
+    }
+
+    [Fact]
     public void AScanWaitsForItsReaderBecauseATableSectionArrivesOncePerCycle()
     {
         Assert.True(SessionPurposes.ReadsEveryPacket(SessionPurpose.Scan));

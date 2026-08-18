@@ -170,6 +170,7 @@ public sealed class ScriptedDriverClient : IDriverClient
 
     public Task<DriverCall<SessionSnapshot>> StopSessionAsync(
         SessionId sessionId,
+        string reason,
         CancellationToken cancellationToken)
     {
         lock (gate)

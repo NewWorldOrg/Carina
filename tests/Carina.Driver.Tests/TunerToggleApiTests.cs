@@ -142,7 +142,7 @@ public sealed class TunerToggleApiTests
         await Toggle(client, "fake-terrestrial", disabled: true);
 
         using (
-            var stopped = await client.DeleteAsync($"{DriverEndpoints.Sessions}/s-1", Soon())
+            var stopped = await client.DeleteAsync($"{DriverEndpoints.Sessions}/s-1?reason=test", Soon())
         )
         {
             Assert.Equal(HttpStatusCode.OK, stopped.StatusCode);

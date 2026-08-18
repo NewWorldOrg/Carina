@@ -13,6 +13,7 @@ public sealed class DriverEventsTests
         "sessionTuned",
         "sessionLockLost",
         "tunerHealthChanged",
+        "sessionStopRequested",
     ];
 
     [Fact]

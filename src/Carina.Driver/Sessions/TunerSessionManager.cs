@@ -310,8 +310,17 @@ public sealed class TunerSessionManager(
             : TakeTheTuner(request, grant, directory, now, endsAt);
     }
 
-    private DateTimeOffset EndOf(StartSessionRequest request, DateTimeOffset now) =>
-        request.EndsAt ?? now.AddMinutes(configuration.LiveSessionMinutes);
+    private DateTimeOffset EndOf(StartSessionRequest request, DateTimeOffset now)
+    {
+        if (!SessionPurposes.ReadsEveryPacket(request.Purpose))
+        {
+            return request.EndsAt ?? now.AddMinutes(configuration.LiveSessionMinutes);
+        }
+
+        var latest = now.AddMinutes(configuration.WalkSessionMinutes);
+
+        return request.EndsAt is { } asked && asked < latest ? asked : latest;
+    }
 
     private bool TryResolveOutput(
         StartSessionRequest request,

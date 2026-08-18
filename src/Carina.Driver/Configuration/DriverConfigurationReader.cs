@@ -44,6 +44,9 @@ public static class DriverConfigurationReader
     private const int MaxShutdownGraceHours = 168;
     private const int MinLiveSessionMinutes = 1;
     private const int MaxLiveSessionMinutes = 1440;
+
+    private const int MinWalkSessionMinutes = 1;
+    private const int MaxWalkSessionMinutes = 240;
     private const int MaxNameLength = 64;
     private const int MinSignalQualitySeconds = 1;
     private const int MaxSignalQualitySeconds = 3600;
@@ -218,6 +221,7 @@ public static class DriverConfigurationReader
         "outputRoots",
         "shutdownGraceHours",
         "liveSessionMinutes",
+        "walkSessionMinutes",
         "tuner",
         "devices",
     ];
@@ -360,6 +364,16 @@ public static class DriverConfigurationReader
         {
             problems.Add(
                 $"liveSessionMinutes: expected {MinLiveSessionMinutes} to {MaxLiveSessionMinutes}, got {configuration.LiveSessionMinutes}."
+            );
+        }
+
+        if (
+            configuration.WalkSessionMinutes is < MinWalkSessionMinutes
+                or > MaxWalkSessionMinutes
+        )
+        {
+            problems.Add(
+                $"walkSessionMinutes: expected {MinWalkSessionMinutes} to {MaxWalkSessionMinutes}, got {configuration.WalkSessionMinutes}."
             );
         }
 
