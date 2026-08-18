@@ -23,6 +23,7 @@ public sealed class ProgrammeWriter(IProgrammeRepository programmes, IAtomicWrit
                 var added = 0;
                 var updated = 0;
                 var discarded = 0;
+                var gathered = new Dictionary<ProgrammeId, ProgrammeBroadcast>();
 
                 foreach (var table in tables)
                 {
@@ -39,27 +40,50 @@ public sealed class ProgrammeWriter(IProgrammeRepository programmes, IAtomicWrit
                             continue;
                         }
 
-                        var held = await programmes.FindAsync(broadcast.Id, token);
+                        gathered[broadcast.Id] = gathered.TryGetValue(broadcast.Id, out var seen)
+                            ? Merged(seen, broadcast)
+                            : broadcast;
+                    }
+                }
 
-                        if (held is null)
-                        {
-                            await programmes.AddAsync(Programme.Discover(broadcast, at), token);
-                            added++;
+                foreach (var broadcast in gathered.Values)
+                {
+                    var held = await programmes.FindAsync(broadcast.Id, token);
 
-                            continue;
-                        }
+                    if (held is null)
+                    {
+                        await programmes.AddAsync(Programme.Discover(broadcast, at), token);
+                        added++;
 
-                        if (held.Absorb(broadcast, at))
-                        {
-                            await programmes.SaveAsync(held, token);
-                            updated++;
-                        }
+                        continue;
+                    }
+
+                    if (held.Absorb(broadcast, at))
+                    {
+                        await programmes.SaveAsync(held, token);
+                        updated++;
                     }
                 }
 
                 return new ProgrammesWritten(added, updated, discarded);
             },
             cancellationToken);
+    }
+
+    private static ProgrammeBroadcast Merged(ProgrammeBroadcast seen, ProgrammeBroadcast arriving)
+    {
+        var named = arriving.Name.Length > 0 ? arriving : seen;
+
+        return named with
+        {
+            EndsAt = named.EndsAt ?? seen.EndsAt ?? arriving.EndsAt,
+            Summary = named.Summary.Length > 0 ? named.Summary : seen.Summary.Length > 0 ? seen.Summary : arriving.Summary,
+            Genres = seen.Genres.Count > 0 ? seen.Genres : arriving.Genres,
+            Items = seen.Items.Count > 0 ? seen.Items : arriving.Items,
+            Related = seen.Related.Count > 0 ? seen.Related : arriving.Related,
+            HasSubtitles = seen.HasSubtitles || arriving.HasSubtitles,
+            IsShadow = seen.IsShadow && arriving.IsShadow,
+        };
     }
 
     private static ProgrammeBroadcast? Read(EventInformationTable table, DescribedEvent carried)
@@ -89,7 +113,7 @@ public sealed class ProgrammeWriter(IProgrammeRepository programmes, IAtomicWrit
             Items = detailed is null
                 ? []
                 : [.. detailed.Items.Select(item => new ProgrammeItem(item.Heading, item.Text))],
-            Related = [.. Related(groupings)],
+            Related = [.. Related(table.OriginalNetworkId, table.ServiceId, carried.EventId, groupings)],
             HasSubtitles = carried.DataContents.Any(content => content.CarriesCaptions),
             Source = Source(table),
         };
@@ -99,7 +123,11 @@ public sealed class ProgrammeWriter(IProgrammeRepository programmes, IAtomicWrit
         => (described is null || described.Name.Length == 0)
             && groupings.Any(grouping => grouping.Kind is EventGroupKind.Shared);
 
-    private static IEnumerable<RelatedProgramme> Related(IReadOnlyList<EventGrouping> groupings)
+    private static IEnumerable<RelatedProgramme> Related(
+        int networkId,
+        int serviceId,
+        int eventId,
+        IReadOnlyList<EventGrouping> groupings)
     {
         foreach (var grouping in groupings)
         {
@@ -110,7 +138,12 @@ public sealed class ProgrammeWriter(IProgrammeRepository programmes, IAtomicWrit
 
             foreach (var carried in grouping.Events)
             {
-                yield return new RelatedProgramme(0, carried.ServiceId, carried.EventId, kind);
+                if (carried.ServiceId == serviceId && carried.EventId == eventId)
+                {
+                    continue;
+                }
+
+                yield return new RelatedProgramme(networkId, carried.ServiceId, carried.EventId, kind);
             }
 
             foreach (var carried in grouping.Elsewhere)

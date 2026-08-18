@@ -8,7 +8,9 @@ public sealed record HarvestedStream(
     VisitOutcome Outcome,
     ScheduleProgress Progress,
     IReadOnlyList<EventInformationTable> Tables,
-    long UnreadablePackets);
+    long UnreadablePackets,
+    int RejectedSections,
+    int RejectedTables);
 
 public sealed class StreamHarvest
 {
@@ -17,6 +19,10 @@ public sealed class StreamHarvest
     private readonly List<EventInformationTable> tables = [];
 
     private readonly ScheduleProgress progress = new();
+
+    private int rejectedSections;
+
+    private int rejectedTables;
 
     public ScheduleProgress Progress => progress;
 
@@ -30,11 +36,15 @@ public sealed class StreamHarvest
         {
             if (read is not SectionRead.Assembled assembled)
             {
+                rejectedSections++;
+
                 continue;
             }
 
             if (EventInformationTable.Read(assembled.Section) is not TableRead<EventInformationTable>.Parsed parsed)
             {
+                rejectedTables++;
+
                 continue;
             }
 
@@ -64,5 +74,5 @@ public sealed class StreamHarvest
     }
 
     private HarvestedStream Harvested(VisitOutcome outcome)
-        => new(outcome, progress, tables, reader.UnreadablePackets);
+        => new(outcome, progress, [.. tables], reader.UnreadablePackets, rejectedSections, rejectedTables);
 }
