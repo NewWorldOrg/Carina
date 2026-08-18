@@ -154,6 +154,49 @@ public sealed class ProgrammeGuideEndpointTests
         Assert.Equal(HttpStatusCode.BadRequest, status);
     }
 
+    [Fact]
+    public async Task APastDayIsAnsweredFromWhatWasKept()
+    {
+        await using var feature = new EpgFeature([Terrestrial(4, 32_736, 1049)]);
+
+        feature.Archived.Programmes.Add(Kept(1, From.AddHours(9)));
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync($"/api/programs{ADay}");
+        JsonElement only = Assert.Single(body.GetProperty("data").GetProperty("programmes").EnumerateArray());
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("4-1049-1", only.GetProperty("id").GetString());
+        Assert.True(only.GetProperty("isArchived").GetBoolean());
+    }
+
+    [Fact]
+    public async Task AProgrammeStillInTheGuideIsNotAlsoServedFromTheArchive()
+    {
+        await using var feature = new EpgFeature([Terrestrial(4, 32_736, 1049)]);
+
+        feature.Programmes.Programmes.Add(Programme(4, 1049, 1, From.AddHours(9)));
+        feature.Archived.Programmes.Add(Kept(1, From.AddHours(9)));
+
+        (_, JsonElement body) = await feature.GetAsync($"/api/programs{ADay}");
+        JsonElement only = Assert.Single(body.GetProperty("data").GetProperty("programmes").EnumerateArray());
+
+        Assert.False(only.GetProperty("isArchived").GetBoolean());
+    }
+
+    private static ArchivedProgramme Kept(int carried, DateTime startsAt)
+        => ArchivedProgramme.Rehydrate(
+            new NetworkId(4),
+            new ServiceId(1049),
+            new EventId(carried),
+            startsAt,
+            startsAt.AddMinutes(30),
+            "a programme that ran",
+            string.Empty,
+            false,
+            [],
+            [],
+            startsAt);
+
     private static BroadcastStream Terrestrial(int network, int stream, int service)
         => Carrying(network, stream, service, TuningParameters.Terrestrial(22));
 

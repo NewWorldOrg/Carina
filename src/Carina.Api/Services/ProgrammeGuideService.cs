@@ -10,12 +10,14 @@ namespace Carina.Api.Services;
 
 public sealed record GuidePage(
     IReadOnlyList<Programme> Programmes,
+    IReadOnlyList<ArchivedProgramme> Archived,
     IReadOnlyList<BroadcastStream> Streams,
     string ETag);
 
 public sealed class ProgrammeGuideService(
     IBroadcastStreamDirectory directory,
     IProgrammeRepository programmes,
+    IArchivedProgrammeRepository archive,
     IStreamVisitRepository visits)
 {
     public async Task<ServiceResult<GuidePage>> ReadAsync(
@@ -41,8 +43,28 @@ public sealed class ProgrammeGuideService(
             window.To,
             cancellationToken);
 
+        IReadOnlyList<ArchivedProgramme> kept = await archive.ListAsync(
+            wanted,
+            window.From,
+            window.To,
+            cancellationToken);
+        var already = found
+            .Select(programme => (
+                programme.NetworkId.Value,
+                programme.ServiceId.Value,
+                programme.EventId.Value,
+                programme.StartsAt))
+            .ToHashSet();
+
         return ServiceResult<GuidePage>.Success(new GuidePage(
             found,
+            [
+                .. kept.Where(programme => !already.Contains((
+                    programme.NetworkId.Value,
+                    programme.ServiceId.Value,
+                    programme.EventId.Value,
+                    programme.StartsAt))),
+            ],
             carried,
             await ETagAsync(carried, window, cancellationToken)));
     }

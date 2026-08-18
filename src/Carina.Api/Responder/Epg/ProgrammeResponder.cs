@@ -1,5 +1,6 @@
 using Carina.Api.Common;
 using Carina.Api.Services;
+using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 
 namespace Carina.Api.Responder.Epg;
@@ -55,10 +56,34 @@ public sealed record ProgrammeResponder(
     bool HasSubtitles,
     ProgrammeSource Source,
     long Revision,
+    bool IsArchived,
     IReadOnlyList<ProgrammeGenreResponder> Genres,
     IReadOnlyList<ProgrammeItemResponder> Items,
     IReadOnlyList<RelatedProgrammeResponder> Related)
 {
+    public static ProgrammeResponder Of(ArchivedProgramme programme)
+    {
+        ArgumentNullException.ThrowIfNull(programme);
+
+        return new ProgrammeResponder(
+            ProgrammeIdText.Of(new ProgrammeId(programme.NetworkId, programme.ServiceId, programme.EventId)),
+            programme.NetworkId.Value,
+            programme.ServiceId.Value,
+            programme.EventId.Value,
+            new DateTimeOffset(programme.StartsAt, TimeSpan.Zero),
+            new DateTimeOffset(programme.EndsAt, TimeSpan.Zero),
+            programme.Name,
+            programme.Summary,
+            false,
+            programme.HasSubtitles,
+            ProgrammeSource.ScheduleBasic,
+            0,
+            true,
+            [.. programme.Genres.Select(ProgrammeGenreResponder.Of)],
+            [.. programme.Items.Select(ProgrammeItemResponder.Of)],
+            []);
+    }
+
     public static ProgrammeResponder Of(Programme programme)
     {
         ArgumentNullException.ThrowIfNull(programme);
@@ -76,6 +101,7 @@ public sealed record ProgrammeResponder(
             programme.HasSubtitles,
             programme.Source,
             programme.Revision,
+            false,
             [.. programme.Genres.Select(ProgrammeGenreResponder.Of)],
             [.. programme.Items.Select(ProgrammeItemResponder.Of)],
             [.. programme.Related.Select(RelatedProgrammeResponder.Of)]);
@@ -100,6 +126,12 @@ public sealed record GuideResponder(
                     .OrderBy(service => service.NetworkId)
                     .ThenBy(service => service.ServiceId),
             ],
-            [.. page.Programmes.Select(ProgrammeResponder.Of)]);
+            [
+                .. page.Programmes.Select(ProgrammeResponder.Of)
+                    .Concat(page.Archived.Select(ProgrammeResponder.Of))
+                    .OrderBy(programme => programme.StartsAt)
+                    .ThenBy(programme => programme.ServiceId)
+                    .ThenBy(programme => programme.EventId),
+            ]);
     }
 }
