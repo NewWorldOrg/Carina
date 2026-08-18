@@ -13,6 +13,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<TunerLedgerService>();
         services.AddScoped<ScanService>();
         services.AddScoped<ChannelCatalogService>();
+        services.AddScoped<CollectionStatusService>();
 
         return services;
     }
