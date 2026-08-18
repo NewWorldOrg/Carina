@@ -43,6 +43,42 @@ public sealed class ScanWalkTests
     }
 
     [Fact]
+    public async Task AServiceUnchangedButNewlyNumberedIsStillProposed()
+    {
+        ScriptedDriverClient driver = new ScriptedDriverClient().Script(
+            Channel53,
+            ChannelScript.Carrying(new SyntheticStream
+            {
+                NetworkId = SyntheticStream.SomeNetworkId,
+                TransportStreamId = SomeStreamId,
+                Services = [new SyntheticService(SomeServiceId, "Carina One")],
+                RemoteControlKeyId = 6,
+            }));
+        var harness = new ScanHarness(driver);
+
+        harness.Services.Services.Add(BroadcastService.Discover(
+            new NetworkId(SyntheticStream.SomeNetworkId),
+            new ServiceId(SomeServiceId),
+            "Carina One",
+            ServiceCategory.Television,
+            StillClock.Now.UtcDateTime));
+        harness.Candidates.Candidates.Add(CandidateChannel.Discover(
+            CandidateChannelId.New(),
+            new NetworkId(SyntheticStream.SomeNetworkId),
+            new ServiceId(SomeServiceId),
+            Channel53,
+            StillClock.Now.UtcDateTime));
+
+        ScanOutcome outcome = await harness.Orchestrator.RunAsync(
+            ScanScope.Over([Channel53]),
+            Cancel);
+
+        ScanServiceChange updated = Assert.Single(outcome.Difference.Updated);
+
+        Assert.Equal(6, updated.RemoteControlKeyId);
+    }
+
+    [Fact]
     public async Task AStreamThatDeclaresNoNumberProposesNone()
     {
         ScriptedDriverClient driver = new ScriptedDriverClient().Script(
