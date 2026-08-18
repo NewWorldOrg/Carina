@@ -1,5 +1,8 @@
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
+
+using Carina.Infrastructure.Persistence.Configurations;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -84,6 +87,45 @@ public sealed class ProgrammeRepository(CarinaDbContext context) : IProgrammeRep
         var wanted = services.Select(service => (service.NetworkId, service.ServiceId)).ToHashSet();
 
         return [.. found.Where(programme => wanted.Contains((programme.NetworkId.Value, programme.ServiceId.Value)))];
+    }
+
+    public async Task<PaginatedList<Programme>> SearchAsync(
+        ProgrammeSearch search,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(search);
+
+        string looking = $"%{search.Keyword.ToLowerInvariant()}%";
+        IQueryable<Programme> found = context.Set<Programme>()
+            .Where(programme => EF.Functions.Like(
+                EF.Property<string>(programme, ProgrammeConfiguration.Searchable),
+                looking));
+
+        if (search.From is { } from)
+        {
+            found = found.Where(programme => programme.EndsAt == null || programme.EndsAt > from);
+        }
+
+        if (search.To is { } to)
+        {
+            found = found.Where(programme => programme.StartsAt < to);
+        }
+
+        int total = await found.CountAsync(cancellationToken);
+        IOrderedQueryable<Programme> ordered = (search.Sort, search.Descending) switch
+        {
+            (ProgrammeSort.Name, false) => found.OrderBy(programme => programme.Name),
+            (ProgrammeSort.Name, true) => found.OrderByDescending(programme => programme.Name),
+            (_, true) => found.OrderByDescending(programme => programme.StartsAt),
+            _ => found.OrderBy(programme => programme.StartsAt),
+        };
+        List<Programme> page = await ordered
+            .ThenBy(programme => programme.EventId)
+            .Skip((search.Page - 1) * search.PerPage)
+            .Take(search.PerPage)
+            .ToListAsync(cancellationToken);
+
+        return new PaginatedList<Programme>(page, total, search.Page, search.PerPage);
     }
 
     public async Task<int> ForgetEverythingAsync(CancellationToken cancellationToken)

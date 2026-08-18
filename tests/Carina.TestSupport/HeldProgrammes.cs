@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 
@@ -65,6 +66,31 @@ public sealed class HeldProgrammes : IProgrammeRepository
         int serviceId,
         CancellationToken cancellationToken)
         => Task.FromResult<DateTime?>(null);
+
+    public Task<PaginatedList<Programme>> SearchAsync(
+        ProgrammeSearch search,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(search);
+
+        Programme[] found =
+        [
+            .. Programmes
+                .Where(programme => programme.Name.Contains(search.Keyword, StringComparison.OrdinalIgnoreCase)
+                    || programme.Summary.Contains(search.Keyword, StringComparison.OrdinalIgnoreCase))
+                .Where(programme => search.From is not { } from
+                    || programme.EndsAt is null
+                    || programme.EndsAt > from)
+                .Where(programme => search.To is not { } to || programme.StartsAt < to)
+                .OrderBy(programme => programme.StartsAt),
+        ];
+
+        return Task.FromResult(new PaginatedList<Programme>(
+            [.. found.Skip((search.Page - 1) * search.PerPage).Take(search.PerPage)],
+            found.Length,
+            search.Page,
+            search.PerPage));
+    }
 
     public Task<int> ForgetEverythingAsync(CancellationToken cancellationToken)
     {

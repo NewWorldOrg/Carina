@@ -116,6 +116,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "putTuners",
                 "rebuildEpg",
                 "restartDriver",
+                "searchProgrammes",
                 "startScan",
             ],
             named.Order(StringComparer.Ordinal).ToArray());

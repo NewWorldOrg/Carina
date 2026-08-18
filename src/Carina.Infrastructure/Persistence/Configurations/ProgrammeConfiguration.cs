@@ -91,9 +91,15 @@ public sealed class ProgrammeConfiguration : IEntityTypeConfiguration<Programme>
 
         builder.Property(programme => programme.UpdatedAt).HasColumnName("updated_at").IsRequired();
 
+        builder.Property<string>(Searchable)
+            .HasColumnName(Searchable)
+            .HasComputedColumnSql("lower(name || ' ' || summary)", stored: true);
+
         builder.HasIndex(programme => programme.StartsAt);
         builder.HasIndex(programme => programme.UpdatedAt);
     }
+
+    public const string Searchable = "searchable";
 
     private static IReadOnlyList<T> Read<T>(string stored)
         => JsonSerializer.Deserialize<List<T>>(stored, ProgrammeJson.Options) ?? [];
