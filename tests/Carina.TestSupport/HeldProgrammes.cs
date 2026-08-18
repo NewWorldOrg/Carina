@@ -26,6 +26,27 @@ public sealed class HeldProgrammes : IProgrammeRepository
         ]);
     }
 
+    public Task<IReadOnlyList<Programme>> ListForServicesAsync(
+        IReadOnlyList<ProgrammeService> services,
+        DateTime from,
+        DateTime to,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        var wanted = services.Select(service => (service.NetworkId, service.ServiceId)).ToHashSet();
+
+        return Task.FromResult<IReadOnlyList<Programme>>(
+        [
+            .. Programmes
+                .Where(programme => wanted.Contains((programme.NetworkId.Value, programme.ServiceId.Value)))
+                .Where(programme => programme.StartsAt < to)
+                .Where(programme => programme.EndsAt is null || programme.EndsAt > from)
+                .OrderBy(programme => programme.StartsAt)
+                .ThenBy(programme => programme.EventId.Value),
+        ]);
+    }
+
     public Task AddAsync(Programme programme, CancellationToken cancellationToken)
     {
         Programmes.Add(programme);

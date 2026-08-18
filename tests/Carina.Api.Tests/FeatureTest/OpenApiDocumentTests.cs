@@ -104,6 +104,8 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "getDetectedTuners",
                 "getDriverStatus",
                 "getHealth",
+                "getProgramme",
+                "getProgrammeGuide",
                 "getScan",
                 "getService",
                 "getTuners",
@@ -136,7 +138,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
             .Select(tag => tag!["name"]!.GetValue<string>())
             .ToArray();
 
-        Assert.Equal(["tuners", "services", "health", "epg", "driver"], tags);
+        Assert.Equal(["tuners", "services", "health", "epg", "programs", "driver"], tags);
         Assert.Equal(tags, declared);
         Assert.DoesNotContain(tags, tag => tag.EndsWith("Action", StringComparison.Ordinal));
     }
