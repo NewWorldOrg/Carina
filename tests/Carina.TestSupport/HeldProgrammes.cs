@@ -94,6 +94,18 @@ public sealed class HeldProgrammes : IProgrammeRepository
             search.PerPage));
     }
 
+    public Task<IReadOnlyList<Programme>> ListAfterAsync(
+        long revision,
+        int rows,
+        CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<Programme>>(
+        [
+            .. Programmes
+                .Where(programme => programme.Revision > revision)
+                .OrderBy(programme => programme.Revision)
+                .Take(rows),
+        ]);
+
     public Task<long> NextRevisionAsync(CancellationToken cancellationToken)
         => Task.FromResult(++handedOut);
 

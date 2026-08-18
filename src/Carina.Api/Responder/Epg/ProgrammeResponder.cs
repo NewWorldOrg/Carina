@@ -54,6 +54,7 @@ public sealed record ProgrammeResponder(
     bool IsShadow,
     bool HasSubtitles,
     ProgrammeSource Source,
+    long Revision,
     IReadOnlyList<ProgrammeGenreResponder> Genres,
     IReadOnlyList<ProgrammeItemResponder> Items,
     IReadOnlyList<RelatedProgrammeResponder> Related)
@@ -74,6 +75,7 @@ public sealed record ProgrammeResponder(
             programme.IsShadow,
             programme.HasSubtitles,
             programme.Source,
+            programme.Revision,
             [.. programme.Genres.Select(ProgrammeGenreResponder.Of)],
             [.. programme.Items.Select(ProgrammeItemResponder.Of)],
             [.. programme.Related.Select(RelatedProgrammeResponder.Of)]);

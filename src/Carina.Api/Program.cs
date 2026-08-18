@@ -3,6 +3,7 @@ using Carina.Api.Common;
 using Carina.Api.Events;
 using Carina.Api.Extensions;
 using Carina.Api.OpenApi;
+using Carina.Api.Services;
 using Carina.Infrastructure.DependencyInjection;
 using Carina.Infrastructure.Events;
 
@@ -42,6 +43,9 @@ if (app.Environment.IsDevelopment())
 app.MapControllers();
 app.MapGet(AppEventStream.Path, (HttpContext context, AppEventHub hub) =>
     AppEventStream.Invoke(context, hub)).ExcludeFromDescription();
+
+app.MapGet(ProgrammeFeedStream.Path, (HttpContext context, ProgrammeFeedService feed) =>
+    ProgrammeFeedStream.Invoke(context, feed)).ExcludeFromDescription();
 
 try
 {
