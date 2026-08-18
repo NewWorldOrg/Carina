@@ -133,9 +133,9 @@ public static class AribText
 
     private static bool IsGraphic(byte code) => (code & 0x7F) is >= 0x21 and <= 0x7E;
 
-    private static void Append(StringBuilder text, int row, int cell)
+    private static void Append(StringBuilder text, GraphicSet set, int row, int cell)
     {
-        if (JisX0208.TryMap(row, cell, out var kanji))
+        if (set is GraphicSet.Kanji && JisX0208.TryMap(row, cell, out var kanji))
         {
             text.Append(kanji);
 
@@ -166,7 +166,7 @@ public static class AribText
 
             if (set is GraphicSet.Kanji or GraphicSet.AdditionalSymbol)
             {
-                Append(text, row, cell);
+                Append(text, set, row, cell);
 
                 return;
             }

@@ -185,6 +185,17 @@ public sealed class AribTextTests
     }
 
     [Fact]
+    public void TheSymbolSetDoesNotReachIntoTheKanjiRowsItDoesNotDefine()
+    {
+        var bytes = new AribTextWriter()
+            .DesignateAdditionalSymbolsToG0()
+            .Raw(0x30, 0x21)
+            .ToArray();
+
+        Assert.Equal(AribText.UnknownCharacter.ToString(), AribText.Decode(bytes));
+    }
+
+    [Fact]
     public void ARowTheStandardLeavesUnusedStillBecomesAVisibleSubstitute()
     {
         var bytes = new AribTextWriter()
