@@ -1,4 +1,5 @@
 using Carina.Domain.Channels;
+using Carina.Domain.Programmes;
 using Carina.Domain.Scans;
 using Carina.Infrastructure.Persistence;
 
@@ -109,6 +110,36 @@ public sealed class ChannelSchemaTests
     }
 
     [Fact]
+    public void EveryTableAProgrammeCanComeFromIsAValueTheDatabaseKnows()
+    {
+        using var context = Carina();
+
+        var check = Assert.Single(
+            Entity<Programme>(context).GetCheckConstraints(),
+            constraint => constraint.Name == "ck_programme_source");
+
+        foreach (var source in Enum.GetNames<ProgrammeSource>())
+        {
+            Assert.Contains($"'{source}'", check.Sql, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void EveryWayAVisitCanEndIsAValueTheDatabaseKnows()
+    {
+        using var context = Carina();
+
+        var check = Assert.Single(
+            Entity<StreamVisit>(context).GetCheckConstraints(),
+            constraint => constraint.Name == "ck_stream_visit_outcome");
+
+        foreach (var outcome in Enum.GetNames<VisitOutcome>())
+        {
+            Assert.Contains($"'{outcome}'", check.Sql, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
     public void TheFourWaysOfFailingAreValuesTheDatabaseKnows()
     {
         using var context = Carina();
@@ -192,9 +223,11 @@ public sealed class ChannelSchemaTests
             [
                 "broadcast_service",
                 "candidate_channel",
+                "programme",
                 "satellite_transport_stream",
                 "scan_run",
                 "scan_run_attempt",
+                "stream_visit",
             ],
             Schema(context).GetEntityTypes()
                 .Where(entity => entity.FindOwnership() is null)

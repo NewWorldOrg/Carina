@@ -50,6 +50,11 @@ public static class PersistenceBoundaryRules
             return true;
         }
 
+        if (declaring is PersistenceFamily.ProgrammeCache && principal is PersistenceFamily.ChannelDefinitions)
+        {
+            return true;
+        }
+
         return principal is PersistenceFamily.ProgrammeCache && declaring is not PersistenceFamily.ProgrammeCache;
     }
 

@@ -33,6 +33,11 @@ public sealed class ProgrammeTests
     [InlineData("summary")]
     [InlineData("shadow")]
     [InlineData("end")]
+    [InlineData("genres")]
+    [InlineData("items")]
+    [InlineData("related")]
+    [InlineData("subtitles")]
+    [InlineData("source")]
     public void AnyOneFieldMovingOnItsOwnCountsAsAChange(string moved)
     {
         var programme = Programme.Discover(Broadcast(), At);
@@ -202,6 +207,46 @@ public sealed class ProgrammeTests
                 At));
     }
 
+    [Theory]
+    [InlineData("genres")]
+    [InlineData("items")]
+    [InlineData("related")]
+    public void AnEmptyListDoesNotEraseTheOneAlreadyKnown(string field)
+    {
+        var programme = Programme.Discover(Moved(field), At);
+
+        Assert.False(programme.Absorb(Broadcast(), At.AddHours(1)));
+
+        Assert.NotEmpty(field switch
+        {
+            "genres" => programme.Genres.Cast<object>(),
+            "items" => programme.Items,
+            _ => programme.Related,
+        });
+        Assert.Equal(At, programme.UpdatedAt);
+    }
+
+    [Fact]
+    public void AProgrammeCarriesWhatItWasBroadcastWithBesidesItsName()
+    {
+        var programme = Programme.Discover(
+            Broadcast() with
+            {
+                Genres = [new ProgrammeGenre(0, 1)],
+                Items = [new ProgrammeItem("Heading", "Body")],
+                Related = [new RelatedProgramme(32739, 1048, 47289, RelationKind.Shared)],
+                HasSubtitles = true,
+                Source = ProgrammeSource.PresentFollowing,
+            },
+            At);
+
+        Assert.Equal(new ProgrammeGenre(0, 1), Assert.Single(programme.Genres));
+        Assert.Equal(new ProgrammeItem("Heading", "Body"), Assert.Single(programme.Items));
+        Assert.Equal(RelationKind.Shared, Assert.Single(programme.Related).Kind);
+        Assert.True(programme.HasSubtitles);
+        Assert.Equal(ProgrammeSource.PresentFollowing, programme.Source);
+    }
+
     [Fact]
     public void AProgrammeThatIsOnlyAPlaceholderIsKeptAndMarkedAsOne()
     {
@@ -219,6 +264,14 @@ public sealed class ProgrammeTests
             "name" => Broadcast(name: "Renamed"),
             "summary" => Broadcast(summary: "Another summary"),
             "shadow" => Broadcast(isShadow: true),
+            "genres" => Broadcast() with { Genres = [new ProgrammeGenre(0, 1)] },
+            "items" => Broadcast() with { Items = [new ProgrammeItem("Heading", "Body")] },
+            "related" => Broadcast() with
+            {
+                Related = [new RelatedProgramme(32739, 1048, 47289, RelationKind.Shared)],
+            },
+            "subtitles" => Broadcast() with { HasSubtitles = true },
+            "source" => Broadcast() with { Source = ProgrammeSource.ScheduleExtended },
             _ => Broadcast(endsAt: At.AddHours(24)),
         };
 

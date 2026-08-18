@@ -13,7 +13,13 @@ public sealed class Programme
     {
     }
 
-    public ProgrammeId Id { get; private set; } = null!;
+    public NetworkId NetworkId { get; private set; } = null!;
+
+    public ServiceId ServiceId { get; private set; } = null!;
+
+    public EventId EventId { get; private set; } = null!;
+
+    public ProgrammeId Id => new(NetworkId, ServiceId, EventId);
 
     public TransportStreamId TransportStreamId { get; private set; } = null!;
 
@@ -26,6 +32,16 @@ public sealed class Programme
     public string Summary { get; private set; } = string.Empty;
 
     public bool IsShadow { get; private set; }
+
+    public IReadOnlyList<ProgrammeGenre> Genres { get; private set; } = [];
+
+    public IReadOnlyList<ProgrammeItem> Items { get; private set; } = [];
+
+    public IReadOnlyList<RelatedProgramme> Related { get; private set; } = [];
+
+    public bool HasSubtitles { get; private set; }
+
+    public ProgrammeSource Source { get; private set; }
 
     public DateTime UpdatedAt { get; private set; }
 
@@ -41,7 +57,12 @@ public sealed class Programme
             broadcast.Name,
             broadcast.Summary,
             broadcast.IsShadow,
-            at);
+            at,
+            broadcast.Genres,
+            broadcast.Items,
+            broadcast.Related,
+            broadcast.HasSubtitles,
+            broadcast.Source);
     }
 
     public static Programme Rehydrate(
@@ -52,7 +73,12 @@ public sealed class Programme
         string name,
         string summary,
         bool isShadow,
-        DateTime updatedAt)
+        DateTime updatedAt,
+        IReadOnlyList<ProgrammeGenre>? genres = null,
+        IReadOnlyList<ProgrammeItem>? items = null,
+        IReadOnlyList<RelatedProgramme>? related = null,
+        bool hasSubtitles = false,
+        ProgrammeSource source = ProgrammeSource.ScheduleBasic)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(transportStreamId);
@@ -61,13 +87,20 @@ public sealed class Programme
 
         return new Programme
         {
-            Id = id,
+            NetworkId = id.NetworkId,
+            ServiceId = id.ServiceId,
+            EventId = id.EventId,
             TransportStreamId = transportStreamId,
             StartsAt = UtcTimes.Required(startsAt, nameof(startsAt)),
             EndsAt = Settled(startsAt, UtcTimes.Optional(endsAt, nameof(endsAt))),
             Name = Clamped(name, NameMaxLength),
             Summary = Clamped(summary, SummaryMaxLength),
             IsShadow = isShadow,
+            Genres = genres ?? [],
+            Items = items ?? [],
+            Related = related ?? [],
+            HasSubtitles = hasSubtitles,
+            Source = source,
             UpdatedAt = UtcTimes.Required(updatedAt, nameof(updatedAt)),
         };
     }
@@ -86,13 +119,21 @@ public sealed class Programme
         var name = Kept(Name, Clamped(broadcast.Name, NameMaxLength));
         var summary = Kept(Summary, Clamped(broadcast.Summary, SummaryMaxLength));
         var endsAt = Settled(startsAt, UtcTimes.Optional(broadcast.EndsAt, nameof(broadcast)) ?? EndsAt);
+        var genres = Kept(Genres, broadcast.Genres);
+        var items = Kept(Items, broadcast.Items);
+        var related = Kept(Related, broadcast.Related);
 
         if (TransportStreamId.Equals(broadcast.TransportStreamId)
             && StartsAt == startsAt
             && EndsAt == endsAt
             && Name == name
             && Summary == summary
-            && IsShadow == broadcast.IsShadow)
+            && IsShadow == broadcast.IsShadow
+            && HasSubtitles == broadcast.HasSubtitles
+            && Source == broadcast.Source
+            && Genres.SequenceEqual(genres)
+            && Items.SequenceEqual(items)
+            && Related.SequenceEqual(related))
         {
             return false;
         }
@@ -103,6 +144,11 @@ public sealed class Programme
         Name = name;
         Summary = summary;
         IsShadow = broadcast.IsShadow;
+        Genres = genres;
+        Items = items;
+        Related = related;
+        HasSubtitles = broadcast.HasSubtitles;
+        Source = broadcast.Source;
         UpdatedAt = at;
 
         return true;
@@ -112,6 +158,9 @@ public sealed class Programme
         => endsAt is { } ends && ends > startsAt ? ends : null;
 
     private static string Kept(string held, string arriving) => arriving.Length == 0 ? held : arriving;
+
+    private static IReadOnlyList<T> Kept<T>(IReadOnlyList<T> held, IReadOnlyList<T> arriving)
+        => arriving.Count == 0 ? held : arriving;
 
     private static string Clamped(string text, int most) => text.Length <= most ? text : text[..most];
 }
