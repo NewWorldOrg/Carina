@@ -73,6 +73,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton(ScanSettings.Default);
         services.TryAddSingleton(new CollectionSettings());
         services.TryAddSingleton<RescanNoticeBoard>();
+        services.TryAddSingleton<CollectionBoost>();
         services.TryAddSingleton(new AppEventHub());
         services.TryAddSingleton<IAppEventPublisher>(provider =>
             provider.GetRequiredService<AppEventHub>());

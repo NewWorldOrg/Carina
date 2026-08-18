@@ -98,6 +98,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "addCandidateChannel",
                 "applyScan",
                 "cancelScan",
+                "collectNow",
                 "deleteCandidateChannel",
                 "getCollectionStatus",
                 "getDetectedTuners",
