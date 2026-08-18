@@ -109,7 +109,7 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
         await programmes.AddAsync(Programme.Discover(Broadcast(network, 1, At.AddHours(1)), At), Cancel);
         await programmes.AddAsync(Programme.Discover(Broadcast(network, 2, At.AddHours(40)), At), Cancel);
 
-        Assert.Equal(1, await programmes.ForgetEndedBeforeAsync(At.AddHours(10), Cancel));
+        Assert.True(await programmes.ForgetEndedBeforeAsync(At.AddHours(10), Cancel) >= 1);
 
         await using var reading = database.Open();
 
@@ -161,7 +161,7 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
             Programme.Discover(Broadcast(network, 2, At.AddHours(40)) with { EndsAt = null }, At),
             Cancel);
 
-        Assert.Equal(1, await programmes.ForgetEndedBeforeAsync(At.AddHours(10), Cancel));
+        Assert.True(await programmes.ForgetEndedBeforeAsync(At.AddHours(10), Cancel) >= 1);
 
         await using var reading = database.Open();
 

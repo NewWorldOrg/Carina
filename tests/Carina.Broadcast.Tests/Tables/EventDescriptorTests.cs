@@ -174,6 +174,31 @@ public sealed class EventDescriptorTests
         Assert.Single(grouping.Events);
     }
 
+    [Fact]
+    public void AProgrammeCarryingCaptionsSaysSoThroughItsDataContent()
+    {
+        var carried = Read(DescriptorTags.DataContent, [0x00, 0x08, 0x30, 0x00, 0x00, 0x6A, 0x70, 0x6E, 0x00]);
+
+        var content = Assert.Single(carried.DataContents);
+
+        Assert.True(content.CarriesCaptions);
+        Assert.False(content.CarriesSuperimpose);
+    }
+
+    [Fact]
+    public void DataBroadcastingIsNotCaptions()
+    {
+        var carried = Read(DescriptorTags.DataContent, [0x00, 0x0C, 0x40, 0x00, 0x00, 0x6A, 0x70, 0x6E, 0x00]);
+
+        Assert.False(Assert.Single(carried.DataContents).CarriesCaptions);
+    }
+
+    [Fact]
+    public void ADataContentCutBeforeItsOwnIdIsNotRead()
+    {
+        Assert.Empty(Read(DescriptorTags.DataContent, [0x00]).DataContents);
+    }
+
     private static DescribedEvent Read(byte tag, byte[] payload)
     {
         byte[] descriptor = [tag, (byte)payload.Length, .. payload];

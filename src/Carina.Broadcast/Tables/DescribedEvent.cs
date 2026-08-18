@@ -65,6 +65,9 @@ public sealed class DescribedEvent(
 
     public IReadOnlyList<EventGrouping> Groupings => [.. Read<EventGrouping>(EventGrouping.TryRead)];
 
+    public IReadOnlyList<DataContentDescription> DataContents
+        => [.. Read<DataContentDescription>(DataContentDescription.TryRead)];
+
     private delegate bool Reads<T>(Descriptor descriptor, out T? read)
         where T : class;
 

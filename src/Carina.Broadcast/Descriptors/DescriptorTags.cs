@@ -18,6 +18,8 @@ public static class DescriptorTags
 
     public const int AudioComponent = 0xC4;
 
+    public const int DataContent = 0xC7;
+
     public const int EventGroup = 0xD6;
 
     public const int TransportStreamInformation = 0xCD;
