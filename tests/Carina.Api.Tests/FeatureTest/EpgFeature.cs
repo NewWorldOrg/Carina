@@ -31,6 +31,7 @@ internal sealed class EpgFeature : IAsyncDisposable
             {
                 services.AddSingleton<IStreamVisitRepository>(Visits);
                 services.AddSingleton<IProgrammeRepository>(Programmes);
+                services.AddSingleton<IArchivedProgrammeRepository>(Archived);
                 services.AddSingleton<ICollectionEpochRepository>(Epochs);
                 services.AddSingleton<IAtomicWrite, UnguardedWrites>();
                 services.RemoveAll<IHostedService>();
@@ -48,6 +49,8 @@ internal sealed class EpgFeature : IAsyncDisposable
     public HeldStreamVisits Visits { get; } = new();
 
     public HeldProgrammes Programmes { get; } = new();
+
+    public HeldArchive Archived { get; } = new();
 
     public HeldEpochs Epochs { get; } = new();
 

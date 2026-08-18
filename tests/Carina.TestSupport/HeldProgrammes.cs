@@ -144,3 +144,46 @@ public sealed class HeldEpochs : ICollectionEpochRepository
         return Task.CompletedTask;
     }
 }
+
+public sealed class HeldArchive : IArchivedProgrammeRepository
+{
+    public List<ArchivedProgramme> Programmes { get; } = [];
+
+    public Task<IReadOnlyList<ArchivedProgramme>> ListAsync(
+        IReadOnlyList<ProgrammeService> services,
+        DateTime from,
+        DateTime to,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        var wanted = services.Select(service => (service.NetworkId, service.ServiceId)).ToHashSet();
+
+        return Task.FromResult<IReadOnlyList<ArchivedProgramme>>(
+        [
+            .. Programmes
+                .Where(programme => wanted.Contains((programme.NetworkId.Value, programme.ServiceId.Value)))
+                .Where(programme => programme.StartsAt < to && programme.EndsAt > from)
+                .OrderBy(programme => programme.StartsAt),
+        ]);
+    }
+
+    public Task<int> KeepAsync(IReadOnlyList<ArchivedProgramme> programmes, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(programmes);
+
+        Programmes.AddRange(programmes);
+
+        return Task.FromResult(programmes.Count);
+    }
+
+    public Task<int> ForgetBeforeAsync(DateTime at, CancellationToken cancellationToken)
+        => Task.FromResult(Programmes.RemoveAll(programme => programme.EndsAt < at));
+
+    public Task<int> ForgetServiceAsync(
+        NetworkId networkId,
+        ServiceId serviceId,
+        CancellationToken cancellationToken)
+        => Task.FromResult(Programmes.RemoveAll(programme =>
+            programme.NetworkId.Equals(networkId) && programme.ServiceId.Equals(serviceId)));
+}
