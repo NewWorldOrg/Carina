@@ -158,7 +158,7 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
             NullLogger<CollectionRound>.Instance);
     }
 
-    private static StreamToVisit Stream(int network, int stream, int channel)
+    private static BroadcastStream Stream(int network, int stream, int channel)
         => new(
             new NetworkId(network),
             new TransportStreamId(stream),

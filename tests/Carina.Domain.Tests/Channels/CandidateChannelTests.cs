@@ -15,6 +15,46 @@ public sealed class CandidateChannelTests
             At);
 
     [Fact]
+    public void AFreshCandidateHasNotYetSeenWhichStreamCarriesIt()
+    {
+        CandidateChannel candidate = Discovered();
+
+        Assert.Null(candidate.ObservedStreamId);
+    }
+
+    [Fact]
+    public void ScanningTellsTheCandidateWhichStreamCarriesIt()
+    {
+        CandidateChannel candidate = Discovered();
+
+        candidate.CarriedBy(new TransportStreamId(32_736));
+
+        Assert.Equal(new TransportStreamId(32_736), candidate.ObservedStreamId);
+    }
+
+    [Fact]
+    public void AStreamMayCorrectItselfWhenTheBroadcasterRenumbers()
+    {
+        CandidateChannel candidate = Discovered();
+
+        candidate.CarriedBy(new TransportStreamId(32_736));
+        candidate.CarriedBy(new TransportStreamId(32_737));
+
+        Assert.Equal(new TransportStreamId(32_737), candidate.ObservedStreamId);
+    }
+
+    [Fact]
+    public void AScanThatSawNoStreamLeavesTheKnownOneAlone()
+    {
+        CandidateChannel candidate = Discovered();
+
+        candidate.CarriedBy(new TransportStreamId(32_736));
+        candidate.CarriedBy(null);
+
+        Assert.Equal(new TransportStreamId(32_736), candidate.ObservedStreamId);
+    }
+
+    [Fact]
     public void AFreshCandidateIsInRotationAndSelectedByNobody()
     {
         CandidateChannel candidate = Discovered();
@@ -187,6 +227,7 @@ public sealed class CandidateChannelTests
             new NetworkId(4),
             new ServiceId(101),
             TuningParameters.Terrestrial(27),
+            null,
             isSelected,
             source,
             isSelected ? At : null,

@@ -28,6 +28,9 @@ public sealed class RefusingCandidates(ICandidateChannelRepository candidates, F
         CancellationToken cancellationToken)
         => candidates.ListInRotationAsync(at, cancellationToken);
 
+    public Task<IReadOnlyList<CandidateChannel>> ListSelectedAsync(CancellationToken cancellationToken)
+        => candidates.ListSelectedAsync(cancellationToken);
+
     public Task<IReadOnlyList<CandidateChannel>> ListNeedingAttentionAsync(CancellationToken cancellationToken)
         => candidates.ListNeedingAttentionAsync(cancellationToken);
 
