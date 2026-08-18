@@ -51,6 +51,8 @@ public sealed class ScriptedDriverClient : IDriverClient
 
     public List<TuningParameters> Started { get; } = [];
 
+    public List<SessionPurpose> Purposes { get; } = [];
+
     public List<SessionId> Stopped { get; } = [];
 
     public ScriptedDriverClient Script(TuningParameters tuning, ChannelScript script)
@@ -101,6 +103,7 @@ public sealed class ScriptedDriverClient : IDriverClient
         lock (gate)
         {
             Started.Add(tuning);
+            Purposes.Add(request.Purpose);
 
             if (UnreachableFrom is { } failure && Started.Count > 1)
             {
