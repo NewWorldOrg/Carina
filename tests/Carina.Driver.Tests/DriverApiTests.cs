@@ -182,10 +182,16 @@ public sealed class DriverApiTests
 
         await Until(
             () => stopping.IsCompleted,
+            manager.HardStopBudget + Patience,
             "Shutdown never finished, though the viewer it was serving had been let go."
         );
 
         await stopping;
+
+        Assert.True(
+            session.Completion.IsCompleted,
+            "Shutdown only finished because its hard stop expired, so it did wait for the viewer."
+        );
 
         Assert.True(
             lifecycle.StreamsDetaching.IsCancellationRequested,
@@ -1238,9 +1244,12 @@ public sealed class DriverApiTests
         { }
     }
 
-    private static async Task Until(Func<bool> fact, string otherwise)
+    private static Task Until(Func<bool> fact, string otherwise)
+        => Until(fact, Patience, otherwise);
+
+    private static async Task Until(Func<bool> fact, TimeSpan patience, string otherwise)
     {
-        DateTimeOffset deadline = DateTimeOffset.UtcNow + Patience;
+        DateTimeOffset deadline = DateTimeOffset.UtcNow + patience;
 
         while (!fact())
         {
