@@ -2,6 +2,7 @@ using System.Globalization;
 
 using Carina.Api.Common;
 using Carina.Contracts;
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 
@@ -52,6 +53,12 @@ public sealed class ProgrammeGuideService(
         => await programmes.FindAsync(id, cancellationToken) is { } programme
             ? ServiceResult<Programme>.Success(programme)
             : ServiceResult<Programme>.Failure("No programme is held under that name.");
+
+    public async Task<ServiceResult<PaginatedList<Programme>>> SearchAsync(
+        ProgrammeSearch search,
+        CancellationToken cancellationToken)
+        => ServiceResult<PaginatedList<Programme>>.Success(
+            await programmes.SearchAsync(search, cancellationToken));
 
     private async Task<string> ETagAsync(
         IReadOnlyList<BroadcastStream> carried,
