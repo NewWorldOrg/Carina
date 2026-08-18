@@ -86,6 +86,19 @@ public sealed class StreamHarvestTests
     }
 
     [Fact]
+    public void PacketsSplitAcrossReadsAreStillRead()
+    {
+        var harvest = new StreamHarvest();
+        var packets = Packets(FirstBasic, FirstBasic, 0, 0);
+
+        harvest.Push(packets.AsSpan(0, 100));
+        harvest.Push(packets.AsSpan(100));
+
+        Assert.Equal(0, harvest.UnreadablePackets);
+        Assert.Single(harvest.Conclude(interrupted: false, anyBytes: true).Tables);
+    }
+
+    [Fact]
     public void BytesThatAreNotEvenPacketsAreCountedRatherThanThrown()
     {
         var harvest = new StreamHarvest();
@@ -93,6 +106,7 @@ public sealed class StreamHarvestTests
         harvest.Push(new byte[188]);
 
         Assert.Equal(1, harvest.UnreadablePackets);
+        Assert.Empty(harvest.Conclude(interrupted: false, anyBytes: true).Tables);
     }
 
     private static void Gather(StreamHarvest harvest, int tableId, int lastTableId, int segments = 4)

@@ -28,6 +28,8 @@ public sealed class PacedStream : Stream
 
     public static PacedStream InChunksOf(byte[] bytes, int chunkSize) => new(bytes, chunkSize, gated: true);
 
+    public static PacedStream Sliced(byte[] bytes, int chunkSize) => new(bytes, chunkSize, gated: false);
+
     public static PacedStream Torn() => new([], 0, gated: false, torn: true);
 
     public int Reads => Volatile.Read(ref reads);
