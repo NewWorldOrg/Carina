@@ -9,6 +9,9 @@ public sealed record PresentChange(
 {
     public bool IsAnotherProgramme => Was is null || Was.EventId != Now.EventId;
 
+    public bool StartsAtAnotherTime
+        => Was is not null && Was.EventId == Now.EventId && Was.StartsAt != Now.StartsAt;
+
     public bool RunsToAnotherTime => Was is not null && Was.EventId == Now.EventId && Was.EndsAt != Now.EndsAt;
 }
 

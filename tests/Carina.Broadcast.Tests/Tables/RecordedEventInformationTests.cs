@@ -134,8 +134,15 @@ public sealed class RecordedEventInformationTests
             }
         }
 
+        var service = Assert.Single(progress.Services);
+
+        Assert.Equal(new ScheduledService(32739, 32739, 1049), service);
         Assert.Equal(ScheduleCompleteness.Incomplete, progress.Completeness);
-        Assert.NotEmpty(progress.SegmentsAwaited(EventInformationTable.FirstScheduleActualTableId));
+
+        var awaited = progress.SegmentsAwaited(service, EventInformationTable.FirstScheduleActualTableId);
+
+        Assert.Equal(31, awaited.Count);
+        Assert.DoesNotContain(9, awaited);
     }
 
     [Fact]

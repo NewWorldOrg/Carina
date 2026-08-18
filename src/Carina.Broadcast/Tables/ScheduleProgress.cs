@@ -9,26 +9,42 @@ public enum ScheduleCompleteness
     Complete = 2,
 }
 
+public sealed record ScheduledService(int NetworkId, int TransportStreamId, int ServiceId);
+
 public sealed class ScheduleProgress
 {
     public const int SectionsPerSegment = 8;
 
     private const int ExtendedOffset = 8;
 
-    private readonly Dictionary<int, TableProgress> tables = [];
+    private readonly Dictionary<(ScheduledService Service, int TableId), TableProgress> tables = [];
+
+    private readonly List<ScheduledService> services = [];
+
+    public IReadOnlyList<ScheduledService> Services => services;
 
     public ScheduleCompleteness Completeness
     {
         get
         {
-            if (!IsWhole(EventInformationTable.FirstScheduleActualTableId))
+            if (services.Count == 0)
             {
                 return ScheduleCompleteness.Incomplete;
             }
 
-            return IsWhole(EventInformationTable.FirstScheduleActualTableId + ExtendedOffset)
-                ? ScheduleCompleteness.Complete
-                : ScheduleCompleteness.BasicOnly;
+            var least = ScheduleCompleteness.Complete;
+
+            foreach (var service in services)
+            {
+                var reached = CompletenessOf(service);
+
+                if (reached < least)
+                {
+                    least = reached;
+                }
+            }
+
+            return least;
         }
     }
 
@@ -41,25 +57,52 @@ public sealed class ScheduleProgress
             return;
         }
 
-        if (!tables.TryGetValue(table.TableId, out var progress) || progress.Version != table.VersionNumber)
+        var service = new ScheduledService(table.OriginalNetworkId, table.TransportStreamId, table.ServiceId);
+        var key = (service, table.TableId);
+
+        if (!tables.TryGetValue(key, out var progress) || progress.Version != table.VersionNumber)
         {
             progress = new TableProgress(table.VersionNumber, table.LastTableId, table.LastSectionNumber);
-            tables[table.TableId] = progress;
+            tables[key] = progress;
+        }
+
+        if (!services.Contains(service))
+        {
+            services.Add(service);
         }
 
         progress.Saw(table.SectionNumber, table.SegmentLastSectionNumber);
     }
 
-    public bool IsWhole(int firstTableId)
+    public ScheduleCompleteness CompletenessOf(ScheduledService service)
     {
-        if (!tables.TryGetValue(firstTableId, out var first))
+        if (!IsWhole(service, EventInformationTable.FirstScheduleActualTableId))
+        {
+            return ScheduleCompleteness.Incomplete;
+        }
+
+        return IsWhole(service, EventInformationTable.FirstScheduleActualTableId + ExtendedOffset)
+            ? ScheduleCompleteness.Complete
+            : ScheduleCompleteness.BasicOnly;
+    }
+
+    public bool IsWhole(ScheduledService service, int firstTableId)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+
+        if (!tables.TryGetValue((service, firstTableId), out var first))
+        {
+            return false;
+        }
+
+        if (first.LastTableId < firstTableId || first.LastTableId > EventInformationTable.LastScheduleActualTableId)
         {
             return false;
         }
 
         for (var tableId = firstTableId; tableId <= first.LastTableId; tableId++)
         {
-            if (!tables.TryGetValue(tableId, out var progress) || progress.Awaited().Count > 0)
+            if (!tables.TryGetValue((service, tableId), out var progress) || progress.Awaited().Count > 0)
             {
                 return false;
             }
@@ -68,8 +111,12 @@ public sealed class ScheduleProgress
         return true;
     }
 
-    public IReadOnlyList<int> SegmentsAwaited(int tableId)
-        => tables.TryGetValue(tableId, out var progress) ? progress.Awaited() : [];
+    public IReadOnlyList<int> SegmentsAwaited(ScheduledService service, int tableId)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+
+        return tables.TryGetValue((service, tableId), out var progress) ? progress.Awaited() : [];
+    }
 
     private sealed class TableProgress(int version, int lastTableId, int lastSectionNumber)
     {

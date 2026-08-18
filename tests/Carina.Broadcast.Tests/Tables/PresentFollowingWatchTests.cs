@@ -61,8 +61,34 @@ public sealed class PresentFollowingWatchTests
 
         Assert.NotNull(change);
         Assert.False(change.IsAnotherProgramme);
+        Assert.False(change.StartsAtAnotherTime);
         Assert.True(change.RunsToAnotherTime);
         Assert.Equal(TimeSpan.FromMinutes(45), change.Now.Runs);
+    }
+
+    [Fact]
+    public void AProgrammePushedBackIsReportedAsStartingAtAnotherTime()
+    {
+        var watch = new PresentFollowingWatch([Watched]);
+
+        watch.Saw(Present(eventId: 1, hours: 0x02, hour: 0x22));
+
+        var change = watch.Saw(Present(eventId: 1, hours: 0x01, hour: 0x23));
+
+        Assert.NotNull(change);
+        Assert.False(change.IsAnotherProgramme);
+        Assert.True(change.StartsAtAnotherTime);
+        Assert.False(change.RunsToAnotherTime);
+    }
+
+    [Fact]
+    public void AProgrammeThatDidNotMoveAtAllReportsNoneOfTheThreeChanges()
+    {
+        var watch = new PresentFollowingWatch([Watched]);
+
+        watch.Saw(Present(eventId: 1));
+
+        Assert.Null(watch.Saw(Present(eventId: 1)));
     }
 
     [Fact]
@@ -122,8 +148,10 @@ public sealed class PresentFollowingWatchTests
         int eventId,
         int minutes = 30,
         int section = PresentFollowingWatch.PresentSectionNumber,
-        int tableId = EventInformationTable.PresentFollowingActualTableId)
-        => Table(tableId, section, Event(eventId, minutes));
+        int tableId = EventInformationTable.PresentFollowingActualTableId,
+        int hour = 0x22,
+        int hours = 0)
+        => Table(tableId, section, Event(eventId, minutes, hour, hours));
 
     private static EventInformationTable Table(int tableId, int section, byte[] events)
         => Assert.IsType<TableRead<EventInformationTable>.Parsed>(
@@ -142,12 +170,12 @@ public sealed class PresentFollowingWatchTests
                 ],
             }))).Table;
 
-    private static byte[] Event(int eventId, int minutes)
+    private static byte[] Event(int eventId, int minutes, int hour = 0x22, int hours = 0)
         =>
         [
             (byte)(eventId >> 8), (byte)(eventId & 0xFF),
-            0xEF, 0x55, 0x22, 0x00, 0x00,
-            0x00, (byte)(((minutes / 10) << 4) | (minutes % 10)), 0x00,
+            0xEF, 0x55, (byte)hour, 0x00, 0x00,
+            (byte)hours, (byte)(hours > 0 ? 0x00 : ((minutes / 10) << 4) | (minutes % 10)), 0x00,
             0x00, 0x00,
         ];
 }
