@@ -16,7 +16,7 @@ public sealed class CollectionRound(
     ILogger<CollectionRound> logger)
 {
     public async Task<RoundResult> WalkAsync(
-        IReadOnlyList<StreamToVisit> streams,
+        IReadOnlyList<BroadcastStream> streams,
         CancellationToken abort)
     {
         ArgumentNullException.ThrowIfNull(streams);
@@ -73,7 +73,7 @@ public sealed class CollectionRound(
     }
 
     private async Task RecordAsync(
-        StreamToVisit stream,
+        BroadcastStream stream,
         VisitResult visit,
         TimeSpan took,
         CancellationToken abort)
@@ -96,13 +96,13 @@ public sealed class CollectionRound(
     }
 
     private async Task<IReadOnlyList<StreamCoverage>> CoverageAsync(
-        IReadOnlyList<StreamToVisit> streams,
+        IReadOnlyList<BroadcastStream> streams,
         CancellationToken abort)
     {
         IReadOnlyList<StreamVisit> known = await visits.ListAsync(abort);
         var coverage = new List<StreamCoverage>(streams.Count);
 
-        foreach (StreamToVisit stream in streams)
+        foreach (BroadcastStream stream in streams)
         {
             StreamVisit? visit = known.FirstOrDefault(candidate =>
                 candidate.NetworkId.Equals(stream.NetworkId)
@@ -131,9 +131,3 @@ public sealed class CollectionRound(
         return coverage;
     }
 }
-
-public sealed record StreamToVisit(
-    NetworkId NetworkId,
-    TransportStreamId TransportStreamId,
-    TuningParameters Tuning,
-    IReadOnlyList<ServiceId> Services);

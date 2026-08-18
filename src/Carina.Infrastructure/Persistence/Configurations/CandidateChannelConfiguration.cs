@@ -71,6 +71,10 @@ public sealed class CandidateChannelConfiguration : IEntityTypeConfiguration<Can
                 .HasColumnName("transport_stream_id");
         });
 
+        builder.Property(candidate => candidate.ObservedStreamId)
+            .HasConversion(id => id!.Value, value => new TransportStreamId(value))
+            .HasColumnName("observed_transport_stream_id");
+
         builder.Property(candidate => candidate.IsSelected).IsRequired();
 
         builder.Property(candidate => candidate.SelectionSource)

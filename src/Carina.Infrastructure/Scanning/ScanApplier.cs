@@ -132,8 +132,15 @@ public sealed class ScanApplier(
 
         foreach (ScanChannelChange? arrival in arriving)
         {
-            if (stored.Any(candidate => candidate.Tuning.Equals(arrival.Tuning)))
+            if (stored.FirstOrDefault(candidate => candidate.Tuning.Equals(arrival.Tuning)) is { } already)
             {
+                if (arrival.TransportStreamId is { } seen && !seen.Equals(already.ObservedStreamId))
+                {
+                    already.CarriedBy(seen);
+
+                    await candidates.SaveAsync(already, cancellationToken);
+                }
+
                 continue;
             }
 
@@ -143,6 +150,8 @@ public sealed class ScanApplier(
                 change.ServiceId,
                 arrival.Tuning,
                 at);
+
+            candidate.CarriedBy(arrival.TransportStreamId);
 
             if (arrival.Measurement is { } measurement)
             {

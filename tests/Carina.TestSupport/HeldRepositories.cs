@@ -137,6 +137,10 @@ public sealed class HeldCandidates : ICandidateChannelRepository
                 candidate.IsInRotation
                 && (candidate.NextAttemptAt is null || candidate.NextAttemptAt <= at))]);
 
+    public Task<IReadOnlyList<CandidateChannel>> ListSelectedAsync(CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<CandidateChannel>>(
+            [.. Candidates.Where(candidate => candidate.IsSelected)]);
+
     public Task<IReadOnlyList<CandidateChannel>> ListNeedingAttentionAsync(
         CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<CandidateChannel>>(

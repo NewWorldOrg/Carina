@@ -16,6 +16,8 @@ public sealed class CandidateChannel
 
     public TuningParameters Tuning { get; private set; } = null!;
 
+    public TransportStreamId? ObservedStreamId { get; private set; }
+
     public bool IsSelected { get; private set; }
 
     public SelectionSource? SelectionSource { get; private set; }
@@ -53,6 +55,7 @@ public sealed class CandidateChannel
             networkId,
             serviceId,
             tuning,
+            observedStreamId: null,
             isSelected: false,
             selectionSource: null,
             selectedAt: null,
@@ -71,6 +74,7 @@ public sealed class CandidateChannel
         NetworkId networkId,
         ServiceId serviceId,
         TuningParameters tuning,
+        TransportStreamId? observedStreamId,
         bool isSelected,
         SelectionSource? selectionSource,
         DateTime? selectedAt,
@@ -103,6 +107,7 @@ public sealed class CandidateChannel
             NetworkId = networkId,
             ServiceId = serviceId,
             Tuning = tuning,
+            ObservedStreamId = observedStreamId,
             IsSelected = isSelected,
             SelectionSource = selectionSource,
             SelectedAt = UtcTimes.Optional(selectedAt, nameof(selectedAt)),
@@ -116,6 +121,16 @@ public sealed class CandidateChannel
             DiscoveredAt = UtcTimes.Required(discoveredAt, nameof(discoveredAt)),
             LastSeenAt = UtcTimes.Required(lastSeenAt, nameof(lastSeenAt)),
         };
+    }
+
+    public void CarriedBy(TransportStreamId? observedStreamId)
+    {
+        if (observedStreamId is null)
+        {
+            return;
+        }
+
+        ObservedStreamId = observedStreamId;
     }
 
     public void Select(SelectionSource source, SignalMeasurement? measuredAtSelection, DateTime at)
