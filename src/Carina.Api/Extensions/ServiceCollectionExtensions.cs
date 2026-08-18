@@ -18,6 +18,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<EpgRebuildService>();
         services.AddScoped<ProgrammeGuideService>();
         services.AddScoped<ProgrammeFeedService>();
+        services.AddScoped<ArchiveService>();
 
         return services;
     }

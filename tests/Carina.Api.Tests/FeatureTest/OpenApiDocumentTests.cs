@@ -100,6 +100,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "cancelScan",
                 "collectNow",
                 "deleteCandidateChannel",
+                "forgetArchivedService",
                 "getCollectionStatus",
                 "getDetectedTuners",
                 "getDriverStatus",
