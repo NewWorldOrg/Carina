@@ -19,19 +19,19 @@ public sealed class ProgrammeWriter(IProgrammeRepository programmes, IAtomicWrit
         return await writes.AllOrNothingAsync(
             async token =>
             {
-                var at = clock.GetUtcNow().UtcDateTime;
-                var added = 0;
-                var updated = 0;
-                var discarded = 0;
+                DateTime at = clock.GetUtcNow().UtcDateTime;
+                int added = 0;
+                int updated = 0;
+                int discarded = 0;
                 var gathered = new Dictionary<ProgrammeId, ProgrammeBroadcast>();
 
-                foreach (var table in tables)
+                foreach (EventInformationTable table in tables)
                 {
                     discarded += table.DiscardedEvents;
 
-                    foreach (var carried in table.Events)
+                    foreach (DescribedEvent carried in table.Events)
                     {
-                        var broadcast = Read(table, carried);
+                        ProgrammeBroadcast? broadcast = Read(table, carried);
 
                         if (broadcast is null)
                         {
@@ -40,15 +40,15 @@ public sealed class ProgrammeWriter(IProgrammeRepository programmes, IAtomicWrit
                             continue;
                         }
 
-                        gathered[broadcast.Id] = gathered.TryGetValue(broadcast.Id, out var seen)
+                        gathered[broadcast.Id] = gathered.TryGetValue(broadcast.Id, out ProgrammeBroadcast? seen)
                             ? Merged(seen, broadcast)
                             : broadcast;
                     }
                 }
 
-                foreach (var broadcast in gathered.Values)
+                foreach (ProgrammeBroadcast broadcast in gathered.Values)
                 {
-                    var held = await programmes.FindAsync(broadcast.Id, token);
+                    Programme? held = await programmes.FindAsync(broadcast.Id, token);
 
                     if (held is null)
                     {
@@ -72,7 +72,7 @@ public sealed class ProgrammeWriter(IProgrammeRepository programmes, IAtomicWrit
 
     private static ProgrammeBroadcast Merged(ProgrammeBroadcast seen, ProgrammeBroadcast arriving)
     {
-        var named = arriving.Name.Length > 0 ? arriving : seen;
+        ProgrammeBroadcast named = arriving.Name.Length > 0 ? arriving : seen;
 
         return named with
         {
@@ -93,9 +93,9 @@ public sealed class ProgrammeWriter(IProgrammeRepository programmes, IAtomicWrit
             return null;
         }
 
-        var described = carried.Described;
-        var detailed = carried.Detailed;
-        var groupings = carried.Groupings;
+        ShortEventDescription? described = carried.Described;
+        ExtendedEventDescription? detailed = carried.Detailed;
+        IReadOnlyList<EventGrouping> groupings = carried.Groupings;
 
         return new ProgrammeBroadcast(
             new ProgrammeId(
@@ -129,14 +129,14 @@ public sealed class ProgrammeWriter(IProgrammeRepository programmes, IAtomicWrit
         int eventId,
         IReadOnlyList<EventGrouping> groupings)
     {
-        foreach (var grouping in groupings)
+        foreach (EventGrouping grouping in groupings)
         {
             if (Relation(grouping.Kind) is not { } kind)
             {
                 continue;
             }
 
-            foreach (var carried in grouping.Events)
+            foreach (GroupedEvent carried in grouping.Events)
             {
                 if (carried.ServiceId == serviceId && carried.EventId == eventId)
                 {
@@ -146,7 +146,7 @@ public sealed class ProgrammeWriter(IProgrammeRepository programmes, IAtomicWrit
                 yield return new RelatedProgramme(networkId, carried.ServiceId, carried.EventId, kind);
             }
 
-            foreach (var carried in grouping.Elsewhere)
+            foreach (GroupedEventElsewhere carried in grouping.Elsewhere)
             {
                 yield return new RelatedProgramme(carried.NetworkId, carried.ServiceId, carried.EventId, kind);
             }

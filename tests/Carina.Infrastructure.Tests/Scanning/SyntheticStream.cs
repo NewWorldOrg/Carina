@@ -62,8 +62,8 @@ public sealed class SyntheticStream
 
     private byte[] NetworkSection()
     {
-        var listed = TransportStreamIdInNetwork ?? TransportStreamId;
-        var partiallyReceived = Services
+        int listed = TransportStreamIdInNetwork ?? TransportStreamId;
+        int[] partiallyReceived = Services
             .Where(service => service.PartiallyReceived)
             .Select(service => service.ServiceId)
             .ToArray();

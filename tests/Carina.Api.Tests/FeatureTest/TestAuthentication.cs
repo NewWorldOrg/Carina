@@ -55,7 +55,7 @@ internal static class TestAuthentication
 
     public static HttpClient CreateAuthenticatedClient(this WebApplicationFactory<Program> factory)
     {
-        var client = factory.WithTestScheme().CreateClient();
+        HttpClient client = factory.WithTestScheme().CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
             TestAuthenticationHandler.SchemeName,
             "anything"

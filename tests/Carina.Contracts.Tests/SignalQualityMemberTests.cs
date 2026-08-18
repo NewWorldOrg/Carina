@@ -46,8 +46,8 @@ public sealed class SignalQualityMemberTests
     [Fact]
     public void EveryPropertySurvivesBeingCopied()
     {
-        var populated = Populated;
-        var copied = populated with { };
+        SignalQualityDto populated = Populated;
+        SignalQualityDto copied = populated with { };
 
         Assert.All(
             Settable,
@@ -59,13 +59,13 @@ public sealed class SignalQualityMemberTests
     [Fact]
     public void EveryPropertyIsWeighedWhenTwoReadingsAreCompared()
     {
-        var populated = Populated;
+        SignalQualityDto populated = Populated;
 
         Assert.All(
             Settable,
             property =>
             {
-                var altered = populated with { };
+                SignalQualityDto altered = populated with { };
                 property.SetValue(altered, Different(property, property.GetValue(populated)));
 
                 Assert.False(

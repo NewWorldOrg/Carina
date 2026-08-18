@@ -27,7 +27,7 @@ public sealed class TableHarvest
     {
         Bytes += bytes.Length;
 
-        foreach (var read in reader.Push(bytes))
+        foreach (SectionRead read in reader.Push(bytes))
         {
             switch (read)
             {
@@ -80,13 +80,13 @@ public sealed class TableHarvest
         Section section,
         Action<IReadOnlyList<Section>> whenComplete)
     {
-        if (!sets.TryGetValue(section.TableIdExtension, out var set))
+        if (!sets.TryGetValue(section.TableIdExtension, out SectionSet? set))
         {
             set = new SectionSet(section.TableId, section.TableIdExtension);
             sets[section.TableIdExtension] = set;
         }
 
-        if (set.Add(section) && set.TryComplete(out var sections))
+        if (set.Add(section) && set.TryComplete(out IReadOnlyList<Section>? sections))
         {
             whenComplete(sections);
         }
@@ -96,7 +96,7 @@ public sealed class TableHarvest
     {
         var tables = new List<NetworkInformationTable>(sections.Count);
 
-        foreach (var section in sections)
+        foreach (Section section in sections)
         {
             if (NetworkInformationTable.Read(section) is not TableRead<NetworkInformationTable>.Parsed parsed)
             {
@@ -118,7 +118,7 @@ public sealed class TableHarvest
     {
         var tables = new List<ServiceDescriptionTable>(sections.Count);
 
-        foreach (var section in sections)
+        foreach (Section section in sections)
         {
             if (ServiceDescriptionTable.Read(section) is not TableRead<ServiceDescriptionTable>.Parsed parsed)
             {

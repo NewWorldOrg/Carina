@@ -63,7 +63,7 @@ public sealed class ScanApplierTests
             ServiceCategory.Television,
             At));
 
-        foreach (var tuning in tunings)
+        foreach (TuningParameters tuning in tunings)
         {
             candidates.Candidates.Add(CandidateChannel.Discover(
                 CandidateChannelId.New(),
@@ -80,7 +80,7 @@ public sealed class ScanApplierTests
         Seed(101, "Terrestrial one", TuningParameters.Terrestrial(Terrestrial));
         Seed(201, "Satellite one", Satellite());
 
-        var applied = await Applier.ApplyAsync(
+        ScanApplication applied = await Applier.ApplyAsync(
             new ScanDifference(
                 [
                     Change(
@@ -122,7 +122,7 @@ public sealed class ScanApplierTests
             Satellite(),
             At));
 
-        var applied = await Applier.ApplyAsync(
+        ScanApplication applied = await Applier.ApplyAsync(
             new ScanDifference(
                 [
                     Change(
@@ -149,7 +149,7 @@ public sealed class ScanApplierTests
             TuningParameters.Terrestrial(Terrestrial),
             TuningParameters.Terrestrial(OtherTerrestrial));
 
-        var applied = await Applier.ApplyAsync(
+        ScanApplication applied = await Applier.ApplyAsync(
             new ScanDifference(
                 [
                     Change(
@@ -172,7 +172,7 @@ public sealed class ScanApplierTests
     {
         Seed(201, "Satellite one", Satellite());
 
-        var applied = await Applier.ApplyAsync(
+        ScanApplication applied = await Applier.ApplyAsync(
             new ScanDifference(
                 [
                     Change(
@@ -195,7 +195,7 @@ public sealed class ScanApplierTests
     [Fact]
     public async Task ANewServiceArrivesWithItsChannelAndASelectionAttributedToTheScan()
     {
-        var applied = await Applier.ApplyAsync(
+        ScanApplication applied = await Applier.ApplyAsync(
             new ScanDifference(
                 [
                     Change(
@@ -232,7 +232,7 @@ public sealed class ScanApplierTests
             [TuneSystem.IsdbT],
             CancellationToken.None);
 
-        var selected = Assert.Single(candidates.Candidates, candidate => candidate.IsSelected);
+        CandidateChannel selected = Assert.Single(candidates.Candidates, candidate => candidate.IsSelected);
 
         Assert.Equal(OtherTerrestrial, selected.Tuning.PhysicalChannel);
     }
@@ -242,7 +242,7 @@ public sealed class ScanApplierTests
     {
         Seed(101, "Old name", TuningParameters.Terrestrial(Terrestrial));
 
-        var applied = await Applier.ApplyAsync(
+        ScanApplication applied = await Applier.ApplyAsync(
             new ScanDifference(
                 [
                     Change(
@@ -268,7 +268,7 @@ public sealed class ScanApplierTests
     {
         Seed(101, "Departed", TuningParameters.Terrestrial(Terrestrial));
 
-        var applied = await Applier.ApplyAsync(
+        ScanApplication applied = await Applier.ApplyAsync(
             new ScanDifference(
                 [
                     Change(
@@ -291,7 +291,7 @@ public sealed class ScanApplierTests
     [Fact]
     public async Task AServiceTheScanDidNotReceiveIsNotStampedAsSeenJustNow()
     {
-        var discovered = At.AddHours(-1);
+        DateTime discovered = At.AddHours(-1);
         services.Services.Add(BroadcastService.Discover(
             new NetworkId(1), new ServiceId(101), "Went quiet", ServiceCategory.Television, discovered));
         candidates.Candidates.Add(CandidateChannel.Discover(
@@ -307,7 +307,7 @@ public sealed class ScanApplierTests
             TuningParameters.Terrestrial(OtherTerrestrial),
             discovered));
 
-        var applied = await Applier.ApplyAsync(
+        ScanApplication applied = await Applier.ApplyAsync(
             new ScanDifference(
                 [
                     Change(
@@ -363,7 +363,7 @@ public sealed class ScanApplierTests
             ],
             []);
 
-        var applied = await Applier.ApplyAsync(difference, [TuneSystem.IsdbT], CancellationToken.None);
+        ScanApplication applied = await Applier.ApplyAsync(difference, [TuneSystem.IsdbT], CancellationToken.None);
 
         Assert.Equal(difference.Added.Count, applied.ServicesAdded);
         Assert.Equal(difference.Updated.Count, applied.ServicesUpdated);
@@ -373,7 +373,7 @@ public sealed class ScanApplierTests
     [Fact]
     public async Task AServiceThatWasAlreadyGoneIsNotCountedAsOneThisApplyRemoved()
     {
-        var applied = await Applier.ApplyAsync(
+        ScanApplication applied = await Applier.ApplyAsync(
             new ScanDifference(
                 [
                     Change(
@@ -393,7 +393,7 @@ public sealed class ScanApplierTests
     [Fact]
     public async Task AServiceTheScanDidNotReceiveIsNotEnteredWhenNothingHoldsItEither()
     {
-        var applied = await Applier.ApplyAsync(
+        ScanApplication applied = await Applier.ApplyAsync(
             new ScanDifference(
                 [
                     Change(
@@ -448,7 +448,7 @@ public sealed class ScanApplierTests
     {
         Seed(101, "Known", TuningParameters.Terrestrial(Terrestrial));
 
-        var applied = await Applier.ApplyAsync(
+        ScanApplication applied = await Applier.ApplyAsync(
             new ScanDifference(
                 [
                     Change(
@@ -470,7 +470,7 @@ public sealed class ScanApplierTests
     {
         Seed(101, "Untouched", TuningParameters.Terrestrial(Terrestrial));
 
-        var applied = await Applier.ApplyAsync(
+        ScanApplication applied = await Applier.ApplyAsync(
             ScanDifference.Nothing,
             [TuneSystem.IsdbT],
             CancellationToken.None);

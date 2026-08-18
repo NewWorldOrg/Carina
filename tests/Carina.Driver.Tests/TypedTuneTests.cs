@@ -25,7 +25,7 @@ public sealed class TypedTuneTests
     {
         var tune = TuneParams.Terrestrial(UnassignedTerrestrialChannel);
 
-        var channel = Assert.IsType<TerrestrialChannel>(
+        TerrestrialChannel channel = Assert.IsType<TerrestrialChannel>(
             DvbTuneRequest.Resolve(tune, tune.ToLegacyRequest())
         );
 
@@ -37,7 +37,7 @@ public sealed class TypedTuneTests
     {
         var tune = TuneParams.Bs(15, SyntheticStream);
 
-        var channel = Assert.IsType<BroadcastSatelliteChannel>(
+        BroadcastSatelliteChannel channel = Assert.IsType<BroadcastSatelliteChannel>(
             DvbTuneRequest.Resolve(tune, tune.ToLegacyRequest())
         );
 
@@ -50,7 +50,7 @@ public sealed class TypedTuneTests
     {
         var tune = TuneParams.Cs110(24);
 
-        var channel = Assert.IsType<CommunicationSatelliteChannel>(
+        CommunicationSatelliteChannel channel = Assert.IsType<CommunicationSatelliteChannel>(
             DvbTuneRequest.Resolve(tune, tune.ToLegacyRequest())
         );
 
@@ -60,7 +60,7 @@ public sealed class TypedTuneTests
     [Fact]
     public void TheTypedParametersTuneTheFrontendEvenWhenTheOlderFieldNamesAnotherChannel()
     {
-        var channel = Assert.IsType<TerrestrialChannel>(
+        TerrestrialChannel channel = Assert.IsType<TerrestrialChannel>(
             DvbTuneRequest.Resolve(
                 TuneParams.Terrestrial(UnassignedTerrestrialChannel),
                 new TuningRequest(TunerKind.Terrestrial, AnotherUnassignedTerrestrialChannel)
@@ -73,7 +73,7 @@ public sealed class TypedTuneTests
     [Fact]
     public void ATuneOnASystemThisDriverDoesNotKnowIsRefusedRatherThanGuessedAt()
     {
-        var refusal = Assert.Throws<DvbDeviceException>(
+        DvbDeviceException refusal = Assert.Throws<DvbDeviceException>(
             () =>
                 DvbTuneRequest.Resolve(
                     new TuneParams(),
@@ -92,7 +92,7 @@ public sealed class TypedTuneTests
         TuneSystem system
     )
     {
-        var refusal = Assert.Throws<DvbDeviceException>(
+        DvbDeviceException refusal = Assert.Throws<DvbDeviceException>(
             () =>
                 DvbTuneRequest.Resolve(
                     new TuneParams { System = system },
@@ -184,7 +184,7 @@ public sealed class TypedTuneTests
     [Fact]
     public void TheDriverAcceptsTheWholeRangeTheBroadcastStandardsAccept()
     {
-        for (var number = -1; number <= 300; number++)
+        for (int number = -1; number <= 300; number++)
         {
             Assert.Equal(
                 BroadcastStandards.IsTerrestrialChannel(number),
@@ -204,13 +204,13 @@ public sealed class TypedTuneTests
     [Fact]
     public void ATypedTerrestrialTuneReachesTheFrontendAsTheTerrestrialPropertyList()
     {
-        var (calls, clock) = Ready();
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
         var tune = TuneParams.Terrestrial(UnassignedTerrestrialChannel);
 
-        using var device = Factory(calls, clock)
+        using ITunerDevice device = Factory(calls, clock)
             .Create(Terrestrial(), tune.ToLegacyRequest(), tune);
 
-        var properties = Assert.Single(calls.PropertiesSet);
+        DvbPropertyList properties = Assert.Single(calls.PropertiesSet);
 
         Assert.Equal(
             (uint)DeliverySystem.IsdbTerrestrial.Code,
@@ -226,12 +226,12 @@ public sealed class TypedTuneTests
     [Fact]
     public void ATypedBroadcastSatelliteTuneReachesTheFrontendWithItsStreamNamed()
     {
-        var (calls, clock) = Ready();
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
         var tune = TuneParams.Bs(15, SyntheticStream);
 
-        using var device = Factory(calls, clock).Create(Satellite(), tune.ToLegacyRequest(), tune);
+        using ITunerDevice device = Factory(calls, clock).Create(Satellite(), tune.ToLegacyRequest(), tune);
 
-        var properties = Assert.Single(calls.PropertiesSet);
+        DvbPropertyList properties = Assert.Single(calls.PropertiesSet);
 
         Assert.Equal(
             (uint)DeliverySystem.IsdbSatellite.Code,
@@ -248,12 +248,12 @@ public sealed class TypedTuneTests
     [Fact]
     public void ATypedCommunicationSatelliteTuneReachesTheFrontendWithoutAStream()
     {
-        var (calls, clock) = Ready();
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
         var tune = TuneParams.Cs110(24);
 
-        using var device = Factory(calls, clock).Create(Satellite(), tune.ToLegacyRequest(), tune);
+        using ITunerDevice device = Factory(calls, clock).Create(Satellite(), tune.ToLegacyRequest(), tune);
 
-        var properties = Assert.Single(calls.PropertiesSet);
+        DvbPropertyList properties = Assert.Single(calls.PropertiesSet);
 
         Assert.Equal(
             (uint)BroadcastStandards.Cs110CentreKHz(24),
@@ -266,10 +266,10 @@ public sealed class TypedTuneTests
     [Fact]
     public void ATypedSatelliteTuneLeavesTheAerialUnfedUnlessTheLedgerSaysOtherwise()
     {
-        var (calls, clock) = Ready();
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
         var tune = TuneParams.Cs110(24);
 
-        using var device = Factory(calls, clock).Create(Satellite(), tune.ToLegacyRequest(), tune);
+        using ITunerDevice device = Factory(calls, clock).Create(Satellite(), tune.ToLegacyRequest(), tune);
 
         Assert.Equal(LnbVoltage.Off, Assert.Single(calls.VoltagesSet));
     }
@@ -277,10 +277,10 @@ public sealed class TypedTuneTests
     [Fact]
     public void ATypedSatelliteTuneFeedsTheAerialWhenTheLedgerSaysTo()
     {
-        var (calls, clock) = Ready();
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
         var tune = TuneParams.Cs110(24);
 
-        using var device = Factory(calls, clock)
+        using ITunerDevice device = Factory(calls, clock)
             .Create(Satellite() with { LnbPower = true }, tune.ToLegacyRequest(), tune);
 
         Assert.Equal(LnbVoltage.Eighteen, Assert.Single(calls.VoltagesSet));
@@ -289,10 +289,10 @@ public sealed class TypedTuneTests
     [Fact]
     public void ATypedTerrestrialTuneNeverPutsAnythingOnTheAerial()
     {
-        var (calls, clock) = Ready();
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
         var tune = TuneParams.Terrestrial(UnassignedTerrestrialChannel);
 
-        using var device = Factory(calls, clock)
+        using ITunerDevice device = Factory(calls, clock)
             .Create(Terrestrial(), tune.ToLegacyRequest(), tune);
 
         Assert.Empty(calls.VoltagesSet);
@@ -301,8 +301,8 @@ public sealed class TypedTuneTests
     [Fact]
     public void TheThreeSystemsDifferOnlyInWhatTheyPutInThePropertyList()
     {
-        var (calls, clock) = Ready();
-        var factory = Factory(calls, clock);
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
+        TunerDeviceFactory factory = Factory(calls, clock);
 
         using (
             factory.Create(
@@ -402,7 +402,7 @@ public sealed class TypedTuneTests
 
     private static int IndexOf(DvbPropertyList list, DvbProperty property)
     {
-        for (var index = 0; index < list.Count; index++)
+        for (int index = 0; index < list.Count; index++)
         {
             if (list.PropertyAt(index) == property)
             {
@@ -415,7 +415,7 @@ public sealed class TypedTuneTests
 
     private static uint ValueOf(DvbPropertyList list, DvbProperty property)
     {
-        var index = IndexOf(list, property);
+        int index = IndexOf(list, property);
 
         Assert.True(index >= 0);
 

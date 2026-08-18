@@ -105,7 +105,7 @@ public sealed class ContinuityCounterTracker
             return;
         }
 
-        if (!lastCounter.TryGetValue(packet.Pid, out var previous))
+        if (!lastCounter.TryGetValue(packet.Pid, out int previous))
         {
             Remember(packet);
             return;
@@ -129,10 +129,10 @@ public sealed class ContinuityCounterTracker
             return;
         }
 
-        var expected = (previous + 1) % TsPacket.CounterWrap;
+        int expected = (previous + 1) % TsPacket.CounterWrap;
         if (packet.ContinuityCounter != expected)
         {
-            var missing =
+            int missing =
                 (packet.ContinuityCounter - expected + TsPacket.CounterWrap)
                 % TsPacket.CounterWrap;
             Count(packet.Pid, missing);

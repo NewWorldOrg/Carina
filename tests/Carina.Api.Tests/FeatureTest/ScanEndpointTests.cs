@@ -50,7 +50,7 @@ public sealed class ScanEndpointTests
     {
         await using var feature = new ScanFeature { Orchestrator = { HoldsOpen = true } };
 
-        var (status, body) = await feature.PostAsync("/api/tuners/scan");
+        (HttpStatusCode status, JsonElement body) = await feature.PostAsync("/api/tuners/scan");
 
         Assert.Equal(HttpStatusCode.Accepted, status);
         Assert.NotEqual(Guid.Empty, body.GetProperty("data").GetProperty("scanId").GetGuid());
@@ -62,8 +62,8 @@ public sealed class ScanEndpointTests
     {
         await using var feature = new ScanFeature { Orchestrator = { HoldsOpen = true } };
 
-        var first = await feature.StartAsync();
-        var (status, body) = await feature.PostAsync("/api/tuners/scan");
+        Guid first = await feature.StartAsync();
+        (HttpStatusCode status, JsonElement body) = await feature.PostAsync("/api/tuners/scan");
 
         Assert.Equal(HttpStatusCode.Conflict, status);
         Assert.Equal(first, body.GetProperty("data").GetProperty("runningScanId").GetGuid());
@@ -77,7 +77,7 @@ public sealed class ScanEndpointTests
             Orchestrator = { CouldNotStart = "the driver did not answer" },
         };
 
-        var (status, body) = await feature.PostAsync("/api/tuners/scan");
+        (HttpStatusCode status, JsonElement body) = await feature.PostAsync("/api/tuners/scan");
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, status);
         Assert.Equal("the driver did not answer", body.GetProperty("message").GetString());
@@ -123,7 +123,7 @@ public sealed class ScanEndpointTests
     {
         await using var feature = new ScanFeature();
 
-        var (status, body) = await feature.PostAsync("/api/tuners/scan", new
+        (HttpStatusCode status, JsonElement body) = await feature.PostAsync("/api/tuners/scan", new
         {
             channels = new[] { new { system = "isdbT", physicalChannel = 99 } },
         });
@@ -138,7 +138,7 @@ public sealed class ScanEndpointTests
     {
         await using var feature = new ScanFeature();
 
-        var (status, _) = await feature.PostAsync("/api/tuners/scan", new
+        (HttpStatusCode status, JsonElement _) = await feature.PostAsync("/api/tuners/scan", new
         {
             channels = new[] { new { system = "isdbSBs", physicalChannel = SatelliteSlot } },
         });
@@ -154,14 +154,14 @@ public sealed class ScanEndpointTests
             Orchestrator = { HoldsOpen = true, Walked = { TuningParameters.Terrestrial(Terrestrial) } },
         };
 
-        var scanId = await feature.StartAsync();
+        Guid scanId = await feature.StartAsync();
 
         await Eventually.Happens(
             () => feature.Runs.Attempts.Count == 1,
             "the walk records its first attempt");
 
-        var (status, body) = await feature.GetAsync($"/api/tuners/scan/{scanId}");
-        var data = body.GetProperty("data");
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync($"/api/tuners/scan/{scanId}");
+        JsonElement data = body.GetProperty("data");
 
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal("running", data.GetProperty("run").GetProperty("state").GetString());
@@ -177,7 +177,7 @@ public sealed class ScanEndpointTests
     {
         await using var feature = new ScanFeature();
 
-        var (status, _) = await feature.GetAsync($"/api/tuners/scan/{Guid.NewGuid()}");
+        (HttpStatusCode status, JsonElement _) = await feature.GetAsync($"/api/tuners/scan/{Guid.NewGuid()}");
 
         Assert.Equal(HttpStatusCode.NotFound, status);
     }
@@ -194,11 +194,11 @@ public sealed class ScanEndpointTests
             },
         };
 
-        var scanId = await feature.StartAsync();
+        Guid scanId = await feature.StartAsync();
         await feature.UntilSettled(scanId);
 
-        var (_, body) = await feature.GetAsync($"/api/tuners/scan/{scanId}");
-        var difference = body.GetProperty("data").GetProperty("difference");
+        (HttpStatusCode _, JsonElement body) = await feature.GetAsync($"/api/tuners/scan/{scanId}");
+        JsonElement difference = body.GetProperty("data").GetProperty("difference");
 
         Assert.Equal(1, difference.GetProperty("added").GetArrayLength());
         Assert.Equal("Arrived", difference.GetProperty("added")[0].GetProperty("name").GetString());
@@ -217,8 +217,8 @@ public sealed class ScanEndpointTests
             ServiceCategory.Television,
             At));
 
-        var scanId = await feature.StartAsync();
-        var (status, _) = await feature.PostAsync($"/api/tuners/scan/{scanId}/cancel");
+        Guid scanId = await feature.StartAsync();
+        (HttpStatusCode status, JsonElement _) = await feature.PostAsync($"/api/tuners/scan/{scanId}/cancel");
 
         await feature.UntilSettled(scanId);
 
@@ -232,10 +232,10 @@ public sealed class ScanEndpointTests
     {
         await using var feature = new ScanFeature();
 
-        var scanId = await feature.StartAsync();
+        Guid scanId = await feature.StartAsync();
         await feature.UntilSettled(scanId);
 
-        var (status, _) = await feature.PostAsync($"/api/tuners/scan/{scanId}/cancel");
+        (HttpStatusCode status, JsonElement _) = await feature.PostAsync($"/api/tuners/scan/{scanId}/cancel");
 
         Assert.Equal(HttpStatusCode.Conflict, status);
     }
@@ -245,8 +245,8 @@ public sealed class ScanEndpointTests
     {
         await using var feature = new ScanFeature { Orchestrator = { HoldsOpen = true } };
 
-        var scanId = await feature.StartAsync();
-        var (status, _) = await feature.PostAsync($"/api/tuners/scan/{scanId}/apply");
+        Guid scanId = await feature.StartAsync();
+        (HttpStatusCode status, JsonElement _) = await feature.PostAsync($"/api/tuners/scan/{scanId}/apply");
 
         Assert.Equal(HttpStatusCode.Conflict, status);
         Assert.Empty(feature.Services.Services);
@@ -265,11 +265,11 @@ public sealed class ScanEndpointTests
             },
         };
 
-        var scanId = await feature.StartAsync();
+        Guid scanId = await feature.StartAsync();
         await feature.PostAsync($"/api/tuners/scan/{scanId}/cancel");
         await feature.UntilSettled(scanId);
 
-        var (status, _) = await feature.PostAsync($"/api/tuners/scan/{scanId}/apply");
+        (HttpStatusCode status, JsonElement _) = await feature.PostAsync($"/api/tuners/scan/{scanId}/apply");
 
         Assert.Equal(HttpStatusCode.Conflict, status);
         Assert.Empty(feature.Services.Services);
@@ -287,12 +287,12 @@ public sealed class ScanEndpointTests
             },
         };
 
-        var scanId = await feature.StartAsync();
+        Guid scanId = await feature.StartAsync();
         await feature.UntilSettled(scanId);
 
         Assert.Empty(feature.Services.Services);
 
-        var (status, body) = await feature.PostAsync($"/api/tuners/scan/{scanId}/apply");
+        (HttpStatusCode status, JsonElement body) = await feature.PostAsync($"/api/tuners/scan/{scanId}/apply");
 
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal(1, body.GetProperty("data").GetProperty("servicesAdded").GetInt32());
@@ -326,10 +326,10 @@ public sealed class ScanEndpointTests
             Satellite(),
             At));
 
-        var scanId = await feature.StartAsync(new { systems = new[] { "isdbT" } });
+        Guid scanId = await feature.StartAsync(new { systems = new[] { "isdbT" } });
         await feature.UntilSettled(scanId);
 
-        var (status, body) = await feature.PostAsync($"/api/tuners/scan/{scanId}/apply");
+        (HttpStatusCode status, JsonElement body) = await feature.PostAsync($"/api/tuners/scan/{scanId}/apply");
 
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal(
@@ -368,10 +368,10 @@ public sealed class ScanEndpointTests
             TuningParameters.Terrestrial(Terrestrial),
             At));
 
-        var scanId = await feature.StartAsync(new { systems = new[] { "isdbT" } });
+        Guid scanId = await feature.StartAsync(new { systems = new[] { "isdbT" } });
         await feature.UntilSettled(scanId);
 
-        var (status, body) = await feature.PostAsync($"/api/tuners/scan/{scanId}/apply");
+        (HttpStatusCode status, JsonElement body) = await feature.PostAsync($"/api/tuners/scan/{scanId}/apply");
 
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal(1, body.GetProperty("data").GetProperty("servicesRemoved").GetInt32());
@@ -390,7 +390,7 @@ public sealed class ScanEndpointTests
             },
         };
 
-        var scanId = await feature.StartAsync();
+        Guid scanId = await feature.StartAsync();
         await feature.UntilSettled(scanId);
 
         Assert.Equal(HttpStatusCode.OK, (await feature.PostAsync($"/api/tuners/scan/{scanId}/apply")).Status);
@@ -414,10 +414,10 @@ public sealed class ScanEndpointTests
             WhenACandidateArrives = () => true,
         };
 
-        var scanId = await feature.StartAsync();
+        Guid scanId = await feature.StartAsync();
         await feature.UntilSettled(scanId);
 
-        var (refused, complaint) = await feature.PostAsync($"/api/tuners/scan/{scanId}/apply");
+        (HttpStatusCode refused, JsonElement complaint) = await feature.PostAsync($"/api/tuners/scan/{scanId}/apply");
 
         Assert.Equal(HttpStatusCode.InternalServerError, refused);
         Assert.False(complaint.GetProperty("status").GetBoolean());
@@ -428,7 +428,7 @@ public sealed class ScanEndpointTests
 
         feature.WhenACandidateArrives = () => false;
 
-        var (status, _) = await feature.PostAsync($"/api/tuners/scan/{scanId}/apply");
+        (HttpStatusCode status, JsonElement _) = await feature.PostAsync($"/api/tuners/scan/{scanId}/apply");
 
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Single(feature.Candidates.Candidates);
@@ -447,7 +447,7 @@ public sealed class ScanEndpointTests
             },
         };
 
-        var scanId = await feature.StartAsync();
+        Guid scanId = await feature.StartAsync();
         await feature.UntilSettled(scanId);
 
         var reached = new TaskCompletionSource();
@@ -460,7 +460,7 @@ public sealed class ScanEndpointTests
             return false;
         };
 
-        var held = feature.PostAsync($"/api/tuners/scan/{scanId}/apply");
+        Task<(HttpStatusCode Status, JsonElement Body)> held = feature.PostAsync($"/api/tuners/scan/{scanId}/apply");
         HttpStatusCode status;
         JsonElement body;
 
@@ -488,7 +488,7 @@ public sealed class ScanEndpointTests
     {
         await using var feature = new ScanFeature();
 
-        var (status, _) = await feature.PostAsync($"/api/tuners/scan/{Guid.NewGuid()}/apply");
+        (HttpStatusCode status, JsonElement _) = await feature.PostAsync($"/api/tuners/scan/{Guid.NewGuid()}/apply");
 
         Assert.Equal(HttpStatusCode.NotFound, status);
     }
@@ -498,11 +498,11 @@ public sealed class ScanEndpointTests
     {
         await using var feature = new ScanFeature();
 
-        var first = await feature.StartAsync();
+        Guid first = await feature.StartAsync();
         await feature.UntilSettled(first);
 
-        var (status, body) = await feature.GetAsync("/api/tuners/scan-runs");
-        var runs = body.GetProperty("data");
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync("/api/tuners/scan-runs");
+        JsonElement runs = body.GetProperty("data");
 
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal(1, runs.GetArrayLength());
@@ -514,7 +514,7 @@ public sealed class ScanEndpointTests
     public async Task EveryScanSurfaceIsBehindTheSameDenialAsTheRestOnceASchemeIsRegistered()
     {
         using var app = new TestingWebApplicationFactory();
-        using var client = app.WithTestScheme().CreateClient();
+        using HttpClient client = app.WithTestScheme().CreateClient();
 
         Assert.Equal(
             HttpStatusCode.Unauthorized,

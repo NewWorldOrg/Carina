@@ -53,8 +53,8 @@ public sealed class ScanRunAttempt
                 nameof(detail));
         }
 
-        var started = UtcTimes.Required(startedAt, nameof(startedAt));
-        var finished = UtcTimes.Required(finishedAt, nameof(finishedAt));
+        DateTime started = UtcTimes.Required(startedAt, nameof(startedAt));
+        DateTime finished = UtcTimes.Required(finishedAt, nameof(finishedAt));
 
         if (finished < started)
         {

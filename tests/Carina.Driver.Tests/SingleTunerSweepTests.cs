@@ -23,14 +23,14 @@ public sealed class SingleTunerSweepTests
     [Fact]
     public async Task EveryChannelOfASweepIsReachedWhenOneTunerServesThemAll()
     {
-        var manager = Manager();
+        TunerSessionManager manager = Manager();
         var reached = new List<int>();
 
-        foreach (var channel in Sweep)
+        foreach (int channel in Sweep)
         {
-            var start = manager.Begin(Request($"scan-{channel}", channel));
+            SessionStart start = manager.Begin(Request($"scan-{channel}", channel));
 
-            if (!start.TryGetSession(out var session))
+            if (!start.TryGetSession(out TunerSession? session))
             {
                 break;
             }
@@ -46,12 +46,12 @@ public sealed class SingleTunerSweepTests
     [Fact]
     public async Task TheTunerIsFreeByTheTimeTheStopIsAnswered()
     {
-        var manager = Manager();
-        var start = manager.Begin(Request("scan-13", 13));
+        TunerSessionManager manager = Manager();
+        SessionStart start = manager.Begin(Request("scan-13", 13));
 
-        Assert.True(start.TryGetSession(out var session));
+        Assert.True(start.TryGetSession(out TunerSession? session));
 
-        var outcome = await manager.StopAsync(session.SessionId, "test", CancellationToken.None);
+        SessionStopOutcome outcome = await manager.StopAsync(session.SessionId, "test", CancellationToken.None);
 
         Assert.Equal(SessionStopOutcome.Stopped, outcome);
         Assert.True(session.Concluded);
@@ -62,19 +62,19 @@ public sealed class SingleTunerSweepTests
     public async Task AStopThatCouldNotFreeTheTunerInTimeSaysSoInsteadOfClaimingItDid()
     {
         var device = new HeldOpenTunerDevice();
-        var manager = Manager(
+        TunerSessionManager manager = Manager(
             new OneTunerDeviceFactory(device),
             letGoLimit: TimeSpan.FromMilliseconds(50)
         );
-        var start = manager.Begin(Request("scan-13", 13));
+        SessionStart start = manager.Begin(Request("scan-13", 13));
 
-        Assert.True(start.TryGetSession(out var session));
+        Assert.True(start.TryGetSession(out TunerSession? session));
         Assert.True(
             device.Reading.Wait(Deadlock),
             "The session never reached the read that cannot be interrupted."
         );
 
-        var outcome = await manager.StopAsync(session.SessionId, "test", CancellationToken.None);
+        SessionStopOutcome outcome = await manager.StopAsync(session.SessionId, "test", CancellationToken.None);
 
         Assert.Equal(SessionStopOutcome.Stopping, outcome);
         Assert.False(session.Concluded);

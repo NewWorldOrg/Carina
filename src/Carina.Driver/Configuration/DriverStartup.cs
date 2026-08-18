@@ -14,7 +14,7 @@ public static class DriverStartup
         string? path = null
     )
     {
-        if (result.TryGetConfiguration(out _, out var problems))
+        if (result.TryGetConfiguration(out _, out IReadOnlyList<string>? problems))
         {
             return 0;
         }
@@ -25,7 +25,7 @@ public static class DriverStartup
                 : $"The driver configuration at '{path}' is not usable:"
         );
 
-        foreach (var problem in problems)
+        foreach (string problem in problems)
         {
             error.WriteLine($"  {problem}");
         }
@@ -44,7 +44,7 @@ public static class DriverStartup
     {
         error.WriteLine("The driver may not serve what this configuration asks of it:");
 
-        foreach (var problem in problems)
+        foreach (string problem in problems)
         {
             error.WriteLine($"  {problem}");
         }
@@ -58,7 +58,7 @@ public static class DriverStartup
     {
         error.WriteLine("The driver could not take the socket it answers on:");
 
-        foreach (var problem in problems)
+        foreach (string problem in problems)
         {
             error.WriteLine($"  {problem}");
         }

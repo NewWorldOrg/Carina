@@ -18,12 +18,12 @@ public sealed class TunerLedgerReconciler(
 {
     public Task StartingAsync(CancellationToken cancellationToken)
     {
-        var contradictions = TunerLedgerCheck.Contradictions(
+        IReadOnlyList<TunerContradiction> contradictions = TunerLedgerCheck.Contradictions(
             configuration.Devices,
             detector.Detect()
         );
 
-        foreach (var contradiction in contradictions)
+        foreach (TunerContradiction contradiction in contradictions)
         {
             sessions.Fault(contradiction.DeviceId, contradiction.Detail);
 

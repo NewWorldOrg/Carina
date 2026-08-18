@@ -95,12 +95,12 @@ public sealed class FakeDriver : IAsyncDisposable
             File.Delete(socketPath);
         }
 
-        var builder = WebApplication.CreateBuilder();
+        WebApplicationBuilder builder = WebApplication.CreateBuilder();
         builder.WebHost.UseSetting(WebHostDefaults.ServerUrlsKey, string.Empty);
         builder.Logging.ClearProviders();
         builder.WebHost.ConfigureKestrel(options => options.ListenUnixSocket(socketPath));
 
-        var app = builder.Build();
+        WebApplication app = builder.Build();
         var driver = new FakeDriver(app, socketPath, hello);
         arrange?.Invoke(driver);
         app.Lifetime.ApplicationStopping.Register(driver.CloseAllListeners);
@@ -140,7 +140,7 @@ public sealed class FakeDriver : IAsyncDisposable
     {
         lock (gate)
         {
-            return requests.TryGetValue(path, out var count) ? count : 0;
+            return requests.TryGetValue(path, out int count) ? count : 0;
         }
     }
 
@@ -148,7 +148,7 @@ public sealed class FakeDriver : IAsyncDisposable
     {
         lock (gate)
         {
-            foreach (var listener in listeners)
+            foreach (Channel<string> listener in listeners)
             {
                 listener.Writer.TryWrite(name);
             }
@@ -171,7 +171,7 @@ public sealed class FakeDriver : IAsyncDisposable
 
         lock (gate)
         {
-            requests[path] = requests.TryGetValue(path, out var count) ? count + 1 : 1;
+            requests[path] = requests.TryGetValue(path, out int count) ? count + 1 : 1;
         }
     }
 
@@ -179,7 +179,7 @@ public sealed class FakeDriver : IAsyncDisposable
     {
         lock (gate)
         {
-            foreach (var listener in listeners)
+            foreach (Channel<string> listener in listeners)
             {
                 listener.Writer.TryComplete();
             }
@@ -234,7 +234,7 @@ public sealed class FakeDriver : IAsyncDisposable
             return;
         }
 
-        var request = await context.Request.ReadFromJsonAsync(
+        StartSessionRequest? request = await context.Request.ReadFromJsonAsync(
             DriverJson.Context.StartSessionRequest,
             context.RequestAborted);
 
@@ -274,7 +274,7 @@ public sealed class FakeDriver : IAsyncDisposable
             return;
         }
 
-        var entries = await context.Request.ReadFromJsonAsync(
+        IReadOnlyList<TunerConfigEntry>? entries = await context.Request.ReadFromJsonAsync(
             DriverJson.Context.IReadOnlyListTunerConfigEntry,
             context.RequestAborted);
 
@@ -301,14 +301,14 @@ public sealed class FakeDriver : IAsyncDisposable
             return;
         }
 
-        var deviceId = context.Request.RouteValues["id"] as string ?? string.Empty;
+        string deviceId = context.Request.RouteValues["id"] as string ?? string.Empty;
 
         LastToggledDeviceId = deviceId;
         LastToggle = await context.Request.ReadFromJsonAsync(
             DriverJson.Context.TunerToggleRequest,
             context.RequestAborted);
 
-        var tuner = Tuners.FirstOrDefault(snapshot =>
+        TunerSnapshot? tuner = Tuners.FirstOrDefault(snapshot =>
             string.Equals(snapshot.DeviceId, deviceId, StringComparison.Ordinal));
 
         if (tuner is null)
@@ -371,7 +371,7 @@ public sealed class FakeDriver : IAsyncDisposable
             await context.Response.StartAsync(context.RequestAborted);
             await context.Response.Body.FlushAsync(context.RequestAborted);
 
-            await foreach (var name in channel.Reader.ReadAllAsync(context.RequestAborted))
+            await foreach (string name in channel.Reader.ReadAllAsync(context.RequestAborted))
             {
                 await context.Response.WriteAsync(
                     $"event: {name}\ndata: {name}\n\n",
@@ -393,7 +393,7 @@ public sealed class FakeDriver : IAsyncDisposable
 
     private async Task<bool> HandledAsync(HttpContext context)
     {
-        var path = context.Request.Path.Value;
+        string? path = context.Request.Path.Value;
 
         if (RefusalFor(path) is { } refusal)
         {
@@ -413,7 +413,7 @@ public sealed class FakeDriver : IAsyncDisposable
             return true;
         }
 
-        if (path is null || !RawBodyByPath.TryGetValue(path, out var body))
+        if (path is null || !RawBodyByPath.TryGetValue(path, out string? body))
         {
             return false;
         }
@@ -427,7 +427,7 @@ public sealed class FakeDriver : IAsyncDisposable
 
     private Refusal? RefusalFor(string? path)
     {
-        if (path is not null && RefusalsByPath.TryGetValue(path, out var refusal))
+        if (path is not null && RefusalsByPath.TryGetValue(path, out Refusal? refusal))
         {
             return refusal;
         }

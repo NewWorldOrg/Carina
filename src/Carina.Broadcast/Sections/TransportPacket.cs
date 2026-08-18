@@ -55,14 +55,14 @@ public readonly ref struct TransportPacket
             return false;
         }
 
-        var adaptationFieldControl = (packet[3] >> 4) & 0b11;
-        var hasAdaptationField = (adaptationFieldControl & 0b10) != 0;
-        var hasPayload = (adaptationFieldControl & 0b01) != 0;
-        var payloadStart = HeaderSize;
+        int adaptationFieldControl = (packet[3] >> 4) & 0b11;
+        bool hasAdaptationField = (adaptationFieldControl & 0b10) != 0;
+        bool hasPayload = (adaptationFieldControl & 0b01) != 0;
+        int payloadStart = HeaderSize;
 
         if (hasAdaptationField)
         {
-            var adaptationFieldLength = packet[HeaderSize];
+            byte adaptationFieldLength = packet[HeaderSize];
             payloadStart = HeaderSize + 1 + adaptationFieldLength;
 
             if (payloadStart > Size)

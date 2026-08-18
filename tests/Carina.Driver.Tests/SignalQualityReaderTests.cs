@@ -55,7 +55,7 @@ public sealed class SignalQualityReaderTests
     public void EveryHierarchicalLayerTheFrontendCountsIsKeptApart()
     {
         var clock = new ManualTimeProvider(Start);
-        var source = new ScriptedQualitySource().Answer(
+        ScriptedQualitySource source = new ScriptedQualitySource().Answer(
             Readings.Measured(
                 20.5,
                 new LayerBitErrors(0, 12, 1_000_000),
@@ -63,7 +63,7 @@ public sealed class SignalQualityReaderTests
             )
         );
 
-        var sample = new SignalQualityReader(source, clock, Interval).Read();
+        SignalQualitySample sample = new SignalQualityReader(source, clock, Interval).Read();
 
         Assert.Equal(
             [new LayerBitErrors(0, 12, 1_000_000), new LayerBitErrors(1, 3, 500_000)],
@@ -75,9 +75,9 @@ public sealed class SignalQualityReaderTests
     public void ACarrierToNoiseTakenWhileTheFrontendIsNotLockedIsNotAValue()
     {
         var clock = new ManualTimeProvider(Start);
-        var source = new ScriptedQualitySource().Answer(Readings.WithoutLock());
+        ScriptedQualitySource source = new ScriptedQualitySource().Answer(Readings.WithoutLock());
 
-        var sample = new SignalQualityReader(source, clock, Interval).Read();
+        SignalQualitySample sample = new SignalQualityReader(source, clock, Interval).Read();
 
         Assert.False(sample.HasLock);
         Assert.False(sample.Quality!.CarrierToNoise.TryGetDecibels(out _));
@@ -93,7 +93,7 @@ public sealed class SignalQualityReaderTests
             ReadingTakes = TimeSpan.FromMilliseconds(4),
         };
 
-        var sample = new SignalQualityReader(source, clock, Interval).Read();
+        SignalQualitySample sample = new SignalQualityReader(source, clock, Interval).Read();
 
         Assert.Equal(Start, sample.MeasuredAt);
         Assert.Equal(Start.AddMilliseconds(4), sample.LockReadAt);
@@ -103,7 +103,7 @@ public sealed class SignalQualityReaderTests
     public void LosingTheLockPartWayThroughASessionIsReportedOnceAndCounted()
     {
         var clock = new ManualTimeProvider(Start);
-        var source = new ScriptedQualitySource().Answer(
+        ScriptedQualitySource source = new ScriptedQualitySource().Answer(
             Readings.Measured(),
             Readings.WithoutLock(),
             Readings.WithoutLock()
@@ -124,7 +124,7 @@ public sealed class SignalQualityReaderTests
     public void ASessionThatNeverSeesALockedReadingStillReportsTheLossItStartedWith()
     {
         var clock = new ManualTimeProvider(Start);
-        var source = new ScriptedQualitySource().Answer(Readings.WithoutLock());
+        ScriptedQualitySource source = new ScriptedQualitySource().Answer(Readings.WithoutLock());
         var losses = new List<SignalQualitySample>();
 
         new SignalQualityReader(source, clock, Interval, losses.Add).Read();
@@ -136,7 +136,7 @@ public sealed class SignalQualityReaderTests
     public void ALockThatComesBackAndGoesAgainIsReportedAgain()
     {
         var clock = new ManualTimeProvider(Start);
-        var source = new ScriptedQualitySource().Answer(
+        ScriptedQualitySource source = new ScriptedQualitySource().Answer(
             Readings.WithoutLock(),
             Readings.Measured(),
             Readings.WithoutLock()
@@ -156,7 +156,7 @@ public sealed class SignalQualityReaderTests
     public void AReadingWhoseTwoStatusesDisagreeIsNotReportedAsALostLock()
     {
         var clock = new ManualTimeProvider(Start);
-        var source = new ScriptedQualitySource().Answer(
+        ScriptedQualitySource source = new ScriptedQualitySource().Answer(
             Readings.Measured(),
             Readings.Wavering()
         );
@@ -164,7 +164,7 @@ public sealed class SignalQualityReaderTests
         var reader = new SignalQualityReader(source, clock, Interval, losses.Add);
 
         reader.Read();
-        var wavering = reader.Read();
+        SignalQualitySample wavering = reader.Read();
 
         Assert.Empty(losses);
         Assert.Equal(0, reader.LockLosses);
@@ -176,7 +176,7 @@ public sealed class SignalQualityReaderTests
     public void ALossThatFollowsAWaveringReadingIsStillReported()
     {
         var clock = new ManualTimeProvider(Start);
-        var source = new ScriptedQualitySource().Answer(
+        ScriptedQualitySource source = new ScriptedQualitySource().Answer(
             Readings.Measured(),
             Readings.Wavering(),
             Readings.WithoutLock()
@@ -199,7 +199,7 @@ public sealed class SignalQualityReaderTests
         var problems = new List<Exception>();
         var reader = new SignalQualityReader(source, clock, Interval, problem: problems.Add);
 
-        var sample = reader.Read();
+        SignalQualitySample sample = reader.Read();
 
         Assert.False(sample.Readable);
         Assert.Null(sample.Quality);
@@ -239,9 +239,9 @@ public sealed class SignalQualityReaderTests
     public void AMetricThisTunerDoesNotImplementIsNotAMeasurementThatFailed()
     {
         var clock = new ManualTimeProvider(Start);
-        var source = new ScriptedQualitySource().Answer(Readings.WithoutCarrierToNoise());
+        ScriptedQualitySource source = new ScriptedQualitySource().Answer(Readings.WithoutCarrierToNoise());
 
-        var sample = new SignalQualityReader(source, clock, Interval).Read();
+        SignalQualitySample sample = new SignalQualityReader(source, clock, Interval).Read();
 
         Assert.True(sample.HasLock);
         Assert.Equal(

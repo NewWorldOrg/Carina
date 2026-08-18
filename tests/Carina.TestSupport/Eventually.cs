@@ -10,7 +10,7 @@ public static class Eventually
     {
         ArgumentNullException.ThrowIfNull(condition);
 
-        var start = Environment.TickCount64;
+        long start = Environment.TickCount64;
 
         while (Environment.TickCount64 - start < Patience.TotalMilliseconds)
         {
@@ -35,8 +35,8 @@ public static class Eventually
         ArgumentNullException.ThrowIfNull(condition);
         ArgumentNullException.ThrowIfNull(describe);
 
-        var start = Environment.TickCount64;
-        var seen = await attempt();
+        long start = Environment.TickCount64;
+        T? seen = await attempt();
 
         while (Environment.TickCount64 - start < Patience.TotalMilliseconds)
         {

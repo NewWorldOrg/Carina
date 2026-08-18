@@ -119,7 +119,7 @@ internal sealed class CatalogFeature : IAsyncDisposable
             ServiceCategory.Television,
             TunerHoldingDriverClient.At));
 
-        foreach (var tuning in tunings)
+        foreach (TuningParameters tuning in tunings)
         {
             Candidates.Candidates.Add(CandidateChannel.Discover(
                 CandidateChannelId.New(),
@@ -160,7 +160,7 @@ internal sealed class CatalogFeature : IAsyncDisposable
     {
         using (request)
         {
-            using var response = await Client.SendAsync(request);
+            using HttpResponseMessage response = await Client.SendAsync(request);
             using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
             return (response.StatusCode, document.RootElement.Clone());

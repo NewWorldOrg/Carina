@@ -16,7 +16,7 @@ public sealed class PresentFollowingWatchTests
     {
         var watch = new PresentFollowingWatch([Watched]);
 
-        var change = watch.Saw(Present(eventId: 1));
+        PresentChange? change = watch.Saw(Present(eventId: 1));
 
         Assert.NotNull(change);
         Assert.Null(change.Was);
@@ -42,7 +42,7 @@ public sealed class PresentFollowingWatchTests
 
         watch.Saw(Present(eventId: 1));
 
-        var change = watch.Saw(Present(eventId: 2));
+        PresentChange? change = watch.Saw(Present(eventId: 2));
 
         Assert.NotNull(change);
         Assert.True(change.IsAnotherProgramme);
@@ -57,7 +57,7 @@ public sealed class PresentFollowingWatchTests
 
         watch.Saw(Present(eventId: 1, minutes: 30));
 
-        var change = watch.Saw(Present(eventId: 1, minutes: 45));
+        PresentChange? change = watch.Saw(Present(eventId: 1, minutes: 45));
 
         Assert.NotNull(change);
         Assert.False(change.IsAnotherProgramme);
@@ -73,7 +73,7 @@ public sealed class PresentFollowingWatchTests
 
         watch.Saw(Present(eventId: 1, hours: 0x02, hour: 0x22));
 
-        var change = watch.Saw(Present(eventId: 1, hours: 0x01, hour: 0x23));
+        PresentChange? change = watch.Saw(Present(eventId: 1, hours: 0x01, hour: 0x23));
 
         Assert.NotNull(change);
         Assert.False(change.IsAnotherProgramme);

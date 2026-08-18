@@ -24,7 +24,7 @@ public sealed class SectionReader
     {
         var outcomes = new List<SectionRead>();
 
-        for (var at = 0; at < packets.Length; at += TransportPacket.Size)
+        for (int at = 0; at < packets.Length; at += TransportPacket.Size)
         {
             if (packets.Length - at < TransportPacket.Size)
             {
@@ -33,16 +33,16 @@ public sealed class SectionReader
                 break;
             }
 
-            var packet = packets.Slice(at, TransportPacket.Size);
+            ReadOnlySpan<byte> packet = packets.Slice(at, TransportPacket.Size);
 
-            if (!TransportPacket.TryRead(packet, out var read))
+            if (!TransportPacket.TryRead(packet, out TransportPacket read))
             {
                 UnreadablePackets++;
 
                 continue;
             }
 
-            if (assemblers.TryGetValue(read.Pid, out var assembler))
+            if (assemblers.TryGetValue(read.Pid, out SectionAssembler? assembler))
             {
                 outcomes.AddRange(assembler.Push(packet));
             }
@@ -55,7 +55,7 @@ public sealed class SectionReader
     {
         var outcomes = new List<SectionRead>();
 
-        foreach (var assembler in assemblers.Values)
+        foreach (SectionAssembler assembler in assemblers.Values)
         {
             if (assembler.Flush() is { } outcome)
             {
@@ -68,7 +68,7 @@ public sealed class SectionReader
 
     public void Reset()
     {
-        foreach (var assembler in assemblers.Values)
+        foreach (SectionAssembler assembler in assemblers.Values)
         {
             assembler.Reset();
         }

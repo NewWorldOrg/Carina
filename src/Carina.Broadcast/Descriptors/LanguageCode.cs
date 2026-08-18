@@ -13,9 +13,9 @@ public static class LanguageCode
 
         Span<char> letters = stackalloc char[Size];
 
-        for (var at = 0; at < Size; at++)
+        for (int at = 0; at < Size; at++)
         {
-            var letter = (char)code[at];
+            char letter = (char)code[at];
 
             if (!char.IsAsciiLetter(letter))
             {

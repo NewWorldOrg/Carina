@@ -10,7 +10,7 @@ public sealed class DriverJsonTests
     [Fact]
     public void HelloSerialisesToItsAgreedForm()
     {
-        var json = DriverJson.Serialize(
+        string json = DriverJson.Serialize(
             new DriverHello(1, "b7f2c9", [DriverCapabilities.Recording, DriverCapabilities.Live])
         );
 
@@ -23,7 +23,7 @@ public sealed class DriverJsonTests
     [Fact]
     public void StartSessionRequestSerialisesToItsAgreedForm()
     {
-        var json = DriverJson.Serialize(
+        string json = DriverJson.Serialize(
             new StartSessionRequest
             {
                 SessionId = SessionId.Parse("rec-1"),
@@ -56,7 +56,7 @@ public sealed class DriverJsonTests
     [Fact]
     public void ASessionCarriesWhatItsQualityLookedLike()
     {
-        var json = DriverJson.Serialize(
+        string json = DriverJson.Serialize(
             LiveSession with
             {
                 FaultCount = 3,
@@ -74,7 +74,7 @@ public sealed class DriverJsonTests
     [Fact]
     public void ASessionSaysWhetherTheDriverSawItFinish()
     {
-        var json = DriverJson.Serialize(
+        string json = DriverJson.Serialize(
             LiveSession with
             {
                 State = SessionState.Stopping,
@@ -92,7 +92,7 @@ public sealed class DriverJsonTests
     [Fact]
     public void TunerSnapshotSerialisesToItsAgreedForm()
     {
-        var json = DriverJson.Serialize(
+        string json = DriverJson.Serialize(
             new TunerSnapshot(
                 "adapter2",
                 TunerKind.Satellite,
@@ -110,7 +110,7 @@ public sealed class DriverJsonTests
     [Fact]
     public void DiagnosticSnapshotSerialisesToItsAgreedForm()
     {
-        var json = DriverJson.Serialize(
+        string json = DriverJson.Serialize(
             new DiagnosticSnapshot(
                 DiagnosticReason.DiskSpaceLow,
                 Moment,
@@ -180,7 +180,7 @@ public sealed class DriverJsonTests
     [Fact]
     public void ATypedSessionRequestSerialisesToItsAgreedForm()
     {
-        var json = DriverJson.Serialize(
+        string json = DriverJson.Serialize(
             new StartSessionRequest
             {
                 SessionId = SessionId.Parse("scan-1"),
@@ -199,7 +199,7 @@ public sealed class DriverJsonTests
     [Fact]
     public void ALockedQualityReadingSerialisesToItsAgreedForm()
     {
-        var json = DriverJson.Serialize(
+        string json = DriverJson.Serialize(
             new SignalQualityDto
             {
                 Lock = SignalLock.Locked,
@@ -231,7 +231,7 @@ public sealed class DriverJsonTests
     [Fact]
     public void ATunerCarryingEverythingSerialisesToItsAgreedForm()
     {
-        var json = DriverJson.Serialize(
+        string json = DriverJson.Serialize(
             new TunerSnapshot("adapter0", TunerKind.Satellite, TunerState.Busy)
             {
                 SessionId = SessionId.Parse("scan-1"),
@@ -282,10 +282,10 @@ public sealed class DriverJsonTests
     [InlineData("2026-08-08T12:04:00+00:00")]
     public void TimestampsKeepWhateverPrecisionAndOffsetTheDriverReports(string wire)
     {
-        var json =
+        string json =
             $$"""{"sessionId":"s-1","purpose":"live","deviceId":"a0","state":"active","startedAt":"{{wire}}","endsAt":null}""";
 
-        var restored = DriverJson.Deserialize(json, DriverJson.Context.SessionSnapshot);
+        SessionSnapshot? restored = DriverJson.Deserialize(json, DriverJson.Context.SessionSnapshot);
 
         Assert.NotNull(restored);
         Assert.Equal(DateTimeOffset.Parse(wire), restored.StartedAt);
@@ -294,7 +294,7 @@ public sealed class DriverJsonTests
     [Fact]
     public void UnknownFieldsAreIgnored()
     {
-        var hello = DriverJson.Deserialize(
+        DriverHello? hello = DriverJson.Deserialize(
             """{"protocolVersion":1,"instanceId":"b7f2c9","capabilities":["recording"],"somethingNew":{"a":1}}""",
             DriverJson.Context.DriverHello
         );
@@ -314,7 +314,7 @@ public sealed class DriverJsonTests
             Tuning = new TuningRequest(TunerKind.Satellite, 15),
         };
 
-        var restored = DriverJson.Deserialize(
+        StartSessionRequest? restored = DriverJson.Deserialize(
             DriverJson.Serialize(request),
             DriverJson.Context.StartSessionRequest
         );
@@ -345,7 +345,7 @@ public sealed class DriverJsonTests
     [Fact]
     public void ARequestMayNotSmuggleAPathThroughTheOutputRoot()
     {
-        var request = DriverJson.Deserialize(
+        StartSessionRequest? request = DriverJson.Deserialize(
             """{"sessionId":"rec-1","purpose":"recording","tuning":{"kind":"terrestrial","physicalChannel":55},"outputRoot":"/etc","endsAt":"2026-08-08T22:04:00+09:00"}""",
             DriverJson.Context.StartSessionRequest
         );

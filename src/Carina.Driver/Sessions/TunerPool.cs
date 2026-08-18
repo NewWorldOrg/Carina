@@ -98,7 +98,7 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
                 ?? TurnAway(request);
         }
 
-        foreach (var device in closing)
+        foreach (ITunerDevice device in closing)
         {
             Close(device);
         }
@@ -108,7 +108,7 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
 
     private PoolGrant? RideAlong(PoolRequest request)
     {
-        foreach (var lease in LeasesFor(request))
+        foreach (Lease lease in LeasesFor(request))
         {
             if (!lease.IsUsable || lease.Tuning != request.Tuning)
             {
@@ -137,7 +137,7 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
 
     private PoolGrant Rehold(Lease lease, PoolRequest request)
     {
-        var wasOpen = lease.Device is not null;
+        bool wasOpen = lease.Device is not null;
 
         lease.Holder = request.SessionId;
         lease.Established = false;
@@ -158,7 +158,7 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
 
     private PoolGrant? TakeAFreeTuner(PoolRequest request)
     {
-        foreach (var deviceId in request.Allowed)
+        foreach (string deviceId in request.Allowed)
         {
             if (leases.ContainsKey(deviceId))
             {
@@ -184,7 +184,7 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
 
     private PoolGrant? TakeATunerNobodyIsOn(PoolRequest request)
     {
-        foreach (var lease in LeasesFor(request))
+        foreach (Lease lease in LeasesFor(request))
         {
             if (!lease.IsIdle || !lease.IsUsable)
             {
@@ -204,7 +204,7 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
 
     private PoolGrant? TakeATunerFromSomethingLessImportant(PoolRequest request)
     {
-        var loser = LeasesFor(request)
+        Lease? loser = LeasesFor(request)
             .Where(lease => lease.IsUsable && !lease.IsIdle && lease.Priority < request.Priority)
             .OrderBy(lease => lease.Priority)
             .FirstOrDefault();
@@ -214,8 +214,8 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
             return null;
         }
 
-        var displaced = loser.Sinks.Select(sink => sink.SessionId).ToArray();
-        var names = string.Join("', '", displaced.Select(session => session.Value));
+        SessionId[] displaced = loser.Sinks.Select(sink => sink.SessionId).ToArray();
+        string names = string.Join("', '", displaced.Select(session => session.Value));
 
         return Retune(
             loser,
@@ -232,7 +232,7 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
         string detail
     )
     {
-        foreach (var sink in lease.Sinks)
+        foreach (Sink sink in lease.Sinks)
         {
             bySink.Remove(sink.SessionId);
         }
@@ -268,15 +268,15 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
         {
             return PoolGrant.Refused(
                 PoolVerdict.DeviceBusy,
-                leases.TryGetValue(named, out var lease)
+                leases.TryGetValue(named, out Lease? lease)
                     ? WhyNot(lease, request)
                     : $"The tuner '{named}' cannot be had for {request.Tuning}."
             );
         }
 
-        var reasons = request
+        string[] reasons = request
             .Candidates.Select(deviceId =>
-                leases.TryGetValue(deviceId, out var lease)
+                leases.TryGetValue(deviceId, out Lease? lease)
                     ? WhyNot(lease, request)
                     : $"The tuner '{deviceId}' cannot be had."
             )
@@ -306,7 +306,7 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
     {
         lock (gate)
         {
-            if (leases.TryGetValue(deviceId, out var lease))
+            if (leases.TryGetValue(deviceId, out Lease? lease))
             {
                 lease.Device = device;
 
@@ -321,7 +321,7 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
     {
         lock (gate)
         {
-            if (!leases.TryGetValue(deviceId, out var lease))
+            if (!leases.TryGetValue(deviceId, out Lease? lease))
             {
                 return;
             }
@@ -335,12 +335,12 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
     {
         lock (gate)
         {
-            if (!leases.TryGetValue(deviceId, out var lease))
+            if (!leases.TryGetValue(deviceId, out Lease? lease))
             {
                 return;
             }
 
-            foreach (var sink in lease.Sinks)
+            foreach (Sink sink in lease.Sinks)
             {
                 bySink.Remove(sink.SessionId);
             }
@@ -359,7 +359,7 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
 
         lock (gate)
         {
-            if (!leases.TryGetValue(deviceId, out var lease))
+            if (!leases.TryGetValue(deviceId, out Lease? lease))
             {
                 return false;
             }
@@ -379,7 +379,7 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
 
         lock (gate)
         {
-            return leases.TryGetValue(deviceId, out var lease) && lease.Established;
+            return leases.TryGetValue(deviceId, out Lease? lease) && lease.Established;
         }
     }
 
@@ -387,7 +387,7 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
     {
         lock (gate)
         {
-            return leases.TryGetValue(deviceId, out var lease) ? lease.Device : null;
+            return leases.TryGetValue(deviceId, out Lease? lease) ? lease.Device : null;
         }
     }
 
@@ -410,7 +410,7 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
     {
         lock (gate)
         {
-            if (!bySink.Remove(sessionId, out var lease))
+            if (!bySink.Remove(sessionId, out Lease? lease))
             {
                 return;
             }
@@ -433,7 +433,7 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
             closing = Expire();
         }
 
-        foreach (var device in closing)
+        foreach (ITunerDevice device in closing)
         {
             Close(device);
         }
@@ -445,9 +445,9 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
 
         lock (gate)
         {
-            if (leases.Remove(deviceId, out var lease))
+            if (leases.Remove(deviceId, out Lease? lease))
             {
-                foreach (var sink in lease.Sinks)
+                foreach (Sink sink in lease.Sinks)
                 {
                     bySink.Remove(sink.SessionId);
                 }
@@ -455,13 +455,13 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
                 Forget(lease, closing);
             }
 
-            if (retiring.Remove(deviceId, out var outgoing))
+            if (retiring.Remove(deviceId, out ITunerDevice? outgoing))
             {
                 closing.Add(outgoing);
             }
         }
 
-        foreach (var device in closing)
+        foreach (ITunerDevice device in closing)
         {
             Close(device);
         }
@@ -471,7 +471,7 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
     {
         lock (gate)
         {
-            return leases.TryGetValue(deviceId, out var lease) && !lease.IsIdle;
+            return leases.TryGetValue(deviceId, out Lease? lease) && !lease.IsIdle;
         }
     }
 
@@ -479,7 +479,7 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
     {
         lock (gate)
         {
-            return leases.TryGetValue(deviceId, out var lease) && lease.IsIdle;
+            return leases.TryGetValue(deviceId, out Lease? lease) && lease.IsIdle;
         }
     }
 
@@ -487,7 +487,7 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
     {
         lock (gate)
         {
-            return leases.TryGetValue(deviceId, out var lease)
+            return leases.TryGetValue(deviceId, out Lease? lease)
                 ? [.. lease.Sinks.Select(sink => sink.SessionId)]
                 : [];
         }
@@ -499,7 +499,7 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
 
         lock (gate)
         {
-            foreach (var lease in leases.Values)
+            foreach (Lease lease in leases.Values)
             {
                 Forget(lease, closing);
             }
@@ -511,7 +511,7 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
             retiring.Clear();
         }
 
-        foreach (var device in closing)
+        foreach (ITunerDevice device in closing)
         {
             Close(device);
         }
@@ -519,9 +519,9 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
 
     private IEnumerable<Lease> LeasesFor(PoolRequest request)
     {
-        foreach (var deviceId in request.Allowed)
+        foreach (string deviceId in request.Allowed)
         {
-            if (leases.TryGetValue(deviceId, out var lease))
+            if (leases.TryGetValue(deviceId, out Lease? lease))
             {
                 yield return lease;
             }
@@ -530,12 +530,12 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
 
     private List<ITunerDevice> Expire()
     {
-        var now = timeProvider.GetUtcNow();
+        DateTimeOffset now = timeProvider.GetUtcNow();
         List<ITunerDevice> closing = [];
 
-        foreach (var deviceId in leases.Keys.ToArray())
+        foreach (string? deviceId in leases.Keys.ToArray())
         {
-            var lease = leases[deviceId];
+            Lease lease = leases[deviceId];
 
             if (lease.IdleSince is not { } since || now - since < linger)
             {
@@ -551,7 +551,7 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
 
     private void Retire(string deviceId, ITunerDevice device)
     {
-        if (retiring.Remove(deviceId, out var already))
+        if (retiring.Remove(deviceId, out ITunerDevice? already))
         {
             Close(already);
         }

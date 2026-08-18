@@ -12,11 +12,11 @@ public sealed class ChannelScanSchemaTests(MigratedScratchDatabase database)
     [Fact]
     public async Task TheDatabaseRefusesASecondSelectedCandidateForTheSameService()
     {
-        await using var connection = await database.OpenAsync();
+        await using NpgsqlConnection connection = await database.OpenAsync();
         await Service(connection, 60001, 1);
         await Candidate(connection, 60001, 1, 27, selected: true);
 
-        var refusal = await Assert.ThrowsAsync<PostgresException>(
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
             () => Candidate(connection, 60001, 1, 28, selected: true));
 
         Assert.Equal(PostgresErrorCodes.UniqueViolation, refusal.SqlState);
@@ -26,7 +26,7 @@ public sealed class ChannelScanSchemaTests(MigratedScratchDatabase database)
     [Fact]
     public async Task EachServiceSelectsOneOfItsOwnCandidates()
     {
-        await using var connection = await database.OpenAsync();
+        await using NpgsqlConnection connection = await database.OpenAsync();
         await Service(connection, 60002, 1);
         await Service(connection, 60002, 2);
 
@@ -39,7 +39,7 @@ public sealed class ChannelScanSchemaTests(MigratedScratchDatabase database)
     [Fact]
     public async Task NoSelectedCandidateAtAllIsAStateTheDatabaseKeeps()
     {
-        await using var connection = await database.OpenAsync();
+        await using NpgsqlConnection connection = await database.OpenAsync();
         await Service(connection, 60003, 1);
 
         await Candidate(connection, 60003, 1, 27, selected: false);
@@ -51,11 +51,11 @@ public sealed class ChannelScanSchemaTests(MigratedScratchDatabase database)
     [Fact]
     public async Task TheSameWayOfReachingAServiceCannotBeRecordedTwice()
     {
-        await using var connection = await database.OpenAsync();
+        await using NpgsqlConnection connection = await database.OpenAsync();
         await Service(connection, 60004, 1);
         await Candidate(connection, 60004, 1, 27, selected: false);
 
-        var refusal = await Assert.ThrowsAsync<PostgresException>(
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
             () => Candidate(connection, 60004, 1, 27, selected: false));
 
         Assert.Equal(PostgresErrorCodes.UniqueViolation, refusal.SqlState);
@@ -65,10 +65,10 @@ public sealed class ChannelScanSchemaTests(MigratedScratchDatabase database)
     [Fact]
     public async Task ADefinitionOutsideWhatCanBeReceivedIsRefused()
     {
-        await using var connection = await database.OpenAsync();
+        await using NpgsqlConnection connection = await database.OpenAsync();
         await Service(connection, 60005, 1);
 
-        foreach (var (system, channel, transportStreamId) in new[]
+        foreach ((string? system, int channel, string? transportStreamId) in new[]
                  {
                      ("IsdbT", 12, "NULL"),
                      ("IsdbT", 63, "NULL"),
@@ -81,7 +81,7 @@ public sealed class ChannelScanSchemaTests(MigratedScratchDatabase database)
                      ("IsdbSky", 1, "NULL"),
                  })
         {
-            var refusal = await Assert.ThrowsAsync<PostgresException>(
+            PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
                 () => Candidate(connection, 60005, 1, channel, false, system, transportStreamId));
 
             Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
@@ -92,10 +92,10 @@ public sealed class ChannelScanSchemaTests(MigratedScratchDatabase database)
     [Fact]
     public async Task AReadingWithoutLockCannotCarryAQualityFigure()
     {
-        await using var connection = await database.OpenAsync();
+        await using NpgsqlConnection connection = await database.OpenAsync();
         await Service(connection, 60006, 1);
 
-        var refusal = await Assert.ThrowsAsync<PostgresException>(() => Execute(
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(() => Execute(
             connection,
             $"""
              INSERT INTO candidate_channel
@@ -115,7 +115,7 @@ public sealed class ChannelScanSchemaTests(MigratedScratchDatabase database)
     [Fact]
     public async Task EditingAServiceLeavesItsCandidatesToTheServiceAlone()
     {
-        await using var connection = await database.OpenAsync();
+        await using NpgsqlConnection connection = await database.OpenAsync();
         await Service(connection, 60007, 1);
         await Candidate(connection, 60007, 1, 27, selected: true);
 
@@ -129,11 +129,11 @@ public sealed class ChannelScanSchemaTests(MigratedScratchDatabase database)
     [Fact]
     public async Task TheDatabaseRefusesASecondRunningScan()
     {
-        await using var connection = await database.OpenAsync();
+        await using NpgsqlConnection connection = await database.OpenAsync();
         await Execute(connection, "DELETE FROM scan_run");
         await ScanRun(connection, "Running");
 
-        var refusal = await Assert.ThrowsAsync<PostgresException>(() => ScanRun(connection, "Running"));
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(() => ScanRun(connection, "Running"));
 
         Assert.Equal(PostgresErrorCodes.UniqueViolation, refusal.SqlState);
         Assert.Equal("ux_scan_run_running", refusal.ConstraintName);
@@ -142,7 +142,7 @@ public sealed class ChannelScanSchemaTests(MigratedScratchDatabase database)
     [Fact]
     public async Task AScanThatEndedDoesNotStandInTheWayOfTheNextOne()
     {
-        await using var connection = await database.OpenAsync();
+        await using NpgsqlConnection connection = await database.OpenAsync();
         await Execute(connection, "DELETE FROM scan_run");
 
         await ScanRun(connection, "Completed");
@@ -157,12 +157,12 @@ public sealed class ChannelScanSchemaTests(MigratedScratchDatabase database)
     [Fact]
     public async Task AScanThatFailedOrWasCancelledWithoutAReasonIsRefused()
     {
-        await using var connection = await database.OpenAsync();
+        await using NpgsqlConnection connection = await database.OpenAsync();
         await Execute(connection, "DELETE FROM scan_run");
 
-        foreach (var state in new[] { "Failed", "Cancelled" })
+        foreach (string? state in new[] { "Failed", "Cancelled" })
         {
-            var refusal = await Assert.ThrowsAsync<PostgresException>(() => ScanRun(connection, state));
+            PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(() => ScanRun(connection, state));
 
             Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
             Assert.Equal("ck_scan_run_reason", refusal.ConstraintName);
@@ -172,9 +172,9 @@ public sealed class ChannelScanSchemaTests(MigratedScratchDatabase database)
     [Fact]
     public async Task AStateNoScanCanBeInIsRefused()
     {
-        await using var connection = await database.OpenAsync();
+        await using NpgsqlConnection connection = await database.OpenAsync();
 
-        var refusal = await Assert.ThrowsAsync<PostgresException>(
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
             () => ScanRun(connection, "Draining", "a state this domain does not have"));
 
         Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
@@ -184,10 +184,10 @@ public sealed class ChannelScanSchemaTests(MigratedScratchDatabase database)
     [Fact]
     public async Task EachWayOfFailingAnAttemptIsAValueOfItsOwn()
     {
-        await using var connection = await database.OpenAsync();
-        var run = await ScanRun(connection, "Completed");
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        Guid run = await ScanRun(connection, "Completed");
 
-        foreach (var outcome in new[]
+        foreach (string? outcome in new[]
                  {
                      "Succeeded", "NoLock", "LockedWithoutData", "IncompleteTables", "UnexpectedStream",
                  })
@@ -199,7 +199,7 @@ public sealed class ChannelScanSchemaTests(MigratedScratchDatabase database)
             5,
             await Count(connection, $"scan_run_attempt WHERE scan_run_id = '{run}' AND outcome IS NOT NULL"));
 
-        var refusal = await Assert.ThrowsAsync<PostgresException>(
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
             () => Attempt(connection, run, "did not lock"));
 
         Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
@@ -209,10 +209,10 @@ public sealed class ChannelScanSchemaTests(MigratedScratchDatabase database)
     [Fact]
     public async Task AnAttemptOutlivesTheCandidateItWasMadeFor()
     {
-        await using var connection = await database.OpenAsync();
+        await using NpgsqlConnection connection = await database.OpenAsync();
         await Service(connection, 60008, 1);
         await Candidate(connection, 60008, 1, 27, selected: false);
-        var run = await ScanRun(connection, "Completed");
+        Guid run = await ScanRun(connection, "Completed");
         await Attempt(connection, run, "NoLock");
 
         await Execute(connection, "DELETE FROM broadcast_service WHERE network_id = 60008");
@@ -224,17 +224,17 @@ public sealed class ChannelScanSchemaTests(MigratedScratchDatabase database)
     [Fact]
     public async Task TheSeedNamesTheFirstTransportStreamOfEveryBsSlotThatDemodulates()
     {
-        await using var connection = await database.OpenAsync();
+        await using NpgsqlConnection connection = await database.OpenAsync();
 
         await using var command = new NpgsqlCommand(
             "SELECT bs_channel, relative_stream_number, transport_stream_id FROM satellite_transport_stream ORDER BY bs_channel",
             connection);
-        await using var reader = await command.ExecuteReaderAsync();
+        await using NpgsqlDataReader reader = await command.ExecuteReaderAsync();
 
         var slots = new List<int>();
         while (await reader.ReadAsync())
         {
-            var bsChannel = reader.GetInt32(0);
+            int bsChannel = reader.GetInt32(0);
             slots.Add(bsChannel);
 
             Assert.Equal(0, reader.GetInt32(1));
@@ -277,7 +277,7 @@ public sealed class ChannelScanSchemaTests(MigratedScratchDatabase database)
     private static async Task<Guid> ScanRun(NpgsqlConnection connection, string state, string? reason = null)
     {
         var id = Guid.NewGuid();
-        var finished = state == "Running" ? "NULL" : Now;
+        string finished = state == "Running" ? "NULL" : Now;
 
         await Execute(
             connection,

@@ -18,9 +18,9 @@ public sealed record StartScanRequest
         {
             var targets = new List<TuningParameters>(named.Count);
 
-            foreach (var channel in named)
+            foreach (TuningParametersRequest channel in named)
             {
-                if (channel.ToParameters(out var refusal) is not { } tuning)
+                if (channel.ToParameters(out string? refusal) is not { } tuning)
                 {
                     problem = $"channels: {refusal}";
 

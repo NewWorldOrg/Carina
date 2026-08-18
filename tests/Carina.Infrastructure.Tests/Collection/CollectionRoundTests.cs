@@ -23,23 +23,23 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
     [Fact]
     public async Task EveryStreamIsVisitedAndWhatItGaveIsWrittenDown()
     {
-        var network = NextNetwork();
+        int network = NextNetwork();
         var driver = new ScriptedDriverClient();
 
         driver.Script(TuningParameters.Terrestrial(22), Carrying(network, 1));
         driver.Script(TuningParameters.Terrestrial(24), Carrying(network, 2));
 
-        await using var context = database.Open();
-        var round = Round(driver, context);
+        await using CarinaDbContext context = database.Open();
+        CollectionRound round = Round(driver, context);
 
-        var walked = await round.WalkAsync(
+        RoundResult walked = await round.WalkAsync(
             [Stream(network, 1, 22), Stream(network, 2, 24)],
             Cancel);
 
         Assert.Equal(new RoundResult(2, 2, 0), walked);
 
-        await using var reading = database.Open();
-        var visits = await new StreamVisitRepository(reading).ListAsync(Cancel);
+        await using CarinaDbContext reading = database.Open();
+        IReadOnlyList<StreamVisit> visits = await new StreamVisitRepository(reading).ListAsync(Cancel);
 
         Assert.Equal(2, visits.Count(visit => visit.NetworkId.Value == network));
         Assert.All(
@@ -50,19 +50,19 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
     [Fact]
     public async Task AStreamThatCameBackShortIsCountedAndItsLedgerSaysSo()
     {
-        var network = NextNetwork();
+        int network = NextNetwork();
         var driver = new ScriptedDriverClient();
 
         driver.Script(TuningParameters.Terrestrial(22), ChannelScript.NoLock());
 
-        await using var context = database.Open();
+        await using CarinaDbContext context = database.Open();
 
-        var walked = await Round(driver, context).WalkAsync([Stream(network, 1, 22)], Cancel);
+        RoundResult walked = await Round(driver, context).WalkAsync([Stream(network, 1, 22)], Cancel);
 
         Assert.Equal(new RoundResult(1, 0, 1), walked);
 
-        await using var reading = database.Open();
-        var visit = await new StreamVisitRepository(reading).FindAsync(
+        await using CarinaDbContext reading = database.Open();
+        StreamVisit? visit = await new StreamVisitRepository(reading).FindAsync(
             new NetworkId(network),
             new TransportStreamId(1),
             Cancel);
@@ -74,13 +74,13 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
     [Fact]
     public async Task AStreamStillBackingOffIsNotVisitedAgainYet()
     {
-        var network = NextNetwork();
+        int network = NextNetwork();
         var driver = new ScriptedDriverClient();
 
         driver.Script(TuningParameters.Terrestrial(22), ChannelScript.NoLock());
 
-        await using var context = database.Open();
-        var round = Round(driver, context);
+        await using CarinaDbContext context = database.Open();
+        CollectionRound round = Round(driver, context);
 
         await round.WalkAsync([Stream(network, 1, 22)], Cancel);
 
@@ -90,19 +90,19 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
     [Fact]
     public async Task ComingBackShortTwiceAddsUpInTheLedger()
     {
-        var network = NextNetwork();
+        int network = NextNetwork();
         var driver = new ScriptedDriverClient();
 
         driver.Script(TuningParameters.Terrestrial(22), ChannelScript.NoLock());
 
-        await using var context = database.Open();
-        var round = Round(driver, context, new CollectionSettings { BeforeRetrying = TimeSpan.Zero });
+        await using CarinaDbContext context = database.Open();
+        CollectionRound round = Round(driver, context, new CollectionSettings { BeforeRetrying = TimeSpan.Zero });
 
         await round.WalkAsync([Stream(network, 1, 22)], Cancel);
         await round.WalkAsync([Stream(network, 1, 22)], Cancel);
 
-        await using var reading = database.Open();
-        var visit = await new StreamVisitRepository(reading).FindAsync(
+        await using CarinaDbContext reading = database.Open();
+        StreamVisit? visit = await new StreamVisitRepository(reading).FindAsync(
             new NetworkId(network),
             new TransportStreamId(1),
             Cancel);
@@ -113,15 +113,15 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
     [Fact]
     public async Task OneStreamFailingOutrightDoesNotStopTheOnesBehindIt()
     {
-        var network = NextNetwork();
+        int network = NextNetwork();
         var driver = new ScriptedDriverClient { UnreachableFrom = "adapter0" };
 
         driver.Script(TuningParameters.Terrestrial(22), ChannelScript.NoLock());
         driver.Script(TuningParameters.Terrestrial(24), Carrying(network, 2));
 
-        await using var context = database.Open();
+        await using CarinaDbContext context = database.Open();
 
-        var walked = await Round(driver, context).WalkAsync(
+        RoundResult walked = await Round(driver, context).WalkAsync(
             [Stream(network, 1, 22), Stream(network, 2, 24)],
             Cancel);
 
@@ -131,7 +131,7 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
     [Fact]
     public async Task NothingToVisitWalksNowhere()
     {
-        await using var context = database.Open();
+        await using CarinaDbContext context = database.Open();
 
         Assert.Equal(
             new RoundResult(0, 0, 0),
@@ -144,7 +144,7 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
         CollectionSettings? settings = null)
     {
         var programmes = new ProgrammeRepository(context);
-        var carried = settings ?? new CollectionSettings();
+        CollectionSettings carried = settings ?? new CollectionSettings();
 
         return new CollectionRound(
             new StreamVisitRepository(context),

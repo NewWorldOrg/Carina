@@ -34,7 +34,7 @@ public sealed class DefaultDenyAuthenticationMiddleware(RequestDelegate next)
             return true;
         }
 
-        var registered = await schemes.GetAllSchemesAsync();
+        IEnumerable<AuthenticationScheme> registered = await schemes.GetAllSchemesAsync();
 
         return !registered.Any();
     }

@@ -53,7 +53,7 @@ public sealed class TunerLedgerStoreTests : IDisposable
     [Fact]
     public void WhatWasSavedAndWhatIsRunningAgreeWhenNobodyHasTouchedTheFile()
     {
-        var view = Store().View();
+        TunerLedgerDto view = Store().View();
 
         Assert.Equal(view.LoadedHash, view.SavedHash);
         Assert.False(view.HasDrifted());
@@ -94,7 +94,7 @@ public sealed class TunerLedgerStoreTests : IDisposable
             )
         );
 
-        var view = Store().View();
+        TunerLedgerDto view = Store().View();
 
         Assert.True(view.HasDrifted());
         Assert.NotEqual(view.LoadedHash, view.SavedHash);
@@ -105,7 +105,7 @@ public sealed class TunerLedgerStoreTests : IDisposable
     {
         File.WriteAllText(path, "{ this is not the configuration }");
 
-        var view = Store().View();
+        TunerLedgerDto view = Store().View();
 
         Assert.Null(view.SavedHash);
         Assert.True(view.HasDrifted());
@@ -114,10 +114,10 @@ public sealed class TunerLedgerStoreTests : IDisposable
     [Fact]
     public void ASavedLedgerIsWhatTheNextStartWillLoadWhileTheRunningOneIsUnchanged()
     {
-        var store = Store();
-        var loaded = store.View().LoadedHash;
+        TunerLedgerStore store = Store();
+        string? loaded = store.View().LoadedHash;
 
-        var saved = store.Save(
+        LedgerRevision saved = store.Save(
             [
                 new TunerConfigEntry { DeviceId = "adapter0.frontend0" },
                 new TunerConfigEntry { DeviceId = "adapter1.frontend0" },
@@ -127,7 +127,7 @@ public sealed class TunerLedgerStoreTests : IDisposable
 
         Assert.Equal(LedgerRefusal.None, saved.Refusal);
 
-        var view = store.View();
+        TunerLedgerDto view = store.View();
 
         Assert.Equal(loaded, view.LoadedHash);
         Assert.True(view.HasDrifted());
@@ -149,9 +149,9 @@ public sealed class TunerLedgerStoreTests : IDisposable
                 [Terrestrial, Satellite]
             );
 
-        var reread = DriverConfigurationReader.ReadFile(path, checkTheFilesystem: false);
+        DriverConfigurationResult reread = DriverConfigurationReader.ReadFile(path, checkTheFilesystem: false);
 
-        Assert.True(reread.TryGetConfiguration(out var written, out var problems), string.Join(" ", problems));
+        Assert.True(reread.TryGetConfiguration(out DriverConfiguration? written, out IReadOnlyList<string>? problems), string.Join(" ", problems));
         Assert.Equal(
             ["adapter1.frontend0", "adapter0.frontend0"],
             (written.Devices ?? []).Select(device => device.Id)
@@ -163,9 +163,9 @@ public sealed class TunerLedgerStoreTests : IDisposable
     {
         Store().Save([new TunerConfigEntry { DeviceId = "adapter0.frontend0" }], [Terrestrial]);
 
-        var reread = DriverConfigurationReader.ReadFile(path, checkTheFilesystem: false);
+        DriverConfigurationResult reread = DriverConfigurationReader.ReadFile(path, checkTheFilesystem: false);
 
-        Assert.True(reread.TryGetConfiguration(out var written, out _));
+        Assert.True(reread.TryGetConfiguration(out DriverConfiguration? written, out _));
         Assert.Equal(configuration.SocketPath, written.SocketPath);
         Assert.Equal(configuration.ShutdownGraceHours, written.ShutdownGraceHours);
         Assert.Equal(configuration.LiveSessionMinutes, written.LiveSessionMinutes);
@@ -184,9 +184,9 @@ public sealed class TunerLedgerStoreTests : IDisposable
     [Fact]
     public void ALedgerThatWouldNotStartTheDriverIsRefusedBeforeItReachesTheFile()
     {
-        var before = File.ReadAllText(path);
+        string before = File.ReadAllText(path);
 
-        var saved = Store()
+        LedgerRevision saved = Store()
             .Save(
                 [new TunerConfigEntry { DeviceId = "adapter0.frontend0", Disabled = true }],
                 [Terrestrial]
@@ -199,9 +199,9 @@ public sealed class TunerLedgerStoreTests : IDisposable
     [Fact]
     public void PuttingPowerOnTheCableOfATunerThatIsNotSatelliteIsRefusedBeforeItReachesTheFile()
     {
-        var before = File.ReadAllText(path);
+        string before = File.ReadAllText(path);
 
-        var saved = Store()
+        LedgerRevision saved = Store()
             .Save(
                 [new TunerConfigEntry { DeviceId = "adapter0.frontend0", LnbPower = true }],
                 [Terrestrial]
@@ -214,7 +214,7 @@ public sealed class TunerLedgerStoreTests : IDisposable
     [Fact]
     public void AReaderHoldingTheLedgerOpenAcrossASaveReadsTheWholeOldOneRatherThanAMixture()
     {
-        var before = File.ReadAllText(path);
+        string before = File.ReadAllText(path);
 
         using var reader = new FileStream(
             path,
@@ -249,7 +249,7 @@ public sealed class TunerLedgerStoreTests : IDisposable
     [Fact]
     public void ARefusedSaveLeavesTheLedgerOnDiskExactlyAsItWas()
     {
-        var before = File.ReadAllBytes(path);
+        byte[] before = File.ReadAllBytes(path);
 
         Assert.Equal(LedgerRefusal.Empty, Store().Save([], [Terrestrial]).Refusal);
         Assert.Equal(
@@ -267,7 +267,7 @@ public sealed class TunerLedgerStoreTests : IDisposable
     {
         var store = new TunerLedgerStore(configuration, null);
 
-        var saved = store.Save(
+        LedgerRevision saved = store.Save(
             [new TunerConfigEntry { DeviceId = "adapter0.frontend0" }],
             [Terrestrial]
         );
@@ -279,7 +279,7 @@ public sealed class TunerLedgerStoreTests : IDisposable
     [Fact]
     public void ARefusalNamesNoDeviceNode()
     {
-        var saved = Store()
+        LedgerRevision saved = Store()
             .Save([new TunerConfigEntry { DeviceId = "adapter7.frontend0" }], [Terrestrial]);
 
         Assert.DoesNotContain("/dev", saved.Detail, StringComparison.Ordinal);
@@ -288,7 +288,7 @@ public sealed class TunerLedgerStoreTests : IDisposable
     [Fact]
     public void ARefusalAboutTheNodeDetectionOfferedNamesTheTunerAndNotTheNode()
     {
-        var saved = Store()
+        LedgerRevision saved = Store()
             .Save(
                 [new TunerConfigEntry { DeviceId = "adapter0.frontend0" }],
                 [Terrestrial with { DevicePath = "/tmp/pretending/to/be/a/tuner" }]

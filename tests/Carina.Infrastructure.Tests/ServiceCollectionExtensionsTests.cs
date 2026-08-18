@@ -36,8 +36,8 @@ public sealed class ServiceCollectionExtensionsTests
     [Fact]
     public void RegistersThePersistenceContext()
     {
-        using var provider = Build(ValidSettings());
-        using var scope = provider.CreateScope();
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
 
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<CarinaDbContext>());
     }
@@ -45,8 +45,8 @@ public sealed class ServiceCollectionExtensionsTests
     [Fact]
     public void RegistersTheScanOrchestratorAlongsideTheRepositoriesItWalksWith()
     {
-        using var provider = Build(ValidSettings());
-        using var scope = provider.CreateScope();
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
 
         Assert.IsType<ChannelScanOrchestrator>(
             scope.ServiceProvider.GetRequiredService<IChannelScanOrchestrator>());
@@ -55,7 +55,7 @@ public sealed class ServiceCollectionExtensionsTests
     [Fact]
     public void RegistersTheHubItselfAsTheAppEventPublisherSoNoSignalIsDropped()
     {
-        using var provider = Build(ValidSettings());
+        using ServiceProvider provider = Build(ValidSettings());
 
         Assert.Same(
             provider.GetRequiredService<AppEventHub>(),
@@ -65,7 +65,7 @@ public sealed class ServiceCollectionExtensionsTests
     [Fact]
     public void RegistersSomethingToCloseTheHubWhenTheAppStops()
     {
-        using var provider = Build(ValidSettings());
+        using ServiceProvider provider = Build(ValidSettings());
 
         Assert.Contains(
             provider.GetServices<IHostedService>(),
@@ -75,7 +75,7 @@ public sealed class ServiceCollectionExtensionsTests
     [Fact]
     public void RegistersTheScanRunnerAsTheSameThingThatIsStoppedWithTheApp()
     {
-        using var provider = Build(ValidSettings());
+        using ServiceProvider provider = Build(ValidSettings());
 
         Assert.Contains(
             provider.GetServices<IHostedService>(),
@@ -85,7 +85,7 @@ public sealed class ServiceCollectionExtensionsTests
     [Fact]
     public void RegistersTheTimeProvider()
     {
-        using var provider = Build(ValidSettings());
+        using ServiceProvider provider = Build(ValidSettings());
 
         Assert.Same(TimeProvider.System, provider.GetRequiredService<TimeProvider>());
     }
@@ -93,7 +93,7 @@ public sealed class ServiceCollectionExtensionsTests
     [Fact]
     public void RegistersTheMonitorBackedDriverStatusReader()
     {
-        using var provider = Build(ValidSettings());
+        using ServiceProvider provider = Build(ValidSettings());
 
         Assert.IsType<MonitoredDriverStatusReader>(provider.GetRequiredService<IDriverStatusReader>());
     }
@@ -101,8 +101,8 @@ public sealed class ServiceCollectionExtensionsTests
     [Fact]
     public void RegistersTheWriteThatLandsWholeOrNotAtAll()
     {
-        using var provider = Build(ValidSettings());
-        using var scope = provider.CreateScope();
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
 
         Assert.IsType<DatabaseAtomicWrite>(scope.ServiceProvider.GetRequiredService<IAtomicWrite>());
     }
@@ -110,7 +110,7 @@ public sealed class ServiceCollectionExtensionsTests
     [Fact]
     public void RegistersTheDriverClientAndItsSupervision()
     {
-        using var provider = Build(ValidSettings());
+        using ServiceProvider provider = Build(ValidSettings());
 
         Assert.IsType<DriverIpcClient>(provider.GetRequiredService<IDriverClient>());
         Assert.NotNull(provider.GetRequiredService<DriverConnectionMonitor>());
@@ -130,11 +130,11 @@ public sealed class ServiceCollectionExtensionsTests
     [Fact]
     public void RejectsAMissingConnectionString()
     {
-        var settings = ValidSettings();
+        Dictionary<string, string?> settings = ValidSettings();
         settings["ConnectionStrings:Carina"] = "";
-        using var provider = Build(settings);
+        using ServiceProvider provider = Build(settings);
 
-        var exception = Assert.Throws<OptionsValidationException>(
+        OptionsValidationException exception = Assert.Throws<OptionsValidationException>(
             () => provider.GetRequiredService<IOptions<DatabaseOptions>>().Value);
 
         Assert.Contains("ConnectionStrings:Carina", exception.Message, StringComparison.Ordinal);
@@ -143,11 +143,11 @@ public sealed class ServiceCollectionExtensionsTests
     [Fact]
     public void RejectsAMissingDriverSocketPath()
     {
-        var settings = ValidSettings();
+        Dictionary<string, string?> settings = ValidSettings();
         settings.Remove("CARINA_DRIVER_SOCKET");
-        using var provider = Build(settings);
+        using ServiceProvider provider = Build(settings);
 
-        var exception = Assert.Throws<OptionsValidationException>(
+        OptionsValidationException exception = Assert.Throws<OptionsValidationException>(
             () => provider.GetRequiredService<IOptions<DriverOptions>>().Value);
 
         Assert.Contains("CARINA_DRIVER_SOCKET", exception.Message, StringComparison.Ordinal);
@@ -156,11 +156,11 @@ public sealed class ServiceCollectionExtensionsTests
     [Fact]
     public void RejectsARelativeDriverSocketPath()
     {
-        var settings = ValidSettings();
+        Dictionary<string, string?> settings = ValidSettings();
         settings["CARINA_DRIVER_SOCKET"] = "driver.sock";
-        using var provider = Build(settings);
+        using ServiceProvider provider = Build(settings);
 
-        var exception = Assert.Throws<OptionsValidationException>(
+        OptionsValidationException exception = Assert.Throws<OptionsValidationException>(
             () => provider.GetRequiredService<IOptions<DriverOptions>>().Value);
 
         Assert.Contains("absolute path", exception.Message, StringComparison.Ordinal);

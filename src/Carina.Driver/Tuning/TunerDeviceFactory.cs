@@ -65,7 +65,7 @@ public sealed class TunerDeviceFactory : ITunerDeviceFactory
 
     private ITunerDevice OpenDvb(DeviceSettings device, TuningRequest tuning, TuneParams? tune)
     {
-        if (!DvbDevicePaths.TryDerive(device.DevicePath, out var paths, out var problem))
+        if (!DvbDevicePaths.TryDerive(device.DevicePath, out DvbDevicePaths? paths, out string? problem))
         {
             throw DvbFailure.Refused($"devices['{device.Id}']: {problem}");
         }

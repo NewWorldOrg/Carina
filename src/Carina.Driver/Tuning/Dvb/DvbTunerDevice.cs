@@ -74,8 +74,8 @@ public sealed class DvbTunerDevice : ITunerDevice, ISignalQualitySource
     )
     {
         var frontend = DvbFrontend.Open(calls, paths.Frontend, DvbAccess.Control);
-        var demux = -1;
-        var dvr = -1;
+        int demux = -1;
+        int dvr = -1;
 
         try
         {
@@ -92,7 +92,7 @@ public sealed class DvbTunerDevice : ITunerDevice, ISignalQualitySource
                     settings.LockPatience,
                     settings.RetryInterval,
                     cancellationToken,
-                    out var lastSeen
+                    out FrontendStatus lastSeen
                 )
             )
             {
@@ -120,14 +120,14 @@ public sealed class DvbTunerDevice : ITunerDevice, ISignalQualitySource
 
     public byte[] Read(int count, CancellationToken cancellationToken)
     {
-        var buffer = new byte[count];
-        var deadline = time.GetUtcNow() + settings.BytePatience;
+        byte[] buffer = new byte[count];
+        DateTimeOffset deadline = time.GetUtcNow() + settings.BytePatience;
 
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var ready = calls.WaitForReadable(
+            SyscallOutcome ready = calls.WaitForReadable(
                 dvr,
                 (int)settings.BytePatience.TotalMilliseconds
             );
@@ -144,7 +144,7 @@ public sealed class DvbTunerDevice : ITunerDevice, ISignalQualitySource
 
             if (!ready.Refused && ready.Value > 0)
             {
-                var read = calls.ReadBytes(dvr, buffer, count);
+                SyscallOutcome read = calls.ReadBytes(dvr, buffer, count);
 
                 if (!read.Refused)
                 {
@@ -184,9 +184,9 @@ public sealed class DvbTunerDevice : ITunerDevice, ISignalQualitySource
 
     private DvbDeviceException NothingArrived()
     {
-        var waited = $"{settings.BytePatience.TotalSeconds:0.#} seconds";
+        string waited = $"{settings.BytePatience.TotalSeconds:0.#} seconds";
 
-        if (!frontend.TryStatus(out var status))
+        if (!frontend.TryStatus(out FrontendStatus status))
         {
             return DvbFailure.Refused(
                 $"{paths.Dvr}: no transport stream bytes arrived within {waited}, and the frontend would not say whether it is still locked. This is left unclassified rather than recorded as a tuner that was locked and delivering nothing."
@@ -226,7 +226,7 @@ public sealed class DvbTunerDevice : ITunerDevice, ISignalQualitySource
         string what
     )
     {
-        var opened = calls.Open(path, access);
+        SyscallOutcome opened = calls.Open(path, access);
 
         if (opened.Refused)
         {
@@ -248,7 +248,7 @@ public sealed class DvbTunerDevice : ITunerDevice, ISignalQualitySource
         int bytes
     )
     {
-        var sized = calls.SetBufferSize(descriptor, bytes);
+        SyscallOutcome sized = calls.SetBufferSize(descriptor, bytes);
 
         if (sized.Refused)
         {
@@ -263,7 +263,7 @@ public sealed class DvbTunerDevice : ITunerDevice, ISignalQualitySource
 
     private static void StartFilter(IDvbSystemCalls calls, string path, int descriptor)
     {
-        var filtered = calls.SetPesFilter(descriptor, DemuxFilter.EverythingFromTheFrontend());
+        SyscallOutcome filtered = calls.SetPesFilter(descriptor, DemuxFilter.EverythingFromTheFrontend());
 
         if (filtered.Refused)
         {

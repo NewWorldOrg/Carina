@@ -16,9 +16,9 @@ public sealed class DriverRestartService(IDriverClient driver)
     public async Task<ServiceResult<DriverRestartView, DriverRestartFailure>> RequestAsync(
         CancellationToken cancellationToken)
     {
-        var call = await driver.RequestRestartAsync(cancellationToken);
+        DriverCall<DriverRestartDto> call = await driver.RequestRestartAsync(cancellationToken);
 
-        if (!call.TryGetValue(out var accepted))
+        if (!call.TryGetValue(out DriverRestartDto? accepted))
         {
             return ServiceResult<DriverRestartView, DriverRestartFailure>.Failure(
                 Describe(call),
@@ -39,7 +39,7 @@ public sealed class DriverRestartService(IDriverClient driver)
             return DriverRestartFailure.DriverUnreachable;
         }
 
-        var title = call.Problem?.Title;
+        string? title = call.Problem?.Title;
 
         if (string.Equals(title, EndpointMissingTitle, StringComparison.Ordinal))
         {

@@ -1,6 +1,8 @@
+using Carina.Api.Common;
 using Carina.Api.Responder;
 using Carina.Api.Responder.DriverStatus;
 using Carina.Api.Services;
+using Carina.Domain.DriverStatus;
 
 using Microsoft.AspNetCore.Mvc;
 
@@ -15,7 +17,7 @@ public sealed class GetDriverStatusAction(DriverStatusService driverStatusServic
     [ProducesResponseType<BaseResponder<DriverStatusResponder>>(StatusCodes.Status503ServiceUnavailable)]
     public async Task<IActionResult> Invoke(CancellationToken cancellationToken)
     {
-        var result = await driverStatusService.GetStatusAsync(cancellationToken);
+        ServiceResult<DriverStatusSnapshot> result = await driverStatusService.GetStatusAsync(cancellationToken);
         if (!result.IsSuccess)
         {
             return StatusCode(

@@ -1,3 +1,5 @@
+using Carina.Infrastructure.Persistence;
+
 using Microsoft.EntityFrameworkCore;
 
 using Npgsql;
@@ -12,7 +14,7 @@ public sealed class MigrationLockTests
 
     private static string ScratchConnectionString()
     {
-        var configured = Environment.GetEnvironmentVariable(
+        string? configured = Environment.GetEnvironmentVariable(
             CarinaDbContextFactory.ConnectionStringVariable
         );
 
@@ -31,7 +33,7 @@ public sealed class MigrationLockTests
 
     private static async Task<NpgsqlConnection> HoldTheLock(string connectionString)
     {
-        var unpooled = new NpgsqlConnectionStringBuilder(connectionString)
+        string unpooled = new NpgsqlConnectionStringBuilder(connectionString)
         {
             Pooling = false,
         }.ConnectionString;
@@ -39,7 +41,7 @@ public sealed class MigrationLockTests
         var holder = new NpgsqlConnection(unpooled);
         await holder.OpenAsync();
 
-        await using var command = holder.CreateCommand();
+        await using NpgsqlCommand command = holder.CreateCommand();
         command.CommandText = $"SELECT pg_advisory_lock({MigrationLock.Key})";
         await command.ExecuteScalarAsync();
 
@@ -49,15 +51,15 @@ public sealed class MigrationLockTests
     [Fact]
     public async Task ASecondMigrationWaitsForTheOneThatHoldsTheLock()
     {
-        var connectionString = ScratchConnectionString();
+        string connectionString = ScratchConnectionString();
 
-        await using (var setup = CarinaDbContextFactory.Create(connectionString))
+        await using (CarinaDbContext setup = CarinaDbContextFactory.Create(connectionString))
         {
             await setup.Database.EnsureDeletedAsync();
             await setup.Database.MigrateAsync();
         }
 
-        var holder = await HoldTheLock(connectionString);
+        NpgsqlConnection holder = await HoldTheLock(connectionString);
 
         using var scope = new EnvironmentVariableScope(
             CarinaDbContextFactory.ConnectionStringVariable,
@@ -65,9 +67,9 @@ public sealed class MigrationLockTests
         );
 
         var error = new StringWriter();
-        var blocked = Task.Run(() => DbEntryPoint.RunAsync(["--migrate"], error));
+        Task<int> blocked = Task.Run(() => DbEntryPoint.RunAsync(["--migrate"], error));
 
-        var finishedEarly = await Task.WhenAny(blocked, Task.Delay(TimeSpan.FromSeconds(3)));
+        Task finishedEarly = await Task.WhenAny(blocked, Task.Delay(TimeSpan.FromSeconds(3)));
 
         Assert.NotSame(blocked, finishedEarly);
 
@@ -80,7 +82,7 @@ public sealed class MigrationLockTests
     [Fact]
     public async Task TheLockIsReleasedSoTheNextMigrationRunsStraightAway()
     {
-        var connectionString = ScratchConnectionString();
+        string connectionString = ScratchConnectionString();
 
         using var scope = new EnvironmentVariableScope(
             CarinaDbContextFactory.ConnectionStringVariable,

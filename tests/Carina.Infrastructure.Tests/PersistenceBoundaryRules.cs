@@ -42,8 +42,8 @@ public static class PersistenceBoundaryRules
 
     private static bool BreaksABoundary(IForeignKey foreignKey)
     {
-        var declaring = FamilyOf(foreignKey.DeclaringEntityType);
-        var principal = FamilyOf(foreignKey.PrincipalEntityType);
+        PersistenceFamily? declaring = FamilyOf(foreignKey.DeclaringEntityType);
+        PersistenceFamily? principal = FamilyOf(foreignKey.PrincipalEntityType);
 
         if (declaring is PersistenceFamily.Reservations && principal is PersistenceFamily.ChannelDefinitions)
         {
@@ -60,19 +60,19 @@ public static class PersistenceBoundaryRules
 
     private static PersistenceFamily? FamilyOf(IEntityType entityType)
     {
-        var feature = FeatureOf(AggregateRootOf(entityType));
+        string? feature = FeatureOf(AggregateRootOf(entityType));
 
         if (feature is null)
         {
             return null;
         }
 
-        return FamiliesByFeature.TryGetValue(feature, out var family) ? family : null;
+        return FamiliesByFeature.TryGetValue(feature, out PersistenceFamily family) ? family : null;
     }
 
     private static IEntityType AggregateRootOf(IEntityType entityType)
     {
-        var current = entityType;
+        IEntityType current = entityType;
 
         while (current.FindOwnership() is { } ownership)
         {
@@ -84,7 +84,7 @@ public static class PersistenceBoundaryRules
 
     private static string? FeatureOf(IEntityType entityType)
     {
-        var space = entityType.ClrType.Namespace;
+        string? space = entityType.ClrType.Namespace;
 
         if (string.IsNullOrEmpty(space))
         {

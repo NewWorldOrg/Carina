@@ -1,5 +1,6 @@
 using Carina.Driver.Transport;
 using Carina.Driver.Tuning;
+using Carina.Driver.Tuning.Dvb;
 
 namespace Carina.Driver.Tests;
 
@@ -14,7 +15,7 @@ public sealed class FakeTunerDeviceTests
         var device = new FakeTunerDevice(physicalChannel: 55, serviceId: 50001);
         var reader = new TsPacketReader();
 
-        var packets = reader.Read(Read(device, 10));
+        IReadOnlyList<TsPacket> packets = reader.Read(Read(device, 10));
 
         Assert.Equal(10, packets.Count);
         Assert.All(packets, packet => Assert.False(packet.IsNull));
@@ -45,9 +46,9 @@ public sealed class FakeTunerDeviceTests
         var reader = new TsPacketReader();
         var tracker = new ContinuityCounterTracker();
 
-        for (var read = 0; read < 5; read++)
+        for (int read = 0; read < 5; read++)
         {
-            foreach (var packet in reader.Read(Read(device, 100)))
+            foreach (TsPacket packet in reader.Read(Read(device, 100)))
             {
                 tracker.Observe(packet);
             }
@@ -64,8 +65,8 @@ public sealed class FakeTunerDeviceTests
         var device = new FakeTunerDevice(55, 50001);
         var reader = new TsPacketReader();
 
-        var first = reader.Read(Read(device, 1));
-        var second = reader.Read(Read(device, 1));
+        IReadOnlyList<TsPacket> first = reader.Read(Read(device, 1));
+        IReadOnlyList<TsPacket> second = reader.Read(Read(device, 1));
 
         Assert.Equal(0, first[0].ContinuityCounter);
         Assert.Equal(1, second[0].ContinuityCounter);
@@ -90,7 +91,7 @@ public sealed class FakeTunerDeviceTests
     {
         var device = new FakeTunerDevice(53, 50001);
 
-        var quality = Assert.IsAssignableFrom<ISignalQualitySource>(device.Quality).Measure();
+        SignalQuality quality = Assert.IsAssignableFrom<ISignalQualitySource>(device.Quality).Measure();
 
         Assert.True(quality.HasLock);
         Assert.True(quality.CarrierToNoise.TryGetDecibels(out _));
@@ -103,7 +104,7 @@ public sealed class FakeTunerDeviceTests
     {
         var device = new FakeTunerDevice(53, 50001);
 
-        var quality = Assert.IsAssignableFrom<ISignalQualitySource>(device.Quality).Measure();
+        SignalQuality quality = Assert.IsAssignableFrom<ISignalQualitySource>(device.Quality).Measure();
 
         Assert.All(
             quality.PostViterbiErrors.Layers,

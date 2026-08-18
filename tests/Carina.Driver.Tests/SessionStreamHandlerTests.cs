@@ -21,7 +21,7 @@ public sealed class SessionStreamHandlerTests : IDisposable
 
     public void Dispose()
     {
-        foreach (var session in started)
+        foreach (TunerSession session in started)
         {
             session.Dispose();
         }
@@ -150,7 +150,7 @@ public sealed class SessionStreamHandlerTests : IDisposable
 
     private TunerSessionManager Manager()
     {
-        var configuration = Configuration;
+        DriverConfiguration configuration = Configuration;
 
         return new TunerSessionManager(
             configuration,
@@ -162,7 +162,7 @@ public sealed class SessionStreamHandlerTests : IDisposable
 
     private TunerSession Begin(TunerSessionManager manager, string sessionId)
     {
-        var start = manager.Begin(
+        SessionStart start = manager.Begin(
             new StartSessionRequest
             {
                 SessionId = SessionId.Parse(sessionId),
@@ -171,7 +171,7 @@ public sealed class SessionStreamHandlerTests : IDisposable
             }
         );
 
-        Assert.True(start.TryGetSession(out var session), start.Detail);
+        Assert.True(start.TryGetSession(out TunerSession? session), start.Detail);
         started.Add(session);
 
         return session;
@@ -179,7 +179,7 @@ public sealed class SessionStreamHandlerTests : IDisposable
 
     private static async Task WaitForBytes(MemoryStream body)
     {
-        var deadline = DateTimeOffset.UtcNow + Patience;
+        DateTimeOffset deadline = DateTimeOffset.UtcNow + Patience;
 
         while (body.Length is 0)
         {
@@ -195,11 +195,11 @@ public sealed class SessionStreamHandlerTests : IDisposable
     [Fact]
     public async Task EveryWriteToTheResponseBodyIsAWholeNumberOfPacketsSoAConsumerNeverParsesAcrossAWrite()
     {
-        var manager = Manager();
-        var session = Begin(manager, "aligned-one");
-        var (context, _, body) = Ask("aligned-one");
+        TunerSessionManager manager = Manager();
+        TunerSession session = Begin(manager, "aligned-one");
+        (HttpContext? context, RecordedLifetime _, RecordedBody? body) = Ask("aligned-one");
 
-        var streaming = SessionStreamHandler.Invoke(context, manager);
+        Task streaming = SessionStreamHandler.Invoke(context, manager);
 
         await WaitForBytes(body);
 
@@ -207,7 +207,7 @@ public sealed class SessionStreamHandlerTests : IDisposable
 
         await streaming.WaitAsync(Patience);
 
-        var writes = body.Writes;
+        int[] writes = body.Writes;
 
         Assert.NotEmpty(writes);
         Assert.All(writes, write => Assert.Equal(0, write % TsPacketReader.PacketLength));
@@ -222,11 +222,11 @@ public sealed class SessionStreamHandlerTests : IDisposable
     [Fact]
     public async Task AStreamThatWasStoppedCleanlyIsNotAborted()
     {
-        var manager = Manager();
-        var session = Begin(manager, "clean-one");
-        var (context, lifetime, body) = Ask("clean-one");
+        TunerSessionManager manager = Manager();
+        TunerSession session = Begin(manager, "clean-one");
+        (HttpContext? context, RecordedLifetime? lifetime, RecordedBody? body) = Ask("clean-one");
 
-        var streaming = SessionStreamHandler.Invoke(context, manager);
+        Task streaming = SessionStreamHandler.Invoke(context, manager);
 
         await WaitForBytes(body);
 
@@ -242,11 +242,11 @@ public sealed class SessionStreamHandlerTests : IDisposable
     [Fact]
     public async Task AStreamThatFailedMidwayIsAborted()
     {
-        var manager = Manager();
-        var session = Begin(manager, "broken-one");
-        var (context, lifetime, body) = Ask("broken-one");
+        TunerSessionManager manager = Manager();
+        TunerSession session = Begin(manager, "broken-one");
+        (HttpContext? context, RecordedLifetime? lifetime, RecordedBody? body) = Ask("broken-one");
 
-        var streaming = SessionStreamHandler.Invoke(context, manager);
+        Task streaming = SessionStreamHandler.Invoke(context, manager);
 
         await WaitForBytes(body);
 
@@ -261,12 +261,12 @@ public sealed class SessionStreamHandlerTests : IDisposable
     [Fact]
     public async Task AReaderArrivingWhileTheSessionConcludesIsRefusedNotHandedAnEmptySuccess()
     {
-        var manager = Manager();
-        var session = Begin(manager, "closing-one");
+        TunerSessionManager manager = Manager();
+        TunerSession session = Begin(manager, "closing-one");
 
         session.Broadcaster.Close(null);
 
-        var (context, lifetime, body) = Ask("closing-one");
+        (HttpContext? context, RecordedLifetime? lifetime, RecordedBody? body) = Ask("closing-one");
 
         await SessionStreamHandler.Invoke(context, manager);
 
@@ -280,11 +280,11 @@ public sealed class SessionStreamHandlerTests : IDisposable
     [Fact]
     public async Task AStreamWhoseEndTheDriverCannotVouchForIsAborted()
     {
-        var manager = Manager();
-        var session = Begin(manager, "unvouched-one");
-        var (context, lifetime, body) = Ask("unvouched-one");
+        TunerSessionManager manager = Manager();
+        TunerSession session = Begin(manager, "unvouched-one");
+        (HttpContext? context, RecordedLifetime? lifetime, RecordedBody? body) = Ask("unvouched-one");
 
-        var streaming = SessionStreamHandler.Invoke(
+        Task streaming = SessionStreamHandler.Invoke(
             context,
             manager,
             TimeSpan.FromMilliseconds(200)
@@ -305,11 +305,11 @@ public sealed class SessionStreamHandlerTests : IDisposable
     [Fact]
     public async Task AStreamCutShortByTheDrainCapIsAbortedAndNotClosedCleanly()
     {
-        var manager = Manager();
-        var session = Begin(manager, "drained-one");
-        var (context, lifetime, body) = Ask("drained-one");
+        TunerSessionManager manager = Manager();
+        TunerSession session = Begin(manager, "drained-one");
+        (HttpContext? context, RecordedLifetime? lifetime, RecordedBody? body) = Ask("drained-one");
 
-        var streaming = SessionStreamHandler.Invoke(context, manager);
+        Task streaming = SessionStreamHandler.Invoke(context, manager);
 
         await WaitForBytes(body);
 
@@ -327,11 +327,11 @@ public sealed class SessionStreamHandlerTests : IDisposable
     [Fact]
     public async Task ASurveyReaderThatWasCutShortIsAborted()
     {
-        var manager = Manager();
-        var session = Begin(manager, "cut-one");
-        var (context, lifetime, body) = Ask("cut-one", DriverEndpoints.SurveySubscriber);
+        TunerSessionManager manager = Manager();
+        TunerSession session = Begin(manager, "cut-one");
+        (HttpContext? context, RecordedLifetime? lifetime, RecordedBody? body) = Ask("cut-one", DriverEndpoints.SurveySubscriber);
 
-        var streaming = SessionStreamHandler.Invoke(context, manager);
+        Task streaming = SessionStreamHandler.Invoke(context, manager);
 
         await WaitForBytes(body);
 
@@ -347,11 +347,11 @@ public sealed class SessionStreamHandlerTests : IDisposable
     [Fact]
     public async Task AReaderThatWentAwayLeavesNoSubscription()
     {
-        var manager = Manager();
-        var session = Begin(manager, "gone-one");
-        var (context, lifetime, body) = Ask("gone-one");
+        TunerSessionManager manager = Manager();
+        TunerSession session = Begin(manager, "gone-one");
+        (HttpContext? context, RecordedLifetime? lifetime, RecordedBody? body) = Ask("gone-one");
 
-        var streaming = SessionStreamHandler.Invoke(context, manager);
+        Task streaming = SessionStreamHandler.Invoke(context, manager);
 
         await WaitForBytes(body);
 
@@ -367,8 +367,8 @@ public sealed class SessionStreamHandlerTests : IDisposable
     [Fact]
     public async Task ASessionIdTheDriverCannotReadIsRefused()
     {
-        var manager = Manager();
-        var (context, lifetime, _) = Ask("not_valid");
+        TunerSessionManager manager = Manager();
+        (HttpContext? context, RecordedLifetime? lifetime, RecordedBody _) = Ask("not_valid");
 
         await SessionStreamHandler.Invoke(context, manager);
 
@@ -379,9 +379,9 @@ public sealed class SessionStreamHandlerTests : IDisposable
     [Fact]
     public async Task ASubscriberKindTheDriverDoesNotKnowIsRefused()
     {
-        var manager = Manager();
+        TunerSessionManager manager = Manager();
         Begin(manager, "kinded-one");
-        var (context, lifetime, _) = Ask("kinded-one", "cameraman");
+        (HttpContext? context, RecordedLifetime? lifetime, RecordedBody _) = Ask("kinded-one", "cameraman");
 
         await SessionStreamHandler.Invoke(context, manager);
 
@@ -392,8 +392,8 @@ public sealed class SessionStreamHandlerTests : IDisposable
     [Fact]
     public async Task ASessionTheDriverDoesNotHoldIsNotFound()
     {
-        var manager = Manager();
-        var (context, _, _) = Ask("absent-one");
+        TunerSessionManager manager = Manager();
+        (HttpContext? context, RecordedLifetime _, RecordedBody _) = Ask("absent-one");
 
         await SessionStreamHandler.Invoke(context, manager);
 
@@ -403,23 +403,23 @@ public sealed class SessionStreamHandlerTests : IDisposable
     [Fact]
     public async Task ReadersBeyondTheLimitAreTurnedAway()
     {
-        var manager = Manager();
-        var session = Begin(manager, "crowded-one");
+        TunerSessionManager manager = Manager();
+        TunerSession session = Begin(manager, "crowded-one");
 
         var held = new List<SessionSubscription>();
-        for (var taken = 0; taken < session.Broadcaster.SubscriberLimit; taken++)
+        for (int taken = 0; taken < session.Broadcaster.SubscriberLimit; taken++)
         {
-            Assert.True(session.Broadcaster.TrySubscribe(SubscriberKind.Viewer, out var one));
+            Assert.True(session.Broadcaster.TrySubscribe(SubscriberKind.Viewer, out SessionSubscription? one));
             held.Add(one);
         }
 
-        var (context, _, _) = Ask("crowded-one");
+        (HttpContext? context, RecordedLifetime _, RecordedBody _) = Ask("crowded-one");
 
         await SessionStreamHandler.Invoke(context, manager);
 
         Assert.Equal(StatusCodes.Status429TooManyRequests, context.Response.StatusCode);
 
-        foreach (var subscription in held)
+        foreach (SessionSubscription subscription in held)
         {
             session.Broadcaster.Unsubscribe(subscription);
         }

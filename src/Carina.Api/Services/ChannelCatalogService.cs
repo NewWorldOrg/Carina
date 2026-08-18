@@ -37,7 +37,7 @@ public sealed class ChannelCatalogService(
     {
         var listed = new List<ServiceWithChannels>();
 
-        foreach (var service in await services.ListAsync(cancellationToken))
+        foreach (BroadcastService service in await services.ListAsync(cancellationToken))
         {
             listed.Add(new ServiceWithChannels(
                 service,
@@ -123,7 +123,7 @@ public sealed class ChannelCatalogService(
             return Unknown(networkId, serviceId);
         }
 
-        var held = await candidates.ListForServiceAsync(networkId, serviceId, cancellationToken);
+        IReadOnlyList<CandidateChannel> held = await candidates.ListForServiceAsync(networkId, serviceId, cancellationToken);
 
         if (held.Any(candidate => candidate.Tuning.Equals(tuning)))
         {
@@ -196,9 +196,9 @@ public sealed class ChannelCatalogService(
         TuningParameters tuning,
         CancellationToken cancellationToken)
     {
-        var tuners = await driver.GetTunersAsync(cancellationToken);
+        DriverCall<IReadOnlyList<TunerSnapshot>> tuners = await driver.GetTunersAsync(cancellationToken);
 
-        if (!tuners.TryGetValue(out var snapshots))
+        if (!tuners.TryGetValue(out IReadOnlyList<TunerSnapshot>? snapshots))
         {
             return ServiceResult<ServiceWithChannels, CatalogFailure>.Failure(
                 "The driver could not be asked which tuners it holds, so this channel cannot be checked"
@@ -206,8 +206,8 @@ public sealed class ChannelCatalogService(
                 CatalogFailure.DriverUnreachable);
         }
 
-        var needed = tuning.System is TuneSystem.IsdbT ? TunerKind.Terrestrial : TunerKind.Satellite;
-        var usable = snapshots
+        TunerKind needed = tuning.System is TuneSystem.IsdbT ? TunerKind.Terrestrial : TunerKind.Satellite;
+        TunerKind[] usable = snapshots
             .Where(tuner => tuner.State is not (TunerState.Disabled or TunerState.Faulted))
             .Select(tuner => tuner.Kind)
             .Distinct()

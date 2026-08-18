@@ -36,7 +36,7 @@ public sealed class OperationNamingTransformer : IOpenApiOperationTransformer
     {
         ArgumentNullException.ThrowIfNull(action);
 
-        var name = action.ControllerName;
+        string name = action.ControllerName;
         if (name.EndsWith(ActionSuffix, StringComparison.Ordinal))
         {
             name = name[..^ActionSuffix.Length];
@@ -49,7 +49,7 @@ public sealed class OperationNamingTransformer : IOpenApiOperationTransformer
     {
         ArgumentNullException.ThrowIfNull(description);
 
-        var segments = (description.RelativePath ?? string.Empty)
+        string[] segments = (description.RelativePath ?? string.Empty)
             .Split('/', StringSplitOptions.RemoveEmptyEntries);
 
         if (segments.Length > 1 && segments[0] == "api")

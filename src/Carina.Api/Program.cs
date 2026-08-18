@@ -9,7 +9,7 @@ using Carina.Infrastructure.Events;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 
-var builder = WebApplication.CreateBuilder(args);
+WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
 builder.Services
     .AddControllers(options => options.Filters.Add(new ProducesAttribute("application/json")))
@@ -27,7 +27,7 @@ builder.Services.AddOpenApi(options =>
     options.AddOperationTransformer<OperationNamingTransformer>();
 });
 
-var app = builder.Build();
+WebApplication app = builder.Build();
 
 
 app.UseMiddleware<UnhandledFailureMiddleware>();

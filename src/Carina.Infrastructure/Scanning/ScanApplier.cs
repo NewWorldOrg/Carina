@@ -31,13 +31,13 @@ public sealed class ScanApplier(
 
         var covered = systems.ToHashSet();
 
-        var tally = await writes.AllOrNothingAsync(
+        Tally tally = await writes.AllOrNothingAsync(
             async token =>
             {
                 var counted = new Tally();
-                var at = clock.GetUtcNow().UtcDateTime;
+                DateTime at = clock.GetUtcNow().UtcDateTime;
 
-                foreach (var change in difference.Services)
+                foreach (ScanServiceChange change in difference.Services)
                 {
                     await ApplyOneAsync(change, covered, at, counted, token);
                 }
@@ -64,23 +64,23 @@ public sealed class ScanApplier(
         Tally tally,
         CancellationToken cancellationToken)
     {
-        var stored = await candidates.ListForServiceAsync(
+        IReadOnlyList<CandidateChannel> stored = await candidates.ListForServiceAsync(
             change.NetworkId,
             change.ServiceId,
             cancellationToken);
 
-        var arriving = change.Channels
+        ScanChannelChange[] arriving = change.Channels
             .Where(channel => channel.Kind is ScanChangeKind.Added)
             .Where(channel => covered.Contains(channel.Tuning.System))
             .ToArray();
-        var leaving = change.Channels
+        ScanChannelChange[] leaving = change.Channels
             .Where(channel => channel.Kind is ScanChangeKind.Missing)
             .Where(channel => covered.Contains(channel.Tuning.System))
             .ToArray();
 
-        var moved = 0;
+        int moved = 0;
 
-        foreach (var gone in leaving)
+        foreach (ScanChannelChange? gone in leaving)
         {
             if (stored.FirstOrDefault(candidate => candidate.Tuning.Equals(gone.Tuning)) is { } dropped)
             {
@@ -90,7 +90,7 @@ public sealed class ScanApplier(
             }
         }
 
-        var left = await candidates.ListForServiceAsync(
+        IReadOnlyList<CandidateChannel> left = await candidates.ListForServiceAsync(
             change.NetworkId,
             change.ServiceId,
             cancellationToken);
@@ -105,7 +105,7 @@ public sealed class ScanApplier(
             return;
         }
 
-        var known = await services.FindAsync(change.NetworkId, change.ServiceId, cancellationToken);
+        BroadcastService? known = await services.FindAsync(change.NetworkId, change.ServiceId, cancellationToken);
 
         if (known is null && !change.Seen)
         {
@@ -130,7 +130,7 @@ public sealed class ScanApplier(
             await services.SaveAsync(known, cancellationToken);
         }
 
-        foreach (var arrival in arriving)
+        foreach (ScanChannelChange? arrival in arriving)
         {
             if (stored.Any(candidate => candidate.Tuning.Equals(arrival.Tuning)))
             {
@@ -164,7 +164,7 @@ public sealed class ScanApplier(
             return;
         }
 
-        var settled = await candidates.ListForServiceAsync(
+        IReadOnlyList<CandidateChannel> settled = await candidates.ListForServiceAsync(
             change.NetworkId,
             change.ServiceId,
             cancellationToken);

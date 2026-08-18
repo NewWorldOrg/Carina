@@ -12,7 +12,7 @@ public sealed class RecordedBroadcastTextTests
     {
         var data = new TheoryData<string, string>();
 
-        foreach (var (bytes, expected) in Samples())
+        foreach ((string? bytes, string? expected) in Samples())
         {
             data.Add(bytes, expected);
         }
@@ -28,7 +28,7 @@ public sealed class RecordedBroadcastTextTests
     [Fact]
     public void EveryRecordedTitleIsFullyMapped()
     {
-        var unreadable = Samples()
+        (string Bytes, string Expected)[] unreadable = Samples()
             .Where(sample => sample.Expected.Contains(AribText.UnknownCharacter, StringComparison.Ordinal))
             .ToArray();
 
@@ -38,7 +38,7 @@ public sealed class RecordedBroadcastTextTests
     [Fact]
     public void TheRecordedTitlesCarryTheSymbolsOnlyBroadcastUses()
     {
-        var enclosing = Samples()
+        int enclosing = Samples()
             .SelectMany(sample => sample.Expected.EnumerateRunes())
             .Count(rune => rune.Value is (>= 0x1F200 and <= 0x1F2FF) or (>= 0x3200 and <= 0x32FF));
 
@@ -47,9 +47,9 @@ public sealed class RecordedBroadcastTextTests
 
     private static byte[] Bytes(string hex)
     {
-        var bytes = new byte[hex.Length / 2];
+        byte[] bytes = new byte[hex.Length / 2];
 
-        for (var at = 0; at < bytes.Length; at++)
+        for (int at = 0; at < bytes.Length; at++)
         {
             bytes[at] = byte.Parse(hex.AsSpan(at * 2, 2), NumberStyles.HexNumber, CultureInfo.InvariantCulture);
         }
@@ -59,7 +59,7 @@ public sealed class RecordedBroadcastTextTests
 
     private static IReadOnlyList<(string Bytes, string Expected)> Samples()
     {
-        using var carried = Assembly.GetExecutingAssembly()
+        using Stream carried = Assembly.GetExecutingAssembly()
             .GetManifestResourceStream("Carina.Broadcast.Tests.Text.Broadcasts.eit-text-samples.tsv")
             ?? throw new InvalidOperationException("The recorded broadcast text is missing from the test assembly.");
 
@@ -74,7 +74,7 @@ public sealed class RecordedBroadcastTextTests
                 continue;
             }
 
-            var split = line.IndexOf('\t', StringComparison.Ordinal);
+            int split = line.IndexOf('\t', StringComparison.Ordinal);
 
             samples.Add((line[..split], line[(split + 1)..]));
         }

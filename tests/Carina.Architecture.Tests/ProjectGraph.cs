@@ -20,7 +20,7 @@ public sealed class ProjectGraph
     public static ProjectGraph FromNodes(params ProjectNode[] projects) => new(projects);
 
     public ProjectNode Node(string name)
-        => nodes.TryGetValue(name, out var node)
+        => nodes.TryGetValue(name, out ProjectNode? node)
             ? node
             : throw new InvalidOperationException(
                 $"Unknown project '{name}'. Known projects: {string.Join(", ", nodes.Keys.Order(StringComparer.Ordinal))}.");
@@ -32,13 +32,13 @@ public sealed class ProjectGraph
 
         while (pending.Count > 0)
         {
-            var current = pending.Pop();
+            string current = pending.Pop();
             if (!reached.Add(current))
             {
                 continue;
             }
 
-            foreach (var next in Node(current).ProjectReferences)
+            foreach (string next in Node(current).ProjectReferences)
             {
                 pending.Push(next);
             }
@@ -76,14 +76,14 @@ public sealed class ProjectGraph
     {
         var document = XDocument.Load(path);
 
-        var projectReferences = document
+        string[] projectReferences = document
             .Descendants("ProjectReference")
             .Select(element => (string?)element.Attribute("Include"))
             .Where(include => !string.IsNullOrWhiteSpace(include))
             .Select(include => Path.GetFileNameWithoutExtension(include!.Replace('\\', '/')))
             .ToArray();
 
-        var packageReferences = document
+        string[] packageReferences = document
             .Descendants("PackageReference")
             .Select(element => (string?)element.Attribute("Include"))
             .Where(include => !string.IsNullOrWhiteSpace(include))

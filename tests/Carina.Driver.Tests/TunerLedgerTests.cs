@@ -30,7 +30,7 @@ public sealed class TunerLedgerTests
     [Fact]
     public void TheLedgerReadsOutAsTheEntriesTheOperatorEdits()
     {
-        var entries = TunerLedger.Entries(
+        IReadOnlyList<TunerConfigEntry> entries = TunerLedger.Entries(
             [
                 new("adapter0.frontend0", DeviceKind.Terrestrial, "/dev/dvb/adapter0/frontend0"),
                 new(
@@ -52,7 +52,7 @@ public sealed class TunerLedgerTests
     [Fact]
     public void TheEntriesTheOperatorEditsCarryNoDevicePath()
     {
-        var json = DriverJson.Serialize<IReadOnlyList<TunerConfigEntry>>(
+        string json = DriverJson.Serialize<IReadOnlyList<TunerConfigEntry>>(
             TunerLedger.Entries(Running)
         );
 
@@ -101,7 +101,7 @@ public sealed class TunerLedgerTests
     [Fact]
     public void AFingerprintIsHexadecimalAndTellsNobodyWhereTheDeviceNodeIs()
     {
-        var fingerprint = TunerLedger.Fingerprint(Running);
+        string fingerprint = TunerLedger.Fingerprint(Running);
 
         Assert.Equal(64, fingerprint.Length);
         Assert.All(fingerprint, c => Assert.True(char.IsAsciiDigit(c) || c is >= 'a' and <= 'f'));
@@ -111,7 +111,7 @@ public sealed class TunerLedgerTests
     [Fact]
     public void ALedgerWithNoTunersInItIsRefusedRatherThanSavedAsAnEmptyMachine()
     {
-        var revision = TunerLedger.Revise([], [Terrestrial], Running);
+        LedgerRevision revision = TunerLedger.Revise([], [Terrestrial], Running);
 
         Assert.False(revision.TryGetDevices(out _));
         Assert.Equal(LedgerRefusal.Empty, revision.Refusal);
@@ -120,7 +120,7 @@ public sealed class TunerLedgerTests
     [Fact]
     public void AnEmptyLedgerSaysToUseTheSeparateOperationRatherThanThatItIsNotAllowed()
     {
-        var revision = TunerLedger.Revise([], [Terrestrial], Running);
+        LedgerRevision revision = TunerLedger.Revise([], [Terrestrial], Running);
 
         Assert.Contains("detect", revision.Detail, StringComparison.OrdinalIgnoreCase);
     }
@@ -128,7 +128,7 @@ public sealed class TunerLedgerTests
     [Fact]
     public void AnEntryNamingSomethingThatWasNeverDetectedIsRefusedAndSaysWhich()
     {
-        var revision = TunerLedger.Revise(
+        LedgerRevision revision = TunerLedger.Revise(
             [new TunerConfigEntry { DeviceId = "adapter7.frontend0" }],
             [Terrestrial],
             Running
@@ -142,7 +142,7 @@ public sealed class TunerLedgerTests
     [Fact]
     public void RefusingAnEntryNamesNoDeviceNode()
     {
-        var revision = TunerLedger.Revise(
+        LedgerRevision revision = TunerLedger.Revise(
             [new TunerConfigEntry { DeviceId = "adapter7.frontend0" }],
             [Terrestrial],
             Running
@@ -154,7 +154,7 @@ public sealed class TunerLedgerTests
     [Fact]
     public void AnEntryWhoseIdIsNotEvenAnIdentifierIsRefusedBeforeItIsLookedFor()
     {
-        var revision = TunerLedger.Revise(
+        LedgerRevision revision = TunerLedger.Revise(
             [new TunerConfigEntry { DeviceId = "/dev/dvb/adapter0/frontend0" }],
             [Terrestrial],
             Running
@@ -167,7 +167,7 @@ public sealed class TunerLedgerTests
     [Fact]
     public void TheSameTunerNamedTwiceIsRefusedRatherThanSavedTwice()
     {
-        var revision = TunerLedger.Revise(
+        LedgerRevision revision = TunerLedger.Revise(
             [
                 new TunerConfigEntry { DeviceId = "adapter0.frontend0" },
                 new TunerConfigEntry { DeviceId = "adapter0.frontend0", LnbPower = true },
@@ -183,46 +183,46 @@ public sealed class TunerLedgerTests
     [Fact]
     public void ASavedTunerTakesItsKindFromDetectionRatherThanFromWhoeverAskedToSaveIt()
     {
-        var revision = TunerLedger.Revise(
+        LedgerRevision revision = TunerLedger.Revise(
             [new TunerConfigEntry { DeviceId = "adapter1.frontend0" }],
             [Satellite],
             Running
         );
 
-        Assert.True(revision.TryGetDevices(out var devices));
+        Assert.True(revision.TryGetDevices(out IReadOnlyList<DeviceSettings>? devices));
         Assert.Equal(DeviceKind.Satellite, Assert.Single(devices).Kind);
     }
 
     [Fact]
     public void SavingRepairsALedgerWhoseKindNoLongerMatchesTheHardware()
     {
-        var revision = TunerLedger.Revise(
+        LedgerRevision revision = TunerLedger.Revise(
             [new TunerConfigEntry { DeviceId = "adapter0.frontend0" }],
             [Terrestrial with { Receives = [DeviceKind.Satellite] }],
             Running
         );
 
-        Assert.True(revision.TryGetDevices(out var devices));
+        Assert.True(revision.TryGetDevices(out IReadOnlyList<DeviceSettings>? devices));
         Assert.Equal(DeviceKind.Satellite, Assert.Single(devices).Kind);
     }
 
     [Fact]
     public void ATunerThatCouldNotBeReadKeepsTheKindTheLedgerAlreadyHadForIt()
     {
-        var revision = TunerLedger.Revise(
+        LedgerRevision revision = TunerLedger.Revise(
             [new TunerConfigEntry { DeviceId = "adapter0.frontend0" }],
             [Terrestrial with { Receives = [], Detection = DeviceDetection.Busy }],
             Running
         );
 
-        Assert.True(revision.TryGetDevices(out var devices));
+        Assert.True(revision.TryGetDevices(out IReadOnlyList<DeviceSettings>? devices));
         Assert.Equal(DeviceKind.Terrestrial, Assert.Single(devices).Kind);
     }
 
     [Fact]
     public void ATunerNobodyCanReadAndNobodyHasSeenBeforeIsRefusedRatherThanGuessedAt()
     {
-        var revision = TunerLedger.Revise(
+        LedgerRevision revision = TunerLedger.Revise(
             [new TunerConfigEntry { DeviceId = "adapter1.frontend0" }],
             [Satellite with { Receives = [], Detection = DeviceDetection.Busy }],
             Running
@@ -235,7 +235,7 @@ public sealed class TunerLedgerTests
     [Fact]
     public void ANewlyDetectedTunerIsSavedWithTheNodeDetectionFoundItOn()
     {
-        var revision = TunerLedger.Revise(
+        LedgerRevision revision = TunerLedger.Revise(
             [
                 new TunerConfigEntry { DeviceId = "adapter0.frontend0" },
                 new TunerConfigEntry { DeviceId = "adapter1.frontend0" },
@@ -244,7 +244,7 @@ public sealed class TunerLedgerTests
             Running
         );
 
-        Assert.True(revision.TryGetDevices(out var devices));
+        Assert.True(revision.TryGetDevices(out IReadOnlyList<DeviceSettings>? devices));
         Assert.Equal(
             ["/dev/dvb/adapter0/frontend0", "/dev/dvb/adapter1/frontend0"],
             devices.Select(device => device.DevicePath)
@@ -254,7 +254,7 @@ public sealed class TunerLedgerTests
     [Fact]
     public void TurningATunerOffAndPuttingPowerOnTheCableAreTheOperatorsToSet()
     {
-        var revision = TunerLedger.Revise(
+        LedgerRevision revision = TunerLedger.Revise(
             [
                 new TunerConfigEntry
                 {
@@ -268,9 +268,9 @@ public sealed class TunerLedgerTests
             Running
         );
 
-        Assert.True(revision.TryGetDevices(out var devices));
+        Assert.True(revision.TryGetDevices(out IReadOnlyList<DeviceSettings>? devices));
 
-        var satellite = Assert.Single(devices, device => device.Id is "adapter1.frontend0");
+        DeviceSettings satellite = Assert.Single(devices, device => device.Id is "adapter1.frontend0");
 
         Assert.False(satellite.Enabled);
         Assert.True(satellite.LnbPower);
@@ -279,13 +279,13 @@ public sealed class TunerLedgerTests
     [Fact]
     public void ATunerLeftOutOfTheSavedLedgerIsGoneFromIt()
     {
-        var revision = TunerLedger.Revise(
+        LedgerRevision revision = TunerLedger.Revise(
             [new TunerConfigEntry { DeviceId = "adapter1.frontend0" }],
             [Terrestrial, Satellite],
             Running
         );
 
-        Assert.True(revision.TryGetDevices(out var devices));
+        Assert.True(revision.TryGetDevices(out IReadOnlyList<DeviceSettings>? devices));
         Assert.Equal("adapter1.frontend0", Assert.Single(devices).Id);
     }
 }

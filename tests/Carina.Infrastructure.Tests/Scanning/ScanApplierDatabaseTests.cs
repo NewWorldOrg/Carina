@@ -23,11 +23,11 @@ public sealed class ScanApplierDatabaseTests(RepositoryDatabase database)
     [Fact]
     public async Task EveryServiceOnOneStreamIsWrittenWithItsOwnCandidate()
     {
-        var network = Interlocked.Increment(ref nextNetworkId);
+        int network = Interlocked.Increment(ref nextNetworkId);
         var carrying = TuningParameters.Terrestrial(PhysicalChannel);
         var measured = SignalMeasurement.WithLock(At, 21_000);
 
-        var applied = await ApplyAsync(new ScanDifference(
+        ScanApplication applied = await ApplyAsync(new ScanDifference(
             [.. Services.Select(service => Change(
                 ScanChangeKind.Added,
                 network,
@@ -39,12 +39,12 @@ public sealed class ScanApplierDatabaseTests(RepositoryDatabase database)
         Assert.Equal(3, applied.ServicesAdded);
         Assert.Equal(3, applied.ChannelsAdded);
 
-        await using var reading = database.Open();
+        await using CarinaDbContext reading = database.Open();
         var candidates = new CandidateChannelRepository(reading);
 
-        foreach (var service in Services)
+        foreach (int service in Services)
         {
-            var stored = Assert.Single(
+            CandidateChannel stored = Assert.Single(
                 await candidates.ListForServiceAsync(new NetworkId(network), new ServiceId(service), Cancel));
 
             Assert.Equal(PhysicalChannel, stored.Tuning.PhysicalChannel);
@@ -56,7 +56,7 @@ public sealed class ScanApplierDatabaseTests(RepositoryDatabase database)
     [Fact]
     public async Task RescanningTheSameStreamRenamesTheServicesAndLeavesTheirChannelsAlone()
     {
-        var network = Interlocked.Increment(ref nextNetworkId);
+        int network = Interlocked.Increment(ref nextNetworkId);
         var carrying = TuningParameters.Terrestrial(PhysicalChannel);
 
         await ApplyAsync(new ScanDifference(
@@ -68,7 +68,7 @@ public sealed class ScanApplierDatabaseTests(RepositoryDatabase database)
                 Channel(ScanChangeKind.Added, carrying, SignalMeasurement.WithLock(At, 21_000))))],
             []));
 
-        var again = await ApplyAsync(new ScanDifference(
+        ScanApplication again = await ApplyAsync(new ScanDifference(
             [.. Services.Select(service => Change(
                 ScanChangeKind.Updated,
                 network,
@@ -80,13 +80,13 @@ public sealed class ScanApplierDatabaseTests(RepositoryDatabase database)
         Assert.Equal(3, again.ServicesUpdated);
         Assert.Equal(0, again.ChannelsAdded);
 
-        await using var reading = database.Open();
+        await using CarinaDbContext reading = database.Open();
         var services = new BroadcastServiceRepository(reading);
         var candidates = new CandidateChannelRepository(reading);
 
-        foreach (var service in Services)
+        foreach (int service in Services)
         {
-            var stored = await services.FindAsync(new NetworkId(network), new ServiceId(service), Cancel);
+            BroadcastService? stored = await services.FindAsync(new NetworkId(network), new ServiceId(service), Cancel);
             Assert.Equal($"Service {service} renamed", stored?.Name);
             Assert.Single(
                 await candidates.ListForServiceAsync(new NetworkId(network), new ServiceId(service), Cancel));
@@ -96,7 +96,7 @@ public sealed class ScanApplierDatabaseTests(RepositoryDatabase database)
     [Fact]
     public async Task AStreamThatHasGoneTakesItsServicesAndTheirChannelsWithIt()
     {
-        var network = Interlocked.Increment(ref nextNetworkId);
+        int network = Interlocked.Increment(ref nextNetworkId);
         var carrying = TuningParameters.Terrestrial(PhysicalChannel);
 
         await ApplyAsync(new ScanDifference(
@@ -108,7 +108,7 @@ public sealed class ScanApplierDatabaseTests(RepositoryDatabase database)
                 Channel(ScanChangeKind.Added, carrying, SignalMeasurement.WithLock(At, 21_000))))],
             []));
 
-        var gone = await ApplyAsync(new ScanDifference(
+        ScanApplication gone = await ApplyAsync(new ScanDifference(
             [.. Services.Select(service => Change(
                 ScanChangeKind.Missing,
                 network,
@@ -120,11 +120,11 @@ public sealed class ScanApplierDatabaseTests(RepositoryDatabase database)
         Assert.Equal(3, gone.ServicesRemoved);
         Assert.Equal(3, gone.ChannelsRemoved);
 
-        await using var reading = database.Open();
+        await using CarinaDbContext reading = database.Open();
         var services = new BroadcastServiceRepository(reading);
         var candidates = new CandidateChannelRepository(reading);
 
-        foreach (var service in Services)
+        foreach (int service in Services)
         {
             Assert.Null(await services.FindAsync(new NetworkId(network), new ServiceId(service), Cancel));
             Assert.Empty(
@@ -135,7 +135,7 @@ public sealed class ScanApplierDatabaseTests(RepositoryDatabase database)
     [Fact]
     public async Task AnApplyThatFailsPartWayThroughLeavesNothingBehind()
     {
-        var network = Interlocked.Increment(ref nextNetworkId);
+        int network = Interlocked.Increment(ref nextNetworkId);
         var carrying = TuningParameters.Terrestrial(PhysicalChannel);
         var difference = new ScanDifference(
             [.. Services.Select(service => Change(
@@ -146,8 +146,8 @@ public sealed class ScanApplierDatabaseTests(RepositoryDatabase database)
                 Channel(ScanChangeKind.Added, carrying, SignalMeasurement.WithLock(At, 21_000))))],
             []);
 
-        await using var writing = database.Open();
-        var arrived = 0;
+        await using CarinaDbContext writing = database.Open();
+        int arrived = 0;
         var events = new RecordingAppEvents();
         var applier = new ScanApplier(
             new BroadcastServiceRepository(writing),
@@ -159,11 +159,11 @@ public sealed class ScanApplierDatabaseTests(RepositoryDatabase database)
         await Assert.ThrowsAsync<StoreRefusedException>(
             () => applier.ApplyAsync(difference, [TuneSystem.IsdbT], Cancel));
 
-        await using var reading = database.Open();
+        await using CarinaDbContext reading = database.Open();
         var services = new BroadcastServiceRepository(reading);
         var candidates = new CandidateChannelRepository(reading);
 
-        foreach (var service in Services)
+        foreach (int service in Services)
         {
             Assert.Null(await services.FindAsync(new NetworkId(network), new ServiceId(service), Cancel));
             Assert.Empty(
@@ -175,7 +175,7 @@ public sealed class ScanApplierDatabaseTests(RepositoryDatabase database)
 
     private async Task<ScanApplication> ApplyAsync(ScanDifference difference)
     {
-        await using var writing = database.Open();
+        await using CarinaDbContext writing = database.Open();
 
         return await new ScanApplier(
             new BroadcastServiceRepository(writing),

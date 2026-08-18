@@ -33,14 +33,14 @@ public sealed class SectionSet
             return false;
         }
 
-        var announced = section.LastSectionNumber + 1;
+        int announced = section.LastSectionNumber + 1;
 
         if (section.SectionNumber >= announced)
         {
             return false;
         }
 
-        var replacesWhatIsHeld = VersionNumber != section.VersionNumber;
+        bool replacesWhatIsHeld = VersionNumber != section.VersionNumber;
 
         if (!replacesWhatIsHeld && held.ContainsKey(section.SectionNumber))
         {

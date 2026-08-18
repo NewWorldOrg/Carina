@@ -1,5 +1,6 @@
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
+using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
 
 namespace Carina.Infrastructure.Tests;
@@ -17,8 +18,8 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
     [Fact]
     public async Task AProgrammeComesBackWithEverythingItWasBroadcastWith()
     {
-        var network = NextNetwork();
-        await using var context = database.Open();
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
         var programmes = new ProgrammeRepository(context);
 
         await programmes.AddAsync(Programme.Discover(Broadcast(network) with
@@ -30,8 +31,8 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
             Source = ProgrammeSource.PresentFollowing,
         }, At), Cancel);
 
-        await using var reading = database.Open();
-        var stored = await new ProgrammeRepository(reading).FindAsync(Id(network), Cancel);
+        await using CarinaDbContext reading = database.Open();
+        Programme? stored = await new ProgrammeRepository(reading).FindAsync(Id(network), Cancel);
 
         Assert.NotNull(stored);
         Assert.Equal("トップニュース先出し🈑", stored.Name);
@@ -46,14 +47,14 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
     [Fact]
     public async Task AProgrammeWhoseEndIsStillOpenComesBackWithoutOne()
     {
-        var network = NextNetwork();
-        await using var context = database.Open();
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
 
         await new ProgrammeRepository(context).AddAsync(
             Programme.Discover(Broadcast(network) with { EndsAt = null }, At),
             Cancel);
 
-        await using var reading = database.Open();
+        await using CarinaDbContext reading = database.Open();
 
         Assert.Null((await new ProgrammeRepository(reading).FindAsync(Id(network), Cancel))!.EndsAt);
     }
@@ -61,8 +62,8 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
     [Fact]
     public async Task OnlyTheProgrammesTouchingTheWindowComeBack()
     {
-        var network = NextNetwork();
-        await using var context = database.Open();
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
         var programmes = new ProgrammeRepository(context);
 
         await programmes.AddAsync(Programme.Discover(Broadcast(network, 1, At.AddHours(20)), At), Cancel);
@@ -71,9 +72,9 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
         await programmes.AddAsync(Programme.Discover(Broadcast(network, 4, At.AddHours(24)), At), Cancel);
         await programmes.AddAsync(Programme.Discover(Broadcast(network, 5, At.AddHours(30)), At), Cancel);
 
-        await using var reading = database.Open();
+        await using CarinaDbContext reading = database.Open();
 
-        var carried = await new ProgrammeRepository(reading).ListAsync(
+        IReadOnlyList<Programme> carried = await new ProgrammeRepository(reading).ListAsync(
             new ProgrammeWindow(network, 1049, At.AddHours(21), At.AddHours(24)),
             Cancel);
 
@@ -83,16 +84,16 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
     [Fact]
     public async Task AProgrammeWhoseEndIsStillOpenIsCarriedByAnyWindowAfterItStarts()
     {
-        var network = NextNetwork();
-        await using var context = database.Open();
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
 
         await new ProgrammeRepository(context).AddAsync(
             Programme.Discover(Broadcast(network, 1, At.AddHours(22)) with { EndsAt = null }, At),
             Cancel);
 
-        await using var reading = database.Open();
+        await using CarinaDbContext reading = database.Open();
 
-        var carried = await new ProgrammeRepository(reading).ListAsync(
+        IReadOnlyList<Programme> carried = await new ProgrammeRepository(reading).ListAsync(
             new ProgrammeWindow(network, 1049, At.AddHours(23), At.AddHours(24)),
             Cancel);
 
@@ -102,8 +103,8 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
     [Fact]
     public async Task ProgrammesThatEndedBeforeTheCutOffAreForgotten()
     {
-        var network = NextNetwork();
-        await using var context = database.Open();
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
         var programmes = new ProgrammeRepository(context);
 
         await programmes.AddAsync(Programme.Discover(Broadcast(network, 1, At.AddHours(1)), At), Cancel);
@@ -111,7 +112,7 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
 
         Assert.True(await programmes.ForgetEndedBeforeAsync(At.AddHours(10), Cancel) >= 1);
 
-        await using var reading = database.Open();
+        await using CarinaDbContext reading = database.Open();
 
         Assert.Null(await new ProgrammeRepository(reading).FindAsync(Id(network, 1), Cancel));
         Assert.NotNull(await new ProgrammeRepository(reading).FindAsync(Id(network, 2), Cancel));
@@ -120,8 +121,8 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
     [Fact]
     public async Task WhatAProgrammeTookInLaterComesBackFromTheStore()
     {
-        var network = NextNetwork();
-        await using var context = database.Open();
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
         var programmes = new ProgrammeRepository(context);
         var programme = Programme.Discover(Broadcast(network), At);
 
@@ -138,8 +139,8 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
 
         await programmes.SaveAsync(programme, Cancel);
 
-        await using var reading = database.Open();
-        var stored = await new ProgrammeRepository(reading).FindAsync(Id(network), Cancel);
+        await using CarinaDbContext reading = database.Open();
+        Programme? stored = await new ProgrammeRepository(reading).FindAsync(Id(network), Cancel);
 
         Assert.Equal(new ProgrammeGenre(7, 2), Assert.Single(stored!.Genres));
         Assert.Equal("公式ページ", Assert.Single(stored.Items).Heading);
@@ -150,8 +151,8 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
     [Fact]
     public async Task AProgrammeWhoseEndWasNeverToldIsForgottenOnceItsStartIsOldEnough()
     {
-        var network = NextNetwork();
-        await using var context = database.Open();
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
         var programmes = new ProgrammeRepository(context);
 
         await programmes.AddAsync(
@@ -163,7 +164,7 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
 
         Assert.True(await programmes.ForgetEndedBeforeAsync(At.AddHours(10), Cancel) >= 1);
 
-        await using var reading = database.Open();
+        await using CarinaDbContext reading = database.Open();
 
         Assert.Null(await new ProgrammeRepository(reading).FindAsync(Id(network, 1), Cancel));
         Assert.NotNull(await new ProgrammeRepository(reading).FindAsync(Id(network, 2), Cancel));
@@ -172,8 +173,8 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
     [Fact]
     public async Task HowFarAServiceIsCoveredIgnoresTheProgrammesThatAreOnlyPlaceholders()
     {
-        var network = NextNetwork();
-        await using var context = database.Open();
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
         var programmes = new ProgrammeRepository(context);
 
         await programmes.AddAsync(Programme.Discover(Broadcast(network, 1, At.AddHours(20)), At), Cancel);
@@ -181,7 +182,7 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
             Programme.Discover(Broadcast(network, 2, At.AddHours(40)) with { IsShadow = true }, At),
             Cancel);
 
-        await using var reading = database.Open();
+        await using CarinaDbContext reading = database.Open();
 
         Assert.Equal(
             At.AddHours(20),
@@ -191,7 +192,7 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
     [Fact]
     public async Task AServiceWithNoProgrammesIsCoveredUntilNoTimeAtAll()
     {
-        await using var reading = database.Open();
+        await using CarinaDbContext reading = database.Open();
 
         Assert.Null(await new ProgrammeRepository(reading).CoveredUntilAsync(NextNetwork(), 1049, Cancel));
     }

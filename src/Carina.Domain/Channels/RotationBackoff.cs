@@ -53,9 +53,9 @@ public sealed record RotationBackoff
                 nameof(consecutiveFailures), consecutiveFailures, "There is no delay before the first failure.");
         }
 
-        var delay = FirstDelay;
+        TimeSpan delay = FirstDelay;
 
-        for (var step = 1; step < consecutiveFailures && delay < MaximumDelay; step++)
+        for (int step = 1; step < consecutiveFailures && delay < MaximumDelay; step++)
         {
             delay *= Factor;
         }

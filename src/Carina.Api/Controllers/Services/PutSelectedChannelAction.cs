@@ -1,3 +1,4 @@
+using Carina.Api.Common;
 using Carina.Api.Requests;
 using Carina.Api.Responder;
 using Carina.Api.Responder.Services;
@@ -22,7 +23,7 @@ public sealed class PutSelectedChannelAction(ChannelCatalogService channelCatalo
         [FromBody] SelectedChannelRequest? request,
         CancellationToken cancellationToken)
     {
-        var result = await channelCatalogService.SelectAsync(
+        ServiceResult<ServiceWithChannels, CatalogFailure> result = await channelCatalogService.SelectAsync(
             new NetworkId(networkId),
             new ServiceId(serviceId),
             request?.CandidateChannelId is { } chosen ? new CandidateChannelId(chosen) : null,

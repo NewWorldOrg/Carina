@@ -23,7 +23,7 @@ public sealed class DiagnosticsStoreTests
         clock.Advance(TimeSpan.FromMinutes(1));
         store.Report(DiagnosticReason.DeviceFaulted, "the device stopped answering", "adapter1");
 
-        var entries = store.Snapshot();
+        IReadOnlyList<DiagnosticSnapshot> entries = store.Snapshot();
 
         Assert.Equal(2, entries.Count);
         Assert.Equal(DiagnosticReason.RecordingWriteFailed, entries[0].Reason);
@@ -41,12 +41,12 @@ public sealed class DiagnosticsStoreTests
     {
         var store = new DiagnosticsStore(new ManualTimeProvider(Start), capacity: 4);
 
-        for (var index = 0; index < 10; index++)
+        for (int index = 0; index < 10; index++)
         {
             store.Report(DiagnosticReason.MeasurementFaulted, $"fault-{index}");
         }
 
-        var entries = store.Snapshot();
+        IReadOnlyList<DiagnosticSnapshot> entries = store.Snapshot();
 
         Assert.Equal(4, entries.Count);
         Assert.Equal("fault-6", entries[0].Detail);
@@ -59,13 +59,13 @@ public sealed class DiagnosticsStoreTests
         var hub = new DriverEventHub();
         var store = new DiagnosticsStore(new ManualTimeProvider(Start), hub);
 
-        Assert.True(hub.TryListen(out var listener));
+        Assert.True(hub.TryListen(out DriverEventListener? listener));
 
         using (listener)
         {
             store.Report(DiagnosticReason.TuningLost, "the carrier vanished");
 
-            var heard = await listener.Take(
+            IReadOnlyList<string> heard = await listener.Take(
                 new CancellationTokenSource(TimeSpan.FromSeconds(5)).Token
             );
 

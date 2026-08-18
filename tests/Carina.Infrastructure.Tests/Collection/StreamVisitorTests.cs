@@ -23,18 +23,18 @@ public sealed class StreamVisitorTests(RepositoryDatabase database)
     [Fact]
     public async Task AVisitGathersTheTablesAndWritesTheProgrammesTheyCarry()
     {
-        var network = NextNetwork();
+        int network = NextNetwork();
         var driver = new ScriptedDriverClient();
 
         driver.Script(Channel, new ChannelScript { Bytes = Schedule(network) });
 
-        await using var context = database.Open();
-        var result = await Visitor(driver, context).VisitAsync(Channel, hurried: false, Cancel);
+        await using CarinaDbContext context = database.Open();
+        VisitResult result = await Visitor(driver, context).VisitAsync(Channel, hurried: false, Cancel);
 
         Assert.Equal(VisitOutcome.BasicOnly, result.Outcome);
         Assert.Equal(1, result.Written.Added);
 
-        await using var reading = database.Open();
+        await using CarinaDbContext reading = database.Open();
 
         Assert.NotNull(await new ProgrammeRepository(reading).FindAsync(
             new ProgrammeId(new NetworkId(network), new ServiceId(1049), new EventId(1)),
@@ -48,8 +48,8 @@ public sealed class StreamVisitorTests(RepositoryDatabase database)
 
         driver.Script(Channel, ChannelScript.NoLock());
 
-        await using var context = database.Open();
-        var result = await Visitor(driver, context).VisitAsync(Channel, hurried: false, Cancel);
+        await using CarinaDbContext context = database.Open();
+        VisitResult result = await Visitor(driver, context).VisitAsync(Channel, hurried: false, Cancel);
 
         Assert.Equal(VisitOutcome.NoLock, result.Outcome);
         Assert.Equal(new ProgrammesWritten(0, 0, 0), result.Written);
@@ -62,7 +62,7 @@ public sealed class StreamVisitorTests(RepositoryDatabase database)
 
         driver.Script(Channel, new ChannelScript { Bytes = Schedule(NextNetwork()) });
 
-        await using var context = database.Open();
+        await using CarinaDbContext context = database.Open();
 
         await Visitor(driver, context).VisitAsync(Channel, hurried: false, Cancel);
 
@@ -76,7 +76,7 @@ public sealed class StreamVisitorTests(RepositoryDatabase database)
 
         driver.Script(Channel, new ChannelScript { Bytes = Schedule(NextNetwork()) });
 
-        await using var context = database.Open();
+        await using CarinaDbContext context = database.Open();
 
         await Visitor(driver, context).VisitAsync(Channel, hurried: true, Cancel);
 
@@ -90,7 +90,7 @@ public sealed class StreamVisitorTests(RepositoryDatabase database)
 
         driver.Script(Channel, new ChannelScript { Bytes = Schedule(NextNetwork()) });
 
-        await using var context = database.Open();
+        await using CarinaDbContext context = database.Open();
 
         await Visitor(driver, context).VisitAsync(Channel, hurried: false, Cancel);
 
@@ -104,8 +104,8 @@ public sealed class StreamVisitorTests(RepositoryDatabase database)
 
         driver.Script(Channel, ChannelScript.Silent());
 
-        await using var context = database.Open();
-        var result = await Visitor(driver, context).VisitAsync(Channel, hurried: false, Cancel);
+        await using CarinaDbContext context = database.Open();
+        VisitResult result = await Visitor(driver, context).VisitAsync(Channel, hurried: false, Cancel);
 
         Assert.Equal(VisitOutcome.NoBytes, result.Outcome);
     }
@@ -117,8 +117,8 @@ public sealed class StreamVisitorTests(RepositoryDatabase database)
 
         driver.Script(Channel, new ChannelScript { Paced = PacedStream.Torn });
 
-        await using var context = database.Open();
-        var result = await Visitor(driver, context).VisitAsync(Channel, hurried: false, Cancel);
+        await using CarinaDbContext context = database.Open();
+        VisitResult result = await Visitor(driver, context).VisitAsync(Channel, hurried: false, Cancel);
 
         Assert.Equal(VisitOutcome.Interrupted, result.Outcome);
         Assert.Single(driver.Stopped);
@@ -127,14 +127,14 @@ public sealed class StreamVisitorTests(RepositoryDatabase database)
     [Fact]
     public async Task PacketsArrivingInOddSizedChunksAreStillRead()
     {
-        var network = NextNetwork();
+        int network = NextNetwork();
         var driver = new ScriptedDriverClient();
-        var packets = Schedule(network);
+        byte[] packets = Schedule(network);
 
         driver.Script(Channel, new ChannelScript { Paced = () => PacedStream.Sliced(packets, 100) });
 
-        await using var context = database.Open();
-        var result = await Visitor(driver, context).VisitAsync(Channel, hurried: false, Cancel);
+        await using CarinaDbContext context = database.Open();
+        VisitResult result = await Visitor(driver, context).VisitAsync(Channel, hurried: false, Cancel);
 
         Assert.Equal(VisitOutcome.BasicOnly, result.Outcome);
         Assert.Equal(0, result.UnreadablePackets);

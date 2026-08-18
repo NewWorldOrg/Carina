@@ -1,7 +1,10 @@
+using Carina.Api.Common;
 using Carina.Api.Requests;
 using Carina.Api.Responder;
 using Carina.Api.Responder.Scans;
 using Carina.Api.Services;
+using Carina.Domain.Scans;
+using Carina.Infrastructure.Scanning;
 
 using Microsoft.AspNetCore.Mvc;
 
@@ -20,15 +23,15 @@ public sealed class StartScanAction(ScanService scanService) : ControllerBase
         [FromBody] StartScanRequest? request,
         CancellationToken cancellationToken)
     {
-        var scope = (request ?? new StartScanRequest()).ToScope(out var problem);
+        ScanScope? scope = (request ?? new StartScanRequest()).ToScope(out string? problem);
 
         if (scope is null)
         {
             return BadRequest(BaseResponder<ScanStartedResponder>.Error(problem!));
         }
 
-        var result = await scanService.StartAsync(scope, cancellationToken);
-        var launch = result.Data!;
+        ServiceResult<ScanLaunch> result = await scanService.StartAsync(scope, cancellationToken);
+        ScanLaunch launch = result.Data!;
 
         if (launch.CouldNotStartBecause is { } refusal)
         {

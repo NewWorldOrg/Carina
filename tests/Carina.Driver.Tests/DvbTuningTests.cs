@@ -22,7 +22,7 @@ public sealed class DvbTuningTests
             channels,
             channel =>
             {
-                var list = DvbTuning.PropertiesFor(channel);
+                DvbPropertyList list = DvbTuning.PropertiesFor(channel);
 
                 Assert.Equal(DvbProperty.Tune, list.PropertyAt(list.Count - 1));
             }
@@ -48,7 +48,7 @@ public sealed class DvbTuningTests
     [Fact]
     public void ATerrestrialTuneNamesTheTerrestrialSystemItsFrequencyInHertzAndItsBandwidth()
     {
-        var list = DvbTuning.PropertiesFor(DvbChannel.Terrestrial(55));
+        DvbPropertyList list = DvbTuning.PropertiesFor(DvbChannel.Terrestrial(55));
 
         Assert.Equal(
             (uint)DeliverySystem.IsdbTerrestrial.Code,
@@ -67,7 +67,7 @@ public sealed class DvbTuningTests
     [Fact]
     public void ABroadcastSatelliteTuneNamesTheSatelliteSystemAndItsFrequencyInKilohertz()
     {
-        var list = DvbTuning.PropertiesFor(DvbChannel.BroadcastSatellite(15, SyntheticStream));
+        DvbPropertyList list = DvbTuning.PropertiesFor(DvbChannel.BroadcastSatellite(15, SyntheticStream));
 
         Assert.Equal(
             (uint)DeliverySystem.IsdbSatellite.Code,
@@ -79,7 +79,7 @@ public sealed class DvbTuningTests
     [Fact]
     public void ABroadcastSatelliteTuneNamesTheStreamWhenOneWasChosen()
     {
-        var list = DvbTuning.PropertiesFor(DvbChannel.BroadcastSatellite(15, SyntheticStream));
+        DvbPropertyList list = DvbTuning.PropertiesFor(DvbChannel.BroadcastSatellite(15, SyntheticStream));
 
         Assert.Equal((uint)SyntheticStream, ValueOf(list, DvbProperty.StreamId));
     }
@@ -107,7 +107,7 @@ public sealed class DvbTuningTests
     [Fact]
     public void ACommunicationSatelliteTuneNeverNamesAStreamBecauseOneSlotCarriesOneStream()
     {
-        var list = DvbTuning.PropertiesFor(DvbChannel.CommunicationSatellite(24));
+        DvbPropertyList list = DvbTuning.PropertiesFor(DvbChannel.CommunicationSatellite(24));
 
         Assert.False(Names(list, DvbProperty.StreamId));
         Assert.Equal(2_053_000u, ValueOf(list, DvbProperty.Frequency));
@@ -127,7 +127,7 @@ public sealed class DvbTuningTests
     [Fact]
     public void TheDeliverySystemIsNamedBeforeTheFrequencyItAppliesTo()
     {
-        var list = DvbTuning.PropertiesFor(DvbChannel.Terrestrial(55));
+        DvbPropertyList list = DvbTuning.PropertiesFor(DvbChannel.Terrestrial(55));
 
         Assert.True(IndexOf(list, DvbProperty.DeliverySystem) < IndexOf(list, DvbProperty.Frequency));
     }
@@ -135,8 +135,8 @@ public sealed class DvbTuningTests
     [Fact]
     public void ClearingFirstMeansAStreamFromAnEarlierTuneCannotSurviveIntoTheNext()
     {
-        var satellite = DvbTuning.PropertiesFor(DvbChannel.BroadcastSatellite(15, SyntheticStream));
-        var afterwards = DvbTuning.PropertiesFor(DvbChannel.CommunicationSatellite(24));
+        DvbPropertyList satellite = DvbTuning.PropertiesFor(DvbChannel.BroadcastSatellite(15, SyntheticStream));
+        DvbPropertyList afterwards = DvbTuning.PropertiesFor(DvbChannel.CommunicationSatellite(24));
 
         Assert.True(Names(satellite, DvbProperty.StreamId));
         Assert.Equal(DvbProperty.Clear, afterwards.PropertyAt(0));
@@ -148,7 +148,7 @@ public sealed class DvbTuningTests
 
     private static int IndexOf(DvbPropertyList list, DvbProperty property)
     {
-        for (var index = 0; index < list.Count; index++)
+        for (int index = 0; index < list.Count; index++)
         {
             if (list.PropertyAt(index) == property)
             {
@@ -161,7 +161,7 @@ public sealed class DvbTuningTests
 
     private static uint ValueOf(DvbPropertyList list, DvbProperty property)
     {
-        var index = IndexOf(list, property);
+        int index = IndexOf(list, property);
 
         Assert.True(index >= 0);
 

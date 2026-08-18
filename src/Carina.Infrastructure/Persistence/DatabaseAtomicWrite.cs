@@ -18,7 +18,7 @@ public sealed class DatabaseAtomicWrite(CarinaDbContext context) : IAtomicWrite
             throw new NestedWriteRefusedException();
         }
 
-        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        await using IDbContextTransaction transaction = await context.Database.BeginTransactionAsync(cancellationToken);
 
         T written;
 

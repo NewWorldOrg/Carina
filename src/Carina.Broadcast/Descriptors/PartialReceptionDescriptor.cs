@@ -16,10 +16,10 @@ public static class PartialReceptionDescriptor
             return false;
         }
 
-        var payload = descriptor.Payload.Span;
+        ReadOnlySpan<byte> payload = descriptor.Payload.Span;
         var found = new List<int>(payload.Length / EntrySize);
 
-        for (var at = 0; at < payload.Length; at += EntrySize)
+        for (int at = 0; at < payload.Length; at += EntrySize)
         {
             found.Add((payload[at] << 8) | payload[at + 1]);
         }

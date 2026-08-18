@@ -11,7 +11,7 @@ public sealed class TunerStatusTests
     [Fact]
     public void ADriverThatReportsNoneOfThisLeavesTheSubtreesEmpty()
     {
-        var tuner = DriverJson.Deserialize(
+        TunerSnapshot? tuner = DriverJson.Deserialize(
             """{"deviceId":"adapter0","kind":"terrestrial","state":"idle"}""",
             DriverJson.Context.TunerSnapshot
         );
@@ -26,7 +26,7 @@ public sealed class TunerStatusTests
     [Fact]
     public void ATunerBeingTakenOutOfServiceWhileItWorksSaysBothThings()
     {
-        var tuner = Idle with
+        TunerSnapshot tuner = Idle with
         {
             State = TunerState.Busy,
             Health = new TunerHealthDto
@@ -60,7 +60,7 @@ public sealed class TunerStatusTests
     [Fact]
     public void AHealthLevelThisBuildDoesNotKnowIsNotReadAsHealthy()
     {
-        var health = DriverJson.Deserialize(
+        TunerHealthDto? health = DriverJson.Deserialize(
             """{"level":"retiring"}""",
             DriverJson.Context.TunerHealthDto
         );
@@ -73,7 +73,7 @@ public sealed class TunerStatusTests
     [Fact]
     public void TheSessionOnATunerNamesWhatItIsForAndWhatItIsOn()
     {
-        var tuner = Idle with
+        TunerSnapshot tuner = Idle with
         {
             State = TunerState.Busy,
             SessionId = SessionId.Parse("scan-1"),
@@ -86,7 +86,7 @@ public sealed class TunerStatusTests
             },
         };
 
-        var restored = DriverJson.Deserialize(
+        TunerSnapshot? restored = DriverJson.Deserialize(
             DriverJson.Serialize(tuner),
             DriverJson.Context.TunerSnapshot
         );
@@ -100,7 +100,7 @@ public sealed class TunerStatusTests
     [Fact]
     public void AQualityReadingRidesOnTheTunerItWasTakenFrom()
     {
-        var tuner = Idle with
+        TunerSnapshot tuner = Idle with
         {
             SignalQuality = new SignalQualityDto
             {
@@ -110,7 +110,7 @@ public sealed class TunerStatusTests
             },
         };
 
-        var restored = DriverJson.Deserialize(
+        TunerSnapshot? restored = DriverJson.Deserialize(
             DriverJson.Serialize(tuner),
             DriverJson.Context.TunerSnapshot
         );
@@ -121,7 +121,7 @@ public sealed class TunerStatusTests
     [Fact]
     public void AnUnlockedTunerOnTheWireCarriesNoMeasurement()
     {
-        var json = DriverJson.Serialize(
+        string json = DriverJson.Serialize(
             Idle with
             {
                 SignalQuality = new SignalQualityDto
@@ -132,7 +132,7 @@ public sealed class TunerStatusTests
             }
         );
 
-        var restored = DriverJson.Deserialize(json, DriverJson.Context.TunerSnapshot);
+        TunerSnapshot? restored = DriverJson.Deserialize(json, DriverJson.Context.TunerSnapshot);
 
         Assert.Null(restored?.SignalQuality?.CnrMilliDecibels);
     }

@@ -82,7 +82,7 @@ public sealed partial class LinuxDvbSystemCalls : IDvbSystemCalls
 
     public SyscallOutcome Open(string path, DvbAccess access)
     {
-        var flags = access switch
+        int flags = access switch
         {
             DvbAccess.Inspect => ReadOnlyFlag,
             DvbAccess.Control => ReadWriteFlag,
@@ -105,11 +105,11 @@ public sealed partial class LinuxDvbSystemCalls : IDvbSystemCalls
 
     public unsafe SyscallOutcome ReadStatus(int descriptor, out uint flags)
     {
-        var block = new byte[DvbLayout.FrontendStatusBytes];
+        byte[] block = new byte[DvbLayout.FrontendStatusBytes];
 
         fixed (byte* pointer = block)
         {
-            var outcome = Outcome(
+            SyscallOutcome outcome = Outcome(
                 IoctlPointer(descriptor, DvbIoctl.FrontendReadStatus, pointer)
             );
 
@@ -148,7 +148,7 @@ public sealed partial class LinuxDvbSystemCalls : IDvbSystemCalls
     {
         fixed (byte* pointer = buffer)
         {
-            var read = ReadDescriptor(descriptor, pointer, (nuint)count);
+            nint read = ReadDescriptor(descriptor, pointer, (nuint)count);
 
             return read < 0
                 ? SyscallOutcome.Failed(Marshal.GetLastPInvokeError())
@@ -158,7 +158,7 @@ public sealed partial class LinuxDvbSystemCalls : IDvbSystemCalls
 
     public unsafe SyscallOutcome WaitForReadable(int descriptor, int timeoutMilliseconds)
     {
-        var waiting = new byte[DvbLayout.PollBytes];
+        byte[] waiting = new byte[DvbLayout.PollBytes];
         BinaryPrimitives.WriteInt32LittleEndian(
             waiting.AsSpan(DvbLayout.PollDescriptorAt),
             descriptor
@@ -183,7 +183,7 @@ public sealed partial class LinuxDvbSystemCalls : IDvbSystemCalls
         byte[] records
     )
     {
-        var header = new byte[DvbLayout.PropertyListHeaderBytes];
+        byte[] header = new byte[DvbLayout.PropertyListHeaderBytes];
 
         fixed (byte* properties = records)
         fixed (byte* pointer = header)

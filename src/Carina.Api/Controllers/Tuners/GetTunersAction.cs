@@ -1,3 +1,4 @@
+using Carina.Api.Common;
 using Carina.Api.Responder;
 using Carina.Api.Responder.Tuners;
 using Carina.Api.Services;
@@ -16,7 +17,7 @@ public sealed class GetTunersAction(TunerLedgerService tunerLedgerService) : Con
     [ProducesResponseType<BaseResponder<TunerLedgerResponder>>(StatusCodes.Status503ServiceUnavailable)]
     public async Task<IActionResult> Invoke(CancellationToken cancellationToken)
     {
-        var result = await tunerLedgerService.ReadAsync(cancellationToken);
+        ServiceResult<TunerLedgerView, TunerLedgerFailure> result = await tunerLedgerService.ReadAsync(cancellationToken);
 
         if (!result.IsSuccess)
         {

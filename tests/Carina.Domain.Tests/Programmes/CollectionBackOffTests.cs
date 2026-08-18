@@ -12,7 +12,7 @@ public sealed class CollectionBackOffTests
     [Fact]
     public void AVisitThatWentWellIsFollowedByTheOrdinaryWait()
     {
-        var visit = Visit(VisitOutcome.Complete);
+        StreamVisit visit = Visit(VisitOutcome.Complete);
 
         Assert.Equal(At + Settings.BetweenVisits, CollectionBackOff.NotBefore(visit, Settings));
     }
@@ -20,7 +20,7 @@ public sealed class CollectionBackOffTests
     [Fact]
     public void GatheringOnlyTheBasicTablesStillCountsAsGoingWell()
     {
-        var visit = Visit(VisitOutcome.BasicOnly);
+        StreamVisit visit = Visit(VisitOutcome.BasicOnly);
 
         Assert.Equal(At + Settings.BetweenVisits, CollectionBackOff.NotBefore(visit, Settings));
     }
@@ -28,7 +28,7 @@ public sealed class CollectionBackOffTests
     [Fact]
     public void ComingBackShortOnceMeansWaitingTheRetryTime()
     {
-        var visit = Visit(VisitOutcome.Incomplete);
+        StreamVisit visit = Visit(VisitOutcome.Incomplete);
 
         Assert.Equal(At + Settings.BeforeRetrying, CollectionBackOff.NotBefore(visit, Settings));
     }
@@ -36,7 +36,7 @@ public sealed class CollectionBackOffTests
     [Fact]
     public void ComingBackShortAgainAndAgainStretchesTheWait()
     {
-        var visit = Visit(VisitOutcome.Incomplete);
+        StreamVisit visit = Visit(VisitOutcome.Incomplete);
 
         visit.Record(VisitOutcome.Incomplete, At, TimeSpan.FromSeconds(1));
 
@@ -50,9 +50,9 @@ public sealed class CollectionBackOffTests
     [Fact]
     public void TheWaitNeverGrowsPastWhatTheSettingsAllow()
     {
-        var visit = Visit(VisitOutcome.Incomplete);
+        StreamVisit visit = Visit(VisitOutcome.Incomplete);
 
-        for (var again = 0; again < 30; again++)
+        for (int again = 0; again < 30; again++)
         {
             visit.Record(VisitOutcome.Incomplete, At, TimeSpan.FromSeconds(1));
         }

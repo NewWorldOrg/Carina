@@ -17,7 +17,7 @@ public sealed class CandidateChannelTests
     [Fact]
     public void AFreshCandidateIsInRotationAndSelectedByNobody()
     {
-        var candidate = Discovered();
+        CandidateChannel candidate = Discovered();
 
         Assert.False(candidate.IsSelected);
         Assert.Null(candidate.SelectionSource);
@@ -31,7 +31,7 @@ public sealed class CandidateChannelTests
     [Fact]
     public void SelectingRecordsWhatChoseItAndWhatWasMeasuredAtThatMoment()
     {
-        var candidate = Discovered();
+        CandidateChannel candidate = Discovered();
 
         candidate.Select(SelectionSource.AutoSwitch, SignalMeasurement.WithLock(At, 20_500), At);
 
@@ -44,7 +44,7 @@ public sealed class CandidateChannelTests
     [Fact]
     public void DroppingASelectionLeavesNothingBehindThatLooksLikeOne()
     {
-        var candidate = Discovered();
+        CandidateChannel candidate = Discovered();
         candidate.Select(SelectionSource.Manual, SignalMeasurement.WithLock(At, 20_500), At);
 
         candidate.Deselect();
@@ -81,10 +81,10 @@ public sealed class CandidateChannelTests
     [Fact]
     public void EachFailureBacksOffFurtherWithoutLeavingRotation()
     {
-        var candidate = Discovered();
+        CandidateChannel candidate = Discovered();
 
         candidate.RecordTuningFailure(RotationBackoff.Default, At);
-        var first = candidate.NextAttemptAt;
+        DateTime? first = candidate.NextAttemptAt;
 
         candidate.RecordTuningFailure(RotationBackoff.Default, At);
 
@@ -99,9 +99,9 @@ public sealed class CandidateChannelTests
     public void ReachingTheCeilingLeavesRotationAndSaysSinceWhen()
     {
         var backoff = new RotationBackoff(TimeSpan.FromMinutes(1), 2, TimeSpan.FromHours(1), 3);
-        var candidate = Discovered();
+        CandidateChannel candidate = Discovered();
 
-        for (var failure = 0; failure < 3; failure++)
+        for (int failure = 0; failure < 3; failure++)
         {
             candidate.RecordTuningFailure(backoff, At.AddMinutes(failure));
         }
@@ -116,7 +116,7 @@ public sealed class CandidateChannelTests
     public void LeavingRotationKeepsTheHourItHappenedRatherThanMovingIt()
     {
         var backoff = new RotationBackoff(TimeSpan.FromMinutes(1), 2, TimeSpan.FromHours(1), 2);
-        var candidate = Discovered();
+        CandidateChannel candidate = Discovered();
 
         candidate.RecordTuningFailure(backoff, At);
         candidate.RecordTuningFailure(backoff, At.AddMinutes(5));
@@ -129,7 +129,7 @@ public sealed class CandidateChannelTests
     public void ASuccessfulTuneReturnsTheCandidateToRotation()
     {
         var backoff = new RotationBackoff(TimeSpan.FromMinutes(1), 2, TimeSpan.FromHours(1), 2);
-        var candidate = Discovered();
+        CandidateChannel candidate = Discovered();
         candidate.RequireRevalidation();
         candidate.RecordTuningFailure(backoff, At);
         candidate.RecordTuningFailure(backoff, At);
@@ -148,7 +148,7 @@ public sealed class CandidateChannelTests
     public void ManualConfirmationReturnsACandidateThatLeftRotation()
     {
         var backoff = new RotationBackoff(TimeSpan.FromMinutes(1), 2, TimeSpan.FromHours(1), 2);
-        var candidate = Discovered();
+        CandidateChannel candidate = Discovered();
         candidate.RecordTuningFailure(backoff, At);
         candidate.RecordTuningFailure(backoff, At);
 
@@ -162,7 +162,7 @@ public sealed class CandidateChannelTests
     [Fact]
     public void AChangedTunerLedgerLeavesTheCandidateToBeRevalidatedRatherThanDeleted()
     {
-        var candidate = Discovered();
+        CandidateChannel candidate = Discovered();
 
         candidate.RequireRevalidation();
 

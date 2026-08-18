@@ -79,7 +79,7 @@ public sealed class PacedStream : Stream
 
         Interlocked.Increment(ref reads);
 
-        var take = Math.Min(Math.Min(chunkSize, buffer.Length), bytes.Length - at);
+        int take = Math.Min(Math.Min(chunkSize, buffer.Length), bytes.Length - at);
 
         if (take <= 0)
         {

@@ -42,9 +42,9 @@ public sealed class ChannelSchemaTests
     [Fact]
     public void AServiceIsKeyedByItsBroadcastIdentifiersAlone()
     {
-        using var context = Carina();
+        using CarinaDbContext context = Carina();
 
-        var key = Entity<BroadcastService>(context).FindPrimaryKey()!;
+        IKey key = Entity<BroadcastService>(context).FindPrimaryKey()!;
 
         Assert.Equal(
             ["network_id", "service_id"],
@@ -54,9 +54,9 @@ public sealed class ChannelSchemaTests
     [Fact]
     public void ACandidateChannelPointsAtItsServiceAndNothingPointsBack()
     {
-        using var context = Carina();
+        using CarinaDbContext context = Carina();
 
-        var foreignKey = Assert.Single(Entity<CandidateChannel>(context).GetForeignKeys());
+        IForeignKey foreignKey = Assert.Single(Entity<CandidateChannel>(context).GetForeignKeys());
 
         Assert.Equal("broadcast_service", foreignKey.PrincipalEntityType.GetTableName());
         Assert.Equal(
@@ -68,9 +68,9 @@ public sealed class ChannelSchemaTests
     [Fact]
     public void OnlyOneCandidatePerServiceCanBeSelected()
     {
-        using var context = Carina();
+        using CarinaDbContext context = Carina();
 
-        var index = Assert.Single(
+        IIndex index = Assert.Single(
             Entity<CandidateChannel>(context).GetIndexes(),
             candidate => candidate.GetDatabaseName() == "ux_candidate_channel_selected");
 
@@ -84,9 +84,9 @@ public sealed class ChannelSchemaTests
     [Fact]
     public void OnlyOneScanCanBeRunning()
     {
-        using var context = Carina();
+        using CarinaDbContext context = Carina();
 
-        var index = Assert.Single(
+        IIndex index = Assert.Single(
             Entity<ScanRun>(context).GetIndexes(),
             run => run.GetDatabaseName() == "ux_scan_run_running");
 
@@ -97,9 +97,9 @@ public sealed class ChannelSchemaTests
     [Fact]
     public void AnAttemptCarriesTheTuningItUsedRatherThanTheCandidateItCameFrom()
     {
-        using var context = Carina();
+        using CarinaDbContext context = Carina();
 
-        var attempt = Entity<ScanRunAttempt>(context);
+        IEntityType attempt = Entity<ScanRunAttempt>(context);
 
         Assert.Equal(
             ["scan_run"],
@@ -112,13 +112,13 @@ public sealed class ChannelSchemaTests
     [Fact]
     public void EveryTableAProgrammeCanComeFromIsAValueTheDatabaseKnows()
     {
-        using var context = Carina();
+        using CarinaDbContext context = Carina();
 
-        var check = Assert.Single(
+        ICheckConstraint check = Assert.Single(
             Entity<Programme>(context).GetCheckConstraints(),
             constraint => constraint.Name == "ck_programme_source");
 
-        foreach (var source in Enum.GetNames<ProgrammeSource>())
+        foreach (string source in Enum.GetNames<ProgrammeSource>())
         {
             Assert.Contains($"'{source}'", check.Sql, StringComparison.Ordinal);
         }
@@ -127,13 +127,13 @@ public sealed class ChannelSchemaTests
     [Fact]
     public void EveryWayAVisitCanEndIsAValueTheDatabaseKnows()
     {
-        using var context = Carina();
+        using CarinaDbContext context = Carina();
 
-        var check = Assert.Single(
+        ICheckConstraint check = Assert.Single(
             Entity<StreamVisit>(context).GetCheckConstraints(),
             constraint => constraint.Name == "ck_stream_visit_outcome");
 
-        foreach (var outcome in Enum.GetNames<VisitOutcome>())
+        foreach (string outcome in Enum.GetNames<VisitOutcome>())
         {
             Assert.Contains($"'{outcome}'", check.Sql, StringComparison.Ordinal);
         }
@@ -142,13 +142,13 @@ public sealed class ChannelSchemaTests
     [Fact]
     public void TheFourWaysOfFailingAreValuesTheDatabaseKnows()
     {
-        using var context = Carina();
+        using CarinaDbContext context = Carina();
 
-        var check = Assert.Single(
+        ICheckConstraint check = Assert.Single(
             Entity<ScanRunAttempt>(context).GetCheckConstraints(),
             constraint => constraint.Name == "ck_scan_run_attempt_outcome");
 
-        foreach (var outcome in Enum.GetNames<ScanAttemptOutcome>())
+        foreach (string outcome in Enum.GetNames<ScanAttemptOutcome>())
         {
             Assert.Contains($"'{outcome}'", check.Sql, StringComparison.Ordinal);
         }
@@ -157,9 +157,9 @@ public sealed class ChannelSchemaTests
     [Fact]
     public void AFailedOrCancelledScanCarriesAReasonTheDatabaseInsistsOn()
     {
-        using var context = Carina();
+        using CarinaDbContext context = Carina();
 
-        var names = Entity<ScanRun>(context).GetCheckConstraints().Select(constraint => constraint.Name);
+        IEnumerable<string?> names = Entity<ScanRun>(context).GetCheckConstraints().Select(constraint => constraint.Name);
 
         Assert.Contains("ck_scan_run_reason", names);
     }
@@ -167,9 +167,9 @@ public sealed class ChannelSchemaTests
     [Fact]
     public void ADefinitionThatCannotBeReceivedIsRefusedByTheDatabaseToo()
     {
-        using var context = Carina();
+        using CarinaDbContext context = Carina();
 
-        var names = Entity<CandidateChannel>(context).GetCheckConstraints().Select(constraint => constraint.Name);
+        IEnumerable<string?> names = Entity<CandidateChannel>(context).GetCheckConstraints().Select(constraint => constraint.Name);
 
         Assert.Contains("ck_candidate_channel_tuning", names);
     }
@@ -177,7 +177,7 @@ public sealed class ChannelSchemaTests
     [Fact]
     public void SelectionCarriesItsSourceAndTheReadingTakenAtTheTime()
     {
-        using var context = Carina();
+        using CarinaDbContext context = Carina();
 
         Assert.Contains(
             "selected_cnr_milli_decibels",
@@ -190,9 +190,9 @@ public sealed class ChannelSchemaTests
     [Fact]
     public void LeavingRotationIsAColumnRatherThanSomethingToInferFromLogs()
     {
-        using var context = Carina();
+        using CarinaDbContext context = Carina();
 
-        var columns = Entity<CandidateChannel>(context)
+        string[] columns = Entity<CandidateChannel>(context)
             .GetProperties()
             .Select(property => property.GetColumnName())
             .ToArray();
@@ -207,7 +207,7 @@ public sealed class ChannelSchemaTests
     [Fact]
     public void NoValueObjectOfThisDomainIsAnEntityInItsOwnRight()
     {
-        using var context = Carina();
+        using CarinaDbContext context = Carina();
 
         Assert.DoesNotContain(
             Schema(context).GetEntityTypes(),
@@ -217,7 +217,7 @@ public sealed class ChannelSchemaTests
     [Fact]
     public void EveryTableOfThisDomainIsNamedInSnakeCase()
     {
-        using var context = Carina();
+        using CarinaDbContext context = Carina();
 
         Assert.Equal(
             [
@@ -238,9 +238,9 @@ public sealed class ChannelSchemaTests
     [Fact]
     public void EveryTimeOfThisDomainGoesThroughTheUtcConverter()
     {
-        using var context = Carina();
+        using CarinaDbContext context = Carina();
 
-        var times = Schema(context).GetEntityTypes()
+        IProperty[] times = Schema(context).GetEntityTypes()
             .SelectMany(EveryProperty)
             .Where(property => property.ClrType == typeof(DateTime) || property.ClrType == typeof(DateTime?))
             .ToArray();

@@ -4,18 +4,18 @@ using Carina.Driver;
 using Carina.Driver.Configuration;
 using Carina.Driver.Ipc;
 
-var configurationPath = Environment.GetEnvironmentVariable(
+string? configurationPath = Environment.GetEnvironmentVariable(
     DriverStartup.ConfigurationPathVariable
 );
 
 if (args is ["--shutdown-budget"])
 {
-    var declared = DriverConfigurationReader.ReadFile(
+    DriverConfigurationResult declared = DriverConfigurationReader.ReadFile(
         configurationPath,
         checkTheFilesystem: false
     );
 
-    if (!declared.TryGetConfiguration(out var planned, out _))
+    if (!declared.TryGetConfiguration(out DriverConfiguration? planned, out _))
     {
         return DriverStartup.Report(declared, Console.Error, configurationPath);
     }
@@ -24,8 +24,8 @@ if (args is ["--shutdown-budget"])
     return 0;
 }
 
-var result = DriverConfigurationReader.ReadFile(configurationPath);
-if (!result.TryGetConfiguration(out var configuration, out _))
+DriverConfigurationResult result = DriverConfigurationReader.ReadFile(configurationPath);
+if (!result.TryGetConfiguration(out DriverConfiguration? configuration, out _))
 {
     return DriverStartup.Report(result, Console.Error, configurationPath);
 }
@@ -51,13 +51,13 @@ using var sigquit = PosixSignalRegistration.Create(
     _ => stopRequest.Record()
 );
 
-var built = DriverHost.Create(
+DriverHostResult built = DriverHost.Create(
     args,
     configuration,
     configurationPath: configurationPath,
     stopRequest: stopRequest
 );
-if (!built.TryGetHost(out var host))
+if (!built.TryGetHost(out IHost? host))
 {
     return built.Refusal is DriverHostRefusal.Configuration
         ? DriverStartup.ReportUnusableConfiguration(built.Problems, Console.Error)

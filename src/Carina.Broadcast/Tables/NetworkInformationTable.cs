@@ -27,7 +27,7 @@ public sealed class NetworkInformationTable
         TransportStreams = transportStreams;
 
         NetworkName = networkDescriptors.WithTag(DescriptorTags.NetworkName) is { } name
-            && NetworkNameDescriptor.TryRead(name, out var read)
+            && NetworkNameDescriptor.TryRead(name, out string? read)
                 ? read
                 : string.Empty;
     }
@@ -57,28 +57,28 @@ public sealed class NetworkInformationTable
             return Rejected(TableDefect.WrongTableId);
         }
 
-        var body = section.Body;
+        ReadOnlyMemory<byte> body = section.Body;
 
         if (body.Length < 4)
         {
             return Rejected(TableDefect.SectionTooShort);
         }
 
-        var span = body.Span;
-        var networkDescriptorsLength = ((span[0] & 0x0F) << 8) | span[1];
+        ReadOnlySpan<byte> span = body.Span;
+        int networkDescriptorsLength = ((span[0] & 0x0F) << 8) | span[1];
 
         if (2 + networkDescriptorsLength + 2 > body.Length)
         {
             return Rejected(TableDefect.LoopOverrun);
         }
 
-        if (!DescriptorLoop.TryRead(body.Slice(2, networkDescriptorsLength), out var networkDescriptors))
+        if (!DescriptorLoop.TryRead(body.Slice(2, networkDescriptorsLength), out IReadOnlyList<Descriptor>? networkDescriptors))
         {
             return Rejected(TableDefect.MalformedDescriptor);
         }
 
-        var at = 2 + networkDescriptorsLength;
-        var loopLength = ((span[at] & 0x0F) << 8) | span[at + 1];
+        int at = 2 + networkDescriptorsLength;
+        int loopLength = ((span[at] & 0x0F) << 8) | span[at + 1];
         at += 2;
 
         if (at + loopLength != body.Length)
@@ -87,7 +87,7 @@ public sealed class NetworkInformationTable
         }
 
         var transportStreams = new List<NetworkTransportStream>();
-        var end = at + loopLength;
+        int end = at + loopLength;
 
         while (at < end)
         {
@@ -96,7 +96,7 @@ public sealed class NetworkInformationTable
                 return Rejected(TableDefect.LoopOverrun);
             }
 
-            var descriptorsLength = ((span[at + 4] & 0x0F) << 8) | span[at + 5];
+            int descriptorsLength = ((span[at + 4] & 0x0F) << 8) | span[at + 5];
 
             if (at + TransportStreamHeaderSize + descriptorsLength > end)
             {
@@ -105,7 +105,7 @@ public sealed class NetworkInformationTable
 
             if (!DescriptorLoop.TryRead(
                     body.Slice(at + TransportStreamHeaderSize, descriptorsLength),
-                    out var descriptors))
+                    out IReadOnlyList<Descriptor>? descriptors))
             {
                 return Rejected(TableDefect.MalformedDescriptor);
             }

@@ -33,7 +33,7 @@ public sealed class SectionAssembler
 
     public IReadOnlyList<SectionRead> Push(ReadOnlySpan<byte> packet)
     {
-        if (!TransportPacket.TryRead(packet, out var read))
+        if (!TransportPacket.TryRead(packet, out TransportPacket read))
         {
             Abandon();
 
@@ -68,7 +68,7 @@ public sealed class SectionAssembler
 
         if (lastContinuityCounter >= 0)
         {
-            var repeats = read.ContinuityCounter == lastContinuityCounter;
+            bool repeats = read.ContinuityCounter == lastContinuityCounter;
 
             if (repeats && !alreadyRepeated && read.Payload.SequenceEqual(lastPayload.AsSpan(0, lastPayloadLength)))
             {
@@ -142,8 +142,8 @@ public sealed class SectionAssembler
             return;
         }
 
-        var pointer = payload[0];
-        var rest = payload[1..];
+        byte pointer = payload[0];
+        ReadOnlySpan<byte> rest = payload[1..];
 
         if (pointer > rest.Length)
         {
@@ -170,7 +170,7 @@ public sealed class SectionAssembler
 
     private void Feed(ReadOnlySpan<byte> bytes, List<SectionRead> outcomes)
     {
-        var at = 0;
+        int at = 0;
 
         while (at < bytes.Length)
         {
@@ -179,10 +179,10 @@ public sealed class SectionAssembler
                 return;
             }
 
-            var wanted = pendingTotal < 0
+            int wanted = pendingTotal < 0
                 ? Section.LengthPrefixSize - pendingCount
                 : pendingTotal - pendingCount;
-            var taken = Math.Min(wanted, bytes.Length - at);
+            int taken = Math.Min(wanted, bytes.Length - at);
 
             bytes.Slice(at, taken).CopyTo(pending.AsSpan(pendingCount));
             pendingCount += taken;
@@ -190,8 +190,8 @@ public sealed class SectionAssembler
 
             if (pendingTotal < 0 && pendingCount == Section.LengthPrefixSize)
             {
-                var declared = ((pending[1] & 0x0F) << 8) | pending[2];
-                var longForm = (pending[1] & 0x80) != 0;
+                int declared = ((pending[1] & 0x0F) << 8) | pending[2];
+                bool longForm = (pending[1] & 0x80) != 0;
 
                 if (declared > Section.MaximumDeclaredLength
                     || (longForm && declared < Section.MinimumLongFormLength))
@@ -216,7 +216,7 @@ public sealed class SectionAssembler
 
     private SectionRead Complete()
     {
-        var raw = pending.AsSpan(0, pendingTotal).ToArray();
+        byte[] raw = pending.AsSpan(0, pendingTotal).ToArray();
 
         if ((raw[1] & 0x80) == 0)
         {

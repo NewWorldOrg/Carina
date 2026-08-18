@@ -11,7 +11,7 @@ public sealed class ScanRunTests
     [Fact]
     public void AStartedScanIsRunningAndHasNotFinished()
     {
-        var run = Started();
+        ScanRun run = Started();
 
         Assert.Equal(ScanRunState.Running, run.State);
         Assert.True(run.IsRunning);
@@ -28,7 +28,7 @@ public sealed class ScanRunTests
     [Fact]
     public void CompletingRecordsWhenItFinished()
     {
-        var run = Started();
+        ScanRun run = Started();
 
         run.Complete(At.AddMinutes(4));
 
@@ -53,7 +53,7 @@ public sealed class ScanRunTests
     [Fact]
     public void AFailureKeepsTheStatedReason()
     {
-        var run = Started();
+        ScanRun run = Started();
 
         run.Fail("every tuner was busy for longer than the bounded wait", At.AddMinutes(1));
 
@@ -64,7 +64,7 @@ public sealed class ScanRunTests
     [Fact]
     public void ADriverThatCameBackAsAnotherInstanceInterruptsTheScan()
     {
-        var run = Started();
+        ScanRun run = Started();
 
         run.Interrupt(At.AddMinutes(2));
 
@@ -75,7 +75,7 @@ public sealed class ScanRunTests
     [Fact]
     public void AScanLeavesRunningOnlyOnce()
     {
-        var run = Started();
+        ScanRun run = Started();
         run.Cancel("the operator asked for it", At.AddMinutes(1));
 
         Assert.Throws<InvalidOperationException>(() => run.Complete(At.AddMinutes(2)));

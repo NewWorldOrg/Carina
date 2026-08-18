@@ -181,7 +181,7 @@ public sealed record ScanProgressResponder(
     {
         ArgumentNullException.ThrowIfNull(progress);
 
-        var failed = progress.Attempts.Count(attempt => attempt.Failed);
+        int failed = progress.Attempts.Count(attempt => attempt.Failed);
 
         return new ScanProgressResponder(
             ScanRunResponder.Of(progress.Run),

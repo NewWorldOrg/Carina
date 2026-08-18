@@ -11,7 +11,7 @@ public sealed class SseFramesTests
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes(wire));
         var names = new List<string>();
 
-        await foreach (var name in SseFrames.ReadNamesAsync(stream))
+        await foreach (string name in SseFrames.ReadNamesAsync(stream))
         {
             names.Add(name);
         }
@@ -22,7 +22,7 @@ public sealed class SseFramesTests
     [Fact]
     public async Task SplitsFramesOnBlankLines()
     {
-        var names = await NamesIn("event: tuners\ndata: tuners\n\nevent: sessions\ndata: sessions\n\n");
+        IReadOnlyList<string> names = await NamesIn("event: tuners\ndata: tuners\n\nevent: sessions\ndata: sessions\n\n");
 
         Assert.Equal(["tuners", "sessions"], names);
     }
@@ -30,7 +30,7 @@ public sealed class SseFramesTests
     [Fact]
     public async Task IgnoresCommentsAndUnknownFields()
     {
-        var names = await NamesIn(": ping\nretry: 100\nevent: draining\ndata: whatever\nid: 7\n\n");
+        IReadOnlyList<string> names = await NamesIn(": ping\nretry: 100\nevent: draining\ndata: whatever\nid: 7\n\n");
 
         Assert.Equal(["draining"], names);
     }
@@ -50,7 +50,7 @@ public sealed class SseFramesTests
     [Fact]
     public async Task ToleratesCarriageReturns()
     {
-        var names = await NamesIn("event: tuners\r\ndata: tuners\r\n\r\n");
+        IReadOnlyList<string> names = await NamesIn("event: tuners\r\ndata: tuners\r\n\r\n");
 
         Assert.Equal(["tuners"], names);
     }
@@ -64,7 +64,7 @@ public sealed class SseFramesTests
     [Fact]
     public async Task UnknownNamesAreStillHandedUpForTheCallerToJudge()
     {
-        var names = await NamesIn("event: somethingNew\n\n");
+        IReadOnlyList<string> names = await NamesIn("event: somethingNew\n\n");
 
         Assert.Equal(["somethingNew"], names);
     }

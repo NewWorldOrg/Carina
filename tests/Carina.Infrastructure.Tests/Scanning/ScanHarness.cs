@@ -66,7 +66,7 @@ public sealed class HeldClock : TimeProvider
 
     public void FireOnePending(string what)
     {
-        Assert.True(pending.TryDequeue(out var fire), $"No timer was waiting to be fired: {what}.");
+        Assert.True(pending.TryDequeue(out Action? fire), $"No timer was waiting to be fired: {what}.");
 
         fire!();
     }

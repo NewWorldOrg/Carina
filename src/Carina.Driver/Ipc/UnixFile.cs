@@ -44,7 +44,7 @@ public static partial class UnixFile
 
     public static UnixEntry Inspect(string path)
     {
-        var buffer = new byte[StatBufferSize];
+        byte[] buffer = new byte[StatBufferSize];
 
         if (Stat(path, buffer) is not 0)
         {
@@ -53,12 +53,12 @@ public static partial class UnixFile
                 : UnixEntry.Unreadable;
         }
 
-        if (!TryFieldOffsets(out var modeAt, out var userAt, out var groupAt))
+        if (!TryFieldOffsets(out int modeAt, out int userAt, out int groupAt))
         {
             return UnixEntry.Unreadable;
         }
 
-        var mode = BitConverter.ToUInt32(buffer, modeAt);
+        uint mode = BitConverter.ToUInt32(buffer, modeAt);
         var permissions = (UnixFileMode)(mode & PermissionMask);
 
         if (!ReadsBackTheSamePermissions(path, permissions))

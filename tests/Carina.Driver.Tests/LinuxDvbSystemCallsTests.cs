@@ -40,7 +40,7 @@ public sealed class LinuxDvbSystemCallsTests
     [Fact]
     public void OpeningANodeThatIsNotThereComesBackWithTheKernelsOwnErrno()
     {
-        var opened = calls.Open("/dev/dvb/adapter99/frontend99", DvbAccess.Inspect);
+        SyscallOutcome opened = calls.Open("/dev/dvb/adapter99/frontend99", DvbAccess.Inspect);
 
         Assert.True(opened.Refused);
         Assert.Equal(NoSuchFileOrDirectory, opened.Error);
@@ -49,7 +49,7 @@ public sealed class LinuxDvbSystemCallsTests
     [Fact]
     public void ANodeThatIsThereOpensAndGivesItsDescriptorBack()
     {
-        var opened = calls.Open(AlwaysThere, DvbAccess.Control);
+        SyscallOutcome opened = calls.Open(AlwaysThere, DvbAccess.Control);
 
         Assert.False(opened.Refused);
         Assert.True(opened.Value > 2);
@@ -67,12 +67,12 @@ public sealed class LinuxDvbSystemCallsTests
     [Fact]
     public void ThePropertySettingCallLinksAndBringsBackTheErrnoTheKernelSet()
     {
-        var opened = calls.Open(AlwaysThere, DvbAccess.Control);
+        SyscallOutcome opened = calls.Open(AlwaysThere, DvbAccess.Control);
 
         try
         {
-            var properties = DvbTuning.PropertiesFor(DvbChannel.Terrestrial(55));
-            var set = calls.SetProperties(opened.Value, properties.Bytes);
+            DvbPropertyList properties = DvbTuning.PropertiesFor(DvbChannel.Terrestrial(55));
+            SyscallOutcome set = calls.SetProperties(opened.Value, properties.Bytes);
 
             Assert.True(set.Refused);
             Assert.Equal(NotADeviceThatTakesThisCall, set.Error);
@@ -86,11 +86,11 @@ public sealed class LinuxDvbSystemCallsTests
     [Fact]
     public void TheStatusReadCallLinksAndBringsBackTheErrnoTheKernelSet()
     {
-        var opened = calls.Open(AlwaysThere, DvbAccess.Control);
+        SyscallOutcome opened = calls.Open(AlwaysThere, DvbAccess.Control);
 
         try
         {
-            var read = calls.ReadStatus(opened.Value, out var flags);
+            SyscallOutcome read = calls.ReadStatus(opened.Value, out uint flags);
 
             Assert.True(read.Refused);
             Assert.Equal(NotADeviceThatTakesThisCall, read.Error);
@@ -105,11 +105,11 @@ public sealed class LinuxDvbSystemCallsTests
     [Fact]
     public void TheVoltageCallLinksAndBringsBackTheErrnoTheKernelSet()
     {
-        var opened = calls.Open(AlwaysThere, DvbAccess.Control);
+        SyscallOutcome opened = calls.Open(AlwaysThere, DvbAccess.Control);
 
         try
         {
-            var set = calls.SetLnbVoltage(opened.Value, LnbVoltage.Off);
+            SyscallOutcome set = calls.SetLnbVoltage(opened.Value, LnbVoltage.Off);
 
             Assert.True(set.Refused);
             Assert.Equal(NotADeviceThatTakesThisCall, set.Error);
@@ -123,11 +123,11 @@ public sealed class LinuxDvbSystemCallsTests
     [Fact]
     public void TheFilterCallLinksAndBringsBackTheErrnoTheKernelSet()
     {
-        var opened = calls.Open(AlwaysThere, DvbAccess.Control);
+        SyscallOutcome opened = calls.Open(AlwaysThere, DvbAccess.Control);
 
         try
         {
-            var set = calls.SetPesFilter(
+            SyscallOutcome set = calls.SetPesFilter(
                 opened.Value,
                 DemuxFilter.EverythingFromTheFrontend()
             );
@@ -144,12 +144,12 @@ public sealed class LinuxDvbSystemCallsTests
     [Fact]
     public void ReadingActuallyReadsThroughToTheKernel()
     {
-        var opened = calls.Open(AlwaysReadable, DvbAccess.Stream);
+        SyscallOutcome opened = calls.Open(AlwaysReadable, DvbAccess.Stream);
 
         try
         {
-            var buffer = new byte[188];
-            var read = calls.ReadBytes(opened.Value, buffer, buffer.Length);
+            byte[] buffer = new byte[188];
+            SyscallOutcome read = calls.ReadBytes(opened.Value, buffer, buffer.Length);
 
             Assert.False(read.Refused);
             Assert.Equal(188, read.Value);
@@ -163,11 +163,11 @@ public sealed class LinuxDvbSystemCallsTests
     [Fact]
     public void WaitingOnSomethingAlwaysReadableComesBackReadable()
     {
-        var opened = calls.Open(AlwaysReadable, DvbAccess.Stream);
+        SyscallOutcome opened = calls.Open(AlwaysReadable, DvbAccess.Stream);
 
         try
         {
-            var ready = calls.WaitForReadable(opened.Value, 0);
+            SyscallOutcome ready = calls.WaitForReadable(opened.Value, 0);
 
             Assert.False(ready.Refused);
             Assert.Equal(1, ready.Value);
@@ -181,7 +181,7 @@ public sealed class LinuxDvbSystemCallsTests
     [Fact]
     public void WaitingOnADescriptorThatWasNeverOpenedTimesOutRatherThanReportingData()
     {
-        var ready = calls.WaitForReadable(-1, 0);
+        SyscallOutcome ready = calls.WaitForReadable(-1, 0);
 
         Assert.False(ready.Refused);
         Assert.Equal(0, ready.Value);
@@ -190,22 +190,22 @@ public sealed class LinuxDvbSystemCallsTests
     [Fact]
     public async Task StreamingAccessDoesNotBlockOnAPipeThatNobodyIsWritingTo()
     {
-        var work = Directory.CreateTempSubdirectory("carina-fifo-").FullName;
+        string work = Directory.CreateTempSubdirectory("carina-fifo-").FullName;
 
         try
         {
-            var pipe = Path.Combine(work, "dvr");
+            string pipe = Path.Combine(work, "dvr");
             MakePipe(pipe);
 
-            var opening = Task.Run(() => calls.Open(pipe, DvbAccess.Stream));
-            var settled = await Task.WhenAny(opening, Task.Delay(TimeSpan.FromSeconds(5)));
+            Task<SyscallOutcome> opening = Task.Run(() => calls.Open(pipe, DvbAccess.Stream));
+            Task settled = await Task.WhenAny(opening, Task.Delay(TimeSpan.FromSeconds(5)));
 
             Assert.True(
                 settled == opening,
                 "Opening a pipe with no writer never returned, so the streaming access mode is not passing the non-blocking flag."
             );
 
-            var opened = await opening;
+            SyscallOutcome opened = await opening;
 
             Assert.False(opened.Refused);
             calls.Close(opened.Value);
@@ -222,7 +222,7 @@ public sealed class LinuxDvbSystemCallsTests
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
 
-        var before = Environment.TickCount64;
+        long before = Environment.TickCount64;
         calls.Rest(TimeSpan.FromSeconds(30), cancellation.Token);
 
         Assert.True(Environment.TickCount64 - before < 5_000);

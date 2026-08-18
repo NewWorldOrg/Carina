@@ -7,7 +7,7 @@ public sealed class VersionSkewTests
     [Fact]
     public void AnAnswerWithoutTheNewerFieldsStillReads()
     {
-        var session = DriverJson.Deserialize(
+        SessionSnapshot? session = DriverJson.Deserialize(
             """{"sessionId":"s-1","purpose":"recording","deviceId":"a0","state":"active","startedAt":"2026-08-08T21:04:00+09:00"}""",
             DriverJson.Context.SessionSnapshot
         );
@@ -23,7 +23,7 @@ public sealed class VersionSkewTests
     [Fact]
     public void ASessionWithoutCountersIsStillReadable()
     {
-        var session = DriverJson.Deserialize(
+        SessionSnapshot? session = DriverJson.Deserialize(
             """{"sessionId":"s-1","purpose":"recording","deviceId":"a0","state":"stopped","startedAt":"2026-08-08T21:04:00+09:00","counters":null}""",
             DriverJson.Context.SessionSnapshot
         );
@@ -36,7 +36,7 @@ public sealed class VersionSkewTests
     [Fact]
     public void AHurriedSurveyReadsBackAsItself()
     {
-        var session = DriverJson.Deserialize(
+        SessionSnapshot? session = DriverJson.Deserialize(
             """{"sessionId":"s-1","purpose":"surveyNow","deviceId":"a0","state":"active","startedAt":"2026-08-08T21:04:00+09:00"}""",
             DriverJson.Context.SessionSnapshot
         );
@@ -48,7 +48,7 @@ public sealed class VersionSkewTests
     [Fact]
     public void AnAnswerWithNewerFieldsAndValuesStillReads()
     {
-        var session = DriverJson.Deserialize(
+        SessionSnapshot? session = DriverJson.Deserialize(
             """{"sessionId":"s-1","purpose":"epgNow","deviceId":"a0","state":"draining","startedAt":"2026-08-08T21:04:00+09:00","priority":8}""",
             DriverJson.Context.SessionSnapshot
         );
@@ -62,7 +62,7 @@ public sealed class VersionSkewTests
     [Fact]
     public void AnUnknownTunerStateDoesNotReadAsAWorkingTuner()
     {
-        var tuner = DriverJson.Deserialize(
+        TunerSnapshot? tuner = DriverJson.Deserialize(
             """{"deviceId":"a0","kind":"terrestrial","state":"warmingUp"}""",
             DriverJson.Context.TunerSnapshot
         );
@@ -75,7 +75,7 @@ public sealed class VersionSkewTests
     [Fact]
     public void NumericEnumValuesAreNotHonoured()
     {
-        var tuner = DriverJson.Deserialize(
+        TunerSnapshot? tuner = DriverJson.Deserialize(
             """{"deviceId":"a0","kind":1,"state":2}""",
             DriverJson.Context.TunerSnapshot
         );
@@ -88,7 +88,7 @@ public sealed class VersionSkewTests
     [Fact]
     public void ADriverWithoutACapabilityIsUsableForEverythingElse()
     {
-        var hello = DriverJson.Deserialize(
+        DriverHello? hello = DriverJson.Deserialize(
             """{"protocolVersion":1,"instanceId":"old","capabilities":["recording"]}""",
             DriverJson.Context.DriverHello
         );
@@ -113,7 +113,7 @@ public sealed class VersionSkewTests
     [Fact]
     public void ADriverThatNamesNoInstanceIsAlwaysTreatedAsARestart()
     {
-        var older = DriverJson.Deserialize(
+        DriverHello? older = DriverJson.Deserialize(
             """{"protocolVersion":1,"capabilities":["recording"]}""",
             DriverJson.Context.DriverHello
         );
@@ -128,7 +128,7 @@ public sealed class VersionSkewTests
     [Fact]
     public void AnIdentifierOutsideTheShapeLeavesTheRestOfTheAnswerReadable()
     {
-        var session = DriverJson.Deserialize(
+        SessionSnapshot? session = DriverJson.Deserialize(
             """{"sessionId":"../x","purpose":"live","deviceId":"a0","state":"active","startedAt":"2026-08-08T21:04:00+09:00"}""",
             DriverJson.Context.SessionSnapshot
         );
@@ -149,7 +149,7 @@ public sealed class VersionSkewTests
     [Fact]
     public void ATerrestrialTuneReachesADriverThatNeverHeardOfTheTypedShape()
     {
-        var request = AsOlderDriverReadsIt(TuneParams.Terrestrial(55));
+        StartSessionRequest? request = AsOlderDriverReadsIt(TuneParams.Terrestrial(55));
 
         Assert.NotNull(request);
         Assert.Null(request.Tune);
@@ -162,9 +162,9 @@ public sealed class VersionSkewTests
     [InlineData(TuneSystem.IsdbSCs110)]
     public void ASatelliteTuneIsRefusedByADriverThatCannotTellTheTwoApart(TuneSystem system)
     {
-        var tune = system is TuneSystem.IsdbSBs ? TuneParams.Bs(15, 50001) : TuneParams.Cs110(24);
+        TuneParams tune = system is TuneSystem.IsdbSBs ? TuneParams.Bs(15, 50001) : TuneParams.Cs110(24);
 
-        var request = AsOlderDriverReadsIt(tune);
+        StartSessionRequest? request = AsOlderDriverReadsIt(tune);
 
         Assert.NotNull(request);
         Assert.Equal(TunerKind.Unspecified, request.Tuning.Kind);
@@ -195,7 +195,7 @@ public sealed class VersionSkewTests
     [Fact]
     public void ATunerAnsweredByADriverWithoutAnyOfThisIsStillReadable()
     {
-        var tuner = DriverJson.Deserialize(
+        TunerSnapshot? tuner = DriverJson.Deserialize(
             """{"deviceId":"a0","kind":"terrestrial","state":"busy","sessionId":"s-1"}""",
             DriverJson.Context.TunerSnapshot
         );
@@ -210,7 +210,7 @@ public sealed class VersionSkewTests
     [Fact]
     public void ADriverThatMeasuresNothingDegradesOneMetricAtATime()
     {
-        var hello = DriverJson.Deserialize(
+        DriverHello? hello = DriverJson.Deserialize(
             """{"protocolVersion":1,"instanceId":"old","capabilities":["recording","signalQuality","signalQuality.cnr"]}""",
             DriverJson.Context.DriverHello
         );
@@ -227,7 +227,7 @@ public sealed class VersionSkewTests
     [Fact]
     public void ATunerToggleIsNotAttemptedAgainstADriverThatCannotDoIt()
     {
-        var hello = DriverJson.Deserialize(
+        DriverHello? hello = DriverJson.Deserialize(
             """{"protocolVersion":1,"instanceId":"old","capabilities":["recording"]}""",
             DriverJson.Context.DriverHello
         );
@@ -241,7 +241,7 @@ public sealed class VersionSkewTests
     [Fact]
     public void DetectionAndTheLedgerAreNotAskedOfADriverThatDoesNotDeclareThem()
     {
-        var hello = DriverJson.Deserialize(
+        DriverHello? hello = DriverJson.Deserialize(
             """{"protocolVersion":1,"instanceId":"old","capabilities":["recording","live"]}""",
             DriverJson.Context.DriverHello
         );
@@ -274,7 +274,7 @@ public sealed class VersionSkewTests
     [Fact]
     public void ALedgerEntryFromANewerAppKeepsWhatThisBuildUnderstands()
     {
-        var entry = DriverJson.Deserialize(
+        TunerConfigEntry? entry = DriverJson.Deserialize(
             """{"deviceId":"adapter0","disabled":true,"lnbPower":true,"lnbVoltage":15}""",
             DriverJson.Context.TunerConfigEntry
         );
@@ -288,7 +288,7 @@ public sealed class VersionSkewTests
     [Fact]
     public void ADrainingTunerIsNotReadAsAWorkingOneByABuildThatPredatesTheState()
     {
-        var tuner = DriverJson.Deserialize(
+        TunerSnapshot? tuner = DriverJson.Deserialize(
             """{"deviceId":"adapter0","kind":"terrestrial","state":"draining"}""",
             DriverJson.Context.TunerSnapshot
         );
@@ -301,7 +301,7 @@ public sealed class VersionSkewTests
     [Fact]
     public void ATunerFromADriverThatCannotTurnOneOffAtRuntimeIsNotReadAsHavingBeenToggled()
     {
-        var tuner = DriverJson.Deserialize(
+        TunerSnapshot? tuner = DriverJson.Deserialize(
             """{"deviceId":"adapter0","kind":"terrestrial","state":"disabled"}""",
             DriverJson.Context.TunerSnapshot
         );
@@ -314,7 +314,7 @@ public sealed class VersionSkewTests
     [Fact]
     public void ALedgerAnswerWithFieldsThisBuildDoesNotKnowStillReadsItsHashes()
     {
-        var ledger = DriverJson.Deserialize(
+        TunerLedgerDto? ledger = DriverJson.Deserialize(
             """{"tuners":[],"loadedHash":"aaaa","savedHash":"bbbb","savedAt":"2026-08-08T21:04:00+09:00"}""",
             DriverJson.Context.TunerLedgerDto
         );
@@ -328,7 +328,7 @@ public sealed class VersionSkewTests
     [Fact]
     public void ATuneArmThisBuildDoesNotKnowLeavesNothingToActOn()
     {
-        var tune = DriverJson.Deserialize(
+        TuneParams? tune = DriverJson.Deserialize(
             """{"system":"isdbSSky","isdbSSky":{"transponder":3}}""",
             DriverJson.Context.TuneParams
         );
@@ -347,7 +347,7 @@ public sealed class VersionSkewTests
     [Fact]
     public void AQualitySubtreeFromANewerDriverIsReadForWhatThisBuildKnows()
     {
-        var reading = DriverJson.Deserialize(
+        SignalQualityDto? reading = DriverJson.Deserialize(
             """{"lock":"locked","cnrMilliDecibels":21500,"signalStrengthMilliDecibels":-40000,"postViterbiBitErrors":[{"layer":0,"errorBits":12,"totalBits":1000000}]}""",
             DriverJson.Context.SignalQualityDto
         );
@@ -359,7 +359,7 @@ public sealed class VersionSkewTests
 
     private static StartSessionRequest? AsOlderDriverReadsIt(TuneParams tune)
     {
-        var json = DriverJson.Serialize(
+        string json = DriverJson.Serialize(
             new StartSessionRequest
             {
                 SessionId = SessionId.Parse("scan-1"),
@@ -369,7 +369,7 @@ public sealed class VersionSkewTests
             }
         );
 
-        var body = JsonNode.Parse(json)!.AsObject();
+        JsonObject body = JsonNode.Parse(json)!.AsObject();
         body.Remove("tune");
 
         return DriverJson.Deserialize(

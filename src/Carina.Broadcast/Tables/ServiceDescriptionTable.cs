@@ -47,16 +47,16 @@ public sealed class ServiceDescriptionTable
             return Rejected(TableDefect.WrongTableId);
         }
 
-        var body = section.Body;
+        ReadOnlyMemory<byte> body = section.Body;
 
         if (body.Length < 3)
         {
             return Rejected(TableDefect.SectionTooShort);
         }
 
-        var span = body.Span;
+        ReadOnlySpan<byte> span = body.Span;
         var services = new List<DescribedService>();
-        var at = 3;
+        int at = 3;
 
         while (at < body.Length)
         {
@@ -65,14 +65,14 @@ public sealed class ServiceDescriptionTable
                 return Rejected(TableDefect.LoopOverrun);
             }
 
-            var descriptorsLength = ((span[at + 3] & 0x0F) << 8) | span[at + 4];
+            int descriptorsLength = ((span[at + 3] & 0x0F) << 8) | span[at + 4];
 
             if (at + ServiceHeaderSize + descriptorsLength > body.Length)
             {
                 return Rejected(TableDefect.LoopOverrun);
             }
 
-            if (!DescriptorLoop.TryRead(body.Slice(at + ServiceHeaderSize, descriptorsLength), out var descriptors))
+            if (!DescriptorLoop.TryRead(body.Slice(at + ServiceHeaderSize, descriptorsLength), out IReadOnlyList<Descriptor>? descriptors))
             {
                 return Rejected(TableDefect.MalformedDescriptor);
             }

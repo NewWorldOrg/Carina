@@ -24,15 +24,15 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
     [Fact]
     public async Task ATableTurnsIntoProgrammesTheStoreCanHandBack()
     {
-        var network = NextNetwork();
-        await using var context = database.Open();
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
 
-        var written = await Writer(context).WriteAsync([Table(network, 1)], Cancel);
+        ProgrammesWritten written = await Writer(context).WriteAsync([Table(network, 1)], Cancel);
 
         Assert.Equal(new ProgrammesWritten(1, 0, 0), written);
 
-        await using var reading = database.Open();
-        var stored = await new ProgrammeRepository(reading).FindAsync(Id(network, 1), Cancel);
+        await using CarinaDbContext reading = database.Open();
+        Programme? stored = await new ProgrammeRepository(reading).FindAsync(Id(network, 1), Cancel);
 
         Assert.Equal("あさイチ", stored!.Name);
         Assert.Equal(new DateTime(2026, 8, 17, 13, 57, 0, DateTimeKind.Utc), stored.StartsAt);
@@ -43,9 +43,9 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
     [Fact]
     public async Task TheSameTableArrivingAgainWritesNothingNew()
     {
-        var network = NextNetwork();
-        await using var context = database.Open();
-        var writer = Writer(context);
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        ProgrammeWriter writer = Writer(context);
 
         await writer.WriteAsync([Table(network, 1)], Cancel);
 
@@ -55,9 +55,9 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
     [Fact]
     public async Task ATableThatSaysSomethingNewUpdatesWhatWasThere()
     {
-        var network = NextNetwork();
-        await using var context = database.Open();
-        var writer = Writer(context);
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        ProgrammeWriter writer = Writer(context);
 
         await writer.WriteAsync([Table(network, 1)], Cancel);
 
@@ -65,7 +65,7 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
             new ProgrammesWritten(0, 1, 0),
             await writer.WriteAsync([Table(network, 1, name: "ひるまえほっと")], Cancel));
 
-        await using var reading = database.Open();
+        await using CarinaDbContext reading = database.Open();
 
         Assert.Equal(
             "ひるまえほっと",
@@ -75,17 +75,17 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
     [Fact]
     public async Task OneEventSeenInSeveralTablesBecomesOneProgrammeCarryingAllOfIt()
     {
-        var network = NextNetwork();
-        await using var context = database.Open();
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
 
-        var written = await Writer(context).WriteAsync(
+        ProgrammesWritten written = await Writer(context).WriteAsync(
             [Table(network, 1), DetailTable(network, 1)],
             Cancel);
 
         Assert.Equal(new ProgrammesWritten(1, 0, 0), written);
 
-        await using var reading = database.Open();
-        var stored = await new ProgrammeRepository(reading).FindAsync(Id(network, 1), Cancel);
+        await using CarinaDbContext reading = database.Open();
+        Programme? stored = await new ProgrammeRepository(reading).FindAsync(Id(network, 1), Cancel);
 
         Assert.Equal("あさイチ", stored!.Name);
         Assert.Equal("Heading", Assert.Single(stored.Items).Heading);
@@ -94,9 +94,9 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
     [Fact]
     public async Task TheSameVisitArrivingAgainWritesNothingEvenAcrossSeveralTables()
     {
-        var network = NextNetwork();
-        await using var context = database.Open();
-        var writer = Writer(context);
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        ProgrammeWriter writer = Writer(context);
         EventInformationTable[] visit = [Table(network, 1), DetailTable(network, 1)];
 
         await writer.WriteAsync(visit, Cancel);
@@ -107,8 +107,8 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
     [Fact]
     public async Task AProgrammeNamesTheOthersItIsSharedWithButNeverItself()
     {
-        var network = NextNetwork();
-        await using var context = database.Open();
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
 
         byte[] group =
         [
@@ -120,10 +120,10 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
 
         await Writer(context).WriteAsync([Table(network, 1, extra: group)], Cancel);
 
-        await using var reading = database.Open();
-        var stored = await new ProgrammeRepository(reading).FindAsync(Id(network, 1), Cancel);
+        await using CarinaDbContext reading = database.Open();
+        Programme? stored = await new ProgrammeRepository(reading).FindAsync(Id(network, 1), Cancel);
 
-        var related = Assert.Single(stored!.Related);
+        RelatedProgramme related = Assert.Single(stored!.Related);
 
         Assert.Equal(network, related.NetworkId);
         Assert.Equal(1048, related.ServiceId);
@@ -134,10 +134,10 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
     [Fact]
     public async Task EventsTheTableItselfThrewAwayAreCountedHereToo()
     {
-        var network = NextNetwork();
-        await using var context = database.Open();
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
 
-        var written = await Writer(context).WriteAsync([Table(network, 1, unreadableStart: true)], Cancel);
+        ProgrammesWritten written = await Writer(context).WriteAsync([Table(network, 1, unreadableStart: true)], Cancel);
 
         Assert.Equal(new ProgrammesWritten(0, 0, 1), written);
     }
@@ -217,11 +217,11 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
 
     private static byte[] Kanji(char letter)
     {
-        for (var row = JisX0208.FirstRow; row <= JisX0208.LastRow; row++)
+        for (int row = JisX0208.FirstRow; row <= JisX0208.LastRow; row++)
         {
-            for (var cell = 1; cell <= JisX0208.CellsPerRow; cell++)
+            for (int cell = 1; cell <= JisX0208.CellsPerRow; cell++)
             {
-                if (JisX0208.TryMap(row, cell, out var mapped) && mapped == letter)
+                if (JisX0208.TryMap(row, cell, out char mapped) && mapped == letter)
                 {
                     return [(byte)(row + 0x20), (byte)(cell + 0x20)];
                 }

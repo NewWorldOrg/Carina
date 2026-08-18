@@ -5,7 +5,7 @@ public sealed class BroadcastDependencyTests
     [Fact]
     public void AssemblyReferencesTheBaseClassLibraryOnly()
     {
-        var referenced = typeof(BroadcastAssemblyMarker).Assembly
+        string?[] referenced = typeof(BroadcastAssemblyMarker).Assembly
             .GetReferencedAssemblies()
             .Select(assembly => assembly.Name)
             .Where(name => name is not null && !name.StartsWith("System.", StringComparison.Ordinal))

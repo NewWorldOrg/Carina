@@ -28,7 +28,7 @@ public sealed class ScanRunRepository(CarinaDbContext context) : IScanRunReposit
         {
             context.Entry(run).State = EntityState.Detached;
 
-            var running = await FindRunningAsync(cancellationToken);
+            ScanRun? running = await FindRunningAsync(cancellationToken);
 
             return ScanRunStart.RefusedBecauseOneIsRunning(running?.Id);
         }

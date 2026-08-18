@@ -16,13 +16,13 @@ public sealed class SignalQualityReadingTests
     [Fact]
     public void ALockedFrontendReportsItsCarrierToNoiseInDecibels()
     {
-        var reading = SignalQualityReading.CarrierToNoiseFrom(
+        CarrierToNoise reading = SignalQualityReading.CarrierToNoiseFrom(
             LockWindow.Throughout(Locked),
             [new DvbStatisticLayer(StatisticScale.Decibel, 21_500)]
         );
 
         Assert.Equal(SignalReading.Measured, reading.Reading);
-        Assert.True(reading.TryGetDecibels(out var decibels));
+        Assert.True(reading.TryGetDecibels(out double decibels));
         Assert.Equal(21.5, decibels, 3);
     }
 
@@ -34,20 +34,20 @@ public sealed class SignalQualityReadingTests
         long millidecibels
     )
     {
-        var reading = SignalQualityReading.CarrierToNoiseFrom(
+        CarrierToNoise reading = SignalQualityReading.CarrierToNoiseFrom(
             LockWindow.Throughout(CarrierOnly),
             [new DvbStatisticLayer(StatisticScale.Decibel, millidecibels)]
         );
 
         Assert.Equal(SignalReading.FrontendNotLocked, reading.Reading);
-        Assert.False(reading.TryGetDecibels(out var decibels));
+        Assert.False(reading.TryGetDecibels(out double decibels));
         Assert.True(double.IsNaN(decibels));
     }
 
     [Fact]
     public void ATunerThatDoesNotImplementCarrierToNoiseSaysSoEvenWhileUnlocked()
     {
-        var reading = SignalQualityReading.CarrierToNoiseFrom(LockWindow.Throughout(CarrierOnly), []);
+        CarrierToNoise reading = SignalQualityReading.CarrierToNoiseFrom(LockWindow.Throughout(CarrierOnly), []);
 
         Assert.Equal(SignalReading.NotImplementedByThisTuner, reading.Reading);
         Assert.False(reading.TryGetDecibels(out _));
@@ -56,7 +56,7 @@ public sealed class SignalQualityReadingTests
     [Fact]
     public void ACarrierToNoiseTheDriverMarksUnavailableIsNotTreatedAsZeroDecibels()
     {
-        var reading = SignalQualityReading.CarrierToNoiseFrom(
+        CarrierToNoise reading = SignalQualityReading.CarrierToNoiseFrom(
             LockWindow.Throughout(Locked),
             [new DvbStatisticLayer(StatisticScale.NotAvailable, 0)]
         );
@@ -68,7 +68,7 @@ public sealed class SignalQualityReadingTests
     [Fact]
     public void ACarrierToNoiseOnARelativeScaleIsNotReadAsThoughItWereDecibels()
     {
-        var reading = SignalQualityReading.CarrierToNoiseFrom(
+        CarrierToNoise reading = SignalQualityReading.CarrierToNoiseFrom(
             LockWindow.Throughout(Locked),
             [new DvbStatisticLayer(StatisticScale.Relative, 40_000)]
         );
@@ -83,20 +83,20 @@ public sealed class SignalQualityReadingTests
     [InlineData(-33_674)]
     public void ACarrierToNoiseReadAcrossALockThatDroppedIsNotAMeasurement(long millidecibels)
     {
-        var reading = SignalQualityReading.CarrierToNoiseFrom(
+        CarrierToNoise reading = SignalQualityReading.CarrierToNoiseFrom(
             new LockWindow(Locked, CarrierOnly),
             [new DvbStatisticLayer(StatisticScale.Decibel, millidecibels)]
         );
 
         Assert.Equal(SignalReading.UnavailableRightNow, reading.Reading);
-        Assert.False(reading.TryGetDecibels(out var decibels));
+        Assert.False(reading.TryGetDecibels(out double decibels));
         Assert.True(double.IsNaN(decibels));
     }
 
     [Fact]
     public void ACarrierToNoiseReadAcrossALockThatArrivedLateIsNotAMeasurement()
     {
-        var reading = SignalQualityReading.CarrierToNoiseFrom(
+        CarrierToNoise reading = SignalQualityReading.CarrierToNoiseFrom(
             new LockWindow(CarrierOnly, Locked),
             [new DvbStatisticLayer(StatisticScale.Decibel, 21_500)]
         );
@@ -108,7 +108,7 @@ public sealed class SignalQualityReadingTests
     [Fact]
     public void ATunerThatDoesNotImplementTheStatisticSaysSoEvenWhenLockWavered()
     {
-        var reading = SignalQualityReading.CarrierToNoiseFrom(new LockWindow(Locked, CarrierOnly), []);
+        CarrierToNoise reading = SignalQualityReading.CarrierToNoiseFrom(new LockWindow(Locked, CarrierOnly), []);
 
         Assert.Equal(SignalReading.NotImplementedByThisTuner, reading.Reading);
     }
@@ -116,7 +116,7 @@ public sealed class SignalQualityReadingTests
     [Fact]
     public void ErrorCountersReadAcrossALockThatDroppedAreNotAMeasurement()
     {
-        var errors = SignalQualityReading.PostViterbiFrom(
+        PostViterbiErrors errors = SignalQualityReading.PostViterbiFrom(
             new LockWindow(Locked, CarrierOnly),
             [new DvbStatisticLayer(StatisticScale.Counter, 3)],
             [new DvbStatisticLayer(StatisticScale.Counter, 30_000)]
@@ -135,7 +135,7 @@ public sealed class SignalQualityReadingTests
         long totalBits
     )
     {
-        var errors = SignalQualityReading.PostViterbiFrom(
+        PostViterbiErrors errors = SignalQualityReading.PostViterbiFrom(
             LockWindow.Throughout(Locked),
             [new DvbStatisticLayer(StatisticScale.Counter, errorBits)],
             [new DvbStatisticLayer(StatisticScale.Counter, totalBits)]
@@ -148,7 +148,7 @@ public sealed class SignalQualityReadingTests
     [Fact]
     public void MoreErrorBitsThanTotalBitsIsRefusedRatherThanReportedAsARateAboveOne()
     {
-        var errors = SignalQualityReading.PostViterbiFrom(
+        PostViterbiErrors errors = SignalQualityReading.PostViterbiFrom(
             LockWindow.Throughout(Locked),
             [new DvbStatisticLayer(StatisticScale.Counter, 30_001)],
             [new DvbStatisticLayer(StatisticScale.Counter, 30_000)]
@@ -160,21 +160,21 @@ public sealed class SignalQualityReadingTests
     [Fact]
     public void ALayerCountingMoreErrorsThanBitsHasNoErrorRate()
     {
-        Assert.False(new LayerBitErrors(0, 11, 10).TryGetErrorRate(out var rate));
+        Assert.False(new LayerBitErrors(0, 11, 10).TryGetErrorRate(out double rate));
         Assert.True(double.IsNaN(rate));
     }
 
     [Fact]
     public void AMeasuredErrorRateNeverExceedsOne()
     {
-        var errors = SignalQualityReading.PostViterbiFrom(
+        PostViterbiErrors errors = SignalQualityReading.PostViterbiFrom(
             LockWindow.Throughout(Locked),
             [new DvbStatisticLayer(StatisticScale.Counter, 30_000)],
             [new DvbStatisticLayer(StatisticScale.Counter, 30_000)]
         );
 
         Assert.Equal(SignalReading.Measured, errors.Reading);
-        Assert.True(errors.Layers[0].TryGetErrorRate(out var rate));
+        Assert.True(errors.Layers[0].TryGetErrorRate(out double rate));
         Assert.Equal(1.0, rate, 12);
     }
 
@@ -191,7 +191,7 @@ public sealed class SignalQualityReadingTests
     [Fact]
     public void ADefaultCarrierToNoiseYieldsNoMeasurement()
     {
-        Assert.False(default(CarrierToNoise).TryGetDecibels(out var decibels));
+        Assert.False(default(CarrierToNoise).TryGetDecibels(out double decibels));
         Assert.True(double.IsNaN(decibels));
         Assert.Equal(SignalReading.Unspecified, default(CarrierToNoise).Reading);
     }
@@ -199,7 +199,7 @@ public sealed class SignalQualityReadingTests
     [Fact]
     public void BothTerrestrialLayersKeepTheirOwnErrorCounters()
     {
-        var errors = SignalQualityReading.PostViterbiFrom(
+        PostViterbiErrors errors = SignalQualityReading.PostViterbiFrom(
             LockWindow.Throughout(Locked),
             [
                 new DvbStatisticLayer(StatisticScale.Counter, 12),
@@ -220,21 +220,21 @@ public sealed class SignalQualityReadingTests
     [Fact]
     public void ALayerErrorRateIsErrorBitsOverTotalBits()
     {
-        Assert.True(new LayerBitErrors(0, 12, 1_000_000).TryGetErrorRate(out var rate));
+        Assert.True(new LayerBitErrors(0, 12, 1_000_000).TryGetErrorRate(out double rate));
         Assert.Equal(1.2e-5, rate, 12);
     }
 
     [Fact]
     public void ALayerThatCountedNoBitsAtAllHasNoErrorRate()
     {
-        Assert.False(new LayerBitErrors(0, 0, 0).TryGetErrorRate(out var rate));
+        Assert.False(new LayerBitErrors(0, 0, 0).TryGetErrorRate(out double rate));
         Assert.True(double.IsNaN(rate));
     }
 
     [Fact]
     public void AnUnlockedFrontendsErrorCountersAreNotAMeasurement()
     {
-        var errors = SignalQualityReading.PostViterbiFrom(
+        PostViterbiErrors errors = SignalQualityReading.PostViterbiFrom(
             LockWindow.Throughout(CarrierOnly),
             [new DvbStatisticLayer(StatisticScale.Counter, 999)],
             [new DvbStatisticLayer(StatisticScale.Counter, 1_000)]
@@ -247,7 +247,7 @@ public sealed class SignalQualityReadingTests
     [Fact]
     public void ATunerThatCountsNoBitsAtAllSaysItDoesNotImplementTheCounters()
     {
-        var errors = SignalQualityReading.PostViterbiFrom(LockWindow.Throughout(CarrierOnly), [], []);
+        PostViterbiErrors errors = SignalQualityReading.PostViterbiFrom(LockWindow.Throughout(CarrierOnly), [], []);
 
         Assert.Equal(SignalReading.NotImplementedByThisTuner, errors.Reading);
     }
@@ -255,7 +255,7 @@ public sealed class SignalQualityReadingTests
     [Fact]
     public void MismatchedLayerCountsAreRefusedRatherThanPairedUpToTheShorterOne()
     {
-        var errors = SignalQualityReading.PostViterbiFrom(
+        PostViterbiErrors errors = SignalQualityReading.PostViterbiFrom(
             LockWindow.Throughout(Locked),
             [
                 new DvbStatisticLayer(StatisticScale.Counter, 12),
@@ -271,7 +271,7 @@ public sealed class SignalQualityReadingTests
     [Fact]
     public void CountersOnAScaleThatIsNotACountAreRefused()
     {
-        var errors = SignalQualityReading.PostViterbiFrom(
+        PostViterbiErrors errors = SignalQualityReading.PostViterbiFrom(
             LockWindow.Throughout(Locked),
             [new DvbStatisticLayer(StatisticScale.Decibel, 12)],
             [new DvbStatisticLayer(StatisticScale.Counter, 1_000_000)]

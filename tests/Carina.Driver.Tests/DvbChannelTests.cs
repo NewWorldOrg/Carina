@@ -25,7 +25,7 @@ public sealed class DvbChannelTests
     [InlineData(-1)]
     public void TerrestrialChannelsOutsideTheUhfPlanAreRefusedByName(int physicalChannel)
     {
-        var refusal = Assert.Throws<DvbDeviceException>(
+        DvbDeviceException refusal = Assert.Throws<DvbDeviceException>(
             () => DvbChannel.Terrestrial(physicalChannel)
         );
 
@@ -50,7 +50,7 @@ public sealed class DvbChannelTests
     [InlineData(17)]
     public void TheTwoBroadcastSatelliteSlotsTheDemodulatorCannotUseAreRefused(int slot)
     {
-        var refusal = Assert.Throws<DvbDeviceException>(
+        DvbDeviceException refusal = Assert.Throws<DvbDeviceException>(
             () => DvbChannel.BroadcastSatellite(slot, SyntheticStream)
         );
 
@@ -92,7 +92,7 @@ public sealed class DvbChannelTests
     [Fact]
     public void ABroadcastSatelliteChannelCarriesTheStreamItWasToldToTake()
     {
-        var channel = Assert.IsType<BroadcastSatelliteChannel>(
+        BroadcastSatelliteChannel channel = Assert.IsType<BroadcastSatelliteChannel>(
             DvbChannel.BroadcastSatellite(1, SyntheticStream)
         );
 
@@ -107,7 +107,7 @@ public sealed class DvbChannelTests
         int slot
     )
     {
-        var refusal = Assert.Throws<DvbDeviceException>(
+        DvbDeviceException refusal = Assert.Throws<DvbDeviceException>(
             () => DvbChannel.BroadcastSatellite(slot, transportStreamId: null)
         );
 
@@ -118,7 +118,7 @@ public sealed class DvbChannelTests
     [Fact]
     public void TheRefusalToTuneAnUnnamedStreamSaysWhatWouldOtherwiseComeBack()
     {
-        var refusal = Assert.Throws<DvbDeviceException>(
+        DvbDeviceException refusal = Assert.Throws<DvbDeviceException>(
             () => DvbChannel.BroadcastSatellite(15, transportStreamId: null)
         );
 

@@ -99,7 +99,7 @@ public sealed class ScanService(
                 ScanFailure.NeverCompleted);
         }
 
-        var claim = runner.ClaimProposal(id);
+        ProposalClaim claim = runner.ClaimProposal(id);
 
         if (claim is not ProposalClaim.Claimed(var proposal, var hold))
         {
@@ -114,7 +114,7 @@ public sealed class ScanService(
 
         try
         {
-            var applied = await applier.ApplyAsync(
+            ScanApplication applied = await applier.ApplyAsync(
                 proposal.Difference,
                 proposal.Systems,
                 cancellationToken);
@@ -146,5 +146,5 @@ public sealed class ScanService(
         => new(
             run,
             await runs.ListAttemptsAsync(run.Id, cancellationToken),
-            runner.TryPeekProposal(run.Id, out var proposal) ? proposal.Difference : null);
+            runner.TryPeekProposal(run.Id, out ScanProposal? proposal) ? proposal.Difference : null);
 }

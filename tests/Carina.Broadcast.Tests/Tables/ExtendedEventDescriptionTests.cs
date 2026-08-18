@@ -11,10 +11,10 @@ public sealed class ExtendedEventDescriptionTests
     [Fact]
     public void AnItemContinuedWithoutAHeadingBelongsToTheOneBeforeIt()
     {
-        var detailed = Detailed(
+        ExtendedEventDescription detailed = Detailed(
             Descriptor(0, 0, Item("A", "one"), Item(string.Empty, "two")));
 
-        var only = Assert.Single(detailed.Items);
+        ExtendedEventItem only = Assert.Single(detailed.Items);
 
         Assert.Equal("A", only.Heading);
         Assert.Equal("onetwo", only.Text);
@@ -23,11 +23,11 @@ public sealed class ExtendedEventDescriptionTests
     [Fact]
     public void AnItemContinuedInTheNextDescriptorIsStillTheSameItem()
     {
-        var detailed = Detailed(
+        ExtendedEventDescription detailed = Detailed(
             Descriptor(0, 1, Item("A", "one")),
             Descriptor(1, 1, Item(string.Empty, "two")));
 
-        var only = Assert.Single(detailed.Items);
+        ExtendedEventItem only = Assert.Single(detailed.Items);
 
         Assert.Equal("A", only.Heading);
         Assert.Equal("onetwo", only.Text);
@@ -36,11 +36,11 @@ public sealed class ExtendedEventDescriptionTests
     [Fact]
     public void DescriptorsAreReadInTheOrderTheyNumberThemselvesNotTheOrderTheyArrive()
     {
-        var detailed = Detailed(
+        ExtendedEventDescription detailed = Detailed(
             Descriptor(1, 1, Item(string.Empty, "two")),
             Descriptor(0, 1, Item("A", "one")));
 
-        var only = Assert.Single(detailed.Items);
+        ExtendedEventItem only = Assert.Single(detailed.Items);
 
         Assert.Equal("onetwo", only.Text);
     }
@@ -48,7 +48,7 @@ public sealed class ExtendedEventDescriptionTests
     [Fact]
     public void AWordSplitBetweenDescriptorsIsPutBackTogetherBeforeItIsRead()
     {
-        var detailed = Detailed(
+        ExtendedEventDescription detailed = Detailed(
             Descriptor(0, 1, Item("A", [0x1B, 0x24, 0x42, 0x46])),
             Descriptor(1, 1, Item(string.Empty, [0x7C])));
 
@@ -58,7 +58,7 @@ public sealed class ExtendedEventDescriptionTests
     [Fact]
     public void TheTrailingTextOfEveryDescriptorIsGatheredInOrder()
     {
-        var detailed = Detailed(
+        ExtendedEventDescription detailed = Detailed(
             Descriptor(0, 1, [], "one"),
             Descriptor(1, 1, [], "two"));
 
@@ -74,7 +74,7 @@ public sealed class ExtendedEventDescriptionTests
     [Fact]
     public void ADescriptorClaimingMoreItemsThanItCarriesIsRefused()
     {
-        var descriptor = new byte[] { DescriptorTags.ExtendedEvent, 0x06, 0x00, 0x6A, 0x70, 0x6E, 0x40, 0x00 };
+        byte[] descriptor = new byte[] { DescriptorTags.ExtendedEvent, 0x06, 0x00, 0x6A, 0x70, 0x6E, 0x40, 0x00 };
 
         Assert.False(ExtendedEventDescription.TryRead(Read(descriptor).Descriptors, out _));
     }
@@ -82,7 +82,7 @@ public sealed class ExtendedEventDescriptionTests
     [Fact]
     public void AnItemClaimingMoreTextThanItCarriesIsRefused()
     {
-        var descriptor = new byte[]
+        byte[] descriptor = new byte[]
         {
             DescriptorTags.ExtendedEvent, 0x09, 0x00, 0x6A, 0x70, 0x6E, 0x04, 0x01, 0x41, 0x40, 0x00,
         };
@@ -92,16 +92,16 @@ public sealed class ExtendedEventDescriptionTests
 
     private static ExtendedEventDescription Detailed(params byte[][] descriptors)
     {
-        var carried = Read([.. descriptors.SelectMany(descriptor => descriptor)]);
+        DescribedEvent carried = Read([.. descriptors.SelectMany(descriptor => descriptor)]);
 
-        Assert.True(ExtendedEventDescription.TryRead(carried.Descriptors, out var detailed));
+        Assert.True(ExtendedEventDescription.TryRead(carried.Descriptors, out ExtendedEventDescription? detailed));
 
         return detailed;
     }
 
     private static DescribedEvent Read(params byte[] descriptors)
     {
-        var table = Assert.IsType<TableRead<EventInformationTable>.Parsed>(
+        EventInformationTable table = Assert.IsType<TableRead<EventInformationTable>.Parsed>(
             EventInformationTable.Read(CarriedSection.Of(new SectionWriter
             {
                 TableId = EventInformationTable.PresentFollowingActualTableId,
@@ -117,7 +117,7 @@ public sealed class ExtendedEventDescriptionTests
 
     private static byte[] Descriptor(int number, int last, byte[] items, string text)
     {
-        var written = Ascii(text);
+        byte[] written = Ascii(text);
         var body = new List<byte>
         {
             (byte)((number << 4) | last),
@@ -138,7 +138,7 @@ public sealed class ExtendedEventDescriptionTests
 
     private static byte[] Item(string heading, byte[] text)
     {
-        var written = Ascii(heading);
+        byte[] written = Ascii(heading);
 
         return [(byte)written.Length, .. written, (byte)text.Length, .. text];
     }

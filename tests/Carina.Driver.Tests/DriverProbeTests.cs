@@ -19,7 +19,7 @@ public sealed class DriverProbeTests
     [Fact]
     public void ADriverThatDoesNotAnswerIsNotHealthy()
     {
-        var verdict = DriverProbe.Judge(null, [Tuner("adapter0", TunerState.Idle)]);
+        ProbeVerdict verdict = DriverProbe.Judge(null, [Tuner("adapter0", TunerState.Idle)]);
 
         Assert.False(verdict.Healthy);
         Assert.Contains("did not answer", verdict.Reason, StringComparison.Ordinal);
@@ -28,7 +28,7 @@ public sealed class DriverProbeTests
     [Fact]
     public void ADrainingDriverIsNotHealthy()
     {
-        var verdict = DriverProbe.Judge(
+        ProbeVerdict verdict = DriverProbe.Judge(
             Serving with
             {
                 Draining = true,
@@ -43,7 +43,7 @@ public sealed class DriverProbeTests
     [Fact]
     public void EveryTunerFaultedIsNotHealthy()
     {
-        var verdict = DriverProbe.Judge(
+        ProbeVerdict verdict = DriverProbe.Judge(
             Serving,
             [Tuner("adapter0", TunerState.Faulted), Tuner("adapter1", TunerState.Faulted)]
         );
@@ -56,7 +56,7 @@ public sealed class DriverProbeTests
     [Fact]
     public void ADisabledTunerIsNotAFault()
     {
-        var verdict = DriverProbe.Judge(
+        ProbeVerdict verdict = DriverProbe.Judge(
             Serving,
             [Tuner("adapter0", TunerState.Idle), Tuner("adapter1", TunerState.Disabled)]
         );
@@ -68,7 +68,7 @@ public sealed class DriverProbeTests
     [Fact]
     public void EveryTunerDisabledIsNotHealthy()
     {
-        var verdict = DriverProbe.Judge(Serving, [Tuner("adapter0", TunerState.Disabled)]);
+        ProbeVerdict verdict = DriverProbe.Judge(Serving, [Tuner("adapter0", TunerState.Disabled)]);
 
         Assert.False(verdict.Healthy);
         Assert.Contains("disabled", verdict.Reason, StringComparison.Ordinal);
@@ -77,7 +77,7 @@ public sealed class DriverProbeTests
     [Fact]
     public void OneFaultedTunerAmongUsableOnesStaysHealthyAndSaysSo()
     {
-        var verdict = DriverProbe.Judge(
+        ProbeVerdict verdict = DriverProbe.Judge(
             Serving,
             [
                 Tuner("adapter0", TunerState.Busy),
@@ -94,7 +94,7 @@ public sealed class DriverProbeTests
     [Fact]
     public void ADriverWithoutTunersIsNotHealthy()
     {
-        var verdict = DriverProbe.Judge(Serving, []);
+        ProbeVerdict verdict = DriverProbe.Judge(Serving, []);
 
         Assert.False(verdict.Healthy);
         Assert.Contains("no tuner", verdict.Reason, StringComparison.Ordinal);
@@ -103,10 +103,10 @@ public sealed class DriverProbeTests
     [Fact]
     public async Task TheProbeReachesARunningDriverOverItsSocket()
     {
-        await using var driver = await DriverUnderTest.Start();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
 
         var output = new StringWriter();
-        var exitCode = await DriverProbe.RunAsync(driver.Configuration, output);
+        int exitCode = await DriverProbe.RunAsync(driver.Configuration, output);
 
         Assert.Equal(DriverProbe.HealthyExitCode, exitCode);
         Assert.Contains("serving", output.ToString(), StringComparison.Ordinal);
@@ -115,11 +115,11 @@ public sealed class DriverProbeTests
     [Fact]
     public async Task TheProbeFailsWhenNothingListensOnTheSocket()
     {
-        var root = DriverUnderTest.NewRoot();
-        var configuration = DriverUnderTest.ConfigurationIn(root);
+        string root = DriverUnderTest.NewRoot();
+        DriverConfiguration configuration = DriverUnderTest.ConfigurationIn(root);
 
         var output = new StringWriter();
-        var exitCode = await DriverProbe.RunAsync(
+        int exitCode = await DriverProbe.RunAsync(
             configuration,
             output,
             TimeSpan.FromSeconds(2)
@@ -134,12 +134,12 @@ public sealed class DriverProbeTests
     [Fact]
     public async Task TheProbeTurnsUnhealthyWhileTheDriverIsDraining()
     {
-        await using var driver = await DriverUnderTest.Start();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
 
         driver.Service<TunerSessionManager>().EnterDraining();
 
         var output = new StringWriter();
-        var exitCode = await DriverProbe.RunAsync(driver.Configuration, output);
+        int exitCode = await DriverProbe.RunAsync(driver.Configuration, output);
 
         Assert.Equal(DriverProbe.UnhealthyExitCode, exitCode);
         Assert.Contains("draining", output.ToString(), StringComparison.Ordinal);

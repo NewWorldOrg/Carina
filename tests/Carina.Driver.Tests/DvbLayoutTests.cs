@@ -36,7 +36,7 @@ public sealed class DvbLayoutTests
     [Fact]
     public void TheFourStatisticLayersFitInsideThePayload()
     {
-        var used = 1 + (DvbLayout.MaxStatisticLayers * DvbLayout.StatisticBytes);
+        int used = 1 + (DvbLayout.MaxStatisticLayers * DvbLayout.StatisticBytes);
 
         Assert.True(used <= DvbLayout.PayloadBytes);
     }

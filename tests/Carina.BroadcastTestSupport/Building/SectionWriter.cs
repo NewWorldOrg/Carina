@@ -28,7 +28,7 @@ public sealed class SectionWriter
 
         if (!LongForm)
         {
-            var shortLength = DeclaredLength ?? Body.Length;
+            int shortLength = DeclaredLength ?? Body.Length;
 
             section.Add((byte)TableId);
             section.Add((byte)(0b0111_0000 | (shortLength >> 8)));
@@ -38,7 +38,7 @@ public sealed class SectionWriter
             return section.ToArray();
         }
 
-        var length = DeclaredLength ?? (Body.Length + 9);
+        int length = DeclaredLength ?? (Body.Length + 9);
 
         section.Add((byte)TableId);
         section.Add((byte)(0b1011_0000 | (length >> 8)));
@@ -50,7 +50,7 @@ public sealed class SectionWriter
         section.Add((byte)LastSectionNumber);
         section.AddRange(Body);
 
-        var checksum = ReferenceCrc32.Compute(section.ToArray()) ^ (CorruptChecksum ? 1u : 0u);
+        uint checksum = ReferenceCrc32.Compute(section.ToArray()) ^ (CorruptChecksum ? 1u : 0u);
 
         section.Add((byte)(checksum >> 24));
         section.Add((byte)(checksum >> 16));
@@ -62,9 +62,9 @@ public sealed class SectionWriter
 
     public static byte[] Filler(int length)
     {
-        var body = new byte[length];
+        byte[] body = new byte[length];
 
-        for (var at = 0; at < length; at++)
+        for (int at = 0; at < length; at++)
         {
             body[at] = (byte)(at & 0x7F);
         }

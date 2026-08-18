@@ -14,17 +14,17 @@ public sealed class NetworkTransportStream
         Descriptors = descriptors;
 
         Services = descriptors.WithTag(DescriptorTags.ServiceList) is { } list
-            && ServiceListDescriptor.TryRead(list, out var services)
+            && ServiceListDescriptor.TryRead(list, out IReadOnlyList<ServiceListEntry>? services)
                 ? services
                 : [];
 
         PartiallyReceivedServices = descriptors.WithTag(DescriptorTags.PartialReception) is { } partial
-            && PartialReceptionDescriptor.TryRead(partial, out var partiallyReceived)
+            && PartialReceptionDescriptor.TryRead(partial, out IReadOnlyList<int>? partiallyReceived)
                 ? partiallyReceived
                 : [];
 
         if (descriptors.WithTag(DescriptorTags.TransportStreamInformation) is { } information
-            && TransportStreamInformation.TryRead(information, out var read))
+            && TransportStreamInformation.TryRead(information, out TransportStreamInformation? read))
         {
             RemoteControlKeyId = read.RemoteControlKeyId;
             Name = read.Name;

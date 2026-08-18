@@ -43,9 +43,9 @@ public sealed class FakeTunerDevice : ITunerDevice, ISignalQualitySource
 
     public byte[] Read(int count, CancellationToken cancellationToken)
     {
-        var bytes = new byte[count];
+        byte[] bytes = new byte[count];
 
-        for (var written = 0; written < count; written++)
+        for (int written = 0; written < count; written++)
         {
             bytes[written] = ByteAt(offsetInPacket);
 

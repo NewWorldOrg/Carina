@@ -35,8 +35,8 @@ public sealed record DvbDevicePaths(string Frontend, string Demux, string Dvr)
             return false;
         }
 
-        var adapter = Path.GetDirectoryName(frontendPath);
-        var node = Path.GetFileName(frontendPath);
+        string? adapter = Path.GetDirectoryName(frontendPath);
+        string node = Path.GetFileName(frontendPath);
 
         if (adapter is null || !Path.GetFileName(adapter).StartsWith(AdapterPrefix, StringComparison.Ordinal))
         {
@@ -46,7 +46,7 @@ public sealed record DvbDevicePaths(string Frontend, string Demux, string Dvr)
             return false;
         }
 
-        if (!TryReadIndex(node, FrontendPrefix, out var index))
+        if (!TryReadIndex(node, FrontendPrefix, out string? index))
         {
             problem =
                 $"devicePath: expected the node to be named '{FrontendPrefix}N', got '{node}'.";
@@ -72,7 +72,7 @@ public sealed record DvbDevicePaths(string Frontend, string Demux, string Dvr)
             return false;
         }
 
-        var digits = node[prefix.Length..];
+        string digits = node[prefix.Length..];
 
         if (digits.Length is 0 || !digits.All(char.IsAsciiDigit))
         {

@@ -7,7 +7,7 @@ public sealed class BroadcastTimeTests
     [Fact]
     public void AStartIsReadAsTheLocalTimeTheBroadcastMeans()
     {
-        Assert.True(BroadcastTime.TryReadStart([0xEF, 0x55, 0x22, 0x57, 0x00], out var start));
+        Assert.True(BroadcastTime.TryReadStart([0xEF, 0x55, 0x22, 0x57, 0x00], out DateTimeOffset? start));
 
         Assert.Equal(new DateTimeOffset(2026, 8, 17, 22, 57, 0, TimeSpan.FromHours(9)), start);
     }
@@ -26,7 +26,7 @@ public sealed class BroadcastTimeTests
         int month,
         int day)
     {
-        Assert.True(BroadcastTime.TryReadStart([high, low, 0x00, 0x00, 0x00], out var start));
+        Assert.True(BroadcastTime.TryReadStart([high, low, 0x00, 0x00, 0x00], out DateTimeOffset? start));
 
         Assert.Equal(new DateTimeOffset(year, month, day, 0, 0, 0, TimeSpan.FromHours(9)), start);
     }
@@ -34,7 +34,7 @@ public sealed class BroadcastTimeTests
     [Fact]
     public void AStartTheBroadcastLeavesOpenIsRefusedRatherThanGuessed()
     {
-        Assert.False(BroadcastTime.TryReadStart([0xFF, 0xFF, 0xFF, 0xFF, 0xFF], out var start));
+        Assert.False(BroadcastTime.TryReadStart([0xFF, 0xFF, 0xFF, 0xFF, 0xFF], out DateTimeOffset? start));
 
         Assert.Null(start);
     }
@@ -42,7 +42,7 @@ public sealed class BroadcastTimeTests
     [Fact]
     public void AnHourNoClockShowsIsRefusedRatherThanRolledIntoTheNextDay()
     {
-        Assert.False(BroadcastTime.TryReadStart([0xEF, 0x55, 0x25, 0x00, 0x00], out var start));
+        Assert.False(BroadcastTime.TryReadStart([0xEF, 0x55, 0x25, 0x00, 0x00], out DateTimeOffset? start));
 
         Assert.Null(start);
     }
@@ -50,7 +50,7 @@ public sealed class BroadcastTimeTests
     [Fact]
     public void ADurationMayRunLongerThanADayEvenThoughAStartMayNot()
     {
-        Assert.True(BroadcastTime.TryReadDuration([0x30, 0x00, 0x00], out var runs));
+        Assert.True(BroadcastTime.TryReadDuration([0x30, 0x00, 0x00], out TimeSpan? runs));
 
         Assert.Equal(TimeSpan.FromHours(30), runs);
     }
@@ -72,7 +72,7 @@ public sealed class BroadcastTimeTests
     [Fact]
     public void ADurationIsReadAsALengthOfTime()
     {
-        Assert.True(BroadcastTime.TryReadDuration([0x02, 0x40, 0x00], out var runs));
+        Assert.True(BroadcastTime.TryReadDuration([0x02, 0x40, 0x00], out TimeSpan? runs));
 
         Assert.Equal(new TimeSpan(2, 40, 0), runs);
     }
@@ -80,7 +80,7 @@ public sealed class BroadcastTimeTests
     [Fact]
     public void ADurationTheBroadcastLeavesOpenIsReadAsUnknownRatherThanRefused()
     {
-        Assert.True(BroadcastTime.TryReadDuration([0xFF, 0xFF, 0xFF], out var runs));
+        Assert.True(BroadcastTime.TryReadDuration([0xFF, 0xFF, 0xFF], out TimeSpan? runs));
 
         Assert.Null(runs);
     }

@@ -66,7 +66,7 @@ public sealed class SessionIdTests
             new DateTimeOffset(2026, 8, 8, 21, 4, 0, TimeSpan.FromHours(9))
         );
 
-        var restored = DriverJson.Deserialize(
+        SessionSnapshot? restored = DriverJson.Deserialize(
             DriverJson.Serialize(snapshot),
             DriverJson.Context.SessionSnapshot
         );

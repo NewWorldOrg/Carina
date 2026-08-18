@@ -73,17 +73,17 @@ public sealed class EventInformationTable
             return Rejected(TableDefect.WrongTableId);
         }
 
-        var body = section.Body;
+        ReadOnlyMemory<byte> body = section.Body;
 
         if (body.Length < HeaderSize)
         {
             return Rejected(TableDefect.SectionTooShort);
         }
 
-        var span = body.Span;
+        ReadOnlySpan<byte> span = body.Span;
         var events = new List<DescribedEvent>();
-        var discarded = 0;
-        var at = HeaderSize;
+        int discarded = 0;
+        int at = HeaderSize;
 
         while (at < body.Length)
         {
@@ -92,20 +92,20 @@ public sealed class EventInformationTable
                 return Rejected(TableDefect.LoopOverrun);
             }
 
-            var descriptorsLength = ((span[at + 10] & 0x0F) << 8) | span[at + 11];
+            int descriptorsLength = ((span[at + 10] & 0x0F) << 8) | span[at + 11];
 
             if (at + EventHeaderSize + descriptorsLength > body.Length)
             {
                 return Rejected(TableDefect.LoopOverrun);
             }
 
-            if (!DescriptorLoop.TryRead(body.Slice(at + EventHeaderSize, descriptorsLength), out var descriptors))
+            if (!DescriptorLoop.TryRead(body.Slice(at + EventHeaderSize, descriptorsLength), out IReadOnlyList<Descriptor>? descriptors))
             {
                 return Rejected(TableDefect.MalformedDescriptor);
             }
 
-            if (!BroadcastTime.TryReadStart(span.Slice(at + 2, BroadcastTime.StartSize), out var startsAt)
-                || !BroadcastTime.TryReadDuration(span.Slice(at + 7, BroadcastTime.DurationSize), out var runs))
+            if (!BroadcastTime.TryReadStart(span.Slice(at + 2, BroadcastTime.StartSize), out DateTimeOffset? startsAt)
+                || !BroadcastTime.TryReadDuration(span.Slice(at + 7, BroadcastTime.DurationSize), out TimeSpan? runs))
             {
                 discarded++;
                 at += EventHeaderSize + descriptorsLength;

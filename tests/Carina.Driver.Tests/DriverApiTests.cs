@@ -25,14 +25,14 @@ public sealed class DriverApiTests
     [Fact]
     public async Task HealthAnswersWithTheGreeting()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var response = await client.GetAsync(DriverEndpoints.Health, Soon());
+        using HttpResponseMessage response = await client.GetAsync(DriverEndpoints.Health, Soon());
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var hello = await DriverUnderTest.Read(response, DriverJson.Context.DriverHello);
+        DriverHello? hello = await DriverUnderTest.Read(response, DriverJson.Context.DriverHello);
 
         Assert.NotNull(hello);
         Assert.Equal(DriverProtocol.Version, hello.ProtocolVersion);
@@ -44,17 +44,17 @@ public sealed class DriverApiTests
     [Fact]
     public async Task ATuneTheOlderParametersCannotNameIsServedFromTheTypedOnes()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
         var tune = TuneParams.Bs(15, 50001);
-        var request = DriverUnderTest.Live("typed-tune") with
+        StartSessionRequest request = DriverUnderTest.Live("typed-tune") with
         {
             Tuning = tune.ToLegacyRequest(),
             Tune = tune,
         };
 
-        using var created = await client.PostAsync(
+        using HttpResponseMessage created = await client.PostAsync(
             DriverEndpoints.Sessions,
             DriverUnderTest.Body(request),
             Soon()
@@ -62,7 +62,7 @@ public sealed class DriverApiTests
 
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
 
-        var snapshot = await DriverUnderTest.Read(created, DriverJson.Context.SessionSnapshot);
+        SessionSnapshot? snapshot = await DriverUnderTest.Read(created, DriverJson.Context.SessionSnapshot);
 
         Assert.NotNull(snapshot);
         Assert.Equal("fake-satellite", snapshot.DeviceId);
@@ -71,11 +71,11 @@ public sealed class DriverApiTests
     [Fact]
     public async Task TunersAnswerWithEveryDeclaredDevice()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var response = await client.GetAsync(DriverEndpoints.Tuners, Soon());
-        var tuners = await DriverUnderTest.Read(
+        using HttpResponseMessage response = await client.GetAsync(DriverEndpoints.Tuners, Soon());
+        IReadOnlyList<TunerSnapshot>? tuners = await DriverUnderTest.Read(
             response,
             DriverJson.Context.IReadOnlyListTunerSnapshot
         );
@@ -89,11 +89,11 @@ public sealed class DriverApiTests
     [Fact]
     public async Task ADriverThatHoldsNothingListsNothing()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var response = await client.GetAsync(DriverEndpoints.Sessions, Soon());
-        var sessions = await DriverUnderTest.Read(
+        using HttpResponseMessage response = await client.GetAsync(DriverEndpoints.Sessions, Soon());
+        IReadOnlyList<SessionSnapshot>? sessions = await DriverUnderTest.Read(
             response,
             DriverJson.Context.IReadOnlyListSessionSnapshot
         );
@@ -106,10 +106,10 @@ public sealed class DriverApiTests
     [Fact]
     public async Task TheLocationOfACreatedSessionCanBeFetched()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var created = await client.PostAsync(
+        using HttpResponseMessage created = await client.PostAsync(
             DriverEndpoints.Sessions,
             DriverUnderTest.Body(DriverUnderTest.Live("located-one")),
             Soon()
@@ -117,19 +117,19 @@ public sealed class DriverApiTests
 
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
 
-        using var fetched = await client.GetAsync(
+        using HttpResponseMessage fetched = await client.GetAsync(
             created.Headers.Location?.ToString(),
             Soon()
         );
 
         Assert.Equal(HttpStatusCode.OK, fetched.StatusCode);
 
-        var snapshot = await DriverUnderTest.Read(fetched, DriverJson.Context.SessionSnapshot);
+        SessionSnapshot? snapshot = await DriverUnderTest.Read(fetched, DriverJson.Context.SessionSnapshot);
 
         Assert.NotNull(snapshot);
         Assert.Equal("located-one", snapshot.SessionId.Value);
 
-        using var missing = await client.GetAsync(
+        using HttpResponseMessage missing = await client.GetAsync(
             DriverEndpoints.Session(SessionId.Parse("nobody")),
             Soon()
         );
@@ -140,10 +140,10 @@ public sealed class DriverApiTests
     [Fact]
     public async Task ShutdownDoesNotWaitForAnAttachedViewer()
     {
-        var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var created = await client.PostAsync(
+        using HttpResponseMessage created = await client.PostAsync(
             DriverEndpoints.Sessions,
             DriverUnderTest.Body(DriverUnderTest.Live("watched-one")),
             Soon()
@@ -151,7 +151,7 @@ public sealed class DriverApiTests
 
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
 
-        using var streaming = await client.GetAsync(
+        using HttpResponseMessage streaming = await client.GetAsync(
             $"{DriverEndpoints.Session(SessionId.Parse("watched-one"))}/stream",
             HttpCompletionOption.ResponseHeadersRead,
             Soon()
@@ -159,21 +159,21 @@ public sealed class DriverApiTests
 
         Assert.Equal(HttpStatusCode.OK, streaming.StatusCode);
 
-        var body = await streaming.Content.ReadAsStreamAsync(Soon());
-        var buffer = new byte[TsPacketLength];
+        Stream body = await streaming.Content.ReadAsStreamAsync(Soon());
+        byte[] buffer = new byte[TsPacketLength];
         Assert.True(await body.ReadAsync(buffer, Soon()) > 0);
 
-        var manager = driver.Service<TunerSessionManager>();
+        TunerSessionManager manager = driver.Service<TunerSessionManager>();
 
-        Assert.True(manager.TryGet(SessionId.Parse("watched-one"), out var session));
+        Assert.True(manager.TryGet(SessionId.Parse("watched-one"), out TunerSession? session));
 
         await Until(
             () => session.Broadcaster.SubscriberCount is 1,
             "The viewer never showed up on the session it asked to watch."
         );
 
-        var lifecycle = driver.Service<DriverLifecycle>();
-        var stopping = driver.BeginStop();
+        DriverLifecycle lifecycle = driver.Service<DriverLifecycle>();
+        Task stopping = driver.BeginStop();
 
         await Until(
             () => session.Broadcaster.SubscriberCount is 0,
@@ -204,10 +204,10 @@ public sealed class DriverApiTests
     [Fact]
     public async Task TheSocketKeepsAnsweringWhileTheDriverDrains()
     {
-        var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var created = await client.PostAsync(
+        using HttpResponseMessage created = await client.PostAsync(
             DriverEndpoints.Sessions,
             DriverUnderTest.Body(
                 DriverUnderTest.Recording("lingering", DateTimeOffset.UtcNow.AddMinutes(10))
@@ -217,14 +217,14 @@ public sealed class DriverApiTests
 
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
 
-        var stopping = driver.BeginStop();
+        Task stopping = driver.BeginStop();
 
-        var deadline = DateTimeOffset.UtcNow + Patience;
+        DateTimeOffset deadline = DateTimeOffset.UtcNow + Patience;
 
         while (true)
         {
-            using var polled = await client.GetAsync(DriverEndpoints.Health, Soon());
-            var hello = await DriverUnderTest.Read(polled, DriverJson.Context.DriverHello);
+            using HttpResponseMessage polled = await client.GetAsync(DriverEndpoints.Health, Soon());
+            DriverHello? hello = await DriverUnderTest.Read(polled, DriverJson.Context.DriverHello);
 
             if (hello is { Draining: true })
             {
@@ -241,24 +241,24 @@ public sealed class DriverApiTests
 
         Assert.False(stopping.IsCompleted);
 
-        using var listed = await client.GetAsync(DriverEndpoints.Sessions, Soon());
-        var sessions = await DriverUnderTest.Read(
+        using HttpResponseMessage listed = await client.GetAsync(DriverEndpoints.Sessions, Soon());
+        IReadOnlyList<SessionSnapshot>? sessions = await DriverUnderTest.Read(
             listed,
             DriverJson.Context.IReadOnlyListSessionSnapshot
         );
 
         Assert.NotNull(sessions);
 
-        var recording = Assert.Single(sessions);
+        SessionSnapshot recording = Assert.Single(sessions);
 
         Assert.Equal("lingering", recording.SessionId.Value);
         Assert.Equal(SessionState.Active, recording.State);
 
-        using var diagnosed = await client.GetAsync(DriverEndpoints.Diagnostics, Soon());
+        using HttpResponseMessage diagnosed = await client.GetAsync(DriverEndpoints.Diagnostics, Soon());
 
         Assert.Equal(HttpStatusCode.OK, diagnosed.StatusCode);
 
-        using var listening = await client.GetAsync(
+        using HttpResponseMessage listening = await client.GetAsync(
             DriverEndpoints.Events,
             HttpCompletionOption.ResponseHeadersRead,
             Soon()
@@ -266,7 +266,7 @@ public sealed class DriverApiTests
 
         Assert.Equal(HttpStatusCode.OK, listening.StatusCode);
 
-        using var refused = await client.PostAsync(
+        using HttpResponseMessage refused = await client.PostAsync(
             DriverEndpoints.Sessions,
             DriverUnderTest.Body(DriverUnderTest.Live("latecomer")),
             Soon()
@@ -274,12 +274,12 @@ public sealed class DriverApiTests
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, refused.StatusCode);
 
-        var problem = await DriverUnderTest.Read(refused, DriverJson.Context.DriverProblem);
+        DriverProblem? problem = await DriverUnderTest.Read(refused, DriverJson.Context.DriverProblem);
 
         Assert.NotNull(problem);
         Assert.Equal("draining", problem.Title);
 
-        using var stopped = await client.DeleteAsync(
+        using HttpResponseMessage stopped = await client.DeleteAsync(
             $"{DriverEndpoints.Session(SessionId.Parse("lingering"))}?reason=test",
             Soon()
         );
@@ -297,10 +297,10 @@ public sealed class DriverApiTests
     [Fact]
     public async Task AnEventsListenerHearsDrainingWhenTheDriverShutsDown()
     {
-        var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var listening = await client.GetAsync(
+        using HttpResponseMessage listening = await client.GetAsync(
             DriverEndpoints.Events,
             HttpCompletionOption.ResponseHeadersRead,
             Soon()
@@ -308,12 +308,12 @@ public sealed class DriverApiTests
 
         Assert.Equal(HttpStatusCode.OK, listening.StatusCode);
 
-        var body = await listening.Content.ReadAsStreamAsync(Soon());
-        var reading = new StreamReader(body).ReadToEndAsync(Soon());
+        Stream body = await listening.Content.ReadAsStreamAsync(Soon());
+        Task<string> reading = new StreamReader(body).ReadToEndAsync(Soon());
 
         await driver.DisposeAsync();
 
-        var heard = await reading.WaitAsync(TimeSpan.FromSeconds(15));
+        string heard = await reading.WaitAsync(TimeSpan.FromSeconds(15));
 
         Assert.Contains("event: draining", heard);
     }
@@ -321,19 +321,19 @@ public sealed class DriverApiTests
     [Fact]
     public async Task HealthSaysWhetherTheDriverIsDraining()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var before = await client.GetAsync(DriverEndpoints.Health, Soon());
-        var serving = await DriverUnderTest.Read(before, DriverJson.Context.DriverHello);
+        using HttpResponseMessage before = await client.GetAsync(DriverEndpoints.Health, Soon());
+        DriverHello? serving = await DriverUnderTest.Read(before, DriverJson.Context.DriverHello);
 
         Assert.NotNull(serving);
         Assert.False(serving.Draining);
 
         driver.Service<TunerSessionManager>().EnterDraining();
 
-        using var after = await client.GetAsync(DriverEndpoints.Health, Soon());
-        var draining = await DriverUnderTest.Read(after, DriverJson.Context.DriverHello);
+        using HttpResponseMessage after = await client.GetAsync(DriverEndpoints.Health, Soon());
+        DriverHello? draining = await DriverUnderTest.Read(after, DriverJson.Context.DriverHello);
 
         Assert.NotNull(draining);
         Assert.True(draining.Draining);
@@ -342,10 +342,10 @@ public sealed class DriverApiTests
     [Fact]
     public async Task AStartedSessionIsCreatedAndThenListed()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var created = await client.PostAsync(
+        using HttpResponseMessage created = await client.PostAsync(
             DriverEndpoints.Sessions,
             DriverUnderTest.Body(DriverUnderTest.Live("live-one")),
             Soon()
@@ -357,20 +357,20 @@ public sealed class DriverApiTests
             created.Headers.Location?.ToString()
         );
 
-        var snapshot = await DriverUnderTest.Read(created, DriverJson.Context.SessionSnapshot);
+        SessionSnapshot? snapshot = await DriverUnderTest.Read(created, DriverJson.Context.SessionSnapshot);
 
         Assert.NotNull(snapshot);
         Assert.Equal(SessionPurpose.Live, snapshot.Purpose);
         Assert.NotNull(snapshot.InstanceId);
 
-        using var listed = await client.GetAsync(DriverEndpoints.Sessions, Soon());
-        var sessions = await DriverUnderTest.Read(
+        using HttpResponseMessage listed = await client.GetAsync(DriverEndpoints.Sessions, Soon());
+        IReadOnlyList<SessionSnapshot>? sessions = await DriverUnderTest.Read(
             listed,
             DriverJson.Context.IReadOnlyListSessionSnapshot
         );
 
         Assert.NotNull(sessions);
-        var only = Assert.Single(sessions);
+        SessionSnapshot only = Assert.Single(sessions);
         Assert.Equal("live-one", only.SessionId.Value);
         Assert.NotNull(only.Counters);
     }
@@ -378,10 +378,10 @@ public sealed class DriverApiTests
     [Fact]
     public async Task ASessionCarriesEnoughToJudgeTheCapture()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var created = await client.PostAsync(
+        using HttpResponseMessage created = await client.PostAsync(
             DriverEndpoints.Sessions,
             DriverUnderTest.Body(
                 DriverUnderTest.Recording("judged", DateTimeOffset.UtcNow.AddMinutes(5))
@@ -391,13 +391,13 @@ public sealed class DriverApiTests
 
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
 
-        var body = await WaitUntil(
+        IReadOnlyList<SessionSnapshot> body = await WaitUntil(
             client,
             sessions =>
                 sessions.Single() is { BytesRecorded: > 0, Counters.Packets: > 0 }
         );
 
-        var only = body.Single();
+        SessionSnapshot only = body.Single();
 
         Assert.Equal(SessionState.Active, only.State);
         Assert.Equal(SessionStopReason.Running, only.StopReason);
@@ -411,10 +411,10 @@ public sealed class DriverApiTests
     [Fact]
     public async Task TheFaultCountIsOnTheWire()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var created = await client.PostAsync(
+        using HttpResponseMessage created = await client.PostAsync(
             DriverEndpoints.Sessions,
             DriverUnderTest.Body(DriverUnderTest.Live("counted")),
             Soon()
@@ -422,8 +422,8 @@ public sealed class DriverApiTests
 
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
 
-        using var listed = await client.GetAsync(DriverEndpoints.Sessions, Soon());
-        var raw = await listed.Content.ReadAsStringAsync(Soon());
+        using HttpResponseMessage listed = await client.GetAsync(DriverEndpoints.Sessions, Soon());
+        string raw = await listed.Content.ReadAsStringAsync(Soon());
 
         Assert.Contains("\"faultCount\":", raw, StringComparison.Ordinal);
         Assert.Contains("\"bytesRecorded\":", raw, StringComparison.Ordinal);
@@ -434,14 +434,14 @@ public sealed class DriverApiTests
     [Fact]
     public async Task TheDiagnosticsOfAnUntroubledDriverAreEmpty()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var response = await client.GetAsync(DriverEndpoints.Diagnostics, Soon());
+        using HttpResponseMessage response = await client.GetAsync(DriverEndpoints.Diagnostics, Soon());
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var entries = await DriverUnderTest.Read(
+        IReadOnlyList<DiagnosticSnapshot>? entries = await DriverUnderTest.Read(
             response,
             DriverJson.Context.IReadOnlyListDiagnosticSnapshot
         );
@@ -453,12 +453,12 @@ public sealed class DriverApiTests
     [Fact]
     public async Task AWriteFailureIsDiagnosedMarkedFailedAndDoesNotKillTheDriver()
     {
-        await using var driver = await DriverUnderTest.Start(reshapeServices: services =>
+        await using DriverUnderTest driver = await DriverUnderTest.Start(reshapeServices: services =>
             services.AddSingleton<IRecordingWriterFactory>(new BrittleRecordingWriterFactory())
         );
-        using var client = driver.Client();
+        using HttpClient client = driver.Client();
 
-        using var created = await client.PostAsync(
+        using HttpResponseMessage created = await client.PostAsync(
             DriverEndpoints.Sessions,
             DriverUnderTest.Body(
                 DriverUnderTest.Recording("starved", DateTimeOffset.UtcNow.AddMinutes(5))
@@ -468,22 +468,22 @@ public sealed class DriverApiTests
 
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
 
-        var settled = await WaitUntil(
+        IReadOnlyList<SessionSnapshot> settled = await WaitUntil(
             client,
             sessions => sessions.Single().State is SessionState.Failed
         );
 
         Assert.Equal(SessionStopReason.RecordingFailed, settled.Single().StopReason);
 
-        using var diagnosed = await client.GetAsync(DriverEndpoints.Diagnostics, Soon());
-        var entries = await DriverUnderTest.Read(
+        using HttpResponseMessage diagnosed = await client.GetAsync(DriverEndpoints.Diagnostics, Soon());
+        IReadOnlyList<DiagnosticSnapshot>? entries = await DriverUnderTest.Read(
             diagnosed,
             DriverJson.Context.IReadOnlyListDiagnosticSnapshot
         );
 
         Assert.NotNull(entries);
 
-        var entry = Assert.Single(
+        DiagnosticSnapshot entry = Assert.Single(
             entries,
             candidate => candidate.Reason is DiagnosticReason.RecordingWriteFailed
         );
@@ -492,7 +492,7 @@ public sealed class DriverApiTests
         Assert.Equal("fake-terrestrial", entry.DeviceId);
         Assert.Contains("No space left on device", entry.Detail, StringComparison.Ordinal);
 
-        using var onward = await client.PostAsync(
+        using HttpResponseMessage onward = await client.PostAsync(
             DriverEndpoints.Sessions,
             DriverUnderTest.Body(DriverUnderTest.Live("onward")),
             Soon()
@@ -500,7 +500,7 @@ public sealed class DriverApiTests
 
         Assert.Equal(HttpStatusCode.Created, onward.StatusCode);
 
-        using var health = await client.GetAsync(DriverEndpoints.Health, Soon());
+        using HttpResponseMessage health = await client.GetAsync(DriverEndpoints.Health, Soon());
 
         Assert.Equal(HttpStatusCode.OK, health.StatusCode);
     }
@@ -508,14 +508,14 @@ public sealed class DriverApiTests
     [Fact]
     public async Task ADeviceFailureFaultsOnlyThatTunerOnTheWire()
     {
-        await using var driver = await DriverUnderTest.Start(reshapeServices: services =>
+        await using DriverUnderTest driver = await DriverUnderTest.Start(reshapeServices: services =>
             services.AddSingleton<ITunerDeviceFactory>(
                 new SelectiveTunerDeviceFactory("fake-terrestrial")
             )
         );
-        using var client = driver.Client();
+        using HttpClient client = driver.Client();
 
-        using var created = await client.PostAsync(
+        using HttpResponseMessage created = await client.PostAsync(
             DriverEndpoints.Sessions,
             DriverUnderTest.Body(DriverUnderTest.Live("doomed", "fake-terrestrial")),
             Soon()
@@ -525,15 +525,15 @@ public sealed class DriverApiTests
 
         await WaitUntil(client, sessions => sessions.Single().State is SessionState.Failed);
 
-        using var listed = await client.GetAsync(DriverEndpoints.Tuners, Soon());
-        var tuners = await DriverUnderTest.Read(
+        using HttpResponseMessage listed = await client.GetAsync(DriverEndpoints.Tuners, Soon());
+        IReadOnlyList<TunerSnapshot>? tuners = await DriverUnderTest.Read(
             listed,
             DriverJson.Context.IReadOnlyListTunerSnapshot
         );
 
         Assert.NotNull(tuners);
 
-        var faulted = tuners.Single(tuner => tuner.DeviceId == "fake-terrestrial");
+        TunerSnapshot faulted = tuners.Single(tuner => tuner.DeviceId == "fake-terrestrial");
 
         Assert.Equal(TunerState.Faulted, faulted.State);
         Assert.NotNull(faulted.Detail);
@@ -542,7 +542,7 @@ public sealed class DriverApiTests
             tuners.Single(tuner => tuner.DeviceId == "fake-satellite").State
         );
 
-        using var refused = await client.PostAsync(
+        using HttpResponseMessage refused = await client.PostAsync(
             DriverEndpoints.Sessions,
             DriverUnderTest.Body(DriverUnderTest.Live("again", "fake-terrestrial")),
             Soon()
@@ -550,12 +550,12 @@ public sealed class DriverApiTests
 
         Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
 
-        var problem = await DriverUnderTest.Read(refused, DriverJson.Context.DriverProblem);
+        DriverProblem? problem = await DriverUnderTest.Read(refused, DriverJson.Context.DriverProblem);
 
         Assert.NotNull(problem);
         Assert.Equal("faultedDevice", problem.Title);
 
-        using var satellite = await client.PostAsync(
+        using HttpResponseMessage satellite = await client.PostAsync(
             DriverEndpoints.Sessions,
             DriverUnderTest.Body(
                 new StartSessionRequest
@@ -574,17 +574,17 @@ public sealed class DriverApiTests
     [Fact]
     public async Task ABodyThatIsNotJsonIsRefusedWithAReason()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
         using var content = new StringContent("{ not json", Encoding.UTF8);
         content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
 
-        using var response = await client.PostAsync(DriverEndpoints.Sessions, content, Soon());
+        using HttpResponseMessage response = await client.PostAsync(DriverEndpoints.Sessions, content, Soon());
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
-        var problem = await DriverUnderTest.Read(response, DriverJson.Context.DriverProblem);
+        DriverProblem? problem = await DriverUnderTest.Read(response, DriverJson.Context.DriverProblem);
 
         Assert.NotNull(problem);
         Assert.Equal("malformedRequest", problem.Title);
@@ -594,8 +594,8 @@ public sealed class DriverApiTests
     [Fact]
     public async Task ARequestThatBreaksTheRulesIsRefusedWithEveryReason()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
         using var content = new StringContent(
             """{"sessionId":"bad-one","purpose":"recording","tuning":{"kind":"terrestrial","physicalChannel":999}}""",
@@ -603,11 +603,11 @@ public sealed class DriverApiTests
             "application/json"
         );
 
-        using var response = await client.PostAsync(DriverEndpoints.Sessions, content, Soon());
+        using HttpResponseMessage response = await client.PostAsync(DriverEndpoints.Sessions, content, Soon());
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
-        var problem = await DriverUnderTest.Read(response, DriverJson.Context.DriverProblem);
+        DriverProblem? problem = await DriverUnderTest.Read(response, DriverJson.Context.DriverProblem);
 
         Assert.NotNull(problem);
         Assert.Equal("rejected", problem.Title);
@@ -627,10 +627,10 @@ public sealed class DriverApiTests
         string title
     )
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var response = await client.PostAsync(
+        using HttpResponseMessage response = await client.PostAsync(
             DriverEndpoints.Sessions,
             DriverUnderTest.Body(DriverUnderTest.Live("refused", deviceId)),
             Soon()
@@ -638,7 +638,7 @@ public sealed class DriverApiTests
 
         Assert.Equal(status, response.StatusCode);
 
-        var problem = await DriverUnderTest.Read(response, DriverJson.Context.DriverProblem);
+        DriverProblem? problem = await DriverUnderTest.Read(response, DriverJson.Context.DriverProblem);
 
         Assert.NotNull(problem);
         Assert.Equal(title, problem.Title);
@@ -647,17 +647,17 @@ public sealed class DriverApiTests
     [Fact]
     public async Task TheSameSessionIsNotStartedTwice()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var first = await client.PostAsync(
+        using HttpResponseMessage first = await client.PostAsync(
             DriverEndpoints.Sessions,
             DriverUnderTest.Body(DriverUnderTest.Live("twice")),
             Soon()
         );
         Assert.Equal(HttpStatusCode.Created, first.StatusCode);
 
-        using var second = await client.PostAsync(
+        using HttpResponseMessage second = await client.PostAsync(
             DriverEndpoints.Sessions,
             DriverUnderTest.Body(DriverUnderTest.Live("twice")),
             Soon()
@@ -665,7 +665,7 @@ public sealed class DriverApiTests
 
         Assert.Equal(HttpStatusCode.Conflict, second.StatusCode);
 
-        var problem = await DriverUnderTest.Read(second, DriverJson.Context.DriverProblem);
+        DriverProblem? problem = await DriverUnderTest.Read(second, DriverJson.Context.DriverProblem);
 
         Assert.NotNull(problem);
         Assert.Equal("duplicateSession", problem.Title);
@@ -674,10 +674,10 @@ public sealed class DriverApiTests
     [Fact]
     public async Task ARecordingThatNamesAnUnknownRootIsRefused()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var response = await client.PostAsync(
+        using HttpResponseMessage response = await client.PostAsync(
             DriverEndpoints.Sessions,
             DriverUnderTest.Body(
                 DriverUnderTest.Recording("elsewhere", DateTimeOffset.UtcNow.AddMinutes(5), "nowhere")
@@ -687,7 +687,7 @@ public sealed class DriverApiTests
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
-        var problem = await DriverUnderTest.Read(response, DriverJson.Context.DriverProblem);
+        DriverProblem? problem = await DriverUnderTest.Read(response, DriverJson.Context.DriverProblem);
 
         Assert.NotNull(problem);
         Assert.Equal("unknownOutputRoot", problem.Title);
@@ -696,28 +696,28 @@ public sealed class DriverApiTests
     [Fact]
     public async Task StoppingASessionIsAnsweredOnceItHasLetGoAndThenSaysItIsDone()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var created = await client.PostAsync(
+        using HttpResponseMessage created = await client.PostAsync(
             DriverEndpoints.Sessions,
             DriverUnderTest.Body(DriverUnderTest.Live("stopped")),
             Soon()
         );
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
 
-        var path = $"{DriverEndpoints.Session(SessionId.Parse("stopped"))}?reason=test";
+        string path = $"{DriverEndpoints.Session(SessionId.Parse("stopped"))}?reason=test";
 
-        using var stopping = await client.DeleteAsync(path, Soon());
+        using HttpResponseMessage stopping = await client.DeleteAsync(path, Soon());
         Assert.Equal(HttpStatusCode.OK, stopping.StatusCode);
 
         await WaitUntil(client, sessions => sessions.Single().Concluded);
 
-        using var again = await client.DeleteAsync(path, Soon());
+        using HttpResponseMessage again = await client.DeleteAsync(path, Soon());
 
         Assert.Equal(HttpStatusCode.OK, again.StatusCode);
 
-        var snapshot = await DriverUnderTest.Read(again, DriverJson.Context.SessionSnapshot);
+        SessionSnapshot? snapshot = await DriverUnderTest.Read(again, DriverJson.Context.SessionSnapshot);
 
         Assert.NotNull(snapshot);
         Assert.True(snapshot.Concluded);
@@ -729,7 +729,7 @@ public sealed class DriverApiTests
     {
         var device = new HeldOpenTunerDevice();
 
-        await using var driver = await DriverUnderTest.Start(reshapeServices: services =>
+        await using DriverUnderTest driver = await DriverUnderTest.Start(reshapeServices: services =>
         {
             services.AddSingleton<ITunerDeviceFactory>(new OneTunerDeviceFactory(device));
             services.AddSingleton(provider => new TunerSessionManager(
@@ -741,9 +741,9 @@ public sealed class DriverApiTests
                 letGoLimit: TimeSpan.FromMilliseconds(50)
             ));
         });
-        using var client = driver.Client();
+        using HttpClient client = driver.Client();
 
-        using var created = await client.PostAsync(
+        using HttpResponseMessage created = await client.PostAsync(
             DriverEndpoints.Sessions,
             DriverUnderTest.Body(DriverUnderTest.Live("stuck")),
             Soon()
@@ -754,14 +754,14 @@ public sealed class DriverApiTests
             "The session never reached the read that cannot be interrupted."
         );
 
-        using var stopping = await client.DeleteAsync(
+        using HttpResponseMessage stopping = await client.DeleteAsync(
             $"{DriverEndpoints.Session(SessionId.Parse("stuck"))}?reason=test",
             Soon()
         );
 
         Assert.Equal(HttpStatusCode.Accepted, stopping.StatusCode);
 
-        var snapshot = await DriverUnderTest.Read(stopping, DriverJson.Context.SessionSnapshot);
+        SessionSnapshot? snapshot = await DriverUnderTest.Read(stopping, DriverJson.Context.SessionSnapshot);
 
         Assert.NotNull(snapshot);
         Assert.NotEqual(SessionState.Stopped, snapshot.State);
@@ -774,12 +774,12 @@ public sealed class DriverApiTests
     [Fact]
     public async Task AFrontendThatDidNotLockAnswersWithItsOwnProblemName()
     {
-        await using var driver = await DriverUnderTest.Start(reshapeServices: services =>
+        await using DriverUnderTest driver = await DriverUnderTest.Start(reshapeServices: services =>
             services.AddSingleton<ITunerDeviceFactory>(new NoLockDeviceFactory())
         );
-        using var client = driver.Client();
+        using HttpClient client = driver.Client();
 
-        using var refused = await client.PostAsync(
+        using HttpResponseMessage refused = await client.PostAsync(
             DriverEndpoints.Sessions,
             DriverUnderTest.Body(DriverUnderTest.Live("empty-channel")),
             Soon()
@@ -787,7 +787,7 @@ public sealed class DriverApiTests
 
         Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
 
-        var problem = await DriverUnderTest.Read(refused, DriverJson.Context.DriverProblem);
+        DriverProblem? problem = await DriverUnderTest.Read(refused, DriverJson.Context.DriverProblem);
 
         Assert.NotNull(problem);
         Assert.Equal("noLock", problem.Title);
@@ -814,24 +814,24 @@ public sealed class DriverApiTests
     [Fact]
     public async Task StoppingASessionWithoutSayingWhyIsRefused()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var created = await client.PostAsync(
+        using HttpResponseMessage created = await client.PostAsync(
             DriverEndpoints.Sessions,
             DriverUnderTest.Body(DriverUnderTest.Live("unexplained")),
             Soon()
         );
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
 
-        using var response = await client.DeleteAsync(
+        using HttpResponseMessage response = await client.DeleteAsync(
             DriverEndpoints.Session(SessionId.Parse("unexplained")),
             Soon()
         );
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
-        var problem = await DriverUnderTest.Read(response, DriverJson.Context.DriverProblem);
+        DriverProblem? problem = await DriverUnderTest.Read(response, DriverJson.Context.DriverProblem);
 
         Assert.NotNull(problem);
         Assert.Equal("reasonRequired", problem.Title);
@@ -840,30 +840,30 @@ public sealed class DriverApiTests
     [Fact]
     public async Task StoppingASessionTellsWhoeverIsWatching()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var created = await client.PostAsync(
+        using HttpResponseMessage created = await client.PostAsync(
             DriverEndpoints.Sessions,
             DriverUnderTest.Body(DriverUnderTest.Live("watched")),
             Soon()
         );
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
 
-        var hub = driver.Service<DriverEventHub>();
+        DriverEventHub hub = driver.Service<DriverEventHub>();
 
-        Assert.True(hub.TryListen(out var listener));
+        Assert.True(hub.TryListen(out DriverEventListener? listener));
 
         using (listener)
         {
-            using var stopped = await client.DeleteAsync(
+            using HttpResponseMessage stopped = await client.DeleteAsync(
                 $"{DriverEndpoints.Session(SessionId.Parse("watched"))}?reason=test",
                 Soon()
             );
 
             Assert.Equal(HttpStatusCode.OK, stopped.StatusCode);
 
-            var taken = await listener.Take(
+            IReadOnlyList<string> taken = await listener.Take(
                 new CancellationTokenSource(TimeSpan.FromSeconds(5)).Token
             );
 
@@ -874,17 +874,17 @@ public sealed class DriverApiTests
     [Fact]
     public async Task StoppingASessionThatIsNotThereIsNotFound()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var response = await client.DeleteAsync(
+        using HttpResponseMessage response = await client.DeleteAsync(
             $"{DriverEndpoints.Session(SessionId.Parse("absent"))}?reason=test",
             Soon()
         );
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
 
-        var problem = await DriverUnderTest.Read(response, DriverJson.Context.DriverProblem);
+        DriverProblem? problem = await DriverUnderTest.Read(response, DriverJson.Context.DriverProblem);
 
         Assert.NotNull(problem);
         Assert.Equal("noSuchSession", problem.Title);
@@ -893,14 +893,14 @@ public sealed class DriverApiTests
     [Fact]
     public async Task ASessionIdTheDriverCannotReadIsRefused()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var response = await client.DeleteAsync($"{DriverEndpoints.Sessions}/not_valid", Soon());
+        using HttpResponseMessage response = await client.DeleteAsync($"{DriverEndpoints.Sessions}/not_valid", Soon());
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
-        var problem = await DriverUnderTest.Read(response, DriverJson.Context.DriverProblem);
+        DriverProblem? problem = await DriverUnderTest.Read(response, DriverJson.Context.DriverProblem);
 
         Assert.NotNull(problem);
         Assert.Equal("badSessionId", problem.Title);
@@ -909,10 +909,10 @@ public sealed class DriverApiTests
     [Fact]
     public async Task AStreamCarriesRawTransportStream()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var created = await client.PostAsync(
+        using HttpResponseMessage created = await client.PostAsync(
             DriverEndpoints.Sessions,
             DriverUnderTest.Body(DriverUnderTest.Live("watched")),
             Soon()
@@ -924,7 +924,7 @@ public sealed class DriverApiTests
             DriverEndpoints.SessionStream(SessionId.Parse("watched"))
         );
 
-        using var response = await client.SendAsync(
+        using HttpResponseMessage response = await client.SendAsync(
             request,
             HttpCompletionOption.ResponseHeadersRead,
             Soon()
@@ -933,9 +933,9 @@ public sealed class DriverApiTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal(SessionStreamHandler.ContentType, response.Content.Headers.ContentType?.MediaType);
 
-        await using var body = await response.Content.ReadAsStreamAsync(Soon());
+        await using Stream body = await response.Content.ReadAsStreamAsync(Soon());
 
-        var buffer = new byte[TsPacketLength * 4];
+        byte[] buffer = new byte[TsPacketLength * 4];
         await body.ReadExactlyAsync(buffer, Soon());
 
         Assert.Equal(0x47, buffer[0]);
@@ -945,10 +945,10 @@ public sealed class DriverApiTests
     [Fact]
     public async Task AStreamThatEndsCleanlyReadsToTheEnd()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var created = await client.PostAsync(
+        using HttpResponseMessage created = await client.PostAsync(
             DriverEndpoints.Sessions,
             DriverUnderTest.Body(DriverUnderTest.Live("clean")),
             Soon()
@@ -960,19 +960,19 @@ public sealed class DriverApiTests
             DriverEndpoints.SessionStream(SessionId.Parse("clean"))
         );
 
-        using var response = await client.SendAsync(
+        using HttpResponseMessage response = await client.SendAsync(
             request,
             HttpCompletionOption.ResponseHeadersRead,
             Soon()
         );
 
-        await using var body = await response.Content.ReadAsStreamAsync(Soon());
+        await using Stream body = await response.Content.ReadAsStreamAsync(Soon());
 
-        var buffer = new byte[TsPacketLength];
+        byte[] buffer = new byte[TsPacketLength];
         await body.ReadExactlyAsync(buffer, Soon());
 
-        using var stopper = driver.Client();
-        using var stopped = await stopper.DeleteAsync(
+        using HttpClient stopper = driver.Client();
+        using HttpResponseMessage stopped = await stopper.DeleteAsync(
             $"{DriverEndpoints.Session(SessionId.Parse("clean"))}?reason=test",
             Soon()
         );
@@ -985,10 +985,10 @@ public sealed class DriverApiTests
     [Fact]
     public async Task AStreamThatFailedMidwayNeverReadsAsAFinishedOne()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var created = await client.PostAsync(
+        using HttpResponseMessage created = await client.PostAsync(
             DriverEndpoints.Sessions,
             DriverUnderTest.Body(DriverUnderTest.Live("severed")),
             Soon()
@@ -1000,7 +1000,7 @@ public sealed class DriverApiTests
             DriverEndpoints.SessionStream(SessionId.Parse("severed"))
         );
 
-        using var response = await client.SendAsync(
+        using HttpResponseMessage response = await client.SendAsync(
             request,
             HttpCompletionOption.ResponseHeadersRead,
             Soon()
@@ -1008,13 +1008,13 @@ public sealed class DriverApiTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        await using var body = await response.Content.ReadAsStreamAsync(Soon());
+        await using Stream body = await response.Content.ReadAsStreamAsync(Soon());
 
-        var buffer = new byte[TsPacketLength];
+        byte[] buffer = new byte[TsPacketLength];
         await body.ReadExactlyAsync(buffer, Soon());
 
-        var manager = driver.Service<TunerSessionManager>();
-        Assert.True(manager.TryGet(SessionId.Parse("severed"), out var session));
+        TunerSessionManager manager = driver.Service<TunerSessionManager>();
+        Assert.True(manager.TryGet(SessionId.Parse("severed"), out TunerSession? session));
 
         session.Broadcaster.Close(new IOException("the tuning was lost"));
 
@@ -1028,10 +1028,10 @@ public sealed class DriverApiTests
     [Fact]
     public async Task AStreamForASessionThatIsNotThereIsNotFound()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var response = await client.GetAsync(
+        using HttpResponseMessage response = await client.GetAsync(
             DriverEndpoints.SessionStream(SessionId.Parse("absent")),
             Soon()
         );
@@ -1042,26 +1042,26 @@ public sealed class DriverApiTests
     [Fact]
     public async Task AStreamAskedForAsSomethingUnknownIsRefused()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var created = await client.PostAsync(
+        using HttpResponseMessage created = await client.PostAsync(
             DriverEndpoints.Sessions,
             DriverUnderTest.Body(DriverUnderTest.Live("kinded")),
             Soon()
         );
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
 
-        var path = DriverEndpoints.SessionStream(SessionId.Parse("kinded"));
+        string path = DriverEndpoints.SessionStream(SessionId.Parse("kinded"));
 
-        using var response = await client.GetAsync(
+        using HttpResponseMessage response = await client.GetAsync(
             $"{path}?{DriverEndpoints.SubscriberQuery}=cameraman",
             Soon()
         );
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
-        var problem = await DriverUnderTest.Read(response, DriverJson.Context.DriverProblem);
+        DriverProblem? problem = await DriverUnderTest.Read(response, DriverJson.Context.DriverProblem);
 
         Assert.NotNull(problem);
         Assert.Equal("unknownSubscriber", problem.Title);
@@ -1070,17 +1070,17 @@ public sealed class DriverApiTests
     [Fact]
     public async Task AStreamForASessionThatHasEndedIsRefused()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var created = await client.PostAsync(
+        using HttpResponseMessage created = await client.PostAsync(
             DriverEndpoints.Sessions,
             DriverUnderTest.Body(DriverUnderTest.Live("over")),
             Soon()
         );
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
 
-        using var stopped = await client.DeleteAsync(
+        using HttpResponseMessage stopped = await client.DeleteAsync(
             $"{DriverEndpoints.Session(SessionId.Parse("over"))}?reason=test",
             Soon()
         );
@@ -1088,19 +1088,19 @@ public sealed class DriverApiTests
 
         await WaitUntil(client, sessions => sessions.Single().Concluded);
 
-        using var response = await client.GetAsync(
+        using HttpResponseMessage response = await client.GetAsync(
             DriverEndpoints.SessionStream(SessionId.Parse("over")),
             Soon()
         );
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
 
-        var problem = await DriverUnderTest.Read(response, DriverJson.Context.DriverProblem);
+        DriverProblem? problem = await DriverUnderTest.Read(response, DriverJson.Context.DriverProblem);
 
         Assert.NotNull(problem);
         Assert.Equal("sessionEnded", problem.Title);
 
-        var detail = Assert.Single(problem.Problems);
+        string detail = Assert.Single(problem.Problems);
 
         Assert.Contains("(requested)", detail, StringComparison.Ordinal);
     }
@@ -1108,11 +1108,11 @@ public sealed class DriverApiTests
     [Fact]
     public async Task EventsArriveAsNamedSignalsWithNoPayload()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var listener = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient listener = driver.Client();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, DriverEndpoints.Events);
-        using var response = await listener.SendAsync(
+        using HttpResponseMessage response = await listener.SendAsync(
             request,
             HttpCompletionOption.ResponseHeadersRead,
             Soon()
@@ -1121,11 +1121,11 @@ public sealed class DriverApiTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal(DriverEventStream.ContentType, response.Content.Headers.ContentType?.MediaType);
 
-        await using var body = await response.Content.ReadAsStreamAsync(Soon());
+        await using Stream body = await response.Content.ReadAsStreamAsync(Soon());
         using var reader = new StreamReader(body, Encoding.UTF8);
 
-        using var starter = driver.Client();
-        using var created = await starter.PostAsync(
+        using HttpClient starter = driver.Client();
+        using HttpResponseMessage created = await starter.PostAsync(
             DriverEndpoints.Sessions,
             DriverUnderTest.Body(DriverUnderTest.Live("announced")),
             Soon()
@@ -1133,7 +1133,7 @@ public sealed class DriverApiTests
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
 
         var names = new List<string>();
-        var token = Soon();
+        CancellationToken token = Soon();
 
         while (names.Count is 0 && await reader.ReadLineAsync(token) is { } line)
         {
@@ -1150,20 +1150,20 @@ public sealed class DriverApiTests
     [Fact]
     public async Task AListenerTooManyIsTurnedAwayPolitely()
     {
-        await using var driver = await DriverUnderTest.Start();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
 
         var clients = new List<HttpClient>();
         var responses = new List<HttpResponseMessage>();
 
         try
         {
-            for (var taken = 0; taken < DriverEventHub.DefaultListenerLimit; taken++)
+            for (int taken = 0; taken < DriverEventHub.DefaultListenerLimit; taken++)
             {
-                var client = driver.Client();
+                HttpClient client = driver.Client();
                 clients.Add(client);
 
                 var request = new HttpRequestMessage(HttpMethod.Get, DriverEndpoints.Events);
-                var response = await client.SendAsync(
+                HttpResponseMessage response = await client.SendAsync(
                     request,
                     HttpCompletionOption.ResponseHeadersRead,
                     Soon()
@@ -1173,24 +1173,24 @@ public sealed class DriverApiTests
                 Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             }
 
-            using var late = driver.Client();
-            using var refused = await late.GetAsync(DriverEndpoints.Events, Soon());
+            using HttpClient late = driver.Client();
+            using HttpResponseMessage refused = await late.GetAsync(DriverEndpoints.Events, Soon());
 
             Assert.Equal(HttpStatusCode.TooManyRequests, refused.StatusCode);
 
-            var problem = await DriverUnderTest.Read(refused, DriverJson.Context.DriverProblem);
+            DriverProblem? problem = await DriverUnderTest.Read(refused, DriverJson.Context.DriverProblem);
 
             Assert.NotNull(problem);
             Assert.Equal("tooManyListeners", problem.Title);
         }
         finally
         {
-            foreach (var response in responses)
+            foreach (HttpResponseMessage response in responses)
             {
                 response.Dispose();
             }
 
-            foreach (var client in clients)
+            foreach (HttpClient client in clients)
             {
                 client.Dispose();
             }
@@ -1200,10 +1200,10 @@ public sealed class DriverApiTests
     [Fact]
     public async Task APathTheDriverDoesNotServeIsNotFound()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var response = await client.GetAsync("/something-else", Soon());
+        using HttpResponseMessage response = await client.GetAsync("/something-else", Soon());
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -1211,10 +1211,10 @@ public sealed class DriverApiTests
     [Fact]
     public async Task AMethodTheDriverDoesNotServeIsNotAllowed()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var response = await client.PostAsync(
+        using HttpResponseMessage response = await client.PostAsync(
             DriverEndpoints.Health,
             new StringContent(string.Empty),
             Soon()
@@ -1227,7 +1227,7 @@ public sealed class DriverApiTests
 
     private static async Task TheStreamEnds(Stream body, CancellationToken cancellationToken)
     {
-        var buffer = new byte[TsPacketLength];
+        byte[] buffer = new byte[TsPacketLength];
 
         try
         {
@@ -1240,7 +1240,7 @@ public sealed class DriverApiTests
 
     private static async Task Until(Func<bool> fact, string otherwise)
     {
-        var deadline = DateTimeOffset.UtcNow + Patience;
+        DateTimeOffset deadline = DateTimeOffset.UtcNow + Patience;
 
         while (!fact())
         {
@@ -1258,12 +1258,12 @@ public sealed class DriverApiTests
         Func<IReadOnlyList<SessionSnapshot>, bool> settled
     )
     {
-        var deadline = DateTimeOffset.UtcNow + Patience;
+        DateTimeOffset deadline = DateTimeOffset.UtcNow + Patience;
 
         while (true)
         {
-            using var response = await client.GetAsync(DriverEndpoints.Sessions, Soon());
-            var sessions = await DriverUnderTest.Read(
+            using HttpResponseMessage response = await client.GetAsync(DriverEndpoints.Sessions, Soon());
+            IReadOnlyList<SessionSnapshot>? sessions = await DriverUnderTest.Read(
                 response,
                 DriverJson.Context.IReadOnlyListSessionSnapshot
             );

@@ -14,7 +14,7 @@ public sealed class StreamVisitTests
     [InlineData(VisitOutcome.BasicOnly)]
     public void AVisitThatGatheredWhatItCameForCountsAsCompleted(VisitOutcome outcome)
     {
-        var visit = Visit(outcome);
+        StreamVisit visit = Visit(outcome);
 
         Assert.Equal(At, visit.LastCompletedAt);
         Assert.Equal(0, visit.ConsecutiveIncomplete);
@@ -26,7 +26,7 @@ public sealed class StreamVisitTests
     [InlineData(VisitOutcome.NoBytes)]
     public void AVisitThatCameBackShortIsNotACompletionAndIsCounted(VisitOutcome outcome)
     {
-        var visit = Visit(outcome);
+        StreamVisit visit = Visit(outcome);
 
         Assert.Null(visit.LastCompletedAt);
         Assert.Equal(1, visit.ConsecutiveIncomplete);
@@ -35,7 +35,7 @@ public sealed class StreamVisitTests
     [Fact]
     public void AVisitCutShortByTheDriverIsNotHeldAgainstTheStream()
     {
-        var visit = Visit(VisitOutcome.Interrupted);
+        StreamVisit visit = Visit(VisitOutcome.Interrupted);
 
         Assert.Null(visit.LastCompletedAt);
         Assert.Equal(0, visit.ConsecutiveIncomplete);
@@ -44,7 +44,7 @@ public sealed class StreamVisitTests
     [Fact]
     public void ComingBackShortAgainAndAgainAddsUp()
     {
-        var visit = Visit(VisitOutcome.Incomplete);
+        StreamVisit visit = Visit(VisitOutcome.Incomplete);
 
         visit.Record(VisitOutcome.Incomplete, At.AddHours(1), Took);
         visit.Record(VisitOutcome.NoLock, At.AddHours(2), Took);
@@ -55,7 +55,7 @@ public sealed class StreamVisitTests
     [Fact]
     public void AnInterruptionLeavesWhatCameBeforeExactlyWhereItWas()
     {
-        var visit = Visit(VisitOutcome.Incomplete);
+        StreamVisit visit = Visit(VisitOutcome.Incomplete);
 
         visit.Record(VisitOutcome.Incomplete, At.AddHours(1), Took);
         visit.Record(VisitOutcome.Interrupted, At.AddHours(2), Took);
@@ -70,7 +70,7 @@ public sealed class StreamVisitTests
     [Fact]
     public void AnInterruptionOnAStreamThatWasFineLeavesItFine()
     {
-        var visit = Visit(VisitOutcome.Complete);
+        StreamVisit visit = Visit(VisitOutcome.Complete);
 
         visit.Record(VisitOutcome.Interrupted, At.AddHours(1), Took);
 
@@ -81,7 +81,7 @@ public sealed class StreamVisitTests
     [Fact]
     public void GatheringItAllClearsWhatCameShortBefore()
     {
-        var visit = Visit(VisitOutcome.Incomplete);
+        StreamVisit visit = Visit(VisitOutcome.Incomplete);
 
         visit.Record(VisitOutcome.Complete, At.AddHours(1), Took);
 
@@ -92,7 +92,7 @@ public sealed class StreamVisitTests
     [Fact]
     public void AVisitThatCameBackShortKeepsTheLastCompletionItHad()
     {
-        var visit = Visit(VisitOutcome.Complete);
+        StreamVisit visit = Visit(VisitOutcome.Complete);
 
         visit.Record(VisitOutcome.Incomplete, At.AddHours(1), Took);
 

@@ -21,7 +21,7 @@ public static class DriverSocket
 
     public static void ClearStale(string path)
     {
-        var length = Encoding.UTF8.GetByteCount(path);
+        int length = Encoding.UTF8.GetByteCount(path);
         if (length > MaxPathBytes)
         {
             throw new DriverSocketException(
@@ -29,7 +29,7 @@ public static class DriverSocket
             );
         }
 
-        var entry = UnixFile.Inspect(path);
+        UnixEntry entry = UnixFile.Inspect(path);
 
         switch (entry.Kind)
         {
@@ -60,7 +60,7 @@ public static class DriverSocket
 
     public static void Secure(string path, int groupId)
     {
-        var group = unchecked((uint)groupId);
+        uint group = unchecked((uint)groupId);
 
         try
         {
@@ -74,14 +74,14 @@ public static class DriverSocket
             );
         }
 
-        if (!UnixFile.TryGiveToGroup(path, group, out var problem))
+        if (!UnixFile.TryGiveToGroup(path, group, out string? problem))
         {
             throw new DriverSocketException(
                 $"The socket at '{path}' could not be given to group {groupId} ('{DriverConfiguration.SocketGroupName}'): {problem}. This driver runs as uid {UnixFile.CurrentUserId()} gid {UnixFile.CurrentGroupId()}, and a process only hands a file to a group it belongs to."
             );
         }
 
-        var entry = UnixFile.Inspect(path);
+        UnixEntry entry = UnixFile.Inspect(path);
 
         if (
             entry.Kind is not UnixPathKind.Socket
@@ -136,7 +136,7 @@ public static class DriverSocket
             ProtocolType.Unspecified
         );
 
-        var connecting = probe.ConnectAsync(new UnixDomainSocketEndPoint(path));
+        Task connecting = probe.ConnectAsync(new UnixDomainSocketEndPoint(path));
 
         try
         {

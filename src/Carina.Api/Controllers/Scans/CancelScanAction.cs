@@ -1,3 +1,4 @@
+using Carina.Api.Common;
 using Carina.Api.Responder;
 using Carina.Api.Responder.Scans;
 using Carina.Api.Services;
@@ -17,7 +18,7 @@ public sealed class CancelScanAction(ScanService scanService) : ControllerBase
     [ProducesResponseType<BaseResponder<ScanProgressResponder>>(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Invoke(Guid scanId, CancellationToken cancellationToken)
     {
-        var result = await scanService.CancelAsync(new ScanRunId(scanId), cancellationToken);
+        ServiceResult<ScanProgress, ScanFailure> result = await scanService.CancelAsync(new ScanRunId(scanId), cancellationToken);
 
         if (!result.IsSuccess)
         {

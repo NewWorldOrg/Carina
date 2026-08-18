@@ -54,7 +54,7 @@ public sealed class DvbFrequencyTests
     public void EveryFrequencyIsTheOneTheSharedBroadcastStandardsDerive()
     {
         for (
-            var channel = BroadcastStandards.TerrestrialFirstChannel;
+            int channel = BroadcastStandards.TerrestrialFirstChannel;
             channel <= BroadcastStandards.TerrestrialLastChannel;
             channel++
         )
@@ -66,7 +66,7 @@ public sealed class DvbFrequencyTests
         }
 
         for (
-            var slot = BroadcastStandards.BsFirstChannel;
+            int slot = BroadcastStandards.BsFirstChannel;
             slot <= BroadcastStandards.BsLastChannel;
             slot += 2
         )
@@ -81,7 +81,7 @@ public sealed class DvbFrequencyTests
         }
 
         for (
-            var slot = BroadcastStandards.Cs110FirstChannel;
+            int slot = BroadcastStandards.Cs110FirstChannel;
             slot <= BroadcastStandards.Cs110LastChannel;
             slot += 2
         )

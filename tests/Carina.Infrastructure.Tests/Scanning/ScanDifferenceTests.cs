@@ -20,10 +20,10 @@ public sealed class ScanDifferenceTests
     [Fact]
     public async Task AServiceNobodyHasStoredYetIsProposedAsAnAddition()
     {
-        var harness = Harness(Carrying(new SyntheticService(SomeServiceId, "Carina One")));
+        ScanHarness harness = Harness(Carrying(new SyntheticService(SomeServiceId, "Carina One")));
 
-        var outcome = await harness.Orchestrator.RunAsync(ScanScope.Over([Channel53]), Cancel);
-        var added = Assert.Single(outcome.Difference.Added);
+        ScanOutcome outcome = await harness.Orchestrator.RunAsync(ScanScope.Over([Channel53]), Cancel);
+        ScanServiceChange added = Assert.Single(outcome.Difference.Added);
 
         Assert.Equal(SomeServiceId, added.ServiceId.Value);
         Assert.Equal("Carina One", added.Name);
@@ -34,15 +34,15 @@ public sealed class ScanDifferenceTests
     [Fact]
     public async Task AServiceReachedOnTwoTerrestrialChannelsIsProposedWithBoth()
     {
-        var script = Carrying(new SyntheticService(SomeServiceId, "Carina One"));
+        ChannelScript script = Carrying(new SyntheticService(SomeServiceId, "Carina One"));
         var harness = new ScanHarness(new ScriptedDriverClient()
             .Script(Channel53, script)
             .Script(Channel55, script));
 
-        var outcome = await harness.Orchestrator.RunAsync(
+        ScanOutcome outcome = await harness.Orchestrator.RunAsync(
             ScanScope.Over([Channel53, Channel55]),
             Cancel);
-        var added = Assert.Single(outcome.Difference.Added);
+        ScanServiceChange added = Assert.Single(outcome.Difference.Added);
 
         Assert.Equal(
             [Channel53, Channel55],
@@ -60,8 +60,8 @@ public sealed class ScanDifferenceTests
             .Script(twin, script)
             .Script(other, script));
 
-        var outcome = await harness.Orchestrator.RunAsync(ScanScope.Over([twin, other]), Cancel);
-        var added = Assert.Single(outcome.Difference.Added);
+        ScanOutcome outcome = await harness.Orchestrator.RunAsync(ScanScope.Over([twin, other]), Cancel);
+        ScanServiceChange added = Assert.Single(outcome.Difference.Added);
 
         Assert.Equal([twin], added.Channels.Select(channel => channel.Tuning));
     }
@@ -69,11 +69,11 @@ public sealed class ScanDifferenceTests
     [Fact]
     public async Task AServiceThatChangedItsNameIsProposedAsAnUpdateRatherThanAsANewOne()
     {
-        var harness = Harness(Carrying(new SyntheticService(SomeServiceId, "Carina One Renamed")));
+        ScanHarness harness = Harness(Carrying(new SyntheticService(SomeServiceId, "Carina One Renamed")));
         Store(harness, SomeServiceId, "Carina One", Channel53);
 
-        var outcome = await harness.Orchestrator.RunAsync(ScanScope.Over([Channel53]), Cancel);
-        var updated = Assert.Single(outcome.Difference.Updated);
+        ScanOutcome outcome = await harness.Orchestrator.RunAsync(ScanScope.Over([Channel53]), Cancel);
+        ScanServiceChange updated = Assert.Single(outcome.Difference.Updated);
 
         Assert.Equal("Carina One Renamed", updated.Name);
         Assert.Empty(updated.Channels);
@@ -83,11 +83,11 @@ public sealed class ScanDifferenceTests
     [Fact]
     public async Task AStoredServiceTheScanReachedAndDidNotFindIsProposedAsMissing()
     {
-        var harness = Harness(Carrying(new SyntheticService(SomeServiceId, "Carina One")));
+        ScanHarness harness = Harness(Carrying(new SyntheticService(SomeServiceId, "Carina One")));
         Store(harness, AnotherServiceId, "Carina Two", Channel53);
 
-        var outcome = await harness.Orchestrator.RunAsync(ScanScope.Over([Channel53]), Cancel);
-        var missing = Assert.Single(outcome.Difference.Missing);
+        ScanOutcome outcome = await harness.Orchestrator.RunAsync(ScanScope.Over([Channel53]), Cancel);
+        ScanServiceChange missing = Assert.Single(outcome.Difference.Missing);
 
         Assert.Equal(AnotherServiceId, missing.ServiceId.Value);
         Assert.Equal(Channel53, Assert.Single(missing.Channels).Tuning);
@@ -98,11 +98,11 @@ public sealed class ScanDifferenceTests
     [Fact]
     public async Task AStoredServiceOnAChannelTheScanCouldNotReachIsLeftAlone()
     {
-        var harness = Harness(Carrying(new SyntheticService(SomeServiceId, "Carina One")));
+        ScanHarness harness = Harness(Carrying(new SyntheticService(SomeServiceId, "Carina One")));
         harness.Driver.Script(Channel55, ChannelScript.NoLock());
         Store(harness, AnotherServiceId, "Carina Two", Channel55);
 
-        var outcome = await harness.Orchestrator.RunAsync(
+        ScanOutcome outcome = await harness.Orchestrator.RunAsync(
             ScanScope.Over([Channel53, Channel55]),
             Cancel);
 
@@ -115,10 +115,10 @@ public sealed class ScanDifferenceTests
     public async Task AScanThatOnlyWalkedOneSystemProposesNothingAboutTheOthers()
     {
         var slot = TuningParameters.Bs(9, new TransportStreamId(50004));
-        var harness = Harness(Carrying(new SyntheticService(SomeServiceId, "Carina One")));
+        ScanHarness harness = Harness(Carrying(new SyntheticService(SomeServiceId, "Carina One")));
         Store(harness, AnotherServiceId, "Carina Two", slot);
 
-        var outcome = await harness.Orchestrator.RunAsync(ScanScope.Over([Channel53]), Cancel);
+        ScanOutcome outcome = await harness.Orchestrator.RunAsync(ScanScope.Over([Channel53]), Cancel);
 
         Assert.Empty(outcome.Difference.Missing);
         Assert.Equal([SomeServiceId], outcome.Difference.Added.Select(change => change.ServiceId.Value));
@@ -127,18 +127,18 @@ public sealed class ScanDifferenceTests
     [Fact]
     public async Task ANewChannelForAStoredServiceIsProposedWithoutTouchingTheOneAlreadyThere()
     {
-        var harness = Harness(Carrying(new SyntheticService(SomeServiceId, "Carina One")));
+        ScanHarness harness = Harness(Carrying(new SyntheticService(SomeServiceId, "Carina One")));
         harness.Driver.Script(Channel55, ChannelScript.Carrying(SyntheticStream.Carrying(
             50003,
             new SyntheticService(SomeServiceId, "Carina One"))));
         Store(harness, SomeServiceId, "Carina One", Channel53);
 
-        var outcome = await harness.Orchestrator.RunAsync(
+        ScanOutcome outcome = await harness.Orchestrator.RunAsync(
             ScanScope.Over([Channel53, Channel55]),
             Cancel);
 
-        var updated = Assert.Single(outcome.Difference.Updated);
-        var channel = Assert.Single(updated.Channels);
+        ScanServiceChange updated = Assert.Single(outcome.Difference.Updated);
+        ScanChannelChange channel = Assert.Single(updated.Channels);
 
         Assert.Equal(ScanChangeKind.Added, channel.Kind);
         Assert.Equal(Channel55, channel.Tuning);
@@ -147,13 +147,13 @@ public sealed class ScanDifferenceTests
     [Fact]
     public async Task TheDifferenceIsProposedAndNothingIsWrittenToTheDefinitions()
     {
-        var harness = Harness(Carrying(
+        ScanHarness harness = Harness(Carrying(
             new SyntheticService(SomeServiceId, "Carina One Renamed"),
             new SyntheticService(AThirdServiceId, "Carina Three")));
         Store(harness, SomeServiceId, "Carina One", Channel53);
         Store(harness, AnotherServiceId, "Carina Two", Channel55);
 
-        var outcome = await harness.Orchestrator.RunAsync(ScanScope.Over([Channel53]), Cancel);
+        ScanOutcome outcome = await harness.Orchestrator.RunAsync(ScanScope.Over([Channel53]), Cancel);
 
         Assert.Equal(2, harness.Services.Services.Count);
         Assert.Equal(2, harness.Candidates.Candidates.Count);
@@ -173,12 +173,12 @@ public sealed class ScanDifferenceTests
             new ScriptedDriverClient().Script(Channel53, new ChannelScript { Paced = () => stream }));
         Store(harness, SomeServiceId, "Carina One", Channel53);
 
-        var scan = Task.Run(() => harness.Orchestrator.RunAsync(ScanScope.Over([Channel53]), Cancel), Cancel);
+        Task<ScanOutcome> scan = Task.Run(() => harness.Orchestrator.RunAsync(ScanScope.Over([Channel53]), Cancel), Cancel);
 
         stream.AwaitParkedBefore(1);
         harness.RestartTheDriver();
 
-        var outcome = await scan;
+        ScanOutcome outcome = await scan;
 
         Assert.Equal(ScanRunState.Interrupted, outcome.State);
         Assert.True(outcome.Difference.ChangesNothing);
@@ -188,7 +188,7 @@ public sealed class ScanDifferenceTests
     [Fact]
     public async Task EveryScanTellsTheScreensSomethingChanged()
     {
-        var harness = Harness(Carrying(new SyntheticService(SomeServiceId, "Carina One")));
+        ScanHarness harness = Harness(Carrying(new SyntheticService(SomeServiceId, "Carina One")));
 
         await harness.Orchestrator.RunAsync(ScanScope.Over([Channel53]), Cancel);
 

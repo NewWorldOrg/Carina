@@ -45,7 +45,7 @@ public sealed class DriverConfigurationRulesTests
     [InlineData("\"socket_path\": \"/run/x.sock\",", "socket_path:")]
     public void AnUnknownSettingIsNamed(string extra, string expected)
     {
-        var json = Complete.Replace("{\n  \"socketPath\"", "{\n  " + extra + "\n  \"socketPath\"");
+        string json = Complete.Replace("{\n  \"socketPath\"", "{\n  " + extra + "\n  \"socketPath\"");
 
         Assert.Contains(Problems(json), problem => problem.StartsWith(expected));
     }
@@ -66,7 +66,7 @@ public sealed class DriverConfigurationRulesTests
     [Fact]
     public void AnUnknownTunerSettingIsNamed()
     {
-        var json = Complete.Replace(
+        string json = Complete.Replace(
             "\"tuner\": { \"backend\": \"fake\" }",
             "\"tuner\": { \"backend\": \"fake\", \"bakcend\": \"dvb\" }"
         );
@@ -79,7 +79,7 @@ public sealed class DriverConfigurationRulesTests
     [InlineData(3601)]
     public void AQualityReadingIntervalOutsideWhatTheDriverWillRunIsAFinding(int seconds)
     {
-        var json = Complete.Replace(
+        string json = Complete.Replace(
             "\"tuner\": { \"backend\": \"fake\" }",
             $"\"tuner\": {{ \"backend\": \"fake\", \"signalQualitySeconds\": {seconds} }}"
         );
@@ -95,7 +95,7 @@ public sealed class DriverConfigurationRulesTests
     [InlineData(268_435_456)]
     public void ARingBufferOutsideWhatTheDriverWillAskForIsAFinding(int bytes)
     {
-        var json = Complete.Replace(
+        string json = Complete.Replace(
             "\"tuner\": { \"backend\": \"fake\" }",
             $"\"tuner\": {{ \"backend\": \"fake\", \"demuxBufferBytes\": {bytes} }}"
         );
@@ -106,7 +106,7 @@ public sealed class DriverConfigurationRulesTests
     [Fact]
     public void AConfigurationThatSaysNothingAboutQualityKeepsTheIntervalAndBufferItShipsWith()
     {
-        var configuration = DriverConfigurationReader.Parse(Complete);
+        DriverConfiguration? configuration = DriverConfigurationReader.Parse(Complete);
 
         Assert.NotNull(configuration);
         Assert.Equal(
@@ -122,12 +122,12 @@ public sealed class DriverConfigurationRulesTests
     [Fact]
     public void TheIntervalAndTheBufferAreReadFromTheFileWhenTheyAreThere()
     {
-        var json = Complete.Replace(
+        string json = Complete.Replace(
             "\"tuner\": { \"backend\": \"fake\" }",
             "\"tuner\": { \"backend\": \"fake\", \"signalQualitySeconds\": 30, \"demuxBufferBytes\": 8388608 }"
         );
 
-        var configuration = DriverConfigurationReader.Parse(json);
+        DriverConfiguration? configuration = DriverConfigurationReader.Parse(json);
 
         Assert.Empty(Problems(json));
         Assert.Equal(30, configuration?.Tuner?.SignalQualitySeconds);
@@ -137,7 +137,7 @@ public sealed class DriverConfigurationRulesTests
     [Fact]
     public void TwoDevicesOnOneNodeAreAFinding()
     {
-        var json = WithDevices("""
+        string json = WithDevices("""
             "devices": [
                 { "id": "a0", "kind": "terrestrial", "devicePath": "/dev/dvb/adapter0/frontend0" },
                 { "id": "a1", "kind": "terrestrial", "devicePath": "/dev/dvb/adapter0/frontend0" }
@@ -191,13 +191,13 @@ public sealed class DriverConfigurationRulesTests
     [Fact]
     public void ADevicePathIsCheckedEvenWhenTheBackendCannotBeRead()
     {
-        var json = WithDevices("""
+        string json = WithDevices("""
             "devices": [
                 { "id": "adapter0", "kind": "terrestrial" }
               ]
             """).Replace("\"backend\": \"fake\"", "\"backend\": \"DVB\"");
 
-        var problems = Problems(json);
+        IReadOnlyList<string> problems = Problems(json);
 
         Assert.Contains(problems, problem => problem.StartsWith("tuner.backend:"));
         Assert.Contains(problems, problem => problem.StartsWith("devices[0].devicePath:"));
@@ -208,7 +208,7 @@ public sealed class DriverConfigurationRulesTests
     [InlineData("/run")]
     public void ASocketOutsideTheRunDirectoryIsAFinding(string socketPath)
     {
-        var json = Complete.Replace("/run/carina/driver.sock", socketPath);
+        string json = Complete.Replace("/run/carina/driver.sock", socketPath);
 
         Assert.Contains(Problems(json), problem => problem.StartsWith("socketPath:"));
     }
@@ -216,7 +216,7 @@ public sealed class DriverConfigurationRulesTests
     [Fact]
     public void ADevicePathOutsideDevIsAFinding()
     {
-        var json = WithDevices("""
+        string json = WithDevices("""
             "devices": [
                 { "id": "adapter0", "kind": "terrestrial", "devicePath": "/etc/shadow" }
               ]

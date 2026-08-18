@@ -13,8 +13,8 @@ public sealed record DriverStatusResponder(
 {
     public static DriverStatusResponder Of(DriverStatusSnapshot snapshot)
     {
-        var observation = snapshot.Observation;
-        var hello = observation.Hello is { } seen
+        DriverObservation observation = snapshot.Observation;
+        DriverHelloResponder? hello = observation.Hello is { } seen
             ? new DriverHelloResponder(
                 seen.ProtocolVersion,
                 seen.InstanceId,

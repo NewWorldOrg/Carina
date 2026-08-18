@@ -10,7 +10,7 @@ public sealed class DriverConfigurationPlanningTests : IDisposable
 
     private string WriteConfiguration(string json)
     {
-        var path = Path.Combine(root, "driver.json");
+        string path = Path.Combine(root, "driver.json");
         File.WriteAllText(path, json);
 
         return path;
@@ -30,29 +30,29 @@ public sealed class DriverConfigurationPlanningTests : IDisposable
     [Fact]
     public void ReadingForTheRuntimeRefusesPathsThatDoNotExist()
     {
-        var path = WriteConfiguration(PointingAtNothingThatExists);
+        string path = WriteConfiguration(PointingAtNothingThatExists);
 
-        var result = DriverConfigurationReader.ReadFile(path);
+        DriverConfigurationResult result = DriverConfigurationReader.ReadFile(path);
 
-        Assert.False(result.TryGetConfiguration(out _, out var problems));
+        Assert.False(result.TryGetConfiguration(out _, out IReadOnlyList<string>? problems));
         Assert.Contains(problems, problem => problem.Contains("does not exist", StringComparison.Ordinal));
     }
 
     [Fact]
     public void ReadingForPlanningAnswersBeforeThosePathsExist()
     {
-        var path = WriteConfiguration(PointingAtNothingThatExists);
+        string path = WriteConfiguration(PointingAtNothingThatExists);
 
-        var result = DriverConfigurationReader.ReadFile(path, checkTheFilesystem: false);
+        DriverConfigurationResult result = DriverConfigurationReader.ReadFile(path, checkTheFilesystem: false);
 
-        Assert.True(result.TryGetConfiguration(out var configuration, out _));
+        Assert.True(result.TryGetConfiguration(out DriverConfiguration? configuration, out _));
         Assert.Equal(21690, DriverShutdownBudget.From(configuration).TotalSeconds);
     }
 
     [Fact]
     public void ReadingForPlanningStillRefusesASettingItCannotUse()
     {
-        var path = WriteConfiguration(
+        string path = WriteConfiguration(
             PointingAtNothingThatExists.Replace(
                 "\"shutdownGraceHours\": 6",
                 "\"shutdownGraceHours\": 400",
@@ -60,9 +60,9 @@ public sealed class DriverConfigurationPlanningTests : IDisposable
             )
         );
 
-        var result = DriverConfigurationReader.ReadFile(path, checkTheFilesystem: false);
+        DriverConfigurationResult result = DriverConfigurationReader.ReadFile(path, checkTheFilesystem: false);
 
-        Assert.False(result.TryGetConfiguration(out _, out var problems));
+        Assert.False(result.TryGetConfiguration(out _, out IReadOnlyList<string>? problems));
         Assert.Contains(
             problems,
             problem => problem.Contains("shutdownGraceHours", StringComparison.Ordinal)

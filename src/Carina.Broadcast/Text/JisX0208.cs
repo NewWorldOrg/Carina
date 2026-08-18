@@ -107,7 +107,7 @@ public static class JisX0208
             return false;
         }
 
-        var mapped = Rows[row - FirstRow][cell - 1];
+        char mapped = Rows[row - FirstRow][cell - 1];
 
         if (mapped == Unassigned)
         {

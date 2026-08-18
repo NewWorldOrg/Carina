@@ -33,7 +33,7 @@ public static class TcpBindingGate
         Func<string, string?>? environment = null
     )
     {
-        var read = environment ?? Environment.GetEnvironmentVariable;
+        Func<string, string?> read = environment ?? Environment.GetEnvironmentVariable;
         var findings = new List<string>();
 
         if (read(UrlsVariable) is { Length: > 0 } fromEnvironment)
@@ -41,7 +41,7 @@ public static class TcpBindingGate
             findings.Add($"{UrlsVariable} is set to '{fromEnvironment}'. {Reason}");
         }
 
-        foreach (var variable in PortVariables)
+        foreach (string variable in PortVariables)
         {
             if (read(variable) is { Length: > 0 } ports)
             {
@@ -49,7 +49,7 @@ public static class TcpBindingGate
             }
         }
 
-        foreach (var setting in PortSettings)
+        foreach (string setting in PortSettings)
         {
             if (configuration[setting] is { Length: > 0 } ports)
             {
@@ -57,7 +57,7 @@ public static class TcpBindingGate
             }
         }
 
-        foreach (var argument in args)
+        foreach (string argument in args)
         {
             if (
                 string.Equals(argument, UrlsArgument, StringComparison.Ordinal)
@@ -73,7 +73,7 @@ public static class TcpBindingGate
             findings.Add($"the '{UrlsSetting}' setting reads '{fromConfiguration}'. {Reason}");
         }
 
-        foreach (var endpoint in configuration.GetSection(EndpointsSection).GetChildren())
+        foreach (IConfigurationSection endpoint in configuration.GetSection(EndpointsSection).GetChildren())
         {
             findings.Add(
                 $"'{EndpointsSection}:{endpoint.Key}' names an endpoint ({endpoint["Url"] ?? "with no url"}). {Reason}"

@@ -27,7 +27,7 @@ public sealed class TunerDeviceFactoryDvbTests
             calls
         );
 
-        using var device = factory.Create(
+        using ITunerDevice device = factory.Create(
             new DeviceSettings("fake-terrestrial", DeviceKind.Terrestrial),
             new TuningRequest(TunerKind.Terrestrial, 55),
             tune: null
@@ -40,10 +40,10 @@ public sealed class TunerDeviceFactoryDvbTests
     [Fact]
     public void TheDvbBackendOpensTheConfiguredFrontend()
     {
-        var (calls, clock) = Ready();
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
         var factory = TunerDeviceFactory.Using(Configured(TunerBackend.Dvb), clock, calls);
 
-        using var device = factory.Create(
+        using ITunerDevice device = factory.Create(
             Terrestrial(),
             new TuningRequest(TunerKind.Terrestrial, 55),
             tune: null
@@ -56,10 +56,10 @@ public sealed class TunerDeviceFactoryDvbTests
     [Fact]
     public void ADeviceWithNoUsablePathIsRefusedByNameBeforeAnythingIsOpened()
     {
-        var (calls, clock) = Ready();
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
         var factory = TunerDeviceFactory.Using(Configured(TunerBackend.Dvb), clock, calls);
 
-        var refusal = Assert.Throws<DvbDeviceException>(
+        DvbDeviceException refusal = Assert.Throws<DvbDeviceException>(
             () =>
                 factory.Create(
                     new DeviceSettings("pt3-0", DeviceKind.Terrestrial, "/dev/video0"),
@@ -76,11 +76,11 @@ public sealed class TunerDeviceFactoryDvbTests
     [Fact]
     public void AMissingDeviceNodeIsRefusedWithTheSamePlainnessAsABadSetting()
     {
-        var (calls, clock) = Ready();
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
         calls.RefuseToOpen("/dev/dvb/adapter0/frontend0", Errno.NoSuchDevice);
         var factory = TunerDeviceFactory.Using(Configured(TunerBackend.Dvb), clock, calls);
 
-        var refusal = Assert.Throws<DvbDeviceException>(
+        DvbDeviceException refusal = Assert.Throws<DvbDeviceException>(
             () => factory.Create(Terrestrial(), new TuningRequest(TunerKind.Terrestrial, 55), tune: null)
         );
 
@@ -91,12 +91,12 @@ public sealed class TunerDeviceFactoryDvbTests
     [Fact]
     public void ASatelliteDeviceWithTheAerialSupplyOffIsToldSoExplicitly()
     {
-        var (calls, clock) = Ready();
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
         var factory = TunerDeviceFactory.Using(Configured(TunerBackend.Dvb), clock, calls);
 
         var tune = TuneParams.Bs(1, SyntheticStream);
 
-        using var device = factory.Create(
+        using ITunerDevice device = factory.Create(
             new DeviceSettings("pt3-2", DeviceKind.Satellite, "/dev/dvb/adapter2/frontend0"),
             tune.ToLegacyRequest(),
             tune
@@ -108,12 +108,12 @@ public sealed class TunerDeviceFactoryDvbTests
     [Fact]
     public void ASatelliteDeviceWithTheAerialSupplyEnabledFeedsTheAerial()
     {
-        var (calls, clock) = Ready();
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
         var factory = TunerDeviceFactory.Using(Configured(TunerBackend.Dvb), clock, calls);
 
         var tune = TuneParams.Bs(1, SyntheticStream);
 
-        using var device = factory.Create(
+        using ITunerDevice device = factory.Create(
             new DeviceSettings(
                 "pt3-2",
                 DeviceKind.Satellite,
@@ -138,7 +138,7 @@ public sealed class TunerDeviceFactoryDvbTests
     [Fact]
     public void AnOddSatelliteSlotInTheOlderParametersIsRefusedForNamingNoTransportStream()
     {
-        var refusal = Assert.Throws<DvbDeviceException>(
+        DvbDeviceException refusal = Assert.Throws<DvbDeviceException>(
             () => DvbTuneRequest.Resolve(null, new TuningRequest(TunerKind.Satellite, 15))
         );
 
@@ -149,7 +149,7 @@ public sealed class TunerDeviceFactoryDvbTests
     [Fact]
     public void AServiceIdInTheOlderParametersIsNotMistakenForATransportStreamId()
     {
-        var refusal = Assert.Throws<DvbDeviceException>(
+        DvbDeviceException refusal = Assert.Throws<DvbDeviceException>(
             () =>
                 DvbTuneRequest.Resolve(
                     null,
@@ -163,7 +163,7 @@ public sealed class TunerDeviceFactoryDvbTests
     [Fact]
     public void ARequestThatDoesNotSayWhichAerialItNeedsIsRefused()
     {
-        var refusal = Assert.Throws<DvbDeviceException>(
+        DvbDeviceException refusal = Assert.Throws<DvbDeviceException>(
             () => DvbTuneRequest.Resolve(null, new TuningRequest(TunerKind.Unspecified, 55))
         );
 
@@ -173,7 +173,7 @@ public sealed class TunerDeviceFactoryDvbTests
     [Fact]
     public void TheRingBufferTheConfigurationAsksForIsTheOneTheDemuxIsGiven()
     {
-        var (calls, clock) = Ready();
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
         var factory = TunerDeviceFactory.Using(
             new DriverConfiguration(
                 null,
@@ -186,7 +186,7 @@ public sealed class TunerDeviceFactoryDvbTests
             calls
         );
 
-        using var device = factory.Create(
+        using ITunerDevice device = factory.Create(
             Terrestrial(),
             new TuningRequest(TunerKind.Terrestrial, 55),
             tune: null
@@ -198,10 +198,10 @@ public sealed class TunerDeviceFactoryDvbTests
     [Fact]
     public void ADvbTunerCanBeAskedForItsQualityWhileTheSessionHoldsIt()
     {
-        var (calls, clock) = Ready();
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
         var factory = TunerDeviceFactory.Using(Configured(TunerBackend.Dvb), clock, calls);
 
-        using var device = factory.Create(
+        using ITunerDevice device = factory.Create(
             Terrestrial(),
             new TuningRequest(TunerKind.Terrestrial, 55),
             tune: null

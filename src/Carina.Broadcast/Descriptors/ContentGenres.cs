@@ -20,10 +20,10 @@ public static class ContentGenres
             return false;
         }
 
-        var payload = descriptor.Payload.Span;
+        ReadOnlySpan<byte> payload = descriptor.Payload.Span;
         var found = new List<ContentGenre>(payload.Length / PairSize);
 
-        for (var at = 0; at + PairSize <= payload.Length; at += PairSize)
+        for (int at = 0; at + PairSize <= payload.Length; at += PairSize)
         {
             found.Add(new ContentGenre(
                 payload[at] >> 4,

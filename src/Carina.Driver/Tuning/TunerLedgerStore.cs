@@ -9,7 +9,7 @@ public sealed class TunerLedgerStore(DriverConfiguration configuration, string? 
 
     public TunerLedgerDto View()
     {
-        var saved = Saved();
+        DriverConfiguration? saved = Saved();
 
         return new TunerLedgerDto
         {
@@ -24,20 +24,20 @@ public sealed class TunerLedgerStore(DriverConfiguration configuration, string? 
         IReadOnlyList<TunerDetection> detected
     )
     {
-        var saved = Saved();
+        DriverConfiguration? saved = Saved();
 
-        var revision = TunerLedger.Revise(
+        LedgerRevision revision = TunerLedger.Revise(
             requested,
             detected,
             saved?.Devices ?? configuration.Devices
         );
 
-        if (!revision.TryGetDevices(out var devices))
+        if (!revision.TryGetDevices(out IReadOnlyList<DeviceSettings>? devices))
         {
             return revision;
         }
 
-        var problems = DriverConfigurationReader.DeviceProblems(
+        IReadOnlyList<string> problems = DriverConfigurationReader.DeviceProblems(
             devices,
             configuration.Tuner?.Backend ?? TunerBackend.Unspecified
         );
@@ -61,7 +61,7 @@ public sealed class TunerLedgerStore(DriverConfiguration configuration, string? 
             );
         }
 
-        var json = DriverConfigurationWriter.Serialize(
+        string json = DriverConfigurationWriter.Serialize(
             (saved ?? configuration) with
             {
                 Devices = devices,
@@ -88,7 +88,7 @@ public sealed class TunerLedgerStore(DriverConfiguration configuration, string? 
         IReadOnlyList<DeviceSettings> devices
     )
     {
-        foreach (var device in devices)
+        foreach (DeviceSettings device in devices)
         {
             if (device.DevicePath is { Length: > 0 } node && device.Id is { } deviceId)
             {

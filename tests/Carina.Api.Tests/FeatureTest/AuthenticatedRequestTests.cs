@@ -9,9 +9,9 @@ public sealed class AuthenticatedRequestTests
     [Fact]
     public async Task AnAuthenticatedRequestReachesTheWorkedExample()
     {
-        using var client = new TestingWebApplicationFactory().CreateAuthenticatedClient();
+        using HttpClient client = new TestingWebApplicationFactory().CreateAuthenticatedClient();
 
-        using var response = await client.GetAsync(new Uri("/api/driver/status", UriKind.Relative));
+        using HttpResponseMessage response = await client.GetAsync(new Uri("/api/driver/status", UriKind.Relative));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -27,9 +27,9 @@ public sealed class AuthenticatedRequestTests
     [Fact]
     public async Task AnUnauthenticatedRequestIsStillDeniedWhenASchemeExists()
     {
-        using var client = new TestingWebApplicationFactory().WithTestScheme().CreateClient();
+        using HttpClient client = new TestingWebApplicationFactory().WithTestScheme().CreateClient();
 
-        using var response = await client.GetAsync(new Uri("/api/driver/status", UriKind.Relative));
+        using HttpResponseMessage response = await client.GetAsync(new Uri("/api/driver/status", UriKind.Relative));
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }

@@ -15,7 +15,7 @@ public readonly record struct SessionId
     public bool IsUnset => Value is null;
 
     public static SessionId Parse(string? value) =>
-        TryParse(value, out var id)
+        TryParse(value, out SessionId id)
             ? id
             : throw new FormatException(
                 $"A session id must be 1 to {MaxLength} characters of A-Z, a-z, 0-9 or '-'; got '{value}'."
@@ -29,9 +29,9 @@ public readonly record struct SessionId
             return false;
         }
 
-        foreach (var c in value)
+        foreach (char c in value)
         {
-            var allowed =
+            bool allowed =
                 c is >= 'a' and <= 'z' or >= 'A' and <= 'Z' or >= '0' and <= '9' or '-';
             if (!allowed)
             {
@@ -56,7 +56,7 @@ public sealed class SessionIdJsonConverter : JsonConverter<SessionId>
     {
         if (reader.TokenType is JsonTokenType.String)
         {
-            return SessionId.TryParse(reader.GetString(), out var id) ? id : default;
+            return SessionId.TryParse(reader.GetString(), out SessionId id) ? id : default;
         }
 
         if (

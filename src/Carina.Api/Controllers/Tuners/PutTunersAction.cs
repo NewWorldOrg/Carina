@@ -1,3 +1,4 @@
+using Carina.Api.Common;
 using Carina.Api.Requests;
 using Carina.Api.Responder;
 using Carina.Api.Responder.Tuners;
@@ -20,7 +21,7 @@ public sealed class PutTunersAction(TunerLedgerService tunerLedgerService) : Con
         [FromBody] TunerLedgerRequest request,
         CancellationToken cancellationToken)
     {
-        var result = await tunerLedgerService.ReplaceAsync(
+        ServiceResult<TunerLedgerView, TunerLedgerFailure> result = await tunerLedgerService.ReplaceAsync(
             request?.ToEntries() ?? [],
             cancellationToken);
 

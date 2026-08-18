@@ -18,8 +18,8 @@ public sealed class TunerLedgerReconcilerTests
     [Fact]
     public async Task ATunerThatReceivesWhatTheLedgerClaimsServesAsBefore()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
         Assert.DoesNotContain(await Tuners(client), tuner => tuner.State is TunerState.Faulted);
     }
@@ -27,10 +27,10 @@ public sealed class TunerLedgerReconcilerTests
     [Fact]
     public async Task ATunerWhoseDeliverySystemContradictsTheLedgerIsFaultedAtStartup()
     {
-        await using var driver = await Started(Contradicting("fake-terrestrial"));
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await Started(Contradicting("fake-terrestrial"));
+        using HttpClient client = driver.Client();
 
-        var tuner = Assert.Single(
+        TunerSnapshot tuner = Assert.Single(
             await Tuners(client),
             candidate => candidate.DeviceId is "fake-terrestrial"
         );
@@ -44,10 +44,10 @@ public sealed class TunerLedgerReconcilerTests
     [Fact]
     public async Task ATunerThatAgreesIsLeftServingWhileTheContradictingOneIsFaulted()
     {
-        await using var driver = await Started(Contradicting("fake-terrestrial"));
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await Started(Contradicting("fake-terrestrial"));
+        using HttpClient client = driver.Client();
 
-        var tuner = Assert.Single(
+        TunerSnapshot tuner = Assert.Single(
             await Tuners(client),
             candidate => candidate.DeviceId is "fake-satellite"
         );
@@ -58,19 +58,19 @@ public sealed class TunerLedgerReconcilerTests
     [Fact]
     public async Task TheContradictionIsRecordedWhereItCanBeReadBackAfterwards()
     {
-        await using var driver = await Started(Contradicting("fake-terrestrial"));
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await Started(Contradicting("fake-terrestrial"));
+        using HttpClient client = driver.Client();
 
-        using var response = await client.GetAsync(DriverEndpoints.Diagnostics, Soon());
+        using HttpResponseMessage response = await client.GetAsync(DriverEndpoints.Diagnostics, Soon());
 
-        var diagnostics = await DriverUnderTest.Read(
+        IReadOnlyList<DiagnosticSnapshot>? diagnostics = await DriverUnderTest.Read(
             response,
             DriverJson.Context.IReadOnlyListDiagnosticSnapshot
         );
 
         Assert.NotNull(diagnostics);
 
-        var recorded = Assert.Single(
+        DiagnosticSnapshot recorded = Assert.Single(
             diagnostics,
             entry => entry.DeviceId is "fake-terrestrial"
         );
@@ -82,10 +82,10 @@ public sealed class TunerLedgerReconcilerTests
     [Fact]
     public async Task ASessionIsRefusedOnATunerThatContradictsTheLedgerRatherThanTunedBlind()
     {
-        await using var driver = await Started(Contradicting("fake-terrestrial"));
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await Started(Contradicting("fake-terrestrial"));
+        using HttpClient client = driver.Client();
 
-        using var refused = await client.PostAsync(
+        using HttpResponseMessage refused = await client.PostAsync(
             DriverEndpoints.Sessions,
             DriverUnderTest.Body(DriverUnderTest.Live("blind-1", "fake-terrestrial")),
             Soon()
@@ -93,7 +93,7 @@ public sealed class TunerLedgerReconcilerTests
 
         Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
 
-        var problem = await DriverUnderTest.Read(refused, DriverJson.Context.DriverProblem);
+        DriverProblem? problem = await DriverUnderTest.Read(refused, DriverJson.Context.DriverProblem);
 
         Assert.NotNull(problem);
         Assert.Equal("faultedDevice", problem.Title);
@@ -111,8 +111,8 @@ public sealed class TunerLedgerReconcilerTests
             )
         );
 
-        await using var driver = await Started(detector);
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await Started(detector);
+        using HttpClient client = driver.Client();
 
         Assert.DoesNotContain(await Tuners(client), tuner => tuner.State is TunerState.Faulted);
     }
@@ -120,11 +120,11 @@ public sealed class TunerLedgerReconcilerTests
     [Fact]
     public async Task TheDriverIsUnhealthyWhenEveryUsableTunerContradictsTheLedger()
     {
-        await using var driver = await Started(
+        await using DriverUnderTest driver = await Started(
             Contradicting("fake-terrestrial", "fake-satellite")
         );
 
-        var verdict = await DriverProbe.AskAsync(driver.Configuration, Patience);
+        ProbeVerdict verdict = await DriverProbe.AskAsync(driver.Configuration, Patience);
 
         Assert.False(verdict.Healthy);
         Assert.Contains("faulted", verdict.Reason, StringComparison.Ordinal);
@@ -133,10 +133,10 @@ public sealed class TunerLedgerReconcilerTests
     [Fact]
     public async Task TheLedgerIsCheckedOnceAtStartupRatherThanOnEveryRequest()
     {
-        var detector = Contradicting("fake-terrestrial");
+        ScriptedTunerDetector detector = Contradicting("fake-terrestrial");
 
-        await using var driver = await Started(detector);
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await Started(detector);
+        using HttpClient client = driver.Client();
 
         await Tuners(client);
         await Tuners(client);
@@ -168,11 +168,11 @@ public sealed class TunerLedgerReconcilerTests
 
     private static async Task<IReadOnlyList<TunerSnapshot>> Tuners(HttpClient client)
     {
-        using var response = await client.GetAsync(DriverEndpoints.Tuners, Soon());
+        using HttpResponseMessage response = await client.GetAsync(DriverEndpoints.Tuners, Soon());
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var tuners = await DriverUnderTest.Read(
+        IReadOnlyList<TunerSnapshot>? tuners = await DriverUnderTest.Read(
             response,
             DriverJson.Context.IReadOnlyListTunerSnapshot
         );

@@ -134,7 +134,7 @@ public sealed class TuneParamsTests
     [Fact]
     public void OnlyTheArmTheSystemNamesMayBeFilled()
     {
-        var tune = TuneParams.Terrestrial(55) with { IsdbSCs110 = new IsdbSCs110Params(24) };
+        TuneParams tune = TuneParams.Terrestrial(55) with { IsdbSCs110 = new IsdbSCs110Params(24) };
 
         Assert.Contains(
             tune.Validate(),
@@ -154,7 +154,7 @@ public sealed class TuneParamsTests
     [Fact]
     public void ATerrestrialTuneIsStillUnderstoodByADriverThatOnlyKnowsTheOlderShape()
     {
-        var legacy = TuneParams.Terrestrial(55).ToLegacyRequest();
+        TuningRequest legacy = TuneParams.Terrestrial(55).ToLegacyRequest();
 
         Assert.Equal(TunerKind.Terrestrial, legacy.Kind);
         Assert.Equal(55, legacy.PhysicalChannel);
@@ -168,9 +168,9 @@ public sealed class TuneParamsTests
         TuneSystem system
     )
     {
-        var tune = system is TuneSystem.IsdbSBs ? TuneParams.Bs(15, 50001) : TuneParams.Cs110(24);
+        TuneParams tune = system is TuneSystem.IsdbSBs ? TuneParams.Bs(15, 50001) : TuneParams.Cs110(24);
 
-        var legacy = tune.ToLegacyRequest();
+        TuningRequest legacy = tune.ToLegacyRequest();
 
         Assert.Equal(TunerKind.Unspecified, legacy.Kind);
 

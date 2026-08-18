@@ -9,7 +9,7 @@ public sealed class DemuxFilterTests
     [Fact]
     public void TheFilterAsksForEveryPacketRatherThanOneStream()
     {
-        var filter = DemuxFilter.EverythingFromTheFrontend();
+        byte[] filter = DemuxFilter.EverythingFromTheFrontend();
 
         Assert.Equal(
             0x2000,
@@ -20,7 +20,7 @@ public sealed class DemuxFilterTests
     [Fact]
     public void TheFilterTakesItsInputFromTheFrontendAndNotFromTheReader()
     {
-        var filter = DemuxFilter.EverythingFromTheFrontend();
+        byte[] filter = DemuxFilter.EverythingFromTheFrontend();
 
         Assert.Equal(
             0u,
@@ -31,7 +31,7 @@ public sealed class DemuxFilterTests
     [Fact]
     public void TheFilterRoutesItsOutputToTheTransportStreamReader()
     {
-        var filter = DemuxFilter.EverythingFromTheFrontend();
+        byte[] filter = DemuxFilter.EverythingFromTheFrontend();
 
         Assert.Equal(
             2u,
@@ -42,7 +42,7 @@ public sealed class DemuxFilterTests
     [Fact]
     public void TheFilterDoesNotAskTheDemuxToInterpretThePayload()
     {
-        var filter = DemuxFilter.EverythingFromTheFrontend();
+        byte[] filter = DemuxFilter.EverythingFromTheFrontend();
 
         Assert.Equal(
             20u,
@@ -53,7 +53,7 @@ public sealed class DemuxFilterTests
     [Fact]
     public void TheFilterStartsWithoutASecondCall()
     {
-        var filter = DemuxFilter.EverythingFromTheFrontend();
+        byte[] filter = DemuxFilter.EverythingFromTheFrontend();
 
         Assert.Equal(
             4u,

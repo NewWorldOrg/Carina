@@ -28,7 +28,7 @@ public static class SignalQualityViews
             MetricsOnAnotherScale = OnAnotherScaleIn(quality),
         };
 
-        if (quality.CarrierToNoise.TryGetDecibels(out var decibels))
+        if (quality.CarrierToNoise.TryGetDecibels(out double decibels))
         {
             reading = reading with
             {

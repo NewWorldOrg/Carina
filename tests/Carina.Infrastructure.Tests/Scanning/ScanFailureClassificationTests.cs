@@ -19,7 +19,7 @@ public sealed class ScanFailureClassificationTests
     [Fact]
     public async Task AFrontendThatNeverLocksIsRecordedApartFromEveryOtherFailure()
     {
-        var outcome = await ScanOne(ChannelScript.NoLock());
+        ScanOutcome outcome = await ScanOne(ChannelScript.NoLock());
 
         Assert.Equal(ScanAttemptOutcome.NoLock, Single(outcome).Outcome);
     }
@@ -27,12 +27,12 @@ public sealed class ScanFailureClassificationTests
     [Fact]
     public async Task ADriverThatRefusesTheTuneIsAFailureToLockRatherThanAnEmptyStream()
     {
-        var outcome = await ScanOne(new ChannelScript
+        ScanOutcome outcome = await ScanOne(new ChannelScript
         {
             Refusal = new DriverProblem("noDeviceOfThatKind", ["No tuner reaches that system."]),
         });
 
-        var attempt = Single(outcome);
+        ScanRunAttempt attempt = Single(outcome);
 
         Assert.Equal(ScanAttemptOutcome.NoLock, attempt.Outcome);
         Assert.Contains("noDeviceOfThatKind", attempt.Detail!, StringComparison.Ordinal);
@@ -41,9 +41,9 @@ public sealed class ScanFailureClassificationTests
     [Fact]
     public async Task ALockedTunerWhoseDemuxDeliversNothingIsRecordedAsLockedWithoutData()
     {
-        var outcome = await ScanOne(ChannelScript.Silent());
+        ScanOutcome outcome = await ScanOne(ChannelScript.Silent());
 
-        var attempt = Single(outcome);
+        ScanRunAttempt attempt = Single(outcome);
 
         Assert.Equal(ScanAttemptOutcome.LockedWithoutData, attempt.Outcome);
         Assert.True(attempt.Measurement!.Locked);
@@ -52,7 +52,7 @@ public sealed class ScanFailureClassificationTests
     [Fact]
     public async Task BytesThatNeverCompleteTheTablesAreRecordedAsIncompleteRatherThanAsSilence()
     {
-        var outcome = await ScanOne(ChannelScript.Carrying(new SyntheticStream
+        ScanOutcome outcome = await ScanOne(ChannelScript.Carrying(new SyntheticStream
         {
             NetworkId = SyntheticStream.SomeNetworkId,
             TransportStreamId = SomeStreamId,
@@ -60,7 +60,7 @@ public sealed class ScanFailureClassificationTests
             WithoutDescription = true,
         }));
 
-        var attempt = Single(outcome);
+        ScanRunAttempt attempt = Single(outcome);
 
         Assert.Equal(ScanAttemptOutcome.IncompleteTables, attempt.Outcome);
         Assert.Contains("service description table", attempt.Detail!, StringComparison.Ordinal);
@@ -69,7 +69,7 @@ public sealed class ScanFailureClassificationTests
     [Fact]
     public async Task AMissingNetworkTableIsIncompleteEvenWhenTheServicesAreAllThere()
     {
-        var outcome = await ScanOne(ChannelScript.Carrying(new SyntheticStream
+        ScanOutcome outcome = await ScanOne(ChannelScript.Carrying(new SyntheticStream
         {
             NetworkId = SyntheticStream.SomeNetworkId,
             TransportStreamId = SomeStreamId,
@@ -77,7 +77,7 @@ public sealed class ScanFailureClassificationTests
             WithoutNetwork = true,
         }));
 
-        var attempt = Single(outcome);
+        ScanRunAttempt attempt = Single(outcome);
 
         Assert.Equal(ScanAttemptOutcome.IncompleteTables, attempt.Outcome);
         Assert.Contains("network information table", attempt.Detail!, StringComparison.Ordinal);
@@ -93,8 +93,8 @@ public sealed class ScanFailureClassificationTests
                 AnotherStreamId,
                 new SyntheticService(SomeServiceId, "Carina One")))));
 
-        var outcome = await harness.Orchestrator.RunAsync(ScanScope.Over([slot]), Cancel);
-        var attempt = Single(outcome);
+        ScanOutcome outcome = await harness.Orchestrator.RunAsync(ScanScope.Over([slot]), Cancel);
+        ScanRunAttempt attempt = Single(outcome);
 
         Assert.Equal(ScanAttemptOutcome.UnexpectedStream, attempt.Outcome);
         Assert.Equal(AnotherStreamId, attempt.ObservedTransportStreamId!.Value);
@@ -105,7 +105,7 @@ public sealed class ScanFailureClassificationTests
     [Fact]
     public async Task TablesThatParseButDisagreeWithEachOtherAreRecordedAsAnUnexpectedStream()
     {
-        var outcome = await ScanOne(ChannelScript.Carrying(new SyntheticStream
+        ScanOutcome outcome = await ScanOne(ChannelScript.Carrying(new SyntheticStream
         {
             NetworkId = SyntheticStream.SomeNetworkId,
             TransportStreamId = SomeStreamId,
@@ -113,7 +113,7 @@ public sealed class ScanFailureClassificationTests
             Services = [new SyntheticService(SomeServiceId, "Carina One")],
         }));
 
-        var attempt = Single(outcome);
+        ScanRunAttempt attempt = Single(outcome);
 
         Assert.Equal(ScanAttemptOutcome.UnexpectedStream, attempt.Outcome);
         Assert.Equal(SomeStreamId, attempt.ObservedTransportStreamId!.Value);
@@ -122,7 +122,7 @@ public sealed class ScanFailureClassificationTests
     [Fact]
     public async Task TheFourFailuresAreToldApartInsteadOfCollapsingIntoOneError()
     {
-        var driver = new ScriptedDriverClient()
+        ScriptedDriverClient driver = new ScriptedDriverClient()
             .Script(TuningParameters.Terrestrial(53), ChannelScript.NoLock())
             .Script(TuningParameters.Terrestrial(55), ChannelScript.Silent())
             .Script(TuningParameters.Terrestrial(57), ChannelScript.Carrying(new SyntheticStream
@@ -137,7 +137,7 @@ public sealed class ScanFailureClassificationTests
                     AnotherStreamId,
                     new SyntheticService(SomeServiceId, "Carina One"))));
 
-        var outcome = await new ScanHarness(driver).Orchestrator.RunAsync(
+        ScanOutcome outcome = await new ScanHarness(driver).Orchestrator.RunAsync(
             ScanScope.Over([
                 TuningParameters.Terrestrial(53),
                 TuningParameters.Terrestrial(55),
@@ -160,11 +160,11 @@ public sealed class ScanFailureClassificationTests
     [Fact]
     public async Task AStreamThatCarriesBothTablesForTheStreamAskedForSucceeds()
     {
-        var outcome = await ScanOne(ChannelScript.Carrying(SyntheticStream.Carrying(
+        ScanOutcome outcome = await ScanOne(ChannelScript.Carrying(SyntheticStream.Carrying(
             SomeStreamId,
             new SyntheticService(SomeServiceId, "Carina One"))));
 
-        var attempt = Single(outcome);
+        ScanRunAttempt attempt = Single(outcome);
 
         Assert.Equal(ScanAttemptOutcome.Succeeded, attempt.Outcome);
         Assert.Empty(outcome.Failures);
@@ -174,11 +174,11 @@ public sealed class ScanFailureClassificationTests
     [Fact]
     public async Task AnAttemptCarriesWhatTheTunerMeasuredWhileItWasStreaming()
     {
-        var outcome = await ScanOne(ChannelScript.Carrying(SyntheticStream.Carrying(
+        ScanOutcome outcome = await ScanOne(ChannelScript.Carrying(SyntheticStream.Carrying(
             SomeStreamId,
             new SyntheticService(SomeServiceId, "Carina One"))));
 
-        var attempt = Single(outcome);
+        ScanRunAttempt attempt = Single(outcome);
 
         Assert.NotNull(attempt.Measurement);
         Assert.True(attempt.Measurement.Locked);
@@ -188,14 +188,14 @@ public sealed class ScanFailureClassificationTests
     [Fact]
     public async Task AStreamThatArrivedWholeIsNotDemotedByALockLostAtTheEndOfIt()
     {
-        var outcome = await ScanOne(ChannelScript.Carrying(SyntheticStream.Carrying(
+        ScanOutcome outcome = await ScanOne(ChannelScript.Carrying(SyntheticStream.Carrying(
             SomeStreamId,
             new SyntheticService(SomeServiceId, "Carina One"))) with
         {
             Lock = SignalLock.NotLocked,
         });
 
-        var attempt = Single(outcome);
+        ScanRunAttempt attempt = Single(outcome);
 
         Assert.Equal(ScanAttemptOutcome.Succeeded, attempt.Outcome);
         Assert.False(attempt.Measurement!.Locked);
@@ -204,7 +204,7 @@ public sealed class ScanFailureClassificationTests
     [Fact]
     public async Task AOneSegServiceIsProposedUnderItsOwnCategoryRatherThanAsTelevision()
     {
-        var outcome = await ScanOne(ChannelScript.Carrying(new SyntheticStream
+        ScanOutcome outcome = await ScanOne(ChannelScript.Carrying(new SyntheticStream
         {
             NetworkId = SyntheticStream.SomeNetworkId,
             TransportStreamId = SomeStreamId,
@@ -223,7 +223,7 @@ public sealed class ScanFailureClassificationTests
     [Fact]
     public async Task EveryScanSessionIsClosedEvenWhenTheChannelCarriesNothing()
     {
-        var driver = new ScriptedDriverClient().Script(Channel53, ChannelScript.Silent());
+        ScriptedDriverClient driver = new ScriptedDriverClient().Script(Channel53, ChannelScript.Silent());
         var harness = new ScanHarness(driver);
 
         await harness.Orchestrator.RunAsync(ScanScope.Over([Channel53]), Cancel);

@@ -22,13 +22,13 @@ public sealed class ReconnectBackoff
 
     public TimeSpan Next()
     {
-        var exponent = Math.Min(failures, ExponentCap);
+        int exponent = Math.Min(failures, ExponentCap);
         failures = exponent + 1;
 
-        var raw = Math.Min(
+        double raw = Math.Min(
             firstDelay.TotalMilliseconds * Math.Pow(2, exponent),
             delayCap.TotalMilliseconds);
-        var factor = 0.5 + (0.5 * Math.Clamp(chance(), 0, 1));
+        double factor = 0.5 + (0.5 * Math.Clamp(chance(), 0, 1));
 
         return TimeSpan.FromMilliseconds(raw * factor);
     }

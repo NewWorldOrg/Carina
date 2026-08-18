@@ -44,7 +44,7 @@ public sealed class ScriptedScanOrchestrator(HeldScanRuns runs) : IChannelScanOr
             return ScanOutcome.CouldNotStart(refusal);
         }
 
-        var start = await runs.StartAsync(
+        ScanRunStart start = await runs.StartAsync(
             ScanRun.Start(ScanRunId.New(), InstanceId, At),
             cancellationToken);
 
@@ -63,7 +63,7 @@ public sealed class ScriptedScanOrchestrator(HeldScanRuns runs) : IChannelScanOr
 
         var attempts = new List<ScanRunAttempt>();
 
-        foreach (var target in Walked)
+        foreach (TuningParameters target in Walked)
         {
             var attempt = ScanRunAttempt.Rehydrate(
                 ScanRunAttemptId.New(),
@@ -91,7 +91,7 @@ public sealed class ScriptedScanOrchestrator(HeldScanRuns runs) : IChannelScanOr
             }
         }
 
-        var cancelled = cancellationToken.IsCancellationRequested;
+        bool cancelled = cancellationToken.IsCancellationRequested;
 
         if (cancelled)
         {

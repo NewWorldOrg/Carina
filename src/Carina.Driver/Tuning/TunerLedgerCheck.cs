@@ -26,14 +26,14 @@ public static class TunerLedgerCheck
     {
         var contradictions = new List<TunerContradiction>();
 
-        foreach (var device in declared ?? [])
+        foreach (DeviceSettings device in declared ?? [])
         {
             if (device?.Id is not { } deviceId || device.Kind is DeviceKind.Unspecified)
             {
                 continue;
             }
 
-            var detection = detected.FirstOrDefault(candidate =>
+            TunerDetection? detection = detected.FirstOrDefault(candidate =>
                 string.Equals(candidate.DeviceId, deviceId, StringComparison.Ordinal)
             );
 

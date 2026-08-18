@@ -10,7 +10,7 @@ public static class SiDescriptorWriter
     {
         var payload = new ByteWriter();
 
-        foreach (var (serviceId, serviceType) in services)
+        foreach ((int serviceId, int serviceType) in services)
         {
             payload.Word(serviceId).Byte(serviceType);
         }
@@ -34,16 +34,16 @@ public static class SiDescriptorWriter
         byte[] name,
         params (int Info, int[] ServiceIds)[] transmissionTypes)
     {
-        var payload = new ByteWriter()
+        ByteWriter payload = new ByteWriter()
             .Byte(remoteControlKeyId)
             .Byte((name.Length << 2) | transmissionTypes.Length)
             .Run(name);
 
-        foreach (var (info, serviceIds) in transmissionTypes)
+        foreach ((int info, int[]? serviceIds) in transmissionTypes)
         {
             payload.Byte(info).Byte(serviceIds.Length);
 
-            foreach (var serviceId in serviceIds)
+            foreach (int serviceId in serviceIds)
             {
                 payload.Word(serviceId);
             }
@@ -56,7 +56,7 @@ public static class SiDescriptorWriter
     {
         var payload = new ByteWriter();
 
-        foreach (var serviceId in serviceIds)
+        foreach (int serviceId in serviceIds)
         {
             payload.Word(serviceId);
         }

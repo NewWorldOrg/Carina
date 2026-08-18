@@ -13,8 +13,8 @@ internal static class ServedOpenApi
     {
         ArgumentNullException.ThrowIfNull(factory);
 
-        using var client = factory.CreateAuthenticatedClient();
-        using var response = await client.GetAsync(new Uri(Route, UriKind.Relative));
+        using HttpClient client = factory.CreateAuthenticatedClient();
+        using HttpResponseMessage response = await client.GetAsync(new Uri(Route, UriKind.Relative));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 

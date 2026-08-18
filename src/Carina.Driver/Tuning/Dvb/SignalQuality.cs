@@ -99,7 +99,7 @@ public readonly record struct LayerBitErrors(int Layer, ulong ErrorBits, ulong T
 {
     public bool TryGetErrorRate(out double rate)
     {
-        var countable = TotalBits is not 0 && ErrorBits <= TotalBits;
+        bool countable = TotalBits is not 0 && ErrorBits <= TotalBits;
         rate = countable ? (double)ErrorBits / TotalBits : double.NaN;
 
         return countable;
@@ -180,7 +180,7 @@ public static class SignalQualityReading
 
         var layers = new LayerBitErrors[errorBits.Count];
 
-        for (var layer = 0; layer < errorBits.Count; layer++)
+        for (int layer = 0; layer < errorBits.Count; layer++)
         {
             if (!Countable(errorBits[layer]) || !Countable(totalBits[layer]))
             {

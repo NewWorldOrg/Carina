@@ -11,7 +11,7 @@ public sealed class ScanConclusionTests
     [Fact]
     public void AScanTheOperatorStoppedIsRecordedAsCancelled()
     {
-        var run = Running();
+        ScanRun run = Running();
 
         ScanConclusion.Stop(run, ScanStop.AsRequested, At);
 
@@ -22,7 +22,7 @@ public sealed class ScanConclusionTests
     [Fact]
     public void AScanTheAppStoppedIsNotRecordedAsSomethingTheOperatorDid()
     {
-        var run = Running();
+        ScanRun run = Running();
 
         ScanConclusion.Stop(run, ScanStop.BecauseTheAppIsStopping, At);
 
@@ -34,9 +34,9 @@ public sealed class ScanConclusionTests
     [Fact]
     public void EveryWayAScanIsStoppedSaysWhy()
     {
-        foreach (var stop in Enum.GetValues<ScanStop>())
+        foreach (ScanStop stop in Enum.GetValues<ScanStop>())
         {
-            var run = Running();
+            ScanRun run = Running();
 
             ScanConclusion.Stop(run, stop, At);
 
@@ -47,7 +47,7 @@ public sealed class ScanConclusionTests
     [Fact]
     public void AScanLeftBehindByAnEarlierProcessSaysThatIsWhatHappened()
     {
-        var run = Running();
+        ScanRun run = Running();
 
         ScanConclusion.Abandon(run, At);
 
@@ -58,7 +58,7 @@ public sealed class ScanConclusionTests
     [Fact]
     public void AScanThatAlreadyEndedIsNotStoppedTwice()
     {
-        var run = Running();
+        ScanRun run = Running();
 
         ScanConclusion.Stop(run, ScanStop.AsRequested, At);
 

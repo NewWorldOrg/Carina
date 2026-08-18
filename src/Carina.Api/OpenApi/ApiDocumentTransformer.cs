@@ -36,13 +36,13 @@ public sealed class ApiDocumentTransformer : IOpenApiDocumentTransformer
     {
         var names = new List<string>();
 
-        foreach (var path in document.Paths ?? [])
+        foreach (KeyValuePair<string, IOpenApiPathItem> path in document.Paths ?? [])
         {
-            foreach (var operation in path.Value.Operations ?? [])
+            foreach (KeyValuePair<HttpMethod, OpenApiOperation> operation in path.Value.Operations ?? [])
             {
-                foreach (var tag in operation.Value.Tags ?? new HashSet<OpenApiTagReference>())
+                foreach (OpenApiTagReference tag in operation.Value.Tags ?? new HashSet<OpenApiTagReference>())
                 {
-                    var name = tag.Reference.Id;
+                    string? name = tag.Reference.Id;
                     if (name is not null && !names.Contains(name, StringComparer.Ordinal))
                     {
                         names.Add(name);

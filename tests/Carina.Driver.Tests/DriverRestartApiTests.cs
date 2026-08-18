@@ -18,10 +18,10 @@ public sealed class DriverRestartApiTests
     [Fact]
     public async Task AskingAnIdleDriverToRestartIsAcceptedAndPutsItIntoDraining()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var response = await client.PostAsync(DriverEndpoints.Restart, null, Soon());
+        using HttpResponseMessage response = await client.PostAsync(DriverEndpoints.Restart, null, Soon());
 
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         Assert.True(driver.Service<TunerSessionManager>().IsDraining);
@@ -30,19 +30,19 @@ public sealed class DriverRestartApiTests
     [Fact]
     public async Task TheAnswerNamesTheInstanceThatIsGoingAwayAndHowLongItMayTake()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var greeted = await client.GetAsync(DriverEndpoints.Health, Soon());
-        var hello = await DriverUnderTest.Read(greeted, DriverJson.Context.DriverHello);
+        using HttpResponseMessage greeted = await client.GetAsync(DriverEndpoints.Health, Soon());
+        DriverHello? hello = await DriverUnderTest.Read(greeted, DriverJson.Context.DriverHello);
 
-        using var response = await client.PostAsync(DriverEndpoints.Restart, null, Soon());
-        var accepted = await DriverUnderTest.Read(
+        using HttpResponseMessage response = await client.PostAsync(DriverEndpoints.Restart, null, Soon());
+        DriverRestartDto? accepted = await DriverUnderTest.Read(
             response,
             DriverJson.Context.DriverRestartDto
         );
 
-        var manager = driver.Service<TunerSessionManager>();
+        TunerSessionManager manager = driver.Service<TunerSessionManager>();
 
         Assert.NotNull(accepted);
         Assert.Equal(hello!.InstanceId, accepted.InstanceId);
@@ -54,10 +54,10 @@ public sealed class DriverRestartApiTests
     [Fact]
     public async Task ARestartTakenOnRequestLeavesWithTheCodeForAnOrderlyStopRatherThanAFault()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        var stopRequest = driver.Service<DriverStopRequest>();
+        DriverStopRequest stopRequest = driver.Service<DriverStopRequest>();
 
         Assert.False(stopRequest.WasAsked);
         Assert.Equal(
@@ -65,7 +65,7 @@ public sealed class DriverRestartApiTests
             DriverStartup.ExitCodeFor(stopRequest.WasAsked)
         );
 
-        using var response = await client.PostAsync(DriverEndpoints.Restart, null, Soon());
+        using HttpResponseMessage response = await client.PostAsync(DriverEndpoints.Restart, null, Soon());
 
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
         Assert.True(stopRequest.WasAsked);
@@ -75,10 +75,10 @@ public sealed class DriverRestartApiTests
     [Fact]
     public async Task ADrainingDriverStillRefusesWhileARecordingItLingersForIsRunning()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var created = await client.PostAsync(
+        using HttpResponseMessage created = await client.PostAsync(
             DriverEndpoints.Sessions,
             DriverUnderTest.Body(
                 DriverUnderTest.Recording("lingered-for", DateTimeOffset.UtcNow.AddMinutes(10))
@@ -90,8 +90,8 @@ public sealed class DriverRestartApiTests
 
         driver.Service<TunerSessionManager>().EnterDraining();
 
-        using var response = await client.PostAsync(DriverEndpoints.Restart, null, Soon());
-        var refusal = await Refusal(response);
+        using HttpResponseMessage response = await client.PostAsync(DriverEndpoints.Restart, null, Soon());
+        DriverProblem? refusal = await Refusal(response);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         Assert.Equal("recordingInProgress", refusal!.Title);
@@ -105,10 +105,10 @@ public sealed class DriverRestartApiTests
     [Fact]
     public async Task ADriverHoldingARecordingRefusesToRestartAndSaysWhichRecordingHoldsIt()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var created = await client.PostAsync(
+        using HttpResponseMessage created = await client.PostAsync(
             DriverEndpoints.Sessions,
             DriverUnderTest.Body(
                 DriverUnderTest.Recording("held", DateTimeOffset.UtcNow.AddMinutes(10))
@@ -118,8 +118,8 @@ public sealed class DriverRestartApiTests
 
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
 
-        using var response = await client.PostAsync(DriverEndpoints.Restart, null, Soon());
-        var refusal = await Refusal(response);
+        using HttpResponseMessage response = await client.PostAsync(DriverEndpoints.Restart, null, Soon());
+        DriverProblem? refusal = await Refusal(response);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         Assert.Equal("recordingInProgress", refusal!.Title);
@@ -131,10 +131,10 @@ public sealed class DriverRestartApiTests
     [Fact]
     public async Task ARefusedRestartLeavesTheRecordingItProtectedRunning()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var created = await client.PostAsync(
+        using HttpResponseMessage created = await client.PostAsync(
             DriverEndpoints.Sessions,
             DriverUnderTest.Body(
                 DriverUnderTest.Recording("keeps-going", DateTimeOffset.UtcNow.AddMinutes(10))
@@ -144,17 +144,17 @@ public sealed class DriverRestartApiTests
 
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
 
-        using var refused = await client.PostAsync(DriverEndpoints.Restart, null, Soon());
+        using HttpResponseMessage refused = await client.PostAsync(DriverEndpoints.Restart, null, Soon());
 
         Assert.Equal(HttpStatusCode.Conflict, refused.StatusCode);
 
-        using var listed = await client.GetAsync(DriverEndpoints.Sessions, Soon());
-        var sessions = await DriverUnderTest.Read(
+        using HttpResponseMessage listed = await client.GetAsync(DriverEndpoints.Sessions, Soon());
+        IReadOnlyList<SessionSnapshot>? sessions = await DriverUnderTest.Read(
             listed,
             DriverJson.Context.IReadOnlyListSessionSnapshot
         );
 
-        var still = Assert.Single(sessions!);
+        SessionSnapshot still = Assert.Single(sessions!);
 
         Assert.Equal("keeps-going", still.SessionId.Value);
         Assert.Equal(SessionState.Active, still.State);
@@ -163,12 +163,12 @@ public sealed class DriverRestartApiTests
     [Fact]
     public async Task ADriverThatIsAlreadyDrainingTakesTheRequestAsDoneRatherThanRefusingIt()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
         driver.Service<TunerSessionManager>().EnterDraining();
 
-        using var response = await client.PostAsync(DriverEndpoints.Restart, null, Soon());
+        using HttpResponseMessage response = await client.PostAsync(DriverEndpoints.Restart, null, Soon());
 
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
     }
@@ -176,14 +176,14 @@ public sealed class DriverRestartApiTests
     [Fact]
     public async Task AnAcceptedRestartStopsTakingNewSessionsBeforeItAnswers()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var accepted = await client.PostAsync(DriverEndpoints.Restart, null, Soon());
+        using HttpResponseMessage accepted = await client.PostAsync(DriverEndpoints.Restart, null, Soon());
 
         Assert.Equal(HttpStatusCode.Accepted, accepted.StatusCode);
 
-        var refusal = driver.Service<TunerSessionManager>().Begin(
+        SessionStart refusal = driver.Service<TunerSessionManager>().Begin(
             DriverUnderTest.Live("latecomer")
         );
 

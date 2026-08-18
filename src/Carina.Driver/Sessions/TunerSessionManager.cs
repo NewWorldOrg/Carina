@@ -92,7 +92,7 @@ public sealed class TunerSessionManager(
     {
         lock (drainGate)
         {
-            var held = sessions
+            TunerSession[] held = sessions
                 .Values.Where(session => session.Purpose is SessionPurpose.Recording)
                 .ToArray();
 
@@ -123,7 +123,7 @@ public sealed class TunerSessionManager(
 
     public void DetachEverySubscriber()
     {
-        foreach (var session in sessions.Values)
+        foreach (TunerSession session in sessions.Values)
         {
             session.Broadcaster.Close(
                 new OperationCanceledException(
@@ -162,11 +162,11 @@ public sealed class TunerSessionManager(
             return;
         }
 
-        var recordings = running
+        TunerSession[] recordings = running
             .Where(session => session.Purpose is SessionPurpose.Recording)
             .ToArray();
 
-        foreach (var session in running.Except(recordings))
+        foreach (TunerSession? session in running.Except(recordings))
         {
             session.Stop();
         }
@@ -195,7 +195,7 @@ public sealed class TunerSessionManager(
                 return;
             }
 
-            foreach (var session in recordings.Where(session => !session.Completion.IsCompleted))
+            foreach (TunerSession? session in recordings.Where(session => !session.Completion.IsCompleted))
             {
                 logger.LogWarning(
                     "Recording {SessionId} on {DeviceId} is being cut short after {BytesRecorded} bytes because shutdown could not wait any longer.",
@@ -218,7 +218,7 @@ public sealed class TunerSessionManager(
 
     private void GiveUpOn(TunerSession[] running)
     {
-        foreach (var session in running.Where(session => !session.Completion.IsCompleted))
+        foreach (TunerSession? session in running.Where(session => !session.Completion.IsCompleted))
         {
             logger.LogError(
                 "Session {SessionId} on {DeviceId} did not let go within {HardStopLimit}; the driver is exiting without it.",
@@ -249,9 +249,9 @@ public sealed class TunerSessionManager(
 
     public SessionStart Begin(StartSessionRequest request)
     {
-        var now = timeProvider.GetUtcNow();
+        DateTimeOffset now = timeProvider.GetUtcNow();
 
-        var problems = request.Validate(now);
+        IReadOnlyList<string> problems = request.Validate(now);
         if (problems.Count > 0)
         {
             return SessionStart.Refused(SessionRefusal.Rejected, string.Join(" ", problems));
@@ -273,17 +273,17 @@ public sealed class TunerSessionManager(
             );
         }
 
-        if (!TryResolveOutput(request, out var directory, out var outputRefusal))
+        if (!TryResolveOutput(request, out string? directory, out SessionStart? outputRefusal))
         {
             return outputRefusal;
         }
 
-        if (!TryEligibleDevices(request, out var candidates, out var deviceRefusal))
+        if (!TryEligibleDevices(request, out IReadOnlyList<string>? candidates, out SessionStart? deviceRefusal))
         {
             return deviceRefusal;
         }
 
-        var grant = pool.Acquire(
+        PoolGrant grant = pool.Acquire(
             new PoolRequest(
                 request.SessionId,
                 request.Purpose,
@@ -303,7 +303,7 @@ public sealed class TunerSessionManager(
             );
         }
 
-        var endsAt = EndOf(request, now);
+        DateTimeOffset endsAt = EndOf(request, now);
 
         return grant.Verdict is PoolVerdict.Shared
             ? RideAlong(request, grant, directory, now, endsAt)
@@ -317,7 +317,7 @@ public sealed class TunerSessionManager(
             return request.EndsAt ?? now.AddMinutes(configuration.LiveSessionMinutes);
         }
 
-        var latest = now.AddMinutes(configuration.WalkSessionMinutes);
+        DateTimeOffset latest = now.AddMinutes(configuration.WalkSessionMinutes);
 
         if (request.EndsAt is { } asked && asked < latest)
         {
@@ -351,14 +351,14 @@ public sealed class TunerSessionManager(
             return true;
         }
 
-        if (configuration.TryResolveOutputRoot(request.OutputRoot, out var resolved))
+        if (configuration.TryResolveOutputRoot(request.OutputRoot, out string? resolved))
         {
             directory = resolved;
 
             return true;
         }
 
-        var declared = string.Join(
+        string declared = string.Join(
             ", ",
             (configuration.OutputRoots ?? []).Select(root => root.Name)
         );
@@ -380,11 +380,11 @@ public sealed class TunerSessionManager(
         candidates = null;
         refusal = null;
 
-        var declared = configuration.Devices ?? [];
+        IReadOnlyList<DeviceSettings> declared = configuration.Devices ?? [];
 
         if (request.DeviceId is { } named)
         {
-            var candidate = declared.FirstOrDefault(entry => entry.Id == named);
+            DeviceSettings? candidate = declared.FirstOrDefault(entry => entry.Id == named);
 
             if (candidate is null)
             {
@@ -408,7 +408,7 @@ public sealed class TunerSessionManager(
                 return false;
             }
 
-            if (faultedDevices.TryGetValue(named, out var fault))
+            if (faultedDevices.TryGetValue(named, out string? fault))
             {
                 refusal = SessionStart.Refused(
                     SessionRefusal.FaultedDevice,
@@ -433,7 +433,7 @@ public sealed class TunerSessionManager(
             return true;
         }
 
-        var usable = declared
+        DeviceSettings[] usable = declared
             .Where(entry => IsEnabled(entry) && Matches(entry.Kind, KindOf(request)))
             .ToArray();
 
@@ -447,7 +447,7 @@ public sealed class TunerSessionManager(
             return false;
         }
 
-        var healthy = usable
+        DeviceSettings[] healthy = usable
             .Where(entry => !faultedDevices.ContainsKey(entry.Id!))
             .ToArray();
 
@@ -474,8 +474,8 @@ public sealed class TunerSessionManager(
         DateTimeOffset endsAt
     )
     {
-        var deviceId = grant.DeviceId;
-        var sessionId = request.SessionId;
+        string deviceId = grant.DeviceId;
+        SessionId sessionId = request.SessionId;
 
         if (!HandOver(grant))
         {
@@ -487,7 +487,7 @@ public sealed class TunerSessionManager(
             );
         }
 
-        if (!TryTune(request, grant, out var tuner, out var tuneRefusal))
+        if (!TryTune(request, grant, out ITunerDevice? tuner, out SessionStart? tuneRefusal))
         {
             return tuneRefusal;
         }
@@ -499,9 +499,9 @@ public sealed class TunerSessionManager(
     {
         var losers = new List<TunerSession>();
 
-        foreach (var displaced in grant.Displaced)
+        foreach (SessionId displaced in grant.Displaced)
         {
-            if (!sessions.TryGetValue(displaced, out var loser))
+            if (!sessions.TryGetValue(displaced, out TunerSession? loser))
             {
                 continue;
             }
@@ -517,7 +517,7 @@ public sealed class TunerSessionManager(
             losers.Add(loser);
         }
 
-        foreach (var loser in losers)
+        foreach (TunerSession loser in losers)
         {
             loser.WaitForEnd(HandOverLimit);
 
@@ -537,7 +537,7 @@ public sealed class TunerSessionManager(
         [NotNullWhen(false)] out SessionStart? refusal
     )
     {
-        var deviceId = grant.DeviceId;
+        string deviceId = grant.DeviceId;
         tuner = null;
         refusal = null;
 
@@ -562,13 +562,13 @@ public sealed class TunerSessionManager(
 
         pool.HandOver(deviceId);
 
-        var settings = (configuration.Devices ?? []).First(entry =>
+        DeviceSettings settings = (configuration.Devices ?? []).First(entry =>
             string.Equals(entry?.Id, deviceId, StringComparison.Ordinal)
         )!;
 
         try
         {
-            var opened = deviceFactory.Create(settings, request.Tuning, request.Tune);
+            ITunerDevice opened = deviceFactory.Create(settings, request.Tuning, request.Tune);
             pool.Tuned(deviceId, opened);
             tuner = new LeasedTunerDevice(opened);
 
@@ -612,7 +612,7 @@ public sealed class TunerSessionManager(
     {
         if (
             !pool.AwaitReady(grant.DeviceId, HandOverLimit)
-            || !sessions.TryGetValue(grant.Holder, out var host)
+            || !sessions.TryGetValue(grant.Holder, out TunerSession? host)
         )
         {
             pool.Leave(request.SessionId);
@@ -623,7 +623,7 @@ public sealed class TunerSessionManager(
             );
         }
 
-        if (!host.Broadcaster.TrySubscribe(SubscriberKind.Piggyback, out var seat))
+        if (!host.Broadcaster.TrySubscribe(SubscriberKind.Piggyback, out SessionSubscription? seat))
         {
             pool.Leave(request.SessionId);
 
@@ -654,12 +654,12 @@ public sealed class TunerSessionManager(
         bool holds
     )
     {
-        var sessionId = request.SessionId;
+        SessionId sessionId = request.SessionId;
 
         IRecordingWriter? writer = null;
         if (directory is not null)
         {
-            var refusal = TryOpenRecording(directory, sessionId, out writer);
+            SessionStart? refusal = TryOpenRecording(directory, sessionId, out writer);
             if (refusal is not null)
             {
                 tunerDevice.Dispose();
@@ -792,7 +792,7 @@ public sealed class TunerSessionManager(
         CancellationToken cancellationToken
     )
     {
-        if (!sessions.TryGetValue(sessionId, out var session))
+        if (!sessions.TryGetValue(sessionId, out TunerSession? session))
         {
             return ended.Any(candidate => candidate.SessionId == sessionId)
                 ? SessionStopOutcome.AlreadyEnded
@@ -822,7 +822,7 @@ public sealed class TunerSessionManager(
     {
         sessions.TryRemove(new KeyValuePair<SessionId, TunerSession>(session.SessionId, session));
 
-        if (tunings.TryRemove(session.SessionId, out var tuning))
+        if (tunings.TryRemove(session.SessionId, out TuningKey? tuning))
         {
             if (session.State is SessionState.Stopped)
             {
@@ -872,7 +872,7 @@ public sealed class TunerSessionManager(
 
     private TimeSpan Interval(SessionPurpose purpose)
     {
-        var configured = configuration.Tuner?.SignalQualityInterval ?? SignalQualityReader.DefaultInterval;
+        TimeSpan configured = configuration.Tuner?.SignalQualityInterval ?? SignalQualityReader.DefaultInterval;
 
         return purpose is SessionPurpose.Scan && SignalQualityReader.WhileWalkingChannels < configured
             ? SignalQualityReader.WhileWalkingChannels
@@ -891,12 +891,12 @@ public sealed class TunerSessionManager(
 
         lock (streakGate)
         {
-            if (!tuneFailureStreaks.TryGetValue(deviceId, out var perChannel))
+            if (!tuneFailureStreaks.TryGetValue(deviceId, out Dictionary<TuningKey, int>? perChannel))
             {
                 perChannel = tuneFailureStreaks[deviceId] = [];
             }
 
-            streak = perChannel[tuning] = perChannel.TryGetValue(tuning, out var seen)
+            streak = perChannel[tuning] = perChannel.TryGetValue(tuning, out int seen)
                 ? seen + 1
                 : 1;
         }
@@ -933,18 +933,18 @@ public sealed class TunerSessionManager(
     public bool IsClaimed(string deviceId) => pool.IsHeld(deviceId);
 
     public bool IsEnabled(DeviceSettings device) =>
-        device.Id is { } deviceId && toggledDevices.TryGetValue(deviceId, out var enabled)
+        device.Id is { } deviceId && toggledDevices.TryGetValue(deviceId, out bool enabled)
             ? enabled
             : device.Enabled;
 
     public bool IsToggled(DeviceSettings device) =>
         device.Id is { } deviceId
-        && toggledDevices.TryGetValue(deviceId, out var enabled)
+        && toggledDevices.TryGetValue(deviceId, out bool enabled)
         && enabled != device.Enabled;
 
     public bool Turn(string deviceId, bool disabled)
     {
-        var device = (configuration.Devices ?? []).FirstOrDefault(candidate =>
+        DeviceSettings? device = (configuration.Devices ?? []).FirstOrDefault(candidate =>
             string.Equals(candidate?.Id, deviceId, StringComparison.Ordinal)
         );
 
@@ -963,7 +963,7 @@ public sealed class TunerSessionManager(
     }
 
     public DateTimeOffset? HealthChangedAt(string deviceId) =>
-        healthChangedAt.TryGetValue(deviceId, out var changed) ? changed : null;
+        healthChangedAt.TryGetValue(deviceId, out DateTimeOffset changed) ? changed : null;
 
     public bool IsFaulted(string deviceId, [NotNullWhen(true)] out string? detail) =>
         faultedDevices.TryGetValue(deviceId, out detail);

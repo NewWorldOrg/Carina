@@ -1,3 +1,4 @@
+using Carina.Api.Common;
 using Carina.Api.Responder;
 using Carina.Api.Responder.Scans;
 using Carina.Api.Services;
@@ -16,7 +17,7 @@ public sealed class GetScanAction(ScanService scanService) : ControllerBase
     [ProducesResponseType<BaseResponder<ScanProgressResponder>>(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Invoke(Guid scanId, CancellationToken cancellationToken)
     {
-        var result = await scanService.ProgressAsync(new ScanRunId(scanId), cancellationToken);
+        ServiceResult<ScanProgress, ScanFailure> result = await scanService.ProgressAsync(new ScanRunId(scanId), cancellationToken);
 
         if (!result.IsSuccess)
         {

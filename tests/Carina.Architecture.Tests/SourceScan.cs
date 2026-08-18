@@ -25,7 +25,7 @@ public static class SourceScan
 
     private static bool IsBuildOutput(string path)
     {
-        var segments = path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        string[] segments = path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
         return segments.Contains("obj", StringComparer.Ordinal)
                || segments.Contains("bin", StringComparer.Ordinal);

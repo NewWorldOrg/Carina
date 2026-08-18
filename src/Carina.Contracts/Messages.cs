@@ -130,7 +130,7 @@ public sealed record StartSessionRequest
             return problems;
         }
 
-        var tuneProblems = Tune?.Validate() ?? [];
+        IReadOnlyList<string> tuneProblems = Tune?.Validate() ?? [];
         problems.AddRange(tuneProblems.Select(problem => $"tune.{problem}"));
 
         if (Tune is null && Tuning.Kind is TunerKind.Unspecified)

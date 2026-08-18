@@ -49,7 +49,7 @@ public static class SessionViews
         var seen = new HashSet<SessionId>();
         var snapshots = new List<SessionSnapshot>();
 
-        foreach (var session in Ordered(manager.Sessions).Concat(Ordered(manager.Recent)))
+        foreach (TunerSession? session in Ordered(manager.Sessions).Concat(Ordered(manager.Recent)))
         {
             if (seen.Add(session.SessionId))
             {
@@ -68,7 +68,7 @@ public static class SessionViews
         var busy = new Dictionary<string, TunerSession>(StringComparer.Ordinal);
         var readings = new Dictionary<string, SignalQualitySample>(StringComparer.Ordinal);
 
-        foreach (var session in manager.Sessions)
+        foreach (TunerSession session in manager.Sessions)
         {
             busy.TryAdd(session.DeviceId, session);
 
@@ -78,7 +78,7 @@ public static class SessionViews
             }
 
             if (
-                !readings.TryGetValue(session.DeviceId, out var seen)
+                !readings.TryGetValue(session.DeviceId, out SignalQualitySample? seen)
                 || seen.MeasuredAt < sample.MeasuredAt
             )
             {
@@ -88,21 +88,21 @@ public static class SessionViews
 
         var snapshots = new List<TunerSnapshot>();
 
-        foreach (var device in configuration.Devices ?? [])
+        foreach (DeviceSettings device in configuration.Devices ?? [])
         {
             if (device?.Id is not { } deviceId)
             {
                 continue;
             }
 
-            var toggled = manager.IsToggled(device);
-            var snapshot = Of(device, deviceId, manager, busy, toggled);
+            bool toggled = manager.IsToggled(device);
+            TunerSnapshot snapshot = Of(device, deviceId, manager, busy, toggled);
 
             snapshots.Add(
                 snapshot with
                 {
                     Toggled = toggled,
-                    SignalQuality = readings.TryGetValue(deviceId, out var reading)
+                    SignalQuality = readings.TryGetValue(deviceId, out SignalQualitySample? reading)
                         ? SignalQualityViews.Of(reading)
                         : null,
                     CurrentSession = Held(snapshot, busy, deviceId),
@@ -119,7 +119,7 @@ public static class SessionViews
         Dictionary<string, TunerSession> busy,
         string deviceId
     ) =>
-        busy.TryGetValue(deviceId, out var session)
+        busy.TryGetValue(deviceId, out TunerSession? session)
         && snapshot.SessionId.Equals(session.SessionId)
             ? new CurrentSessionDto
             {
@@ -139,7 +139,7 @@ public static class SessionViews
     ) =>
         new()
         {
-            Level = manager.IsFaulted(deviceId, out var fault)
+            Level = manager.IsFaulted(deviceId, out string? fault)
                 ? TunerHealthLevel.Faulted
                 : TunerHealthLevel.Healthy,
             DisablePending = state is TunerState.Draining,
@@ -156,11 +156,11 @@ public static class SessionViews
         bool toggled
     )
     {
-        var kind = DeviceViews.Wire(device.Kind);
+        TunerKind kind = DeviceViews.Wire(device.Kind);
 
         if (!manager.IsEnabled(device))
         {
-            return busy.TryGetValue(deviceId, out var draining)
+            return busy.TryGetValue(deviceId, out TunerSession? draining)
                 ? new TunerSnapshot(
                     deviceId,
                     kind,
@@ -178,12 +178,12 @@ public static class SessionViews
                 );
         }
 
-        if (manager.IsFaulted(deviceId, out var fault))
+        if (manager.IsFaulted(deviceId, out string? fault))
         {
             return new TunerSnapshot(deviceId, kind, TunerState.Faulted, Detail: fault);
         }
 
-        return busy.TryGetValue(deviceId, out var session)
+        return busy.TryGetValue(deviceId, out TunerSession? session)
             ? new TunerSnapshot(deviceId, kind, TunerState.Busy, session.SessionId)
             : new TunerSnapshot(deviceId, kind, TunerState.Idle);
     }

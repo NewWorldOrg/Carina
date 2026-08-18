@@ -32,7 +32,7 @@ public sealed record DriverObservation
         ArgumentNullException.ThrowIfNull(hello);
         ArgumentNullException.ThrowIfNull(missingCapabilities);
 
-        var connection = hello.Draining ? DriverConnection.Draining : DriverConnection.Connected;
+        DriverConnection connection = hello.Draining ? DriverConnection.Draining : DriverConnection.Connected;
 
         return new DriverObservation(connection, hello, missingCapabilities);
     }

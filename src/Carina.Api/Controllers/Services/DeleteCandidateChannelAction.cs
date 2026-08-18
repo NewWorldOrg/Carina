@@ -1,3 +1,4 @@
+using Carina.Api.Common;
 using Carina.Api.Responder;
 using Carina.Api.Responder.Services;
 using Carina.Api.Services;
@@ -21,7 +22,7 @@ public sealed class DeleteCandidateChannelAction(ChannelCatalogService channelCa
         Guid candidateChannelId,
         CancellationToken cancellationToken)
     {
-        var result = await channelCatalogService.RemoveCandidateAsync(
+        ServiceResult<ServiceWithChannels, CatalogFailure> result = await channelCatalogService.RemoveCandidateAsync(
             new NetworkId(networkId),
             new ServiceId(serviceId),
             new CandidateChannelId(candidateChannelId),

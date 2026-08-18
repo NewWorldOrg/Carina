@@ -19,7 +19,7 @@ public sealed class DvbFrontend : IDisposable
 
     public static DvbFrontend Open(IDvbSystemCalls calls, string path, DvbAccess access)
     {
-        var opened = calls.Open(path, access);
+        SyscallOutcome opened = calls.Open(path, access);
 
         if (opened.Refused)
         {
@@ -38,7 +38,7 @@ public sealed class DvbFrontend : IDisposable
 
     public FrontendStatus Status()
     {
-        var read = calls.ReadStatus(descriptor, out var flags);
+        SyscallOutcome read = calls.ReadStatus(descriptor, out uint flags);
 
         if (read.Refused)
         {
@@ -55,7 +55,7 @@ public sealed class DvbFrontend : IDisposable
 
     public bool TryStatus(out FrontendStatus status)
     {
-        var read = calls.ReadStatus(descriptor, out var flags);
+        SyscallOutcome read = calls.ReadStatus(descriptor, out uint flags);
         status = (FrontendStatus)flags;
 
         return !read.Refused;
@@ -63,8 +63,8 @@ public sealed class DvbFrontend : IDisposable
 
     public void Tune(DvbChannel channel)
     {
-        var properties = DvbTuning.PropertiesFor(channel);
-        var set = calls.SetProperties(descriptor, properties.Bytes);
+        DvbPropertyList properties = DvbTuning.PropertiesFor(channel);
+        SyscallOutcome set = calls.SetProperties(descriptor, properties.Bytes);
 
         if (set.Refused)
         {
@@ -79,7 +79,7 @@ public sealed class DvbFrontend : IDisposable
 
     public void SetLnbVoltage(LnbVoltage voltage)
     {
-        var set = calls.SetLnbVoltage(descriptor, voltage);
+        SyscallOutcome set = calls.SetLnbVoltage(descriptor, voltage);
 
         if (set.Refused)
         {
@@ -100,7 +100,7 @@ public sealed class DvbFrontend : IDisposable
         out FrontendStatus lastSeen
     )
     {
-        var deadline = time.GetUtcNow() + patience;
+        DateTimeOffset deadline = time.GetUtcNow() + patience;
 
         while (true)
         {
@@ -124,15 +124,15 @@ public sealed class DvbFrontend : IDisposable
 
     public SignalQuality Quality()
     {
-        var before = Status();
-        var asked = new[]
+        FrontendStatus before = Status();
+        DvbProperty[] asked = new[]
         {
             DvbProperty.CarrierToNoise,
             DvbProperty.PostErrorBitCount,
             DvbProperty.PostTotalBitCount,
         };
         var answer = DvbPropertyList.Asking(asked);
-        var read = calls.GetProperties(descriptor, answer.Bytes);
+        SyscallOutcome read = calls.GetProperties(descriptor, answer.Bytes);
 
         if (read.Refused)
         {
@@ -152,9 +152,9 @@ public sealed class DvbFrontend : IDisposable
         }
 
         if (
-            !answer.TryReadStatisticLayers(0, out var carrier)
-            || !answer.TryReadStatisticLayers(1, out var errorBits)
-            || !answer.TryReadStatisticLayers(2, out var totalBits)
+            !answer.TryReadStatisticLayers(0, out IReadOnlyList<DvbStatisticLayer>? carrier)
+            || !answer.TryReadStatisticLayers(1, out IReadOnlyList<DvbStatisticLayer>? errorBits)
+            || !answer.TryReadStatisticLayers(2, out IReadOnlyList<DvbStatisticLayer>? totalBits)
         )
         {
             throw DvbFailure.Refused(
@@ -180,7 +180,7 @@ public sealed class DvbFrontend : IDisposable
         problem = string.Empty;
 
         var answer = DvbPropertyList.Asking(DvbProperty.EnumerateDeliverySystems);
-        var read = calls.GetProperties(descriptor, answer.Bytes);
+        SyscallOutcome read = calls.GetProperties(descriptor, answer.Bytes);
 
         if (read.Refused)
         {
@@ -220,8 +220,8 @@ public sealed class DvbFrontend : IDisposable
         name = string.Empty;
         problem = string.Empty;
 
-        var block = new byte[DvbLayout.FrontendInfoBytes];
-        var read = calls.ReadFrontendInfo(descriptor, block);
+        byte[] block = new byte[DvbLayout.FrontendInfoBytes];
+        SyscallOutcome read = calls.ReadFrontendInfo(descriptor, block);
 
         if (read.Refused)
         {
@@ -256,8 +256,8 @@ public sealed class DvbFrontend : IDisposable
 
     private static string ReadName(byte[] block)
     {
-        var name = block.AsSpan(DvbLayout.FrontendNameAt, DvbLayout.FrontendNameBytes);
-        var end = name.IndexOf((byte)0);
+        Span<byte> name = block.AsSpan(DvbLayout.FrontendNameAt, DvbLayout.FrontendNameBytes);
+        int end = name.IndexOf((byte)0);
 
         return Encoding.ASCII.GetString(end < 0 ? name : name[..end]).Trim();
     }

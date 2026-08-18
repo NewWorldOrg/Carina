@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 
 using Carina.Contracts;
 using Carina.Domain.Channels;
@@ -23,8 +24,8 @@ public sealed class ServiceCatalogEndpointTests
         feature.Seed(101, "First", TuningParameters.Terrestrial(Terrestrial));
         feature.Seed(102, "Second", TuningParameters.Terrestrial(OtherTerrestrial));
 
-        var (status, body) = await feature.GetAsync("/api/services");
-        var listed = body.GetProperty("data");
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync("/api/services");
+        JsonElement listed = body.GetProperty("data");
 
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal(2, listed.GetArrayLength());
@@ -40,7 +41,7 @@ public sealed class ServiceCatalogEndpointTests
         feature.Seed(101, "Same name", TuningParameters.Terrestrial(Terrestrial));
         feature.Seed(102, "Same name", TuningParameters.Terrestrial(OtherTerrestrial));
 
-        var (_, body) = await feature.GetAsync("/api/services");
+        (HttpStatusCode _, JsonElement body) = await feature.GetAsync("/api/services");
 
         Assert.Equal(
             [101, 102],
@@ -65,8 +66,8 @@ public sealed class ServiceCatalogEndpointTests
             TunerHoldingDriverClient.At,
             CancellationToken.None);
 
-        var (status, body) = await feature.GetAsync(OneService);
-        var data = body.GetProperty("data");
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync(OneService);
+        JsonElement data = body.GetProperty("data");
 
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal(2, data.GetProperty("candidateCount").GetInt32());
@@ -83,7 +84,7 @@ public sealed class ServiceCatalogEndpointTests
     {
         await using var feature = new CatalogFeature();
 
-        var (status, _) = await feature.GetAsync("/api/services/1-999");
+        (HttpStatusCode status, JsonElement _) = await feature.GetAsync("/api/services/1-999");
 
         Assert.Equal(HttpStatusCode.NotFound, status);
     }
@@ -98,9 +99,9 @@ public sealed class ServiceCatalogEndpointTests
             TuningParameters.Terrestrial(Terrestrial),
             TuningParameters.Terrestrial(OtherTerrestrial));
 
-        var second = feature.Candidates.Candidates[1];
+        CandidateChannel second = feature.Candidates.Candidates[1];
 
-        var (status, body) = await feature.PutAsync(
+        (HttpStatusCode status, JsonElement body) = await feature.PutAsync(
             $"{OneService}/selected-channel",
             new { candidateChannelId = second.Id.Value });
 
@@ -121,7 +122,7 @@ public sealed class ServiceCatalogEndpointTests
             TuningParameters.Terrestrial(OtherTerrestrial),
             TuningParameters.Terrestrial(ThirdTerrestrial));
 
-        foreach (var candidate in feature.Candidates.Candidates.ToArray())
+        foreach (CandidateChannel candidate in feature.Candidates.Candidates.ToArray())
         {
             await feature.PutAsync(
                 $"{OneService}/selected-channel",
@@ -148,7 +149,7 @@ public sealed class ServiceCatalogEndpointTests
             $"{OneService}/selected-channel",
             new { candidateChannelId = feature.Candidates.Candidates[0].Id.Value });
 
-        var (status, body) = await feature.PutAsync(
+        (HttpStatusCode status, JsonElement body) = await feature.PutAsync(
             $"{OneService}/selected-channel",
             new { candidateChannelId = (Guid?)null });
 
@@ -164,9 +165,9 @@ public sealed class ServiceCatalogEndpointTests
     {
         await using var feature = new CatalogFeature();
         feature.Seed(101, "First", TuningParameters.Terrestrial(Terrestrial));
-        var elsewhere = feature.Seed(102, "Second", TuningParameters.Terrestrial(OtherTerrestrial));
+        CandidateChannel elsewhere = feature.Seed(102, "Second", TuningParameters.Terrestrial(OtherTerrestrial));
 
-        var (status, _) = await feature.PutAsync(
+        (HttpStatusCode status, JsonElement _) = await feature.PutAsync(
             $"{OneService}/selected-channel",
             new { candidateChannelId = elsewhere.Id.Value });
 
@@ -180,7 +181,7 @@ public sealed class ServiceCatalogEndpointTests
         await using var feature = new CatalogFeature();
         feature.Seed(101, "First", TuningParameters.Terrestrial(Terrestrial));
 
-        var (status, _) = await feature.PutAsync(
+        (HttpStatusCode status, JsonElement _) = await feature.PutAsync(
             $"{OneService}/selected-channel",
             new { candidateChannelId = Guid.NewGuid() });
 
@@ -193,7 +194,7 @@ public sealed class ServiceCatalogEndpointTests
         await using var feature = new CatalogFeature();
         feature.Seed(101, "First", TuningParameters.Terrestrial(Terrestrial));
 
-        var (status, body) = await feature.PostAsync(
+        (HttpStatusCode status, JsonElement body) = await feature.PostAsync(
             $"{OneService}/candidate-channels",
             new { tuning = new { system = "isdbT", physicalChannel = OtherTerrestrial } });
 
@@ -210,7 +211,7 @@ public sealed class ServiceCatalogEndpointTests
         await using var feature = new CatalogFeature();
         feature.Seed(101, "First", TuningParameters.Terrestrial(Terrestrial));
 
-        var (status, body) = await feature.PostAsync(
+        (HttpStatusCode status, JsonElement body) = await feature.PostAsync(
             $"{OneService}/candidate-channels",
             new { tuning = new { system = "isdbT", physicalChannel = 12 } });
 
@@ -225,7 +226,7 @@ public sealed class ServiceCatalogEndpointTests
         await using var feature = new CatalogFeature();
         feature.Seed(101, "First", TuningParameters.Terrestrial(Terrestrial));
 
-        var (status, _) = await feature.PostAsync(
+        (HttpStatusCode status, JsonElement _) = await feature.PostAsync(
             $"{OneService}/candidate-channels",
             new { tuning = new { system = "isdbSBs", physicalChannel = 7, transportStreamId = SatelliteStream } });
 
@@ -239,7 +240,7 @@ public sealed class ServiceCatalogEndpointTests
         feature.Driver.Tuners = [new TunerSnapshot("adapter0", TunerKind.Terrestrial, TunerState.Idle)];
         feature.Seed(101, "First", TuningParameters.Terrestrial(Terrestrial));
 
-        var (status, body) = await feature.PostAsync(
+        (HttpStatusCode status, JsonElement body) = await feature.PostAsync(
             $"{OneService}/candidate-channels",
             new
             {
@@ -267,7 +268,7 @@ public sealed class ServiceCatalogEndpointTests
         ];
         feature.Seed(101, "First", TuningParameters.Terrestrial(Terrestrial));
 
-        var (status, _) = await feature.PostAsync(
+        (HttpStatusCode status, JsonElement _) = await feature.PostAsync(
             $"{OneService}/candidate-channels",
             new
             {
@@ -289,7 +290,7 @@ public sealed class ServiceCatalogEndpointTests
         feature.Driver.Unreachable = "the driver socket is not there";
         feature.Seed(101, "First", TuningParameters.Terrestrial(Terrestrial));
 
-        var (status, _) = await feature.PostAsync(
+        (HttpStatusCode status, JsonElement _) = await feature.PostAsync(
             $"{OneService}/candidate-channels",
             new { tuning = new { system = "isdbT", physicalChannel = OtherTerrestrial } });
 
@@ -303,7 +304,7 @@ public sealed class ServiceCatalogEndpointTests
         await using var feature = new CatalogFeature();
         feature.Seed(101, "First", TuningParameters.Terrestrial(Terrestrial));
 
-        var (status, _) = await feature.PostAsync(
+        (HttpStatusCode status, JsonElement _) = await feature.PostAsync(
             $"{OneService}/candidate-channels",
             new { tuning = new { system = "isdbT", physicalChannel = Terrestrial } });
 
@@ -321,9 +322,9 @@ public sealed class ServiceCatalogEndpointTests
             TuningParameters.Terrestrial(Terrestrial),
             TuningParameters.Terrestrial(OtherTerrestrial));
 
-        var doomed = feature.Candidates.Candidates[0];
+        CandidateChannel doomed = feature.Candidates.Candidates[0];
 
-        var (status, body) = await feature.DeleteAsync(
+        (HttpStatusCode status, JsonElement body) = await feature.DeleteAsync(
             $"{OneService}/candidate-channels/{doomed.Id.Value}");
 
         Assert.Equal(HttpStatusCode.OK, status);
@@ -341,12 +342,12 @@ public sealed class ServiceCatalogEndpointTests
             TuningParameters.Terrestrial(Terrestrial),
             TuningParameters.Terrestrial(OtherTerrestrial));
 
-        var chosen = feature.Candidates.Candidates[0];
+        CandidateChannel chosen = feature.Candidates.Candidates[0];
         await feature.PutAsync(
             $"{OneService}/selected-channel",
             new { candidateChannelId = chosen.Id.Value });
 
-        var (status, body) = await feature.DeleteAsync(
+        (HttpStatusCode status, JsonElement body) = await feature.DeleteAsync(
             $"{OneService}/candidate-channels/{chosen.Id.Value}");
 
         Assert.Equal(HttpStatusCode.OK, status);
@@ -360,9 +361,9 @@ public sealed class ServiceCatalogEndpointTests
     {
         await using var feature = new CatalogFeature();
         feature.Seed(101, "First", TuningParameters.Terrestrial(Terrestrial));
-        var elsewhere = feature.Seed(102, "Second", TuningParameters.Terrestrial(OtherTerrestrial));
+        CandidateChannel elsewhere = feature.Seed(102, "Second", TuningParameters.Terrestrial(OtherTerrestrial));
 
-        var (status, _) = await feature.DeleteAsync(
+        (HttpStatusCode status, JsonElement _) = await feature.DeleteAsync(
             $"{OneService}/candidate-channels/{elsewhere.Id.Value}");
 
         Assert.Equal(HttpStatusCode.Conflict, status);
@@ -373,7 +374,7 @@ public sealed class ServiceCatalogEndpointTests
     public async Task EveryCatalogSurfaceIsBehindTheSameDenialAsTheRestOnceASchemeIsRegistered()
     {
         using var app = new TestingWebApplicationFactory();
-        using var client = app.WithTestScheme().CreateClient();
+        using HttpClient client = app.WithTestScheme().CreateClient();
 
         Assert.Equal(
             HttpStatusCode.Unauthorized,

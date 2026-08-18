@@ -20,8 +20,8 @@ public sealed class TunedStreamProbe(IDriverClient driver, ScanSettings settings
         ArgumentNullException.ThrowIfNull(tuning);
 
         var sessionId = SessionId.Parse($"scan-{Guid.NewGuid():n}");
-        var tune = TuneParamsOf(tuning);
-        var start = await driver.StartSessionAsync(
+        TuneParams tune = TuneParamsOf(tuning);
+        DriverCall<SessionSnapshot> start = await driver.StartSessionAsync(
             new StartSessionRequest
             {
                 SessionId = sessionId,
@@ -40,7 +40,7 @@ public sealed class TunedStreamProbe(IDriverClient driver, ScanSettings settings
                 return Refused(start.Problem!);
         }
 
-        if (!start.TryGetValue(out var session))
+        if (!start.TryGetValue(out SessionSnapshot? session))
         {
             return StreamProbe.DriverUnreachable("The driver accepted the scan session but described none.");
         }
@@ -64,7 +64,7 @@ public sealed class TunedStreamProbe(IDriverClient driver, ScanSettings settings
 
     private static StreamProbe Refused(DriverProblem problem)
     {
-        var detail = $"{problem.Title}: {string.Join(" ", problem.Problems)}";
+        string detail = $"{problem.Title}: {string.Join(" ", problem.Problems)}";
 
         return BusyRefusals.Contains(problem.Title, StringComparer.Ordinal)
             ? StreamProbe.TunersBusy(detail)
@@ -77,7 +77,7 @@ public sealed class TunedStreamProbe(IDriverClient driver, ScanSettings settings
         CancellationToken deadline,
         CancellationToken abort)
     {
-        var opened = await driver.OpenSessionStreamAsync(
+        DriverCall<Stream> opened = await driver.OpenSessionStreamAsync(
             sessionId,
             DriverEndpoints.SurveySubscriber,
             abort);
@@ -87,7 +87,7 @@ public sealed class TunedStreamProbe(IDriverClient driver, ScanSettings settings
             return StreamProbe.DriverUnreachable(opened.Failure!);
         }
 
-        if (!opened.TryGetValue(out var stream))
+        if (!opened.TryGetValue(out Stream? stream))
         {
             return StreamProbe.Attempted(
                 ScanAttemptOutcome.LockedWithoutData,
@@ -106,7 +106,7 @@ public sealed class TunedStreamProbe(IDriverClient driver, ScanSettings settings
             await HarvestAsync(stream, harvest, deadline, abort);
         }
 
-        var (measurement, lostLock) = await MeasureAsync(sessionId, abort);
+        (SignalMeasurement? measurement, bool lostLock) = await MeasureAsync(sessionId, abort);
 
         if (harvest.Bytes == 0 && lostLock)
         {
@@ -128,13 +128,13 @@ public sealed class TunedStreamProbe(IDriverClient driver, ScanSettings settings
         CancellationToken abort)
     {
         using var reading = CancellationTokenSource.CreateLinkedTokenSource(deadline, abort);
-        var buffer = ArrayPool<byte>.Shared.Rent(settings.ReadBufferSize);
+        byte[] buffer = ArrayPool<byte>.Shared.Rent(settings.ReadBufferSize);
 
         try
         {
             while (!harvest.IsComplete)
             {
-                var read = await stream.ReadAsync(buffer.AsMemory(0, settings.ReadBufferSize), reading.Token);
+                int read = await stream.ReadAsync(buffer.AsMemory(0, settings.ReadBufferSize), reading.Token);
 
                 if (read == 0)
                 {
@@ -209,14 +209,14 @@ public sealed class TunedStreamProbe(IDriverClient driver, ScanSettings settings
         SessionId sessionId,
         CancellationToken cancellationToken)
     {
-        var tuners = await driver.GetTunersAsync(cancellationToken);
+        DriverCall<IReadOnlyList<TunerSnapshot>> tuners = await driver.GetTunersAsync(cancellationToken);
 
-        if (!tuners.TryGetValue(out var snapshots))
+        if (!tuners.TryGetValue(out IReadOnlyList<TunerSnapshot>? snapshots))
         {
             return (null, false);
         }
 
-        var quality = snapshots
+        SignalQualityDto? quality = snapshots
             .FirstOrDefault(tuner => tuner.CurrentSession?.SessionId == sessionId)?
             .SignalQuality;
 
@@ -225,14 +225,14 @@ public sealed class TunedStreamProbe(IDriverClient driver, ScanSettings settings
             return (null, false);
         }
 
-        var measuredAt = (quality.MeasuredAt ?? clock.GetUtcNow()).UtcDateTime;
+        DateTime measuredAt = (quality.MeasuredAt ?? clock.GetUtcNow()).UtcDateTime;
 
         if (quality.Lock is not SignalLock.Locked)
         {
             return (SignalMeasurement.WithoutLock(measuredAt), quality.Lock is SignalLock.NotLocked);
         }
 
-        var layer = quality.PostViterbiBitErrors.OrderBy(counts => counts.Layer).FirstOrDefault();
+        LayerBitErrorCounts? layer = quality.PostViterbiBitErrors.OrderBy(counts => counts.Layer).FirstOrDefault();
 
         return (
             SignalMeasurement.WithLock(

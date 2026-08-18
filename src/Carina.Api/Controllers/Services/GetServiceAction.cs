@@ -1,3 +1,4 @@
+using Carina.Api.Common;
 using Carina.Api.Responder;
 using Carina.Api.Responder.Services;
 using Carina.Api.Services;
@@ -19,7 +20,7 @@ public sealed class GetServiceAction(ChannelCatalogService channelCatalogService
         int serviceId,
         CancellationToken cancellationToken)
     {
-        var result = await channelCatalogService.FindAsync(
+        ServiceResult<ServiceWithChannels, CatalogFailure> result = await channelCatalogService.FindAsync(
             new NetworkId(networkId),
             new ServiceId(serviceId),
             cancellationToken);

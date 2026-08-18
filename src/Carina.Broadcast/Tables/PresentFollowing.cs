@@ -48,9 +48,9 @@ public sealed class PresentFollowingWatch
             return null;
         }
 
-        var now = table.Events[0];
+        DescribedEvent now = table.Events[0];
 
-        if (present.TryGetValue(service, out var was)
+        if (present.TryGetValue(service, out DescribedEvent? was)
             && was.EventId == now.EventId
             && was.StartsAt == now.StartsAt
             && was.EndsAt == now.EndsAt)
@@ -64,5 +64,5 @@ public sealed class PresentFollowingWatch
     }
 
     public DescribedEvent? PresentOn(WatchedService service)
-        => present.TryGetValue(service, out var carried) ? carried : null;
+        => present.TryGetValue(service, out DescribedEvent? carried) ? carried : null;
 }

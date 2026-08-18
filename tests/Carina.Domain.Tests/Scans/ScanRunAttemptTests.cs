@@ -26,7 +26,7 @@ public sealed class ScanRunAttemptTests
     [Fact]
     public void AnAttemptKeepsTheTuningItUsedRatherThanPointingAtACandidate()
     {
-        var attempt = Attempt(ScanAttemptOutcome.Succeeded);
+        ScanRunAttempt attempt = Attempt(ScanAttemptOutcome.Succeeded);
 
         Assert.Equal(TuneSystem.IsdbSBs, attempt.Tuning.System);
         Assert.Equal(15, attempt.Tuning.PhysicalChannel);
@@ -43,7 +43,7 @@ public sealed class ScanRunAttemptTests
     [InlineData(ScanAttemptOutcome.UnexpectedStream)]
     public void EachWayOfFailingIsItsOwnOutcome(ScanAttemptOutcome outcome)
     {
-        var attempt = Attempt(outcome);
+        ScanRunAttempt attempt = Attempt(outcome);
 
         Assert.True(attempt.Failed);
         Assert.Equal(outcome, attempt.Outcome);
@@ -66,7 +66,7 @@ public sealed class ScanRunAttemptTests
     [Fact]
     public void AStreamThatWasNotTheExpectedOneIsRecordedAsTheOneThatArrived()
     {
-        var attempt = Attempt(
+        ScanRunAttempt attempt = Attempt(
             ScanAttemptOutcome.UnexpectedStream,
             observed: new TransportStreamId(0x4031));
 
@@ -77,7 +77,7 @@ public sealed class ScanRunAttemptTests
     [Fact]
     public void AFrontendThatDidNotLockKeepsTheReadingThatShowsIt()
     {
-        var attempt = Attempt(ScanAttemptOutcome.NoLock, SignalMeasurement.WithoutLock(At));
+        ScanRunAttempt attempt = Attempt(ScanAttemptOutcome.NoLock, SignalMeasurement.WithoutLock(At));
 
         Assert.False(attempt.Measurement?.Locked);
         Assert.Null(attempt.Measurement?.CnrMilliDecibels);

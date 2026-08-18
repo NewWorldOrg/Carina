@@ -19,8 +19,8 @@ public sealed class DriverEventHubTests
     {
         var hub = new DriverEventHub();
 
-        Assert.True(hub.TryListen(out var first));
-        Assert.True(hub.TryListen(out var second));
+        Assert.True(hub.TryListen(out DriverEventListener? first));
+        Assert.True(hub.TryListen(out DriverEventListener? second));
 
         hub.Signal(DriverEvents.Sessions);
 
@@ -47,7 +47,7 @@ public sealed class DriverEventHubTests
 
         Assert.True(hub.TryListen(out _));
 
-        foreach (var name in DriverEvents.All)
+        foreach (string name in DriverEvents.All)
         {
             hub.Signal(name);
         }
@@ -58,9 +58,9 @@ public sealed class DriverEventHubTests
     {
         var hub = new DriverEventHub();
 
-        Assert.True(hub.TryListen(out var listener));
+        Assert.True(hub.TryListen(out DriverEventListener? listener));
 
-        for (var index = 0; index < 1000; index++)
+        for (int index = 0; index < 1000; index++)
         {
             hub.Signal(DriverEvents.Tuners);
         }
@@ -73,7 +73,7 @@ public sealed class DriverEventHubTests
     {
         var hub = new DriverEventHub();
 
-        Assert.True(hub.TryListen(out var listener));
+        Assert.True(hub.TryListen(out DriverEventListener? listener));
 
         hub.Signal(DriverEvents.Tuners);
         hub.Signal(DriverEvents.Sessions);
@@ -93,7 +93,7 @@ public sealed class DriverEventHubTests
     {
         var hub = new DriverEventHub();
 
-        Assert.True(hub.TryListen(out var listener));
+        Assert.True(hub.TryListen(out DriverEventListener? listener));
 
         hub.Signal(DriverEvents.Sessions);
         Assert.Equal([DriverEvents.Sessions], await Next(listener));
@@ -109,7 +109,7 @@ public sealed class DriverEventHubTests
 
         Assert.True(hub.TryListen(out _));
         Assert.True(hub.TryListen(out _));
-        Assert.False(hub.TryListen(out var refused));
+        Assert.False(hub.TryListen(out DriverEventListener? refused));
 
         Assert.Null(refused);
         Assert.Equal(2, hub.ListenerCount);
@@ -120,7 +120,7 @@ public sealed class DriverEventHubTests
     {
         var hub = new DriverEventHub(listenerLimit: 1);
 
-        Assert.True(hub.TryListen(out var listener));
+        Assert.True(hub.TryListen(out DriverEventListener? listener));
         Assert.False(hub.TryListen(out _));
 
         listener.Dispose();
@@ -133,7 +133,7 @@ public sealed class DriverEventHubTests
     {
         var hub = new DriverEventHub();
 
-        Assert.True(hub.TryListen(out var listener));
+        Assert.True(hub.TryListen(out DriverEventListener? listener));
 
         hub.CloseAll();
 
@@ -169,7 +169,7 @@ public sealed class DriverEventHubTests
     {
         var hub = new DriverEventHub();
 
-        Assert.True(hub.TryListen(out var listener));
+        Assert.True(hub.TryListen(out DriverEventListener? listener));
 
         hub.Signal(DriverEvents.Draining);
         hub.CloseAll();

@@ -92,9 +92,9 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
 
         try
         {
-            using var patience = Patience(cancellationToken);
+            using CancellationTokenSource patience = Patience(cancellationToken);
             using var body = JsonContent.Create(tuners, DriverJson.Context.IReadOnlyListTunerConfigEntry);
-            using var response = await http.PutAsync(DriverEndpoints.Tuners, body, patience.Token);
+            using HttpResponseMessage response = await http.PutAsync(DriverEndpoints.Tuners, body, patience.Token);
 
             return await ReadAsync(
                 response,
@@ -119,8 +119,8 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
 
         try
         {
-            using var patience = Patience(cancellationToken);
-            using var response = await http.PostAsync(
+            using CancellationTokenSource patience = Patience(cancellationToken);
+            using HttpResponseMessage response = await http.PostAsync(
                 DriverEndpoints.Restart,
                 content: null,
                 patience.Token);
@@ -154,11 +154,11 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
 
         try
         {
-            using var patience = Patience(cancellationToken);
+            using CancellationTokenSource patience = Patience(cancellationToken);
             using var body = JsonContent.Create(
                 new TunerToggleRequest { Disabled = disabled },
                 DriverJson.Context.TunerToggleRequest);
-            using var response = await http.PatchAsync(DriverEndpoints.Tuner(deviceId), body, patience.Token);
+            using HttpResponseMessage response = await http.PatchAsync(DriverEndpoints.Tuner(deviceId), body, patience.Token);
 
             return await ReadAsync(
                 response,
@@ -202,9 +202,9 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
 
         try
         {
-            using var patience = Patience(cancellationToken);
+            using CancellationTokenSource patience = Patience(cancellationToken);
             using var body = JsonContent.Create(request, DriverJson.Context.StartSessionRequest);
-            using var response = await http.PostAsync(DriverEndpoints.Sessions, body, patience.Token);
+            using HttpResponseMessage response = await http.PostAsync(DriverEndpoints.Sessions, body, patience.Token);
 
             return await ReadAsync(
                 response,
@@ -227,8 +227,8 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
 
         try
         {
-            using var patience = Patience(cancellationToken);
-            using var response = await http.DeleteAsync(
+            using CancellationTokenSource patience = Patience(cancellationToken);
+            using HttpResponseMessage response = await http.DeleteAsync(
                 $"{DriverEndpoints.Session(sessionId)}?reason={Uri.EscapeDataString(reason)}",
                 patience.Token);
 
@@ -249,8 +249,8 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
         string? subscriber,
         CancellationToken cancellationToken)
     {
-        var path = DriverEndpoints.SessionStream(sessionId);
-        var target = subscriber is null
+        string path = DriverEndpoints.SessionStream(sessionId);
+        string target = subscriber is null
             ? path
             : $"{path}?{DriverEndpoints.SubscriberQuery}={Uri.EscapeDataString(subscriber)}";
 
@@ -281,9 +281,9 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
         string capability,
         CancellationToken cancellationToken)
     {
-        var health = await GetHealthAsync(cancellationToken);
+        DriverCall<DriverHello> health = await GetHealthAsync(cancellationToken);
 
-        if (health.TryGetValue(out var hello) && !hello.Supports(capability))
+        if (health.TryGetValue(out DriverHello? hello) && !hello.Supports(capability))
         {
             return new DriverProblem(
                 "capabilityMissing",
@@ -301,8 +301,8 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
     {
         try
         {
-            using var patience = Patience(cancellationToken);
-            using var response = await http.GetAsync(path, patience.Token);
+            using CancellationTokenSource patience = Patience(cancellationToken);
+            using HttpResponseMessage response = await http.GetAsync(path, patience.Token);
 
             return await ReadAsync(response, typeInfo, bodyRequired: true, patience.Token);
         }
@@ -315,13 +315,13 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
     private async Task<DriverCall<Stream>> OpenAsync(string path, CancellationToken cancellationToken)
     {
         var patience = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var handedOver = false;
+        bool handedOver = false;
 
         try
         {
             patience.CancelAfter(RequestPatience);
 
-            var response = await http.GetAsync(
+            HttpResponseMessage response = await http.GetAsync(
                 path,
                 HttpCompletionOption.ResponseHeadersRead,
                 patience.Token);
@@ -336,7 +336,7 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
 
             patience.CancelAfter(Timeout.InfiniteTimeSpan);
 
-            var stream = await response.Content.ReadAsStreamAsync(patience.Token);
+            Stream stream = await response.Content.ReadAsStreamAsync(patience.Token);
             handedOver = true;
 
             return DriverCall<Stream>.Reached(new OwnedStream(stream, response, patience));
@@ -361,14 +361,14 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
         CancellationToken cancellationToken)
         where T : class
     {
-        var status = (int)response.StatusCode;
+        int status = (int)response.StatusCode;
 
         if (!response.IsSuccessStatusCode)
         {
             return DriverCall<T>.Refused(await ProblemIn(response, cancellationToken));
         }
 
-        var body = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+        byte[] body = await response.Content.ReadAsByteArrayAsync(cancellationToken);
 
         if (body.Length == 0)
         {
@@ -378,7 +378,7 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
                 : DriverCall<T>.Reached(null);
         }
 
-        var value = JsonSerializer.Deserialize(body, typeInfo);
+        T? value = JsonSerializer.Deserialize(body, typeInfo);
 
         return value is null
             ? DriverCall<T>.Unreachable($"The driver answered {status} with a body that reads as nothing.")
@@ -391,11 +391,11 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
     {
         try
         {
-            var body = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+            byte[] body = await response.Content.ReadAsByteArrayAsync(cancellationToken);
 
             if (body.Length > 0)
             {
-                var problem = JsonSerializer.Deserialize(body, DriverJson.Context.DriverProblem);
+                DriverProblem? problem = JsonSerializer.Deserialize(body, DriverJson.Context.DriverProblem);
 
                 if (problem is not null)
                 {

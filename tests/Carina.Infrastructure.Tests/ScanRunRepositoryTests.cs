@@ -1,6 +1,7 @@
 using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Scans;
+using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
 
 using Microsoft.EntityFrameworkCore;
@@ -18,12 +19,12 @@ public sealed class ScanRunRepositoryTests(RepositoryDatabase database)
     public async Task TheSecondStartIsRefusedAndNamesTheScanAlreadyRunning()
     {
         await ClearAsync();
-        await using var context = database.Open();
+        await using CarinaDbContext context = database.Open();
         var runs = new ScanRunRepository(context);
-        var first = await runs.StartAsync(ScanRun.Start(ScanRunId.New(), "instance-a", At), Cancel);
+        ScanRunStart first = await runs.StartAsync(ScanRun.Start(ScanRunId.New(), "instance-a", At), Cancel);
 
-        await using var other = database.Open();
-        var second = await new ScanRunRepository(other)
+        await using CarinaDbContext other = database.Open();
+        ScanRunStart second = await new ScanRunRepository(other)
             .StartAsync(ScanRun.Start(ScanRunId.New(), "instance-a", At.AddMinutes(1)), Cancel);
 
         Assert.True(first.WasStarted);
@@ -35,15 +36,15 @@ public sealed class ScanRunRepositoryTests(RepositoryDatabase database)
     public async Task AScanThatEndedLetsTheNextOneStart()
     {
         await ClearAsync();
-        await using var context = database.Open();
+        await using CarinaDbContext context = database.Open();
         var runs = new ScanRunRepository(context);
-        var first = await runs.StartAsync(ScanRun.Start(ScanRunId.New(), "instance-a", At), Cancel);
+        ScanRunStart first = await runs.StartAsync(ScanRun.Start(ScanRunId.New(), "instance-a", At), Cancel);
 
         first.Started!.Complete(At.AddMinutes(3));
         await runs.SaveAsync(first.Started, Cancel);
 
-        await using var other = database.Open();
-        var second = await new ScanRunRepository(other)
+        await using CarinaDbContext other = database.Open();
+        ScanRunStart second = await new ScanRunRepository(other)
             .StartAsync(ScanRun.Start(ScanRunId.New(), "instance-a", At.AddMinutes(4)), Cancel);
 
         Assert.True(second.WasStarted);
@@ -54,15 +55,15 @@ public sealed class ScanRunRepositoryTests(RepositoryDatabase database)
     public async Task ADriverThatCameBackAsAnotherInstanceEndsTheScanAsInterrupted()
     {
         await ClearAsync();
-        await using var context = database.Open();
+        await using CarinaDbContext context = database.Open();
         var runs = new ScanRunRepository(context);
-        var started = await runs.StartAsync(ScanRun.Start(ScanRunId.New(), "instance-a", At), Cancel);
+        ScanRunStart started = await runs.StartAsync(ScanRun.Start(ScanRunId.New(), "instance-a", At), Cancel);
 
         started.Started!.Interrupt(At.AddMinutes(2));
         await runs.SaveAsync(started.Started, Cancel);
 
-        await using var reading = database.Open();
-        var stored = await new ScanRunRepository(reading).FindAsync(started.Started.Id, Cancel);
+        await using CarinaDbContext reading = database.Open();
+        ScanRun? stored = await new ScanRunRepository(reading).FindAsync(started.Started.Id, Cancel);
 
         Assert.Equal(ScanRunState.Interrupted, stored!.State);
         Assert.Equal("instance-a", stored.DriverInstanceId);
@@ -73,15 +74,15 @@ public sealed class ScanRunRepositoryTests(RepositoryDatabase database)
     public async Task AFailureKeepsItsReasonThroughTheRoundTrip()
     {
         await ClearAsync();
-        await using var context = database.Open();
+        await using CarinaDbContext context = database.Open();
         var runs = new ScanRunRepository(context);
-        var started = await runs.StartAsync(ScanRun.Start(ScanRunId.New(), "instance-a", At), Cancel);
+        ScanRunStart started = await runs.StartAsync(ScanRun.Start(ScanRunId.New(), "instance-a", At), Cancel);
 
         started.Started!.Fail("every tuner was busy for longer than the bounded wait", At.AddMinutes(1));
         await runs.SaveAsync(started.Started, Cancel);
 
-        await using var reading = database.Open();
-        var stored = await new ScanRunRepository(reading).FindAsync(started.Started.Id, Cancel);
+        await using CarinaDbContext reading = database.Open();
+        ScanRun? stored = await new ScanRunRepository(reading).FindAsync(started.Started.Id, Cancel);
 
         Assert.Equal(ScanRunState.Failed, stored!.State);
         Assert.Equal("every tuner was busy for longer than the bounded wait", stored.Reason);
@@ -91,10 +92,10 @@ public sealed class ScanRunRepositoryTests(RepositoryDatabase database)
     public async Task EveryAttemptKeepsTheTuningAndTheWayItFailed()
     {
         await ClearAsync();
-        await using var context = database.Open();
+        await using CarinaDbContext context = database.Open();
         var runs = new ScanRunRepository(context);
-        var started = await runs.StartAsync(ScanRun.Start(ScanRunId.New(), "instance-a", At), Cancel);
-        var run = started.Started!;
+        ScanRunStart started = await runs.StartAsync(ScanRun.Start(ScanRunId.New(), "instance-a", At), Cancel);
+        ScanRun run = started.Started!;
 
         await runs.AddAttemptAsync(
             Attempt(run.Id, TuningParameters.Terrestrial(27), ScanAttemptOutcome.NoLock, null, null, 0),
@@ -109,8 +110,8 @@ public sealed class ScanRunRepositoryTests(RepositoryDatabase database)
                 30),
             Cancel);
 
-        await using var reading = database.Open();
-        var attempts = await new ScanRunRepository(reading).ListAttemptsAsync(run.Id, Cancel);
+        await using CarinaDbContext reading = database.Open();
+        IReadOnlyList<ScanRunAttempt> attempts = await new ScanRunRepository(reading).ListAttemptsAsync(run.Id, Cancel);
 
         Assert.Equal(2, attempts.Count);
         Assert.Equal(ScanAttemptOutcome.NoLock, attempts[0].Outcome);
@@ -125,7 +126,7 @@ public sealed class ScanRunRepositoryTests(RepositoryDatabase database)
     public async Task AStartThatIsNotRunningIsRefusedBeforeItReachesTheDatabase()
     {
         await ClearAsync();
-        await using var context = database.Open();
+        await using CarinaDbContext context = database.Open();
         var run = ScanRun.Start(ScanRunId.New(), "instance-a", At);
         run.Complete(At.AddMinutes(1));
 
@@ -153,7 +154,7 @@ public sealed class ScanRunRepositoryTests(RepositoryDatabase database)
 
     private async Task ClearAsync()
     {
-        await using var context = database.Open();
+        await using CarinaDbContext context = database.Open();
         await context.Database.ExecuteSqlRawAsync("DELETE FROM scan_run", Cancel);
     }
 }

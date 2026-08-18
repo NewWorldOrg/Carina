@@ -21,13 +21,13 @@ public sealed class CollectionRound(
     {
         ArgumentNullException.ThrowIfNull(streams);
 
-        var now = clock.GetUtcNow().UtcDateTime;
-        var plan = CollectionPlan.Of(await CoverageAsync(streams, abort), now, settings.WantedCoverage);
-        var visited = 0;
-        var gathered = 0;
-        var cameBackShort = 0;
+        DateTime now = clock.GetUtcNow().UtcDateTime;
+        IReadOnlyList<PlannedVisit> plan = CollectionPlan.Of(await CoverageAsync(streams, abort), now, settings.WantedCoverage);
+        int visited = 0;
+        int gathered = 0;
+        int cameBackShort = 0;
 
-        foreach (var planned in plan)
+        foreach (PlannedVisit planned in plan)
         {
             abort.ThrowIfCancellationRequested();
 
@@ -38,7 +38,7 @@ public sealed class CollectionRound(
                 continue;
             }
 
-            var began = clock.GetTimestamp();
+            long began = clock.GetTimestamp();
             VisitResult visit;
 
             try
@@ -78,8 +78,8 @@ public sealed class CollectionRound(
         TimeSpan took,
         CancellationToken abort)
     {
-        var at = clock.GetUtcNow().UtcDateTime;
-        var held = await visits.FindAsync(stream.NetworkId, stream.TransportStreamId, abort);
+        DateTime at = clock.GetUtcNow().UtcDateTime;
+        StreamVisit? held = await visits.FindAsync(stream.NetworkId, stream.TransportStreamId, abort);
 
         if (held is null)
         {
@@ -99,20 +99,20 @@ public sealed class CollectionRound(
         IReadOnlyList<StreamToVisit> streams,
         CancellationToken abort)
     {
-        var known = await visits.ListAsync(abort);
+        IReadOnlyList<StreamVisit> known = await visits.ListAsync(abort);
         var coverage = new List<StreamCoverage>(streams.Count);
 
-        foreach (var stream in streams)
+        foreach (StreamToVisit stream in streams)
         {
-            var visit = known.FirstOrDefault(candidate =>
+            StreamVisit? visit = known.FirstOrDefault(candidate =>
                 candidate.NetworkId.Equals(stream.NetworkId)
                 && candidate.TransportStreamId.Equals(stream.TransportStreamId));
-            var everGathered = visit?.LastCompletedAt is not null;
+            bool everGathered = visit?.LastCompletedAt is not null;
             var services = new List<ServiceCoverage>(stream.Services.Count);
 
-            foreach (var service in stream.Services)
+            foreach (ServiceId service in stream.Services)
             {
-                var until = await programmes.CoveredUntilAsync(
+                DateTime? until = await programmes.CoveredUntilAsync(
                     stream.NetworkId.Value,
                     service.Value,
                     abort);

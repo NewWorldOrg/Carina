@@ -11,7 +11,7 @@ public sealed class DbEntryPointTests
     {
         var error = new StringWriter();
 
-        var exitCode = await DbEntryPoint.RunAsync(args, error);
+        int exitCode = await DbEntryPoint.RunAsync(args, error);
 
         Assert.Equal(DbEntryPoint.UsageExitCode, exitCode);
         Assert.Contains("usage: Carina.Db --migrate", error.ToString(), StringComparison.Ordinal);
@@ -23,7 +23,7 @@ public sealed class DbEntryPointTests
         using var scope = new EnvironmentVariableScope(CarinaDbContextFactory.ConnectionStringVariable, null);
         var error = new StringWriter();
 
-        var exitCode = await DbEntryPoint.RunAsync(["--migrate"], error);
+        int exitCode = await DbEntryPoint.RunAsync(["--migrate"], error);
 
         Assert.Equal(DbEntryPoint.UnusableConfigurationExitCode, exitCode);
         Assert.Contains(CarinaDbContextFactory.ConnectionStringVariable, error.ToString(), StringComparison.Ordinal);
@@ -37,7 +37,7 @@ public sealed class DbEntryPointTests
             "this is not a connection string");
         var error = new StringWriter();
 
-        var exitCode = await DbEntryPoint.RunAsync(["--migrate"], error);
+        int exitCode = await DbEntryPoint.RunAsync(["--migrate"], error);
 
         Assert.Equal(DbEntryPoint.MigrationFailedExitCode, exitCode);
         Assert.Contains("Carina.Db --migrate failed", error.ToString(), StringComparison.Ordinal);

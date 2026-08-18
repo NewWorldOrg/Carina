@@ -15,7 +15,7 @@ public sealed class SocketPermissionGuard(
 {
     public Task StartedAsync(CancellationToken cancellationToken)
     {
-        var path = configuration.SocketPath!;
+        string path = configuration.SocketPath!;
 
         AssertOnlyTheSocketIsServed(path);
 
@@ -42,11 +42,11 @@ public sealed class SocketPermissionGuard(
 
     private void AssertOnlyTheSocketIsServed(string path)
     {
-        var addresses =
+        ICollection<string> addresses =
             server.Features.Get<IServerAddressesFeature>()?.Addresses ?? [];
-        var expected = $"http://unix:{path}";
+        string expected = $"http://unix:{path}";
 
-        var strangers = addresses
+        string[] strangers = addresses
             .Where(address => !string.Equals(address, expected, StringComparison.Ordinal))
             .ToArray();
 

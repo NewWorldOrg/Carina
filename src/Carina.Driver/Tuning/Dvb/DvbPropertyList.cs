@@ -75,7 +75,7 @@ public sealed class DvbPropertyList
     {
         var list = new DvbPropertyList(properties.Length);
 
-        for (var index = 0; index < properties.Length; index++)
+        for (int index = 0; index < properties.Length; index++)
         {
             list.WriteCommand(index, properties[index]);
         }
@@ -87,7 +87,7 @@ public sealed class DvbPropertyList
     {
         var list = new DvbPropertyList(settings.Count);
 
-        for (var index = 0; index < settings.Count; index++)
+        for (int index = 0; index < settings.Count; index++)
         {
             list.WriteCommand(index, settings[index].Property);
             BinaryPrimitives.WriteUInt32LittleEndian(
@@ -117,7 +117,7 @@ public sealed class DvbPropertyList
             return false;
         }
 
-        for (var index = 0; index < properties.Length; index++)
+        for (int index = 0; index < properties.Length; index++)
         {
             if (PropertyAt(index) != properties[index])
             {
@@ -137,8 +137,8 @@ public sealed class DvbPropertyList
             return false;
         }
 
-        var record = RecordAt(index);
-        var count = bytes[record + DvbLayout.StatisticCountAt];
+        int record = RecordAt(index);
+        byte count = bytes[record + DvbLayout.StatisticCountAt];
 
         if (count > DvbLayout.MaxStatisticLayers)
         {
@@ -147,9 +147,9 @@ public sealed class DvbPropertyList
 
         var gathered = new DvbStatisticLayer[count];
 
-        for (var layer = 0; layer < count; layer++)
+        for (int layer = 0; layer < count; layer++)
         {
-            var at = record + DvbLayout.StatisticsAt + (layer * DvbLayout.StatisticBytes);
+            int at = record + DvbLayout.StatisticsAt + (layer * DvbLayout.StatisticBytes);
             gathered[layer] = new DvbStatisticLayer(
                 (StatisticScale)bytes[at],
                 BinaryPrimitives.ReadInt64LittleEndian(
@@ -172,8 +172,8 @@ public sealed class DvbPropertyList
             return false;
         }
 
-        var record = RecordAt(index);
-        var count = BinaryPrimitives.ReadUInt32LittleEndian(
+        int record = RecordAt(index);
+        uint count = BinaryPrimitives.ReadUInt32LittleEndian(
             bytes.AsSpan(record + DvbLayout.BufferLengthAt)
         );
 
@@ -184,7 +184,7 @@ public sealed class DvbPropertyList
 
         var gathered = new DeliverySystem[count];
 
-        for (var system = 0; system < count; system++)
+        for (int system = 0; system < count; system++)
         {
             gathered[system] = new DeliverySystem(bytes[record + DvbLayout.BufferDataAt + system]);
         }

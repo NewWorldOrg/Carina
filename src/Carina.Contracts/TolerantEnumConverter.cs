@@ -19,7 +19,7 @@ public abstract class TolerantEnumConverter<TEnum> : JsonConverter<TEnum>
         switch (reader.TokenType)
         {
             case JsonTokenType.String:
-                var name = reader.GetString();
+                string? name = reader.GetString();
                 return name is null ? default : ValueOf(name) ?? default;
 
             case JsonTokenType.Number:

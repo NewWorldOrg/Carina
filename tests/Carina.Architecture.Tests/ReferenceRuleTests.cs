@@ -32,7 +32,7 @@ public sealed class ReferenceRuleTests
     [Fact]
     public void BroadcastDependsOnNothing()
     {
-        var broadcast = Graph.Node("Carina.Broadcast");
+        ProjectNode broadcast = Graph.Node("Carina.Broadcast");
 
         Assert.Empty(broadcast.ProjectReferences);
         Assert.Empty(broadcast.PackageReferences);
@@ -41,7 +41,7 @@ public sealed class ReferenceRuleTests
     [Fact]
     public void ContractsDependsOnNothing()
     {
-        var contracts = Graph.Node("Carina.Contracts");
+        ProjectNode contracts = Graph.Node("Carina.Contracts");
 
         Assert.Empty(contracts.ProjectReferences);
         Assert.Empty(contracts.PackageReferences);

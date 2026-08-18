@@ -45,7 +45,7 @@ public sealed class PersistenceBoundaryRuleSelfCheckTests
     [Fact]
     public void DetectsAReservationThatHoldsAForeignKeyToAChannelDefinition()
     {
-        using var context = Violating();
+        using ViolatingDbContext context = Violating();
 
         Assert.Contains(
             "booking -> channel_lineup",
@@ -55,7 +55,7 @@ public sealed class PersistenceBoundaryRuleSelfCheckTests
     [Fact]
     public void DetectsAForeignKeyIntoTheProgrammeCache()
     {
-        using var context = Violating();
+        using ViolatingDbContext context = Violating();
 
         Assert.Contains(
             "recording_job -> guide_entry",
@@ -65,7 +65,7 @@ public sealed class PersistenceBoundaryRuleSelfCheckTests
     [Fact]
     public void LeavesForeignKeysInsideTheReservationAggregateAlone()
     {
-        using var context = Violating();
+        using ViolatingDbContext context = Violating();
 
         Assert.Equal(
             ["booking -> channel_lineup", "recording_job -> guide_entry"],
@@ -75,7 +75,7 @@ public sealed class PersistenceBoundaryRuleSelfCheckTests
     [Fact]
     public void CatchesBreaksThatNoTableNameRevealsAsBelongingToTheirFamily()
     {
-        using var context = Violating();
+        using ViolatingDbContext context = Violating();
 
         Assert.DoesNotContain(
             new[] { "booking", "guide_entry", "recording_job" },
@@ -88,7 +88,7 @@ public sealed class PersistenceBoundaryRuleSelfCheckTests
     [Fact]
     public void DetectsAnEntityThatBelongsToNoDeclaredFamily()
     {
-        using var context = Violating();
+        using ViolatingDbContext context = Violating();
 
         Assert.Equal(
             [$"{typeof(ShelfItem).FullName} (shelf_item)"],

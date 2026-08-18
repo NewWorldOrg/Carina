@@ -12,7 +12,7 @@ public sealed class CollectionPlanTests
     [Fact]
     public void AStreamNeverCollectedGoesBeforeOneThatIsMerelyThin()
     {
-        var plan = CollectionPlan.Of(
+        IReadOnlyList<PlannedVisit> plan = CollectionPlan.Of(
             [Thin(2, Now.AddHours(1)), NeverVisited(1)],
             Now,
             Wanted);
@@ -24,7 +24,7 @@ public sealed class CollectionPlanTests
     [Fact]
     public void AStreamCarryingAServiceNeverCollectedIsTreatedAsNeverCollected()
     {
-        var plan = CollectionPlan.Of(
+        IReadOnlyList<PlannedVisit> plan = CollectionPlan.Of(
             [Stream(1, Now.AddHours(-1), null, Collected(1, Now.AddDays(8)), NeverCollected(2))],
             Now,
             Wanted);
@@ -35,7 +35,7 @@ public sealed class CollectionPlanTests
     [Fact]
     public void TheThinnestServiceDecidesHowThinTheWholeStreamIs()
     {
-        var stream = Stream(1, Now.AddHours(-1), null, Collected(1, Now.AddDays(8)), Collected(2, Now.AddDays(1)));
+        StreamCoverage stream = Stream(1, Now.AddHours(-1), null, Collected(1, Now.AddDays(8)), Collected(2, Now.AddDays(1)));
 
         Assert.Equal(Now.AddDays(1), CollectionPlan.ThinnestOf(stream));
     }
@@ -43,7 +43,7 @@ public sealed class CollectionPlanTests
     [Fact]
     public void AServiceCollectedButCarryingNoProgrammesDoesNotMakeTheStreamLookThin()
     {
-        var stream = Stream(1, Now.AddHours(-1), null, Collected(1, Now.AddDays(8)), Collected(2, until: null));
+        StreamCoverage stream = Stream(1, Now.AddHours(-1), null, Collected(1, Now.AddDays(8)), Collected(2, until: null));
 
         Assert.Equal(Now.AddDays(8), CollectionPlan.ThinnestOf(stream));
         Assert.Equal(VisitReason.Rotation, Assert.Single(CollectionPlan.Of([stream], Now, Wanted)).Reason);
@@ -52,7 +52,7 @@ public sealed class CollectionPlanTests
     [Fact]
     public void ThinnerStreamsAreVisitedBeforeThickerOnes()
     {
-        var plan = CollectionPlan.Of(
+        IReadOnlyList<PlannedVisit> plan = CollectionPlan.Of(
             [Thin(1, Now.AddDays(2)), Thin(2, Now.AddHours(6)), Thin(3, Now.AddDays(1))],
             Now,
             Wanted);
@@ -63,7 +63,7 @@ public sealed class CollectionPlanTests
     [Fact]
     public void AmongStreamsMerelyTakingTheirTurnTheOneLeftLongestGoesFirst()
     {
-        var plan = CollectionPlan.Of(
+        IReadOnlyList<PlannedVisit> plan = CollectionPlan.Of(
             [
                 Stream(1, Now.AddHours(-1), null, Collected(1, Now.AddDays(8))),
                 Stream(2, Now.AddDays(-2), null, Collected(1, Now.AddDays(9))),
@@ -79,7 +79,7 @@ public sealed class CollectionPlanTests
     [Fact]
     public void AStreamCoveredPastWhatIsWantedIsOnlyVisitedInTurn()
     {
-        var plan = CollectionPlan.Of([Thin(1, Now.AddDays(8))], Now, Wanted);
+        IReadOnlyList<PlannedVisit> plan = CollectionPlan.Of([Thin(1, Now.AddDays(8))], Now, Wanted);
 
         Assert.Equal(VisitReason.Rotation, Assert.Single(plan).Reason);
     }
@@ -87,7 +87,7 @@ public sealed class CollectionPlanTests
     [Fact]
     public void AStreamCoveredExactlyAsFarAsIsWantedIsThickEnough()
     {
-        var plan = CollectionPlan.Of([Thin(1, Now + Wanted)], Now, Wanted);
+        IReadOnlyList<PlannedVisit> plan = CollectionPlan.Of([Thin(1, Now + Wanted)], Now, Wanted);
 
         Assert.Equal(VisitReason.Rotation, Assert.Single(plan).Reason);
     }
@@ -113,7 +113,7 @@ public sealed class CollectionPlanTests
     [Fact]
     public void StreamsThatAreEquallyDueAreVisitedInASettledOrder()
     {
-        var plan = CollectionPlan.Of([NeverVisited(9), NeverVisited(4)], Now, Wanted);
+        IReadOnlyList<PlannedVisit> plan = CollectionPlan.Of([NeverVisited(9), NeverVisited(4)], Now, Wanted);
 
         Assert.Equal([4, 9], Streams(plan));
     }
@@ -121,7 +121,7 @@ public sealed class CollectionPlanTests
     [Fact]
     public void StreamsOnDifferentNetworksAreVisitedInASettledOrder()
     {
-        var plan = CollectionPlan.Of(
+        IReadOnlyList<PlannedVisit> plan = CollectionPlan.Of(
             [
                 new StreamCoverage(new NetworkId(2), new TransportStreamId(1), [], null, null),
                 new StreamCoverage(new NetworkId(1), new TransportStreamId(1), [], null, null),
@@ -135,7 +135,7 @@ public sealed class CollectionPlanTests
     [Fact]
     public void APlannedVisitNamesTheStreamItMeans()
     {
-        var visit = Assert.Single(CollectionPlan.Of([NeverVisited(7)], Now, Wanted));
+        PlannedVisit visit = Assert.Single(CollectionPlan.Of([NeverVisited(7)], Now, Wanted));
 
         Assert.Equal(32739, visit.NetworkId.Value);
         Assert.Equal(7, visit.TransportStreamId.Value);

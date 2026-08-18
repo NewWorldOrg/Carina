@@ -31,9 +31,9 @@ public sealed class AribTextWriter
 
     public AribTextWriter Kanji(string text)
     {
-        foreach (var character in text)
+        foreach (char character in text)
         {
-            var (row, cell) = KanjiCells[character];
+            (int row, int cell) = KanjiCells[character];
             bytes.Add((byte)(0x20 + row));
             bytes.Add((byte)(0x20 + cell));
         }
@@ -47,7 +47,7 @@ public sealed class AribTextWriter
 
     public AribTextWriter KatakanaBySingleShift(string text)
     {
-        foreach (var character in text)
+        foreach (char character in text)
         {
             Raw(0x1D, (byte)CodeOf(character, KatakanaCodes, KatakanaMarkCodes));
         }
@@ -59,7 +59,7 @@ public sealed class AribTextWriter
 
     public AribTextWriter Ascii(string text)
     {
-        foreach (var character in text)
+        foreach (char character in text)
         {
             bytes.Add((byte)character);
         }
@@ -95,14 +95,14 @@ public sealed class AribTextWriter
 
     public static int CodeOf(char character, string set, string marks)
     {
-        var atSet = set.IndexOf(character, StringComparison.Ordinal);
+        int atSet = set.IndexOf(character, StringComparison.Ordinal);
 
         if (atSet >= 0)
         {
             return FirstCode + atSet;
         }
 
-        var atMarks = marks.IndexOf(character, StringComparison.Ordinal);
+        int atMarks = marks.IndexOf(character, StringComparison.Ordinal);
 
         if (atMarks >= 0)
         {
@@ -114,7 +114,7 @@ public sealed class AribTextWriter
 
     private AribTextWriter Right(string text, string set, string marks)
     {
-        foreach (var character in text)
+        foreach (char character in text)
         {
             bytes.Add((byte)(CodeOf(character, set, marks) | 0x80));
         }
@@ -126,11 +126,11 @@ public sealed class AribTextWriter
     {
         var cells = new Dictionary<char, (int Row, int Cell)>();
 
-        for (var row = JisX0208.FirstRow; row <= JisX0208.LastRow; row++)
+        for (int row = JisX0208.FirstRow; row <= JisX0208.LastRow; row++)
         {
-            for (var cell = 1; cell <= JisX0208.CellsPerRow; cell++)
+            for (int cell = 1; cell <= JisX0208.CellsPerRow; cell++)
             {
-                if (JisX0208.TryMap(row, cell, out var character))
+                if (JisX0208.TryMap(row, cell, out char character))
                 {
                     cells.TryAdd(character, (row, cell));
                 }

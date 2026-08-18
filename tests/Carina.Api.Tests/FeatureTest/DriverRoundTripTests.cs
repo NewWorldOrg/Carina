@@ -22,12 +22,12 @@ public sealed class DriverRoundTripTests
     [Fact]
     public async Task AnAuthenticatedRequestReachesTheDriverAcrossARealSocket()
     {
-        await using var feature = await DriverFeature.StartAsync(
+        await using DriverFeature feature = await DriverFeature.StartAsync(
             FakeDriver.HelloFor("instance-a"),
             driver => driver.Sessions = [Recording("rec-1", "fake-terrestrial")]);
 
-        var data = await feature.UntilConnectionIs("connected");
-        var hello = data.GetProperty("hello");
+        JsonElement data = await feature.UntilConnectionIs("connected");
+        JsonElement hello = data.GetProperty("hello");
 
         Assert.Equal("instance-a", hello.GetProperty("instanceId").GetString());
         Assert.Equal(DriverProtocol.Version, hello.GetProperty("protocolVersion").GetInt32());
@@ -45,12 +45,12 @@ public sealed class DriverRoundTripTests
     [Fact]
     public async Task ADriverThatGoesAwayIsReportedAsNotConnectedAndNeverAsAFault()
     {
-        await using var feature = await DriverFeature.StartAsync(FakeDriver.HelloFor("instance-a"));
+        await using DriverFeature feature = await DriverFeature.StartAsync(FakeDriver.HelloFor("instance-a"));
 
         await feature.UntilConnectionIs("connected");
         await feature.StopDriverAsync();
 
-        var data = await feature.UntilConnectionIs("notConnected");
+        JsonElement data = await feature.UntilConnectionIs("notConnected");
 
         Assert.Equal(JsonValueKind.Null, data.GetProperty("hello").ValueKind);
         Assert.False(data.GetProperty("driverUpdateRequired").GetBoolean());
@@ -59,7 +59,7 @@ public sealed class DriverRoundTripTests
     [Fact]
     public async Task ADriverThatComesBackAsANewInstanceFiresTheResyncHook()
     {
-        await using var feature = await DriverFeature.StartAsync(
+        await using DriverFeature feature = await DriverFeature.StartAsync(
             FakeDriver.HelloFor("instance-a"),
             driver => driver.Sessions = [Recording("rec-1", "fake-terrestrial")]);
 
@@ -73,7 +73,7 @@ public sealed class DriverRoundTripTests
 
         await feature.UntilReadoptions(2);
 
-        var data = await feature.UntilConnectionIs("connected");
+        JsonElement data = await feature.UntilConnectionIs("connected");
 
         Assert.Equal(
             "instance-b",
@@ -84,7 +84,7 @@ public sealed class DriverRoundTripTests
     [Fact]
     public async Task ADriverThatComesBackAsTheSameInstanceIsNotReadoptedAgain()
     {
-        await using var feature = await DriverFeature.StartAsync(
+        await using DriverFeature feature = await DriverFeature.StartAsync(
             FakeDriver.HelloFor("instance-a"),
             driver => driver.Sessions = [Recording("rec-1", "fake-terrestrial")]);
 
@@ -107,9 +107,9 @@ public sealed class DriverRoundTripTests
     [Fact]
     public async Task TheAppStartsWithoutADriverAndAdoptsOneWhenItAppears()
     {
-        await using var feature = await DriverFeature.StartAsync();
+        await using DriverFeature feature = await DriverFeature.StartAsync();
 
-        var missing = await feature.UntilConnectionIs("notConnected");
+        JsonElement missing = await feature.UntilConnectionIs("notConnected");
 
         Assert.Equal(JsonValueKind.Null, missing.GetProperty("hello").ValueKind);
 
@@ -117,7 +117,7 @@ public sealed class DriverRoundTripTests
             FakeDriver.HelloFor("instance-a"),
             driver => driver.Sessions = [Recording("rec-1", "fake-terrestrial")]);
 
-        var data = await feature.UntilConnectionIs("connected");
+        JsonElement data = await feature.UntilConnectionIs("connected");
 
         Assert.Equal(
             "instance-a",

@@ -23,7 +23,7 @@ public sealed class ByteWriter
 
     public ByteWriter Run(ReadOnlySpan<byte> run)
     {
-        foreach (var value in run)
+        foreach (byte value in run)
         {
             bytes.Add(value);
         }

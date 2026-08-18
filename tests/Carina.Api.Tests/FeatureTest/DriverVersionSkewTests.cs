@@ -24,12 +24,12 @@ public sealed class DriverVersionSkewTests
     [Fact]
     public async Task AnOlderDriverKeepsWorkingAndTellsTheOperatorToUpdateIt()
     {
-        await using var feature = await DriverFeature.StartAsync(
+        await using DriverFeature feature = await DriverFeature.StartAsync(
             FakeDriver.HelloFor("instance-old", capabilities: ["recording"], protocolVersion: 0),
             driver => driver.RawBodyByPath[DriverEndpoints.Health] = HelloFromABuildWithoutDraining);
 
-        var data = await feature.UntilConnectionIs("connected");
-        var hello = data.GetProperty("hello");
+        JsonElement data = await feature.UntilConnectionIs("connected");
+        JsonElement hello = data.GetProperty("hello");
 
         Assert.Equal(0, hello.GetProperty("protocolVersion").GetInt32());
         Assert.Equal("instance-old", hello.GetProperty("instanceId").GetString());
@@ -44,10 +44,10 @@ public sealed class DriverVersionSkewTests
     [Fact]
     public async Task AnOlderProtocolOnItsOwnAlreadyAsksForAnUpdate()
     {
-        await using var feature = await DriverFeature.StartAsync(
+        await using DriverFeature feature = await DriverFeature.StartAsync(
             FakeDriver.HelloFor("instance-old", protocolVersion: 0));
 
-        var data = await feature.UntilConnectionIs("connected");
+        JsonElement data = await feature.UntilConnectionIs("connected");
 
         Assert.Equal(0, data.GetProperty("hello").GetProperty("protocolVersion").GetInt32());
         Assert.Empty(data.GetProperty("missingCapabilities").EnumerateArray());
@@ -57,21 +57,21 @@ public sealed class DriverVersionSkewTests
     [Fact]
     public async Task AValueThisAppDoesNotKnowArrivesAsUnspecifiedRatherThanBreakingTheCall()
     {
-        await using var feature = await DriverFeature.StartAsync(
+        await using DriverFeature feature = await DriverFeature.StartAsync(
             FakeDriver.HelloFor("instance-a"),
             driver => driver.RawBodyByPath[DriverEndpoints.Sessions] = SessionsFromANewerBuild);
 
         await feature.UntilConnectionIs("connected");
         await feature.UntilReadoptions(1);
 
-        var session = Assert.Single(feature.Hook.LastSessions!);
+        SessionSnapshot session = Assert.Single(feature.Hook.LastSessions!);
 
         Assert.Equal("rec-9", session.SessionId.Value);
         Assert.Equal("a0", session.DeviceId);
         Assert.Equal(SessionPurpose.Unspecified, session.Purpose);
         Assert.Equal(SessionState.Unspecified, session.State);
 
-        var data = await feature.StatusAsync();
+        JsonElement data = await feature.StatusAsync();
 
         Assert.Equal("connected", DriverFeature.ConnectionOf(data));
     }
@@ -79,7 +79,7 @@ public sealed class DriverVersionSkewTests
     [Fact]
     public async Task AnAnswerThatIsNotAContractAtAllIsNotReadoptedAsIfItWere()
     {
-        await using var feature = await DriverFeature.StartAsync(
+        await using DriverFeature feature = await DriverFeature.StartAsync(
             FakeDriver.HelloFor("instance-a"),
             driver => driver.RawBodyByPath[DriverEndpoints.Sessions] = SessionsThatAreNotJson);
 
@@ -95,7 +95,7 @@ public sealed class DriverVersionSkewTests
     [Fact]
     public async Task AnEventNameThisAppDoesNotKnowDoesNotCostItTheFeed()
     {
-        await using var feature = await DriverFeature.StartAsync(FakeDriver.HelloFor("instance-a"));
+        await using DriverFeature feature = await DriverFeature.StartAsync(FakeDriver.HelloFor("instance-a"));
 
         await feature.UntilConnectionIs("connected");
         await Eventually.Happens(
@@ -105,7 +105,7 @@ public sealed class DriverVersionSkewTests
         feature.Driver.Signal("somethingFromTheFuture");
         feature.Driver.Signal(DriverEvents.Draining);
 
-        var data = await feature.UntilConnectionIs("draining");
+        JsonElement data = await feature.UntilConnectionIs("draining");
 
         Assert.Equal("instance-a", data.GetProperty("hello").GetProperty("instanceId").GetString());
     }

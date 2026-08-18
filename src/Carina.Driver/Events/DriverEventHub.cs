@@ -70,9 +70,9 @@ public sealed class DriverEventHub
 
     public void Signal(string name)
     {
-        var bit = BitFor(name);
+        int bit = BitFor(name);
 
-        foreach (var listener in listeners.Keys)
+        foreach (DriverEventListener listener in listeners.Keys)
         {
             listener.Offer(bit);
         }
@@ -104,7 +104,7 @@ public sealed class DriverEventHub
             closed = true;
         }
 
-        foreach (var listener in listeners.Keys)
+        foreach (DriverEventListener listener in listeners.Keys)
         {
             Forget(listener);
             listener.Close();
@@ -122,7 +122,7 @@ public sealed class DriverEventHub
 
         var names = new List<string>(DriverEvents.All.Count);
 
-        for (var index = 0; index < DriverEvents.All.Count; index++)
+        for (int index = 0; index < DriverEvents.All.Count; index++)
         {
             if ((mask & (1 << index)) is not 0)
             {
@@ -135,7 +135,7 @@ public sealed class DriverEventHub
 
     private static int BitFor(string name)
     {
-        for (var index = 0; index < DriverEvents.All.Count; index++)
+        for (int index = 0; index < DriverEvents.All.Count; index++)
         {
             if (string.Equals(DriverEvents.All[index], name, StringComparison.Ordinal))
             {

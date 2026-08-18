@@ -106,6 +106,22 @@ rules hold rather than that they inspected nothing.
 - Secrets never enter committed configuration — placeholders only, real values from
   the environment. Only the app process holds secrets; the driver holds none.
 
+## Coding Conventions
+
+- Declarations name their type. `var` is only for the case where the type already
+  appears on the right — `new`, a cast, or a factory whose name carries the type
+  (`ToList`, `Parse`, `CreateLinkedTokenSource`). Everything else is written out, so a
+  reader learns the type without following the call. `.editorconfig` sets `IDE0008` to
+  error and `EnforceCodeStyleInBuild` makes the build the thing that enforces it,
+  not memory.
+- Comments earn their place or are absent. Code that needs a comment to be understood
+  is rewritten instead.
+- Asynchronous methods end in `Async`.
+- Domain holds entities, value objects, and repository interfaces, grouped by
+  aggregate. Infrastructure holds the implementations. Entities are restored through a
+  static `Rehydrate`.
+- Warnings are errors. The build is the gate.
+
 ## CI Commands
 
 All commands run inside the containers.

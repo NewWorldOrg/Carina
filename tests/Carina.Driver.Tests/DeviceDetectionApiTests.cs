@@ -17,14 +17,14 @@ public sealed class DeviceDetectionApiTests
     [Fact]
     public async Task DetectedDevicesAnswerWithEveryTunerTheBackendFinds()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var response = await client.GetAsync(DriverEndpoints.DevicesDetected, Soon());
+        using HttpResponseMessage response = await client.GetAsync(DriverEndpoints.DevicesDetected, Soon());
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var detected = await DriverUnderTest.Read(
+        IReadOnlyList<DetectedDeviceDto>? detected = await DriverUnderTest.Read(
             response,
             DriverJson.Context.IReadOnlyListDetectedDeviceDto
         );
@@ -39,10 +39,10 @@ public sealed class DeviceDetectionApiTests
     [Fact]
     public async Task ADetectedTunerSaysWhichDeliverySystemsItReceives()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        var detected = await Ask(client);
+        IReadOnlyList<DetectedDeviceDto> detected = await Ask(client);
 
         Assert.Equal(
             [TunerKind.Terrestrial],
@@ -60,10 +60,10 @@ public sealed class DeviceDetectionApiTests
     [Fact]
     public async Task DetectionReportsTheHardwareSoATunerTurnedOffInTheLedgerIsStillFound()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        var detected = await Ask(client);
+        IReadOnlyList<DetectedDeviceDto> detected = await Ask(client);
 
         Assert.Contains(detected, device => device.DeviceId is "fake-spare");
     }
@@ -86,12 +86,12 @@ public sealed class DeviceDetectionApiTests
             )
         );
 
-        await using var driver = await DriverUnderTest.Start(
+        await using DriverUnderTest driver = await DriverUnderTest.Start(
             reshapeServices: services => services.AddSingleton<ITunerDetector>(scripted)
         );
-        using var client = driver.Client();
+        using HttpClient client = driver.Client();
 
-        var body = await client.GetStringAsync(DriverEndpoints.DevicesDetected, Soon());
+        string body = await client.GetStringAsync(DriverEndpoints.DevicesDetected, Soon());
 
         Assert.Contains("adapter0.frontend0", body, StringComparison.Ordinal);
         Assert.DoesNotContain("/dev", body, StringComparison.Ordinal);
@@ -110,12 +110,12 @@ public sealed class DeviceDetectionApiTests
             )
         );
 
-        await using var driver = await DriverUnderTest.Start(
+        await using DriverUnderTest driver = await DriverUnderTest.Start(
             reshapeServices: services => services.AddSingleton<ITunerDetector>(scripted)
         );
-        using var client = driver.Client();
+        using HttpClient client = driver.Client();
 
-        var device = Assert.Single(await Ask(client));
+        DetectedDeviceDto device = Assert.Single(await Ask(client));
 
         Assert.Equal(DeviceDetection.Busy, device.Detection);
         Assert.Empty(device.Kinds);
@@ -134,12 +134,12 @@ public sealed class DeviceDetectionApiTests
             )
         );
 
-        await using var driver = await DriverUnderTest.Start(
+        await using DriverUnderTest driver = await DriverUnderTest.Start(
             reshapeServices: services => services.AddSingleton<ITunerDetector>(scripted)
         );
-        using var client = driver.Client();
+        using HttpClient client = driver.Client();
 
-        var before = scripted.Detections;
+        int before = scripted.Detections;
 
         await Ask(client);
         await Ask(client);
@@ -149,11 +149,11 @@ public sealed class DeviceDetectionApiTests
 
     private static async Task<IReadOnlyList<DetectedDeviceDto>> Ask(HttpClient client)
     {
-        using var response = await client.GetAsync(DriverEndpoints.DevicesDetected, Soon());
+        using HttpResponseMessage response = await client.GetAsync(DriverEndpoints.DevicesDetected, Soon());
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var detected = await DriverUnderTest.Read(
+        IReadOnlyList<DetectedDeviceDto>? detected = await DriverUnderTest.Read(
             response,
             DriverJson.Context.IReadOnlyListDetectedDeviceDto
         );

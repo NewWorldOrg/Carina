@@ -24,7 +24,7 @@ public sealed record DataContentDescription(int DataComponentId)
             return false;
         }
 
-        var payload = descriptor.Payload.Span;
+        ReadOnlySpan<byte> payload = descriptor.Payload.Span;
 
         described = new DataContentDescription((payload[0] << 8) | payload[1]);
 

@@ -22,7 +22,7 @@ public sealed class SignalQualityTests
     [Fact]
     public void TheLockStateAndTheStatisticsEachCarryTheTimeTheyWereRead()
     {
-        var restored = DriverJson.Deserialize(
+        SignalQualityDto? restored = DriverJson.Deserialize(
             DriverJson.Serialize(Locked),
             DriverJson.Context.SignalQualityDto
         );
@@ -62,7 +62,7 @@ public sealed class SignalQualityTests
     [Fact]
     public void AReadingFromADriverThatNamedNoMetricsClaimsNoneAreMissing()
     {
-        var reading = DriverJson.Deserialize(
+        SignalQualityDto? reading = DriverJson.Deserialize(
             """{"lock":"locked","cnrMilliDecibels":21500}""",
             DriverJson.Context.SignalQualityDto
         );
@@ -90,7 +90,7 @@ public sealed class SignalQualityTests
     [Fact]
     public void TheCarrierToNoiseOfATunerThatIsNotLockedIsNotAMeasurement()
     {
-        var reading = Locked with { Lock = SignalLock.NotLocked };
+        SignalQualityDto reading = Locked with { Lock = SignalLock.NotLocked };
 
         Assert.Null(reading.CnrMilliDecibels);
         Assert.Null(reading.CnrDecibels);
@@ -100,7 +100,7 @@ public sealed class SignalQualityTests
     [Fact]
     public void ALockStateThisBuildDoesNotKnowIsNotReadAsLocked()
     {
-        var reading = DriverJson.Deserialize(
+        SignalQualityDto? reading = DriverJson.Deserialize(
             """{"lock":"almostThere","cnrMilliDecibels":21500,"postViterbiBitErrors":[{"layer":0,"errorBits":12,"totalBits":1000000}]}""",
             DriverJson.Context.SignalQualityDto
         );
@@ -114,7 +114,7 @@ public sealed class SignalQualityTests
     [Fact]
     public void AReadingWithoutALockStateIsNotReadAsLocked()
     {
-        var reading = DriverJson.Deserialize("{}", DriverJson.Context.SignalQualityDto);
+        SignalQualityDto? reading = DriverJson.Deserialize("{}", DriverJson.Context.SignalQualityDto);
 
         Assert.NotNull(reading);
         Assert.Equal(SignalLock.Unspecified, reading.Lock);
@@ -126,7 +126,7 @@ public sealed class SignalQualityTests
     [Fact]
     public void TheLayersOfATerrestrialReadingAreKeptApart()
     {
-        var restored = DriverJson.Deserialize(
+        SignalQualityDto? restored = DriverJson.Deserialize(
             DriverJson.Serialize(Locked),
             DriverJson.Context.SignalQualityDto
         );
@@ -141,7 +141,7 @@ public sealed class SignalQualityTests
     [Fact]
     public void ALayerCountThisBuildDoesNotExpectIsCarriedAsItStands()
     {
-        var reading = DriverJson.Deserialize(
+        SignalQualityDto? reading = DriverJson.Deserialize(
             """{"lock":"locked","postViterbiBitErrors":[{"layer":0,"errorBits":1,"totalBits":2},{"layer":1,"errorBits":3,"totalBits":4},{"layer":2,"errorBits":5,"totalBits":6}]}""",
             DriverJson.Context.SignalQualityDto
         );
@@ -181,7 +181,7 @@ public sealed class SignalQualityTests
     [Fact]
     public void ACountersOnlyReadingIsNotMistakenForARate()
     {
-        var json = DriverJson.Serialize(Locked);
+        string json = DriverJson.Serialize(Locked);
 
         Assert.Contains("\"errorBits\":12", json, StringComparison.Ordinal);
         Assert.Contains("\"totalBits\":1000000", json, StringComparison.Ordinal);
@@ -204,7 +204,7 @@ public sealed class SignalQualityTests
             PostViterbiBitErrors = [new LayerBitErrorCounts(0, 12, 1_000_000)],
         };
 
-        var promoted = whileUnlocked with { Lock = SignalLock.Locked };
+        SignalQualityDto promoted = whileUnlocked with { Lock = SignalLock.Locked };
 
         Assert.Null(promoted.CnrMilliDecibels);
         Assert.Empty(promoted.PostViterbiBitErrors);
@@ -214,7 +214,7 @@ public sealed class SignalQualityTests
     [Fact]
     public void AReadingThatLostItsLockDoesNotKeepTheValueItHad()
     {
-        var lost = Locked with { Lock = SignalLock.NotLocked };
+        SignalQualityDto lost = Locked with { Lock = SignalLock.NotLocked };
 
         Assert.Null(lost.CnrMilliDecibels);
         Assert.Null((lost with { Lock = SignalLock.Locked }).CnrMilliDecibels);
@@ -223,7 +223,7 @@ public sealed class SignalQualityTests
     [Fact]
     public void ALockedReadingSurvivesBeingCopiedForSomethingElse()
     {
-        var copied = Locked with { MeasuredAt = null };
+        SignalQualityDto copied = Locked with { MeasuredAt = null };
 
         Assert.Equal(21_500, copied.CnrMilliDecibels);
         Assert.Equal(2, copied.PostViterbiBitErrors.Count);

@@ -30,9 +30,9 @@ public sealed class DvbTunerDeviceTests
     [Fact]
     public void OpeningTakesTheFrontendThenTheDemuxThenTheReader()
     {
-        var (calls, clock) = Ready();
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
 
-        using var device = Open(calls, clock);
+        using DvbTunerDevice device = Open(calls, clock);
 
         Assert.Equal(
             ["/dev/dvb/adapter0/frontend0", "/dev/dvb/adapter0/demux0", "/dev/dvb/adapter0/dvr0"],
@@ -46,9 +46,9 @@ public sealed class DvbTunerDeviceTests
     [Fact]
     public void OpeningAsksForTheConfiguredRingBufferAndTheFullStreamFilter()
     {
-        var (calls, clock) = Ready();
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
 
-        using var device = Open(calls, clock);
+        using DvbTunerDevice device = Open(calls, clock);
 
         Assert.Equal(8 * 1024 * 1024, Assert.Single(calls.BufferSizesSet));
         Assert.Equal(DemuxFilter.EverythingFromTheFrontend(), Assert.Single(calls.FiltersSet));
@@ -57,10 +57,10 @@ public sealed class DvbTunerDeviceTests
     [Fact]
     public void AFrontendThatNeverLocksIsReportedAsAFailureToLockNotAsAnEmptyStream()
     {
-        var (calls, clock) = Ready();
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
         calls.ReportStatus(FrontendStatus.Signal);
 
-        var refusal = Assert.Throws<DvbDeviceException>(() => Open(calls, clock));
+        DvbDeviceException refusal = Assert.Throws<DvbDeviceException>(() => Open(calls, clock));
 
         Assert.Contains("did not lock", refusal.Message, StringComparison.Ordinal);
         Assert.Contains("no bytes will follow", refusal.Message, StringComparison.Ordinal);
@@ -70,10 +70,10 @@ public sealed class DvbTunerDeviceTests
     [Fact]
     public void TheDidNotLockDiagnosisQuotesTheStatusSeenWhileWaiting()
     {
-        var (calls, clock) = Ready();
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
         calls.ReportStatus(FrontendStatus.Signal | FrontendStatus.Carrier);
 
-        var refusal = Assert.Throws<DvbDeviceException>(() => Open(calls, clock));
+        DvbDeviceException refusal = Assert.Throws<DvbDeviceException>(() => Open(calls, clock));
 
         Assert.Equal(TuningFailure.NoLock, refusal.Failure);
         Assert.Contains("last status it reported while waiting", refusal.Message, StringComparison.Ordinal);
@@ -83,7 +83,7 @@ public sealed class DvbTunerDeviceTests
     [Fact]
     public void AFrontendThatNeverLocksLeavesNoDescriptorBehind()
     {
-        var (calls, clock) = Ready();
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
         calls.ReportStatus(FrontendStatus.Signal);
 
         Assert.Throws<DvbDeviceException>(() => Open(calls, clock));
@@ -94,7 +94,7 @@ public sealed class DvbTunerDeviceTests
     [Fact]
     public void ADemuxThatWillNotFilterLeavesNoDescriptorBehind()
     {
-        var (calls, clock) = Ready();
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
         calls.RefuseFilterWith = Errno.NoSuchDevice;
 
         Assert.Throws<DvbDeviceException>(() => Open(calls, clock));
@@ -105,9 +105,9 @@ public sealed class DvbTunerDeviceTests
     [Fact]
     public void ATerrestrialTuneNeverTouchesTheAerialSupply()
     {
-        var (calls, clock) = Ready();
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
 
-        using var device = Open(calls, clock);
+        using DvbTunerDevice device = Open(calls, clock);
 
         Assert.Empty(calls.VoltagesSet);
     }
@@ -115,7 +115,7 @@ public sealed class DvbTunerDeviceTests
     [Fact]
     public void ASatelliteTuneAlwaysStatesTheAerialSupplyRatherThanLeavingItAsFound()
     {
-        var (calls, clock) = Ready();
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
 
         using var device = DvbTunerDevice.Open(
             calls,
@@ -133,10 +133,10 @@ public sealed class DvbTunerDeviceTests
     [Fact]
     public void BytesComeBackFromTheReader()
     {
-        var (calls, clock) = Ready();
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
         calls.Deliver([1, 2, 3, 4]);
 
-        using var device = Open(calls, clock);
+        using DvbTunerDevice device = Open(calls, clock);
 
         Assert.Equal([1, 2, 3, 4], device.Read(4, CancellationToken.None));
     }
@@ -144,10 +144,10 @@ public sealed class DvbTunerDeviceTests
     [Fact]
     public void AShortReadReturnsOnlyWhatArrived()
     {
-        var (calls, clock) = Ready();
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
         calls.Deliver([1, 2, 3]);
 
-        using var device = Open(calls, clock);
+        using DvbTunerDevice device = Open(calls, clock);
 
         Assert.Equal([1, 2, 3], device.Read(8, CancellationToken.None));
     }
@@ -155,11 +155,11 @@ public sealed class DvbTunerDeviceTests
     [Fact]
     public void ALockedTunerThatDeliversNothingIsADistinctFailureFromNotLocking()
     {
-        var (calls, clock) = Ready();
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
 
-        using var device = Open(calls, clock);
+        using DvbTunerDevice device = Open(calls, clock);
 
-        var refusal = Assert.Throws<DvbDeviceException>(
+        DvbDeviceException refusal = Assert.Throws<DvbDeviceException>(
             () => device.Read(188, CancellationToken.None)
         );
 
@@ -171,11 +171,11 @@ public sealed class DvbTunerDeviceTests
     [Fact]
     public void LosingLockWhileReadingIsFiledAsAFailureToLockNotAsADeliveryFault()
     {
-        var (calls, clock) = Ready();
-        using var device = Open(calls, clock);
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
+        using DvbTunerDevice device = Open(calls, clock);
         calls.ReportStatus(FrontendStatus.Signal);
 
-        var refusal = Assert.Throws<DvbDeviceException>(
+        DvbDeviceException refusal = Assert.Throws<DvbDeviceException>(
             () => device.Read(188, CancellationToken.None)
         );
 
@@ -188,11 +188,11 @@ public sealed class DvbTunerDeviceTests
     [Fact]
     public void AStatusThatCannotBeReReadIsLeftUnclassifiedRatherThanFiledAsLockedWithoutData()
     {
-        var (calls, clock) = Ready();
-        using var device = Open(calls, clock);
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
+        using DvbTunerDevice device = Open(calls, clock);
         calls.RefuseStatusWith = Errno.NoSuchDevice;
 
-        var refusal = Assert.Throws<DvbDeviceException>(
+        DvbDeviceException refusal = Assert.Throws<DvbDeviceException>(
             () => device.Read(188, CancellationToken.None)
         );
 
@@ -204,16 +204,16 @@ public sealed class DvbTunerDeviceTests
     [Fact]
     public void APollThatKeepsReportingReadableWithNothingToReadStillGivesUp()
     {
-        var (calls, clock) = Ready();
-        using var device = Open(calls, clock);
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
+        using DvbTunerDevice device = Open(calls, clock);
 
-        for (var attempt = 0; attempt < 500; attempt++)
+        for (int attempt = 0; attempt < 500; attempt++)
         {
             calls.Polls.Enqueue(SyscallOutcome.Ok(1));
             calls.Reads.Enqueue(SyscallOutcome.Failed(Errno.WouldBlock));
         }
 
-        var refusal = Assert.Throws<DvbDeviceException>(
+        DvbDeviceException refusal = Assert.Throws<DvbDeviceException>(
             () => device.Read(188, CancellationToken.None)
         );
 
@@ -231,10 +231,10 @@ public sealed class DvbTunerDeviceTests
     [Fact]
     public void ARingBufferTheKernelWillNotGrantStopsTheSessionRatherThanShrinkingQuietly()
     {
-        var (calls, clock) = Ready();
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
         calls.RefuseBufferSizeWith = Errno.NoSuchDevice;
 
-        var refusal = Assert.Throws<DvbDeviceException>(() => Open(calls, clock));
+        DvbDeviceException refusal = Assert.Throws<DvbDeviceException>(() => Open(calls, clock));
 
         Assert.Contains("ring buffer", refusal.Message, StringComparison.Ordinal);
         Assert.Equal(TuningFailure.DeviceUnusable, refusal.Failure);
@@ -244,12 +244,12 @@ public sealed class DvbTunerDeviceTests
     [Fact]
     public void AnOverrunRingBufferIsCountedRatherThanEndingTheSession()
     {
-        var (calls, clock) = Ready();
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
         calls.Polls.Enqueue(SyscallOutcome.Ok(1));
         calls.Reads.Enqueue(SyscallOutcome.Failed(Errno.Overflowed));
         calls.Deliver([9, 9, 9]);
 
-        using var device = Open(calls, clock);
+        using DvbTunerDevice device = Open(calls, clock);
 
         Assert.Equal([9, 9, 9], device.Read(3, CancellationToken.None));
         Assert.Equal(1, device.Overflows);
@@ -258,13 +258,13 @@ public sealed class DvbTunerDeviceTests
     [Fact]
     public void AReaderThatStopsAnsweringEndsTheSessionByName()
     {
-        var (calls, clock) = Ready();
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
         calls.Polls.Enqueue(SyscallOutcome.Ok(1));
         calls.Reads.Enqueue(SyscallOutcome.Failed(Errno.NoSuchDevice));
 
-        using var device = Open(calls, clock);
+        using DvbTunerDevice device = Open(calls, clock);
 
-        var refusal = Assert.Throws<DvbDeviceException>(
+        DvbDeviceException refusal = Assert.Throws<DvbDeviceException>(
             () => device.Read(188, CancellationToken.None)
         );
 
@@ -275,11 +275,11 @@ public sealed class DvbTunerDeviceTests
     [Fact]
     public void AReadStopsWhenTheSessionIsCancelled()
     {
-        var (calls, clock) = Ready();
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
         using var cancellation = new CancellationTokenSource();
         cancellation.Cancel();
 
-        using var device = Open(calls, clock);
+        using DvbTunerDevice device = Open(calls, clock);
 
         Assert.Throws<OperationCanceledException>(() => device.Read(188, cancellation.Token));
     }
@@ -287,8 +287,8 @@ public sealed class DvbTunerDeviceTests
     [Fact]
     public void ClosingStopsTheFilterAndHandsBackEveryDescriptor()
     {
-        var (calls, clock) = Ready();
-        var device = Open(calls, clock);
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
+        DvbTunerDevice device = Open(calls, clock);
 
         device.Dispose();
         device.Dispose();
@@ -309,7 +309,7 @@ public sealed class DvbTunerDeviceTests
     [Fact]
     public void ATunerHoldingAFrontendCanBeAskedForTheQualityOfWhatItIsReceiving()
     {
-        var (calls, clock) = Ready();
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
         calls.AnswerWith(
             DvbProperty.CarrierToNoise,
             [new DvbStatisticLayer(StatisticScale.Decibel, 20_500)]
@@ -329,11 +329,11 @@ public sealed class DvbTunerDeviceTests
             ]
         );
 
-        using var device = Open(calls, clock);
-        var quality = Assert.IsAssignableFrom<ISignalQualitySource>(device.Quality).Measure();
+        using DvbTunerDevice device = Open(calls, clock);
+        SignalQuality quality = Assert.IsAssignableFrom<ISignalQualitySource>(device.Quality).Measure();
 
         Assert.True(quality.HasLock);
-        Assert.True(quality.CarrierToNoise.TryGetDecibels(out var decibels));
+        Assert.True(quality.CarrierToNoise.TryGetDecibels(out double decibels));
         Assert.Equal(20.5, decibels, 3);
         Assert.Equal(2, quality.PostViterbiErrors.Layers.Count);
     }
@@ -341,13 +341,13 @@ public sealed class DvbTunerDeviceTests
     [Fact]
     public void ATunerTakenOverByAnotherSessionIsStillTheOneThatAnswersForQuality()
     {
-        var (calls, clock) = Ready();
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
         calls.AnswerWith(
             DvbProperty.CarrierToNoise,
             [new DvbStatisticLayer(StatisticScale.Decibel, 20_500)]
         );
 
-        using var device = Open(calls, clock);
+        using DvbTunerDevice device = Open(calls, clock);
         var leased = new LeasedTunerDevice(device);
 
         Assert.Same(device.Quality, leased.Quality);

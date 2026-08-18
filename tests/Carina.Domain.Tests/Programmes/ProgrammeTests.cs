@@ -158,7 +158,7 @@ public sealed class ProgrammeTests
     {
         var programme = Programme.Discover(Broadcast(), At);
 
-        var another = Broadcast() with
+        ProgrammeBroadcast another = Broadcast() with
         {
             Id = new ProgrammeId(new NetworkId(32739), new ServiceId(1049), new EventId(47290)),
         };
@@ -171,8 +171,8 @@ public sealed class ProgrammeTests
     [InlineData("summary")]
     public void TextLongerThanThisSystemKeepsIsCutOnTheWayIn(string field)
     {
-        var most = field == "name" ? Programme.NameMaxLength : Programme.SummaryMaxLength;
-        var overlong = new string('あ', most + 10);
+        int most = field == "name" ? Programme.NameMaxLength : Programme.SummaryMaxLength;
+        string overlong = new string('あ', most + 10);
 
         var programme = Programme.Discover(
             field == "name" ? Broadcast(name: overlong) : Broadcast(summary: overlong),
@@ -186,9 +186,9 @@ public sealed class ProgrammeTests
     [InlineData("summary")]
     public void TextAlreadyCutIsNotSeenAsChangingWhenItArrivesAgain(string field)
     {
-        var most = field == "name" ? Programme.NameMaxLength : Programme.SummaryMaxLength;
-        var overlong = new string('あ', most + 10);
-        var broadcast = field == "name" ? Broadcast(name: overlong) : Broadcast(summary: overlong);
+        int most = field == "name" ? Programme.NameMaxLength : Programme.SummaryMaxLength;
+        string overlong = new string('あ', most + 10);
+        ProgrammeBroadcast broadcast = field == "name" ? Broadcast(name: overlong) : Broadcast(summary: overlong);
 
         var programme = Programme.Discover(broadcast, At);
 

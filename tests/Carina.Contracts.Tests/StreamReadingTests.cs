@@ -16,7 +16,7 @@ public sealed class StreamReadingTests
 
     private static string Padded(string enumToken)
     {
-        var detail = new string('x', 64 * 1024);
+        string detail = new string('x', 64 * 1024);
         return $$"""
             {"deviceId":"a0","kind":{{enumToken}},"state":"idle","sessionId":null,"detail":"{{detail}}"}
             """;
@@ -31,7 +31,7 @@ public sealed class StreamReadingTests
     [InlineData("[\"bs\"]")]
     public async Task AValueThisBuildDoesNotKnowStillReadsOverAStream(string enumToken)
     {
-        var tuner = await ReadOverAStreamAsync(
+        TunerSnapshot? tuner = await ReadOverAStreamAsync(
             Padded(enumToken),
             DriverJson.Context.TunerSnapshot
         );
@@ -50,13 +50,13 @@ public sealed class StreamReadingTests
     [InlineData("[\"x\"]")]
     public async Task AnIdentifierThisBuildCannotTakeStillReadsOverAStream(string idToken)
     {
-        var detail = new string('x', 64 * 1024);
-        var json =
+        string detail = new string('x', 64 * 1024);
+        string json =
             $$"""
             {"deviceId":"a0","kind":"terrestrial","state":"busy","sessionId":{{idToken}},"detail":"{{detail}}"}
             """;
 
-        var tuner = await ReadOverAStreamAsync(json, DriverJson.Context.TunerSnapshot);
+        TunerSnapshot? tuner = await ReadOverAStreamAsync(json, DriverJson.Context.TunerSnapshot);
 
         Assert.NotNull(tuner);
         Assert.True(tuner.SessionId.IsUnset);
@@ -66,9 +66,9 @@ public sealed class StreamReadingTests
     [Fact]
     public async Task AListReadsOverAStream()
     {
-        var json = $"[{Padded("\"terrestrial\"")},{Padded("\"satellite\"")}]";
+        string json = $"[{Padded("\"terrestrial\"")},{Padded("\"satellite\"")}]";
 
-        var tuners = await ReadOverAStreamAsync(
+        IReadOnlyList<TunerSnapshot>? tuners = await ReadOverAStreamAsync(
             json,
             DriverJson.Context.IReadOnlyListTunerSnapshot
         );

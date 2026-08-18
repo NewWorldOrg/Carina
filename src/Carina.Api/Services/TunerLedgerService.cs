@@ -13,14 +13,14 @@ public sealed class TunerLedgerService(IDriverClient driver, TimeProvider clock)
     public async Task<ServiceResult<TunerLedgerView, TunerLedgerFailure>> ReadAsync(
         CancellationToken cancellationToken)
     {
-        var ledger = await driver.GetTunerLedgerAsync(cancellationToken);
+        DriverCall<TunerLedgerDto> ledger = await driver.GetTunerLedgerAsync(cancellationToken);
 
-        if (!ledger.TryGetValue(out var document))
+        if (!ledger.TryGetValue(out TunerLedgerDto? document))
         {
             return Failed<TunerLedgerView, TunerLedgerDto>(ledger);
         }
 
-        var tuners = await driver.GetTunersAsync(cancellationToken);
+        DriverCall<IReadOnlyList<TunerSnapshot>> tuners = await driver.GetTunersAsync(cancellationToken);
 
         return ServiceResult<TunerLedgerView, TunerLedgerFailure>.Success(
             Merge(document, tuners));
@@ -29,21 +29,21 @@ public sealed class TunerLedgerService(IDriverClient driver, TimeProvider clock)
     public async Task<ServiceResult<DetectedTunersView, TunerLedgerFailure>> DetectAsync(
         CancellationToken cancellationToken)
     {
-        var detection = await driver.GetDetectedDevicesAsync(cancellationToken);
+        DriverCall<IReadOnlyList<DetectedDeviceDto>> detection = await driver.GetDetectedDevicesAsync(cancellationToken);
 
-        if (!detection.TryGetValue(out var detected))
+        if (!detection.TryGetValue(out IReadOnlyList<DetectedDeviceDto>? detected))
         {
             return Failed<DetectedTunersView, IReadOnlyList<DetectedDeviceDto>>(detection);
         }
 
-        var ledger = await driver.GetTunerLedgerAsync(cancellationToken);
+        DriverCall<TunerLedgerDto> ledger = await driver.GetTunerLedgerAsync(cancellationToken);
 
-        if (!ledger.TryGetValue(out var document))
+        if (!ledger.TryGetValue(out TunerLedgerDto? document))
         {
             return Failed<DetectedTunersView, TunerLedgerDto>(ledger);
         }
 
-        var tuners = await driver.GetTunersAsync(cancellationToken);
+        DriverCall<IReadOnlyList<TunerSnapshot>> tuners = await driver.GetTunersAsync(cancellationToken);
 
         return ServiceResult<DetectedTunersView, TunerLedgerFailure>.Success(
             Compare(detected, document, tuners.Value ?? []));
@@ -69,14 +69,14 @@ public sealed class TunerLedgerService(IDriverClient driver, TimeProvider clock)
                 TunerLedgerFailure.Malformed);
         }
 
-        var replaced = await driver.ReplaceTunerLedgerAsync(wanted, cancellationToken);
+        DriverCall<TunerLedgerDto> replaced = await driver.ReplaceTunerLedgerAsync(wanted, cancellationToken);
 
-        if (!replaced.TryGetValue(out var document))
+        if (!replaced.TryGetValue(out TunerLedgerDto? document))
         {
             return Failed<TunerLedgerView, TunerLedgerDto>(replaced);
         }
 
-        var tuners = await driver.GetTunersAsync(cancellationToken);
+        DriverCall<IReadOnlyList<TunerSnapshot>> tuners = await driver.GetTunersAsync(cancellationToken);
 
         return ServiceResult<TunerLedgerView, TunerLedgerFailure>.Success(Merge(document, tuners));
     }
@@ -86,16 +86,16 @@ public sealed class TunerLedgerService(IDriverClient driver, TimeProvider clock)
         bool disabled,
         CancellationToken cancellationToken)
     {
-        var toggled = await driver.ToggleTunerAsync(deviceId, disabled, cancellationToken);
+        DriverCall<TunerSnapshot> toggled = await driver.ToggleTunerAsync(deviceId, disabled, cancellationToken);
 
-        return toggled.TryGetValue(out var snapshot)
+        return toggled.TryGetValue(out TunerSnapshot? snapshot)
             ? ServiceResult<TunerSnapshot, TunerLedgerFailure>.Success(snapshot)
             : Failed<TunerSnapshot, TunerSnapshot>(toggled);
     }
 
     private TunerLedgerView Merge(TunerLedgerDto document, DriverCall<IReadOnlyList<TunerSnapshot>> tuners)
     {
-        var observed = tuners.TryGetValue(out var snapshots)
+        TunerObservations? observed = tuners.TryGetValue(out IReadOnlyList<TunerSnapshot>? snapshots)
             ? new TunerObservations(snapshots, clock.GetUtcNow())
             : null;
 
@@ -123,7 +123,7 @@ public sealed class TunerLedgerService(IDriverClient driver, TimeProvider clock)
             [
                 .. observed
                     .Where(tuner => kept.Contains(tuner.DeviceId))
-                    .Where(tuner => known.TryGetValue(tuner.DeviceId, out var device)
+                    .Where(tuner => known.TryGetValue(tuner.DeviceId, out DetectedDeviceDto? device)
                         && device.Detection is DeviceDetection.Detected
                         && !device.Kinds.Contains(tuner.Kind))
                     .Select(tuner => new TunerKindMismatch(
