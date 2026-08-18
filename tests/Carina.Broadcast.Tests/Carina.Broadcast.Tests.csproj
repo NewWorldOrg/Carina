@@ -7,6 +7,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Text/Broadcasts/eit-text-samples.tsv" />
+    <EmbeddedResource Include="Tables/Broadcasts/eit-sections.bin" />
   </ItemGroup>
 
 </Project>
