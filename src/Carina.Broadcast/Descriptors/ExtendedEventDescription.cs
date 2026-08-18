@@ -6,12 +6,22 @@ namespace Carina.Broadcast.Descriptors;
 
 public sealed record ExtendedEventItem(string Heading, string Text);
 
-public sealed record ExtendedEventDescription(
-    string Language,
-    IReadOnlyList<ExtendedEventItem> Items,
-    string Text)
+public sealed class ExtendedEventDescription
 {
     private const int HeaderSize = 5;
+
+    private ExtendedEventDescription(string language, IReadOnlyList<ExtendedEventItem> items, string text)
+    {
+        Language = language;
+        Items = items;
+        Text = text;
+    }
+
+    public string Language { get; }
+
+    public IReadOnlyList<ExtendedEventItem> Items { get; }
+
+    public string Text { get; }
 
     public static bool TryRead(
         IReadOnlyList<Descriptor> descriptors,

@@ -2,14 +2,26 @@ using Carina.Broadcast.Descriptors;
 
 namespace Carina.Broadcast.Tables;
 
-public sealed record DescribedEvent(
-    int EventId,
-    DateTimeOffset StartsAt,
-    TimeSpan? Runs,
-    RunningStatus Status,
-    bool IsScrambled,
-    IReadOnlyList<Descriptor> Descriptors)
+public sealed class DescribedEvent(
+    int eventId,
+    DateTimeOffset startsAt,
+    TimeSpan? runs,
+    RunningStatus status,
+    bool isScrambled,
+    IReadOnlyList<Descriptor> descriptors)
 {
+    public int EventId { get; } = eventId;
+
+    public DateTimeOffset StartsAt { get; } = startsAt;
+
+    public TimeSpan? Runs { get; } = runs;
+
+    public RunningStatus Status { get; } = status;
+
+    public bool IsScrambled { get; } = isScrambled;
+
+    public IReadOnlyList<Descriptor> Descriptors { get; } = descriptors;
+
     public DateTimeOffset? EndsAt => Runs is { } runs ? StartsAt + runs : null;
 
     public ShortEventDescription? Described
@@ -39,7 +51,7 @@ public sealed record DescribedEvent(
             {
                 if (ContentGenres.TryRead(descriptor, out var genres))
                 {
-                    return genres.Genres;
+                    return genres;
                 }
             }
 

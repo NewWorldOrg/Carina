@@ -4,11 +4,13 @@ namespace Carina.Broadcast.Descriptors;
 
 public sealed record ContentGenre(int Kind, int Sort, int UserKind, int UserSort);
 
-public sealed record ContentGenres(IReadOnlyList<ContentGenre> Genres)
+public static class ContentGenres
 {
     private const int PairSize = 2;
 
-    public static bool TryRead(Descriptor descriptor, [NotNullWhen(true)] out ContentGenres? genres)
+    public static bool TryRead(
+        Descriptor descriptor,
+        [NotNullWhen(true)] out IReadOnlyList<ContentGenre>? genres)
     {
         ArgumentNullException.ThrowIfNull(descriptor);
         genres = null;
@@ -30,7 +32,7 @@ public sealed record ContentGenres(IReadOnlyList<ContentGenre> Genres)
                 payload[at + 1] & 0x0F));
         }
 
-        genres = new ContentGenres(found);
+        genres = found;
 
         return true;
     }

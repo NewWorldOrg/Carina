@@ -16,6 +16,7 @@ public sealed class EventDescriptorTests
         Assert.Equal([0, 11], genres.Select(genre => genre.Kind));
         Assert.Equal([15, 5], genres.Select(genre => genre.Sort));
         Assert.Equal([15, 15], genres.Select(genre => genre.UserKind));
+        Assert.Equal([15, 15], genres.Select(genre => genre.UserSort));
     }
 
     [Fact]
@@ -61,14 +62,35 @@ public sealed class EventDescriptorTests
     }
 
     [Fact]
-    public void AnAudioStreamInTwoLanguagesNamesTheSecondOneToo()
+    public void AnAudioStreamInTwoLanguagesNamesTheSecondOneAndStillReadsItsText()
     {
         var audio = Assert.Single(Read(
             DescriptorTags.AudioComponent,
-            [0xF2, 0x03, 0x10, 0x0F, 0xFF, 0xEF, 0x6A, 0x70, 0x6E, 0x65, 0x6E, 0x67]).AudioComponents);
+            [
+                0xF2, 0x03, 0x10, 0x0F, 0xFF, 0xEF,
+                0x6A, 0x70, 0x6E,
+                0x65, 0x6E, 0x67,
+                0x1B, 0x28, 0x4A, 0x41, 0x42,
+            ]).AudioComponents);
 
         Assert.Equal("jpn", audio.Language);
         Assert.Equal("eng", audio.SecondLanguage);
+        Assert.Equal("AB", audio.Text);
+    }
+
+    [Fact]
+    public void AnAudioStreamInOneLanguageReadsItsTextFromRightAfterThatLanguage()
+    {
+        var audio = Assert.Single(Read(
+            DescriptorTags.AudioComponent,
+            [
+                0xF2, 0x03, 0x10, 0x0F, 0xFF, 0x6F,
+                0x6A, 0x70, 0x6E,
+                0x1B, 0x28, 0x4A, 0x41, 0x42,
+            ]).AudioComponents);
+
+        Assert.Equal(string.Empty, audio.SecondLanguage);
+        Assert.Equal("AB", audio.Text);
     }
 
     [Fact]
@@ -91,25 +113,50 @@ public sealed class EventDescriptorTests
         Assert.Equal(
             [(1048, 47300), (1049, 47300)],
             grouping.Events.Select(carried => (carried.ServiceId, carried.EventId)));
-
-        Assert.All(grouping.Events, carried => Assert.Equal(0, carried.NetworkId));
     }
 
     [Fact]
-    public void EventsCarriedOverFromAnotherNetworkNameThatNetwork()
+    public void EventsCarriedOverFromAnotherNetworkNameBothSidesOfTheHandover()
     {
         var grouping = Assert.Single(Read(
             DescriptorTags.EventGroup,
-            [0x41, 0x7F, 0xE3, 0x7F, 0xE4, 0x04, 0x18, 0xB8, 0xC4]).Groupings);
+            [
+                0x41,
+                0x04, 0x18, 0xB8, 0xC4,
+                0x7F, 0xE3, 0x7F, 0xE4, 0x04, 0x19, 0xB8, 0xC5,
+            ]).Groupings);
 
         Assert.Equal(EventGroupKind.RelayedFromAnotherNetwork, grouping.Kind);
 
-        var carried = Assert.Single(grouping.Events);
+        var here = Assert.Single(grouping.Events);
 
-        Assert.Equal(32739, carried.NetworkId);
-        Assert.Equal(32740, carried.TransportStreamId);
-        Assert.Equal(1048, carried.ServiceId);
-        Assert.Equal(47300, carried.EventId);
+        Assert.Equal(1048, here.ServiceId);
+        Assert.Equal(47300, here.EventId);
+
+        var there = Assert.Single(grouping.Elsewhere);
+
+        Assert.Equal(32739, there.NetworkId);
+        Assert.Equal(32740, there.TransportStreamId);
+        Assert.Equal(1049, there.ServiceId);
+        Assert.Equal(47301, there.EventId);
+    }
+
+    [Fact]
+    public void AHandoverWhoseFarSideIsCutShortIsNotRead()
+    {
+        Assert.Empty(Read(
+            DescriptorTags.EventGroup,
+            [0x41, 0x04, 0x18, 0xB8, 0xC4, 0x7F, 0xE3, 0x7F, 0xE4]).Groupings);
+    }
+
+    [Fact]
+    public void AGroupInThisNetworkCarriesNothingFromAnywhereElse()
+    {
+        var grouping = Assert.Single(Read(
+            DescriptorTags.EventGroup,
+            [0x12, 0x04, 0x18, 0xB8, 0xC4, 0x04, 0x19, 0xB8, 0xC4]).Groupings);
+
+        Assert.Empty(grouping.Elsewhere);
     }
 
     [Fact]
