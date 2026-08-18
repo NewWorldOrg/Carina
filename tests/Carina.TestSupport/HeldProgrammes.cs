@@ -10,6 +10,8 @@ public sealed class HeldProgrammes : IProgrammeRepository
 
     public int Wiped { get; private set; }
 
+    private long handedOut;
+
     public Task<Programme?> FindAsync(ProgrammeId id, CancellationToken cancellationToken)
         => Task.FromResult(Programmes.FirstOrDefault(programme => programme.Id.Equals(id)));
 
@@ -91,6 +93,9 @@ public sealed class HeldProgrammes : IProgrammeRepository
             search.Page,
             search.PerPage));
     }
+
+    public Task<long> NextRevisionAsync(CancellationToken cancellationToken)
+        => Task.FromResult(++handedOut);
 
     public Task<int> ForgetEverythingAsync(CancellationToken cancellationToken)
     {
