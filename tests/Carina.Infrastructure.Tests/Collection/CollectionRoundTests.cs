@@ -34,7 +34,7 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
 
         RoundResult walked = await round.WalkAsync(
             [Stream(network, 1, 22), Stream(network, 2, 24)],
-            Cancel);
+            Cancel, Cancel);
 
         Assert.Equal(new RoundResult(2, 2, 0), walked);
 
@@ -57,7 +57,7 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
 
         await using CarinaDbContext context = database.Open();
 
-        RoundResult walked = await Round(driver, context).WalkAsync([Stream(network, 1, 22)], Cancel);
+        RoundResult walked = await Round(driver, context).WalkAsync([Stream(network, 1, 22)], Cancel, Cancel);
 
         Assert.Equal(new RoundResult(1, 0, 1), walked);
 
@@ -82,9 +82,9 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
         await using CarinaDbContext context = database.Open();
         CollectionRound round = Round(driver, context);
 
-        await round.WalkAsync([Stream(network, 1, 22)], Cancel);
+        await round.WalkAsync([Stream(network, 1, 22)], Cancel, Cancel);
 
-        Assert.Equal(new RoundResult(0, 0, 0), await round.WalkAsync([Stream(network, 1, 22)], Cancel));
+        Assert.Equal(new RoundResult(0, 0, 0), await round.WalkAsync([Stream(network, 1, 22)], Cancel, Cancel));
     }
 
     [Fact]
@@ -98,8 +98,8 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
         await using CarinaDbContext context = database.Open();
         CollectionRound round = Round(driver, context, new CollectionSettings { BeforeRetrying = TimeSpan.Zero });
 
-        await round.WalkAsync([Stream(network, 1, 22)], Cancel);
-        await round.WalkAsync([Stream(network, 1, 22)], Cancel);
+        await round.WalkAsync([Stream(network, 1, 22)], Cancel, Cancel);
+        await round.WalkAsync([Stream(network, 1, 22)], Cancel, Cancel);
 
         await using CarinaDbContext reading = database.Open();
         StreamVisit? visit = await new StreamVisitRepository(reading).FindAsync(
@@ -123,7 +123,7 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
 
         RoundResult walked = await Round(driver, context).WalkAsync(
             [Stream(network, 1, 22), Stream(network, 2, 24)],
-            Cancel);
+            Cancel, Cancel);
 
         Assert.Equal(2, walked.Visited);
     }
@@ -135,7 +135,7 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
 
         Assert.Equal(
             new RoundResult(0, 0, 0),
-            await Round(new ScriptedDriverClient(), context).WalkAsync([], Cancel));
+            await Round(new ScriptedDriverClient(), context).WalkAsync([], Cancel, Cancel));
     }
 
     [Fact]
@@ -150,7 +150,7 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
         await using CarinaDbContext context = database.Open();
 
         RoundResult walked = await Round(driver, context, clock: clock)
-            .WalkAsync([Stream(network, 1, 22)], Cancel);
+            .WalkAsync([Stream(network, 1, 22)], Cancel, Cancel);
 
         Assert.Equal(new RoundResult(1, 1, 0), walked);
         Assert.Equal(2, clock.Waits.Count);
@@ -168,7 +168,7 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
         await using CarinaDbContext context = database.Open();
 
         RoundResult walked = await Round(driver, context, clock: new HurriedClock())
-            .WalkAsync([Stream(network, 1, 22), Stream(network, 2, 24)], Cancel);
+            .WalkAsync([Stream(network, 1, 22), Stream(network, 2, 24)], Cancel, Cancel);
 
         Assert.Equal(new RoundResult(0, 0, 0), walked);
 
