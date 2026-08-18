@@ -1,5 +1,7 @@
+using Carina.Broadcast.Descriptors;
 using Carina.Broadcast.Tables;
 using Carina.BroadcastTestSupport;
+using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Infrastructure.Collection;
@@ -18,7 +20,6 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
 {
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
-    private static int nextNetworkId = 40000;
 
     [Fact]
     public async Task EveryStreamIsVisitedAndWhatItGaveIsWrittenDown()
@@ -180,11 +181,76 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
         Assert.Equal(0, recorded.ConsecutiveIncomplete);
     }
 
+    [Fact]
+    public async Task AStreamDeclaringAServiceTheCatalogueDoesNotHoldSuggestsARescan()
+    {
+        int network = NextNetwork();
+        var driver = new ScriptedDriverClient();
+        var events = new SilentEvents();
+        var board = new RescanNoticeBoard(events, TimeProvider.System);
+
+        driver.Script(
+            TuningParameters.Terrestrial(22),
+            new ChannelScript { Bytes = [.. Schedule(network, 1), .. Described(network, 1, [1049, 1050])] });
+
+        await using CarinaDbContext context = database.Open();
+
+        await Round(driver, context, board: board).WalkAsync([Stream(network, 1, 22)], Cancel, Cancel);
+
+        RescanNotice only = Assert.Single(board.Standing);
+
+        Assert.Equal(RescanReason.ServicesAppeared, only.Hint.Reason);
+        Assert.Equal([1050], only.Hint.Services.Select(service => service.Value));
+        Assert.Equal([AppEventName.Tuners], events.Signalled);
+    }
+
+    [Fact]
+    public async Task AStreamDeclaringExactlyWhatWeHoldSuggestsNothing()
+    {
+        int network = NextNetwork();
+        var driver = new ScriptedDriverClient();
+        var events = new SilentEvents();
+        var board = new RescanNoticeBoard(events, TimeProvider.System);
+
+        driver.Script(
+            TuningParameters.Terrestrial(22),
+            new ChannelScript { Bytes = [.. Schedule(network, 1), .. Described(network, 1, [1049])] });
+
+        await using CarinaDbContext context = database.Open();
+
+        await Round(driver, context, board: board).WalkAsync([Stream(network, 1, 22)], Cancel, Cancel);
+
+        Assert.Empty(board.Standing);
+        Assert.Empty(events.Signalled);
+    }
+
+    private static byte[] Described(int network, int stream, IReadOnlyList<int> services)
+        => [.. new TransportStreamWriter(ServiceDescriptionTable.Pid)
+            .Sections(new SectionWriter
+            {
+                TableId = ServiceDescriptionTable.ActualStreamTableId,
+                TableIdExtension = stream,
+                LastSectionNumber = 0,
+                Body = new SdtWriter
+                {
+                    OriginalNetworkId = network,
+                    Services = [.. services.Select(service => SdtWriter.Service(
+                        service,
+                        SiDescriptorWriter.Service(
+                            (int)ServiceKind.Television,
+                            [],
+                            new AribTextWriter().Kanji("試験").ToArray())))],
+                }.ToBody(),
+            }.ToBytes())
+            .Packets
+            .SelectMany(packet => packet.ToArray())];
+
     private static CollectionRound Round(
         ScriptedDriverClient driver,
         CarinaDbContext context,
         CollectionSettings? settings = null,
-        TimeProvider? clock = null)
+        TimeProvider? clock = null,
+        RescanNoticeBoard? board = null)
     {
         var programmes = new ProgrammeRepository(context);
         CollectionSettings carried = settings ?? new CollectionSettings();
@@ -196,6 +262,7 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
                 driver,
                 new ProgrammeWriter(programmes, new UnguardedWrites(), new StillClock()),
                 carried),
+            board ?? new RescanNoticeBoard(new SilentEvents(), TimeProvider.System),
             carried,
             clock ?? TimeProvider.System,
             NullLogger<CollectionRound>.Instance);
@@ -232,5 +299,5 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
             .Packets
             .SelectMany(packet => packet.ToArray())];
 
-    private static int NextNetwork() => 40000 + (Interlocked.Increment(ref nextNetworkId) % 20000);
+    private static int NextNetwork() => BroadcastIds.NextNetwork();
 }

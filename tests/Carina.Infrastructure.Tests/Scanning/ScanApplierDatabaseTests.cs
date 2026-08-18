@@ -18,12 +18,11 @@ public sealed class ScanApplierDatabaseTests(RepositoryDatabase database)
     private static readonly CancellationToken Cancel = CancellationToken.None;
     private static readonly int[] Services = [1, 2, 3];
 
-    private static int nextNetworkId = 60_000;
 
     [Fact]
     public async Task EveryServiceOnOneStreamIsWrittenWithItsOwnCandidate()
     {
-        int network = Interlocked.Increment(ref nextNetworkId);
+        int network = BroadcastIds.NextNetwork();
         var carrying = TuningParameters.Terrestrial(PhysicalChannel);
         var measured = SignalMeasurement.WithLock(At, 21_000);
 
@@ -56,7 +55,7 @@ public sealed class ScanApplierDatabaseTests(RepositoryDatabase database)
     [Fact]
     public async Task RescanningTheSameStreamRenamesTheServicesAndLeavesTheirChannelsAlone()
     {
-        int network = Interlocked.Increment(ref nextNetworkId);
+        int network = BroadcastIds.NextNetwork();
         var carrying = TuningParameters.Terrestrial(PhysicalChannel);
 
         await ApplyAsync(new ScanDifference(
@@ -96,7 +95,7 @@ public sealed class ScanApplierDatabaseTests(RepositoryDatabase database)
     [Fact]
     public async Task AStreamThatHasGoneTakesItsServicesAndTheirChannelsWithIt()
     {
-        int network = Interlocked.Increment(ref nextNetworkId);
+        int network = BroadcastIds.NextNetwork();
         var carrying = TuningParameters.Terrestrial(PhysicalChannel);
 
         await ApplyAsync(new ScanDifference(
@@ -135,7 +134,7 @@ public sealed class ScanApplierDatabaseTests(RepositoryDatabase database)
     [Fact]
     public async Task AnApplyThatFailsPartWayThroughLeavesNothingBehind()
     {
-        int network = Interlocked.Increment(ref nextNetworkId);
+        int network = BroadcastIds.NextNetwork();
         var carrying = TuningParameters.Terrestrial(PhysicalChannel);
         var difference = new ScanDifference(
             [.. Services.Select(service => Change(

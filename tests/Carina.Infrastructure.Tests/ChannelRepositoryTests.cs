@@ -13,7 +13,6 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
     private static readonly DateTime At = new(2026, 8, 14, 0, 0, 0, DateTimeKind.Utc);
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
-    private static int nextNetworkId = 50_000;
 
     [Fact]
     public async Task AServiceComesBackWithTheIdentifiersItWasStoredUnder()
@@ -327,7 +326,7 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
             after.Select(stream => stream.TransportStreamId));
     }
 
-    private static int NextNetwork() => Interlocked.Increment(ref nextNetworkId);
+    private static int NextNetwork() => BroadcastIds.NextNetwork();
 
     private static BroadcastService Service(int network, int service)
         => BroadcastService.Discover(

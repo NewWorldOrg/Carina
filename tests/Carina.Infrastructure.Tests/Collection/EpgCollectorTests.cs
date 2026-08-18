@@ -22,7 +22,6 @@ public sealed class EpgCollectorTests(RepositoryDatabase database)
 {
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
-    private static int nextNetworkId;
 
     [Fact]
     public async Task ASweepVisitsWhatTheDirectoryOffersAndWritesTheGuideItGathers()
@@ -151,6 +150,9 @@ public sealed class EpgCollectorTests(RepositoryDatabase database)
         services.AddSingleton<IDriverClient>(driver);
         services.AddSingleton(new CollectionSettings());
         services.AddSingleton<TimeProvider>(TimeProvider.System);
+        services.AddSingleton(provider => new RescanNoticeBoard(
+            new SilentEvents(),
+            provider.GetRequiredService<TimeProvider>()));
         services.AddSingleton<IDriverSignals>(relay ?? new DriverSignalRelay(NullLogger<DriverSignalRelay>.Instance));
         services.AddScoped(scope => new ProgrammeWriter(
             scope.GetRequiredService<IProgrammeRepository>(),
@@ -164,6 +166,7 @@ public sealed class EpgCollectorTests(RepositoryDatabase database)
             scope.GetRequiredService<IStreamVisitRepository>(),
             scope.GetRequiredService<IProgrammeRepository>(),
             scope.GetRequiredService<StreamVisitor>(),
+            scope.GetRequiredService<RescanNoticeBoard>(),
             scope.GetRequiredService<CollectionSettings>(),
             scope.GetRequiredService<TimeProvider>(),
             NullLogger<CollectionRound>.Instance));
@@ -181,7 +184,7 @@ public sealed class EpgCollectorTests(RepositoryDatabase database)
                 [new ServiceId(1049)]),
         ]);
 
-    private static int NextNetwork() => 20000 + (Interlocked.Increment(ref nextNetworkId) % 10000);
+    private static int NextNetwork() => BroadcastIds.NextNetwork();
 
     private static byte[] Schedule(int network)
         => [.. new TransportStreamWriter(EventInformationTable.Pid)

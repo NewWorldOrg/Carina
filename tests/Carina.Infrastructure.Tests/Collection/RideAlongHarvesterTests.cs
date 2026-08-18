@@ -22,7 +22,6 @@ public sealed class RideAlongHarvesterTests(RepositoryDatabase database)
 {
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
-    private static int nextNetworkId;
 
     [Fact]
     public async Task ARecordingTakesTheGuideAlongWithItWithoutAskingForATuner()
@@ -168,7 +167,7 @@ public sealed class RideAlongHarvesterTests(RepositoryDatabase database)
             Cancel);
     }
 
-    private static int NextNetwork() => 30000 + (Interlocked.Increment(ref nextNetworkId) % 10000);
+    private static int NextNetwork() => BroadcastIds.NextNetwork();
 
     private static byte[] Schedule(int network)
         => [.. new TransportStreamWriter(EventInformationTable.Pid)

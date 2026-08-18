@@ -1,5 +1,6 @@
 using System.Buffers;
 
+using Carina.Broadcast.Tables;
 using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
@@ -19,6 +20,8 @@ public sealed record VisitResult(
     public int RejectedTables { get; init; }
 
     public bool WorthWaitingOut { get; init; }
+
+    public IReadOnlyList<ServiceDescriptionTable> Descriptions { get; init; } = [];
 }
 
 public sealed class StreamVisitor(
@@ -145,6 +148,7 @@ public sealed class StreamVisitor(
 
         return new VisitResult(done.Outcome, written, null)
         {
+            Descriptions = done.Descriptions,
             UnreadablePackets = done.UnreadablePackets,
             RejectedSections = done.RejectedSections,
             RejectedTables = done.RejectedTables,

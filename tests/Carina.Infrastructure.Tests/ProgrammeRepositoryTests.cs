@@ -3,6 +3,8 @@ using Carina.Domain.Programmes;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
 
+using Carina.TestSupport;
+
 namespace Carina.Infrastructure.Tests;
 
 [Collection(RepositoryDatabaseCollection.Name)]
@@ -13,7 +15,6 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
-    private static int nextNetworkId = 40000;
 
     [Fact]
     public async Task AProgrammeComesBackWithEverythingItWasBroadcastWith()
@@ -197,7 +198,7 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
         Assert.Null(await new ProgrammeRepository(reading).CoveredUntilAsync(NextNetwork(), 1049, Cancel));
     }
 
-    private static int NextNetwork() => Interlocked.Increment(ref nextNetworkId);
+    private static int NextNetwork() => BroadcastIds.NextNetwork();
 
     private static ProgrammeId Id(int network, int carried = 1)
         => new(new NetworkId(network), new ServiceId(1049), new EventId(carried));
