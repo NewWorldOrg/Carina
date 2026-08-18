@@ -11,6 +11,7 @@ public sealed class CollectionRound(
     IStreamVisitRepository visits,
     IProgrammeRepository programmes,
     StreamVisitor visitor,
+    RescanNoticeBoard rescans,
     CollectionSettings settings,
     TimeProvider clock,
     ILogger<CollectionRound> logger)
@@ -84,10 +85,35 @@ public sealed class CollectionRound(
                 cameBackShort++;
             }
 
+            NoticeWhatTheStreamDeclared(stream, visit);
+
             await RecordAsync(stream, visit, clock.GetElapsedTime(began), abort);
         }
 
         return new RoundResult(visited, gathered, cameBackShort);
+    }
+
+    private void NoticeWhatTheStreamDeclared(BroadcastStream stream, VisitResult visit)
+    {
+        ServiceId[] declared =
+        [
+            .. visit.Descriptions
+                .Where(description => description.IsActualStream
+                    && description.TransportStreamId == stream.TransportStreamId.Value)
+                .SelectMany(description => description.Services)
+                .Select(service => new ServiceId(service.ServiceId)),
+        ];
+
+        if (declared.Length == 0)
+        {
+            return;
+        }
+
+        rescans.Post(RescanHints.Between(
+            stream.NetworkId,
+            stream.TransportStreamId,
+            declared,
+            stream.Services));
     }
 
     private async Task<VisitResult> VisitAsync(BroadcastStream stream, CancellationToken abort)

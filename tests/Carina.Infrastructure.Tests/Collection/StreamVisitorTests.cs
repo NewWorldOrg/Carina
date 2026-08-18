@@ -19,7 +19,6 @@ public sealed class StreamVisitorTests(RepositoryDatabase database)
 
     private static readonly TuningParameters Channel = TuningParameters.Terrestrial(22);
 
-    private static int nextNetworkId = 60000;
 
     [Fact]
     public async Task AVisitGathersTheTablesAndWritesTheProgrammesTheyCarry()
@@ -202,5 +201,5 @@ public sealed class StreamVisitorTests(RepositoryDatabase database)
             .SelectMany(packet => packet.ToArray())];
     }
 
-    private static int NextNetwork() => Interlocked.Increment(ref nextNetworkId);
+    private static int NextNetwork() => BroadcastIds.NextNetwork();
 }

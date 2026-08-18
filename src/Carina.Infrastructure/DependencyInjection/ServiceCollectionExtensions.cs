@@ -71,6 +71,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton(DriverSupervisionSettings.Default);
         services.TryAddSingleton(ScanSettings.Default);
         services.TryAddSingleton(new CollectionSettings());
+        services.TryAddSingleton<RescanNoticeBoard>();
         services.TryAddSingleton(new AppEventHub());
         services.TryAddSingleton<IAppEventPublisher>(provider =>
             provider.GetRequiredService<AppEventHub>());

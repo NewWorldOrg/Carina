@@ -19,7 +19,6 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
 
     private static readonly DateTime At = StillClock.Now.UtcDateTime;
 
-    private static int nextNetworkId = 50000;
 
     [Fact]
     public async Task ATableTurnsIntoProgrammesTheStoreCanHandBack()
@@ -145,7 +144,7 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
     private static ProgrammeWriter Writer(CarinaDbContext context)
         => new(new ProgrammeRepository(context), new UnguardedWrites(), new StillClock());
 
-    private static int NextNetwork() => Interlocked.Increment(ref nextNetworkId);
+    private static int NextNetwork() => BroadcastIds.NextNetwork();
 
     private static ProgrammeId Id(int network, int carried)
         => new(new NetworkId(network), new ServiceId(1049), new EventId(carried));

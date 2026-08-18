@@ -10,15 +10,20 @@ public sealed record HarvestedStream(
     IReadOnlyList<EventInformationTable> Tables,
     long UnreadablePackets,
     int RejectedSections,
-    int RejectedTables);
+    int RejectedTables)
+{
+    public IReadOnlyList<ServiceDescriptionTable> Descriptions { get; init; } = [];
+}
 
 public sealed class StreamHarvest
 {
-    private readonly SectionReader reader = new(EventInformationTable.Pid);
+    private readonly SectionReader reader = new(EventInformationTable.Pid, ServiceDescriptionTable.Pid);
 
     private readonly List<EventInformationTable> tables = [];
 
     private readonly ScheduleProgress progress = new();
+
+    private readonly List<ServiceDescriptionTable> descriptions = [];
 
     private int rejectedSections;
 
@@ -71,6 +76,17 @@ public sealed class StreamHarvest
                 continue;
             }
 
+            if (assembled.Pid == ServiceDescriptionTable.Pid)
+            {
+                if (ServiceDescriptionTable.Read(assembled.Section)
+                    is TableRead<ServiceDescriptionTable>.Parsed described)
+                {
+                    descriptions.Add(described.Table);
+                }
+
+                continue;
+            }
+
             if (EventInformationTable.Read(assembled.Section) is not TableRead<EventInformationTable>.Parsed parsed)
             {
                 rejectedTables++;
@@ -81,6 +97,20 @@ public sealed class StreamHarvest
             tables.Add(parsed.Table);
             progress.Saw(parsed.Table);
         }
+    }
+
+    public IReadOnlyList<ServiceDescriptionTable> TakeWhatWasDescribed()
+    {
+        if (descriptions.Count == 0)
+        {
+            return [];
+        }
+
+        ServiceDescriptionTable[] taken = [.. descriptions];
+
+        descriptions.Clear();
+
+        return taken;
     }
 
     public IReadOnlyList<EventInformationTable> TakeWhatIsGathered()
@@ -118,5 +148,8 @@ public sealed class StreamHarvest
     }
 
     private HarvestedStream Harvested(VisitOutcome outcome)
-        => new(outcome, progress, [.. tables], reader.UnreadablePackets, rejectedSections, rejectedTables);
+        => new(outcome, progress, [.. tables], reader.UnreadablePackets, rejectedSections, rejectedTables)
+        {
+            Descriptions = [.. descriptions],
+        };
 }
