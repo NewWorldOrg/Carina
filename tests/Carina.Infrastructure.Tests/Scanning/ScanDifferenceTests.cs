@@ -208,7 +208,15 @@ public sealed class ScanDifferenceTests
 
         harness.Services.Services.Add(
             BroadcastService.Discover(networkId, service, name, ServiceCategory.Television, At));
-        harness.Candidates.Candidates.Add(
-            CandidateChannel.Discover(CandidateChannelId.New(), networkId, service, tuning, At));
+        CandidateChannel candidate = CandidateChannel.Discover(
+            CandidateChannelId.New(),
+            networkId,
+            service,
+            tuning,
+            At);
+
+        candidate.CarriedBy(new TransportStreamId(SomeStreamId));
+
+        harness.Candidates.Candidates.Add(candidate);
     }
 }
