@@ -15,6 +15,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ChannelCatalogService>();
         services.AddScoped<CollectionStatusService>();
         services.AddScoped<CollectionBoostService>();
+        services.AddScoped<EpgRebuildService>();
 
         return services;
     }

@@ -112,6 +112,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "patchTuner",
                 "putSelectedChannel",
                 "putTuners",
+                "rebuildEpg",
                 "restartDriver",
                 "startScan",
             ],
