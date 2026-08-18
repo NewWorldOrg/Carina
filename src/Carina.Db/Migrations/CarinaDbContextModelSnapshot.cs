@@ -297,6 +297,142 @@ namespace Carina.Db.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Carina.Domain.Programmes.Programme", b =>
+                {
+                    b.Property<int>("NetworkId")
+                        .HasColumnType("integer")
+                        .HasColumnName("network_id");
+
+                    b.Property<int>("ServiceId")
+                        .HasColumnType("integer")
+                        .HasColumnName("service_id");
+
+                    b.Property<int>("EventId")
+                        .HasColumnType("integer")
+                        .HasColumnName("event_id");
+
+                    b.Property<DateTime?>("EndsAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("end_at");
+
+                    b.Property<string>("Genres")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("genres");
+
+                    b.Property<bool>("HasSubtitles")
+                        .HasColumnType("boolean")
+                        .HasColumnName("has_subtitles");
+
+                    b.Property<bool>("IsShadow")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_shadow");
+
+                    b.Property<string>("Items")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("items");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Related")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("related");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("source");
+
+                    b.Property<DateTime>("StartsAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("start_at");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .HasMaxLength(4096)
+                        .HasColumnType("character varying(4096)")
+                        .HasColumnName("summary");
+
+                    b.Property<int>("TransportStreamId")
+                        .HasColumnType("integer")
+                        .HasColumnName("transport_stream_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("NetworkId", "ServiceId", "EventId")
+                        .HasName("pk_programme");
+
+                    b.HasIndex("StartsAt")
+                        .HasDatabaseName("ix_programme_start_at");
+
+                    b.HasIndex("UpdatedAt")
+                        .HasDatabaseName("ix_programme_updated_at");
+
+                    b.ToTable("programme", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_programme_runs_forward", "end_at IS NULL OR end_at > start_at");
+
+                            t.HasCheckConstraint("ck_programme_source", "source IN ('PresentFollowing', 'ScheduleBasic', 'ScheduleExtended')");
+                        });
+                });
+
+            modelBuilder.Entity("Carina.Domain.Programmes.StreamVisit", b =>
+                {
+                    b.Property<int>("NetworkId")
+                        .HasColumnType("integer")
+                        .HasColumnName("network_id");
+
+                    b.Property<int>("TransportStreamId")
+                        .HasColumnType("integer")
+                        .HasColumnName("transport_stream_id");
+
+                    b.Property<int>("ConsecutiveIncomplete")
+                        .HasColumnType("integer")
+                        .HasColumnName("consecutive_incomplete");
+
+                    b.Property<DateTime>("LastAttemptedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_attempted_at");
+
+                    b.Property<DateTime?>("LastCompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_completed_at");
+
+                    b.Property<int>("LastDurationMilliseconds")
+                        .HasColumnType("integer")
+                        .HasColumnName("last_duration_milliseconds");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("outcome");
+
+                    b.HasKey("NetworkId", "TransportStreamId")
+                        .HasName("pk_stream_visit");
+
+                    b.HasIndex("LastCompletedAt")
+                        .HasDatabaseName("ix_stream_visit_last_completed_at");
+
+                    b.ToTable("stream_visit", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_stream_visit_completion", "last_completed_at IS NULL OR last_completed_at <= last_attempted_at");
+
+                            t.HasCheckConstraint("ck_stream_visit_counts", "consecutive_incomplete >= 0 AND last_duration_milliseconds >= 0");
+
+                            t.HasCheckConstraint("ck_stream_visit_outcome", "outcome IN ('Complete', 'BasicOnly', 'Incomplete', 'Interrupted', 'NoLock', 'NoBytes')");
+                        });
+                });
+
             modelBuilder.Entity("Carina.Domain.Scans.ScanRun", b =>
                 {
                     b.Property<Guid>("Id")

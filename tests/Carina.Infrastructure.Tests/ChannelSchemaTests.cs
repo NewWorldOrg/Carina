@@ -192,9 +192,11 @@ public sealed class ChannelSchemaTests
             [
                 "broadcast_service",
                 "candidate_channel",
+                "programme",
                 "satellite_transport_stream",
                 "scan_run",
                 "scan_run_attempt",
+                "stream_visit",
             ],
             Schema(context).GetEntityTypes()
                 .Where(entity => entity.FindOwnership() is null)

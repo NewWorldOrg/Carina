@@ -3,6 +3,7 @@ using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.DriverStatus;
 using Carina.Domain.Events;
+using Carina.Domain.Programmes;
 using Carina.Domain.Scans;
 using Carina.Infrastructure.Configuration;
 using Carina.Infrastructure.Driver;
@@ -45,6 +46,7 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<IAtomicWrite, DatabaseAtomicWrite>();
         services.AddScoped<IBroadcastServiceRepository, BroadcastServiceRepository>();
+        services.AddScoped<IProgrammeRepository, ProgrammeRepository>();
         services.AddScoped<ICandidateChannelRepository, CandidateChannelRepository>();
         services.AddScoped<ISatelliteTransportStreamRepository, SatelliteTransportStreamRepository>();
         services.AddScoped<IScanRunRepository, ScanRunRepository>();
