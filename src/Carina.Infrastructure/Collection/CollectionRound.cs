@@ -1,6 +1,8 @@
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 
+using Microsoft.Extensions.Logging;
+
 namespace Carina.Infrastructure.Collection;
 
 public sealed record RoundResult(int Visited, int Gathered, int CameBackShort);
@@ -10,7 +12,8 @@ public sealed class CollectionRound(
     IProgrammeRepository programmes,
     StreamVisitor visitor,
     CollectionSettings settings,
-    TimeProvider clock)
+    TimeProvider clock,
+    ILogger<CollectionRound> logger)
 {
     public async Task<RoundResult> WalkAsync(
         IReadOnlyList<StreamToVisit> streams,
@@ -36,7 +39,21 @@ public sealed class CollectionRound(
             }
 
             var began = clock.GetTimestamp();
-            var visit = await visitor.VisitAsync(stream.Tuning, hurried: false, abort);
+            VisitResult visit;
+
+            try
+            {
+                visit = await visitor.VisitAsync(stream.Tuning, hurried: false, abort);
+            }
+            catch (Exception failure) when (failure is not OperationCanceledException)
+            {
+                logger.LogWarning(
+                    failure,
+                    "Visiting {NetworkId}-{TransportStreamId} failed; the walk carries on.",
+                    stream.NetworkId.Value,
+                    stream.TransportStreamId.Value);
+                visit = new VisitResult(VisitOutcome.Interrupted, new ProgrammesWritten(0, 0, 0), failure.Message);
+            }
 
             visited++;
 

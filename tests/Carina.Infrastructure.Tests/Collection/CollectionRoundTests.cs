@@ -8,6 +8,8 @@ using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Tests.Scanning;
 using Carina.TestSupport;
 
+using Microsoft.Extensions.Logging.Abstractions;
+
 namespace Carina.Infrastructure.Tests.Collection;
 
 [Collection(RepositoryDatabaseCollection.Name)]
@@ -109,6 +111,24 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
     }
 
     [Fact]
+    public async Task OneStreamFailingOutrightDoesNotStopTheOnesBehindIt()
+    {
+        var network = NextNetwork();
+        var driver = new ScriptedDriverClient { UnreachableFrom = "adapter0" };
+
+        driver.Script(TuningParameters.Terrestrial(22), ChannelScript.NoLock());
+        driver.Script(TuningParameters.Terrestrial(24), Carrying(network, 2));
+
+        await using var context = database.Open();
+
+        var walked = await Round(driver, context).WalkAsync(
+            [Stream(network, 1, 22), Stream(network, 2, 24)],
+            Cancel);
+
+        Assert.Equal(2, walked.Visited);
+    }
+
+    [Fact]
     public async Task NothingToVisitWalksNowhere()
     {
         await using var context = database.Open();
@@ -134,7 +154,8 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
                 new ProgrammeWriter(programmes, new UnguardedWrites(), new StillClock()),
                 carried),
             carried,
-            TimeProvider.System);
+            TimeProvider.System,
+            NullLogger<CollectionRound>.Instance);
     }
 
     private static StreamToVisit Stream(int network, int stream, int channel)
