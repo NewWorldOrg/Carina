@@ -17,6 +17,8 @@ public sealed record VisitResult(
     public int RejectedSections { get; init; }
 
     public int RejectedTables { get; init; }
+
+    public bool WorthWaitingOut { get; init; }
 }
 
 public sealed class StreamVisitor(
@@ -46,9 +48,12 @@ public sealed class StreamVisitor(
         if (!start.TryGetValue(out SessionSnapshot? session))
         {
             return new VisitResult(
-                VisitOutcome.NoLock,
+                SessionRefusalReading.Of(start.Problem),
                 new ProgrammesWritten(0, 0, 0),
-                start.Failure ?? start.Problem?.Title ?? "The driver described no session.");
+                start.Failure ?? start.Problem?.Title ?? "The driver described no session.")
+            {
+                WorthWaitingOut = SessionRefusalReading.IsWorthWaitingOut(start.Problem),
+            };
         }
 
         try

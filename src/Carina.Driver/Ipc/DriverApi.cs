@@ -536,46 +536,46 @@ public static class DriverApi
     private static (int Status, string Title) Outcome(SessionRefusal refusal) =>
         refusal switch
         {
-            SessionRefusal.Rejected => (StatusCodes.Status400BadRequest, "rejected"),
-            SessionRefusal.UnknownDevice => (StatusCodes.Status400BadRequest, "unknownDevice"),
+            SessionRefusal.Rejected => (StatusCodes.Status400BadRequest, SessionRefusalTitles.Rejected),
+            SessionRefusal.UnknownDevice => (StatusCodes.Status400BadRequest, SessionRefusalTitles.UnknownDevice),
             SessionRefusal.WrongDeviceKind => (
                 StatusCodes.Status400BadRequest,
-                "wrongDeviceKind"
+                SessionRefusalTitles.WrongDeviceKind
             ),
             SessionRefusal.NoDeviceOfThatKind => (
                 StatusCodes.Status400BadRequest,
-                "noDeviceOfThatKind"
+                SessionRefusalTitles.NoDeviceOfThatKind
             ),
             SessionRefusal.UnknownOutputRoot => (
                 StatusCodes.Status400BadRequest,
-                "unknownOutputRoot"
+                SessionRefusalTitles.UnknownOutputRoot
             ),
             SessionRefusal.DuplicateSession => (
                 StatusCodes.Status409Conflict,
-                "duplicateSession"
+                SessionRefusalTitles.DuplicateSession
             ),
-            SessionRefusal.DisabledDevice => (StatusCodes.Status409Conflict, "disabledDevice"),
-            SessionRefusal.FaultedDevice => (StatusCodes.Status409Conflict, "faultedDevice"),
-            SessionRefusal.DeviceBusy => (StatusCodes.Status409Conflict, "deviceBusy"),
-            SessionRefusal.NoDeviceFree => (StatusCodes.Status409Conflict, "noDeviceFree"),
+            SessionRefusal.DisabledDevice => (StatusCodes.Status409Conflict, SessionRefusalTitles.DisabledDevice),
+            SessionRefusal.FaultedDevice => (StatusCodes.Status409Conflict, SessionRefusalTitles.FaultedDevice),
+            SessionRefusal.DeviceBusy => (StatusCodes.Status409Conflict, SessionRefusalTitles.DeviceBusy),
+            SessionRefusal.NoDeviceFree => (StatusCodes.Status409Conflict, SessionRefusalTitles.NoDeviceFree),
             SessionRefusal.RecordingAlreadyExists => (
                 StatusCodes.Status409Conflict,
-                "recordingAlreadyExists"
+                SessionRefusalTitles.RecordingAlreadyExists
             ),
             SessionRefusal.CapabilityMissing => (
                 StatusCodes.Status501NotImplemented,
-                "capabilityMissing"
+                SessionRefusalTitles.CapabilityMissing
             ),
-            SessionRefusal.Draining => (StatusCodes.Status503ServiceUnavailable, "draining"),
+            SessionRefusal.Draining => (StatusCodes.Status503ServiceUnavailable, SessionRefusalTitles.Draining),
             SessionRefusal.OutputUnavailable => (
                 StatusCodes.Status503ServiceUnavailable,
-                "outputUnavailable"
+                SessionRefusalTitles.OutputUnavailable
             ),
             SessionRefusal.DeviceUnavailable => (
                 StatusCodes.Status503ServiceUnavailable,
-                "deviceUnavailable"
+                SessionRefusalTitles.DeviceUnavailable
             ),
-            SessionRefusal.NoLock => (StatusCodes.Status409Conflict, "noLock"),
-            _ => (StatusCodes.Status503ServiceUnavailable, "refused"),
+            SessionRefusal.NoLock => (StatusCodes.Status409Conflict, SessionRefusalTitles.NoLock),
+            _ => (StatusCodes.Status503ServiceUnavailable, SessionRefusalTitles.Refused),
         };
 }

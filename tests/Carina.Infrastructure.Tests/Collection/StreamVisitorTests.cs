@@ -1,3 +1,4 @@
+using Carina.Contracts;
 using Carina.Broadcast.Tables;
 using Carina.BroadcastTestSupport;
 using Carina.Domain.Channels;
@@ -39,6 +40,36 @@ public sealed class StreamVisitorTests(RepositoryDatabase database)
         Assert.NotNull(await new ProgrammeRepository(reading).FindAsync(
             new ProgrammeId(new NetworkId(network), new ServiceId(1049), new EventId(1)),
             Cancel));
+    }
+
+    [Fact]
+    public async Task ATunerThatWasBusyLeavesTheStreamUnblamedAndWorthWaitingFor()
+    {
+        var driver = new ScriptedDriverClient { BusyRefusalsRemaining = 1 };
+
+        driver.Script(Channel, new ChannelScript { Bytes = Schedule(NextNetwork()) });
+
+        await using CarinaDbContext context = database.Open();
+        VisitResult result = await Visitor(driver, context).VisitAsync(Channel, hurried: false, Cancel);
+
+        Assert.Equal(VisitOutcome.Interrupted, result.Outcome);
+        Assert.True(result.WorthWaitingOut);
+    }
+
+    [Fact]
+    public async Task ARefusalThatNamesTheLockIsStillATuningFailure()
+    {
+        var driver = new ScriptedDriverClient();
+
+        driver.Script(
+            Channel,
+            new ChannelScript { Refusal = new DriverProblem(SessionRefusalTitles.NoLock, []) });
+
+        await using CarinaDbContext context = database.Open();
+        VisitResult result = await Visitor(driver, context).VisitAsync(Channel, hurried: false, Cancel);
+
+        Assert.Equal(VisitOutcome.NoLock, result.Outcome);
+        Assert.False(result.WorthWaitingOut);
     }
 
     [Fact]

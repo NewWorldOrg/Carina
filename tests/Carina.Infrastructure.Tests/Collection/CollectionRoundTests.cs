@@ -138,10 +138,53 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
             await Round(new ScriptedDriverClient(), context).WalkAsync([], Cancel));
     }
 
+    [Fact]
+    public async Task ABusyTunerIsWaitedOutRatherThanCountedAgainstTheStream()
+    {
+        int network = NextNetwork();
+        var driver = new ScriptedDriverClient { BusyRefusalsRemaining = 2 };
+        var clock = new HurriedClock();
+
+        driver.Script(TuningParameters.Terrestrial(22), Carrying(network, 1));
+
+        await using CarinaDbContext context = database.Open();
+
+        RoundResult walked = await Round(driver, context, clock: clock)
+            .WalkAsync([Stream(network, 1, 22)], Cancel);
+
+        Assert.Equal(new RoundResult(1, 1, 0), walked);
+        Assert.Equal(2, clock.Waits.Count);
+    }
+
+    [Fact]
+    public async Task AWalkStepsBackWhenEveryTunerStaysBusyInsteadOfBurningThroughThePlan()
+    {
+        int network = NextNetwork();
+        var driver = new ScriptedDriverClient { BusyRefusalsRemaining = 100 };
+
+        driver.Script(TuningParameters.Terrestrial(22), Carrying(network, 1));
+        driver.Script(TuningParameters.Terrestrial(24), Carrying(network, 2));
+
+        await using CarinaDbContext context = database.Open();
+
+        RoundResult walked = await Round(driver, context, clock: new HurriedClock())
+            .WalkAsync([Stream(network, 1, 22), Stream(network, 2, 24)], Cancel);
+
+        Assert.Equal(new RoundResult(0, 0, 0), walked);
+
+        await using CarinaDbContext reading = database.Open();
+        IReadOnlyList<StreamVisit> visits = await new StreamVisitRepository(reading).ListAsync(Cancel);
+        StreamVisit recorded = Assert.Single(visits, visit => visit.NetworkId.Value == network);
+
+        Assert.Equal(VisitOutcome.Interrupted, recorded.Outcome);
+        Assert.Equal(0, recorded.ConsecutiveIncomplete);
+    }
+
     private static CollectionRound Round(
         ScriptedDriverClient driver,
         CarinaDbContext context,
-        CollectionSettings? settings = null)
+        CollectionSettings? settings = null,
+        TimeProvider? clock = null)
     {
         var programmes = new ProgrammeRepository(context);
         CollectionSettings carried = settings ?? new CollectionSettings();
@@ -154,7 +197,7 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
                 new ProgrammeWriter(programmes, new UnguardedWrites(), new StillClock()),
                 carried),
             carried,
-            TimeProvider.System,
+            clock ?? TimeProvider.System,
             NullLogger<CollectionRound>.Instance);
     }
 
