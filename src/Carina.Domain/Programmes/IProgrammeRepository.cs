@@ -28,6 +28,11 @@ public interface IProgrammeRepository
 
     Task<PaginatedList<Programme>> SearchAsync(ProgrammeSearch search, CancellationToken cancellationToken);
 
+    Task<IReadOnlyList<Programme>> ListAfterAsync(
+        long revision,
+        int rows,
+        CancellationToken cancellationToken);
+
     Task<long> NextRevisionAsync(CancellationToken cancellationToken);
 
     Task<int> ForgetEverythingAsync(CancellationToken cancellationToken);

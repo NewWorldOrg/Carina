@@ -129,6 +129,16 @@ public sealed class ProgrammeRepository(CarinaDbContext context) : IProgrammeRep
         return new PaginatedList<Programme>(page, total, search.Page, search.PerPage);
     }
 
+    public async Task<IReadOnlyList<Programme>> ListAfterAsync(
+        long revision,
+        int rows,
+        CancellationToken cancellationToken)
+        => await context.Set<Programme>()
+            .Where(programme => programme.Revision > revision)
+            .OrderBy(programme => programme.Revision)
+            .Take(rows)
+            .ToListAsync(cancellationToken);
+
     public async Task<long> NextRevisionAsync(CancellationToken cancellationToken)
     {
         await using System.Data.Common.DbCommand command = context.Database.GetDbConnection().CreateCommand();
