@@ -31,7 +31,7 @@ public sealed record ScanScope
                 nameof(systems));
         }
 
-        var wanted = systems.Distinct().ToArray();
+        TuneSystem[] wanted = systems.Distinct().ToArray();
 
         if (wanted.Length == 0)
         {
@@ -45,7 +45,7 @@ public sealed record ScanScope
     {
         ArgumentNullException.ThrowIfNull(targets);
 
-        var named = targets.Distinct().ToArray();
+        TuningParameters[] named = targets.Distinct().ToArray();
 
         if (named.Length == 0)
         {

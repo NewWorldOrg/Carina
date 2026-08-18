@@ -69,7 +69,7 @@ public sealed class ScriptedDvbSystemCalls : IDvbSystemCalls
 
     public void ReportStatusesInTurn(params FrontendStatus[] statuses)
     {
-        foreach (var status in statuses)
+        foreach (FrontendStatus status in statuses)
         {
             statusFlags.Enqueue((uint)status);
         }
@@ -79,12 +79,12 @@ public sealed class ScriptedDvbSystemCalls : IDvbSystemCalls
 
     public SyscallOutcome Open(string path, DvbAccess access)
     {
-        if (refusedOpens.TryGetValue(path, out var error))
+        if (refusedOpens.TryGetValue(path, out int error))
         {
             return SyscallOutcome.Failed(error);
         }
 
-        var descriptor = nextDescriptor++;
+        int descriptor = nextDescriptor++;
         Opened.Add(new OpenedNode(path, access, descriptor));
 
         return SyscallOutcome.Ok(descriptor);
@@ -111,11 +111,11 @@ public sealed class ScriptedDvbSystemCalls : IDvbSystemCalls
 
     public SyscallOutcome GetProperties(int descriptor, byte[] records)
     {
-        var count = records.Length / DvbLayout.PropertyBytes;
+        int count = records.Length / DvbLayout.PropertyBytes;
 
-        for (var index = 0; index < count; index++)
+        for (int index = 0; index < count; index++)
         {
-            var record = index * DvbLayout.PropertyBytes;
+            int record = index * DvbLayout.PropertyBytes;
             var property = (DvbProperty)
                 BinaryPrimitives.ReadUInt32LittleEndian(records.AsSpan(record));
 
@@ -131,7 +131,7 @@ public sealed class ScriptedDvbSystemCalls : IDvbSystemCalls
                 continue;
             }
 
-            if (statistics.TryGetValue(property, out var layers))
+            if (statistics.TryGetValue(property, out IReadOnlyList<DvbStatisticLayer>? layers))
             {
                 WriteStatistics(records, record, layers);
             }
@@ -164,7 +164,7 @@ public sealed class ScriptedDvbSystemCalls : IDvbSystemCalls
             return SyscallOutcome.Failed(error);
         }
 
-        var name = System.Text.Encoding.ASCII.GetBytes(HardwareName);
+        byte[] name = System.Text.Encoding.ASCII.GetBytes(HardwareName);
         name.CopyTo(block, DvbLayout.FrontendNameAt);
 
         return SyscallOutcome.Ok(0);
@@ -227,8 +227,8 @@ public sealed class ScriptedDvbSystemCalls : IDvbSystemCalls
             return SyscallOutcome.Failed(Errno.WouldBlock);
         }
 
-        var bytes = streamed.Dequeue();
-        var taken = Math.Min(count, bytes.Length);
+        byte[] bytes = streamed.Dequeue();
+        int taken = Math.Min(count, bytes.Length);
         bytes.AsSpan(0, taken).CopyTo(buffer);
 
         return SyscallOutcome.Ok(taken);
@@ -264,7 +264,7 @@ public sealed class ScriptedDvbSystemCalls : IDvbSystemCalls
             (uint)DeliverySystems.Count
         );
 
-        for (var system = 0; system < DeliverySystems.Count; system++)
+        for (int system = 0; system < DeliverySystems.Count; system++)
         {
             records[record + DvbLayout.BufferDataAt + system] = (byte)
                 DeliverySystems[system].Code;
@@ -279,9 +279,9 @@ public sealed class ScriptedDvbSystemCalls : IDvbSystemCalls
     {
         records[record + DvbLayout.StatisticCountAt] = (byte)layers.Count;
 
-        for (var layer = 0; layer < layers.Count; layer++)
+        for (int layer = 0; layer < layers.Count; layer++)
         {
-            var at = record + DvbLayout.StatisticsAt + (layer * DvbLayout.StatisticBytes);
+            int at = record + DvbLayout.StatisticsAt + (layer * DvbLayout.StatisticBytes);
             records[at] = (byte)layers[layer].Scale;
             BinaryPrimitives.WriteInt64LittleEndian(
                 records.AsSpan(at + DvbLayout.StatisticScaleBytes),

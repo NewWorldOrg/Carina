@@ -95,12 +95,12 @@ public sealed class ScanRunner(IServiceScopeFactory scopes, ILogger<ScanRunner> 
     {
         stopping = true;
 
-        foreach (var id in live.Keys)
+        foreach (ScanRunId id in live.Keys)
         {
             TryCancel(id);
         }
 
-        var pending = walks.Keys.ToArray();
+        Task[] pending = walks.Keys.ToArray();
 
         if (pending.Length == 0)
         {
@@ -127,7 +127,7 @@ public sealed class ScanRunner(IServiceScopeFactory scopes, ILogger<ScanRunner> 
             TaskCreationOptions.RunContinuationsAsynchronously);
         var cancellation = new CancellationTokenSource();
         var announcement = new Announcement(this, announced, cancellation);
-        var walking = Task.Run(
+        Task<ScanOutcome> walking = Task.Run(
             () => WalkAsync(scope, announcement, cancellation),
             CancellationToken.None);
 
@@ -145,7 +145,7 @@ public sealed class ScanRunner(IServiceScopeFactory scopes, ILogger<ScanRunner> 
             return ScanLaunch.Of(announced.Task.Result);
         }
 
-        var outcome = await walking;
+        ScanOutcome outcome = await walking;
 
         return outcome.CouldNotStartBecause is { } reason
             ? ScanLaunch.CouldNotStart(reason)
@@ -156,7 +156,7 @@ public sealed class ScanRunner(IServiceScopeFactory scopes, ILogger<ScanRunner> 
 
     public bool TryCancel(ScanRunId id)
     {
-        if (!live.TryGetValue(id, out var cancellation))
+        if (!live.TryGetValue(id, out CancellationTokenSource? cancellation))
         {
             return false;
         }
@@ -185,7 +185,7 @@ public sealed class ScanRunner(IServiceScopeFactory scopes, ILogger<ScanRunner> 
             return new ProposalClaim.AlreadyBeingApplied();
         }
 
-        if (proposals.TryGetValue(id, out var proposal))
+        if (proposals.TryGetValue(id, out ScanProposal? proposal))
         {
             return new ProposalClaim.Claimed(proposal, hold);
         }
@@ -199,7 +199,7 @@ public sealed class ScanRunner(IServiceScopeFactory scopes, ILogger<ScanRunner> 
     {
         ArgumentNullException.ThrowIfNull(id);
 
-        if (!claimed.TryGetValue(id, out var held) || held != hold)
+        if (!claimed.TryGetValue(id, out Guid held) || held != hold)
         {
             return;
         }
@@ -217,9 +217,9 @@ public sealed class ScanRunner(IServiceScopeFactory scopes, ILogger<ScanRunner> 
 
     private async Task AbandonWhatAnEarlierProcessLeftAsync(CancellationToken cancellationToken)
     {
-        using var scoped = scopes.CreateScope();
+        using IServiceScope scoped = scopes.CreateScope();
 
-        var runs = scoped.ServiceProvider.GetRequiredService<IScanRunRepository>();
+        IScanRunRepository runs = scoped.ServiceProvider.GetRequiredService<IScanRunRepository>();
 
         if (await runs.FindRunningAsync(cancellationToken) is not { } abandoned)
         {
@@ -243,11 +243,11 @@ public sealed class ScanRunner(IServiceScopeFactory scopes, ILogger<ScanRunner> 
     {
         try
         {
-            using var scoped = scopes.CreateScope();
+            using IServiceScope scoped = scopes.CreateScope();
 
             try
             {
-                var outcome = await scoped.ServiceProvider
+                ScanOutcome outcome = await scoped.ServiceProvider
                     .GetRequiredService<IChannelScanOrchestrator>()
                     .RunAsync(scope, announcement, cancellation.Token);
 
@@ -284,9 +284,9 @@ public sealed class ScanRunner(IServiceScopeFactory scopes, ILogger<ScanRunner> 
 
         try
         {
-            using var scoped = scopes.CreateScope();
+            using IServiceScope scoped = scopes.CreateScope();
 
-            var runs = scoped.ServiceProvider.GetRequiredService<IScanRunRepository>();
+            IScanRunRepository runs = scoped.ServiceProvider.GetRequiredService<IScanRunRepository>();
 
             if (await runs.FindAsync(started.Id, CancellationToken.None) is not { IsRunning: true } stuck)
             {
@@ -320,7 +320,7 @@ public sealed class ScanRunner(IServiceScopeFactory scopes, ILogger<ScanRunner> 
             [.. outcome.Attempts.Select(attempt => attempt.Tuning.System).Distinct()]);
         order.Enqueue(run.Id);
 
-        while (order.Count > ProposalsKept && order.TryDequeue(out var oldest))
+        while (order.Count > ProposalsKept && order.TryDequeue(out ScanRunId? oldest))
         {
             proposals.TryRemove(oldest, out _);
         }

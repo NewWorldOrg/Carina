@@ -7,13 +7,13 @@ public static class ReferenceCrc32
 
     public static uint Compute(ReadOnlySpan<byte> data)
     {
-        var register = Seed;
+        uint register = Seed;
 
-        foreach (var octet in data)
+        foreach (byte octet in data)
         {
             register ^= (uint)octet << 24;
 
-            for (var bit = 0; bit < 8; bit++)
+            for (int bit = 0; bit < 8; bit++)
             {
                 register = (register & 0x8000_0000) != 0
                     ? (register << 1) ^ Polynomial

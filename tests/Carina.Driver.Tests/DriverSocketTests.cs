@@ -11,7 +11,7 @@ public sealed class DriverSocketTests : IDisposable
 
     public void Dispose()
     {
-        foreach (var socket in left)
+        foreach (Socket socket in left)
         {
             socket.Dispose();
         }
@@ -39,7 +39,7 @@ public sealed class DriverSocketTests : IDisposable
     [Fact]
     public void AFreePathIsLeftAlone()
     {
-        var path = At("free.sock");
+        string path = At("free.sock");
 
         DriverSocket.ClearStale(path);
 
@@ -49,7 +49,7 @@ public sealed class DriverSocketTests : IDisposable
     [Fact]
     public void ASocketNobodyAnswersOnIsRemoved()
     {
-        var path = At("stale.sock");
+        string path = At("stale.sock");
         Bind(path, listening: false);
         Assert.True(File.Exists(path));
 
@@ -61,10 +61,10 @@ public sealed class DriverSocketTests : IDisposable
     [Fact]
     public void ASocketAnotherDriverAnswersOnIsKept()
     {
-        var path = At("live.sock");
-        using var listener = Bind(path, listening: true);
+        string path = At("live.sock");
+        using Socket listener = Bind(path, listening: true);
 
-        var refusal = Assert.Throws<DriverSocketException>(() => DriverSocket.ClearStale(path));
+        DriverSocketException refusal = Assert.Throws<DriverSocketException>(() => DriverSocket.ClearStale(path));
 
         Assert.Contains("another driver is already answering", refusal.Message, StringComparison.Ordinal);
         Assert.True(File.Exists(path));
@@ -73,10 +73,10 @@ public sealed class DriverSocketTests : IDisposable
     [Fact]
     public void AnOrdinaryFileIsNeverDeleted()
     {
-        var path = At("notasocket");
+        string path = At("notasocket");
         File.WriteAllText(path, "something a person put here");
 
-        var refusal = Assert.Throws<DriverSocketException>(() => DriverSocket.ClearStale(path));
+        DriverSocketException refusal = Assert.Throws<DriverSocketException>(() => DriverSocket.ClearStale(path));
 
         Assert.Contains("is not a socket", refusal.Message, StringComparison.Ordinal);
         Assert.Equal("something a person put here", File.ReadAllText(path));
@@ -85,7 +85,7 @@ public sealed class DriverSocketTests : IDisposable
     [Fact]
     public void ADirectoryIsNeverDeleted()
     {
-        var path = At("adirectory");
+        string path = At("adirectory");
         Directory.CreateDirectory(path);
 
         Assert.Throws<DriverSocketException>(() => DriverSocket.ClearStale(path));
@@ -96,9 +96,9 @@ public sealed class DriverSocketTests : IDisposable
     [Fact]
     public void APathTooLongForTheKernelIsNamed()
     {
-        var path = Path.Combine(root, new string('p', 200));
+        string path = Path.Combine(root, new string('p', 200));
 
-        var refusal = Assert.Throws<DriverSocketException>(() => DriverSocket.ClearStale(path));
+        DriverSocketException refusal = Assert.Throws<DriverSocketException>(() => DriverSocket.ClearStale(path));
 
         Assert.Contains("at most 107 bytes", refusal.Message, StringComparison.Ordinal);
     }
@@ -106,12 +106,12 @@ public sealed class DriverSocketTests : IDisposable
     [Fact]
     public void ABoundSocketTakesTheModeAndTheGroup()
     {
-        var path = At("secured.sock");
-        using var socket = Bind(path, listening: true);
+        string path = At("secured.sock");
+        using Socket socket = Bind(path, listening: true);
 
         DriverSocket.Secure(path, (int)UnixFile.CurrentGroupId());
 
-        var entry = UnixFile.Inspect(path);
+        UnixEntry entry = UnixFile.Inspect(path);
         Assert.Equal(UnixPathKind.Socket, entry.Kind);
         Assert.Equal(DriverSocket.RequiredPermissions, entry.Permissions);
         Assert.Equal(UnixFile.CurrentGroupId(), entry.GroupId);
@@ -121,10 +121,10 @@ public sealed class DriverSocketTests : IDisposable
     [Fact]
     public void ASocketThatDidNotTakeTheGroupIsRefused()
     {
-        var path = At("ungrouped.sock");
-        using var socket = Bind(path, listening: true);
+        string path = At("ungrouped.sock");
+        using Socket socket = Bind(path, listening: true);
 
-        var refusal = Assert.Throws<DriverSocketException>(() => DriverSocket.Secure(path, -1));
+        DriverSocketException refusal = Assert.Throws<DriverSocketException>(() => DriverSocket.Secure(path, -1));
 
         Assert.Contains("did not take 0660", refusal.Message, StringComparison.Ordinal);
     }
@@ -132,7 +132,7 @@ public sealed class DriverSocketTests : IDisposable
     [Fact]
     public void ASocketThatIsNotThereCannotBeSecured()
     {
-        var refusal = Assert.Throws<DriverSocketException>(
+        DriverSocketException refusal = Assert.Throws<DriverSocketException>(
             () => DriverSocket.Secure(At("absent.sock"), (int)UnixFile.CurrentGroupId())
         );
 
@@ -142,13 +142,13 @@ public sealed class DriverSocketTests : IDisposable
     [Fact]
     public void OnlyASocketIsUnlinked()
     {
-        var file = At("ordinary");
+        string file = At("ordinary");
         File.WriteAllText(file, "x");
 
         Assert.False(DriverSocket.TryUnlink(file));
         Assert.True(File.Exists(file));
 
-        var path = At("gone.sock");
+        string path = At("gone.sock");
         Bind(path, listening: false);
 
         Assert.True(DriverSocket.TryUnlink(path));

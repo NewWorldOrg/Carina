@@ -23,7 +23,7 @@ public sealed record ComponentDescription(
             return false;
         }
 
-        var payload = descriptor.Payload.Span;
+        ReadOnlySpan<byte> payload = descriptor.Payload.Span;
 
         described = new ComponentDescription(
             payload[0] & 0x0F,

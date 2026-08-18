@@ -61,10 +61,10 @@ public sealed class TunerPoolSessionTests : IDisposable
 
     private TunerSession Started(TunerSessionManager manager, StartSessionRequest request)
     {
-        var start = manager.Begin(request);
+        SessionStart start = manager.Begin(request);
 
         Assert.Equal(SessionRefusal.None, start.Refusal);
-        Assert.True(start.TryGetSession(out var session));
+        Assert.True(start.TryGetSession(out TunerSession? session));
 
         return session;
     }
@@ -73,7 +73,7 @@ public sealed class TunerPoolSessionTests : IDisposable
     public void ASecondConsumerOfTheSameTuningOpensNoSecondTuner()
     {
         var factory = new CountingDeviceFactory();
-        var manager = Manager(
+        TunerSessionManager manager = Manager(
             factory,
             Configuration(
                 new DeviceSettings("adapter0", DeviceKind.Terrestrial),
@@ -81,8 +81,8 @@ public sealed class TunerPoolSessionTests : IDisposable
             )
         );
 
-        var holder = Started(manager, Request("s-1", SessionPurpose.Live));
-        var rider = Started(manager, Request("s-2", SessionPurpose.Live));
+        TunerSession holder = Started(manager, Request("s-1", SessionPurpose.Live));
+        TunerSession rider = Started(manager, Request("s-2", SessionPurpose.Live));
 
         Assert.Equal(["adapter0"], factory.Opened);
         Assert.Equal(holder.DeviceId, rider.DeviceId);
@@ -98,7 +98,7 @@ public sealed class TunerPoolSessionTests : IDisposable
     public void AConsumerOfAnotherTuningOpensATunerOfItsOwn()
     {
         var factory = new CountingDeviceFactory();
-        var manager = Manager(
+        TunerSessionManager manager = Manager(
             factory,
             Configuration(
                 new DeviceSettings("adapter0", DeviceKind.Terrestrial),
@@ -106,8 +106,8 @@ public sealed class TunerPoolSessionTests : IDisposable
             )
         );
 
-        var first = Started(manager, Request("s-1", SessionPurpose.Live));
-        var second = Started(manager, Request("s-2", SessionPurpose.Live, channel: 57));
+        TunerSession first = Started(manager, Request("s-1", SessionPurpose.Live));
+        TunerSession second = Started(manager, Request("s-2", SessionPurpose.Live, channel: 57));
 
         Assert.Equal(["adapter0", "adapter1"], factory.Opened.Order());
         Assert.NotEqual(first.DeviceId, second.DeviceId);
@@ -122,10 +122,10 @@ public sealed class TunerPoolSessionTests : IDisposable
     public void ARiderIsGivenTheSameBytesTheHolderReadAndNoOthers()
     {
         var device = new PacedTunerDevice();
-        var manager = Manager(new OneDeviceFactory(device));
+        TunerSessionManager manager = Manager(new OneDeviceFactory(device));
 
-        var holder = Started(manager, Request("s-1", SessionPurpose.Recording));
-        var rider = Started(manager, Request("s-2", SessionPurpose.Recording));
+        TunerSession holder = Started(manager, Request("s-1", SessionPurpose.Recording));
+        TunerSession rider = Started(manager, Request("s-2", SessionPurpose.Recording));
 
         device.Allow(4);
         device.AwaitParkedBefore(5);
@@ -143,10 +143,10 @@ public sealed class TunerPoolSessionTests : IDisposable
     public void ARiderIsToldOfTheOverrunsAtTheTunerItsBytesCameFrom()
     {
         var device = new PacedTunerDevice();
-        var manager = Manager(new OneDeviceFactory(device));
+        TunerSessionManager manager = Manager(new OneDeviceFactory(device));
 
-        var holder = Started(manager, Request("s-1", SessionPurpose.Recording));
-        var rider = Started(manager, Request("s-2", SessionPurpose.Recording));
+        TunerSession holder = Started(manager, Request("s-1", SessionPurpose.Recording));
+        TunerSession rider = Started(manager, Request("s-2", SessionPurpose.Recording));
 
         device.Allow(2);
         device.AwaitParkedBefore(3);
@@ -164,10 +164,10 @@ public sealed class TunerPoolSessionTests : IDisposable
     public void ARiderDoesNotAskTheFrontendItDoesNotHold()
     {
         var device = new PacedTunerDevice { Signal = new ScriptedQualitySource() };
-        var manager = Manager(new OneDeviceFactory(device));
+        TunerSessionManager manager = Manager(new OneDeviceFactory(device));
 
-        var holder = Started(manager, Request("s-1", SessionPurpose.Recording));
-        var rider = Started(manager, Request("s-2", SessionPurpose.Recording));
+        TunerSession holder = Started(manager, Request("s-1", SessionPurpose.Recording));
+        TunerSession rider = Started(manager, Request("s-2", SessionPurpose.Recording));
 
         device.Allow(2);
         device.AwaitParkedBefore(3);
@@ -185,10 +185,10 @@ public sealed class TunerPoolSessionTests : IDisposable
     public void ARiderWhoseHolderStoppedIsNeverMistakenForOneThatFinished()
     {
         var device = new PacedTunerDevice();
-        var manager = Manager(new OneDeviceFactory(device));
+        TunerSessionManager manager = Manager(new OneDeviceFactory(device));
 
-        var holder = Started(manager, Request("s-1", SessionPurpose.Recording));
-        var rider = Started(manager, Request("s-2", SessionPurpose.Recording));
+        TunerSession holder = Started(manager, Request("s-1", SessionPurpose.Recording));
+        TunerSession rider = Started(manager, Request("s-2", SessionPurpose.Recording));
 
         device.Allow(2);
         device.AwaitParkedBefore(3);
@@ -205,10 +205,10 @@ public sealed class TunerPoolSessionTests : IDisposable
     [Fact]
     public void AConsumerWhoseTunerWasTakenIsCutOffRatherThanClosedPolitely()
     {
-        var manager = Manager(new CountingDeviceFactory());
+        TunerSessionManager manager = Manager(new CountingDeviceFactory());
 
-        var scan = Started(manager, Request("s-1", SessionPurpose.Scan));
-        var recording = Started(manager, Request("s-2", SessionPurpose.Recording, channel: 57));
+        TunerSession scan = Started(manager, Request("s-1", SessionPurpose.Scan));
+        TunerSession recording = Started(manager, Request("s-2", SessionPurpose.Recording, channel: 57));
 
         Assert.Equal(SessionState.Failed, scan.State);
         Assert.Equal(SessionStopReason.Preempted, scan.StopReason);
@@ -223,12 +223,12 @@ public sealed class TunerPoolSessionTests : IDisposable
     [Fact]
     public void AConsumerWhoseTunerWasTakenLearnsWhatTookIt()
     {
-        var manager = Manager(new CountingDeviceFactory());
+        TunerSessionManager manager = Manager(new CountingDeviceFactory());
 
-        var scan = Started(manager, Request("s-1", SessionPurpose.Scan));
-        var recording = Started(manager, Request("s-2", SessionPurpose.Recording, channel: 57));
+        TunerSession scan = Started(manager, Request("s-1", SessionPurpose.Scan));
+        TunerSession recording = Started(manager, Request("s-2", SessionPurpose.Recording, channel: 57));
 
-        var because = scan.FailureCause!.Message;
+        string because = scan.FailureCause!.Message;
 
         Assert.Contains("s-2", because, StringComparison.Ordinal);
         Assert.Contains("recording", because, StringComparison.OrdinalIgnoreCase);
@@ -241,20 +241,20 @@ public sealed class TunerPoolSessionTests : IDisposable
     [Fact]
     public async Task AReaderOfADisplacedConsumerIsCutOffAndNotLeftToThinkItSawEverything()
     {
-        var manager = Manager(new CountingDeviceFactory());
+        TunerSessionManager manager = Manager(new CountingDeviceFactory());
 
-        var scan = Started(manager, Request("s-1", SessionPurpose.Scan));
-        var reader = scan.Broadcaster.Subscribe(SubscriberKind.Viewer);
+        TunerSession scan = Started(manager, Request("s-1", SessionPurpose.Scan));
+        SessionSubscription reader = scan.Broadcaster.Subscribe(SubscriberKind.Viewer);
 
-        var recording = Started(manager, Request("s-2", SessionPurpose.Recording, channel: 57));
+        TunerSession recording = Started(manager, Request("s-2", SessionPurpose.Recording, channel: 57));
 
-        var reading = async () =>
+        Func<Task> reading = async () =>
         {
-            await foreach (var _ in reader.Reader.ReadAllAsync())
+            await foreach (byte[] _ in reader.Reader.ReadAllAsync())
             { }
         };
 
-        var cut = await Record.ExceptionAsync(reading);
+        Exception cut = await Record.ExceptionAsync(reading);
 
         Assert.NotNull(cut);
         Assert.Contains("s-2", cut.Message, StringComparison.Ordinal);
@@ -266,10 +266,10 @@ public sealed class TunerPoolSessionTests : IDisposable
     [Fact]
     public void EveryRiderOfATunerThatChangesHandsIsCutOffToo()
     {
-        var manager = Manager(new CountingDeviceFactory());
+        TunerSessionManager manager = Manager(new CountingDeviceFactory());
 
-        var holder = Started(manager, Request("s-1", SessionPurpose.Scan));
-        var rider = Started(manager, Request("s-2", SessionPurpose.Scan));
+        TunerSession holder = Started(manager, Request("s-1", SessionPurpose.Scan));
+        TunerSession rider = Started(manager, Request("s-2", SessionPurpose.Scan));
 
         Started(manager, Request("s-3", SessionPurpose.Recording, channel: 57));
 
@@ -281,11 +281,11 @@ public sealed class TunerPoolSessionTests : IDisposable
     [Fact]
     public void AnEqualReasonLeavesTheConsumerAlreadyOnTheTunerAlone()
     {
-        var manager = Manager(new CountingDeviceFactory());
+        TunerSessionManager manager = Manager(new CountingDeviceFactory());
 
-        var first = Started(manager, Request("s-1", SessionPurpose.Recording));
+        TunerSession first = Started(manager, Request("s-1", SessionPurpose.Recording));
 
-        var refused = manager.Begin(Request("s-2", SessionPurpose.Recording, channel: 57));
+        SessionStart refused = manager.Begin(Request("s-2", SessionPurpose.Recording, channel: 57));
 
         Assert.Equal(SessionRefusal.NoDeviceFree, refused.Refusal);
         Assert.Equal(SessionState.Active, first.State);
@@ -300,11 +300,11 @@ public sealed class TunerPoolSessionTests : IDisposable
     [Fact]
     public void ALesserReasonLeavesTheConsumerAlreadyOnTheTunerAlone()
     {
-        var manager = Manager(new CountingDeviceFactory());
+        TunerSessionManager manager = Manager(new CountingDeviceFactory());
 
-        var first = Started(manager, Request("s-1", SessionPurpose.Recording));
+        TunerSession first = Started(manager, Request("s-1", SessionPurpose.Recording));
 
-        var refused = manager.Begin(Request("s-2", SessionPurpose.Live, channel: 57));
+        SessionStart refused = manager.Begin(Request("s-2", SessionPurpose.Live, channel: 57));
 
         Assert.Equal(SessionRefusal.NoDeviceFree, refused.Refusal);
         Assert.Equal(SessionState.Active, first.State);
@@ -319,15 +319,15 @@ public sealed class TunerPoolSessionTests : IDisposable
     public void ATunerIsKeptForALittleWhileForWhoeverComesStraightBack()
     {
         var factory = new CountingDeviceFactory();
-        var manager = Manager(factory, grace: TimeSpan.FromSeconds(5));
+        TunerSessionManager manager = Manager(factory, grace: TimeSpan.FromSeconds(5));
 
-        var first = Started(manager, Request("s-1", SessionPurpose.Live));
+        TunerSession first = Started(manager, Request("s-1", SessionPurpose.Live));
         first.Stop();
         first.WaitForEnd(Deadlock);
 
         clock.Advance(TimeSpan.FromSeconds(4));
 
-        var second = Started(manager, Request("s-2", SessionPurpose.Live));
+        TunerSession second = Started(manager, Request("s-2", SessionPurpose.Live));
 
         Assert.Equal(["adapter0"], factory.Opened);
 
@@ -339,9 +339,9 @@ public sealed class TunerPoolSessionTests : IDisposable
     public void AConsumerThatCameStraightBackIsNotHandedTheLossesOfTheOneBeforeIt()
     {
         var device = new PacedTunerDevice();
-        var manager = Manager(new OneDeviceFactory(device), grace: TimeSpan.FromSeconds(5));
+        TunerSessionManager manager = Manager(new OneDeviceFactory(device), grace: TimeSpan.FromSeconds(5));
 
-        var first = Started(manager, Request("s-1", SessionPurpose.Live));
+        TunerSession first = Started(manager, Request("s-1", SessionPurpose.Live));
         device.Allow(1);
         device.AwaitParkedBefore(2);
         device.Overflows = 3;
@@ -350,7 +350,7 @@ public sealed class TunerPoolSessionTests : IDisposable
 
         clock.Advance(TimeSpan.FromSeconds(4));
 
-        var second = Started(manager, Request("s-2", SessionPurpose.Live));
+        TunerSession second = Started(manager, Request("s-2", SessionPurpose.Live));
 
         Assert.Equal(3, first.DeviceOverflows);
         Assert.Equal(0, second.DeviceOverflows);
@@ -367,15 +367,15 @@ public sealed class TunerPoolSessionTests : IDisposable
     public void ATunerHeldPastItsGraceIsTunedAgainForTheNextConsumer()
     {
         var factory = new CountingDeviceFactory();
-        var manager = Manager(factory, grace: TimeSpan.FromSeconds(5));
+        TunerSessionManager manager = Manager(factory, grace: TimeSpan.FromSeconds(5));
 
-        var first = Started(manager, Request("s-1", SessionPurpose.Live));
+        TunerSession first = Started(manager, Request("s-1", SessionPurpose.Live));
         first.Stop();
         first.WaitForEnd(Deadlock);
 
         clock.Advance(TimeSpan.FromSeconds(6));
 
-        var second = Started(manager, Request("s-2", SessionPurpose.Live));
+        TunerSession second = Started(manager, Request("s-2", SessionPurpose.Live));
 
         Assert.Equal(["adapter0", "adapter0"], factory.Opened);
 
@@ -387,13 +387,13 @@ public sealed class TunerPoolSessionTests : IDisposable
     public void ATuneThatFailedLeavesTheTunerHeldRatherThanFreeForTheNextTry()
     {
         var factory = new RefusingDeviceFactory();
-        var manager = Manager(factory, grace: TimeSpan.FromSeconds(5));
+        TunerSessionManager manager = Manager(factory, grace: TimeSpan.FromSeconds(5));
 
-        var first = manager.Begin(Request("s-1", SessionPurpose.Live));
+        SessionStart first = manager.Begin(Request("s-1", SessionPurpose.Live));
 
         Assert.Equal(SessionRefusal.DeviceUnavailable, first.Refusal);
 
-        var second = manager.Begin(Request("s-2", SessionPurpose.Recording, channel: 57));
+        SessionStart second = manager.Begin(Request("s-2", SessionPurpose.Recording, channel: 57));
 
         Assert.Equal(SessionRefusal.NoDeviceFree, second.Refusal);
         Assert.Contains("would not lock", second.Detail, StringComparison.Ordinal);
@@ -404,7 +404,7 @@ public sealed class TunerPoolSessionTests : IDisposable
     public void ATunerHeldBackAfterAFailedTuneIsTriedAgainOnceItsHoldRunsOut()
     {
         var factory = new RefusingDeviceFactory();
-        var manager = Manager(factory, grace: TimeSpan.FromSeconds(5));
+        TunerSessionManager manager = Manager(factory, grace: TimeSpan.FromSeconds(5));
 
         manager.Begin(Request("s-1", SessionPurpose.Live));
 
@@ -419,7 +419,7 @@ public sealed class TunerPoolSessionTests : IDisposable
     public void OneSlowTuneDoesNotHoldUpARequestForAnotherTuner()
     {
         var factory = new GatedDeviceFactory("adapter0");
-        var manager = Manager(
+        TunerSessionManager manager = Manager(
             factory,
             Configuration(
                 new DeviceSettings("adapter0", DeviceKind.Terrestrial),
@@ -445,13 +445,13 @@ public sealed class TunerPoolSessionTests : IDisposable
         );
         Assert.False(answered.IsSet);
 
-        var taken = string.Empty;
+        string taken = string.Empty;
         var served = new ManualResetEventSlim(false);
         var quick = new Thread(() =>
         {
-            var start = manager.Begin(Request("s-2", SessionPurpose.Live, channel: 57));
+            SessionStart start = manager.Begin(Request("s-2", SessionPurpose.Live, channel: 57));
 
-            if (start.TryGetSession(out var session))
+            if (start.TryGetSession(out TunerSession? session))
             {
                 taken = session.DeviceId;
             }
@@ -477,7 +477,7 @@ public sealed class TunerPoolSessionTests : IDisposable
         Assert.True(slow.Join(Deadlock));
         Assert.True(quick.Join(Deadlock));
 
-        foreach (var session in manager.Sessions)
+        foreach (TunerSession session in manager.Sessions)
         {
             session.Stop();
             session.WaitForEnd(Deadlock);

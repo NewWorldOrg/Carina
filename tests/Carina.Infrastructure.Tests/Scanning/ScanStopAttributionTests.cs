@@ -23,12 +23,12 @@ public sealed class ScanStopAttributionTests
         var stream = PacedStream.InChunksOf(
             SyntheticStream.Carrying(50002, new SyntheticService(50101, "Carina One")).ToBytes(),
             188);
-        var driver = new ScriptedDriverClient().Script(Channel53, new ChannelScript { Paced = () => stream });
+        ScriptedDriverClient driver = new ScriptedDriverClient().Script(Channel53, new ChannelScript { Paced = () => stream });
         var harness = new ScanHarness(driver);
 
         using var stopping = new CancellationTokenSource();
 
-        var scan = Task.Run(
+        Task<ScanOutcome> scan = Task.Run(
             () => harness.Orchestrator.RunAsync(
                 ScanScope.Over([Channel53, Channel55]),
                 new Stopping(stop),
@@ -44,7 +44,7 @@ public sealed class ScanStopAttributionTests
     [Fact]
     public async Task AScanTheOperatorStoppedIsRecordedAsCancelled()
     {
-        var outcome = await StoppedAsync(ScanStop.AsRequested);
+        ScanOutcome outcome = await StoppedAsync(ScanStop.AsRequested);
 
         Assert.Equal(ScanRunState.Cancelled, outcome.State);
         Assert.Equal(ScanConclusion.CancelledReason, outcome.Run!.Reason);
@@ -53,7 +53,7 @@ public sealed class ScanStopAttributionTests
     [Fact]
     public async Task ADeploymentRestartIsNotRecordedAsSomethingTheOperatorDid()
     {
-        var outcome = await StoppedAsync(ScanStop.BecauseTheAppIsStopping);
+        ScanOutcome outcome = await StoppedAsync(ScanStop.BecauseTheAppIsStopping);
 
         Assert.NotEqual(ScanRunState.Cancelled, outcome.State);
         Assert.Equal(ScanRunState.Failed, outcome.State);

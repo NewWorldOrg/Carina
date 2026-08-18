@@ -31,15 +31,15 @@ public sealed class DriverIpcClientTests
     [Fact]
     public async Task ReadsTheDriversHello()
     {
-        var socketPath = NewSocketPath();
-        await using var driver = await FakeDriver.StartAsync(
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
             socketPath,
             FakeDriver.HelloFor("instance-a"));
-        using var client = ClientFor(socketPath);
+        using DriverIpcClient client = ClientFor(socketPath);
 
-        var call = await client.GetHealthAsync(CancellationToken.None);
+        DriverCall<DriverHello> call = await client.GetHealthAsync(CancellationToken.None);
 
-        Assert.True(call.TryGetValue(out var hello));
+        Assert.True(call.TryGetValue(out DriverHello? hello));
         Assert.Equal(DriverProtocol.Version, hello.ProtocolVersion);
         Assert.Equal("instance-a", hello.InstanceId);
         Assert.Equal(["recording", "live"], hello.Capabilities);
@@ -48,14 +48,14 @@ public sealed class DriverIpcClientTests
     [Fact]
     public async Task ARefusalSurfacesTheProblemInsteadOfThrowing()
     {
-        var socketPath = NewSocketPath();
-        await using var driver = await FakeDriver.StartAsync(
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
             socketPath,
             FakeDriver.HelloFor("instance-a"));
         driver.RefuseEverythingWith = new DriverProblem("draining", ["The driver is shutting down."]);
-        using var client = ClientFor(socketPath);
+        using DriverIpcClient client = ClientFor(socketPath);
 
-        var call = await client.GetHealthAsync(CancellationToken.None);
+        DriverCall<DriverHello> call = await client.GetHealthAsync(CancellationToken.None);
 
         Assert.Equal(DriverCallOutcome.Refused, call.Outcome);
         Assert.Equal("draining", call.Problem?.Title);
@@ -64,9 +64,9 @@ public sealed class DriverIpcClientTests
     [Fact]
     public async Task AMissingSocketIsUnreachableNotAnException()
     {
-        using var client = ClientFor(NewSocketPath());
+        using DriverIpcClient client = ClientFor(NewSocketPath());
 
-        var call = await client.GetHealthAsync(CancellationToken.None);
+        DriverCall<DriverHello> call = await client.GetHealthAsync(CancellationToken.None);
 
         Assert.Equal(DriverCallOutcome.Unreachable, call.Outcome);
         Assert.NotNull(call.Failure);
@@ -75,11 +75,11 @@ public sealed class DriverIpcClientTests
     [Fact]
     public async Task AStaleSocketFileIsUnreachableNotAnException()
     {
-        var socketPath = NewSocketPath();
+        string socketPath = NewSocketPath();
         await File.WriteAllTextAsync(socketPath, string.Empty, CancellationToken.None);
-        using var client = ClientFor(socketPath);
+        using DriverIpcClient client = ClientFor(socketPath);
 
-        var call = await client.GetHealthAsync(CancellationToken.None);
+        DriverCall<DriverHello> call = await client.GetHealthAsync(CancellationToken.None);
 
         Assert.Equal(DriverCallOutcome.Unreachable, call.Outcome);
     }
@@ -87,14 +87,14 @@ public sealed class DriverIpcClientTests
     [Fact]
     public async Task ATruncatedBodyReadsAsUnreachableNotAsAnAnswer()
     {
-        var socketPath = NewSocketPath();
-        await using var driver = await FakeDriver.StartAsync(
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
             socketPath,
             FakeDriver.HelloFor("instance-a"));
         driver.TruncateHealth = true;
-        using var client = ClientFor(socketPath);
+        using DriverIpcClient client = ClientFor(socketPath);
 
-        var call = await client.GetHealthAsync(CancellationToken.None);
+        DriverCall<DriverHello> call = await client.GetHealthAsync(CancellationToken.None);
 
         Assert.Equal(DriverCallOutcome.Unreachable, call.Outcome);
     }
@@ -102,8 +102,8 @@ public sealed class DriverIpcClientTests
     [Fact]
     public async Task ReadsTheActiveSessions()
     {
-        var socketPath = NewSocketPath();
-        await using var driver = await FakeDriver.StartAsync(
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
             socketPath,
             FakeDriver.HelloFor("instance-a"));
         driver.Sessions =
@@ -121,11 +121,11 @@ public sealed class DriverIpcClientTests
                 SessionState.Stopping,
                 DateTimeOffset.UtcNow),
         ];
-        using var client = ClientFor(socketPath);
+        using DriverIpcClient client = ClientFor(socketPath);
 
-        var call = await client.GetActiveSessionsAsync(CancellationToken.None);
+        DriverCall<IReadOnlyList<SessionSnapshot>> call = await client.GetActiveSessionsAsync(CancellationToken.None);
 
-        Assert.True(call.TryGetValue(out var sessions));
+        Assert.True(call.TryGetValue(out IReadOnlyList<SessionSnapshot>? sessions));
         Assert.Equal(2, sessions.Count);
         Assert.Equal("rec-1", sessions[0].SessionId.Value);
         Assert.Equal(SessionState.Stopping, sessions[1].State);
@@ -134,8 +134,8 @@ public sealed class DriverIpcClientTests
     [Fact]
     public async Task ReadsTheDiagnostics()
     {
-        var socketPath = NewSocketPath();
-        await using var driver = await FakeDriver.StartAsync(
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
             socketPath,
             FakeDriver.HelloFor("instance-a"));
         driver.Diagnostics =
@@ -147,12 +147,12 @@ public sealed class DriverIpcClientTests
                 SessionId.Parse("rec-1"),
                 "No space left on device"),
         ];
-        using var client = ClientFor(socketPath);
+        using DriverIpcClient client = ClientFor(socketPath);
 
-        var call = await client.GetDiagnosticsAsync(CancellationToken.None);
+        DriverCall<IReadOnlyList<DiagnosticSnapshot>> call = await client.GetDiagnosticsAsync(CancellationToken.None);
 
-        Assert.True(call.TryGetValue(out var diagnostics));
-        var entry = Assert.Single(diagnostics);
+        Assert.True(call.TryGetValue(out IReadOnlyList<DiagnosticSnapshot>? diagnostics));
+        DiagnosticSnapshot entry = Assert.Single(diagnostics);
         Assert.Equal(DiagnosticReason.RecordingWriteFailed, entry.Reason);
         Assert.Equal("rec-1", entry.SessionId.Value);
     }
@@ -160,8 +160,8 @@ public sealed class DriverIpcClientTests
     [Fact]
     public async Task ReadsTheDetectedDevices()
     {
-        var socketPath = NewSocketPath();
-        await using var driver = await FakeDriver.StartAsync(
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
             socketPath,
             FakeDriver.HelloFor("instance-a", capabilities: TunerKeepingCapabilities));
         driver.DetectedDevices =
@@ -179,11 +179,11 @@ public sealed class DriverIpcClientTests
                 Detail = "held by another process",
             },
         ];
-        using var client = ClientFor(socketPath);
+        using DriverIpcClient client = ClientFor(socketPath);
 
-        var call = await client.GetDetectedDevicesAsync(CancellationToken.None);
+        DriverCall<IReadOnlyList<DetectedDeviceDto>> call = await client.GetDetectedDevicesAsync(CancellationToken.None);
 
-        Assert.True(call.TryGetValue(out var devices));
+        Assert.True(call.TryGetValue(out IReadOnlyList<DetectedDeviceDto>? devices));
         Assert.Equal(2, devices.Count);
         Assert.Equal("adapter0", devices[0].DeviceId);
         Assert.Equal([TunerKind.Terrestrial], devices[0].Kinds);
@@ -193,8 +193,8 @@ public sealed class DriverIpcClientTests
     [Fact]
     public async Task ReadsTheLedgerWithItsDriftHashes()
     {
-        var socketPath = NewSocketPath();
-        await using var driver = await FakeDriver.StartAsync(
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
             socketPath,
             FakeDriver.HelloFor("instance-a", capabilities: TunerKeepingCapabilities));
         driver.Ledger = new TunerLedgerDto
@@ -203,11 +203,11 @@ public sealed class DriverIpcClientTests
             LoadedHash = "aaaa",
             SavedHash = "bbbb",
         };
-        using var client = ClientFor(socketPath);
+        using DriverIpcClient client = ClientFor(socketPath);
 
-        var call = await client.GetTunerLedgerAsync(CancellationToken.None);
+        DriverCall<TunerLedgerDto> call = await client.GetTunerLedgerAsync(CancellationToken.None);
 
-        Assert.True(call.TryGetValue(out var ledger));
+        Assert.True(call.TryGetValue(out TunerLedgerDto? ledger));
         Assert.Equal("adapter0", Assert.Single(ledger.Tuners).DeviceId);
         Assert.True(ledger.HasDrifted());
     }
@@ -215,8 +215,8 @@ public sealed class DriverIpcClientTests
     [Fact]
     public async Task ReplacesTheLedgerAndReadsTheAnswerBack()
     {
-        var socketPath = NewSocketPath();
-        await using var driver = await FakeDriver.StartAsync(
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
             socketPath,
             FakeDriver.HelloFor("instance-a", capabilities: TunerKeepingCapabilities));
         driver.Ledger = new TunerLedgerDto
@@ -225,13 +225,13 @@ public sealed class DriverIpcClientTests
             LoadedHash = "cccc",
             SavedHash = "cccc",
         };
-        using var client = ClientFor(socketPath);
+        using DriverIpcClient client = ClientFor(socketPath);
 
-        var call = await client.ReplaceTunerLedgerAsync(
+        DriverCall<TunerLedgerDto> call = await client.ReplaceTunerLedgerAsync(
             [new TunerConfigEntry { DeviceId = "adapter0", Disabled = true }],
             CancellationToken.None);
 
-        Assert.True(call.TryGetValue(out var ledger));
+        Assert.True(call.TryGetValue(out TunerLedgerDto? ledger));
         Assert.False(ledger.HasDrifted());
         Assert.Equal("adapter0", Assert.Single(driver.LastReplacedLedger!).DeviceId);
         Assert.True(driver.LastReplacedLedger![0].Disabled);
@@ -240,13 +240,13 @@ public sealed class DriverIpcClientTests
     [Fact]
     public async Task AnEmptyLedgerReplacementSurfacesTheDriversRefusal()
     {
-        var socketPath = NewSocketPath();
-        await using var driver = await FakeDriver.StartAsync(
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
             socketPath,
             FakeDriver.HelloFor("instance-a", capabilities: TunerKeepingCapabilities));
-        using var client = ClientFor(socketPath);
+        using DriverIpcClient client = ClientFor(socketPath);
 
-        var call = await client.ReplaceTunerLedgerAsync([], CancellationToken.None);
+        DriverCall<TunerLedgerDto> call = await client.ReplaceTunerLedgerAsync([], CancellationToken.None);
 
         Assert.Equal(DriverCallOutcome.Refused, call.Outcome);
         Assert.Equal("emptyLedger", call.Problem?.Title);
@@ -255,16 +255,16 @@ public sealed class DriverIpcClientTests
     [Fact]
     public async Task ALedgerNamingAnUnknownDeviceSurfacesTheDriversRefusal()
     {
-        var socketPath = NewSocketPath();
-        await using var driver = await FakeDriver.StartAsync(
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
             socketPath,
             FakeDriver.HelloFor("instance-a", capabilities: TunerKeepingCapabilities));
         driver.RefusalsByPath[DriverEndpoints.Tuners] = new FakeDriver.Refusal(
             400,
             new DriverProblem("unknownDevice", ["This driver detected no device called 'adapter9'."]));
-        using var client = ClientFor(socketPath);
+        using DriverIpcClient client = ClientFor(socketPath);
 
-        var call = await client.ReplaceTunerLedgerAsync(
+        DriverCall<TunerLedgerDto> call = await client.ReplaceTunerLedgerAsync(
             [new TunerConfigEntry { DeviceId = "adapter9" }],
             CancellationToken.None);
 
@@ -275,19 +275,19 @@ public sealed class DriverIpcClientTests
     [Fact]
     public async Task TogglesATunerAndReadsTheAnsweredSnapshot()
     {
-        var socketPath = NewSocketPath();
-        await using var driver = await FakeDriver.StartAsync(
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
             socketPath,
             FakeDriver.HelloFor("instance-a", capabilities: TunerKeepingCapabilities));
         driver.Tuners =
         [
             new TunerSnapshot("adapter0", TunerKind.Terrestrial, TunerState.Disabled),
         ];
-        using var client = ClientFor(socketPath);
+        using DriverIpcClient client = ClientFor(socketPath);
 
-        var call = await client.ToggleTunerAsync("adapter0", disabled: true, CancellationToken.None);
+        DriverCall<TunerSnapshot> call = await client.ToggleTunerAsync("adapter0", disabled: true, CancellationToken.None);
 
-        Assert.True(call.TryGetValue(out var tuner));
+        Assert.True(call.TryGetValue(out TunerSnapshot? tuner));
         Assert.Equal("adapter0", tuner.DeviceId);
         Assert.True(tuner.Toggled);
         Assert.Equal("adapter0", driver.LastToggledDeviceId);
@@ -297,13 +297,13 @@ public sealed class DriverIpcClientTests
     [Fact]
     public async Task AToggleForATunerTheDriverDoesNotHoldSurfacesTheProblem()
     {
-        var socketPath = NewSocketPath();
-        await using var driver = await FakeDriver.StartAsync(
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
             socketPath,
             FakeDriver.HelloFor("instance-a", capabilities: TunerKeepingCapabilities));
-        using var client = ClientFor(socketPath);
+        using DriverIpcClient client = ClientFor(socketPath);
 
-        var call = await client.ToggleTunerAsync("adapter9", disabled: false, CancellationToken.None);
+        DriverCall<TunerSnapshot> call = await client.ToggleTunerAsync("adapter9", disabled: false, CancellationToken.None);
 
         Assert.Equal(DriverCallOutcome.Refused, call.Outcome);
         Assert.Equal("noSuchTuner", call.Problem?.Title);
@@ -312,13 +312,13 @@ public sealed class DriverIpcClientTests
     [Fact]
     public async Task ADeviceIdOutsideTheShapeIsRefusedWithoutReachingTheDriver()
     {
-        var socketPath = NewSocketPath();
-        await using var driver = await FakeDriver.StartAsync(
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
             socketPath,
             FakeDriver.HelloFor("instance-a", capabilities: TunerKeepingCapabilities));
-        using var client = ClientFor(socketPath);
+        using DriverIpcClient client = ClientFor(socketPath);
 
-        var call = await client.ToggleTunerAsync("../etc/shadow", disabled: true, CancellationToken.None);
+        DriverCall<TunerSnapshot> call = await client.ToggleTunerAsync("../etc/shadow", disabled: true, CancellationToken.None);
 
         Assert.Equal(DriverCallOutcome.Refused, call.Outcome);
         Assert.Equal("badDeviceId", call.Problem?.Title);
@@ -332,13 +332,13 @@ public sealed class DriverIpcClientTests
     [InlineData("toggle")]
     public async Task ACallTheDriverDoesNotDeclareIsRefusedLocallyInsteadOfAsARawNotFound(string surface)
     {
-        var socketPath = NewSocketPath();
-        await using var driver = await FakeDriver.StartAsync(
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
             socketPath,
             FakeDriver.HelloFor("instance-old"));
-        using var client = ClientFor(socketPath);
+        using DriverIpcClient client = ClientFor(socketPath);
 
-        var outcome = surface switch
+        (DriverCallOutcome Outcome, DriverProblem? Problem) outcome = surface switch
         {
             "detected" => Of(await client.GetDetectedDevicesAsync(CancellationToken.None)),
             "ledgerRead" => Of(await client.GetTunerLedgerAsync(CancellationToken.None)),
@@ -360,9 +360,9 @@ public sealed class DriverIpcClientTests
     [Fact]
     public async Task AMissingSocketMakesTheNewCallsUnreachableNotAnException()
     {
-        using var client = ClientFor(NewSocketPath());
+        using DriverIpcClient client = ClientFor(NewSocketPath());
 
-        var call = await client.GetTunerLedgerAsync(CancellationToken.None);
+        DriverCall<TunerLedgerDto> call = await client.GetTunerLedgerAsync(CancellationToken.None);
 
         Assert.Equal(DriverCallOutcome.Unreachable, call.Outcome);
         Assert.NotNull(call.Failure);
@@ -371,15 +371,15 @@ public sealed class DriverIpcClientTests
     [Fact]
     public async Task ATypedTuneTravelsToTheDriverBesideTheOlderFields()
     {
-        var socketPath = NewSocketPath();
-        await using var driver = await FakeDriver.StartAsync(
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
             socketPath,
             FakeDriver.HelloFor("instance-a", capabilities: TunerKeepingCapabilities));
-        using var client = ClientFor(socketPath);
+        using DriverIpcClient client = ClientFor(socketPath);
 
         var tune = TuneParams.Bs(15, 50001);
 
-        var call = await client.StartSessionAsync(
+        DriverCall<SessionSnapshot> call = await client.StartSessionAsync(
             new StartSessionRequest
             {
                 SessionId = SessionId.Parse("scan-1"),
@@ -389,7 +389,7 @@ public sealed class DriverIpcClientTests
             },
             CancellationToken.None);
 
-        Assert.True(call.TryGetValue(out var snapshot));
+        Assert.True(call.TryGetValue(out SessionSnapshot? snapshot));
         Assert.Equal("scan-1", snapshot.SessionId.Value);
         Assert.Equal(TuneSystem.IsdbSBs, driver.LastStartRequest?.Tune?.System);
         Assert.Equal(15, driver.LastStartRequest?.Tune?.IsdbSBs?.BsChannel);
@@ -403,13 +403,13 @@ public sealed class DriverIpcClientTests
     [Fact]
     public async Task StartsASessionAndReadsTheCreatedSnapshot()
     {
-        var socketPath = NewSocketPath();
-        await using var driver = await FakeDriver.StartAsync(
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
             socketPath,
             FakeDriver.HelloFor("instance-a"));
-        using var client = ClientFor(socketPath);
+        using DriverIpcClient client = ClientFor(socketPath);
 
-        var call = await client.StartSessionAsync(
+        DriverCall<SessionSnapshot> call = await client.StartSessionAsync(
             new StartSessionRequest
             {
                 SessionId = SessionId.Parse("rec-1"),
@@ -420,20 +420,20 @@ public sealed class DriverIpcClientTests
             },
             CancellationToken.None);
 
-        Assert.True(call.TryGetValue(out var snapshot));
+        Assert.True(call.TryGetValue(out SessionSnapshot? snapshot));
         Assert.Equal("rec-1", snapshot.SessionId.Value);
     }
 
     [Fact]
     public async Task AStopAcknowledgedWithoutABodyStillReachesTheDriver()
     {
-        var socketPath = NewSocketPath();
-        await using var driver = await FakeDriver.StartAsync(
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
             socketPath,
             FakeDriver.HelloFor("instance-a"));
-        using var client = ClientFor(socketPath);
+        using DriverIpcClient client = ClientFor(socketPath);
 
-        var call = await client.StopSessionAsync(
+        DriverCall<SessionSnapshot> call = await client.StopSessionAsync(
             SessionId.Parse("rec-1"),
             "walk over & done",
             CancellationToken.None);
@@ -446,26 +446,26 @@ public sealed class DriverIpcClientTests
     [Fact]
     public async Task AnAbortedSessionStreamSurfacesAsAFailedReadNotACleanEnd()
     {
-        var socketPath = NewSocketPath();
-        await using var driver = await FakeDriver.StartAsync(
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
             socketPath,
             FakeDriver.HelloFor("instance-a"));
-        using var client = ClientFor(socketPath);
+        using DriverIpcClient client = ClientFor(socketPath);
 
-        var call = await client.OpenSessionStreamAsync(
+        DriverCall<Stream> call = await client.OpenSessionStreamAsync(
             SessionId.Parse("rec-1"),
             DriverEndpoints.ViewerSubscriber,
             CancellationToken.None);
 
-        Assert.True(call.TryGetValue(out var stream));
+        Assert.True(call.TryGetValue(out Stream? stream));
         await using (stream)
         {
-            var received = 0;
-            var buffer = new byte[188];
+            int received = 0;
+            byte[] buffer = new byte[188];
 
             while (received < buffer.Length)
             {
-                var read = await stream.ReadAsync(
+                int read = await stream.ReadAsync(
                     buffer.AsMemory(received),
                     CancellationToken.None);
                 Assert.NotEqual(0, read);
@@ -474,7 +474,7 @@ public sealed class DriverIpcClientTests
 
             driver.StreamAbortGate.Release();
 
-            var error = await Record.ExceptionAsync(async () =>
+            Exception error = await Record.ExceptionAsync(async () =>
             {
                 using var sink = new MemoryStream();
                 await stream.CopyToAsync(sink, CancellationToken.None);
@@ -489,15 +489,15 @@ public sealed class DriverIpcClientTests
     [Fact]
     public async Task ReadsSignalNamesFromTheEventStream()
     {
-        var socketPath = NewSocketPath();
-        await using var driver = await FakeDriver.StartAsync(
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
             socketPath,
             FakeDriver.HelloFor("instance-a"));
-        using var client = ClientFor(socketPath);
+        using DriverIpcClient client = ClientFor(socketPath);
 
-        var call = await client.OpenEventsAsync(CancellationToken.None);
+        DriverCall<Stream> call = await client.OpenEventsAsync(CancellationToken.None);
 
-        Assert.True(call.TryGetValue(out var stream));
+        Assert.True(call.TryGetValue(out Stream? stream));
         await using (stream)
         {
             driver.Signal("tuners");
@@ -505,7 +505,7 @@ public sealed class DriverIpcClientTests
 
             var names = new List<string>();
 
-            await foreach (var name in SseFrames.ReadNamesAsync(
+            await foreach (string name in SseFrames.ReadNamesAsync(
                 stream,
                 CancellationToken.None))
             {
@@ -524,14 +524,14 @@ public sealed class DriverIpcClientTests
     [Fact]
     public async Task ARefusedEventSubscriptionSurfacesTheProblem()
     {
-        var socketPath = NewSocketPath();
-        await using var driver = await FakeDriver.StartAsync(
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
             socketPath,
             FakeDriver.HelloFor("instance-a"));
         driver.RefuseEverythingWith = new DriverProblem("draining", ["No further events."]);
-        using var client = ClientFor(socketPath);
+        using DriverIpcClient client = ClientFor(socketPath);
 
-        var call = await client.OpenEventsAsync(CancellationToken.None);
+        DriverCall<Stream> call = await client.OpenEventsAsync(CancellationToken.None);
 
         Assert.Equal(DriverCallOutcome.Refused, call.Outcome);
         Assert.Equal("draining", call.Problem?.Title);

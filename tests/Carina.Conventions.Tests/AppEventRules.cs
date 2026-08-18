@@ -39,7 +39,7 @@ public static class AppEventRules
 
     private static bool NamesItsEventFromTheSet(MethodInfo method)
     {
-        var parameters = method.GetParameters();
+        ParameterInfo[] parameters = method.GetParameters();
 
         return parameters.Length > 0 && parameters[0].ParameterType == typeof(AppEventName);
     }

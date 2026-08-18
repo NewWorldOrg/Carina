@@ -9,7 +9,7 @@ public sealed class JapanTimeZoneTests
     {
         var clock = new FixedTimeProvider(new DateTimeOffset(2026, 8, 13, 3, 0, 0, TimeSpan.Zero));
 
-        var now = JapanTimeZone.Now(clock);
+        DateTimeOffset now = JapanTimeZone.Now(clock);
 
         Assert.Equal(new DateTimeOffset(2026, 8, 13, 12, 0, 0, TimeSpan.FromHours(9)), now);
         Assert.Equal(TimeSpan.FromHours(9), now.Offset);

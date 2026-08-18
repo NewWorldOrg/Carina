@@ -34,10 +34,10 @@ public sealed class DriverOutputRootTests
     [Fact]
     public void ADeclaredRootIsReadAsANameAndAPath()
     {
-        var configuration = DriverConfigurationReader.Read(Complete).Configuration;
+        DriverConfiguration? configuration = DriverConfigurationReader.Read(Complete).Configuration;
 
         Assert.NotNull(configuration);
-        var root = Assert.Single(configuration.OutputRoots!);
+        OutputRootSettings root = Assert.Single(configuration.OutputRoots!);
         Assert.Equal("primary", root.Name);
         Assert.Equal("/srv/recordings", root.Path);
     }
@@ -150,9 +150,9 @@ public sealed class DriverOutputRootTests
     [Fact]
     public void OnlyADeclaredNameResolvesToAPath()
     {
-        var configuration = DriverConfigurationReader.Read(Complete).Configuration!;
+        DriverConfiguration configuration = DriverConfigurationReader.Read(Complete).Configuration!;
 
-        Assert.True(configuration.TryResolveOutputRoot("primary", out var path));
+        Assert.True(configuration.TryResolveOutputRoot("primary", out string? path));
         Assert.Equal("/srv/recordings", path);
     }
 
@@ -164,16 +164,16 @@ public sealed class DriverOutputRootTests
     [InlineData(null)]
     public void ANameTheDriverNeverDeclaredResolvesToNothing(string? name)
     {
-        var configuration = DriverConfigurationReader.Read(Complete).Configuration!;
+        DriverConfiguration configuration = DriverConfigurationReader.Read(Complete).Configuration!;
 
-        Assert.False(configuration.TryResolveOutputRoot(name, out var path));
+        Assert.False(configuration.TryResolveOutputRoot(name, out string? path));
         Assert.Null(path);
     }
 
     [Fact]
     public void TheGroupThatOwnsTheSocketHasAnAgreedDefault()
     {
-        var configuration = DriverConfigurationReader.Read(Complete).Configuration!;
+        DriverConfiguration configuration = DriverConfigurationReader.Read(Complete).Configuration!;
 
         Assert.Equal(DriverConfiguration.DefaultSocketGroupId, configuration.SocketGroupId);
         Assert.Equal(10001, DriverConfiguration.DefaultSocketGroupId);
@@ -183,7 +183,7 @@ public sealed class DriverOutputRootTests
     [Fact]
     public void TheGroupThatOwnsTheSocketCanBeSetForTheHostItRunsOn()
     {
-        var configuration = DriverConfigurationReader
+        DriverConfiguration configuration = DriverConfigurationReader
             .Read(Complete.Replace("\"socketPath\"", "\"socketGroupId\": 3000,\n  \"socketPath\""))
             .Configuration!;
 
@@ -209,7 +209,7 @@ public sealed class DriverOutputRootTests
     [Fact]
     public void ALiveSessionRunsForAsLongAsTheConfigurationSays()
     {
-        var configuration = DriverConfigurationReader
+        DriverConfiguration configuration = DriverConfigurationReader
             .Read(
                 Complete.Replace("\"socketPath\"", "\"liveSessionMinutes\": 30,\n  \"socketPath\"")
             )
@@ -225,7 +225,7 @@ public sealed class DriverOutputRootTests
     [Fact]
     public void AWalkSessionLengthIsReadAndHasItsOwnDefault()
     {
-        var configuration = DriverConfigurationReader
+        DriverConfiguration configuration = DriverConfigurationReader
             .Read(Complete.Replace("\"socketPath\"", "\"walkSessionMinutes\": 15,\n  \"socketPath\""))
             .Configuration!;
 

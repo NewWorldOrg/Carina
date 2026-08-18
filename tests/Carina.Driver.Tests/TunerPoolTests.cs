@@ -44,7 +44,7 @@ public sealed class TunerPoolTests
         IReadOnlyList<string>? candidates = null
     )
     {
-        var grant = pool.Acquire(Wanting(sessionId, purpose, tuning, deviceId, candidates));
+        PoolGrant grant = pool.Acquire(Wanting(sessionId, purpose, tuning, deviceId, candidates));
 
         if (grant.Verdict is PoolVerdict.Granted && grant.NeedsTuning)
         {
@@ -62,9 +62,9 @@ public sealed class TunerPoolTests
     [Fact]
     public void TheFirstConsumerOfATuningOpensATuner()
     {
-        var pool = Pool();
+        TunerPool pool = Pool();
 
-        var grant = Take(pool, "s-1", SessionPurpose.Live);
+        PoolGrant grant = Take(pool, "s-1", SessionPurpose.Live);
 
         Assert.Equal(PoolVerdict.Granted, grant.Verdict);
         Assert.Equal("adapter0", grant.DeviceId);
@@ -75,10 +75,10 @@ public sealed class TunerPoolTests
     [Fact]
     public void TwoConsumersOfTheSameTuningRideOneTuner()
     {
-        var pool = Pool();
+        TunerPool pool = Pool();
 
         Take(pool, "s-1", SessionPurpose.Live);
-        var second = pool.Acquire(Wanting("s-2", SessionPurpose.Live, candidates: TwoTuners));
+        PoolGrant second = pool.Acquire(Wanting("s-2", SessionPurpose.Live, candidates: TwoTuners));
 
         Assert.Equal(PoolVerdict.Shared, second.Verdict);
         Assert.Equal("adapter0", second.DeviceId);
@@ -89,10 +89,10 @@ public sealed class TunerPoolTests
     [Fact]
     public void RidingAlongIsPreferredToOpeningASecondTuner()
     {
-        var pool = Pool();
+        TunerPool pool = Pool();
 
         Take(pool, "s-1", SessionPurpose.Live, candidates: TwoTuners);
-        var second = pool.Acquire(Wanting("s-2", SessionPurpose.Live, candidates: TwoTuners));
+        PoolGrant second = pool.Acquire(Wanting("s-2", SessionPurpose.Live, candidates: TwoTuners));
 
         Assert.Equal(PoolVerdict.Shared, second.Verdict);
         Assert.False(pool.IsHeld("adapter1"));
@@ -101,10 +101,10 @@ public sealed class TunerPoolTests
     [Fact]
     public void AConsumerOfAnotherTuningTakesATunerOfItsOwn()
     {
-        var pool = Pool();
+        TunerPool pool = Pool();
 
         Take(pool, "s-1", SessionPurpose.Live, candidates: TwoTuners);
-        var second = Take(
+        PoolGrant second = Take(
             pool,
             "s-2",
             SessionPurpose.Live,
@@ -120,12 +120,12 @@ public sealed class TunerPoolTests
     [Fact]
     public void TheTwoStreamsOnOneSatelliteChannelAreNotTheSameTuning()
     {
-        var pool = Pool();
+        TunerPool pool = Pool();
         var one = TuningKey.Of(TuneParams.Bs(15, 50001));
         var other = TuningKey.Of(TuneParams.Bs(15, 50002));
 
         Take(pool, "s-1", SessionPurpose.Live, one, candidates: TwoTuners);
-        var second = pool.Acquire(Wanting("s-2", SessionPurpose.Live, other, candidates: TwoTuners));
+        PoolGrant second = pool.Acquire(Wanting("s-2", SessionPurpose.Live, other, candidates: TwoTuners));
 
         Assert.NotEqual(PoolVerdict.Shared, second.Verdict);
         Assert.Equal("adapter1", second.DeviceId);
@@ -134,10 +134,10 @@ public sealed class TunerPoolTests
     [Fact]
     public void ARequestForANamedTunerNeverRidesAlongOnAnother()
     {
-        var pool = Pool();
+        TunerPool pool = Pool();
 
         Take(pool, "s-1", SessionPurpose.Live, candidates: TwoTuners);
-        var second = Take(
+        PoolGrant second = Take(
             pool,
             "s-2",
             SessionPurpose.Live,
@@ -152,10 +152,10 @@ public sealed class TunerPoolTests
     [Fact]
     public void AnEqualPriorityRequestNeverDisplacesAnEqual()
     {
-        var pool = Pool();
+        TunerPool pool = Pool();
 
         Take(pool, "s-1", SessionPurpose.Recording);
-        var second = pool.Acquire(Wanting("s-2", SessionPurpose.Recording, Elsewhere));
+        PoolGrant second = pool.Acquire(Wanting("s-2", SessionPurpose.Recording, Elsewhere));
 
         Assert.Equal(PoolVerdict.NoDeviceFree, second.Verdict);
         Assert.Empty(second.Displaced);
@@ -169,10 +169,10 @@ public sealed class TunerPoolTests
     [InlineData(SessionPurpose.Survey)]
     public void NoPurposeDisplacesItself(SessionPurpose purpose)
     {
-        var pool = Pool();
+        TunerPool pool = Pool();
 
         Take(pool, "s-1", purpose);
-        var second = pool.Acquire(Wanting("s-2", purpose, Elsewhere));
+        PoolGrant second = pool.Acquire(Wanting("s-2", purpose, Elsewhere));
 
         Assert.Equal(PoolVerdict.NoDeviceFree, second.Verdict);
         Assert.Empty(second.Displaced);
@@ -190,10 +190,10 @@ public sealed class TunerPoolTests
         SessionPurpose loser
     )
     {
-        var pool = Pool();
+        TunerPool pool = Pool();
 
         Take(pool, "s-1", loser);
-        var second = pool.Acquire(Wanting("s-2", winner, Elsewhere));
+        PoolGrant second = pool.Acquire(Wanting("s-2", winner, Elsewhere));
 
         Assert.Equal(PoolVerdict.Granted, second.Verdict);
         Assert.Equal("adapter0", second.DeviceId);
@@ -214,10 +214,10 @@ public sealed class TunerPoolTests
         SessionPurpose holding
     )
     {
-        var pool = Pool();
+        TunerPool pool = Pool();
 
         Take(pool, "s-1", holding);
-        var second = pool.Acquire(Wanting("s-2", asking, Elsewhere));
+        PoolGrant second = pool.Acquire(Wanting("s-2", asking, Elsewhere));
 
         Assert.Equal(PoolVerdict.NoDeviceFree, second.Verdict);
         Assert.Empty(second.Displaced);
@@ -227,12 +227,12 @@ public sealed class TunerPoolTests
     [Fact]
     public void TheLeastImportantHolderIsTheOneThatLosesItsTuner()
     {
-        var pool = Pool();
+        TunerPool pool = Pool();
 
         Take(pool, "s-1", SessionPurpose.Scan, candidates: TwoTuners);
         Take(pool, "s-2", SessionPurpose.Survey, Elsewhere, candidates: TwoTuners);
 
-        var third = pool.Acquire(
+        PoolGrant third = pool.Acquire(
             Wanting("s-3", SessionPurpose.Recording, new TuningKey(TunerKind.Terrestrial, 53, 0), candidates: TwoTuners)
         );
 
@@ -244,12 +244,12 @@ public sealed class TunerPoolTests
     [Fact]
     public void ATunerIsJudgedByItsMostImportantRiderAndNotItsLeast()
     {
-        var pool = Pool();
+        TunerPool pool = Pool();
 
         Take(pool, "s-1", SessionPurpose.Survey);
         pool.Acquire(Wanting("s-2", SessionPurpose.Recording));
 
-        var third = pool.Acquire(Wanting("s-3", SessionPurpose.Live, Elsewhere));
+        PoolGrant third = pool.Acquire(Wanting("s-3", SessionPurpose.Live, Elsewhere));
 
         Assert.Equal(PoolVerdict.NoDeviceFree, third.Verdict);
         Assert.Empty(third.Displaced);
@@ -258,12 +258,12 @@ public sealed class TunerPoolTests
     [Fact]
     public void EveryRiderOfADisplacedTunerIsNamedInTheGrant()
     {
-        var pool = Pool();
+        TunerPool pool = Pool();
 
         Take(pool, "s-1", SessionPurpose.Survey);
         pool.Acquire(Wanting("s-2", SessionPurpose.Survey));
 
-        var third = pool.Acquire(Wanting("s-3", SessionPurpose.Recording, Elsewhere));
+        PoolGrant third = pool.Acquire(Wanting("s-3", SessionPurpose.Recording, Elsewhere));
 
         Assert.Equal([SessionId.Parse("s-1"), SessionId.Parse("s-2")], third.Displaced);
         Assert.Equal([SessionId.Parse("s-3")], pool.SinksOn("adapter0"));
@@ -272,11 +272,11 @@ public sealed class TunerPoolTests
     [Fact]
     public void TheGrantThatDisplacesSomeoneSaysWhoTookTheTunerAndWhatFor()
     {
-        var pool = Pool();
+        TunerPool pool = Pool();
 
         Take(pool, "s-1", SessionPurpose.Survey);
 
-        var second = pool.Acquire(Wanting("s-2", SessionPurpose.Recording, Elsewhere));
+        PoolGrant second = pool.Acquire(Wanting("s-2", SessionPurpose.Recording, Elsewhere));
 
         Assert.Contains("s-2", second.Detail, StringComparison.Ordinal);
         Assert.Contains("recording", second.Detail, StringComparison.OrdinalIgnoreCase);
@@ -286,11 +286,11 @@ public sealed class TunerPoolTests
     [Fact]
     public void ARefusalOnANamedTunerSaysThatTunerIsBusyRatherThanThatNoneIsFree()
     {
-        var pool = Pool();
+        TunerPool pool = Pool();
 
         Take(pool, "s-1", SessionPurpose.Recording, candidates: TwoTuners);
 
-        var second = pool.Acquire(
+        PoolGrant second = pool.Acquire(
             Wanting("s-2", SessionPurpose.Recording, Elsewhere, "adapter0", TwoTuners)
         );
 
@@ -301,14 +301,14 @@ public sealed class TunerPoolTests
     [Fact]
     public void TheTunerIsHeldForAWhileAfterTheLastRiderLeaves()
     {
-        var pool = Pool(TimeSpan.FromSeconds(5));
+        TunerPool pool = Pool(TimeSpan.FromSeconds(5));
 
         Take(pool, "s-1", SessionPurpose.Live);
         pool.Leave(SessionId.Parse("s-1"));
 
         clock.Advance(TimeSpan.FromSeconds(4));
 
-        var second = pool.Acquire(Wanting("s-2", SessionPurpose.Live, Elsewhere, candidates: TwoTuners));
+        PoolGrant second = pool.Acquire(Wanting("s-2", SessionPurpose.Live, Elsewhere, candidates: TwoTuners));
 
         Assert.Equal("adapter1", second.DeviceId);
         Assert.True(pool.IsLingering("adapter0"));
@@ -317,14 +317,14 @@ public sealed class TunerPoolTests
     [Fact]
     public void ARiderComingStraightBackPaysNoRetune()
     {
-        var pool = Pool(TimeSpan.FromSeconds(5));
+        TunerPool pool = Pool(TimeSpan.FromSeconds(5));
 
         Take(pool, "s-1", SessionPurpose.Live);
         pool.Leave(SessionId.Parse("s-1"));
 
         clock.Advance(TimeSpan.FromSeconds(4));
 
-        var second = pool.Acquire(Wanting("s-2", SessionPurpose.Live));
+        PoolGrant second = pool.Acquire(Wanting("s-2", SessionPurpose.Live));
 
         Assert.Equal(PoolVerdict.Granted, second.Verdict);
         Assert.Equal("adapter0", second.DeviceId);
@@ -335,10 +335,10 @@ public sealed class TunerPoolTests
     [Fact]
     public void TheTunerHeldOverIsTheSameOpenTunerAndNotAFreshOne()
     {
-        var pool = Pool(TimeSpan.FromSeconds(5));
+        TunerPool pool = Pool(TimeSpan.FromSeconds(5));
         var device = new FakeTunerDevice(55);
 
-        var first = pool.Acquire(Wanting("s-1", SessionPurpose.Live));
+        PoolGrant first = pool.Acquire(Wanting("s-1", SessionPurpose.Live));
         pool.Tuned(first.DeviceId, device);
         pool.Ready(first.DeviceId);
         pool.Leave(SessionId.Parse("s-1"));
@@ -352,14 +352,14 @@ public sealed class TunerPoolTests
     [Fact]
     public void TheHeldTunerGoesBackOnceTheGraceHasRunOut()
     {
-        var pool = Pool(TimeSpan.FromSeconds(5));
+        TunerPool pool = Pool(TimeSpan.FromSeconds(5));
 
         Take(pool, "s-1", SessionPurpose.Live);
         pool.Leave(SessionId.Parse("s-1"));
 
         clock.Advance(TimeSpan.FromSeconds(6));
 
-        var second = pool.Acquire(Wanting("s-2", SessionPurpose.Live));
+        PoolGrant second = pool.Acquire(Wanting("s-2", SessionPurpose.Live));
 
         Assert.Equal(PoolVerdict.Granted, second.Verdict);
         Assert.True(second.NeedsTuning);
@@ -369,12 +369,12 @@ public sealed class TunerPoolTests
     [Fact]
     public void AHeldTunerIsGivenUpRatherThanRefusingTheOnlyOtherTuning()
     {
-        var pool = Pool(TimeSpan.FromSeconds(5));
+        TunerPool pool = Pool(TimeSpan.FromSeconds(5));
 
         Take(pool, "s-1", SessionPurpose.Live);
         pool.Leave(SessionId.Parse("s-1"));
 
-        var second = pool.Acquire(Wanting("s-2", SessionPurpose.Survey, Elsewhere));
+        PoolGrant second = pool.Acquire(Wanting("s-2", SessionPurpose.Survey, Elsewhere));
 
         Assert.Equal(PoolVerdict.Granted, second.Verdict);
         Assert.Equal("adapter0", second.DeviceId);
@@ -385,10 +385,10 @@ public sealed class TunerPoolTests
     [Fact]
     public void TheHeldTunerIsClosedWhenSomeoneElseTunesIt()
     {
-        var pool = Pool(TimeSpan.FromSeconds(5));
+        TunerPool pool = Pool(TimeSpan.FromSeconds(5));
         var device = new ClosableTunerDevice();
 
-        var first = pool.Acquire(Wanting("s-1", SessionPurpose.Live));
+        PoolGrant first = pool.Acquire(Wanting("s-1", SessionPurpose.Live));
         pool.Tuned(first.DeviceId, device);
         pool.Ready(first.DeviceId);
         pool.Leave(SessionId.Parse("s-1"));
@@ -402,12 +402,12 @@ public sealed class TunerPoolTests
     [Fact]
     public void ATunerThatCouldNotBeTunedIsNotHandedStraightBackOut()
     {
-        var pool = Pool(TimeSpan.FromSeconds(5));
+        TunerPool pool = Pool(TimeSpan.FromSeconds(5));
 
-        var first = pool.Acquire(Wanting("s-1", SessionPurpose.Live));
+        PoolGrant first = pool.Acquire(Wanting("s-1", SessionPurpose.Live));
         pool.TuningFailed(first.DeviceId, new IOException("the frontend would not lock"));
 
-        var second = pool.Acquire(Wanting("s-2", SessionPurpose.Live));
+        PoolGrant second = pool.Acquire(Wanting("s-2", SessionPurpose.Live));
 
         Assert.Equal(PoolVerdict.NoDeviceFree, second.Verdict);
         Assert.Empty(pool.SinksOn("adapter0"));
@@ -417,12 +417,12 @@ public sealed class TunerPoolTests
     [Fact]
     public void ATunerThatCouldNotBeTunedIsNotOfferedAsARideEither()
     {
-        var pool = Pool(TimeSpan.FromSeconds(5));
+        TunerPool pool = Pool(TimeSpan.FromSeconds(5));
 
-        var first = pool.Acquire(Wanting("s-1", SessionPurpose.Live));
+        PoolGrant first = pool.Acquire(Wanting("s-1", SessionPurpose.Live));
         pool.TuningFailed(first.DeviceId, new IOException("the frontend would not lock"));
 
-        var second = pool.Acquire(Wanting("s-2", SessionPurpose.Recording));
+        PoolGrant second = pool.Acquire(Wanting("s-2", SessionPurpose.Recording));
 
         Assert.NotEqual(PoolVerdict.Shared, second.Verdict);
         Assert.NotEqual(PoolVerdict.Granted, second.Verdict);
@@ -431,12 +431,12 @@ public sealed class TunerPoolTests
     [Fact]
     public void TheRefusalAfterAFailedTuneRepeatsWhatWentWrong()
     {
-        var pool = Pool(TimeSpan.FromSeconds(5));
+        TunerPool pool = Pool(TimeSpan.FromSeconds(5));
 
-        var first = pool.Acquire(Wanting("s-1", SessionPurpose.Live));
+        PoolGrant first = pool.Acquire(Wanting("s-1", SessionPurpose.Live));
         pool.TuningFailed(first.DeviceId, new IOException("the frontend would not lock"));
 
-        var second = pool.Acquire(Wanting("s-2", SessionPurpose.Live));
+        PoolGrant second = pool.Acquire(Wanting("s-2", SessionPurpose.Live));
 
         Assert.Contains("adapter0", second.Detail, StringComparison.Ordinal);
         Assert.Contains("would not lock", second.Detail, StringComparison.Ordinal);
@@ -445,14 +445,14 @@ public sealed class TunerPoolTests
     [Fact]
     public void ATunerThatCouldNotBeTunedComesBackOnceItsHoldRunsOut()
     {
-        var pool = Pool(TimeSpan.FromSeconds(5));
+        TunerPool pool = Pool(TimeSpan.FromSeconds(5));
 
-        var first = pool.Acquire(Wanting("s-1", SessionPurpose.Live));
+        PoolGrant first = pool.Acquire(Wanting("s-1", SessionPurpose.Live));
         pool.TuningFailed(first.DeviceId, new IOException("the frontend would not lock"));
 
         clock.Advance(TimeSpan.FromSeconds(6));
 
-        var second = pool.Acquire(Wanting("s-2", SessionPurpose.Live));
+        PoolGrant second = pool.Acquire(Wanting("s-2", SessionPurpose.Live));
 
         Assert.Equal(PoolVerdict.Granted, second.Verdict);
         Assert.True(second.NeedsTuning);
@@ -461,9 +461,9 @@ public sealed class TunerPoolTests
     [Fact]
     public void AFailedTuneNeverLeavesAWaiterHangingOnAHolderThatWillNotCome()
     {
-        var pool = Pool(TimeSpan.FromSeconds(5));
+        TunerPool pool = Pool(TimeSpan.FromSeconds(5));
 
-        var first = pool.Acquire(Wanting("s-1", SessionPurpose.Live));
+        PoolGrant first = pool.Acquire(Wanting("s-1", SessionPurpose.Live));
         pool.TuningFailed(first.DeviceId, new IOException("the frontend would not lock"));
 
         Assert.False(pool.AwaitReady("adapter0", TimeSpan.FromSeconds(30)));
@@ -472,18 +472,18 @@ public sealed class TunerPoolTests
     [Fact]
     public void ARiderWaitsForTheHolderItWasToldToRideRatherThanReadingNothing()
     {
-        using var pool = Pool();
+        using TunerPool pool = Pool();
         var answered = new ManualResetEventSlim(false);
         var seated = new ManualResetEventSlim(false);
 
-        var first = pool.Acquire(Wanting("s-1", SessionPurpose.Live));
+        PoolGrant first = pool.Acquire(Wanting("s-1", SessionPurpose.Live));
 
-        var verdict = PoolVerdict.NoDeviceFree;
-        var rode = false;
+        PoolVerdict verdict = PoolVerdict.NoDeviceFree;
+        bool rode = false;
 
         var rider = new Thread(() =>
         {
-            var grant = pool.Acquire(Wanting("s-2", SessionPurpose.Live));
+            PoolGrant grant = pool.Acquire(Wanting("s-2", SessionPurpose.Live));
             verdict = grant.Verdict;
             answered.Set();
             rode = pool.AwaitReady(grant.DeviceId, Deadlock);
@@ -513,12 +513,12 @@ public sealed class TunerPoolTests
     [Fact]
     public void OneTuneInFlightDoesNotHoldUpARequestForAnotherTuner()
     {
-        using var pool = Pool();
+        using TunerPool pool = Pool();
         var answered = new ManualResetEventSlim(false);
 
-        var first = pool.Acquire(Wanting("s-1", SessionPurpose.Live, candidates: TwoTuners));
+        PoolGrant first = pool.Acquire(Wanting("s-1", SessionPurpose.Live, candidates: TwoTuners));
 
-        var taken = string.Empty;
+        string taken = string.Empty;
 
         var asking = new Thread(() =>
         {
@@ -548,10 +548,10 @@ public sealed class TunerPoolTests
     [Fact]
     public void ATunerTakenOutOfServiceIsForgottenRatherThanLingering()
     {
-        var pool = Pool(TimeSpan.FromSeconds(5));
+        TunerPool pool = Pool(TimeSpan.FromSeconds(5));
         var device = new ClosableTunerDevice();
 
-        var first = pool.Acquire(Wanting("s-1", SessionPurpose.Live));
+        PoolGrant first = pool.Acquire(Wanting("s-1", SessionPurpose.Live));
         pool.Tuned(first.DeviceId, device);
         pool.Ready(first.DeviceId);
         pool.Leave(SessionId.Parse("s-1"));
@@ -564,10 +564,10 @@ public sealed class TunerPoolTests
     [Fact]
     public void ClosingThePoolClosesEveryTunerItStillHolds()
     {
-        var pool = Pool(TimeSpan.FromSeconds(5));
+        TunerPool pool = Pool(TimeSpan.FromSeconds(5));
         var device = new ClosableTunerDevice();
 
-        var first = pool.Acquire(Wanting("s-1", SessionPurpose.Live));
+        PoolGrant first = pool.Acquire(Wanting("s-1", SessionPurpose.Live));
         pool.Tuned(first.DeviceId, device);
         pool.Ready(first.DeviceId);
 

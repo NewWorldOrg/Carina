@@ -7,7 +7,7 @@ public sealed class AppEventRuleSelfCheckTests
     [Fact]
     public void DetectsASignalThatTakesARawNameInsteadOfOneFromTheSet()
     {
-        var violations = AppEventRules.SignalsThatAcceptANameOutsideTheSet(
+        IReadOnlyList<string> violations = AppEventRules.SignalsThatAcceptANameOutsideTheSet(
             [typeof(LoosePublisher), typeof(CompliantPublisher)]);
 
         Assert.Equal([$"{typeof(LoosePublisher).FullName}.Signal(String)"], violations);
@@ -16,7 +16,7 @@ public sealed class AppEventRuleSelfCheckTests
     [Fact]
     public void DetectsASignalThatCarriesAPayload()
     {
-        var violations = AppEventRules.SignalsThatCarryAPayload(
+        IReadOnlyList<string> violations = AppEventRules.SignalsThatCarryAPayload(
             [typeof(PayloadPublisher), typeof(CompliantPublisher)]);
 
         Assert.Equal([$"{typeof(PayloadPublisher).FullName}.Signal(AppEventName, String)"], violations);

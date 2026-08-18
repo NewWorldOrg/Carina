@@ -76,7 +76,7 @@ public sealed class SignalQualityReader
 
     public bool ReadIfDue()
     {
-        var now = time.GetUtcNow();
+        DateTimeOffset now = time.GetUtcNow();
 
         lock (gate)
         {
@@ -93,7 +93,7 @@ public sealed class SignalQualityReader
 
     public SignalQualitySample Read()
     {
-        var startedAt = time.GetUtcNow();
+        DateTimeOffset startedAt = time.GetUtcNow();
         SignalQuality? quality = null;
         Exception? refusal = null;
 

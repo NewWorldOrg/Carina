@@ -14,9 +14,9 @@ internal static class WireName
             return false;
         }
 
-        foreach (var c in value)
+        foreach (char c in value)
         {
-            var allowed =
+            bool allowed =
                 c is >= 'a' and <= 'z'
                     or >= 'A' and <= 'Z'
                     or >= '0' and <= '9'

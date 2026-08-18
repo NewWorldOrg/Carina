@@ -46,7 +46,7 @@ public sealed class TunerSessionTests : IDisposable
     public void TheSessionPassesOnWhatTheDeviceLostToRingBufferOverruns()
     {
         var device = new ScriptedTunerDevice();
-        using var session = Session(device, new ManualTimeProvider(Start));
+        using TunerSession session = Session(device, new ManualTimeProvider(Start));
 
         Assert.Equal(0, session.DeviceOverflows);
 
@@ -59,7 +59,7 @@ public sealed class TunerSessionTests : IDisposable
     public void ASessionOnATunerThatWasAlreadyOverrunCountsOnlyItsOwnLosses()
     {
         var device = new ScriptedTunerDevice { Overflows = 5 };
-        using var session = Session(device, new ManualTimeProvider(Start));
+        using TunerSession session = Session(device, new ManualTimeProvider(Start));
 
         Assert.Equal(0, session.DeviceOverflows);
 
@@ -74,7 +74,7 @@ public sealed class TunerSessionTests : IDisposable
         var clock = new ManualTimeProvider(Start);
         var signal = new ScriptedQualitySource();
         var device = new PacedTunerDevice { Signal = signal };
-        using var session = Session(device, clock, Writer(), watch: Watch());
+        using TunerSession session = Session(device, clock, Writer(), watch: Watch());
 
         var steps = new Pacer(device);
 
@@ -98,7 +98,7 @@ public sealed class TunerSessionTests : IDisposable
         var clock = new ManualTimeProvider(Start);
         var signal = new ScriptedQualitySource();
         var device = new PacedTunerDevice { Signal = signal };
-        using var session = Session(device, clock, Writer(), watch: Watch());
+        using TunerSession session = Session(device, clock, Writer(), watch: Watch());
 
         var steps = new Pacer(device);
 
@@ -116,13 +116,13 @@ public sealed class TunerSessionTests : IDisposable
     public void ASessionWhoseFrontendLosesTheLockSaysSoWhileItIsStillRunning()
     {
         var clock = new ManualTimeProvider(Start);
-        var signal = new ScriptedQualitySource().Answer(
+        ScriptedQualitySource signal = new ScriptedQualitySource().Answer(
             Readings.Measured(),
             Readings.WithoutLock()
         );
         var device = new PacedTunerDevice { Signal = signal };
         var told = new List<SignalQualitySample>();
-        using var session = Session(
+        using TunerSession session = Session(
             device,
             clock,
             Writer(),
@@ -148,12 +148,12 @@ public sealed class TunerSessionTests : IDisposable
     public void ARecordingThatLostTheLockIsStillWritingWhenTheLossIsReported()
     {
         var clock = new ManualTimeProvider(Start);
-        var signal = new ScriptedQualitySource().Answer(
+        ScriptedQualitySource signal = new ScriptedQualitySource().Answer(
             Readings.Measured(),
             Readings.WithoutLock()
         );
         var device = new PacedTunerDevice { Signal = signal };
-        using var session = Session(device, clock, Writer(), watch: Watch());
+        using TunerSession session = Session(device, clock, Writer(), watch: Watch());
 
         var steps = new Pacer(device);
 
@@ -174,9 +174,9 @@ public sealed class TunerSessionTests : IDisposable
     {
         var clock = new ManualTimeProvider(Start);
         var diagnostics = new DiagnosticsStore(clock);
-        var signal = new ScriptedQualitySource().Answer(Readings.WithoutLock());
+        ScriptedQualitySource signal = new ScriptedQualitySource().Answer(Readings.WithoutLock());
         var device = new PacedTunerDevice { Signal = signal };
-        using var session = Session(
+        using TunerSession session = Session(
             device,
             clock,
             Writer(),
@@ -189,7 +189,7 @@ public sealed class TunerSessionTests : IDisposable
         session.Start();
         steps.Read(1);
 
-        var reported = Assert.Single(diagnostics.Snapshot());
+        DiagnosticSnapshot reported = Assert.Single(diagnostics.Snapshot());
 
         Assert.Equal(DiagnosticReason.TuningLost, reported.Reason);
         Assert.Equal("adapter0", reported.DeviceId);
@@ -205,7 +205,7 @@ public sealed class TunerSessionTests : IDisposable
         var clock = new ManualTimeProvider(Start);
         var signal = new ScriptedQualitySource { RefuseFromReadNumber = 1 };
         var device = new PacedTunerDevice { Signal = signal };
-        using var session = Session(device, clock, Writer(), watch: Watch());
+        using TunerSession session = Session(device, clock, Writer(), watch: Watch());
 
         var steps = new Pacer(device);
 
@@ -225,7 +225,7 @@ public sealed class TunerSessionTests : IDisposable
     {
         var clock = new ManualTimeProvider(Start);
         var device = new PacedTunerDevice();
-        using var session = Session(device, clock, Writer(), watch: Watch());
+        using TunerSession session = Session(device, clock, Writer(), watch: Watch());
 
         var steps = new Pacer(device);
 
@@ -244,7 +244,7 @@ public sealed class TunerSessionTests : IDisposable
 
     private static void WaitUntilRecording(TunerSession session)
     {
-        var deadline = DateTime.UtcNow.AddSeconds(10);
+        DateTime deadline = DateTime.UtcNow.AddSeconds(10);
 
         while (session.BytesRecorded is 0 && DateTime.UtcNow < deadline)
         {
@@ -258,7 +258,7 @@ public sealed class TunerSessionTests : IDisposable
     public void ASessionEndsItselfWhenItsEndTimeArrives()
     {
         var clock = new ManualTimeProvider(Start);
-        using var session = Session(new ScriptedTunerDevice(), clock, Writer());
+        using TunerSession session = Session(new ScriptedTunerDevice(), clock, Writer());
 
         session.Start();
         WaitUntilRecording(session);
@@ -273,7 +273,7 @@ public sealed class TunerSessionTests : IDisposable
     public void ADeliberateStopEndsTheSessionAsStopped()
     {
         var clock = new ManualTimeProvider(Start);
-        using var session = Session(new ScriptedTunerDevice(), clock, Writer());
+        using TunerSession session = Session(new ScriptedTunerDevice(), clock, Writer());
 
         session.Start();
         session.Stop();
@@ -287,7 +287,7 @@ public sealed class TunerSessionTests : IDisposable
     public void ADrainCapStopIsNotMistakenForADeliberateStop()
     {
         var clock = new ManualTimeProvider(Start);
-        using var session = Session(new ScriptedTunerDevice(), clock, Writer());
+        using TunerSession session = Session(new ScriptedTunerDevice(), clock, Writer());
 
         session.Start();
         session.Stop(SessionStopReason.DrainCapReached);
@@ -302,7 +302,7 @@ public sealed class TunerSessionTests : IDisposable
     public void ADeviceFailureEndsTheSessionAsFailedAndNotStopped()
     {
         var clock = new ManualTimeProvider(Start);
-        using var session = Session(new ScriptedTunerDevice(failAfterReads: 3), clock, Writer());
+        using TunerSession session = Session(new ScriptedTunerDevice(failAfterReads: 3), clock, Writer());
 
         session.Start();
         WaitForEnd(session);
@@ -316,7 +316,7 @@ public sealed class TunerSessionTests : IDisposable
     public void ADeviceThatStopsProducingBytesIsAFailureAndNotAnEnding()
     {
         var clock = new ManualTimeProvider(Start);
-        using var session = Session(new ScriptedTunerDevice(emptyAfterReads: 3), clock, Writer());
+        using TunerSession session = Session(new ScriptedTunerDevice(emptyAfterReads: 3), clock, Writer());
 
         session.Start();
         WaitForEnd(session);
@@ -329,10 +329,10 @@ public sealed class TunerSessionTests : IDisposable
     public void AWriteFailureEndsTheSessionAsFailedAndNotStopped()
     {
         var clock = new ManualTimeProvider(Start);
-        var writer = Writer();
+        RecordingWriter writer = Writer();
         writer.Dispose();
 
-        using var session = Session(new ScriptedTunerDevice(), clock, writer);
+        using TunerSession session = Session(new ScriptedTunerDevice(), clock, writer);
 
         session.Start();
         WaitForEnd(session);
@@ -348,7 +348,7 @@ public sealed class TunerSessionTests : IDisposable
         var store = new DiagnosticsStore(clock);
         var device = new ScriptedTunerDevice();
 
-        using var session = Session(
+        using TunerSession session = Session(
             device,
             clock,
             new BrittleRecordingWriter(Path.Combine(root, "s-1.ts")),
@@ -363,7 +363,7 @@ public sealed class TunerSessionTests : IDisposable
         Assert.IsType<IOException>(session.FailureCause);
         Assert.True(device.Disposed);
 
-        var entry = Assert.Single(
+        DiagnosticSnapshot entry = Assert.Single(
             store.Snapshot(),
             candidate => candidate.Reason is DiagnosticReason.RecordingWriteFailed
         );
@@ -383,7 +383,7 @@ public sealed class TunerSessionTests : IDisposable
             failOnClose: true
         );
 
-        var session = Session(new ScriptedTunerDevice(), clock, writer, diagnostics: store);
+        TunerSession session = Session(new ScriptedTunerDevice(), clock, writer, diagnostics: store);
 
         session.Start();
         session.Stop();
@@ -402,7 +402,7 @@ public sealed class TunerSessionTests : IDisposable
         var clock = new ManualTimeProvider(Start);
         var store = new DiagnosticsStore(clock);
 
-        using var session = Session(
+        using TunerSession session = Session(
             new ScriptedTunerDevice(failAfterReads: 3),
             clock,
             diagnostics: store
@@ -411,7 +411,7 @@ public sealed class TunerSessionTests : IDisposable
         session.Start();
         WaitForEnd(session);
 
-        var entry = Assert.Single(
+        DiagnosticSnapshot entry = Assert.Single(
             store.Snapshot(),
             candidate => candidate.Reason is DiagnosticReason.DeviceFaulted
         );
@@ -426,7 +426,7 @@ public sealed class TunerSessionTests : IDisposable
         var clock = new ManualTimeProvider(Start);
         var store = new DiagnosticsStore(clock);
 
-        using var session = Session(
+        using TunerSession session = Session(
             new ScriptedTunerDevice(),
             clock,
             Writer(),
@@ -437,7 +437,7 @@ public sealed class TunerSessionTests : IDisposable
         session.Stop(SessionStopReason.DrainCapReached);
         WaitForEnd(session);
 
-        var entry = Assert.Single(
+        DiagnosticSnapshot entry = Assert.Single(
             store.Snapshot(),
             candidate => candidate.Reason is DiagnosticReason.RecordingCutShort
         );
@@ -451,7 +451,7 @@ public sealed class TunerSessionTests : IDisposable
         var clock = new ManualTimeProvider(Start);
         var store = new DiagnosticsStore(clock);
 
-        using var session = Session(new ScriptedTunerDevice(), clock, Writer(), diagnostics: store);
+        using TunerSession session = Session(new ScriptedTunerDevice(), clock, Writer(), diagnostics: store);
 
         session.Start();
         session.Stop();
@@ -466,7 +466,7 @@ public sealed class TunerSessionTests : IDisposable
     {
         var clock = new ManualTimeProvider(Start);
         var store = new DiagnosticsStore(clock);
-        var session = Session(new ScriptedTunerDevice(), clock, Writer(), diagnostics: store);
+        TunerSession session = Session(new ScriptedTunerDevice(), clock, Writer(), diagnostics: store);
 
         session.Ended += _ => throw new InvalidOperationException("the first listener is broken");
         session.Ended += _ => throw new InvalidOperationException("the second listener is broken");
@@ -490,7 +490,7 @@ public sealed class TunerSessionTests : IDisposable
             failOnClose: true
         );
         var device = new ScriptedTunerDevice();
-        var session = Session(device, clock, writer);
+        TunerSession session = Session(device, clock, writer);
 
         session.Start();
         session.Stop();
@@ -511,8 +511,8 @@ public sealed class TunerSessionTests : IDisposable
             failOnClose: true
         );
         var device = new ScriptedTunerDevice();
-        var session = Session(device, clock, writer);
-        var announced = 0;
+        TunerSession session = Session(device, clock, writer);
+        int announced = 0;
 
         session.Ended += _ => Interlocked.Increment(ref announced);
         session.Start();
@@ -528,8 +528,8 @@ public sealed class TunerSessionTests : IDisposable
     {
         var clock = new ManualTimeProvider(Start);
         var device = new ScriptedTunerDevice();
-        var session = Session(device, clock, Writer());
-        var announced = 0;
+        TunerSession session = Session(device, clock, Writer());
+        int announced = 0;
 
         session.Ended += _ => throw new InvalidOperationException("the listener is broken");
         session.Ended += _ => Interlocked.Increment(ref announced);
@@ -548,15 +548,15 @@ public sealed class TunerSessionTests : IDisposable
     {
         var clock = new ManualTimeProvider(Start);
         var device = new PacedTunerDevice();
-        var writer = Writer();
-        using var session = Session(device, clock, writer);
+        RecordingWriter writer = Writer();
+        using TunerSession session = Session(device, clock, writer);
 
         session.Start();
         ReadExactly(device, 4);
         session.Stop();
         WaitForEnd(session);
 
-        var written = new FileInfo(Path.Combine(root, "s-1.ts")).Length;
+        long written = new FileInfo(Path.Combine(root, "s-1.ts")).Length;
 
         Assert.Equal(4, device.Reads);
         Assert.Equal(device.Reads * ChunkSize, written);
@@ -568,14 +568,14 @@ public sealed class TunerSessionTests : IDisposable
     {
         var clock = new ManualTimeProvider(Start);
         var device = new PacedTunerDevice();
-        using var session = Session(device, clock, Writer());
+        using TunerSession session = Session(device, clock, Writer());
 
         session.Start();
         ReadExactly(device, 4);
         session.Stop();
         WaitForEnd(session);
 
-        var seen = session.Counters.Packets + session.Counters.ProvisionalPackets;
+        long seen = session.Counters.Packets + session.Counters.ProvisionalPackets;
 
         Assert.Equal(4, device.Reads);
         Assert.Equal(device.Reads * 4L, seen);
@@ -586,18 +586,18 @@ public sealed class TunerSessionTests : IDisposable
     {
         var clock = new ManualTimeProvider(Start);
         var device = new PacedTunerDevice();
-        var writer = Writer();
-        using var session = Session(device, clock, writer);
-        var chunks = SessionBroadcaster.DefaultViewerCapacity + 1;
+        RecordingWriter writer = Writer();
+        using TunerSession session = Session(device, clock, writer);
+        int chunks = SessionBroadcaster.DefaultViewerCapacity + 1;
 
-        var stalled = session.Broadcaster.Subscribe(SubscriberKind.Viewer);
+        SessionSubscription stalled = session.Broadcaster.Subscribe(SubscriberKind.Viewer);
 
         session.Start();
         ReadExactly(device, chunks);
         session.Stop();
         WaitForEnd(session);
 
-        var written = new FileInfo(Path.Combine(root, "s-1.ts")).Length;
+        long written = new FileInfo(Path.Combine(root, "s-1.ts")).Length;
 
         Assert.Equal(chunks, device.Reads);
         Assert.Equal(device.Reads * ChunkSize, written);
@@ -610,11 +610,11 @@ public sealed class TunerSessionTests : IDisposable
     {
         var clock = new ManualTimeProvider(Start);
         var device = new PacedTunerDevice();
-        var writer = Writer();
-        using var session = Session(device, clock, writer);
-        var chunks = SessionBroadcaster.DefaultSurveyCapacity + 1;
+        RecordingWriter writer = Writer();
+        using TunerSession session = Session(device, clock, writer);
+        int chunks = SessionBroadcaster.DefaultSurveyCapacity + 1;
 
-        var stalled = session.Broadcaster.Subscribe(SubscriberKind.Survey);
+        SessionSubscription stalled = session.Broadcaster.Subscribe(SubscriberKind.Survey);
 
         session.Start();
         ReadExactly(device, chunks);
@@ -624,7 +624,7 @@ public sealed class TunerSessionTests : IDisposable
         session.Stop();
         WaitForEnd(session);
 
-        var written = new FileInfo(Path.Combine(root, "s-1.ts")).Length;
+        long written = new FileInfo(Path.Combine(root, "s-1.ts")).Length;
 
         Assert.Equal(chunks, device.Reads);
         Assert.Equal(device.Reads * ChunkSize, written);
@@ -635,22 +635,22 @@ public sealed class TunerSessionTests : IDisposable
     {
         var clock = new ManualTimeProvider(Start);
         var device = new PacedTunerDevice();
-        using var session = Session(device, clock, Writer());
+        using TunerSession session = Session(device, clock, Writer());
 
-        var stalled = session.Broadcaster.Subscribe(SubscriberKind.Survey);
+        SessionSubscription stalled = session.Broadcaster.Subscribe(SubscriberKind.Survey);
 
         session.Start();
         ReadExactly(device, SessionBroadcaster.DefaultSurveyCapacity + 1);
         session.Stop();
         WaitForEnd(session);
 
-        var reading = async () =>
+        Func<Task> reading = async () =>
         {
-            await foreach (var _ in stalled.Reader.ReadAllAsync())
+            await foreach (byte[] _ in stalled.Reader.ReadAllAsync())
             { }
         };
 
-        var refusal = await Record.ExceptionAsync(reading);
+        Exception refusal = await Record.ExceptionAsync(reading);
 
         Assert.IsType<IOException>(refusal);
         Assert.True(stalled.IsTruncated);
@@ -661,10 +661,10 @@ public sealed class TunerSessionTests : IDisposable
     {
         var clock = new ManualTimeProvider(Start);
         var device = new PacedTunerDevice();
-        using var session = Session(device, clock, purpose: SessionPurpose.Survey);
-        var capacity = SessionBroadcaster.DefaultSurveyCapacity;
+        using TunerSession session = Session(device, clock, purpose: SessionPurpose.Survey);
+        int capacity = SessionBroadcaster.DefaultSurveyCapacity;
 
-        var reader = session.Broadcaster.Subscribe(SubscriberKind.Survey);
+        SessionSubscription reader = session.Broadcaster.Subscribe(SubscriberKind.Survey);
 
         session.Start();
         ReadExactly(device, capacity);
@@ -678,7 +678,7 @@ public sealed class TunerSessionTests : IDisposable
 
         device.AwaitParkedBefore(capacity + 2);
 
-        var taken = 1;
+        int taken = 1;
         while (reader.Reader.TryRead(out _))
         {
             taken++;
@@ -697,10 +697,10 @@ public sealed class TunerSessionTests : IDisposable
     {
         var clock = new ManualTimeProvider(Start);
         var device = new PacedTunerDevice();
-        using var session = Session(device, clock, Writer());
-        var chunks = SessionBroadcaster.DefaultViewerCapacity + 1;
+        using TunerSession session = Session(device, clock, Writer());
+        int chunks = SessionBroadcaster.DefaultViewerCapacity + 1;
 
-        var stalled = session.Broadcaster.Subscribe(SubscriberKind.Piggyback);
+        SessionSubscription stalled = session.Broadcaster.Subscribe(SubscriberKind.Piggyback);
 
         session.Start();
         ReadExactly(device, chunks);
@@ -715,20 +715,20 @@ public sealed class TunerSessionTests : IDisposable
     public async Task AFailedSessionAbortsItsReadersRatherThanClosingCleanly()
     {
         var clock = new ManualTimeProvider(Start);
-        using var session = Session(
+        using TunerSession session = Session(
             new ScriptedTunerDevice(failAfterReads: 3),
             clock,
             Writer()
         );
 
-        var viewer = session.Broadcaster.Subscribe(SubscriberKind.Viewer);
+        SessionSubscription viewer = session.Broadcaster.Subscribe(SubscriberKind.Viewer);
 
         session.Start();
         WaitForEnd(session);
 
-        var reading = async () =>
+        Func<Task> reading = async () =>
         {
-            await foreach (var _ in viewer.Reader.ReadAllAsync())
+            await foreach (byte[] _ in viewer.Reader.ReadAllAsync())
             { }
         };
 
@@ -739,15 +739,15 @@ public sealed class TunerSessionTests : IDisposable
     public async Task AStoppedSessionClosesItsReadersCleanly()
     {
         var clock = new ManualTimeProvider(Start);
-        using var session = Session(new ScriptedTunerDevice(), clock, Writer());
+        using TunerSession session = Session(new ScriptedTunerDevice(), clock, Writer());
 
-        var viewer = session.Broadcaster.Subscribe(SubscriberKind.Viewer);
+        SessionSubscription viewer = session.Broadcaster.Subscribe(SubscriberKind.Viewer);
 
         session.Start();
         session.Stop();
         WaitForEnd(session);
 
-        await foreach (var _ in viewer.Reader.ReadAllAsync())
+        await foreach (byte[] _ in viewer.Reader.ReadAllAsync())
         { }
     }
 
@@ -755,15 +755,15 @@ public sealed class TunerSessionTests : IDisposable
     public async Task AReaderArrivingAfterTheEndIsClosedRatherThanLeftWaiting()
     {
         var clock = new ManualTimeProvider(Start);
-        using var session = Session(new ScriptedTunerDevice(), clock, Writer());
+        using TunerSession session = Session(new ScriptedTunerDevice(), clock, Writer());
 
         session.Start();
         session.Stop();
         WaitForEnd(session);
 
-        var late = session.Broadcaster.Subscribe(SubscriberKind.Viewer);
+        SessionSubscription late = session.Broadcaster.Subscribe(SubscriberKind.Viewer);
 
-        await foreach (var _ in late.Reader.ReadAllAsync())
+        await foreach (byte[] _ in late.Reader.ReadAllAsync())
         { }
 
         Assert.True(late.IsDisconnected);
@@ -774,10 +774,10 @@ public sealed class TunerSessionTests : IDisposable
     public void ASubscriberComingAndGoingDoesNotChangeTheSessionState()
     {
         var clock = new ManualTimeProvider(Start);
-        using var session = Session(new ScriptedTunerDevice(), clock, Writer());
+        using TunerSession session = Session(new ScriptedTunerDevice(), clock, Writer());
 
         session.Start();
-        var subscription = session.Broadcaster.Subscribe(SubscriberKind.Viewer);
+        SessionSubscription subscription = session.Broadcaster.Subscribe(SubscriberKind.Viewer);
 
         Assert.Equal(SessionState.Active, session.State);
 
@@ -794,7 +794,7 @@ public sealed class TunerSessionTests : IDisposable
     {
         var clock = new ManualTimeProvider(Start);
         var device = new PacedTunerDevice();
-        using var session = Session(device, clock, Writer());
+        using TunerSession session = Session(device, clock, Writer());
 
         session.Start();
         ReadExactly(device, 8);
@@ -809,7 +809,7 @@ public sealed class TunerSessionTests : IDisposable
     public void AnEndTimeMovesForwardAndNeverBack()
     {
         var clock = new ManualTimeProvider(Start);
-        using var session = Session(new ScriptedTunerDevice(), clock, Writer());
+        using TunerSession session = Session(new ScriptedTunerDevice(), clock, Writer());
 
         Assert.True(session.Extend(Start.AddHours(3)));
         Assert.Equal(Start.AddHours(3), session.EndsAt);
@@ -822,7 +822,7 @@ public sealed class TunerSessionTests : IDisposable
     public void AnEndedSessionCannotBeExtended()
     {
         var clock = new ManualTimeProvider(Start);
-        using var session = Session(new ScriptedTunerDevice(), clock, Writer());
+        using TunerSession session = Session(new ScriptedTunerDevice(), clock, Writer());
 
         session.Start();
         session.Stop();
@@ -853,7 +853,7 @@ public sealed class TunerSessionTests : IDisposable
     public void ASessionStartsOnce()
     {
         var clock = new ManualTimeProvider(Start);
-        using var session = Session(new ScriptedTunerDevice(), clock, Writer());
+        using TunerSession session = Session(new ScriptedTunerDevice(), clock, Writer());
 
         session.Start();
 
@@ -868,7 +868,7 @@ public sealed class TunerSessionTests : IDisposable
     {
         var clock = new ManualTimeProvider(Start);
         var device = new ScriptedTunerDevice();
-        using var session = Session(device, clock, Writer());
+        using TunerSession session = Session(device, clock, Writer());
 
         session.Start();
         session.Stop();
@@ -884,7 +884,7 @@ public sealed class TunerSessionTests : IDisposable
         var device = new ScriptedTunerDevice();
         var writer = new CountingRecordingWriter(Path.Combine(root, "s-1.ts"));
 
-        var session = Session(device, clock, writer);
+        TunerSession session = Session(device, clock, writer);
         session.Dispose();
 
         Assert.True(device.Disposed);
@@ -932,7 +932,7 @@ public sealed class TunerSessionTests : IDisposable
             surveyCapacity: 1,
             surveyBlockLimit: TimeSpan.FromSeconds(5)
         );
-        var survey = broadcaster.Subscribe(SubscriberKind.Survey);
+        SessionSubscription survey = broadcaster.Subscribe(SubscriberKind.Survey);
         using var stopping = new CancellationTokenSource();
 
         broadcaster.Publish(new byte[] { 1 }, stopping.Token);
@@ -940,9 +940,9 @@ public sealed class TunerSessionTests : IDisposable
         broadcaster.Publish(new byte[] { 2 }, stopping.Token);
         broadcaster.Close(null);
 
-        var reading = async () =>
+        Func<Task> reading = async () =>
         {
-            await foreach (var _ in survey.Reader.ReadAllAsync())
+            await foreach (byte[] _ in survey.Reader.ReadAllAsync())
             { }
         };
 
@@ -955,13 +955,13 @@ public sealed class TunerSessionTests : IDisposable
     public async Task ASubscriberThatSawEveryChunkIsToldTheStreamFinished()
     {
         using var broadcaster = new SessionBroadcaster(surveyCapacity: 4);
-        var survey = broadcaster.Subscribe(SubscriberKind.Survey);
+        SessionSubscription survey = broadcaster.Subscribe(SubscriberKind.Survey);
 
         broadcaster.Publish(new byte[] { 1 });
         broadcaster.Close(null);
 
-        var taken = 0;
-        await foreach (var _ in survey.Reader.ReadAllAsync())
+        int taken = 0;
+        await foreach (byte[] _ in survey.Reader.ReadAllAsync())
         {
             taken++;
         }
@@ -975,7 +975,7 @@ public sealed class TunerSessionTests : IDisposable
     {
         var clock = new ManualTimeProvider(Start);
         var device = new PacedTunerDevice();
-        using var session = Session(device, clock, Writer());
+        using TunerSession session = Session(device, clock, Writer());
 
         session.Start();
         ReadExactly(device, 2);
@@ -993,25 +993,25 @@ public sealed class TunerSessionTests : IDisposable
     {
         var clock = new ManualTimeProvider(Start);
         var device = new PacedTunerDevice();
-        using var session = Session(device, clock, Writer());
+        using TunerSession session = Session(device, clock, Writer());
 
-        var viewer = session.Broadcaster.Subscribe(SubscriberKind.Viewer);
+        SessionSubscription viewer = session.Broadcaster.Subscribe(SubscriberKind.Viewer);
 
         session.Start();
         ReadExactly(device, 2);
         session.Preempt("a recording of another channel took this tuner");
         WaitForEnd(session);
 
-        var taken = 0;
-        var reading = async () =>
+        int taken = 0;
+        Func<Task> reading = async () =>
         {
-            await foreach (var _ in viewer.Reader.ReadAllAsync())
+            await foreach (byte[] _ in viewer.Reader.ReadAllAsync())
             {
                 taken++;
             }
         };
 
-        var cut = await Record.ExceptionAsync(reading);
+        Exception cut = await Record.ExceptionAsync(reading);
 
         Assert.Equal(2, taken);
         Assert.NotNull(cut);
@@ -1023,7 +1023,7 @@ public sealed class TunerSessionTests : IDisposable
     {
         var clock = new ManualTimeProvider(Start);
         var device = new PacedTunerDevice();
-        using var session = Session(device, clock, Writer());
+        using TunerSession session = Session(device, clock, Writer());
 
         session.Start();
         ReadExactly(device, 1);

@@ -20,7 +20,7 @@ internal sealed class SeamProbe : IAsyncDisposable
 
     private SeamProbe(bool schemeRegistered)
     {
-        var wired = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
+        WebApplicationFactory<Program> wired = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {
             services.AddSingleton<IBroadcastServiceRepository>(Services);
             services.AddSingleton<ICandidateChannelRepository>(Candidates);
@@ -76,7 +76,7 @@ public sealed class DefaultDenyTests(TestingWebApplicationFactory factory)
     {
         await using var probe = SeamProbe.WithNoSchemeRegistered();
 
-        using var response = await probe.GetAsync(path);
+        using HttpResponseMessage response = await probe.GetAsync(path);
 
         Assert.NotEqual(HttpStatusCode.Unauthorized, response.StatusCode);
     }
@@ -88,7 +88,7 @@ public sealed class DefaultDenyTests(TestingWebApplicationFactory factory)
     {
         await using var probe = SeamProbe.WithASchemeRegistered();
 
-        using var response = await probe.GetAsync(path);
+        using HttpResponseMessage response = await probe.GetAsync(path);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         Assert.Empty(await response.Content.ReadAsByteArrayAsync());
@@ -105,7 +105,7 @@ public sealed class DefaultDenyTests(TestingWebApplicationFactory factory)
             ServiceCategory.Television,
             TunerHoldingDriverClient.At));
 
-        using var response = await probe.GetAsync("/api/services");
+        using HttpResponseMessage response = await probe.GetAsync("/api/services");
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -117,9 +117,9 @@ public sealed class DefaultDenyTests(TestingWebApplicationFactory factory)
     [Fact]
     public async Task AnUnknownPathReachesRoutingWhileTheAppHoldsNoAuthenticationScheme()
     {
-        using var client = factory.CreateClient();
+        using HttpClient client = factory.CreateClient();
 
-        using var response = await client.GetAsync(new Uri("/api/does-not-exist", UriKind.Relative));
+        using HttpResponseMessage response = await client.GetAsync(new Uri("/api/does-not-exist", UriKind.Relative));
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -127,9 +127,9 @@ public sealed class DefaultDenyTests(TestingWebApplicationFactory factory)
     [Fact]
     public async Task AWrongMethodOnAKnownPathReachesRoutingWhileTheAppHoldsNoAuthenticationScheme()
     {
-        using var client = factory.CreateClient();
+        using HttpClient client = factory.CreateClient();
 
-        using var response = await client.PostAsync(
+        using HttpResponseMessage response = await client.PostAsync(
             new Uri("/api/driver/status", UriKind.Relative),
             content: null
         );
@@ -140,9 +140,9 @@ public sealed class DefaultDenyTests(TestingWebApplicationFactory factory)
     [Fact]
     public async Task AnUnknownPathIsRefusedBeforeRoutingHasAnEndpointToAnswer404AboutOnceASchemeIsRegistered()
     {
-        using var client = factory.WithTestScheme().CreateClient();
+        using HttpClient client = factory.WithTestScheme().CreateClient();
 
-        using var response = await client.GetAsync(new Uri("/api/does-not-exist", UriKind.Relative));
+        using HttpResponseMessage response = await client.GetAsync(new Uri("/api/does-not-exist", UriKind.Relative));
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         Assert.Empty(await response.Content.ReadAsByteArrayAsync());
@@ -151,9 +151,9 @@ public sealed class DefaultDenyTests(TestingWebApplicationFactory factory)
     [Fact]
     public async Task AWrongMethodOnAKnownPathIsRefusedBeforeRoutingHasAnEndpointToAnswer405AboutOnceASchemeIsRegistered()
     {
-        using var client = factory.WithTestScheme().CreateClient();
+        using HttpClient client = factory.WithTestScheme().CreateClient();
 
-        using var response = await client.PostAsync(
+        using HttpResponseMessage response = await client.PostAsync(
             new Uri("/api/driver/status", UriKind.Relative),
             content: null
         );
@@ -165,9 +165,9 @@ public sealed class DefaultDenyTests(TestingWebApplicationFactory factory)
     [Fact]
     public async Task TheDocumentIsHandedOutWithoutCredentialsInDevelopmentBecauseTheClientIsGeneratedFromIt()
     {
-        using var client = factory.CreateClient();
+        using HttpClient client = factory.CreateClient();
 
-        using var response = await client.GetAsync(new Uri(ServedOpenApi.Route, UriKind.Relative));
+        using HttpResponseMessage response = await client.GetAsync(new Uri(ServedOpenApi.Route, UriKind.Relative));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.NotEmpty(await response.Content.ReadAsByteArrayAsync());
@@ -177,11 +177,11 @@ public sealed class DefaultDenyTests(TestingWebApplicationFactory factory)
     public async Task TheDocumentIsNotServedAtAllOutsideDevelopmentRatherThanLeftToASeamThatMayAdmit()
     {
         using var deployed = new TestingWebApplicationFactory();
-        using var client = deployed
+        using HttpClient client = deployed
             .WithWebHostBuilder(builder => builder.UseEnvironment(Environments.Production))
             .CreateClient();
 
-        using var response = await client.GetAsync(new Uri(ServedOpenApi.Route, UriKind.Relative));
+        using HttpResponseMessage response = await client.GetAsync(new Uri(ServedOpenApi.Route, UriKind.Relative));
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }

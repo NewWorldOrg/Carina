@@ -26,10 +26,10 @@ public sealed class GetDriverStatusActionTests
             new FixedTimeProvider(ObservedAt),
             NullLogger<DriverStatusService>.Instance));
 
-        var response = await action.Invoke(CancellationToken.None);
+        IActionResult response = await action.Invoke(CancellationToken.None);
 
-        var ok = Assert.IsType<OkObjectResult>(response);
-        var responder = Assert.IsType<BaseResponder<DriverStatusResponder>>(ok.Value);
+        OkObjectResult ok = Assert.IsType<OkObjectResult>(response);
+        BaseResponder<DriverStatusResponder> responder = Assert.IsType<BaseResponder<DriverStatusResponder>>(ok.Value);
         Assert.True(responder.Status);
         Assert.NotNull(responder.Data);
         Assert.Equal(DriverConnection.Connected, responder.Data.Connection);
@@ -47,11 +47,11 @@ public sealed class GetDriverStatusActionTests
             new FixedTimeProvider(ObservedAt),
             NullLogger<DriverStatusService>.Instance));
 
-        var response = await action.Invoke(CancellationToken.None);
+        IActionResult response = await action.Invoke(CancellationToken.None);
 
-        var faulted = Assert.IsType<ObjectResult>(response);
+        ObjectResult faulted = Assert.IsType<ObjectResult>(response);
         Assert.Equal(StatusCodes.Status503ServiceUnavailable, faulted.StatusCode);
-        var responder = Assert.IsType<BaseResponder<DriverStatusResponder>>(faulted.Value);
+        BaseResponder<DriverStatusResponder> responder = Assert.IsType<BaseResponder<DriverStatusResponder>>(faulted.Value);
         Assert.False(responder.Status);
         Assert.Equal("The driver status is unavailable.", responder.Message);
         Assert.Null(responder.Data);

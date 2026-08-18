@@ -227,9 +227,9 @@ public sealed class ScheduleProgressTests
         int version = 0,
         int service = SomeService)
     {
-        for (var segment = 0; segment < segments; segment++)
+        for (int segment = 0; segment < segments; segment++)
         {
-            var section = segment * ScheduleProgress.SectionsPerSegment;
+            int section = segment * ScheduleProgress.SectionsPerSegment;
 
             progress.Saw(Table(tableId, lastTableId, section, section, lastSection, version, service));
         }

@@ -17,7 +17,7 @@ public sealed class PersistenceBoundaryRuleTests
     [Fact]
     public void TheCarinaModelDeclaresNoBoundaryBreakingForeignKeys()
     {
-        using var context = Carina();
+        using CarinaDbContext context = Carina();
 
         Assert.Empty(PersistenceBoundaryRules.BoundaryBreakingForeignKeys(context.Model));
     }
@@ -25,7 +25,7 @@ public sealed class PersistenceBoundaryRuleTests
     [Fact]
     public void EveryEntityInTheCarinaModelDeclaresWhichFamilyItBelongsTo()
     {
-        using var context = Carina();
+        using CarinaDbContext context = Carina();
 
         Assert.Empty(PersistenceBoundaryRules.UnclassifiedEntityTypes(context.Model));
     }

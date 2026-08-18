@@ -22,15 +22,15 @@ public sealed class ScanRotationTests
     [Fact]
     public async Task AChannelThatKeepsFailingWaitsLongerEachTimeBeforeItIsTriedAgain()
     {
-        var harness = Failing();
-        var candidate = harness.Candidates.Candidates[0];
+        ScanHarness harness = Failing();
+        CandidateChannel candidate = harness.Candidates.Candidates[0];
 
         await harness.Orchestrator.RunAsync(ScanScope.Over([Channel53]), Cancel);
-        var first = candidate.NextAttemptAt!.Value - At;
+        TimeSpan first = candidate.NextAttemptAt!.Value - At;
 
         harness.Runs.Runs.Clear();
         await harness.Orchestrator.RunAsync(ScanScope.Over([Channel53]), Cancel);
-        var second = candidate.NextAttemptAt!.Value - At;
+        TimeSpan second = candidate.NextAttemptAt!.Value - At;
 
         Assert.Equal(RotationState.BackingOff, candidate.RotationState);
         Assert.Equal(TimeSpan.FromMinutes(1), first);
@@ -40,17 +40,17 @@ public sealed class ScanRotationTests
     [Fact]
     public async Task AChannelThatFailsUpToTheCeilingLeavesTheRotationAndSaysSoOutLoud()
     {
-        var harness = Failing();
-        var candidate = harness.Candidates.Candidates[0];
+        ScanHarness harness = Failing();
+        CandidateChannel candidate = harness.Candidates.Candidates[0];
 
-        for (var round = 0; round < 2; round++)
+        for (int round = 0; round < 2; round++)
         {
             harness.Runs.Runs.Clear();
             await harness.Orchestrator.RunAsync(ScanScope.Over([Channel53]), Cancel);
         }
 
-        var outcome = await LastRun(harness);
-        var departure = Assert.Single(outcome.Difference.Departures);
+        ScanOutcome outcome = await LastRun(harness);
+        RotationDeparture departure = Assert.Single(outcome.Difference.Departures);
 
         Assert.Equal(RotationState.NeedsAttention, candidate.RotationState);
         Assert.False(candidate.IsInRotation);
@@ -62,9 +62,9 @@ public sealed class ScanRotationTests
     [Fact]
     public async Task AChannelThatLeftTheRotationIsFoundAgainAmongThoseNeedingAttention()
     {
-        var harness = Failing();
+        ScanHarness harness = Failing();
 
-        for (var round = 0; round < 3; round++)
+        for (int round = 0; round < 3; round++)
         {
             harness.Runs.Runs.Clear();
             await harness.Orchestrator.RunAsync(ScanScope.Over([Channel53]), Cancel);
@@ -77,16 +77,16 @@ public sealed class ScanRotationTests
     [Fact]
     public async Task ADepartureIsAnnouncedOnlyOnTheRunThatCausedIt()
     {
-        var harness = Failing();
+        ScanHarness harness = Failing();
 
         harness.Runs.Runs.Clear();
-        var first = await harness.Orchestrator.RunAsync(ScanScope.Over([Channel53]), Cancel);
+        ScanOutcome first = await harness.Orchestrator.RunAsync(ScanScope.Over([Channel53]), Cancel);
         harness.Runs.Runs.Clear();
-        var second = await harness.Orchestrator.RunAsync(ScanScope.Over([Channel53]), Cancel);
+        ScanOutcome second = await harness.Orchestrator.RunAsync(ScanScope.Over([Channel53]), Cancel);
         harness.Runs.Runs.Clear();
-        var third = await harness.Orchestrator.RunAsync(ScanScope.Over([Channel53]), Cancel);
+        ScanOutcome third = await harness.Orchestrator.RunAsync(ScanScope.Over([Channel53]), Cancel);
         harness.Runs.Runs.Clear();
-        var fourth = await harness.Orchestrator.RunAsync(ScanScope.Over([Channel53]), Cancel);
+        ScanOutcome fourth = await harness.Orchestrator.RunAsync(ScanScope.Over([Channel53]), Cancel);
 
         Assert.Empty(first.Difference.Departures);
         Assert.Empty(second.Difference.Departures);
@@ -97,8 +97,8 @@ public sealed class ScanRotationTests
     [Fact]
     public async Task AChannelThatCarriesItsServiceAgainIsPutBackIntoTheRotation()
     {
-        var harness = Failing();
-        var candidate = harness.Candidates.Candidates[0];
+        ScanHarness harness = Failing();
+        CandidateChannel candidate = harness.Candidates.Candidates[0];
 
         await harness.Orchestrator.RunAsync(ScanScope.Over([Channel53]), Cancel);
         Assert.Equal(RotationState.BackingOff, candidate.RotationState);
@@ -134,7 +134,7 @@ public sealed class ScanRotationTests
     [Fact]
     public async Task AChannelNoScanWalkedIsLeftWhereItWas()
     {
-        var harness = Failing();
+        ScanHarness harness = Failing();
 
         await harness.Orchestrator.RunAsync(
             ScanScope.Over([TuningParameters.Terrestrial(55)]),

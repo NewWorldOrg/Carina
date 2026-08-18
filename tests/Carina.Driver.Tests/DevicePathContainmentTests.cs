@@ -40,7 +40,7 @@ public sealed class DevicePathContainmentTests : IDisposable
     [Fact]
     public void ALeafSymbolicLinkOutOfTheRootIsRejected()
     {
-        var link = Path.Combine(root, "frontend0");
+        string link = Path.Combine(root, "frontend0");
         File.CreateSymbolicLink(link, Path.Combine(outside, "target"));
 
         Assert.False(DriverConfigurationReader.IsUnderRoot(link, Root));
@@ -49,7 +49,7 @@ public sealed class DevicePathContainmentTests : IDisposable
     [Fact]
     public void ASymbolicLinkAnyLevelAboveTheNodeIsRejected()
     {
-        var branch = Path.Combine(root, "adapter0");
+        string branch = Path.Combine(root, "adapter0");
         Directory.CreateSymbolicLink(branch, outside);
 
         Assert.False(

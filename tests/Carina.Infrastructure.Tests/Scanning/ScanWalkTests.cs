@@ -26,18 +26,18 @@ public sealed class ScanWalkTests
         var carrying = ChannelScript.Carrying(SyntheticStream.Carrying(
             SomeStreamId,
             new SyntheticService(SomeServiceId, "Carina One")));
-        var driver = new ScriptedDriverClient()
+        ScriptedDriverClient driver = new ScriptedDriverClient()
             .Script(Slot9, carrying)
             .Script(Slot11, carrying);
 
-        var outcome = await new ScanHarness(driver).Orchestrator.RunAsync(
+        ScanOutcome outcome = await new ScanHarness(driver).Orchestrator.RunAsync(
             ScanScope.Over([Slot9, Slot11]),
             Cancel);
 
         Assert.Equal(2, outcome.Attempts.Count);
         Assert.Empty(outcome.Failures);
 
-        var added = Assert.Single(outcome.Difference.Added);
+        ScanServiceChange added = Assert.Single(outcome.Difference.Added);
 
         Assert.Equal(Slot9, Assert.Single(added.Channels).Tuning);
         Assert.Contains(
@@ -49,7 +49,7 @@ public sealed class ScanWalkTests
     [Fact]
     public async Task TheSameServiceOnTwoStreamsKeepsBothAsCandidates()
     {
-        var driver = new ScriptedDriverClient()
+        ScriptedDriverClient driver = new ScriptedDriverClient()
             .Script(Channel53, ChannelScript.Carrying(SyntheticStream.Carrying(
                 SomeStreamId,
                 new SyntheticService(SomeServiceId, "Carina One"))))
@@ -57,11 +57,11 @@ public sealed class ScanWalkTests
                 50003,
                 new SyntheticService(SomeServiceId, "Carina One"))));
 
-        var outcome = await new ScanHarness(driver).Orchestrator.RunAsync(
+        ScanOutcome outcome = await new ScanHarness(driver).Orchestrator.RunAsync(
             ScanScope.Over([Channel53, Channel55]),
             Cancel);
 
-        var added = Assert.Single(outcome.Difference.Added);
+        ScanServiceChange added = Assert.Single(outcome.Difference.Added);
 
         Assert.Equal([Channel53, Channel55], added.Channels.Select(channel => channel.Tuning));
     }
@@ -70,14 +70,14 @@ public sealed class ScanWalkTests
     public async Task ABusyTunerIsWaitedForOnAWideningIntervalRatherThanAtAFixedOne()
     {
         var clock = new HurriedClock();
-        var driver = new ScriptedDriverClient
+        ScriptedDriverClient driver = new ScriptedDriverClient
         {
             BusyRefusalsRemaining = 3,
         }.Script(Channel53, ChannelScript.Carrying(SyntheticStream.Carrying(
             SomeStreamId,
             new SyntheticService(SomeServiceId, "Carina One"))));
 
-        var outcome = await Harness(driver, clock).Orchestrator.RunAsync(
+        ScanOutcome outcome = await Harness(driver, clock).Orchestrator.RunAsync(
             ScanScope.Over([Channel53]),
             Cancel);
 
@@ -94,7 +94,7 @@ public sealed class ScanWalkTests
             BusyRefusalsRemaining = int.MaxValue,
         };
 
-        var outcome = await Harness(driver, clock).Orchestrator.RunAsync(
+        ScanOutcome outcome = await Harness(driver, clock).Orchestrator.RunAsync(
             ScanScope.Over([Channel53, Channel55]),
             Cancel);
 
@@ -108,7 +108,7 @@ public sealed class ScanWalkTests
     [Fact]
     public async Task AChannelThatDidNotLockIsRecordedAndTheSweepWalksOn()
     {
-        var driver = new ScriptedDriverClient()
+        ScriptedDriverClient driver = new ScriptedDriverClient()
             .Script(Channel53, ChannelScript.Carrying(SyntheticStream.Carrying(
                 SomeStreamId,
                 new SyntheticService(SomeServiceId, "Carina One"))))
@@ -122,7 +122,7 @@ public sealed class ScanWalkTests
                 50003,
                 new SyntheticService(50102, "Carina Two"))));
 
-        var outcome = await new ScanHarness(driver).Orchestrator.RunAsync(
+        ScanOutcome outcome = await new ScanHarness(driver).Orchestrator.RunAsync(
             ScanScope.Over([Channel53, Channel55, Channel57]),
             Cancel);
 
@@ -137,7 +137,7 @@ public sealed class ScanWalkTests
     [Fact]
     public async Task AStreamTheDriverToreDownIsRecordedOnItsBytesAndTheSweepWalksOn()
     {
-        var driver = new ScriptedDriverClient()
+        ScriptedDriverClient driver = new ScriptedDriverClient()
             .Script(Channel53, ChannelScript.Carrying(SyntheticStream.Carrying(
                 SomeStreamId,
                 new SyntheticService(SomeServiceId, "Carina One"))))
@@ -146,7 +146,7 @@ public sealed class ScanWalkTests
                 50003,
                 new SyntheticService(50102, "Carina Two"))));
 
-        var outcome = await new ScanHarness(driver).Orchestrator.RunAsync(
+        ScanOutcome outcome = await new ScanHarness(driver).Orchestrator.RunAsync(
             ScanScope.Over([Channel53, Channel55, Channel57]),
             Cancel);
 
@@ -167,16 +167,16 @@ public sealed class ScanWalkTests
         var stream = PacedStream.InChunksOf(
             SyntheticStream.Carrying(SomeStreamId, new SyntheticService(SomeServiceId, "Carina One")).ToBytes(),
             188);
-        var driver = new ScriptedDriverClient().Script(Channel53, new ChannelScript { Paced = () => stream });
+        ScriptedDriverClient driver = new ScriptedDriverClient().Script(Channel53, new ChannelScript { Paced = () => stream });
         var harness = new ScanHarness(driver, clock);
 
-        var scan = Task.Run(() => harness.Orchestrator.RunAsync(ScanScope.Over([Channel53]), Cancel), Cancel);
+        Task<ScanOutcome> scan = Task.Run(() => harness.Orchestrator.RunAsync(ScanScope.Over([Channel53]), Cancel), Cancel);
 
         stream.Allow(1);
         stream.AwaitParkedBefore(2);
         clock.FireOnePending("the patience of the attempt");
 
-        var outcome = await scan;
+        ScanOutcome outcome = await scan;
 
         Assert.Equal(ScanAttemptOutcome.IncompleteTables, Assert.Single(outcome.Attempts).Outcome);
         Assert.Equal(ScanRunState.Completed, outcome.State);
@@ -188,17 +188,17 @@ public sealed class ScanWalkTests
         var stream = PacedStream.InChunksOf(
             SyntheticStream.Carrying(SomeStreamId, new SyntheticService(SomeServiceId, "Carina One")).ToBytes(),
             188);
-        var driver = new ScriptedDriverClient().Script(Channel53, new ChannelScript { Paced = () => stream });
+        ScriptedDriverClient driver = new ScriptedDriverClient().Script(Channel53, new ChannelScript { Paced = () => stream });
         var harness = new ScanHarness(driver);
 
-        var scan = Task.Run(
+        Task<ScanOutcome> scan = Task.Run(
             () => harness.Orchestrator.RunAsync(ScanScope.Over([Channel53, Channel55]), Cancel),
             Cancel);
 
         stream.AwaitParkedBefore(1);
         harness.RestartTheDriver();
 
-        var outcome = await scan;
+        ScanOutcome outcome = await scan;
 
         Assert.Equal(ScanRunState.Interrupted, outcome.State);
         Assert.Equal([Channel53], driver.Started);
@@ -211,14 +211,14 @@ public sealed class ScanWalkTests
         var carrying = ChannelScript.Carrying(SyntheticStream.Carrying(
             SomeStreamId,
             new SyntheticService(SomeServiceId, "Carina One")));
-        var driver = new ScriptedDriverClient
+        ScriptedDriverClient driver = new ScriptedDriverClient
         {
             UnreachableFrom = "the socket went away",
         }
             .Script(Channel53, carrying)
             .Script(Channel55, carrying);
 
-        var outcome = await new ScanHarness(driver).Orchestrator.RunAsync(
+        ScanOutcome outcome = await new ScanHarness(driver).Orchestrator.RunAsync(
             ScanScope.Over([Channel53, Channel55, Channel57]),
             Cancel);
 
@@ -234,7 +234,7 @@ public sealed class ScanWalkTests
         var running = ScanRun.Start(ScanRunId.New(), "instance-a", DateTime.UtcNow);
         harness.Runs.Runs.Add(running);
 
-        var outcome = await harness.Orchestrator.RunAsync(ScanScope.Over([Channel53]), Cancel);
+        ScanOutcome outcome = await harness.Orchestrator.RunAsync(ScanScope.Over([Channel53]), Cancel);
 
         Assert.False(outcome.WasStarted);
         Assert.Equal(running.Id, outcome.AlreadyRunning);
@@ -245,7 +245,7 @@ public sealed class ScanWalkTests
     {
         var harness = new ScanHarness(new ScriptedDriverClient { GreetingFailure = "no socket" });
 
-        var outcome = await harness.Orchestrator.RunAsync(ScanScope.Over([Channel53]), Cancel);
+        ScanOutcome outcome = await harness.Orchestrator.RunAsync(ScanScope.Over([Channel53]), Cancel);
 
         Assert.False(outcome.WasStarted);
         Assert.Equal("no socket", outcome.CouldNotStartBecause);
@@ -257,7 +257,7 @@ public sealed class ScanWalkTests
     {
         var harness = new ScanHarness(new ScriptedDriverClient());
 
-        var outcome = await harness.Orchestrator.RunAsync(ScanScope.Of(TuneSystem.IsdbT), Cancel);
+        ScanOutcome outcome = await harness.Orchestrator.RunAsync(ScanScope.Of(TuneSystem.IsdbT), Cancel);
 
         Assert.Equal(50, outcome.Attempts.Count);
         Assert.Equal(
@@ -277,7 +277,7 @@ public sealed class ScanWalkTests
         harness.SatelliteStreams.Streams.Add(
             SatelliteTransportStream.Rehydrate(3, 0, new TransportStreamId(50003)));
 
-        var outcome = await harness.Orchestrator.RunAsync(ScanScope.Of(TuneSystem.IsdbSBs), Cancel);
+        ScanOutcome outcome = await harness.Orchestrator.RunAsync(ScanScope.Of(TuneSystem.IsdbSBs), Cancel);
 
         Assert.Equal(
             [

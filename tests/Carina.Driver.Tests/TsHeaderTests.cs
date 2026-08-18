@@ -13,7 +13,7 @@ public sealed class TsHeaderTests
         byte fill = 0x00
     )
     {
-        var packet = new byte[TsPacketReader.PacketLength];
+        byte[] packet = new byte[TsPacketReader.PacketLength];
         packet[0] = TsPacketReader.SyncByte;
         packet[1] = (byte)(byte1High | ((pid >> 8) & 0x1F));
         packet[2] = (byte)(pid & 0xFF);
@@ -33,7 +33,7 @@ public sealed class TsHeaderTests
     private static TsPacket ReadOne(byte[] packet)
     {
         var reader = new TsPacketReader();
-        var packets = reader.Read([.. packet, .. packet]);
+        IReadOnlyList<TsPacket> packets = reader.Read([.. packet, .. packet]);
 
         return packets[0];
     }
@@ -48,7 +48,7 @@ public sealed class TsHeaderTests
     [InlineData(0xF0, true)]
     public void PayloadPresenceComesFromTheAdaptationFieldControl(int byte3High, bool expected)
     {
-        var packet = ReadOne(Packet(byte3High: (byte)byte3High, continuityCounter: 5));
+        TsPacket packet = ReadOne(Packet(byte3High: (byte)byte3High, continuityCounter: 5));
 
         Assert.Equal(expected, packet.HasPayload);
         Assert.Equal(5, packet.ContinuityCounter);
@@ -96,7 +96,7 @@ public sealed class TsHeaderTests
         bool expected
     )
     {
-        var packet = ReadOne(
+        TsPacket packet = ReadOne(
             Packet(byte3High: (byte)byte3High, discontinuity: set)
         );
 
@@ -106,8 +106,8 @@ public sealed class TsHeaderTests
     [Fact]
     public void ARewrittenAdaptationFieldDoesNotChangeTheHash()
     {
-        var first = Packet(byte3High: 0x30, fill: 0x11);
-        var second = (byte[])first.Clone();
+        byte[] first = Packet(byte3High: 0x30, fill: 0x11);
+        byte[] second = (byte[])first.Clone();
         second[8] = 0x99;
 
         Assert.Equal(ReadOne(first).PayloadHash, ReadOne(second).PayloadHash);

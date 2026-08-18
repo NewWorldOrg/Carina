@@ -18,16 +18,16 @@ public sealed record ShortEventDescription(string Language, string Name, string 
             return false;
         }
 
-        var payload = descriptor.Payload.Span;
-        var nameLength = payload[LanguageSize];
-        var afterName = LanguageSize + 1 + nameLength;
+        ReadOnlySpan<byte> payload = descriptor.Payload.Span;
+        byte nameLength = payload[LanguageSize];
+        int afterName = LanguageSize + 1 + nameLength;
 
         if (afterName + 1 > payload.Length)
         {
             return false;
         }
 
-        var summaryLength = payload[afterName];
+        byte summaryLength = payload[afterName];
 
         if (afterName + 1 + summaryLength > payload.Length)
         {

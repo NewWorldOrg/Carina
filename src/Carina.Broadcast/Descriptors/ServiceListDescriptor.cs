@@ -23,10 +23,10 @@ public static class ServiceListDescriptor
             return false;
         }
 
-        var payload = descriptor.Payload.Span;
+        ReadOnlySpan<byte> payload = descriptor.Payload.Span;
         var found = new List<ServiceListEntry>(payload.Length / EntrySize);
 
-        for (var at = 0; at < payload.Length; at += EntrySize)
+        for (int at = 0; at < payload.Length; at += EntrySize)
         {
             found.Add(new ServiceListEntry((payload[at] << 8) | payload[at + 1], payload[at + 2]));
         }

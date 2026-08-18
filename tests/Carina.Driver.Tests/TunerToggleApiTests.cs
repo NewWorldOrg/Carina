@@ -20,10 +20,10 @@ public sealed class TunerToggleApiTests
     [Fact]
     public async Task TurningATunerOffTakesEffectAtOnceWhenNothingIsUsingIt()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        var tuner = await Toggle(client, "fake-terrestrial", disabled: true);
+        TunerSnapshot tuner = await Toggle(client, "fake-terrestrial", disabled: true);
 
         Assert.Equal(TunerState.Disabled, tuner.State);
         Assert.Equal(TunerState.Disabled, (await Tuner(client, "fake-terrestrial")).State);
@@ -32,12 +32,12 @@ public sealed class TunerToggleApiTests
     [Fact]
     public async Task ATunerTurnedOffIsNoLongerHandedOut()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
         await Toggle(client, "fake-terrestrial", disabled: true);
 
-        using var response = await client.PostAsync(
+        using HttpResponseMessage response = await client.PostAsync(
             DriverEndpoints.Sessions,
             DriverUnderTest.Body(DriverUnderTest.Live("s-1", "fake-terrestrial")),
             Soon()
@@ -53,12 +53,12 @@ public sealed class TunerToggleApiTests
     [Fact]
     public async Task ATunerTurnedBackOnIsHandedOutAgainWithoutARestart()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
         await Toggle(client, "fake-spare", disabled: false);
 
-        using var response = await client.PostAsync(
+        using HttpResponseMessage response = await client.PostAsync(
             DriverEndpoints.Sessions,
             DriverUnderTest.Body(DriverUnderTest.Live("s-1", "fake-spare")),
             Soon()
@@ -70,11 +70,11 @@ public sealed class TunerToggleApiTests
     [Fact]
     public async Task ATunerInUseIsNotYankedOutFromUnderTheSessionThatHoldsIt()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
         using (
-            var started = await client.PostAsync(
+            HttpResponseMessage started = await client.PostAsync(
                 DriverEndpoints.Sessions,
                 DriverUnderTest.Body(DriverUnderTest.Live("s-1", "fake-terrestrial")),
                 Soon()
@@ -86,11 +86,11 @@ public sealed class TunerToggleApiTests
 
         await Toggle(client, "fake-terrestrial", disabled: true);
 
-        using var session = await client.GetAsync($"{DriverEndpoints.Sessions}/s-1", Soon());
+        using HttpResponseMessage session = await client.GetAsync($"{DriverEndpoints.Sessions}/s-1", Soon());
 
         Assert.Equal(HttpStatusCode.OK, session.StatusCode);
 
-        var snapshot = await DriverUnderTest.Read(session, DriverJson.Context.SessionSnapshot);
+        SessionSnapshot? snapshot = await DriverUnderTest.Read(session, DriverJson.Context.SessionSnapshot);
 
         Assert.NotNull(snapshot);
         Assert.False(snapshot.Concluded);
@@ -99,12 +99,12 @@ public sealed class TunerToggleApiTests
     [Fact]
     public async Task TurningOffATunerInUseIsAnsweredAsDrainingRatherThanAsDisabled()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
         await Occupy(client, "fake-terrestrial");
 
-        var tuner = await Toggle(client, "fake-terrestrial", disabled: true);
+        TunerSnapshot tuner = await Toggle(client, "fake-terrestrial", disabled: true);
 
         Assert.Equal(TunerState.Draining, tuner.State);
         Assert.Equal(TunerState.Draining, (await Tuner(client, "fake-terrestrial")).State);
@@ -113,13 +113,13 @@ public sealed class TunerToggleApiTests
     [Fact]
     public async Task ADrainingTunerIsRefusedToTheNextSessionThatAsksForIt()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
         await Occupy(client, "fake-terrestrial");
         await Toggle(client, "fake-terrestrial", disabled: true);
 
-        using var response = await client.PostAsync(
+        using HttpResponseMessage response = await client.PostAsync(
             DriverEndpoints.Sessions,
             DriverUnderTest.Body(DriverUnderTest.Live("s-2", "fake-terrestrial")),
             Soon()
@@ -135,14 +135,14 @@ public sealed class TunerToggleApiTests
     [Fact]
     public async Task ADrainingTunerSettlesIntoBeingOffWhenTheSessionHoldingItEnds()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
         await Occupy(client, "fake-terrestrial");
         await Toggle(client, "fake-terrestrial", disabled: true);
 
         using (
-            var stopped = await client.DeleteAsync($"{DriverEndpoints.Sessions}/s-1?reason=test", Soon())
+            HttpResponseMessage stopped = await client.DeleteAsync($"{DriverEndpoints.Sessions}/s-1?reason=test", Soon())
         )
         {
             Assert.Equal(HttpStatusCode.OK, stopped.StatusCode);
@@ -160,13 +160,13 @@ public sealed class TunerToggleApiTests
     [Fact]
     public async Task ATunerTurnedBackOnWhileDrainingIsInServiceAgainRatherThanStillOnItsWayOut()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
         await Occupy(client, "fake-terrestrial");
         await Toggle(client, "fake-terrestrial", disabled: true);
 
-        var tuner = await Toggle(client, "fake-terrestrial", disabled: false);
+        TunerSnapshot tuner = await Toggle(client, "fake-terrestrial", disabled: false);
 
         Assert.Equal(TunerState.Busy, tuner.State);
     }
@@ -174,10 +174,10 @@ public sealed class TunerToggleApiTests
     [Fact]
     public async Task ATunerNobodyHasHeardOfIsNotToggled()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var response = await client.PatchAsync(
+        using HttpResponseMessage response = await client.PatchAsync(
             DriverEndpoints.Tuner("adapter9.frontend0"),
             Body(disabled: true),
             Soon()
@@ -193,10 +193,10 @@ public sealed class TunerToggleApiTests
     [Fact]
     public async Task AToggleThatSaysNothingIsRefusedRatherThanReadAsTurningATunerOn()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var response = await client.PatchAsync(
+        using HttpResponseMessage response = await client.PatchAsync(
             DriverEndpoints.Tuner("fake-terrestrial"),
             Body(disabled: null),
             Soon()
@@ -213,10 +213,10 @@ public sealed class TunerToggleApiTests
     [Fact]
     public async Task ATunerIdOutsideTheShapeIsRefusedBeforeAnyTunerIsLookedUp()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var response = await client.PatchAsync(
+        using HttpResponseMessage response = await client.PatchAsync(
             "/tuners/..%2Fsecrets",
             Body(disabled: true),
             Soon()
@@ -232,10 +232,10 @@ public sealed class TunerToggleApiTests
     [Fact]
     public async Task ADriverThatCanTurnATunerOffWhileItRunsSaysSoInItsGreeting()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        var hello = await DriverUnderTest.Read(
+        DriverHello? hello = await DriverUnderTest.Read(
             await client.GetAsync(DriverEndpoints.Health, Soon()),
             DriverJson.Context.DriverHello
         );
@@ -247,13 +247,13 @@ public sealed class TunerToggleApiTests
     [Fact]
     public async Task TurningATunerOffDoesNotChangeTheLedgerThatIsSaved()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
         await Toggle(client, "fake-terrestrial", disabled: true);
 
-        using var response = await client.GetAsync(DriverEndpoints.TunerLedger, Soon());
-        var ledger = await DriverUnderTest.Read(response, DriverJson.Context.TunerLedgerDto);
+        using HttpResponseMessage response = await client.GetAsync(DriverEndpoints.TunerLedger, Soon());
+        TunerLedgerDto? ledger = await DriverUnderTest.Read(response, DriverJson.Context.TunerLedgerDto);
 
         Assert.NotNull(ledger);
         Assert.False(ledger.HasDrifted());
@@ -265,24 +265,24 @@ public sealed class TunerToggleApiTests
     [Fact]
     public async Task NoDeviceNodeCrossesTheSocketWhenATunerIsToggled()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var answered = await client.PatchAsync(
+        using HttpResponseMessage answered = await client.PatchAsync(
             DriverEndpoints.Tuner("fake-terrestrial"),
             Body(disabled: true),
             Soon()
         );
 
-        using var refused = await client.PatchAsync(
+        using HttpResponseMessage refused = await client.PatchAsync(
             DriverEndpoints.Tuner("adapter9.frontend0"),
             Body(disabled: true),
             Soon()
         );
 
-        foreach (var response in new[] { answered, refused })
+        foreach (HttpResponseMessage? response in new[] { answered, refused })
         {
-            var body = await response.Content.ReadAsStringAsync(Soon());
+            string body = await response.Content.ReadAsStringAsync(Soon());
 
             Assert.DoesNotContain("/dev", body, StringComparison.Ordinal);
             Assert.DoesNotContain("devicePath", body, StringComparison.Ordinal);
@@ -292,14 +292,14 @@ public sealed class TunerToggleApiTests
     [Fact]
     public async Task ADriverWhoseTunersAreAllDrainingIsNotHealthy()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
         await Occupy(client, "fake-terrestrial");
         await Toggle(client, "fake-terrestrial", disabled: true);
         await Toggle(client, "fake-satellite", disabled: true);
 
-        var tuners = await Tuners(client);
+        IReadOnlyList<TunerSnapshot> tuners = await Tuners(client);
 
         Assert.False(
             Ipc.DriverProbe
@@ -310,7 +310,7 @@ public sealed class TunerToggleApiTests
 
     private static async Task Occupy(HttpClient client, string deviceId)
     {
-        using var response = await client.PostAsync(
+        using HttpResponseMessage response = await client.PostAsync(
             DriverEndpoints.Sessions,
             DriverUnderTest.Body(DriverUnderTest.Live("s-1", deviceId)),
             Soon()
@@ -325,7 +325,7 @@ public sealed class TunerToggleApiTests
         bool disabled
     )
     {
-        using var response = await client.PatchAsync(
+        using HttpResponseMessage response = await client.PatchAsync(
             DriverEndpoints.Tuner(deviceId),
             Body(disabled),
             Soon()
@@ -333,7 +333,7 @@ public sealed class TunerToggleApiTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var tuner = await DriverUnderTest.Read(response, DriverJson.Context.TunerSnapshot);
+        TunerSnapshot? tuner = await DriverUnderTest.Read(response, DriverJson.Context.TunerSnapshot);
 
         Assert.NotNull(tuner);
         Assert.Equal(deviceId, tuner.DeviceId);
@@ -343,11 +343,11 @@ public sealed class TunerToggleApiTests
 
     private static async Task<IReadOnlyList<TunerSnapshot>> Tuners(HttpClient client)
     {
-        using var response = await client.GetAsync(DriverEndpoints.Tuners, Soon());
+        using HttpResponseMessage response = await client.GetAsync(DriverEndpoints.Tuners, Soon());
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var tuners = await DriverUnderTest.Read(
+        IReadOnlyList<TunerSnapshot>? tuners = await DriverUnderTest.Read(
             response,
             DriverJson.Context.IReadOnlyListTunerSnapshot
         );
@@ -365,7 +365,7 @@ public sealed class TunerToggleApiTests
         Func<IReadOnlyList<TunerSnapshot>, bool> settled
     )
     {
-        var deadline = DateTimeOffset.UtcNow + Patience;
+        DateTimeOffset deadline = DateTimeOffset.UtcNow + Patience;
 
         while (DateTimeOffset.UtcNow < deadline)
         {

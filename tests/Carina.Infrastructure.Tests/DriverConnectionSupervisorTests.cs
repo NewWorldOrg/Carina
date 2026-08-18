@@ -133,8 +133,8 @@ public sealed class DriverConnectionSupervisorTests
     [Fact]
     public async Task ConnectsAndSurfacesTheHelloAndReadopts()
     {
-        var socketPath = NewSocketPath();
-        await using var driver = await FakeDriver.StartAsync(
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
             socketPath,
             FakeDriver.HelloFor("instance-a"));
         driver.Sessions =
@@ -147,7 +147,7 @@ public sealed class DriverConnectionSupervisorTests
                 DateTimeOffset.UtcNow),
         ];
 
-        await using var harness = await Harness.StartAsync(socketPath);
+        await using Harness harness = await Harness.StartAsync(socketPath);
 
         await Eventually.Happens(
             () => harness.Monitor.Current.Connection is DriverConnection.Connected,
@@ -163,7 +163,7 @@ public sealed class DriverConnectionSupervisorTests
     [Fact]
     public async Task StartsDegradedWithoutADriverAndNeverThrows()
     {
-        await using var harness = await Harness.StartAsync();
+        await using Harness harness = await Harness.StartAsync();
 
         await Task.Delay(200);
 
@@ -174,9 +174,9 @@ public sealed class DriverConnectionSupervisorTests
     [Fact]
     public async Task ALostDriverFlipsToNotConnectedWithoutCrashing()
     {
-        var socketPath = NewSocketPath();
-        var driver = await FakeDriver.StartAsync(socketPath, FakeDriver.HelloFor("instance-a"));
-        await using var harness = await Harness.StartAsync(socketPath);
+        string socketPath = NewSocketPath();
+        FakeDriver driver = await FakeDriver.StartAsync(socketPath, FakeDriver.HelloFor("instance-a"));
+        await using Harness harness = await Harness.StartAsync(socketPath);
 
         await Eventually.Happens(
             () => harness.Monitor.Current.Connection is DriverConnection.Connected,
@@ -192,9 +192,9 @@ public sealed class DriverConnectionSupervisorTests
     [Fact]
     public async Task ANewInstanceOnReconnectTriggersReadoption()
     {
-        var socketPath = NewSocketPath();
-        var first = await FakeDriver.StartAsync(socketPath, FakeDriver.HelloFor("instance-a"));
-        await using var harness = await Harness.StartAsync(socketPath);
+        string socketPath = NewSocketPath();
+        FakeDriver first = await FakeDriver.StartAsync(socketPath, FakeDriver.HelloFor("instance-a"));
+        await using Harness harness = await Harness.StartAsync(socketPath);
 
         await Eventually.Happens(() => harness.Hook.CallCount == 1, "the first adoption");
 
@@ -203,7 +203,7 @@ public sealed class DriverConnectionSupervisorTests
             () => harness.Monitor.Current.Connection is DriverConnection.NotConnected,
             "the loss is noticed");
 
-        await using var second = await FakeDriver.StartAsync(
+        await using FakeDriver second = await FakeDriver.StartAsync(
             socketPath,
             FakeDriver.HelloFor("instance-b"));
         second.Sessions =
@@ -225,9 +225,9 @@ public sealed class DriverConnectionSupervisorTests
     [Fact]
     public async Task TheSameInstanceOnReconnectDoesNotReadoptAgain()
     {
-        var socketPath = NewSocketPath();
-        var first = await FakeDriver.StartAsync(socketPath, FakeDriver.HelloFor("instance-a"));
-        await using var harness = await Harness.StartAsync(socketPath);
+        string socketPath = NewSocketPath();
+        FakeDriver first = await FakeDriver.StartAsync(socketPath, FakeDriver.HelloFor("instance-a"));
+        await using Harness harness = await Harness.StartAsync(socketPath);
 
         await Eventually.Happens(() => harness.Hook.CallCount == 1, "the first adoption");
 
@@ -236,7 +236,7 @@ public sealed class DriverConnectionSupervisorTests
             () => harness.Monitor.Current.Connection is DriverConnection.NotConnected,
             "the loss is noticed");
 
-        await using var second = await FakeDriver.StartAsync(
+        await using FakeDriver second = await FakeDriver.StartAsync(
             socketPath,
             FakeDriver.HelloFor("instance-a"));
 
@@ -250,14 +250,14 @@ public sealed class DriverConnectionSupervisorTests
     [Fact]
     public async Task ADrainingSignalFlipsTheConnectionState()
     {
-        var socketPath = NewSocketPath();
-        await using var driver = await FakeDriver.StartAsync(
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
             socketPath,
             FakeDriver.HelloFor("instance-a"));
-        await using var harness = await Harness.StartAsync(socketPath);
+        await using Harness harness = await Harness.StartAsync(socketPath);
 
         var received = new ConcurrentQueue<string>();
-        using var subscription = harness.Signals.Subscribe(received.Enqueue);
+        using IDisposable subscription = harness.Signals.Subscribe(received.Enqueue);
 
         await Eventually.Happens(
             () => harness.Monitor.Current.Connection is DriverConnection.Connected,
@@ -279,11 +279,11 @@ public sealed class DriverConnectionSupervisorTests
     [Fact]
     public async Task AHelloAlreadyDrainingReportsDraining()
     {
-        var socketPath = NewSocketPath();
-        await using var driver = await FakeDriver.StartAsync(
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
             socketPath,
             FakeDriver.HelloFor("instance-a", draining: true));
-        await using var harness = await Harness.StartAsync(socketPath);
+        await using Harness harness = await Harness.StartAsync(socketPath);
 
         await Eventually.Happens(
             () => harness.Monitor.Current.Connection is DriverConnection.Draining,
@@ -293,14 +293,14 @@ public sealed class DriverConnectionSupervisorTests
     [Fact]
     public async Task SignalsReachSubscribersAndUnknownNamesAreIgnored()
     {
-        var socketPath = NewSocketPath();
-        await using var driver = await FakeDriver.StartAsync(
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
             socketPath,
             FakeDriver.HelloFor("instance-a"));
-        await using var harness = await Harness.StartAsync(socketPath);
+        await using Harness harness = await Harness.StartAsync(socketPath);
 
         var received = new ConcurrentQueue<string>();
-        using var subscription = harness.Signals.Subscribe(received.Enqueue);
+        using IDisposable subscription = harness.Signals.Subscribe(received.Enqueue);
 
         await Eventually.Happens(
             () => harness.Monitor.Current.Connection is DriverConnection.Connected,
@@ -321,14 +321,14 @@ public sealed class DriverConnectionSupervisorTests
     [Fact]
     public async Task TheTuningLockAndHealthEventNamesAreRecognisedAndReachSubscribers()
     {
-        var socketPath = NewSocketPath();
-        await using var driver = await FakeDriver.StartAsync(
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
             socketPath,
             FakeDriver.HelloFor("instance-a"));
-        await using var harness = await Harness.StartAsync(socketPath);
+        await using Harness harness = await Harness.StartAsync(socketPath);
 
         var received = new ConcurrentQueue<string>();
-        using var subscription = harness.Signals.Subscribe(received.Enqueue);
+        using IDisposable subscription = harness.Signals.Subscribe(received.Enqueue);
 
         await Eventually.Happens(
             () => harness.Monitor.Current.Connection is DriverConnection.Connected,
@@ -351,21 +351,21 @@ public sealed class DriverConnectionSupervisorTests
     [Fact]
     public async Task AReconnectToADifferentInstanceIsAnnouncedToSubscribers()
     {
-        var socketPath = NewSocketPath();
-        var first = await FakeDriver.StartAsync(socketPath, FakeDriver.HelloFor("instance-a"));
-        await using var harness = await Harness.StartAsync(socketPath);
+        string socketPath = NewSocketPath();
+        FakeDriver first = await FakeDriver.StartAsync(socketPath, FakeDriver.HelloFor("instance-a"));
+        await using Harness harness = await Harness.StartAsync(socketPath);
 
         await Eventually.Happens(() => harness.Hook.CallCount == 1, "the first adoption");
 
         var received = new ConcurrentQueue<string>();
-        using var subscription = harness.Signals.Subscribe(received.Enqueue);
+        using IDisposable subscription = harness.Signals.Subscribe(received.Enqueue);
 
         await first.DisposeAsync();
         await Eventually.Happens(
             () => harness.Monitor.Current.Connection is DriverConnection.NotConnected,
             "the loss is noticed");
 
-        await using var second = await FakeDriver.StartAsync(
+        await using FakeDriver second = await FakeDriver.StartAsync(
             socketPath,
             FakeDriver.HelloFor("instance-b"));
 
@@ -377,13 +377,13 @@ public sealed class DriverConnectionSupervisorTests
     [Fact]
     public async Task TheFirstAdoptionIsNotAnnouncedAsAnInstanceChange()
     {
-        var socketPath = NewSocketPath();
-        await using var harness = await Harness.StartAsync(socketPath);
+        string socketPath = NewSocketPath();
+        await using Harness harness = await Harness.StartAsync(socketPath);
 
         var received = new ConcurrentQueue<string>();
-        using var subscription = harness.Signals.Subscribe(received.Enqueue);
+        using IDisposable subscription = harness.Signals.Subscribe(received.Enqueue);
 
-        await using var driver = await FakeDriver.StartAsync(
+        await using FakeDriver driver = await FakeDriver.StartAsync(
             socketPath,
             FakeDriver.HelloFor("instance-a"));
 
@@ -395,21 +395,21 @@ public sealed class DriverConnectionSupervisorTests
     [Fact]
     public async Task AReconnectToTheSameInstanceIsNotAnnouncedAsAnInstanceChange()
     {
-        var socketPath = NewSocketPath();
-        var first = await FakeDriver.StartAsync(socketPath, FakeDriver.HelloFor("instance-a"));
-        await using var harness = await Harness.StartAsync(socketPath);
+        string socketPath = NewSocketPath();
+        FakeDriver first = await FakeDriver.StartAsync(socketPath, FakeDriver.HelloFor("instance-a"));
+        await using Harness harness = await Harness.StartAsync(socketPath);
 
         await Eventually.Happens(() => harness.Hook.CallCount == 1, "the first adoption");
 
         var received = new ConcurrentQueue<string>();
-        using var subscription = harness.Signals.Subscribe(received.Enqueue);
+        using IDisposable subscription = harness.Signals.Subscribe(received.Enqueue);
 
         await first.DisposeAsync();
         await Eventually.Happens(
             () => harness.Monitor.Current.Connection is DriverConnection.NotConnected,
             "the loss is noticed");
 
-        await using var second = await FakeDriver.StartAsync(
+        await using FakeDriver second = await FakeDriver.StartAsync(
             socketPath,
             FakeDriver.HelloFor("instance-a"));
 
@@ -426,11 +426,11 @@ public sealed class DriverConnectionSupervisorTests
     [Fact]
     public async Task AMissingCapabilityIsSurfacedAsDegradation()
     {
-        var socketPath = NewSocketPath();
-        await using var driver = await FakeDriver.StartAsync(
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
             socketPath,
             FakeDriver.HelloFor("instance-a", capabilities: ["recording"]));
-        await using var harness = await Harness.StartAsync(socketPath);
+        await using Harness harness = await Harness.StartAsync(socketPath);
 
         await Eventually.Happens(
             () => harness.Monitor.Current.Connection is DriverConnection.Connected,
@@ -445,15 +445,15 @@ public sealed class DriverConnectionSupervisorTests
     [InlineData(503)]
     public async Task ADriverThatRefusesItsSessionListStaysConnected(int status)
     {
-        var socketPath = NewSocketPath();
-        await using var driver = await FakeDriver.StartAsync(
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
             socketPath,
             FakeDriver.HelloFor("instance-a"));
         driver.RefusalsByPath[DriverEndpoints.Sessions] = new FakeDriver.Refusal(
             status,
             new DriverProblem("sessionsUnavailable", ["The session list is not being served."]));
 
-        await using var harness = await Harness.StartAsync(socketPath);
+        await using Harness harness = await Harness.StartAsync(socketPath);
 
         await Eventually.Happens(
             () => harness.Monitor.Current.Connection is DriverConnection.Connected,
@@ -469,8 +469,8 @@ public sealed class DriverConnectionSupervisorTests
     [Fact]
     public async Task AFailingResyncHookIsNotReportedAsAMissingDriver()
     {
-        var socketPath = NewSocketPath();
-        await using var driver = await FakeDriver.StartAsync(
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
             socketPath,
             FakeDriver.HelloFor("instance-a"));
         driver.Sessions =
@@ -483,7 +483,7 @@ public sealed class DriverConnectionSupervisorTests
                 DateTimeOffset.UtcNow),
         ];
 
-        await using var harness = await Harness.StartAsync(
+        await using Harness harness = await Harness.StartAsync(
             socketPath,
             resyncFailure: new InvalidOperationException("The recording store is unavailable."));
 
@@ -507,8 +507,8 @@ public sealed class DriverConnectionSupervisorTests
     [Fact]
     public async Task ADrainingDriverIsPolledOnItsOwnCadenceAndItsFeedIsLeftAlone()
     {
-        var socketPath = NewSocketPath();
-        await using var driver = await FakeDriver.StartAsync(
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
             socketPath,
             FakeDriver.HelloFor("instance-a", draining: true));
         driver.RefusalsByPath[DriverEndpoints.Events] = new FakeDriver.Refusal(
@@ -516,7 +516,7 @@ public sealed class DriverConnectionSupervisorTests
             new DriverProblem("draining", ["The driver is shutting down and sends no further events."]));
 
         var clock = new HurriedClock();
-        await using var harness = await Harness.StartAsync(socketPath, clock: clock);
+        await using Harness harness = await Harness.StartAsync(socketPath, clock: clock);
 
         await Eventually.Happens(() => clock.Waits.Count >= 5, "five supervision rounds");
 
@@ -527,8 +527,8 @@ public sealed class DriverConnectionSupervisorTests
     [Fact]
     public async Task ARefusedEventFeedBacksOffInsteadOfRestartingAtTheFirstDelay()
     {
-        var socketPath = NewSocketPath();
-        await using var driver = await FakeDriver.StartAsync(
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
             socketPath,
             FakeDriver.HelloFor("instance-a"));
         driver.RefusalsByPath[DriverEndpoints.Events] = new FakeDriver.Refusal(
@@ -536,7 +536,7 @@ public sealed class DriverConnectionSupervisorTests
             new DriverProblem("tooManyListeners", ["This driver carries 1 event listener at a time."]));
 
         var clock = new HurriedClock();
-        await using var harness = await Harness.StartAsync(socketPath, clock: clock);
+        await using Harness harness = await Harness.StartAsync(socketPath, clock: clock);
 
         await Eventually.Happens(() => clock.Waits.Count >= 5, "five supervision rounds");
 
@@ -547,14 +547,14 @@ public sealed class DriverConnectionSupervisorTests
     [Fact]
     public async Task AnEventFeedThatIsDroppedAtOnceBacksOffInsteadOfRestarting()
     {
-        var socketPath = NewSocketPath();
-        await using var driver = await FakeDriver.StartAsync(
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
             socketPath,
             FakeDriver.HelloFor("instance-a"));
         driver.DropEventFeed = true;
 
         var clock = new HurriedClock();
-        await using var harness = await Harness.StartAsync(socketPath, clock: clock);
+        await using Harness harness = await Harness.StartAsync(socketPath, clock: clock);
 
         await Eventually.Happens(() => clock.Waits.Count >= 5, "five supervision rounds");
 

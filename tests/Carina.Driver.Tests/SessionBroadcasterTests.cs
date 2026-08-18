@@ -11,7 +11,7 @@ public sealed class SessionBroadcasterTests
 
         Assert.True(broadcaster.TrySubscribe(SubscriberKind.Viewer, out _));
         Assert.True(broadcaster.TrySubscribe(SubscriberKind.Survey, out _));
-        Assert.False(broadcaster.TrySubscribe(SubscriberKind.Viewer, out var refused));
+        Assert.False(broadcaster.TrySubscribe(SubscriberKind.Viewer, out SessionSubscription? refused));
 
         Assert.Null(refused);
         Assert.Equal(2, broadcaster.SubscriberCount);
@@ -22,7 +22,7 @@ public sealed class SessionBroadcasterTests
     {
         using var broadcaster = new SessionBroadcaster(subscriberLimit: 1);
 
-        Assert.True(broadcaster.TrySubscribe(SubscriberKind.Viewer, out var first));
+        Assert.True(broadcaster.TrySubscribe(SubscriberKind.Viewer, out SessionSubscription? first));
         Assert.False(broadcaster.TrySubscribe(SubscriberKind.Viewer, out _));
 
         broadcaster.Unsubscribe(first);
@@ -34,7 +34,7 @@ public sealed class SessionBroadcasterTests
     public void TheLimitHoldsWhenEveryoneArrivesAtOnce()
     {
         using var broadcaster = new SessionBroadcaster(subscriberLimit: 4);
-        var taken = 0;
+        int taken = 0;
 
         Parallel.For(
             0,
@@ -60,7 +60,7 @@ public sealed class SessionBroadcasterTests
             surveyBlockLimit: TimeSpan.FromMilliseconds(50)
         );
 
-        Assert.True(broadcaster.TrySubscribe(SubscriberKind.Survey, out var subscription));
+        Assert.True(broadcaster.TrySubscribe(SubscriberKind.Survey, out SessionSubscription? subscription));
 
         broadcaster.Publish(new byte[188]);
         broadcaster.Publish(new byte[188]);
@@ -80,7 +80,7 @@ public sealed class SessionBroadcasterTests
             subscriberLimit: SessionBroadcaster.DefaultSubscriberLimit
         );
 
-        for (var index = 0; index < 100; index++)
+        for (int index = 0; index < 100; index++)
         {
             broadcaster.TrySubscribe(SubscriberKind.Survey, out _);
         }

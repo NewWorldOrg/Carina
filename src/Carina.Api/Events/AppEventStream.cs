@@ -1,6 +1,7 @@
 using System.Threading.Channels;
 
 using Carina.Api.Responder;
+using Carina.Contracts;
 using Carina.Infrastructure.Events;
 
 namespace Carina.Api.Events;
@@ -18,7 +19,7 @@ public static class AppEventStream
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(hub);
 
-        if (!hub.TryListen(out var listener))
+        if (!hub.TryListen(out AppEventListener? listener))
         {
             await RefuseAsync(context, hub);
 
@@ -31,7 +32,7 @@ public static class AppEventStream
             context.Response.ContentType = ContentType;
             context.Response.Headers.CacheControl = "no-cache";
 
-            var patience = writePatience ?? WritePatience;
+            TimeSpan patience = writePatience ?? WritePatience;
 
             try
             {
@@ -40,12 +41,12 @@ public static class AppEventStream
 
                 while (true)
                 {
-                    var names = await listener.Take(context.RequestAborted);
+                    IReadOnlyList<AppEventName> names = await listener.Take(context.RequestAborted);
 
                     using var leash = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
                     leash.CancelAfter(patience);
 
-                    foreach (var name in names)
+                    foreach (AppEventName name in names)
                     {
                         await context.Response.WriteAsync(Frame(name.Value), leash.Token);
                     }
@@ -69,7 +70,7 @@ public static class AppEventStream
 
     private static Task RefuseAsync(HttpContext context, AppEventHub hub)
     {
-        var (status, message) = hub.IsClosed
+        (int status, string? message) = hub.IsClosed
             ? (StatusCodes.Status503ServiceUnavailable, "The app is shutting down and sends no further signals.")
             : (StatusCodes.Status429TooManyRequests,
                 $"This app carries {hub.ListenerLimit} signal listeners at a time and they are all taken.");

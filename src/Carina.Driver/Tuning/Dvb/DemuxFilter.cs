@@ -13,7 +13,7 @@ public static class DemuxFilter
 
     public static byte[] EverythingFromTheFrontend()
     {
-        var filter = new byte[DvbLayout.PesFilterBytes];
+        byte[] filter = new byte[DvbLayout.PesFilterBytes];
 
         BinaryPrimitives.WriteUInt16LittleEndian(
             filter.AsSpan(DvbLayout.PesFilterPidAt),

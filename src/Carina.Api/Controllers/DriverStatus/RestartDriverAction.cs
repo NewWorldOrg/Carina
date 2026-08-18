@@ -1,3 +1,4 @@
+using Carina.Api.Common;
 using Carina.Api.Responder;
 using Carina.Api.Responder.DriverStatus;
 using Carina.Api.Services;
@@ -20,7 +21,7 @@ public sealed class RestartDriverAction(DriverRestartService driverRestartServic
     [ProducesResponseType<BaseResponder<DriverRestartResponder>>(StatusCodes.Status503ServiceUnavailable)]
     public async Task<IActionResult> Invoke(CancellationToken cancellationToken)
     {
-        var result = await driverRestartService.RequestAsync(cancellationToken);
+        ServiceResult<DriverRestartView, DriverRestartFailure> result = await driverRestartService.RequestAsync(cancellationToken);
 
         if (!result.IsSuccess)
         {

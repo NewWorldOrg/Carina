@@ -15,14 +15,14 @@ public sealed class UnhandledFailureMiddlewareTests
     [Fact]
     public async Task ARequestThatFailedIsAnsweredWithTheUsualEnvelope()
     {
-        var context = Context();
+        DefaultHttpContext context = Context();
 
         await Middleware(_ => throw new InvalidOperationException("no answer of its own"))
             .InvokeAsync(context);
 
         Assert.Equal(StatusCodes.Status500InternalServerError, context.Response.StatusCode);
 
-        var answered = await ReadAsync(context);
+        JsonElement answered = await ReadAsync(context);
 
         Assert.False(answered.GetProperty("status").GetBoolean());
         Assert.Equal(UnhandledFailureMiddleware.Message, answered.GetProperty("message").GetString());
@@ -33,7 +33,7 @@ public sealed class UnhandledFailureMiddlewareTests
     [Fact]
     public async Task AFailureAfterTheAnswerBeganIsLeftToEndTheConnection()
     {
-        var context = Context();
+        DefaultHttpContext context = Context();
         var response = (StartableResponse)context.Features.Get<IHttpResponseFeature>()!;
 
         await Assert.ThrowsAsync<InvalidOperationException>(
@@ -52,7 +52,7 @@ public sealed class UnhandledFailureMiddlewareTests
     public async Task ARequestTheCallerAbandonedIsNotReportedAsAFailure()
     {
         var abandoned = new CancellationTokenSource();
-        var context = Context();
+        DefaultHttpContext context = Context();
         context.RequestAborted = abandoned.Token;
 
         await Assert.ThrowsAsync<TaskCanceledException>(

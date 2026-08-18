@@ -24,7 +24,7 @@ public sealed class NitWriter
 
     public byte[] ToBody()
     {
-        var loop = TransportStreams.SelectMany(stream => stream).ToArray();
+        byte[] loop = TransportStreams.SelectMany(stream => stream).ToArray();
 
         return new ByteWriter()
             .Word(0xF000 | (DeclaredNetworkDescriptorsLength ?? NetworkDescriptors.Length))

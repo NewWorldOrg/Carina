@@ -18,7 +18,7 @@ public static class DriverEventStream
         TimeSpan? writePatience = null
     )
     {
-        if (!hub.TryListen(out var listener))
+        if (!hub.TryListen(out DriverEventListener? listener))
         {
             if (hub.IsClosed)
             {
@@ -48,7 +48,7 @@ public static class DriverEventStream
             context.Response.ContentType = ContentType;
             context.Response.Headers.CacheControl = "no-cache";
 
-            var patience = writePatience ?? WritePatience;
+            TimeSpan patience = writePatience ?? WritePatience;
 
             try
             {
@@ -57,14 +57,14 @@ public static class DriverEventStream
 
                 while (true)
                 {
-                    var names = await listener.Take(context.RequestAborted);
+                    IReadOnlyList<string> names = await listener.Take(context.RequestAborted);
 
                     using var leash = CancellationTokenSource.CreateLinkedTokenSource(
                         context.RequestAborted
                     );
                     leash.CancelAfter(patience);
 
-                    foreach (var name in names)
+                    foreach (string name in names)
                     {
                         await context.Response.WriteAsync(
                             $"event: {name}\ndata: {name}\n\n",

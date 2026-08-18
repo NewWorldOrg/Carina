@@ -55,10 +55,10 @@ public sealed class EventGrouping
             return false;
         }
 
-        var payload = descriptor.Payload.Span;
-        var kind = Kinds(payload[0] >> 4);
-        var count = payload[0] & 0x0F;
-        var afterHere = HeaderSize + (count * HereSize);
+        ReadOnlySpan<byte> payload = descriptor.Payload.Span;
+        EventGroupKind kind = Kinds(payload[0] >> 4);
+        int count = payload[0] & 0x0F;
+        int afterHere = HeaderSize + (count * HereSize);
 
         if (afterHere > payload.Length)
         {
@@ -67,7 +67,7 @@ public sealed class EventGrouping
 
         var events = new List<GroupedEvent>(count);
 
-        for (var at = HeaderSize; at < afterHere; at += HereSize)
+        for (int at = HeaderSize; at < afterHere; at += HereSize)
         {
             events.Add(new GroupedEvent(
                 (payload[at] << 8) | payload[at + 1],
@@ -81,7 +81,7 @@ public sealed class EventGrouping
             return true;
         }
 
-        var left = payload.Length - afterHere;
+        int left = payload.Length - afterHere;
 
         if (left % ElsewhereSize != 0)
         {
@@ -90,7 +90,7 @@ public sealed class EventGrouping
 
         var elsewhere = new List<GroupedEventElsewhere>(left / ElsewhereSize);
 
-        for (var at = afterHere; at < payload.Length; at += ElsewhereSize)
+        for (int at = afterHere; at < payload.Length; at += ElsewhereSize)
         {
             elsewhere.Add(new GroupedEventElsewhere(
                 (payload[at] << 8) | payload[at + 1],

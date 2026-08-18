@@ -31,7 +31,7 @@ public sealed class TunerDetectorTests : IDisposable
     {
         Node("adapter2", "frontend1");
 
-        var detection = Assert.Single(Detect(Terrestrial()));
+        TunerDetection detection = Assert.Single(Detect(Terrestrial()));
 
         Assert.Equal("adapter2.frontend1", detection.DeviceId);
         Assert.DoesNotContain('/', detection.DeviceId);
@@ -50,7 +50,7 @@ public sealed class TunerDetectorTests : IDisposable
     {
         Node("adapter0", "frontend0");
 
-        var detection = Assert.Single(Detect(Terrestrial()));
+        TunerDetection detection = Assert.Single(Detect(Terrestrial()));
 
         Assert.Equal(DeviceDetection.Detected, detection.Detection);
         Assert.Equal([DeviceKind.Terrestrial], detection.Receives);
@@ -84,7 +84,7 @@ public sealed class TunerDetectorTests : IDisposable
             HardwareName = SatelliteName,
         };
 
-        var detection = Assert.Single(Detect(calls));
+        TunerDetection detection = Assert.Single(Detect(calls));
 
         Assert.Equal(DeviceDetection.Detected, detection.Detection);
         Assert.Equal([DeviceKind.Satellite], detection.Receives);
@@ -95,10 +95,10 @@ public sealed class TunerDetectorTests : IDisposable
     {
         Node("adapter0", "frontend0");
 
-        var calls = Terrestrial();
+        ScriptedDvbSystemCalls calls = Terrestrial();
         calls.RefuseToOpen(Path.Combine(root, "adapter0", "frontend0"), Errno.Busy);
 
-        var detection = Assert.Single(Detect(calls));
+        TunerDetection detection = Assert.Single(Detect(calls));
 
         Assert.Equal(DeviceDetection.Busy, detection.Detection);
         Assert.Empty(detection.Receives);
@@ -110,10 +110,10 @@ public sealed class TunerDetectorTests : IDisposable
     {
         Node("adapter0", "frontend0");
 
-        var calls = Terrestrial();
+        ScriptedDvbSystemCalls calls = Terrestrial();
         calls.RefuseToOpen(Path.Combine(root, "adapter0", "frontend0"), Errno.PermissionDenied);
 
-        var detection = Assert.Single(Detect(calls));
+        TunerDetection detection = Assert.Single(Detect(calls));
 
         Assert.NotNull(detection.Detail);
         Assert.DoesNotContain(root, detection.Detail, StringComparison.Ordinal);
@@ -124,7 +124,7 @@ public sealed class TunerDetectorTests : IDisposable
     [Fact]
     public void TheSyntheticBackendDetectsTheTunersTheConfigurationDeclares()
     {
-        var detected = new FakeTunerDetector(Configured()).Detect();
+        IReadOnlyList<TunerDetection> detected = new FakeTunerDetector(Configured()).Detect();
 
         Assert.Equal(
             ["fake-terrestrial", "fake-satellite"],
@@ -138,7 +138,7 @@ public sealed class TunerDetectorTests : IDisposable
     [Fact]
     public void ASyntheticTunerReceivesWhatTheConfigurationCallsIt()
     {
-        var detected = new FakeTunerDetector(Configured()).Detect();
+        IReadOnlyList<TunerDetection> detected = new FakeTunerDetector(Configured()).Detect();
 
         Assert.Equal([DeviceKind.Terrestrial], detected[0].Receives);
         Assert.Equal([DeviceKind.Satellite], detected[1].Receives);
@@ -147,12 +147,12 @@ public sealed class TunerDetectorTests : IDisposable
     [Fact]
     public void ASyntheticTunerWithoutAKindIsNotDetectedAsAWorkingTuner()
     {
-        var configuration = Configured() with
+        DriverConfiguration configuration = Configured() with
         {
             Devices = [new DeviceSettings("fake-nameless", DeviceKind.Unspecified)],
         };
 
-        var detection = Assert.Single(new FakeTunerDetector(configuration).Detect());
+        TunerDetection detection = Assert.Single(new FakeTunerDetector(configuration).Detect());
 
         Assert.Equal(DeviceDetection.Unreadable, detection.Detection);
         Assert.Empty(detection.Receives);

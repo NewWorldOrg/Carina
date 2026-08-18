@@ -22,7 +22,7 @@ public sealed class DriverSignalRelay(ILogger<DriverSignalRelay> logger) : IDriv
 
     public void Publish(string name)
     {
-        foreach (var subscription in subscriptions.Keys)
+        foreach (Subscription subscription in subscriptions.Keys)
         {
             try
             {

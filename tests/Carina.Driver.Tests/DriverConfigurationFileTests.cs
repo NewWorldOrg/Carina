@@ -10,7 +10,7 @@ public sealed class DriverConfigurationFileTests : IDisposable
 
     private string Write(string name, string content)
     {
-        var path = Path.Combine(root, name);
+        string path = Path.Combine(root, name);
         File.WriteAllText(path, content);
 
         return path;
@@ -41,7 +41,7 @@ public sealed class DriverConfigurationFileTests : IDisposable
     [Fact]
     public void AMissingFileNamesThePath()
     {
-        var path = Path.Combine(root, "absent.json");
+        string path = Path.Combine(root, "absent.json");
 
         Assert.Contains(
             DriverConfigurationReader.ReadFile(path).Problems,
@@ -52,7 +52,7 @@ public sealed class DriverConfigurationFileTests : IDisposable
     [Fact]
     public void ADirectoryIsNotMistakenForAnUnreadableFile()
     {
-        var problem = Assert.Single(DriverConfigurationReader.ReadFile(root).Problems);
+        string problem = Assert.Single(DriverConfigurationReader.ReadFile(root).Problems);
 
         Assert.Contains("directory", problem);
     }
@@ -60,7 +60,7 @@ public sealed class DriverConfigurationFileTests : IDisposable
     [Fact]
     public void AnOutputRootThatIsNotThereIsAFinding()
     {
-        var path = Write(
+        string path = Write(
             "driver.json",
             Configuration(Path.Combine(root, "absent"), "/run/carina")
         );
@@ -74,8 +74,8 @@ public sealed class DriverConfigurationFileTests : IDisposable
     [Fact]
     public void ASocketDirectoryThatIsNotThereIsAFinding()
     {
-        var recordings = Directory.CreateDirectory(Path.Combine(root, "recordings")).FullName;
-        var path = Write("driver.json", Configuration(recordings, "/run/absent"));
+        string recordings = Directory.CreateDirectory(Path.Combine(root, "recordings")).FullName;
+        string path = Write("driver.json", Configuration(recordings, "/run/absent"));
 
         Assert.Contains(
             DriverConfigurationReader.ReadFile(path).Problems,
@@ -86,8 +86,8 @@ public sealed class DriverConfigurationFileTests : IDisposable
     [Fact]
     public void ASocketDirectoryAnyoneCanWriteInIsAFinding()
     {
-        var recordings = Directory.CreateDirectory(Path.Combine(root, "recordings")).FullName;
-        var sockets = Directory.CreateDirectory(Path.Combine(root, "sockets")).FullName;
+        string recordings = Directory.CreateDirectory(Path.Combine(root, "recordings")).FullName;
+        string sockets = Directory.CreateDirectory(Path.Combine(root, "sockets")).FullName;
         File.SetUnixFileMode(
             sockets,
             UnixFileMode.UserRead
@@ -114,7 +114,7 @@ public sealed class DriverConfigurationFileTests : IDisposable
     [Fact]
     public void TheShippedDevelopmentConfigurationIsUsable()
     {
-        var path = Path.Combine(
+        string path = Path.Combine(
             AppContext.BaseDirectory,
             "..",
             "..",

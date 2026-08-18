@@ -16,8 +16,8 @@ public sealed record TransportStreamInformation(int RemoteControlKeyId, string N
             return false;
         }
 
-        var payload = descriptor.Payload.Span;
-        var nameLength = payload[1] >> 2;
+        ReadOnlySpan<byte> payload = descriptor.Payload.Span;
+        int nameLength = payload[1] >> 2;
 
         if (2 + nameLength > payload.Length)
         {

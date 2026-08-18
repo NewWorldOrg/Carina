@@ -30,21 +30,21 @@ public sealed class ExtendedEventDescription
         ArgumentNullException.ThrowIfNull(descriptors);
         described = null;
 
-        var carried = Ordered(descriptors);
+        IReadOnlyList<Descriptor> carried = Ordered(descriptors);
 
         if (carried.Count == 0)
         {
             return false;
         }
 
-        var language = string.Empty;
+        string language = string.Empty;
         var headings = new List<string>();
         var bodies = new List<List<ReadOnlyMemory<byte>>>();
         var text = new List<ReadOnlyMemory<byte>>();
 
-        foreach (var descriptor in carried)
+        foreach (Descriptor descriptor in carried)
         {
-            var payload = descriptor.Payload;
+            ReadOnlyMemory<byte> payload = descriptor.Payload;
 
             if (payload.Length < HeaderSize)
             {
@@ -56,8 +56,8 @@ public sealed class ExtendedEventDescription
                 language = LanguageCode.Of(payload.Span.Slice(1, LanguageCode.Size));
             }
 
-            var itemsLength = payload.Span[4];
-            var afterItems = HeaderSize + itemsLength;
+            byte itemsLength = payload.Span[4];
+            int afterItems = HeaderSize + itemsLength;
 
             if (afterItems + 1 > payload.Length)
             {
@@ -69,7 +69,7 @@ public sealed class ExtendedEventDescription
                 return false;
             }
 
-            var textLength = payload.Span[afterItems];
+            byte textLength = payload.Span[afterItems];
 
             if (afterItems + 1 + textLength > payload.Length)
             {
@@ -92,7 +92,7 @@ public sealed class ExtendedEventDescription
         List<string> headings,
         List<List<ReadOnlyMemory<byte>>> bodies)
     {
-        var at = 0;
+        int at = 0;
 
         while (at < loop.Length)
         {
@@ -101,22 +101,22 @@ public sealed class ExtendedEventDescription
                 return false;
             }
 
-            var headingLength = loop.Span[at];
-            var afterHeading = at + 1 + headingLength;
+            byte headingLength = loop.Span[at];
+            int afterHeading = at + 1 + headingLength;
 
             if (afterHeading + 1 > loop.Length)
             {
                 return false;
             }
 
-            var bodyLength = loop.Span[afterHeading];
+            byte bodyLength = loop.Span[afterHeading];
 
             if (afterHeading + 1 + bodyLength > loop.Length)
             {
                 return false;
             }
 
-            var body = loop.Slice(afterHeading + 1, bodyLength);
+            ReadOnlyMemory<byte> body = loop.Slice(afterHeading + 1, bodyLength);
 
             if (headingLength == 0 && bodies.Count > 0)
             {
@@ -141,17 +141,17 @@ public sealed class ExtendedEventDescription
             return AribText.Decode(parts[0]);
         }
 
-        var length = 0;
+        int length = 0;
 
-        foreach (var part in parts)
+        foreach (ReadOnlyMemory<byte> part in parts)
         {
             length += part.Length;
         }
 
-        var joined = new byte[length];
-        var at = 0;
+        byte[] joined = new byte[length];
+        int at = 0;
 
-        foreach (var part in parts)
+        foreach (ReadOnlyMemory<byte> part in parts)
         {
             part.Span.CopyTo(joined.AsSpan(at));
             at += part.Length;
@@ -164,7 +164,7 @@ public sealed class ExtendedEventDescription
     {
         var carried = new List<Descriptor>();
 
-        foreach (var descriptor in descriptors)
+        foreach (Descriptor descriptor in descriptors)
         {
             if (descriptor.Tag == DescriptorTags.ExtendedEvent && descriptor.Payload.Length >= 1)
             {

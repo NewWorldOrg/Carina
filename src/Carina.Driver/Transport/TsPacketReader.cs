@@ -84,14 +84,14 @@ public sealed class TsPacketReader
 
     private bool TryAlign()
     {
-        for (var offset = 0; offset + PacketLength <= buffer.Count; offset++)
+        for (int offset = 0; offset + PacketLength <= buffer.Count; offset++)
         {
             if (buffer[offset] is not SyncByte)
             {
                 continue;
             }
 
-            var next = offset + PacketLength;
+            int next = offset + PacketLength;
             if (next < buffer.Count && buffer[next] is not SyncByte)
             {
                 continue;
@@ -110,28 +110,28 @@ public sealed class TsPacketReader
 
     private void DiscardAllButATrailingPacket()
     {
-        var keep = PacketLength - 1;
+        int keep = PacketLength - 1;
         if (buffer.Count <= keep)
         {
             return;
         }
 
-        var drop = buffer.Count - keep;
+        int drop = buffer.Count - keep;
         buffer.RemoveRange(0, drop);
         DiscardedBytes += drop;
     }
 
     private TsPacket ReadHeader()
     {
-        var transportError = (buffer[1] & 0x80) is not 0;
-        var payloadUnitStart = (buffer[1] & 0x40) is not 0;
-        var pid = ((buffer[1] & 0x1F) << 8) | buffer[2];
-        var scrambling = (buffer[3] >> 6) & 0x03;
-        var adaptationField = (buffer[3] >> 4) & 0x03;
-        var hasAdaptation = adaptationField is 0x02 or 0x03;
-        var hasPayload = adaptationField is 0x01 or 0x03;
+        bool transportError = (buffer[1] & 0x80) is not 0;
+        bool payloadUnitStart = (buffer[1] & 0x40) is not 0;
+        int pid = ((buffer[1] & 0x1F) << 8) | buffer[2];
+        int scrambling = (buffer[3] >> 6) & 0x03;
+        int adaptationField = (buffer[3] >> 4) & 0x03;
+        bool hasAdaptation = adaptationField is 0x02 or 0x03;
+        bool hasPayload = adaptationField is 0x01 or 0x03;
 
-        var discontinuity = false;
+        bool discontinuity = false;
         if (hasAdaptation && buffer[HeaderLength] > 0)
         {
             discontinuity = (buffer[HeaderLength + 1] & 0x80) is not 0;
@@ -151,14 +151,14 @@ public sealed class TsPacketReader
 
     private int HashPayload(bool hasAdaptation)
     {
-        var start = HeaderLength;
+        int start = HeaderLength;
         if (hasAdaptation)
         {
             start += 1 + buffer[HeaderLength];
         }
 
-        var hash = 17;
-        for (var index = Math.Min(start, PacketLength); index < PacketLength; index++)
+        int hash = 17;
+        for (int index = Math.Min(start, PacketLength); index < PacketLength; index++)
         {
             hash = (hash * 31) + buffer[index];
         }

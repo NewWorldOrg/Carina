@@ -39,7 +39,7 @@ public sealed class DriverShutdownBudgetTests
     [Fact]
     public void TheBudgetMatchesWhatTheSessionManagerWillWaitFor()
     {
-        var configuration = Configuration(3);
+        DriverConfiguration configuration = Configuration(3);
         var manager = new TunerSessionManager(
             configuration,
             new TunerDeviceFactory(configuration, TimeProvider.System),
@@ -64,7 +64,7 @@ public sealed class DriverShutdownBudgetTests
     [Fact]
     public void TheDescriptionNamesEveryPartOfTheSum()
     {
-        var description = DriverShutdownBudget.From(Configuration(6)).Describe();
+        string description = DriverShutdownBudget.From(Configuration(6)).Describe();
 
         Assert.Contains("21690s", description, StringComparison.Ordinal);
         Assert.Contains("21600s", description, StringComparison.Ordinal);

@@ -13,7 +13,7 @@ public sealed class ReferenceRuleSelfCheckTests
     [Fact]
     public void DetectsADriverThatReachesTheDomain()
     {
-        var forbidden = ViolatingGraph().ForbiddenReferencesOf("Carina.Driver", "Carina.Contracts");
+        IReadOnlyList<string> forbidden = ViolatingGraph().ForbiddenReferencesOf("Carina.Driver", "Carina.Contracts");
 
         Assert.Equal(["Carina.Domain", "Carina.Infrastructure"], forbidden);
     }
@@ -33,7 +33,7 @@ public sealed class ReferenceRuleSelfCheckTests
     [Fact]
     public void DetectsADomainThatDependsOnAnythingBeyondTheContract()
     {
-        var graph = ViolatingGraph();
+        ProjectGraph graph = ViolatingGraph();
 
         Assert.Equal(
             ["Carina.Domain", "Carina.Infrastructure"],
@@ -44,7 +44,7 @@ public sealed class ReferenceRuleSelfCheckTests
     [Fact]
     public void DetectsAContractThatTakesOnAPackage()
     {
-        var contracts = ViolatingGraph().Node("Carina.Contracts");
+        ProjectNode contracts = ViolatingGraph().Node("Carina.Contracts");
 
         Assert.Empty(contracts.ProjectReferences);
         Assert.NotEmpty(contracts.PackageReferences);
@@ -53,7 +53,7 @@ public sealed class ReferenceRuleSelfCheckTests
     [Fact]
     public void DetectsASourceFileThatNamesATransportDetail()
     {
-        var directory = Directory.CreateTempSubdirectory("carina-source-scan-");
+        DirectoryInfo directory = Directory.CreateTempSubdirectory("carina-source-scan-");
 
         try
         {

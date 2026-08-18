@@ -15,7 +15,7 @@ public sealed class ServiceDescriptionTableTests
     [Fact]
     public void TheServicesOfTheCurrentStreamComeBackNamedAndTold()
     {
-        var table = Parse(new SdtWriter
+        ServiceDescriptionTable table = Parse(new SdtWriter
         {
             OriginalNetworkId = SomeNetworkId,
             Services =
@@ -38,7 +38,7 @@ public sealed class ServiceDescriptionTableTests
         Assert.Equal(SomeNetworkId, table.OriginalNetworkId);
         Assert.True(table.IsActualStream);
 
-        var first = table.Services[0];
+        DescribedService first = table.Services[0];
         Assert.Equal(SomeServiceId, first.ServiceId);
         Assert.Equal("試験テレビその", first.Name);
         Assert.Equal("試験", first.ProviderName);
@@ -47,7 +47,7 @@ public sealed class ServiceDescriptionTableTests
         Assert.True(first.CarriesPresentFollowingEvents);
         Assert.False(first.IsConditionalAccess);
 
-        var second = table.Services[1];
+        DescribedService second = table.Services[1];
         Assert.Equal(AnotherServiceId, second.ServiceId);
         Assert.Equal(ServiceKind.Audio, second.Kind);
         Assert.False(second.CarriesScheduleEvents);
@@ -57,13 +57,13 @@ public sealed class ServiceDescriptionTableTests
     [Fact]
     public void AServiceWithNoDescriptionHasNoNameRatherThanAWrongOne()
     {
-        var table = Parse(new SdtWriter
+        ServiceDescriptionTable table = Parse(new SdtWriter
         {
             OriginalNetworkId = SomeNetworkId,
             Services = [SdtWriter.Service(SomeServiceId, [])],
         });
 
-        var service = Assert.Single(table.Services);
+        DescribedService service = Assert.Single(table.Services);
         Assert.Equal(string.Empty, service.Name);
         Assert.Null(service.Description);
         Assert.Equal(ServiceKind.Unknown, service.Kind);
@@ -72,7 +72,7 @@ public sealed class ServiceDescriptionTableTests
     [Fact]
     public void AKindTheStandardDoesNotNameIsUnknownRatherThanGuessed()
     {
-        var table = Parse(new SdtWriter
+        ServiceDescriptionTable table = Parse(new SdtWriter
         {
             OriginalNetworkId = SomeNetworkId,
             Services = [SdtWriter.Service(SomeServiceId, SiDescriptorWriter.Service(0x5A, [], []))],
@@ -85,7 +85,7 @@ public sealed class ServiceDescriptionTableTests
     [Fact]
     public void ATemporaryServiceIsToldApartFromAPermanentOne()
     {
-        var table = Parse(new SdtWriter
+        ServiceDescriptionTable table = Parse(new SdtWriter
         {
             OriginalNetworkId = SomeNetworkId,
             Services =
@@ -102,7 +102,7 @@ public sealed class ServiceDescriptionTableTests
     [Fact]
     public void TheTableForAnotherStreamSaysSoRatherThanPassingForThisOne()
     {
-        var table = Parse(
+        ServiceDescriptionTable table = Parse(
             new SdtWriter { OriginalNetworkId = SomeNetworkId },
             tableId: ServiceDescriptionTable.OtherStreamTableId);
 
@@ -123,7 +123,7 @@ public sealed class ServiceDescriptionTableTests
     [Fact]
     public void ASectionTooShortForTheFixedFieldsIsRefused()
     {
-        var section = CarriedSection.Of(new SectionWriter
+        Section section = CarriedSection.Of(new SectionWriter
         {
             TableId = ServiceDescriptionTable.ActualStreamTableId,
             TableIdExtension = SomeTransportStreamId,
@@ -136,7 +136,7 @@ public sealed class ServiceDescriptionTableTests
     [Fact]
     public void AServiceEntryCutShortRefusesTheWholeTable()
     {
-        var rejected = Read(new SdtWriter
+        TableRead<ServiceDescriptionTable> rejected = Read(new SdtWriter
         {
             OriginalNetworkId = SomeNetworkId,
             Services = [[0x01, 0x02, 0x03]],
@@ -148,7 +148,7 @@ public sealed class ServiceDescriptionTableTests
     [Fact]
     public void ADescriptorLoopLongerThanTheSectionRefusesTheWholeTable()
     {
-        var rejected = Read(new SdtWriter
+        TableRead<ServiceDescriptionTable> rejected = Read(new SdtWriter
         {
             OriginalNetworkId = SomeNetworkId,
             Services = [SdtWriter.Service(SomeServiceId, [], declaredDescriptorsLength: 90)],
@@ -160,7 +160,7 @@ public sealed class ServiceDescriptionTableTests
     [Fact]
     public void ADescriptorWhoseLengthOverrunsItsServiceRefusesTheWholeTable()
     {
-        var rejected = Read(new SdtWriter
+        TableRead<ServiceDescriptionTable> rejected = Read(new SdtWriter
         {
             OriginalNetworkId = SomeNetworkId,
             Services =
@@ -177,7 +177,7 @@ public sealed class ServiceDescriptionTableTests
     [Fact]
     public void ATagNoOneKnowsIsCarriedOnTheServiceRatherThanRefused()
     {
-        var table = Parse(new SdtWriter
+        ServiceDescriptionTable table = Parse(new SdtWriter
         {
             OriginalNetworkId = SomeNetworkId,
             Services =
@@ -190,7 +190,7 @@ public sealed class ServiceDescriptionTableTests
             ],
         });
 
-        var service = Assert.Single(table.Services);
+        DescribedService service = Assert.Single(table.Services);
         Assert.Equal(2, service.Descriptors.Count);
         Assert.Equal<byte[]>([0x09], service.Descriptors.WithTag(0xCF)!.Payload.ToArray());
         Assert.Equal(ServiceKind.Television, service.Kind);

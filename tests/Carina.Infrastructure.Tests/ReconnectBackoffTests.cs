@@ -63,7 +63,7 @@ public sealed class ReconnectBackoffTests
             TimeSpan.FromSeconds(30),
             () => 1.0);
 
-        for (var attempt = 0; attempt < 100; attempt++)
+        for (int attempt = 0; attempt < 100; attempt++)
         {
             backoff.Next();
         }

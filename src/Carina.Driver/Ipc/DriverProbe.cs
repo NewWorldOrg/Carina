@@ -72,7 +72,7 @@ public static class DriverProbe
         TimeSpan? timeout = null
     )
     {
-        var verdict = await AskAsync(configuration, timeout ?? DefaultTimeout);
+        ProbeVerdict verdict = await AskAsync(configuration, timeout ?? DefaultTimeout);
 
         await output.WriteLineAsync(verdict.Reason);
 
@@ -84,7 +84,7 @@ public static class DriverProbe
         TimeSpan timeout
     )
     {
-        var path = configuration.SocketPath;
+        string? path = configuration.SocketPath;
 
         if (string.IsNullOrEmpty(path))
         {
@@ -93,14 +93,14 @@ public static class DriverProbe
 
         try
         {
-            using var client = ClientFor(path, timeout);
+            using HttpClient client = ClientFor(path, timeout);
 
-            var hello = await client.GetFromJsonAsync(
+            DriverHello? hello = await client.GetFromJsonAsync(
                 DriverEndpoints.Health,
                 DriverJson.Context.DriverHello
             );
 
-            var tuners = await client.GetFromJsonAsync(
+            IReadOnlyList<TunerSnapshot>? tuners = await client.GetFromJsonAsync(
                 DriverEndpoints.Tuners,
                 DriverJson.Context.IReadOnlyListTunerSnapshot
             );

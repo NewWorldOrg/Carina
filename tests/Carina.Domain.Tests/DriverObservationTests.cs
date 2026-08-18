@@ -14,7 +14,7 @@ public sealed class DriverObservationTests
     [Fact]
     public void StartsNotConnectedWithNothingKnown()
     {
-        var observation = DriverObservation.NotConnected;
+        DriverObservation observation = DriverObservation.NotConnected;
 
         Assert.Equal(DriverConnection.NotConnected, observation.Connection);
         Assert.Null(observation.Hello);
@@ -43,7 +43,7 @@ public sealed class DriverObservationTests
     [Fact]
     public void ADrainingSignalFlipsTheConnectionAndKeepsTheHello()
     {
-        var observation = DriverObservation.Of(Hello(capabilities: ["recording"]), []).WhileDraining();
+        DriverObservation observation = DriverObservation.Of(Hello(capabilities: ["recording"]), []).WhileDraining();
 
         Assert.Equal(DriverConnection.Draining, observation.Connection);
         Assert.NotNull(observation.Hello);

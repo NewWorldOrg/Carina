@@ -19,19 +19,19 @@ public static class BroadcastTime
             return false;
         }
 
-        var days = (bytes[0] << 8) | bytes[1];
+        int days = (bytes[0] << 8) | bytes[1];
 
-        if (!TryReadClock(bytes[2..StartSize], 23, out var clock))
+        if (!TryReadClock(bytes[2..StartSize], 23, out TimeSpan? clock))
         {
             return false;
         }
 
-        var years = (int)((days - 15078.2) / 365.25);
-        var months = (int)((days - 14956.1 - (int)(years * 365.25)) / 30.6001);
-        var day = days - 14956 - (int)(years * 365.25) - (int)(months * 30.6001);
-        var wrapped = months is 14 or 15 ? 1 : 0;
-        var year = years + wrapped + 1900;
-        var month = months - 1 - (wrapped * 12);
+        int years = (int)((days - 15078.2) / 365.25);
+        int months = (int)((days - 14956.1 - (int)(years * 365.25)) / 30.6001);
+        int day = days - 14956 - (int)(years * 365.25) - (int)(months * 30.6001);
+        int wrapped = months is 14 or 15 ? 1 : 0;
+        int year = years + wrapped + 1900;
+        int month = months - 1 - (wrapped * 12);
 
         if (month is < 1 or > 12 || day is < 1 || day > DateTime.DaysInMonth(year, month))
         {
@@ -57,7 +57,7 @@ public static class BroadcastTime
             return true;
         }
 
-        if (!TryReadClock(bytes[..DurationSize], 99, out var clock))
+        if (!TryReadClock(bytes[..DurationSize], 99, out TimeSpan? clock))
         {
             return false;
         }
@@ -71,9 +71,9 @@ public static class BroadcastTime
     {
         clock = null;
 
-        if (!TryReadDecimal(bytes[0], out var hours)
-            || !TryReadDecimal(bytes[1], out var minutes)
-            || !TryReadDecimal(bytes[2], out var seconds))
+        if (!TryReadDecimal(bytes[0], out int hours)
+            || !TryReadDecimal(bytes[1], out int minutes)
+            || !TryReadDecimal(bytes[2], out int seconds))
         {
             return false;
         }
@@ -90,8 +90,8 @@ public static class BroadcastTime
 
     private static bool TryReadDecimal(byte packed, out int value)
     {
-        var tens = packed >> 4;
-        var units = packed & 0x0F;
+        int tens = packed >> 4;
+        int units = packed & 0x0F;
 
         value = (tens * 10) + units;
 

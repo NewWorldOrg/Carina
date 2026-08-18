@@ -68,7 +68,7 @@ public static class TunerLedger
 
     public static string Fingerprint(IReadOnlyList<DeviceSettings>? devices)
     {
-        var canonical = string.Join(
+        string canonical = string.Join(
             "\n",
             (devices ?? [])
                 .Where(device => device?.Id is not null)
@@ -85,7 +85,7 @@ public static class TunerLedger
         IReadOnlyList<DeviceSettings>? current
     )
     {
-        var wanted = requested ?? [];
+        IReadOnlyList<TunerConfigEntry> wanted = requested ?? [];
 
         if (wanted.Count is 0)
         {
@@ -98,7 +98,7 @@ public static class TunerLedger
         var devices = new List<DeviceSettings>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (var entry in wanted)
+        foreach (TunerConfigEntry? entry in wanted)
         {
             if (entry is null)
             {
@@ -124,7 +124,7 @@ public static class TunerLedger
                 );
             }
 
-            var detection = detected.FirstOrDefault(candidate =>
+            TunerDetection? detection = detected.FirstOrDefault(candidate =>
                 string.Equals(candidate.DeviceId, entry.DeviceId, StringComparison.Ordinal)
             );
 
@@ -136,11 +136,11 @@ public static class TunerLedger
                 );
             }
 
-            var settings = current?.FirstOrDefault(device =>
+            DeviceSettings? settings = current?.FirstOrDefault(device =>
                 string.Equals(device?.Id, entry.DeviceId, StringComparison.Ordinal)
             );
 
-            if (!TryResolveKind(detection, settings, out var kind))
+            if (!TryResolveKind(detection, settings, out DeviceKind kind))
             {
                 return LedgerRevision.Refused(
                     LedgerRefusal.UndeterminedKind,
@@ -168,7 +168,7 @@ public static class TunerLedger
         out DeviceKind kind
     )
     {
-        var declared = settings?.Kind ?? DeviceKind.Unspecified;
+        DeviceKind declared = settings?.Kind ?? DeviceKind.Unspecified;
 
         if (declared is not DeviceKind.Unspecified && detection.Receives.Contains(declared))
         {

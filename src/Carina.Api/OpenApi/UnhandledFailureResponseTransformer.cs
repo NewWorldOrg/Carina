@@ -33,7 +33,7 @@ public sealed class UnhandledFailureResponseTransformer : IOpenApiOperationTrans
 
     private static IOpenApiSchema? EnvelopeOf(IDictionary<string, IOpenApiResponse> answers)
         => answers.Values
-            .Select(answer => answer.Content is { } content && content.TryGetValue(Json, out var body)
+            .Select(answer => answer.Content is { } content && content.TryGetValue(Json, out OpenApiMediaType? body)
                 ? body.Schema
                 : null)
             .FirstOrDefault(schema => schema is not null);

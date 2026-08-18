@@ -7,7 +7,7 @@ public static class DescriptorLoop
     public static bool TryRead(ReadOnlyMemory<byte> loop, out IReadOnlyList<Descriptor> descriptors)
     {
         var found = new List<Descriptor>();
-        var at = 0;
+        int at = 0;
 
         while (at < loop.Length)
         {
@@ -18,10 +18,10 @@ public static class DescriptorLoop
                 return false;
             }
 
-            var span = loop.Span;
-            var tag = span[at];
-            var length = span[at + 1];
-            var start = at + Descriptor.HeaderSize;
+            ReadOnlySpan<byte> span = loop.Span;
+            byte tag = span[at];
+            byte length = span[at + 1];
+            int start = at + Descriptor.HeaderSize;
 
             if (start + length > loop.Length)
             {
@@ -43,7 +43,7 @@ public static class DescriptorLoop
     {
         ArgumentNullException.ThrowIfNull(descriptors);
 
-        foreach (var descriptor in descriptors)
+        foreach (Descriptor descriptor in descriptors)
         {
             if (descriptor.Tag == tag)
             {

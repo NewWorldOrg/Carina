@@ -1,7 +1,9 @@
+using Carina.Api.Common;
 using Carina.Api.Responder;
 using Carina.Api.Responder.Scans;
 using Carina.Api.Services;
 using Carina.Domain.Scans;
+using Carina.Infrastructure.Scanning;
 
 using Microsoft.AspNetCore.Mvc;
 
@@ -18,7 +20,7 @@ public sealed class ApplyScanAction(ScanService scanService) : ControllerBase
     [ProducesResponseType<BaseResponder<ScanApplicationResponder>>(StatusCodes.Status410Gone)]
     public async Task<IActionResult> Invoke(Guid scanId, CancellationToken cancellationToken)
     {
-        var result = await scanService.ApplyAsync(new ScanRunId(scanId), cancellationToken);
+        ServiceResult<ScanApplication, ScanFailure> result = await scanService.ApplyAsync(new ScanRunId(scanId), cancellationToken);
 
         if (!result.IsSuccess)
         {

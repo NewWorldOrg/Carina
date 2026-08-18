@@ -17,12 +17,12 @@ public sealed class SectionSetTests
         Assert.True(set.Add(SectionOf(version: 3, sectionNumber: 0, lastSectionNumber: 2)));
         Assert.True(set.Add(SectionOf(version: 3, sectionNumber: 2, lastSectionNumber: 2)));
         Assert.False(set.IsComplete);
-        Assert.False(set.TryComplete(out var incomplete));
+        Assert.False(set.TryComplete(out IReadOnlyList<Section>? incomplete));
         Assert.Empty(incomplete);
 
         Assert.True(set.Add(SectionOf(version: 3, sectionNumber: 1, lastSectionNumber: 2)));
         Assert.True(set.IsComplete);
-        Assert.True(set.TryComplete(out var complete));
+        Assert.True(set.TryComplete(out IReadOnlyList<Section>? complete));
         Assert.Equal<int>([0, 1, 2], complete.Select(section => section.SectionNumber).ToArray());
     }
 
@@ -93,7 +93,7 @@ public sealed class SectionSetTests
         Assert.False(set.Add(SectionOf(version: 1, sectionNumber: 5, lastSectionNumber: 0)));
 
         Assert.False(set.IsComplete);
-        Assert.False(set.TryComplete(out var sections));
+        Assert.False(set.TryComplete(out IReadOnlyList<Section>? sections));
         Assert.Empty(sections);
         Assert.Equal(1, set.HeldCount);
     }
@@ -132,7 +132,7 @@ public sealed class SectionSetTests
         int tableId = SomeTableId,
         int extension = SomeExtension)
     {
-        var bytes = new SectionWriter
+        byte[] bytes = new SectionWriter
         {
             TableId = tableId,
             TableIdExtension = extension,
@@ -143,7 +143,7 @@ public sealed class SectionSetTests
             Body = SectionWriter.Filler(6),
         }.ToBytes();
 
-        var read = new SectionAssembler(Pid).Push(new TransportStreamWriter(Pid).Sections(bytes).Packets[0]);
+        IReadOnlyList<SectionRead> read = new SectionAssembler(Pid).Push(new TransportStreamWriter(Pid).Sections(bytes).Packets[0]);
 
         return Assert.IsType<SectionRead.Assembled>(Assert.Single(read)).Section;
     }

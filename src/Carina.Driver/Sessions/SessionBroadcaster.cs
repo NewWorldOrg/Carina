@@ -102,7 +102,7 @@ public sealed class SessionBroadcaster(
     {
         SessionSubscription? subscription = null;
 
-        var channel = kind is SubscriberKind.Survey
+        Channel<byte[]> channel = kind is SubscriberKind.Survey
             ? Channel.CreateBounded<byte[]>(
                 new BoundedChannelOptions(surveyCapacity)
                 {
@@ -164,9 +164,9 @@ public sealed class SessionBroadcaster(
             return;
         }
 
-        var copy = chunk.ToArray();
+        byte[] copy = chunk.ToArray();
 
-        foreach (var entry in subscriptions)
+        foreach (KeyValuePair<SessionSubscription, byte> entry in subscriptions)
         {
             try
             {
@@ -197,7 +197,7 @@ public sealed class SessionBroadcaster(
             closedBecause = because;
         }
 
-        foreach (var entry in subscriptions)
+        foreach (KeyValuePair<SessionSubscription, byte> entry in subscriptions)
         {
             Unsubscribe(entry.Key, because ?? Truncation(entry.Key));
         }
@@ -245,7 +245,7 @@ public sealed class SessionBroadcaster(
         CancellationToken cancellationToken
     )
     {
-        var start = Stopwatch.GetTimestamp();
+        long start = Stopwatch.GetTimestamp();
 
         while (true)
         {
@@ -259,13 +259,13 @@ public sealed class SessionBroadcaster(
                 return Delivery.Abandoned;
             }
 
-            var left = blockLimit - Stopwatch.GetElapsedTime(start);
+            TimeSpan left = blockLimit - Stopwatch.GetElapsedTime(start);
             if (left <= TimeSpan.Zero)
             {
                 return Delivery.Refused;
             }
 
-            var room = subscription.Channel.Writer.WaitToWriteAsync().AsTask();
+            Task<bool> room = subscription.Channel.Writer.WaitToWriteAsync().AsTask();
 
             try
             {

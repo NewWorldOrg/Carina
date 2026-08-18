@@ -27,7 +27,7 @@ public sealed class DriverConfigurationTests
     [Fact]
     public void ACompleteConfigurationIsAccepted()
     {
-        var result = Read(Complete);
+        DriverConfigurationResult result = Read(Complete);
 
         Assert.Empty(result.Problems);
         Assert.NotNull(result.Configuration);
@@ -39,7 +39,7 @@ public sealed class DriverConfigurationTests
     [Fact]
     public void EveryProblemIsReportedAtOnce()
     {
-        var result = Read("""
+        DriverConfigurationResult result = Read("""
             {
               "socketPath": "run/carina/driver.sock",
               "outputRoots": [],
@@ -62,7 +62,7 @@ public sealed class DriverConfigurationTests
     [InlineData("shutdownGraceHours", "169")]
     public void ASettingOutsideItsRangeNamesItself(string setting, string value)
     {
-        var result = Read(Replace(setting, value));
+        DriverConfigurationResult result = Read(Replace(setting, value));
 
         Assert.Contains(result.Problems, problem => problem.StartsWith($"{setting}:"));
     }
@@ -70,7 +70,7 @@ public sealed class DriverConfigurationTests
     [Fact]
     public void AProblemCarriesTheExpectationAndTheValue()
     {
-        var problem = Assert.Single(
+        string problem = Assert.Single(
             Read(Replace("shutdownGraceHours", "0")).Problems,
             p => p.StartsWith("shutdownGraceHours:")
         );
@@ -83,7 +83,7 @@ public sealed class DriverConfigurationTests
     [Fact]
     public void AMissingSettingIsReportedRatherThanDefaulted()
     {
-        var result = Read("""{ "tuner": { "backend": "fake" } }""");
+        DriverConfigurationResult result = Read("""{ "tuner": { "backend": "fake" } }""");
 
         Assert.Contains(result.Problems, problem => problem.StartsWith("socketPath:"));
         Assert.Contains(result.Problems, problem => problem.StartsWith("outputRoots:"));
@@ -93,7 +93,7 @@ public sealed class DriverConfigurationTests
     [Fact]
     public void AnUnreadableFileIsAProblemAndNotAnException()
     {
-        var result = Read("{ this is not json");
+        DriverConfigurationResult result = Read("{ this is not json");
 
         Assert.Null(result.Configuration);
         Assert.Contains(result.Problems, problem => problem.StartsWith("file:"));
@@ -117,7 +117,7 @@ public sealed class DriverConfigurationTests
     [Fact]
     public void TwoDevicesWithOneNameAreReported()
     {
-        var result = Read(
+        DriverConfigurationResult result = Read(
             Complete.Replace(
                 "\"devices\": [",
                 """
@@ -141,7 +141,7 @@ public sealed class DriverConfigurationTests
     [InlineData("\"adapter 0\"")]
     public void ADeviceNameOutsideTheShapeIsReported(string id)
     {
-        var result = Read(Complete.Replace("\"adapter0\"", id));
+        DriverConfigurationResult result = Read(Complete.Replace("\"adapter0\"", id));
 
         Assert.Contains(result.Problems, problem => problem.StartsWith("devices[0].id:"));
     }
@@ -149,7 +149,7 @@ public sealed class DriverConfigurationTests
     [Fact]
     public void ADeviceWithNoKindIsReported()
     {
-        var result = Read(Complete.Replace("\"terrestrial\"", "\"quantum\""));
+        DriverConfigurationResult result = Read(Complete.Replace("\"terrestrial\"", "\"quantum\""));
 
         Assert.Contains(
             result.Problems,
@@ -160,7 +160,7 @@ public sealed class DriverConfigurationTests
     [Fact]
     public void TheSyntheticBackendDoesNotNeedADevicePath()
     {
-        var result = Read(
+        DriverConfigurationResult result = Read(
             Complete.Replace("\"devicePath\": \"/dev/dvb/adapter0/frontend0\",", "")
         );
 
@@ -170,7 +170,7 @@ public sealed class DriverConfigurationTests
     [Fact]
     public void TheHardwareBackendNeedsADevicePath()
     {
-        var result = Read(
+        DriverConfigurationResult result = Read(
             Complete
                 .Replace("\"backend\": \"fake\"", "\"backend\": \"dvb\"")
                 .Replace("\"devicePath\": \"/dev/dvb/adapter0/frontend0\",", "")
@@ -185,7 +185,7 @@ public sealed class DriverConfigurationTests
     [Fact]
     public void ThereIsNoSettingThatCouldOpenAPort()
     {
-        var settings = typeof(DriverConfiguration)
+        IEnumerable<string> settings = typeof(DriverConfiguration)
             .GetProperties()
             .Select(property => property.Name.ToLowerInvariant());
 
@@ -194,8 +194,8 @@ public sealed class DriverConfigurationTests
 
     private static string Replace(string setting, string value)
     {
-        var start = Complete.IndexOf($"\"{setting}\":", StringComparison.Ordinal);
-        var end = Complete.IndexOf(',', start);
+        int start = Complete.IndexOf($"\"{setting}\":", StringComparison.Ordinal);
+        int end = Complete.IndexOf(',', start);
 
         return Complete[..start] + $"\"{setting}\": {value}" + Complete[end..];
     }

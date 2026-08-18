@@ -23,14 +23,14 @@ public sealed class MigrationLock : IAsyncDisposable
 
     public static async Task<MigrationLock> TakeAsync(CarinaDbContext context, TextWriter error)
     {
-        var wasClosed = context.Database.GetDbConnection().State is ConnectionState.Closed;
+        bool wasClosed = context.Database.GetDbConnection().State is ConnectionState.Closed;
 
         if (wasClosed)
         {
             await context.Database.OpenConnectionAsync();
         }
 
-        var taken = await context
+        bool taken = await context
             .Database.SqlQueryRaw<bool>($"SELECT pg_try_advisory_lock({Key}) AS \"Value\"")
             .SingleAsync();
 
@@ -40,7 +40,7 @@ public sealed class MigrationLock : IAsyncDisposable
                 $"Another --migrate holds the migration lock; waiting up to {WaitLimit.TotalMinutes:0} minutes for it to finish."
             );
 
-            var previousTimeout = context.Database.GetCommandTimeout();
+            int? previousTimeout = context.Database.GetCommandTimeout();
             context.Database.SetCommandTimeout(WaitLimit);
 
             try

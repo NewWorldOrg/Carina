@@ -21,7 +21,7 @@ public sealed class DriverSocketPathTests
     [Fact]
     public void RejectsARelativePath()
     {
-        var exception = Assert.Throws<ArgumentException>(() => new DriverSocketPath("driver.sock"));
+        ArgumentException exception = Assert.Throws<ArgumentException>(() => new DriverSocketPath("driver.sock"));
 
         Assert.Contains("absolute", exception.Message, StringComparison.Ordinal);
     }

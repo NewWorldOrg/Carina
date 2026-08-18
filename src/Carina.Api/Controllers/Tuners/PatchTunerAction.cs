@@ -1,7 +1,9 @@
+using Carina.Api.Common;
 using Carina.Api.Requests;
 using Carina.Api.Responder;
 using Carina.Api.Responder.Tuners;
 using Carina.Api.Services;
+using Carina.Contracts;
 
 using Microsoft.AspNetCore.Mvc;
 
@@ -28,7 +30,7 @@ public sealed class PatchTunerAction(TunerLedgerService tunerLedgerService) : Co
                 "disabled: expected true to take a tuner out of service or false to put it back."));
         }
 
-        var result = await tunerLedgerService.ToggleAsync(deviceId, disabled, cancellationToken);
+        ServiceResult<TunerSnapshot, TunerLedgerFailure> result = await tunerLedgerService.ToggleAsync(deviceId, disabled, cancellationToken);
 
         if (!result.IsSuccess)
         {

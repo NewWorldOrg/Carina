@@ -1,3 +1,4 @@
+using Carina.Api.Common;
 using Carina.Api.Requests;
 using Carina.Api.Responder;
 using Carina.Api.Responder.Services;
@@ -31,12 +32,12 @@ public sealed class AddCandidateChannelAction(ChannelCatalogService channelCatal
                 "tuning: a candidate channel names the system and channel it tunes."));
         }
 
-        if (asked.ToParameters(out var problem) is not { } tuning)
+        if (asked.ToParameters(out string? problem) is not { } tuning)
         {
             return BadRequest(BaseResponder<BroadcastServiceResponder>.Error($"tuning: {problem}"));
         }
 
-        var result = await channelCatalogService.AddCandidateAsync(
+        ServiceResult<ServiceWithChannels, CatalogFailure> result = await channelCatalogService.AddCandidateAsync(
             new NetworkId(networkId),
             new ServiceId(serviceId),
             tuning,

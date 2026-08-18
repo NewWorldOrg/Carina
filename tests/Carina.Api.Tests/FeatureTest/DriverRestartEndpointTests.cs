@@ -60,15 +60,15 @@ public sealed class DriverRestartEndpointTests
     [Fact]
     public async Task AskingForARestartReachesTheDriverAndCarriesBackWhatItAnswered()
     {
-        await using var feature = await DriverFeature.StartAsync(Capable(), Willing);
+        await using DriverFeature feature = await DriverFeature.StartAsync(Capable(), Willing);
 
-        using var response = await feature.Client.PostAsync(Restart, null);
-        var (status, body) = await ReadAsync(response);
+        using HttpResponseMessage response = await feature.Client.PostAsync(Restart, null);
+        (HttpStatusCode status, JsonElement body) = await ReadAsync(response);
 
         Assert.Equal(HttpStatusCode.Accepted, status);
         Assert.Equal(1, feature.Driver.RequestsFor(DriverEndpoints.Restart));
 
-        var data = body.GetProperty("data");
+        JsonElement data = body.GetProperty("data");
 
         Assert.Equal("instance-a", data.GetProperty("instanceId").GetString());
         Assert.Equal(Accepted, data.GetProperty("acceptedAt").GetDateTimeOffset());
@@ -78,10 +78,10 @@ public sealed class DriverRestartEndpointTests
     [Fact]
     public async Task ARestartIsRefusedWhileTheDriverIsRecordingAndTheScreenIsToldWhy()
     {
-        await using var feature = await DriverFeature.StartAsync(Capable(), Recording);
+        await using DriverFeature feature = await DriverFeature.StartAsync(Capable(), Recording);
 
-        using var response = await feature.Client.PostAsync(Restart, null);
-        var (status, body) = await ReadAsync(response);
+        using HttpResponseMessage response = await feature.Client.PostAsync(Restart, null);
+        (HttpStatusCode status, JsonElement body) = await ReadAsync(response);
 
         Assert.Equal(HttpStatusCode.Conflict, status);
         Assert.False(body.GetProperty("status").GetBoolean());
@@ -98,10 +98,10 @@ public sealed class DriverRestartEndpointTests
     [Fact]
     public async Task ADriverThatIsNotThereIsAnsweredAsUnavailableRatherThanAsARefusal()
     {
-        await using var feature = await DriverFeature.StartAsync();
+        await using DriverFeature feature = await DriverFeature.StartAsync();
 
-        using var response = await feature.Client.PostAsync(Restart, null);
-        var (status, body) = await ReadAsync(response);
+        using HttpResponseMessage response = await feature.Client.PostAsync(Restart, null);
+        (HttpStatusCode status, JsonElement body) = await ReadAsync(response);
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, status);
         Assert.False(body.GetProperty("status").GetBoolean());
@@ -111,12 +111,12 @@ public sealed class DriverRestartEndpointTests
     [Fact]
     public async Task ADriverTooOldToRestartOnRequestIsAnsweredAsUnimplementedRatherThanBroken()
     {
-        await using var feature = await DriverFeature.StartAsync(
+        await using DriverFeature feature = await DriverFeature.StartAsync(
             Capable([DriverCapabilities.Recording]),
             Willing);
 
-        using var response = await feature.Client.PostAsync(Restart, null);
-        var (status, body) = await ReadAsync(response);
+        using HttpResponseMessage response = await feature.Client.PostAsync(Restart, null);
+        (HttpStatusCode status, JsonElement body) = await ReadAsync(response);
 
         Assert.Equal(HttpStatusCode.NotImplemented, status);
         Assert.Equal(0, feature.Driver.RequestsFor(DriverEndpoints.Restart));
@@ -129,10 +129,10 @@ public sealed class DriverRestartEndpointTests
     [Fact]
     public async Task ADriverThatPromisesTheEndpointAndThenHasNoneIsBlamedRatherThanTheCaller()
     {
-        await using var feature = await DriverFeature.StartAsync(Capable(), MissingTheEndpoint);
+        await using DriverFeature feature = await DriverFeature.StartAsync(Capable(), MissingTheEndpoint);
 
-        using var response = await feature.Client.PostAsync(Restart, null);
-        var (status, body) = await ReadAsync(response);
+        using HttpResponseMessage response = await feature.Client.PostAsync(Restart, null);
+        (HttpStatusCode status, JsonElement body) = await ReadAsync(response);
 
         Assert.Equal(HttpStatusCode.BadGateway, status);
         Assert.False(body.GetProperty("status").GetBoolean());
@@ -145,11 +145,11 @@ public sealed class DriverRestartEndpointTests
     [Fact]
     public async Task TheRestartSurfaceIsBehindTheSameDenialAsTheRestOnceASchemeIsRegistered()
     {
-        await using var feature = await DriverFeature.StartAsync(Capable(), Willing);
+        await using DriverFeature feature = await DriverFeature.StartAsync(Capable(), Willing);
         using var app = new TestingWebApplicationFactory();
-        using var client = app.WithTestScheme().CreateClient();
+        using HttpClient client = app.WithTestScheme().CreateClient();
 
-        using var response = await client.PostAsync(Restart, null);
+        using HttpResponseMessage response = await client.PostAsync(Restart, null);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }

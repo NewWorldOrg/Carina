@@ -74,7 +74,7 @@ public sealed class SessionPriorityTests
     [Fact]
     public void NoNamedPurposeIsLeftOffTheLadder()
     {
-        foreach (var purpose in Enum.GetValues<SessionPurpose>())
+        foreach (SessionPurpose purpose in Enum.GetValues<SessionPurpose>())
         {
             if (purpose is SessionPurpose.Unspecified)
             {
@@ -88,7 +88,7 @@ public sealed class SessionPriorityTests
     [Fact]
     public void APurposeThisBuildDoesNotKnowSitsBelowEveryNamedOne()
     {
-        var unknown = SessionPriority.Of(SessionPurpose.Unspecified);
+        int unknown = SessionPriority.Of(SessionPurpose.Unspecified);
 
         Assert.True(unknown < SessionPriority.LogoCapture);
         Assert.Equal(unknown, SessionPriority.Of((SessionPurpose)99));
@@ -97,7 +97,7 @@ public sealed class SessionPriorityTests
     [Fact]
     public void APurposeIsNeverRankedAboveItself()
     {
-        foreach (var purpose in Enum.GetValues<SessionPurpose>())
+        foreach (SessionPurpose purpose in Enum.GetValues<SessionPurpose>())
         {
             Assert.Equal(SessionPriority.Of(purpose), SessionPriority.Of(purpose));
         }

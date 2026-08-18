@@ -67,7 +67,7 @@ public sealed class DvbPropertyListTests
         var list = DvbPropertyList.Asking(DvbProperty.CarrierToNoise);
         FillStatistics(list, 0, [(StatisticScale.Decibel, 12_345L), (StatisticScale.Decibel, -1_000L)]);
 
-        Assert.True(list.TryReadStatisticLayers(0, out var layers));
+        Assert.True(list.TryReadStatisticLayers(0, out IReadOnlyList<DvbStatisticLayer>? layers));
         Assert.Equal(2, layers.Count);
         Assert.Equal(new DvbStatisticLayer(StatisticScale.Decibel, 12_345L), layers[0]);
         Assert.Equal(new DvbStatisticLayer(StatisticScale.Decibel, -1_000L), layers[1]);
@@ -78,7 +78,7 @@ public sealed class DvbPropertyListTests
     {
         var list = DvbPropertyList.Asking(DvbProperty.CarrierToNoise);
 
-        Assert.True(list.TryReadStatisticLayers(0, out var layers));
+        Assert.True(list.TryReadStatisticLayers(0, out IReadOnlyList<DvbStatisticLayer>? layers));
         Assert.Empty(layers);
     }
 
@@ -88,7 +88,7 @@ public sealed class DvbPropertyListTests
         var list = DvbPropertyList.Asking(DvbProperty.CarrierToNoise);
         list.Bytes[DvbLayout.StatisticCountAt] = 5;
 
-        Assert.False(list.TryReadStatisticLayers(0, out var layers));
+        Assert.False(list.TryReadStatisticLayers(0, out IReadOnlyList<DvbStatisticLayer>? layers));
         Assert.Empty(layers);
     }
 
@@ -98,7 +98,7 @@ public sealed class DvbPropertyListTests
         var list = DvbPropertyList.Asking(DvbProperty.EnumerateDeliverySystems);
         FillDeliverySystems(list, 0, [8, 9]);
 
-        Assert.True(list.TryReadDeliverySystems(0, out var systems));
+        Assert.True(list.TryReadDeliverySystems(0, out IReadOnlyList<DeliverySystem>? systems));
         Assert.Equal([DeliverySystem.IsdbTerrestrial, DeliverySystem.IsdbSatellite], systems);
     }
 
@@ -111,7 +111,7 @@ public sealed class DvbPropertyListTests
             (uint)(DvbLayout.BufferDataBytes + 1)
         );
 
-        Assert.False(list.TryReadDeliverySystems(0, out var systems));
+        Assert.False(list.TryReadDeliverySystems(0, out IReadOnlyList<DeliverySystem>? systems));
         Assert.Empty(systems);
     }
 
@@ -152,12 +152,12 @@ public sealed class DvbPropertyListTests
         IReadOnlyList<(StatisticScale Scale, long Value)> layers
     )
     {
-        var record = index * DvbLayout.PropertyBytes;
+        int record = index * DvbLayout.PropertyBytes;
         list.Bytes[record + DvbLayout.StatisticCountAt] = (byte)layers.Count;
 
-        for (var layer = 0; layer < layers.Count; layer++)
+        for (int layer = 0; layer < layers.Count; layer++)
         {
-            var at = record + DvbLayout.StatisticsAt + (layer * DvbLayout.StatisticBytes);
+            int at = record + DvbLayout.StatisticsAt + (layer * DvbLayout.StatisticBytes);
             list.Bytes[at] = (byte)layers[layer].Scale;
             BinaryPrimitives.WriteInt64LittleEndian(
                 list.Bytes.AsSpan(at + DvbLayout.StatisticScaleBytes),
@@ -168,13 +168,13 @@ public sealed class DvbPropertyListTests
 
     private static void FillDeliverySystems(DvbPropertyList list, int index, IReadOnlyList<byte> codes)
     {
-        var record = index * DvbLayout.PropertyBytes;
+        int record = index * DvbLayout.PropertyBytes;
         BinaryPrimitives.WriteUInt32LittleEndian(
             list.Bytes.AsSpan(record + DvbLayout.BufferLengthAt),
             (uint)codes.Count
         );
 
-        for (var code = 0; code < codes.Count; code++)
+        for (int code = 0; code < codes.Count; code++)
         {
             list.Bytes[record + DvbLayout.BufferDataAt + code] = codes[code];
         }

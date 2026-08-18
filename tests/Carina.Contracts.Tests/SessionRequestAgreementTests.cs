@@ -17,7 +17,7 @@ public sealed class SessionRequestAgreementTests
     [Fact]
     public void TheOlderFieldIsCheckedEvenWhenTypedParametersAreThere()
     {
-        var problems = Request(
+        IReadOnlyList<string> problems = Request(
             new TuningRequest(TunerKind.Terrestrial, 900, -5),
             TuneParams.Terrestrial(55)
         ).Validate(Moment);
@@ -35,7 +35,7 @@ public sealed class SessionRequestAgreementTests
     [Fact]
     public void TheTwoFieldsHaveToNameTheSameTune()
     {
-        var problems = Request(
+        IReadOnlyList<string> problems = Request(
             new TuningRequest(TunerKind.Terrestrial, 42),
             TuneParams.Terrestrial(55)
         ).Validate(Moment);
@@ -49,7 +49,7 @@ public sealed class SessionRequestAgreementTests
     [Fact]
     public void AKindThatDisagreesWithTheTypedParametersIsRefused()
     {
-        var problems = Request(
+        IReadOnlyList<string> problems = Request(
             new TuningRequest(TunerKind.Satellite, 55),
             TuneParams.Terrestrial(55)
         ).Validate(Moment);
@@ -73,7 +73,7 @@ public sealed class SessionRequestAgreementTests
     [InlineData(TuneSystem.IsdbSCs110)]
     public void ASatelliteTuneStaysUsableEvenThoughTheOlderFieldCannotNameIt(TuneSystem system)
     {
-        var tune = system is TuneSystem.IsdbSBs ? TuneParams.Bs(15, 50001) : TuneParams.Cs110(24);
+        TuneParams tune = system is TuneSystem.IsdbSBs ? TuneParams.Bs(15, 50001) : TuneParams.Cs110(24);
 
         Assert.Empty(Request(tune.ToLegacyRequest(), tune).Validate(Moment));
     }
@@ -90,7 +90,7 @@ public sealed class SessionRequestAgreementTests
     [Fact]
     public void AMissingOlderFieldFromTheWireIsRefusedEvenWhenTypedParametersAreThere()
     {
-        var request = DriverJson.Deserialize(
+        StartSessionRequest? request = DriverJson.Deserialize(
             """{"sessionId":"scan-1","purpose":"scan","tuning":null,"tune":{"system":"isdbT","isdbT":{"physicalChannel":55}}}""",
             DriverJson.Context.StartSessionRequest
         );
@@ -102,7 +102,7 @@ public sealed class SessionRequestAgreementTests
     [Fact]
     public void TypedParametersThatAreWrongAreReportedWithoutBlamingTheOlderField()
     {
-        var problems = Request(new TuningRequest(TunerKind.Terrestrial, 7), TuneParams.Bs(7, 0))
+        IReadOnlyList<string> problems = Request(new TuningRequest(TunerKind.Terrestrial, 7), TuneParams.Bs(7, 0))
             .Validate(Moment);
 
         Assert.Contains(
@@ -144,7 +144,7 @@ public sealed class SessionRequestAgreementTests
     [Fact]
     public void TheReasonGivenForASatelliteTuneDoesNotPromiseTheOlderFieldWouldWork()
     {
-        var problem = Assert.Single(
+        string problem = Assert.Single(
             Request(new TuningRequest(TunerKind.Satellite, 15), TuneParams.Bs(15, 50001))
                 .Validate(Moment)
         );
@@ -159,7 +159,7 @@ public sealed class SessionRequestAgreementTests
     [Fact]
     public void TheReasonGivenForATerrestrialTuneIsThatBothFieldsTuneAlike()
     {
-        var problem = Assert.Single(
+        string problem = Assert.Single(
             Request(new TuningRequest(TunerKind.Terrestrial, 42), TuneParams.Terrestrial(55))
                 .Validate(Moment)
         );

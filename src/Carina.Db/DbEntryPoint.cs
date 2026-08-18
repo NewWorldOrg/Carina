@@ -35,7 +35,7 @@ public static class DbEntryPoint
         {
             await using (context)
             {
-                await using var lease = await MigrationLock.TakeAsync(context, error);
+                await using MigrationLock lease = await MigrationLock.TakeAsync(context, error);
 
                 await context.Database.MigrateAsync();
             }
@@ -52,7 +52,7 @@ public static class DbEntryPoint
 
     private static string Describe(Exception exception)
     {
-        var innermost = exception;
+        Exception innermost = exception;
 
         while (innermost.InnerException is { } inner)
         {

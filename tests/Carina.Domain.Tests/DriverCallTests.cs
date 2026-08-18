@@ -11,7 +11,7 @@ public sealed class DriverCallTests
         var call = DriverCall<string>.Reached("hello");
 
         Assert.Equal(DriverCallOutcome.Reached, call.Outcome);
-        Assert.True(call.TryGetValue(out var value));
+        Assert.True(call.TryGetValue(out string? value));
         Assert.Equal("hello", value);
     }
 

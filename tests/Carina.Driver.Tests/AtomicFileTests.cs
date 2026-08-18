@@ -34,7 +34,7 @@ public sealed class AtomicFileTests : IDisposable
     [Fact]
     public void TheNewContentIsWrittenBesideTheTargetSoThatPuttingItInPlaceIsOneRename()
     {
-        var staged = AtomicFile.Stage(target, After);
+        string staged = AtomicFile.Stage(target, After);
 
         Assert.Equal(Path.GetDirectoryName(target), Path.GetDirectoryName(staged));
         Assert.NotEqual(target, staged);
@@ -51,7 +51,7 @@ public sealed class AtomicFileTests : IDisposable
     [Fact]
     public void TheTargetIsNeverOpenedForWritingSoItCannotBeCaughtHalfWritten()
     {
-        var written = File.GetLastWriteTimeUtc(target);
+        DateTime written = File.GetLastWriteTimeUtc(target);
 
         AtomicFile.Stage(target, After);
 
@@ -62,7 +62,7 @@ public sealed class AtomicFileTests : IDisposable
     [Fact]
     public void TheRenameSwapsTheWholeFileRatherThanGrowingIt()
     {
-        var staged = AtomicFile.Stage(target, After);
+        string staged = AtomicFile.Stage(target, After);
 
         AtomicFile.Commit(staged, target);
 
@@ -93,7 +93,7 @@ public sealed class AtomicFileTests : IDisposable
     [Fact]
     public void ReplacingAFileThatIsNotThereYetCreatesIt()
     {
-        var fresh = Path.Combine(root, "fresh.json");
+        string fresh = Path.Combine(root, "fresh.json");
 
         AtomicFile.Replace(fresh, After);
 

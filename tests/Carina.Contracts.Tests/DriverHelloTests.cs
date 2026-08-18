@@ -20,7 +20,7 @@ public sealed class DriverHelloTests
     [Fact]
     public void UnknownCapabilityNamesAreCarriedWithoutComplaint()
     {
-        var hello = Hello("somethingTheAppDoesNotKnow");
+        DriverHello hello = Hello("somethingTheAppDoesNotKnow");
 
         Assert.False(hello.Supports(DriverCapabilities.Recording));
         Assert.Contains("somethingTheAppDoesNotKnow", hello.Capabilities);
@@ -29,7 +29,7 @@ public sealed class DriverHelloTests
     [Fact]
     public void ADriverThatMeasuresOneMetricButNotAnotherSaysSo()
     {
-        var hello = Hello(
+        DriverHello hello = Hello(
             DriverCapabilities.SignalQuality,
             DriverCapabilities.SignalQualityMetric(SignalQualityMetrics.Cnr)
         );
@@ -45,7 +45,7 @@ public sealed class DriverHelloTests
     [Fact]
     public void ADriverThatMeasuresNothingLeavesEveryMetricUnsupported()
     {
-        var hello = Hello(DriverCapabilities.Recording);
+        DriverHello hello = Hello(DriverCapabilities.Recording);
 
         Assert.False(hello.Supports(DriverCapabilities.SignalQuality));
         Assert.Empty(hello.DeclaredSignalQualityMetrics());
@@ -58,7 +58,7 @@ public sealed class DriverHelloTests
     [Fact]
     public void EveryMetricADriverDeclaresIsListedEvenTheOnesThisBuildDoesNotKnow()
     {
-        var hello = Hello(
+        DriverHello hello = Hello(
             DriverCapabilities.SignalQuality,
             DriverCapabilities.SignalQualityMetric(SignalQualityMetrics.Cnr),
             DriverCapabilities.SignalQualityMetric("somethingMeasuredLater")
@@ -74,7 +74,7 @@ public sealed class DriverHelloTests
     [Fact]
     public void TheCoarseCapabilityDoesNotStandInForAMetric()
     {
-        var hello = Hello(DriverCapabilities.SignalQuality);
+        DriverHello hello = Hello(DriverCapabilities.SignalQuality);
 
         Assert.True(hello.Supports(DriverCapabilities.SignalQuality));
         Assert.False(hello.SupportsSignalQualityMetric(SignalQualityMetrics.Cnr));

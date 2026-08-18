@@ -113,7 +113,7 @@ public sealed class WireStabilityTests
     [Fact]
     public void ASessionRequestKeepsItsFieldsAndTakesTheNewOneAtTheEnd()
     {
-        var fields = FieldsOf(DriverJson.Serialize(LegacyRequest));
+        IReadOnlyList<string> fields = FieldsOf(DriverJson.Serialize(LegacyRequest));
 
         Assert.Equal(StartSessionRequestFields, fields.Take(StartSessionRequestFields.Length));
         Assert.Equal(["tune"], fields.Skip(StartSessionRequestFields.Length));
@@ -128,7 +128,7 @@ public sealed class WireStabilityTests
     [Fact]
     public void TheCountersKeepTheirFieldsAndTakeTheNewOnesAtTheEnd()
     {
-        var fields = FieldsOf(DriverJson.Serialize(SessionCounters.Nothing));
+        IReadOnlyList<string> fields = FieldsOf(DriverJson.Serialize(SessionCounters.Nothing));
 
         Assert.Equal(SessionCountersFields, fields.Take(SessionCountersFields.Length));
         Assert.Equal(
@@ -140,7 +140,7 @@ public sealed class WireStabilityTests
     [Fact]
     public void CountersFromADriverThatCountedNeitherOfTheNewOnesStillRead()
     {
-        var counters = DriverJson.Deserialize(
+        SessionCounters? counters = DriverJson.Deserialize(
             """{"packets":1000,"drops":7,"discardedBytes":188,"resyncs":2}""",
             DriverJson.Context.SessionCounters
         );
@@ -154,7 +154,7 @@ public sealed class WireStabilityTests
     [Fact]
     public void ATunerKeepsItsFieldsAndTakesTheNewSubtreesAtTheEnd()
     {
-        var fields = FieldsOf(
+        IReadOnlyList<string> fields = FieldsOf(
             DriverJson.Serialize(new TunerSnapshot("adapter0", TunerKind.Terrestrial, TunerState.Idle))
         );
 
@@ -179,7 +179,7 @@ public sealed class WireStabilityTests
     [Fact]
     public void TheSubtreesATunerGainedAreExplicitNullsUntilADriverFillsThem()
     {
-        var json = DriverJson.Serialize(
+        string json = DriverJson.Serialize(
             new TunerSnapshot("adapter0", TunerKind.Terrestrial, TunerState.Idle)
         );
 
@@ -200,7 +200,7 @@ public sealed class WireStabilityTests
     [Fact]
     public void ARequestWrittenBeforeAnyOfThisStillValidatesTheSameWay()
     {
-        var request = DriverJson.Deserialize(
+        StartSessionRequest? request = DriverJson.Deserialize(
             """{"sessionId":"rec-1","purpose":"recording","tuning":{"kind":"terrestrial","physicalChannel":55},"outputRoot":"primary","endsAt":"2026-08-08T22:04:00+09:00"}""",
             DriverJson.Context.StartSessionRequest
         );
@@ -213,7 +213,7 @@ public sealed class WireStabilityTests
     [Fact]
     public void ARequestWrittenBeforeAnyOfThisIsRefusedForTheSameReasons()
     {
-        var request = DriverJson.Deserialize(
+        StartSessionRequest? request = DriverJson.Deserialize(
             """{"sessionId":"rec-1","purpose":"recording","tuning":{"kind":"terrestrial","physicalChannel":900}}""",
             DriverJson.Context.StartSessionRequest
         );
@@ -287,7 +287,7 @@ public sealed class WireStabilityTests
     [Fact]
     public void AQualityReadingKeepsItsFieldsAndTakesTheNewOnesAtTheEnd()
     {
-        var fields = FieldsOf(DriverJson.Serialize(SignalQualityDto.NotLocked(Moment)));
+        IReadOnlyList<string> fields = FieldsOf(DriverJson.Serialize(SignalQualityDto.NotLocked(Moment)));
 
         Assert.Equal(
             ["lock", "cnrMilliDecibels", "postViterbiBitErrors", "measuredAt"],
@@ -314,7 +314,7 @@ public sealed class WireStabilityTests
     [Fact]
     public void ACurrentSessionKeepsItsFieldsAndTakesTheNewOnesAtTheEnd()
     {
-        var fields = FieldsOf(DriverJson.Serialize(new CurrentSessionDto()));
+        IReadOnlyList<string> fields = FieldsOf(DriverJson.Serialize(new CurrentSessionDto()));
 
         Assert.Equal(["sessionId", "purpose", "startedAt", "tune"], fields.Take(4));
         Assert.Equal(["endsAt"], fields.Skip(4));

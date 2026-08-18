@@ -23,7 +23,7 @@ public sealed class DvbTunerDetector : ITunerDetector
 
     public IReadOnlyList<TunerDetection> Detect()
     {
-        var frontends = DvbDeviceProbe.FrontendPathsUnder(root);
+        IReadOnlyList<string> frontends = DvbDeviceProbe.FrontendPathsUnder(root);
 
         if (frontends.Count is 0)
         {
@@ -35,7 +35,7 @@ public sealed class DvbTunerDetector : ITunerDetector
 
     private static TunerDetection Describe(DetectedTuner tuner)
     {
-        var deviceId = DeviceIdFor(tuner.FrontendPath);
+        string deviceId = DeviceIdFor(tuner.FrontendPath);
 
         return new TunerDetection(
             deviceId,
@@ -48,7 +48,7 @@ public sealed class DvbTunerDetector : ITunerDetector
 
     private static string DeviceIdFor(string frontendPath)
     {
-        var adapter = Path.GetDirectoryName(frontendPath) is { } directory
+        string adapter = Path.GetDirectoryName(frontendPath) is { } directory
             ? Path.GetFileName(directory)
             : string.Empty;
 

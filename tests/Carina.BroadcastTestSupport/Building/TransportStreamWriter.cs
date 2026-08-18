@@ -29,9 +29,9 @@ public sealed class TransportStreamWriter
         bool transportError = false,
         int scramblingControl = 0)
     {
-        var adaptation = adaptationFieldLength >= 0 ? adaptationFieldLength + 1 : 0;
-        var pointer = pointerField is null ? 0 : 1;
-        var capacity = PayloadCapacity - adaptation - pointer;
+        int adaptation = adaptationFieldLength >= 0 ? adaptationFieldLength + 1 : 0;
+        int pointer = pointerField is null ? 0 : 1;
+        int capacity = PayloadCapacity - adaptation - pointer;
 
         if (payload.Length > capacity)
         {
@@ -41,10 +41,10 @@ public sealed class TransportStreamWriter
                 $"A packet carries at most {capacity} bytes here.");
         }
 
-        var counter = continuityCounter ?? nextContinuityCounter;
+        int counter = continuityCounter ?? nextContinuityCounter;
         nextContinuityCounter = (counter + 1) & 0x0F;
 
-        var packet = new byte[PacketSize];
+        byte[] packet = new byte[PacketSize];
         Array.Fill(packet, StuffingByte);
 
         packet[0] = SyncByte;
@@ -52,7 +52,7 @@ public sealed class TransportStreamWriter
         packet[2] = (byte)(pid & 0xFF);
         packet[3] = (byte)((scramblingControl << 6) | ((adaptation > 0 ? 0b11 : 0b01) << 4) | counter);
 
-        var at = HeaderSize;
+        int at = HeaderSize;
 
         if (adaptation > 0)
         {
@@ -78,9 +78,9 @@ public sealed class TransportStreamWriter
 
     public TransportStreamWriter AdaptationOnlyPacket(int? continuityCounter = null)
     {
-        var counter = continuityCounter ?? nextContinuityCounter;
+        int counter = continuityCounter ?? nextContinuityCounter;
 
-        var packet = new byte[PacketSize];
+        byte[] packet = new byte[PacketSize];
         Array.Fill(packet, StuffingByte);
 
         packet[0] = SyncByte;
@@ -103,22 +103,22 @@ public sealed class TransportStreamWriter
         var joined = new List<byte>();
         var starts = new List<int>();
 
-        foreach (var section in sections)
+        foreach (byte[] section in sections)
         {
             starts.Add(joined.Count);
             joined.AddRange(section);
         }
 
-        var stream = joined.ToArray();
-        var written = 0;
+        byte[] stream = joined.ToArray();
+        int written = 0;
 
         while (written < stream.Length)
         {
-            var adaptation = adaptationFieldLength >= 0 ? adaptationFieldLength + 1 : 0;
-            var withoutPointer = PayloadCapacity - adaptation;
-            var firstStart = starts.FirstOrDefault(start => start >= written, -1);
+            int adaptation = adaptationFieldLength >= 0 ? adaptationFieldLength + 1 : 0;
+            int withoutPointer = PayloadCapacity - adaptation;
+            int firstStart = starts.FirstOrDefault(start => start >= written, -1);
             int? pointer = null;
-            var capacity = withoutPointer;
+            int capacity = withoutPointer;
 
             if (firstStart >= written && firstStart - written < withoutPointer - 1)
             {
@@ -126,7 +126,7 @@ public sealed class TransportStreamWriter
                 capacity = withoutPointer - 1;
             }
 
-            var take = Math.Min(capacity, stream.Length - written);
+            int take = Math.Min(capacity, stream.Length - written);
             Packet(pointer, stream.AsSpan(written, take), adaptationFieldLength);
             written += take;
         }

@@ -21,7 +21,7 @@ public sealed class UtcDateTimeConverterTests
     {
         var value = new DateTime(2026, 8, 13, 1, 2, 3, kind);
 
-        var exception = Assert.Throws<ArgumentException>(() => Converter.ConvertToProvider(value));
+        ArgumentException exception = Assert.Throws<ArgumentException>(() => Converter.ConvertToProvider(value));
 
         Assert.Contains(kind.ToString(), exception.Message, StringComparison.Ordinal);
     }
@@ -31,7 +31,7 @@ public sealed class UtcDateTimeConverterTests
     {
         var stored = new DateTime(2026, 8, 13, 1, 2, 3, DateTimeKind.Unspecified);
 
-        var read = Assert.IsType<DateTime>(Converter.ConvertFromProvider(stored));
+        DateTime read = Assert.IsType<DateTime>(Converter.ConvertFromProvider(stored));
 
         Assert.Equal(DateTimeKind.Utc, read.Kind);
         Assert.Equal(stored.Ticks, read.Ticks);

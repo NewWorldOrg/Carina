@@ -53,7 +53,7 @@ public sealed class DriverConnectionSupervisor(
                 monitor.Record(DriverObservation.NotConnected);
             }
 
-            var pause = serve.Outcome switch
+            TimeSpan pause = serve.Outcome switch
             {
                 ServeOutcome.Draining => cadence.WhileDraining(),
                 ServeOutcome.FeedEnded => cadence.AfterFeed(serve.Held),
@@ -73,14 +73,14 @@ public sealed class DriverConnectionSupervisor(
 
     private async Task<Serve> ServeOnceAsync(CancellationToken stoppingToken)
     {
-        var health = await client.GetHealthAsync(stoppingToken);
+        DriverCall<DriverHello> health = await client.GetHealthAsync(stoppingToken);
 
-        if (!health.TryGetValue(out var hello))
+        if (!health.TryGetValue(out DriverHello? hello))
         {
             return Serve.Of(ServeOutcome.NeverReached);
         }
 
-        var missing = settings.ExpectedCapabilities
+        string[] missing = settings.ExpectedCapabilities
             .Where(capability => !hello.Supports(capability))
             .ToArray();
 
@@ -89,7 +89,7 @@ public sealed class DriverConnectionSupervisor(
 
         if (hello.IsDifferentInstanceFrom(adopted))
         {
-            var sessions = await client.GetActiveSessionsAsync(stoppingToken);
+            DriverCall<IReadOnlyList<SessionSnapshot>> sessions = await client.GetActiveSessionsAsync(stoppingToken);
 
             if (sessions.Outcome is DriverCallOutcome.Unreachable)
             {
@@ -100,7 +100,7 @@ public sealed class DriverConnectionSupervisor(
                 return Serve.Of(ServeOutcome.Lost);
             }
 
-            if (!sessions.TryGetValue(out var held))
+            if (!sessions.TryGetValue(out IReadOnlyList<SessionSnapshot>? held))
             {
                 logger.LogWarning(
                     "The driver refused its session list ({Problem}); it stays connected and readoption retries.",
@@ -114,7 +114,7 @@ public sealed class DriverConnectionSupervisor(
                 return Serve.Of(ServeOutcome.Alive);
             }
 
-            var previous = adopted;
+            DriverHello? previous = adopted;
             adopted = hello;
 
             if (previous is not null)
@@ -128,25 +128,25 @@ public sealed class DriverConnectionSupervisor(
             return Serve.Of(ServeOutcome.Draining);
         }
 
-        var feed = await client.OpenEventsAsync(stoppingToken);
+        DriverCall<Stream> feed = await client.OpenEventsAsync(stoppingToken);
 
         if (feed.Outcome is DriverCallOutcome.Refused)
         {
             return Serve.Of(ServeOutcome.Alive);
         }
 
-        if (!feed.TryGetValue(out var stream))
+        if (!feed.TryGetValue(out Stream? stream))
         {
             return Serve.Of(ServeOutcome.Lost);
         }
 
-        var opened = timeProvider.GetTimestamp();
+        long opened = timeProvider.GetTimestamp();
 
         try
         {
             await using (stream)
             {
-                await foreach (var name in SseFrames.ReadNamesAsync(stream, stoppingToken))
+                await foreach (string name in SseFrames.ReadNamesAsync(stream, stoppingToken))
                 {
                     if (!DriverEvents.IsKnown(name))
                     {

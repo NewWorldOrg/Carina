@@ -19,7 +19,7 @@ public sealed class DvbFrontendTests
         var calls = new ScriptedDvbSystemCalls();
         calls.RefuseToOpen(Path, Errno.NoSuchDevice);
 
-        var refusal = Assert.Throws<DvbDeviceException>(
+        DvbDeviceException refusal = Assert.Throws<DvbDeviceException>(
             () => DvbFrontend.Open(calls, Path, DvbAccess.Control)
         );
 
@@ -34,7 +34,7 @@ public sealed class DvbFrontendTests
         var calls = new ScriptedDvbSystemCalls();
         calls.RefuseToOpen(Path, Errno.Busy);
 
-        var refusal = Assert.Throws<DvbDeviceException>(
+        DvbDeviceException refusal = Assert.Throws<DvbDeviceException>(
             () => DvbFrontend.Open(calls, Path, DvbAccess.Control)
         );
 
@@ -49,7 +49,7 @@ public sealed class DvbFrontendTests
 
         frontend.Tune(DvbChannel.Terrestrial(55));
 
-        var written = Assert.Single(calls.PropertiesSet);
+        DvbPropertyList written = Assert.Single(calls.PropertiesSet);
         Assert.Equal(DvbProperty.Clear, written.PropertyAt(0));
         Assert.Equal(DvbProperty.Tune, written.PropertyAt(written.Count - 1));
     }
@@ -60,7 +60,7 @@ public sealed class DvbFrontendTests
         var calls = new ScriptedDvbSystemCalls { RefusePropertySetWith = Errno.NoSuchDevice };
         using var frontend = DvbFrontend.Open(calls, Path, DvbAccess.Control);
 
-        var refusal = Assert.Throws<DvbDeviceException>(
+        DvbDeviceException refusal = Assert.Throws<DvbDeviceException>(
             () => frontend.Tune(DvbChannel.Terrestrial(55))
         );
 
@@ -75,7 +75,7 @@ public sealed class DvbFrontendTests
         var calls = new ScriptedDvbSystemCalls { RefuseStatusWith = Errno.NoSuchDevice };
         using var frontend = DvbFrontend.Open(calls, Path, DvbAccess.Control);
 
-        var refusal = Assert.Throws<DvbDeviceException>(() => frontend.Status());
+        DvbDeviceException refusal = Assert.Throws<DvbDeviceException>(() => frontend.Status());
 
         Assert.Contains("reading the frontend status", refusal.Message, StringComparison.Ordinal);
     }
@@ -86,7 +86,7 @@ public sealed class DvbFrontendTests
         var calls = new ScriptedDvbSystemCalls { RefuseVoltageWith = Errno.NoSuchDevice };
         using var frontend = DvbFrontend.Open(calls, Path, DvbAccess.Control);
 
-        var refusal = Assert.Throws<DvbDeviceException>(
+        DvbDeviceException refusal = Assert.Throws<DvbDeviceException>(
             () => frontend.SetLnbVoltage(LnbVoltage.Off)
         );
 
@@ -177,10 +177,10 @@ public sealed class DvbFrontendTests
         );
 
         using var frontend = DvbFrontend.Open(calls, Path, DvbAccess.Control);
-        var quality = frontend.Quality();
+        SignalQuality quality = frontend.Quality();
 
         Assert.True(quality.HasLock);
-        Assert.True(quality.CarrierToNoise.TryGetDecibels(out var decibels));
+        Assert.True(quality.CarrierToNoise.TryGetDecibels(out double decibels));
         Assert.Equal(20.5, decibels, 3);
         Assert.Equal(SignalReading.Measured, quality.PostViterbiErrors.Reading);
     }
@@ -196,7 +196,7 @@ public sealed class DvbFrontendTests
         );
 
         using var frontend = DvbFrontend.Open(calls, Path, DvbAccess.Control);
-        var quality = frontend.Quality();
+        SignalQuality quality = frontend.Quality();
 
         Assert.False(quality.HasLock);
         Assert.Equal(SignalReading.FrontendNotLocked, quality.CarrierToNoise.Reading);
@@ -222,7 +222,7 @@ public sealed class DvbFrontendTests
         );
 
         using var frontend = DvbFrontend.Open(calls, Path, DvbAccess.Control);
-        var quality = frontend.Quality();
+        SignalQuality quality = frontend.Quality();
 
         Assert.False(quality.HasLock);
         Assert.Equal(SignalReading.UnavailableRightNow, quality.CarrierToNoise.Reading);
@@ -241,7 +241,7 @@ public sealed class DvbFrontendTests
         );
 
         using var frontend = DvbFrontend.Open(calls, Path, DvbAccess.Control);
-        var quality = frontend.Quality();
+        SignalQuality quality = frontend.Quality();
 
         Assert.False(quality.HasLock);
         Assert.Equal(SignalReading.UnavailableRightNow, quality.CarrierToNoise.Reading);
@@ -267,7 +267,7 @@ public sealed class DvbFrontendTests
 
         using var frontend = DvbFrontend.Open(calls, Path, DvbAccess.Control);
 
-        var refusal = Assert.Throws<DvbDeviceException>(() => frontend.Quality());
+        DvbDeviceException refusal = Assert.Throws<DvbDeviceException>(() => frontend.Quality());
 
         Assert.Contains("signal statistics", refusal.Message, StringComparison.Ordinal);
         Assert.Contains(Path, refusal.Message, StringComparison.Ordinal);
@@ -283,7 +283,7 @@ public sealed class DvbFrontendTests
 
         using var frontend = DvbFrontend.Open(calls, Path, DvbAccess.Inspect);
 
-        Assert.True(frontend.TryReadDeliverySystems(out var systems, out _));
+        Assert.True(frontend.TryReadDeliverySystems(out IReadOnlyList<DeliverySystem>? systems, out _));
         Assert.Equal([DeliverySystem.IsdbTerrestrial], systems);
     }
 
@@ -294,7 +294,7 @@ public sealed class DvbFrontendTests
 
         using var frontend = DvbFrontend.Open(calls, Path, DvbAccess.Inspect);
 
-        Assert.False(frontend.TryReadDeliverySystems(out var systems, out var problem));
+        Assert.False(frontend.TryReadDeliverySystems(out IReadOnlyList<DeliverySystem>? systems, out string? problem));
         Assert.Empty(systems);
         Assert.Contains("no delivery systems", problem, StringComparison.Ordinal);
     }
@@ -306,7 +306,7 @@ public sealed class DvbFrontendTests
 
         using var frontend = DvbFrontend.Open(calls, Path, DvbAccess.Inspect);
 
-        Assert.True(frontend.TryReadHardwareName(out var name, out _));
+        Assert.True(frontend.TryReadHardwareName(out string? name, out _));
         Assert.Equal("PT3 ISDB-S", name);
     }
 

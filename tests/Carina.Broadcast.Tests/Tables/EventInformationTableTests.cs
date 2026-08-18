@@ -33,7 +33,7 @@ public sealed class EventInformationTableTests
     [Fact]
     public void AnEventWhoseStartIsNotAReadableTimeIsDroppedAndCounted()
     {
-        var table = Parsed([.. Header(), .. Event(hour: 0x2A), .. Event()]);
+        EventInformationTable table = Parsed([.. Header(), .. Event(hour: 0x2A), .. Event()]);
 
         Assert.Equal(1, table.DiscardedEvents);
         Assert.Single(table.Events);
@@ -42,7 +42,7 @@ public sealed class EventInformationTableTests
     [Fact]
     public void AStartTheBroadcastLeavesOpenCostsThatEventAndNoOther()
     {
-        var table = Parsed([.. Header(), .. Event(startUndefined: true), .. Event()]);
+        EventInformationTable table = Parsed([.. Header(), .. Event(startUndefined: true), .. Event()]);
 
         Assert.Equal(1, table.DiscardedEvents);
         Assert.Single(table.Events);
@@ -65,7 +65,7 @@ public sealed class EventInformationTableTests
     [Fact]
     public void AnEventWithNoDescriptorsIsStillAnEvent()
     {
-        var table = Assert.IsType<TableRead<EventInformationTable>.Parsed>(
+        EventInformationTable table = Assert.IsType<TableRead<EventInformationTable>.Parsed>(
             EventInformationTable.Read(CarriedSection.Of(new SectionWriter
             {
                 TableId = EventInformationTable.PresentFollowingActualTableId,
@@ -73,7 +73,7 @@ public sealed class EventInformationTableTests
                 Body = [.. Header(), .. Event()],
             }))).Table;
 
-        var carried = Assert.Single(table.Events);
+        DescribedEvent carried = Assert.Single(table.Events);
 
         Assert.Equal(SomeService, table.ServiceId);
         Assert.Equal(1, carried.EventId);
@@ -84,7 +84,7 @@ public sealed class EventInformationTableTests
     [Fact]
     public void AnEventWithoutAnEndIsCarriedWithoutOneRatherThanGuessed()
     {
-        var table = Assert.IsType<TableRead<EventInformationTable>.Parsed>(
+        EventInformationTable table = Assert.IsType<TableRead<EventInformationTable>.Parsed>(
             EventInformationTable.Read(CarriedSection.Of(new SectionWriter
             {
                 TableId = EventInformationTable.PresentFollowingActualTableId,
@@ -92,7 +92,7 @@ public sealed class EventInformationTableTests
                 Body = [.. Header(), .. Event(openEnded: true)],
             }))).Table;
 
-        var carried = Assert.Single(table.Events);
+        DescribedEvent carried = Assert.Single(table.Events);
 
         Assert.Null(carried.Runs);
         Assert.Null(carried.EndsAt);
@@ -101,7 +101,7 @@ public sealed class EventInformationTableTests
     [Fact]
     public void ARunningStatusThisLibraryDoesNotKnowIsCarriedAsUndefined()
     {
-        var table = Assert.IsType<TableRead<EventInformationTable>.Parsed>(
+        EventInformationTable table = Assert.IsType<TableRead<EventInformationTable>.Parsed>(
             EventInformationTable.Read(CarriedSection.Of(new SectionWriter
             {
                 TableId = EventInformationTable.PresentFollowingActualTableId,
@@ -117,7 +117,7 @@ public sealed class EventInformationTableTests
     {
         Assert.True(EventInformationTable.CarriesEvents(EventInformationTable.PresentFollowingActualTableId));
 
-        for (var tableId = EventInformationTable.FirstScheduleActualTableId;
+        for (int tableId = EventInformationTable.FirstScheduleActualTableId;
             tableId <= EventInformationTable.LastScheduleActualTableId;
             tableId++)
         {
@@ -130,9 +130,9 @@ public sealed class EventInformationTableTests
     [Fact]
     public void ASummaryTheBroadcastCutShortLeavesTheEventUndescribed()
     {
-        var descriptor = new byte[] { DescriptorTags.ShortEvent, 0x07, 0x6A, 0x70, 0x6E, 0x02, 0x41, 0x42, 0x08 };
+        byte[] descriptor = new byte[] { DescriptorTags.ShortEvent, 0x07, 0x6A, 0x70, 0x6E, 0x02, 0x41, 0x42, 0x08 };
 
-        var table = Assert.IsType<TableRead<EventInformationTable>.Parsed>(
+        EventInformationTable table = Assert.IsType<TableRead<EventInformationTable>.Parsed>(
             EventInformationTable.Read(CarriedSection.Of(new SectionWriter
             {
                 TableId = EventInformationTable.PresentFollowingActualTableId,
@@ -140,7 +140,7 @@ public sealed class EventInformationTableTests
                 Body = [.. Header(), .. Event(descriptorsLength: descriptor.Length), .. descriptor],
             }))).Table;
 
-        var carried = Assert.Single(table.Events);
+        DescribedEvent carried = Assert.Single(table.Events);
 
         Assert.Single(carried.Descriptors);
         Assert.Null(carried.Described);

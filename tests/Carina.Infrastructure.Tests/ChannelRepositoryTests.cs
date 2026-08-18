@@ -18,12 +18,12 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
     [Fact]
     public async Task AServiceComesBackWithTheIdentifiersItWasStoredUnder()
     {
-        var network = NextNetwork();
-        await using var context = database.Open();
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
         var services = new BroadcastServiceRepository(context);
         await services.AddAsync(Service(network, 1), Cancel);
 
-        var found = await services.FindAsync(new NetworkId(network), new ServiceId(1), Cancel);
+        BroadcastService? found = await services.FindAsync(new NetworkId(network), new ServiceId(1), Cancel);
 
         Assert.NotNull(found);
         Assert.Equal("Fixture Service", found.Name);
@@ -34,13 +34,13 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
     [Fact]
     public async Task SelectingACandidateLeavesExactlyOneSelectedForTheService()
     {
-        var network = NextNetwork();
-        await using var context = database.Open();
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
         var services = new BroadcastServiceRepository(context);
         var candidates = new CandidateChannelRepository(context);
         await services.AddAsync(Service(network, 1), Cancel);
-        var first = Candidate(network, 1, 27);
-        var second = Candidate(network, 1, 28);
+        CandidateChannel first = Candidate(network, 1, 27);
+        CandidateChannel second = Candidate(network, 1, 28);
         await candidates.AddAsync(first, Cancel);
         await candidates.AddAsync(second, Cancel);
 
@@ -49,11 +49,11 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
         await candidates.SelectAsync(
             second.Id, SelectionSource.AutoSwitch, SignalMeasurement.WithLock(At, 22_000), At, Cancel);
 
-        await using var reading = database.Open();
-        var stored = await new CandidateChannelRepository(reading)
+        await using CarinaDbContext reading = database.Open();
+        IReadOnlyList<CandidateChannel> stored = await new CandidateChannelRepository(reading)
             .ListForServiceAsync(new NetworkId(network), new ServiceId(1), Cancel);
 
-        var selected = Assert.Single(stored, candidate => candidate.IsSelected);
+        CandidateChannel selected = Assert.Single(stored, candidate => candidate.IsSelected);
         Assert.Equal(second.Id, selected.Id);
         Assert.Equal(SelectionSource.AutoSwitch, selected.SelectionSource);
         Assert.Equal(22_000, selected.SelectionMeasurement?.CnrMilliDecibels);
@@ -62,21 +62,21 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
     [Fact]
     public async Task ClearingTheSelectionLeavesTheServiceWithNoWayToTuneItAndNoRepair()
     {
-        var network = NextNetwork();
-        await using var context = database.Open();
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
         await new BroadcastServiceRepository(context).AddAsync(Service(network, 1), Cancel);
         var candidates = new CandidateChannelRepository(context);
-        var only = Candidate(network, 1, 27);
+        CandidateChannel only = Candidate(network, 1, 27);
         await candidates.AddAsync(only, Cancel);
         await candidates.SelectAsync(
             only.Id, SelectionSource.Manual, SignalMeasurement.WithLock(At, 21_000), At, Cancel);
 
         await candidates.ClearSelectionAsync(new NetworkId(network), new ServiceId(1), Cancel);
 
-        await using var reading = database.Open();
+        await using CarinaDbContext reading = database.Open();
         var repository = new CandidateChannelRepository(reading);
         Assert.Null(await repository.FindSelectedAsync(new NetworkId(network), new ServiceId(1), Cancel));
-        var left = Assert.Single(
+        CandidateChannel left = Assert.Single(
             await repository.ListForServiceAsync(new NetworkId(network), new ServiceId(1), Cancel));
 
         Assert.Null(left.SelectionMeasurement);
@@ -86,12 +86,12 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
     [Fact]
     public async Task ACandidateOutOfRotationIsLeftOutOfTheRoundAndStaysVisible()
     {
-        var network = NextNetwork();
-        await using var context = database.Open();
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
         await new BroadcastServiceRepository(context).AddAsync(Service(network, 1), Cancel);
         var candidates = new CandidateChannelRepository(context);
-        var backingOff = Candidate(network, 1, 27);
-        var lost = Candidate(network, 1, 28);
+        CandidateChannel backingOff = Candidate(network, 1, 27);
+        CandidateChannel lost = Candidate(network, 1, 28);
         await candidates.AddAsync(backingOff, Cancel);
         await candidates.AddAsync(lost, Cancel);
 
@@ -102,10 +102,10 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
         await candidates.SaveAsync(backingOff, Cancel);
         await candidates.SaveAsync(lost, Cancel);
 
-        await using var reading = database.Open();
+        await using CarinaDbContext reading = database.Open();
         var repository = new CandidateChannelRepository(reading);
-        var inRotation = await repository.ListInRotationAsync(At.AddMinutes(2), Cancel);
-        var needingAttention = await repository.ListNeedingAttentionAsync(Cancel);
+        IReadOnlyList<CandidateChannel> inRotation = await repository.ListInRotationAsync(At.AddMinutes(2), Cancel);
+        IReadOnlyList<CandidateChannel> needingAttention = await repository.ListNeedingAttentionAsync(Cancel);
 
         Assert.Contains(inRotation, candidate => candidate.Id.Equals(backingOff.Id));
         Assert.DoesNotContain(inRotation, candidate => candidate.Id.Equals(lost.Id));
@@ -116,16 +116,16 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
     [Fact]
     public async Task ACandidateBackingOffIsSkippedUntilItsNextAttemptIsDue()
     {
-        var network = NextNetwork();
-        await using var context = database.Open();
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
         await new BroadcastServiceRepository(context).AddAsync(Service(network, 1), Cancel);
         var candidates = new CandidateChannelRepository(context);
-        var candidate = Candidate(network, 1, 27);
+        CandidateChannel candidate = Candidate(network, 1, 27);
         await candidates.AddAsync(candidate, Cancel);
         candidate.RecordTuningFailure(RotationBackoff.Default, At);
         await candidates.SaveAsync(candidate, Cancel);
 
-        await using var reading = database.Open();
+        await using CarinaDbContext reading = database.Open();
         var repository = new CandidateChannelRepository(reading);
 
         Assert.DoesNotContain(
@@ -139,22 +139,22 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
     [Fact]
     public async Task RecordingAFailureDoesNotUndoASelectionMadeMeanwhile()
     {
-        var network = NextNetwork();
-        await using var context = database.Open();
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
         await new BroadcastServiceRepository(context).AddAsync(Service(network, 1), Cancel);
-        var candidate = Candidate(network, 1, 27);
+        CandidateChannel candidate = Candidate(network, 1, 27);
         await new CandidateChannelRepository(context).AddAsync(candidate, Cancel);
 
-        await using var elsewhere = database.Open();
+        await using CarinaDbContext elsewhere = database.Open();
         await new CandidateChannelRepository(elsewhere)
             .SelectAsync(candidate.Id, SelectionSource.AutoSwitch, null, At, Cancel);
 
         candidate.RecordTuningFailure(RotationBackoff.Default, At.AddMinutes(1));
-        await using var stale = database.Open();
+        await using CarinaDbContext stale = database.Open();
         await new CandidateChannelRepository(stale).SaveAsync(candidate, Cancel);
 
-        await using var reading = database.Open();
-        var stored = await new CandidateChannelRepository(reading).FindAsync(candidate.Id, Cancel);
+        await using CarinaDbContext reading = database.Open();
+        CandidateChannel? stored = await new CandidateChannelRepository(reading).FindAsync(candidate.Id, Cancel);
         Assert.True(stored!.IsSelected);
         Assert.Equal(SelectionSource.AutoSwitch, stored.SelectionSource);
         Assert.Equal(RotationState.BackingOff, stored.RotationState);
@@ -163,37 +163,37 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
     [Fact]
     public async Task AChangedTunerLedgerMarksEveryCandidateForRevalidation()
     {
-        var network = NextNetwork();
-        await using var context = database.Open();
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
         await new BroadcastServiceRepository(context).AddAsync(Service(network, 1), Cancel);
         var candidates = new CandidateChannelRepository(context);
-        var candidate = Candidate(network, 1, 27);
+        CandidateChannel candidate = Candidate(network, 1, 27);
         await candidates.AddAsync(candidate, Cancel);
 
         await candidates.RequireRevalidationAsync(Cancel);
 
-        await using var reading = database.Open();
-        var stored = await new CandidateChannelRepository(reading).FindAsync(candidate.Id, Cancel);
+        await using CarinaDbContext reading = database.Open();
+        CandidateChannel? stored = await new CandidateChannelRepository(reading).FindAsync(candidate.Id, Cancel);
         Assert.True(stored!.NeedsRevalidation);
     }
 
     [Fact]
     public async Task DeletingAServiceTakesItsCandidatesAndNothingElse()
     {
-        var network = NextNetwork();
-        await using var context = database.Open();
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
         var services = new BroadcastServiceRepository(context);
         var candidates = new CandidateChannelRepository(context);
         await services.AddAsync(Service(network, 1), Cancel);
         await services.AddAsync(Service(network, 2), Cancel);
-        var doomed = Candidate(network, 1, 27);
-        var spared = Candidate(network, 2, 27);
+        CandidateChannel doomed = Candidate(network, 1, 27);
+        CandidateChannel spared = Candidate(network, 2, 27);
         await candidates.AddAsync(doomed, Cancel);
         await candidates.AddAsync(spared, Cancel);
 
         await services.RemoveAsync(new NetworkId(network), new ServiceId(1), Cancel);
 
-        await using var reading = database.Open();
+        await using CarinaDbContext reading = database.Open();
         var repository = new CandidateChannelRepository(reading);
         Assert.Null(await repository.FindAsync(doomed.Id, Cancel));
         Assert.NotNull(await repository.FindAsync(spared.Id, Cancel));
@@ -202,8 +202,8 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
     [Fact]
     public async Task ServicesSharingOneChannelEachKeepACandidateOfTheirOwn()
     {
-        var network = NextNetwork();
-        await using var context = database.Open();
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
         var services = new BroadcastServiceRepository(context);
         var candidates = new CandidateChannelRepository(context);
         await services.AddAsync(Service(network, 1), Cancel);
@@ -212,7 +212,7 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
         var carrying = TuningParameters.Terrestrial(27);
         var measured = SignalMeasurement.WithLock(At, 21_000);
 
-        foreach (var service in (int[])[1, 2])
+        foreach (int service in (int[])[1, 2])
         {
             var candidate = CandidateChannel.Discover(
                 CandidateChannelId.New(),
@@ -225,12 +225,12 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
             await candidates.AddAsync(candidate, Cancel);
         }
 
-        await using var reading = database.Open();
+        await using CarinaDbContext reading = database.Open();
         var repository = new CandidateChannelRepository(reading);
 
-        foreach (var service in (int[])[1, 2])
+        foreach (int service in (int[])[1, 2])
         {
-            var stored = Assert.Single(
+            CandidateChannel stored = Assert.Single(
                 await repository.ListForServiceAsync(new NetworkId(network), new ServiceId(service), Cancel));
 
             Assert.Equal(27, stored.Tuning.PhysicalChannel);
@@ -241,10 +241,10 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
     [Fact]
     public async Task TheSatelliteReferenceRowsAreReplacedOneSlotAtATime()
     {
-        await using var context = database.Open();
+        await using CarinaDbContext context = database.Open();
         var streams = new SatelliteTransportStreamRepository(context);
 
-        var seeded = await streams.ListAsync(Cancel);
+        IReadOnlyList<SatelliteTransportStream> seeded = await streams.ListAsync(Cancel);
         Assert.Equal(10, seeded.Count);
 
         await streams.ReplaceSlotAsync(
@@ -255,8 +255,8 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
             ],
             Cancel);
 
-        await using var reading = database.Open();
-        var slot = await new SatelliteTransportStreamRepository(reading)
+        await using CarinaDbContext reading = database.Open();
+        IReadOnlyList<SatelliteTransportStream> slot = await new SatelliteTransportStreamRepository(reading)
             .ListForSlotAsync(15, Cancel);
 
         Assert.Equal(2, slot.Count);
@@ -266,8 +266,8 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
     [Fact]
     public async Task AWriteInsideAnotherOneIsRefusedBeforeItWritesAnything()
     {
-        var network = NextNetwork();
-        await using var context = database.Open();
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
         var services = new BroadcastServiceRepository(context);
         var writes = new DatabaseAtomicWrite(context);
 
@@ -290,7 +290,7 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
             },
             Cancel);
 
-        await using var reading = database.Open();
+        await using CarinaDbContext reading = database.Open();
         var stored = new BroadcastServiceRepository(reading);
 
         Assert.NotNull(await stored.FindAsync(new NetworkId(network), new ServiceId(1), Cancel));
@@ -302,9 +302,9 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
     {
         const int Slot = 21;
 
-        await using var context = database.Open();
+        await using CarinaDbContext context = database.Open();
         var streams = new SatelliteTransportStreamRepository(context);
-        var before = await streams.ListForSlotAsync(Slot, Cancel);
+        IReadOnlyList<SatelliteTransportStream> before = await streams.ListForSlotAsync(Slot, Cancel);
 
         await Assert.ThrowsAsync<StoreRefusedException>(
             () => new DatabaseAtomicWrite(context).AllOrNothingAsync<int>(
@@ -319,8 +319,8 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
                 },
                 Cancel));
 
-        await using var reading = database.Open();
-        var after = await new SatelliteTransportStreamRepository(reading).ListForSlotAsync(Slot, Cancel);
+        await using CarinaDbContext reading = database.Open();
+        IReadOnlyList<SatelliteTransportStream> after = await new SatelliteTransportStreamRepository(reading).ListForSlotAsync(Slot, Cancel);
 
         Assert.Equal(
             before.Select(stream => stream.TransportStreamId),

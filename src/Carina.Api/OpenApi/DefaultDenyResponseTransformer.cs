@@ -17,7 +17,7 @@ public sealed class DefaultDenyResponseTransformer : IOpenApiOperationTransforme
         ArgumentNullException.ThrowIfNull(operation);
         ArgumentNullException.ThrowIfNull(context);
 
-        var anonymous = context.Description.ActionDescriptor.EndpointMetadata
+        bool anonymous = context.Description.ActionDescriptor.EndpointMetadata
             .OfType<IAllowAnonymous>()
             .Any();
 

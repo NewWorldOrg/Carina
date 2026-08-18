@@ -23,7 +23,7 @@ public static class ScanTargets
 
         if (scope.Covers(TuneSystem.IsdbT))
         {
-            for (var channel = BroadcastStandards.TerrestrialFirstChannel;
+            for (int channel = BroadcastStandards.TerrestrialFirstChannel;
                  channel <= BroadcastStandards.TerrestrialLastChannel;
                  channel++)
             {
@@ -33,7 +33,7 @@ public static class ScanTargets
 
         if (scope.Covers(TuneSystem.IsdbSBs))
         {
-            var known = await satelliteStreams.ListAsync(cancellationToken);
+            IReadOnlyList<SatelliteTransportStream> known = await satelliteStreams.ListAsync(cancellationToken);
 
             targets.AddRange(known
                 .OrderBy(stream => stream.BsChannel)
@@ -43,7 +43,7 @@ public static class ScanTargets
 
         if (scope.Covers(TuneSystem.IsdbSCs110))
         {
-            for (var slot = BroadcastStandards.Cs110FirstChannel;
+            for (int slot = BroadcastStandards.Cs110FirstChannel;
                  slot <= BroadcastStandards.Cs110LastChannel;
                  slot += 2)
             {

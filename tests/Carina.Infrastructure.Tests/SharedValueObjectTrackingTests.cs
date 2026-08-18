@@ -21,7 +21,7 @@ public sealed class SharedValueObjectTrackingTests
     [Fact]
     public void TwoCandidatesMayBeTunedByTheVerySameParameters()
     {
-        using var context = Carina();
+        using CarinaDbContext context = Carina();
         var carrying = TuningParameters.Terrestrial(27);
 
         context.Attach(Candidate(1, carrying));
@@ -34,10 +34,10 @@ public sealed class SharedValueObjectTrackingTests
     [Fact]
     public void TwoCandidatesMayCarryTheVerySameReading()
     {
-        using var context = Carina();
+        using CarinaDbContext context = Carina();
         var measured = SignalMeasurement.WithLock(At, 21_000);
-        var first = Candidate(1, TuningParameters.Terrestrial(27));
-        var second = Candidate(2, TuningParameters.Terrestrial(27));
+        CandidateChannel first = Candidate(1, TuningParameters.Terrestrial(27));
+        CandidateChannel second = Candidate(2, TuningParameters.Terrestrial(27));
         first.RecordTuningSuccess(measured, At);
         second.RecordTuningSuccess(measured, At);
         context.Attach(first);
@@ -50,7 +50,7 @@ public sealed class SharedValueObjectTrackingTests
     [Fact]
     public void TwoAttemptsMayBeTunedByTheVerySameParametersAndCarryTheVerySameReading()
     {
-        using var context = Carina();
+        using CarinaDbContext context = Carina();
         var carrying = TuningParameters.Terrestrial(27);
         var measured = SignalMeasurement.WithLock(At, 21_000);
         context.Attach(Attempt(carrying, measured));
@@ -63,9 +63,9 @@ public sealed class SharedValueObjectTrackingTests
     [Fact]
     public void OneReadingMayBeKeptByBothAnAttemptAndACandidateAtOnce()
     {
-        using var context = Carina();
+        using CarinaDbContext context = Carina();
         var measured = SignalMeasurement.WithLock(At, 21_000);
-        var candidate = Candidate(1, TuningParameters.Terrestrial(27));
+        CandidateChannel candidate = Candidate(1, TuningParameters.Terrestrial(27));
         candidate.RecordTuningSuccess(measured, At);
         context.Attach(Attempt(TuningParameters.Terrestrial(27), measured));
 

@@ -1,6 +1,8 @@
 using Carina.Domain.Channels;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Carina.Infrastructure.Persistence.Repositories;
 
@@ -77,13 +79,13 @@ public sealed class CandidateChannelRepository(CarinaDbContext context) : ICandi
     {
         ArgumentNullException.ThrowIfNull(candidate);
 
-        var entry = context.Entry(candidate);
+        EntityEntry<CandidateChannel> entry = context.Entry(candidate);
 
         if (entry.State is EntityState.Detached)
         {
             entry = context.Attach(candidate);
 
-            foreach (var property in RotationProperties)
+            foreach (string property in RotationProperties)
             {
                 entry.Property(property).IsModified = true;
             }
@@ -101,13 +103,13 @@ public sealed class CandidateChannelRepository(CarinaDbContext context) : ICandi
     {
         ArgumentNullException.ThrowIfNull(id);
 
-        var chosen = await FindAsync(id, cancellationToken);
+        CandidateChannel? chosen = await FindAsync(id, cancellationToken);
         if (chosen is null)
         {
             return null;
         }
 
-        await using var transaction = context.Database.CurrentTransaction is null
+        await using IDbContextTransaction? transaction = context.Database.CurrentTransaction is null
             ? await context.Database.BeginTransactionAsync(cancellationToken)
             : null;
 
@@ -155,7 +157,7 @@ public sealed class CandidateChannelRepository(CarinaDbContext context) : ICandi
         ServiceId serviceId,
         CancellationToken cancellationToken)
     {
-        var selected = await OfService(networkId, serviceId)
+        List<CandidateChannel> selected = await OfService(networkId, serviceId)
             .Where(candidate => candidate.IsSelected)
             .ToListAsync(cancellationToken);
 
@@ -164,7 +166,7 @@ public sealed class CandidateChannelRepository(CarinaDbContext context) : ICandi
             return;
         }
 
-        foreach (var candidate in selected)
+        foreach (CandidateChannel? candidate in selected)
         {
             candidate.Deselect();
         }

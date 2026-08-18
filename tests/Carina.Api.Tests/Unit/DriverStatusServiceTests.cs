@@ -1,3 +1,4 @@
+using Carina.Api.Common;
 using Carina.Api.Services;
 using Carina.Contracts;
 using Carina.Domain.DriverStatus;
@@ -21,7 +22,7 @@ public sealed class DriverStatusServiceTests
             new FixedTimeProvider(ObservedAt),
             NullLogger<DriverStatusService>.Instance);
 
-        var result = await service.GetStatusAsync(CancellationToken.None);
+        ServiceResult<DriverStatusSnapshot> result = await service.GetStatusAsync(CancellationToken.None);
 
         Assert.True(result.IsSuccess);
         Assert.NotNull(result.Data);
@@ -37,7 +38,7 @@ public sealed class DriverStatusServiceTests
             new FixedTimeProvider(ObservedAt),
             NullLogger<DriverStatusService>.Instance);
 
-        var result = await service.GetStatusAsync(CancellationToken.None);
+        ServiceResult<DriverStatusSnapshot> result = await service.GetStatusAsync(CancellationToken.None);
 
         Assert.False(result.IsSuccess);
         Assert.Equal("The driver status is unavailable.", result.ErrorMessage);

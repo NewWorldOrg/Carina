@@ -68,8 +68,8 @@ public sealed record BroadcastServiceResponder(
     {
         ArgumentNullException.ThrowIfNull(held);
 
-        var service = held.Service;
-        var selected = held.Candidates.FirstOrDefault(candidate => candidate.IsSelected);
+        BroadcastService service = held.Service;
+        CandidateChannel? selected = held.Candidates.FirstOrDefault(candidate => candidate.IsSelected);
 
         return new BroadcastServiceResponder(
             service.NetworkId.Value,

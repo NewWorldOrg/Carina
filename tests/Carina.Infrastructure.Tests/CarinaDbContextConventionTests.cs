@@ -1,6 +1,7 @@
 using Carina.Infrastructure.Persistence;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace Carina.Infrastructure.Tests;
 
@@ -31,9 +32,9 @@ public sealed class CarinaDbContextConventionTests
     [Fact]
     public void NamesTablesAndColumnsInSnakeCase()
     {
-        using var context = Probe();
+        using ProbeDbContext context = Probe();
 
-        var entity = context.Model.FindEntityType(typeof(ConventionProbe))!;
+        IEntityType entity = context.Model.FindEntityType(typeof(ConventionProbe))!;
 
         Assert.Equal("convention_probe", entity.GetTableName());
         Assert.Equal("recorded_at", entity.FindProperty(nameof(ConventionProbe.RecordedAt))!.GetColumnName());
@@ -42,9 +43,9 @@ public sealed class CarinaDbContextConventionTests
     [Fact]
     public void RoutesEveryDateTimeThroughTheUtcConverter()
     {
-        using var context = Probe();
+        using ProbeDbContext context = Probe();
 
-        var property = context.Model.FindEntityType(typeof(ConventionProbe))!
+        IProperty property = context.Model.FindEntityType(typeof(ConventionProbe))!
             .FindProperty(nameof(ConventionProbe.RecordedAt))!;
 
         Assert.IsType<UtcDateTimeConverter>(property.GetValueConverter());

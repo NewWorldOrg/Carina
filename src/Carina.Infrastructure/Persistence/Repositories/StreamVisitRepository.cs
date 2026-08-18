@@ -31,7 +31,7 @@ public sealed class StreamVisitRepository(CarinaDbContext context) : IStreamVisi
     {
         ArgumentNullException.ThrowIfNull(visit);
 
-        var held = await FindAsync(visit.NetworkId, visit.TransportStreamId, cancellationToken);
+        StreamVisit? held = await FindAsync(visit.NetworkId, visit.TransportStreamId, cancellationToken);
 
         if (held is null)
         {

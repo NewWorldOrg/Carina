@@ -89,7 +89,7 @@ public sealed class StreamHarvestTests
     public void PacketsSplitAcrossReadsAreStillRead()
     {
         var harvest = new StreamHarvest();
-        var packets = Packets(FirstBasic, FirstBasic, 0, 0);
+        byte[] packets = Packets(FirstBasic, FirstBasic, 0, 0);
 
         harvest.Push(packets.AsSpan(0, 100));
         harvest.Push(packets.AsSpan(100));
@@ -111,9 +111,9 @@ public sealed class StreamHarvestTests
 
     private static void Gather(StreamHarvest harvest, int tableId, int lastTableId, int segments = 4)
     {
-        for (var segment = 0; segment < segments; segment++)
+        for (int segment = 0; segment < segments; segment++)
         {
-            var section = segment * ScheduleProgress.SectionsPerSegment;
+            int section = segment * ScheduleProgress.SectionsPerSegment;
 
             harvest.Push(Packets(tableId, lastTableId, section, section));
         }

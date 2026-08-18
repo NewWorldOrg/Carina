@@ -21,9 +21,9 @@ public sealed class SessionViewsTests : IDisposable
 
     public void Dispose()
     {
-        foreach (var manager in managers)
+        foreach (TunerSessionManager manager in managers)
         {
-            foreach (var session in manager.Sessions)
+            foreach (TunerSession session in manager.Sessions)
             {
                 session.Dispose();
             }
@@ -47,7 +47,7 @@ public sealed class SessionViewsTests : IDisposable
 
     private TunerSessionManager Manager(ITunerDeviceFactory? factory = null)
     {
-        var configuration = Configuration;
+        DriverConfiguration configuration = Configuration;
         var manager = new TunerSessionManager(
             configuration,
             factory ?? new TunerDeviceFactory(configuration, TimeProvider.System),
@@ -70,7 +70,7 @@ public sealed class SessionViewsTests : IDisposable
         DateTimeOffset? endsAt = null
     )
     {
-        var start = manager.Begin(
+        SessionStart start = manager.Begin(
             new StartSessionRequest
             {
                 SessionId = SessionId.Parse(sessionId),
@@ -82,7 +82,7 @@ public sealed class SessionViewsTests : IDisposable
             }
         );
 
-        Assert.True(start.TryGetSession(out var session), start.Detail);
+        Assert.True(start.TryGetSession(out TunerSession? session), start.Detail);
 
         return session;
     }
@@ -93,7 +93,7 @@ public sealed class SessionViewsTests : IDisposable
     [InlineData(SessionPurpose.SurveyNow)]
     public void AWalkingSessionEndsAtTheDriversOwnLimitWhenTheAppNamesNoEnd(SessionPurpose purpose)
     {
-        var session = Begin(Manager(), "walk", purpose: purpose);
+        TunerSession session = Begin(Manager(), "walk", purpose: purpose);
 
         Assert.Equal(
             Start.AddMinutes(DriverConfiguration.DefaultWalkSessionMinutes),
@@ -103,7 +103,7 @@ public sealed class SessionViewsTests : IDisposable
     [Fact]
     public void AWalkingSessionAskingForLongerThanTheDriverAllowsIsCutToTheLimit()
     {
-        var session = Begin(
+        TunerSession session = Begin(
             Manager(),
             "walk",
             purpose: SessionPurpose.Scan,
@@ -117,7 +117,7 @@ public sealed class SessionViewsTests : IDisposable
     [Fact]
     public void AWalkingSessionAskingForLessThanTheLimitKeepsItsOwnEnd()
     {
-        var session = Begin(
+        TunerSession session = Begin(
             Manager(),
             "walk",
             purpose: SessionPurpose.Survey,
@@ -129,7 +129,7 @@ public sealed class SessionViewsTests : IDisposable
     [Fact]
     public void ALiveSessionIsNotCutByTheWalkingLimit()
     {
-        var session = Begin(Manager(), "live", endsAt: Start.AddHours(4));
+        TunerSession session = Begin(Manager(), "live", endsAt: Start.AddHours(4));
 
         Assert.Equal(Start.AddHours(4), session.EndsAt);
     }
@@ -137,10 +137,10 @@ public sealed class SessionViewsTests : IDisposable
     [Fact]
     public void ASessionCarriesItsStateAndItsCounters()
     {
-        var manager = Manager();
-        var session = Begin(manager, "counted");
+        TunerSessionManager manager = Manager();
+        TunerSession session = Begin(manager, "counted");
 
-        var snapshot = SessionViews.Of(session, Hello);
+        SessionSnapshot snapshot = SessionViews.Of(session, Hello);
 
         Assert.Equal(session.SessionId, snapshot.SessionId);
         Assert.Equal(SessionPurpose.Live, snapshot.Purpose);
@@ -153,18 +153,18 @@ public sealed class SessionViewsTests : IDisposable
     [Fact]
     public void AFaultedMeasurementIsNeverHiddenFromTheSnapshot()
     {
-        var manager = Manager();
-        var session = Begin(manager, "faulted");
+        TunerSessionManager manager = Manager();
+        TunerSession session = Begin(manager, "faulted");
 
         session.Broadcaster.Close(new IOException("the reader went away"));
 
-        var subscription = session.Broadcaster.Subscribe(SubscriberKind.Viewer);
+        SessionSubscription subscription = session.Broadcaster.Subscribe(SubscriberKind.Viewer);
         Assert.True(subscription.IsDisconnected);
 
         session.Stop();
         session.WaitForEnd(TimeSpan.FromSeconds(5));
 
-        var snapshot = SessionViews.Of(session, Hello);
+        SessionSnapshot snapshot = SessionViews.Of(session, Hello);
 
         Assert.Equal(session.FaultCount, snapshot.FaultCount);
         Assert.Equal(session.StopReason, snapshot.StopReason);
@@ -174,12 +174,12 @@ public sealed class SessionViewsTests : IDisposable
     [Fact]
     public async Task TheFaultCountAndTheFirstFaultTravelTogether()
     {
-        var manager = Manager(new ScriptedTunerDeviceFactory(failAfterReads: 1));
-        var session = Begin(manager, "broken");
+        TunerSessionManager manager = Manager(new ScriptedTunerDeviceFactory(failAfterReads: 1));
+        TunerSession session = Begin(manager, "broken");
 
         await session.Completion.WaitAsync(TimeSpan.FromSeconds(5));
 
-        var snapshot = SessionViews.Of(session, Hello);
+        SessionSnapshot snapshot = SessionViews.Of(session, Hello);
 
         Assert.Equal(SessionState.Failed, snapshot.State);
         Assert.Equal(SessionStopReason.DeviceFailed, snapshot.StopReason);
@@ -190,14 +190,14 @@ public sealed class SessionViewsTests : IDisposable
     [Fact]
     public void EverySessionAppearsOnceEvenAfterItEnds()
     {
-        var manager = Manager();
-        var running = Begin(manager, "running", "adapter0");
-        var ending = Begin(manager, "ending", "adapter1", TunerKind.Satellite);
+        TunerSessionManager manager = Manager();
+        TunerSession running = Begin(manager, "running", "adapter0");
+        TunerSession ending = Begin(manager, "ending", "adapter1", TunerKind.Satellite);
 
         ending.Stop();
         ending.WaitForEnd(TimeSpan.FromSeconds(5));
 
-        var snapshots = SessionViews.All(manager, Hello);
+        IReadOnlyList<SessionSnapshot> snapshots = SessionViews.All(manager, Hello);
 
         Assert.Equal(2, snapshots.Count);
         Assert.Single(snapshots, snapshot => snapshot.SessionId == running.SessionId);
@@ -207,9 +207,9 @@ public sealed class SessionViewsTests : IDisposable
     [Fact]
     public void AnIdleDriverShowsEveryDeclaredTuner()
     {
-        var manager = Manager();
+        TunerSessionManager manager = Manager();
 
-        var tuners = SessionViews.Tuners(Configuration, manager);
+        IReadOnlyList<TunerSnapshot> tuners = SessionViews.Tuners(Configuration, manager);
 
         Assert.Equal(3, tuners.Count);
         Assert.Equal(TunerState.Idle, tuners[0].State);
@@ -222,11 +222,11 @@ public sealed class SessionViewsTests : IDisposable
     [Fact]
     public void ATunerServingASessionNamesIt()
     {
-        var manager = Manager();
-        var session = Begin(manager, "busy-one", "adapter0");
+        TunerSessionManager manager = Manager();
+        TunerSession session = Begin(manager, "busy-one", "adapter0");
 
-        var tuners = SessionViews.Tuners(Configuration, manager);
-        var busy = tuners.Single(tuner => tuner.DeviceId == "adapter0");
+        IReadOnlyList<TunerSnapshot> tuners = SessionViews.Tuners(Configuration, manager);
+        TunerSnapshot busy = tuners.Single(tuner => tuner.DeviceId == "adapter0");
 
         Assert.Equal(TunerState.Busy, busy.State);
         Assert.Equal(session.SessionId, busy.SessionId);
@@ -235,13 +235,13 @@ public sealed class SessionViewsTests : IDisposable
     [Fact]
     public void AFaultedTunerSaysSoAndNamesItsFault()
     {
-        var manager = Manager(new SelectiveTunerDeviceFactory("adapter0"));
-        var doomed = Begin(manager, "doomed", "adapter0");
+        TunerSessionManager manager = Manager(new SelectiveTunerDeviceFactory("adapter0"));
+        TunerSession doomed = Begin(manager, "doomed", "adapter0");
 
         doomed.WaitForEnd(TimeSpan.FromSeconds(5));
 
-        var tuners = SessionViews.Tuners(Configuration, manager);
-        var faulted = tuners.Single(tuner => tuner.DeviceId == "adapter0");
+        IReadOnlyList<TunerSnapshot> tuners = SessionViews.Tuners(Configuration, manager);
+        TunerSnapshot faulted = tuners.Single(tuner => tuner.DeviceId == "adapter0");
 
         Assert.Equal(TunerState.Faulted, faulted.State);
         Assert.NotNull(faulted.Detail);
@@ -264,11 +264,11 @@ public sealed class SessionViewsTests : IDisposable
                 )
             )
         );
-        var manager = Manager(factory);
+        TunerSessionManager manager = Manager(factory);
         Begin(manager, "reading", "adapter0");
         ReadOneChunk(factory);
 
-        var reading = Quality(manager, "adapter0");
+        SignalQualityDto reading = Quality(manager, "adapter0");
 
         Assert.Equal(SignalLock.Locked, reading.Lock);
         Assert.Equal(20_500, reading.CnrMilliDecibels);
@@ -284,11 +284,11 @@ public sealed class SessionViewsTests : IDisposable
         var factory = new PacedTunerDeviceFactory(
             new ScriptedQualitySource().Answer(Readings.WithoutLock())
         );
-        var manager = Manager(factory);
+        TunerSessionManager manager = Manager(factory);
         Begin(manager, "unlocked", "adapter0");
         ReadOneChunk(factory);
 
-        var reading = Quality(manager, "adapter0");
+        SignalQualityDto reading = Quality(manager, "adapter0");
 
         Assert.Equal(SignalLock.NotLocked, reading.Lock);
         Assert.Null(reading.CnrMilliDecibels);
@@ -301,11 +301,11 @@ public sealed class SessionViewsTests : IDisposable
         var factory = new PacedTunerDeviceFactory(
             new ScriptedQualitySource().Answer(Readings.WithoutLock())
         );
-        var manager = Manager(factory);
-        var session = Begin(manager, "unlocked", "adapter0");
+        TunerSessionManager manager = Manager(factory);
+        TunerSession session = Begin(manager, "unlocked", "adapter0");
         ReadOneChunk(factory);
 
-        var snapshot = SessionViews.Of(session, Hello);
+        SessionSnapshot snapshot = SessionViews.Of(session, Hello);
 
         Assert.Equal(1, snapshot.Counters.LockLosses);
     }
@@ -316,11 +316,11 @@ public sealed class SessionViewsTests : IDisposable
         var factory = new PacedTunerDeviceFactory(
             new ScriptedQualitySource().Answer(Readings.WithCarrierToNoiseOnAnotherScale())
         );
-        var manager = Manager(factory);
+        TunerSessionManager manager = Manager(factory);
         Begin(manager, "other-scale", "adapter0");
         ReadOneChunk(factory);
 
-        var reading = Quality(manager, "adapter0");
+        SignalQualityDto reading = Quality(manager, "adapter0");
 
         Assert.Equal([SignalQualityMetrics.Cnr], reading.MetricsOnAnotherScale);
         Assert.Empty(reading.NotImplementedMetrics);
@@ -334,11 +334,11 @@ public sealed class SessionViewsTests : IDisposable
         var factory = new PacedTunerDeviceFactory(
             new ScriptedQualitySource().Answer(Readings.WithoutCarrierToNoise())
         );
-        var manager = Manager(factory);
+        TunerSessionManager manager = Manager(factory);
         Begin(manager, "partial", "adapter0");
         ReadOneChunk(factory);
 
-        var reading = Quality(manager, "adapter0");
+        SignalQualityDto reading = Quality(manager, "adapter0");
 
         Assert.Equal([SignalQualityMetrics.Cnr], reading.NotImplementedMetrics);
         Assert.False(reading.Implements(SignalQualityMetrics.Cnr));
@@ -352,11 +352,11 @@ public sealed class SessionViewsTests : IDisposable
         var factory = new PacedTunerDeviceFactory(
             new ScriptedQualitySource { RefuseFromReadNumber = 1 }
         );
-        var manager = Manager(factory);
+        TunerSessionManager manager = Manager(factory);
         Begin(manager, "refused", "adapter0");
         ReadOneChunk(factory);
 
-        var reading = Quality(manager, "adapter0");
+        SignalQualityDto reading = Quality(manager, "adapter0");
 
         Assert.Equal(SignalLock.Unspecified, reading.Lock);
         Assert.Null(reading.CnrMilliDecibels);
@@ -370,11 +370,11 @@ public sealed class SessionViewsTests : IDisposable
         var factory = new PacedTunerDeviceFactory(
             () => new ScriptedQualitySource(clock) { ReadingTakes = TimeSpan.FromMilliseconds(4) }
         );
-        var manager = Manager(factory);
+        TunerSessionManager manager = Manager(factory);
         Begin(manager, "timed", "adapter0");
         ReadOneChunk(factory);
 
-        var reading = Quality(manager, "adapter0");
+        SignalQualityDto reading = Quality(manager, "adapter0");
 
         Assert.Equal(Start, reading.MeasuredAt);
         Assert.Equal(Start.AddMilliseconds(4), reading.LockReadAt);
@@ -383,7 +383,7 @@ public sealed class SessionViewsTests : IDisposable
     [Fact]
     public void ATunerNobodyIsReadingCarriesNoReadingAtAll()
     {
-        var manager = Manager();
+        TunerSessionManager manager = Manager();
 
         Assert.All(
             SessionViews.Tuners(Configuration, manager),
@@ -395,8 +395,8 @@ public sealed class SessionViewsTests : IDisposable
     public void TheOverrunsCountedAtTheDeviceReachWhoeverAsksAboutTheSession()
     {
         var factory = new PacedTunerDeviceFactory();
-        var manager = Manager(factory);
-        var session = Begin(manager, "overrun", "adapter0");
+        TunerSessionManager manager = Manager(factory);
+        TunerSession session = Begin(manager, "overrun", "adapter0");
         ReadOneChunk(factory);
 
         factory.Last.Overflows = 2;
@@ -406,7 +406,7 @@ public sealed class SessionViewsTests : IDisposable
 
     private static SignalQualityDto Quality(TunerSessionManager manager, string deviceId)
     {
-        var tuner = SessionViews
+        TunerSnapshot tuner = SessionViews
             .Tuners(
                 new DriverConfiguration(
                     "/run/carina/driver.sock",
@@ -433,8 +433,8 @@ public sealed class SessionViewsTests : IDisposable
     [Fact]
     public void ATunerServingASessionSaysWhatItIsForAndWhatItIsTunedTo()
     {
-        var manager = Manager();
-        var session = Begin(
+        TunerSessionManager manager = Manager();
+        TunerSession session = Begin(
             manager,
             "scanning-one",
             "adapter0",
@@ -442,7 +442,7 @@ public sealed class SessionViewsTests : IDisposable
             tune: TuneParams.Terrestrial(55)
         );
 
-        var busy = Tuner(manager, "adapter0");
+        TunerSnapshot busy = Tuner(manager, "adapter0");
 
         Assert.NotNull(busy.CurrentSession);
         Assert.Equal(session.SessionId, busy.CurrentSession.SessionId);
@@ -454,8 +454,8 @@ public sealed class SessionViewsTests : IDisposable
     [Fact]
     public void TheMomentATunerComesFreeAgainTravelsWithTheSessionHoldingIt()
     {
-        var manager = Manager();
-        var session = Begin(
+        TunerSessionManager manager = Manager();
+        TunerSession session = Begin(
             manager,
             "until-then",
             "adapter0",
@@ -463,7 +463,7 @@ public sealed class SessionViewsTests : IDisposable
             endsAt: Start.AddMinutes(30)
         );
 
-        var busy = Tuner(manager, "adapter0");
+        TunerSnapshot busy = Tuner(manager, "adapter0");
 
         Assert.Equal(Start.AddMinutes(30), session.EndsAt);
         Assert.Equal(session.EndsAt, busy.CurrentSession?.EndsAt);
@@ -472,10 +472,10 @@ public sealed class SessionViewsTests : IDisposable
     [Fact]
     public void ASessionThatNamedNoEndStillTellsTheSubtreeTheCapItWasGiven()
     {
-        var manager = Manager();
-        var session = Begin(manager, "open-ended", "adapter0", tune: TuneParams.Terrestrial(55));
+        TunerSessionManager manager = Manager();
+        TunerSession session = Begin(manager, "open-ended", "adapter0", tune: TuneParams.Terrestrial(55));
 
-        var held = Tuner(manager, "adapter0").CurrentSession;
+        CurrentSessionDto? held = Tuner(manager, "adapter0").CurrentSession;
 
         Assert.NotNull(held?.EndsAt);
         Assert.Equal(session.EndsAt, held.EndsAt);
@@ -484,10 +484,10 @@ public sealed class SessionViewsTests : IDisposable
     [Fact]
     public void TheSessionInTheSubtreeIsTheOneNamedBesideIt()
     {
-        var manager = Manager();
+        TunerSessionManager manager = Manager();
         Begin(manager, "matched", "adapter0", tune: TuneParams.Terrestrial(55));
 
-        var busy = Tuner(manager, "adapter0");
+        TunerSnapshot busy = Tuner(manager, "adapter0");
 
         Assert.Equal(busy.SessionId, busy.CurrentSession?.SessionId);
     }
@@ -495,10 +495,10 @@ public sealed class SessionViewsTests : IDisposable
     [Fact]
     public void ASessionStartedWithoutTypedParametersStillSaysWhoHoldsTheTunerAndWhatFor()
     {
-        var manager = Manager();
-        var session = Begin(manager, "legacy", "adapter0");
+        TunerSessionManager manager = Manager();
+        TunerSession session = Begin(manager, "legacy", "adapter0");
 
-        var busy = Tuner(manager, "adapter0");
+        TunerSnapshot busy = Tuner(manager, "adapter0");
 
         Assert.NotNull(busy.CurrentSession);
         Assert.Equal(session.SessionId, busy.CurrentSession.SessionId);
@@ -509,7 +509,7 @@ public sealed class SessionViewsTests : IDisposable
     [Fact]
     public void ATunerNobodyIsUsingCarriesNoSessionSubtree()
     {
-        var manager = Manager();
+        TunerSessionManager manager = Manager();
 
         Assert.All(
             SessionViews.Tuners(Configuration, manager),
@@ -520,9 +520,9 @@ public sealed class SessionViewsTests : IDisposable
     [Fact]
     public void ATunerNothingHasHappenedToIsHealthyAndSaysNothingChanged()
     {
-        var manager = Manager();
+        TunerSessionManager manager = Manager();
 
-        var health = Tuner(manager, "adapter0").Health;
+        TunerHealthDto? health = Tuner(manager, "adapter0").Health;
 
         Assert.NotNull(health);
         Assert.Equal(TunerHealthLevel.Healthy, health.Level);
@@ -534,11 +534,11 @@ public sealed class SessionViewsTests : IDisposable
     [Fact]
     public void AFaultedTunerCarriesTheFaultAndWhenItWasNoticed()
     {
-        var manager = Manager();
+        TunerSessionManager manager = Manager();
 
         manager.Fault("adapter0", "the frontend stopped answering");
 
-        var health = Tuner(manager, "adapter0").Health;
+        TunerHealthDto? health = Tuner(manager, "adapter0").Health;
 
         Assert.NotNull(health);
         Assert.Equal(TunerHealthLevel.Faulted, health.Level);
@@ -549,12 +549,12 @@ public sealed class SessionViewsTests : IDisposable
     [Fact]
     public void ATunerTurnedOffWhileItHoldsASessionSaysTheDisableIsStillPending()
     {
-        var manager = Manager();
+        TunerSessionManager manager = Manager();
         Begin(manager, "draining-one", "adapter0");
 
         Assert.True(manager.Turn("adapter0", disabled: true));
 
-        var tuner = Tuner(manager, "adapter0");
+        TunerSnapshot tuner = Tuner(manager, "adapter0");
 
         Assert.Equal(TunerState.Draining, tuner.State);
         Assert.NotNull(tuner.Health);
@@ -565,11 +565,11 @@ public sealed class SessionViewsTests : IDisposable
     [Fact]
     public void ATunerTurnedOffWhileItHoldsNothingIsAlreadyOffRatherThanPending()
     {
-        var manager = Manager();
+        TunerSessionManager manager = Manager();
 
         Assert.True(manager.Turn("adapter0", disabled: true));
 
-        var tuner = Tuner(manager, "adapter0");
+        TunerSnapshot tuner = Tuner(manager, "adapter0");
 
         Assert.Equal(TunerState.Disabled, tuner.State);
         Assert.NotNull(tuner.Health);
@@ -579,8 +579,8 @@ public sealed class SessionViewsTests : IDisposable
     [Fact]
     public void OnlyASatelliteTunerConfiguredToFeedTheAntennaReportsItsSupply()
     {
-        var manager = Manager();
-        var configuration = Configuration with
+        TunerSessionManager manager = Manager();
+        DriverConfiguration configuration = Configuration with
         {
             Devices =
             [
@@ -590,7 +590,7 @@ public sealed class SessionViewsTests : IDisposable
             ],
         };
 
-        var tuners = SessionViews.Tuners(configuration, manager);
+        IReadOnlyList<TunerSnapshot> tuners = SessionViews.Tuners(configuration, manager);
 
         Assert.False(tuners[0].Health?.LnbPowered);
         Assert.True(tuners[1].Health?.LnbPowered);
@@ -614,13 +614,13 @@ public sealed class SessionViewsTests : IDisposable
     [Fact]
     public void ATunerIsIdleAgainOnceItsSessionEnds()
     {
-        var manager = Manager();
-        var session = Begin(manager, "short-one", "adapter0");
+        TunerSessionManager manager = Manager();
+        TunerSession session = Begin(manager, "short-one", "adapter0");
 
         session.Stop();
         session.WaitForEnd(TimeSpan.FromSeconds(5));
 
-        var busy = SessionViews
+        TunerSnapshot busy = SessionViews
             .Tuners(Configuration, manager)
             .Single(tuner => tuner.DeviceId == "adapter0");
 

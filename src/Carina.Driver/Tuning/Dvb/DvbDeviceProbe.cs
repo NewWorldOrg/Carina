@@ -39,8 +39,8 @@ public sealed class DvbDeviceProbe(IDvbSystemCalls calls)
 
     public static DeviceKind KindOf(IReadOnlyList<DeliverySystem> systems, string name)
     {
-        var terrestrial = systems.Contains(DeliverySystem.IsdbTerrestrial);
-        var satellite = systems.Contains(DeliverySystem.IsdbSatellite);
+        bool terrestrial = systems.Contains(DeliverySystem.IsdbTerrestrial);
+        bool satellite = systems.Contains(DeliverySystem.IsdbSatellite);
 
         if (terrestrial && !satellite)
         {
@@ -62,9 +62,9 @@ public sealed class DvbDeviceProbe(IDvbSystemCalls calls)
     {
         var enumerated = new List<DeviceKind>();
 
-        foreach (var system in systems)
+        foreach (DeliverySystem system in systems)
         {
-            var kind = KindFromDeliverySystem(system);
+            DeviceKind kind = KindFromDeliverySystem(system);
 
             if (kind is not DeviceKind.Unspecified && !enumerated.Contains(kind))
             {
@@ -92,10 +92,10 @@ public sealed class DvbDeviceProbe(IDvbSystemCalls calls)
         {
             frontend = DvbFrontend.Open(calls, frontendPath, DvbAccess.Inspect);
 
-            var named = frontend.TryReadHardwareName(out var name, out var nameProblem);
-            var enumerated = frontend.TryReadDeliverySystems(out var systems, out var systemProblem);
-            var kind = KindOf(systems, name);
-            var receives = KindsOf(systems, name);
+            bool named = frontend.TryReadHardwareName(out string? name, out string? nameProblem);
+            bool enumerated = frontend.TryReadDeliverySystems(out IReadOnlyList<DeliverySystem>? systems, out string? systemProblem);
+            DeviceKind kind = KindOf(systems, name);
+            IReadOnlyList<DeviceKind> receives = KindsOf(systems, name);
             var problems = new List<string>();
 
             if (!enumerated)

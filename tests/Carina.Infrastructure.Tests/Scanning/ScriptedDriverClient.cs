@@ -72,7 +72,7 @@ public sealed class ScriptedDriverClient : IDriverClient
     {
         lock (gate)
         {
-            var snapshots = live
+            TunerSnapshot[] snapshots = live
                 .Select(entry => new TunerSnapshot(DeviceId, TunerKind.Terrestrial, TunerState.Busy)
                 {
                     CurrentSession = new CurrentSessionDto
@@ -98,7 +98,7 @@ public sealed class ScriptedDriverClient : IDriverClient
         StartSessionRequest request,
         CancellationToken cancellationToken)
     {
-        var tuning = TuningOf(request.Tune!);
+        TuningParameters tuning = TuningOf(request.Tune!);
 
         lock (gate)
         {
@@ -119,7 +119,7 @@ public sealed class ScriptedDriverClient : IDriverClient
                     new DriverProblem("noDeviceFree", ["Every usable tuner is busy."])));
             }
 
-            var script = Script(tuning);
+            ChannelScript script = Script(tuning);
 
             if (script.Refusal is { } refusal)
             {
@@ -149,12 +149,12 @@ public sealed class ScriptedDriverClient : IDriverClient
     {
         lock (gate)
         {
-            if (!live.TryGetValue(sessionId, out var tuning))
+            if (!live.TryGetValue(sessionId, out TuningParameters? tuning))
             {
                 return Task.FromResult(DriverCall<Stream>.Unreachable("That session is not open."));
             }
 
-            var script = Script(tuning);
+            ChannelScript script = Script(tuning);
 
             if (script.StreamRefusal is { } refusal)
             {
@@ -225,7 +225,7 @@ public sealed class ScriptedDriverClient : IDriverClient
         => throw new NotSupportedException();
 
     private ChannelScript Script(TuningParameters tuning)
-        => scripts.TryGetValue(tuning, out var script) ? script : ChannelScript.NoLock();
+        => scripts.TryGetValue(tuning, out ChannelScript? script) ? script : ChannelScript.NoLock();
 
     private static SignalQualityDto? QualityOf(ChannelScript script)
         => script.Measured

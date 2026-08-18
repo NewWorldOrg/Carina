@@ -14,7 +14,7 @@ public static class ConventionRules
             .Where(type => typeof(ControllerBase).IsAssignableFrom(type) && !type.IsAbstract)
             .Where(type =>
             {
-                var actions = PublicDeclaredInstanceMethods(type);
+                MethodInfo[] actions = PublicDeclaredInstanceMethods(type);
                 return actions.Length != 1 || actions[0].Name != "Invoke";
             })
             .Select(type => type.FullName!)
@@ -77,7 +77,7 @@ public static class ConventionRules
 
     private static bool IsAnApplicationDependency(Type type)
     {
-        var space = type.Namespace ?? string.Empty;
+        string space = type.Namespace ?? string.Empty;
 
         return space.StartsWith("Carina.", StringComparison.Ordinal);
     }
@@ -90,10 +90,10 @@ public static class ConventionRules
 
     private static bool ReturnsAServiceResult(Type returnType)
     {
-        var type = returnType;
+        Type type = returnType;
         if (type.IsGenericType)
         {
-            var definition = type.GetGenericTypeDefinition();
+            Type definition = type.GetGenericTypeDefinition();
             if (definition == typeof(Task<>) || definition == typeof(ValueTask<>))
             {
                 type = type.GetGenericArguments()[0];
@@ -105,7 +105,7 @@ public static class ConventionRules
 
     private static bool IsValueObject(Type type)
     {
-        for (var current = type.BaseType; current is not null; current = current.BaseType)
+        for (Type? current = type.BaseType; current is not null; current = current.BaseType)
         {
             if (current.IsGenericType && current.GetGenericTypeDefinition() == typeof(CommonValueObject<>))
             {

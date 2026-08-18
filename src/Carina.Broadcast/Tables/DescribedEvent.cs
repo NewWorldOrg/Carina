@@ -28,9 +28,9 @@ public sealed class DescribedEvent(
     {
         get
         {
-            foreach (var descriptor in Descriptors)
+            foreach (Descriptor descriptor in Descriptors)
             {
-                if (ShortEventDescription.TryRead(descriptor, out var described))
+                if (ShortEventDescription.TryRead(descriptor, out ShortEventDescription? described))
                 {
                     return described;
                 }
@@ -41,15 +41,15 @@ public sealed class DescribedEvent(
     }
 
     public ExtendedEventDescription? Detailed
-        => ExtendedEventDescription.TryRead(Descriptors, out var detailed) ? detailed : null;
+        => ExtendedEventDescription.TryRead(Descriptors, out ExtendedEventDescription? detailed) ? detailed : null;
 
     public IReadOnlyList<ContentGenre> Genres
     {
         get
         {
-            foreach (var descriptor in Descriptors)
+            foreach (Descriptor descriptor in Descriptors)
             {
-                if (ContentGenres.TryRead(descriptor, out var genres))
+                if (ContentGenres.TryRead(descriptor, out IReadOnlyList<ContentGenre>? genres))
                 {
                     return genres;
                 }
@@ -74,9 +74,9 @@ public sealed class DescribedEvent(
     private IEnumerable<T> Read<T>(Reads<T> reads)
         where T : class
     {
-        foreach (var descriptor in Descriptors)
+        foreach (Descriptor descriptor in Descriptors)
         {
-            if (reads(descriptor, out var read))
+            if (reads(descriptor, out T? read))
             {
                 yield return read!;
             }

@@ -9,7 +9,7 @@ public sealed class TunerLedgerCheckTests
     [Fact]
     public void ASatelliteTunerTheLedgerCallsTerrestrialContradictsTheLedger()
     {
-        var contradiction = Assert.Single(
+        TunerContradiction contradiction = Assert.Single(
             TunerLedgerCheck.Contradictions(
                 [Declared("adapter0.frontend0", DeviceKind.Terrestrial)],
                 [Receiving("adapter0.frontend0", DeviceKind.Satellite)]
@@ -24,7 +24,7 @@ public sealed class TunerLedgerCheckTests
     [Fact]
     public void ATerrestrialTunerTheLedgerCallsSatelliteContradictsTheLedger()
     {
-        var contradiction = Assert.Single(
+        TunerContradiction contradiction = Assert.Single(
             TunerLedgerCheck.Contradictions(
                 [Declared("adapter0.frontend0", DeviceKind.Satellite)],
                 [Receiving("adapter0.frontend0", DeviceKind.Terrestrial)]
@@ -177,7 +177,7 @@ public sealed class TunerLedgerCheckTests
     [Fact]
     public void TheContradictionSaysBothWhatTheLedgerClaimsAndWhatTheTunerReports()
     {
-        var contradiction = Assert.Single(
+        TunerContradiction contradiction = Assert.Single(
             TunerLedgerCheck.Contradictions(
                 [Declared("adapter0.frontend0", DeviceKind.Terrestrial)],
                 [Receiving("adapter0.frontend0", DeviceKind.Satellite)]

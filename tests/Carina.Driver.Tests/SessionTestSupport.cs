@@ -36,7 +36,7 @@ public sealed class ScriptedTunerDevice(
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var taken = Interlocked.Increment(ref reads);
+        long taken = Interlocked.Increment(ref reads);
 
         if (taken > failAfterReads)
         {

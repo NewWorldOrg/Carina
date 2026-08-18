@@ -105,7 +105,7 @@ public sealed class DvbDeviceProbeTests : IDisposable
         };
         var probe = new DvbDeviceProbe(calls);
 
-        var detected = Assert.Single(probe.Inspect(["/dev/dvb/adapter0/frontend0"]));
+        DetectedTuner detected = Assert.Single(probe.Inspect(["/dev/dvb/adapter0/frontend0"]));
 
         Assert.Equal("/dev/dvb/adapter0/frontend0", detected.FrontendPath);
         Assert.Equal("PT3 ISDB-S", detected.Name);
@@ -123,7 +123,7 @@ public sealed class DvbDeviceProbeTests : IDisposable
         };
         var probe = new DvbDeviceProbe(calls);
 
-        var detected = Assert.Single(probe.Inspect(["/dev/dvb/adapter0/frontend0"]));
+        DetectedTuner detected = Assert.Single(probe.Inspect(["/dev/dvb/adapter0/frontend0"]));
 
         Assert.Equal(DeviceKind.Terrestrial, detected.Kind);
         Assert.NotNull(detected.Problem);
@@ -140,10 +140,10 @@ public sealed class DvbDeviceProbeTests : IDisposable
         };
         var unusable = new ScriptedDvbSystemCalls { DeliverySystems = [], HardwareName = "mystery" };
 
-        var withProblem = Assert.Single(
+        DetectedTuner withProblem = Assert.Single(
             new DvbDeviceProbe(usable).Inspect(["/dev/dvb/adapter0/frontend0"])
         );
-        var withoutKind = Assert.Single(
+        DetectedTuner withoutKind = Assert.Single(
             new DvbDeviceProbe(unusable).Inspect(["/dev/dvb/adapter0/frontend0"])
         );
 
@@ -160,7 +160,7 @@ public sealed class DvbDeviceProbeTests : IDisposable
         calls.RefuseToOpen("/dev/dvb/adapter0/frontend0", Errno.Busy);
         var probe = new DvbDeviceProbe(calls);
 
-        var detected = Assert.Single(probe.Inspect(["/dev/dvb/adapter0/frontend0"]));
+        DetectedTuner detected = Assert.Single(probe.Inspect(["/dev/dvb/adapter0/frontend0"]));
 
         Assert.Equal(DeviceKind.Unspecified, detected.Kind);
         Assert.NotNull(detected.Problem);
@@ -193,7 +193,7 @@ public sealed class DvbDeviceProbeTests : IDisposable
         };
         var probe = new DvbDeviceProbe(calls);
 
-        var detected = Assert.Single(probe.Inspect(["/dev/dvb/adapter0/frontend0"]));
+        DetectedTuner detected = Assert.Single(probe.Inspect(["/dev/dvb/adapter0/frontend0"]));
 
         Assert.Equal(DeviceKind.Unspecified, detected.Kind);
         Assert.NotNull(detected.Problem);

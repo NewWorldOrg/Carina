@@ -95,11 +95,11 @@ public sealed class TunerLedgerEndpointTests
         TuneParams tune,
         DateTimeOffset? endsAt = null)
     {
-        await using var feature = await DriverFeature.StartAsync(
+        await using DriverFeature feature = await DriverFeature.StartAsync(
             Capable(),
             driver => Holding(driver, purpose, tune, endsAt));
 
-        var (_, body) = await ReadAsync(await feature.Client.GetAsync(Tuners));
+        (HttpStatusCode _, JsonElement body) = await ReadAsync(await feature.Client.GetAsync(Tuners));
 
         return body.GetProperty("data").GetProperty("observed")[0].Clone();
     }
@@ -115,13 +115,13 @@ public sealed class TunerLedgerEndpointTests
     [Fact]
     public async Task TheLedgerKeepsWhatWasSavedApartFromWhatIsRunning()
     {
-        await using var feature = await DriverFeature.StartAsync(Capable(), Stocked);
+        await using DriverFeature feature = await DriverFeature.StartAsync(Capable(), Stocked);
 
-        var (status, body) = await ReadAsync(await feature.Client.GetAsync(Tuners));
+        (HttpStatusCode status, JsonElement body) = await ReadAsync(await feature.Client.GetAsync(Tuners));
 
         Assert.Equal(HttpStatusCode.OK, status);
 
-        var data = body.GetProperty("data");
+        JsonElement data = body.GetProperty("data");
 
         Assert.Equal(
             ["adapter0", "adapter1"],
@@ -138,9 +138,9 @@ public sealed class TunerLedgerEndpointTests
     [Fact]
     public async Task TheObservationCarriesTheMomentItWasTakenSoTheScreenCanSayHowOldItIs()
     {
-        await using var feature = await DriverFeature.StartAsync(Capable(), Stocked);
+        await using DriverFeature feature = await DriverFeature.StartAsync(Capable(), Stocked);
 
-        var (_, body) = await ReadAsync(await feature.Client.GetAsync(Tuners));
+        (HttpStatusCode _, JsonElement body) = await ReadAsync(await feature.Client.GetAsync(Tuners));
 
         Assert.NotEqual(
             default,
@@ -150,8 +150,8 @@ public sealed class TunerLedgerEndpointTests
     [Fact]
     public async Task TheChannelTheDriverSaysATunerIsOnReachesTheScreenAndNotOnlyThePurpose()
     {
-        var observed = await HeldSessionAsync(SessionPurpose.Recording, TuneParams.Terrestrial(57));
-        var tuning = observed.GetProperty("sessionTuning");
+        JsonElement observed = await HeldSessionAsync(SessionPurpose.Recording, TuneParams.Terrestrial(57));
+        JsonElement tuning = observed.GetProperty("sessionTuning");
 
         Assert.Equal("recording", observed.GetProperty("sessionPurpose").GetString());
         Assert.Equal("isdbT", tuning.GetProperty("system").GetString());
@@ -161,7 +161,7 @@ public sealed class TunerLedgerEndpointTests
     [Fact]
     public async Task TheEndOfTheRecordingHoldingATunerReachesTheScreenThatHasToNameIt()
     {
-        var observed = await HeldSessionAsync(
+        JsonElement observed = await HeldSessionAsync(
             SessionPurpose.Recording,
             TuneParams.Terrestrial(53),
             Ends);
@@ -172,7 +172,7 @@ public sealed class TunerLedgerEndpointTests
     [Fact]
     public async Task TheMomentASessionStartedSurvivesTheTripFromTheDriverToTheScreen()
     {
-        var observed = await HeldSessionAsync(SessionPurpose.Live, TuneParams.Terrestrial(55));
+        JsonElement observed = await HeldSessionAsync(SessionPurpose.Live, TuneParams.Terrestrial(55));
 
         Assert.Equal(Started, observed.GetProperty("sessionStartedAt").GetDateTimeOffset());
     }
@@ -180,8 +180,8 @@ public sealed class TunerLedgerEndpointTests
     [Fact]
     public async Task ASessionOnASatelliteSlotCarriesTheTransportStreamThatTellsItApart()
     {
-        var observed = await HeldSessionAsync(SessionPurpose.Live, TuneParams.Bs(1, 50001));
-        var tuning = observed.GetProperty("sessionTuning");
+        JsonElement observed = await HeldSessionAsync(SessionPurpose.Live, TuneParams.Bs(1, 50001));
+        JsonElement tuning = observed.GetProperty("sessionTuning");
 
         Assert.Equal("isdbSBs", tuning.GetProperty("system").GetString());
         Assert.Equal(1, tuning.GetProperty("physicalChannel").GetInt32());
@@ -191,7 +191,7 @@ public sealed class TunerLedgerEndpointTests
     [Fact]
     public async Task ADriverTooOldToNameWhenASessionEndsLeavesTheFieldEmptyRatherThanInventingAMoment()
     {
-        var observed = await HeldSessionAsync(SessionPurpose.Live, TuneParams.Terrestrial(55));
+        JsonElement observed = await HeldSessionAsync(SessionPurpose.Live, TuneParams.Terrestrial(55));
 
         Assert.Equal(JsonValueKind.Null, observed.GetProperty("sessionEndsAt").ValueKind);
     }
@@ -199,10 +199,10 @@ public sealed class TunerLedgerEndpointTests
     [Fact]
     public async Task ATunerHoldingNothingCarriesNoTuningRatherThanAChannelOfZero()
     {
-        await using var feature = await DriverFeature.StartAsync(Capable(), Stocked);
+        await using DriverFeature feature = await DriverFeature.StartAsync(Capable(), Stocked);
 
-        var (_, body) = await ReadAsync(await feature.Client.GetAsync(Tuners));
-        var observed = body.GetProperty("data").GetProperty("observed")[0];
+        (HttpStatusCode _, JsonElement body) = await ReadAsync(await feature.Client.GetAsync(Tuners));
+        JsonElement observed = body.GetProperty("data").GetProperty("observed")[0];
 
         Assert.Equal(JsonValueKind.Null, observed.GetProperty("sessionTuning").ValueKind);
         Assert.Equal(JsonValueKind.Null, observed.GetProperty("sessionStartedAt").ValueKind);
@@ -212,14 +212,14 @@ public sealed class TunerLedgerEndpointTests
     [Fact]
     public async Task DriftBetweenTheSavedAndTheLoadedLedgerIsVisibleToTheClient()
     {
-        await using var feature = await DriverFeature.StartAsync(Capable(), driver =>
+        await using DriverFeature feature = await DriverFeature.StartAsync(Capable(), driver =>
         {
             Stocked(driver);
             driver.Ledger = driver.Ledger with { SavedHash = "saved", LoadedHash = "loaded" };
         });
 
-        var (_, body) = await ReadAsync(await feature.Client.GetAsync(Tuners));
-        var data = body.GetProperty("data");
+        (HttpStatusCode _, JsonElement body) = await ReadAsync(await feature.Client.GetAsync(Tuners));
+        JsonElement data = body.GetProperty("data");
 
         Assert.True(data.GetProperty("drifted").GetBoolean());
         Assert.Equal("saved", data.GetProperty("savedHash").GetString());
@@ -229,9 +229,9 @@ public sealed class TunerLedgerEndpointTests
     [Fact]
     public async Task ALedgerThatMatchesWhatTheDriverLoadedDoesNotClaimDrift()
     {
-        await using var feature = await DriverFeature.StartAsync(Capable(), Stocked);
+        await using DriverFeature feature = await DriverFeature.StartAsync(Capable(), Stocked);
 
-        var (_, body) = await ReadAsync(await feature.Client.GetAsync(Tuners));
+        (HttpStatusCode _, JsonElement body) = await ReadAsync(await feature.Client.GetAsync(Tuners));
 
         Assert.False(body.GetProperty("data").GetProperty("drifted").GetBoolean());
     }
@@ -239,7 +239,7 @@ public sealed class TunerLedgerEndpointTests
     [Fact]
     public async Task TheSavedLedgerStillReadsWhenTheRunningTunersCannotBeAsked()
     {
-        await using var feature = await DriverFeature.StartAsync(Capable(), driver =>
+        await using DriverFeature feature = await DriverFeature.StartAsync(Capable(), driver =>
         {
             Stocked(driver);
             driver.RefusalsByPath[DriverEndpoints.Tuners] = new FakeDriver.Refusal(
@@ -247,8 +247,8 @@ public sealed class TunerLedgerEndpointTests
                 new DriverProblem("draining", ["The driver is shutting down."]));
         });
 
-        var (status, body) = await ReadAsync(await feature.Client.GetAsync(Tuners));
-        var data = body.GetProperty("data");
+        (HttpStatusCode status, JsonElement body) = await ReadAsync(await feature.Client.GetAsync(Tuners));
+        JsonElement data = body.GetProperty("data");
 
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal(2, data.GetProperty("desired").GetArrayLength());
@@ -259,9 +259,9 @@ public sealed class TunerLedgerEndpointTests
     [Fact]
     public async Task ADriverThatIsNotThereIsAnsweredApartFromADriverThatSaidNo()
     {
-        await using var feature = await DriverFeature.StartAsync();
+        await using DriverFeature feature = await DriverFeature.StartAsync();
 
-        var (status, _) = await ReadAsync(await feature.Client.GetAsync(Tuners));
+        (HttpStatusCode status, JsonElement _) = await ReadAsync(await feature.Client.GetAsync(Tuners));
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, status);
     }
@@ -269,11 +269,11 @@ public sealed class TunerLedgerEndpointTests
     [Fact]
     public async Task ADriverTooOldToHoldALedgerIsAnsweredAsUnimplementedRatherThanBroken()
     {
-        await using var feature = await DriverFeature.StartAsync(
+        await using DriverFeature feature = await DriverFeature.StartAsync(
             Capable([DriverCapabilities.Recording]),
             Stocked);
 
-        var (status, body) = await ReadAsync(await feature.Client.GetAsync(Tuners));
+        (HttpStatusCode status, JsonElement body) = await ReadAsync(await feature.Client.GetAsync(Tuners));
 
         Assert.Equal(HttpStatusCode.NotImplemented, status);
         Assert.Contains(
@@ -285,7 +285,7 @@ public sealed class TunerLedgerEndpointTests
     [Fact]
     public async Task DetectionNamesWhatIsNewWhatIsGoneAndWhatChangedItsKind()
     {
-        await using var feature = await DriverFeature.StartAsync(Capable(), driver =>
+        await using DriverFeature feature = await DriverFeature.StartAsync(Capable(), driver =>
         {
             Stocked(driver);
             driver.DetectedDevices =
@@ -305,8 +305,8 @@ public sealed class TunerLedgerEndpointTests
             ];
         });
 
-        var (status, body) = await ReadAsync(await feature.Client.GetAsync(Detected));
-        var data = body.GetProperty("data");
+        (HttpStatusCode status, JsonElement body) = await ReadAsync(await feature.Client.GetAsync(Detected));
+        JsonElement data = body.GetProperty("data");
 
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal(
@@ -324,10 +324,10 @@ public sealed class TunerLedgerEndpointTests
     [Fact]
     public async Task AnUndisturbedLedgerShowsNoDetectionDifference()
     {
-        await using var feature = await DriverFeature.StartAsync(Capable(), Stocked);
+        await using DriverFeature feature = await DriverFeature.StartAsync(Capable(), Stocked);
 
-        var (_, body) = await ReadAsync(await feature.Client.GetAsync(Detected));
-        var data = body.GetProperty("data");
+        (HttpStatusCode _, JsonElement body) = await ReadAsync(await feature.Client.GetAsync(Detected));
+        JsonElement data = body.GetProperty("data");
 
         Assert.Equal(0, data.GetProperty("added").GetArrayLength());
         Assert.Equal(0, data.GetProperty("missing").GetArrayLength());
@@ -337,14 +337,14 @@ public sealed class TunerLedgerEndpointTests
     [Fact]
     public async Task SavingALedgerHandsTheDriverOnlyTheDeviceIdsItDetected()
     {
-        await using var feature = await DriverFeature.StartAsync(Capable(), Stocked);
+        await using DriverFeature feature = await DriverFeature.StartAsync(Capable(), Stocked);
 
-        using var response = await feature.Client.PutAsJsonAsync(Tuners, new
+        using HttpResponseMessage response = await feature.Client.PutAsJsonAsync(Tuners, new
         {
             tuners = new[] { new { deviceId = "adapter0", disabled = false, lnbPower = true } },
         });
 
-        var (status, _) = await ReadAsync(response);
+        (HttpStatusCode status, JsonElement _) = await ReadAsync(response);
 
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal(
@@ -356,10 +356,10 @@ public sealed class TunerLedgerEndpointTests
     [Fact]
     public async Task AnEmptyLedgerIsRefusedBeforeTheDriverIsEvenAsked()
     {
-        await using var feature = await DriverFeature.StartAsync(Capable(), Stocked);
+        await using DriverFeature feature = await DriverFeature.StartAsync(Capable(), Stocked);
 
-        using var response = await feature.Client.PutAsJsonAsync(Tuners, new { tuners = Array.Empty<object>() });
-        var (status, _) = await ReadAsync(response);
+        using HttpResponseMessage response = await feature.Client.PutAsJsonAsync(Tuners, new { tuners = Array.Empty<object>() });
+        (HttpStatusCode status, JsonElement _) = await ReadAsync(response);
 
         Assert.Equal(HttpStatusCode.BadRequest, status);
         Assert.Null(feature.Driver.LastReplacedLedger);
@@ -368,14 +368,14 @@ public sealed class TunerLedgerEndpointTests
     [Fact]
     public async Task ALedgerNamingSomethingThatIsNotADeviceIdIsRefused()
     {
-        await using var feature = await DriverFeature.StartAsync(Capable(), Stocked);
+        await using DriverFeature feature = await DriverFeature.StartAsync(Capable(), Stocked);
 
-        using var response = await feature.Client.PutAsJsonAsync(Tuners, new
+        using HttpResponseMessage response = await feature.Client.PutAsJsonAsync(Tuners, new
         {
             tuners = new[] { new { deviceId = "../../dev/dvb/adapter0/frontend0" } },
         });
 
-        var (status, _) = await ReadAsync(response);
+        (HttpStatusCode status, JsonElement _) = await ReadAsync(response);
 
         Assert.Equal(HttpStatusCode.BadRequest, status);
         Assert.Null(feature.Driver.LastReplacedLedger);
@@ -384,13 +384,13 @@ public sealed class TunerLedgerEndpointTests
     [Fact]
     public async Task TogglingATunerReachesTheDriverAndReportsWhatItAnswered()
     {
-        await using var feature = await DriverFeature.StartAsync(Capable(), Stocked);
+        await using DriverFeature feature = await DriverFeature.StartAsync(Capable(), Stocked);
 
-        using var response = await feature.Client.PatchAsJsonAsync(
+        using HttpResponseMessage response = await feature.Client.PatchAsJsonAsync(
             new Uri("/api/tuners/adapter0", UriKind.Relative),
             new { disabled = true });
 
-        var (status, body) = await ReadAsync(response);
+        (HttpStatusCode status, JsonElement body) = await ReadAsync(response);
 
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal("adapter0", feature.Driver.LastToggledDeviceId);
@@ -401,7 +401,7 @@ public sealed class TunerLedgerEndpointTests
     [Fact]
     public async Task ATunerBusyWhenDisabledIsReportedAsPendingRatherThanDone()
     {
-        await using var feature = await DriverFeature.StartAsync(Capable(), driver =>
+        await using DriverFeature feature = await DriverFeature.StartAsync(Capable(), driver =>
         {
             Stocked(driver);
             driver.Tuners =
@@ -413,12 +413,12 @@ public sealed class TunerLedgerEndpointTests
             ];
         });
 
-        using var response = await feature.Client.PatchAsJsonAsync(
+        using HttpResponseMessage response = await feature.Client.PatchAsJsonAsync(
             new Uri("/api/tuners/adapter0", UriKind.Relative),
             new { disabled = true });
 
-        var (_, body) = await ReadAsync(response);
-        var data = body.GetProperty("data");
+        (HttpStatusCode _, JsonElement body) = await ReadAsync(response);
+        JsonElement data = body.GetProperty("data");
 
         Assert.Equal("draining", data.GetProperty("state").GetString());
         Assert.True(data.GetProperty("disablePending").GetBoolean());
@@ -427,13 +427,13 @@ public sealed class TunerLedgerEndpointTests
     [Fact]
     public async Task TogglingATunerTheDriverDoesNotHoldIsAnsweredAsNotFound()
     {
-        await using var feature = await DriverFeature.StartAsync(Capable(), Stocked);
+        await using DriverFeature feature = await DriverFeature.StartAsync(Capable(), Stocked);
 
-        using var response = await feature.Client.PatchAsJsonAsync(
+        using HttpResponseMessage response = await feature.Client.PatchAsJsonAsync(
             new Uri("/api/tuners/adapter9", UriKind.Relative),
             new { disabled = true });
 
-        var (status, _) = await ReadAsync(response);
+        (HttpStatusCode status, JsonElement _) = await ReadAsync(response);
 
         Assert.Equal(HttpStatusCode.NotFound, status);
     }
@@ -441,15 +441,15 @@ public sealed class TunerLedgerEndpointTests
     [Fact]
     public async Task ADriverThatCannotToggleWhileRunningSaysSoWithoutFailingTheScreen()
     {
-        await using var feature = await DriverFeature.StartAsync(
+        await using DriverFeature feature = await DriverFeature.StartAsync(
             Capable([DriverCapabilities.TunerLedger]),
             Stocked);
 
-        using var response = await feature.Client.PatchAsJsonAsync(
+        using HttpResponseMessage response = await feature.Client.PatchAsJsonAsync(
             new Uri("/api/tuners/adapter0", UriKind.Relative),
             new { disabled = true });
 
-        var (status, _) = await ReadAsync(response);
+        (HttpStatusCode status, JsonElement _) = await ReadAsync(response);
 
         Assert.Equal(HttpStatusCode.NotImplemented, status);
     }
@@ -457,13 +457,13 @@ public sealed class TunerLedgerEndpointTests
     [Fact]
     public async Task AToggleWithoutASideIsRefusedBeforeTheDriverIsAsked()
     {
-        await using var feature = await DriverFeature.StartAsync(Capable(), Stocked);
+        await using DriverFeature feature = await DriverFeature.StartAsync(Capable(), Stocked);
 
-        using var response = await feature.Client.PatchAsJsonAsync(
+        using HttpResponseMessage response = await feature.Client.PatchAsJsonAsync(
             new Uri("/api/tuners/adapter0", UriKind.Relative),
             new { });
 
-        var (status, _) = await ReadAsync(response);
+        (HttpStatusCode status, JsonElement _) = await ReadAsync(response);
 
         Assert.Equal(HttpStatusCode.BadRequest, status);
         Assert.Null(feature.Driver.LastToggledDeviceId);
@@ -472,9 +472,9 @@ public sealed class TunerLedgerEndpointTests
     [Fact]
     public async Task EveryLedgerSurfaceIsBehindTheSameDenialAsTheRestOnceASchemeIsRegistered()
     {
-        await using var feature = await DriverFeature.StartAsync(Capable(), Stocked);
+        await using DriverFeature feature = await DriverFeature.StartAsync(Capable(), Stocked);
         using var app = new TestingWebApplicationFactory();
-        using var client = app.WithTestScheme().CreateClient();
+        using HttpClient client = app.WithTestScheme().CreateClient();
 
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync(Tuners)).StatusCode);
         Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync(Detected)).StatusCode);

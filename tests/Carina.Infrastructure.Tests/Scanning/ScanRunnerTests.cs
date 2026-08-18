@@ -44,7 +44,7 @@ public sealed class ScanRunnerTests : IAsyncLifetime
     {
         Orchestrator.HoldsOpen = true;
 
-        var launch = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
+        ScanLaunch launch = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
 
         Assert.True(launch.WasStarted);
         Assert.Equal(runs.Runs[0].Id, launch.Started);
@@ -56,8 +56,8 @@ public sealed class ScanRunnerTests : IAsyncLifetime
     {
         Orchestrator.HoldsOpen = true;
 
-        var first = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
-        var second = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
+        ScanLaunch first = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
+        ScanLaunch second = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
 
         Assert.False(second.WasStarted);
         Assert.Equal(first.Started, second.AlreadyRunning);
@@ -68,7 +68,7 @@ public sealed class ScanRunnerTests : IAsyncLifetime
     {
         Orchestrator.CouldNotStart = "the driver did not answer";
 
-        var launch = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
+        ScanLaunch launch = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
 
         Assert.False(launch.WasStarted);
         Assert.Null(launch.AlreadyRunning);
@@ -80,7 +80,7 @@ public sealed class ScanRunnerTests : IAsyncLifetime
     {
         Orchestrator.HoldsOpen = true;
 
-        var launch = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
+        ScanLaunch launch = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
 
         Assert.True(Runner.TryCancel(launch.Started!));
 
@@ -94,7 +94,7 @@ public sealed class ScanRunnerTests : IAsyncLifetime
     [Fact]
     public async Task CancellingAScanNobodyIsWalkingIsRefused()
     {
-        var launch = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
+        ScanLaunch launch = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
 
         await Eventually.Happens(
             () => !Runner.IsWalking(launch.Started!),
@@ -108,13 +108,13 @@ public sealed class ScanRunnerTests : IAsyncLifetime
     {
         Orchestrator.Difference = ProposedDifference();
 
-        var launch = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
+        ScanLaunch launch = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
 
         await Eventually.Happens(
             () => Runner.TryPeekProposal(launch.Started!, out _),
             "the proposal is held for the apply that follows");
 
-        var claim = Assert.IsType<ProposalClaim.Claimed>(Runner.ClaimProposal(launch.Started!));
+        ProposalClaim.Claimed claim = Assert.IsType<ProposalClaim.Claimed>(Runner.ClaimProposal(launch.Started!));
         Assert.Single(claim.Proposal.Difference.Added);
     }
 
@@ -123,7 +123,7 @@ public sealed class ScanRunnerTests : IAsyncLifetime
     {
         Orchestrator.Difference = ProposedDifference();
 
-        var launch = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
+        ScanLaunch launch = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
 
         await Eventually.Happens(
             () => Runner.TryPeekProposal(launch.Started!, out _),
@@ -139,16 +139,16 @@ public sealed class ScanRunnerTests : IAsyncLifetime
     {
         Orchestrator.Difference = ProposedDifference();
 
-        var launch = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
+        ScanLaunch launch = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
 
         await Eventually.Happens(
             () => Runner.TryPeekProposal(launch.Started!, out _),
             "the proposal is held");
 
-        var held = Assert.IsType<ProposalClaim.Claimed>(Runner.ClaimProposal(launch.Started!));
+        ProposalClaim.Claimed held = Assert.IsType<ProposalClaim.Claimed>(Runner.ClaimProposal(launch.Started!));
         Runner.GiveBackProposal(launch.Started!, held.Hold);
 
-        var again = Assert.IsType<ProposalClaim.Claimed>(Runner.ClaimProposal(launch.Started!));
+        ProposalClaim.Claimed again = Assert.IsType<ProposalClaim.Claimed>(Runner.ClaimProposal(launch.Started!));
         Assert.Single(again.Proposal.Difference.Added);
     }
 
@@ -157,13 +157,13 @@ public sealed class ScanRunnerTests : IAsyncLifetime
     {
         Orchestrator.Difference = ProposedDifference();
 
-        var launch = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
+        ScanLaunch launch = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
 
         await Eventually.Happens(
             () => Runner.TryPeekProposal(launch.Started!, out _),
             "the proposal is held");
 
-        var applied = Assert.IsType<ProposalClaim.Claimed>(Runner.ClaimProposal(launch.Started!));
+        ProposalClaim.Claimed applied = Assert.IsType<ProposalClaim.Claimed>(Runner.ClaimProposal(launch.Started!));
         Runner.ProposalApplied(launch.Started!, applied.Hold);
 
         Assert.IsType<ProposalClaim.Gone>(Runner.ClaimProposal(launch.Started!));
@@ -176,7 +176,7 @@ public sealed class ScanRunnerTests : IAsyncLifetime
     {
         Orchestrator.Difference = ProposedDifference();
 
-        var launch = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
+        ScanLaunch launch = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
 
         await Eventually.Happens(
             () => Runner.TryPeekProposal(launch.Started!, out _),
@@ -197,7 +197,7 @@ public sealed class ScanRunnerTests : IAsyncLifetime
         Orchestrator.HoldsOpen = true;
         Orchestrator.Difference = ProposedDifference();
 
-        var launch = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
+        ScanLaunch launch = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
         Runner.TryCancel(launch.Started!);
 
         await Eventually.Happens(
@@ -213,7 +213,7 @@ public sealed class ScanRunnerTests : IAsyncLifetime
         Orchestrator.Walked.Add(TuningParameters.Terrestrial(53));
         Orchestrator.Difference = ProposedDifference();
 
-        var launch = await Runner.LaunchAsync(
+        ScanLaunch launch = await Runner.LaunchAsync(
             ScanScope.Of(TuneSystem.IsdbT),
             CancellationToken.None);
 
@@ -221,7 +221,7 @@ public sealed class ScanRunnerTests : IAsyncLifetime
             () => Runner.TryPeekProposal(launch.Started!, out _),
             "the proposal is held");
 
-        Assert.True(Runner.TryPeekProposal(launch.Started!, out var proposal));
+        Assert.True(Runner.TryPeekProposal(launch.Started!, out ScanProposal? proposal));
         Assert.Equal([TuneSystem.IsdbT], proposal.Systems);
     }
 
@@ -242,7 +242,7 @@ public sealed class ScanRunnerTests : IAsyncLifetime
     {
         Orchestrator.ThrowsAfterAnnouncing = "the database went away mid-walk";
 
-        var launch = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
+        ScanLaunch launch = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
 
         await Eventually.Happens(
             () => !Runner.IsWalking(launch.Started!),
@@ -257,7 +257,7 @@ public sealed class ScanRunnerTests : IAsyncLifetime
     {
         Orchestrator.ThrowsAfterAnnouncing = "the database went away mid-walk";
 
-        var wedged = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
+        ScanLaunch wedged = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
 
         await Eventually.Happens(
             () => !Runner.IsWalking(wedged.Started!),
@@ -265,7 +265,7 @@ public sealed class ScanRunnerTests : IAsyncLifetime
 
         Orchestrator.ThrowsAfterAnnouncing = null;
 
-        var next = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
+        ScanLaunch next = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
 
         Assert.True(next.WasStarted);
         Assert.Null(next.AlreadyRunning);
@@ -276,7 +276,7 @@ public sealed class ScanRunnerTests : IAsyncLifetime
     {
         Orchestrator.HoldsOpen = true;
 
-        var launch = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
+        ScanLaunch launch = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
 
         await Runner.StopAsync(CancellationToken.None);
 
@@ -307,7 +307,7 @@ public sealed class ScanRunnerTests : IAsyncLifetime
         Assert.Equal(ScanRunState.Failed, orphan.State);
         Assert.Equal(ScanConclusion.AbandonedReason, orphan.Reason);
 
-        var next = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
+        ScanLaunch next = await Runner.LaunchAsync(ScanScope.Everything, CancellationToken.None);
 
         Assert.True(next.WasStarted);
     }
@@ -319,13 +319,13 @@ public sealed class ScanRunnerTests : IAsyncLifetime
         Orchestrator.EveryAttemptFails = true;
         Orchestrator.Difference = ProposedDifference();
 
-        var launch = await Runner.LaunchAsync(ScanScope.Of(TuneSystem.IsdbT), CancellationToken.None);
+        ScanLaunch launch = await Runner.LaunchAsync(ScanScope.Of(TuneSystem.IsdbT), CancellationToken.None);
 
         await Eventually.Happens(
             () => Runner.TryPeekProposal(launch.Started!, out _),
             "the proposal is held");
 
-        Assert.True(Runner.TryPeekProposal(launch.Started!, out var proposal));
+        Assert.True(Runner.TryPeekProposal(launch.Started!, out ScanProposal? proposal));
         Assert.Equal([TuneSystem.IsdbT], proposal.Systems);
     }
 

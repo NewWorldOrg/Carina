@@ -115,13 +115,13 @@ public sealed class Programme
             throw new ArgumentException("That broadcast describes another programme.", nameof(broadcast));
         }
 
-        var startsAt = UtcTimes.Required(broadcast.StartsAt, nameof(broadcast));
-        var name = Kept(Name, Clamped(broadcast.Name, NameMaxLength));
-        var summary = Kept(Summary, Clamped(broadcast.Summary, SummaryMaxLength));
-        var endsAt = Settled(startsAt, UtcTimes.Optional(broadcast.EndsAt, nameof(broadcast)) ?? EndsAt);
-        var genres = Kept(Genres, broadcast.Genres);
-        var items = Kept(Items, broadcast.Items);
-        var related = Kept(Related, broadcast.Related);
+        DateTime startsAt = UtcTimes.Required(broadcast.StartsAt, nameof(broadcast));
+        string name = Kept(Name, Clamped(broadcast.Name, NameMaxLength));
+        string summary = Kept(Summary, Clamped(broadcast.Summary, SummaryMaxLength));
+        DateTime? endsAt = Settled(startsAt, UtcTimes.Optional(broadcast.EndsAt, nameof(broadcast)) ?? EndsAt);
+        IReadOnlyList<ProgrammeGenre> genres = Kept(Genres, broadcast.Genres);
+        IReadOnlyList<ProgrammeItem> items = Kept(Items, broadcast.Items);
+        IReadOnlyList<RelatedProgramme> related = Kept(Related, broadcast.Related);
 
         if (TransportStreamId.Equals(broadcast.TransportStreamId)
             && StartsAt == startsAt

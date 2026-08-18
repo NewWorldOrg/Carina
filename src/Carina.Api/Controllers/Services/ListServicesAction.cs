@@ -1,3 +1,4 @@
+using Carina.Api.Common;
 using Carina.Api.Responder;
 using Carina.Api.Responder.Services;
 using Carina.Api.Services;
@@ -14,7 +15,7 @@ public sealed class ListServicesAction(ChannelCatalogService channelCatalogServi
     [ProducesResponseType<BaseResponder<IReadOnlyList<BroadcastServiceResponder>>>(StatusCodes.Status200OK)]
     public async Task<IActionResult> Invoke(CancellationToken cancellationToken)
     {
-        var result = await channelCatalogService.ListAsync(cancellationToken);
+        ServiceResult<IReadOnlyList<ServiceWithChannels>> result = await channelCatalogService.ListAsync(cancellationToken);
 
         return Ok(BaseResponder<IReadOnlyList<BroadcastServiceResponder>>.Success(
             [.. result.Data!.Select(BroadcastServiceResponder.Of)]));

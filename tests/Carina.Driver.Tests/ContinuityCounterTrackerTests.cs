@@ -29,7 +29,7 @@ public sealed class ContinuityCounterTrackerTests
     {
         var tracker = new ContinuityCounterTracker();
 
-        for (var counter = 0; counter < 32; counter++)
+        for (int counter = 0; counter < 32; counter++)
         {
             tracker.Observe(Packet(0x100, counter % 16));
         }

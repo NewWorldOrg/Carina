@@ -53,20 +53,20 @@ internal static class AribGraphicSets
 
     private static string Kana(int kanaRow, int kanaCount, (int Row, int Cell)[] repeatMarks)
     {
-        var codes = new char[Codes];
+        char[] codes = new char[Codes];
 
-        for (var cell = 1; cell <= kanaCount; cell++)
+        for (int cell = 1; cell <= kanaCount; cell++)
         {
-            codes[cell - 1] = JisX0208.TryMap(kanaRow, cell, out var kana) ? kana : '\0';
+            codes[cell - 1] = JisX0208.TryMap(kanaRow, cell, out char kana) ? kana : '\0';
         }
 
-        var marks = repeatMarks.Concat(SharedMarks).ToArray();
+        (int Row, int Cell)[] marks = repeatMarks.Concat(SharedMarks).ToArray();
 
-        for (var index = 0; index < marks.Length; index++)
+        for (int index = 0; index < marks.Length; index++)
         {
-            var (row, cell) = marks[index];
+            (int row, int cell) = marks[index];
             codes[Codes - marks.Length + index] =
-                JisX0208.TryMap(row, cell, out var mark) ? mark : '\0';
+                JisX0208.TryMap(row, cell, out char mark) ? mark : '\0';
         }
 
         return new string(codes);

@@ -15,7 +15,7 @@ public sealed class DriverStartupTests
     {
         var writer = new StringWriter();
 
-        var exitCode = DriverStartup.Report(
+        int exitCode = DriverStartup.Report(
             DriverConfigurationResult.Usable(
                 new DriverConfiguration(
                     "/run/carina/driver.sock",
@@ -37,7 +37,7 @@ public sealed class DriverStartupTests
     {
         var writer = new StringWriter();
 
-        var exitCode = DriverStartup.Report(
+        int exitCode = DriverStartup.Report(
             DriverConfigurationResult.Unusable(TwoProblems),
             writer
         );
@@ -52,7 +52,7 @@ public sealed class DriverStartupTests
 
         DriverStartup.Report(DriverConfigurationResult.Unusable(TwoProblems), writer);
 
-        var written = writer.ToString();
+        string written = writer.ToString();
         Assert.All(TwoProblems, problem => Assert.Contains(problem, written));
     }
 

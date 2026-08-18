@@ -141,7 +141,7 @@ public static class AribSymbols
             return false;
         }
 
-        var code = CodePoints[((row - FirstRow) * CellsPerRow) + cell - 1];
+        uint code = CodePoints[((row - FirstRow) * CellsPerRow) + cell - 1];
 
         if (code == Unassigned)
         {

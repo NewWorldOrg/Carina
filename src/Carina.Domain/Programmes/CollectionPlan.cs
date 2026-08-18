@@ -35,14 +35,14 @@ public static class CollectionPlan
 
         var due = new List<(StreamCoverage Stream, VisitReason Reason, DateTime? Thinnest)>();
 
-        foreach (var stream in streams)
+        foreach (StreamCoverage stream in streams)
         {
             if (UtcTimes.Optional(stream.NotBefore, nameof(streams)) is { } notBefore && notBefore > now)
             {
                 continue;
             }
 
-            var lastCompletedAt = UtcTimes.Optional(stream.LastCompletedAt, nameof(streams));
+            DateTime? lastCompletedAt = UtcTimes.Optional(stream.LastCompletedAt, nameof(streams));
 
             if (lastCompletedAt is null || AwaitsAFirstCollection(stream))
             {
@@ -51,7 +51,7 @@ public static class CollectionPlan
                 continue;
             }
 
-            var thinnest = ThinnestOf(stream);
+            DateTime? thinnest = ThinnestOf(stream);
 
             due.Add((
                 stream,
@@ -79,7 +79,7 @@ public static class CollectionPlan
     {
         ArgumentNullException.ThrowIfNull(stream);
 
-        foreach (var service in stream.Services)
+        foreach (ServiceCoverage service in stream.Services)
         {
             if (!service.WasEverCollected)
             {
@@ -96,7 +96,7 @@ public static class CollectionPlan
 
         DateTime? thinnest = null;
 
-        foreach (var service in stream.Services)
+        foreach (ServiceCoverage service in stream.Services)
         {
             if (!service.WasEverCollected
                 || UtcTimes.Optional(service.CoveredUntil, nameof(stream)) is not { } until)

@@ -82,7 +82,7 @@ public sealed class ScriptedQualitySource(ManualTimeProvider? clock = null) : IS
 
     public ScriptedQualitySource Answer(params SignalQuality[] qualities)
     {
-        foreach (var quality in qualities)
+        foreach (SignalQuality quality in qualities)
         {
             readings.Enqueue(quality);
         }

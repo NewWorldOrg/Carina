@@ -70,14 +70,14 @@ public static class DriverConfigurationReader
 
         try
         {
-            var result = Read(File.ReadAllText(path));
+            DriverConfigurationResult result = Read(File.ReadAllText(path));
 
             if (!checkTheFilesystem)
             {
                 return result;
             }
 
-            return result.TryGetConfiguration(out var configuration, out _)
+            return result.TryGetConfiguration(out DriverConfiguration? configuration, out _)
                 ? CheckTheFilesystem(configuration)
                 : result;
         }
@@ -106,11 +106,11 @@ public static class DriverConfigurationReader
     )
     {
         var problems = new List<string>();
-        var roots = configuration.OutputRoots ?? [];
+        IReadOnlyList<OutputRootSettings> roots = configuration.OutputRoots ?? [];
 
-        for (var index = 0; index < roots.Count; index++)
+        for (int index = 0; index < roots.Count; index++)
         {
-            var path = roots[index]!.Path!;
+            string path = roots[index]!.Path!;
 
             if (!Directory.Exists(path))
             {
@@ -122,7 +122,7 @@ public static class DriverConfigurationReader
             }
         }
 
-        var socketDirectory = Path.GetDirectoryName(configuration.SocketPath!);
+        string? socketDirectory = Path.GetDirectoryName(configuration.SocketPath!);
         if (!Directory.Exists(socketDirectory))
         {
             problems.Add($"socketPath: '{socketDirectory}' does not exist.");
@@ -144,7 +144,7 @@ public static class DriverConfigurationReader
 
     private static bool IsWritable(string directory)
     {
-        var probe = Path.Combine(directory, $".carina-{Guid.NewGuid():N}");
+        string probe = Path.Combine(directory, $".carina-{Guid.NewGuid():N}");
         try
         {
             using (File.Create(probe))
@@ -262,7 +262,7 @@ public static class DriverConfigurationReader
             return problems;
         }
 
-        foreach (var property in document.RootElement.EnumerateObject())
+        foreach (JsonProperty property in document.RootElement.EnumerateObject())
         {
             if (!KnownRootKeys.Contains(property.Name, StringComparer.Ordinal))
             {
@@ -271,11 +271,11 @@ public static class DriverConfigurationReader
         }
 
         if (
-            document.RootElement.TryGetProperty("tuner", out var tuner)
+            document.RootElement.TryGetProperty("tuner", out JsonElement tuner)
             && tuner.ValueKind is JsonValueKind.Object
         )
         {
-            foreach (var property in tuner.EnumerateObject())
+            foreach (JsonProperty property in tuner.EnumerateObject())
             {
                 if (!KnownTunerKeys.Contains(property.Name, StringComparer.Ordinal))
                 {
@@ -297,7 +297,7 @@ public static class DriverConfigurationReader
         List<string> problems
     )
     {
-        if (!root.TryGetProperty(arrayName, out var array))
+        if (!root.TryGetProperty(arrayName, out JsonElement array))
         {
             return;
         }
@@ -307,12 +307,12 @@ public static class DriverConfigurationReader
             return;
         }
 
-        var index = 0;
-        foreach (var entry in array.EnumerateArray())
+        int index = 0;
+        foreach (JsonElement entry in array.EnumerateArray())
         {
             if (entry.ValueKind is JsonValueKind.Object)
             {
-                foreach (var property in entry.EnumerateObject())
+                foreach (JsonProperty property in entry.EnumerateObject())
                 {
                     if (!knownKeys.Contains(property.Name, StringComparer.Ordinal))
                     {
@@ -377,7 +377,7 @@ public static class DriverConfigurationReader
             );
         }
 
-        var backend = configuration.Tuner?.Backend ?? TunerBackend.Unspecified;
+        TunerBackend backend = configuration.Tuner?.Backend ?? TunerBackend.Unspecified;
         if (backend is TunerBackend.Unspecified)
         {
             problems.Add("tuner.backend: expected 'dvb' or 'fake'.");
@@ -422,7 +422,7 @@ public static class DriverConfigurationReader
     )
     {
         var problems = new List<string>();
-        var devices = declared ?? [];
+        IReadOnlyList<DeviceSettings> devices = declared ?? [];
 
         if (devices.Count is 0)
         {
@@ -433,7 +433,7 @@ public static class DriverConfigurationReader
 
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var paths = new HashSet<string>(StringComparer.Ordinal);
-        for (var index = 0; index < devices.Count; index++)
+        for (int index = 0; index < devices.Count; index++)
         {
             ValidateDevice(devices[index], index, backend, seen, paths, problems);
         }
@@ -449,7 +449,7 @@ public static class DriverConfigurationReader
     private static IReadOnlyList<string> OutputRootProblems(DriverConfiguration configuration)
     {
         var problems = new List<string>();
-        var roots = configuration.OutputRoots ?? [];
+        IReadOnlyList<OutputRootSettings> roots = configuration.OutputRoots ?? [];
 
         if (roots.Count is 0)
         {
@@ -461,9 +461,9 @@ public static class DriverConfigurationReader
         }
 
         var names = new HashSet<string>(StringComparer.Ordinal);
-        for (var index = 0; index < roots.Count; index++)
+        for (int index = 0; index < roots.Count; index++)
         {
-            var root = roots[index];
+            OutputRootSettings? root = roots[index];
 
             if (root is null)
             {
@@ -559,7 +559,7 @@ public static class DriverConfigurationReader
             return false;
         }
 
-        var resolved = ResolveLinks(value!);
+        string resolved = ResolveLinks(value!);
 
         return resolved.StartsWith(root, StringComparison.Ordinal)
             && resolved.Length > root.Length;
@@ -567,18 +567,18 @@ public static class DriverConfigurationReader
 
     private static string ResolveLinks(string value)
     {
-        var resolved = LinkTarget(value) ?? Path.GetFullPath(value);
+        string resolved = LinkTarget(value) ?? Path.GetFullPath(value);
         var trailing = new Stack<string>();
 
         while (true)
         {
-            var parent = Path.GetDirectoryName(resolved);
+            string? parent = Path.GetDirectoryName(resolved);
             if (string.IsNullOrEmpty(parent))
             {
                 break;
             }
 
-            var target = LinkTarget(parent);
+            string? target = LinkTarget(parent);
             trailing.Push(Path.GetFileName(resolved));
             resolved = target ?? parent;
 
@@ -621,9 +621,9 @@ public static class DriverConfigurationReader
             return false;
         }
 
-        foreach (var c in value)
+        foreach (char c in value)
         {
-            var allowed =
+            bool allowed =
                 c is >= 'a' and <= 'z'
                     or >= 'A' and <= 'Z'
                     or >= '0' and <= '9'

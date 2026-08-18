@@ -12,7 +12,7 @@ public sealed class DriverStatusService(
     {
         try
         {
-            var observation = await driverStatusReader.ReadAsync(cancellationToken);
+            DriverObservation observation = await driverStatusReader.ReadAsync(cancellationToken);
 
             return ServiceResult<DriverStatusSnapshot>.Success(
                 DriverStatusSnapshot.Observe(observation, timeProvider));

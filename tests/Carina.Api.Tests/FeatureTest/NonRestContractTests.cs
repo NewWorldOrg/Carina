@@ -1,3 +1,5 @@
+using System.Text.Json.Nodes;
+
 namespace Carina.Api.Tests.FeatureTest;
 
 [Collection(FeatureTestCollection.Name)]
@@ -14,11 +16,11 @@ public sealed class NonRestContractTests(TestingWebApplicationFactory factory)
     [Fact]
     public async Task TheDocumentNamesTheContractsItCannotHold()
     {
-        var document = await ServedOpenApi.FetchAsync(factory);
-        var description = document["info"]!["description"]!.GetValue<string>();
-        var described = document["paths"]!.AsObject().Select(path => path.Key).ToArray();
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        string description = document["info"]!["description"]!.GetValue<string>();
+        string[] described = document["paths"]!.AsObject().Select(path => path.Key).ToArray();
 
-        foreach (var surface in Surfaces)
+        foreach (string surface in Surfaces)
         {
             Assert.Contains(surface, description, StringComparison.Ordinal);
             Assert.DoesNotContain(surface, described, StringComparer.Ordinal);

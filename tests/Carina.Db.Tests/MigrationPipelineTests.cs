@@ -1,3 +1,5 @@
+using Carina.Infrastructure.Persistence;
+
 using Microsoft.EntityFrameworkCore;
 
 using Npgsql;
@@ -12,7 +14,7 @@ public sealed class MigrationPipelineTests
 
     private static string ScratchConnectionString()
     {
-        var configured = Environment.GetEnvironmentVariable(CarinaDbContextFactory.ConnectionStringVariable);
+        string? configured = Environment.GetEnvironmentVariable(CarinaDbContextFactory.ConnectionStringVariable);
         if (string.IsNullOrWhiteSpace(configured))
         {
             throw new InvalidOperationException(
@@ -25,12 +27,12 @@ public sealed class MigrationPipelineTests
     [Fact]
     public async Task AppliesEveryMigrationToAnEmptyDatabase()
     {
-        await using var context = CarinaDbContextFactory.Create(ScratchConnectionString());
+        await using CarinaDbContext context = CarinaDbContextFactory.Create(ScratchConnectionString());
         await context.Database.EnsureDeletedAsync();
 
         await context.Database.MigrateAsync();
 
-        var applied = (await context.Database.GetAppliedMigrationsAsync()).ToArray();
+        string[] applied = (await context.Database.GetAppliedMigrationsAsync()).ToArray();
         Assert.EndsWith("_Initial", applied[0], StringComparison.Ordinal);
         Assert.Equal(context.Database.GetMigrations(), applied);
         Assert.Empty(await context.Database.GetPendingMigrationsAsync());
@@ -41,10 +43,10 @@ public sealed class MigrationPipelineTests
     [Fact]
     public async Task ReRunningTheMigrationsIsIdempotent()
     {
-        await using var context = CarinaDbContextFactory.Create(ScratchConnectionString());
+        await using CarinaDbContext context = CarinaDbContextFactory.Create(ScratchConnectionString());
         await context.Database.EnsureDeletedAsync();
         await context.Database.MigrateAsync();
-        var firstRun = (await context.Database.GetAppliedMigrationsAsync()).ToArray();
+        string[] firstRun = (await context.Database.GetAppliedMigrationsAsync()).ToArray();
 
         await context.Database.MigrateAsync();
 
@@ -54,7 +56,7 @@ public sealed class MigrationPipelineTests
     [Fact]
     public async Task EntryPointMigratesRepeatablyAndFailsLoudlyOnBadCredentials()
     {
-        var connectionString = ScratchConnectionString();
+        string connectionString = ScratchConnectionString();
 
         using (new EnvironmentVariableScope(CarinaDbContextFactory.ConnectionStringVariable, connectionString))
         {
@@ -62,13 +64,13 @@ public sealed class MigrationPipelineTests
             Assert.Equal(DbEntryPoint.SuccessExitCode, await DbEntryPoint.RunAsync(["--migrate"], new StringWriter()));
         }
 
-        var wrongPassword = new NpgsqlConnectionStringBuilder(connectionString) { Password = "wrong" }.ConnectionString;
+        string wrongPassword = new NpgsqlConnectionStringBuilder(connectionString) { Password = "wrong" }.ConnectionString;
 
         using (new EnvironmentVariableScope(CarinaDbContextFactory.ConnectionStringVariable, wrongPassword))
         {
             var error = new StringWriter();
 
-            var exitCode = await DbEntryPoint.RunAsync(["--migrate"], error);
+            int exitCode = await DbEntryPoint.RunAsync(["--migrate"], error);
 
             Assert.Equal(DbEntryPoint.MigrationFailedExitCode, exitCode);
             Assert.Contains("Carina.Db --migrate failed", error.ToString(), StringComparison.Ordinal);

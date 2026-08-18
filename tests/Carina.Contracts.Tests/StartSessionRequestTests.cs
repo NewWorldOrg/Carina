@@ -17,7 +17,7 @@ public sealed class StartSessionRequestTests
     ) =>
         new()
         {
-            SessionId = SessionId.TryParse(sessionId, out var parsed) ? parsed : default,
+            SessionId = SessionId.TryParse(sessionId, out SessionId parsed) ? parsed : default,
             Purpose = purpose,
             Tuning = new TuningRequest(kind, physicalChannel, serviceId),
             EndsAt = endsAt,
@@ -198,7 +198,7 @@ public sealed class StartSessionRequestTests
     [Fact]
     public void EveryProblemIsReportedAtOnce()
     {
-        var problems = Request(
+        IReadOnlyList<string> problems = Request(
             purpose: SessionPurpose.Unspecified,
             kind: TunerKind.Unspecified,
             serviceId: -5,

@@ -12,13 +12,13 @@ public sealed class HealthEndpointTests(TestingWebApplicationFactory factory)
     [Fact]
     public async Task HealthIsServedWithoutAuthentication()
     {
-        using var client = factory.CreateClient();
+        using HttpClient client = factory.CreateClient();
 
-        using var response = await client.GetAsync(new Uri("/api/health", UriKind.Relative));
+        using HttpResponseMessage response = await client.GetAsync(new Uri("/api/health", UriKind.Relative));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var payload = await response.Content.ReadFromJsonAsync<HealthResponder>();
+        HealthResponder? payload = await response.Content.ReadFromJsonAsync<HealthResponder>();
         Assert.Equal("ok", payload?.Status);
     }
 }

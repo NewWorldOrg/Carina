@@ -1,3 +1,5 @@
+using Carina.Infrastructure.Persistence;
+
 using Microsoft.EntityFrameworkCore;
 
 using Npgsql;
@@ -12,7 +14,7 @@ public sealed class MigratedScratchDatabase : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        await using var context = CarinaDbContextFactory.Create(ConnectionString);
+        await using CarinaDbContext context = CarinaDbContextFactory.Create(ConnectionString);
         await context.Database.EnsureDeletedAsync();
         await context.Database.MigrateAsync();
     }
@@ -29,7 +31,7 @@ public sealed class MigratedScratchDatabase : IAsyncLifetime
 
     private static string Scratch()
     {
-        var configured = Environment.GetEnvironmentVariable(CarinaDbContextFactory.ConnectionStringVariable);
+        string? configured = Environment.GetEnvironmentVariable(CarinaDbContextFactory.ConnectionStringVariable);
         if (string.IsNullOrWhiteSpace(configured))
         {
             throw new InvalidOperationException(

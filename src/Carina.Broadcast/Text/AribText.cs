@@ -26,7 +26,7 @@ public static class AribText
 
     public static string Decode(ReadOnlySpan<byte> bytes)
     {
-        var designated = new[]
+        GraphicSet[] designated = new[]
         {
             GraphicSet.Kanji,
             GraphicSet.Alphanumeric,
@@ -34,15 +34,15 @@ public static class AribText
             GraphicSet.Katakana,
         };
 
-        var left = 0;
-        var right = 2;
-        var single = -1;
+        int left = 0;
+        int right = 2;
+        int single = -1;
         var text = new StringBuilder(bytes.Length);
-        var at = 0;
+        int at = 0;
 
         while (at < bytes.Length)
         {
-            var code = bytes[at];
+            byte code = bytes[at];
 
             if (code == Escape)
             {
@@ -107,9 +107,9 @@ public static class AribText
                 continue;
             }
 
-            var set = single >= 0 ? designated[single] : designated[code >= 0x80 ? right : left];
+            GraphicSet set = single >= 0 ? designated[single] : designated[code >= 0x80 ? right : left];
             single = -1;
-            var width = AribGraphicSets.Width(set);
+            int width = AribGraphicSets.Width(set);
 
             if (at + width > bytes.Length)
             {
@@ -135,14 +135,14 @@ public static class AribText
 
     private static void Append(StringBuilder text, GraphicSet set, int row, int cell)
     {
-        if (set is GraphicSet.Kanji && JisX0208.TryMap(row, cell, out var kanji))
+        if (set is GraphicSet.Kanji && JisX0208.TryMap(row, cell, out char kanji))
         {
             text.Append(kanji);
 
             return;
         }
 
-        if (AribSymbols.TryMap(row, cell, out var symbol))
+        if (AribSymbols.TryMap(row, cell, out string? symbol))
         {
             text.Append(symbol);
 
@@ -161,8 +161,8 @@ public static class AribText
 
         if (code.Length == 2)
         {
-            var row = (code[0] & 0x7F) - 0x20;
-            var cell = (code[1] & 0x7F) - 0x20;
+            int row = (code[0] & 0x7F) - 0x20;
+            int cell = (code[1] & 0x7F) - 0x20;
 
             if (set is GraphicSet.Kanji or GraphicSet.AdditionalSymbol)
             {
@@ -176,7 +176,7 @@ public static class AribText
             return;
         }
 
-        var index = (code[0] & 0x7F) - AribGraphicSets.FirstCode;
+        int index = (code[0] & 0x7F) - AribGraphicSets.FirstCode;
 
         switch (set)
         {
@@ -205,7 +205,7 @@ public static class AribText
 
     private static void Append(StringBuilder text, string set, int index)
     {
-        var mapped = index >= 0 && index < set.Length ? set[index] : '\0';
+        char mapped = index >= 0 && index < set.Length ? set[index] : '\0';
         text.Append(mapped == '\0' ? UnknownCharacter : mapped);
     }
 
@@ -284,7 +284,7 @@ public static class AribText
             return at + 1;
         }
 
-        var slot = bytes[at] - 0x28;
+        int slot = bytes[at] - 0x28;
 
         if (at + 1 >= bytes.Length)
         {

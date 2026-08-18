@@ -14,14 +14,14 @@ public sealed class RecordedEventInformationTests
     [Fact]
     public void ThePresentFollowingSectionNamesTheOneEventItCarries()
     {
-        var table = Table(0);
+        EventInformationTable table = Table(0);
 
         Assert.True(table.IsPresentFollowing);
         Assert.Equal(1049, table.ServiceId);
         Assert.Equal(32739, table.TransportStreamId);
         Assert.Equal(32739, table.OriginalNetworkId);
 
-        var carried = Assert.Single(table.Events);
+        DescribedEvent carried = Assert.Single(table.Events);
 
         Assert.Equal(47289, carried.EventId);
         Assert.Equal(new DateTimeOffset(2026, 8, 17, 22, 57, 0, BroadcastOffset), carried.StartsAt);
@@ -32,7 +32,7 @@ public sealed class RecordedEventInformationTests
     [Fact]
     public void ThePresentFollowingEventReadsBackTheTitleAsItWasBroadcast()
     {
-        var described = Assert.Single(Table(0).Events).Described;
+        ShortEventDescription? described = Assert.Single(Table(0).Events).Described;
 
         Assert.NotNull(described);
         Assert.Equal("jpn", described.Language);
@@ -43,7 +43,7 @@ public sealed class RecordedEventInformationTests
     [Fact]
     public void TheScheduleSectionCarriesEventsThatRunOneAfterAnother()
     {
-        var table = Table(1);
+        EventInformationTable table = Table(1);
 
         Assert.False(table.IsPresentFollowing);
         Assert.Equal(72, table.SectionNumber);
@@ -70,7 +70,7 @@ public sealed class RecordedEventInformationTests
     [Fact]
     public void TheLongDescriptionIsGatheredUnderTheHeadingsItWasBroadcastWith()
     {
-        var detailed = Assert.Single(Table(2).Events).Detailed;
+        ExtendedEventDescription? detailed = Assert.Single(Table(2).Events).Detailed;
 
         Assert.NotNull(detailed);
         Assert.Equal("jpn", detailed.Language);
@@ -90,7 +90,7 @@ public sealed class RecordedEventInformationTests
     [Fact]
     public void TheDescriptionArrivesSpreadOverSeveralDescriptors()
     {
-        var carried = Assert.Single(Table(2).Events).Descriptors
+        int carried = Assert.Single(Table(2).Events).Descriptors
             .Count(descriptor => descriptor.Tag == DescriptorTags.ExtendedEvent);
 
         Assert.True(carried > 1, $"expected the recording to spread the description, saw {carried} descriptor");
@@ -106,13 +106,13 @@ public sealed class RecordedEventInformationTests
     [Fact]
     public void TheRecordedEventNamesItsGenresStreamsAndTheEventsItSharesWith()
     {
-        var carried = Assert.Single(Table(2).Events);
+        DescribedEvent carried = Assert.Single(Table(2).Events);
 
         Assert.Equal([0, 11], carried.Genres.Select(genre => genre.Kind));
         Assert.Equal(1, Assert.Single(carried.Components).StreamContent);
         Assert.Equal(2, Assert.Single(carried.AudioComponents).StreamContent);
 
-        var grouping = Assert.Single(carried.Groupings);
+        EventGrouping grouping = Assert.Single(carried.Groupings);
 
         Assert.Equal(EventGroupKind.Shared, grouping.Kind);
 
@@ -126,7 +126,7 @@ public sealed class RecordedEventInformationTests
     {
         var progress = new ScheduleProgress();
 
-        foreach (var section in Sections())
+        foreach (Section section in Sections())
         {
             if (EventInformationTable.Read(section) is TableRead<EventInformationTable>.Parsed parsed)
             {
@@ -134,12 +134,12 @@ public sealed class RecordedEventInformationTests
             }
         }
 
-        var service = Assert.Single(progress.Services);
+        ScheduledService service = Assert.Single(progress.Services);
 
         Assert.Equal(new ScheduledService(32739, 32739, 1049), service);
         Assert.Equal(ScheduleCompleteness.Incomplete, progress.Completeness);
 
-        var awaited = progress.SegmentsAwaited(service, EventInformationTable.FirstScheduleActualTableId);
+        IReadOnlyList<int> awaited = progress.SegmentsAwaited(service, EventInformationTable.FirstScheduleActualTableId);
 
         Assert.Equal(31, awaited.Count);
         Assert.DoesNotContain(9, awaited);
@@ -148,7 +148,7 @@ public sealed class RecordedEventInformationTests
     [Fact]
     public void ASectionOfADifferentTableIsRefusedRatherThanRead()
     {
-        var refused = Assert.IsType<TableRead<EventInformationTable>.Rejected>(
+        TableRead<EventInformationTable>.Rejected refused = Assert.IsType<TableRead<EventInformationTable>.Rejected>(
             EventInformationTable.Read(CarriedSection.Of(new SectionWriter
             {
                 TableId = ServiceDescriptionTable.ActualStreamTableId,
@@ -160,27 +160,27 @@ public sealed class RecordedEventInformationTests
 
     private static EventInformationTable Table(int index)
     {
-        var read = EventInformationTable.Read(Sections()[index]);
+        TableRead<EventInformationTable> read = EventInformationTable.Read(Sections()[index]);
 
         return Assert.IsType<TableRead<EventInformationTable>.Parsed>(read).Table;
     }
 
     private static IReadOnlyList<Section> Sections()
     {
-        using var carried = Assembly.GetExecutingAssembly()
+        using Stream carried = Assembly.GetExecutingAssembly()
             .GetManifestResourceStream("Carina.Broadcast.Tests.Tables.Broadcasts.eit-sections.bin")
             ?? throw new InvalidOperationException("The recorded sections are missing from the test assembly.");
 
         using var held = new MemoryStream();
         carried.CopyTo(held);
 
-        var bytes = held.ToArray();
+        byte[] bytes = held.ToArray();
         var sections = new List<Section>();
-        var at = 0;
+        int at = 0;
 
         while (at + 2 <= bytes.Length)
         {
-            var length = (bytes[at] << 8) | bytes[at + 1];
+            int length = (bytes[at] << 8) | bytes[at + 1];
             at += 2;
 
             var assembler = new SectionAssembler(EventInformationTable.Pid);

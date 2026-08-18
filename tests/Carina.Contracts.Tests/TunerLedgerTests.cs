@@ -5,7 +5,7 @@ public sealed class TunerLedgerTests
     [Fact]
     public void AnEntryNamesADetectedDeviceAndNothingAboutTheMachine()
     {
-        var json = DriverJson.Serialize(new TunerConfigEntry { DeviceId = "adapter0" });
+        string json = DriverJson.Serialize(new TunerConfigEntry { DeviceId = "adapter0" });
 
         Assert.Equal(
             """{"deviceId":"adapter0","disabled":false,"lnbPower":false}""",
@@ -16,7 +16,7 @@ public sealed class TunerLedgerTests
     [Fact]
     public void AnEntryCannotCarryADevicePathOrAKindOfItsOwn()
     {
-        var json = DriverJson.Serialize(
+        string json = DriverJson.Serialize(
             new TunerConfigEntry { DeviceId = "adapter0", LnbPower = true }
         );
 
@@ -30,7 +30,7 @@ public sealed class TunerLedgerTests
     [Fact]
     public void ATunerNobodyDisabledStaysInService()
     {
-        var entry = DriverJson.Deserialize(
+        TunerConfigEntry? entry = DriverJson.Deserialize(
             """{"deviceId":"adapter0"}""",
             DriverJson.Context.TunerConfigEntry
         );
@@ -63,7 +63,7 @@ public sealed class TunerLedgerTests
     [Fact]
     public void AnEntryWithoutAnyDeviceIdIsRefused()
     {
-        var entry = DriverJson.Deserialize("{}", DriverJson.Context.TunerConfigEntry);
+        TunerConfigEntry? entry = DriverJson.Deserialize("{}", DriverJson.Context.TunerConfigEntry);
 
         Assert.NotNull(entry);
         Assert.NotEmpty(entry.Validate());
@@ -85,7 +85,7 @@ public sealed class TunerLedgerTests
     [Fact]
     public void ADetectedDeviceReportsWhatTheDriverAskedTheHardware()
     {
-        var json = DriverJson.Serialize(
+        string json = DriverJson.Serialize(
             new DetectedDeviceDto
             {
                 DeviceId = "adapter0",
@@ -117,7 +117,7 @@ public sealed class TunerLedgerTests
     [Fact]
     public void ADetectionOutcomeThisBuildDoesNotKnowIsNotReadAsASuccess()
     {
-        var device = DriverJson.Deserialize(
+        DetectedDeviceDto? device = DriverJson.Deserialize(
             """{"deviceId":"adapter0","detection":"warmingUp","kinds":["terrestrial"]}""",
             DriverJson.Context.DetectedDeviceDto
         );
@@ -130,7 +130,7 @@ public sealed class TunerLedgerTests
     [Fact]
     public void AKindThisBuildDoesNotKnowLeavesTheOtherKindsReadable()
     {
-        var device = DriverJson.Deserialize(
+        DetectedDeviceDto? device = DriverJson.Deserialize(
             """{"deviceId":"adapter0","detection":"detected","kinds":["terrestrial","isdbSky"]}""",
             DriverJson.Context.DetectedDeviceDto
         );
@@ -147,7 +147,7 @@ public sealed class TunerLedgerTests
     {
         Assert.Empty(new DetectedDeviceDto { DeviceId = "adapter0", Kinds = null! }.Kinds);
 
-        var device = DriverJson.Deserialize(
+        DetectedDeviceDto? device = DriverJson.Deserialize(
             """{"deviceId":"adapter0","kinds":null}""",
             DriverJson.Context.DetectedDeviceDto
         );
@@ -203,7 +203,7 @@ public sealed class TunerLedgerTests
     [Fact]
     public void DriftIsAComparisonTheReaderMakesRatherThanAFieldOnTheWire()
     {
-        var json = DriverJson.Serialize(
+        string json = DriverJson.Serialize(
             new TunerLedgerDto { LoadedHash = "aaaa", SavedHash = "aaaa" }
         );
 
@@ -213,7 +213,7 @@ public sealed class TunerLedgerTests
     [Fact]
     public void ALedgerAnswerCarriesNoDevicePath()
     {
-        var json = DriverJson.Serialize(
+        string json = DriverJson.Serialize(
             new TunerLedgerDto
             {
                 Tuners = [new TunerConfigEntry { DeviceId = "adapter0.frontend0" }],
@@ -229,7 +229,7 @@ public sealed class TunerLedgerTests
     [Fact]
     public void ALedgerAnswerFromAnOlderDriverStillReads()
     {
-        var ledger = DriverJson.Deserialize(
+        TunerLedgerDto? ledger = DriverJson.Deserialize(
             """{"tuners":[{"deviceId":"adapter0"}]}""",
             DriverJson.Context.TunerLedgerDto
         );
@@ -245,7 +245,7 @@ public sealed class TunerLedgerTests
     {
         Assert.Empty(new TunerLedgerDto { Tuners = null! }.Tuners);
 
-        var ledger = DriverJson.Deserialize(
+        TunerLedgerDto? ledger = DriverJson.Deserialize(
             """{"tuners":null}""",
             DriverJson.Context.TunerLedgerDto
         );
@@ -262,7 +262,7 @@ public sealed class TunerLedgerTests
             DriverJson.Serialize(new TunerToggleRequest { Disabled = true })
         );
 
-        var request = DriverJson.Deserialize(
+        TunerToggleRequest? request = DriverJson.Deserialize(
             """{"disabled":false}""",
             DriverJson.Context.TunerToggleRequest
         );
@@ -275,7 +275,7 @@ public sealed class TunerLedgerTests
     [Fact]
     public void AToggleThatSaysNothingIsRefusedRatherThanReadAsPuttingATunerBackInService()
     {
-        var request = DriverJson.Deserialize("{}", DriverJson.Context.TunerToggleRequest);
+        TunerToggleRequest? request = DriverJson.Deserialize("{}", DriverJson.Context.TunerToggleRequest);
 
         Assert.NotNull(request);
         Assert.Null(request.Disabled);

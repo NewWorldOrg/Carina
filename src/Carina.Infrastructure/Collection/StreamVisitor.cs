@@ -32,8 +32,8 @@ public sealed class StreamVisitor(
         ArgumentNullException.ThrowIfNull(tuning);
 
         var sessionId = SessionId.Parse($"epg-{Guid.NewGuid():n}");
-        var tune = TuneParamsOf(tuning);
-        var start = await driver.StartSessionAsync(
+        TuneParams tune = TuneParamsOf(tuning);
+        DriverCall<SessionSnapshot> start = await driver.StartSessionAsync(
             new StartSessionRequest
             {
                 SessionId = sessionId,
@@ -43,7 +43,7 @@ public sealed class StreamVisitor(
             },
             abort);
 
-        if (!start.TryGetValue(out var session))
+        if (!start.TryGetValue(out SessionSnapshot? session))
         {
             return new VisitResult(
                 VisitOutcome.NoLock,
@@ -71,9 +71,9 @@ public sealed class StreamVisitor(
 
     private async Task<VisitResult> ReadAsync(SessionId sessionId, CancellationToken abort)
     {
-        var opened = await driver.OpenSessionStreamAsync(sessionId, DriverEndpoints.SurveySubscriber, abort);
+        DriverCall<Stream> opened = await driver.OpenSessionStreamAsync(sessionId, DriverEndpoints.SurveySubscriber, abort);
 
-        if (!opened.TryGetValue(out var stream))
+        if (!opened.TryGetValue(out Stream? stream))
         {
             return new VisitResult(
                 VisitOutcome.NoBytes,
@@ -82,9 +82,9 @@ public sealed class StreamVisitor(
         }
 
         var harvest = new StreamHarvest();
-        var anyBytes = false;
-        var interrupted = false;
-        var buffer = ArrayPool<byte>.Shared.Rent(64 * 188);
+        bool anyBytes = false;
+        bool interrupted = false;
+        byte[] buffer = ArrayPool<byte>.Shared.Rent(64 * 188);
         using var reading = CancellationTokenSource.CreateLinkedTokenSource(abort);
 
         reading.CancelAfter(settings.LongestVisit);
@@ -95,7 +95,7 @@ public sealed class StreamVisitor(
             {
                 while (!harvest.CanLetGo)
                 {
-                    var got = await stream.ReadAsync(buffer, reading.Token);
+                    int got = await stream.ReadAsync(buffer, reading.Token);
 
                     if (got == 0)
                     {
@@ -130,11 +130,11 @@ public sealed class StreamVisitor(
             return new VisitResult(VisitOutcome.NoLock, new ProgrammesWritten(0, 0, 0), null);
         }
 
-        var done = harvest.Conclude(interrupted, anyBytes);
+        HarvestedStream done = harvest.Conclude(interrupted, anyBytes);
 
         using var writing = new CancellationTokenSource(settings.LongestVisit);
 
-        var written = done.Tables.Count > 0
+        ProgrammesWritten written = done.Tables.Count > 0
             ? await writer.WriteAsync(done.Tables, writing.Token)
             : new ProgrammesWritten(0, 0, 0);
 
@@ -148,14 +148,14 @@ public sealed class StreamVisitor(
 
     private async Task<bool> LockWasLostAsync(SessionId sessionId, CancellationToken cancellationToken)
     {
-        var tuners = await driver.GetTunersAsync(cancellationToken);
+        DriverCall<IReadOnlyList<TunerSnapshot>> tuners = await driver.GetTunersAsync(cancellationToken);
 
-        if (!tuners.TryGetValue(out var snapshots))
+        if (!tuners.TryGetValue(out IReadOnlyList<TunerSnapshot>? snapshots))
         {
             return false;
         }
 
-        var quality = snapshots
+        SignalQualityDto? quality = snapshots
             .FirstOrDefault(tuner => tuner.CurrentSession?.SessionId == sessionId)?
             .SignalQuality;
 

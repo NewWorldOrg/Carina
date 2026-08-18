@@ -55,14 +55,14 @@ public sealed class TunerLedgerApiTests
     [Fact]
     public async Task TheLedgerAnswersWithTheTunersTheDriverWasStartedWith()
     {
-        await using var driver = await Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await Start();
+        using HttpClient client = driver.Client();
 
-        using var response = await client.GetAsync(DriverEndpoints.TunerLedger, Soon());
+        using HttpResponseMessage response = await client.GetAsync(DriverEndpoints.TunerLedger, Soon());
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var ledger = await DriverUnderTest.Read(response, DriverJson.Context.TunerLedgerDto);
+        TunerLedgerDto? ledger = await DriverUnderTest.Read(response, DriverJson.Context.TunerLedgerDto);
 
         Assert.NotNull(ledger);
         Assert.Equal(
@@ -74,10 +74,10 @@ public sealed class TunerLedgerApiTests
     [Fact]
     public async Task ADriverRunningWhatIsSavedReportsNoDrift()
     {
-        await using var driver = await Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await Start();
+        using HttpClient client = driver.Client();
 
-        var ledger = await Ledger(client);
+        TunerLedgerDto ledger = await Ledger(client);
 
         Assert.False(ledger.HasDrifted());
         Assert.Equal(ledger.LoadedHash, ledger.SavedHash);
@@ -86,10 +86,10 @@ public sealed class TunerLedgerApiTests
     [Fact]
     public async Task ASavedLedgerIsNotTheRunningOneAndTheDriverSaysSo()
     {
-        await using var driver = await Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await Start();
+        using HttpClient client = driver.Client();
 
-        using var response = await client.PutAsync(
+        using HttpResponseMessage response = await client.PutAsync(
             DriverEndpoints.Tuners,
             Body([new TunerConfigEntry { DeviceId = "fake-terrestrial" }]),
             Soon()
@@ -97,7 +97,7 @@ public sealed class TunerLedgerApiTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var saved = await DriverUnderTest.Read(response, DriverJson.Context.TunerLedgerDto);
+        TunerLedgerDto? saved = await DriverUnderTest.Read(response, DriverJson.Context.TunerLedgerDto);
 
         Assert.NotNull(saved);
         Assert.True(saved.HasDrifted());
@@ -108,10 +108,10 @@ public sealed class TunerLedgerApiTests
     [Fact]
     public async Task SavingTheLedgerDoesNotChangeTheTunersTheDriverIsServingWith()
     {
-        await using var driver = await Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await Start();
+        using HttpClient client = driver.Client();
 
-        using var response = await client.PutAsync(
+        using HttpResponseMessage response = await client.PutAsync(
             DriverEndpoints.Tuners,
             Body([new TunerConfigEntry { DeviceId = "fake-terrestrial" }]),
             Soon()
@@ -119,7 +119,7 @@ public sealed class TunerLedgerApiTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var tuners = await DriverUnderTest.Read(
+        IReadOnlyList<TunerSnapshot>? tuners = await DriverUnderTest.Read(
             await client.GetAsync(DriverEndpoints.Tuners, Soon()),
             DriverJson.Context.IReadOnlyListTunerSnapshot
         );
@@ -134,10 +134,10 @@ public sealed class TunerLedgerApiTests
     [Fact]
     public async Task ALedgerWithNothingInItIsRefused()
     {
-        await using var driver = await Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await Start();
+        using HttpClient client = driver.Client();
 
-        using var response = await client.PutAsync(
+        using HttpResponseMessage response = await client.PutAsync(
             DriverEndpoints.Tuners,
             Body([]),
             Soon()
@@ -150,16 +150,16 @@ public sealed class TunerLedgerApiTests
     [Fact]
     public async Task RefusingAnEmptyLedgerSaysHowToClearItOnPurposeInstead()
     {
-        await using var driver = await Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await Start();
+        using HttpClient client = driver.Client();
 
-        using var response = await client.PutAsync(
+        using HttpResponseMessage response = await client.PutAsync(
             DriverEndpoints.Tuners,
             Body([]),
             Soon()
         );
 
-        var problem = await Refusal(response);
+        DriverProblem? problem = await Refusal(response);
 
         Assert.NotNull(problem);
         Assert.Contains(
@@ -172,10 +172,10 @@ public sealed class TunerLedgerApiTests
     [Fact]
     public async Task AnEntryNamingATunerThatWasNeverDetectedIsRefusedAndSaysWhich()
     {
-        await using var driver = await Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await Start();
+        using HttpClient client = driver.Client();
 
-        using var response = await client.PutAsync(
+        using HttpResponseMessage response = await client.PutAsync(
             DriverEndpoints.Tuners,
             Body([new TunerConfigEntry { DeviceId = "adapter9.frontend0" }]),
             Soon()
@@ -183,7 +183,7 @@ public sealed class TunerLedgerApiTests
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
 
-        var problem = await Refusal(response);
+        DriverProblem? problem = await Refusal(response);
 
         Assert.NotNull(problem);
         Assert.Equal("unknownDevice", problem.Title);
@@ -197,16 +197,16 @@ public sealed class TunerLedgerApiTests
     [Fact]
     public async Task NoDeviceNodeCrossesTheSocketWhenTheDriverRefusesALedger()
     {
-        await using var driver = await Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await Start();
+        using HttpClient client = driver.Client();
 
-        using var response = await client.PutAsync(
+        using HttpResponseMessage response = await client.PutAsync(
             DriverEndpoints.Tuners,
             Body([new TunerConfigEntry { DeviceId = "adapter9.frontend0" }]),
             Soon()
         );
 
-        var body = await response.Content.ReadAsStringAsync(Soon());
+        string body = await response.Content.ReadAsStringAsync(Soon());
 
         Assert.DoesNotContain("/dev", body, StringComparison.Ordinal);
         Assert.DoesNotContain("devicePath", body, StringComparison.Ordinal);
@@ -215,10 +215,10 @@ public sealed class TunerLedgerApiTests
     [Fact]
     public async Task NoDeviceNodeCrossesTheSocketWhenTheDriverAnswersWithTheLedger()
     {
-        await using var driver = await Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await Start();
+        using HttpClient client = driver.Client();
 
-        var body = await client.GetStringAsync(DriverEndpoints.TunerLedger, Soon());
+        string body = await client.GetStringAsync(DriverEndpoints.TunerLedger, Soon());
 
         Assert.DoesNotContain("/dev", body, StringComparison.Ordinal);
         Assert.DoesNotContain("devicePath", body, StringComparison.Ordinal);
@@ -227,10 +227,10 @@ public sealed class TunerLedgerApiTests
     [Fact]
     public async Task ABodyThisDriverCannotReadIsRefusedRatherThanTakenAsAnEmptyLedger()
     {
-        await using var driver = await Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await Start();
+        using HttpClient client = driver.Client();
 
-        using var response = await client.PutAsync(
+        using HttpResponseMessage response = await client.PutAsync(
             DriverEndpoints.Tuners,
             new StringContent(
                 "not json",
@@ -247,10 +247,10 @@ public sealed class TunerLedgerApiTests
     [Fact]
     public async Task AnEmptyBodyIsRefusedRatherThanTakenAsAnEmptyLedger()
     {
-        await using var driver = await Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await Start();
+        using HttpClient client = driver.Client();
 
-        using var response = await client.PutAsync(
+        using HttpResponseMessage response = await client.PutAsync(
             DriverEndpoints.Tuners,
             new StringContent("", System.Text.Encoding.UTF8, "application/json"),
             Soon()
@@ -263,8 +263,8 @@ public sealed class TunerLedgerApiTests
     [Fact]
     public async Task AnOperatorEditingTheFileUnderTheRunningDriverIsAnsweredAsDrift()
     {
-        await using var driver = await Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await Start();
+        using HttpClient client = driver.Client();
 
         driver.RewriteLedger(
             driver.Configuration with
@@ -276,7 +276,7 @@ public sealed class TunerLedgerApiTests
             }
         );
 
-        var ledger = await Ledger(client);
+        TunerLedgerDto ledger = await Ledger(client);
 
         Assert.True(ledger.HasDrifted());
         Assert.Equal("fake-terrestrial", Assert.Single(ledger.Tuners).DeviceId);
@@ -285,12 +285,12 @@ public sealed class TunerLedgerApiTests
     [Fact]
     public async Task ALedgerFileThatNoLongerParsesIsAnsweredAsDriftRatherThanAsAgreement()
     {
-        await using var driver = await Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await Start();
+        using HttpClient client = driver.Client();
 
         driver.CorruptLedger();
 
-        var ledger = await Ledger(client);
+        TunerLedgerDto ledger = await Ledger(client);
 
         Assert.Null(ledger.SavedHash);
         Assert.True(ledger.HasDrifted());
@@ -300,8 +300,8 @@ public sealed class TunerLedgerApiTests
     [Fact]
     public async Task TheLedgerIsReadFromDiskEachTimeSoThatDriftIsNoticedWithoutARestart()
     {
-        await using var driver = await Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await Start();
+        using HttpClient client = driver.Client();
 
         Assert.False((await Ledger(client)).HasDrifted());
 
@@ -318,10 +318,10 @@ public sealed class TunerLedgerApiTests
     [Fact]
     public async Task TheLedgerPathIsNotMistakenForATunerCalledLedger()
     {
-        await using var driver = await Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await Start();
+        using HttpClient client = driver.Client();
 
-        using var response = await client.PatchAsync(
+        using HttpResponseMessage response = await client.PatchAsync(
             DriverEndpoints.Tuner("ledger"),
             Body(new TunerToggleRequest { Disabled = true }),
             Soon()
@@ -333,11 +333,11 @@ public sealed class TunerLedgerApiTests
 
     private static async Task<TunerLedgerDto> Ledger(HttpClient client)
     {
-        using var response = await client.GetAsync(DriverEndpoints.TunerLedger, Soon());
+        using HttpResponseMessage response = await client.GetAsync(DriverEndpoints.TunerLedger, Soon());
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
-        var ledger = await DriverUnderTest.Read(response, DriverJson.Context.TunerLedgerDto);
+        TunerLedgerDto? ledger = await DriverUnderTest.Read(response, DriverJson.Context.TunerLedgerDto);
 
         Assert.NotNull(ledger);
 

@@ -1,3 +1,5 @@
+using Carina.Infrastructure.Persistence;
+
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 
@@ -10,7 +12,7 @@ public sealed class CarinaDbContextFactoryTests
     [Fact]
     public void CreatesAPostgresContextFromTheConnectionString()
     {
-        using var context = CarinaDbContextFactory.Create(ConnectionString);
+        using CarinaDbContext context = CarinaDbContextFactory.Create(ConnectionString);
 
         Assert.Equal("Npgsql.EntityFrameworkCore.PostgreSQL", context.Database.ProviderName);
     }
@@ -18,9 +20,9 @@ public sealed class CarinaDbContextFactoryTests
     [Fact]
     public void KeepsMigrationsInTheDbProject()
     {
-        using var context = CarinaDbContextFactory.Create(ConnectionString);
+        using CarinaDbContext context = CarinaDbContextFactory.Create(ConnectionString);
 
-        var relational = context.GetService<IDbContextOptions>().Extensions
+        RelationalOptionsExtension relational = context.GetService<IDbContextOptions>().Extensions
             .OfType<RelationalOptionsExtension>()
             .Single();
 
@@ -30,7 +32,7 @@ public sealed class CarinaDbContextFactoryTests
     [Fact]
     public void AppliesTheSnakeCaseNamingConvention()
     {
-        using var context = CarinaDbContextFactory.Create(ConnectionString);
+        using CarinaDbContext context = CarinaDbContextFactory.Create(ConnectionString);
 
         Assert.Contains(
             context.GetService<IDbContextOptions>().Extensions,
@@ -43,7 +45,7 @@ public sealed class CarinaDbContextFactoryTests
     [InlineData("   ")]
     public void FailsFastWhenTheConnectionStringIsMissing(string? connectionString)
     {
-        var exception = Assert.Throws<InvalidOperationException>(() => CarinaDbContextFactory.Create(connectionString));
+        InvalidOperationException exception = Assert.Throws<InvalidOperationException>(() => CarinaDbContextFactory.Create(connectionString));
 
         Assert.Contains(CarinaDbContextFactory.ConnectionStringVariable, exception.Message, StringComparison.Ordinal);
     }

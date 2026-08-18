@@ -15,7 +15,7 @@ public sealed class SdtWriter
         bool isConditionalAccess = false,
         int? declaredDescriptorsLength = null)
     {
-        var length = declaredDescriptorsLength ?? descriptors.Length;
+        int length = declaredDescriptorsLength ?? descriptors.Length;
 
         return new ByteWriter()
             .Word(serviceId)

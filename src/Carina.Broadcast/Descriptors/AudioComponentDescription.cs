@@ -29,9 +29,9 @@ public sealed record AudioComponentDescription(
             return false;
         }
 
-        var payload = descriptor.Payload.Span;
-        var multilingual = (payload[5] & 0x80) != 0;
-        var afterLanguages = HeaderSize + (multilingual ? LanguageCode.Size : 0);
+        ReadOnlySpan<byte> payload = descriptor.Payload.Span;
+        bool multilingual = (payload[5] & 0x80) != 0;
+        int afterLanguages = HeaderSize + (multilingual ? LanguageCode.Size : 0);
 
         if (afterLanguages > payload.Length)
         {

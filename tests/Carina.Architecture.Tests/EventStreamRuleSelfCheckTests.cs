@@ -5,7 +5,7 @@ public sealed class EventStreamRuleSelfCheckTests
     [Fact]
     public void DetectsAnEventStreamThatWritesAPayloadFieldAndLeavesSignalsAlone()
     {
-        var directory = Directory.CreateTempSubdirectory("carina-event-stream-");
+        DirectoryInfo directory = Directory.CreateTempSubdirectory("carina-event-stream-");
 
         try
         {

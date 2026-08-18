@@ -19,8 +19,8 @@ public sealed class AppEventHubTests
     {
         var hub = new AppEventHub();
 
-        Assert.True(hub.TryListen(out var first));
-        Assert.True(hub.TryListen(out var second));
+        Assert.True(hub.TryListen(out AppEventListener? first));
+        Assert.True(hub.TryListen(out AppEventListener? second));
 
         hub.Signal(AppEventName.Tuners);
 
@@ -33,7 +33,7 @@ public sealed class AppEventHubTests
     {
         var hub = new AppEventHub();
 
-        Assert.True(hub.TryListen(out var listener));
+        Assert.True(hub.TryListen(out AppEventListener? listener));
 
         hub.Signal(AppEventName.Quality);
 
@@ -45,9 +45,9 @@ public sealed class AppEventHubTests
     {
         var hub = new AppEventHub();
 
-        Assert.True(hub.TryListen(out var listener));
+        Assert.True(hub.TryListen(out AppEventListener? listener));
 
-        for (var index = 0; index < 1000; index++)
+        for (int index = 0; index < 1000; index++)
         {
             hub.Signal(AppEventName.Tuners);
         }
@@ -60,7 +60,7 @@ public sealed class AppEventHubTests
     {
         var hub = new AppEventHub();
 
-        Assert.True(hub.TryListen(out var listener));
+        Assert.True(hub.TryListen(out AppEventListener? listener));
 
         hub.Signal(AppEventName.Tuners);
         hub.Signal(AppEventName.Recordings);
@@ -75,7 +75,7 @@ public sealed class AppEventHubTests
 
         Assert.True(hub.TryListen(out _));
 
-        foreach (var name in AppEventName.All)
+        foreach (AppEventName name in AppEventName.All)
         {
             hub.Signal(name);
         }
@@ -87,7 +87,7 @@ public sealed class AppEventHubTests
         var hub = new AppEventHub(listenerLimit: 1);
 
         Assert.True(hub.TryListen(out _));
-        Assert.False(hub.TryListen(out var refused));
+        Assert.False(hub.TryListen(out AppEventListener? refused));
         Assert.Null(refused);
     }
 
@@ -96,7 +96,7 @@ public sealed class AppEventHubTests
     {
         var hub = new AppEventHub(listenerLimit: 1);
 
-        Assert.True(hub.TryListen(out var first));
+        Assert.True(hub.TryListen(out AppEventListener? first));
         first.Dispose();
 
         Assert.Equal(0, hub.ListenerCount);
@@ -119,9 +119,9 @@ public sealed class AppEventHubTests
         var hub = new AppEventHub();
         var lifetime = new AppEventHubLifetime(hub);
 
-        Assert.True(hub.TryListen(out var listener));
+        Assert.True(hub.TryListen(out AppEventListener? listener));
 
-        var waiting = Next(listener);
+        Task<IReadOnlyList<AppEventName>> waiting = Next(listener);
         await lifetime.StopAsync(CancellationToken.None);
 
         Assert.True(hub.IsClosed);
@@ -133,9 +133,9 @@ public sealed class AppEventHubTests
     {
         var hub = new AppEventHub();
 
-        Assert.True(hub.TryListen(out var listener));
+        Assert.True(hub.TryListen(out AppEventListener? listener));
 
-        var waiting = Next(listener);
+        Task<IReadOnlyList<AppEventName>> waiting = Next(listener);
         hub.CloseAll();
 
         await Assert.ThrowsAnyAsync<Exception>(() => waiting);

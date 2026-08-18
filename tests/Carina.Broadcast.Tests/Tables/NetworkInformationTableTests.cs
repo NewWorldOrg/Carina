@@ -17,7 +17,7 @@ public sealed class NetworkInformationTableTests
     [Fact]
     public void AScanLearnsWhichStreamsExistAndWhatEachCarries()
     {
-        var table = Parse(new NitWriter
+        NetworkInformationTable table = Parse(new NitWriter
         {
             NetworkDescriptors = SiDescriptorWriter.NetworkName(new AribTextWriter().Kanji("試験").ToArray()),
             TransportStreams =
@@ -48,7 +48,7 @@ public sealed class NetworkInformationTableTests
             [SomeTransportStreamId, AnotherTransportStreamId],
             table.TransportStreams.Select(stream => stream.TransportStreamId).ToArray());
 
-        var first = table.TransportStreams[0];
+        NetworkTransportStream first = table.TransportStreams[0];
         Assert.Equal(SomeNetworkId, first.OriginalNetworkId);
         Assert.Equal(9, first.RemoteControlKeyId);
         Assert.Equal("試験", first.Name);
@@ -65,7 +65,7 @@ public sealed class NetworkInformationTableTests
     [Fact]
     public void TheTableForAnotherNetworkSaysSoRatherThanPassingForThisOne()
     {
-        var table = Parse(new NitWriter(), tableId: NetworkInformationTable.OtherNetworkTableId);
+        NetworkInformationTable table = Parse(new NitWriter(), tableId: NetworkInformationTable.OtherNetworkTableId);
 
         Assert.False(table.IsActualNetwork);
     }
@@ -73,7 +73,7 @@ public sealed class NetworkInformationTableTests
     [Fact]
     public void ANetworkThatAnnouncesNoStreamsIsStillATable()
     {
-        var table = Parse(new NitWriter());
+        NetworkInformationTable table = Parse(new NitWriter());
 
         Assert.Empty(table.TransportStreams);
         Assert.Equal(string.Empty, table.NetworkName);
@@ -82,7 +82,7 @@ public sealed class NetworkInformationTableTests
     [Fact]
     public void ATagNoOneKnowsIsCarriedOnTheStreamRatherThanRefused()
     {
-        var table = Parse(new NitWriter
+        NetworkInformationTable table = Parse(new NitWriter
         {
             TransportStreams =
             [
@@ -95,7 +95,7 @@ public sealed class NetworkInformationTableTests
             ],
         });
 
-        var stream = Assert.Single(table.TransportStreams);
+        NetworkTransportStream stream = Assert.Single(table.TransportStreams);
         Assert.Equal(2, stream.Descriptors.Count);
         Assert.Equal<byte[]>([0x01, 0x02, 0x03], stream.Descriptors.WithTag(0xFA)!.Payload.ToArray());
         Assert.Single(stream.Services);
@@ -113,7 +113,7 @@ public sealed class NetworkInformationTableTests
     [InlineData(0x4E)]
     public void ASectionThatIsNotTheNetworkTableIsRefused(int tableId)
     {
-        var rejected = Read(new NitWriter(), tableId: tableId);
+        TableRead<NetworkInformationTable> rejected = Read(new NitWriter(), tableId: tableId);
 
         Assert.Equal(TableDefect.WrongTableId, Rejection(rejected));
     }
@@ -121,7 +121,7 @@ public sealed class NetworkInformationTableTests
     [Fact]
     public void ASectionTooShortForTheFixedFieldsIsRefused()
     {
-        var section = CarriedSection.Of(new SectionWriter
+        Section section = CarriedSection.Of(new SectionWriter
         {
             TableId = NetworkInformationTable.ActualNetworkTableId,
             TableIdExtension = SomeNetworkId,
@@ -134,7 +134,7 @@ public sealed class NetworkInformationTableTests
     [Fact]
     public void ANetworkDescriptorLoopReachingPastTheSectionRefusesTheWholeTable()
     {
-        var rejected = Read(new NitWriter
+        TableRead<NetworkInformationTable> rejected = Read(new NitWriter
         {
             NetworkDescriptors = SiDescriptorWriter.NetworkName([0x41]),
             DeclaredNetworkDescriptorsLength = 200,
@@ -146,7 +146,7 @@ public sealed class NetworkInformationTableTests
     [Fact]
     public void AStreamLoopReachingPastTheSectionRefusesTheWholeTable()
     {
-        var rejected = Read(new NitWriter
+        TableRead<NetworkInformationTable> rejected = Read(new NitWriter
         {
             TransportStreams =
             [
@@ -161,14 +161,14 @@ public sealed class NetworkInformationTableTests
     [Fact]
     public void AStreamLoopStoppingShortOfTheSectionRefusesTheWholeTableRatherThanReportingAShortList()
     {
-        var streams = new[]
+        byte[][] streams = new[]
         {
             NitWriter.TransportStream(SomeTransportStreamId, SomeNetworkId, []),
             NitWriter.TransportStream(AnotherTransportStreamId, SomeNetworkId, []),
             NitWriter.TransportStream(50004, SomeNetworkId, []),
         };
 
-        var rejected = Read(new NitWriter
+        TableRead<NetworkInformationTable> rejected = Read(new NitWriter
         {
             TransportStreams = streams,
             DeclaredTransportStreamLoopLength = streams[0].Length,
@@ -180,7 +180,7 @@ public sealed class NetworkInformationTableTests
     [Fact]
     public void AStreamLoopEndingPartWayThroughAnEntryRefusesTheWholeTable()
     {
-        var rejected = Read(new NitWriter
+        TableRead<NetworkInformationTable> rejected = Read(new NitWriter
         {
             TransportStreams = [[0x01, 0x02, 0x03]],
         });
@@ -191,7 +191,7 @@ public sealed class NetworkInformationTableTests
     [Fact]
     public void ADescriptorWhoseLengthOverrunsItsStreamRefusesTheWholeTable()
     {
-        var rejected = Read(new NitWriter
+        TableRead<NetworkInformationTable> rejected = Read(new NitWriter
         {
             TransportStreams =
             [
@@ -208,7 +208,7 @@ public sealed class NetworkInformationTableTests
     [Fact]
     public void ADescriptorLoopLongerThanTheStreamItBelongsToRefusesTheWholeTable()
     {
-        var rejected = Read(new NitWriter
+        TableRead<NetworkInformationTable> rejected = Read(new NitWriter
         {
             TransportStreams =
             [

@@ -11,7 +11,7 @@ public sealed class UnixFileTests : IDisposable
 
     public void Dispose()
     {
-        foreach (var socket in left)
+        foreach (Socket socket in left)
         {
             socket.Dispose();
         }
@@ -39,7 +39,7 @@ public sealed class UnixFileTests : IDisposable
     [Fact]
     public void APathBelowAFileIsMissing()
     {
-        var file = At("file");
+        string file = At("file");
         File.WriteAllText(file, "x");
 
         Assert.Equal(UnixPathKind.Missing, UnixFile.Inspect(Path.Combine(file, "below")).Kind);
@@ -48,11 +48,11 @@ public sealed class UnixFileTests : IDisposable
     [Fact]
     public void AnOrdinaryFileIsNotASocket()
     {
-        var file = At("ordinary");
+        string file = At("ordinary");
         File.WriteAllText(file, "x");
         File.SetUnixFileMode(file, UnixFileMode.UserRead | UnixFileMode.UserWrite);
 
-        var entry = UnixFile.Inspect(file);
+        UnixEntry entry = UnixFile.Inspect(file);
 
         Assert.Equal(UnixPathKind.Other, entry.Kind);
         Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, entry.Permissions);
@@ -62,7 +62,7 @@ public sealed class UnixFileTests : IDisposable
     [Fact]
     public void ABoundSocketIsASocket()
     {
-        var path = At("bound.sock");
+        string path = At("bound.sock");
         LeaveBoundSocket(path).Listen(1);
 
         Assert.Equal(UnixPathKind.Socket, UnixFile.Inspect(path).Kind);
@@ -71,7 +71,7 @@ public sealed class UnixFileTests : IDisposable
     [Fact]
     public void ASocketNobodyListensOnIsStillASocket()
     {
-        var path = At("stale.sock");
+        string path = At("stale.sock");
         LeaveBoundSocket(path);
 
         Assert.Equal(UnixPathKind.Socket, UnixFile.Inspect(path).Kind);
@@ -80,7 +80,7 @@ public sealed class UnixFileTests : IDisposable
     [Fact]
     public void ADirectoryIsNotASocket()
     {
-        var path = At("directory");
+        string path = At("directory");
         Directory.CreateDirectory(path);
 
         Assert.NotEqual(UnixPathKind.Socket, UnixFile.Inspect(path).Kind);
@@ -89,14 +89,14 @@ public sealed class UnixFileTests : IDisposable
     [Fact]
     public void TheModeAndTheOwnerAreReadTogether()
     {
-        var file = At("owned");
+        string file = At("owned");
         File.WriteAllText(file, "x");
         File.SetUnixFileMode(
             file,
             UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead
         );
 
-        var entry = UnixFile.Inspect(file);
+        UnixEntry entry = UnixFile.Inspect(file);
 
         Assert.Equal(
             UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.GroupRead,
@@ -108,10 +108,10 @@ public sealed class UnixFileTests : IDisposable
     [Fact]
     public void AFileIsGivenToAGroupThisProcessBelongsTo()
     {
-        var file = At("given");
+        string file = At("given");
         File.WriteAllText(file, "x");
 
-        Assert.True(UnixFile.TryGiveToGroup(file, UnixFile.CurrentGroupId(), out var problem));
+        Assert.True(UnixFile.TryGiveToGroup(file, UnixFile.CurrentGroupId(), out string? problem));
         Assert.Empty(problem);
         Assert.Equal(UnixFile.CurrentGroupId(), UnixFile.Inspect(file).GroupId);
     }
@@ -119,7 +119,7 @@ public sealed class UnixFileTests : IDisposable
     [Fact]
     public void GivingAwayAFileThatIsNotThereSaysWhy()
     {
-        Assert.False(UnixFile.TryGiveToGroup(At("absent"), UnixFile.CurrentGroupId(), out var problem));
+        Assert.False(UnixFile.TryGiveToGroup(At("absent"), UnixFile.CurrentGroupId(), out string? problem));
         Assert.NotEmpty(problem);
     }
 

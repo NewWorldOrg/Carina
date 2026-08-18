@@ -20,12 +20,12 @@ public static class DriverApi
 {
     public static void Map(WebApplication app)
     {
-        var configuration = app.Services.GetRequiredService<DriverConfiguration>();
-        var manager = app.Services.GetRequiredService<TunerSessionManager>();
-        var hello = app.Services.GetRequiredService<DriverHello>();
-        var hub = app.Services.GetRequiredService<DriverEventHub>();
-        var diagnosticsStore = app.Services.GetRequiredService<DiagnosticsStore>();
-        var detector = app.Services.GetRequiredService<ITunerDetector>();
+        DriverConfiguration configuration = app.Services.GetRequiredService<DriverConfiguration>();
+        TunerSessionManager manager = app.Services.GetRequiredService<TunerSessionManager>();
+        DriverHello hello = app.Services.GetRequiredService<DriverHello>();
+        DriverEventHub hub = app.Services.GetRequiredService<DriverEventHub>();
+        DiagnosticsStore diagnosticsStore = app.Services.GetRequiredService<DiagnosticsStore>();
+        ITunerDetector detector = app.Services.GetRequiredService<ITunerDetector>();
 
         RequestDelegate health = context =>
             Write(
@@ -51,7 +51,7 @@ public static class DriverApi
                 DriverJson.Context.IReadOnlyListDetectedDeviceDto
             );
 
-        var ledger = app.Services.GetRequiredService<TunerLedgerStore>();
+        TunerLedgerStore ledger = app.Services.GetRequiredService<TunerLedgerStore>();
 
         RequestDelegate showLedger = context =>
             Write(
@@ -80,7 +80,7 @@ public static class DriverApi
 
         RequestDelegate stopSession = context => StopSession(context, manager, hub, hello);
 
-        var lifecycle = app.Services.GetRequiredService<DriverLifecycle>();
+        DriverLifecycle lifecycle = app.Services.GetRequiredService<DriverLifecycle>();
 
         RequestDelegate stream = context =>
             SessionStreamHandler.Invoke(
@@ -89,9 +89,9 @@ public static class DriverApi
                 streamsDetaching: lifecycle.StreamsDetaching
             );
 
-        var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
-        var clock = app.Services.GetRequiredService<TimeProvider>();
-        var stopRequest = app.Services.GetRequiredService<DriverStopRequest>();
+        IHostApplicationLifetime lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
+        TimeProvider clock = app.Services.GetRequiredService<TimeProvider>();
+        DriverStopRequest stopRequest = app.Services.GetRequiredService<DriverStopRequest>();
 
         RequestDelegate restart = context =>
             Restart(context, manager, hello, lifetime, clock, stopRequest);
@@ -191,11 +191,11 @@ public static class DriverApi
             return;
         }
 
-        var start = manager.Begin(request);
+        SessionStart start = manager.Begin(request);
 
-        if (!start.TryGetSession(out var session))
+        if (!start.TryGetSession(out TunerSession? session))
         {
-            var (status, title) = Outcome(start.Refusal);
+            (int status, string? title) = Outcome(start.Refusal);
 
             await Problem(context, status, title, start.Detail);
 
@@ -256,11 +256,11 @@ public static class DriverApi
             return;
         }
 
-        var revision = ledger.Save(requested, detector.Detect());
+        LedgerRevision revision = ledger.Save(requested, detector.Detect());
 
         if (revision.Refusal is not LedgerRefusal.None)
         {
-            var (status, title) = Outcome(revision.Refusal);
+            (int status, string? title) = Outcome(revision.Refusal);
 
             await Problem(context, status, title, revision.Detail);
 
@@ -281,7 +281,7 @@ public static class DriverApi
         TunerSessionManager manager
     )
     {
-        var deviceId = context.Request.RouteValues["id"] as string ?? string.Empty;
+        string deviceId = context.Request.RouteValues["id"] as string ?? string.Empty;
 
         if (new TunerConfigEntry { DeviceId = deviceId }.Validate() is { Count: > 0 } malformed)
         {
@@ -321,7 +321,7 @@ public static class DriverApi
             return;
         }
 
-        var problems = request?.Validate() ?? ["disabled: the body was empty."];
+        IReadOnlyList<string> problems = request?.Validate() ?? ["disabled: the body was empty."];
 
         if (problems.Count > 0)
         {
@@ -342,7 +342,7 @@ public static class DriverApi
             return;
         }
 
-        var tuners = SessionViews.Tuners(configuration, manager);
+        IReadOnlyList<TunerSnapshot> tuners = SessionViews.Tuners(configuration, manager);
 
         await Write(
             context,
@@ -361,7 +361,7 @@ public static class DriverApi
         DriverStopRequest stopRequest
     )
     {
-        if (!manager.TryEnterDrainingUnlessRecording(out var recordings))
+        if (!manager.TryEnterDrainingUnlessRecording(out IReadOnlyList<TunerSession>? recordings))
         {
             await Problem(
                 context,
@@ -396,8 +396,8 @@ public static class DriverApi
 
     private static string Holding(IReadOnlyList<TunerSession> recordings)
     {
-        var names = string.Join(", ", recordings.Select(session => session.SessionId.Value));
-        var last = recordings.Max(session => session.EndsAt);
+        string names = string.Join(", ", recordings.Select(session => session.SessionId.Value));
+        DateTimeOffset last = recordings.Max(session => session.EndsAt);
 
         return $"{recordings.Count} recording(s) are running ({names}); the driver is not restarted until the last one ends at {last:O}.";
     }
@@ -416,7 +416,7 @@ public static class DriverApi
         DriverHello hello
     )
     {
-        if (!SessionId.TryParse(context.Request.RouteValues["id"] as string, out var sessionId))
+        if (!SessionId.TryParse(context.Request.RouteValues["id"] as string, out SessionId sessionId))
         {
             await Problem(
                 context,
@@ -428,7 +428,7 @@ public static class DriverApi
             return;
         }
 
-        if (!manager.TryGet(sessionId, out var session))
+        if (!manager.TryGet(sessionId, out TunerSession? session))
         {
             await Problem(
                 context,
@@ -455,7 +455,7 @@ public static class DriverApi
         DriverHello hello
     )
     {
-        if (!SessionId.TryParse(context.Request.RouteValues["id"] as string, out var sessionId))
+        if (!SessionId.TryParse(context.Request.RouteValues["id"] as string, out SessionId sessionId))
         {
             await Problem(
                 context,
@@ -479,7 +479,7 @@ public static class DriverApi
             return;
         }
 
-        var outcome = await manager.StopAsync(sessionId, context.Request.Query["reason"].ToString(), context.RequestAborted);
+        SessionStopOutcome outcome = await manager.StopAsync(sessionId, context.Request.Query["reason"].ToString(), context.RequestAborted);
 
         if (outcome is not SessionStopOutcome.NoSuchSession)
         {
@@ -498,11 +498,11 @@ public static class DriverApi
             return;
         }
 
-        var status = outcome is SessionStopOutcome.Stopping
+        int status = outcome is SessionStopOutcome.Stopping
             ? StatusCodes.Status202Accepted
             : StatusCodes.Status200OK;
 
-        if (!manager.TryGet(sessionId, out var session))
+        if (!manager.TryGet(sessionId, out TunerSession? session))
         {
             context.Response.StatusCode = status;
 

@@ -8,7 +8,7 @@ public sealed class TsPacketReaderTests
 
     private static byte[] Packet(int pid, int continuityCounter, byte fill = 0x00)
     {
-        var packet = new byte[PacketLength];
+        byte[] packet = new byte[PacketLength];
         packet[0] = 0x47;
         packet[1] = (byte)((pid >> 8) & 0x1F);
         packet[2] = (byte)(pid & 0xFF);
@@ -38,7 +38,7 @@ public sealed class TsPacketReaderTests
     public void KeepsAPartialPacketUntilTheRestArrives()
     {
         var reader = new TsPacketReader();
-        var packet = Packet(0x100, 3);
+        byte[] packet = Packet(0x100, 3);
 
         Assert.Empty(reader.Read(packet.AsSpan(0, 100).ToArray()));
 
@@ -52,7 +52,7 @@ public sealed class TsPacketReaderTests
     public void FindsTheFirstBoundaryInAStreamThatStartsMidPacket()
     {
         var reader = new TsPacketReader();
-        var stream = Concat([0x11, 0x22, 0x33], Packet(0x101, 5), Packet(0x101, 6));
+        byte[] stream = Concat([0x11, 0x22, 0x33], Packet(0x101, 5), Packet(0x101, 6));
 
         var packets = reader.Read(stream).ToList();
 
@@ -65,8 +65,8 @@ public sealed class TsPacketReaderTests
     public void DoesNotMistakeAPayloadByteForABoundary()
     {
         var reader = new TsPacketReader();
-        var decoy = Packet(0x102, 0, fill: 0x47);
-        var stream = Concat([0x00], decoy, Packet(0x102, 1), Packet(0x102, 2));
+        byte[] decoy = Packet(0x102, 0, fill: 0x47);
+        byte[] stream = Concat([0x00], decoy, Packet(0x102, 1), Packet(0x102, 2));
 
         var packets = reader.Read(stream).ToList();
 
@@ -81,7 +81,7 @@ public sealed class TsPacketReaderTests
         var reader = new TsPacketReader();
         reader.Read(Concat(Packet(0x103, 0), Packet(0x103, 1)));
 
-        var stream = Concat([0xFF, 0xFF, 0xFF], Packet(0x103, 4), Packet(0x103, 5));
+        byte[] stream = Concat([0xFF, 0xFF, 0xFF], Packet(0x103, 4), Packet(0x103, 5));
         var packets = reader.Read(stream).ToList();
 
         Assert.Equal(2, packets.Count);
@@ -104,7 +104,7 @@ public sealed class TsPacketReaderTests
     {
         var reader = new TsPacketReader();
 
-        for (var read = 0; read < 64; read++)
+        for (int read = 0; read < 64; read++)
         {
             Assert.Empty(reader.Read(new byte[4096]));
         }
@@ -116,7 +116,7 @@ public sealed class TsPacketReaderTests
     public void APacketIsNotEmittedFromAnAlignmentNothingConfirmed()
     {
         var reader = new TsPacketReader();
-        var decoy = new byte[PacketLength];
+        byte[] decoy = new byte[PacketLength];
         decoy[13] = 0x47;
 
         Assert.Empty(reader.Read(decoy));
@@ -127,7 +127,7 @@ public sealed class TsPacketReaderTests
     {
         var reader = new TsPacketReader();
 
-        var packet = Assert.Single(reader.Read(Packet(0x100, 0)));
+        TsPacket packet = Assert.Single(reader.Read(Packet(0x100, 0)));
 
         Assert.True(packet.Provisional);
     }
@@ -137,7 +137,7 @@ public sealed class TsPacketReaderTests
     {
         var reader = new TsPacketReader();
 
-        var packets = reader.Read(Concat(Packet(0x100, 0), Packet(0x100, 1)));
+        IReadOnlyList<TsPacket> packets = reader.Read(Concat(Packet(0x100, 0), Packet(0x100, 1)));
 
         Assert.All(packets, packet => Assert.False(packet.Provisional));
     }
@@ -146,9 +146,9 @@ public sealed class TsPacketReaderTests
     public void AByteThatDisprovesTheBoundaryDropsTheAlignment()
     {
         var reader = new TsPacketReader();
-        var first = new byte[PacketLength];
+        byte[] first = new byte[PacketLength];
         first[0] = 0x47;
-        var second = new byte[PacketLength];
+        byte[] second = new byte[PacketLength];
 
         Assert.True(reader.Read(first)[0].Provisional);
         Assert.Empty(reader.Read(second));
@@ -159,7 +159,7 @@ public sealed class TsPacketReaderTests
     public void ARealBoundaryStillReadsAfterAFalseOne()
     {
         var reader = new TsPacketReader();
-        var noise = new byte[40];
+        byte[] noise = new byte[40];
         noise[0] = 0x47;
 
         var packets = reader
@@ -174,9 +174,9 @@ public sealed class TsPacketReaderTests
     public void AStrideThisReaderCannotParseIsVisible()
     {
         var reader = new TsPacketReader();
-        var packet = Packet(0x100, 0);
+        byte[] packet = Packet(0x100, 0);
 
-        for (var count = 0; count < 20; count++)
+        for (int count = 0; count < 20; count++)
         {
             reader.Read([.. packet, .. new byte[16]]);
         }
@@ -189,7 +189,7 @@ public sealed class TsPacketReaderTests
     {
         var reader = new TsPacketReader();
 
-        var packets = reader.Read(Concat(Packet(0x1FFF, 0), Packet(0x1FFF, 1)));
+        IReadOnlyList<TsPacket> packets = reader.Read(Concat(Packet(0x1FFF, 0), Packet(0x1FFF, 1)));
 
         Assert.Equal(0x1FFF, packets[0].Pid);
         Assert.True(packets[0].IsNull);

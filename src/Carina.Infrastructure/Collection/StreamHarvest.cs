@@ -38,7 +38,7 @@ public sealed class StreamHarvest
     {
         if (carried > 0)
         {
-            var take = Math.Min(TransportPacket.Size - carried, packets.Length);
+            int take = Math.Min(TransportPacket.Size - carried, packets.Length);
 
             packets[..take].CopyTo(carry.AsSpan(carried));
             carried += take;
@@ -53,7 +53,7 @@ public sealed class StreamHarvest
             carried = 0;
         }
 
-        var whole = packets.Length - (packets.Length % TransportPacket.Size);
+        int whole = packets.Length - (packets.Length % TransportPacket.Size);
 
         Read(packets[..whole]);
         packets[whole..].CopyTo(carry);
@@ -62,7 +62,7 @@ public sealed class StreamHarvest
 
     private void Read(ReadOnlySpan<byte> packets)
     {
-        foreach (var read in reader.Push(packets))
+        foreach (SectionRead read in reader.Push(packets))
         {
             if (read is not SectionRead.Assembled assembled)
             {

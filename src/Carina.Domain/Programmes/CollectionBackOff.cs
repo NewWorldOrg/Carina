@@ -17,7 +17,7 @@ public static class CollectionBackOff
             return visit.LastAttemptedAt + settings.BetweenVisits;
         }
 
-        var doubled = settings.BeforeRetrying * Math.Pow(2, Math.Min(visit.ConsecutiveIncomplete - 1, 16));
+        TimeSpan doubled = settings.BeforeRetrying * Math.Pow(2, Math.Min(visit.ConsecutiveIncomplete - 1, 16));
 
         return visit.LastAttemptedAt
             + (doubled > settings.LongestBackOff ? settings.LongestBackOff : doubled);

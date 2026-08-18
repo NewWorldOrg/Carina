@@ -81,8 +81,8 @@ internal sealed class DriverFeature : IAsyncDisposable
 
     public async Task<JsonElement> StatusAsync()
     {
-        using var response = await Client.GetAsync(StatusPath);
-        var payload = await response.Content.ReadAsStringAsync();
+        using HttpResponseMessage response = await Client.GetAsync(StatusPath);
+        string payload = await response.Content.ReadAsStringAsync();
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 

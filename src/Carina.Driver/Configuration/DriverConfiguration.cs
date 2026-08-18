@@ -75,7 +75,7 @@ public sealed record DriverConfiguration(
             return false;
         }
 
-        foreach (var root in OutputRoots ?? [])
+        foreach (OutputRootSettings root in OutputRoots ?? [])
         {
             if (root?.Name is null || !string.Equals(root.Name, name, StringComparison.Ordinal))
             {

@@ -12,12 +12,12 @@ public sealed class EventInformationFuzzTests
     {
         var random = new Random(20260818);
 
-        for (var round = 0; round < 2000; round++)
+        for (int round = 0; round < 2000; round++)
         {
-            var body = new byte[random.Next(0, 200)];
+            byte[] body = new byte[random.Next(0, 200)];
             random.NextBytes(body);
 
-            var read = EventInformationTable.Read(CarriedSection.Of(new SectionWriter
+            TableRead<EventInformationTable> read = EventInformationTable.Read(CarriedSection.Of(new SectionWriter
             {
                 TableId = EventInformationTable.PresentFollowingActualTableId,
                 TableIdExtension = SomeService,
@@ -29,7 +29,7 @@ public sealed class EventInformationFuzzTests
                 continue;
             }
 
-            foreach (var carried in parsed.Table.Events)
+            foreach (DescribedEvent carried in parsed.Table.Events)
             {
                 _ = carried.Described;
                 _ = carried.Detailed;
@@ -47,12 +47,12 @@ public sealed class EventInformationFuzzTests
     {
         var random = new Random(20260819);
 
-        for (var round = 0; round < 2000; round++)
+        for (int round = 0; round < 2000; round++)
         {
-            var descriptors = new byte[random.Next(0, 120)];
+            byte[] descriptors = new byte[random.Next(0, 120)];
             random.NextBytes(descriptors);
 
-            var read = EventInformationTable.Read(CarriedSection.Of(new SectionWriter
+            TableRead<EventInformationTable> read = EventInformationTable.Read(CarriedSection.Of(new SectionWriter
             {
                 TableId = EventInformationTable.PresentFollowingActualTableId,
                 TableIdExtension = SomeService,
@@ -64,7 +64,7 @@ public sealed class EventInformationFuzzTests
                 continue;
             }
 
-            foreach (var carried in parsed.Table.Events)
+            foreach (DescribedEvent carried in parsed.Table.Events)
             {
                 _ = carried.Described;
                 _ = carried.Detailed;

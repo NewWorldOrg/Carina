@@ -10,6 +10,7 @@ using Carina.Domain.DriverStatus;
 
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -42,7 +43,7 @@ public sealed class DriverStatusEndpointTests
 
     private static HttpClient ClientReading(IDriverStatusReader? reader)
     {
-        var factory = new TestingWebApplicationFactory().WithWebHostBuilder(builder =>
+        WebApplicationFactory<Program> factory = new TestingWebApplicationFactory().WithWebHostBuilder(builder =>
             builder.ConfigureTestServices(services =>
             {
                 services
@@ -57,7 +58,7 @@ public sealed class DriverStatusEndpointTests
                 }
             }));
 
-        var client = factory.CreateClient();
+        HttpClient client = factory.CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
             SchemeName,
             "anything");
@@ -74,10 +75,10 @@ public sealed class DriverStatusEndpointTests
         var observation = DriverObservation.Of(
             new DriverHello(DriverProtocol.Version, "instance-a", ["recording", "live"]),
             []);
-        using var client = ClientReading(new StubDriverStatusReader(observation));
+        using HttpClient client = ClientReading(new StubDriverStatusReader(observation));
 
-        using var body = await StatusBody(client);
-        var data = body.RootElement.GetProperty("data");
+        using JsonDocument body = await StatusBody(client);
+        JsonElement data = body.RootElement.GetProperty("data");
 
         Assert.True(body.RootElement.GetProperty("status").GetBoolean());
         Assert.Equal("connected", data.GetProperty("connection").GetString());
@@ -95,13 +96,13 @@ public sealed class DriverStatusEndpointTests
     [Fact]
     public async Task ADrainingDriverIsSurfaced()
     {
-        var observation = DriverObservation.Of(
+        DriverObservation observation = DriverObservation.Of(
                 new DriverHello(DriverProtocol.Version, "instance-a", ["recording", "live"]),
                 [])
             .WhileDraining();
-        using var client = ClientReading(new StubDriverStatusReader(observation));
+        using HttpClient client = ClientReading(new StubDriverStatusReader(observation));
 
-        using var body = await StatusBody(client);
+        using JsonDocument body = await StatusBody(client);
 
         Assert.Equal(
             "draining",
@@ -114,10 +115,10 @@ public sealed class DriverStatusEndpointTests
         var observation = DriverObservation.Of(
             new DriverHello(DriverProtocol.Version, "instance-old", ["recording"]),
             ["live"]);
-        using var client = ClientReading(new StubDriverStatusReader(observation));
+        using HttpClient client = ClientReading(new StubDriverStatusReader(observation));
 
-        using var body = await StatusBody(client);
-        var data = body.RootElement.GetProperty("data");
+        using JsonDocument body = await StatusBody(client);
+        JsonElement data = body.RootElement.GetProperty("data");
 
         Assert.True(data.GetProperty("driverUpdateRequired").GetBoolean());
         Assert.Equal(
@@ -128,14 +129,14 @@ public sealed class DriverStatusEndpointTests
     [Fact]
     public async Task WithoutADriverTheAnswerIsStillOkAndNotConnected()
     {
-        using var client = ClientReading(null);
+        using HttpClient client = ClientReading(null);
 
-        using var response = await client.GetAsync("/api/driver/status");
+        using HttpResponseMessage response = await client.GetAsync("/api/driver/status");
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        var data = body.RootElement.GetProperty("data");
+        JsonElement data = body.RootElement.GetProperty("data");
 
         Assert.Equal("notConnected", data.GetProperty("connection").GetString());
         Assert.Equal(JsonValueKind.Null, data.GetProperty("hello").ValueKind);
@@ -144,9 +145,9 @@ public sealed class DriverStatusEndpointTests
     [Fact]
     public async Task ABrokenReaderIsAGenuine503()
     {
-        using var client = ClientReading(new ThrowingDriverStatusReader());
+        using HttpClient client = ClientReading(new ThrowingDriverStatusReader());
 
-        using var response = await client.GetAsync("/api/driver/status");
+        using HttpResponseMessage response = await client.GetAsync("/api/driver/status");
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
 

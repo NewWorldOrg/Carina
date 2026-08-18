@@ -290,13 +290,13 @@ public sealed class TunerSession : IDisposable
 
     private void Run()
     {
-        var token = stopping.Token;
+        CancellationToken token = stopping.Token;
 
         try
         {
             while (!token.IsCancellationRequested && timeProvider.GetUtcNow() < EndsAt)
             {
-                var chunk = device.Read(chunkSize, token);
+                byte[] chunk = device.Read(chunkSize, token);
 
                 if (chunk.Length is 0)
                 {
@@ -419,7 +419,7 @@ public sealed class TunerSession : IDisposable
     {
         try
         {
-            foreach (var packet in packetReader.Read(chunk))
+            foreach (TsPacket packet in packetReader.Read(chunk))
             {
                 Counters.Observe(packet);
             }
@@ -458,7 +458,7 @@ public sealed class TunerSession : IDisposable
 
     private void RecordFault(Exception error)
     {
-        var seen = Interlocked.Increment(ref faultCount);
+        long seen = Interlocked.Increment(ref faultCount);
 
         lock (gate)
         {
@@ -505,21 +505,21 @@ public sealed class TunerSession : IDisposable
             causes.Add(cause);
         }
 
-        var writerFault = Close(() => recordingWriter?.Dispose());
+        Exception? writerFault = Close(() => recordingWriter?.Dispose());
         if (writerFault is not null)
         {
             causes.Add(writerFault);
         }
 
-        var deviceFault = Close(device.Dispose);
+        Exception? deviceFault = Close(device.Dispose);
         if (deviceFault is not null)
         {
             causes.Add(deviceFault);
         }
 
-        var failed = causes.Count > 0;
+        bool failed = causes.Count > 0;
 
-        var closeFault = Close(() => Broadcaster.Close(failed ? Combine(causes) : null));
+        Exception? closeFault = Close(() => Broadcaster.Close(failed ? Combine(causes) : null));
 
         lock (gate)
         {
@@ -549,7 +549,7 @@ public sealed class TunerSession : IDisposable
             return;
         }
 
-        var reason = StopReason switch
+        DiagnosticReason reason = StopReason switch
         {
             SessionStopReason.RecordingFailed => DiagnosticReason.RecordingWriteFailed,
             SessionStopReason.DeviceFailed => DiagnosticReason.DeviceFaulted,
@@ -642,13 +642,13 @@ public sealed class TunerSession : IDisposable
 
     private void RaiseEnded()
     {
-        var handlers = Ended;
+        Action<TunerSession>? handlers = Ended;
         if (handlers is null)
         {
             return;
         }
 
-        foreach (var handler in handlers.GetInvocationList())
+        foreach (Delegate handler in handlers.GetInvocationList())
         {
             try
             {

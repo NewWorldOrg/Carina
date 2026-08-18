@@ -32,11 +32,11 @@ public sealed class ScheduleProgress
                 return ScheduleCompleteness.Incomplete;
             }
 
-            var least = ScheduleCompleteness.Complete;
+            ScheduleCompleteness least = ScheduleCompleteness.Complete;
 
-            foreach (var service in services)
+            foreach (ScheduledService service in services)
             {
-                var reached = CompletenessOf(service);
+                ScheduleCompleteness reached = CompletenessOf(service);
 
                 if (reached < least)
                 {
@@ -58,9 +58,9 @@ public sealed class ScheduleProgress
         }
 
         var service = new ScheduledService(table.OriginalNetworkId, table.TransportStreamId, table.ServiceId);
-        var key = (service, table.TableId);
+        (ScheduledService service, int TableId) key = (service, table.TableId);
 
-        if (!tables.TryGetValue(key, out var progress) || progress.Version != table.VersionNumber)
+        if (!tables.TryGetValue(key, out TableProgress? progress) || progress.Version != table.VersionNumber)
         {
             progress = new TableProgress(table.VersionNumber, table.LastTableId, table.LastSectionNumber);
             tables[key] = progress;
@@ -90,7 +90,7 @@ public sealed class ScheduleProgress
     {
         ArgumentNullException.ThrowIfNull(service);
 
-        if (!tables.TryGetValue((service, firstTableId), out var first))
+        if (!tables.TryGetValue((service, firstTableId), out TableProgress? first))
         {
             return false;
         }
@@ -100,9 +100,9 @@ public sealed class ScheduleProgress
             return false;
         }
 
-        for (var tableId = firstTableId; tableId <= first.LastTableId; tableId++)
+        for (int tableId = firstTableId; tableId <= first.LastTableId; tableId++)
         {
-            if (!tables.TryGetValue((service, tableId), out var progress) || progress.Awaited().Count > 0)
+            if (!tables.TryGetValue((service, tableId), out TableProgress? progress) || progress.Awaited().Count > 0)
             {
                 return false;
             }
@@ -115,7 +115,7 @@ public sealed class ScheduleProgress
     {
         ArgumentNullException.ThrowIfNull(service);
 
-        return tables.TryGetValue((service, tableId), out var progress) ? progress.Awaited() : [];
+        return tables.TryGetValue((service, tableId), out TableProgress? progress) ? progress.Awaited() : [];
     }
 
     private sealed class TableProgress(int version, int lastTableId, int lastSectionNumber)
@@ -138,16 +138,16 @@ public sealed class ScheduleProgress
         {
             var awaited = new List<int>();
 
-            for (var segment = 0; segment <= lastSectionNumber / SectionsPerSegment; segment++)
+            for (int segment = 0; segment <= lastSectionNumber / SectionsPerSegment; segment++)
             {
-                if (!lastOfSegment.TryGetValue(segment, out var last))
+                if (!lastOfSegment.TryGetValue(segment, out int last))
                 {
                     awaited.Add(segment);
 
                     continue;
                 }
 
-                for (var section = segment * SectionsPerSegment; section <= last; section++)
+                for (int section = segment * SectionsPerSegment; section <= last; section++)
                 {
                     if (!sections.Contains(section))
                     {

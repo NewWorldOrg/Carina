@@ -34,8 +34,8 @@ public sealed record TunerObservationResponder(
     {
         ArgumentNullException.ThrowIfNull(snapshot);
 
-        var health = snapshot.Health;
-        var session = snapshot.CurrentSession;
+        TunerHealthDto? health = snapshot.Health;
+        CurrentSessionDto? session = snapshot.CurrentSession;
 
         return new TunerObservationResponder(
             snapshot.DeviceId,

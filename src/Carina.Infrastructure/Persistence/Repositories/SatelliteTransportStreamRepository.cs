@@ -1,6 +1,7 @@
 using Carina.Domain.Channels;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Carina.Infrastructure.Persistence.Repositories;
 
@@ -35,7 +36,7 @@ public sealed class SatelliteTransportStreamRepository(CarinaDbContext context)
                 nameof(streams));
         }
 
-        await using var transaction = context.Database.CurrentTransaction is null
+        await using IDbContextTransaction? transaction = context.Database.CurrentTransaction is null
             ? await context.Database.BeginTransactionAsync(cancellationToken)
             : null;
 

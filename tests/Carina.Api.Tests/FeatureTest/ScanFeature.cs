@@ -52,7 +52,7 @@ internal sealed class ScanFeature : IAsyncDisposable
 
     public async Task<(HttpStatusCode Status, JsonElement Body)> PostAsync(string path, object? body = null)
     {
-        using var response = await Client.PostAsJsonAsync(
+        using HttpResponseMessage response = await Client.PostAsJsonAsync(
             new Uri(path, UriKind.Relative),
             body ?? new { });
 
@@ -61,14 +61,14 @@ internal sealed class ScanFeature : IAsyncDisposable
 
     public async Task<(HttpStatusCode Status, JsonElement Body)> GetAsync(string path)
     {
-        using var response = await Client.GetAsync(new Uri(path, UriKind.Relative));
+        using HttpResponseMessage response = await Client.GetAsync(new Uri(path, UriKind.Relative));
 
         return await ReadAsync(response);
     }
 
     public async Task<Guid> StartAsync(object? body = null)
     {
-        var (status, payload) = await PostAsync("/api/tuners/scan", body);
+        (HttpStatusCode status, JsonElement payload) = await PostAsync("/api/tuners/scan", body);
 
         Assert.Equal(HttpStatusCode.Accepted, status);
 
@@ -90,7 +90,7 @@ internal sealed class ScanFeature : IAsyncDisposable
     private static async Task<(HttpStatusCode Status, JsonElement Body)> ReadAsync(
         HttpResponseMessage response)
     {
-        var body = await response.Content.ReadAsStringAsync();
+        string body = await response.Content.ReadAsStringAsync();
 
         if (!body.StartsWith('{') && !body.StartsWith('['))
         {

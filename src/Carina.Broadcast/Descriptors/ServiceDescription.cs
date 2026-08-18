@@ -18,15 +18,15 @@ public sealed record ServiceDescription(byte ServiceType, string ProviderName, s
             return false;
         }
 
-        var payload = descriptor.Payload.Span;
-        var providerLength = payload[1];
+        ReadOnlySpan<byte> payload = descriptor.Payload.Span;
+        byte providerLength = payload[1];
 
         if (2 + providerLength + 1 > payload.Length)
         {
             return false;
         }
 
-        var nameLength = payload[2 + providerLength];
+        byte nameLength = payload[2 + providerLength];
 
         if (3 + providerLength + nameLength > payload.Length)
         {

@@ -15,7 +15,7 @@ public sealed class RepositoryDatabase : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        await using var context = Open();
+        await using CarinaDbContext context = Open();
         await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
     }
@@ -32,7 +32,7 @@ public sealed class RepositoryDatabase : IAsyncLifetime
 
     private static string Scratch()
     {
-        var configured = Environment.GetEnvironmentVariable(ConnectionStringVariable);
+        string? configured = Environment.GetEnvironmentVariable(ConnectionStringVariable);
         if (string.IsNullOrWhiteSpace(configured))
         {
             throw new InvalidOperationException(

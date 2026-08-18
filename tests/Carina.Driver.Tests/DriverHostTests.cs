@@ -25,7 +25,7 @@ public sealed class DriverHostTests : IDisposable
 
     private static IHost HostOf(DriverHostResult result)
     {
-        Assert.True(result.TryGetHost(out var host), string.Join(" ", result.Problems));
+        Assert.True(result.TryGetHost(out IHost? host), string.Join(" ", result.Problems));
 
         return host;
     }
@@ -33,7 +33,7 @@ public sealed class DriverHostTests : IDisposable
     [Fact]
     public void BuildsTheHost()
     {
-        using var host = HostOf(Build());
+        using IHost host = HostOf(Build());
 
         Assert.NotNull(host.Services.GetService(typeof(IHostApplicationLifetime)));
     }
@@ -41,8 +41,8 @@ public sealed class DriverHostTests : IDisposable
     [Fact]
     public void TheConfigurationIsAvailableToTheServices()
     {
-        var configuration = DriverUnderTest.ConfigurationIn(root);
-        using var host = HostOf(DriverHost.Create([], configuration));
+        DriverConfiguration configuration = DriverUnderTest.ConfigurationIn(root);
+        using IHost host = HostOf(DriverHost.Create([], configuration));
 
         Assert.Same(configuration, host.Services.GetService(typeof(DriverConfiguration)));
     }
@@ -50,7 +50,7 @@ public sealed class DriverHostTests : IDisposable
     [Fact]
     public void TheSessionManagerIsAvailableToTheServices()
     {
-        using var host = HostOf(Build());
+        using IHost host = HostOf(Build());
 
         Assert.NotNull(host.Services.GetService(typeof(TunerSessionManager)));
         Assert.NotNull(host.Services.GetService(typeof(ITunerDeviceFactory)));
@@ -62,7 +62,7 @@ public sealed class DriverHostTests : IDisposable
     [Fact]
     public void TheSessionManagerRunsWithTheHost()
     {
-        using var host = HostOf(Build());
+        using IHost host = HostOf(Build());
 
         var hosted = (IEnumerable<IHostedService>)
             host.Services.GetService(typeof(IEnumerable<IHostedService>))!;
@@ -75,7 +75,7 @@ public sealed class DriverHostTests : IDisposable
     [Fact]
     public void TheShutdownTimeoutCoversTheDrainAndTheHardStop()
     {
-        using var host = HostOf(Build());
+        using IHost host = HostOf(Build());
 
         var manager = (TunerSessionManager)host.Services.GetService(typeof(TunerSessionManager))!;
         var options = (IOptions<HostOptions>)
@@ -94,18 +94,18 @@ public sealed class DriverHostTests : IDisposable
     [Fact]
     public async Task TheSessionManagerSignalsTheEventHub()
     {
-        using var host = HostOf(Build());
+        using IHost host = HostOf(Build());
 
         var manager = (TunerSessionManager)host.Services.GetService(typeof(TunerSessionManager))!;
         var hub = (DriverEventHub)host.Services.GetService(typeof(DriverEventHub))!;
 
-        Assert.True(hub.TryListen(out var listener));
+        Assert.True(hub.TryListen(out DriverEventListener? listener));
 
         using (listener)
         {
             manager.Begin(DriverUnderTest.Live("hub-signal"));
 
-            var taken = await listener.Take(
+            IReadOnlyList<string> taken = await listener.Take(
                 new CancellationTokenSource(TimeSpan.FromSeconds(5)).Token
             );
 
@@ -116,7 +116,7 @@ public sealed class DriverHostTests : IDisposable
     [Fact]
     public void TheGreetingCarriesTheProtocolAndTheCapabilities()
     {
-        using var host = HostOf(Build());
+        using IHost host = HostOf(Build());
 
         var hello = (DriverHello)host.Services.GetService(typeof(DriverHello))!;
 
@@ -132,8 +132,8 @@ public sealed class DriverHostTests : IDisposable
     [Fact]
     public void EachDriverAnnouncesItselfAsADifferentInstance()
     {
-        using var first = HostOf(Build());
-        using var second = HostOf(DriverHost.Create([], DriverUnderTest.ConfigurationIn(root)));
+        using IHost first = HostOf(Build());
+        using IHost second = HostOf(DriverHost.Create([], DriverUnderTest.ConfigurationIn(root)));
 
         var one = (DriverHello)first.Services.GetService(typeof(DriverHello))!;
         var other = (DriverHello)second.Services.GetService(typeof(DriverHello))!;
@@ -144,7 +144,7 @@ public sealed class DriverHostTests : IDisposable
     [Fact]
     public void AUrlOnTheCommandLineStopsTheDriver()
     {
-        var refused = Build(["--urls", "http://0.0.0.0:8080"]);
+        DriverHostResult refused = Build(["--urls", "http://0.0.0.0:8080"]);
 
         Assert.False(refused.TryGetHost(out _));
         Assert.Equal(DriverHostRefusal.Configuration, refused.Refusal);
@@ -154,7 +154,7 @@ public sealed class DriverHostTests : IDisposable
     [Fact]
     public void AKestrelEndpointStopsTheDriver()
     {
-        var refused = Build(["--Kestrel:Endpoints:Http:Url=http://0.0.0.0:5000"]);
+        DriverHostResult refused = Build(["--Kestrel:Endpoints:Http:Url=http://0.0.0.0:5000"]);
 
         Assert.False(refused.TryGetHost(out _));
         Assert.Equal(DriverHostRefusal.Configuration, refused.Refusal);
@@ -167,7 +167,7 @@ public sealed class DriverHostTests : IDisposable
     [Fact]
     public void ARefusedConfigurationBindsNothing()
     {
-        var refused = Build(["--urls", "http://0.0.0.0:8080"]);
+        DriverHostResult refused = Build(["--urls", "http://0.0.0.0:8080"]);
 
         Assert.False(refused.TryGetHost(out _));
         Assert.False(File.Exists(Path.Combine(root, "driver.sock")));
@@ -176,10 +176,10 @@ public sealed class DriverHostTests : IDisposable
     [Fact]
     public void SomethingThatIsNotASocketOnThePathStopsTheDriver()
     {
-        var path = Path.Combine(root, "driver.sock");
+        string path = Path.Combine(root, "driver.sock");
         File.WriteAllText(path, "not a socket");
 
-        var refused = Build();
+        DriverHostResult refused = Build();
 
         Assert.False(refused.TryGetHost(out _));
         Assert.Equal(DriverHostRefusal.Socket, refused.Refusal);
@@ -189,9 +189,9 @@ public sealed class DriverHostTests : IDisposable
     [Fact]
     public async Task TheDriverListensOnTheSocketAndNowhereElse()
     {
-        await using var driver = await DriverUnderTest.Start();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
 
-        var addresses = driver
+        ICollection<string> addresses = driver
             .Service<IServer>()
             .Features.Get<IServerAddressesFeature>()!
             .Addresses;
@@ -206,9 +206,9 @@ public sealed class DriverHostTests : IDisposable
     [Fact]
     public async Task TheSocketCarriesTheModeAndTheGroup()
     {
-        await using var driver = await DriverUnderTest.Start();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
 
-        var entry = UnixFile.Inspect(driver.SocketPath);
+        UnixEntry entry = UnixFile.Inspect(driver.SocketPath);
 
         Assert.Equal(UnixPathKind.Socket, entry.Kind);
         Assert.Equal("0660", UnixFile.Octal(entry.Permissions));
@@ -218,12 +218,12 @@ public sealed class DriverHostTests : IDisposable
     [Fact]
     public async Task ASocketLeftBehindDoesNotStopTheNextDriver()
     {
-        var root = DriverUnderTest.NewRoot();
+        string root = DriverUnderTest.NewRoot();
 
         try
         {
-            var configuration = DriverUnderTest.ConfigurationIn(root);
-            var path = configuration.SocketPath!;
+            DriverConfiguration configuration = DriverUnderTest.ConfigurationIn(root);
+            string path = configuration.SocketPath!;
 
             using (var stale = new System.Net.Sockets.Socket(
                 System.Net.Sockets.AddressFamily.Unix,
@@ -235,7 +235,7 @@ public sealed class DriverHostTests : IDisposable
 
                 Assert.True(File.Exists(path));
 
-                using var host = HostOf(DriverHost.Create([], configuration));
+                using IHost host = HostOf(DriverHost.Create([], configuration));
 
                 await host.StartAsync();
                 await host.StopAsync(TimeSpan.FromSeconds(10));
@@ -250,8 +250,8 @@ public sealed class DriverHostTests : IDisposable
     [Fact]
     public async Task TheSocketIsGoneWhenTheDriverStops()
     {
-        var driver = await DriverUnderTest.Start();
-        var path = driver.SocketPath;
+        DriverUnderTest driver = await DriverUnderTest.Start();
+        string path = driver.SocketPath;
 
         Assert.True(File.Exists(path));
 

@@ -72,15 +72,15 @@ public static class DriverHost
         DriverStopRequest? stopRequest = null
     )
     {
-        var builder = WebApplication.CreateSlimBuilder(args);
+        WebApplicationBuilder builder = WebApplication.CreateSlimBuilder(args);
 
-        var wouldBindTcp = TcpBindingGate.Inspect(builder.Configuration, args);
+        IReadOnlyList<string> wouldBindTcp = TcpBindingGate.Inspect(builder.Configuration, args);
         if (wouldBindTcp.Count > 0)
         {
             return DriverHostResult.Refused(DriverHostRefusal.Configuration, wouldBindTcp);
         }
 
-        var socketPath = configuration.SocketPath!;
+        string socketPath = configuration.SocketPath!;
 
         try
         {
@@ -144,7 +144,7 @@ public static class DriverHost
 
         reshapeServices?.Invoke(builder.Services);
 
-        var app = builder.Build();
+        WebApplication app = builder.Build();
 
         DriverApi.Map(app);
 

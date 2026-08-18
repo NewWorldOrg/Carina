@@ -22,7 +22,7 @@ public sealed class TcpBindingGateTests
     [Fact]
     public void TheUrlVariableIsNamed()
     {
-        var findings = TcpBindingGate.Inspect(
+        IReadOnlyList<string> findings = TcpBindingGate.Inspect(
             Settings(),
             [],
             name => name is TcpBindingGate.UrlsVariable ? "http://0.0.0.0:8080" : null
@@ -53,7 +53,7 @@ public sealed class TcpBindingGateTests
     [InlineData(TcpBindingGate.HttpsPortsVariable)]
     public void APortTheImageHandedDownIsNamed(string variable)
     {
-        var findings = TcpBindingGate.Inspect(
+        IReadOnlyList<string> findings = TcpBindingGate.Inspect(
             Settings(),
             [],
             name => name == variable ? "8080" : null
@@ -72,7 +72,7 @@ public sealed class TcpBindingGateTests
     [InlineData("https_ports")]
     public void APortSettingIsNamed(string setting)
     {
-        var findings = TcpBindingGate.Inspect(Settings((setting, "8080")), [], Nothing);
+        IReadOnlyList<string> findings = TcpBindingGate.Inspect(Settings((setting, "8080")), [], Nothing);
 
         Assert.Contains(
             findings,
@@ -95,7 +95,7 @@ public sealed class TcpBindingGateTests
     [Fact]
     public void TheUrlArgumentIsNamed()
     {
-        var findings = TcpBindingGate.Inspect(Settings(), ["--urls", "http://0.0.0.0:8080"], Nothing);
+        IReadOnlyList<string> findings = TcpBindingGate.Inspect(Settings(), ["--urls", "http://0.0.0.0:8080"], Nothing);
 
         Assert.Contains(findings, finding => finding.Contains("--urls", StringComparison.Ordinal));
     }
@@ -103,7 +103,7 @@ public sealed class TcpBindingGateTests
     [Fact]
     public void TheJoinedUrlArgumentIsNamed()
     {
-        var findings = TcpBindingGate.Inspect(Settings(), ["--urls=http://0.0.0.0:8080"], Nothing);
+        IReadOnlyList<string> findings = TcpBindingGate.Inspect(Settings(), ["--urls=http://0.0.0.0:8080"], Nothing);
 
         Assert.Contains(
             findings,
@@ -120,7 +120,7 @@ public sealed class TcpBindingGateTests
     [Fact]
     public void TheUrlSettingIsNamedWhateverPutItThere()
     {
-        var findings = TcpBindingGate.Inspect(
+        IReadOnlyList<string> findings = TcpBindingGate.Inspect(
             Settings((TcpBindingGate.UrlsSetting, "http://[::]:5000")),
             [],
             Nothing
@@ -135,7 +135,7 @@ public sealed class TcpBindingGateTests
     [Fact]
     public void EveryKestrelEndpointIsNamed()
     {
-        var findings = TcpBindingGate.Inspect(
+        IReadOnlyList<string> findings = TcpBindingGate.Inspect(
             Settings(
                 ("Kestrel:Endpoints:Http:Url", "http://0.0.0.0:5000"),
                 ("Kestrel:Endpoints:Https:Url", "https://0.0.0.0:5001")
@@ -157,7 +157,7 @@ public sealed class TcpBindingGateTests
     [Fact]
     public void EveryFindingSaysWhyTheDriverRefuses()
     {
-        var findings = TcpBindingGate.Inspect(
+        IReadOnlyList<string> findings = TcpBindingGate.Inspect(
             Settings(("Kestrel:Endpoints:Http:Url", "http://0.0.0.0:5000")),
             ["--urls=http://0.0.0.0:8080"],
             name => name is TcpBindingGate.UrlsVariable ? "http://0.0.0.0:9090" : null

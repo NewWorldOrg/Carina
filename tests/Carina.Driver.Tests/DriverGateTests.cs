@@ -16,10 +16,10 @@ public sealed class DriverGateTests
     [Fact]
     public async Task AStreamIsServedToARequestCarryingNoCredentialsBecauseTheDriverAuthenticatesNobody()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
-        using var created = await client.PostAsync(
+        using HttpResponseMessage created = await client.PostAsync(
             DriverEndpoints.Sessions,
             DriverUnderTest.Body(DriverUnderTest.Live("unauthenticated")),
             Soon()
@@ -31,7 +31,7 @@ public sealed class DriverGateTests
             DriverEndpoints.SessionStream(SessionId.Parse("unauthenticated"))
         );
 
-        using var response = await client.SendAsync(
+        using HttpResponseMessage response = await client.SendAsync(
             request,
             HttpCompletionOption.ResponseHeadersRead,
             Soon()
@@ -41,9 +41,9 @@ public sealed class DriverGateTests
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Empty(response.Headers.WwwAuthenticate);
 
-        await using var body = await response.Content.ReadAsStreamAsync(Soon());
+        await using Stream body = await response.Content.ReadAsStreamAsync(Soon());
 
-        var buffer = new byte[TsPacketLength];
+        byte[] buffer = new byte[TsPacketLength];
         await body.ReadExactlyAsync(buffer, Soon());
 
         Assert.Equal(0x47, buffer[0]);
@@ -52,8 +52,8 @@ public sealed class DriverGateTests
     [Fact]
     public async Task ACredentialTheDriverNeverAskedForChangesNothingBecauseNothingHereInspectsOne()
     {
-        await using var driver = await DriverUnderTest.Start();
-        using var client = driver.Client();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
 
         using var anonymous = new HttpRequestMessage(HttpMethod.Get, DriverEndpoints.Health);
         using var presented = new HttpRequestMessage(HttpMethod.Get, DriverEndpoints.Health)
@@ -61,8 +61,8 @@ public sealed class DriverGateTests
             Headers = { Authorization = new AuthenticationHeaderValue("Bearer", "not-a-token") },
         };
 
-        using var withoutCredentials = await client.SendAsync(anonymous, Soon());
-        using var withCredentials = await client.SendAsync(presented, Soon());
+        using HttpResponseMessage withoutCredentials = await client.SendAsync(anonymous, Soon());
+        using HttpResponseMessage withCredentials = await client.SendAsync(presented, Soon());
 
         Assert.Equal(HttpStatusCode.OK, withoutCredentials.StatusCode);
         Assert.Equal(withoutCredentials.StatusCode, withCredentials.StatusCode);
@@ -75,11 +75,11 @@ public sealed class DriverGateTests
     [Fact]
     public async Task TheSocketGrantsNothingToAnyoneOutsideItsGroupBecauseThatIsTheWholeGate()
     {
-        await using var driver = await DriverUnderTest.Start();
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
 
-        var entry = UnixFile.Inspect(driver.SocketPath);
+        UnixEntry entry = UnixFile.Inspect(driver.SocketPath);
 
-        var forOthers =
+        UnixFileMode forOthers =
             entry.Permissions
             & (UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute);
 

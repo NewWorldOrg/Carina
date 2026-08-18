@@ -50,13 +50,13 @@ public sealed class DriverUnderTest : IAsyncDisposable
 
         ClearTheInheritedUrls();
 
-        var saved = DriverConfigurationReader.Parse(File.ReadAllText(ConfigurationPath));
+        DriverConfiguration? saved = DriverConfigurationReader.Parse(File.ReadAllText(ConfigurationPath));
 
         Assert.NotNull(saved);
 
-        var built = DriverHost.Create([], saved, configurationPath: ConfigurationPath);
+        DriverHostResult built = DriverHost.Create([], saved, configurationPath: ConfigurationPath);
 
-        Assert.True(built.TryGetHost(out var restarted), string.Join(" ", built.Problems));
+        Assert.True(built.TryGetHost(out IHost? restarted), string.Join(" ", built.Problems));
 
         host = restarted;
 
@@ -67,7 +67,7 @@ public sealed class DriverUnderTest : IAsyncDisposable
 
     public static DriverConfiguration ConfigurationIn(string root)
     {
-        var recordings = Path.Combine(root, "recordings");
+        string recordings = Path.Combine(root, "recordings");
         Directory.CreateDirectory(recordings);
 
         return new DriverConfiguration(
@@ -86,7 +86,7 @@ public sealed class DriverUnderTest : IAsyncDisposable
 
     public static string LedgerIn(string root, DriverConfiguration configuration)
     {
-        var path = Path.Combine(root, "driver.json");
+        string path = Path.Combine(root, "driver.json");
 
         File.WriteAllText(path, DriverConfigurationWriter.Serialize(configuration));
 
@@ -103,17 +103,17 @@ public sealed class DriverUnderTest : IAsyncDisposable
     {
         ClearTheInheritedUrls();
 
-        var root = NewRoot();
-        var configuration = ConfigurationIn(root);
-        var configurationPath = LedgerIn(root, configuration);
-        var built = DriverHost.Create(
+        string root = NewRoot();
+        DriverConfiguration configuration = ConfigurationIn(root);
+        string configurationPath = LedgerIn(root, configuration);
+        DriverHostResult built = DriverHost.Create(
             args ?? [],
             configuration,
             reshapeServices,
             configurationPath
         );
 
-        Assert.True(built.TryGetHost(out var host), string.Join(" ", built.Problems));
+        Assert.True(built.TryGetHost(out IHost? host), string.Join(" ", built.Problems));
 
         await host.StartAsync();
 
@@ -136,7 +136,7 @@ public sealed class DriverUnderTest : IAsyncDisposable
 
     public HttpClient Client()
     {
-        var path = SocketPath;
+        string path = SocketPath;
 
         return new HttpClient(
             new SocketsHttpHandler

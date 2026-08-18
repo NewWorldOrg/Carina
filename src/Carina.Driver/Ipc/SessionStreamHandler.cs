@@ -18,7 +18,7 @@ public static class SessionStreamHandler
         CancellationToken streamsDetaching = default
     )
     {
-        if (!SessionId.TryParse(context.Request.RouteValues["id"] as string, out var sessionId))
+        if (!SessionId.TryParse(context.Request.RouteValues["id"] as string, out SessionId sessionId))
         {
             await DriverApi.Problem(
                 context,
@@ -30,7 +30,7 @@ public static class SessionStreamHandler
             return;
         }
 
-        if (!TryReadKind(context, out var kind))
+        if (!TryReadKind(context, out SubscriberKind kind))
         {
             await DriverApi.Problem(
                 context,
@@ -42,7 +42,7 @@ public static class SessionStreamHandler
             return;
         }
 
-        if (!manager.TryGet(sessionId, out var session))
+        if (!manager.TryGet(sessionId, out TunerSession? session))
         {
             await DriverApi.Problem(
                 context,
@@ -66,7 +66,7 @@ public static class SessionStreamHandler
             return;
         }
 
-        if (!session.Broadcaster.TrySubscribe(kind, out var subscription))
+        if (!session.Broadcaster.TrySubscribe(kind, out SessionSubscription? subscription))
         {
             if (session.Broadcaster.IsClosed)
             {
@@ -127,7 +127,7 @@ public static class SessionStreamHandler
             await context.Response.StartAsync(leash.Token);
             await context.Response.Body.FlushAsync(leash.Token);
 
-            await foreach (var chunk in subscription.Reader.ReadAllAsync(leash.Token))
+            await foreach (byte[] chunk in subscription.Reader.ReadAllAsync(leash.Token))
             {
                 await context.Response.Body.WriteAsync(chunk, leash.Token);
             }
@@ -187,7 +187,7 @@ public static class SessionStreamHandler
     {
         kind = SubscriberKind.Viewer;
 
-        var asked = context.Request.Query[DriverEndpoints.SubscriberQuery].ToString();
+        string asked = context.Request.Query[DriverEndpoints.SubscriberQuery].ToString();
 
         if (asked.Length is 0 || string.Equals(asked, DriverEndpoints.ViewerSubscriber, StringComparison.Ordinal))
         {

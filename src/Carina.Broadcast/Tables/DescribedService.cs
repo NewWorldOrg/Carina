@@ -20,7 +20,7 @@ public sealed class DescribedService
         Descriptors = descriptors;
 
         if (descriptors.WithTag(DescriptorTags.Service) is { } service
-            && ServiceDescription.TryRead(service, out var description))
+            && ServiceDescription.TryRead(service, out ServiceDescription? description))
         {
             Description = description;
         }

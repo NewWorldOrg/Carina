@@ -6,7 +6,7 @@ public static class AtomicFile
 {
     public static void Replace(string path, string contents)
     {
-        var staged = Stage(path, contents);
+        string staged = Stage(path, contents);
 
         try
         {
@@ -22,13 +22,13 @@ public static class AtomicFile
 
     public static string Stage(string path, string contents)
     {
-        var target = Path.GetFullPath(path);
+        string target = Path.GetFullPath(path);
 
-        var directory =
+        string directory =
             Path.GetDirectoryName(target)
             ?? throw new IOException($"'{path}' has no directory to be written beside.");
 
-        var staged = Path.Combine(
+        string staged = Path.Combine(
             directory,
             $".{Path.GetFileName(target)}.{Guid.NewGuid():N}"
         );

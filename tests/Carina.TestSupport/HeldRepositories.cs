@@ -163,14 +163,14 @@ public sealed class HeldCandidates : ICandidateChannelRepository
         DateTime at,
         CancellationToken cancellationToken)
     {
-        var chosen = Candidates.FirstOrDefault(candidate => candidate.Id.Equals(id));
+        CandidateChannel? chosen = Candidates.FirstOrDefault(candidate => candidate.Id.Equals(id));
 
         if (chosen is null)
         {
             return Task.FromResult<CandidateChannel?>(null);
         }
 
-        foreach (var candidate in Of(chosen.NetworkId, chosen.ServiceId).Where(held => held.IsSelected))
+        foreach (CandidateChannel? candidate in Of(chosen.NetworkId, chosen.ServiceId).Where(held => held.IsSelected))
         {
             candidate.Deselect();
         }
@@ -185,7 +185,7 @@ public sealed class HeldCandidates : ICandidateChannelRepository
         ServiceId serviceId,
         CancellationToken cancellationToken)
     {
-        foreach (var candidate in Of(networkId, serviceId).Where(held => held.IsSelected))
+        foreach (CandidateChannel? candidate in Of(networkId, serviceId).Where(held => held.IsSelected))
         {
             candidate.Deselect();
         }
@@ -195,7 +195,7 @@ public sealed class HeldCandidates : ICandidateChannelRepository
 
     public Task RequireRevalidationAsync(CancellationToken cancellationToken)
     {
-        foreach (var candidate in Candidates)
+        foreach (CandidateChannel candidate in Candidates)
         {
             candidate.RequireRevalidation();
         }
