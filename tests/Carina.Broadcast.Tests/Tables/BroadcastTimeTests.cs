@@ -12,6 +12,33 @@ public sealed class BroadcastTimeTests
         Assert.Equal(new DateTimeOffset(2026, 8, 17, 22, 57, 0, TimeSpan.FromHours(9)), start);
     }
 
+    [Theory]
+    [InlineData(0xEE, 0x81, 2026, 1, 17)]
+    [InlineData(0xEE, 0xAB, 2026, 2, 28)]
+    [InlineData(0xEB, 0xD1, 2024, 2, 29)]
+    [InlineData(0xED, 0x3F, 2025, 3, 1)]
+    [InlineData(0xEF, 0xDD, 2026, 12, 31)]
+    [InlineData(0xEF, 0x55, 2026, 8, 17)]
+    public void TheDayIsReadBackWhicheverSideOfTheYearItFallsOn(
+        byte high,
+        byte low,
+        int year,
+        int month,
+        int day)
+    {
+        Assert.True(BroadcastTime.TryReadStart([high, low, 0x00, 0x00, 0x00], out var start));
+
+        Assert.Equal(new DateTimeOffset(year, month, day, 0, 0, 0, TimeSpan.FromHours(9)), start);
+    }
+
+    [Fact]
+    public void AStartTheBroadcastLeavesOpenIsRefusedRatherThanGuessed()
+    {
+        Assert.False(BroadcastTime.TryReadStart([0xFF, 0xFF, 0xFF, 0xFF, 0xFF], out var start));
+
+        Assert.Null(start);
+    }
+
     [Fact]
     public void AnHourNoClockShowsIsRefusedRatherThanRolledIntoTheNextDay()
     {

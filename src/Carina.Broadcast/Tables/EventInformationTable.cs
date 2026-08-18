@@ -17,8 +17,13 @@ public sealed class EventInformationTable
 
     private const int EventHeaderSize = 12;
 
-    private EventInformationTable(Section section, ReadOnlySpan<byte> header, IReadOnlyList<DescribedEvent> events)
+    private EventInformationTable(
+        Section section,
+        ReadOnlySpan<byte> header,
+        IReadOnlyList<DescribedEvent> events,
+        int discarded)
     {
+        DiscardedEvents = discarded;
         ServiceId = section.TableIdExtension;
         TransportStreamId = (header[0] << 8) | header[1];
         OriginalNetworkId = (header[2] << 8) | header[3];
@@ -51,6 +56,8 @@ public sealed class EventInformationTable
 
     public IReadOnlyList<DescribedEvent> Events { get; }
 
+    public int DiscardedEvents { get; }
+
     public bool IsPresentFollowing => TableId == PresentFollowingActualTableId;
 
     public static bool CarriesEvents(int tableId)
@@ -75,6 +82,7 @@ public sealed class EventInformationTable
 
         var span = body.Span;
         var events = new List<DescribedEvent>();
+        var discarded = 0;
         var at = HeaderSize;
 
         while (at < body.Length)
@@ -91,19 +99,18 @@ public sealed class EventInformationTable
                 return Rejected(TableDefect.LoopOverrun);
             }
 
-            if (!BroadcastTime.TryReadStart(span.Slice(at + 2, BroadcastTime.StartSize), out var startsAt))
-            {
-                return Rejected(TableDefect.UnreadableTime);
-            }
-
-            if (!BroadcastTime.TryReadDuration(span.Slice(at + 7, BroadcastTime.DurationSize), out var runs))
-            {
-                return Rejected(TableDefect.UnreadableTime);
-            }
-
             if (!DescriptorLoop.TryRead(body.Slice(at + EventHeaderSize, descriptorsLength), out var descriptors))
             {
                 return Rejected(TableDefect.MalformedDescriptor);
+            }
+
+            if (!BroadcastTime.TryReadStart(span.Slice(at + 2, BroadcastTime.StartSize), out var startsAt)
+                || !BroadcastTime.TryReadDuration(span.Slice(at + 7, BroadcastTime.DurationSize), out var runs))
+            {
+                discarded++;
+                at += EventHeaderSize + descriptorsLength;
+
+                continue;
             }
 
             events.Add(new DescribedEvent(
@@ -118,7 +125,7 @@ public sealed class EventInformationTable
         }
 
         return new TableRead<EventInformationTable>.Parsed(
-            new EventInformationTable(section, span[..HeaderSize], events));
+            new EventInformationTable(section, span[..HeaderSize], events, discarded));
     }
 
     private static RunningStatus Status(int declared)

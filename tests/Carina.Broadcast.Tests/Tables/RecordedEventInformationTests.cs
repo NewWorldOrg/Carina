@@ -1,5 +1,6 @@
 using System.Reflection;
 
+using Carina.Broadcast.Descriptors;
 using Carina.Broadcast.Sections;
 using Carina.Broadcast.Tables;
 using Carina.BroadcastTestSupport;
@@ -64,6 +65,42 @@ public sealed class RecordedEventInformationTests
         Assert.Equal(
             table.Events.Take(2).Select(carried => carried.EndsAt),
             table.Events.Skip(1).Select(carried => (DateTimeOffset?)carried.StartsAt));
+    }
+
+    [Fact]
+    public void TheLongDescriptionIsGatheredUnderTheHeadingsItWasBroadcastWith()
+    {
+        var detailed = Assert.Single(Table(2).Events).Detailed;
+
+        Assert.NotNull(detailed);
+        Assert.Equal("jpn", detailed.Language);
+
+        Assert.Equal(
+            ["番組内容", "公式ページ", "おことわり"],
+            detailed.Items.Select(item => item.Heading));
+
+        Assert.StartsWith(
+            "このあとすぐ始まる",
+            detailed.Items[0].Text,
+            StringComparison.Ordinal);
+
+        Assert.Equal("番組の内容と放送時間は変更になる可能性があります。", detailed.Items[^1].Text);
+    }
+
+    [Fact]
+    public void TheDescriptionArrivesSpreadOverSeveralDescriptors()
+    {
+        var carried = Assert.Single(Table(2).Events).Descriptors
+            .Count(descriptor => descriptor.Tag == DescriptorTags.ExtendedEvent);
+
+        Assert.True(carried > 1, $"expected the recording to spread the description, saw {carried} descriptor");
+        Assert.DoesNotContain(Assert.Single(Table(2).Events).Detailed!.Items, item => item.Heading.Length == 0);
+    }
+
+    [Fact]
+    public void ASectionWithoutALongDescriptionSaysSoRatherThanInventingOne()
+    {
+        Assert.Null(Assert.Single(Table(0).Events).Detailed);
     }
 
     [Fact]

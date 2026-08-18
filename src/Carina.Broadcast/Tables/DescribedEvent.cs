@@ -27,4 +27,7 @@ public sealed record DescribedEvent(
             return null;
         }
     }
+
+    public ExtendedEventDescription? Detailed
+        => ExtendedEventDescription.TryRead(Descriptors, out var detailed) ? detailed : null;
 }

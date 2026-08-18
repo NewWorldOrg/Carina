@@ -9,6 +9,4 @@ public enum TableDefect
     LoopOverrun = 3,
 
     MalformedDescriptor = 4,
-
-    UnreadableTime = 5,
 }

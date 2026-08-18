@@ -31,11 +31,27 @@ public sealed class EventInformationTableTests
     }
 
     [Fact]
-    public void AnEventWhoseStartIsNotAReadableTimeIsRefused()
+    public void AnEventWhoseStartIsNotAReadableTimeIsDroppedAndCounted()
     {
-        Assert.Equal(
-            TableDefect.UnreadableTime,
-            Refusal([.. Header(), .. Event(hour: 0x2A)]));
+        var table = Parsed([.. Header(), .. Event(hour: 0x2A), .. Event()]);
+
+        Assert.Equal(1, table.DiscardedEvents);
+        Assert.Single(table.Events);
+    }
+
+    [Fact]
+    public void AStartTheBroadcastLeavesOpenCostsThatEventAndNoOther()
+    {
+        var table = Parsed([.. Header(), .. Event(startUndefined: true), .. Event()]);
+
+        Assert.Equal(1, table.DiscardedEvents);
+        Assert.Single(table.Events);
+    }
+
+    [Fact]
+    public void ASectionWhoseEventsAreAllReadableCountsNoneDiscarded()
+    {
+        Assert.Equal(0, Parsed([.. Header(), .. Event()]).DiscardedEvents);
     }
 
     [Fact]
@@ -132,15 +148,29 @@ public sealed class EventInformationTableTests
 
     private static byte[] Header() => [0x7F, 0xE3, 0x7F, 0xE3, 0x00, 0x4E];
 
+    private static EventInformationTable Parsed(byte[] body)
+        => Assert.IsType<TableRead<EventInformationTable>.Parsed>(
+            EventInformationTable.Read(CarriedSection.Of(new SectionWriter
+            {
+                TableId = EventInformationTable.PresentFollowingActualTableId,
+                TableIdExtension = SomeService,
+                Body = body,
+            }))).Table;
+
     private static byte[] Event(
         int hour = 0x22,
         int status = 0,
         int descriptorsLength = 0,
-        bool openEnded = false)
+        bool openEnded = false,
+        bool startUndefined = false)
         =>
         [
             0x00, 0x01,
-            0xEF, 0x55, (byte)hour, 0x57, 0x00,
+            startUndefined ? (byte)0xFF : (byte)0xEF,
+            startUndefined ? (byte)0xFF : (byte)0x55,
+            startUndefined ? (byte)0xFF : (byte)hour,
+            startUndefined ? (byte)0xFF : (byte)0x57,
+            startUndefined ? (byte)0xFF : (byte)0x00,
             openEnded ? (byte)0xFF : (byte)0x00, openEnded ? (byte)0xFF : (byte)0x03, openEnded ? (byte)0xFF : (byte)0x00,
             (byte)((status << 5) | ((descriptorsLength >> 8) & 0x0F)), (byte)(descriptorsLength & 0xFF),
         ];
