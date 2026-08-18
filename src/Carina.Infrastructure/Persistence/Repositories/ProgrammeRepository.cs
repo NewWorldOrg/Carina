@@ -57,6 +57,16 @@ public sealed class ProgrammeRepository(CarinaDbContext context) : IProgrammeRep
         await context.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<Programme>> ListEndedBeforeAsync(
+        DateTime at,
+        int rows,
+        CancellationToken cancellationToken)
+        => await context.Set<Programme>()
+            .Where(programme => programme.EndsAt != null && programme.EndsAt < at)
+            .OrderBy(programme => programme.EndsAt)
+            .Take(rows)
+            .ToListAsync(cancellationToken);
+
     public async Task<int> ForgetEndedBeforeAsync(DateTime at, CancellationToken cancellationToken)
         => await context.Set<Programme>()
             .Where(programme => programme.EndsAt == null ? programme.StartsAt < at : programme.EndsAt < at)

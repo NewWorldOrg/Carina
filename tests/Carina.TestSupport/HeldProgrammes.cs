@@ -60,6 +60,18 @@ public sealed class HeldProgrammes : IProgrammeRepository
     public Task SaveAsync(Programme programme, CancellationToken cancellationToken)
         => Task.CompletedTask;
 
+    public Task<IReadOnlyList<Programme>> ListEndedBeforeAsync(
+        DateTime at,
+        int rows,
+        CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<Programme>>(
+        [
+            .. Programmes
+                .Where(programme => programme.EndsAt is { } endsAt && endsAt < at)
+                .OrderBy(programme => programme.EndsAt)
+                .Take(rows),
+        ]);
+
     public Task<int> ForgetEndedBeforeAsync(DateTime at, CancellationToken cancellationToken)
         => Task.FromResult(0);
 

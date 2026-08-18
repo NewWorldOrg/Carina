@@ -76,10 +76,8 @@ public sealed class EpgCollector(
             walked.CameBackShort);
 
         await scope.ServiceProvider
-            .GetRequiredService<IProgrammeRepository>()
-            .ForgetEndedBeforeAsync(
-                clock.GetUtcNow().UtcDateTime - settings.KeepEndedProgrammes,
-                stoppingToken);
+            .GetRequiredService<ArchiveTransfer>()
+            .RunAsync(stoppingToken);
     }
 
     private void Stop(CancellationTokenSource interruption)
