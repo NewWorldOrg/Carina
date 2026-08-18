@@ -122,6 +122,23 @@ public sealed class RecordedEventInformationTests
     }
 
     [Fact]
+    public void AShortListeningLeavesTheScheduleUnfinishedAndSaysWhichSegmentsAreMissing()
+    {
+        var progress = new ScheduleProgress();
+
+        foreach (var section in Sections())
+        {
+            if (EventInformationTable.Read(section) is TableRead<EventInformationTable>.Parsed parsed)
+            {
+                progress.Saw(parsed.Table);
+            }
+        }
+
+        Assert.Equal(ScheduleCompleteness.Incomplete, progress.Completeness);
+        Assert.NotEmpty(progress.SegmentsAwaited(EventInformationTable.FirstScheduleActualTableId));
+    }
+
+    [Fact]
     public void ASectionOfADifferentTableIsRefusedRatherThanRead()
     {
         var refused = Assert.IsType<TableRead<EventInformationTable>.Rejected>(
