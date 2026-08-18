@@ -90,6 +90,7 @@ public sealed class ProgrammeWriter(IProgrammeRepository programmes, IAtomicWrit
                 ? []
                 : [.. detailed.Items.Select(item => new ProgrammeItem(item.Heading, item.Text))],
             Related = [.. Related(groupings)],
+            HasSubtitles = carried.DataContents.Any(content => content.CarriesCaptions),
             Source = Source(table),
         };
     }
