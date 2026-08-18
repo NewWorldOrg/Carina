@@ -146,7 +146,8 @@ public sealed class RideAlongHarvesterTests(RepositoryDatabase database)
         services.AddScoped(scope => new ProgrammeWriter(
             scope.GetRequiredService<IProgrammeRepository>(),
             new UnguardedWrites(),
-            new StillClock()));
+            new StillClock(),
+            new SilentEvents()));
         services.AddSingleton<IDriverClient>(driver);
         services.AddSingleton(settings ?? new CollectionSettings
         {

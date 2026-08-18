@@ -158,7 +158,8 @@ public sealed class EpgCollectorTests(RepositoryDatabase database)
         services.AddScoped(scope => new ProgrammeWriter(
             scope.GetRequiredService<IProgrammeRepository>(),
             new UnguardedWrites(),
-            new StillClock()));
+            new StillClock(),
+            new SilentEvents()));
         services.AddScoped(scope => new StreamVisitor(
             scope.GetRequiredService<IDriverClient>(),
             scope.GetRequiredService<ProgrammeWriter>(),
@@ -169,6 +170,7 @@ public sealed class EpgCollectorTests(RepositoryDatabase database)
             scope.GetRequiredService<StreamVisitor>(),
             scope.GetRequiredService<RescanNoticeBoard>(),
             scope.GetRequiredService<ITuneFailureReporter>(),
+            new SilentEvents(),
             scope.GetRequiredService<CollectionSettings>(),
             scope.GetRequiredService<TimeProvider>(),
             NullLogger<CollectionRound>.Instance));

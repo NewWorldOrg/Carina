@@ -1,4 +1,6 @@
+using Carina.Contracts;
 using Carina.Domain.Channels;
+using Carina.Domain.Events;
 using Carina.Domain.Programmes;
 
 using Microsoft.Extensions.Logging;
@@ -13,6 +15,7 @@ public sealed class CollectionRound(
     StreamVisitor visitor,
     RescanNoticeBoard rescans,
     ITuneFailureReporter tuning,
+    IAppEventPublisher events,
     CollectionSettings settings,
     TimeProvider clock,
     ILogger<CollectionRound> logger)
@@ -198,6 +201,7 @@ public sealed class CollectionRound(
             await visits.SaveAsync(
                 StreamVisit.Record(stream.NetworkId, stream.TransportStreamId, visit.Outcome, at, took),
                 abort);
+            events.Signal(AppEventName.EpgCollection);
 
             return;
         }
@@ -205,6 +209,7 @@ public sealed class CollectionRound(
         held.Record(visit.Outcome, at, took);
 
         await visits.SaveAsync(held, abort);
+        events.Signal(AppEventName.EpgCollection);
     }
 
     private async Task<IReadOnlyList<StreamCoverage>> CoverageAsync(
