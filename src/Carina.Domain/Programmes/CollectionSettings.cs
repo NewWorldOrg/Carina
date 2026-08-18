@@ -18,6 +18,12 @@ public sealed record CollectionSettings
 
     public TimeSpan LongestBackOff { get; init; } = TimeSpan.FromHours(24);
 
+    public bool RidesAlong { get; init; } = true;
+
+    public TimeSpan BetweenRideAlongSaves { get; init; } = TimeSpan.FromMinutes(5);
+
+    public TimeSpan BetweenSessionChecks { get; init; } = TimeSpan.FromSeconds(30);
+
     public RotationBackoff WhenTunersAreFull { get; init; } =
         new(TimeSpan.FromSeconds(30), 2, TimeSpan.FromMinutes(5), 4);
 }

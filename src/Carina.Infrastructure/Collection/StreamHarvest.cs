@@ -83,6 +83,20 @@ public sealed class StreamHarvest
         }
     }
 
+    public IReadOnlyList<EventInformationTable> TakeWhatIsGathered()
+    {
+        if (tables.Count == 0)
+        {
+            return [];
+        }
+
+        EventInformationTable[] taken = [.. tables];
+
+        tables.Clear();
+
+        return taken;
+    }
+
     public HarvestedStream Conclude(bool interrupted, bool anyBytes)
     {
         if (interrupted)

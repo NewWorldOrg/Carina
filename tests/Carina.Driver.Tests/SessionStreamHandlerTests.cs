@@ -377,6 +377,28 @@ public sealed class SessionStreamHandlerTests : IDisposable
     }
 
     [Fact]
+    public async Task ARiderThatCameAlongForTheGuideIsServedAndDoesNotHoldTheSessionUp()
+    {
+        TunerSessionManager manager = Manager();
+        TunerSession session = Begin(manager, "ridden-one");
+        (HttpContext? context, RecordedLifetime? lifetime, RecordedBody? body) = Ask(
+            "ridden-one",
+            DriverEndpoints.PiggybackSubscriber);
+
+        Task streaming = SessionStreamHandler.Invoke(context, manager);
+
+        await WaitForBytes(body);
+
+        Assert.Equal(1, session.Broadcaster.SubscriberCount);
+
+        lifetime.Abort();
+
+        await streaming.WaitAsync(Patience);
+
+        Assert.Equal(0, session.Broadcaster.SubscriberCount);
+    }
+
+    [Fact]
     public async Task ASubscriberKindTheDriverDoesNotKnowIsRefused()
     {
         TunerSessionManager manager = Manager();

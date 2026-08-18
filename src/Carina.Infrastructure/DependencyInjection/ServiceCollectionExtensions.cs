@@ -78,6 +78,7 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<AppEventHubLifetime>();
         services.AddHostedService(provider => provider.GetRequiredService<ScanRunner>());
         services.AddHostedService<EpgCollector>();
+        services.AddHostedService<RideAlongHarvester>();
 
         return services;
     }
