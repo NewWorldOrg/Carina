@@ -220,13 +220,16 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
 
     public async Task<DriverCall<SessionSnapshot>> StopSessionAsync(
         SessionId sessionId,
+        string reason,
         CancellationToken cancellationToken)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+
         try
         {
             using var patience = Patience(cancellationToken);
             using var response = await http.DeleteAsync(
-                DriverEndpoints.Session(sessionId),
+                $"{DriverEndpoints.Session(sessionId)}?reason={Uri.EscapeDataString(reason)}",
                 patience.Token);
 
             return await ReadAsync(

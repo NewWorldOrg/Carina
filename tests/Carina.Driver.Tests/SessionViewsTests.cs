@@ -87,6 +87,53 @@ public sealed class SessionViewsTests : IDisposable
         return session;
     }
 
+    [Theory]
+    [InlineData(SessionPurpose.Scan)]
+    [InlineData(SessionPurpose.Survey)]
+    [InlineData(SessionPurpose.SurveyNow)]
+    public void AWalkingSessionEndsAtTheDriversOwnLimitWhenTheAppNamesNoEnd(SessionPurpose purpose)
+    {
+        var session = Begin(Manager(), "walk", purpose: purpose);
+
+        Assert.Equal(
+            Start.AddMinutes(DriverConfiguration.DefaultWalkSessionMinutes),
+            session.EndsAt);
+    }
+
+    [Fact]
+    public void AWalkingSessionAskingForLongerThanTheDriverAllowsIsCutToTheLimit()
+    {
+        var session = Begin(
+            Manager(),
+            "walk",
+            purpose: SessionPurpose.Scan,
+            endsAt: Start.AddHours(4));
+
+        Assert.Equal(
+            Start.AddMinutes(DriverConfiguration.DefaultWalkSessionMinutes),
+            session.EndsAt);
+    }
+
+    [Fact]
+    public void AWalkingSessionAskingForLessThanTheLimitKeepsItsOwnEnd()
+    {
+        var session = Begin(
+            Manager(),
+            "walk",
+            purpose: SessionPurpose.Survey,
+            endsAt: Start.AddMinutes(5));
+
+        Assert.Equal(Start.AddMinutes(5), session.EndsAt);
+    }
+
+    [Fact]
+    public void ALiveSessionIsNotCutByTheWalkingLimit()
+    {
+        var session = Begin(Manager(), "live", endsAt: Start.AddHours(4));
+
+        Assert.Equal(Start.AddHours(4), session.EndsAt);
+    }
+
     [Fact]
     public void ASessionCarriesItsStateAndItsCounters()
     {

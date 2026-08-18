@@ -58,7 +58,7 @@ public sealed class TunedStreamProbe(IDriverClient driver, ScanSettings settings
         }
         finally
         {
-            await driver.StopSessionAsync(session.SessionId, CancellationToken.None);
+            await driver.StopSessionAsync(session.SessionId, "the walk moves on", CancellationToken.None);
         }
     }
 

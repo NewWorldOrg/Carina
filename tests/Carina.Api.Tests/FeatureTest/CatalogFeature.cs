@@ -70,6 +70,7 @@ internal sealed class TunerHoldingDriverClient : IDriverClient
 
     public Task<DriverCall<SessionSnapshot>> StopSessionAsync(
         SessionId sessionId,
+        string reason,
         CancellationToken cancellationToken)
         => throw new NotSupportedException();
 

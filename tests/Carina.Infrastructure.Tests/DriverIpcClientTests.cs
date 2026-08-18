@@ -435,10 +435,12 @@ public sealed class DriverIpcClientTests
 
         var call = await client.StopSessionAsync(
             SessionId.Parse("rec-1"),
+            "walk over & done",
             CancellationToken.None);
 
         Assert.Equal(DriverCallOutcome.Reached, call.Outcome);
         Assert.False(call.TryGetValue(out _));
+        Assert.Equal("walk over & done", driver.LastStopReason);
     }
 
     [Fact]

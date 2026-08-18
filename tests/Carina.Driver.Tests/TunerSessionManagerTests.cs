@@ -438,16 +438,16 @@ public sealed class TunerSessionManagerTests : IDisposable
 
         Assert.Equal(
             SessionStopOutcome.Stopped,
-            await manager.StopAsync(SessionId.Parse("s-1"), CancellationToken.None)
+            await manager.StopAsync(SessionId.Parse("s-1"), "test", CancellationToken.None)
         );
         Assert.True(session.Concluded);
         Assert.Equal(
             SessionStopOutcome.AlreadyEnded,
-            await manager.StopAsync(SessionId.Parse("s-1"), CancellationToken.None)
+            await manager.StopAsync(SessionId.Parse("s-1"), "test", CancellationToken.None)
         );
         Assert.Equal(
             SessionStopOutcome.NoSuchSession,
-            await manager.StopAsync(SessionId.Parse("s-9"), CancellationToken.None)
+            await manager.StopAsync(SessionId.Parse("s-9"), "test", CancellationToken.None)
         );
     }
 
@@ -1118,6 +1118,7 @@ public sealed class TunerSessionManagerTests : IDisposable
                 DriverCapabilities.Live,
                 DriverCapabilities.QualityMetering,
                 DriverCapabilities.DeviceDetection,
+                DriverCapabilities.SessionStopReason,
                 DriverCapabilities.TunerLedger,
                 DriverCapabilities.LiveTunerToggle,
                 DriverCapabilities.TypedTuning,

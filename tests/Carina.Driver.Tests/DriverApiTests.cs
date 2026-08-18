@@ -280,7 +280,7 @@ public sealed class DriverApiTests
         Assert.Equal("draining", problem.Title);
 
         using var stopped = await client.DeleteAsync(
-            DriverEndpoints.Session(SessionId.Parse("lingering")),
+            $"{DriverEndpoints.Session(SessionId.Parse("lingering"))}?reason=test",
             Soon()
         );
 
@@ -706,7 +706,7 @@ public sealed class DriverApiTests
         );
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
 
-        var path = DriverEndpoints.Session(SessionId.Parse("stopped"));
+        var path = $"{DriverEndpoints.Session(SessionId.Parse("stopped"))}?reason=test";
 
         using var stopping = await client.DeleteAsync(path, Soon());
         Assert.Equal(HttpStatusCode.OK, stopping.StatusCode);
@@ -755,7 +755,7 @@ public sealed class DriverApiTests
         );
 
         using var stopping = await client.DeleteAsync(
-            DriverEndpoints.Session(SessionId.Parse("stuck")),
+            $"{DriverEndpoints.Session(SessionId.Parse("stuck"))}?reason=test",
             Soon()
         );
 
@@ -812,13 +812,73 @@ public sealed class DriverApiTests
     }
 
     [Fact]
+    public async Task StoppingASessionWithoutSayingWhyIsRefused()
+    {
+        await using var driver = await DriverUnderTest.Start();
+        using var client = driver.Client();
+
+        using var created = await client.PostAsync(
+            DriverEndpoints.Sessions,
+            DriverUnderTest.Body(DriverUnderTest.Live("unexplained")),
+            Soon()
+        );
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+
+        using var response = await client.DeleteAsync(
+            DriverEndpoints.Session(SessionId.Parse("unexplained")),
+            Soon()
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+
+        var problem = await DriverUnderTest.Read(response, DriverJson.Context.DriverProblem);
+
+        Assert.NotNull(problem);
+        Assert.Equal("reasonRequired", problem.Title);
+    }
+
+    [Fact]
+    public async Task StoppingASessionTellsWhoeverIsWatching()
+    {
+        await using var driver = await DriverUnderTest.Start();
+        using var client = driver.Client();
+
+        using var created = await client.PostAsync(
+            DriverEndpoints.Sessions,
+            DriverUnderTest.Body(DriverUnderTest.Live("watched")),
+            Soon()
+        );
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+
+        var hub = driver.Service<DriverEventHub>();
+
+        Assert.True(hub.TryListen(out var listener));
+
+        using (listener)
+        {
+            using var stopped = await client.DeleteAsync(
+                $"{DriverEndpoints.Session(SessionId.Parse("watched"))}?reason=test",
+                Soon()
+            );
+
+            Assert.Equal(HttpStatusCode.OK, stopped.StatusCode);
+
+            var taken = await listener.Take(
+                new CancellationTokenSource(TimeSpan.FromSeconds(5)).Token
+            );
+
+            Assert.Contains(DriverEvents.SessionStopRequested, taken);
+        }
+    }
+
+    [Fact]
     public async Task StoppingASessionThatIsNotThereIsNotFound()
     {
         await using var driver = await DriverUnderTest.Start();
         using var client = driver.Client();
 
         using var response = await client.DeleteAsync(
-            DriverEndpoints.Session(SessionId.Parse("absent")),
+            $"{DriverEndpoints.Session(SessionId.Parse("absent"))}?reason=test",
             Soon()
         );
 
@@ -913,7 +973,7 @@ public sealed class DriverApiTests
 
         using var stopper = driver.Client();
         using var stopped = await stopper.DeleteAsync(
-            DriverEndpoints.Session(SessionId.Parse("clean")),
+            $"{DriverEndpoints.Session(SessionId.Parse("clean"))}?reason=test",
             Soon()
         );
         Assert.Equal(HttpStatusCode.OK, stopped.StatusCode);
@@ -1021,7 +1081,7 @@ public sealed class DriverApiTests
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
 
         using var stopped = await client.DeleteAsync(
-            DriverEndpoints.Session(SessionId.Parse("over")),
+            $"{DriverEndpoints.Session(SessionId.Parse("over"))}?reason=test",
             Soon()
         );
         Assert.Equal(HttpStatusCode.OK, stopped.StatusCode);

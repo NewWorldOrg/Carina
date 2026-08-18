@@ -54,7 +54,8 @@ public sealed record DriverConfiguration(
     TunerSettings? Tuner,
     IReadOnlyList<DeviceSettings>? Devices,
     int SocketGroupId = DriverConfiguration.DefaultSocketGroupId,
-    int LiveSessionMinutes = DriverConfiguration.DefaultLiveSessionMinutes
+    int LiveSessionMinutes = DriverConfiguration.DefaultLiveSessionMinutes,
+    int WalkSessionMinutes = DriverConfiguration.DefaultWalkSessionMinutes
 )
 {
     public const string SocketGroupName = "carina";
@@ -62,6 +63,8 @@ public sealed record DriverConfiguration(
     public const int DefaultSocketGroupId = 10001;
 
     public const int DefaultLiveSessionMinutes = 240;
+
+    public const int DefaultWalkSessionMinutes = 30;
 
     public bool TryResolveOutputRoot(string? name, [NotNullWhen(true)] out string? path)
     {

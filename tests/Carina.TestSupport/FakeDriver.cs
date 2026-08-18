@@ -48,6 +48,8 @@ public sealed class FakeDriver : IAsyncDisposable
 
     public StartSessionRequest? LastStartRequest { get; private set; }
 
+    public string? LastStopReason { get; private set; }
+
     public DriverProblem? RefuseEverythingWith { get; set; }
 
     public int RefusalStatus { get; set; } = StatusCodes.Status503ServiceUnavailable;
@@ -255,6 +257,8 @@ public sealed class FakeDriver : IAsyncDisposable
 
     private async Task StopSessionAsync(HttpContext context)
     {
+        LastStopReason = context.Request.Query["reason"].ToString();
+
         if (await HandledAsync(context))
         {
             return;

@@ -34,6 +34,18 @@ public sealed class VersionSkewTests
     }
 
     [Fact]
+    public void AHurriedSurveyReadsBackAsItself()
+    {
+        var session = DriverJson.Deserialize(
+            """{"sessionId":"s-1","purpose":"surveyNow","deviceId":"a0","state":"active","startedAt":"2026-08-08T21:04:00+09:00"}""",
+            DriverJson.Context.SessionSnapshot
+        );
+
+        Assert.NotNull(session);
+        Assert.Equal(SessionPurpose.SurveyNow, session.Purpose);
+    }
+
+    [Fact]
     public void AnAnswerWithNewerFieldsAndValuesStillReads()
     {
         var session = DriverJson.Deserialize(

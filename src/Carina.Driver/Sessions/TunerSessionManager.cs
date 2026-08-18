@@ -310,8 +310,32 @@ public sealed class TunerSessionManager(
             : TakeTheTuner(request, grant, directory, now, endsAt);
     }
 
-    private DateTimeOffset EndOf(StartSessionRequest request, DateTimeOffset now) =>
-        request.EndsAt ?? now.AddMinutes(configuration.LiveSessionMinutes);
+    private DateTimeOffset EndOf(StartSessionRequest request, DateTimeOffset now)
+    {
+        if (!SessionPurposes.ReadsEveryPacket(request.Purpose))
+        {
+            return request.EndsAt ?? now.AddMinutes(configuration.LiveSessionMinutes);
+        }
+
+        var latest = now.AddMinutes(configuration.WalkSessionMinutes);
+
+        if (request.EndsAt is { } asked && asked < latest)
+        {
+            return asked;
+        }
+
+        if (request.EndsAt is { } cut)
+        {
+            logger.LogInformation(
+                "Session {SessionId} asked to run until {Asked} and was cut to {Granted}.",
+                request.SessionId.Value,
+                cut,
+                latest
+            );
+        }
+
+        return latest;
+    }
 
     private bool TryResolveOutput(
         StartSessionRequest request,
@@ -764,6 +788,7 @@ public sealed class TunerSessionManager(
 
     public async Task<SessionStopOutcome> StopAsync(
         SessionId sessionId,
+        string reason,
         CancellationToken cancellationToken
     )
     {
@@ -774,6 +799,11 @@ public sealed class TunerSessionManager(
                 : SessionStopOutcome.NoSuchSession;
         }
 
+        logger.LogInformation(
+            "Session {SessionId} was asked to stop: {Reason}",
+            sessionId.Value,
+            reason
+        );
         session.Stop();
 
         try

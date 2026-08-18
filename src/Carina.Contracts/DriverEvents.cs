@@ -16,6 +16,8 @@ public static class DriverEvents
 
     public const string TunerHealthChanged = "tunerHealthChanged";
 
+    public const string SessionStopRequested = "sessionStopRequested";
+
     public static readonly IReadOnlyList<string> All =
     [
         Tuners,
@@ -25,6 +27,7 @@ public static class DriverEvents
         SessionTuned,
         SessionLockLost,
         TunerHealthChanged,
+        SessionStopRequested,
     ];
 
     public static bool IsKnown(string? name) =>

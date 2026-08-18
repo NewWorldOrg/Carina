@@ -78,7 +78,7 @@ public static class DriverApi
 
         RequestDelegate startSession = context => StartSession(context, manager, hello);
 
-        RequestDelegate stopSession = context => StopSession(context, manager, hello);
+        RequestDelegate stopSession = context => StopSession(context, manager, hub, hello);
 
         var lifecycle = app.Services.GetRequiredService<DriverLifecycle>();
 
@@ -451,6 +451,7 @@ public static class DriverApi
     private static async Task StopSession(
         HttpContext context,
         TunerSessionManager manager,
+        DriverEventHub hub,
         DriverHello hello
     )
     {
@@ -466,7 +467,24 @@ public static class DriverApi
             return;
         }
 
-        var outcome = await manager.StopAsync(sessionId, context.RequestAborted);
+        if (string.IsNullOrWhiteSpace(context.Request.Query["reason"]))
+        {
+            await Problem(
+                context,
+                StatusCodes.Status400BadRequest,
+                "reasonRequired",
+                "Say why this session is being stopped: DELETE /sessions/{id}?reason=..."
+            );
+
+            return;
+        }
+
+        var outcome = await manager.StopAsync(sessionId, context.Request.Query["reason"].ToString(), context.RequestAborted);
+
+        if (outcome is not SessionStopOutcome.NoSuchSession)
+        {
+            hub.Signal(DriverEvents.SessionStopRequested);
+        }
 
         if (outcome is SessionStopOutcome.NoSuchSession)
         {

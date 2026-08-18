@@ -12,6 +12,8 @@ public static class DriverCapabilities
 
     public const string SignalQuality = "signalQuality";
 
+    public const string SessionStopReason = "sessionStopReason";
+
     public const string LiveTunerToggle = "liveTunerToggle";
 
     public const string TypedTuning = "typedTuning";
