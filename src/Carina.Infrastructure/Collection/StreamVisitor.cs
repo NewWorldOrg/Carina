@@ -10,13 +10,19 @@ namespace Carina.Infrastructure.Collection;
 public sealed record VisitResult(
     VisitOutcome Outcome,
     ProgrammesWritten Written,
-    string? Detail);
+    string? Detail)
+{
+    public long UnreadablePackets { get; init; }
+
+    public int RejectedSections { get; init; }
+
+    public int RejectedTables { get; init; }
+}
 
 public sealed class StreamVisitor(
     IDriverClient driver,
     ProgrammeWriter writer,
-    CollectionSettings settings,
-    TimeProvider clock)
+    CollectionSettings settings)
 {
     public async Task<VisitResult> VisitAsync(
         TuningParameters tuning,
@@ -78,8 +84,10 @@ public sealed class StreamVisitor(
         var harvest = new StreamHarvest();
         var anyBytes = false;
         var interrupted = false;
-        var began = clock.GetTimestamp();
         var buffer = ArrayPool<byte>.Shared.Rent(64 * 188);
+        using var reading = CancellationTokenSource.CreateLinkedTokenSource(abort);
+
+        reading.CancelAfter(settings.LongestVisit);
 
         try
         {
@@ -87,16 +95,11 @@ public sealed class StreamVisitor(
             {
                 while (!harvest.CanLetGo)
                 {
-                    if (clock.GetElapsedTime(began) > settings.LongestVisit)
-                    {
-                        break;
-                    }
-
-                    var got = await stream.ReadAsync(buffer, abort);
+                    var got = await stream.ReadAsync(buffer, reading.Token);
 
                     if (got == 0)
                     {
-                        interrupted = harvest.Progress.Services.Count > 0 || anyBytes;
+                        interrupted = anyBytes;
 
                         break;
                     }
@@ -107,6 +110,13 @@ public sealed class StreamVisitor(
             }
         }
         catch (OperationCanceledException) when (abort.IsCancellationRequested)
+        {
+            interrupted = true;
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (IOException)
         {
             interrupted = true;
         }
@@ -121,11 +131,19 @@ public sealed class StreamVisitor(
         }
 
         var done = harvest.Conclude(interrupted, anyBytes);
+
+        using var writing = new CancellationTokenSource(settings.LongestVisit);
+
         var written = done.Tables.Count > 0
-            ? await writer.WriteAsync(done.Tables, CancellationToken.None)
+            ? await writer.WriteAsync(done.Tables, writing.Token)
             : new ProgrammesWritten(0, 0, 0);
 
-        return new VisitResult(done.Outcome, written, null);
+        return new VisitResult(done.Outcome, written, null)
+        {
+            UnreadablePackets = done.UnreadablePackets,
+            RejectedSections = done.RejectedSections,
+            RejectedTables = done.RejectedTables,
+        };
     }
 
     private async Task<bool> LockWasLostAsync(SessionId sessionId, CancellationToken cancellationToken)

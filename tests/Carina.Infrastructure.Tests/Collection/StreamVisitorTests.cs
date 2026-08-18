@@ -83,12 +83,68 @@ public sealed class StreamVisitorTests(RepositoryDatabase database)
         Assert.Contains(Contracts.SessionPurpose.SurveyNow, driver.Purposes);
     }
 
+    [Fact]
+    public async Task AnOrdinaryVisitAsksForTheOrdinaryPurpose()
+    {
+        var driver = new ScriptedDriverClient();
+
+        driver.Script(Channel, new ChannelScript { Bytes = Schedule(NextNetwork()) });
+
+        await using var context = database.Open();
+
+        await Visitor(driver, context).VisitAsync(Channel, hurried: false, Cancel);
+
+        Assert.Equal([Contracts.SessionPurpose.Survey], driver.Purposes);
+    }
+
+    [Fact]
+    public async Task AChannelThatLocksButStaysSilentIsNamedAsCarryingNoBytes()
+    {
+        var driver = new ScriptedDriverClient();
+
+        driver.Script(Channel, ChannelScript.Silent());
+
+        await using var context = database.Open();
+        var result = await Visitor(driver, context).VisitAsync(Channel, hurried: false, Cancel);
+
+        Assert.Equal(VisitOutcome.NoBytes, result.Outcome);
+    }
+
+    [Fact]
+    public async Task TheSessionIsLetGoEvenWhenTheStreamTears()
+    {
+        var driver = new ScriptedDriverClient();
+
+        driver.Script(Channel, new ChannelScript { Paced = PacedStream.Torn });
+
+        await using var context = database.Open();
+        var result = await Visitor(driver, context).VisitAsync(Channel, hurried: false, Cancel);
+
+        Assert.Equal(VisitOutcome.Interrupted, result.Outcome);
+        Assert.Single(driver.Stopped);
+    }
+
+    [Fact]
+    public async Task PacketsArrivingInOddSizedChunksAreStillRead()
+    {
+        var network = NextNetwork();
+        var driver = new ScriptedDriverClient();
+        var packets = Schedule(network);
+
+        driver.Script(Channel, new ChannelScript { Paced = () => PacedStream.Sliced(packets, 100) });
+
+        await using var context = database.Open();
+        var result = await Visitor(driver, context).VisitAsync(Channel, hurried: false, Cancel);
+
+        Assert.Equal(VisitOutcome.BasicOnly, result.Outcome);
+        Assert.Equal(0, result.UnreadablePackets);
+    }
+
     private static StreamVisitor Visitor(ScriptedDriverClient driver, CarinaDbContext context)
         => new(
             driver,
             new ProgrammeWriter(new ProgrammeRepository(context), new UnguardedWrites(), new StillClock()),
-            new CollectionSettings(),
-            TimeProvider.System);
+            new CollectionSettings());
 
     private static byte[] Schedule(int network)
     {

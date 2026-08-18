@@ -30,7 +30,37 @@ public sealed class StreamHarvest
 
     public bool CanLetGo => progress.Completeness is not ScheduleCompleteness.Incomplete;
 
+    private readonly byte[] carry = new byte[TransportPacket.Size];
+
+    private int carried;
+
     public void Push(ReadOnlySpan<byte> packets)
+    {
+        if (carried > 0)
+        {
+            var take = Math.Min(TransportPacket.Size - carried, packets.Length);
+
+            packets[..take].CopyTo(carry.AsSpan(carried));
+            carried += take;
+            packets = packets[take..];
+
+            if (carried < TransportPacket.Size)
+            {
+                return;
+            }
+
+            Read(carry);
+            carried = 0;
+        }
+
+        var whole = packets.Length - (packets.Length % TransportPacket.Size);
+
+        Read(packets[..whole]);
+        packets[whole..].CopyTo(carry);
+        carried = packets.Length % TransportPacket.Size;
+    }
+
+    private void Read(ReadOnlySpan<byte> packets)
     {
         foreach (var read in reader.Push(packets))
         {
