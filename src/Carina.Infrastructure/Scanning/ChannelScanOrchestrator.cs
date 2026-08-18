@@ -350,13 +350,18 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
             ScanChannelChange[] added = seen.Channels
                 .Where(channel => stored.All(candidate => !candidate.Tuning.Equals(channel.Tuning)))
                 .ToArray();
+            ScanChannelChange[] restated = seen.Channels
+                .Where(channel => channel.TransportStreamId is not null
+                    && stored.Any(candidate => candidate.Tuning.Equals(channel.Tuning)
+                        && !channel.TransportStreamId.Equals(candidate.ObservedStreamId)))
+                .ToArray();
             IReadOnlyList<ScanChannelChange> missing = MissingChannels(inScope
                 .Where(candidate => seen.Channels.All(channel => !channel.Tuning.Equals(candidate.Tuning))));
             bool described = service.Name != seen.Name || service.Category != seen.Category;
             bool renumbered = seen.RemoteControlKeyId is not null
                 && service.RemoteControlKeyId != seen.RemoteControlKeyId;
 
-            if (added.Length > 0 || missing.Count > 0 || described || renumbered)
+            if (added.Length > 0 || restated.Length > 0 || missing.Count > 0 || described || renumbered)
             {
                 changes.Add(new ScanServiceChange(
                     ScanChangeKind.Updated,
@@ -364,7 +369,7 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
                     service.ServiceId,
                     seen.Name,
                     seen.Category,
-                    [.. added, .. missing],
+                    [.. added, .. restated, .. missing],
                     Seen: true)
                 {
                     RemoteControlKeyId = seen.RemoteControlKeyId,
