@@ -55,6 +55,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IChannelScanOrchestrator, ChannelScanOrchestrator>();
         services.AddScoped<ScanApplier>();
         services.AddScoped<IBroadcastStreamDirectory, BroadcastStreamDirectory>();
+        services.AddScoped<ITuneFailureReporter, CandidateTuneFailureReporter>();
         services.AddScoped<ProgrammeWriter>();
         services.AddScoped<StreamVisitor>();
         services.AddScoped<CollectionRound>();

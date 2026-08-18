@@ -25,7 +25,10 @@ public sealed class BroadcastStreamDirectory(ICandidateChannelRepository candida
                 reachable.NetworkId,
                 reachable.ObservedStreamId!,
                 reachable.Tuning,
-                [.. group.Select(candidate => candidate.ServiceId).DistinctBy(service => service.Value).OrderBy(service => service.Value)]));
+                [.. group.Select(candidate => candidate.ServiceId).DistinctBy(service => service.Value).OrderBy(service => service.Value)])
+            {
+                TunedWith = reachable.Id,
+            });
         }
 
         return [.. streams.OrderBy(stream => stream.NetworkId.Value).ThenBy(stream => stream.TransportStreamId.Value)];

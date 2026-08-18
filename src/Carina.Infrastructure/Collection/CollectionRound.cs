@@ -12,6 +12,7 @@ public sealed class CollectionRound(
     IProgrammeRepository programmes,
     StreamVisitor visitor,
     RescanNoticeBoard rescans,
+    ITuneFailureReporter tuning,
     CollectionSettings settings,
     TimeProvider clock,
     ILogger<CollectionRound> logger)
@@ -87,10 +88,38 @@ public sealed class CollectionRound(
 
             NoticeWhatTheStreamDeclared(stream, visit);
 
+            await TellTheTunerWhatHappenedAsync(stream, visit.Outcome, abort);
             await RecordAsync(stream, visit, clock.GetElapsedTime(began), abort);
         }
 
         return new RoundResult(visited, gathered, cameBackShort);
+    }
+
+    private async Task TellTheTunerWhatHappenedAsync(
+        BroadcastStream stream,
+        VisitOutcome outcome,
+        CancellationToken abort)
+    {
+        if (stream.TunedWith is not { } candidateChannelId)
+        {
+            return;
+        }
+
+        DateTime at = clock.GetUtcNow().UtcDateTime;
+
+        if (CollectionBackOff.IsWorthReportingToTheTuner(outcome))
+        {
+            await tuning.ReportFailureAsync(candidateChannelId, at, abort);
+
+            return;
+        }
+
+        if (outcome is VisitOutcome.Interrupted)
+        {
+            return;
+        }
+
+        await tuning.ReportReachedAsync(candidateChannelId, at, abort);
     }
 
     private void NoticeWhatTheStreamDeclared(BroadcastStream stream, VisitResult visit)
