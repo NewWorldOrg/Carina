@@ -150,6 +150,7 @@ public sealed class EpgCollectorTests(RepositoryDatabase database)
         services.AddSingleton<IDriverClient>(driver);
         services.AddSingleton(new CollectionSettings());
         services.AddSingleton<TimeProvider>(TimeProvider.System);
+        services.AddSingleton<ITuneFailureReporter>(new RememberedTuneReports());
         services.AddSingleton(provider => new RescanNoticeBoard(
             new SilentEvents(),
             provider.GetRequiredService<TimeProvider>()));
@@ -167,6 +168,7 @@ public sealed class EpgCollectorTests(RepositoryDatabase database)
             scope.GetRequiredService<IProgrammeRepository>(),
             scope.GetRequiredService<StreamVisitor>(),
             scope.GetRequiredService<RescanNoticeBoard>(),
+            scope.GetRequiredService<ITuneFailureReporter>(),
             scope.GetRequiredService<CollectionSettings>(),
             scope.GetRequiredService<TimeProvider>(),
             NullLogger<CollectionRound>.Instance));

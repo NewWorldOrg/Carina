@@ -4,7 +4,10 @@ public sealed record BroadcastStream(
     NetworkId NetworkId,
     TransportStreamId TransportStreamId,
     TuningParameters Tuning,
-    IReadOnlyList<ServiceId> Services);
+    IReadOnlyList<ServiceId> Services)
+{
+    public CandidateChannelId? TunedWith { get; init; }
+}
 
 public interface IBroadcastStreamDirectory
 {

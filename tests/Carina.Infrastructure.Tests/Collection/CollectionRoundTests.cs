@@ -224,6 +224,65 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
         Assert.Empty(events.Signalled);
     }
 
+    [Fact]
+    public async Task AChannelThatWouldNotLockIsReportedToTheTuner()
+    {
+        int network = NextNetwork();
+        var driver = new ScriptedDriverClient();
+        var reports = new RememberedTuneReports();
+        var candidateChannelId = CandidateChannelId.New();
+
+        driver.Script(TuningParameters.Terrestrial(22), ChannelScript.NoLock());
+
+        await using CarinaDbContext context = database.Open();
+
+        await Round(driver, context, reports: reports)
+            .WalkAsync([TunedWith(Stream(network, 1, 22), candidateChannelId)], Cancel, Cancel);
+
+        Assert.Equal([candidateChannelId], reports.Failures);
+        Assert.Empty(reports.Reached);
+    }
+
+    [Fact]
+    public async Task AStreamThatLockedButNeverFinishedItsGuideIsNotReportedAsAFailure()
+    {
+        int network = NextNetwork();
+        var driver = new ScriptedDriverClient();
+        var reports = new RememberedTuneReports();
+        var candidateChannelId = CandidateChannelId.New();
+
+        driver.Script(TuningParameters.Terrestrial(22), Carrying(network, 1));
+
+        await using CarinaDbContext context = database.Open();
+
+        await Round(driver, context, reports: reports)
+            .WalkAsync([TunedWith(Stream(network, 1, 22), candidateChannelId)], Cancel, Cancel);
+
+        Assert.Empty(reports.Failures);
+        Assert.Equal([candidateChannelId], reports.Reached);
+    }
+
+    [Fact]
+    public async Task AVisitTheDriverCutShortSaysNothingAboutTheChannelEitherWay()
+    {
+        int network = NextNetwork();
+        var driver = new ScriptedDriverClient { BusyRefusalsRemaining = 100 };
+        var reports = new RememberedTuneReports();
+
+        driver.Script(TuningParameters.Terrestrial(22), Carrying(network, 1));
+
+        await using CarinaDbContext context = database.Open();
+
+        await Round(driver, context, clock: new HurriedClock(), reports: reports)
+            .WalkAsync([TunedWith(Stream(network, 1, 22), CandidateChannelId.New())], Cancel, Cancel);
+
+        Assert.Empty(reports.Failures);
+        Assert.Empty(reports.Reached);
+    }
+
+    private static BroadcastStream TunedWith(BroadcastStream stream, CandidateChannelId candidateChannelId)
+        => stream with { TunedWith = candidateChannelId };
+
     private static byte[] Described(int network, int stream, IReadOnlyList<int> services)
         => [.. new TransportStreamWriter(ServiceDescriptionTable.Pid)
             .Sections(new SectionWriter
@@ -250,7 +309,8 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
         CarinaDbContext context,
         CollectionSettings? settings = null,
         TimeProvider? clock = null,
-        RescanNoticeBoard? board = null)
+        RescanNoticeBoard? board = null,
+        RememberedTuneReports? reports = null)
     {
         var programmes = new ProgrammeRepository(context);
         CollectionSettings carried = settings ?? new CollectionSettings();
@@ -263,6 +323,7 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
                 new ProgrammeWriter(programmes, new UnguardedWrites(), new StillClock()),
                 carried),
             board ?? new RescanNoticeBoard(new SilentEvents(), TimeProvider.System),
+            reports ?? new RememberedTuneReports(),
             carried,
             clock ?? TimeProvider.System,
             NullLogger<CollectionRound>.Instance);
