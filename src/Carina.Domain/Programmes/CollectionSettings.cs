@@ -16,6 +16,8 @@ public sealed record CollectionSettings
 
     public TimeSpan KeepEndedProgrammes { get; init; } = TimeSpan.FromHours(24);
 
+    public TimeSpan? ArchiveRetention { get; init; }
+
     public TimeSpan LongestBackOff { get; init; } = TimeSpan.FromHours(24);
 
     public TimeSpan BetweenBoosts { get; init; } = TimeSpan.FromMinutes(10);

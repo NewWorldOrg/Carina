@@ -22,6 +22,11 @@ public interface IProgrammeRepository
 
     Task SaveAsync(Programme programme, CancellationToken cancellationToken);
 
+    Task<IReadOnlyList<Programme>> ListEndedBeforeAsync(
+        DateTime at,
+        int rows,
+        CancellationToken cancellationToken);
+
     Task<int> ForgetEndedBeforeAsync(DateTime at, CancellationToken cancellationToken);
 
     Task<DateTime?> CoveredUntilAsync(int networkId, int serviceId, CancellationToken cancellationToken);

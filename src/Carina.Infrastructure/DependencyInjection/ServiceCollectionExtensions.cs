@@ -61,6 +61,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ProgrammeWriter>();
         services.AddScoped<StreamVisitor>();
         services.AddScoped<CollectionRound>();
+        services.AddScoped<ArchiveTransfer>();
 
         services.AddSingleton(TimeProvider.System);
         services.AddSingleton<IDriverStatusReader, MonitoredDriverStatusReader>();
