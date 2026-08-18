@@ -104,6 +104,24 @@ public sealed class RecordedEventInformationTests
     }
 
     [Fact]
+    public void TheRecordedEventNamesItsGenresStreamsAndTheEventsItSharesWith()
+    {
+        var carried = Assert.Single(Table(2).Events);
+
+        Assert.Equal([0, 11], carried.Genres.Select(genre => genre.Kind));
+        Assert.Equal(1, Assert.Single(carried.Components).StreamContent);
+        Assert.Equal(2, Assert.Single(carried.AudioComponents).StreamContent);
+
+        var grouping = Assert.Single(carried.Groupings);
+
+        Assert.Equal(EventGroupKind.Shared, grouping.Kind);
+
+        Assert.Equal(
+            [(1048, 47289), (1049, 47289)],
+            grouping.Events.Select(shared => (shared.ServiceId, shared.EventId)));
+    }
+
+    [Fact]
     public void ASectionOfADifferentTableIsRefusedRatherThanRead()
     {
         var refused = Assert.IsType<TableRead<EventInformationTable>.Rejected>(

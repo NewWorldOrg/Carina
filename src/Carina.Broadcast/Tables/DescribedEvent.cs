@@ -30,4 +30,41 @@ public sealed record DescribedEvent(
 
     public ExtendedEventDescription? Detailed
         => ExtendedEventDescription.TryRead(Descriptors, out var detailed) ? detailed : null;
+
+    public IReadOnlyList<ContentGenre> Genres
+    {
+        get
+        {
+            foreach (var descriptor in Descriptors)
+            {
+                if (ContentGenres.TryRead(descriptor, out var genres))
+                {
+                    return genres.Genres;
+                }
+            }
+
+            return [];
+        }
+    }
+
+    public IReadOnlyList<ComponentDescription> Components => [.. Read<ComponentDescription>(ComponentDescription.TryRead)];
+
+    public IReadOnlyList<AudioComponentDescription> AudioComponents => [.. Read<AudioComponentDescription>(AudioComponentDescription.TryRead)];
+
+    public IReadOnlyList<EventGrouping> Groupings => [.. Read<EventGrouping>(EventGrouping.TryRead)];
+
+    private delegate bool Reads<T>(Descriptor descriptor, out T? read)
+        where T : class;
+
+    private IEnumerable<T> Read<T>(Reads<T> reads)
+        where T : class
+    {
+        foreach (var descriptor in Descriptors)
+        {
+            if (reads(descriptor, out var read))
+            {
+                yield return read!;
+            }
+        }
+    }
 }
