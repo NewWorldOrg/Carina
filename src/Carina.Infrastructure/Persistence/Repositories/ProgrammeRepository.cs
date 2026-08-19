@@ -85,11 +85,11 @@ public sealed class ProgrammeRepository(CarinaDbContext context) : IProgrammeRep
             return [];
         }
 
-        int[] networks = [.. services.Select(service => service.NetworkId).Distinct()];
-        int[] carried = [.. services.Select(service => service.ServiceId).Distinct()];
+        List<NetworkId> networks = [.. services.Select(service => new NetworkId(service.NetworkId)).Distinct()];
+        List<ServiceId> carried = [.. services.Select(service => new ServiceId(service.ServiceId)).Distinct()];
         List<Programme> found = await context.Set<Programme>()
-            .Where(programme => networks.Contains(programme.NetworkId.Value))
-            .Where(programme => carried.Contains(programme.ServiceId.Value))
+            .Where(programme => networks.Contains(programme.NetworkId))
+            .Where(programme => carried.Contains(programme.ServiceId))
             .Where(programme => programme.StartsAt < to)
             .Where(programme => programme.EndsAt == null || programme.EndsAt > from)
             .OrderBy(programme => programme.StartsAt)
