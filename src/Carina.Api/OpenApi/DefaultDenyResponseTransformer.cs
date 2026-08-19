@@ -1,4 +1,5 @@
-using Microsoft.AspNetCore.Authorization;
+using Carina.Api.Authentication;
+
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.OpenApi;
 
@@ -17,9 +18,9 @@ public sealed class DefaultDenyResponseTransformer : IOpenApiOperationTransforme
         ArgumentNullException.ThrowIfNull(operation);
         ArgumentNullException.ThrowIfNull(context);
 
-        bool anonymous = context.Description.ActionDescriptor.EndpointMetadata
-            .OfType<IAllowAnonymous>()
-            .Any();
+        bool anonymous = AnonymousSurfaces.Everywhere.Admit(
+            context.Description.HttpMethod ?? HttpMethods.Get,
+            $"/{context.Description.RelativePath}");
 
         if (anonymous)
         {

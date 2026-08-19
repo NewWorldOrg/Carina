@@ -1,13 +1,13 @@
+using Carina.Api.Authentication;
 using Carina.Api.Responder.Health;
 
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Carina.Api.Controllers.Health;
 
 [ApiController]
 [Route("api/health")]
-[AllowAnonymous]
+[EndpointEffect(EndpointEffect.Reading)]
 public sealed class GetHealthAction : ControllerBase
 {
     [HttpGet]
