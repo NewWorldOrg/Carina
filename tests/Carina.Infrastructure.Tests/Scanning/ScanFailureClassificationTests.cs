@@ -1,4 +1,5 @@
 using Carina.Broadcast.Descriptors;
+using Carina.BroadcastTestSupport;
 using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Scans;
@@ -59,7 +60,7 @@ public sealed class ScanFailureClassificationTests
             TransportStreamId = SomeStreamId,
             Services = [new SyntheticService(SomeServiceId, "Carina One")],
             WithoutDescription = true,
-        }));
+        }.ToBytes()));
 
         ScanRunAttempt attempt = Single(outcome);
 
@@ -76,7 +77,7 @@ public sealed class ScanFailureClassificationTests
             TransportStreamId = SomeStreamId,
             Services = [new SyntheticService(SomeServiceId, "Carina One")],
             WithoutNetwork = true,
-        }));
+        }.ToBytes()));
 
         ScanRunAttempt attempt = Single(outcome);
 
@@ -92,7 +93,7 @@ public sealed class ScanFailureClassificationTests
             slot,
             ChannelScript.Carrying(SyntheticStream.Carrying(
                 AnotherStreamId,
-                new SyntheticService(SomeServiceId, "Carina One")))));
+                new SyntheticService(SomeServiceId, "Carina One")).ToBytes())));
 
         ScanOutcome outcome = await harness.Orchestrator.RunAsync(ScanScope.Over([slot]), Cancel);
         ScanRunAttempt attempt = Single(outcome);
@@ -112,7 +113,7 @@ public sealed class ScanFailureClassificationTests
             TransportStreamId = SomeStreamId,
             TransportStreamIdInNetwork = AnotherStreamId,
             Services = [new SyntheticService(SomeServiceId, "Carina One")],
-        }));
+        }.ToBytes()));
 
         ScanRunAttempt attempt = Single(outcome);
 
@@ -132,11 +133,11 @@ public sealed class ScanFailureClassificationTests
                 TransportStreamId = SomeStreamId,
                 Services = [new SyntheticService(SomeServiceId, "Carina One")],
                 WithoutDescription = true,
-            }))
+            }.ToBytes()))
             .Script(TuningParameters.Bs(SomeBsSlot, new TransportStreamId(SomeStreamId)),
                 ChannelScript.Carrying(SyntheticStream.Carrying(
                     AnotherStreamId,
-                    new SyntheticService(SomeServiceId, "Carina One"))));
+                    new SyntheticService(SomeServiceId, "Carina One")).ToBytes()));
 
         ScanOutcome outcome = await new ScanHarness(driver).Orchestrator.RunAsync(
             ScanScope.Over([
@@ -163,7 +164,7 @@ public sealed class ScanFailureClassificationTests
     {
         ScanOutcome outcome = await ScanOne(ChannelScript.Carrying(SyntheticStream.Carrying(
             SomeStreamId,
-            new SyntheticService(SomeServiceId, "Carina One"))));
+            new SyntheticService(SomeServiceId, "Carina One")).ToBytes()));
 
         ScanRunAttempt attempt = Single(outcome);
 
@@ -177,7 +178,7 @@ public sealed class ScanFailureClassificationTests
     {
         ScanOutcome outcome = await ScanOne(ChannelScript.Carrying(SyntheticStream.Carrying(
             SomeStreamId,
-            new SyntheticService(SomeServiceId, "Carina One"))));
+            new SyntheticService(SomeServiceId, "Carina One")).ToBytes()));
 
         ScanRunAttempt attempt = Single(outcome);
 
@@ -191,7 +192,7 @@ public sealed class ScanFailureClassificationTests
     {
         ScanOutcome outcome = await ScanOne(ChannelScript.Carrying(SyntheticStream.Carrying(
             SomeStreamId,
-            new SyntheticService(SomeServiceId, "Carina One"))) with
+            new SyntheticService(SomeServiceId, "Carina One")).ToBytes()) with
         {
             Lock = SignalLock.NotLocked,
         });
@@ -214,7 +215,7 @@ public sealed class ScanFailureClassificationTests
                 new SyntheticService(SomeServiceId, "Carina One"),
                 new SyntheticService(50108, "Carina One Mobile", ServiceKind.Television, PartiallyReceived: true),
             ],
-        }));
+        }.ToBytes()));
 
         Assert.Equal(
             [ServiceCategory.Television, ServiceCategory.OneSeg],

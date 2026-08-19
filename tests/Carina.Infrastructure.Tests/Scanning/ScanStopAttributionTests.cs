@@ -1,3 +1,4 @@
+using Carina.BroadcastTestSupport;
 using Carina.Domain.Channels;
 using Carina.Domain.Scans;
 using Carina.TestSupport;

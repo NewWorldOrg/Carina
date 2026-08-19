@@ -30,7 +30,7 @@ public sealed class SyntheticEpgCollectionTests
     {
         var driver = new ScriptedDriverClient();
 
-        driver.Script(Channel, ChannelScript.Carrying(Guide() with { CorruptSections = 2 }));
+        driver.Script(Channel, ChannelScript.Carrying((Guide() with { CorruptSections = 2 }).ToBytes()));
 
         await using var feature = new EpgFeature([OnAir()], driver);
 
@@ -69,7 +69,7 @@ public sealed class SyntheticEpgCollectionTests
     {
         var driver = new ScriptedDriverClient();
 
-        driver.Script(Channel, ChannelScript.Carrying(Guide()));
+        driver.Script(Channel, ChannelScript.Carrying(Guide().ToBytes()));
 
         await using var feature = new EpgFeature([OnAir()], driver);
 
@@ -96,7 +96,7 @@ public sealed class SyntheticEpgCollectionTests
     {
         var driver = new ScriptedDriverClient();
 
-        driver.Script(Channel, ChannelScript.Carrying(Guide()));
+        driver.Script(Channel, ChannelScript.Carrying(Guide().ToBytes()));
 
         await using var feature = new EpgFeature([OnAir()], driver);
 
@@ -207,7 +207,7 @@ public sealed class SyntheticEpgCollectionTests
     {
         var driver = new ScriptedDriverClient();
 
-        driver.Script(Channel, ChannelScript.Carrying(Guide()));
+        driver.Script(Channel, ChannelScript.Carrying(Guide().ToBytes()));
 
         await using var feature = new EpgFeature(
             [OnAir()],
@@ -253,7 +253,7 @@ public sealed class SyntheticEpgCollectionTests
     {
         var driver = new ScriptedDriverClient();
 
-        driver.Script(Channel, ChannelScript.Carrying(Guide()));
+        driver.Script(Channel, ChannelScript.Carrying(Guide().ToBytes()));
 
         await using var feature = new EpgFeature([OnAir()], driver);
 

@@ -1,3 +1,4 @@
+using Carina.BroadcastTestSupport;
 using Carina.Domain.Channels;
 using Carina.Domain.Scans;
 using Carina.Infrastructure.Scanning;
@@ -56,7 +57,7 @@ public sealed class ScanDifferenceTests
         var twin = TuningParameters.Bs(9, new TransportStreamId(50004));
         var other = TuningParameters.Bs(11, new TransportStreamId(50004));
         var script = ChannelScript.Carrying(
-            SyntheticStream.Carrying(50004, new SyntheticService(SomeServiceId, "Carina One")));
+            SyntheticStream.Carrying(50004, new SyntheticService(SomeServiceId, "Carina One")).ToBytes());
         var harness = new ScanHarness(new ScriptedDriverClient()
             .Script(twin, script)
             .Script(other, script));
@@ -131,7 +132,7 @@ public sealed class ScanDifferenceTests
         ScanHarness harness = Harness(Carrying(new SyntheticService(SomeServiceId, "Carina One")));
         harness.Driver.Script(Channel55, ChannelScript.Carrying(SyntheticStream.Carrying(
             50003,
-            new SyntheticService(SomeServiceId, "Carina One"))));
+            new SyntheticService(SomeServiceId, "Carina One")).ToBytes()));
         Store(harness, SomeServiceId, "Carina One", Channel53);
 
         ScanOutcome outcome = await harness.Orchestrator.RunAsync(
@@ -200,7 +201,7 @@ public sealed class ScanDifferenceTests
         => new(new ScriptedDriverClient().Script(Channel53, script));
 
     private static ChannelScript Carrying(params SyntheticService[] services)
-        => ChannelScript.Carrying(SyntheticStream.Carrying(SomeStreamId, services));
+        => ChannelScript.Carrying(SyntheticStream.Carrying(SomeStreamId, services).ToBytes());
 
     private static void Store(ScanHarness harness, int serviceId, string name, TuningParameters tuning)
     {

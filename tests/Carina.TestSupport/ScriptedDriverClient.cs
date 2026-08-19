@@ -1,4 +1,3 @@
-using Carina.BroadcastTestSupport;
 using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
@@ -25,9 +24,7 @@ public sealed record ChannelScript
 
     public DriverProblem? StreamRefusal { get; init; }
 
-    public static ChannelScript Carrying(SyntheticStream stream) => new() { Bytes = stream.ToBytes() };
-
-    public static ChannelScript Carrying(SyntheticGuide guide) => new() { Bytes = guide.ToBytes() };
+    public static ChannelScript Carrying(byte[] bytes) => new() { Bytes = bytes };
 
     public static ChannelScript NoLock() =>
         new() { Lock = SignalLock.NotLocked, Bytes = [] };

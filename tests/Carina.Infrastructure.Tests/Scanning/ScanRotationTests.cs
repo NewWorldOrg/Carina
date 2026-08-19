@@ -1,3 +1,4 @@
+using Carina.BroadcastTestSupport;
 using Carina.Domain.Channels;
 using Carina.Domain.Scans;
 using Carina.Infrastructure.Scanning;
@@ -107,7 +108,7 @@ public sealed class ScanRotationTests
         harness.Runs.Runs.Clear();
         harness.Driver.Script(Channel53, ChannelScript.Carrying(SyntheticStream.Carrying(
             SomeStreamId,
-            new SyntheticService(SomeServiceId, "Carina One"))));
+            new SyntheticService(SomeServiceId, "Carina One")).ToBytes()));
 
         await harness.Orchestrator.RunAsync(ScanScope.Over([Channel53]), Cancel);
 
@@ -123,7 +124,7 @@ public sealed class ScanRotationTests
         var harness = new ScanHarness(
             new ScriptedDriverClient().Script(Channel53, ChannelScript.Carrying(SyntheticStream.Carrying(
                 SomeStreamId,
-                new SyntheticService(50109, "Carina Nine")))),
+                new SyntheticService(50109, "Carina Nine")).ToBytes())),
             settings: BacksOffTwice);
         Store(harness);
 
