@@ -9,6 +9,7 @@ public static class AnonymousSurfaces
         AnonymousSurface.Exactly(HttpMethods.Get, "/api/health"),
         AnonymousSurface.Exactly(HttpMethods.Get, LoginRedirect.Path),
         AnonymousSurface.Exactly(HttpMethods.Get, LoginRedirect.LoggedOut),
+        AnonymousSurface.Exactly(HttpMethods.Get, SignInOptions.Path),
         AnonymousSurface.Exactly(HttpMethods.Post, "/api/auth/login"),
         AnonymousSurface.Exactly(HttpMethods.Get, OidcHandshake.StartPath),
         AnonymousSurface.Exactly(HttpMethods.Get, OidcHandshake.CallbackPath),

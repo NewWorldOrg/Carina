@@ -16,9 +16,25 @@ services:
       ConnectionStrings__Carina: Host=db;Port=5432;Database=carina;Username=carina;Password=${POSTGRES_PASSWORD:-carina}
       CARINA_DB_CONNECTION: Host=db;Port=5432;Database=carina;Username=carina;Password=${POSTGRES_PASSWORD:-carina}
       CARINA_DRIVER_SOCKET: /run/carina/driver.sock
+      CARINA_KNOWN_NETWORKS: ${CARINA_KNOWN_NETWORKS:-172.16.0.0/12}
     depends_on:
       db:
         condition: service_healthy
+
+  proxy:
+    image: nginx:1.29-alpine
+    ports:
+      - ${PROXY_PORT:-8000}:8080
+    volumes:
+      - ./docker/proxy.conf.template:/etc/nginx/templates/default.conf.template:ro
+    environment:
+      NGINX_ENVSUBST_FILTER: ^CARINA_
+      CARINA_APP_ORIGIN: ${CARINA_APP_ORIGIN:-http://app:8080}
+      CARINA_WEB_ORIGIN: ${CARINA_WEB_ORIGIN:-http://host.docker.internal:8080}
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    depends_on:
+      - app
 
   driver:
     image: mcr.microsoft.com/dotnet/sdk:10.0

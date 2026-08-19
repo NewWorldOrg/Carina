@@ -2,6 +2,8 @@ using System.Net;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
+using Carina.Api.Authentication;
+
 namespace Carina.Api.Tests.FeatureTest;
 
 [Collection(FeatureTestCollection.Name)]
@@ -31,7 +33,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
         JsonNode document = await ServedOpenApi.FetchAsync(factory);
 
         string[] withoutRefusal = ServedOpenApi.Operations(document)
-            .Where(operation => operation.Path != "/api/health")
+            .Where(operation => !AnonymousSurfaces.WhileDeveloping.Admit(operation.Method, operation.Path))
             .Where(operation => operation.Value["responses"]!["401"] is null)
             .Select(operation => $"{operation.Method} {operation.Path}")
             .ToArray();
@@ -40,13 +42,15 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
     }
 
     [Fact]
-    public async Task TheAnonymousEndpointDoesNotClaimItCanRefuse()
+    public async Task TheAnonymousEndpointsDoNotClaimTheyCanRefuse()
     {
         JsonNode document = await ServedOpenApi.FetchAsync(factory);
 
         JsonObject health = document["paths"]!["/api/health"]!["get"]!["responses"]!.AsObject();
+        JsonObject options = document["paths"]![SignInOptions.Path]!["get"]!["responses"]!.AsObject();
 
         Assert.Null(health["401"]);
+        Assert.Null(options["401"]);
     }
 
     [Fact]
@@ -114,6 +118,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "getScan",
                 "getService",
                 "getSessions",
+                "getSignInOptions",
                 "getTuners",
                 "listScanRuns",
                 "listServices",

@@ -3,6 +3,16 @@ using Carina.Domain.Auth;
 
 namespace Carina.Api.Responder.Auth;
 
+public sealed record SignInOptionsResponder(bool IdentityProvider, string? ProviderName, OidcReach Reach)
+{
+    public static SignInOptionsResponder Of(SignInOptionsView view)
+    {
+        ArgumentNullException.ThrowIfNull(view);
+
+        return new SignInOptionsResponder(view.IdentityProvider, view.ProviderName, view.Reach);
+    }
+}
+
 public sealed record OidcConfigResponder(
     bool Configured,
     string? DiscoveryUrl,

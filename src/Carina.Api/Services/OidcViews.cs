@@ -50,6 +50,18 @@ public sealed record OidcConfigView(
     }
 }
 
+public sealed record SignInOptionsView(bool IdentityProvider, string? ProviderName, OidcReach Reach)
+{
+    public static SignInOptionsView Of(OidcSettings settings, OidcReach reach)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        return settings.IsConfigured
+            ? new SignInOptionsView(true, settings.ProviderName, reach)
+            : new SignInOptionsView(false, null, OidcReach.NotConfigured);
+    }
+}
+
 public sealed record HealthView(string Status, IReadOnlyList<string> Degraded)
 {
     public const string Alive = "ok";

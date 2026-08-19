@@ -28,6 +28,14 @@ public sealed class OidcConfigService(
             OidcConfigView.Of(held, reachability.State, redirectUri));
     }
 
+    public async Task<ServiceResult<SignInOptionsView>> ReadSignInOptionsAsync(CancellationToken cancellationToken)
+    {
+        OidcSettings held = await settings.FindAsync(cancellationToken)
+                            ?? OidcSettings.Unconfigured(clock.GetUtcNow().UtcDateTime);
+
+        return ServiceResult<SignInOptionsView>.Success(SignInOptionsView.Of(held, reachability.State));
+    }
+
     public async Task<ServiceResult<OidcConfigView>> SaveAsync(
         OidcConfigChange change,
         string redirectUri,
