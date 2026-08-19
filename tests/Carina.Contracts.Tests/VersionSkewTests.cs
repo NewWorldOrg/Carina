@@ -357,6 +357,137 @@ public sealed class VersionSkewTests
         Assert.Single(reading.PostViterbiBitErrors);
     }
 
+    [Fact]
+    public void TheBaselinePurposesAreTheOnesEveryDriverHasAlwaysAccepted()
+    {
+        Assert.Equal(
+            PurposesTheOlderDriverKnows,
+            SessionPurposes.Baseline.Select(SessionPurposeConverter.WireName)
+        );
+    }
+
+    [Theory]
+    [MemberData(nameof(PurposesThisBuildCanAskFor))]
+    public void ADriverThatPredatesAPurposeIsOnlyEverAskedForOneItKnows(SessionPurpose purpose)
+    {
+        SessionPurpose agreed = SessionPurposes.AgreedWith(OlderDriver, purpose);
+
+        string[] readable = [.. PurposesTheOlderDriverKnows, "unspecified"];
+
+        Assert.Contains(SessionPurposeConverter.WireName(agreed), readable);
+    }
+
+    [Theory]
+    [MemberData(nameof(PurposesThisBuildCanAskFor))]
+    public void ThePurposeAnOlderDriverIsAskedForIsOneItStarts(SessionPurpose purpose)
+    {
+        SessionPurpose agreed = SessionPurposes.AgreedWith(OlderDriver, purpose);
+
+        if (agreed is SessionPurpose.Unspecified)
+        {
+            Assert.NotNull(SessionPurposes.Capability(purpose));
+
+            return;
+        }
+
+        StartSessionRequest? read = AsOlderDriverReadsThePurpose(agreed);
+
+        Assert.NotNull(read);
+        Assert.Equal(agreed, read.Purpose);
+        Assert.Empty(read.Validate(Moment));
+    }
+
+    [Fact]
+    public void AHurriedSurveyReachesADriverThatPredatesItAsAnOrdinaryOne()
+    {
+        SessionPurpose agreed = SessionPurposes.AgreedWith(OlderDriver, SessionPurpose.SurveyNow);
+
+        Assert.Equal(SessionPurpose.Survey, agreed);
+        Assert.True(SessionPurposes.ReadsEveryPacket(agreed));
+    }
+
+    [Fact]
+    public void ADriverThatDeclaresTheHurriedSurveyIsAskedForItPlainly()
+    {
+        var declaring = new DriverHello(
+            DriverProtocol.Version,
+            "current",
+            [DriverCapabilities.Purpose("surveyNow")]
+        );
+
+        Assert.Equal(
+            SessionPurpose.SurveyNow,
+            SessionPurposes.AgreedWith(declaring, SessionPurpose.SurveyNow)
+        );
+    }
+
+    [Fact]
+    public void APurposeAnOlderDriverDoesNotKnowIsRefusedRatherThanGuessedAt()
+    {
+        StartSessionRequest? read = AsOlderDriverReadsThePurpose(SessionPurpose.SurveyNow);
+
+        Assert.NotNull(read);
+        Assert.Equal(SessionPurpose.Unspecified, read.Purpose);
+        Assert.Contains(
+            read.Validate(Moment),
+            problem => problem.StartsWith("purpose:", StringComparison.Ordinal)
+        );
+    }
+
+    [Fact]
+    public void APurposeThisBuildCannotSpellIsNeverPutOnTheWire()
+    {
+        Assert.Equal(
+            SessionPurpose.Unspecified,
+            SessionPurposes.AgreedWith(OlderDriver, (SessionPurpose)99)
+        );
+    }
+
+    public static TheoryData<SessionPurpose> PurposesThisBuildCanAskFor()
+    {
+        var purposes = new TheoryData<SessionPurpose>();
+
+        foreach (SessionPurpose purpose in Enum.GetValues<SessionPurpose>())
+        {
+            if (purpose is not SessionPurpose.Unspecified)
+            {
+                purposes.Add(purpose);
+            }
+        }
+
+        return purposes;
+    }
+
+    private static StartSessionRequest? AsOlderDriverReadsThePurpose(SessionPurpose purpose)
+    {
+        var tune = TuneParams.Terrestrial(55);
+        bool records = purpose is SessionPurpose.Recording;
+        string json = DriverJson.Serialize(
+            new StartSessionRequest
+            {
+                SessionId = SessionId.Parse("epg-1"),
+                Purpose = purpose,
+                Tuning = tune.ToLegacyRequest(),
+                Tune = tune,
+                OutputRoot = records ? "primary" : null,
+                EndsAt = records ? Moment.AddHours(1) : null,
+            }
+        );
+
+        JsonObject body = JsonNode.Parse(json)!.AsObject();
+        string spelling = body["purpose"]!.GetValue<string>();
+
+        if (!PurposesTheOlderDriverKnows.Contains(spelling, StringComparer.Ordinal))
+        {
+            body["purpose"] = "unspecified";
+        }
+
+        return DriverJson.Deserialize(
+            body.ToJsonString(),
+            DriverJson.Context.StartSessionRequest
+        );
+    }
+
     private static StartSessionRequest? AsOlderDriverReadsIt(TuneParams tune)
     {
         string json = DriverJson.Serialize(
@@ -380,4 +511,14 @@ public sealed class VersionSkewTests
 
     private static readonly DateTimeOffset Moment =
         new(2026, 8, 8, 21, 4, 0, TimeSpan.FromHours(9));
+
+    private static readonly string[] PurposesTheOlderDriverKnows =
+        ["recording", "live", "survey", "scan"];
+
+    private static readonly DriverHello OlderDriver =
+        new(
+            DriverProtocol.Version,
+            "older",
+            [DriverCapabilities.Recording, DriverCapabilities.Live]
+        );
 }

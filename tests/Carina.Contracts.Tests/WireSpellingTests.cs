@@ -8,9 +8,25 @@ public sealed class WireSpellingTests
     [InlineData(SessionPurpose.Live, "live")]
     [InlineData(SessionPurpose.Survey, "survey")]
     [InlineData(SessionPurpose.Scan, "scan")]
+    [InlineData(SessionPurpose.SurveyNow, "surveyNow")]
     public void SessionPurposeIsSpelledThisWay(SessionPurpose value, string wire)
     {
         AssertRoundTrip(value, wire, DriverJson.Context.SessionPurpose);
+    }
+
+    [Fact]
+    public void EveryValueAddedToAnEnumIsGivenASpellingOfItsOwn()
+    {
+        AssertEveryValueIsSpelled(DriverJson.Context.SessionPurpose);
+        AssertEveryValueIsSpelled(DriverJson.Context.TuneSystem);
+        AssertEveryValueIsSpelled(DriverJson.Context.SignalLock);
+        AssertEveryValueIsSpelled(DriverJson.Context.TunerHealthLevel);
+        AssertEveryValueIsSpelled(DriverJson.Context.DeviceDetection);
+        AssertEveryValueIsSpelled(DriverJson.Context.TunerKind);
+        AssertEveryValueIsSpelled(DriverJson.Context.TunerState);
+        AssertEveryValueIsSpelled(DriverJson.Context.SessionState);
+        AssertEveryValueIsSpelled(DriverJson.Context.SessionStopReason);
+        AssertEveryValueIsSpelled(DriverJson.Context.DiagnosticReason);
     }
 
     [Theory]
@@ -181,6 +197,31 @@ public sealed class WireSpellingTests
         Assert.Null(DriverCapabilities.MetricIn("signalQuality"));
         Assert.Null(DriverCapabilities.MetricIn("signalQuality."));
         Assert.Null(DriverCapabilities.MetricIn("recording"));
+    }
+
+    private static void AssertEveryValueIsSpelled<T>(
+        System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> typeInfo
+    )
+        where T : struct, Enum
+    {
+        var spellings = new Dictionary<string, T>(StringComparer.Ordinal);
+
+        foreach (T value in Enum.GetValues<T>())
+        {
+            string wire = DriverJson.Serialize(value, typeInfo).Trim('"');
+
+            Assert.False(
+                !EqualityComparer<T>.Default.Equals(value, default) && wire is "unspecified",
+                $"{typeof(T).Name}.{value} has no spelling of its own."
+            );
+            Assert.False(
+                spellings.TryGetValue(wire, out T taken),
+                $"{typeof(T).Name}.{value} is spelled '{wire}', which {taken} already answers to."
+            );
+            Assert.Equal(value, DriverJson.Deserialize($"\"{wire}\"", typeInfo));
+
+            spellings[wire] = value;
+        }
     }
 
     private static void AssertRoundTrip<T>(
