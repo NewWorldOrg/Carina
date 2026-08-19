@@ -215,6 +215,29 @@ public sealed class ChannelSchemaTests
     }
 
     [Fact]
+    public void ATallyIsKeyedByTheStreamTheServiceAndTheTable()
+    {
+        using CarinaDbContext context = Carina();
+
+        IKey key = Entity<VisitTally>(context).FindPrimaryKey()!;
+
+        Assert.Equal(
+            ["network_id", "transport_stream_id", "service_id", "table_id"],
+            key.Properties.Select(property => property.GetColumnName()));
+    }
+
+    [Fact]
+    public void ATallyGoesWithTheVisitItCounted()
+    {
+        using CarinaDbContext context = Carina();
+
+        IForeignKey foreignKey = Assert.Single(Entity<VisitTally>(context).GetForeignKeys());
+
+        Assert.Equal("stream_visit", foreignKey.PrincipalEntityType.GetTableName());
+        Assert.Equal(DeleteBehavior.Cascade, foreignKey.DeleteBehavior);
+    }
+
+    [Fact]
     public void EveryTableOfThisDomainIsNamedInSnakeCase()
     {
         using CarinaDbContext context = Carina();
@@ -233,6 +256,7 @@ public sealed class ChannelSchemaTests
                 "scan_run",
                 "scan_run_attempt",
                 "stream_visit",
+                "stream_visit_tally",
             ],
             Schema(context).GetEntityTypes()
                 .Where(entity => entity.FindOwnership() is null)

@@ -297,6 +297,57 @@ public sealed class ScheduleProgressTests
         Assert.Equal(ScheduleCompleteness.Complete, progress.Completeness);
     }
 
+    [Fact]
+    public void TheTallyNamesWhatEachTableDeclaredAgainstWhatArrived()
+    {
+        var progress = new ScheduleProgress(Midnight());
+
+        progress.Saw(Table(FirstBasic, LastBasic, section: 0, segmentLast: 2, lastSection: 15));
+        progress.Saw(Table(FirstBasic, LastBasic, section: 1, segmentLast: 2, lastSection: 15));
+
+        ScheduleTally only = Assert.Single(progress.Tally());
+
+        Assert.Equal(SomeService, only.Service.ServiceId);
+        Assert.Equal(FirstBasic, only.TableId);
+        Assert.Equal(LastBasic, only.LastTableId);
+        Assert.Equal(2, only.SegmentsDeclared);
+        Assert.Equal(1, only.SegmentsHeard);
+        Assert.Equal(3, only.SectionsDeclared);
+        Assert.Equal(2, only.SectionsHeard);
+        Assert.Equal(0, only.VersionChanges);
+    }
+
+    [Fact]
+    public void TheTallyCountsHowOftenAVersionMovedUnderTheCollector()
+    {
+        var progress = new ScheduleProgress(Midnight());
+
+        Gather(progress, FirstBasic, FirstBasic, segments: 4, lastSection: 31);
+        Gather(progress, FirstBasic, FirstBasic, segments: 4, lastSection: 31, version: 1);
+        Gather(progress, FirstBasic, FirstBasic, segments: 2, lastSection: 31, version: 2);
+
+        ScheduleTally only = Assert.Single(progress.Tally());
+
+        Assert.Equal(2, only.VersionChanges);
+        Assert.Equal(2, only.SegmentsHeard);
+        Assert.Equal(2, only.SectionsHeard);
+    }
+
+    [Fact]
+    public void TheTallySeparatesTheServicesSharingAStream()
+    {
+        var progress = new ScheduleProgress(Midnight());
+
+        Gather(progress, FirstBasic, FirstBasic, segments: 4, lastSection: 31);
+        Gather(progress, FirstBasic, FirstBasic, segments: 1, lastSection: 31, service: AnotherService);
+
+        IReadOnlyList<ScheduleTally> counted = progress.Tally();
+
+        Assert.Equal([SomeService, AnotherService], counted.Select(entry => entry.Service.ServiceId));
+        Assert.Equal([4, 1], counted.Select(entry => entry.SegmentsHeard));
+        Assert.Equal([4, 4], counted.Select(entry => entry.SegmentsDeclared));
+    }
+
     private static HeldClock Midnight() => HeldClock.Broadcasting(2026, 8, 19, 0, 0, 0);
 
     private static void Gather(

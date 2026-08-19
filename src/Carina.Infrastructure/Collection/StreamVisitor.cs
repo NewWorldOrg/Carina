@@ -22,6 +22,8 @@ public sealed record VisitResult(
     public bool WorthWaitingOut { get; init; }
 
     public IReadOnlyList<ServiceDescriptionTable> Descriptions { get; init; } = [];
+
+    public IReadOnlyList<ScheduleTally> Tally { get; init; } = [];
 }
 
 public sealed class StreamVisitor(
@@ -153,6 +155,7 @@ public sealed class StreamVisitor(
             UnreadablePackets = done.UnreadablePackets,
             RejectedSections = done.RejectedSections,
             RejectedTables = done.RejectedTables,
+            Tally = done.Progress.Tally(),
         };
     }
 

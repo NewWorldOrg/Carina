@@ -40,6 +40,7 @@ public sealed class StreamVisitRepository(CarinaDbContext context) : IStreamVisi
         else if (!ReferenceEquals(held, visit))
         {
             context.Entry(held).CurrentValues.SetValues(visit);
+            held.Tallied(visit.Tally);
         }
 
         await context.SaveChangesAsync(cancellationToken);

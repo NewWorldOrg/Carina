@@ -687,6 +687,57 @@ namespace Carina.Db.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Carina.Domain.Programmes.VisitTally", b =>
+                {
+                    b.Property<int>("NetworkId")
+                        .HasColumnType("integer")
+                        .HasColumnName("network_id");
+
+                    b.Property<int>("TransportStreamId")
+                        .HasColumnType("integer")
+                        .HasColumnName("transport_stream_id");
+
+                    b.Property<int>("ServiceId")
+                        .HasColumnType("integer")
+                        .HasColumnName("service_id");
+
+                    b.Property<int>("TableId")
+                        .HasColumnType("integer")
+                        .HasColumnName("table_id");
+
+                    b.Property<int>("LastTableId")
+                        .HasColumnType("integer")
+                        .HasColumnName("last_table_id");
+
+                    b.Property<int>("SectionsDeclared")
+                        .HasColumnType("integer")
+                        .HasColumnName("sections_declared");
+
+                    b.Property<int>("SectionsHeard")
+                        .HasColumnType("integer")
+                        .HasColumnName("sections_heard");
+
+                    b.Property<int>("SegmentsDeclared")
+                        .HasColumnType("integer")
+                        .HasColumnName("segments_declared");
+
+                    b.Property<int>("SegmentsHeard")
+                        .HasColumnType("integer")
+                        .HasColumnName("segments_heard");
+
+                    b.Property<int>("VersionChanges")
+                        .HasColumnType("integer")
+                        .HasColumnName("version_changes");
+
+                    b.HasKey("NetworkId", "TransportStreamId", "ServiceId", "TableId")
+                        .HasName("pk_stream_visit_tally");
+
+                    b.ToTable("stream_visit_tally", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_stream_visit_tally_counts", "segments_declared >= segments_heard AND segments_heard >= 0 AND sections_declared >= 0 AND sections_heard >= 0 AND version_changes >= 0");
+                        });
+                });
+
             modelBuilder.Entity("Carina.Domain.Scans.ScanRun", b =>
                 {
                     b.Property<Guid>("Id")
@@ -841,6 +892,16 @@ namespace Carina.Db.Migrations
                         .HasConstraintName("fk_candidate_channel_broadcast_service_network_id_service_id");
                 });
 
+            modelBuilder.Entity("Carina.Domain.Programmes.VisitTally", b =>
+                {
+                    b.HasOne("Carina.Domain.Programmes.StreamVisit", null)
+                        .WithMany("Tally")
+                        .HasForeignKey("NetworkId", "TransportStreamId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_stream_visit_tally_stream_visit_network_id_transport_stream");
+                });
+
             modelBuilder.Entity("Carina.Domain.Scans.ScanRunAttempt", b =>
                 {
                     b.HasOne("Carina.Domain.Scans.ScanRun", null)
@@ -849,6 +910,11 @@ namespace Carina.Db.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_scan_run_attempt_scan_run_scan_run_id");
+                });
+
+            modelBuilder.Entity("Carina.Domain.Programmes.StreamVisit", b =>
+                {
+                    b.Navigation("Tally");
                 });
 #pragma warning restore 612, 618
         }
