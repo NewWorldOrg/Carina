@@ -198,6 +198,60 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
         Assert.Null(await new ProgrammeRepository(reading).CoveredUntilAsync(NextNetwork(), 1049, Cancel));
     }
 
+    [Fact]
+    public async Task TheProgrammesOfEveryAskedServiceComeBackTogether()
+    {
+        int network = NextNetwork();
+        int neighbour = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        var programmes = new ProgrammeRepository(context);
+
+        await programmes.AddAsync(Programme.Discover(Carried(network, 1049, 1, At.AddHours(22)), At), Cancel);
+        await programmes.AddAsync(Programme.Discover(Carried(neighbour, 1050, 1, At.AddHours(22.5)), At), Cancel);
+        await programmes.AddAsync(Programme.Discover(Carried(network, 1049, 2, At.AddHours(30)), At), Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        IReadOnlyList<Programme> found = await new ProgrammeRepository(reading).ListForServicesAsync(
+            [new ProgrammeService(network, 1049), new ProgrammeService(neighbour, 1050)],
+            At.AddHours(21),
+            At.AddHours(24),
+            Cancel);
+
+        Assert.Equal(
+            [(network, 1049, 1), (neighbour, 1050, 1)],
+            found.Select(programme
+                => (programme.NetworkId.Value, programme.ServiceId.Value, programme.EventId.Value)));
+    }
+
+    [Fact]
+    public async Task AProgrammeOfANetworkOrServiceNotAskedForIsNotCarried()
+    {
+        int network = NextNetwork();
+        int neighbour = NextNetwork();
+        int stranger = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        var programmes = new ProgrammeRepository(context);
+
+        await programmes.AddAsync(Programme.Discover(Carried(network, 1049, 1, At.AddHours(22)), At), Cancel);
+        await programmes.AddAsync(Programme.Discover(Carried(network, 1050, 2, At.AddHours(22)), At), Cancel);
+        await programmes.AddAsync(Programme.Discover(Carried(network, 1048, 3, At.AddHours(22)), At), Cancel);
+        await programmes.AddAsync(Programme.Discover(Carried(stranger, 1049, 4, At.AddHours(22)), At), Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        IReadOnlyList<Programme> found = await new ProgrammeRepository(reading).ListForServicesAsync(
+            [new ProgrammeService(network, 1049), new ProgrammeService(neighbour, 1050)],
+            At.AddHours(21),
+            At.AddHours(24),
+            Cancel);
+
+        Assert.DoesNotContain(found, programme => programme.NetworkId.Value == stranger);
+        Assert.DoesNotContain(found, programme => programme.ServiceId.Value == 1048);
+        Assert.DoesNotContain(
+            found,
+            programme => programme.NetworkId.Value == network && programme.ServiceId.Value == 1050);
+        Assert.Equal(1, Assert.Single(found).EventId.Value);
+    }
+
     private static int NextNetwork() => BroadcastIds.NextNetwork();
 
     private static ProgrammeId Id(int network, int carried = 1)
@@ -209,6 +263,16 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
             new TransportStreamId(32739),
             startsAt ?? At.AddHours(22),
             (startsAt ?? At.AddHours(22)).AddHours(1),
+            "トップニュース先出し\U0001F211",
+            "きょうのみどころ",
+            IsShadow: false);
+
+    private static ProgrammeBroadcast Carried(int network, int service, int carried, DateTime startsAt)
+        => new(
+            new ProgrammeId(new NetworkId(network), new ServiceId(service), new EventId(carried)),
+            new TransportStreamId(32739),
+            startsAt,
+            startsAt.AddHours(1),
             "トップニュース先出し\U0001F211",
             "きょうのみどころ",
             IsShadow: false);
