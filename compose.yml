@@ -20,17 +20,27 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      default:
+        aliases:
+          - carina-api
+      carina-web:
+        aliases:
+          - carina-api
 
   proxy:
     image: nginx:1.29-alpine
     ports:
-      - ${PROXY_PORT:-8000}:8080
+      - ${PROXY_PORT:-8080}:8080
     volumes:
       - ./docker/proxy.conf.template:/etc/nginx/templates/default.conf.template:ro
     environment:
       NGINX_ENVSUBST_FILTER: ^CARINA_
-      CARINA_APP_ORIGIN: ${CARINA_APP_ORIGIN:-http://app:8080}
-      CARINA_WEB_ORIGIN: ${CARINA_WEB_ORIGIN:-http://host.docker.internal:8080}
+      CARINA_APP_ORIGIN: ${CARINA_APP_ORIGIN:-http://carina-api:8080}
+      CARINA_WEB_ORIGIN: ${CARINA_WEB_ORIGIN:-http://web:3000}
+    networks:
+      - default
+      - carina-web
     extra_hosts:
       - host.docker.internal:host-gateway
     depends_on:
@@ -69,6 +79,11 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+networks:
+  default:
+  carina-web:
+    external: true
 
 volumes:
   nuget:
