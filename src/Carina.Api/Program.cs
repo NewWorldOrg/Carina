@@ -18,6 +18,7 @@ builder.Services
     .AddJsonOptions(options => WireJson.Configure(options.JsonSerializerOptions));
 builder.Services.ConfigureHttpJsonOptions(options => WireJson.Configure(options.SerializerOptions));
 builder.Services.AddApplicationServices();
+builder.Services.AddTrustedProxies(builder.Configuration);
 builder.Services.AddCarinaInfrastructure(builder.Configuration);
 builder.Services
     .AddAuthentication(SessionAuthenticationHandler.SchemeName)
@@ -37,6 +38,8 @@ WebApplication app = builder.Build();
 
 
 app.UseMiddleware<UnhandledFailureMiddleware>();
+app.UseForwardedHeaders();
+app.UseMiddleware<ForwardedHeadersDiagnosticMiddleware>();
 app.UseCookiePolicy(SessionCookiePolicy.Options);
 app.UseAuthentication();
 app.UseMiddleware<DefaultDenyAuthenticationMiddleware>();
