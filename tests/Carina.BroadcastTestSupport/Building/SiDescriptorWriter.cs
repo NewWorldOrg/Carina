@@ -52,6 +52,29 @@ public static class SiDescriptorWriter
         return DescriptorWriter.Of(DescriptorTags.TransportStreamInformation, payload.ToArray());
     }
 
+    public static byte[] ShortEvent(byte[] name, byte[] summary)
+        => DescriptorWriter.Of(
+            DescriptorTags.ShortEvent,
+            new ByteWriter()
+                .Run("jpn"u8)
+                .Byte(name.Length)
+                .Run(name)
+                .Byte(summary.Length)
+                .Run(summary)
+                .ToArray());
+
+    public static byte[] EventGroup(EventGroupKind kind, params (int ServiceId, int EventId)[] events)
+    {
+        ByteWriter payload = new ByteWriter().Byte(((int)kind << 4) | events.Length);
+
+        foreach ((int serviceId, int eventId) in events)
+        {
+            payload.Word(serviceId).Word(eventId);
+        }
+
+        return DescriptorWriter.Of(DescriptorTags.EventGroup, payload.ToArray());
+    }
+
     public static byte[] PartialReception(params int[] serviceIds)
     {
         var payload = new ByteWriter();
