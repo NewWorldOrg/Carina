@@ -1,3 +1,4 @@
+using Carina.Api.Authentication;
 using Carina.Api.Common;
 using Carina.Api.Requests;
 using Carina.Api.Responder;
@@ -10,6 +11,7 @@ namespace Carina.Api.Controllers.Tuners;
 
 [ApiController]
 [Route("api/tuners")]
+[EndpointEffect(EndpointEffect.Changing)]
 public sealed class PutTunersAction(TunerLedgerService tunerLedgerService) : ControllerBase
 {
     [HttpPut]

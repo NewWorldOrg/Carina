@@ -1,3 +1,4 @@
+using Carina.Api.Authentication;
 using Carina.Api.Common;
 using Carina.Api.Responder;
 using Carina.Api.Responder.DriverStatus;
@@ -9,6 +10,7 @@ namespace Carina.Api.Controllers.DriverStatus;
 
 [ApiController]
 [Route("api/driver/restart")]
+[EndpointEffect(EndpointEffect.Changing)]
 public sealed class RestartDriverAction(DriverRestartService driverRestartService)
     : ControllerBase
 {

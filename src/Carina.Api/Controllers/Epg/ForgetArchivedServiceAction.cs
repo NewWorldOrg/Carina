@@ -1,3 +1,4 @@
+using Carina.Api.Authentication;
 using Carina.Api.Common;
 using Carina.Api.Requests;
 using Carina.Api.Responder;
@@ -12,6 +13,7 @@ public sealed record ArchiveForgottenResponder(int Forgotten);
 
 [ApiController]
 [Route("api/epg/archive/forget-service")]
+[EndpointEffect(EndpointEffect.Destructive)]
 public sealed class ForgetArchivedServiceAction(ArchiveService archive) : ControllerBase
 {
     [HttpPost]

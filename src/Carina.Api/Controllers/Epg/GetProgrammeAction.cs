@@ -1,3 +1,4 @@
+using Carina.Api.Authentication;
 using Carina.Api.Common;
 using Carina.Api.Responder;
 using Carina.Api.Responder.Epg;
@@ -10,6 +11,7 @@ namespace Carina.Api.Controllers.Epg;
 
 [ApiController]
 [Route("api/programs/{id}")]
+[EndpointEffect(EndpointEffect.Reading)]
 public sealed class GetProgrammeAction(ProgrammeGuideService guide) : ControllerBase
 {
     [HttpGet]
