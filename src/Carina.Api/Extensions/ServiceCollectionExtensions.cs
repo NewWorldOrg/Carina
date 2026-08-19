@@ -10,6 +10,9 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<LocalAccountService>();
         services.AddScoped<AuthSessionService>();
+        services.AddScoped<OidcLoginService>();
+        services.AddScoped<OidcConfigService>();
+        services.AddScoped<HealthService>();
         services.AddScoped<DriverStatusService>();
         services.AddScoped<DriverRestartService>();
         services.AddScoped<TunerLedgerService>();

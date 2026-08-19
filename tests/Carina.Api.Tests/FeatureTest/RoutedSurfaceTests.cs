@@ -34,6 +34,7 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
                 "POST /api/epg/archive/forget-service",
                 "POST /api/epg/rebuild",
                 "POST /api/tuners/scan/{scanId:guid}/apply",
+                "PUT /api/auth/oidc-config",
             ],
             Inventory()
                 .Where(surface => surface.Effect is EndpointEffect.Destructive)
@@ -50,6 +51,8 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
         Assert.Contains("/api/events", patterns, StringComparer.Ordinal);
         Assert.Contains("/api/programs/bulk", patterns, StringComparer.Ordinal);
         Assert.Contains("/api/health", patterns, StringComparer.Ordinal);
+        Assert.Contains(OidcHandshake.StartPath, patterns, StringComparer.Ordinal);
+        Assert.Contains(OidcHandshake.CallbackPath, patterns, StringComparer.Ordinal);
     }
 
     [Fact]

@@ -13,3 +13,16 @@ public sealed record ChangePasswordRequest
 
     public string? NewPassword { get; init; }
 }
+
+public sealed record OidcConfigRequest
+{
+    public string? DiscoveryUrl { get; init; }
+
+    public string? ClientId { get; init; }
+
+    public string? ClientSecret { get; init; }
+
+    public IReadOnlyList<string>? AllowedGroups { get; init; }
+
+    public IReadOnlyList<string>? AllowedHostedDomains { get; init; }
+}
