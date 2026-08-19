@@ -1,7 +1,9 @@
+using Carina.BroadcastTestSupport;
 using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Scans;
 using Carina.Infrastructure.Scanning;
+using Carina.TestSupport;
 
 namespace Carina.Infrastructure.Tests.Scanning;
 
@@ -31,7 +33,7 @@ public sealed class ScanWalkTests
                 TransportStreamId = SomeStreamId,
                 Services = [new SyntheticService(SomeServiceId, "Carina One")],
                 RemoteControlKeyId = 6,
-            }));
+            }.ToBytes()));
 
         ScanOutcome outcome = await new ScanHarness(driver).Orchestrator.RunAsync(
             ScanScope.Over([Channel53]),
@@ -53,7 +55,7 @@ public sealed class ScanWalkTests
                 TransportStreamId = SomeStreamId,
                 Services = [new SyntheticService(SomeServiceId, "Carina One")],
                 RemoteControlKeyId = 6,
-            }));
+            }.ToBytes()));
         var harness = new ScanHarness(driver);
 
         harness.Services.Services.Add(BroadcastService.Discover(
@@ -85,7 +87,7 @@ public sealed class ScanWalkTests
             Channel53,
             ChannelScript.Carrying(SyntheticStream.Carrying(
                 SomeStreamId,
-                new SyntheticService(SomeServiceId, "Carina One"))));
+                new SyntheticService(SomeServiceId, "Carina One")).ToBytes()));
         var harness = new ScanHarness(driver);
 
         harness.Services.Services.Add(BroadcastService.Discover(
@@ -118,7 +120,7 @@ public sealed class ScanWalkTests
             Channel53,
             ChannelScript.Carrying(SyntheticStream.Carrying(
                 SomeStreamId,
-                new SyntheticService(SomeServiceId, "Carina One"))));
+                new SyntheticService(SomeServiceId, "Carina One")).ToBytes()));
 
         ScanOutcome outcome = await new ScanHarness(driver).Orchestrator.RunAsync(
             ScanScope.Over([Channel53]),
@@ -132,7 +134,7 @@ public sealed class ScanWalkTests
     {
         var carrying = ChannelScript.Carrying(SyntheticStream.Carrying(
             SomeStreamId,
-            new SyntheticService(SomeServiceId, "Carina One")));
+            new SyntheticService(SomeServiceId, "Carina One")).ToBytes());
         ScriptedDriverClient driver = new ScriptedDriverClient()
             .Script(Slot9, carrying)
             .Script(Slot11, carrying);
@@ -159,10 +161,10 @@ public sealed class ScanWalkTests
         ScriptedDriverClient driver = new ScriptedDriverClient()
             .Script(Channel53, ChannelScript.Carrying(SyntheticStream.Carrying(
                 SomeStreamId,
-                new SyntheticService(SomeServiceId, "Carina One"))))
+                new SyntheticService(SomeServiceId, "Carina One")).ToBytes()))
             .Script(Channel55, ChannelScript.Carrying(SyntheticStream.Carrying(
                 50003,
-                new SyntheticService(SomeServiceId, "Carina One"))));
+                new SyntheticService(SomeServiceId, "Carina One")).ToBytes()));
 
         ScanOutcome outcome = await new ScanHarness(driver).Orchestrator.RunAsync(
             ScanScope.Over([Channel53, Channel55]),
@@ -182,7 +184,7 @@ public sealed class ScanWalkTests
             BusyRefusalsRemaining = 3,
         }.Script(Channel53, ChannelScript.Carrying(SyntheticStream.Carrying(
             SomeStreamId,
-            new SyntheticService(SomeServiceId, "Carina One"))));
+            new SyntheticService(SomeServiceId, "Carina One")).ToBytes()));
 
         ScanOutcome outcome = await Harness(driver, clock).Orchestrator.RunAsync(
             ScanScope.Over([Channel53]),
@@ -218,7 +220,7 @@ public sealed class ScanWalkTests
         ScriptedDriverClient driver = new ScriptedDriverClient()
             .Script(Channel53, ChannelScript.Carrying(SyntheticStream.Carrying(
                 SomeStreamId,
-                new SyntheticService(SomeServiceId, "Carina One"))))
+                new SyntheticService(SomeServiceId, "Carina One")).ToBytes()))
             .Script(Channel55, new ChannelScript
             {
                 Refusal = new DriverProblem(
@@ -227,7 +229,7 @@ public sealed class ScanWalkTests
             })
             .Script(Channel57, ChannelScript.Carrying(SyntheticStream.Carrying(
                 50003,
-                new SyntheticService(50102, "Carina Two"))));
+                new SyntheticService(50102, "Carina Two")).ToBytes()));
 
         ScanOutcome outcome = await new ScanHarness(driver).Orchestrator.RunAsync(
             ScanScope.Over([Channel53, Channel55, Channel57]),
@@ -247,11 +249,11 @@ public sealed class ScanWalkTests
         ScriptedDriverClient driver = new ScriptedDriverClient()
             .Script(Channel53, ChannelScript.Carrying(SyntheticStream.Carrying(
                 SomeStreamId,
-                new SyntheticService(SomeServiceId, "Carina One"))))
+                new SyntheticService(SomeServiceId, "Carina One")).ToBytes()))
             .Script(Channel55, new ChannelScript { Paced = () => PacedStream.Torn() })
             .Script(Channel57, ChannelScript.Carrying(SyntheticStream.Carrying(
                 50003,
-                new SyntheticService(50102, "Carina Two"))));
+                new SyntheticService(50102, "Carina Two")).ToBytes()));
 
         ScanOutcome outcome = await new ScanHarness(driver).Orchestrator.RunAsync(
             ScanScope.Over([Channel53, Channel55, Channel57]),
@@ -317,7 +319,7 @@ public sealed class ScanWalkTests
     {
         var carrying = ChannelScript.Carrying(SyntheticStream.Carrying(
             SomeStreamId,
-            new SyntheticService(SomeServiceId, "Carina One")));
+            new SyntheticService(SomeServiceId, "Carina One")).ToBytes());
         ScriptedDriverClient driver = new ScriptedDriverClient
         {
             UnreachableFrom = "the socket went away",

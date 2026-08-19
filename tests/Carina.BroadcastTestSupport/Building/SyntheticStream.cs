@@ -1,8 +1,7 @@
 using Carina.Broadcast.Descriptors;
 using Carina.Broadcast.Tables;
-using Carina.BroadcastTestSupport;
 
-namespace Carina.Infrastructure.Tests.Scanning;
+namespace Carina.BroadcastTestSupport;
 
 public sealed record SyntheticService(
     int ServiceId,
