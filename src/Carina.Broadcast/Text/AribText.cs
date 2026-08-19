@@ -16,9 +16,13 @@ public static class AribText
 
     private const byte SingleShiftThree = 0x1D;
 
+    private const byte ActivePositionReturn = 0x0D;
+
     private const byte ActivePositionForward = 0x16;
 
     private const byte ActivePositionSet = 0x1C;
+
+    private const char LineBreak = '\n';
 
     private const byte Delete = 0x7F;
 
@@ -69,6 +73,10 @@ public static class AribText
                         break;
                     case SingleShiftThree:
                         single = 3;
+
+                        break;
+                    case ActivePositionReturn:
+                        text.Append(LineBreak);
 
                         break;
                 }
@@ -128,7 +136,14 @@ public static class AribText
             at += width;
         }
 
-        return text.ToString();
+        int length = text.Length;
+
+        while (length > 0 && text[length - 1] == LineBreak)
+        {
+            length--;
+        }
+
+        return text.ToString(0, length);
     }
 
     private static bool IsGraphic(byte code) => (code & 0x7F) is >= 0x21 and <= 0x7E;

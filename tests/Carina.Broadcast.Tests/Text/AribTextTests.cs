@@ -215,6 +215,46 @@ public sealed class AribTextTests
     }
 
     [Fact]
+    public void AnActivePositionReturnIsTheLineBreakItStandsFor()
+    {
+        byte[] bytes = new AribTextWriter().Kanji("文字").Raw(0x0D).Hiragana("てすと").ToArray();
+
+        Assert.Equal("文字\nてすと", AribText.Decode(bytes));
+    }
+
+    [Fact]
+    public void BlankLinesBetweenTwoLinesAreKeptAsManyAsTheyWereBroadcast()
+    {
+        byte[] bytes = new AribTextWriter().Kanji("文字").Raw(0x0D, 0x0D, 0x0D).Hiragana("てすと").ToArray();
+
+        Assert.Equal("文字\n\n\nてすと", AribText.Decode(bytes));
+    }
+
+    [Fact]
+    public void ALineBreakThatEndsTheTextOpensNoLineToKeep()
+    {
+        byte[] bytes = new AribTextWriter().Hiragana("てすと").Raw(0x0D, 0x0D).ToArray();
+
+        Assert.Equal("てすと", AribText.Decode(bytes));
+    }
+
+    [Fact]
+    public void SpacingWithinALineSurvivesTheTrimmingOfTheLineBreaksBehindIt()
+    {
+        byte[] bytes = new AribTextWriter().Hiragana("てすと").Raw(0x20, 0x0D).ToArray();
+
+        Assert.Equal("てすと ", AribText.Decode(bytes));
+    }
+
+    [Fact]
+    public void TheOtherPositioningControlsAreNotLineBreaks()
+    {
+        byte[] bytes = new AribTextWriter().Kanji("文字").Raw(0x08, 0x09, 0x0A, 0x0B, 0x0C).Hiragana("てすと").ToArray();
+
+        Assert.Equal("文字てすと", AribText.Decode(bytes));
+    }
+
+    [Fact]
     public void AColourControlLeavesNoMarkOfItsOwn()
     {
         byte[] bytes = new AribTextWriter().Raw(0x80).Hiragana("てすと").Raw(0x87).ToArray();
