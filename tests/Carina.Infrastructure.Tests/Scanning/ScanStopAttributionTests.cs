@@ -1,5 +1,6 @@
 using Carina.Domain.Channels;
 using Carina.Domain.Scans;
+using Carina.TestSupport;
 
 namespace Carina.Infrastructure.Tests.Scanning;
 

@@ -1,4 +1,4 @@
-namespace Carina.Infrastructure.Tests.Scanning;
+namespace Carina.TestSupport;
 
 public sealed class PacedStream : Stream
 {
@@ -54,9 +54,11 @@ public sealed class PacedStream : Stream
     {
         while (seen < read)
         {
-            Assert.True(
-                parked.Wait(Deadlock),
-                $"The scan never settled before read {seen + 1}; it is stuck somewhere else.");
+            if (!parked.Wait(Deadlock))
+            {
+                throw new TimeoutException(
+                    $"The scan never settled before read {seen + 1}; it is stuck somewhere else.");
+            }
 
             seen++;
         }

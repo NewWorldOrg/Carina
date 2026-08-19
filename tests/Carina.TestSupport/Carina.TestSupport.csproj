@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/Carina.Domain/Carina.Domain.csproj" />
+    <ProjectReference Include="../Carina.BroadcastTestSupport/Carina.BroadcastTestSupport.csproj" />
   </ItemGroup>
 
 </Project>
