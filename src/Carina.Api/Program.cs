@@ -32,8 +32,10 @@ WebApplication app = builder.Build();
 
 
 app.UseMiddleware<UnhandledFailureMiddleware>();
+app.UseCookiePolicy(SessionCookiePolicy.Options);
 app.UseAuthentication();
 app.UseMiddleware<DefaultDenyAuthenticationMiddleware>();
+app.UseMiddleware<StateChangingRequestMiddleware>();
 
 if (app.Environment.IsDevelopment())
 {

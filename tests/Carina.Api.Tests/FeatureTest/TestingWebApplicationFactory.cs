@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Net.Http.Headers;
 
 namespace Carina.Api.Tests.FeatureTest;
 
@@ -16,5 +17,16 @@ public class TestingWebApplicationFactory : WebApplicationFactory<Program>
             "ConnectionStrings:Carina",
             "Host=db;Port=5432;Database=carina;Username=carina;Password=placeholder");
         builder.UseSetting("CARINA_DRIVER_SOCKET", DriverSocketPath);
+    }
+
+    protected override void ConfigureClient(HttpClient client)
+    {
+        ArgumentNullException.ThrowIfNull(client);
+
+        base.ConfigureClient(client);
+
+        client.DefaultRequestHeaders.Add(
+            HeaderNames.Origin,
+            client.BaseAddress!.GetLeftPart(UriPartial.Authority));
     }
 }
