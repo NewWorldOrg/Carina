@@ -222,9 +222,12 @@ public sealed class ChannelSchemaTests
         Assert.Equal(
             [
                 "archived_programme",
+                "auth_session",
                 "broadcast_service",
                 "candidate_channel",
                 "collection_epoch",
+                "local_account",
+                "oidc_config",
                 "programme",
                 "satellite_transport_stream",
                 "scan_run",
