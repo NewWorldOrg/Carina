@@ -89,6 +89,39 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
     }
 
     [Fact]
+    public async Task AHurriedWalkVisitsAStreamThatIsStillBackingOff()
+    {
+        int network = NextNetwork();
+        var driver = new ScriptedDriverClient();
+
+        driver.Script(TuningParameters.Terrestrial(22), ChannelScript.NoLock());
+
+        await using CarinaDbContext context = database.Open();
+        CollectionRound round = Round(driver, context);
+
+        await round.WalkAsync([Stream(network, 1, 22)], Cancel, Cancel);
+
+        Assert.Equal(
+            new RoundResult(1, 0, 1),
+            await round.WalkAsync([Stream(network, 1, 22)], Cancel, Cancel, hurried: true));
+    }
+
+    [Fact]
+    public async Task AHurriedWalkAsksTheDriverForTheHurriedPurpose()
+    {
+        int network = NextNetwork();
+        var driver = new ScriptedDriverClient();
+
+        driver.Script(TuningParameters.Terrestrial(22), Carrying(network, 1));
+
+        await using CarinaDbContext context = database.Open();
+
+        await Round(driver, context).WalkAsync([Stream(network, 1, 22)], Cancel, Cancel, hurried: true);
+
+        Assert.Equal([SessionPurpose.SurveyNow], driver.Purposes);
+    }
+
+    [Fact]
     public async Task ComingBackShortTwiceAddsUpInTheLedger()
     {
         int network = NextNetwork();
