@@ -425,6 +425,81 @@ public sealed class DriverIpcClientTests
     }
 
     [Fact]
+    public async Task AHurriedSurveyIsAskedOfADriverThatPredatesItAsAnOrdinaryOne()
+    {
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
+            socketPath,
+            FakeDriver.HelloFor("instance-a"));
+        using DriverIpcClient client = ClientFor(socketPath);
+
+        DriverCall<SessionSnapshot> call = await client.StartSessionAsync(
+            SurveyFor(SessionPurpose.SurveyNow),
+            CancellationToken.None);
+
+        Assert.True(call.TryGetValue(out SessionSnapshot? snapshot));
+        Assert.Equal(SessionPurpose.Survey, driver.LastStartRequest?.Purpose);
+        Assert.Equal(SessionPurpose.Survey, snapshot.Purpose);
+    }
+
+    [Fact]
+    public async Task AHurriedSurveyIsAskedForPlainlyOfADriverThatDeclaresIt()
+    {
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
+            socketPath,
+            FakeDriver.HelloFor(
+                "instance-a",
+                capabilities: [.. TunerKeepingCapabilities, .. SessionPurposes.Capabilities]));
+        using DriverIpcClient client = ClientFor(socketPath);
+
+        await client.StartSessionAsync(SurveyFor(SessionPurpose.SurveyNow), CancellationToken.None);
+
+        Assert.Equal(SessionPurpose.SurveyNow, driver.LastStartRequest?.Purpose);
+    }
+
+    [Fact]
+    public async Task APurposeWithNothingOlderToFallBackOnNeverReachesTheDriver()
+    {
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
+            socketPath,
+            FakeDriver.HelloFor("instance-a"));
+        using DriverIpcClient client = ClientFor(socketPath);
+
+        DriverCall<SessionSnapshot> call = await client.StartSessionAsync(
+            SurveyFor((SessionPurpose)99),
+            CancellationToken.None);
+
+        Assert.Equal(DriverCallOutcome.Refused, call.Outcome);
+        Assert.Equal(SessionRefusalTitles.CapabilityMissing, call.Problem?.Title);
+        Assert.Null(driver.LastStartRequest);
+    }
+
+    [Fact]
+    public async Task ARecordingIsSentWithoutFirstAskingTheDriverWhatItAccepts()
+    {
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
+            socketPath,
+            FakeDriver.HelloFor("instance-a"));
+        using DriverIpcClient client = ClientFor(socketPath);
+
+        await client.StartSessionAsync(SurveyFor(SessionPurpose.Recording), CancellationToken.None);
+
+        Assert.Equal(0, driver.RequestsFor(DriverEndpoints.Health));
+        Assert.Equal(SessionPurpose.Recording, driver.LastStartRequest?.Purpose);
+    }
+
+    private static StartSessionRequest SurveyFor(SessionPurpose purpose)
+        => new()
+        {
+            SessionId = SessionId.Parse("epg-1"),
+            Purpose = purpose,
+            Tuning = new TuningRequest(TunerKind.Terrestrial, 55),
+        };
+
+    [Fact]
     public async Task AStopAcknowledgedWithoutABodyStillReachesTheDriver()
     {
         string socketPath = NewSocketPath();
