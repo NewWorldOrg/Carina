@@ -40,6 +40,14 @@ public sealed class OidcSettingsConfiguration : IEntityTypeConfiguration<OidcSet
             .HasConversion(secret => secret!.Value, value => new ClientSecret(value))
             .HasMaxLength(512);
 
+        builder.PrimitiveCollection(settings => settings.AllowedGroups)
+            .HasDefaultValueSql("'{}'")
+            .IsRequired();
+
+        builder.PrimitiveCollection(settings => settings.AllowedHostedDomains)
+            .HasDefaultValueSql("'{}'")
+            .IsRequired();
+
         builder.Property(settings => settings.UpdatedAt).IsRequired();
     }
 }

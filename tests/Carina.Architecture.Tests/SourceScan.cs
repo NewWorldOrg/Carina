@@ -8,6 +8,12 @@ public static class SourceScan
     public static IReadOnlyList<string> FilesMentioningAll(string directory, params string[] identifiers)
         => Matching(directory, source => MentionsAll(source, identifiers));
 
+    public static IReadOnlyList<string> FilesMentioningBoth(
+        string directory,
+        IEnumerable<string> these,
+        IEnumerable<string> those)
+        => Matching(directory, source => Mentions(source, these) && Mentions(source, those));
+
     private static IReadOnlyList<string> Matching(string directory, Func<string, bool> predicate)
         => Directory
             .EnumerateFiles(directory, "*.cs", SearchOption.AllDirectories)

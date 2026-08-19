@@ -24,6 +24,26 @@ public static class AuthenticationBypasses
         "EndSessionEndpoint",
     ];
 
+    public static IReadOnlyList<string> ClientSecretInTheClear { get; } =
+    [
+        "ClientSecret.Value",
+        "ClientSecret!.Value",
+        "secret.Value",
+        "secret!.Value",
+    ];
+
+    public static IReadOnlyList<string> Logging { get; } =
+    [
+        "ILogger",
+        "LogTrace",
+        "LogDebug",
+        "LogInformation",
+        "LogWarning",
+        "LogError",
+        "LogCritical",
+        "Console.Write",
+    ];
+
     public static IReadOnlyList<string> OutboundCallers { get; } =
     [
         "HttpClient",

@@ -50,6 +50,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IAtomicWrite, DatabaseAtomicWrite>();
         services.AddScoped<IAuthSessionRepository, AuthSessionRepository>();
         services.AddScoped<ILocalAccountRepository, LocalAccountRepository>();
+        services.AddScoped<IOidcSettingsRepository, OidcSettingsRepository>();
+        services.AddScoped<IOidcDirectory, OidcDirectory>();
         services.AddScoped<IBroadcastServiceRepository, BroadcastServiceRepository>();
         services.AddScoped<IProgrammeRepository, ProgrammeRepository>();
         services.AddScoped<IStreamVisitRepository, StreamVisitRepository>();
@@ -68,9 +70,14 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ArchiveTransfer>();
 
         services.AddSingleton(TimeProvider.System);
+        services.AddHttpClient<IOidcGateway, OidcGateway>();
         services.TryAddSingleton(SessionPolicy.Default);
         services.TryAddSingleton(PasswordHashPolicy.Default);
         services.TryAddSingleton(LoginRatePolicy.Default);
+        services.TryAddSingleton(OidcLoginPolicy.Default);
+        services.TryAddSingleton<OidcDirectoryCache>();
+        services.TryAddSingleton<IOidcReachability, OidcReachability>();
+        services.TryAddSingleton<IPendingOidcLoginStore, PendingOidcLoginStore>();
         services.TryAddSingleton<IPasswordHasher, Argon2idPasswordHasher>();
         services.TryAddSingleton<ILoginThrottle, LoginThrottle>();
         services.AddSingleton<IDriverStatusReader, MonitoredDriverStatusReader>();
@@ -90,6 +97,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IAppEventPublisher>(provider =>
             provider.GetRequiredService<AppEventHub>());
         services.AddHostedService<LocalAccountBootstrap>();
+        services.AddHostedService<OidcDiscoveryProbe>();
         services.AddHostedService<DriverConnectionSupervisor>();
         services.AddHostedService<AppEventHubLifetime>();
         services.AddHostedService(provider => provider.GetRequiredService<ScanRunner>());

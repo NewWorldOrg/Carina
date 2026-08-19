@@ -22,9 +22,15 @@ public sealed class OidcSettings
 
     public ClientSecret? ClientSecret { get; private set; }
 
+    public IReadOnlyList<string> AllowedGroups { get; private set; } = [];
+
+    public IReadOnlyList<string> AllowedHostedDomains { get; private set; } = [];
+
     public DateTime UpdatedAt { get; private set; }
 
     public bool IsConfigured => DiscoveryUrl is not null && ClientId is not null && ClientSecret is not null;
+
+    public OidcRestriction Restriction => OidcRestriction.Of(AllowedGroups, AllowedHostedDomains);
 
     public static OidcSettings Unconfigured(DateTime at) => Rehydrate(TheOnlyRow, null, null, null, at);
 
@@ -33,7 +39,9 @@ public sealed class OidcSettings
         string? discoveryUrl,
         string? clientId,
         ClientSecret? clientSecret,
-        DateTime updatedAt)
+        DateTime updatedAt,
+        IEnumerable<string>? allowedGroups = null,
+        IEnumerable<string>? allowedHostedDomains = null)
     {
         bool anything = discoveryUrl is not null || clientId is not null || clientSecret is not null;
         bool everything = discoveryUrl is not null && clientId is not null && clientSecret is not null;
@@ -51,6 +59,10 @@ public sealed class OidcSettings
             DiscoveryUrl = discoveryUrl is null ? null : ValidatedDiscoveryUrl(discoveryUrl),
             ClientId = clientId is null ? null : ValidatedClientId(clientId),
             ClientSecret = clientSecret,
+            AllowedGroups = OidcRestriction.Tidied(allowedGroups, nameof(allowedGroups)),
+            AllowedHostedDomains = OidcRestriction.Tidied(
+                allowedHostedDomains,
+                nameof(allowedHostedDomains)),
             UpdatedAt = UtcTimes.Required(updatedAt, nameof(updatedAt)),
         };
     }
@@ -73,6 +85,21 @@ public sealed class OidcSettings
         UpdatedAt = at;
     }
 
+    public void Restrict(
+        IEnumerable<string>? allowedGroups,
+        IEnumerable<string>? allowedHostedDomains,
+        DateTime at)
+    {
+        UtcTimes.Required(at, nameof(at));
+        ArgumentOutOfRangeException.ThrowIfLessThan(at, UpdatedAt, nameof(at));
+
+        AllowedGroups = OidcRestriction.Tidied(allowedGroups, nameof(allowedGroups));
+        AllowedHostedDomains = OidcRestriction.Tidied(
+            allowedHostedDomains,
+            nameof(allowedHostedDomains));
+        UpdatedAt = at;
+    }
+
     public void Clear(DateTime at)
     {
         UtcTimes.Required(at, nameof(at));
@@ -81,6 +108,8 @@ public sealed class OidcSettings
         DiscoveryUrl = null;
         ClientId = null;
         ClientSecret = null;
+        AllowedGroups = [];
+        AllowedHostedDomains = [];
         UpdatedAt = at;
     }
 

@@ -172,6 +172,40 @@ public sealed class AuthSchemaTests(MigratedScratchDatabase database)
             "INSERT INTO local_account (id, username, password_hash, created_at, password_changed_at) "
             + $"VALUES ({id}, '{username}', '{Hash}', {Created}, {changed ?? Created})");
 
+    [Fact]
+    public async Task AProviderThatNamesNobodyStillHasTwoEmptyListsRatherThanNulls()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        await Execute(connection, "DELETE FROM oidc_config");
+        await Settings(connection, 1, "'https://login.example.test/c'", "'carina'", "'a-secret'");
+
+        Assert.Equal(
+            1,
+            await Count(
+                connection,
+                "oidc_config WHERE allowed_groups = '{}' AND allowed_hosted_domains = '{}'"));
+    }
+
+    [Fact]
+    public async Task WhoIsAllowedThroughIsKeptAsAListRatherThanOneRunTogetherString()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        await Execute(connection, "DELETE FROM oidc_config");
+        await Settings(connection, 1, "'https://login.example.test/c'", "'carina'", "'a-secret'");
+        await Execute(
+            connection,
+            "UPDATE oidc_config SET allowed_groups = ARRAY['operators', 'owners'] WHERE id = 1");
+
+        Assert.Equal(
+            1,
+            await Count(connection, "oidc_config WHERE 'owners' = ANY(allowed_groups)"));
+        Assert.Equal(
+            1,
+            await Count(connection, "oidc_config WHERE array_length(allowed_groups, 1) = 2"));
+    }
+
     private static Task Settings(
         NpgsqlConnection connection,
         int id,

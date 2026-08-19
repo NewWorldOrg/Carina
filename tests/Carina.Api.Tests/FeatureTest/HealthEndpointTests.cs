@@ -20,5 +20,6 @@ public sealed class HealthEndpointTests(TestingWebApplicationFactory factory)
 
         HealthResponder? payload = await response.Content.ReadFromJsonAsync<HealthResponder>();
         Assert.Equal("ok", payload?.Status);
+        Assert.Empty(payload!.Degraded);
     }
 }
