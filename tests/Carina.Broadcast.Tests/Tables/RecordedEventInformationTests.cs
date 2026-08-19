@@ -88,6 +88,20 @@ public sealed class RecordedEventInformationTests
     }
 
     [Fact]
+    public void TheLongDescriptionKeepsTheLinesItWasBroadcastOn()
+    {
+        ExtendedEventDescription? detailed = Assert.Single(Table(2).Events).Detailed;
+
+        Assert.NotNull(detailed);
+
+        string[] lines = detailed.Items[1].Text.Split('\n');
+
+        Assert.Equal(7, lines.Length);
+        Assert.DoesNotContain(lines, line => line.Length == 0);
+        Assert.All(detailed.Items, item => Assert.False(item.Text.EndsWith('\n')));
+    }
+
+    [Fact]
     public void TheDescriptionArrivesSpreadOverSeveralDescriptors()
     {
         int carried = Assert.Single(Table(2).Events).Descriptors
