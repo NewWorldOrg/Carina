@@ -70,6 +70,10 @@ docker compose exec app dotnet test
 
 API はコンテナの 8080 番で待ち受け、ホストの 8081 番に出ます（`API_PORT` で変えられます）。
 
+同一オリジンで触るときはプロキシ側、ホストの 8000 番（`PROXY_PORT`）を使います。
+`/api/*` が app へ、それ以外が画面へ行きます。画面をどこで動かしているかは
+`CARINA_WEB_ORIGIN` で指します。詳しくは `deploy/README.md`。
+
 driver のヘルスチェックは driver 自身です。
 
 ```bash
@@ -129,6 +133,8 @@ task probe:driver     # ヘルスチェック（ビルドし直さない）
 | `ConnectionStrings__Carina` | API が使う PostgreSQL の接続文字列 |
 | `CARINA_DB_CONNECTION` | マイグレーション実行時の接続文字列 |
 | `CARINA_ROLE` | イメージが起動する役割（`driver` / `app` / `web` / `all` / `migrate`） |
+| `CARINA_KNOWN_PROXIES` | 前段のリバースプロキシのアドレス。ここに無い相手の `X-Forwarded-*` は読みません |
+| `CARINA_KNOWN_NETWORKS` | 同じくネットワークを アドレス/プレフィクス で |
 
 ## イメージの役割
 
@@ -143,7 +149,15 @@ task probe:driver     # ヘルスチェック（ビルドし直さない）
 | `all` | driver と app を1つのコンテナで。開発用 |
 
 `/api/*` を app へ、それ以外を画面へ振り分けるのはイメージの外のリバースプロキシの
-仕事です。イメージにプロキシは入れません。
+仕事です。イメージにプロキシは入れません。`role=web` は単独の Deployment として
+動きます。
+
+この振り分けは好みではなく契約です。画面と API が別のオリジンに出るとブラウザは
+セッション Cookie を送らず、状態を変える要求は `Origin` の不一致で断られ、iPad では
+サードパーティ Cookie の遮断に当たります。契約の中身と、それを満たす compose /
+k8s の構成例は `deploy/README.md` にあります。開発用の compose にも同じプロキシが
+入っているのは、開発のときだけ別オリジンになると、認証の不具合が本番でしか出ない
+からです。
 
 ## テスト
 
