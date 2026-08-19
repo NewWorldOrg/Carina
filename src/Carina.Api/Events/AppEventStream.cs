@@ -12,9 +12,17 @@ public static class AppEventStream
 
     public const string ContentType = "text/event-stream";
 
+    public const string Keepalive = ": keepalive\n\n";
+
     public static readonly TimeSpan WritePatience = TimeSpan.FromSeconds(5);
 
-    public static async Task Invoke(HttpContext context, AppEventHub hub, TimeSpan? writePatience = null)
+    public static readonly TimeSpan BetweenKeepalives = TimeSpan.FromSeconds(15);
+
+    public static async Task Invoke(
+        HttpContext context,
+        AppEventHub hub,
+        TimeSpan? writePatience = null,
+        TimeSpan? betweenKeepalives = null)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(hub);
@@ -33,25 +41,28 @@ public static class AppEventStream
             context.Response.Headers.CacheControl = "no-cache";
 
             TimeSpan patience = writePatience ?? WritePatience;
+            TimeSpan quiet = betweenKeepalives ?? BetweenKeepalives;
 
             try
             {
                 await context.Response.StartAsync(context.RequestAborted);
                 await context.Response.Body.FlushAsync(context.RequestAborted);
 
+                Task<IReadOnlyList<AppEventName>> waiting = listener.Take(context.RequestAborted);
+
                 while (true)
                 {
-                    IReadOnlyList<AppEventName> names = await listener.Take(context.RequestAborted);
-
-                    using var leash = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
-                    leash.CancelAfter(patience);
-
-                    foreach (AppEventName name in names)
+                    if (!await SignalledWithin(waiting, quiet, context.RequestAborted))
                     {
-                        await context.Response.WriteAsync(Frame(name.Value), leash.Token);
+                        await WriteAsync(context, Keepalive, patience);
+
+                        continue;
                     }
 
-                    await context.Response.Body.FlushAsync(leash.Token);
+                    IReadOnlyList<AppEventName> names = await waiting;
+                    waiting = listener.Take(context.RequestAborted);
+
+                    await WriteAsync(context, Frames(names), patience);
                 }
             }
             catch (Exception error)
@@ -66,6 +77,33 @@ public static class AppEventStream
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
         return $"event: {name}\ndata\n\n";
+    }
+
+    private static string Frames(IReadOnlyList<AppEventName> names)
+        => string.Concat(names.Select(name => Frame(name.Value)));
+
+    private static async Task<bool> SignalledWithin(
+        Task<IReadOnlyList<AppEventName>> waiting,
+        TimeSpan quiet,
+        CancellationToken cancellationToken)
+    {
+        using var tick = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+        Task quiets = Task.Delay(quiet, tick.Token);
+        bool signalled = await Task.WhenAny(waiting, quiets) != quiets;
+
+        await tick.CancelAsync();
+
+        return signalled;
+    }
+
+    private static async Task WriteAsync(HttpContext context, string payload, TimeSpan patience)
+    {
+        using var leash = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
+        leash.CancelAfter(patience);
+
+        await context.Response.WriteAsync(payload, leash.Token);
+        await context.Response.Body.FlushAsync(leash.Token);
     }
 
     private static Task RefuseAsync(HttpContext context, AppEventHub hub)

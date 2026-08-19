@@ -28,7 +28,9 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
     {
         Assert.Equal(
             [
+                "DELETE /api/auth/sessions/{id}",
                 "DELETE /api/services/{networkId:int}-{serviceId:int}/candidate-channels/{candidateChannelId:guid}",
+                "POST /api/auth/password",
                 "POST /api/epg/archive/forget-service",
                 "POST /api/epg/rebuild",
                 "POST /api/tuners/scan/{scanId:guid}/apply",

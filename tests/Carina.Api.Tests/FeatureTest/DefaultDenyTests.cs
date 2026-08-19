@@ -18,7 +18,7 @@ internal sealed class SeamProbe : IAsyncDisposable
 {
     private readonly TestingWebApplicationFactory factory = new();
 
-    private SeamProbe(bool schemeRegistered)
+    private SeamProbe(bool credentialled)
     {
         WebApplicationFactory<Program> wired = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {
@@ -28,7 +28,7 @@ internal sealed class SeamProbe : IAsyncDisposable
             services.AddSingleton<ISatelliteTransportStreamRepository>(SatelliteStreams);
         }));
 
-        Client = (schemeRegistered ? wired.WithTestScheme() : wired).CreateClient();
+        Client = credentialled ? wired.CreateAuthenticatedClient() : wired.WithTestScheme().CreateClient();
     }
 
     public HttpClient Client { get; }
@@ -41,9 +41,9 @@ internal sealed class SeamProbe : IAsyncDisposable
 
     public HeldSatelliteStreams SatelliteStreams { get; } = new();
 
-    public static SeamProbe WithNoSchemeRegistered() => new(schemeRegistered: false);
+    public static SeamProbe CarryingNoCredentials() => new(credentialled: false);
 
-    public static SeamProbe WithASchemeRegistered() => new(schemeRegistered: true);
+    public static SeamProbe CarryingCredentials() => new(credentialled: true);
 
     public Task<HttpResponseMessage> GetAsync(string path)
         => Client.GetAsync(new Uri(path, UriKind.Relative), HttpCompletionOption.ResponseHeadersRead);
@@ -71,22 +71,9 @@ public sealed class DefaultDenyTests(TestingWebApplicationFactory factory)
 
     [Theory]
     [MemberData(nameof(EveryBusinessSurface))]
-    public async Task ASurfaceAnswersAClientCarryingNoCredentialsWhileTheAppHoldsNoAuthenticationScheme(
-        string path)
+    public async Task ASurfaceRefusesAClientCarryingNoCredentials(string path)
     {
-        await using var probe = SeamProbe.WithNoSchemeRegistered();
-
-        using HttpResponseMessage response = await probe.GetAsync(path);
-
-        Assert.NotEqual(HttpStatusCode.Unauthorized, response.StatusCode);
-    }
-
-    [Theory]
-    [MemberData(nameof(EveryBusinessSurface))]
-    public async Task ASurfaceRefusesAClientCarryingNoCredentialsOnceAnAuthenticationSchemeIsRegistered(
-        string path)
-    {
-        await using var probe = SeamProbe.WithASchemeRegistered();
+        await using var probe = SeamProbe.CarryingNoCredentials();
 
         using HttpResponseMessage response = await probe.GetAsync(path);
 
@@ -94,10 +81,21 @@ public sealed class DefaultDenyTests(TestingWebApplicationFactory factory)
         Assert.Empty(await response.Content.ReadAsByteArrayAsync());
     }
 
-    [Fact]
-    public async Task TheCatalogArrivesWithoutCredentialsRatherThanADenialWithNoWayToSatisfyIt()
+    [Theory]
+    [MemberData(nameof(EveryBusinessSurface))]
+    public async Task ASurfaceAnswersAClientCarryingCredentials(string path)
     {
-        await using var probe = SeamProbe.WithNoSchemeRegistered();
+        await using var probe = SeamProbe.CarryingCredentials();
+
+        using HttpResponseMessage response = await probe.GetAsync(path);
+
+        Assert.NotEqual(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task TheCatalogArrivesForACallerThatHasSignedIn()
+    {
+        await using var probe = SeamProbe.CarryingCredentials();
         probe.Services.Services.Add(BroadcastService.Discover(
             new NetworkId(1),
             new ServiceId(101),
@@ -115,9 +113,9 @@ public sealed class DefaultDenyTests(TestingWebApplicationFactory factory)
     }
 
     [Fact]
-    public async Task AnUnknownPathReachesRoutingWhileTheAppHoldsNoAuthenticationScheme()
+    public async Task AnUnknownPathReachesRoutingOnceTheCallerHasSignedIn()
     {
-        using HttpClient client = factory.CreateClient();
+        using HttpClient client = factory.CreateAuthenticatedClient();
 
         using HttpResponseMessage response = await client.GetAsync(new Uri("/api/does-not-exist", UriKind.Relative));
 
@@ -125,9 +123,9 @@ public sealed class DefaultDenyTests(TestingWebApplicationFactory factory)
     }
 
     [Fact]
-    public async Task AWrongMethodOnAKnownPathReachesRoutingWhileTheAppHoldsNoAuthenticationScheme()
+    public async Task AWrongMethodOnAKnownPathReachesRoutingOnceTheCallerHasSignedIn()
     {
-        using HttpClient client = factory.CreateClient();
+        using HttpClient client = factory.CreateAuthenticatedClient();
 
         using HttpResponseMessage response = await client.PostAsync(
             new Uri("/api/driver/status", UriKind.Relative),
@@ -138,7 +136,7 @@ public sealed class DefaultDenyTests(TestingWebApplicationFactory factory)
     }
 
     [Fact]
-    public async Task AnUnknownPathIsRefusedBeforeRoutingHasAnEndpointToAnswer404AboutOnceASchemeIsRegistered()
+    public async Task AnUnknownPathIsRefusedBeforeRoutingHasAnEndpointToAnswer404About()
     {
         using HttpClient client = factory.WithTestScheme().CreateClient();
 
@@ -149,7 +147,7 @@ public sealed class DefaultDenyTests(TestingWebApplicationFactory factory)
     }
 
     [Fact]
-    public async Task AWrongMethodOnAKnownPathIsRefusedBeforeRoutingHasAnEndpointToAnswer405AboutOnceASchemeIsRegistered()
+    public async Task AWrongMethodOnAKnownPathIsRefusedBeforeRoutingHasAnEndpointToAnswer405About()
     {
         using HttpClient client = factory.WithTestScheme().CreateClient();
 
@@ -179,10 +177,23 @@ public sealed class DefaultDenyTests(TestingWebApplicationFactory factory)
         using var deployed = new TestingWebApplicationFactory();
         using HttpClient client = deployed
             .WithWebHostBuilder(builder => builder.UseEnvironment(Environments.Production))
-            .CreateClient();
+            .CreateAuthenticatedClient();
 
         using HttpResponseMessage response = await client.GetAsync(new Uri(ServedOpenApi.Route, UriKind.Relative));
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task TheDocumentIsRefusedOutsideDevelopmentToACallerCarryingNoCredentials()
+    {
+        using var deployed = new TestingWebApplicationFactory();
+        using HttpClient client = deployed
+            .WithWebHostBuilder(builder => builder.UseEnvironment(Environments.Production))
+            .CreateClient();
+
+        using HttpResponseMessage response = await client.GetAsync(new Uri(ServedOpenApi.Route, UriKind.Relative));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 }

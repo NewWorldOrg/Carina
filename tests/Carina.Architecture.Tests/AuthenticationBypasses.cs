@@ -17,4 +17,16 @@ public static class AuthenticationBypasses
     [
         "AllowAnonymous",
     ];
+
+    public static IReadOnlyList<string> IdentityProviderSignOut { get; } =
+    [
+        "end_session_endpoint",
+        "EndSessionEndpoint",
+    ];
+
+    public static IReadOnlyList<string> OutboundCallers { get; } =
+    [
+        "HttpClient",
+        "IHttpClientFactory",
+    ];
 }

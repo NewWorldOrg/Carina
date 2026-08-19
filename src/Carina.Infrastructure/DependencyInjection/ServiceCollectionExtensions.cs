@@ -1,3 +1,4 @@
+using Carina.Domain.Auth;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
@@ -5,6 +6,7 @@ using Carina.Domain.DriverStatus;
 using Carina.Domain.Events;
 using Carina.Domain.Programmes;
 using Carina.Domain.Scans;
+using Carina.Infrastructure.Auth;
 using Carina.Infrastructure.Collection;
 using Carina.Infrastructure.Configuration;
 using Carina.Infrastructure.Driver;
@@ -46,6 +48,8 @@ public static class ServiceCollectionExtensions
             options.UseCarinaDatabase(provider.GetRequiredService<IOptions<DatabaseOptions>>().Value.ConnectionString));
 
         services.AddScoped<IAtomicWrite, DatabaseAtomicWrite>();
+        services.AddScoped<IAuthSessionRepository, AuthSessionRepository>();
+        services.AddScoped<ILocalAccountRepository, LocalAccountRepository>();
         services.AddScoped<IBroadcastServiceRepository, BroadcastServiceRepository>();
         services.AddScoped<IProgrammeRepository, ProgrammeRepository>();
         services.AddScoped<IStreamVisitRepository, StreamVisitRepository>();
@@ -64,6 +68,11 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ArchiveTransfer>();
 
         services.AddSingleton(TimeProvider.System);
+        services.TryAddSingleton(SessionPolicy.Default);
+        services.TryAddSingleton(PasswordHashPolicy.Default);
+        services.TryAddSingleton(LoginRatePolicy.Default);
+        services.TryAddSingleton<IPasswordHasher, Argon2idPasswordHasher>();
+        services.TryAddSingleton<ILoginThrottle, LoginThrottle>();
         services.AddSingleton<IDriverStatusReader, MonitoredDriverStatusReader>();
         services.AddSingleton<IDriverClient, DriverIpcClient>();
         services.AddSingleton<DriverConnectionMonitor>();
@@ -80,6 +89,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton(new AppEventHub());
         services.TryAddSingleton<IAppEventPublisher>(provider =>
             provider.GetRequiredService<AppEventHub>());
+        services.AddHostedService<LocalAccountBootstrap>();
         services.AddHostedService<DriverConnectionSupervisor>();
         services.AddHostedService<AppEventHubLifetime>();
         services.AddHostedService(provider => provider.GetRequiredService<ScanRunner>());

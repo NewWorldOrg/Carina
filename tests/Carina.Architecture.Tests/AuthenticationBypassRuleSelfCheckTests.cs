@@ -51,6 +51,44 @@ public sealed class AuthenticationBypassRuleSelfCheckTests
     }
 
     [Fact]
+    public void DetectsASignOutThatWouldReachOutToTheIdentityProvider()
+    {
+        DirectoryInfo directory = Directory.CreateTempSubdirectory("carina-sign-out-");
+
+        try
+        {
+            File.WriteAllText(
+                Path.Combine(directory.FullName, "Local.cs"),
+                """
+                namespace Sample;
+                public static class SignOut
+                {
+                    public static void Invoke() => Sessions.Delete();
+                }
+                """);
+            File.WriteAllText(
+                Path.Combine(directory.FullName, "Federated.cs"),
+                """
+                namespace Sample;
+                public static class SignOut
+                {
+                    public const string Away = "end_session_endpoint";
+                }
+                """);
+
+            Assert.Equal(
+                ["Federated.cs"],
+                SourceScan.FilesMentioning(
+                    directory.FullName,
+                    [.. AuthenticationBypasses.IdentityProviderSignOut]));
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public void DetectsAnEndpointExemptingItselfFromTheDenial()
     {
         DirectoryInfo directory = Directory.CreateTempSubdirectory("carina-anonymity-");

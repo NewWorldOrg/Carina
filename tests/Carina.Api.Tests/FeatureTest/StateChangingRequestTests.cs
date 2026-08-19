@@ -53,7 +53,7 @@ public sealed class StateChangingRequestTests(TestingWebApplicationFactory facto
     [Fact]
     public async Task ARequestFromThisOriginCarryingJsonReachesTheEndpoint()
     {
-        using HttpClient client = factory.CreateClient();
+        using HttpClient client = factory.CreateAuthenticatedClient();
 
         using HttpResponseMessage response = await client.PostAsync(Restart, Json());
 
@@ -63,7 +63,7 @@ public sealed class StateChangingRequestTests(TestingWebApplicationFactory facto
     [Fact]
     public async Task ARequestNamingNoOriginIsRefused()
     {
-        using HttpClient client = factory.CreateClient();
+        using HttpClient client = factory.CreateAuthenticatedClient();
         client.DefaultRequestHeaders.Remove(HeaderNames.Origin);
 
         using HttpResponseMessage response = await client.PostAsync(Restart, Json());
@@ -78,7 +78,7 @@ public sealed class StateChangingRequestTests(TestingWebApplicationFactory facto
     [InlineData("null")]
     public async Task ARequestNamingAnotherOriginIsRefused(string origin)
     {
-        using HttpClient client = factory.CreateClient();
+        using HttpClient client = factory.CreateAuthenticatedClient();
         client.DefaultRequestHeaders.Remove(HeaderNames.Origin);
         client.DefaultRequestHeaders.Add(HeaderNames.Origin, origin);
 
@@ -90,7 +90,7 @@ public sealed class StateChangingRequestTests(TestingWebApplicationFactory facto
     [Fact]
     public async Task AFormPostIsRefusedEvenWhereTheEndpointReadsNoBody()
     {
-        using HttpClient client = factory.CreateClient();
+        using HttpClient client = factory.CreateAuthenticatedClient();
         using var form = new StringContent("anything=1", Encoding.UTF8, "application/x-www-form-urlencoded");
 
         using HttpResponseMessage response = await client.PostAsync(Restart, form);
@@ -102,7 +102,7 @@ public sealed class StateChangingRequestTests(TestingWebApplicationFactory facto
     [Fact]
     public async Task ARequestCarryingNoContentTypeAtAllIsRefused()
     {
-        using HttpClient client = factory.CreateClient();
+        using HttpClient client = factory.CreateAuthenticatedClient();
 
         using HttpResponseMessage response = await client.PostAsync(Restart, content: null);
 
@@ -112,7 +112,7 @@ public sealed class StateChangingRequestTests(TestingWebApplicationFactory facto
     [Fact]
     public async Task AReadFromAnotherOriginIsLeftAlone()
     {
-        using HttpClient client = factory.CreateClient();
+        using HttpClient client = factory.CreateAuthenticatedClient();
         client.DefaultRequestHeaders.Remove(HeaderNames.Origin);
         client.DefaultRequestHeaders.Add(HeaderNames.Origin, "https://elsewhere.example");
 
@@ -125,7 +125,7 @@ public sealed class StateChangingRequestTests(TestingWebApplicationFactory facto
     [Fact]
     public async Task AMethodTheEndpointDoesNotAnswerIsStillToldSo()
     {
-        using HttpClient client = factory.CreateClient();
+        using HttpClient client = factory.CreateAuthenticatedClient();
 
         using HttpResponseMessage response = await client.PostAsync(Status, content: null);
 
