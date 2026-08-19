@@ -115,6 +115,9 @@ internal sealed class OidcProbe : IAsyncDisposable
         return new Uri(started.Headers.Location!.ToString());
     }
 
+    public Task<HttpResponseMessage> SignInOptionsAsync()
+        => Client.GetAsync(new Uri(SignInOptions.Path, UriKind.Relative));
+
     public Task<HttpResponseMessage> ReadConfigAsync()
         => Signed.GetAsync(new Uri($"/{OidcHandshake.ConfigRoute}", UriKind.Relative));
 

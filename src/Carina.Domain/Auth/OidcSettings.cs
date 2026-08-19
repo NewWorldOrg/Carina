@@ -30,6 +30,11 @@ public sealed class OidcSettings
 
     public bool IsConfigured => DiscoveryUrl is not null && ClientId is not null && ClientSecret is not null;
 
+    public string? ProviderName =>
+        DiscoveryUrl is not null && Uri.TryCreate(DiscoveryUrl, UriKind.Absolute, out Uri? parsed)
+            ? parsed.Host
+            : null;
+
     public OidcRestriction Restriction => OidcRestriction.Of(AllowedGroups, AllowedHostedDomains);
 
     public static OidcSettings Unconfigured(DateTime at) => Rehydrate(TheOnlyRow, null, null, null, at);

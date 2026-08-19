@@ -14,6 +14,7 @@ public sealed class AnonymousSurfaceTests
     [InlineData("GET", "/login")]
     [InlineData("GET", "/logged-out")]
     [InlineData("POST", "/api/auth/login")]
+    [InlineData("GET", "/api/auth/sign-in-options")]
     [InlineData("GET", "/api/auth/oidc/start")]
     [InlineData("GET", "/api/auth/oidc/callback")]
     [InlineData("GET", "/favicon.ico")]
@@ -48,6 +49,7 @@ public sealed class AnonymousSurfaceTests
                 "GET /_next/static/",
                 "GET /api/auth/oidc/callback",
                 "GET /api/auth/oidc/start",
+                "GET /api/auth/sign-in-options",
                 "GET /api/health",
                 "GET /favicon.ico",
                 "GET /logged-out",
