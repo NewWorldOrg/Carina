@@ -5,6 +5,7 @@ using System.Text.Json;
 
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
+using Carina.Domain.Driver;
 using Carina.Domain.Programmes;
 using Carina.Infrastructure.Collection;
 using Carina.TestSupport;
@@ -23,7 +24,10 @@ internal sealed class EpgFeature : IAsyncDisposable
     private readonly WebApplicationFactory<Program> configured;
     private readonly WebApplicationFactory<Program> authenticated;
 
-    public EpgFeature(IReadOnlyList<BroadcastStream>? streams = null)
+    public EpgFeature(
+        IReadOnlyList<BroadcastStream>? streams = null,
+        IDriverClient? driver = null,
+        CollectionSettings? collection = null)
     {
         Streams = new HeldStreams(streams ?? []);
         configured = factory
@@ -33,9 +37,20 @@ internal sealed class EpgFeature : IAsyncDisposable
                 services.AddSingleton<IProgrammeRepository>(Programmes);
                 services.AddSingleton<IArchivedProgrammeRepository>(Archived);
                 services.AddSingleton<ICollectionEpochRepository>(Epochs);
+                services.AddSingleton<ICandidateChannelRepository>(Candidates);
                 services.AddSingleton<IAtomicWrite, UnguardedWrites>();
                 services.RemoveAll<IHostedService>();
                 services.AddSingleton<IBroadcastStreamDirectory>(Streams);
+
+                if (driver is not null)
+                {
+                    services.AddSingleton(driver);
+                }
+
+                if (collection is not null)
+                {
+                    services.AddSingleton(collection);
+                }
             }));
         authenticated = configured.WithTestScheme();
         Client = authenticated.CreateClient();
@@ -56,6 +71,8 @@ internal sealed class EpgFeature : IAsyncDisposable
 
     public HeldStreams Streams { get; }
 
+    public HeldCandidates Candidates { get; } = new();
+
     public async Task<(HttpStatusCode Status, JsonElement Body)> GetAsync(string path)
     {
         using HttpResponseMessage response = await Client.GetAsync(new Uri(path, UriKind.Relative));
@@ -73,6 +90,8 @@ internal sealed class EpgFeature : IAsyncDisposable
     }
 
     public RescanNoticeBoard Board() => authenticated.Services.GetRequiredService<RescanNoticeBoard>();
+
+    public Task CollectionSettled() => authenticated.Services.GetRequiredService<CollectionBoost>().Settled;
 
     public async ValueTask DisposeAsync()
     {

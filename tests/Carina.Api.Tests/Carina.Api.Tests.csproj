@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/Carina.Api/Carina.Api.csproj" />
+    <ProjectReference Include="../Carina.BroadcastTestSupport/Carina.BroadcastTestSupport.csproj" />
     <ProjectReference Include="../Carina.TestSupport/Carina.TestSupport.csproj" />
   </ItemGroup>
 
