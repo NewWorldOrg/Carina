@@ -15,13 +15,13 @@ public sealed record HarvestedStream(
     public IReadOnlyList<ServiceDescriptionTable> Descriptions { get; init; } = [];
 }
 
-public sealed class StreamHarvest
+public sealed class StreamHarvest(TimeProvider clock)
 {
     private readonly SectionReader reader = new(EventInformationTable.Pid, ServiceDescriptionTable.Pid);
 
     private readonly List<EventInformationTable> tables = [];
 
-    private readonly ScheduleProgress progress = new();
+    private readonly ScheduleProgress progress = new(clock);
 
     private readonly List<ServiceDescriptionTable> descriptions = [];
 

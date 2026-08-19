@@ -27,7 +27,8 @@ public sealed record VisitResult(
 public sealed class StreamVisitor(
     IDriverClient driver,
     ProgrammeWriter writer,
-    CollectionSettings settings)
+    CollectionSettings settings,
+    TimeProvider clock)
 {
     public async Task<VisitResult> VisitAsync(
         TuningParameters tuning,
@@ -89,7 +90,7 @@ public sealed class StreamVisitor(
                 opened.Failure ?? opened.Problem?.Title ?? "The driver opened no stream.");
         }
 
-        var harvest = new StreamHarvest();
+        var harvest = new StreamHarvest(clock);
         bool anyBytes = false;
         bool interrupted = false;
         byte[] buffer = ArrayPool<byte>.Shared.Rent(64 * 188);

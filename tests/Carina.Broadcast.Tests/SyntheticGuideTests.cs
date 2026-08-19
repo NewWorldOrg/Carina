@@ -169,7 +169,7 @@ public sealed class SyntheticGuideTests
 
     private static ScheduleCompleteness CompletenessOf(SyntheticGuide guide)
     {
-        var progress = new ScheduleProgress();
+        var progress = new ScheduleProgress(HeldClock.Broadcasting(2026, 8, 19, 0, 0, 0));
 
         foreach (EventInformationTable table in ReadAll(guide).Tables)
         {

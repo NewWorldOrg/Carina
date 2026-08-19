@@ -8,7 +8,7 @@ public static class BroadcastTime
 
     public const int DurationSize = 3;
 
-    private static readonly TimeSpan Offset = TimeSpan.FromHours(9);
+    public static readonly TimeSpan Offset = TimeSpan.FromHours(9);
 
     public static bool TryReadStart(ReadOnlySpan<byte> bytes, [NotNullWhen(true)] out DateTimeOffset? start)
     {

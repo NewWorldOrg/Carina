@@ -11,11 +11,17 @@ public enum ScheduleCompleteness
 
 public sealed record ScheduledService(int NetworkId, int TransportStreamId, int ServiceId);
 
-public sealed class ScheduleProgress
+public sealed class ScheduleProgress(TimeProvider clock)
 {
     public const int SectionsPerSegment = 8;
 
-    private const int ExtendedOffset = 8;
+    public const int SegmentsPerDay = 8;
+
+    private const int TablesPerSchedule = 8;
+
+    private const int SegmentsPerTable = 32;
+
+    private static readonly TimeSpan SegmentSpan = TimeSpan.FromHours(3);
 
     private readonly Dictionary<(ScheduledService Service, int TableId), TableProgress> tables = [];
 
@@ -81,7 +87,7 @@ public sealed class ScheduleProgress
             return ScheduleCompleteness.Incomplete;
         }
 
-        return IsWhole(service, EventInformationTable.FirstScheduleActualTableId + ExtendedOffset)
+        return IsWhole(service, EventInformationTable.FirstScheduleActualTableId + TablesPerSchedule)
             ? ScheduleCompleteness.Complete
             : ScheduleCompleteness.BasicOnly;
     }
@@ -102,7 +108,8 @@ public sealed class ScheduleProgress
 
         for (int tableId = firstTableId; tableId <= first.LastTableId; tableId++)
         {
-            if (!tables.TryGetValue((service, tableId), out TableProgress? progress) || progress.Awaited().Count > 0)
+            if (!tables.TryGetValue((service, tableId), out TableProgress? progress)
+                || progress.Awaited(FirstSegmentStillToCome(tableId)).Count > 0)
             {
                 return false;
             }
@@ -115,7 +122,18 @@ public sealed class ScheduleProgress
     {
         ArgumentNullException.ThrowIfNull(service);
 
-        return tables.TryGetValue((service, tableId), out TableProgress? progress) ? progress.Awaited() : [];
+        return tables.TryGetValue((service, tableId), out TableProgress? progress)
+            ? progress.Awaited(FirstSegmentStillToCome(tableId))
+            : [];
+    }
+
+    private int FirstSegmentStillToCome(int tableId)
+    {
+        TimeSpan sinceMidnight = clock.GetUtcNow().ToOffset(BroadcastTime.Offset).TimeOfDay;
+        int gone = (int)(sinceMidnight.Ticks / SegmentSpan.Ticks);
+        int firstOfTable = (tableId % TablesPerSchedule) * SegmentsPerTable;
+
+        return Math.Max(0, gone - firstOfTable);
     }
 
     private sealed class TableProgress(int version, int lastTableId, int lastSectionNumber)
@@ -134,11 +152,11 @@ public sealed class ScheduleProgress
             lastOfSegment[sectionNumber / SectionsPerSegment] = segmentLastSectionNumber;
         }
 
-        public IReadOnlyList<int> Awaited()
+        public IReadOnlyList<int> Awaited(int from)
         {
             var awaited = new List<int>();
 
-            for (int segment = 0; segment <= lastSectionNumber / SectionsPerSegment; segment++)
+            for (int segment = from; segment <= lastSectionNumber / SectionsPerSegment; segment++)
             {
                 if (!lastOfSegment.TryGetValue(segment, out int last))
                 {

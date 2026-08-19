@@ -20,7 +20,7 @@ public sealed class StreamHarvestTests
     [Fact]
     public void AVisitTheDriverCutShortIsNamedAsSuchWhateverItGathered()
     {
-        var harvest = new StreamHarvest();
+        var harvest = new StreamHarvest(Midnight());
 
         Gather(harvest, FirstBasic, LastBasic);
         Gather(harvest, LastBasic, LastBasic);
@@ -32,12 +32,12 @@ public sealed class StreamHarvestTests
     public void AVisitThatSawNoBytesAtAllIsNamedAsSuch()
         => Assert.Equal(
             VisitOutcome.NoBytes,
-            new StreamHarvest().Conclude(interrupted: false, anyBytes: false).Outcome);
+            new StreamHarvest(Midnight()).Conclude(interrupted: false, anyBytes: false).Outcome);
 
     [Fact]
     public void AVisitThatGatheredTheBasicTablesMaySayGoodbyeToTheTuner()
     {
-        var harvest = new StreamHarvest();
+        var harvest = new StreamHarvest(Midnight());
 
         Assert.False(harvest.CanLetGo);
 
@@ -54,7 +54,7 @@ public sealed class StreamHarvestTests
     [Fact]
     public void AVisitThatGatheredTheDetailedTablesTooHasNothingLeftToWaitFor()
     {
-        var harvest = new StreamHarvest();
+        var harvest = new StreamHarvest(Midnight());
 
         Gather(harvest, FirstBasic, LastBasic);
         Gather(harvest, LastBasic, LastBasic);
@@ -67,7 +67,7 @@ public sealed class StreamHarvestTests
     [Fact]
     public void AVisitThatSawBytesButNeverEnoughIsNamedIncomplete()
     {
-        var harvest = new StreamHarvest();
+        var harvest = new StreamHarvest(Midnight());
 
         Gather(harvest, FirstBasic, LastBasic, segments: 2);
 
@@ -78,7 +78,7 @@ public sealed class StreamHarvestTests
     [Fact]
     public void EveryTableItReadIsKeptForWhoeverWritesThemDown()
     {
-        var harvest = new StreamHarvest();
+        var harvest = new StreamHarvest(Midnight());
 
         Gather(harvest, FirstBasic, LastBasic, segments: 3);
 
@@ -88,7 +88,7 @@ public sealed class StreamHarvestTests
     [Fact]
     public void PacketsSplitAcrossReadsAreStillRead()
     {
-        var harvest = new StreamHarvest();
+        var harvest = new StreamHarvest(Midnight());
         byte[] packets = Packets(FirstBasic, FirstBasic, 0, 0);
 
         harvest.Push(packets.AsSpan(0, 100));
@@ -101,13 +101,15 @@ public sealed class StreamHarvestTests
     [Fact]
     public void BytesThatAreNotEvenPacketsAreCountedRatherThanThrown()
     {
-        var harvest = new StreamHarvest();
+        var harvest = new StreamHarvest(Midnight());
 
         harvest.Push(new byte[188]);
 
         Assert.Equal(1, harvest.UnreadablePackets);
         Assert.Empty(harvest.Conclude(interrupted: false, anyBytes: true).Tables);
     }
+
+    private static HeldClock Midnight() => HeldClock.Broadcasting(2026, 8, 19, 0, 0, 0);
 
     private static void Gather(StreamHarvest harvest, int tableId, int lastTableId, int segments = 4)
     {

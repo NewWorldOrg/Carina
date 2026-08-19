@@ -25,6 +25,8 @@ public sealed record SyntheticGuideService(int ServiceId, string Name)
 
 public sealed record SyntheticGuide
 {
+    private const int SectionsUpToTomorrow = ScheduleProgress.SectionsPerSegment * ScheduleProgress.SegmentsPerDay;
+
     public required int NetworkId { get; init; }
 
     public required int TransportStreamId { get; init; }
@@ -96,7 +98,7 @@ public sealed record SyntheticGuide
             TableId = tableId,
             TableIdExtension = service.ServiceId,
             VersionNumber = 1,
-            LastSectionNumber = service.MissingSegment && !corrupt ? ScheduleProgress.SectionsPerSegment : 0,
+            LastSectionNumber = service.MissingSegment && !corrupt ? SectionsUpToTomorrow : 0,
             CorruptChecksum = corrupt,
             Body = new EitWriter
             {
