@@ -128,3 +128,31 @@ public sealed class CountingPasswordHasher(IPasswordHasher inner) : IPasswordHas
         return inner.Matches(password, hash);
     }
 }
+
+public sealed class HeldOidcSettings : IOidcSettingsRepository
+{
+    public OidcSettings? Settings { get; set; }
+
+    public int Saves { get; private set; }
+
+    public Task<OidcSettings?> FindAsync(CancellationToken cancellationToken) => Task.FromResult(Settings);
+
+    public Task SaveAsync(OidcSettings settings, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        Settings = settings;
+        Saves++;
+
+        return Task.CompletedTask;
+    }
+}
+
+public sealed class WoundClock(DateTimeOffset from) : TimeProvider
+{
+    private DateTimeOffset now = from;
+
+    public override DateTimeOffset GetUtcNow() => now;
+
+    public void Wind(TimeSpan by) => now = now.Add(by);
+}
