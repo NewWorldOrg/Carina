@@ -79,7 +79,11 @@ public sealed class HeldProgrammes : IProgrammeRepository
         int networkId,
         int serviceId,
         CancellationToken cancellationToken)
-        => Task.FromResult<DateTime?>(null);
+        => Task.FromResult(Programmes
+            .Where(programme => programme.NetworkId.Value == networkId
+                && programme.ServiceId.Value == serviceId
+                && !programme.IsShadow)
+            .Max(programme => (DateTime?)programme.StartsAt));
 
     public Task<PaginatedList<Programme>> SearchAsync(
         ProgrammeSearch search,

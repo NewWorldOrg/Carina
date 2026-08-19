@@ -27,7 +27,8 @@ internal sealed class EpgFeature : IAsyncDisposable
     public EpgFeature(
         IReadOnlyList<BroadcastStream>? streams = null,
         IDriverClient? driver = null,
-        CollectionSettings? collection = null)
+        CollectionSettings? collection = null,
+        TimeProvider? clock = null)
     {
         Streams = new HeldStreams(streams ?? []);
         configured = factory
@@ -50,6 +51,11 @@ internal sealed class EpgFeature : IAsyncDisposable
                 if (collection is not null)
                 {
                     services.AddSingleton(collection);
+                }
+
+                if (clock is not null)
+                {
+                    services.AddSingleton(clock);
                 }
             }));
         authenticated = configured.WithTestScheme();
