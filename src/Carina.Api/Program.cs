@@ -7,6 +7,7 @@ using Carina.Api.Services;
 using Carina.Infrastructure.DependencyInjection;
 using Carina.Infrastructure.Events;
 
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 
@@ -18,7 +19,11 @@ builder.Services
 builder.Services.ConfigureHttpJsonOptions(options => WireJson.Configure(options.SerializerOptions));
 builder.Services.AddApplicationServices();
 builder.Services.AddCarinaInfrastructure(builder.Configuration);
-builder.Services.AddAuthentication();
+builder.Services
+    .AddAuthentication(SessionAuthenticationHandler.SchemeName)
+    .AddScheme<AuthenticationSchemeOptions, SessionAuthenticationHandler>(
+        SessionAuthenticationHandler.SchemeName,
+        _ => { });
 builder.Services.AddOpenApi(options =>
 {
     options.AddDocumentTransformer<ApiDocumentTransformer>();
