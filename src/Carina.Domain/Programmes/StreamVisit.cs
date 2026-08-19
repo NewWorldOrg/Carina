@@ -20,9 +20,13 @@ public enum VisitOutcome
 
 public sealed class StreamVisit
 {
+    private readonly List<VisitTally> tally = [];
+
     private StreamVisit()
     {
     }
+
+    public IReadOnlyList<VisitTally> Tally => tally;
 
     public NetworkId NetworkId { get; private set; } = null!;
 
@@ -97,6 +101,33 @@ public sealed class StreamVisit
         else if (Settles(outcome))
         {
             ConsecutiveIncomplete = 0;
+        }
+    }
+
+    public void Tallied(IReadOnlyList<VisitTally> counted)
+    {
+        ArgumentNullException.ThrowIfNull(counted);
+
+        if (counted.Any(fresh =>
+            !fresh.NetworkId.Equals(NetworkId) || !fresh.TransportStreamId.Equals(TransportStreamId)))
+        {
+            throw new ArgumentException(
+                "A tally belongs to the stream that was visited.",
+                nameof(counted));
+        }
+
+        tally.RemoveAll(held => !counted.Any(held.Counts));
+
+        foreach (VisitTally fresh in counted)
+        {
+            if (tally.FirstOrDefault(fresh.Counts) is { } already)
+            {
+                already.Restate(fresh);
+
+                continue;
+            }
+
+            tally.Add(fresh);
         }
     }
 

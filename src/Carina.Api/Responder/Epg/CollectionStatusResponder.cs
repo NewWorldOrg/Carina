@@ -1,4 +1,5 @@
 using Carina.Api.Services;
+using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Infrastructure.Collection;
@@ -22,16 +23,93 @@ public enum StreamCollectionOutcome
     NoBytes = 6,
 }
 
+public sealed record StreamTuningResponder(TuneSystem System, int PhysicalChannel, int? TransportStreamId)
+{
+    public static StreamTuningResponder Of(TuningParameters tuning)
+    {
+        ArgumentNullException.ThrowIfNull(tuning);
+
+        return new StreamTuningResponder(
+            tuning.System,
+            tuning.PhysicalChannel,
+            tuning.TransportStreamId?.Value);
+    }
+}
+
+public sealed record StreamRotationResponder(
+    RotationState State,
+    int ConsecutiveFailures,
+    DateTimeOffset? NextAttemptAt,
+    DateTimeOffset? NeedsAttentionSince)
+{
+    public static StreamRotationResponder Of(StreamReach reach)
+    {
+        ArgumentNullException.ThrowIfNull(reach);
+
+        return new StreamRotationResponder(
+            reach.State,
+            reach.ConsecutiveFailures,
+            Moments.Of(reach.NextAttemptAt),
+            Moments.Of(reach.NeedsAttentionSince));
+    }
+}
+
+public sealed record ServiceCoverageResponder(
+    int ServiceId,
+    DateTimeOffset? CoveredUntil,
+    bool MeetsWantedCoverage)
+{
+    public static ServiceCoverageResponder Of(ServiceCoverageStatus coverage)
+    {
+        ArgumentNullException.ThrowIfNull(coverage);
+
+        return new ServiceCoverageResponder(
+            coverage.ServiceId.Value,
+            Moments.Of(coverage.CoveredUntil),
+            coverage.MeetsWantedCoverage);
+    }
+}
+
+public sealed record VisitTallyResponder(
+    int ServiceId,
+    int TableId,
+    int LastTableId,
+    int SegmentsDeclared,
+    int SegmentsHeard,
+    int SectionsDeclared,
+    int SectionsHeard,
+    int VersionChanges)
+{
+    public static VisitTallyResponder Of(VisitTally tally)
+    {
+        ArgumentNullException.ThrowIfNull(tally);
+
+        return new VisitTallyResponder(
+            tally.ServiceId.Value,
+            tally.TableId,
+            tally.LastTableId,
+            tally.SegmentsDeclared,
+            tally.SegmentsHeard,
+            tally.SectionsDeclared,
+            tally.SectionsHeard,
+            tally.VersionChanges);
+    }
+}
+
 public sealed record StreamCollectionStatusResponder(
     int NetworkId,
-    int TransportStreamId,
+    int? TransportStreamId,
+    StreamTuningResponder Tuning,
+    StreamRotationResponder Rotation,
     StreamCollectionOutcome Outcome,
     DateTimeOffset? LastAttemptedAt,
     DateTimeOffset? LastCompletedAt,
     int ConsecutiveIncomplete,
     int LastDurationMilliseconds,
     DateTimeOffset? NotBefore,
-    IReadOnlyList<int> ServiceIds)
+    IReadOnlyList<int> ServiceIds,
+    IReadOnlyList<ServiceCoverageResponder> Coverage,
+    IReadOnlyList<VisitTallyResponder> Tally)
 {
     public static StreamCollectionStatusResponder Of(StreamCollectionStatus status)
     {
@@ -39,23 +117,24 @@ public sealed record StreamCollectionStatusResponder(
 
         return new StreamCollectionStatusResponder(
             status.NetworkId.Value,
-            status.TransportStreamId.Value,
+            status.TransportStreamId?.Value,
+            StreamTuningResponder.Of(status.Tuning),
+            StreamRotationResponder.Of(status.Reach),
             Reached(status.Outcome),
-            Moment(status.LastAttemptedAt),
-            Moment(status.LastCompletedAt),
+            Moments.Of(status.LastAttemptedAt),
+            Moments.Of(status.LastCompletedAt),
             status.ConsecutiveIncomplete,
             status.LastDurationMilliseconds,
-            Moment(status.NotBefore),
-            [.. status.Services.Select(service => service.Value)]);
+            Moments.Of(status.NotBefore),
+            [.. status.Services.Select(service => service.Value)],
+            [.. status.Coverage.Select(ServiceCoverageResponder.Of)],
+            [.. status.Tally.Select(VisitTallyResponder.Of)]);
     }
 
     private static StreamCollectionOutcome Reached(VisitOutcome? outcome)
         => outcome is null
             ? StreamCollectionOutcome.NeverVisited
             : (StreamCollectionOutcome)(int)outcome.Value;
-
-    private static DateTimeOffset? Moment(DateTime? at)
-        => at is null ? null : new DateTimeOffset(at.Value, TimeSpan.Zero);
 }
 
 public sealed record RescanNoticeResponder(
@@ -79,6 +158,7 @@ public sealed record RescanNoticeResponder(
 }
 
 public sealed record CollectionStatusResponder(
+    int WantedCoverageHours,
     IReadOnlyList<StreamCollectionStatusResponder> Streams,
     IReadOnlyList<RescanNoticeResponder> Rescans)
 {
@@ -87,7 +167,14 @@ public sealed record CollectionStatusResponder(
         ArgumentNullException.ThrowIfNull(status);
 
         return new CollectionStatusResponder(
+            (int)status.WantedCoverage.TotalHours,
             [.. status.Streams.Select(StreamCollectionStatusResponder.Of)],
             [.. status.Rescans.Select(RescanNoticeResponder.Of)]);
     }
+}
+
+file static class Moments
+{
+    public static DateTimeOffset? Of(DateTime? at)
+        => at is null ? null : new DateTimeOffset(at.Value, TimeSpan.Zero);
 }

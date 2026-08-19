@@ -364,6 +364,60 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
             NullLogger<CollectionRound>.Instance);
     }
 
+    [Fact]
+    public async Task WhatEachTableDeclaredAgainstWhatArrivedIsKeptWithTheVisit()
+    {
+        int network = NextNetwork();
+        var driver = new ScriptedDriverClient();
+
+        driver.Script(TuningParameters.Terrestrial(22), Carrying(network, 1));
+
+        await using CarinaDbContext context = database.Open();
+
+        await Round(driver, context).WalkAsync([Stream(network, 1, 22)], Cancel, Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        StreamVisit visit = (await new StreamVisitRepository(reading).FindAsync(
+            new NetworkId(network),
+            new TransportStreamId(1),
+            Cancel))!;
+        VisitTally counted = Assert.Single(visit.Tally);
+
+        Assert.Equal(1049, counted.ServiceId.Value);
+        Assert.Equal(EventInformationTable.FirstScheduleActualTableId, counted.TableId);
+        Assert.Equal(EventInformationTable.FirstScheduleActualTableId, counted.LastTableId);
+        Assert.Equal(1, counted.SegmentsDeclared);
+        Assert.Equal(1, counted.SegmentsHeard);
+        Assert.Equal(1, counted.SectionsDeclared);
+        Assert.Equal(1, counted.SectionsHeard);
+        Assert.Equal(0, counted.VersionChanges);
+    }
+
+    [Fact]
+    public async Task TheTallyOfASecondVisitReplacesTheFirstWithoutLosingTheLedgerRow()
+    {
+        int network = NextNetwork();
+        var driver = new ScriptedDriverClient();
+
+        driver.Script(TuningParameters.Terrestrial(22), Carrying(network, 1));
+
+        await using CarinaDbContext context = database.Open();
+
+        await Round(driver, context).WalkAsync([Stream(network, 1, 22)], Cancel, Cancel);
+
+        await using CarinaDbContext again = database.Open();
+
+        await Round(driver, again).WalkAsync([Stream(network, 1, 22)], Cancel, Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        StreamVisit visit = (await new StreamVisitRepository(reading).FindAsync(
+            new NetworkId(network),
+            new TransportStreamId(1),
+            Cancel))!;
+
+        Assert.Single(visit.Tally);
+    }
+
     private static BroadcastStream Stream(int network, int stream, int channel)
         => new(
             new NetworkId(network),

@@ -11,6 +11,16 @@ public enum ScheduleCompleteness
 
 public sealed record ScheduledService(int NetworkId, int TransportStreamId, int ServiceId);
 
+public sealed record ScheduleTally(
+    ScheduledService Service,
+    int TableId,
+    int LastTableId,
+    int SegmentsDeclared,
+    int SegmentsHeard,
+    int SectionsDeclared,
+    int SectionsHeard,
+    int VersionChanges);
+
 public sealed class ScheduleProgress(TimeProvider clock)
 {
     public const int SectionsPerSegment = 8;
@@ -66,10 +76,14 @@ public sealed class ScheduleProgress(TimeProvider clock)
         var service = new ScheduledService(table.OriginalNetworkId, table.TransportStreamId, table.ServiceId);
         (ScheduledService service, int TableId) key = (service, table.TableId);
 
-        if (!tables.TryGetValue(key, out TableProgress? progress) || progress.Version != table.VersionNumber)
+        if (!tables.TryGetValue(key, out TableProgress? progress))
         {
             progress = new TableProgress(table.VersionNumber, table.LastTableId, table.LastSectionNumber);
             tables[key] = progress;
+        }
+        else if (progress.Version != table.VersionNumber)
+        {
+            progress.Renew(table.VersionNumber, table.LastTableId, table.LastSectionNumber);
         }
 
         if (!services.Contains(service))
@@ -118,6 +132,23 @@ public sealed class ScheduleProgress(TimeProvider clock)
         return true;
     }
 
+    public IReadOnlyList<ScheduleTally> Tally()
+        =>
+        [
+            .. tables
+                .Select(entry => new ScheduleTally(
+                    entry.Key.Service,
+                    entry.Key.TableId,
+                    entry.Value.LastTableId,
+                    entry.Value.SegmentsDeclared,
+                    entry.Value.SegmentsHeard,
+                    entry.Value.SectionsDeclared,
+                    entry.Value.SectionsHeard,
+                    entry.Value.VersionChanges))
+                .OrderBy(counted => counted.Service.ServiceId)
+                .ThenBy(counted => counted.TableId),
+        ];
+
     public IReadOnlyList<int> SegmentsAwaited(ScheduledService service, int tableId)
     {
         ArgumentNullException.ThrowIfNull(service);
@@ -142,9 +173,32 @@ public sealed class ScheduleProgress(TimeProvider clock)
 
         private readonly HashSet<int> sections = [];
 
-        public int Version { get; } = version;
+        private int lastSectionNumber = lastSectionNumber;
 
-        public int LastTableId { get; } = lastTableId;
+        public int Version { get; private set; } = version;
+
+        public int LastTableId { get; private set; } = lastTableId;
+
+        public int VersionChanges { get; private set; }
+
+        public int SegmentsDeclared => (lastSectionNumber / SectionsPerSegment) + 1;
+
+        public int SegmentsHeard => lastOfSegment.Count;
+
+        public int SectionsDeclared
+            => lastOfSegment.Sum(segment => segment.Value - (segment.Key * SectionsPerSegment) + 1);
+
+        public int SectionsHeard => sections.Count;
+
+        public void Renew(int renewedVersion, int renewedLastTableId, int renewedLastSectionNumber)
+        {
+            Version = renewedVersion;
+            LastTableId = renewedLastTableId;
+            VersionChanges++;
+            lastSectionNumber = renewedLastSectionNumber;
+            lastOfSegment.Clear();
+            sections.Clear();
+        }
 
         public void Saw(int sectionNumber, int segmentLastSectionNumber)
         {

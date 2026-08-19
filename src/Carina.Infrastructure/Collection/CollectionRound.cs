@@ -203,19 +203,46 @@ public sealed class CollectionRound(
 
         if (held is null)
         {
-            await visits.SaveAsync(
-                StreamVisit.Record(stream.NetworkId, stream.TransportStreamId, visit.Outcome, at, took),
-                abort);
+            StreamVisit first = StreamVisit.Record(
+                stream.NetworkId,
+                stream.TransportStreamId,
+                visit.Outcome,
+                at,
+                took);
+
+            first.Tallied(TallyOf(stream, visit));
+
+            await visits.SaveAsync(first, abort);
             events.Signal(AppEventName.EpgCollection);
 
             return;
         }
 
         held.Record(visit.Outcome, at, took);
+        held.Tallied(TallyOf(stream, visit));
 
         await visits.SaveAsync(held, abort);
         events.Signal(AppEventName.EpgCollection);
     }
+
+    private static IReadOnlyList<VisitTally> TallyOf(BroadcastStream stream, VisitResult visit)
+        =>
+        [
+            .. visit.Tally
+                .Where(counted => counted.Service.NetworkId == stream.NetworkId.Value
+                    && counted.Service.TransportStreamId == stream.TransportStreamId.Value)
+                .Select(counted => VisitTally.Rehydrate(
+                    stream.NetworkId,
+                    stream.TransportStreamId,
+                    new ServiceId(counted.Service.ServiceId),
+                    counted.TableId,
+                    counted.LastTableId,
+                    counted.SegmentsDeclared,
+                    counted.SegmentsHeard,
+                    counted.SectionsDeclared,
+                    counted.SectionsHeard,
+                    counted.VersionChanges)),
+        ];
 
     private async Task<IReadOnlyList<StreamCoverage>> CoverageAsync(
         IReadOnlyList<BroadcastStream> streams,

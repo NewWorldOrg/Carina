@@ -49,5 +49,14 @@ public sealed class StreamVisitConfiguration : IEntityTypeConfiguration<StreamVi
         builder.Property(visit => visit.LastDurationMilliseconds).IsRequired();
 
         builder.HasIndex(visit => visit.LastCompletedAt);
+
+        builder.HasMany(visit => visit.Tally)
+            .WithOne()
+            .HasForeignKey(tally => new { tally.NetworkId, tally.TransportStreamId })
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Navigation(visit => visit.Tally)
+            .UsePropertyAccessMode(PropertyAccessMode.Field)
+            .AutoInclude();
     }
 }
