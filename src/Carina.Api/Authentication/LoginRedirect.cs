@@ -10,6 +10,10 @@ public static class LoginRedirect
 
     public const string Home = "/";
 
+    public const string ErrorKey = "error";
+
+    public const string TheIdentityProviderFailed = "oidc";
+
     public static string Within(string? target)
     {
         if (string.IsNullOrEmpty(target)
@@ -27,6 +31,9 @@ public static class LoginRedirect
 
     public static string For(string? target)
         => $"{Path}?{ReturnKey}={Uri.EscapeDataString(Within(target))}";
+
+    public static string AfterAFailedSignIn(string? target)
+        => $"{For(target)}&{ErrorKey}={TheIdentityProviderFailed}";
 
     private static bool LeadsBackToTheLoginScreen(string target)
         => target.Equals(Path, StringComparison.OrdinalIgnoreCase)
