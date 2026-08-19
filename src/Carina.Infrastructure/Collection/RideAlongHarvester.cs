@@ -120,7 +120,7 @@ public sealed class RideAlongHarvester(
             return;
         }
 
-        var harvest = new StreamHarvest();
+        var harvest = new StreamHarvest(clock);
         byte[] buffer = ArrayPool<byte>.Shared.Rent(64 * 188);
         long lastSaved = clock.GetTimestamp();
 

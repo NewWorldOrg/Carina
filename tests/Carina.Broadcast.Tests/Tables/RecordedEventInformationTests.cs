@@ -124,7 +124,7 @@ public sealed class RecordedEventInformationTests
     [Fact]
     public void AShortListeningLeavesTheScheduleUnfinishedAndSaysWhichSegmentsAreMissing()
     {
-        var progress = new ScheduleProgress();
+        var progress = new ScheduleProgress(HeldClock.Broadcasting(2026, 8, 19, 0, 0, 0));
 
         foreach (Section section in Sections())
         {

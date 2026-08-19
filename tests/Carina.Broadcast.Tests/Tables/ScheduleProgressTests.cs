@@ -28,7 +28,7 @@ public sealed class ScheduleProgressTests
     [Fact]
     public void ATableIsNotWholeUntilEverySegmentHasBeenSeen()
     {
-        var progress = new ScheduleProgress();
+        var progress = new ScheduleProgress(Midnight());
 
         Gather(progress, FirstBasic, LastBasic, segments: 3, lastSection: 31);
 
@@ -39,7 +39,7 @@ public sealed class ScheduleProgressTests
     [Fact]
     public void ATableWhoseEverySegmentArrivedAwaitsNothing()
     {
-        var progress = new ScheduleProgress();
+        var progress = new ScheduleProgress(Midnight());
 
         Gather(progress, FirstBasic, FirstBasic, segments: 4, lastSection: 31);
 
@@ -50,7 +50,7 @@ public sealed class ScheduleProgressTests
     [Fact]
     public void ASegmentCarryingSeveralSectionsIsNotWholeUntilAllOfThemArrive()
     {
-        var progress = new ScheduleProgress();
+        var progress = new ScheduleProgress(Midnight());
 
         progress.Saw(Table(FirstBasic, FirstBasic, section: 0, segmentLast: 2, lastSection: 7));
 
@@ -65,7 +65,7 @@ public sealed class ScheduleProgressTests
     [Fact]
     public void TheBasicTablesBeingWholeIsEnoughToLetGoOfTheTuner()
     {
-        var progress = new ScheduleProgress();
+        var progress = new ScheduleProgress(Midnight());
 
         Gather(progress, FirstBasic, LastBasic, segments: 4, lastSection: 31);
         Gather(progress, LastBasic, LastBasic, segments: 4, lastSection: 31);
@@ -76,7 +76,7 @@ public sealed class ScheduleProgressTests
     [Fact]
     public void OnlyOneOfTheBasicTablesIsNotEnough()
     {
-        var progress = new ScheduleProgress();
+        var progress = new ScheduleProgress(Midnight());
 
         Gather(progress, FirstBasic, LastBasic, segments: 4, lastSection: 31);
 
@@ -86,7 +86,7 @@ public sealed class ScheduleProgressTests
     [Fact]
     public void TheDetailedTablesOnTopOfTheBasicOnesMeanThereIsNothingLeftToWaitFor()
     {
-        var progress = new ScheduleProgress();
+        var progress = new ScheduleProgress(Midnight());
 
         Gather(progress, FirstBasic, LastBasic, segments: 4, lastSection: 31);
         Gather(progress, LastBasic, LastBasic, segments: 4, lastSection: 31);
@@ -99,7 +99,7 @@ public sealed class ScheduleProgressTests
     [Fact]
     public void TheDetailedTablesAloneDoNotMakeTheScheduleComplete()
     {
-        var progress = new ScheduleProgress();
+        var progress = new ScheduleProgress(Midnight());
 
         Gather(progress, FirstExtended, LastExtended, segments: 4, lastSection: 31);
         Gather(progress, LastExtended, LastExtended, segments: 4, lastSection: 31);
@@ -110,7 +110,7 @@ public sealed class ScheduleProgressTests
     [Fact]
     public void EachTableKeepsItsOwnVersionSoOneMovingOnDoesNotUndoTheOthers()
     {
-        var progress = new ScheduleProgress();
+        var progress = new ScheduleProgress(Midnight());
 
         Gather(progress, FirstBasic, LastBasic, segments: 4, lastSection: 31);
         Gather(progress, LastBasic, LastBasic, segments: 4, lastSection: 31, version: 9);
@@ -123,7 +123,7 @@ public sealed class ScheduleProgressTests
     [Fact]
     public void ATableThatMovesToANewVersionStartsOverOnItsOwn()
     {
-        var progress = new ScheduleProgress();
+        var progress = new ScheduleProgress(Midnight());
 
         Gather(progress, FirstBasic, LastBasic, segments: 4, lastSection: 31);
         Gather(progress, LastBasic, LastBasic, segments: 4, lastSection: 31);
@@ -138,7 +138,7 @@ public sealed class ScheduleProgressTests
     [Fact]
     public void WhatIsOnNowAndNextIsNotPartOfTheSchedule()
     {
-        var progress = new ScheduleProgress();
+        var progress = new ScheduleProgress(Midnight());
 
         progress.Saw(Table(
             EventInformationTable.PresentFollowingActualTableId,
@@ -154,7 +154,7 @@ public sealed class ScheduleProgressTests
     [Fact]
     public void TwoServicesOnTheOneStreamKeepTheirOwnProgress()
     {
-        var progress = new ScheduleProgress();
+        var progress = new ScheduleProgress(Midnight());
 
         Gather(progress, FirstBasic, LastBasic, segments: 4, lastSection: 31);
         Gather(progress, LastBasic, LastBasic, segments: 4, lastSection: 31);
@@ -169,7 +169,7 @@ public sealed class ScheduleProgressTests
     [Fact]
     public void TheStreamIsOnlyAsFinishedAsItsLeastFinishedService()
     {
-        var progress = new ScheduleProgress();
+        var progress = new ScheduleProgress(Midnight());
 
         Gather(progress, FirstBasic, LastBasic, segments: 4, lastSection: 31);
         Gather(progress, LastBasic, LastBasic, segments: 4, lastSection: 31);
@@ -182,7 +182,7 @@ public sealed class ScheduleProgressTests
     [Fact]
     public void OneServiceMovingToANewVersionDoesNotUndoAnother()
     {
-        var progress = new ScheduleProgress();
+        var progress = new ScheduleProgress(Midnight());
 
         Gather(progress, FirstBasic, LastBasic, segments: 4, lastSection: 31);
         Gather(progress, FirstBasic, LastBasic, segments: 4, lastSection: 31, version: 9, service: AnotherService);
@@ -194,7 +194,7 @@ public sealed class ScheduleProgressTests
     [Fact]
     public void ATableNamingALastTableBeforeItselfIsNotTakenAsFinished()
     {
-        var progress = new ScheduleProgress();
+        var progress = new ScheduleProgress(Midnight());
 
         Gather(progress, LastBasic, FirstBasic, segments: 4, lastSection: 31);
 
@@ -204,7 +204,7 @@ public sealed class ScheduleProgressTests
     [Fact]
     public void ATableNamingALastTableBeyondTheScheduleIsNotTakenAsFinished()
     {
-        var progress = new ScheduleProgress();
+        var progress = new ScheduleProgress(Midnight());
 
         Gather(progress, FirstBasic, 0xFF, segments: 4, lastSection: 31);
 
@@ -214,9 +214,90 @@ public sealed class ScheduleProgressTests
     [Fact]
     public void ATableNeverSeenAwaitsNothingBecauseNothingIsKnownOfIt()
     {
-        Assert.Empty(new ScheduleProgress().SegmentsAwaited(Service, FirstBasic));
-        Assert.False(new ScheduleProgress().IsWhole(Service, FirstBasic));
+        Assert.Empty(new ScheduleProgress(Midnight()).SegmentsAwaited(Service, FirstBasic));
+        Assert.False(new ScheduleProgress(Midnight()).IsWhole(Service, FirstBasic));
     }
+
+    [Fact]
+    public void TheHoursThatHaveAlreadyGoneByAreNotWaitedFor()
+    {
+        var progress = new ScheduleProgress(HeldClock.Broadcasting(2026, 8, 19, 15, 20, 0));
+
+        Gather(progress, FirstBasic, FirstBasic, segments: 32, lastSection: 255, from: 5);
+
+        Assert.Empty(progress.SegmentsAwaited(Service, FirstBasic));
+        Assert.True(progress.IsWhole(Service, FirstBasic));
+    }
+
+    [Fact]
+    public void TheSegmentWhoseHoursAreRunningIsStillWaitedFor()
+    {
+        var progress = new ScheduleProgress(HeldClock.Broadcasting(2026, 8, 19, 15, 0, 0));
+
+        Gather(progress, FirstBasic, FirstBasic, segments: 32, lastSection: 255, from: 6);
+
+        Assert.Equal([5], progress.SegmentsAwaited(Service, FirstBasic));
+        Assert.False(progress.IsWhole(Service, FirstBasic));
+    }
+
+    [Fact]
+    public void TheSegmentsStillToComeAreWaitedForHoweverLateInTheDayItIs()
+    {
+        var progress = new ScheduleProgress(HeldClock.Broadcasting(2026, 8, 19, 23, 59, 59));
+
+        Gather(progress, FirstBasic, FirstBasic, segments: 32, lastSection: 255, from: 9);
+
+        Assert.Equal([7, 8], progress.SegmentsAwaited(Service, FirstBasic));
+    }
+
+    [Fact]
+    public void ATableForTheDaysBeyondTheFirstNeverGoesStale()
+    {
+        var progress = new ScheduleProgress(HeldClock.Broadcasting(2026, 8, 19, 23, 59, 59));
+
+        Gather(progress, LastBasic, LastBasic, segments: 32, lastSection: 255, from: 1);
+
+        Assert.Equal([0], progress.SegmentsAwaited(Service, LastBasic));
+    }
+
+    [Fact]
+    public void JustAfterMidnightNoSegmentHasGoneStaleYet()
+    {
+        var progress = new ScheduleProgress(HeldClock.Broadcasting(2026, 8, 20, 0, 0, 1));
+
+        Gather(progress, FirstBasic, FirstBasic, segments: 4, lastSection: 31, from: 1);
+
+        Assert.Equal([0], progress.SegmentsAwaited(Service, FirstBasic));
+    }
+
+    [Fact]
+    public void ASegmentStopsBeingWaitedForOnceItsHoursRunOut()
+    {
+        HeldClock clock = HeldClock.Broadcasting(2026, 8, 19, 2, 59, 0);
+        var progress = new ScheduleProgress(clock);
+
+        Gather(progress, FirstBasic, FirstBasic, segments: 4, lastSection: 31, from: 1);
+
+        Assert.Equal([0], progress.SegmentsAwaited(Service, FirstBasic));
+
+        clock.MoveOn(TimeSpan.FromMinutes(2));
+
+        Assert.Empty(progress.SegmentsAwaited(Service, FirstBasic));
+        Assert.True(progress.IsWhole(Service, FirstBasic));
+    }
+
+    [Fact]
+    public void AScheduleWhoseSpentHoursNeverArriveStillReachesTheEnd()
+    {
+        var progress = new ScheduleProgress(HeldClock.Broadcasting(2026, 8, 19, 15, 20, 0));
+
+        Gather(progress, FirstBasic, FirstBasic, segments: 32, lastSection: 255, from: 5);
+        Gather(progress, FirstExtended, FirstExtended, segments: 32, lastSection: 255, from: 5);
+
+        Assert.Equal(ScheduleCompleteness.Complete, progress.Completeness);
+    }
+
+    private static HeldClock Midnight() => HeldClock.Broadcasting(2026, 8, 19, 0, 0, 0);
 
     private static void Gather(
         ScheduleProgress progress,
@@ -225,9 +306,10 @@ public sealed class ScheduleProgressTests
         int segments,
         int lastSection,
         int version = 0,
-        int service = SomeService)
+        int service = SomeService,
+        int from = 0)
     {
-        for (int segment = 0; segment < segments; segment++)
+        for (int segment = from; segment < segments; segment++)
         {
             int section = segment * ScheduleProgress.SectionsPerSegment;
 

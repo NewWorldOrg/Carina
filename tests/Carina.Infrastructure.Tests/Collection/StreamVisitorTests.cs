@@ -174,7 +174,8 @@ public sealed class StreamVisitorTests(RepositoryDatabase database)
         => new(
             driver,
             new ProgrammeWriter(new ProgrammeRepository(context), new UnguardedWrites(), new StillClock(), new SilentEvents()),
-            new CollectionSettings());
+            new CollectionSettings(),
+            TimeProvider.System);
 
     private static byte[] Schedule(int network)
     {

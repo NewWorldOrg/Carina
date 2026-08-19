@@ -163,7 +163,8 @@ public sealed class EpgCollectorTests(RepositoryDatabase database)
         services.AddScoped(scope => new StreamVisitor(
             scope.GetRequiredService<IDriverClient>(),
             scope.GetRequiredService<ProgrammeWriter>(),
-            scope.GetRequiredService<CollectionSettings>()));
+            scope.GetRequiredService<CollectionSettings>(),
+            scope.GetRequiredService<TimeProvider>()));
         services.AddScoped(scope => new CollectionRound(
             scope.GetRequiredService<IStreamVisitRepository>(),
             scope.GetRequiredService<IProgrammeRepository>(),

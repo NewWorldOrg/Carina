@@ -12,7 +12,7 @@ public sealed record CollectionSettings
 
     public TimeSpan BeforeRetrying { get; init; } = TimeSpan.FromHours(2);
 
-    public TimeSpan LongestVisit { get; init; } = TimeSpan.FromMinutes(10);
+    public TimeSpan LongestVisit { get; init; } = TimeSpan.FromMinutes(3);
 
     public TimeSpan KeepEndedProgrammes { get; init; } = TimeSpan.FromHours(24);
 
