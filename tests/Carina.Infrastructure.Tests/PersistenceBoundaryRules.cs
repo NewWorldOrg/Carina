@@ -22,6 +22,7 @@ public static class PersistenceBoundaryRules
             ["Scans"] = PersistenceFamily.ChannelDefinitions,
             ["Programmes"] = PersistenceFamily.ProgrammeCache,
             ["Recordings"] = PersistenceFamily.Unrelated,
+            ["Auth"] = PersistenceFamily.Unrelated,
         };
 
     public static IReadOnlyList<string> BoundaryBreakingForeignKeys(IModel model)
