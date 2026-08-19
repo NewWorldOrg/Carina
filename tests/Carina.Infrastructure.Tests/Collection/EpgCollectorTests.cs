@@ -217,4 +217,7 @@ internal sealed class OfferedStreams(IReadOnlyList<BroadcastStream> streams) : I
 {
     public Task<IReadOnlyList<BroadcastStream>> ListAsync(CancellationToken cancellationToken)
         => Task.FromResult(streams);
+
+    public Task<IReadOnlyList<IntendedStream>> ListIntendedAsync(CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<IntendedStream>>([]);
 }

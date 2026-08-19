@@ -92,4 +92,7 @@ internal sealed class HoldingStreams(IReadOnlyList<BroadcastStream> streams) : I
 
         return streams;
     }
+
+    public Task<IReadOnlyList<IntendedStream>> ListIntendedAsync(CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<IntendedStream>>([]);
 }

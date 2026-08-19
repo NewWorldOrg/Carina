@@ -102,6 +102,78 @@ public sealed class BroadcastStreamDirectoryTests
         Assert.Equal([101, 102], only.Services.Select(service => service.Value));
     }
 
+    [Fact]
+    public async Task AServiceWhoseStreamIsUnknownIsStillIntendedSoTheGapIsVisible()
+    {
+        var held = new HeldCandidates();
+        CandidateChannel unreached = Selected(4, 101, 22, null);
+
+        unreached.RecordTuningFailure(RotationBackoff.Default, At);
+
+        await held.AddAsync(unreached, Cancel);
+
+        IntendedStream only = Assert.Single(await new BroadcastStreamDirectory(held).ListIntendedAsync(Cancel));
+
+        Assert.Null(only.TransportStreamId);
+        Assert.Equal(RotationState.BackingOff, only.Reach.State);
+        Assert.Equal(1, only.Reach.ConsecutiveFailures);
+        Assert.NotNull(only.Reach.NextAttemptAt);
+        Assert.Equal([101], only.Services.Select(service => service.Value));
+    }
+
+    [Fact]
+    public async Task UnknownStreamsOnOneNetworkStayApartWhenTheyAreTunedDifferently()
+    {
+        var held = new HeldCandidates();
+
+        await held.AddAsync(Selected(4, 101, 22, null), Cancel);
+        await held.AddAsync(Selected(4, 102, 24, null), Cancel);
+
+        IReadOnlyList<IntendedStream> intended = await new BroadcastStreamDirectory(held).ListIntendedAsync(Cancel);
+
+        Assert.Equal([22, 24], intended.Select(stream => stream.Tuning.PhysicalChannel));
+    }
+
+    [Fact]
+    public async Task AnIntendedStreamCarriesTheReachOfTheCandidateAWalkWouldUse()
+    {
+        var held = new HeldCandidates();
+        CandidateChannel troubled = Selected(4, 101, 22, 32_736);
+
+        troubled.RecordTuningFailure(RotationBackoff.Default, At);
+
+        await held.AddAsync(troubled, Cancel);
+        await held.AddAsync(Selected(4, 102, 23, 32_736), Cancel);
+
+        IntendedStream only = Assert.Single(await new BroadcastStreamDirectory(held).ListIntendedAsync(Cancel));
+
+        Assert.Equal(RotationState.Active, only.Reach.State);
+        Assert.Equal(new TransportStreamId(32_736), only.TransportStreamId);
+    }
+
+    [Fact]
+    public async Task AStreamNoCandidateCanReachIsStillIntendedThoughNoWalkOffersIt()
+    {
+        var held = new HeldCandidates();
+        CandidateChannel troubled = Selected(4, 101, 22, 32_736);
+
+        while (troubled.IsInRotation)
+        {
+            troubled.RecordTuningFailure(RotationBackoff.Default, At);
+        }
+
+        await held.AddAsync(troubled, Cancel);
+
+        var directory = new BroadcastStreamDirectory(held);
+
+        Assert.Empty(await directory.ListAsync(Cancel));
+
+        IntendedStream only = Assert.Single(await directory.ListIntendedAsync(Cancel));
+
+        Assert.Equal(RotationState.NeedsAttention, only.Reach.State);
+        Assert.NotNull(only.Reach.NeedsAttentionSince);
+    }
+
     private static CandidateChannel Selected(int network, int service, int channel, int? streamId)
     {
         CandidateChannel candidate = CandidateChannel.Discover(
