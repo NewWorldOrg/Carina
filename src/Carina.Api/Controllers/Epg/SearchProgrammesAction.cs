@@ -1,3 +1,4 @@
+using Carina.Api.Authentication;
 using Carina.Api.Common;
 using Carina.Api.Responder;
 using Carina.Api.Responder.Epg;
@@ -11,6 +12,7 @@ namespace Carina.Api.Controllers.Epg;
 
 [ApiController]
 [Route("api/programs/search")]
+[EndpointEffect(EndpointEffect.Reading)]
 public sealed class SearchProgrammesAction(ProgrammeGuideService guide) : ControllerBase
 {
     [HttpGet]

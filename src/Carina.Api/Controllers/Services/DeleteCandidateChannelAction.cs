@@ -1,3 +1,4 @@
+using Carina.Api.Authentication;
 using Carina.Api.Common;
 using Carina.Api.Responder;
 using Carina.Api.Responder.Services;
@@ -10,6 +11,7 @@ namespace Carina.Api.Controllers.Services;
 
 [ApiController]
 [Route("api/services/{networkId:int}-{serviceId:int}/candidate-channels/{candidateChannelId:guid}")]
+[EndpointEffect(EndpointEffect.Destructive)]
 public sealed class DeleteCandidateChannelAction(ChannelCatalogService channelCatalogService) : ControllerBase
 {
     [HttpDelete]

@@ -32,20 +32,22 @@ WebApplication app = builder.Build();
 
 
 app.UseMiddleware<UnhandledFailureMiddleware>();
+app.UseCookiePolicy(SessionCookiePolicy.Options);
 app.UseAuthentication();
 app.UseMiddleware<DefaultDenyAuthenticationMiddleware>();
+app.UseMiddleware<StateChangingRequestMiddleware>();
 
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi().AllowAnonymous();
+    app.MapOpenApi().WithEffect(EndpointEffect.Reading);
 }
 
 app.MapControllers();
 app.MapGet(AppEventStream.Path, (HttpContext context, AppEventHub hub) =>
-    AppEventStream.Invoke(context, hub)).ExcludeFromDescription();
+    AppEventStream.Invoke(context, hub)).ExcludeFromDescription().WithEffect(EndpointEffect.Reading);
 
 app.MapGet(ProgrammeFeedStream.Path, (HttpContext context, ProgrammeFeedService feed) =>
-    ProgrammeFeedStream.Invoke(context, feed)).ExcludeFromDescription();
+    ProgrammeFeedStream.Invoke(context, feed)).ExcludeFromDescription().WithEffect(EndpointEffect.Reading);
 
 try
 {

@@ -1,3 +1,4 @@
+using Carina.Api.Authentication;
 using Carina.Api.Common;
 using Carina.Api.Responder;
 using Carina.Api.Responder.Scans;
@@ -11,6 +12,7 @@ namespace Carina.Api.Controllers.Scans;
 
 [ApiController]
 [Route("api/tuners/scan/{scanId:guid}/apply")]
+[EndpointEffect(EndpointEffect.Destructive)]
 public sealed class ApplyScanAction(ScanService scanService) : ControllerBase
 {
     [HttpPost]

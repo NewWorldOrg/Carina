@@ -1,10 +1,18 @@
 using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authorization;
 
 namespace Carina.Api.Authentication;
 
-public sealed class DefaultDenyAuthenticationMiddleware(RequestDelegate next)
+public sealed class DefaultDenyAuthenticationMiddleware
 {
+    private readonly RequestDelegate next;
+    private readonly IReadOnlyList<AnonymousSurface> anonymous;
+
+    public DefaultDenyAuthenticationMiddleware(RequestDelegate next, IHostEnvironment environment)
+    {
+        this.next = next;
+        anonymous = AnonymousSurfaces.For(environment);
+    }
+
     public async Task InvokeAsync(HttpContext context, IAuthenticationSchemeProvider schemes)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -17,14 +25,26 @@ public sealed class DefaultDenyAuthenticationMiddleware(RequestDelegate next)
             return;
         }
 
-        context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+        Refuse(context);
     }
 
-    private static async Task<bool> AdmitsAsync(
-        HttpContext context,
-        IAuthenticationSchemeProvider schemes)
+    private static void Refuse(HttpContext context)
     {
-        if (context.GetEndpoint()?.Metadata.GetMetadata<IAllowAnonymous>() is not null)
+        if (!PageRequest.ExpectsAScreen(context.Request))
+        {
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+
+            return;
+        }
+
+        context.Response.StatusCode = StatusCodes.Status302Found;
+        context.Response.Headers.Location = LoginRedirect.For(
+            $"{context.Request.Path}{context.Request.QueryString}");
+    }
+
+    private async Task<bool> AdmitsAsync(HttpContext context, IAuthenticationSchemeProvider schemes)
+    {
+        if (anonymous.Admit(context.Request.Method, context.Request.Path.ToString()))
         {
             return true;
         }

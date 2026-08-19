@@ -1,3 +1,4 @@
+using Carina.Api.Authentication;
 using Carina.Api.Common;
 using Carina.Api.Requests;
 using Carina.Api.Responder;
@@ -11,6 +12,7 @@ namespace Carina.Api.Controllers.Services;
 
 [ApiController]
 [Route("api/services/{networkId:int}-{serviceId:int}/selected-channel")]
+[EndpointEffect(EndpointEffect.Changing)]
 public sealed class PutSelectedChannelAction(ChannelCatalogService channelCatalogService) : ControllerBase
 {
     [HttpPut]

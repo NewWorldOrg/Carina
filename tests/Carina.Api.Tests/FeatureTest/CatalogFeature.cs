@@ -136,7 +136,10 @@ internal sealed class CatalogFeature : IAsyncDisposable
         => SendAsync(new HttpRequestMessage(HttpMethod.Get, new Uri(path, UriKind.Relative)));
 
     public Task<(HttpStatusCode Status, JsonElement Body)> DeleteAsync(string path)
-        => SendAsync(new HttpRequestMessage(HttpMethod.Delete, new Uri(path, UriKind.Relative)));
+        => SendAsync(new HttpRequestMessage(HttpMethod.Delete, new Uri(path, UriKind.Relative))
+        {
+            Content = JsonContent.Create(new { }),
+        });
 
     public Task<(HttpStatusCode Status, JsonElement Body)> PutAsync(string path, object body)
         => SendAsync(new HttpRequestMessage(HttpMethod.Put, new Uri(path, UriKind.Relative))

@@ -1,3 +1,4 @@
+using Carina.Api.Authentication;
 using Carina.Api.Common;
 using Carina.Api.Responder;
 using Carina.Api.Responder.Scans;
@@ -10,6 +11,7 @@ namespace Carina.Api.Controllers.Scans;
 
 [ApiController]
 [Route("api/tuners/scan/{scanId:guid}/cancel")]
+[EndpointEffect(EndpointEffect.Changing)]
 public sealed class CancelScanAction(ScanService scanService) : ControllerBase
 {
     [HttpPost]

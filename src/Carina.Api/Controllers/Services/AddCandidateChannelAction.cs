@@ -1,3 +1,4 @@
+using Carina.Api.Authentication;
 using Carina.Api.Common;
 using Carina.Api.Requests;
 using Carina.Api.Responder;
@@ -11,6 +12,7 @@ namespace Carina.Api.Controllers.Services;
 
 [ApiController]
 [Route("api/services/{networkId:int}-{serviceId:int}/candidate-channels")]
+[EndpointEffect(EndpointEffect.Changing)]
 public sealed class AddCandidateChannelAction(ChannelCatalogService channelCatalogService) : ControllerBase
 {
     [HttpPost]

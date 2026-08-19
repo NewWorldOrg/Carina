@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text;
 using System.Text.Json;
 
 using Carina.Contracts;
@@ -49,6 +50,8 @@ public sealed class DriverRestartEndpointTests
             null);
     }
 
+    private static StringContent Json() => new("{}", Encoding.UTF8, "application/json");
+
     private static async Task<(HttpStatusCode Status, JsonElement Body)> ReadAsync(
         HttpResponseMessage response)
     {
@@ -62,7 +65,7 @@ public sealed class DriverRestartEndpointTests
     {
         await using DriverFeature feature = await DriverFeature.StartAsync(Capable(), Willing);
 
-        using HttpResponseMessage response = await feature.Client.PostAsync(Restart, null);
+        using HttpResponseMessage response = await feature.Client.PostAsync(Restart, Json());
         (HttpStatusCode status, JsonElement body) = await ReadAsync(response);
 
         Assert.Equal(HttpStatusCode.Accepted, status);
@@ -80,7 +83,7 @@ public sealed class DriverRestartEndpointTests
     {
         await using DriverFeature feature = await DriverFeature.StartAsync(Capable(), Recording);
 
-        using HttpResponseMessage response = await feature.Client.PostAsync(Restart, null);
+        using HttpResponseMessage response = await feature.Client.PostAsync(Restart, Json());
         (HttpStatusCode status, JsonElement body) = await ReadAsync(response);
 
         Assert.Equal(HttpStatusCode.Conflict, status);
@@ -100,7 +103,7 @@ public sealed class DriverRestartEndpointTests
     {
         await using DriverFeature feature = await DriverFeature.StartAsync();
 
-        using HttpResponseMessage response = await feature.Client.PostAsync(Restart, null);
+        using HttpResponseMessage response = await feature.Client.PostAsync(Restart, Json());
         (HttpStatusCode status, JsonElement body) = await ReadAsync(response);
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, status);
@@ -115,7 +118,7 @@ public sealed class DriverRestartEndpointTests
             Capable([DriverCapabilities.Recording]),
             Willing);
 
-        using HttpResponseMessage response = await feature.Client.PostAsync(Restart, null);
+        using HttpResponseMessage response = await feature.Client.PostAsync(Restart, Json());
         (HttpStatusCode status, JsonElement body) = await ReadAsync(response);
 
         Assert.Equal(HttpStatusCode.NotImplemented, status);
@@ -131,7 +134,7 @@ public sealed class DriverRestartEndpointTests
     {
         await using DriverFeature feature = await DriverFeature.StartAsync(Capable(), MissingTheEndpoint);
 
-        using HttpResponseMessage response = await feature.Client.PostAsync(Restart, null);
+        using HttpResponseMessage response = await feature.Client.PostAsync(Restart, Json());
         (HttpStatusCode status, JsonElement body) = await ReadAsync(response);
 
         Assert.Equal(HttpStatusCode.BadGateway, status);
