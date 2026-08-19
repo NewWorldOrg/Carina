@@ -17,6 +17,7 @@ public static class DriverGreeting
         DriverCapabilities.SignalQuality,
         DriverCapabilities.GracefulRestart,
         .. SignalQualityMetrics.All.Select(DriverCapabilities.SignalQualityMetric),
+        .. SessionPurposes.Capabilities,
     ];
 
     public static DriverHello ForThisProcess() =>

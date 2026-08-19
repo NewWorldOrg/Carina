@@ -200,10 +200,29 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        StartSessionRequest agreed = request;
+
+        if (SessionPurposes.Capability(request.Purpose) is { } purposeCapability)
+        {
+            DriverCall<DriverHello> health = await GetHealthAsync(cancellationToken);
+
+            if (health.TryGetValue(out DriverHello? hello))
+            {
+                SessionPurpose purpose = SessionPurposes.AgreedWith(hello, request.Purpose);
+
+                if (purpose is SessionPurpose.Unspecified)
+                {
+                    return DriverCall<SessionSnapshot>.Refused(Undeclared(purposeCapability));
+                }
+
+                agreed = request with { Purpose = purpose };
+            }
+        }
+
         try
         {
             using CancellationTokenSource patience = Patience(cancellationToken);
-            using var body = JsonContent.Create(request, DriverJson.Context.StartSessionRequest);
+            using var body = JsonContent.Create(agreed, DriverJson.Context.StartSessionRequest);
             using HttpResponseMessage response = await http.PostAsync(DriverEndpoints.Sessions, body, patience.Token);
 
             return await ReadAsync(
@@ -285,13 +304,16 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
 
         if (health.TryGetValue(out DriverHello? hello) && !hello.Supports(capability))
         {
-            return new DriverProblem(
-                "capabilityMissing",
-                [$"This driver does not declare '{capability}'; update the driver to use it."]);
+            return Undeclared(capability);
         }
 
         return null;
     }
+
+    private static DriverProblem Undeclared(string capability) =>
+        new(
+            SessionRefusalTitles.CapabilityMissing,
+            [$"This driver does not declare '{capability}'; update the driver to use it."]);
 
     private async Task<DriverCall<T>> GetAsync<T>(
         string path,

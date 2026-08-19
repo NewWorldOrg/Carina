@@ -26,6 +26,8 @@ public static class DriverCapabilities
 
     public const string SignalQualityMetricPrefix = "signalQuality.";
 
+    public const string SessionPurposePrefix = "sessionPurpose.";
+
     public static string SignalQualityMetric(string metric) =>
         SignalQualityMetricPrefix + metric;
 
@@ -33,5 +35,13 @@ public static class DriverCapabilities
         capability.StartsWith(SignalQualityMetricPrefix, StringComparison.Ordinal)
         && capability.Length > SignalQualityMetricPrefix.Length
             ? capability[SignalQualityMetricPrefix.Length..]
+            : null;
+
+    public static string Purpose(string purpose) => SessionPurposePrefix + purpose;
+
+    public static string? PurposeIn(string capability) =>
+        capability.StartsWith(SessionPurposePrefix, StringComparison.Ordinal)
+        && capability.Length > SessionPurposePrefix.Length
+            ? capability[SessionPurposePrefix.Length..]
             : null;
 }
