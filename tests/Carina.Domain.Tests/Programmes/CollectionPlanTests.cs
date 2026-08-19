@@ -102,6 +102,18 @@ public sealed class CollectionPlanTests
     }
 
     [Fact]
+    public void AStreamStillBackingOffIsVisitedAnywayWhenTheWalkIsHurried()
+    {
+        PlannedVisit visit = Assert.Single(CollectionPlan.Of(
+            [Stream(1, Now.AddHours(-1), Now.AddHours(1), Collected(1, Now.AddHours(1)))],
+            Now,
+            Wanted,
+            hurried: true));
+
+        Assert.Equal(1, visit.TransportStreamId.Value);
+    }
+
+    [Fact]
     public void AStreamWhoseBackingOffEndsRightNowIsVisitedAgain()
     {
         Assert.Single(CollectionPlan.Of(

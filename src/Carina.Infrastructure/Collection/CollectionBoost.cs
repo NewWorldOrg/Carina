@@ -96,7 +96,7 @@ public sealed class CollectionBoost(
             await using AsyncServiceScope scope = scopes.CreateAsyncScope();
             RoundResult walked = await scope.ServiceProvider
                 .GetRequiredService<CollectionRound>()
-                .WalkAsync(asked, CancellationToken.None, deadline.Token);
+                .WalkAsync(asked, CancellationToken.None, deadline.Token, hurried: true);
 
             logger.LogInformation(
                 "Boost {BoostId} visited {Visited} of {Asked} stream(s).",

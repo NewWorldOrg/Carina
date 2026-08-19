@@ -23,7 +23,8 @@ public sealed class CollectionRound(
     public async Task<RoundResult> WalkAsync(
         IReadOnlyList<BroadcastStream> streams,
         CancellationToken interruption,
-        CancellationToken abort)
+        CancellationToken abort,
+        bool hurried = false)
     {
         ArgumentNullException.ThrowIfNull(streams);
 
@@ -31,7 +32,11 @@ public sealed class CollectionRound(
             interruption,
             abort);
         DateTime now = clock.GetUtcNow().UtcDateTime;
-        IReadOnlyList<PlannedVisit> plan = CollectionPlan.Of(await CoverageAsync(streams, abort), now, settings.WantedCoverage);
+        IReadOnlyList<PlannedVisit> plan = CollectionPlan.Of(
+            await CoverageAsync(streams, abort),
+            now,
+            settings.WantedCoverage,
+            hurried);
         int visited = 0;
         int gathered = 0;
         int cameBackShort = 0;
@@ -52,7 +57,7 @@ public sealed class CollectionRound(
 
             try
             {
-                visit = await VisitAsync(stream, walking.Token);
+                visit = await VisitAsync(stream, hurried, walking.Token);
             }
             catch (OperationCanceledException) when (!abort.IsCancellationRequested)
             {
@@ -148,7 +153,7 @@ public sealed class CollectionRound(
             stream.Services));
     }
 
-    private async Task<VisitResult> VisitAsync(BroadcastStream stream, CancellationToken abort)
+    private async Task<VisitResult> VisitAsync(BroadcastStream stream, bool hurried, CancellationToken abort)
     {
         int refusals = 0;
 
@@ -158,7 +163,7 @@ public sealed class CollectionRound(
 
             try
             {
-                visit = await visitor.VisitAsync(stream.Tuning, hurried: false, abort);
+                visit = await visitor.VisitAsync(stream.Tuning, hurried, abort);
             }
             catch (Exception failure) when (failure is not OperationCanceledException)
             {

@@ -28,7 +28,8 @@ public static class CollectionPlan
     public static IReadOnlyList<PlannedVisit> Of(
         IReadOnlyList<StreamCoverage> streams,
         DateTime now,
-        TimeSpan wanted)
+        TimeSpan wanted,
+        bool hurried = false)
     {
         ArgumentNullException.ThrowIfNull(streams);
         UtcTimes.Required(now, nameof(now));
@@ -37,7 +38,9 @@ public static class CollectionPlan
 
         foreach (StreamCoverage stream in streams)
         {
-            if (UtcTimes.Optional(stream.NotBefore, nameof(streams)) is { } notBefore && notBefore > now)
+            DateTime? notBefore = UtcTimes.Optional(stream.NotBefore, nameof(streams));
+
+            if (!hurried && notBefore is { } waited && waited > now)
             {
                 continue;
             }
