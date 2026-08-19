@@ -46,7 +46,7 @@ public abstract class TolerantEnumConverter<TEnum> : JsonConverter<TEnum>
 
 public sealed class SessionPurposeConverter : TolerantEnumConverter<SessionPurpose>
 {
-    protected override string NameOf(SessionPurpose value) =>
+    public static string WireName(SessionPurpose value) =>
         value switch
         {
             SessionPurpose.Recording => "recording",
@@ -56,6 +56,8 @@ public sealed class SessionPurposeConverter : TolerantEnumConverter<SessionPurpo
             SessionPurpose.Scan => "scan",
             _ => "unspecified",
         };
+
+    protected override string NameOf(SessionPurpose value) => WireName(value);
 
     protected override SessionPurpose? ValueOf(string name) =>
         name switch

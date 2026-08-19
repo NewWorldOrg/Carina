@@ -1126,6 +1126,7 @@ public sealed class TunerSessionManagerTests : IDisposable
                 DriverCapabilities.GracefulRestart,
                 "signalQuality.cnr",
                 "signalQuality.postViterbiBitError",
+                "sessionPurpose.surveyNow",
             ],
             Carina.Driver.Ipc.DriverGreeting.Capabilities
         );
