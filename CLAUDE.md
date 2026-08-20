@@ -74,9 +74,10 @@ learns that they exist.
 
 ## Invariants
 
-Each of these is held by a test, and each test is paired with a self-check that
-runs the same rule against a deliberately violating fixture, so a green run means
-the rule holds rather than that it inspected nothing.
+Most of these are held by a rule test rather than by memory, and every rule test
+is paired with a self-check that runs the same rule against a deliberately
+violating fixture — so a green run means the rule holds, not that it inspected
+nothing.
 
 - **Contract changes are additive only.** Removing or renaming an endpoint or an
   event breaks the "old driver, new app" combination, which is the normal state.
@@ -120,10 +121,12 @@ the rule holds rather than that it inspected nothing.
 - Controllers are one class per action, named `{Verb}{Entity}Action.cs` with a
   single public method `Invoke`, and they take their dependencies from the
   `Services` namespace and nowhere else.
-- Use cases are `{Entity}Service`, every public method returns a
-  `ServiceResult<T>`, and a responder derived from `BaseResponder` renders it.
-  The one exception is `GET /api/health`, which answers a probe with bare JSON
-  and no envelope; do not copy that shape into a business endpoint.
+- Use cases are `{Entity}Service`, and every public method returns a
+  `ServiceResult<T>`. An action renders that as `BaseResponder<{X}Responder>`:
+  the envelope carries the status and the message, and the `{X}Responder` record
+  it wraps is built by a static `Of`. The one exception is `GET /api/health`,
+  which answers a probe with bare JSON and no envelope; do not copy that shape
+  into a business endpoint.
 - Repository interfaces belong to `Carina.Domain`, implementations to
   `Carina.Infrastructure`.
 - Value objects, identifiers included, derive from `CommonValueObject<T>` and are
