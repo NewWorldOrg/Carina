@@ -18,6 +18,17 @@ public static class AuthenticationBypasses
         "AllowAnonymous",
     ];
 
+    public static IReadOnlyList<string> AskingWhoIsCalling { get; } =
+    [
+        "AddAuthentication",
+        "UseAuthentication",
+        "AddAuthorization",
+        "UseAuthorization",
+        "AuthenticationHandler",
+        "[Authorize]",
+        "WWW-Authenticate",
+    ];
+
     public static IReadOnlyList<string> IdentityProviderSignOut { get; } =
     [
         "end_session_endpoint",
