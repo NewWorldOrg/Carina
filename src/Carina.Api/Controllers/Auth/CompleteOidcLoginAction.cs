@@ -24,7 +24,7 @@ public sealed class CompleteOidcLoginAction(OidcLoginService logins) : Controlle
                 state,
                 code,
                 OidcHandshake.MarkCarriedBy(Request),
-                OidcHandshake.RedirectUriFor(Request),
+                OidcHandshake.ArrivedAt(Request),
                 DeviceLabel.From(Request.Headers.UserAgent.ToString())),
             cancellationToken);
 

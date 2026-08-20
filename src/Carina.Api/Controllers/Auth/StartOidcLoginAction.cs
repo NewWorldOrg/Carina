@@ -22,7 +22,7 @@ public sealed class StartOidcLoginAction(OidcLoginService logins) : ControllerBa
             new OidcStartAttempt(
                 OidcHandshake.MarkCarriedBy(Request),
                 next,
-                OidcHandshake.RedirectUriFor(Request)),
+                OidcHandshake.ArrivedAt(Request)),
             cancellationToken);
 
         if (asked.Data is not { } start)

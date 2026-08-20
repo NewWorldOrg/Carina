@@ -22,7 +22,8 @@ public sealed record OidcConfigResponder(
     IReadOnlyList<string> AllowedHostedDomains,
     bool AdmitsEveryone,
     OidcReach Reach,
-    string RedirectUri)
+    string RedirectUri,
+    bool RedirectUriGuessed)
 {
     public static OidcConfigResponder Of(OidcConfigView view)
     {
@@ -37,6 +38,7 @@ public sealed record OidcConfigResponder(
             view.AllowedHostedDomains,
             view.AdmitsEveryone,
             view.Reach,
-            view.RedirectUri);
+            view.RedirectUri,
+            view.RedirectUriGuessed);
     }
 }

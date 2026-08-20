@@ -10,6 +10,7 @@ public sealed class OidcLoginService(
     IOidcGateway gateway,
     IPendingOidcLoginStore handshakes,
     IAuthSessionRepository sessions,
+    PublicOrigin origin,
     OidcLoginPolicy policy,
     SessionPolicy sessionPolicy,
     TimeProvider clock,
@@ -48,7 +49,7 @@ public sealed class OidcLoginService(
 
         return ServiceResult<OidcStart, OidcRefusal>.Success(
             new OidcStart(
-                AuthorizeUri(endpoints, held.ClientId!, attempt.RedirectUri, pending),
+                AuthorizeUri(endpoints, held.ClientId!, origin.RedirectUriFor(attempt.ArrivedAt).Value, pending),
                 mark,
                 policy.HandshakeLifetime));
     }
@@ -99,7 +100,7 @@ public sealed class OidcLoginService(
                 held.ClientId!,
                 held.ClientSecret!,
                 code,
-                attempt.RedirectUri,
+                origin.RedirectUriFor(attempt.ArrivedAt).Value,
                 pending.Pkce.Verifier),
             cancellationToken);
 

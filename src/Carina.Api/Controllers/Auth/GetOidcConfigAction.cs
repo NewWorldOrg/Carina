@@ -19,7 +19,7 @@ public sealed class GetOidcConfigAction(OidcConfigService configuration) : Contr
     public async Task<IActionResult> Invoke(CancellationToken cancellationToken)
     {
         ServiceResult<OidcConfigView> asked = await configuration.ReadAsync(
-            OidcHandshake.RedirectUriFor(Request),
+            OidcHandshake.ArrivedAt(Request),
             cancellationToken);
 
         return Ok(BaseResponder<OidcConfigResponder>.Success(OidcConfigResponder.Of(asked.Data!)));

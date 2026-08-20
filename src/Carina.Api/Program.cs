@@ -19,6 +19,7 @@ builder.Services
 builder.Services.ConfigureHttpJsonOptions(options => WireJson.Configure(options.SerializerOptions));
 builder.Services.AddApplicationServices();
 builder.Services.AddTrustedProxies(builder.Configuration);
+builder.Services.AddPublicOrigin(builder.Configuration);
 builder.Services.AddCarinaInfrastructure(builder.Configuration);
 builder.Services
     .AddAuthentication(SessionAuthenticationHandler.SchemeName)

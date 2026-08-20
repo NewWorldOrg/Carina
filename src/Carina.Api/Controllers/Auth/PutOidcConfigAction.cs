@@ -30,7 +30,7 @@ public sealed class PutOidcConfigAction(OidcConfigService configuration) : Contr
                 request?.ClientSecret,
                 request?.AllowedGroups,
                 request?.AllowedHostedDomains),
-            OidcHandshake.RedirectUriFor(Request),
+            OidcHandshake.ArrivedAt(Request),
             cancellationToken);
 
         if (asked.Data is not { } saved)
