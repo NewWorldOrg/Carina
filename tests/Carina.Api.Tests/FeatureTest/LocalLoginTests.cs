@@ -19,7 +19,7 @@ public sealed class LocalLoginTests
         string cookie = Assert.Single(response.Headers.GetValues("Set-Cookie"));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.StartsWith($"{SessionCookie.PlainName}=", cookie, StringComparison.Ordinal);
+        Assert.StartsWith($"{SessionCookie.Name}=", cookie, StringComparison.Ordinal);
         Assert.Contains("httponly", cookie, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("samesite=lax", cookie, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("path=/", cookie, StringComparison.OrdinalIgnoreCase);
@@ -27,7 +27,7 @@ public sealed class LocalLoginTests
     }
 
     [Fact]
-    public async Task OverHttpsTheCookieTakesTheHostPrefixAndTheSecureFlag()
+    public async Task OverHttpsTheCookieKeepsTheOneNameAndTakesTheSecureFlag()
     {
         await using AuthProbe probe = AuthProbe.OverHttps().WithAnAccount();
 
@@ -35,7 +35,7 @@ public sealed class LocalLoginTests
         string cookie = Assert.Single(response.Headers.GetValues("Set-Cookie"));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.StartsWith($"{SessionCookie.HostName}=", cookie, StringComparison.Ordinal);
+        Assert.StartsWith($"{SessionCookie.Name}=", cookie, StringComparison.Ordinal);
         Assert.Contains("secure", cookie, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("path=/", cookie, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("domain=", cookie, StringComparison.OrdinalIgnoreCase);
@@ -50,7 +50,7 @@ public sealed class LocalLoginTests
         string cookie = Assert.Single(response.Headers.GetValues("Set-Cookie"));
         AuthSession started = probe.Sessions.Sessions[^1];
 
-        string carried = cookie[$"{SessionCookie.PlainName}=".Length..cookie.IndexOf(';', StringComparison.Ordinal)];
+        string carried = cookie[$"{SessionCookie.Name}=".Length..cookie.IndexOf(';', StringComparison.Ordinal)];
 
         Assert.Equal(started.Id.Value, carried);
         Assert.DoesNotContain(FirstCredentials.Username, carried, StringComparison.Ordinal);

@@ -7,15 +7,9 @@ namespace Carina.Api.Tests.Unit;
 public sealed class SessionCookieTests
 {
     [Fact]
-    public void OverHttpsTheCookieTakesThePrefixThatTiesItToTheHostAndThePath()
+    public void TheCookieAnswersToOneNameSoTheSameOneIsFoundHoweverTheRequestArrived()
     {
-        Assert.Equal("__Host-carina_session", SessionCookie.NameFor(secure: true));
-    }
-
-    [Fact]
-    public void OverPlainHttpTheCookieDropsThePrefixBecauseABrowserWouldRefuseItWithoutSecure()
-    {
-        Assert.Equal("carina_session", SessionCookie.NameFor(secure: false));
+        Assert.Equal("carina_session", SessionCookie.Name);
     }
 
     [Fact]
@@ -32,12 +26,13 @@ public sealed class SessionCookieTests
     }
 
     [Fact]
-    public void TheHostPrefixRulesAreAllMetSoABrowserAcceptsTheCookieItNames()
+    public void OverPlainHttpTheCookieGivesUpTheSecureFlagAndNothingElse()
     {
-        CookieOptions options = SessionCookie.Carrying(secure: true, TimeSpan.FromDays(30));
+        CookieOptions options = SessionCookie.Carrying(secure: false, TimeSpan.FromDays(30));
 
-        Assert.StartsWith("__Host-", SessionCookie.NameFor(secure: true), StringComparison.Ordinal);
-        Assert.True(options.Secure);
+        Assert.False(options.Secure);
+        Assert.True(options.HttpOnly);
+        Assert.Equal(SameSiteMode.Lax, options.SameSite);
         Assert.Equal("/", options.Path);
         Assert.Null(options.Domain);
     }
@@ -51,6 +46,7 @@ public sealed class SessionCookieTests
         Assert.True(options.Secure);
         Assert.Equal(SameSiteMode.Lax, options.SameSite);
         Assert.Equal("/", options.Path);
+        Assert.False(SessionCookie.Discarding(secure: false).Secure);
     }
 
     [Fact]

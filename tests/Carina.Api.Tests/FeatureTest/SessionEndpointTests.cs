@@ -62,7 +62,7 @@ public sealed class SessionEndpointTests
     {
         await using AuthProbe probe = AuthProbe.OverHttp().WithAnAccount();
 
-        probe.Client.DefaultRequestHeaders.Add("Cookie", $"{probe.CookieName}=not-a-session-id");
+        probe.Client.DefaultRequestHeaders.Add("Cookie", $"{SessionCookie.Name}=not-a-session-id");
 
         using HttpResponseMessage response = await probe.Client.GetAsync(Me);
 
@@ -135,7 +135,7 @@ public sealed class SessionEndpointTests
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
         Assert.Equal(1, probe.Sessions.Deletions);
         Assert.Empty(probe.Sessions.Sessions);
-        Assert.StartsWith($"{SessionCookie.PlainName}=;", cookie, StringComparison.Ordinal);
+        Assert.StartsWith($"{SessionCookie.Name}=;", cookie, StringComparison.Ordinal);
     }
 
     [Fact]
