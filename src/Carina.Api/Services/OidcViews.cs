@@ -1,8 +1,9 @@
+using Carina.Api.Authentication;
 using Carina.Domain.Auth;
 
 namespace Carina.Api.Services;
 
-public sealed record OidcStartAttempt(string? BrowserMark, string? ReturnTo, string RedirectUri);
+public sealed record OidcStartAttempt(string? BrowserMark, string? ReturnTo, string ArrivedAt);
 
 public sealed record OidcStart(Uri Authorize, string BrowserMark, TimeSpan MarkLifetime);
 
@@ -10,7 +11,7 @@ public sealed record OidcArrivalAttempt(
     string? State,
     string? Code,
     string? BrowserMark,
-    string RedirectUri,
+    string ArrivedAt,
     string DeviceLabel);
 
 public sealed record OidcArrival(AuthSession Session, string ReturnPath, TimeSpan SessionLifetime);
@@ -31,11 +32,13 @@ public sealed record OidcConfigView(
     IReadOnlyList<string> AllowedHostedDomains,
     bool AdmitsEveryone,
     OidcReach Reach,
-    string RedirectUri)
+    string RedirectUri,
+    bool RedirectUriGuessed)
 {
-    public static OidcConfigView Of(OidcSettings settings, OidcReach reach, string redirectUri)
+    public static OidcConfigView Of(OidcSettings settings, OidcReach reach, PublicRedirectUri redirect)
     {
         ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(redirect);
 
         return new OidcConfigView(
             settings.IsConfigured,
@@ -46,7 +49,8 @@ public sealed record OidcConfigView(
             settings.AllowedHostedDomains,
             settings.Restriction.AdmitsEveryone,
             reach,
-            redirectUri);
+            redirect.Value,
+            redirect.Guessed);
     }
 }
 

@@ -1,3 +1,4 @@
+using Carina.Api.Authentication;
 using Carina.Api.Common;
 using Carina.Domain.Auth;
 
@@ -8,6 +9,7 @@ public sealed class OidcConfigService(
     IOidcDirectory directory,
     IOidcGateway gateway,
     IOidcReachability reachability,
+    PublicOrigin origin,
     TimeProvider clock)
 {
     public const string TheProviderDidNotAnswer =
@@ -18,14 +20,14 @@ public sealed class OidcConfigService(
         "The client secret is write-only, so the first save of an identity provider has to carry one.";
 
     public async Task<ServiceResult<OidcConfigView>> ReadAsync(
-        string redirectUri,
+        string arrivedAt,
         CancellationToken cancellationToken)
     {
         OidcSettings held = await settings.FindAsync(cancellationToken)
                             ?? OidcSettings.Unconfigured(clock.GetUtcNow().UtcDateTime);
 
         return ServiceResult<OidcConfigView>.Success(
-            OidcConfigView.Of(held, reachability.State, redirectUri));
+            OidcConfigView.Of(held, reachability.State, origin.RedirectUriFor(arrivedAt)));
     }
 
     public async Task<ServiceResult<SignInOptionsView>> ReadSignInOptionsAsync(CancellationToken cancellationToken)
@@ -38,7 +40,7 @@ public sealed class OidcConfigService(
 
     public async Task<ServiceResult<OidcConfigView>> SaveAsync(
         OidcConfigChange change,
-        string redirectUri,
+        string arrivedAt,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(change);
@@ -51,7 +53,7 @@ public sealed class OidcConfigService(
             held.Clear(now);
             held.Restrict(change.AllowedGroups, change.AllowedHostedDomains, now);
 
-            return await SavedAsync(held, redirectUri, cancellationToken);
+            return await SavedAsync(held, arrivedAt, cancellationToken);
         }
 
         ClientSecret? offered = Named(change.ClientSecret) is { } secret ? new ClientSecret(secret) : null;
@@ -81,7 +83,7 @@ public sealed class OidcConfigService(
         held.Configure(discoveryUrl, clientId, offered, now);
         held.Restrict(change.AllowedGroups, change.AllowedHostedDomains, now);
 
-        return await SavedAsync(held, redirectUri, cancellationToken);
+        return await SavedAsync(held, arrivedAt, cancellationToken);
     }
 
     private static string? Named(string? value)
@@ -89,13 +91,13 @@ public sealed class OidcConfigService(
 
     private async Task<ServiceResult<OidcConfigView>> SavedAsync(
         OidcSettings held,
-        string redirectUri,
+        string arrivedAt,
         CancellationToken cancellationToken)
     {
         await settings.SaveAsync(held, cancellationToken);
         await directory.ProbeAsync(held, cancellationToken);
 
         return ServiceResult<OidcConfigView>.Success(
-            OidcConfigView.Of(held, reachability.State, redirectUri));
+            OidcConfigView.Of(held, reachability.State, origin.RedirectUriFor(arrivedAt)));
     }
 }

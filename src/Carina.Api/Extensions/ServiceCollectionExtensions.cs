@@ -61,6 +61,26 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
+    public static IServiceCollection AddPublicOrigin(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        services.AddSingleton<IValidateOptions<PublicOriginOptions>, PublicOriginValidation>();
+        services.AddOptions<PublicOriginOptions>()
+            .Configure(options => options.Origin = configuration[PublicOrigin.Key])
+            .ValidateOnStart();
+
+        services.AddSingleton(provider =>
+            provider.GetRequiredService<IOptions<PublicOriginOptions>>().Value.Read());
+
+        services.AddHostedService<PublicOriginDiagnosis>();
+
+        return services;
+    }
+
     private static void Trusting(ForwardedHeadersOptions options, TrustedProxies trusted)
     {
         options.ForwardedHeaders = trusted.TrustsNothing

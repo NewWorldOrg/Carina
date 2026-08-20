@@ -20,11 +20,11 @@ public static class OidcHandshake
 
     public const string CodeKey = "code";
 
-    public static string RedirectUriFor(HttpRequest request)
+    public static string ArrivedAt(HttpRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        return $"{request.Scheme}://{request.Host.Value}{CallbackPath}";
+        return $"{request.Scheme}://{request.Host.Value}";
     }
 
     public static string? MarkCarriedBy(HttpRequest request)
