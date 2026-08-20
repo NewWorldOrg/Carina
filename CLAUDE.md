@@ -135,7 +135,7 @@ docker compose exec app dotnet format --verify-no-changes
 `task` shortcuts: `task build`, `task test`, `task lint`, `task format`.
 
 GitHub Actions runs build, format verification, the compose
-render, the image and its role checks, and two test jobs: one
+render, the image build, and two test jobs: one
 for everything except `Category=DbIntegration`, one for those against a PostgreSQL
 service container. The second job counts the tests it ran, because `dotnet test` exits 0
 when a filter matches nothing and a mistyped category would otherwise be green having
