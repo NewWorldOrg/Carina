@@ -2,129 +2,178 @@
 
 Backend of a self-hosted recording system for Japanese digital broadcasting: a
 privileged driver process that owns the tuner hardware and writes recordings, and
-an unprivileged app process that provides the HTTP API around it.
+an unprivileged app process that serves the HTTP API around it.
 
-Two properties drive the design:
+Two properties decide most of what follows, and are the argument to answer before
+relaxing any of it:
 
 - **A recording in progress survives a deployment.** The driver is a separate
-  process on its own release tag; replacing the app must not touch it.
-- **Recording quality is observable.** Continuity errors are measured while
-  recording, so a broken recording can be found afterwards instead of being
-  discovered on playback.
+  process on its own release stream; replacing the app must not touch it.
+- **Recording quality is observable.** Continuity errors are counted while the
+  recording is being written, so a broken recording is found by searching for it
+  rather than on playback.
+
+`README.md` is for running this — setup, configuration, image roles, driver
+operation. This file is for changing it, and does not repeat what is there.
 
 ## Tech Stack
 
-- .NET 10, ASP.NET Core.
-- EF Core + PostgreSQL. Migrations live in a dedicated entry point.
-- Driver: Linux DVB API through P/Invoke, in-process descrambling, smart card daemon.
-- IPC: HTTP/1.1 over a Unix domain socket. The driver never binds a TCP port.
+- .NET 10, ASP.NET Core, xUnit.
+- EF Core and PostgreSQL. Migrations are applied by the `Carina.Db --migrate`
+  entry point, never by the app on startup.
+- The driver reaches the tuner through the Linux DVB API with P/Invoke, and
+  answers the app over HTTP/1.1 on a Unix domain socket. It binds no TCP port.
+- Build settings are central in `Directory.Build.props`, package versions in
+  `Directory.Packages.props`. Neither is repeated per project.
 
 ## Architecture
 
 Two processes, one repository.
 
-```
-src/Carina.Driver          privileged; tuning, descrambling, TS handling, recording files
-src/Carina.Contracts       the only artifact both processes share (IPC contract)
-src/Carina.Domain          entities, value objects, repository interfaces — references Contracts only
-src/Carina.Broadcast       broadcast-standard parsing — no dependencies
-src/Carina.Infrastructure  persistence, IPC client, external boundaries
-src/Carina.Db              migration entry point (leaf; nothing references it)
-src/Carina.Api             HTTP surface; serves the OpenAPI document
-tests/                     one test project per production project + architecture tests
-```
+| Project | What it holds |
+| --- | --- |
+| `src/Carina.Driver` | privileged: tuning, transport stream handling, sessions, recording files |
+| `src/Carina.Contracts` | the only artifact both processes share — the IPC contract |
+| `src/Carina.Domain` | entities, value objects and repository interfaces, grouped by aggregate |
+| `src/Carina.Broadcast` | broadcast-standard parsing, as a library that depends on nothing |
+| `src/Carina.Infrastructure` | persistence, the driver IPC client, external boundaries |
+| `src/Carina.Db` | the migration entry point |
+| `src/Carina.Api` | the HTTP surface, and the OpenAPI document it serves |
 
-The running application is the only source of the OpenAPI document: it is served at
-`GET /openapi/v1.json` and nothing is checked in. It is mapped in Development only, so a
-deployment does not publish its own description, and there it is anonymous, which is
-where the web frontend fetches it from to generate its client. Three surfaces cannot be expressed in
-the document — the transport stream, the event hub and the bulk programme guide — and
-its description names all three so a consumer reading only the generated client learns
-they exist.
+Reference direction is one way, and `tests/Carina.Architecture.Tests` is what
+holds it:
 
-Reference direction is one-way and enforced by `tests/Carina.Architecture.Tests`:
-
-- `Carina.Driver` may reference `Carina.Contracts` and nothing else. Reaching into
-  the app's layers would tie the two release streams back together.
-- `Carina.Domain` may reference `Carina.Contracts` and nothing else — the driver client
-  interface speaks the wire types, and mirroring them would duplicate every additive
-  contract change. `Carina.Broadcast` has no project and no package references.
-- `Carina.Contracts` itself has neither project nor package references. The domain's
-  framework-freeness now runs through it, so a package added here would reach the domain
-  transitively. What the contract carries is shared vocabulary — message records, enums,
-  identifiers; the domain knows nothing of HTTP, URLs or JSON, and a source rule keeps
-  `DriverEndpoints` and `DriverJson` out of it even though both compile against it.
+- `Carina.Driver` may reference `Carina.Contracts` and nothing else. Reaching
+  into the app's layers would tie the two release streams back together.
+- `Carina.Domain` may reference `Carina.Contracts` and nothing else, and carries
+  no package reference at all — the driver client interface speaks the wire
+  types, and mirroring them would duplicate every additive contract change.
+- `Carina.Contracts` itself has neither project nor package references. The
+  domain's framework-freeness runs through it, so a package added here reaches
+  the domain transitively. What the contract carries is shared vocabulary:
+  message records, enums, identifiers. The domain knows nothing of HTTP, URLs or
+  JSON, and a source rule keeps `DriverEndpoints` and `DriverJson` out of it even
+  though both compile against it.
+- `Carina.Broadcast` has no project and no package references.
+- `Carina.Infrastructure` and `Carina.Api` depend inwards only.
 - `Carina.Db` is a leaf: no project may reference the migration entry point.
+- The set of projects is itself asserted, so a new one is a deliberate act rather
+  than something that appears in the graph unnoticed.
 
-The architecture tests read the project files rather than the compiled output, so a
-reference that is declared but not yet used is still caught. `ReferenceRuleSelfCheckTests`
-runs the same rules against a deliberately violating graph, so a green run means the
-rules hold rather than that they inspected nothing.
+The rules read the project files rather than the compiled output, so a reference
+that is declared but not yet used is still caught.
 
-### Conventions
+The running application is the only source of the OpenAPI document: it is served
+at `GET /openapi/v1.json` and nothing is checked in. It is mapped in Development
+only, so a deployment does not publish its own description, and there it is one
+of the anonymous surfaces, which is where the web frontend fetches it from to
+generate its client. Three surfaces cannot be expressed in the document — the
+transport stream, the event hub and the bulk programme guide — and its
+description names all three, so a consumer reading only the generated client
+learns that they exist.
 
-- Controllers are one class per action: `{Verb}{Entity}Action.cs`, method `Invoke`.
-- Use cases are `{Entity}Service`, returning `ServiceResult<T>` rendered by `BaseResponder`.
-  The one exception is `/api/health`, which answers a probe with bare JSON and no envelope;
-  do not copy that shape into a business endpoint.
-- App-layer conventions are enforced by reflection in `tests/Carina.Conventions.Tests`,
-  kept apart from `Carina.Architecture.Tests` so the latter can keep referencing no
-  production assembly.
-- Repository interfaces belong to `Carina.Domain`, implementations to `Carina.Infrastructure`.
-- Value objects — identifiers included — derive from `CommonValueObject<T>`.
-- Entities have a private constructor and a static `Rehydrate`.
+## Invariants
+
+Most of these are held by a rule test rather than by memory, and every rule test
+is paired with a self-check that runs the same rule against a deliberately
+violating fixture — so a green run means the rule holds, not that it inspected
+nothing.
+
+- **Contract changes are additive only.** Removing or renaming an endpoint or an
+  event breaks the "old driver, new app" combination, which is the normal state.
+- **App events are signals, not messages.** A producer signals through
+  `IAppEventPublisher` with a `Carina.Contracts.AppEventName` and nothing beside
+  it; the nine names are the only instances there are, and none is reachable from
+  a string. A subscriber reads a signal as "re-read", never as what changed.
+- **Reservations hold no foreign key to the channel definitions.** They persist
+  by their broadcast identifiers, so editing a channel definition can never
+  delete a reservation.
+- **The programme cache is disposable.** Dropping it is recoverable by collecting
+  again, so no table outside the cache may hold a foreign key into it.
+- **Which family a table belongs to is read from the feature namespace of its
+  entity type, never from the table's name:** a reservation called `booking` is
+  still a reservation. The map from feature namespace to family lives in
+  `PersistenceBoundaryRules`, owned types are judged as their aggregate root, and
+  an entity whose namespace is not in the map fails the rule instead of passing
+  as unrelated. A domain that adds tables declares which side of the boundary
+  they are on rather than escaping it by naming.
+- **The driver asks nobody who they are.** The gate is the socket's permissions
+  and owning group, and adding authentication would mean putting a secret in the
+  privileged process. Only the app process holds secrets; the driver holds none,
+  and the entrypoint strips database settings out of the driver role rather than
+  trusting it to ignore them.
+- **No endpoint exempts itself from the default denial,** and no production
+  source reads an identity handed to it by an edge. Authentication is decided by
+  the session the request carries, not by a header a proxy could be talked into
+  setting.
+- **The OIDC client secret is read in the clear in two files only** — where it is
+  stored and where it is spent. Neither of them logs, and nothing that answers a
+  caller can even name it.
+- **Configuration is validated at startup** and the process stops with a message
+  naming the offending setting. There is no hot reload. Secrets never enter
+  committed configuration: placeholders only, real values from the environment.
+- **A stop the driver was asked for exits 0; anything else exits 70.** Coming
+  back is the supervisor's half of the deal, which is why `on-failure` is the one
+  restart policy the driver must never be given.
+
+## Conventions
+
+- Controllers are one class per action, named `{Verb}{Entity}Action.cs` with a
+  single public method `Invoke`, and they take their dependencies from the
+  `Services` namespace and nowhere else.
+- Use cases are `{Entity}Service`, and every public method returns a
+  `ServiceResult<T>`. An action renders that as `BaseResponder<{X}Responder>`:
+  the envelope carries the status and the message, and the `{X}Responder` record
+  it wraps is built by a static `Of`. The one exception is `GET /api/health`,
+  which answers a probe with bare JSON and no envelope; do not copy that shape
+  into a business endpoint.
+- Repository interfaces belong to `Carina.Domain`, implementations to
+  `Carina.Infrastructure`.
+- Value objects, identifiers included, derive from `CommonValueObject<T>` and are
+  immutable — no property may have a setter.
+- Entities have a private constructor and a static `Rehydrate`. A type that
+  offers `Rehydrate` exposes no public constructor beside it.
 - Time is taken from an injected `TimeProvider`, never from the ambient clock.
-- Common build settings live in `Directory.Build.props`, package versions in
-  `Directory.Packages.props`. Do not repeat them per project.
-- Tests come first; no implementation without a test.
-
-### Boundaries that must not be broken
-
-- Reservations persist by their broadcast identifiers (nid + sid) and hold no foreign
-  key to the channel definitions. Editing a channel definition must never delete a
-  reservation.
-- The programme cache is disposable: dropping it is recoverable by collecting again,
-  so no table outside the cache may hold a foreign key into it.
-- Both persistence boundaries are enforced against the EF Core model by
-  `PersistenceBoundaryRuleTests` in `tests/Carina.Infrastructure.Tests`, self-checked
-  against a deliberately violating model. The real columns of the three aggregates are
-  out of the foundation's scope and belong to their own domains.
-- Which family a table belongs to is read from the feature namespace of its entity type,
-  never from the table's name: a reservation called `booking` is still a reservation.
-  The map from feature namespace to family lives in `PersistenceBoundaryRules`, owned
-  types are judged as their aggregate root, and an entity whose namespace is not in the
-  map fails the rule instead of passing as unrelated — a domain adding tables declares
-  which side of the boundary they are on rather than escaping it by naming.
-- Contract changes are additive only. Removing or renaming an endpoint or an event
-  breaks the "old driver + new app" combination, which is the normal state.
-- App events are signals, not messages. A producer signals through `IAppEventPublisher`
-  with a `Carina.Contracts.AppEventName` and nothing beside it — the nine names are the
-  only instances there are and none is reachable from a string. `AppEventRuleTests` and
-  `EventStreamRuleTests` hold both halves of that before the hub itself is built.
-- Configuration is validated at startup and the process fails fast with a message
-  naming the offending setting. There is no hot reload.
-- Secrets never enter committed configuration — placeholders only, real values from
-  the environment. Only the app process holds secrets; the driver holds none.
-
-## Coding Conventions
-
+- Asynchronous methods end in `Async`.
 - Declarations name their type. `var` is only for the case where the type already
   appears on the right — `new`, a cast, or a factory whose name carries the type
-  (`ToList`, `Parse`, `CreateLinkedTokenSource`). Everything else is written out, so a
-  reader learns the type without following the call. `.editorconfig` sets `IDE0008` to
-  error and `EnforceCodeStyleInBuild` makes the build the thing that enforces it,
-  not memory.
-- Comments earn their place or are absent. Code that needs a comment to be understood
-  is rewritten instead.
-- Asynchronous methods end in `Async`.
-- Domain holds entities, value objects, and repository interfaces, grouped by
-  aggregate. Infrastructure holds the implementations. Entities are restored through a
-  static `Rehydrate`.
+  (`ToList`, `Parse`, `CreateLinkedTokenSource`). Everything else is written out,
+  so a reader learns the type without following the call. `.editorconfig` raises
+  `IDE0008` to an error and `EnforceCodeStyleInBuild` makes the build enforce it,
+  rather than memory.
+- Comments earn their place or are absent. Code that needs a comment to be
+  understood is rewritten instead.
 - Warnings are errors. The build is the gate.
+- Tests come first. There is no implementation without a test.
 
-## CI Commands
+The conventions in the first five bullets are checked by reflection in
+`tests/Carina.Conventions.Tests`, which is kept apart from
+`Carina.Architecture.Tests` so that the latter can go on referencing no
+production assembly.
 
-All commands run inside the containers.
+## Tests
+
+There is one test project per production project, plus `Carina.Architecture.Tests`
+and `Carina.Conventions.Tests` for the rules above. `Carina.TestSupport` and
+`Carina.BroadcastTestSupport` carry the shared fakes and fixtures; no test project
+may reference another test project, and the shared support reaches no further than
+the domain.
+
+Three filters divide the suite, and CI runs one job per filter:
+
+| Filter | What it selects |
+| --- | --- |
+| under a `Unit` folder, or nothing more specific | everything that needs neither a database nor the HTTP surface |
+| `FullyQualifiedName~FeatureTest` | the tests that drive the application through its HTTP surface |
+| `Category=DbIntegration` or a `DbIntegration` name | the tests that need a real PostgreSQL |
+
+Each job counts the tests it ran and fails on zero, because `dotnet test` exits 0
+when a filter matches nothing and a mistyped name would otherwise be green having
+verified nothing.
+
+## Commands
+
+Everything runs inside the containers.
 
 ```bash
 docker compose exec app dotnet build
@@ -132,83 +181,44 @@ docker compose exec app dotnet test
 docker compose exec app dotnet format --verify-no-changes
 ```
 
-`task` shortcuts: `task build`, `task test`, `task lint`, `task format`.
+`Taskfile.yml` is the place for a repeatable operation — `task build`, `task
+test`, `task lint`, `task format`, `task migrate`, `task psql`, and the driver
+tasks the README describes. Add a task rather than passing a longer command
+around by hand.
 
-GitHub Actions runs build, format verification, the compose
-render, the image and its role checks, and two test jobs: one
-for everything except `Category=DbIntegration`, one for those against a PostgreSQL
-service container. The second job counts the tests it ran, because `dotnet test` exits 0
-when a filter matches nothing and a mistyped category would otherwise be green having
-verified nothing.
+GitHub Actions runs, on push and pull request to `master`: one job for the build
+with warnings as errors and the format check, and the three test jobs above. A
+second workflow builds the image and renders the compose file; it stays out of
+the way of draft pull requests.
 
-## Docker Config
+## Development environment
 
-- `compose.yml` is the development environment: an `app` and a `driver` container on
-  the .NET SDK image with the repository mounted at `/code`, plus `db` (PostgreSQL).
-  No tuner device is mapped; development runs against the synthetic tuner backend.
-- The two processes share `/run/carina`, where the driver socket lives.
-- `driver` has a stop grace period longer than the driver's recording linger cap;
-  shortening it would kill a recording that was about to finish. `docker compose stop`
-  is an explicit stop, so the restart policy does not fight it.
-- The driver's health probe is the driver itself — `Carina.Driver --probe` reads the
-  configured socket, asks `/health` and `/tuners`, and answers on what it finds:
-  draining, or every usable tuner faulted, is not healthy. The runtime image carries
-  no HTTP client for this.
-- `Carina.Driver --shutdown-budget` prints the seconds the runtime has to allow
-  before SIGKILL — the linger cap plus the hard stop plus the host's own slack. The
-  driver prints the same figure at startup. Whatever runs the image has to allow at
-  least that long before killing the driver, or a recording that was about to finish
-  is lost.
-- The driver can be asked to restart over IPC (`POST /restart`, reached from the app as
-  `POST /api/driver/restart`); it refuses with 409 while a recording is running. The
-  driver only ever stops itself — coming back is the supervisor's half of the deal, and
-  a stop it was asked for, by that call or by a signal, leaves exit code 0 while anything
-  else leaves 70.
-- Because an asked-for stop exits 0, `on-failure` is the one restart policy that must not
-  be used for the driver: it would leave the process down exactly when it was asked to
-  come back. `compose.yml` uses `unless-stopped`, which restarts on both exit codes and
-  still leaves a driver the operator stopped by hand stopped across a daemon restart.
-- In development the `driver` service runs the driver as its own main process
-  (`docker/driver.dev.sh`), so it receives SIGTERM directly and `stop_grace_period` covers
-  the recording linger. That script builds into `--artifacts-path /driver`, a container-local
-  volume, so building from the `app` container never writes over the assembly the running
-  driver has open. A tree that does not compile costs one build attempt per cooldown rather
-  than a restart loop, and the container picks up the fix by itself.
-- Code changes reach the driver with `task restart:driver` (`docker compose restart driver`);
-  `task logs:driver` reads what it printed and `task probe:driver` runs the health probe
-  against the built assembly without rebuilding it. With a recording held, that restart
-  does not return until the recording ends — the same linger the grace period exists for.
-  `POST /api/driver/restart` says so up front with a 409 instead of blocking.
-- `migrate` takes a PostgreSQL advisory lock, so a second one waits instead of
-  racing. Do not scale it: the lock serialises, but two migrations still make the
-  slower deploy wait on a lock it cannot see.
-- `Dockerfile` builds the single role-switched image (`driver`, `app`, `web`, `all`,
-  plus `migrate`) via `docker/entrypoint.sh`. Routing between app and web is the job
-  of a reverse proxy outside the image; the image contains no proxy.
-- In that image the driver is published Native AOT; the app and the migration entry
-  point are framework-dependent. The driver role runs as root, `app` and `migrate`
-  drop to the unprivileged `carina` user, and `all` supervises both processes as a
-  reaping PID 1.
-- Releasing one role must not recreate the container running the other: replacing the
-  app while the driver holds a recording ends that recording. Whatever builds and
-  publishes the image owns that guarantee; this repository builds the image and does
-  not publish it.
+`compose.yml` brings up `app`, `driver` and `db` on the repository mounted at
+`/code`, sharing `/run/carina` where the driver socket lives. No tuner device is
+mapped: development runs against the synthetic tuner backend named in
+`docker/driver.development.json`. Real hardware is attached by an untracked
+compose override, which is also where the configuration for a real machine
+belongs.
 
-## UI Hostname
+The `driver` service runs the driver as its own main process, so it receives
+SIGTERM directly and `stop_grace_period` covers the recording linger. It builds
+into a container-local artifacts path, so building from the `app` container never
+writes over the assembly the running driver has open, and a tree that does not
+compile costs one build attempt per cooldown rather than a restart loop — the
+container picks the fix up by itself.
 
-This repository serves the API only. In development the container listens on port
-8080 and compose publishes it on host port 8081; `API_PORT` overrides the host
-side. The web frontend lives in its own repository and fetches the OpenAPI
-document this process serves.
+`--migrate` takes a PostgreSQL advisory lock, so a second one waits instead of
+racing. Do not run it in parallel: the lock serialises, but two migrations still
+make the slower deploy wait on a lock it cannot see.
 
-## Implementation Phases
+## Domains
 
-The skeleton is in place: solution layout, build settings, container and CI. Feature
-work proceeds one domain at a time, each finished through to merge before the next
-one starts.
+The system is the sum of the domains below. They land one at a time, each
+finished through to merge before the next one starts, and each carries its own
+share of the HTTP surface, its own tables and its own tests.
 
-1. Foundation — driver/app skeleton, IPC over the Unix socket, configuration-driven
-   environment independence
+1. Foundation — the driver and app skeletons, IPC over the Unix socket, and an
+   execution environment driven entirely by configuration
 2. Tuners and channel selection
 3. Programme guide
 4. Authentication
