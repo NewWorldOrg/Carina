@@ -1,32 +1,31 @@
 # Carina
 
-Backend for a self-hosted TV recording system for Japanese digital broadcasting.
+地上デジタル放送向けの録画システムのバックエンドです。
 
-Carina runs as two processes: a privileged `driver` that owns the tuners and writes
-recording files, and an unprivileged `app` that serves the HTTP API. Splitting them
-means replacing the API never interrupts a recording in progress.
+チューナーを占有して録画ファイルを書く特権プロセス `driver` と、HTTP API を提供する
+非特権プロセス `app` の2つで動きます。分けているのは、API を入れ替えても進行中の
+録画を止めないためです。
 
-The web frontend lives in a separate repository and generates its client from
-`GET /openapi/v1.json`, which only the running app serves. The document is not
-committed.
+フロントエンドは別リポジトリにあり、稼働中の app が返す `GET /openapi/v1.json` から
+クライアントを生成します。この文書はコミットしません。
 
-## Requirements
+## 必要なもの
 
 - Docker
 
-No tuner card and no B-CAS card are needed for development. A synthetic tuner
-produces a fixed transport stream.
+開発にチューナーカードと B-CAS カードは不要です。合成チューナーが固定内容の
+トランスポートストリームを生成します。
 
-## Getting started
+## セットアップ
 
 ```bash
-task up      # driver, app, PostgreSQL
+task up      # driver / app / PostgreSQL
 task build
 task test
 task lint    # dotnet format --verify-no-changes
 ```
 
-Without Task:
+Task を使わない場合:
 
 ```bash
 docker compose up -d
@@ -34,66 +33,64 @@ docker compose exec app dotnet build
 docker compose exec app dotnet test
 ```
 
-The API listens on port 8080 in the container and is published on host port 8081
-(`API_PORT`).
+API はコンテナ内のポート 8080 で待ち受け、ホストのポート 8081 に公開します
+(`API_PORT` で変更可)。
 
-## Configuration
+## 設定
 
-Nothing environment-specific is compiled in. Devices, output paths, the socket path,
-the database connection and ports are all read from configuration, and an invalid
-value stops startup with the offending setting named. Committed configuration files
-contain placeholders only.
+環境依存の値は埋め込みません。デバイス、出力先、ソケットのパス、データベース接続、
+ポートはすべて設定から読み、不正な値があれば該当項目を示して起動を停止します。
+コミットする設定ファイルにはプレースホルダのみを置きます。
 
-| Variable | Description |
+| 変数 | 用途 |
 | --- | --- |
-| `CARINA_DRIVER_CONFIG` | Path to the driver's configuration file |
-| `ConnectionStrings__Carina` | PostgreSQL connection string for the API |
-| `CARINA_DB_CONNECTION` | Connection string used when applying migrations |
-| `CARINA_ROLE` | Which role the image starts |
-| `CARINA_KNOWN_PROXIES` | Addresses whose `X-Forwarded-*` headers are trusted |
-| `CARINA_KNOWN_NETWORKS` | The same as networks, in address/prefix form |
+| `CARINA_DRIVER_CONFIG` | driver の設定ファイルのパス |
+| `ConnectionStrings__Carina` | API が使う PostgreSQL の接続文字列 |
+| `CARINA_DB_CONNECTION` | マイグレーション適用時の接続文字列 |
+| `CARINA_ROLE` | イメージが起動する役割 |
+| `CARINA_KNOWN_PROXIES` | `X-Forwarded-*` を信頼する前段のアドレス |
+| `CARINA_KNOWN_NETWORKS` | 同じくネットワーク(アドレス/プレフィクス) |
 
-## Image roles
+## イメージの役割
 
-`Dockerfile` produces a single image; `docker/entrypoint.sh` selects the role.
+`Dockerfile` が生成するイメージは1つで、`docker/entrypoint.sh` が役割を選択します。
 
-| Role | Starts |
+| 役割 | 起動するもの |
 | --- | --- |
-| `driver` | The privileged process |
-| `app` | The HTTP process |
-| `migrate` | Applies migrations and exits |
-| `web` | The frontend, injected by the distribution image build |
-| `all` | Both processes in one container, for development |
+| `driver` | 特権プロセス |
+| `app` | HTTP プロセス |
+| `migrate` | マイグレーションを適用して終了 |
+| `web` | フロントエンド。配布用イメージのビルドが成果物を差し込む |
+| `all` | 両プロセスを1コンテナで起動(開発用) |
 
-Routing `/api/*` to `app` and everything else to `web` is done outside the image.
-This is a contract, not a preference: on separate origins the browser drops the
-session cookie, state-changing requests fail the `Origin` check, and iPadOS blocks
-third-party cookies. See `deploy/README.md` for the contract and a Kubernetes
-reference.
+`/api/*` を app へ、それ以外を web へ振り分けるのはイメージの外側の役割です。これは
+設計上の契約です。別オリジンになるとブラウザはセッション Cookie を送らず、状態を
+変更するリクエストは `Origin` 検証で拒否され、iPadOS ではサードパーティ Cookie が
+遮断されます。契約の内容と Kubernetes の構成例は `deploy/README.md` にあります。
 
-## Working with the driver
+## driver の操作
 
 ```bash
-task probe:driver     # health check
+task probe:driver     # ヘルスチェック
 task logs:driver
-task restart:driver   # pick up code changes
+task restart:driver   # コード変更の反映
 ```
 
-Restarting while a recording is held does not return until that recording ends.
-`POST /api/driver/restart` answers 409 instead of blocking.
+録画中の再起動は、その録画が終わるまで戻りません。`POST /api/driver/restart` は
+409 を返して待たせません。
 
-Two things the runtime must respect:
+実行環境が守るべき点が2つあります。
 
-- `stop_grace_period` must exceed the budget the driver reports through
-  `Carina.Driver --shutdown-budget`. A shorter one SIGKILLs the driver mid-cleanup
-- Do not use the `on-failure` restart policy. An asked-for stop exits 0, so the
-  driver would stay down exactly when it was asked to come back
+- `stop_grace_period` は driver が `Carina.Driver --shutdown-budget` で申告する
+  秒数より長くすること。短いと後処理の途中で SIGKILL されます
+- 再起動ポリシーに `on-failure` を使わないこと。要求による停止は終了コード 0 のため、
+  意図的に停止したときに再起動しません
 
-## Tests
+## テスト
 
-`dotnet test` runs unit tests, API feature tests and architecture tests.
+`dotnet test` で単体テスト・API のフィーチャテスト・アーキテクチャテストが動きます。
 
-The architecture tests read the project files rather than compiled output, so a
-reference that is declared but not yet used is still caught: the driver reaching
-past the shared contract, the domain or the broadcast parser taking a dependency,
-or anything referencing the migration project.
+アーキテクチャテストはコンパイル結果ではなくプロジェクトファイルを読むため、宣言
+しただけで未使用の参照も検出します。driver が共有契約を越えて参照していないこと、
+ドメインと放送規格パーサが依存を持たないこと、マイグレーション用プロジェクトを
+誰も参照していないことを確認します。
