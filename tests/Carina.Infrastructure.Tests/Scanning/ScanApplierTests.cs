@@ -869,6 +869,44 @@ public sealed class ScanApplierTests
         Assert.Null(selected.SelectionMeasurement);
     }
 
+    [Fact]
+    public async Task ServicesOnOneStreamStayOnOneChannelWhenOnlyOneOfTheirCandidatesLosesItsReading()
+    {
+        SeedMeasured(101, "First on the stream", (Terrestrial, 36_000), (OtherTerrestrial, 30_000));
+        SeedMeasured(102, "Second on the stream", (Terrestrial, 36_000), (OtherTerrestrial, 30_000));
+
+        candidates.Candidates
+            .Single(candidate => candidate.ServiceId.Value == 101
+                                 && candidate.Tuning.PhysicalChannel == Terrestrial)
+            .RecordTuningSuccess(SignalMeasurement.WithLock(At.AddHours(1)), At.AddHours(1));
+
+        int[] onTheStream = [101, 102];
+
+        foreach (int serviceId in onTheStream)
+        {
+            await candidates.SelectAsync(
+                candidates.Candidates
+                    .Single(candidate => candidate.ServiceId.Value == serviceId
+                                         && candidate.Tuning.PhysicalChannel == OtherTerrestrial)
+                    .Id,
+                SelectionSource.Scan,
+                null,
+                At,
+                CancellationToken.None);
+        }
+
+        await Applier.ApplyAsync(ScanDifference.Nothing, [TuneSystem.IsdbT], CancellationToken.None);
+
+        int[] chosen =
+        [
+            .. candidates.Candidates
+                .Where(candidate => candidate.IsSelected)
+                .Select(candidate => candidate.Tuning.PhysicalChannel),
+        ];
+
+        Assert.Equal([Terrestrial, Terrestrial], chosen);
+    }
+
     private void SeedMeasured(int serviceId, string name, params (int PhysicalChannel, int Cnr)[] measured)
     {
         Seed(serviceId, name, [.. measured.Select(channel => TuningParameters.Terrestrial(channel.PhysicalChannel))]);

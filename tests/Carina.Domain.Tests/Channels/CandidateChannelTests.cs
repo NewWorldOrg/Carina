@@ -185,6 +185,71 @@ public sealed class CandidateChannelTests
     }
 
     [Fact]
+    public void ATuneThatCouldNotReadTheCarrierToNoiseKeepsTheReadingThatDid()
+    {
+        CandidateChannel candidate = Discovered();
+        candidate.RecordTuningSuccess(SignalMeasurement.WithLock(At, 36_000), At);
+
+        candidate.RecordTuningSuccess(SignalMeasurement.WithLock(At.AddHours(1)), At.AddHours(1));
+
+        Assert.Equal(36_000, candidate.LastMeasurement?.CnrMilliDecibels);
+        Assert.Equal(At, candidate.LastMeasurement?.MeasuredAt);
+        Assert.Equal(At.AddHours(1), candidate.LastSeenAt);
+    }
+
+    [Fact]
+    public void ATuneThatCouldNotReadTheCarrierToNoiseStillReturnsTheCandidateToRotation()
+    {
+        var backoff = new RotationBackoff(TimeSpan.FromMinutes(1), 2, TimeSpan.FromHours(1), 2);
+        CandidateChannel candidate = Discovered();
+        candidate.RecordTuningSuccess(SignalMeasurement.WithLock(At, 36_000), At);
+        candidate.RecordTuningFailure(backoff, At);
+        candidate.RecordTuningFailure(backoff, At);
+
+        candidate.RecordTuningSuccess(SignalMeasurement.WithLock(At.AddHours(1)), At.AddHours(1));
+
+        Assert.Equal(RotationState.Active, candidate.RotationState);
+        Assert.Equal(0, candidate.ConsecutiveFailures);
+        Assert.Equal(36_000, candidate.LastMeasurement?.CnrMilliDecibels);
+    }
+
+    [Fact]
+    public void AWeakerReadingIsTakenOverTheStrongerOneItFollows()
+    {
+        CandidateChannel candidate = Discovered();
+        candidate.RecordTuningSuccess(SignalMeasurement.WithLock(At, 36_000), At);
+
+        candidate.RecordTuningSuccess(SignalMeasurement.WithLock(At.AddHours(1), 12_000), At.AddHours(1));
+
+        Assert.Equal(12_000, candidate.LastMeasurement?.CnrMilliDecibels);
+        Assert.Equal(At.AddHours(1), candidate.LastMeasurement?.MeasuredAt);
+    }
+
+    [Fact]
+    public void ATuneThatDidNotLockDisplacesWhatWasReadWhileItDid()
+    {
+        CandidateChannel candidate = Discovered();
+        candidate.RecordTuningSuccess(SignalMeasurement.WithLock(At, 36_000), At);
+
+        candidate.RecordTuningSuccess(SignalMeasurement.WithoutLock(At.AddHours(1)), At.AddHours(1));
+
+        Assert.False(candidate.LastMeasurement?.Locked);
+        Assert.Null(candidate.LastMeasurement?.CnrMilliDecibels);
+    }
+
+    [Fact]
+    public void AFirstReadingStandsEvenWhenTheCarrierToNoiseWasNotAmongIt()
+    {
+        CandidateChannel candidate = Discovered();
+
+        candidate.RecordTuningSuccess(SignalMeasurement.WithLock(At), At);
+
+        Assert.True(candidate.LastMeasurement?.Locked);
+        Assert.Null(candidate.LastMeasurement?.CnrMilliDecibels);
+        Assert.Equal(At, candidate.LastMeasurement?.MeasuredAt);
+    }
+
+    [Fact]
     public void ManualConfirmationReturnsACandidateThatLeftRotation()
     {
         var backoff = new RotationBackoff(TimeSpan.FromMinutes(1), 2, TimeSpan.FromHours(1), 2);
