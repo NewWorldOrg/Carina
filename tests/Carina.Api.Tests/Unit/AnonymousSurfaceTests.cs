@@ -41,6 +41,33 @@ public sealed class AnonymousSurfaceTests
         Assert.False(AnonymousSurfaces.Everywhere.Admit(method, path));
     }
 
+    [Theory]
+    [InlineData("GET", "/api/events")]
+    [InlineData("GET", "/api/programs")]
+    [InlineData("GET", "/api/programs/bulk")]
+    [InlineData("GET", "/api/programs/search")]
+    [InlineData("GET", "/api/epg/collection-status")]
+    [InlineData("POST", "/api/epg/collect-now")]
+    [InlineData("GET", "/api/tuners/detected")]
+    [InlineData("PATCH", "/api/tuners/adapter0")]
+    public void TheSurfacesCarriedOverFromBeforeTheDenialAreNotAmongThem(string method, string path)
+    {
+        Assert.False(AnonymousSurfaces.Everywhere.Admit(method, path));
+    }
+
+    [Theory]
+    [InlineData("GET", "/_next/image")]
+    [InlineData("GET", "/_next/data/build/programs.json")]
+    [InlineData("GET", "/api/programs/1/thumbnail")]
+    [InlineData("GET", "/api/recordings/1/thumbnail.jpg")]
+    [InlineData("GET", "/api/recordings/1/stream.ts")]
+    [InlineData("GET", "/api/services/1-101/logo")]
+    public void ContentIsNeverMistakenForABuildArtifact(string method, string path)
+    {
+        Assert.False(AnonymousSurfaces.Everywhere.Admit(method, path));
+        Assert.False(AnonymousSurfaces.WhileDeveloping.Admit(method, path));
+    }
+
     [Fact]
     public void TheListIsTheWholeOfWhatMayBeReachedWithoutCredentials()
     {
@@ -59,6 +86,18 @@ public sealed class AnonymousSurfaceTests
             ],
             AnonymousSurfaces.Everywhere
                 .Select(surface => $"{surface.Method} {surface.Path}")
+                .Order(StringComparer.Ordinal)
+                .ToArray());
+    }
+
+    [Fact]
+    public void TheBuiltFrontEndIsTheOnlyWholeDirectoryHandedOverWithoutCredentials()
+    {
+        Assert.Equal(
+            ["/_next/static/"],
+            AnonymousSurfaces.WhileDeveloping
+                .Where(surface => surface.AdmitsEverythingBelow)
+                .Select(surface => surface.Path)
                 .Order(StringComparer.Ordinal)
                 .ToArray());
     }
