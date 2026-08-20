@@ -46,6 +46,7 @@ API はコンテナ内のポート 8080 で待ち受け、ホストのポート 
 | 変数 | 用途 |
 | --- | --- |
 | `CARINA_DRIVER_CONFIG` | driver の設定ファイルのパス |
+| `CARINA_DRIVER_SOCKET` | driver と app をつなぐ Unix ドメインソケットのパス |
 | `ConnectionStrings__Carina` | API が使う PostgreSQL の接続文字列 |
 | `CARINA_DB_CONNECTION` | マイグレーション適用時の接続文字列 |
 | `CARINA_ROLE` | イメージが起動する役割 |
@@ -82,8 +83,9 @@ task restart:driver   # コード変更の反映
 
 実行環境が守るべき点が2つあります。
 
-- `stop_grace_period` は driver が `Carina.Driver --shutdown-budget` で申告する
-  秒数より長くすること。短いと後処理の途中で SIGKILL されます
+- `stop_grace_period` は driver が申告する秒数より長くすること。短いと後処理の
+  途中で SIGKILL されます。秒数は driver を `--shutdown-budget` 付きで起動すると
+  表示され、通常の起動時にも同じ値を出力します
 - 再起動ポリシーに `on-failure` を使わないこと。要求による停止は終了コード 0 のため、
   意図的に停止したときに再起動しません
 
