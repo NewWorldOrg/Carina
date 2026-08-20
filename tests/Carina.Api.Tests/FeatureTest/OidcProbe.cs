@@ -83,6 +83,21 @@ internal sealed class OidcProbe : IAsyncDisposable
         return this;
     }
 
+    public OidcProbe WithALocalAccount()
+    {
+        Accounts.Account = LocalAccount.Bootstrap(
+            FirstCredentials.Username,
+            Hasher.Hash(AuthProbe.Password, PasswordHashPolicy.Default),
+            Founded);
+
+        return this;
+    }
+
+    public Task<HttpResponseMessage> LogInAsync()
+        => Client.PostAsJsonAsync(
+            new Uri("/api/auth/login", UriKind.Relative),
+            new { username = FirstCredentials.Username, password = AuthProbe.Password });
+
     public HttpClient Relaying(string carried)
     {
         HttpClient client = wired.CreateClient(new WebApplicationFactoryClientOptions

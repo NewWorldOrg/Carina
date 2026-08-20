@@ -47,6 +47,25 @@ public sealed class SignInOptionsEndpointTests
     }
 
     [Fact]
+    public async Task TheLocalAccountStillOpensASessionWhileTheProviderIsOutOfReach()
+    {
+        await using OidcProbe probe = OidcProbe.OverHttp().Configured().WithALocalAccount();
+        probe.Idp.Reachable = false;
+
+        using HttpResponseMessage signedIn = await probe.LogInAsync();
+        using HttpResponseMessage named = await probe.Client.GetAsync(
+            new Uri("/api/auth/me", UriKind.Relative));
+        using var body = JsonDocument.Parse(await named.Content.ReadAsStringAsync());
+
+        Assert.Equal(HttpStatusCode.OK, signedIn.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, named.StatusCode);
+        Assert.Equal(
+            FirstCredentials.Username,
+            body.RootElement.GetProperty("data").GetProperty("subject").GetString());
+        Assert.Equal("local", body.RootElement.GetProperty("data").GetProperty("method").GetString());
+    }
+
+    [Fact]
     public async Task WhatTheScreenIsToldCarriesNothingOfTheSettingsBehindIt()
     {
         await using OidcProbe probe = OidcProbe.OverHttp().Configured();
