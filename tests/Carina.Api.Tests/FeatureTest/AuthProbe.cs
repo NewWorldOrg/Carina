@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Text;
 
 using Carina.Domain.Auth;
+using Carina.Domain.Programmes;
 using Carina.TestSupport;
 
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -24,6 +25,8 @@ internal sealed class AuthProbe : IAsyncDisposable
             services.AddSingleton<IAuthSessionRepository>(Sessions);
             services.AddSingleton<ILocalAccountRepository>(Accounts);
             services.AddSingleton<IPasswordHasher>(Hasher);
+            services.AddSingleton<IProgrammeRepository>(Programmes);
+            services.AddSingleton<ICollectionEpochRepository>(Epochs);
         }));
 
         Client = Wired.CreateClient(new WebApplicationFactoryClientOptions
@@ -49,6 +52,10 @@ internal sealed class AuthProbe : IAsyncDisposable
     public HeldLocalAccount Accounts { get; } = new();
 
     public QuickPasswordHasher Hasher { get; } = new();
+
+    public HeldProgrammes Programmes { get; } = new();
+
+    public HeldEpochs Epochs { get; } = new();
 
     public static AuthProbe OverHttp() => new(secure: false);
 
