@@ -20,6 +20,7 @@ builder.Services.ConfigureHttpJsonOptions(options => WireJson.Configure(options.
 builder.Services.AddApplicationServices();
 builder.Services.AddTrustedProxies(builder.Configuration);
 builder.Services.AddPublicOrigin(builder.Configuration);
+builder.Services.AddAnonymousNetworks(builder.Configuration);
 builder.Services.AddCarinaInfrastructure(builder.Configuration);
 builder.Services
     .AddAuthentication(SessionAuthenticationHandler.SchemeName)

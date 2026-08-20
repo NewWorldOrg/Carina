@@ -18,6 +18,7 @@ services:
       CARINA_DRIVER_SOCKET: /run/carina/driver.sock
       CARINA_KNOWN_NETWORKS: ${CARINA_KNOWN_NETWORKS:-172.16.0.0/12}
       CARINA_PUBLIC_ORIGIN: ${CARINA_PUBLIC_ORIGIN:-}
+      CARINA_ANONYMOUS_NETWORKS: ${CARINA_ANONYMOUS_NETWORKS:-}
     depends_on:
       db:
         condition: service_healthy
