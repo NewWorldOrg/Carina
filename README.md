@@ -1,110 +1,99 @@
 # Carina
 
-テレビ録画システムの裏側。チューナーを掴んで放送を受け、録画ファイルを書き、
-番組表と録画の記録を持ち、画面へ API を出します。
+Backend for a self-hosted TV recording system for Japanese digital broadcasting.
 
-画面は別のリポジトリで、動いているこのアプリが出す `GET /openapi/v1.json` から
-生成したクライアントで繋ぎます。文書はコミットしません。
+Carina runs as two processes: a privileged `driver` that owns the tuners and writes
+recording files, and an unprivileged `app` that serves the HTTP API. Splitting them
+means replacing the API never interrupts a recording in progress.
 
-## 設計の理由
+The web frontend lives in a separate repository and generates its client from
+`GET /openapi/v1.json`, which only the running app serves. The document is not
+committed.
 
-既存の録画システムで困った2つが、構造のすべての理由です。
+## Requirements
 
-- **録画中にアプリを更新すると録画が死ぬ** — チューナーを掴む部分を別プロセスに
-  切り出し、独立したタグで出す。API を何度入れ替えても録画には触れない
-- **壊れた録画が、再生するまで壊れていると分からない** — 録画しながら測る。
-  取りこぼし・訂正不能・スクランブル残存を数え、あとから検索で見つけられるようにする
+- Docker
 
-測るのは録画を書くのと同じ読み出しからで、コピーも2本目の経路も作りません。
-読み手が遅くても、録画の書き込みは待ちません。
+No tuner card and no B-CAS card are needed for development. A synthetic tuner
+produces a fixed transport stream.
 
-## 2つのプロセス
-
-| | driver | app |
-| --- | --- | --- |
-| 権限 | 特権 | 非特権 |
-| 持ち物 | チューナー、選局、スクランブル解除、TS の扱い、録画ファイルの書き込み | 番組表、予約、ルール、録画の記録、HTTP API |
-| 外との口 | Unix ドメインソケット1本のみ。TCP は開かない | HTTP |
-| 秘密情報 | 持たない | DB 接続情報など |
-
-driver が理解するのはバイトの層まで、放送規格の解釈は app 側です。特権プロセスに
-持たせるものを増やさないための線引きです。
-
-## 動かす
-
-Docker があれば足ります。チューナーも B-CAS カードも要りません。合成チューナーが
-決まった中身の放送波を作ります。
+## Getting started
 
 ```bash
-task up      # driver / app / PostgreSQL
+task up      # driver, app, PostgreSQL
 task build
 task test
 task lint    # dotnet format --verify-no-changes
 ```
 
-Task を使わない場合は `docker compose up -d` と `docker compose exec app dotnet build`。
-
-API はコンテナの 8080 番で待ち受け、ホストの 8081 番に出ます（`API_PORT`）。
-
-## driver を扱う
-
-driver のヘルスチェックは driver 自身です。排水中、あるいは使えるチューナーが
-全て故障していれば unhealthy を返します。
+Without Task:
 
 ```bash
-task probe:driver     # ヘルスチェック
-task logs:driver      # driver が何を言ったか
-task restart:driver   # コードを直したあとの入れ直し
+docker compose up -d
+docker compose exec app dotnet build
+docker compose exec app dotnet test
 ```
 
-録画を抱えているときの入れ直しは、その録画が終わるまで返ってきません。
-`POST /api/driver/restart` なら 409 でそのことを先に教えてくれます。
+The API listens on port 8080 in the container and is published on host port 8081
+(`API_PORT`).
 
-運用側が守るものが2つあります。
+## Configuration
 
-- `stop_grace_period` は driver が申告する予算より長くすること。短いと録画の
-  後始末の途中で SIGKILL します。予算は `Carina.Driver --shutdown-budget` が出します
-- 再起動方針に `on-failure` を使わないこと。要求されて止まったときの終了コードは
-  0 なので、意図して止めたときに二度と起きてきません
+Nothing environment-specific is compiled in. Devices, output paths, the socket path,
+the database connection and ports are all read from configuration, and an invalid
+value stops startup with the offending setting named. Committed configuration files
+contain placeholders only.
 
-## 設定
-
-環境依存のものは何ひとつ埋め込みません。デバイスの一覧、録画の出力先、ソケットの
-パス、DB 接続、ポートはすべて設定から読み、不正なら起動時にその項目を名指しして
-終了します。コミットする設定ファイルはプレースホルダだけで、実値は環境変数です。
-
-| 変数 | 意味 |
+| Variable | Description |
 | --- | --- |
-| `CARINA_DRIVER_CONFIG` | driver の設定ファイルのパス |
-| `ConnectionStrings__Carina` | API が使う PostgreSQL の接続文字列 |
-| `CARINA_DB_CONNECTION` | マイグレーション実行時の接続文字列 |
-| `CARINA_ROLE` | イメージが起動する役割 |
-| `CARINA_KNOWN_PROXIES` | 前段のアドレス。ここに無い相手の `X-Forwarded-*` は読みません |
-| `CARINA_KNOWN_NETWORKS` | 同じくネットワークを アドレス/プレフィクス で |
+| `CARINA_DRIVER_CONFIG` | Path to the driver's configuration file |
+| `ConnectionStrings__Carina` | PostgreSQL connection string for the API |
+| `CARINA_DB_CONNECTION` | Connection string used when applying migrations |
+| `CARINA_ROLE` | Which role the image starts |
+| `CARINA_KNOWN_PROXIES` | Addresses whose `X-Forwarded-*` headers are trusted |
+| `CARINA_KNOWN_NETWORKS` | The same as networks, in address/prefix form |
 
-## イメージの役割
+## Image roles
 
-`Dockerfile` が作るイメージは1つで、`docker/entrypoint.sh` が役割を選びます。
+`Dockerfile` produces a single image; `docker/entrypoint.sh` selects the role.
 
-| 役割 | 起動するもの |
+| Role | Starts |
 | --- | --- |
-| `driver` | 特権プロセス |
-| `app` | HTTP プロセス |
-| `migrate` | マイグレーションを適用して終了 |
-| `web` | 画面。成果物は配布用のイメージビルドが差し込む |
-| `all` | driver と app を1つのコンテナで。開発用 |
+| `driver` | The privileged process |
+| `app` | The HTTP process |
+| `migrate` | Applies migrations and exits |
+| `web` | The frontend, injected by the distribution image build |
+| `all` | Both processes in one container, for development |
 
-`/api/*` を app へ、それ以外を画面へ振り分けるのはイメージの外の仕事です。これは
-好みではなく契約で、画面と API が別のオリジンに出るとブラウザはセッション Cookie を
-送らず、状態を変える要求は `Origin` の不一致で断られ、iPad ではサードパーティ
-Cookie の遮断に当たります。契約の中身と k8s の構成例は `deploy/README.md`。
+Routing `/api/*` to `app` and everything else to `web` is done outside the image.
+This is a contract, not a preference: on separate origins the browser drops the
+session cookie, state-changing requests fail the `Origin` check, and iPadOS blocks
+third-party cookies. See `deploy/README.md` for the contract and a Kubernetes
+reference.
 
-## テスト
+## Working with the driver
 
-`dotnet test` で単体テスト・API のフィーチャテスト・アーキテクチャテストが走ります。
+```bash
+task probe:driver     # health check
+task logs:driver
+task restart:driver   # pick up code changes
+```
 
-アーキテクチャテストは、2プロセスに分けた意味を守るための参照ルールを機械的に
-確かめます。driver が共有の契約以外に手を伸ばしていないこと、ドメインと放送規格の
-解析が何にも依存していないこと、マイグレーション用のプロジェクトを誰も参照して
-いないこと。プロジェクトファイルを読むので、宣言しただけでまだ使っていない参照も
-捕まえます。
+Restarting while a recording is held does not return until that recording ends.
+`POST /api/driver/restart` answers 409 instead of blocking.
+
+Two things the runtime must respect:
+
+- `stop_grace_period` must exceed the budget the driver reports through
+  `Carina.Driver --shutdown-budget`. A shorter one SIGKILLs the driver mid-cleanup
+- Do not use the `on-failure` restart policy. An asked-for stop exits 0, so the
+  driver would stay down exactly when it was asked to come back
+
+## Tests
+
+`dotnet test` runs unit tests, API feature tests and architecture tests.
+
+The architecture tests read the project files rather than compiled output, so a
+reference that is declared but not yet used is still caught: the driver reaching
+past the shared contract, the domain or the broadcast parser taking a dependency,
+or anything referencing the migration project.
