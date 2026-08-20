@@ -6,8 +6,9 @@
 非特権プロセス `app` の2つで動きます。分けているのは、API を入れ替えても進行中の
 録画を止めないためです。
 
-フロントエンドは [Vela](https://github.com/NewWorldOrg/Vela) で、稼働中の app が返す
-`GET /openapi/v1.json` からクライアントを生成します。この文書はコミットしません。
+フロントエンドは [Vela](https://github.com/NewWorldOrg/Vela) で、稼働中の app が
+`GET /openapi/v1.json` で返す OpenAPI 文書からクライアントを生成します。この文書は
+app が実行時に組み立てるものなので、Carina 側には置きません。
 
 ## 必要なもの
 
