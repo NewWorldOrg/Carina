@@ -2,8 +2,6 @@ namespace Carina.Api.Authentication;
 
 public sealed class AnonymousSurface
 {
-    private readonly bool below;
-
     private AnonymousSurface(string method, string path, bool below)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(method);
@@ -11,12 +9,14 @@ public sealed class AnonymousSurface
 
         Method = method;
         Path = path;
-        this.below = below;
+        AdmitsEverythingBelow = below;
     }
 
     public string Method { get; }
 
     public string Path { get; }
+
+    public bool AdmitsEverythingBelow { get; }
 
     public static AnonymousSurface Exactly(string method, string path)
         => new(method, path, below: false);
@@ -38,7 +38,7 @@ public sealed class AnonymousSurface
             return false;
         }
 
-        return below
+        return AdmitsEverythingBelow
             ? path.StartsWith(Path, StringComparison.OrdinalIgnoreCase)
             : string.Equals(WithoutATrailingSlash(path), Path, StringComparison.OrdinalIgnoreCase);
     }
