@@ -11,8 +11,32 @@ public static class CandidateOrder
         return candidates.Order(ByWhatWasMeasured).FirstOrDefault();
     }
 
+    public static CandidateChannel? BetterThanTheSelected(IEnumerable<CandidateChannel> candidates)
+    {
+        ArgumentNullException.ThrowIfNull(candidates);
+
+        CandidateChannel[] held = [.. candidates];
+
+        if (held.FirstOrDefault(candidate => candidate.IsSelected) is not { } selected
+            || Best(held) is not { } best)
+        {
+            return null;
+        }
+
+        return MeasuredFirst.ByMeasurement(best, selected) < 0 ? best : null;
+    }
+
     private sealed class MeasuredFirst : IComparer<CandidateChannel>
     {
+        public static int ByMeasurement(CandidateChannel x, CandidateChannel y)
+        {
+            int byLock = Locked(y).CompareTo(Locked(x));
+
+            return byLock != 0
+                ? byLock
+                : Comparer<int?>.Default.Compare(Cnr(y), Cnr(x));
+        }
+
         public int Compare(CandidateChannel? x, CandidateChannel? y)
         {
             if (ReferenceEquals(x, y))
@@ -30,17 +54,10 @@ public static class CandidateOrder
                 return -1;
             }
 
-            int byLock = Locked(y).CompareTo(Locked(x));
+            int byMeasurement = ByMeasurement(x, y);
 
-            if (byLock != 0)
-            {
-                return byLock;
-            }
-
-            int byCnr = Comparer<int?>.Default.Compare(Cnr(y), Cnr(x));
-
-            return byCnr != 0
-                ? byCnr
+            return byMeasurement != 0
+                ? byMeasurement
                 : x.Tuning.PhysicalChannel.CompareTo(y.Tuning.PhysicalChannel);
         }
 

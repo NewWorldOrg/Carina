@@ -68,6 +68,83 @@ public sealed class CandidateOrderTests
     public void NoChannelsAtAllMeansThereIsNothingToChoose()
         => Assert.Null(CandidateOrder.Best([]));
 
+    [Fact]
+    public void TheChannelThatMeasuredBetterThanTheSelectedOneIsNamed()
+    {
+        CandidateChannel selected = Chosen(Measured(HighChannel, SignalMeasurement.WithLock(At, 12_000)));
+        CandidateChannel better = Measured(LowChannel, SignalMeasurement.WithLock(At, 29_000));
+
+        Assert.Equal(better, CandidateOrder.BetterThanTheSelected([selected, better]));
+    }
+
+    [Fact]
+    public void TheSelectedChannelIsNamedAgainstNothingWhenTheMeasurementsAlreadyFavourIt()
+    {
+        CandidateChannel selected = Chosen(Measured(LowChannel, SignalMeasurement.WithLock(At, 29_000)));
+        CandidateChannel weaker = Measured(HighChannel, SignalMeasurement.WithLock(At, 12_000));
+
+        Assert.Null(CandidateOrder.BetterThanTheSelected([selected, weaker]));
+    }
+
+    [Fact]
+    public void AChannelChosenByHandIsWeighedTheSameWayAsOneAScanChose()
+    {
+        CandidateChannel byHand = Chosen(
+            Measured(HighChannel, SignalMeasurement.WithLock(At, 12_000)),
+            SelectionSource.Manual);
+        CandidateChannel better = Measured(LowChannel, SignalMeasurement.WithLock(At, 29_000));
+
+        Assert.Equal(better, CandidateOrder.BetterThanTheSelected([byHand, better]));
+    }
+
+    [Fact]
+    public void AServiceWithNothingSelectedHasNothingToBeOutranked()
+    {
+        CandidateChannel weak = Measured(HighChannel, SignalMeasurement.WithLock(At, 12_000));
+        CandidateChannel strong = Measured(LowChannel, SignalMeasurement.WithLock(At, 29_000));
+
+        Assert.Null(CandidateOrder.BetterThanTheSelected([weak, strong]));
+    }
+
+    [Fact]
+    public void AChannelTheMeasurementsCannotSeparateFromTheSelectedOneDoesNotOutrankIt()
+    {
+        CandidateChannel selected = Chosen(Measured(HighChannel, SignalMeasurement.WithLock(At, 29_000)));
+        CandidateChannel even = Measured(LowChannel, SignalMeasurement.WithLock(At, 29_000));
+
+        Assert.Null(CandidateOrder.BetterThanTheSelected([selected, even]));
+    }
+
+    [Fact]
+    public void AChannelNobodyHasMeasuredDoesNotOutrankASelectedOneNobodyHasMeasuredEither()
+    {
+        CandidateChannel selected = Chosen(Measured(HighChannel, null));
+        CandidateChannel unmeasured = Measured(LowChannel, null);
+
+        Assert.Null(CandidateOrder.BetterThanTheSelected([selected, unmeasured]));
+    }
+
+    [Fact]
+    public void ReadingWhetherTheSelectionIsOutrankedLeavesTheSelectionWhereItWas()
+    {
+        CandidateChannel selected = Chosen(Measured(HighChannel, SignalMeasurement.WithLock(At, 12_000)));
+        CandidateChannel better = Measured(LowChannel, SignalMeasurement.WithLock(At, 29_000));
+
+        CandidateOrder.BetterThanTheSelected([selected, better]);
+
+        Assert.True(selected.IsSelected);
+        Assert.False(better.IsSelected);
+    }
+
+    private static CandidateChannel Chosen(
+        CandidateChannel candidate,
+        SelectionSource source = SelectionSource.Scan)
+    {
+        candidate.Select(source, candidate.LastMeasurement, At);
+
+        return candidate;
+    }
+
     private static CandidateChannel Measured(int physicalChannel, SignalMeasurement? measurement)
     {
         CandidateChannel candidate = CandidateChannel.Discover(
