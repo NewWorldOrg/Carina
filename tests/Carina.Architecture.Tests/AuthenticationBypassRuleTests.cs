@@ -33,4 +33,12 @@ public sealed class AuthenticationBypassRuleTests
             Path.Combine(RepositoryLayout.SourceDirectory, "Carina.Api", "Controllers", "Auth"),
             [.. AuthenticationBypasses.OutboundCallers]));
     }
+
+    [Fact]
+    public void TheDriverAsksNobodyWhoTheyAreBecauseTheSocketPermissionsAreTheWholeGate()
+    {
+        Assert.Empty(SourceScan.FilesMentioning(
+            Path.Combine(RepositoryLayout.SourceDirectory, "Carina.Driver"),
+            [.. AuthenticationBypasses.AskingWhoIsCalling]));
+    }
 }

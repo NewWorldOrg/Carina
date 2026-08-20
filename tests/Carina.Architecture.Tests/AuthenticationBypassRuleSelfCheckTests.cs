@@ -122,4 +122,42 @@ public sealed class AuthenticationBypassRuleSelfCheckTests
             directory.Delete(recursive: true);
         }
     }
+
+    [Fact]
+    public void DetectsADriverThatStartedAskingWhoIsCalling()
+    {
+        DirectoryInfo directory = Directory.CreateTempSubdirectory("carina-driver-gate-");
+
+        try
+        {
+            File.WriteAllText(
+                Path.Combine(directory.FullName, "Open.cs"),
+                """
+                namespace Sample;
+                public static class Gate
+                {
+                    public static void Invoke(WebApplication app) => app.MapGet("/health", Health);
+                }
+                """);
+            File.WriteAllText(
+                Path.Combine(directory.FullName, "Guarded.cs"),
+                """
+                namespace Sample;
+                public static class Gate
+                {
+                    public static void Invoke(WebApplication app) => app.UseAuthentication();
+                }
+                """);
+
+            Assert.Equal(
+                ["Guarded.cs"],
+                SourceScan.FilesMentioning(
+                    directory.FullName,
+                    [.. AuthenticationBypasses.AskingWhoIsCalling]));
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
 }
