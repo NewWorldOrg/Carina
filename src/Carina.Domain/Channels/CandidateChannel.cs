@@ -153,7 +153,7 @@ public sealed class CandidateChannel
     {
         ArgumentNullException.ThrowIfNull(measurement);
 
-        LastMeasurement = measurement;
+        LastMeasurement = TheReadingThatStands(LastMeasurement, measurement);
         LastSeenAt = UtcTimes.Required(at, nameof(at));
         NeedsRevalidation = false;
         RotationState = RotationState.Active;
@@ -197,4 +197,10 @@ public sealed class CandidateChannel
     {
         NeedsRevalidation = true;
     }
+
+    private static SignalMeasurement TheReadingThatStands(SignalMeasurement? held, SignalMeasurement arriving)
+        => arriving is { Locked: true, CnrMilliDecibels: null }
+           && held is { Locked: true, CnrMilliDecibels: not null }
+            ? held
+            : arriving;
 }

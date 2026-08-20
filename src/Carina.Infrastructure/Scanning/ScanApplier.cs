@@ -36,11 +36,16 @@ public sealed class ScanApplier(
             {
                 var counted = new Tally();
                 DateTime at = clock.GetUtcNow().UtcDateTime;
+                var named = new HashSet<(NetworkId, ServiceId)>();
 
                 foreach (ScanServiceChange change in difference.Services)
                 {
+                    named.Add((change.NetworkId, change.ServiceId));
+
                     await ApplyOneAsync(change, covered, at, counted, token);
                 }
+
+                await ReconsiderTheRestAsync(named, covered, at, token);
 
                 return counted;
             },
@@ -177,6 +182,42 @@ public sealed class ScanApplier(
             change.ServiceId,
             cancellationToken);
 
+        await LetTheScanDecideAsync(known, settled, at, cancellationToken);
+    }
+
+    private async Task ReconsiderTheRestAsync(
+        HashSet<(NetworkId, ServiceId)> named,
+        HashSet<TuneSystem> covered,
+        DateTime at,
+        CancellationToken cancellationToken)
+    {
+        foreach (BroadcastService service in await services.ListAsync(cancellationToken))
+        {
+            if (named.Contains((service.NetworkId, service.ServiceId)))
+            {
+                continue;
+            }
+
+            IReadOnlyList<CandidateChannel> settled = await candidates.ListForServiceAsync(
+                service.NetworkId,
+                service.ServiceId,
+                cancellationToken);
+
+            if (!settled.Any(candidate => covered.Contains(candidate.Tuning.System)))
+            {
+                continue;
+            }
+
+            await LetTheScanDecideAsync(service, settled, at, cancellationToken);
+        }
+    }
+
+    private async Task LetTheScanDecideAsync(
+        BroadcastService? known,
+        IReadOnlyList<CandidateChannel> settled,
+        DateTime at,
+        CancellationToken cancellationToken)
+    {
         if (!TheScanDecides(known, settled) || CandidateOrder.Best(settled) is not { } best)
         {
             return;

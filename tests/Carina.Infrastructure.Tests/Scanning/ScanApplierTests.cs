@@ -10,8 +10,11 @@ public sealed class ScanApplierTests
 {
     private const int Terrestrial = 53;
     private const int OtherTerrestrial = 55;
+    private const int ThirdTerrestrial = 57;
     private const int SatelliteSlot = 5;
     private const int SatelliteStream = 50001;
+    private const int OtherSatelliteSlot = 9;
+    private const int OtherSatelliteStream = 50002;
 
     private static readonly DateTime At = StillClock.Now.UtcDateTime;
 
@@ -59,6 +62,9 @@ public sealed class ScanApplierTests
 
     private static TuningParameters Satellite()
         => TuningParameters.Bs(SatelliteSlot, new TransportStreamId(SatelliteStream));
+
+    private static TuningParameters OtherSatellite()
+        => TuningParameters.Bs(OtherSatelliteSlot, new TransportStreamId(OtherSatelliteStream));
 
     [Fact]
     public async Task AScanPickMadeWithNothingToCompareMovesToTheChannelThatMeasuredBest()
@@ -745,5 +751,172 @@ public sealed class ScanApplierTests
             CancellationToken.None);
 
         Assert.Equal([AppEvents.Tuners], events.Signalled);
+    }
+
+    [Fact]
+    public async Task AServiceWhoseChannelsAllStayedTheSameIsStillMovedOffTheOneChosenBlind()
+    {
+        SeedMeasured(101, "Two ways in", (Terrestrial, 16_000), (OtherTerrestrial, 35_000));
+
+        await candidates.SelectAsync(
+            candidates.Candidates[0].Id,
+            SelectionSource.Scan,
+            null,
+            At,
+            CancellationToken.None);
+
+        await Applier.ApplyAsync(ScanDifference.Nothing, [TuneSystem.IsdbT], CancellationToken.None);
+
+        CandidateChannel selected = Assert.Single(candidates.Candidates, candidate => candidate.IsSelected);
+
+        Assert.Equal(OtherTerrestrial, selected.Tuning.PhysicalChannel);
+        Assert.Equal(35_000, selected.SelectionMeasurement?.CnrMilliDecibels);
+        Assert.Equal(SelectionSource.Scan, selected.SelectionSource);
+    }
+
+    [Fact]
+    public async Task ReconsideringAServiceTheDifferenceNeverNamedLeavesItOneChannelAndNoMore()
+    {
+        SeedMeasured(
+            101,
+            "Three ways in",
+            (Terrestrial, 16_000),
+            (OtherTerrestrial, 35_000),
+            (ThirdTerrestrial, 29_000));
+
+        await candidates.SelectAsync(
+            candidates.Candidates[0].Id,
+            SelectionSource.Scan,
+            null,
+            At,
+            CancellationToken.None);
+
+        await Applier.ApplyAsync(ScanDifference.Nothing, [TuneSystem.IsdbT], CancellationToken.None);
+
+        CandidateChannel selected = Assert.Single(candidates.Candidates, candidate => candidate.IsSelected);
+
+        Assert.Equal(OtherTerrestrial, selected.Tuning.PhysicalChannel);
+    }
+
+    [Fact]
+    public async Task AHandPickedChannelIsLeftAloneByAScanThatNeverNamedItsService()
+    {
+        SeedMeasured(101, "Two ways in", (Terrestrial, 16_000), (OtherTerrestrial, 35_000));
+
+        await candidates.SelectAsync(
+            candidates.Candidates[0].Id,
+            SelectionSource.Manual,
+            null,
+            At,
+            CancellationToken.None);
+
+        await Applier.ApplyAsync(ScanDifference.Nothing, [TuneSystem.IsdbT], CancellationToken.None);
+
+        CandidateChannel selected = Assert.Single(candidates.Candidates, candidate => candidate.IsSelected);
+
+        Assert.Equal(Terrestrial, selected.Tuning.PhysicalChannel);
+        Assert.Equal(SelectionSource.Manual, selected.SelectionSource);
+    }
+
+    [Fact]
+    public async Task AServiceWithNowhereToTuneIsNotGivenSomewhereByAScanThatNeverNamedIt()
+    {
+        SeedMeasured(101, "Two ways in", (Terrestrial, 16_000), (OtherTerrestrial, 35_000));
+
+        await Applier.ApplyAsync(ScanDifference.Nothing, [TuneSystem.IsdbT], CancellationToken.None);
+
+        Assert.DoesNotContain(candidates.Candidates, candidate => candidate.IsSelected);
+    }
+
+    [Fact]
+    public async Task AChannelChosenAgainstAMeasurementIsNotMovedByAScanThatNeverNamedItsService()
+    {
+        SeedMeasured(101, "Two ways in", (Terrestrial, 16_000), (OtherTerrestrial, 35_000));
+
+        await candidates.SelectAsync(
+            candidates.Candidates[0].Id,
+            SelectionSource.Scan,
+            SignalMeasurement.WithLock(At, 16_000),
+            At,
+            CancellationToken.None);
+
+        await Applier.ApplyAsync(ScanDifference.Nothing, [TuneSystem.IsdbT], CancellationToken.None);
+
+        CandidateChannel selected = Assert.Single(candidates.Candidates, candidate => candidate.IsSelected);
+
+        Assert.Equal(Terrestrial, selected.Tuning.PhysicalChannel);
+    }
+
+    [Fact]
+    public async Task AServiceOfASystemTheScanNeverWalkedKeepsTheChannelChosenBlind()
+    {
+        Seed(201, "Satellite one", Satellite(), OtherSatellite());
+        candidates.Candidates[0].RecordTuningSuccess(SignalMeasurement.WithLock(At, 16_000), At);
+        candidates.Candidates[1].RecordTuningSuccess(SignalMeasurement.WithLock(At, 35_000), At);
+
+        await candidates.SelectAsync(
+            candidates.Candidates[0].Id,
+            SelectionSource.Scan,
+            null,
+            At,
+            CancellationToken.None);
+
+        await Applier.ApplyAsync(ScanDifference.Nothing, [TuneSystem.IsdbT], CancellationToken.None);
+
+        CandidateChannel selected = Assert.Single(candidates.Candidates, candidate => candidate.IsSelected);
+
+        Assert.Equal(SatelliteSlot, selected.Tuning.PhysicalChannel);
+        Assert.Null(selected.SelectionMeasurement);
+    }
+
+    [Fact]
+    public async Task ServicesOnOneStreamStayOnOneChannelWhenOnlyOneOfTheirCandidatesLosesItsReading()
+    {
+        SeedMeasured(101, "First on the stream", (Terrestrial, 36_000), (OtherTerrestrial, 30_000));
+        SeedMeasured(102, "Second on the stream", (Terrestrial, 36_000), (OtherTerrestrial, 30_000));
+
+        candidates.Candidates
+            .Single(candidate => candidate.ServiceId.Value == 101
+                                 && candidate.Tuning.PhysicalChannel == Terrestrial)
+            .RecordTuningSuccess(SignalMeasurement.WithLock(At.AddHours(1)), At.AddHours(1));
+
+        int[] onTheStream = [101, 102];
+
+        foreach (int serviceId in onTheStream)
+        {
+            await candidates.SelectAsync(
+                candidates.Candidates
+                    .Single(candidate => candidate.ServiceId.Value == serviceId
+                                         && candidate.Tuning.PhysicalChannel == OtherTerrestrial)
+                    .Id,
+                SelectionSource.Scan,
+                null,
+                At,
+                CancellationToken.None);
+        }
+
+        await Applier.ApplyAsync(ScanDifference.Nothing, [TuneSystem.IsdbT], CancellationToken.None);
+
+        int[] chosen =
+        [
+            .. candidates.Candidates
+                .Where(candidate => candidate.IsSelected)
+                .Select(candidate => candidate.Tuning.PhysicalChannel),
+        ];
+
+        Assert.Equal([Terrestrial, Terrestrial], chosen);
+    }
+
+    private void SeedMeasured(int serviceId, string name, params (int PhysicalChannel, int Cnr)[] measured)
+    {
+        Seed(serviceId, name, [.. measured.Select(channel => TuningParameters.Terrestrial(channel.PhysicalChannel))]);
+
+        foreach ((int physicalChannel, int cnr) in measured)
+        {
+            candidates.Candidates
+                .Single(candidate => candidate.ServiceId.Value == serviceId
+                                     && candidate.Tuning.PhysicalChannel == physicalChannel)
+                .RecordTuningSuccess(SignalMeasurement.WithLock(At, cnr), At);
+        }
     }
 }

@@ -13,6 +13,7 @@ namespace Carina.Infrastructure.Tests.Scanning;
 public sealed class ScanApplierDatabaseTests(RepositoryDatabase database)
 {
     private const int PhysicalChannel = 31;
+    private const int OtherPhysicalChannel = 33;
 
     private static readonly DateTime At = StillClock.Now.UtcDateTime;
     private static readonly CancellationToken Cancel = CancellationToken.None;
@@ -170,6 +171,58 @@ public sealed class ScanApplierDatabaseTests(RepositoryDatabase database)
         }
 
         Assert.Empty(events.Signalled);
+    }
+
+    [Fact]
+    public async Task AServiceWhoseChannelsAllStayedTheSameIsStillMovedOffTheOneChosenBlind()
+    {
+        int network = BroadcastIds.NextNetwork();
+        var networkId = new NetworkId(network);
+        var serviceId = new ServiceId(Services[0]);
+
+        await ApplyAsync(new ScanDifference(
+            [
+                new ScanServiceChange(
+                    ScanChangeKind.Added,
+                    networkId,
+                    serviceId,
+                    "Two ways in",
+                    ServiceCategory.Television,
+                    [
+                        Channel(ScanChangeKind.Added, TuningParameters.Terrestrial(PhysicalChannel), null),
+                        Channel(ScanChangeKind.Added, TuningParameters.Terrestrial(OtherPhysicalChannel), null),
+                    ],
+                    true),
+            ],
+            []));
+
+        await using (CarinaDbContext measuring = database.Open())
+        {
+            var walked = new CandidateChannelRepository(measuring);
+
+            foreach (CandidateChannel candidate in await walked.ListForServiceAsync(networkId, serviceId, Cancel))
+            {
+                candidate.RecordTuningSuccess(
+                    SignalMeasurement.WithLock(
+                        At,
+                        candidate.Tuning.PhysicalChannel == OtherPhysicalChannel ? 35_000 : 16_000),
+                    At);
+
+                await walked.SaveAsync(candidate, Cancel);
+            }
+        }
+
+        await ApplyAsync(ScanDifference.Nothing);
+
+        await using CarinaDbContext reading = database.Open();
+        var candidates = new CandidateChannelRepository(reading);
+        CandidateChannel? selected = await candidates.FindSelectedAsync(networkId, serviceId, Cancel);
+
+        Assert.Equal(OtherPhysicalChannel, selected?.Tuning.PhysicalChannel);
+        Assert.Equal(35_000, selected?.SelectionMeasurement?.CnrMilliDecibels);
+        Assert.Single(
+            await candidates.ListForServiceAsync(networkId, serviceId, Cancel),
+            candidate => candidate.IsSelected);
     }
 
     private async Task<ScanApplication> ApplyAsync(ScanDifference difference)
