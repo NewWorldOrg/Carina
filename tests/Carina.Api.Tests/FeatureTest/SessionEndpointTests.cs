@@ -70,6 +70,52 @@ public sealed class SessionEndpointTests
     }
 
     [Fact]
+    public async Task ACookieSpeltWithTheHostPrefixNamesTheAccountOnARequestThatArrivedOverPlainHttp()
+    {
+        await using AuthProbe probe = AuthProbe.OverHttp().WithAnAccount();
+        AuthSession session = probe.Sitting("a device that signed in elsewhere");
+
+        probe.Client.DefaultRequestHeaders.Add("Cookie", $"{SessionCookie.HostName}={session.Id.Value}");
+
+        using HttpResponseMessage response = await probe.Client.GetAsync(Me);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ACookieSpeltWithoutThePrefixNamesTheAccountOnARequestThatArrivedOverHttps()
+    {
+        await using AuthProbe probe = AuthProbe.OverHttps().WithAnAccount();
+        AuthSession session = probe.Sitting("a device that signed in elsewhere");
+
+        probe.Client.DefaultRequestHeaders.Add("Cookie", $"{SessionCookie.PlainName}={session.Id.Value}");
+
+        using HttpResponseMessage response = await probe.Client.GetAsync(Me);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task WithBothSpellingsInFlightThePrefixedOneNamesTheSessionThatIsAsking()
+    {
+        await using AuthProbe probe = AuthProbe.OverHttp().WithAnAccount();
+        AuthSession vouched = probe.Sitting("the device the prefixed cookie was issued to");
+        AuthSession weaker = probe.Sitting("the device the unprefixed cookie was issued to");
+
+        probe.Client.DefaultRequestHeaders.Add(
+            "Cookie",
+            $"{SessionCookie.PlainName}={weaker.Id.Value}; {SessionCookie.HostName}={vouched.Id.Value}");
+
+        using HttpResponseMessage response = await probe.Client.GetAsync(Sessions);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        JsonElement listed = body.RootElement.GetProperty("data");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(Only(listed, vouched.Id).GetProperty("current").GetBoolean());
+        Assert.False(Only(listed, weaker.Id).GetProperty("current").GetBoolean());
+    }
+
+    [Fact]
     public async Task TheSessionListMarksTheDeviceThatIsAskingAndShowsTheOthersBesideIt()
     {
         await using AuthProbe probe = AuthProbe.OverHttp();

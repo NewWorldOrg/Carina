@@ -8,7 +8,15 @@ public static class SessionCookie
 
     public const string Path = "/";
 
+    private static readonly string[] NamesInDescendingTrust = [HostName, PlainName];
+
     public static string NameFor(bool secure) => secure ? HostName : PlainName;
+
+    public static string? CarriedBy(HttpRequest request)
+        => CarriedCookie.FirstUsable(
+            request,
+            NamesInDescendingTrust,
+            carried => !string.IsNullOrEmpty(carried));
 
     public static CookieOptions Carrying(bool secure, TimeSpan lifetime)
     {

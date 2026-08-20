@@ -22,13 +22,15 @@ internal sealed class OidcProbe : IAsyncDisposable
 
     private readonly HttpClient outward;
 
+    private readonly WebApplicationFactory<Program> wired;
+
     private OidcProbe(bool secure)
     {
         outward = new HttpClient(Idp);
         Clock = new WoundClock(Founded);
         Idp.Clock = Clock;
 
-        WebApplicationFactory<Program> wired = factory.WithWebHostBuilder(
+        wired = factory.WithWebHostBuilder(
             builder => builder.ConfigureTestServices(services =>
             {
                 services.AddSingleton<IAuthSessionRepository>(Sessions);
@@ -93,6 +95,25 @@ internal sealed class OidcProbe : IAsyncDisposable
                 ? OidcHandshake.StartPath
                 : $"{OidcHandshake.StartPath}?{LoginRedirect.ReturnKey}={Uri.EscapeDataString(next)}",
             UriKind.Relative));
+
+    public string MarkFrom(HttpResponseMessage started)
+    {
+        ArgumentNullException.ThrowIfNull(started);
+
+        string handed = started.Headers.GetValues(HeaderNames.SetCookie)
+            .Single(cookie => cookie.StartsWith($"{MarkCookieName}=", StringComparison.Ordinal));
+
+        return handed[(MarkCookieName.Length + 1)..handed.IndexOf(';', StringComparison.Ordinal)];
+    }
+
+    public async Task<HttpResponseMessage> CallbackCarryingAsync(string cookie, string? state, string? code)
+    {
+        using HttpClient carrying = Browsing(wired, Secure);
+
+        carrying.DefaultRequestHeaders.Add(HeaderNames.Cookie, cookie);
+
+        return await CallbackAsync(state, code, carrying);
+    }
 
     public Task<HttpResponseMessage> CallbackAsync(string? state, string? code, HttpClient? through = null)
         => (through ?? Client).GetAsync(new Uri(

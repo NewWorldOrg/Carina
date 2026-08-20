@@ -22,6 +22,8 @@ public static class OidcHandshake
 
     public const string CodeKey = "code";
 
+    private static readonly string[] MarkNamesInDescendingTrust = [HostMarkName, PlainMarkName];
+
     public static string MarkNameFor(bool secure) => secure ? HostMarkName : PlainMarkName;
 
     public static string RedirectUriFor(HttpRequest request)
@@ -32,14 +34,7 @@ public static class OidcHandshake
     }
 
     public static string? MarkCarriedBy(HttpRequest request)
-    {
-        ArgumentNullException.ThrowIfNull(request);
-
-        return request.Cookies.TryGetValue(MarkNameFor(request.IsHttps), out string? carried)
-               && Unguessable.IsOne(carried)
-            ? carried
-            : null;
-    }
+        => CarriedCookie.FirstUsable(request, MarkNamesInDescendingTrust, Unguessable.IsOne);
 
     public static CookieOptions MarkCookie(bool secure, TimeSpan lifetime)
     {

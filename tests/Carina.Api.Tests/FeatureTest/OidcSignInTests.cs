@@ -73,6 +73,40 @@ public sealed class OidcSignInTests
     }
 
     [Fact]
+    public async Task AMarkHandedOutWithTheHostPrefixFinishesTheHandshakeWhenItComesBackWithoutIt()
+    {
+        await using OidcProbe probe = OidcProbe.OverHttps().Configured();
+
+        using HttpResponseMessage started = await probe.StartAsync();
+        var authorize = new Uri(started.Headers.Location!.ToString());
+
+        using HttpResponseMessage arrived = await probe.CallbackCarryingAsync(
+            $"{OidcHandshake.PlainMarkName}={probe.MarkFrom(started)}",
+            MockIdentityProvider.StateOf(authorize),
+            probe.Idp.Authorize(authorize, new MockIdentityUser("owner")));
+
+        Assert.Equal(LoginRedirect.Home, arrived.Headers.Location!.ToString());
+        Assert.Single(probe.Sessions.Sessions);
+    }
+
+    [Fact]
+    public async Task AMarkHandedOutWithoutThePrefixFinishesTheHandshakeWhenItComesBackWithOne()
+    {
+        await using OidcProbe probe = OidcProbe.OverHttp().Configured();
+
+        using HttpResponseMessage started = await probe.StartAsync();
+        var authorize = new Uri(started.Headers.Location!.ToString());
+
+        using HttpResponseMessage arrived = await probe.CallbackCarryingAsync(
+            $"{OidcHandshake.HostMarkName}={probe.MarkFrom(started)}",
+            MockIdentityProvider.StateOf(authorize),
+            probe.Idp.Authorize(authorize, new MockIdentityUser("owner")));
+
+        Assert.Equal(LoginRedirect.Home, arrived.Headers.Location!.ToString());
+        Assert.Single(probe.Sessions.Sessions);
+    }
+
+    [Fact]
     public async Task ACallerWhoComesBackWithTheCodeGetsTheSameSessionRowALocalSignInWouldHaveGiven()
     {
         await using OidcProbe probe = OidcProbe.OverHttp().Configured();
