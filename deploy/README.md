@@ -87,32 +87,28 @@ Docker がユーザー定義ネットワークに使うプールの範囲で書�
 | --- | --- |
 | `app.yaml` | `role=app` の Deployment と ClusterIP Service |
 | `web.yaml` | `role=web` の Deployment と ClusterIP Service |
-| `ingress.yaml` | ルーティング契約の2本 |
 
 `role=web` は単独の Deployment として動きます。app と同じ Pod に同居させる必要は
 ありません。画面だけを入れ替えても、録画を抱えたプロセスには何も起きません。
 
-Ingress のルールは契約と同じ2本です。`/api` を前に、`/` を後ろに置きます。
+前段の振り分けは契約と同じ2本です。`/api` を前に、`/` を後ろに置き、それぞれ
+`carina-app` と `carina-web` の Service へ送ります。使う Ingress コントローラや
+Gateway の書式に合わせてください。ここに具体的な定義は置きません。契約は2本の
+ルールであって、特定のコントローラの書き方ではないためです。
 
-```yaml
-- path: /api
-  pathType: Prefix
-  backend: { service: { name: carina-app, port: { name: http } } }
-- path: /
-  pathType: Prefix
-  backend: { service: { name: carina-web, port: { name: http } } }
-```
+その際、前段側で次の3つを満たします。
 
-Service は ClusterIP です。外から届く経路は Ingress の1本だけになり、app の認証を
+- バッファリングを切る。SSE とトランスポートストリームが前段で溜まると止まります
+- 読み書きの時間切れを長く取る。長時間の接続がそこで切られます
+- `Host` を受け取ったままポートごと送る。落とすと app が組み立てるオリジンから
+  ポートが消え、`Origin` と一致せず状態を変える要求が 403 になります
+
+Service は ClusterIP です。外から届く経路は前段の1本だけになり、app の認証を
 迂回して Service に届く道が残りません。
 
-`app.yaml` の `CARINA_KNOWN_NETWORKS` は Ingress コントローラの Pod が居る
-ネットワークです。クラスタの Pod CIDR に合わせてください。ここが合っていないと、
-前段が https で終端していても app は平文として読みます。
-
-`ingress.yaml` の注釈はバッファリングを切り、時間切れを長く取るためのものです。
-コントローラごとに書き方が違うので、使うコントローラのものに読み替えてください。
-契約はあくまで2本のルールであって、注釈の綴りではありません。
+`app.yaml` の `CARINA_KNOWN_NETWORKS` は前段の Pod が居るネットワークです。
+クラスタの Pod CIDR に合わせてください。ここが合っていないと、前段が https で
+終端していても app は平文として読みます。
 
 ホスト名は例です。IdP に登録する redirect URI はホスト名ごとに要るので、ホストを
 決めてから `https://<ホスト>/api/auth/oidc/callback` を IdP へ先に登録します。
