@@ -328,6 +328,33 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
 
     private static int NextNetwork() => BroadcastIds.NextNetwork();
 
+    [Fact]
+    public async Task TheChannelsOfAServiceComeBackWithTheBestMeasuredAheadOfTheOneFoundFirst()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        var services = new BroadcastServiceRepository(context);
+        var candidates = new CandidateChannelRepository(context);
+        await services.AddAsync(Service(network, 1), Cancel);
+
+        CandidateChannel weak = Candidate(network, 1, 41);
+        CandidateChannel strong = Candidate(network, 1, 58);
+        CandidateChannel unlocked = Candidate(network, 1, 44);
+
+        weak.RecordTuningSuccess(SignalMeasurement.WithLock(At, 12_000), At);
+        strong.RecordTuningSuccess(SignalMeasurement.WithLock(At.AddHours(1), 29_000), At.AddHours(1));
+        unlocked.RecordTuningSuccess(SignalMeasurement.WithoutLock(At.AddHours(2)), At.AddHours(2));
+
+        await candidates.AddAsync(weak, Cancel);
+        await candidates.AddAsync(strong, Cancel);
+        await candidates.AddAsync(unlocked, Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        IReadOnlyList<CandidateChannel> stored = await new CandidateChannelRepository(reading)
+            .ListForServiceAsync(new NetworkId(network), new ServiceId(1), Cancel);
+
+        Assert.Equal([58, 41, 44], stored.Select(candidate => candidate.Tuning.PhysicalChannel));
+    }
     private static BroadcastService Service(int network, int service)
         => BroadcastService.Discover(
             new NetworkId(network),
@@ -343,4 +370,5 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
             new ServiceId(service),
             TuningParameters.Terrestrial(physicalChannel),
             At);
+
 }

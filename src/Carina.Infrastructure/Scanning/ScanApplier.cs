@@ -167,14 +167,9 @@ public sealed class ScanApplier(
             moved++;
         }
 
-        if (known is not null)
+        if (known is not null && (change.Seen || moved > 0))
         {
-            if (change.Seen || moved > 0)
-            {
-                tally.ServicesUpdated++;
-            }
-
-            return;
+            tally.ServicesUpdated++;
         }
 
         IReadOnlyList<CandidateChannel> settled = await candidates.ListForServiceAsync(
@@ -182,23 +177,23 @@ public sealed class ScanApplier(
             change.ServiceId,
             cancellationToken);
 
-        if (Best(settled) is { } best)
+        if (!TheScanDecides(known, settled) || CandidateOrder.Best(settled) is not { } best)
         {
-            await candidates.SelectAsync(
-                best.Id,
-                SelectionSource.Scan,
-                best.LastMeasurement,
-                at,
-                cancellationToken);
+            return;
         }
+
+        await candidates.SelectAsync(
+            best.Id,
+            SelectionSource.Scan,
+            best.LastMeasurement,
+            at,
+            cancellationToken);
     }
 
-    private static CandidateChannel? Best(IReadOnlyList<CandidateChannel> settled)
-        => settled
-            .OrderByDescending(candidate => candidate.LastMeasurement?.Locked ?? false)
-            .ThenByDescending(candidate => candidate.LastMeasurement?.CnrMilliDecibels ?? int.MinValue)
-            .ThenBy(candidate => candidate.Tuning.PhysicalChannel)
-            .FirstOrDefault();
+    private static bool TheScanDecides(BroadcastService? known, IReadOnlyList<CandidateChannel> settled)
+        => known is null
+            || settled.FirstOrDefault(candidate => candidate.IsSelected)
+                is { SelectionSource: SelectionSource.Scan, SelectionMeasurement: null };
 
     private sealed class Tally
     {
