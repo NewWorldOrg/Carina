@@ -17,7 +17,7 @@ public sealed class BroadcastStreamDirectory(ICandidateChannelRepository candida
 
         foreach (IGrouping<(int Network, int Stream), CandidateChannel> group in carried)
         {
-            if (group.FirstOrDefault(candidate => candidate.IsInRotation) is not { } reachable)
+            if (CandidateOrder.Best(group.Where(candidate => candidate.IsInRotation)) is not { } reachable)
             {
                 continue;
             }
@@ -86,6 +86,7 @@ public sealed class BroadcastStreamDirectory(ICandidateChannelRepository candida
             })
             .ThenBy(candidate => candidate.ConsecutiveFailures)
             .ThenBy(candidate => candidate.NextAttemptAt ?? DateTime.MinValue)
+            .ThenBy(candidate => candidate, CandidateOrder.ByWhatWasMeasured)
             .First();
 
     private readonly record struct StreamIdentity(

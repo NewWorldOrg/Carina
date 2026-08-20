@@ -33,10 +33,15 @@ public sealed class CandidateChannelRepository(CarinaDbContext context) : ICandi
         ArgumentNullException.ThrowIfNull(networkId);
         ArgumentNullException.ThrowIfNull(serviceId);
 
-        return await OfService(networkId, serviceId)
-            .OrderByDescending(candidate => candidate.IsSelected)
-            .ThenBy(candidate => candidate.DiscoveredAt)
-            .ToListAsync(cancellationToken);
+        List<CandidateChannel> held = await OfService(networkId, serviceId).ToListAsync(cancellationToken);
+
+        return
+        [
+            .. held
+                .OrderByDescending(candidate => candidate.IsSelected)
+                .ThenBy(candidate => candidate, CandidateOrder.ByWhatWasMeasured)
+                .ThenBy(candidate => candidate.DiscoveredAt),
+        ];
     }
 
     public async Task<CandidateChannel?> FindSelectedAsync(

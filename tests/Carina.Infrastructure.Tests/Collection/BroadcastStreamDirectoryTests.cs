@@ -174,6 +174,56 @@ public sealed class BroadcastStreamDirectoryTests
         Assert.NotNull(only.Reach.NeedsAttentionSince);
     }
 
+    [Fact]
+    public async Task AStreamReachedThroughSeveralChannelsIsWalkedOnTheOneThatMeasuredBest()
+    {
+        var held = new HeldCandidates();
+
+        await held.AddAsync(Measured(Selected(4, 101, 22, 32_736), 12_000), Cancel);
+        await held.AddAsync(Measured(Selected(4, 102, 24, 32_736), 29_000), Cancel);
+
+        BroadcastStream only = Assert.Single(await new BroadcastStreamDirectory(held).ListAsync(Cancel));
+
+        Assert.Equal(24, only.Tuning.PhysicalChannel);
+    }
+
+    [Fact]
+    public async Task AnIntendedStreamNamesTheChannelThatMeasuredBestWhenReachSaysNothingElse()
+    {
+        var held = new HeldCandidates();
+
+        await held.AddAsync(Measured(Selected(4, 101, 22, 32_736), 12_000), Cancel);
+        await held.AddAsync(Measured(Selected(4, 102, 24, 32_736), 29_000), Cancel);
+
+        IntendedStream only = Assert.Single(
+            await new BroadcastStreamDirectory(held).ListIntendedAsync(Cancel));
+
+        Assert.Equal(24, only.Tuning.PhysicalChannel);
+    }
+
+    [Fact]
+    public async Task AChannelThatNeverLockedIsNotWalkedWhileOneThatDidIsAvailable()
+    {
+        var held = new HeldCandidates();
+        CandidateChannel unlocked = Selected(4, 101, 22, 32_736);
+
+        unlocked.RecordTuningSuccess(SignalMeasurement.WithoutLock(At), At);
+
+        await held.AddAsync(unlocked, Cancel);
+        await held.AddAsync(Measured(Selected(4, 102, 24, 32_736), 8_000), Cancel);
+
+        BroadcastStream only = Assert.Single(await new BroadcastStreamDirectory(held).ListAsync(Cancel));
+
+        Assert.Equal(24, only.Tuning.PhysicalChannel);
+    }
+
+    private static CandidateChannel Measured(CandidateChannel candidate, int cnrMilliDecibels)
+    {
+        candidate.RecordTuningSuccess(SignalMeasurement.WithLock(At, cnrMilliDecibels), At);
+
+        return candidate;
+    }
+
     private static CandidateChannel Selected(int network, int service, int channel, int? streamId)
     {
         CandidateChannel candidate = CandidateChannel.Discover(

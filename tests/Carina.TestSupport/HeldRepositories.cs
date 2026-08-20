@@ -121,7 +121,13 @@ public sealed class HeldCandidates : ICandidateChannelRepository
         NetworkId networkId,
         ServiceId serviceId,
         CancellationToken cancellationToken)
-        => Task.FromResult<IReadOnlyList<CandidateChannel>>([.. Of(networkId, serviceId)]);
+        => Task.FromResult<IReadOnlyList<CandidateChannel>>(
+        [
+            .. Of(networkId, serviceId)
+                .OrderByDescending(candidate => candidate.IsSelected)
+                .ThenBy(candidate => candidate, CandidateOrder.ByWhatWasMeasured)
+                .ThenBy(candidate => candidate.DiscoveredAt),
+        ]);
 
     public Task<CandidateChannel?> FindSelectedAsync(
         NetworkId networkId,
