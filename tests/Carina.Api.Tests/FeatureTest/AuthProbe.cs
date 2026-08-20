@@ -1,7 +1,6 @@
 using System.Net.Http.Json;
 using System.Text;
 
-using Carina.Api.Authentication;
 using Carina.Domain.Auth;
 using Carina.TestSupport;
 
@@ -51,9 +50,6 @@ internal sealed class AuthProbe : IAsyncDisposable
 
     public QuickPasswordHasher Hasher { get; } = new();
 
-    public string CookieName => SessionCookie.NameFor(
-        Client.BaseAddress!.Scheme == Uri.UriSchemeHttps);
-
     public static AuthProbe OverHttp() => new(secure: false);
 
     public static AuthProbe OverHttps() => new(secure: true);
@@ -86,6 +82,32 @@ internal sealed class AuthProbe : IAsyncDisposable
         => Client.PostAsJsonAsync(
             new Uri("/api/auth/login", UriKind.Relative),
             new { username, password });
+
+    public HttpClient Relaying(string carried)
+    {
+        HttpClient client = Wired.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri("http://localhost"),
+            AllowAutoRedirect = false,
+        });
+
+        client.DefaultRequestHeaders.Add(HeaderNames.Cookie, carried);
+
+        return client;
+    }
+
+    public async Task<HttpClient> RelayingAsync()
+    {
+        WithAnAccount();
+
+        using HttpResponseMessage response = await LogInAsync(FirstCredentials.Username, Password);
+
+        response.EnsureSuccessStatusCode();
+
+        string handed = response.Headers.GetValues(HeaderNames.SetCookie).Single();
+
+        return Relaying(handed[..handed.IndexOf(';', StringComparison.Ordinal)]);
+    }
 
     public async Task<AuthSession> SignedInAsync()
     {

@@ -52,24 +52,11 @@ public sealed class OidcSignInTests
 
         using HttpResponseMessage started = await probe.StartAsync();
         string mark = started.Headers.GetValues(HeaderNames.SetCookie)
-            .Single(cookie => cookie.StartsWith(probe.MarkCookieName, StringComparison.Ordinal));
+            .Single(cookie => cookie.StartsWith(OidcHandshake.MarkName, StringComparison.Ordinal));
 
         Assert.Contains("httponly", mark, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("samesite=lax", mark, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("path=/", mark, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
-    public async Task OverHttpsTheHandshakeMarkCarriesThePrefixThatPinsItToThisHost()
-    {
-        await using OidcProbe probe = OidcProbe.OverHttps().Configured();
-
-        using HttpResponseMessage started = await probe.StartAsync();
-
-        Assert.Contains(
-            started.Headers.GetValues(HeaderNames.SetCookie),
-            cookie => cookie.StartsWith(OidcHandshake.HostMarkName, StringComparison.Ordinal)
-                      && cookie.Contains("secure", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]
@@ -88,7 +75,7 @@ public sealed class OidcSignInTests
         Assert.Equal("owner-from-the-provider", started.Subject.Value);
         Assert.Contains(
             arrived.Headers.GetValues(HeaderNames.SetCookie),
-            cookie => cookie.StartsWith($"{probe.SessionCookieName}={started.Id.Value}", StringComparison.Ordinal)
+            cookie => cookie.StartsWith($"{SessionCookie.Name}={started.Id.Value}", StringComparison.Ordinal)
                       && cookie.Contains("httponly", StringComparison.OrdinalIgnoreCase));
     }
 

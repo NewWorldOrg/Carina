@@ -19,7 +19,7 @@ public sealed class SessionAuthenticationHandler(
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        if (!Request.Cookies.TryGetValue(SessionCookie.NameFor(Request.IsHttps), out string? carried)
+        if (!Request.Cookies.TryGetValue(SessionCookie.Name, out string? carried)
             || string.IsNullOrEmpty(carried))
         {
             return AuthenticateResult.NoResult();

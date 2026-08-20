@@ -22,13 +22,15 @@ internal sealed class OidcProbe : IAsyncDisposable
 
     private readonly HttpClient outward;
 
+    private readonly WebApplicationFactory<Program> wired;
+
     private OidcProbe(bool secure)
     {
         outward = new HttpClient(Idp);
         Clock = new WoundClock(Founded);
         Idp.Clock = Clock;
 
-        WebApplicationFactory<Program> wired = factory.WithWebHostBuilder(
+        wired = factory.WithWebHostBuilder(
             builder => builder.ConfigureTestServices(services =>
             {
                 services.AddSingleton<IAuthSessionRepository>(Sessions);
@@ -61,12 +63,6 @@ internal sealed class OidcProbe : IAsyncDisposable
 
     public HttpClient Signed { get; }
 
-    public bool Secure => Client.BaseAddress!.Scheme == Uri.UriSchemeHttps;
-
-    public string SessionCookieName => SessionCookie.NameFor(Secure);
-
-    public string MarkCookieName => OidcHandshake.MarkNameFor(Secure);
-
     public static OidcProbe OverHttp() => new(secure: false);
 
     public static OidcProbe OverHttps() => new(secure: true);
@@ -85,6 +81,19 @@ internal sealed class OidcProbe : IAsyncDisposable
             allowedHostedDomains);
 
         return this;
+    }
+
+    public HttpClient Relaying(string carried)
+    {
+        HttpClient client = wired.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            BaseAddress = new Uri("http://localhost"),
+            AllowAutoRedirect = false,
+        });
+
+        client.DefaultRequestHeaders.Add(HeaderNames.Cookie, carried);
+
+        return client;
     }
 
     public Task<HttpResponseMessage> StartAsync(string? next = null)

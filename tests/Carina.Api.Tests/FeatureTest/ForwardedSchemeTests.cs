@@ -121,7 +121,7 @@ internal sealed class ForwardedProxyProbe : IAsyncDisposable
 public sealed class ForwardedSchemeTests
 {
     [Fact]
-    public async Task ANamedProxySayingHttpsMakesTheSessionCookieSecureAndHostPrefixed()
+    public async Task ANamedProxySayingHttpsMakesTheSessionCookieSecureUnderTheOneName()
     {
         await using ForwardedProxyProbe probe = ForwardedProxyProbe.TrustingItsProxy();
 
@@ -129,7 +129,7 @@ public sealed class ForwardedSchemeTests
         string cookie = Assert.Single(response.Headers.GetValues("Set-Cookie"));
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.StartsWith($"{SessionCookie.HostName}=", cookie, StringComparison.Ordinal);
+        Assert.StartsWith($"{SessionCookie.Name}=", cookie, StringComparison.Ordinal);
         Assert.Contains("secure", cookie, StringComparison.OrdinalIgnoreCase);
     }
 

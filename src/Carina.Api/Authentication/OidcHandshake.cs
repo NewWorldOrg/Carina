@@ -14,15 +14,11 @@ public static class OidcHandshake
 
     public const string CallbackPath = $"/{CallbackRoute}";
 
-    public const string PlainMarkName = "carina_oidc";
-
-    public const string HostMarkName = "__Host-carina_oidc";
+    public const string MarkName = "carina_oidc";
 
     public const string StateKey = "state";
 
     public const string CodeKey = "code";
-
-    public static string MarkNameFor(bool secure) => secure ? HostMarkName : PlainMarkName;
 
     public static string RedirectUriFor(HttpRequest request)
     {
@@ -35,7 +31,7 @@ public static class OidcHandshake
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        return request.Cookies.TryGetValue(MarkNameFor(request.IsHttps), out string? carried)
+        return request.Cookies.TryGetValue(MarkName, out string? carried)
                && Unguessable.IsOne(carried)
             ? carried
             : null;

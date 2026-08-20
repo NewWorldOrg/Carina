@@ -52,7 +52,7 @@ public sealed class LogInAction(LocalAccountService accounts, TimeProvider clock
         }
 
         Response.Cookies.Append(
-            SessionCookie.NameFor(Request.IsHttps),
+            SessionCookie.Name,
             session.Id.Value,
             SessionCookie.Carrying(Request.IsHttps, outcome.SessionLifetime));
 

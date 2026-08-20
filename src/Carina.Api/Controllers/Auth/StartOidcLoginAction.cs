@@ -31,7 +31,7 @@ public sealed class StartOidcLoginAction(OidcLoginService logins) : ControllerBa
         }
 
         Response.Cookies.Append(
-            OidcHandshake.MarkNameFor(Request.IsHttps),
+            OidcHandshake.MarkName,
             start.BrowserMark,
             OidcHandshake.MarkCookie(Request.IsHttps, start.MarkLifetime));
 

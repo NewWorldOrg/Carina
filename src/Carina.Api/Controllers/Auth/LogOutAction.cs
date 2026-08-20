@@ -26,7 +26,7 @@ public sealed class LogOutAction(AuthSessionService sessions) : ControllerBase
         await sessions.LogOutAsync(current, cancellationToken);
 
         Response.Cookies.Delete(
-            SessionCookie.NameFor(Request.IsHttps),
+            SessionCookie.Name,
             SessionCookie.Discarding(Request.IsHttps));
 
         return NoContent();
