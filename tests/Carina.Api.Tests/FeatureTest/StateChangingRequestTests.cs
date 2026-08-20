@@ -109,6 +109,47 @@ public sealed class StateChangingRequestTests(TestingWebApplicationFactory facto
         Assert.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
     }
 
+    [Theory]
+    [InlineData("text/plain")]
+    [InlineData("multipart/form-data")]
+    public async Task ABodyAnotherSiteCanPostWithoutBeingLetThroughFirstIsRefused(string type)
+    {
+        using HttpClient client = factory.CreateAuthenticatedClient();
+        using var content = new StringContent("anything=1", Encoding.UTF8, type);
+
+        using HttpResponseMessage response = await client.PostAsync(Restart, content);
+
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
+        Assert.False(await SucceededAsync(response));
+    }
+
+    [Theory]
+    [InlineData("DELETE", "/api/auth/sessions/anything")]
+    [InlineData("PUT", "/api/auth/oidc-config")]
+    public async Task ADestructiveRequestNamingAnotherOriginIsRefusedWhateverItsMethod(string method, string path)
+    {
+        using HttpClient client = factory.CreateAuthenticatedClient();
+        client.DefaultRequestHeaders.Remove(HeaderNames.Origin);
+        client.DefaultRequestHeaders.Add(HeaderNames.Origin, "https://elsewhere.example");
+
+        using HttpResponseMessage response = await SendingAsync(client, method, path, Json());
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("DELETE", "/api/auth/sessions/anything")]
+    [InlineData("PUT", "/api/auth/oidc-config")]
+    public async Task ADestructiveRequestCarryingAFormIsRefusedWhateverItsMethod(string method, string path)
+    {
+        using HttpClient client = factory.CreateAuthenticatedClient();
+        using var form = new StringContent("anything=1", Encoding.UTF8, "application/x-www-form-urlencoded");
+
+        using HttpResponseMessage response = await SendingAsync(client, method, path, form);
+
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
+    }
+
     [Fact]
     public async Task AReadFromAnotherOriginIsLeftAlone()
     {
@@ -154,6 +195,20 @@ public sealed class StateChangingRequestTests(TestingWebApplicationFactory facto
     }
 
     private static StringContent Json() => new("{}", Encoding.UTF8, "application/json");
+
+    private static async Task<HttpResponseMessage> SendingAsync(
+        HttpClient client,
+        string method,
+        string path,
+        HttpContent content)
+    {
+        using var asking = new HttpRequestMessage(new HttpMethod(method), new Uri(path, UriKind.Relative))
+        {
+            Content = content,
+        };
+
+        return await client.SendAsync(asking);
+    }
 
     private static async Task<bool> SucceededAsync(HttpResponseMessage response)
     {
