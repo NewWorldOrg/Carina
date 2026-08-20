@@ -63,6 +63,7 @@ public sealed record BroadcastServiceResponder(
     DateTimeOffset LastSeenAt,
     int CandidateCount,
     ScanTargetResponder? SelectedChannel,
+    ScanTargetResponder? BetterChannel,
     IReadOnlyList<CandidateChannelResponder> Candidates)
 {
     public static BroadcastServiceResponder Of(ServiceWithChannels held)
@@ -71,6 +72,7 @@ public sealed record BroadcastServiceResponder(
 
         BroadcastService service = held.Service;
         CandidateChannel? selected = held.Candidates.FirstOrDefault(candidate => candidate.IsSelected);
+        CandidateChannel? better = CandidateOrder.BetterThanTheSelected(held.Candidates);
 
         return new BroadcastServiceResponder(
             service.NetworkId.Value,
@@ -83,6 +85,7 @@ public sealed record BroadcastServiceResponder(
             service.LastSeenAt,
             held.Candidates.Count,
             selected is null ? null : ScanTargetResponder.Of(selected.Tuning),
+            better is null ? null : ScanTargetResponder.Of(better.Tuning),
             [.. held.Candidates.Select(CandidateChannelResponder.Of)]);
     }
 }

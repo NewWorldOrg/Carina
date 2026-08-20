@@ -371,6 +371,133 @@ public sealed class ServiceCatalogEndpointTests
     }
 
     [Fact]
+    public async Task TheListNamesTheChannelThatMeasuredBetterThanTheSelectedOne()
+    {
+        await using var feature = new CatalogFeature();
+        feature.Seed(
+            101,
+            "Two ways in",
+            TuningParameters.Terrestrial(Terrestrial),
+            TuningParameters.Terrestrial(OtherTerrestrial));
+        feature.Measure(0, 12_000);
+        feature.Measure(1, 29_000);
+
+        await feature.PutAsync(
+            $"{OneService}/selected-channel",
+            new { candidateChannelId = feature.Candidates.Candidates[0].Id.Value });
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync("/api/services");
+        JsonElement listed = body.GetProperty("data")[0];
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(
+            Terrestrial,
+            listed.GetProperty("selectedChannel").GetProperty("physicalChannel").GetInt32());
+        Assert.Equal(
+            OtherTerrestrial,
+            listed.GetProperty("betterChannel").GetProperty("physicalChannel").GetInt32());
+    }
+
+    [Fact]
+    public async Task TheListNamesNoBetterChannelWhenTheMeasurementsAlreadyFavourTheSelectedOne()
+    {
+        await using var feature = new CatalogFeature();
+        feature.Seed(
+            101,
+            "Two ways in",
+            TuningParameters.Terrestrial(Terrestrial),
+            TuningParameters.Terrestrial(OtherTerrestrial));
+        feature.Measure(0, 29_000);
+        feature.Measure(1, 12_000);
+
+        await feature.PutAsync(
+            $"{OneService}/selected-channel",
+            new { candidateChannelId = feature.Candidates.Candidates[0].Id.Value });
+
+        (HttpStatusCode _, JsonElement body) = await feature.GetAsync("/api/services");
+
+        Assert.Equal(
+            System.Text.Json.JsonValueKind.Null,
+            body.GetProperty("data")[0].GetProperty("betterChannel").ValueKind);
+    }
+
+    [Fact]
+    public async Task AChannelChosenByHandIsSaidToBeOutrankedJustAsOneAScanChoseWouldBe()
+    {
+        await using var feature = new CatalogFeature();
+        feature.Seed(
+            101,
+            "Two ways in",
+            TuningParameters.Terrestrial(Terrestrial),
+            TuningParameters.Terrestrial(OtherTerrestrial));
+        feature.Measure(0, 12_000);
+        feature.Measure(1, 29_000);
+
+        await feature.Candidates.SelectAsync(
+            feature.Candidates.Candidates[0].Id,
+            SelectionSource.Manual,
+            null,
+            TunerHoldingDriverClient.At,
+            CancellationToken.None);
+
+        (HttpStatusCode _, JsonElement body) = await feature.GetAsync("/api/services");
+        JsonElement listed = body.GetProperty("data")[0];
+
+        Assert.Equal(
+            "manual",
+            listed.GetProperty("candidates")[0].GetProperty("selection").GetProperty("source").GetString());
+        Assert.Equal(
+            OtherTerrestrial,
+            listed.GetProperty("betterChannel").GetProperty("physicalChannel").GetInt32());
+    }
+
+    [Fact]
+    public async Task AServiceWithNowhereToTuneIsNotSaidToHaveABetterChannel()
+    {
+        await using var feature = new CatalogFeature();
+        feature.Seed(
+            101,
+            "Two ways in",
+            TuningParameters.Terrestrial(Terrestrial),
+            TuningParameters.Terrestrial(OtherTerrestrial));
+        feature.Measure(0, 12_000);
+        feature.Measure(1, 29_000);
+
+        (HttpStatusCode _, JsonElement body) = await feature.GetAsync("/api/services");
+
+        Assert.Equal(
+            System.Text.Json.JsonValueKind.Null,
+            body.GetProperty("data")[0].GetProperty("betterChannel").ValueKind);
+    }
+
+    [Fact]
+    public async Task SayingTheSelectionIsOutrankedDoesNotMoveTheSelection()
+    {
+        await using var feature = new CatalogFeature();
+        feature.Seed(
+            101,
+            "Two ways in",
+            TuningParameters.Terrestrial(Terrestrial),
+            TuningParameters.Terrestrial(OtherTerrestrial));
+        feature.Measure(0, 12_000);
+        feature.Measure(1, 29_000);
+
+        await feature.PutAsync(
+            $"{OneService}/selected-channel",
+            new { candidateChannelId = feature.Candidates.Candidates[0].Id.Value });
+
+        await feature.GetAsync("/api/services");
+        await feature.GetAsync(OneService);
+
+        CandidateChannel held = Assert.Single(
+            feature.Candidates.Candidates,
+            candidate => candidate.IsSelected);
+
+        Assert.Equal(Terrestrial, held.Tuning.PhysicalChannel);
+        Assert.Equal(SelectionSource.Manual, held.SelectionSource);
+    }
+
+    [Fact]
     public async Task EveryCatalogSurfaceIsBehindTheSameDenialAsTheRestOnceASchemeIsRegistered()
     {
         using var app = new TestingWebApplicationFactory();

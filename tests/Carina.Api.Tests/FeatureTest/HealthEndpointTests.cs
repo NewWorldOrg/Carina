@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 
 using Carina.Api.Responder.Health;
 
@@ -21,5 +22,18 @@ public sealed class HealthEndpointTests(TestingWebApplicationFactory factory)
         HealthResponder? payload = await response.Content.ReadFromJsonAsync<HealthResponder>();
         Assert.Equal("ok", payload?.Status);
         Assert.Empty(payload!.Degraded);
+    }
+
+    [Fact]
+    public async Task TheProbeAnswersWithTheWordsItHasAlwaysAnsweredWithAndNoOperationalDetail()
+    {
+        using HttpClient client = factory.CreateClient();
+
+        using HttpResponseMessage response = await client.GetAsync(new Uri("/api/health", UriKind.Relative));
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+        Assert.Equal(
+            ["status", "degraded"],
+            document.RootElement.EnumerateObject().Select(property => property.Name));
     }
 }
