@@ -1,6 +1,8 @@
 using System.Net;
 using System.Text.Json;
 
+using Carina.Domain.Auth;
+
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Hosting;
 
@@ -48,6 +50,24 @@ public sealed class ForwardedIdentityTests(TestingWebApplicationFactory factory)
         Assert.Equal(HttpStatusCode.OK, spoofed.StatusCode);
         Assert.Equal(await ConnectionAsync(answered), ConnectionOf(body));
         Assert.DoesNotContain(Spoofed, body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task AHeaderNamingAUserDoesNotTakeOverASessionThatAlreadyNamesSomebodyElse()
+    {
+        await using AuthProbe probe = AuthProbe.OverHttp();
+        await probe.SignedInAsync();
+
+        Spoofing(probe.Client);
+
+        using HttpResponseMessage response = await probe.Client.GetAsync(
+            new Uri("/api/auth/me", UriKind.Relative));
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(
+            FirstCredentials.Username,
+            body.RootElement.GetProperty("data").GetProperty("subject").GetString());
     }
 
     [Fact]
