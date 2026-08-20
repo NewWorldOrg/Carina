@@ -81,6 +81,26 @@ public static class ServiceCollectionExtensions
         return services;
     }
 
+    public static IServiceCollection AddAnonymousNetworks(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        services.AddSingleton<IValidateOptions<AnonymousNetworkOptions>, AnonymousNetworkValidation>();
+        services.AddOptions<AnonymousNetworkOptions>()
+            .Configure(options => options.Networks = configuration[AnonymousNetworks.Key])
+            .ValidateOnStart();
+
+        services.AddSingleton(provider =>
+            provider.GetRequiredService<IOptions<AnonymousNetworkOptions>>().Value.Read());
+
+        services.AddHostedService<AnonymousNetworkDiagnosis>();
+
+        return services;
+    }
+
     private static void Trusting(ForwardedHeadersOptions options, TrustedProxies trusted)
     {
         options.ForwardedHeaders = trusted.TrustsNothing

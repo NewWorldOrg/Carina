@@ -6,7 +6,6 @@ using Carina.Api.Authentication;
 using Carina.Domain.Auth;
 using Carina.TestSupport;
 
-using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
@@ -95,26 +94,6 @@ internal sealed class ForwardedProxyProbe : IAsyncDisposable
         client.DefaultRequestHeaders.Add("X-Forwarded-Proto", "https");
 
         return client;
-    }
-
-    private sealed class ArrivingFrom(IPAddress address) : IStartupFilter
-    {
-        public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next)
-        {
-            ArgumentNullException.ThrowIfNull(next);
-
-            return builder =>
-            {
-                builder.Use((context, following) =>
-                {
-                    context.Connection.RemoteIpAddress = address;
-
-                    return following(context);
-                });
-
-                next(builder);
-            };
-        }
     }
 }
 
