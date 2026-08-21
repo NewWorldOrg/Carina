@@ -95,11 +95,27 @@ public sealed class SessionPriorityTests
     }
 
     [Fact]
-    public void APurposeIsNeverRankedAboveItself()
+    public void ThePurposesRankInTheOrderTheRequirementFixes()
     {
-        foreach (SessionPurpose purpose in Enum.GetValues<SessionPurpose>())
+        SessionPurpose[] descending =
+        [
+            SessionPurpose.Recording,
+            SessionPurpose.Live,
+            SessionPurpose.SurveyNow,
+            SessionPurpose.Scan,
+            SessionPurpose.Survey,
+            SessionPurpose.Unspecified,
+        ];
+
+        for (int rung = 1; rung < descending.Length; rung++)
         {
-            Assert.Equal(SessionPriority.Of(purpose), SessionPriority.Of(purpose));
+            SessionPurpose above = descending[rung - 1];
+            SessionPurpose below = descending[rung];
+
+            Assert.True(
+                SessionPriority.Of(above) > SessionPriority.Of(below),
+                $"{above} takes a tuner from {below}, and it ranked "
+                + $"{SessionPriority.Of(above)} against {SessionPriority.Of(below)}");
         }
     }
 }
