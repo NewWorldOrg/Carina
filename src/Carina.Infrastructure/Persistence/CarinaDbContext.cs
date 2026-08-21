@@ -9,6 +9,7 @@ public class CarinaDbContext(DbContextOptions<CarinaDbContext> options) : DbCont
         ArgumentNullException.ThrowIfNull(modelBuilder);
 
         modelBuilder.HasSequence<long>(ProgrammeRevisions.Sequence).StartsAt(1).IncrementsBy(1);
+        BroadcastText.Declare(modelBuilder);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(CarinaDbContext).Assembly);
     }
 

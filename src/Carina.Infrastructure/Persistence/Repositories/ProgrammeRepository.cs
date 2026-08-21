@@ -221,15 +221,18 @@ public sealed class ProgrammeRepository(CarinaDbContext context) : IProgrammeRep
         string word,
         IReadOnlyList<ProgrammeField> fields)
     {
-        string looking = $"%{word}%";
         IQueryable<Programme> narrowed = found.Where(programme => EF.Functions.Like(
             EF.Property<string>(programme, ProgrammeConfiguration.Searchable),
-            looking));
+            "%" + BroadcastText.Normalised(word, BroadcastText.Compatibility).ToLower() + "%"));
 
         return (fields.Contains(ProgrammeField.Title), fields.Contains(ProgrammeField.Description)) switch
         {
-            (true, false) => narrowed.Where(programme => EF.Functions.Like(programme.Name.ToLower(), looking)),
-            (false, true) => narrowed.Where(programme => EF.Functions.Like(programme.Summary.ToLower(), looking)),
+            (true, false) => narrowed.Where(programme => EF.Functions.Like(
+                BroadcastText.Normalised(programme.Name, BroadcastText.Compatibility).ToLower(),
+                "%" + BroadcastText.Normalised(word, BroadcastText.Compatibility).ToLower() + "%")),
+            (false, true) => narrowed.Where(programme => EF.Functions.Like(
+                BroadcastText.Normalised(programme.Summary, BroadcastText.Compatibility).ToLower(),
+                "%" + BroadcastText.Normalised(word, BroadcastText.Compatibility).ToLower() + "%")),
             _ => narrowed,
         };
     }
@@ -239,15 +242,17 @@ public sealed class ProgrammeRepository(CarinaDbContext context) : IProgrammeRep
         string word,
         IReadOnlyList<ProgrammeField> fields)
     {
-        string looking = $"%{word}%";
-
         return (fields.Contains(ProgrammeField.Title), fields.Contains(ProgrammeField.Description)) switch
         {
-            (true, false) => found.Where(programme => !EF.Functions.Like(programme.Name.ToLower(), looking)),
-            (false, true) => found.Where(programme => !EF.Functions.Like(programme.Summary.ToLower(), looking)),
+            (true, false) => found.Where(programme => !EF.Functions.Like(
+                BroadcastText.Normalised(programme.Name, BroadcastText.Compatibility).ToLower(),
+                "%" + BroadcastText.Normalised(word, BroadcastText.Compatibility).ToLower() + "%")),
+            (false, true) => found.Where(programme => !EF.Functions.Like(
+                BroadcastText.Normalised(programme.Summary, BroadcastText.Compatibility).ToLower(),
+                "%" + BroadcastText.Normalised(word, BroadcastText.Compatibility).ToLower() + "%")),
             _ => found.Where(programme => !EF.Functions.Like(
                 EF.Property<string>(programme, ProgrammeConfiguration.Searchable),
-                looking)),
+                "%" + BroadcastText.Normalised(word, BroadcastText.Compatibility).ToLower() + "%")),
         };
     }
 
