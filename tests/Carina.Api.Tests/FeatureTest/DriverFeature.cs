@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.Json;
 
 using Carina.Contracts;
+using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Infrastructure.Driver;
 using Carina.TestSupport;
@@ -35,6 +36,7 @@ internal sealed class DriverFeature : IAsyncDisposable
             {
                 services.AddSingleton<IDriverSessionResyncHook>(Hook);
                 services.AddSingleton(Impatient);
+                services.AddSingleton<ICandidateChannelRepository>(Candidates);
             }))
             .CreateAuthenticatedClient();
     }
@@ -42,6 +44,8 @@ internal sealed class DriverFeature : IAsyncDisposable
     public HttpClient Client { get; }
 
     public RecordingResyncHook Hook { get; }
+
+    public HeldCandidates Candidates { get; } = new();
 
     public FakeDriver Driver => driver
         ?? throw new InvalidOperationException("No driver double is running.");
