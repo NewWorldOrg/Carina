@@ -315,6 +315,60 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
         Assert.Equal(0, (await repository.SearchAsync(Asking($"番組{network}").Over([]), Cancel)).Total);
     }
 
+    [Fact]
+    public async Task WithNoWordToLookForTheOtherConditionsStillNarrow()
+    {
+        int network = BroadcastIds.NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        var repository = new ProgrammeRepository(context);
+
+        await repository.AddAsync(Filed(network, 1, $"番組{network}の一", 8), Cancel);
+        await repository.AddAsync(Filed(network, 2, $"番組{network}の二", 6), Cancel);
+        await context.SaveChangesAsync(Cancel);
+
+        PaginatedList<Programme> found = await repository.SearchAsync(
+            ProgrammeSearch.For(
+                null,
+                At.AddHours(-1),
+                At.AddDays(1),
+                conditions: new ProgrammeConditions
+                {
+                    Genres = [8],
+                    Channels = [new ProgrammeService(network, 1049)],
+                })!,
+            Cancel);
+
+        Assert.Equal(1, found.Total);
+        Assert.Equal(1, found.Items[0].EventId.Value);
+    }
+
+    [Fact]
+    public async Task WithNoWordToLookForAWordToLeaveOutStillTakesItsProgrammesOut()
+    {
+        int network = BroadcastIds.NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        var repository = new ProgrammeRepository(context);
+
+        await repository.AddAsync(Programme(network, 1, $"番組{network}の一", "はじめての放送"), Cancel);
+        await repository.AddAsync(Programme(network, 2, $"番組{network}の二", $"再放送{network}です"), Cancel);
+        await context.SaveChangesAsync(Cancel);
+
+        PaginatedList<Programme> found = await repository.SearchAsync(
+            ProgrammeSearch.For(
+                null,
+                At.AddHours(-1),
+                At.AddDays(1),
+                conditions: new ProgrammeConditions
+                {
+                    Exclude = $"再放送{network}",
+                    Channels = [new ProgrammeService(network, 1049)],
+                })!,
+            Cancel);
+
+        Assert.Equal(1, found.Total);
+        Assert.Equal(1, found.Items[0].EventId.Value);
+    }
+
     private static ProgrammeSearch Asking(string keyword, ProgrammeConditions? conditions = null)
         => ProgrammeSearch.For(keyword, At.AddHours(-1), At.AddDays(1), conditions: conditions)!;
 

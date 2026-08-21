@@ -39,11 +39,120 @@ public sealed class ProgrammeSearchEndpointTests
     }
 
     [Fact]
-    public async Task ASearchWithNoKeywordIsRefused()
+    public async Task ASearchNobodyNarrowedIsRefused()
     {
         await using var feature = new EpgFeature();
 
         (HttpStatusCode status, _) = await feature.GetAsync("/api/programs/search");
+
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+    }
+
+    [Fact]
+    public async Task SortingAndPagingOnTheirOwnDoNotMakeASearch()
+    {
+        await using var feature = new EpgFeature();
+
+        (HttpStatusCode status, _) = await feature.GetAsync(
+            "/api/programs/search?sort=name&descending=true&page=2&perPage=100");
+
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+    }
+
+    [Fact]
+    public async Task NamingWhereToLookWithoutAWordToLookForIsRefused()
+    {
+        await using var feature = new EpgFeature();
+
+        (HttpStatusCode status, _) = await feature.GetAsync("/api/programs/search?fields=title");
+
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+    }
+
+    [Fact]
+    public async Task AGenreOnItsOwnBringsBackWhatIsFiledUnderIt()
+    {
+        await using var feature = new EpgFeature();
+
+        feature.Programmes.Programmes.Add(Filed(1, "紀行その一", 8));
+        feature.Programmes.Programmes.Add(Filed(2, "紀行その二", 6));
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync("/api/programs/search?genre=8");
+        JsonElement data = body.GetProperty("data");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(1, data.GetProperty("total").GetInt32());
+        Assert.Equal("紀行その一", data.GetProperty("items")[0].GetProperty("name").GetString());
+    }
+
+    [Fact]
+    public async Task AChannelOnItsOwnBringsBackWhatThatServiceBroadcast()
+    {
+        await using var feature = new EpgFeature();
+
+        feature.Programmes.Programmes.Add(On(1049, 1, "紀行その一"));
+        feature.Programmes.Programmes.Add(On(1032, 2, "紀行その二"));
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync("/api/programs/search?channel=4-1049");
+        JsonElement data = body.GetProperty("data");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(1, data.GetProperty("total").GetInt32());
+        Assert.Equal(1049, data.GetProperty("items")[0].GetProperty("serviceId").GetInt32());
+    }
+
+    [Fact]
+    public async Task ABroadcastTypeOnItsOwnBringsBackWhatTheServicesItCarriesBroadcast()
+    {
+        await using var feature = new EpgFeature([Terrestrial(4, 1049), Satellite(4, 1032)]);
+
+        feature.Programmes.Programmes.Add(On(1049, 1, "紀行その一"));
+        feature.Programmes.Programmes.Add(On(1032, 2, "紀行その二"));
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync("/api/programs/search?type=isdbT");
+        JsonElement data = body.GetProperty("data");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(1, data.GetProperty("total").GetInt32());
+        Assert.Equal("紀行その一", data.GetProperty("items")[0].GetProperty("name").GetString());
+    }
+
+    [Fact]
+    public async Task AnExcludedWordOnItsOwnLeavesOutWhatCarriesIt()
+    {
+        await using var feature = new EpgFeature();
+
+        feature.Programmes.Programmes.Add(Programme(1, "絶景紀行"));
+        feature.Programmes.Programmes.Add(Programme(2, "絶景紀行 再放送"));
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync("/api/programs/search?exclude=再放送");
+        JsonElement data = body.GetProperty("data");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(1, data.GetProperty("total").GetInt32());
+        Assert.Equal("絶景紀行", data.GetProperty("items")[0].GetProperty("name").GetString());
+    }
+
+    [Fact]
+    public async Task ASpanOnItsOwnBringsBackWhatFallsInsideIt()
+    {
+        await using var feature = new EpgFeature();
+
+        feature.Programmes.Programmes.Add(Programme(1, "紀行その一"));
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync(
+            "/api/programs/search?from=2026-08-18T00:00:00Z&to=2026-08-19T00:00:00Z");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(1, body.GetProperty("data").GetProperty("total").GetInt32());
+    }
+
+    [Fact]
+    public async Task AConditionBesideTheKeywordDoesNotBuyAKeywordOfOneLetterItsWayIn()
+    {
+        await using var feature = new EpgFeature();
+
+        (HttpStatusCode status, _) = await feature.GetAsync("/api/programs/search?keyword=あ&genre=8");
 
         Assert.Equal(HttpStatusCode.BadRequest, status);
     }

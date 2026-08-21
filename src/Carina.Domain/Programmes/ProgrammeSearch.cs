@@ -108,6 +108,15 @@ public sealed class ProgrammeSearch
 
     public int PerPage { get; }
 
+    private bool NarrowsNothing
+        => Words.Count is 0
+            && ExcludedWords.Count is 0
+            && Genres.Count is 0
+            && Channels.Count is 0
+            && System is null
+            && From is null
+            && To is null;
+
     public static ProgrammeSearch? For(
         string? keyword,
         DateTime? from,
@@ -155,7 +164,7 @@ public sealed class ProgrammeSearch
             return null;
         }
 
-        return new ProgrammeSearch(
+        var looking = new ProgrammeSearch(
             asked,
             words,
             excluded,
@@ -170,6 +179,8 @@ public sealed class ProgrammeSearch
             descending,
             page is { } asking && asking > 1 ? asking : 1,
             Clamped(perPage));
+
+        return looking.NarrowsNothing ? null : looking;
     }
 
     public ProgrammeSearch Over(IReadOnlyList<ProgrammeService>? services)
@@ -191,6 +202,11 @@ public sealed class ProgrammeSearch
 
     private static IReadOnlyList<string>? WordsIn(string asked)
     {
+        if (asked.Length is 0)
+        {
+            return [];
+        }
+
         string[] apart = asked.Split(
             (char[]?)null,
             StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
