@@ -3,6 +3,8 @@ using System.Net.Http.Json;
 using System.Text.Json;
 
 using Carina.Contracts;
+using Carina.Domain.Base;
+using Carina.Domain.Channels;
 using Carina.TestSupport;
 
 using Microsoft.AspNetCore.Http;
@@ -102,6 +104,19 @@ public sealed class TunerLedgerEndpointTests
         (HttpStatusCode _, JsonElement body) = await ReadAsync(await feature.Client.GetAsync(Tuners));
 
         return body.GetProperty("data").GetProperty("observed")[0].Clone();
+    }
+
+    private static void Seed(DriverFeature feature, params int[] physicalChannels)
+    {
+        foreach (int channel in physicalChannels)
+        {
+            feature.Candidates.Candidates.Add(CandidateChannel.Discover(
+                CandidateChannelId.New(),
+                new NetworkId(1),
+                new ServiceId(1024 + channel),
+                TuningParameters.Terrestrial(channel),
+                Started.UtcDateTime));
+        }
     }
 
     private static async Task<(HttpStatusCode Status, JsonElement Body)> ReadAsync(
@@ -351,6 +366,61 @@ public sealed class TunerLedgerEndpointTests
             ["adapter0"],
             feature.Driver.LastReplacedLedger!.Select(entry => entry.DeviceId));
         Assert.True(feature.Driver.LastReplacedLedger![0].LnbPower);
+    }
+
+    [Fact]
+    public async Task SavingALedgerAsksEveryCandidateToProveItselfAgain()
+    {
+        await using DriverFeature feature = await DriverFeature.StartAsync(Capable(), Stocked);
+
+        Seed(feature, 53, 57);
+
+        using HttpResponseMessage response = await feature.Client.PutAsJsonAsync(Tuners, new
+        {
+            tuners = new[] { new { deviceId = "adapter0" } },
+        });
+
+        (HttpStatusCode status, JsonElement _) = await ReadAsync(response);
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.All(feature.Candidates.Candidates, candidate => Assert.True(candidate.NeedsRevalidation));
+    }
+
+    [Fact]
+    public async Task ALedgerRefusedBeforeTheDriverIsAskedLeavesTheCandidatesAlone()
+    {
+        await using DriverFeature feature = await DriverFeature.StartAsync(Capable(), Stocked);
+
+        Seed(feature, 53);
+
+        using HttpResponseMessage response = await feature.Client.PutAsJsonAsync(
+            Tuners,
+            new { tuners = Array.Empty<object>() });
+
+        (HttpStatusCode status, JsonElement _) = await ReadAsync(response);
+
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        Assert.All(feature.Candidates.Candidates, candidate => Assert.False(candidate.NeedsRevalidation));
+    }
+
+    [Fact]
+    public async Task ALedgerTheDriverRefusesLeavesTheCandidatesAlone()
+    {
+        await using DriverFeature feature = await DriverFeature.StartAsync(
+            Capable([DriverCapabilities.DeviceDetection]),
+            Stocked);
+
+        Seed(feature, 53);
+
+        using HttpResponseMessage response = await feature.Client.PutAsJsonAsync(Tuners, new
+        {
+            tuners = new[] { new { deviceId = "adapter0" } },
+        });
+
+        (HttpStatusCode status, JsonElement _) = await ReadAsync(response);
+
+        Assert.NotEqual(HttpStatusCode.OK, status);
+        Assert.All(feature.Candidates.Candidates, candidate => Assert.False(candidate.NeedsRevalidation));
     }
 
     [Fact]

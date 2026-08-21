@@ -1,10 +1,14 @@
 using Carina.Api.Common;
 using Carina.Contracts;
+using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 
 namespace Carina.Api.Services;
 
-public sealed class TunerLedgerService(IDriverClient driver, TimeProvider clock)
+public sealed class TunerLedgerService(
+    IDriverClient driver,
+    ICandidateChannelRepository candidates,
+    TimeProvider clock)
 {
     public const string CapabilityMissingTitle = "capabilityMissing";
 
@@ -75,6 +79,14 @@ public sealed class TunerLedgerService(IDriverClient driver, TimeProvider clock)
         {
             return Failed<TunerLedgerView, TunerLedgerDto>(replaced);
         }
+
+        // Which tuners exist, and of which kind, is what decides whether a
+        // candidate can still be received at all. Saving the ledger is the one
+        // operation that changes that, so every candidate's last measurement
+        // now predates the configuration it was taken under and has to be
+        // proven again. Enabling and disabling a tuner is a running flag rather
+        // than a configuration change, and does not come through here.
+        await candidates.RequireRevalidationAsync(cancellationToken);
 
         DriverCall<IReadOnlyList<TunerSnapshot>> tuners = await driver.GetTunersAsync(cancellationToken);
 
