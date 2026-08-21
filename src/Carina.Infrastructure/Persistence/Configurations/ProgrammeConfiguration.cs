@@ -100,6 +100,10 @@ public sealed class ProgrammeConfiguration : IEntityTypeConfiguration<Programme>
             .HasColumnName(Searchable)
             .HasComputedColumnSql("lower(name || ' ' || summary)", stored: true);
 
+        builder.Property<int[]>(GenreKinds)
+            .HasColumnName(GenreKinds)
+            .HasComputedColumnSql(GenreKindsSql, stored: true);
+
         builder.HasIndex(programme => programme.Revision).IsUnique();
 
         builder.HasIndex(programme => programme.StartsAt);
@@ -107,6 +111,13 @@ public sealed class ProgrammeConfiguration : IEntityTypeConfiguration<Programme>
     }
 
     public const string Searchable = "searchable";
+
+    public const string GenreKinds = "genre_kinds";
+
+    public const string GenreKindsSql =
+        "string_to_array("
+        + "nullif(translate(jsonb_path_query_array(genres, '$[*].kind')::text, '[] ', ''), '')"
+        + ", ',')::integer[]";
 
     private static IReadOnlyList<T> Read<T>(string stored)
         => JsonSerializer.Deserialize<List<T>>(stored, ProgrammeJson.Options) ?? [];

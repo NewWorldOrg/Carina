@@ -94,8 +94,12 @@ public sealed class HeldProgrammes : IProgrammeRepository
         Programme[] found =
         [
             .. Programmes
-                .Where(programme => programme.Name.Contains(search.Keyword, StringComparison.OrdinalIgnoreCase)
-                    || programme.Summary.Contains(search.Keyword, StringComparison.OrdinalIgnoreCase))
+                .Where(programme => search.Words.All(word => Carries(programme, word, search.Fields)))
+                .Where(programme => !search.ExcludedWords.Any(word => Carries(programme, word, search.Fields)))
+                .Where(programme => search.Genres.Count == 0
+                    || programme.Genres.Any(genre => search.Genres.Contains(genre.Kind)))
+                .Where(programme => search.Channels.Count == 0 || On(programme, search.Channels))
+                .Where(programme => search.Services is not { } within || On(programme, within))
                 .Where(programme => search.From is not { } from
                     || programme.EndsAt is null
                     || programme.EndsAt > from)
@@ -109,6 +113,16 @@ public sealed class HeldProgrammes : IProgrammeRepository
             search.Page,
             search.PerPage));
     }
+
+    private static bool Carries(Programme programme, string word, IReadOnlyList<ProgrammeField> fields)
+        => (fields.Contains(ProgrammeField.Title)
+                && programme.Name.Contains(word, StringComparison.OrdinalIgnoreCase))
+            || (fields.Contains(ProgrammeField.Description)
+                && programme.Summary.Contains(word, StringComparison.OrdinalIgnoreCase));
+
+    private static bool On(Programme programme, IReadOnlyList<ProgrammeService> services)
+        => services.Any(service => service.NetworkId == programme.NetworkId.Value
+            && service.ServiceId == programme.ServiceId.Value);
 
     public Task<IReadOnlyList<Programme>> ListAfterAsync(
         long revision,

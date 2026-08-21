@@ -1,3 +1,5 @@
+using System.Linq.Expressions;
+
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
@@ -106,11 +108,35 @@ public sealed class ProgrammeRepository(CarinaDbContext context) : IProgrammeRep
     {
         ArgumentNullException.ThrowIfNull(search);
 
-        string looking = $"%{search.Keyword.ToLowerInvariant()}%";
-        IQueryable<Programme> found = context.Set<Programme>()
-            .Where(programme => EF.Functions.Like(
-                EF.Property<string>(programme, ProgrammeConfiguration.Searchable),
-                looking));
+        IQueryable<Programme> found = context.Set<Programme>();
+
+        foreach (string word in search.Words)
+        {
+            found = Carrying(found, word, search.Fields);
+        }
+
+        foreach (string word in search.ExcludedWords)
+        {
+            found = Without(found, word, search.Fields);
+        }
+
+        if (search.Genres.Count > 0)
+        {
+            int[] asked = [.. search.Genres];
+
+            found = found.Where(programme =>
+                EF.Property<int[]>(programme, ProgrammeConfiguration.GenreKinds).Any(kind => asked.Contains(kind)));
+        }
+
+        if (search.Channels.Count > 0)
+        {
+            found = OnAnyOf(found, search.Channels);
+        }
+
+        if (search.Services is { } within)
+        {
+            found = OnAnyOf(found, within);
+        }
 
         if (search.From is { } from)
         {
@@ -179,5 +205,75 @@ public sealed class ProgrammeRepository(CarinaDbContext context) : IProgrammeRep
             .Where(programme => programme.NetworkId == network && programme.ServiceId == service)
             .Where(programme => !programme.IsShadow)
             .MaxAsync(programme => (DateTime?)programme.StartsAt, cancellationToken);
+    }
+
+    private static IQueryable<Programme> Carrying(
+        IQueryable<Programme> found,
+        string word,
+        IReadOnlyList<ProgrammeField> fields)
+    {
+        string looking = $"%{word}%";
+        IQueryable<Programme> narrowed = found.Where(programme => EF.Functions.Like(
+            EF.Property<string>(programme, ProgrammeConfiguration.Searchable),
+            looking));
+
+        return (fields.Contains(ProgrammeField.Title), fields.Contains(ProgrammeField.Description)) switch
+        {
+            (true, false) => narrowed.Where(programme => EF.Functions.Like(programme.Name.ToLower(), looking)),
+            (false, true) => narrowed.Where(programme => EF.Functions.Like(programme.Summary.ToLower(), looking)),
+            _ => narrowed,
+        };
+    }
+
+    private static IQueryable<Programme> Without(
+        IQueryable<Programme> found,
+        string word,
+        IReadOnlyList<ProgrammeField> fields)
+    {
+        string looking = $"%{word}%";
+
+        return (fields.Contains(ProgrammeField.Title), fields.Contains(ProgrammeField.Description)) switch
+        {
+            (true, false) => found.Where(programme => !EF.Functions.Like(programme.Name.ToLower(), looking)),
+            (false, true) => found.Where(programme => !EF.Functions.Like(programme.Summary.ToLower(), looking)),
+            _ => found.Where(programme => !EF.Functions.Like(
+                EF.Property<string>(programme, ProgrammeConfiguration.Searchable),
+                looking)),
+        };
+    }
+
+    private static IQueryable<Programme> OnAnyOf(
+        IQueryable<Programme> found,
+        IReadOnlyList<ProgrammeService> services)
+    {
+        Expression<Func<Programme, bool>> nowhere = programme => false;
+
+        return found.Where(services.Aggregate(nowhere, (carried, service) => Either(carried, On(service))));
+    }
+
+    private static Expression<Func<Programme, bool>> On(ProgrammeService service)
+    {
+        var network = new NetworkId(service.NetworkId);
+        var carried = new ServiceId(service.ServiceId);
+
+        return programme => programme.NetworkId == network && programme.ServiceId == carried;
+    }
+
+    private static Expression<Func<Programme, bool>> Either(
+        Expression<Func<Programme, bool>> left,
+        Expression<Func<Programme, bool>> right)
+    {
+        ParameterExpression programme = left.Parameters[0];
+        Expression rejoined = new Rebound(right.Parameters[0], programme).Visit(right.Body);
+
+        return Expression.Lambda<Func<Programme, bool>>(
+            Expression.OrElse(left.Body, rejoined),
+            programme);
+    }
+
+    private sealed class Rebound(ParameterExpression from, ParameterExpression to) : ExpressionVisitor
+    {
+        protected override Expression VisitParameter(ParameterExpression node)
+            => node == from ? to : base.VisitParameter(node);
     }
 }

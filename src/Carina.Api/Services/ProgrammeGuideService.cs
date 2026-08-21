@@ -79,8 +79,27 @@ public sealed class ProgrammeGuideService(
     public async Task<ServiceResult<PaginatedList<Programme>>> SearchAsync(
         ProgrammeSearch search,
         CancellationToken cancellationToken)
-        => ServiceResult<PaginatedList<Programme>>.Success(
-            await programmes.SearchAsync(search, cancellationToken));
+    {
+        ArgumentNullException.ThrowIfNull(search);
+
+        ProgrammeSearch asked = search.System is { } system
+            ? search.Over(await CarriedOnAsync(system, cancellationToken))
+            : search;
+
+        return ServiceResult<PaginatedList<Programme>>.Success(
+            await programmes.SearchAsync(asked, cancellationToken));
+    }
+
+    private async Task<IReadOnlyList<ProgrammeService>> CarriedOnAsync(
+        TuneSystem system,
+        CancellationToken cancellationToken)
+        =>
+        [
+            .. (await directory.ListAsync(cancellationToken))
+                .Where(stream => stream.Tuning.System == system)
+                .SelectMany(stream => stream.Services.Select(service =>
+                    new ProgrammeService(stream.NetworkId.Value, service.Value))),
+        ];
 
     private async Task<string> ETagAsync(
         IReadOnlyList<BroadcastStream> carried,

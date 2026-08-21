@@ -1,4 +1,4 @@
-using Carina.Domain.Base;
+using Carina.Contracts;
 
 namespace Carina.Domain.Programmes;
 
@@ -9,6 +9,26 @@ public enum ProgrammeSort
     Name = 1,
 }
 
+public enum ProgrammeField
+{
+    Title = 1,
+
+    Description = 2,
+}
+
+public sealed record ProgrammeConditions
+{
+    public string? Exclude { get; init; }
+
+    public IReadOnlyList<ProgrammeField>? Fields { get; init; }
+
+    public IReadOnlyList<int>? Genres { get; init; }
+
+    public TuneSystem? System { get; init; }
+
+    public IReadOnlyList<ProgrammeService>? Channels { get; init; }
+}
+
 public sealed class ProgrammeSearch
 {
     public const int ShortestKeyword = 2;
@@ -17,10 +37,26 @@ public sealed class ProgrammeSearch
 
     public const int DefaultPerPage = 50;
 
+    public const int MostWords = 8;
+
+    public const int MostChannels = 64;
+
+    public const int HighestGenre = 15;
+
     public static readonly TimeSpan LongestSpan = TimeSpan.FromDays(31);
+
+    private static readonly IReadOnlyList<ProgrammeField> BothFields =
+        [ProgrammeField.Title, ProgrammeField.Description];
 
     private ProgrammeSearch(
         string keyword,
+        IReadOnlyList<string> words,
+        IReadOnlyList<string> excludedWords,
+        IReadOnlyList<ProgrammeField> fields,
+        IReadOnlyList<int> genres,
+        TuneSystem? system,
+        IReadOnlyList<ProgrammeService> channels,
+        IReadOnlyList<ProgrammeService>? services,
         DateTime? from,
         DateTime? to,
         ProgrammeSort sort,
@@ -29,6 +65,13 @@ public sealed class ProgrammeSearch
         int perPage)
     {
         Keyword = keyword;
+        Words = words;
+        ExcludedWords = excludedWords;
+        Fields = fields;
+        Genres = genres;
+        System = system;
+        Channels = channels;
+        Services = services;
         From = from;
         To = to;
         Sort = sort;
@@ -38,6 +81,20 @@ public sealed class ProgrammeSearch
     }
 
     public string Keyword { get; }
+
+    public IReadOnlyList<string> Words { get; }
+
+    public IReadOnlyList<string> ExcludedWords { get; }
+
+    public IReadOnlyList<ProgrammeField> Fields { get; }
+
+    public IReadOnlyList<int> Genres { get; }
+
+    public TuneSystem? System { get; }
+
+    public IReadOnlyList<ProgrammeService> Channels { get; }
+
+    public IReadOnlyList<ProgrammeService>? Services { get; }
 
     public DateTime? From { get; }
 
@@ -58,11 +115,27 @@ public sealed class ProgrammeSearch
         ProgrammeSort sort = ProgrammeSort.StartsAt,
         bool descending = false,
         int? page = null,
-        int? perPage = null)
+        int? perPage = null,
+        ProgrammeConditions? conditions = null)
     {
         string asked = (keyword ?? string.Empty).Trim();
+        ProgrammeConditions beside = conditions ?? new ProgrammeConditions();
 
-        if (asked.Length < ShortestKeyword)
+        if (WordsIn(asked) is not { } words
+            || ExcludedIn(beside.Exclude) is not { } excluded
+            || FieldsIn(beside.Fields) is not { } fields
+            || GenresIn(beside.Genres) is not { } genres
+            || ChannelsIn(beside.Channels) is not { } channels)
+        {
+            return null;
+        }
+
+        if (!Enum.IsDefined(sort))
+        {
+            return null;
+        }
+
+        if (beside.System is { } named && named is not TuneSystem.Unspecified && !Enum.IsDefined(named))
         {
             return null;
         }
@@ -84,12 +157,85 @@ public sealed class ProgrammeSearch
 
         return new ProgrammeSearch(
             asked,
+            words,
+            excluded,
+            fields,
+            genres,
+            beside.System is TuneSystem.Unspecified ? null : beside.System,
+            channels,
+            null,
             from,
             to,
             sort,
             descending,
             page is { } asking && asking > 1 ? asking : 1,
             Clamped(perPage));
+    }
+
+    public ProgrammeSearch Over(IReadOnlyList<ProgrammeService>? services)
+        => new(
+            Keyword,
+            Words,
+            ExcludedWords,
+            Fields,
+            Genres,
+            System,
+            Channels,
+            services,
+            From,
+            To,
+            Sort,
+            Descending,
+            Page,
+            PerPage);
+
+    private static IReadOnlyList<string>? WordsIn(string asked)
+    {
+        string[] apart = asked.Split(
+            (char[]?)null,
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        if (apart.Length is 0 or > MostWords || !apart.Any(word => word.Length >= ShortestKeyword))
+        {
+            return null;
+        }
+
+        return [.. apart.Select(word => word.ToLowerInvariant())];
+    }
+
+    private static IReadOnlyList<string>? ExcludedIn(string? asked)
+        => string.IsNullOrWhiteSpace(asked) ? [] : WordsIn(asked.Trim());
+
+    private static IReadOnlyList<ProgrammeField>? FieldsIn(IReadOnlyList<ProgrammeField>? asked)
+    {
+        if (asked is null || asked.Count == 0)
+        {
+            return BothFields;
+        }
+
+        return asked.Any(field => !Enum.IsDefined(field)) ? null : [.. asked.Distinct()];
+    }
+
+    private static IReadOnlyList<int>? GenresIn(IReadOnlyList<int>? asked)
+    {
+        if (asked is null || asked.Count == 0)
+        {
+            return [];
+        }
+
+        return asked.Any(genre => genre is < 0 or > HighestGenre) ? null : [.. asked.Distinct()];
+    }
+
+    private static IReadOnlyList<ProgrammeService>? ChannelsIn(IReadOnlyList<ProgrammeService>? asked)
+    {
+        if (asked is null || asked.Count == 0)
+        {
+            return [];
+        }
+
+        ProgrammeService[] apart = [.. asked.Distinct()];
+
+        return apart.Length > MostChannels ? null : apart;
     }
 
     private static int Clamped(int? perPage)
