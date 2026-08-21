@@ -28,8 +28,8 @@ public sealed class RecordedBroadcastTextTests
     [Fact]
     public void EveryRecordedTitleIsFullyMapped()
     {
-        (string Bytes, string Expected)[] unreadable = Samples()
-            .Where(sample => sample.Expected.Contains(AribText.UnknownCharacter, StringComparison.Ordinal))
+        string[] unreadable = Read()
+            .Where(title => title.Contains(AribText.UnknownCharacter, StringComparison.Ordinal))
             .ToArray();
 
         Assert.Empty(unreadable);
@@ -38,12 +38,15 @@ public sealed class RecordedBroadcastTextTests
     [Fact]
     public void TheRecordedTitlesCarryTheSymbolsOnlyBroadcastUses()
     {
-        int enclosing = Samples()
-            .SelectMany(sample => sample.Expected.EnumerateRunes())
+        int enclosing = Read()
+            .SelectMany(title => title.EnumerateRunes())
             .Count(rune => rune.Value is (>= 0x1F200 and <= 0x1F2FF) or (>= 0x3200 and <= 0x32FF));
 
         Assert.True(enclosing >= 10, $"expected the recording to exercise the symbol rows, saw {enclosing}");
     }
+
+    private static IEnumerable<string> Read()
+        => Samples().Select(sample => AribText.Decode(Bytes(sample.Bytes)));
 
     private static byte[] Bytes(string hex)
     {
