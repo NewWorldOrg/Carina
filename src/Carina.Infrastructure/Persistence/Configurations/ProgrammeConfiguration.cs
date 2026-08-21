@@ -98,7 +98,7 @@ public sealed class ProgrammeConfiguration : IEntityTypeConfiguration<Programme>
 
         builder.Property<string>(Searchable)
             .HasColumnName(Searchable)
-            .HasComputedColumnSql("lower(name || ' ' || summary)", stored: true);
+            .HasComputedColumnSql(SearchableSql, stored: true);
 
         builder.Property<int[]>(GenreKinds)
             .HasColumnName(GenreKinds)
@@ -113,6 +113,9 @@ public sealed class ProgrammeConfiguration : IEntityTypeConfiguration<Programme>
     public const string Searchable = "searchable";
 
     public const string GenreKinds = "genre_kinds";
+
+    public const string SearchableSql =
+        $"lower(pg_catalog.normalize(name || ' ' || summary, '{BroadcastText.Compatibility}'))";
 
     public const string GenreKindsSql =
         "string_to_array("

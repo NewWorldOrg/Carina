@@ -2,6 +2,7 @@ using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Infrastructure.Persistence;
+using Carina.Infrastructure.Persistence.Configurations;
 using Carina.Infrastructure.Persistence.Repositories;
 using Carina.TestSupport;
 
@@ -367,6 +368,140 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
 
         Assert.Equal(1, found.Total);
         Assert.Equal(1, found.Items[0].EventId.Value);
+    }
+
+    [Fact]
+    public async Task AKeywordTypedInHalfWidthKanaFindsWhatWasBroadcastInFullWidth()
+    {
+        int network = BroadcastIds.NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        var repository = new ProgrammeRepository(context);
+
+        await repository.AddAsync(Programme(network, 1, $"ニュース{network}", "きょうのできごと"), Cancel);
+        await context.SaveChangesAsync(Cancel);
+
+        Assert.Equal(1, (await repository.SearchAsync(Asking($"ﾆｭｰｽ{network}"), Cancel)).Total);
+    }
+
+    [Fact]
+    public async Task AKeywordTypedInFullWidthKanaFindsWhatWasBroadcastInHalfWidth()
+    {
+        int network = BroadcastIds.NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        var repository = new ProgrammeRepository(context);
+
+        await repository.AddAsync(Programme(network, 1, $"ﾆｭｰｽ{network}", "きょうのできごと"), Cancel);
+        await context.SaveChangesAsync(Cancel);
+
+        Assert.Equal(1, (await repository.SearchAsync(Asking($"ニュース{network}"), Cancel)).Total);
+    }
+
+    [Fact]
+    public async Task AnEnclosedNumberIsFoundByTheNumberItEncloses()
+    {
+        int network = BroadcastIds.NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        var repository = new ProgrammeRepository(context);
+
+        await repository.AddAsync(Programme(network, 1, $"紀行{network}①", "はじまり"), Cancel);
+        await context.SaveChangesAsync(Cancel);
+
+        Assert.Equal(1, (await repository.SearchAsync(Asking($"紀行{network}1"), Cancel)).Total);
+    }
+
+    [Fact]
+    public async Task FullWidthLettersAreFoundByTheLettersTheyStandFor()
+    {
+        int network = BroadcastIds.NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        var repository = new ProgrammeRepository(context);
+
+        await repository.AddAsync(Programme(network, 1, $"ＮＥＷＳ{network}", "きょうのできごと"), Cancel);
+        await context.SaveChangesAsync(Cancel);
+
+        Assert.Equal(1, (await repository.SearchAsync(Asking($"news{network}"), Cancel)).Total);
+    }
+
+    [Fact]
+    public async Task NarrowingToTheTitleStillFindsItWhicheverShapeItWasTypedIn()
+    {
+        int network = BroadcastIds.NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        var repository = new ProgrammeRepository(context);
+
+        await repository.AddAsync(Programme(network, 1, $"ニュース{network}", "きょうのできごと"), Cancel);
+        await context.SaveChangesAsync(Cancel);
+
+        Assert.Equal(
+            1,
+            (await repository.SearchAsync(
+                Asking($"ﾆｭｰｽ{network}", new ProgrammeConditions { Fields = [ProgrammeField.Title] }),
+                Cancel)).Total);
+    }
+
+    [Fact]
+    public async Task NarrowingToTheSummaryStillFindsItWhicheverShapeItWasTypedIn()
+    {
+        int network = BroadcastIds.NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        var repository = new ProgrammeRepository(context);
+
+        await repository.AddAsync(Programme(network, 1, "大河ドラマ", $"のちほどニュース{network}を"), Cancel);
+        await context.SaveChangesAsync(Cancel);
+
+        Assert.Equal(
+            1,
+            (await repository.SearchAsync(
+                Asking($"ﾆｭｰｽ{network}", new ProgrammeConditions { Fields = [ProgrammeField.Description] }),
+                Cancel)).Total);
+    }
+
+    [Fact]
+    public async Task AWordToLeaveOutTakesTheProgrammeOutWhicheverShapeItWasTypedIn()
+    {
+        int network = BroadcastIds.NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        var repository = new ProgrammeRepository(context);
+
+        await repository.AddAsync(Programme(network, 1, $"紀行{network}", "はじめての放送"), Cancel);
+        await repository.AddAsync(Programme(network, 2, $"紀行{network}", "ﾀﾞｲｼﾞｪｽﾄです"), Cancel);
+        await context.SaveChangesAsync(Cancel);
+
+        PaginatedList<Programme> found = await repository.SearchAsync(
+            Asking($"紀行{network}", new ProgrammeConditions { Exclude = "ダイジェスト" }),
+            Cancel);
+
+        Assert.Equal(1, found.Total);
+        Assert.Equal(1, found.Items[0].EventId.Value);
+    }
+
+    [Theory]
+    [InlineData("ﾆｭｰｽ", "ニュース")]
+    [InlineData("ｷﾞｮｳｻﾞ", "ギョウザ")]
+    [InlineData("ＮＥＷＳ", "news")]
+    [InlineData("①②", "12")]
+    [InlineData("㊤", "上")]
+    [InlineData("㈱", "(株)")]
+    [InlineData("㎏", "kg")]
+    [InlineData("Ⅷ", "viii")]
+    public async Task TheTextIsKeptAsBroadcastAndSearchedInItsCompatibilityShape(string broadcast, string searchable)
+    {
+        int network = BroadcastIds.NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        var repository = new ProgrammeRepository(context);
+
+        await repository.AddAsync(Programme(network, 1, broadcast, string.Empty), Cancel);
+        await context.SaveChangesAsync(Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        Programme held = (await new ProgrammeRepository(reading).FindAsync(
+            new ProgrammeId(new NetworkId(network), new ServiceId(1049), new EventId(1)),
+            Cancel))!;
+
+        Assert.Equal(broadcast, held.Name);
+        Assert.Equal(
+            $"{searchable} ",
+            reading.Entry(held).Property<string>(ProgrammeConfiguration.Searchable).CurrentValue);
     }
 
     private static ProgrammeSearch Asking(string keyword, ProgrammeConditions? conditions = null)
