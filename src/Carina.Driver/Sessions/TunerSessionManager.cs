@@ -492,7 +492,16 @@ public sealed class TunerSessionManager(
             return tuneRefusal;
         }
 
-        return Open(request, deviceId, tuner, directory, now, endsAt, holds: true);
+        return Open(
+            request,
+            deviceId,
+            tuner,
+            directory,
+            now,
+            endsAt,
+            holds: true,
+            tuned: grant.NeedsTuning
+        );
     }
 
     private bool HandOver(PoolGrant grant)
@@ -640,7 +649,8 @@ public sealed class TunerSessionManager(
             directory,
             now,
             endsAt,
-            holds: false
+            holds: false,
+            tuned: false
         );
     }
 
@@ -651,7 +661,8 @@ public sealed class TunerSessionManager(
         string? directory,
         DateTimeOffset now,
         DateTimeOffset endsAt,
-        bool holds
+        bool holds,
+        bool tuned
     )
     {
         SessionId sessionId = request.SessionId;
@@ -733,6 +744,11 @@ public sealed class TunerSessionManager(
         if (holds)
         {
             pool.Ready(deviceId);
+        }
+
+        if (tuned)
+        {
+            events?.Signal(DriverEvents.SessionTuned);
         }
 
         Announce();

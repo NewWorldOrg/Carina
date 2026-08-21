@@ -961,6 +961,63 @@ public sealed class TunerSessionManagerTests : IDisposable
     }
 
     [Fact]
+    public async Task ASessionThatTunesRingsTheSignalTheAppListensFor()
+    {
+        var hub = new DriverEventHub();
+        TunerSessionManager manager = Manager(
+            Configuration,
+            new TunerDeviceFactory(Configuration, TimeProvider.System),
+            hub
+        );
+
+        Assert.True(hub.TryListen(out DriverEventListener? listener));
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        TunerSession session = Begin(manager, "tuning", "adapter0");
+
+        var signalled = new List<string>();
+        while (!signalled.Contains(DriverEvents.SessionTuned, StringComparer.Ordinal))
+        {
+            signalled.AddRange(await listener.Take(deadline.Token));
+        }
+
+        listener.Dispose();
+        session.Stop();
+    }
+
+    [Fact]
+    public async Task ASessionRidingATunerAlreadyOnItsChannelDoesNotClaimToHaveTunedIt()
+    {
+        var hub = new DriverEventHub();
+        TunerSessionManager manager = Manager(
+            Configuration,
+            new TunerDeviceFactory(Configuration, TimeProvider.System),
+            hub
+        );
+
+        TunerSession held = Begin(manager, "holding", purpose: SessionPurpose.Live);
+
+        Assert.True(hub.TryListen(out DriverEventListener? listener));
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+        TunerSession riding = Begin(manager, "riding", purpose: SessionPurpose.Live);
+
+        Assert.Equal(held.DeviceId, riding.DeviceId);
+
+        var signalled = new List<string>();
+        while (!signalled.Contains(DriverEvents.Sessions, StringComparer.Ordinal))
+        {
+            signalled.AddRange(await listener.Take(deadline.Token));
+        }
+
+        Assert.DoesNotContain(DriverEvents.SessionTuned, signalled);
+
+        listener.Dispose();
+        riding.Stop();
+        held.Stop();
+    }
+
+    [Fact]
     public async Task ASessionThatLosesItsLockRingsTheSignalTheAppListensFor()
     {
         var hub = new DriverEventHub();

@@ -318,8 +318,15 @@ public sealed class DriverConnectionSupervisorTests
         Assert.Equal(["tuners", "sessions"], [.. received]);
     }
 
+    /// <summary>
+    /// Whether the driver ever sends a given name is the driver's own business
+    /// and is held there; what this side owes is that none of the names the
+    /// contract fixes is dropped on the way to a subscriber. Reading the set
+    /// from the contract rather than listing it here is what keeps a name added
+    /// later from going unrelayed and unnoticed.
+    /// </summary>
     [Fact]
-    public async Task TheTuningLockAndHealthEventNamesAreRecognisedAndReachSubscribers()
+    public async Task EveryNameTheContractFixesReachesSubscribers()
     {
         string socketPath = NewSocketPath();
         await using FakeDriver driver = await FakeDriver.StartAsync(
@@ -335,17 +342,16 @@ public sealed class DriverConnectionSupervisorTests
             "the supervisor connects");
         await Eventually.Happens(() => driver.ListenerCount > 0, "the event feed is subscribed");
 
-        driver.Signal(DriverEvents.SessionTuned);
-        driver.Signal(DriverEvents.SessionLockLost);
-        driver.Signal(DriverEvents.TunerHealthChanged);
+        foreach (string name in DriverEvents.All)
+        {
+            driver.Signal(name);
+        }
 
         await Eventually.Happens(
-            () => received.Contains(DriverEvents.TunerHealthChanged),
+            () => received.Count == DriverEvents.All.Count,
             "the signals arrive");
 
-        Assert.Equal(
-            [DriverEvents.SessionTuned, DriverEvents.SessionLockLost, DriverEvents.TunerHealthChanged],
-            [.. received]);
+        Assert.Equal(DriverEvents.All, [.. received]);
     }
 
     [Fact]
