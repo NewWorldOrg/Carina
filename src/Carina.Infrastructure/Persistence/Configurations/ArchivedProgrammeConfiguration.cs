@@ -77,7 +77,16 @@ public sealed class ArchivedProgrammeConfiguration : IEntityTypeConfiguration<Ar
 
         builder.Property(programme => programme.ArchivedAt).HasColumnName("archived_at").IsRequired();
 
+        builder.Property<string>(ProgrammeConfiguration.Searchable)
+            .HasColumnName(ProgrammeConfiguration.Searchable)
+            .HasComputedColumnSql(ProgrammeConfiguration.SearchableSql, stored: true);
+
+        builder.Property<int[]>(ProgrammeConfiguration.GenreKinds)
+            .HasColumnName(ProgrammeConfiguration.GenreKinds)
+            .HasComputedColumnSql(ProgrammeConfiguration.GenreKindsSql, stored: true);
+
         builder.HasIndex(programme => programme.EndsAt);
+        builder.HasIndex(programme => programme.StartsAt);
     }
 
     private static IReadOnlyList<T> Read<T>(string stored)

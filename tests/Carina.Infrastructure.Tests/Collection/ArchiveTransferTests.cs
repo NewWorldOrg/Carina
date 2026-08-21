@@ -313,9 +313,6 @@ internal sealed class StubbornProgrammes(IProgrammeRepository held) : IProgramme
     public Task<DateTime?> CoveredUntilAsync(int networkId, int serviceId, CancellationToken cancellationToken)
         => held.CoveredUntilAsync(networkId, serviceId, cancellationToken);
 
-    public Task<PaginatedList<Programme>> SearchAsync(ProgrammeSearch search, CancellationToken cancellationToken)
-        => held.SearchAsync(search, cancellationToken);
-
     public Task<IReadOnlyList<Programme>> ListAfterAsync(
         long revision,
         int rows,

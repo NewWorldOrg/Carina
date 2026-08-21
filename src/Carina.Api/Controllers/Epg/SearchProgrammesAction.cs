@@ -58,7 +58,7 @@ public sealed class SearchProgrammesAction(ProgrammeGuideService guide) : Contro
             return BadRequest(BaseResponder<ProgrammeSearchResponder>.Error(Refusal));
         }
 
-        ServiceResult<PaginatedList<Programme>> found = await guide.SearchAsync(asked, cancellationToken);
+        ServiceResult<PaginatedList<ProgrammeMatch>> found = await guide.SearchAsync(asked, cancellationToken);
 
         return Ok(BaseResponder<ProgrammeSearchResponder>.Success(
             ProgrammeSearchResponder.Of(found.Data!)));

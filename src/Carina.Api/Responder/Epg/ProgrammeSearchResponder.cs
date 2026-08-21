@@ -10,7 +10,7 @@ public sealed record ProgrammeSearchResponder(
     int LastPage,
     int PerPage)
 {
-    public static ProgrammeSearchResponder Of(PaginatedList<Programme> found)
+    public static ProgrammeSearchResponder Of(PaginatedList<ProgrammeMatch> found)
     {
         ArgumentNullException.ThrowIfNull(found);
 

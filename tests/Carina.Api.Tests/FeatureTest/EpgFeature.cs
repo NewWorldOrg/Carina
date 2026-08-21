@@ -37,6 +37,7 @@ internal sealed class EpgFeature : IAsyncDisposable
                 services.AddSingleton<IStreamVisitRepository>(Visits);
                 services.AddSingleton<IProgrammeRepository>(Programmes);
                 services.AddSingleton<IArchivedProgrammeRepository>(Archived);
+                services.AddSingleton<IProgrammeSearchRepository>(new HeldSearches(Programmes, Archived));
                 services.AddSingleton<ICollectionEpochRepository>(Epochs);
                 services.AddSingleton<ICandidateChannelRepository>(Candidates);
                 services.AddSingleton<IAtomicWrite, UnguardedWrites>();

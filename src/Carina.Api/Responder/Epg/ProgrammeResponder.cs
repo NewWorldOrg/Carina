@@ -61,50 +61,33 @@ public sealed record ProgrammeResponder(
     IReadOnlyList<ProgrammeItemResponder> Items,
     IReadOnlyList<RelatedProgrammeResponder> Related)
 {
-    public static ProgrammeResponder Of(ArchivedProgramme programme)
-    {
-        ArgumentNullException.ThrowIfNull(programme);
-
-        return new ProgrammeResponder(
-            ProgrammeIdText.Of(new ProgrammeId(programme.NetworkId, programme.ServiceId, programme.EventId)),
-            programme.NetworkId.Value,
-            programme.ServiceId.Value,
-            programme.EventId.Value,
-            new DateTimeOffset(programme.StartsAt, TimeSpan.Zero),
-            new DateTimeOffset(programme.EndsAt, TimeSpan.Zero),
-            programme.Name,
-            programme.Summary,
-            false,
-            programme.HasSubtitles,
-            ProgrammeSource.ScheduleBasic,
-            0,
-            true,
-            [.. programme.Genres.Select(ProgrammeGenreResponder.Of)],
-            [.. programme.Items.Select(ProgrammeItemResponder.Of)],
-            []);
-    }
-
     public static ProgrammeResponder Of(Programme programme)
+        => Of(ProgrammeMatch.Of(programme));
+
+    public static ProgrammeResponder Of(ArchivedProgramme programme)
+        => Of(ProgrammeMatch.Of(programme));
+
+    public static ProgrammeResponder Of(ProgrammeMatch match)
     {
-        ArgumentNullException.ThrowIfNull(programme);
+        ArgumentNullException.ThrowIfNull(match);
 
         return new ProgrammeResponder(
-            ProgrammeIdText.Of(programme.Id),
-            programme.NetworkId.Value,
-            programme.ServiceId.Value,
-            programme.EventId.Value,
-            new DateTimeOffset(programme.StartsAt, TimeSpan.Zero),
-            programme.EndsAt is null ? null : new DateTimeOffset(programme.EndsAt.Value, TimeSpan.Zero),
-            programme.Name,
-            programme.Summary,
-            programme.IsShadow,
-            programme.HasSubtitles,
-            programme.Source,
-            programme.Revision,
-            false,
-            [.. programme.Genres.Select(ProgrammeGenreResponder.Of)],
-            [.. programme.Items.Select(ProgrammeItemResponder.Of)],
-            [.. programme.Related.Select(RelatedProgrammeResponder.Of)]);
+            ProgrammeIdText.Of(match.Id),
+            match.NetworkId.Value,
+            match.ServiceId.Value,
+            match.EventId.Value,
+            new DateTimeOffset(match.StartsAt, TimeSpan.Zero),
+            match.EndsAt is null ? null : new DateTimeOffset(match.EndsAt.Value, TimeSpan.Zero),
+            match.Name,
+            match.Summary,
+            match.IsShadow,
+            match.HasSubtitles,
+            match.Source ?? ProgrammeSource.ScheduleBasic,
+            match.Revision ?? 0,
+            match.IsArchived,
+            [.. match.Genres.Select(ProgrammeGenreResponder.Of)],
+            [.. match.Items.Select(ProgrammeItemResponder.Of)],
+            [.. match.Related.Select(RelatedProgrammeResponder.Of)]);
     }
 }
 

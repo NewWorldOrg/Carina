@@ -260,7 +260,21 @@ public sealed class ChannelSchemaTests
             ],
             Schema(context).GetEntityTypes()
                 .Where(entity => entity.FindOwnership() is null)
-                .Select(entity => entity.GetTableName()!)
+                .Select(entity => entity.GetTableName())
+                .OfType<string>()
+                .Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void TheOnlyShapeReadFromAQueryRatherThanATableIsTheSearchAcrossBothLayers()
+    {
+        using CarinaDbContext context = Carina();
+
+        Assert.Equal(
+            [nameof(ProgrammeMatch)],
+            Schema(context).GetEntityTypes()
+                .Where(entity => entity.GetTableName() is null)
+                .Select(entity => entity.ClrType.Name)
                 .Order(StringComparer.Ordinal));
     }
 

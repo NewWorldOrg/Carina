@@ -22,13 +22,14 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
         int network = BroadcastIds.NextNetwork();
         await using CarinaDbContext context = database.Open();
         var repository = new ProgrammeRepository(context);
+        var searches = new ProgrammeSearchRepository(context);
 
         await repository.AddAsync(Programme(network, 1, $"ニュース{network}", "今日のできごと"), Cancel);
         await repository.AddAsync(Programme(network, 2, "大河ドラマ", $"続きはニュース{network}の後で"), Cancel);
         await repository.AddAsync(Programme(network, 3, "天気予報", "あすの空"), Cancel);
         await context.SaveChangesAsync(Cancel);
 
-        PaginatedList<Programme> found = await repository.SearchAsync(Asking($"ニュース{network}"), Cancel);
+        PaginatedList<ProgrammeMatch> found = await searches.SearchAsync(Asking($"ニュース{network}"), Cancel);
 
         Assert.Equal(2, found.Total);
         Assert.Equal([1, 2], found.Items.Select(programme => programme.EventId.Value));
@@ -40,11 +41,12 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
         int network = BroadcastIds.NextNetwork();
         await using CarinaDbContext context = database.Open();
         var repository = new ProgrammeRepository(context);
+        var searches = new ProgrammeSearchRepository(context);
 
         await repository.AddAsync(Programme(network, 1, $"Morning NEWS{network}", string.Empty), Cancel);
         await context.SaveChangesAsync(Cancel);
 
-        Assert.Equal(1, (await repository.SearchAsync(Asking($"news{network}"), Cancel)).Total);
+        Assert.Equal(1, (await searches.SearchAsync(Asking($"news{network}"), Cancel)).Total);
     }
 
     [Fact]
@@ -53,6 +55,7 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
         int network = BroadcastIds.NextNetwork();
         await using CarinaDbContext context = database.Open();
         var repository = new ProgrammeRepository(context);
+        var searches = new ProgrammeSearchRepository(context);
 
         for (int carried = 1; carried <= 5; carried++)
         {
@@ -61,7 +64,7 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
 
         await context.SaveChangesAsync(Cancel);
 
-        PaginatedList<Programme> second = await repository.SearchAsync(
+        PaginatedList<ProgrammeMatch> second = await searches.SearchAsync(
             ProgrammeSearch.For($"報道{network}", At.AddHours(-1), At.AddDays(1), page: 2, perPage: 2)!,
             Cancel);
 
@@ -76,12 +79,13 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
         int network = BroadcastIds.NextNetwork();
         await using CarinaDbContext context = database.Open();
         var repository = new ProgrammeRepository(context);
+        var searches = new ProgrammeSearchRepository(context);
 
         await repository.AddAsync(Programme(network, 1, $"夏{network}の絶景", "海と山"), Cancel);
         await repository.AddAsync(Programme(network, 2, $"夏{network}の思い出", "海と山"), Cancel);
         await context.SaveChangesAsync(Cancel);
 
-        PaginatedList<Programme> found = await repository.SearchAsync(Asking($"夏{network} 絶景"), Cancel);
+        PaginatedList<ProgrammeMatch> found = await searches.SearchAsync(Asking($"夏{network} 絶景"), Cancel);
 
         Assert.Equal(1, found.Total);
         Assert.Equal(1, found.Items[0].EventId.Value);
@@ -93,12 +97,13 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
         int network = BroadcastIds.NextNetwork();
         await using CarinaDbContext context = database.Open();
         var repository = new ProgrammeRepository(context);
+        var searches = new ProgrammeSearchRepository(context);
 
         await repository.AddAsync(Programme(network, 1, "大河ドラマ", $"絶景{network}をめぐる"), Cancel);
         await repository.AddAsync(Programme(network, 2, $"絶景{network}紀行", "ある町で"), Cancel);
         await context.SaveChangesAsync(Cancel);
 
-        PaginatedList<Programme> found = await repository.SearchAsync(
+        PaginatedList<ProgrammeMatch> found = await searches.SearchAsync(
             Asking($"絶景{network}", new ProgrammeConditions { Fields = [ProgrammeField.Title] }),
             Cancel);
 
@@ -112,12 +117,13 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
         int network = BroadcastIds.NextNetwork();
         await using CarinaDbContext context = database.Open();
         var repository = new ProgrammeRepository(context);
+        var searches = new ProgrammeSearchRepository(context);
 
         await repository.AddAsync(Programme(network, 1, $"絶景{network}紀行", "ある町で"), Cancel);
         await repository.AddAsync(Programme(network, 2, "大河ドラマ", $"絶景{network}をめぐる"), Cancel);
         await context.SaveChangesAsync(Cancel);
 
-        PaginatedList<Programme> found = await repository.SearchAsync(
+        PaginatedList<ProgrammeMatch> found = await searches.SearchAsync(
             Asking($"絶景{network}", new ProgrammeConditions { Fields = [ProgrammeField.Description] }),
             Cancel);
 
@@ -131,12 +137,13 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
         int network = BroadcastIds.NextNetwork();
         await using CarinaDbContext context = database.Open();
         var repository = new ProgrammeRepository(context);
+        var searches = new ProgrammeSearchRepository(context);
 
         await repository.AddAsync(Programme(network, 1, $"紀行{network}", "はじめての放送"), Cancel);
         await repository.AddAsync(Programme(network, 2, $"紀行{network}", "再放送です"), Cancel);
         await context.SaveChangesAsync(Cancel);
 
-        PaginatedList<Programme> found = await repository.SearchAsync(
+        PaginatedList<ProgrammeMatch> found = await searches.SearchAsync(
             Asking($"紀行{network}", new ProgrammeConditions { Exclude = "再放送" }),
             Cancel);
 
@@ -150,13 +157,14 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
         int network = BroadcastIds.NextNetwork();
         await using CarinaDbContext context = database.Open();
         var repository = new ProgrammeRepository(context);
+        var searches = new ProgrammeSearchRepository(context);
 
         await repository.AddAsync(Programme(network, 1, $"紀行{network}", "はじめての放送"), Cancel);
         await repository.AddAsync(Programme(network, 2, $"紀行{network}", "再放送です"), Cancel);
         await repository.AddAsync(Programme(network, 3, $"紀行{network} ダイジェスト", "まとめ"), Cancel);
         await context.SaveChangesAsync(Cancel);
 
-        PaginatedList<Programme> found = await repository.SearchAsync(
+        PaginatedList<ProgrammeMatch> found = await searches.SearchAsync(
             Asking($"紀行{network}", new ProgrammeConditions { Exclude = "再放送 ダイジェスト" }),
             Cancel);
 
@@ -170,11 +178,12 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
         int network = BroadcastIds.NextNetwork();
         await using CarinaDbContext context = database.Open();
         var repository = new ProgrammeRepository(context);
+        var searches = new ProgrammeSearchRepository(context);
 
         await repository.AddAsync(Programme(network, 1, $"紀行{network}", "再放送です"), Cancel);
         await context.SaveChangesAsync(Cancel);
 
-        PaginatedList<Programme> found = await repository.SearchAsync(
+        PaginatedList<ProgrammeMatch> found = await searches.SearchAsync(
             Asking(
                 $"紀行{network}",
                 new ProgrammeConditions { Exclude = "再放送", Fields = [ProgrammeField.Title] }),
@@ -189,13 +198,14 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
         int network = BroadcastIds.NextNetwork();
         await using CarinaDbContext context = database.Open();
         var repository = new ProgrammeRepository(context);
+        var searches = new ProgrammeSearchRepository(context);
 
         await repository.AddAsync(Filed(network, 1, $"番組{network}", 8), Cancel);
         await repository.AddAsync(Filed(network, 2, $"番組{network}", 6), Cancel);
         await repository.AddAsync(Programme(network, 3, $"番組{network}", string.Empty), Cancel);
         await context.SaveChangesAsync(Cancel);
 
-        PaginatedList<Programme> found = await repository.SearchAsync(
+        PaginatedList<ProgrammeMatch> found = await searches.SearchAsync(
             Asking($"番組{network}", new ProgrammeConditions { Genres = [8] }),
             Cancel);
 
@@ -209,13 +219,14 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
         int network = BroadcastIds.NextNetwork();
         await using CarinaDbContext context = database.Open();
         var repository = new ProgrammeRepository(context);
+        var searches = new ProgrammeSearchRepository(context);
 
         await repository.AddAsync(Filed(network, 1, $"番組{network}", 8), Cancel);
         await repository.AddAsync(Filed(network, 2, $"番組{network}", 6), Cancel);
         await repository.AddAsync(Filed(network, 3, $"番組{network}", 4), Cancel);
         await context.SaveChangesAsync(Cancel);
 
-        PaginatedList<Programme> found = await repository.SearchAsync(
+        PaginatedList<ProgrammeMatch> found = await searches.SearchAsync(
             Asking($"番組{network}", new ProgrammeConditions { Genres = [8, 6] }),
             Cancel);
 
@@ -228,13 +239,14 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
         int network = BroadcastIds.NextNetwork();
         await using CarinaDbContext context = database.Open();
         var repository = new ProgrammeRepository(context);
+        var searches = new ProgrammeSearchRepository(context);
 
         await repository.AddAsync(Filed(network, 1, $"番組{network}", 8, 6), Cancel);
         await context.SaveChangesAsync(Cancel);
 
         Assert.Equal(
             1,
-            (await repository.SearchAsync(
+            (await searches.SearchAsync(
                 Asking($"番組{network}", new ProgrammeConditions { Genres = [6] }),
                 Cancel)).Total);
     }
@@ -245,12 +257,13 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
         int network = BroadcastIds.NextNetwork();
         await using CarinaDbContext context = database.Open();
         var repository = new ProgrammeRepository(context);
+        var searches = new ProgrammeSearchRepository(context);
 
         await repository.AddAsync(On(network, 1024, 1, $"番組{network}"), Cancel);
         await repository.AddAsync(On(network, 1032, 2, $"番組{network}"), Cancel);
         await context.SaveChangesAsync(Cancel);
 
-        PaginatedList<Programme> found = await repository.SearchAsync(
+        PaginatedList<ProgrammeMatch> found = await searches.SearchAsync(
             Asking(
                 $"番組{network}",
                 new ProgrammeConditions { Channels = [new ProgrammeService(network, 1024)] }),
@@ -266,13 +279,14 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
         int network = BroadcastIds.NextNetwork();
         await using CarinaDbContext context = database.Open();
         var repository = new ProgrammeRepository(context);
+        var searches = new ProgrammeSearchRepository(context);
 
         await repository.AddAsync(On(network, 1024, 1, $"番組{network}"), Cancel);
         await repository.AddAsync(On(network, 1032, 2, $"番組{network}"), Cancel);
         await repository.AddAsync(On(network, 1040, 3, $"番組{network}"), Cancel);
         await context.SaveChangesAsync(Cancel);
 
-        PaginatedList<Programme> found = await repository.SearchAsync(
+        PaginatedList<ProgrammeMatch> found = await searches.SearchAsync(
             Asking(
                 $"番組{network}",
                 new ProgrammeConditions
@@ -290,12 +304,13 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
         int network = BroadcastIds.NextNetwork();
         await using CarinaDbContext context = database.Open();
         var repository = new ProgrammeRepository(context);
+        var searches = new ProgrammeSearchRepository(context);
 
         await repository.AddAsync(On(network, 1024, 1, $"番組{network}"), Cancel);
         await repository.AddAsync(On(network, 1032, 2, $"番組{network}"), Cancel);
         await context.SaveChangesAsync(Cancel);
 
-        PaginatedList<Programme> found = await repository.SearchAsync(
+        PaginatedList<ProgrammeMatch> found = await searches.SearchAsync(
             Asking($"番組{network}").Over([new ProgrammeService(network, 1032)]),
             Cancel);
 
@@ -309,11 +324,12 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
         int network = BroadcastIds.NextNetwork();
         await using CarinaDbContext context = database.Open();
         var repository = new ProgrammeRepository(context);
+        var searches = new ProgrammeSearchRepository(context);
 
         await repository.AddAsync(On(network, 1024, 1, $"番組{network}"), Cancel);
         await context.SaveChangesAsync(Cancel);
 
-        Assert.Equal(0, (await repository.SearchAsync(Asking($"番組{network}").Over([]), Cancel)).Total);
+        Assert.Equal(0, (await searches.SearchAsync(Asking($"番組{network}").Over([]), Cancel)).Total);
     }
 
     [Fact]
@@ -322,12 +338,13 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
         int network = BroadcastIds.NextNetwork();
         await using CarinaDbContext context = database.Open();
         var repository = new ProgrammeRepository(context);
+        var searches = new ProgrammeSearchRepository(context);
 
         await repository.AddAsync(Filed(network, 1, $"番組{network}の一", 8), Cancel);
         await repository.AddAsync(Filed(network, 2, $"番組{network}の二", 6), Cancel);
         await context.SaveChangesAsync(Cancel);
 
-        PaginatedList<Programme> found = await repository.SearchAsync(
+        PaginatedList<ProgrammeMatch> found = await searches.SearchAsync(
             ProgrammeSearch.For(
                 null,
                 At.AddHours(-1),
@@ -349,12 +366,13 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
         int network = BroadcastIds.NextNetwork();
         await using CarinaDbContext context = database.Open();
         var repository = new ProgrammeRepository(context);
+        var searches = new ProgrammeSearchRepository(context);
 
         await repository.AddAsync(Programme(network, 1, $"番組{network}の一", "はじめての放送"), Cancel);
         await repository.AddAsync(Programme(network, 2, $"番組{network}の二", $"再放送{network}です"), Cancel);
         await context.SaveChangesAsync(Cancel);
 
-        PaginatedList<Programme> found = await repository.SearchAsync(
+        PaginatedList<ProgrammeMatch> found = await searches.SearchAsync(
             ProgrammeSearch.For(
                 null,
                 At.AddHours(-1),
@@ -376,11 +394,12 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
         int network = BroadcastIds.NextNetwork();
         await using CarinaDbContext context = database.Open();
         var repository = new ProgrammeRepository(context);
+        var searches = new ProgrammeSearchRepository(context);
 
         await repository.AddAsync(Programme(network, 1, $"ニュース{network}", "きょうのできごと"), Cancel);
         await context.SaveChangesAsync(Cancel);
 
-        Assert.Equal(1, (await repository.SearchAsync(Asking($"ﾆｭｰｽ{network}"), Cancel)).Total);
+        Assert.Equal(1, (await searches.SearchAsync(Asking($"ﾆｭｰｽ{network}"), Cancel)).Total);
     }
 
     [Fact]
@@ -389,11 +408,12 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
         int network = BroadcastIds.NextNetwork();
         await using CarinaDbContext context = database.Open();
         var repository = new ProgrammeRepository(context);
+        var searches = new ProgrammeSearchRepository(context);
 
         await repository.AddAsync(Programme(network, 1, $"ﾆｭｰｽ{network}", "きょうのできごと"), Cancel);
         await context.SaveChangesAsync(Cancel);
 
-        Assert.Equal(1, (await repository.SearchAsync(Asking($"ニュース{network}"), Cancel)).Total);
+        Assert.Equal(1, (await searches.SearchAsync(Asking($"ニュース{network}"), Cancel)).Total);
     }
 
     [Fact]
@@ -402,11 +422,12 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
         int network = BroadcastIds.NextNetwork();
         await using CarinaDbContext context = database.Open();
         var repository = new ProgrammeRepository(context);
+        var searches = new ProgrammeSearchRepository(context);
 
         await repository.AddAsync(Programme(network, 1, $"紀行{network}①", "はじまり"), Cancel);
         await context.SaveChangesAsync(Cancel);
 
-        Assert.Equal(1, (await repository.SearchAsync(Asking($"紀行{network}1"), Cancel)).Total);
+        Assert.Equal(1, (await searches.SearchAsync(Asking($"紀行{network}1"), Cancel)).Total);
     }
 
     [Fact]
@@ -415,11 +436,12 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
         int network = BroadcastIds.NextNetwork();
         await using CarinaDbContext context = database.Open();
         var repository = new ProgrammeRepository(context);
+        var searches = new ProgrammeSearchRepository(context);
 
         await repository.AddAsync(Programme(network, 1, $"ＮＥＷＳ{network}", "きょうのできごと"), Cancel);
         await context.SaveChangesAsync(Cancel);
 
-        Assert.Equal(1, (await repository.SearchAsync(Asking($"news{network}"), Cancel)).Total);
+        Assert.Equal(1, (await searches.SearchAsync(Asking($"news{network}"), Cancel)).Total);
     }
 
     [Fact]
@@ -428,13 +450,14 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
         int network = BroadcastIds.NextNetwork();
         await using CarinaDbContext context = database.Open();
         var repository = new ProgrammeRepository(context);
+        var searches = new ProgrammeSearchRepository(context);
 
         await repository.AddAsync(Programme(network, 1, $"ニュース{network}", "きょうのできごと"), Cancel);
         await context.SaveChangesAsync(Cancel);
 
         Assert.Equal(
             1,
-            (await repository.SearchAsync(
+            (await searches.SearchAsync(
                 Asking($"ﾆｭｰｽ{network}", new ProgrammeConditions { Fields = [ProgrammeField.Title] }),
                 Cancel)).Total);
     }
@@ -445,13 +468,14 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
         int network = BroadcastIds.NextNetwork();
         await using CarinaDbContext context = database.Open();
         var repository = new ProgrammeRepository(context);
+        var searches = new ProgrammeSearchRepository(context);
 
         await repository.AddAsync(Programme(network, 1, "大河ドラマ", $"のちほどニュース{network}を"), Cancel);
         await context.SaveChangesAsync(Cancel);
 
         Assert.Equal(
             1,
-            (await repository.SearchAsync(
+            (await searches.SearchAsync(
                 Asking($"ﾆｭｰｽ{network}", new ProgrammeConditions { Fields = [ProgrammeField.Description] }),
                 Cancel)).Total);
     }
@@ -462,12 +486,13 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
         int network = BroadcastIds.NextNetwork();
         await using CarinaDbContext context = database.Open();
         var repository = new ProgrammeRepository(context);
+        var searches = new ProgrammeSearchRepository(context);
 
         await repository.AddAsync(Programme(network, 1, $"紀行{network}", "はじめての放送"), Cancel);
         await repository.AddAsync(Programme(network, 2, $"紀行{network}", "ﾀﾞｲｼﾞｪｽﾄです"), Cancel);
         await context.SaveChangesAsync(Cancel);
 
-        PaginatedList<Programme> found = await repository.SearchAsync(
+        PaginatedList<ProgrammeMatch> found = await searches.SearchAsync(
             Asking($"紀行{network}", new ProgrammeConditions { Exclude = "ダイジェスト" }),
             Cancel);
 
@@ -489,6 +514,7 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
         int network = BroadcastIds.NextNetwork();
         await using CarinaDbContext context = database.Open();
         var repository = new ProgrammeRepository(context);
+        var searches = new ProgrammeSearchRepository(context);
 
         await repository.AddAsync(Programme(network, 1, broadcast, string.Empty), Cancel);
         await context.SaveChangesAsync(Cancel);
