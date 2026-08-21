@@ -7,9 +7,114 @@ public sealed class ProgrammeSearchTests
 {
     private static readonly DateTime From = new(2026, 8, 18, 0, 0, 0, DateTimeKind.Utc);
 
+    private static readonly ProgrammeService Channel = new(4, 1024);
+
     [Fact]
     public void AKeywordOfOneLetterWouldWalkTheWholeTableAndIsRefused()
         => Assert.Null(ProgrammeSearch.For("あ", null, null));
+
+    [Fact]
+    public void ASearchNobodyNarrowedWouldHandBackTheWholeTableAndIsRefused()
+        => Assert.Null(ProgrammeSearch.For(null, null, null));
+
+    [Fact]
+    public void HowTheAnswerIsSortedAndPagedIsNotACondition()
+        => Assert.Null(ProgrammeSearch.For(
+            null,
+            null,
+            null,
+            ProgrammeSort.Name,
+            true,
+            page: 3,
+            perPage: 100));
+
+    [Fact]
+    public void WhereToLookNarrowsNothingWithoutAWordToLookForAndIsRefusedOnItsOwn()
+        => Assert.Null(ProgrammeSearch.For(
+            null,
+            null,
+            null,
+            conditions: new ProgrammeConditions { Fields = [ProgrammeField.Title] }));
+
+    [Fact]
+    public void ConditionsAskedForAsNothingAtAllAreTheSameAsNotAskingForThem()
+    {
+        Assert.Null(ProgrammeSearch.For(
+            null,
+            null,
+            null,
+            conditions: new ProgrammeConditions { Genres = [], Channels = [], Fields = [] }));
+        Assert.Null(ProgrammeSearch.For(
+            null,
+            null,
+            null,
+            conditions: new ProgrammeConditions { Exclude = "   " }));
+        Assert.Null(ProgrammeSearch.For(
+            null,
+            null,
+            null,
+            conditions: new ProgrammeConditions { System = TuneSystem.Unspecified }));
+    }
+
+    [Fact]
+    public void AnExcludedWordOnItsOwnIsEnoughToAskWith()
+        => Assert.NotNull(ProgrammeSearch.For(
+            null,
+            null,
+            null,
+            conditions: new ProgrammeConditions { Exclude = "再放送" }));
+
+    [Fact]
+    public void AGenreOnItsOwnIsEnoughToAskWith()
+        => Assert.NotNull(ProgrammeSearch.For(
+            null,
+            null,
+            null,
+            conditions: new ProgrammeConditions { Genres = [8] }));
+
+    [Fact]
+    public void ABroadcastTypeOnItsOwnIsEnoughToAskWith()
+        => Assert.NotNull(ProgrammeSearch.For(
+            null,
+            null,
+            null,
+            conditions: new ProgrammeConditions { System = TuneSystem.IsdbT }));
+
+    [Fact]
+    public void AChannelOnItsOwnIsEnoughToAskWith()
+        => Assert.NotNull(ProgrammeSearch.For(
+            null,
+            null,
+            null,
+            conditions: new ProgrammeConditions { Channels = [Channel] }));
+
+    [Fact]
+    public void EitherEndOfASpanOnItsOwnIsEnoughToAskWith()
+    {
+        Assert.NotNull(ProgrammeSearch.For(null, From, null));
+        Assert.NotNull(ProgrammeSearch.For(null, null, From));
+    }
+
+    [Fact]
+    public void AConditionBesideTheKeywordDoesNotBuyAKeywordOfOneLetterItsWayIn()
+        => Assert.Null(ProgrammeSearch.For(
+            "あ",
+            null,
+            null,
+            conditions: new ProgrammeConditions { Genres = [8] }));
+
+    [Fact]
+    public void AKeywordNobodyNamedLeavesNoWordToLookFor()
+    {
+        ProgrammeSearch asked = ProgrammeSearch.For(
+            null,
+            null,
+            null,
+            conditions: new ProgrammeConditions { Genres = [8] })!;
+
+        Assert.Equal(string.Empty, asked.Keyword);
+        Assert.Empty(asked.Words);
+    }
 
     [Fact]
     public void TwoLettersIsEnoughToAskWith()

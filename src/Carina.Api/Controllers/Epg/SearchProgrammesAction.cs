@@ -65,7 +65,10 @@ public sealed class SearchProgrammesAction(ProgrammeGuideService guide) : Contro
     }
 
     private static string Refusal
-        => $"A search needs a keyword carrying a word of at least {ProgrammeSearch.ShortestKeyword} letters, "
+        => "A search needs at least one condition that narrows: a keyword, a word to leave out, a genre, "
+            + "a broadcast type, a channel, or an end of a span. Naming where to look narrows nothing on its own, "
+            + "and neither does the sort or the page. "
+            + $"A keyword, where one is given, carries a word of at least {ProgrammeSearch.ShortestKeyword} letters, "
             + $"at most {ProgrammeSearch.MostWords} words to look for and as many to leave out, "
             + $"genres between 0 and {ProgrammeSearch.HighestGenre}, "
             + $"at most {ProgrammeSearch.MostChannels} channels named as network-service, "
