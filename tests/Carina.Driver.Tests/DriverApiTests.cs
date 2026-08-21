@@ -1154,6 +1154,66 @@ public sealed class DriverApiTests
     }
 
     [Fact]
+    public async Task TuningATunerForASessionIsOneOfTheNamesTheFeedCarries()
+    {
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient listener = driver.Client();
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, DriverEndpoints.Events);
+        using HttpResponseMessage response = await listener.SendAsync(
+            request,
+            HttpCompletionOption.ResponseHeadersRead,
+            Soon()
+        );
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using Stream body = await response.Content.ReadAsStreamAsync(Soon());
+        using var reader = new StreamReader(body, Encoding.UTF8);
+
+        using HttpClient starter = driver.Client();
+        using HttpResponseMessage created = await starter.PostAsync(
+            DriverEndpoints.Sessions,
+            DriverUnderTest.Body(DriverUnderTest.Live("tuned")),
+            Soon()
+        );
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+
+        Assert.Contains(
+            DriverEvents.SessionTuned,
+            await NamesUntil(reader, DriverEvents.SessionTuned)
+        );
+    }
+
+    /// <summary>
+    /// Reads event names off an open feed until the awaited one arrives, and
+    /// answers with what did arrive when it never does, so a feed that has gone
+    /// quiet fails on the names it carried rather than on the deadline.
+    /// </summary>
+    private static async Task<IReadOnlyList<string>> NamesUntil(StreamReader reader, string awaited)
+    {
+        var names = new List<string>();
+        CancellationToken token = Soon();
+
+        try
+        {
+            while (!names.Contains(awaited, StringComparer.Ordinal)
+                && await reader.ReadLineAsync(token) is { } line)
+            {
+                if (line.StartsWith("event: ", StringComparison.Ordinal))
+                {
+                    names.Add(line["event: ".Length..]);
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+
+        return names;
+    }
+
+    [Fact]
     public async Task AListenerTooManyIsTurnedAwayPolitely()
     {
         await using DriverUnderTest driver = await DriverUnderTest.Start();
