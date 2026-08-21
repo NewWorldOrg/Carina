@@ -72,8 +72,14 @@ public sealed class HeldProgrammes : IProgrammeRepository
                 .Take(rows),
         ]);
 
-    public Task<int> ForgetEndedBeforeAsync(DateTime at, CancellationToken cancellationToken)
-        => Task.FromResult(0);
+    public Task<int> ForgetAsync(IReadOnlyList<Programme> programmes, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(programmes);
+
+        var leaving = programmes.Select(programme => programme.Id).ToHashSet();
+
+        return Task.FromResult(Programmes.RemoveAll(held => leaving.Contains(held.Id)));
+    }
 
     public Task<DateTime?> CoveredUntilAsync(
         int networkId,

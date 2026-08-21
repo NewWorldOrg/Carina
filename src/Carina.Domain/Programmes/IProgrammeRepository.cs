@@ -27,7 +27,7 @@ public interface IProgrammeRepository
         int rows,
         CancellationToken cancellationToken);
 
-    Task<int> ForgetEndedBeforeAsync(DateTime at, CancellationToken cancellationToken);
+    Task<int> ForgetAsync(IReadOnlyList<Programme> programmes, CancellationToken cancellationToken);
 
     Task<DateTime?> CoveredUntilAsync(int networkId, int serviceId, CancellationToken cancellationToken);
 
