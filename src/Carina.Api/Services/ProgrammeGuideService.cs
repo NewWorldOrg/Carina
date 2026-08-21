@@ -18,6 +18,7 @@ public sealed class ProgrammeGuideService(
     IBroadcastStreamDirectory directory,
     IProgrammeRepository programmes,
     IArchivedProgrammeRepository archive,
+    IProgrammeSearchRepository searches,
     IStreamVisitRepository visits)
 {
     public async Task<ServiceResult<GuidePage>> ReadAsync(
@@ -76,7 +77,7 @@ public sealed class ProgrammeGuideService(
             ? ServiceResult<Programme>.Success(programme)
             : ServiceResult<Programme>.Failure("No programme is held under that name.");
 
-    public async Task<ServiceResult<PaginatedList<Programme>>> SearchAsync(
+    public async Task<ServiceResult<PaginatedList<ProgrammeMatch>>> SearchAsync(
         ProgrammeSearch search,
         CancellationToken cancellationToken)
     {
@@ -86,8 +87,8 @@ public sealed class ProgrammeGuideService(
             ? search.Over(await CarriedOnAsync(system, cancellationToken))
             : search;
 
-        return ServiceResult<PaginatedList<Programme>>.Success(
-            await programmes.SearchAsync(asked, cancellationToken));
+        return ServiceResult<PaginatedList<ProgrammeMatch>>.Success(
+            await searches.SearchAsync(asked, cancellationToken));
     }
 
     private async Task<IReadOnlyList<ProgrammeService>> CarriedOnAsync(

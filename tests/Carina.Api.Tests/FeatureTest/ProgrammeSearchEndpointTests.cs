@@ -29,6 +29,26 @@ public sealed class ProgrammeSearchEndpointTests
     }
 
     [Fact]
+    public async Task AProgrammeInTheArchiveComesBackMarkedAsACopy()
+    {
+        await using var feature = new EpgFeature();
+
+        feature.Programmes.Programmes.Add(Programme(1, "ニュース7"));
+        feature.Archived.Programmes.Add(Archived(2, "ニュース特集"));
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync("/api/programs/search?keyword=ニュース");
+        JsonElement data = body.GetProperty("data");
+        var copied = data.GetProperty("items").EnumerateArray().ToDictionary(
+            item => item.GetProperty("name").GetString()!,
+            item => item.GetProperty("isArchived").GetBoolean());
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(2, data.GetProperty("total").GetInt32());
+        Assert.True(copied["ニュース特集"]);
+        Assert.False(copied["ニュース7"]);
+    }
+
+    [Fact]
     public async Task AKeywordOfOneLetterIsRefusedBeforeItReachesTheStore()
     {
         await using var feature = new EpgFeature();
@@ -445,6 +465,20 @@ public sealed class ProgrammeSearchEndpointTests
 
     private static Programme Programme(int carried, string name, string summary = "")
         => On(1049, carried, name, summary);
+
+    private static ArchivedProgramme Archived(int carried, string name)
+        => ArchivedProgramme.Rehydrate(
+            new NetworkId(4),
+            new ServiceId(1049),
+            new EventId(carried),
+            At.AddDays(-3),
+            At.AddDays(-3).AddMinutes(30),
+            name,
+            string.Empty,
+            false,
+            [],
+            [],
+            At);
 
     private static Programme Filed(int carried, string name, int genre)
         => Held(

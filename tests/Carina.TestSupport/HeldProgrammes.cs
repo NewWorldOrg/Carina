@@ -91,45 +91,6 @@ public sealed class HeldProgrammes : IProgrammeRepository
                 && !programme.IsShadow)
             .Max(programme => (DateTime?)programme.StartsAt));
 
-    public Task<PaginatedList<Programme>> SearchAsync(
-        ProgrammeSearch search,
-        CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(search);
-
-        Programme[] found =
-        [
-            .. Programmes
-                .Where(programme => search.Words.All(word => Carries(programme, word, search.Fields)))
-                .Where(programme => !search.ExcludedWords.Any(word => Carries(programme, word, search.Fields)))
-                .Where(programme => search.Genres.Count == 0
-                    || programme.Genres.Any(genre => search.Genres.Contains(genre.Kind)))
-                .Where(programme => search.Channels.Count == 0 || On(programme, search.Channels))
-                .Where(programme => search.Services is not { } within || On(programme, within))
-                .Where(programme => search.From is not { } from
-                    || programme.EndsAt is null
-                    || programme.EndsAt > from)
-                .Where(programme => search.To is not { } to || programme.StartsAt < to)
-                .OrderBy(programme => programme.StartsAt),
-        ];
-
-        return Task.FromResult(new PaginatedList<Programme>(
-            [.. found.Skip((search.Page - 1) * search.PerPage).Take(search.PerPage)],
-            found.Length,
-            search.Page,
-            search.PerPage));
-    }
-
-    private static bool Carries(Programme programme, string word, IReadOnlyList<ProgrammeField> fields)
-        => (fields.Contains(ProgrammeField.Title)
-                && programme.Name.Contains(word, StringComparison.OrdinalIgnoreCase))
-            || (fields.Contains(ProgrammeField.Description)
-                && programme.Summary.Contains(word, StringComparison.OrdinalIgnoreCase));
-
-    private static bool On(Programme programme, IReadOnlyList<ProgrammeService> services)
-        => services.Any(service => service.NetworkId == programme.NetworkId.Value
-            && service.ServiceId == programme.ServiceId.Value);
-
     public Task<IReadOnlyList<Programme>> ListAfterAsync(
         long revision,
         int rows,
@@ -210,4 +171,54 @@ public sealed class HeldArchive : IArchivedProgrammeRepository
         CancellationToken cancellationToken)
         => Task.FromResult(Programmes.RemoveAll(programme =>
             programme.NetworkId.Equals(networkId) && programme.ServiceId.Equals(serviceId)));
+}
+
+public sealed class HeldSearches(HeldProgrammes programmes, HeldArchive archive) : IProgrammeSearchRepository
+{
+    public Task<PaginatedList<ProgrammeMatch>> SearchAsync(
+        ProgrammeSearch search,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(search);
+
+        ProgrammeMatch[] held = [.. programmes.Programmes.Select(ProgrammeMatch.Of)];
+        var already = held.Select(Key).ToHashSet();
+        IEnumerable<ProgrammeMatch> narrowed = held
+            .Concat(archive.Programmes.Select(ProgrammeMatch.Of).Where(match => !already.Contains(Key(match))))
+            .Where(match => search.Words.All(word => Carries(match, word, search.Fields)))
+            .Where(match => !search.ExcludedWords.Any(word => Carries(match, word, search.Fields)))
+            .Where(match => search.Genres.Count == 0
+                || match.Genres.Any(genre => search.Genres.Contains(genre.Kind)))
+            .Where(match => search.Channels.Count == 0 || On(match, search.Channels))
+            .Where(match => search.Services is not { } within || On(match, within))
+            .Where(match => search.From is not { } from || match.EndsAt is null || match.EndsAt > from)
+            .Where(match => search.To is not { } to || match.StartsAt < to);
+        IOrderedEnumerable<ProgrammeMatch> ordered = (search.Sort, search.Descending) switch
+        {
+            (ProgrammeSort.Name, false) => narrowed.OrderBy(match => match.Name, StringComparer.Ordinal),
+            (ProgrammeSort.Name, true) => narrowed.OrderByDescending(match => match.Name, StringComparer.Ordinal),
+            (_, true) => narrowed.OrderByDescending(match => match.StartsAt),
+            _ => narrowed.OrderBy(match => match.StartsAt),
+        };
+        ProgrammeMatch[] found = [.. ordered.ThenBy(match => match.EventId.Value)];
+
+        return Task.FromResult(new PaginatedList<ProgrammeMatch>(
+            [.. found.Skip((search.Page - 1) * search.PerPage).Take(search.PerPage)],
+            found.Length,
+            search.Page,
+            search.PerPage));
+    }
+
+    private static (int, int, int, DateTime) Key(ProgrammeMatch match)
+        => (match.NetworkId.Value, match.ServiceId.Value, match.EventId.Value, match.StartsAt);
+
+    private static bool Carries(ProgrammeMatch match, string word, IReadOnlyList<ProgrammeField> fields)
+        => (fields.Contains(ProgrammeField.Title)
+                && match.Name.Contains(word, StringComparison.OrdinalIgnoreCase))
+            || (fields.Contains(ProgrammeField.Description)
+                && match.Summary.Contains(word, StringComparison.OrdinalIgnoreCase));
+
+    private static bool On(ProgrammeMatch match, IReadOnlyList<ProgrammeService> services)
+        => services.Any(service => service.NetworkId == match.NetworkId.Value
+            && service.ServiceId == match.ServiceId.Value);
 }
