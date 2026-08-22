@@ -5,6 +5,7 @@ using System.Text.Json;
 using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
+using Carina.Domain.Programmes;
 using Carina.TestSupport;
 
 using Microsoft.AspNetCore.TestHost;
@@ -98,6 +99,7 @@ internal sealed class CatalogFeature : IAsyncDisposable
             {
                 services.AddSingleton<IBroadcastServiceRepository>(Services);
                 services.AddSingleton<ICandidateChannelRepository>(Candidates);
+                services.AddSingleton<IProgrammeRepository>(Programmes);
                 services.AddSingleton<IDriverClient>(Driver);
             }))
             .CreateAuthenticatedClient();
@@ -107,6 +109,8 @@ internal sealed class CatalogFeature : IAsyncDisposable
     public HeldServices Services { get; } = new();
 
     public HeldCandidates Candidates { get; } = new();
+
+    public HeldProgrammes Programmes { get; } = new();
 
     public TunerHoldingDriverClient Driver { get; } = new();
 
@@ -136,6 +140,34 @@ internal sealed class CatalogFeature : IAsyncDisposable
         => Candidates.Candidates[candidate].RecordTuningSuccess(
             SignalMeasurement.WithLock(TunerHoldingDriverClient.At, cnrMilliDecibels),
             TunerHoldingDriverClient.At);
+
+    public void Refuse(int candidate, int times)
+    {
+        for (int failure = 0; failure < times; failure++)
+        {
+            Candidates.Candidates[candidate].RecordTuningFailure(
+                RotationBackoff.Default,
+                TunerHoldingDriverClient.At);
+        }
+    }
+
+    public Programme Collect(int serviceId, int eventId, string name)
+    {
+        var programme = Programme.Discover(
+            new ProgrammeBroadcast(
+                new ProgrammeId(new NetworkId(1), new ServiceId(serviceId), new EventId(eventId)),
+                new TransportStreamId(1),
+                TunerHoldingDriverClient.At,
+                TunerHoldingDriverClient.At.AddMinutes(30),
+                name,
+                string.Empty,
+                false),
+            TunerHoldingDriverClient.At);
+
+        Programmes.Programmes.Add(programme);
+
+        return programme;
+    }
 
     public Task<(HttpStatusCode Status, JsonElement Body)> GetAsync(string path)
         => SendAsync(new HttpRequestMessage(HttpMethod.Get, new Uri(path, UriKind.Relative)));

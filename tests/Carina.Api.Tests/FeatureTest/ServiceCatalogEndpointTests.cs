@@ -498,6 +498,94 @@ public sealed class ServiceCatalogEndpointTests
     }
 
     [Fact]
+    public async Task ACandidateThatKeptFailingSaysSoOnTheListWithoutOpeningIt()
+    {
+        await using var feature = new CatalogFeature();
+        feature.Seed(
+            101,
+            "Two ways in",
+            TuningParameters.Terrestrial(Terrestrial),
+            TuningParameters.Terrestrial(OtherTerrestrial));
+        feature.Measure(0, 21_000);
+        feature.Refuse(1, RotationBackoff.Default.FailureCeiling);
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync("/api/services");
+        JsonElement candidates = body.GetProperty("data")[0].GetProperty("candidates");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("active", candidates[0].GetProperty("rotationState").GetString());
+        Assert.Equal("needsAttention", candidates[1].GetProperty("rotationState").GetString());
+        Assert.Equal(
+            RotationBackoff.Default.FailureCeiling,
+            candidates[1].GetProperty("consecutiveFailures").GetInt32());
+        Assert.NotEqual(
+            JsonValueKind.Null,
+            candidates[1].GetProperty("needsAttentionSince").ValueKind);
+    }
+
+    [Fact]
+    public async Task ACandidateStillBackingOffSaysWhenItIsDueAgainRatherThanThatItIsGone()
+    {
+        await using var feature = new CatalogFeature();
+        feature.Seed(101, "One way in", TuningParameters.Terrestrial(Terrestrial));
+        feature.Refuse(0, 1);
+
+        (HttpStatusCode _, JsonElement body) = await feature.GetAsync("/api/services");
+        JsonElement candidate = body.GetProperty("data")[0].GetProperty("candidates")[0];
+
+        Assert.Equal("backingOff", candidate.GetProperty("rotationState").GetString());
+        Assert.Equal(
+            new DateTimeOffset(TunerHoldingDriverClient.At.Add(RotationBackoff.Default.FirstDelay)),
+            candidate.GetProperty("nextAttemptAt").GetDateTimeOffset());
+    }
+
+    [Fact]
+    public async Task DeletingAChannelDefinitionLeavesTheProgrammesCollectedThroughItAlone()
+    {
+        await using var feature = new CatalogFeature();
+        feature.Seed(
+            101,
+            "Two ways in",
+            TuningParameters.Terrestrial(Terrestrial),
+            TuningParameters.Terrestrial(OtherTerrestrial));
+        feature.Collect(101, 40_001, "Kept");
+        feature.Collect(101, 40_002, "Kept too");
+
+        CandidateChannel doomed = feature.Candidates.Candidates[0];
+
+        (HttpStatusCode status, JsonElement body) = await feature.DeleteAsync(
+            $"{OneService}/candidate-channels/{doomed.Id.Value}");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(1, body.GetProperty("data").GetProperty("candidateCount").GetInt32());
+        Assert.Equal(
+            [40_001, 40_002],
+            feature.Programmes.Programmes.Select(programme => programme.EventId.Value));
+    }
+
+    [Fact]
+    public async Task LeavingAServiceWithNowhereToTuneStillLeavesItsProgrammesAlone()
+    {
+        await using var feature = new CatalogFeature();
+        feature.Seed(101, "One way in", TuningParameters.Terrestrial(Terrestrial));
+        feature.Collect(101, 40_001, "Kept");
+
+        CandidateChannel chosen = feature.Candidates.Candidates[0];
+        await feature.PutAsync(
+            $"{OneService}/selected-channel",
+            new { candidateChannelId = chosen.Id.Value });
+
+        (HttpStatusCode status, JsonElement body) = await feature.DeleteAsync(
+            $"{OneService}/candidate-channels/{chosen.Id.Value}");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(
+            JsonValueKind.Null,
+            body.GetProperty("data").GetProperty("selectedChannel").ValueKind);
+        Assert.Single(feature.Programmes.Programmes);
+    }
+
+    [Fact]
     public async Task EveryCatalogSurfaceIsBehindTheSameDenialAsTheRestOnceASchemeIsRegistered()
     {
         using var app = new TestingWebApplicationFactory();
