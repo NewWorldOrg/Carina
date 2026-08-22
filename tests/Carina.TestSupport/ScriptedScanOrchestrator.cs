@@ -23,6 +23,8 @@ public sealed class ScriptedScanOrchestrator(HeldScanRuns runs) : IChannelScanOr
 
     public List<TuningParameters> Walked { get; } = [];
 
+    public List<ScanAttemptOutcome> Outcomes { get; } = [];
+
     public List<ScanScope> Scopes { get; } = [];
 
     public TaskCompletionSource Announced { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -63,16 +65,23 @@ public sealed class ScriptedScanOrchestrator(HeldScanRuns runs) : IChannelScanOr
 
         var attempts = new List<ScanRunAttempt>();
 
-        foreach (TuningParameters target in Walked)
+        for (int step = 0; step < Walked.Count; step++)
         {
+            ScanAttemptOutcome outcome = Outcomes.Count > step
+                ? Outcomes[step]
+                : EveryAttemptFails
+                    ? ScanAttemptOutcome.NoLock
+                    : ScanAttemptOutcome.Succeeded;
+            bool locked = outcome is not ScanAttemptOutcome.NoLock;
+
             var attempt = ScanRunAttempt.Rehydrate(
                 ScanRunAttemptId.New(),
                 run.Id,
-                target,
-                EveryAttemptFails ? ScanAttemptOutcome.NoLock : ScanAttemptOutcome.Succeeded,
-                EveryAttemptFails ? SignalMeasurement.WithoutLock(At) : SignalMeasurement.WithLock(At, 21_500),
+                Walked[step],
+                outcome,
+                locked ? SignalMeasurement.WithLock(At, 21_500) : SignalMeasurement.WithoutLock(At),
                 null,
-                null,
+                outcome is ScanAttemptOutcome.Succeeded ? null : $"scripted {outcome}",
                 At,
                 At);
 

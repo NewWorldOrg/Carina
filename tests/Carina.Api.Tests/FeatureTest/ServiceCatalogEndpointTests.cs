@@ -498,6 +498,48 @@ public sealed class ServiceCatalogEndpointTests
     }
 
     [Fact]
+    public async Task ACandidateThatKeptFailingSaysSoOnTheListWithoutOpeningIt()
+    {
+        await using var feature = new CatalogFeature();
+        feature.Seed(
+            101,
+            "Two ways in",
+            TuningParameters.Terrestrial(Terrestrial),
+            TuningParameters.Terrestrial(OtherTerrestrial));
+        feature.Measure(0, 21_000);
+        feature.Refuse(1, RotationBackoff.Default.FailureCeiling);
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync("/api/services");
+        JsonElement candidates = body.GetProperty("data")[0].GetProperty("candidates");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("active", candidates[0].GetProperty("rotationState").GetString());
+        Assert.Equal("needsAttention", candidates[1].GetProperty("rotationState").GetString());
+        Assert.Equal(
+            RotationBackoff.Default.FailureCeiling,
+            candidates[1].GetProperty("consecutiveFailures").GetInt32());
+        Assert.NotEqual(
+            JsonValueKind.Null,
+            candidates[1].GetProperty("needsAttentionSince").ValueKind);
+    }
+
+    [Fact]
+    public async Task ACandidateStillBackingOffSaysWhenItIsDueAgainRatherThanThatItIsGone()
+    {
+        await using var feature = new CatalogFeature();
+        feature.Seed(101, "One way in", TuningParameters.Terrestrial(Terrestrial));
+        feature.Refuse(0, 1);
+
+        (HttpStatusCode _, JsonElement body) = await feature.GetAsync("/api/services");
+        JsonElement candidate = body.GetProperty("data")[0].GetProperty("candidates")[0];
+
+        Assert.Equal("backingOff", candidate.GetProperty("rotationState").GetString());
+        Assert.Equal(
+            new DateTimeOffset(TunerHoldingDriverClient.At.Add(RotationBackoff.Default.FirstDelay)),
+            candidate.GetProperty("nextAttemptAt").GetDateTimeOffset());
+    }
+
+    [Fact]
     public async Task EveryCatalogSurfaceIsBehindTheSameDenialAsTheRestOnceASchemeIsRegistered()
     {
         using var app = new TestingWebApplicationFactory();

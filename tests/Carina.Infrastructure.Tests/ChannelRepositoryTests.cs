@@ -1,5 +1,6 @@
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
+using Carina.Domain.Programmes;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
 using Carina.TestSupport;
@@ -199,6 +200,30 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
     }
 
     [Fact]
+    public async Task DeletingAChannelDefinitionLeavesTheProgrammesCollectedThroughItInPlace()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        var services = new BroadcastServiceRepository(context);
+        var candidates = new CandidateChannelRepository(context);
+        await services.AddAsync(Service(network, 1), Cancel);
+        CandidateChannel doomed = Candidate(network, 1, 27);
+        await candidates.AddAsync(doomed, Cancel);
+        await new ProgrammeRepository(context).AddAsync(
+            Programme.Discover(Collected(network, 1, 40_001), At),
+            Cancel);
+
+        await candidates.RemoveAsync(doomed.Id, Cancel);
+        await services.RemoveAsync(new NetworkId(network), new ServiceId(1), Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+
+        Assert.NotNull(await new ProgrammeRepository(reading).FindAsync(
+            new ProgrammeId(new NetworkId(network), new ServiceId(1), new EventId(40_001)),
+            Cancel));
+    }
+
+    [Fact]
     public async Task ServicesSharingOneChannelEachKeepACandidateOfTheirOwn()
     {
         int network = NextNetwork();
@@ -370,5 +395,15 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
             new ServiceId(service),
             TuningParameters.Terrestrial(physicalChannel),
             At);
+
+    private static ProgrammeBroadcast Collected(int network, int service, int carried)
+        => new(
+            new ProgrammeId(new NetworkId(network), new ServiceId(service), new EventId(carried)),
+            new TransportStreamId(32739),
+            At.AddHours(22),
+            At.AddHours(23),
+            "Fixture Programme",
+            "Fixture description",
+            IsShadow: false);
 
 }

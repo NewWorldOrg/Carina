@@ -137,6 +137,16 @@ internal sealed class CatalogFeature : IAsyncDisposable
             SignalMeasurement.WithLock(TunerHoldingDriverClient.At, cnrMilliDecibels),
             TunerHoldingDriverClient.At);
 
+    public void Refuse(int candidate, int times)
+    {
+        for (int failure = 0; failure < times; failure++)
+        {
+            Candidates.Candidates[candidate].RecordTuningFailure(
+                RotationBackoff.Default,
+                TunerHoldingDriverClient.At);
+        }
+    }
+
     public Task<(HttpStatusCode Status, JsonElement Body)> GetAsync(string path)
         => SendAsync(new HttpRequestMessage(HttpMethod.Get, new Uri(path, UriKind.Relative)));
 
