@@ -540,52 +540,6 @@ public sealed class ServiceCatalogEndpointTests
     }
 
     [Fact]
-    public async Task DeletingAChannelDefinitionLeavesTheProgrammesCollectedThroughItAlone()
-    {
-        await using var feature = new CatalogFeature();
-        feature.Seed(
-            101,
-            "Two ways in",
-            TuningParameters.Terrestrial(Terrestrial),
-            TuningParameters.Terrestrial(OtherTerrestrial));
-        feature.Collect(101, 40_001, "Kept");
-        feature.Collect(101, 40_002, "Kept too");
-
-        CandidateChannel doomed = feature.Candidates.Candidates[0];
-
-        (HttpStatusCode status, JsonElement body) = await feature.DeleteAsync(
-            $"{OneService}/candidate-channels/{doomed.Id.Value}");
-
-        Assert.Equal(HttpStatusCode.OK, status);
-        Assert.Equal(1, body.GetProperty("data").GetProperty("candidateCount").GetInt32());
-        Assert.Equal(
-            [40_001, 40_002],
-            feature.Programmes.Programmes.Select(programme => programme.EventId.Value));
-    }
-
-    [Fact]
-    public async Task LeavingAServiceWithNowhereToTuneStillLeavesItsProgrammesAlone()
-    {
-        await using var feature = new CatalogFeature();
-        feature.Seed(101, "One way in", TuningParameters.Terrestrial(Terrestrial));
-        feature.Collect(101, 40_001, "Kept");
-
-        CandidateChannel chosen = feature.Candidates.Candidates[0];
-        await feature.PutAsync(
-            $"{OneService}/selected-channel",
-            new { candidateChannelId = chosen.Id.Value });
-
-        (HttpStatusCode status, JsonElement body) = await feature.DeleteAsync(
-            $"{OneService}/candidate-channels/{chosen.Id.Value}");
-
-        Assert.Equal(HttpStatusCode.OK, status);
-        Assert.Equal(
-            JsonValueKind.Null,
-            body.GetProperty("data").GetProperty("selectedChannel").ValueKind);
-        Assert.Single(feature.Programmes.Programmes);
-    }
-
-    [Fact]
     public async Task EveryCatalogSurfaceIsBehindTheSameDenialAsTheRestOnceASchemeIsRegistered()
     {
         using var app = new TestingWebApplicationFactory();

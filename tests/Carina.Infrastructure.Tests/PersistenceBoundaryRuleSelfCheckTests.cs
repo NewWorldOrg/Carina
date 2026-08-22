@@ -27,7 +27,9 @@ public sealed class PersistenceBoundaryRuleSelfCheckTests
                 booking.HasOne<BookingRule>().WithMany()
                     .HasForeignKey(entity => entity.BookingRuleId);
             });
-            modelBuilder.Entity<GuideEntry>();
+            modelBuilder.Entity<GuideEntry>(entry =>
+                entry.HasOne<ChannelLineup>().WithMany()
+                    .HasForeignKey(entity => entity.ChannelLineupId));
             modelBuilder.Entity<RecordingJob>(job =>
                 job.HasOne<GuideEntry>().WithMany().HasForeignKey(entity => entity.GuideEntryId));
             modelBuilder.Entity<ShelfItem>();
@@ -63,12 +65,22 @@ public sealed class PersistenceBoundaryRuleSelfCheckTests
     }
 
     [Fact]
+    public void DetectsAProgrammeCacheEntryThatHoldsAForeignKeyToAChannelDefinition()
+    {
+        using ViolatingDbContext context = Violating();
+
+        Assert.Contains(
+            "guide_entry -> channel_lineup",
+            PersistenceBoundaryRules.BoundaryBreakingForeignKeys(context.Model));
+    }
+
+    [Fact]
     public void LeavesForeignKeysInsideTheReservationAggregateAlone()
     {
         using ViolatingDbContext context = Violating();
 
         Assert.Equal(
-            ["booking -> channel_lineup", "recording_job -> guide_entry"],
+            ["booking -> channel_lineup", "guide_entry -> channel_lineup", "recording_job -> guide_entry"],
             PersistenceBoundaryRules.BoundaryBreakingForeignKeys(context.Model));
     }
 
@@ -81,7 +93,7 @@ public sealed class PersistenceBoundaryRuleSelfCheckTests
             new[] { "booking", "guide_entry", "recording_job" },
             table => FamilyPrefixes.Any(prefix => table.StartsWith(prefix, StringComparison.Ordinal)));
         Assert.Equal(
-            ["booking -> channel_lineup", "recording_job -> guide_entry"],
+            ["booking -> channel_lineup", "guide_entry -> channel_lineup", "recording_job -> guide_entry"],
             PersistenceBoundaryRules.BoundaryBreakingForeignKeys(context.Model));
     }
 
