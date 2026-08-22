@@ -7,7 +7,7 @@ public sealed class CollectionPlanTests
 {
     private static readonly DateTime Now = new(2026, 8, 18, 12, 0, 0, DateTimeKind.Utc);
 
-    private static readonly TimeSpan Wanted = TimeSpan.FromDays(3);
+    private static readonly TimeSpan RevisitsBelow = TimeSpan.FromDays(3);
 
     [Fact]
     public void AStreamNeverCollectedGoesBeforeOneThatIsMerelyThin()
@@ -15,7 +15,7 @@ public sealed class CollectionPlanTests
         IReadOnlyList<PlannedVisit> plan = CollectionPlan.Of(
             [Thin(2, Now.AddHours(1)), NeverVisited(1)],
             Now,
-            Wanted);
+            RevisitsBelow);
 
         Assert.Equal([1, 2], Streams(plan));
         Assert.Equal([VisitReason.NeverCollected, VisitReason.ThinnestCoverage], plan.Select(v => v.Reason));
@@ -27,7 +27,7 @@ public sealed class CollectionPlanTests
         IReadOnlyList<PlannedVisit> plan = CollectionPlan.Of(
             [Stream(1, Now.AddHours(-1), null, Collected(1, Now.AddDays(8)), NeverCollected(2))],
             Now,
-            Wanted);
+            RevisitsBelow);
 
         Assert.Equal(VisitReason.NeverCollected, Assert.Single(plan).Reason);
     }
@@ -46,7 +46,7 @@ public sealed class CollectionPlanTests
         StreamCoverage stream = Stream(1, Now.AddHours(-1), null, Collected(1, Now.AddDays(8)), Collected(2, until: null));
 
         Assert.Equal(Now.AddDays(8), CollectionPlan.ThinnestOf(stream));
-        Assert.Equal(VisitReason.Rotation, Assert.Single(CollectionPlan.Of([stream], Now, Wanted)).Reason);
+        Assert.Equal(VisitReason.Rotation, Assert.Single(CollectionPlan.Of([stream], Now, RevisitsBelow)).Reason);
     }
 
     [Fact]
@@ -55,7 +55,7 @@ public sealed class CollectionPlanTests
         IReadOnlyList<PlannedVisit> plan = CollectionPlan.Of(
             [Thin(1, Now.AddDays(2)), Thin(2, Now.AddHours(6)), Thin(3, Now.AddDays(1))],
             Now,
-            Wanted);
+            RevisitsBelow);
 
         Assert.Equal([2, 3, 1], Streams(plan));
     }
@@ -70,24 +70,24 @@ public sealed class CollectionPlanTests
                 Stream(3, Now.AddHours(-5), null, Collected(1, Now.AddDays(10))),
             ],
             Now,
-            Wanted);
+            RevisitsBelow);
 
         Assert.Equal([2, 3, 1], Streams(plan));
         Assert.All(plan, visit => Assert.Equal(VisitReason.Rotation, visit.Reason));
     }
 
     [Fact]
-    public void AStreamCoveredPastWhatIsWantedIsOnlyVisitedInTurn()
+    public void AStreamCoveredPastTheRevisitThresholdIsOnlyVisitedInTurn()
     {
-        IReadOnlyList<PlannedVisit> plan = CollectionPlan.Of([Thin(1, Now.AddDays(8))], Now, Wanted);
+        IReadOnlyList<PlannedVisit> plan = CollectionPlan.Of([Thin(1, Now.AddDays(8))], Now, RevisitsBelow);
 
         Assert.Equal(VisitReason.Rotation, Assert.Single(plan).Reason);
     }
 
     [Fact]
-    public void AStreamCoveredExactlyAsFarAsIsWantedIsThickEnough()
+    public void AStreamCoveredExactlyToTheRevisitThresholdIsNotWorthGoingBackTo()
     {
-        IReadOnlyList<PlannedVisit> plan = CollectionPlan.Of([Thin(1, Now + Wanted)], Now, Wanted);
+        IReadOnlyList<PlannedVisit> plan = CollectionPlan.Of([Thin(1, Now + RevisitsBelow)], Now, RevisitsBelow);
 
         Assert.Equal(VisitReason.Rotation, Assert.Single(plan).Reason);
     }
@@ -98,7 +98,7 @@ public sealed class CollectionPlanTests
         Assert.Empty(CollectionPlan.Of(
             [Stream(1, Now.AddHours(-1), Now.AddHours(1), Collected(1, Now.AddHours(1)))],
             Now,
-            Wanted));
+            RevisitsBelow));
     }
 
     [Fact]
@@ -107,7 +107,7 @@ public sealed class CollectionPlanTests
         PlannedVisit visit = Assert.Single(CollectionPlan.Of(
             [Stream(1, Now.AddHours(-1), Now.AddHours(1), Collected(1, Now.AddHours(1)))],
             Now,
-            Wanted,
+            RevisitsBelow,
             hurried: true));
 
         Assert.Equal(1, visit.TransportStreamId.Value);
@@ -119,13 +119,13 @@ public sealed class CollectionPlanTests
         Assert.Single(CollectionPlan.Of(
             [Stream(1, Now.AddHours(-1), Now, Collected(1, Now.AddHours(1)))],
             Now,
-            Wanted));
+            RevisitsBelow));
     }
 
     [Fact]
     public void StreamsThatAreEquallyDueAreVisitedInASettledOrder()
     {
-        IReadOnlyList<PlannedVisit> plan = CollectionPlan.Of([NeverVisited(9), NeverVisited(4)], Now, Wanted);
+        IReadOnlyList<PlannedVisit> plan = CollectionPlan.Of([NeverVisited(9), NeverVisited(4)], Now, RevisitsBelow);
 
         Assert.Equal([4, 9], Streams(plan));
     }
@@ -139,7 +139,7 @@ public sealed class CollectionPlanTests
                 new StreamCoverage(new NetworkId(1), new TransportStreamId(1), [], null, null),
             ],
             Now,
-            Wanted);
+            RevisitsBelow);
 
         Assert.Equal([1, 2], plan.Select(visit => visit.NetworkId.Value));
     }
@@ -147,7 +147,7 @@ public sealed class CollectionPlanTests
     [Fact]
     public void APlannedVisitNamesTheStreamItMeans()
     {
-        PlannedVisit visit = Assert.Single(CollectionPlan.Of([NeverVisited(7)], Now, Wanted));
+        PlannedVisit visit = Assert.Single(CollectionPlan.Of([NeverVisited(7)], Now, RevisitsBelow));
 
         Assert.Equal(32739, visit.NetworkId.Value);
         Assert.Equal(7, visit.TransportStreamId.Value);
@@ -156,11 +156,11 @@ public sealed class CollectionPlanTests
     [Fact]
     public void ATimeThatIsNotInUniversalTimeIsRefused()
         => Assert.Throws<ArgumentException>(
-            () => CollectionPlan.Of([], new DateTime(2026, 8, 18, 12, 0, 0, DateTimeKind.Local), Wanted));
+            () => CollectionPlan.Of([], new DateTime(2026, 8, 18, 12, 0, 0, DateTimeKind.Local), RevisitsBelow));
 
     [Fact]
     public void NothingToVisitPlansNothing()
-        => Assert.Empty(CollectionPlan.Of([], Now, Wanted));
+        => Assert.Empty(CollectionPlan.Of([], Now, RevisitsBelow));
 
     private static IEnumerable<int> Streams(IReadOnlyList<PlannedVisit> plan)
         => plan.Select(visit => visit.TransportStreamId.Value);

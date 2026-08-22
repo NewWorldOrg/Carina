@@ -232,7 +232,48 @@ public sealed class CollectionStatusEndpointTests
         Assert.Equal(3, counted.GetProperty("versionChanges").GetInt32());
     }
 
+    [Fact]
+    public async Task WhetherAServiceIsThickEnoughIsAskedOfTheGoalNotOfTheRevisitThreshold()
+    {
+        await using var feature = new EpgFeature(
+            [Stream(4, 32_736, [1049])],
+            collection: Aiming,
+            clock: new FixedTimeProvider(At));
+
+        feature.Programmes.Programmes.Add(ProgrammeStartingAt(4, 1049, At.AddDays(4).AddHours(-1)));
+
+        (_, JsonElement body) = await feature.GetAsync("/api/epg/collection-status");
+        JsonElement only = Assert.Single(body.GetProperty("data").GetProperty("streams").EnumerateArray());
+        JsonElement coverage = Assert.Single(only.GetProperty("coverage").EnumerateArray());
+
+        Assert.Equal(192, body.GetProperty("data").GetProperty("wantedCoverageHours").GetInt32());
+        Assert.False(coverage.GetProperty("meetsWantedCoverage").GetBoolean());
+    }
+
+    [Fact]
+    public async Task AServiceCoveredExactlyAsFarAsTheGoalIsThickEnough()
+    {
+        await using var feature = new EpgFeature(
+            [Stream(4, 32_736, [1049])],
+            collection: Aiming,
+            clock: new FixedTimeProvider(At));
+
+        feature.Programmes.Programmes.Add(ProgrammeStartingAt(4, 1049, At.AddDays(8)));
+
+        (_, JsonElement body) = await feature.GetAsync("/api/epg/collection-status");
+        JsonElement only = Assert.Single(body.GetProperty("data").GetProperty("streams").EnumerateArray());
+        JsonElement coverage = Assert.Single(only.GetProperty("coverage").EnumerateArray());
+
+        Assert.True(coverage.GetProperty("meetsWantedCoverage").GetBoolean());
+    }
+
     private static readonly CollectionSettings Wanting = new() { WantedCoverage = TimeSpan.FromDays(3) };
+
+    private static readonly CollectionSettings Aiming = new()
+    {
+        WantedCoverage = TimeSpan.FromDays(8),
+        RevisitsBelow = TimeSpan.FromDays(3),
+    };
 
     private static Programme ProgrammeStartingAt(int network, int service, DateTime startsAt)
         => Programme.Rehydrate(

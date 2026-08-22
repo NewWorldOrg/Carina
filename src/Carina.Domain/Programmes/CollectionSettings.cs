@@ -6,7 +6,9 @@ public sealed record CollectionSettings
 {
     public TimeSpan BetweenSweeps { get; init; } = TimeSpan.FromMinutes(30);
 
-    public TimeSpan WantedCoverage { get; init; } = TimeSpan.FromDays(3);
+    public TimeSpan WantedCoverage { get; init; } = TimeSpan.FromDays(8);
+
+    public TimeSpan RevisitsBelow { get; init; } = TimeSpan.FromDays(3);
 
     public TimeSpan BetweenVisits { get; init; } = TimeSpan.FromHours(6);
 

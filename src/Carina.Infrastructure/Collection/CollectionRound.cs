@@ -35,7 +35,7 @@ public sealed class CollectionRound(
         IReadOnlyList<PlannedVisit> plan = CollectionPlan.Of(
             await CoverageAsync(streams, abort),
             now,
-            settings.WantedCoverage,
+            settings.RevisitsBelow,
             hurried);
         int visited = 0;
         int gathered = 0;
