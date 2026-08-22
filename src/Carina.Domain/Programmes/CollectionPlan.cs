@@ -28,7 +28,7 @@ public static class CollectionPlan
     public static IReadOnlyList<PlannedVisit> Of(
         IReadOnlyList<StreamCoverage> streams,
         DateTime now,
-        TimeSpan wanted,
+        TimeSpan revisitsBelow,
         bool hurried = false)
     {
         ArgumentNullException.ThrowIfNull(streams);
@@ -58,7 +58,9 @@ public static class CollectionPlan
 
             due.Add((
                 stream,
-                thinnest is not null && thinnest < now + wanted ? VisitReason.ThinnestCoverage : VisitReason.Rotation,
+                thinnest is not null && thinnest < now + revisitsBelow
+                    ? VisitReason.ThinnestCoverage
+                    : VisitReason.Rotation,
                 thinnest));
         }
 

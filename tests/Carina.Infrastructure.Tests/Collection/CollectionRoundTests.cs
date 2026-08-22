@@ -418,6 +418,69 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
         Assert.Single(visit.Tally);
     }
 
+    [Fact]
+    public async Task HowFarAheadWeWantToSeeIsNotWhatMakesAStreamWorthGoingBackTo()
+    {
+        int network = NextNetwork();
+        DateTime now = DateTime.UtcNow;
+        var driver = new ScriptedDriverClient();
+
+        driver.Script(TuningParameters.Terrestrial(22), Carrying(network, 1));
+        driver.Script(TuningParameters.Terrestrial(24), Carrying(network, 2));
+
+        await using CarinaDbContext context = database.Open();
+        var programmes = new ProgrammeRepository(context);
+        var visits = new StreamVisitRepository(context);
+
+        await programmes.AddAsync(Reaching(network, 1049, now.AddDays(4)), Cancel);
+        await programmes.AddAsync(Reaching(network, 1050, now.AddDays(6)), Cancel);
+        await visits.SaveAsync(Settled(network, 1, now.AddHours(-1)), Cancel);
+        await visits.SaveAsync(Settled(network, 2, now.AddHours(-48)), Cancel);
+
+        await Round(driver, context, Aiming(TimeSpan.FromDays(8), TimeSpan.FromDays(3))).WalkAsync(
+            [Serving(network, 1, 22, 1049), Serving(network, 2, 24, 1050)],
+            Cancel, Cancel);
+
+        Assert.Equal(
+            [TuningParameters.Terrestrial(24), TuningParameters.Terrestrial(22)],
+            driver.Started);
+    }
+
+    private static CollectionSettings Aiming(TimeSpan wanted, TimeSpan revisitsBelow)
+        => new()
+        {
+            WantedCoverage = wanted,
+            RevisitsBelow = revisitsBelow,
+            BetweenVisits = TimeSpan.Zero,
+        };
+
+    private static Programme Reaching(int network, int service, DateTime until)
+        => Programme.Discover(
+            new ProgrammeBroadcast(
+                new ProgrammeId(new NetworkId(network), new ServiceId(service), new EventId(1)),
+                new TransportStreamId(1),
+                until.AddMinutes(-30),
+                until,
+                "報道",
+                string.Empty,
+                false),
+            until.AddMinutes(-30));
+
+    private static StreamVisit Settled(int network, int stream, DateTime at)
+        => StreamVisit.Record(
+            new NetworkId(network),
+            new TransportStreamId(stream),
+            VisitOutcome.BasicOnly,
+            at,
+            TimeSpan.FromSeconds(1));
+
+    private static BroadcastStream Serving(int network, int stream, int channel, int service)
+        => new(
+            new NetworkId(network),
+            new TransportStreamId(stream),
+            TuningParameters.Terrestrial(channel),
+            [new ServiceId(service)]);
+
     private static BroadcastStream Stream(int network, int stream, int channel)
         => new(
             new NetworkId(network),
