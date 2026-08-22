@@ -44,6 +44,11 @@ public static class ServiceCollectionExtensions
                 $"{DriverOptions.SocketPathKey} must be an absolute path.")
             .ValidateOnStart();
 
+        services.AddSingleton<IValidateOptions<CollectionOptions>, CollectionValidation>();
+        services.AddOptions<CollectionOptions>()
+            .Configure(options => options.ReadFrom(configuration))
+            .ValidateOnStart();
+
         services.AddDbContext<CarinaDbContext>((provider, options) =>
             options.UseCarinaDatabase(provider.GetRequiredService<IOptions<DatabaseOptions>>().Value.ConnectionString));
 
@@ -91,7 +96,8 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IDriverSessionResyncHook, NoopDriverSessionResyncHook>();
         services.TryAddSingleton(DriverSupervisionSettings.Default);
         services.TryAddSingleton(ScanSettings.Default);
-        services.TryAddSingleton(new CollectionSettings());
+        services.TryAddSingleton<CollectionSettings>(provider =>
+            provider.GetRequiredService<IOptions<CollectionOptions>>().Value.Read());
         services.TryAddSingleton<RescanNoticeBoard>();
         services.TryAddSingleton<CollectionBoost>();
         services.TryAddSingleton(new AppEventHub());
