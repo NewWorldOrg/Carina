@@ -147,6 +147,49 @@ public sealed class ScanEndpointTests
     }
 
     [Fact]
+    public async Task ProgressTellsTheFourWaysOfFailingApartAndCarriesAReasonForEachOne()
+    {
+        await using var feature = new ScanFeature
+        {
+            Orchestrator =
+            {
+                Walked =
+                {
+                    TuningParameters.Terrestrial(Terrestrial),
+                    TuningParameters.Terrestrial(OtherTerrestrial),
+                    TuningParameters.Terrestrial(Terrestrial),
+                    TuningParameters.Terrestrial(OtherTerrestrial),
+                },
+                Outcomes =
+                {
+                    ScanAttemptOutcome.NoLock,
+                    ScanAttemptOutcome.LockedWithoutData,
+                    ScanAttemptOutcome.IncompleteTables,
+                    ScanAttemptOutcome.UnexpectedStream,
+                },
+            },
+        };
+
+        Guid scanId = await feature.StartAsync();
+
+        await feature.UntilSettled(scanId);
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync($"/api/tuners/scan/{scanId}");
+        JsonElement data = body.GetProperty("data");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(4, data.GetProperty("attempted").GetInt32());
+        Assert.Equal(0, data.GetProperty("succeeded").GetInt32());
+        Assert.Equal(
+            ["noLock", "lockedWithoutData", "incompleteTables", "unexpectedStream"],
+            data.GetProperty("attempts").EnumerateArray()
+                .Select(attempt => attempt.GetProperty("outcome").GetString()));
+        Assert.All(
+            data.GetProperty("attempts").EnumerateArray(),
+            attempt => Assert.False(string.IsNullOrWhiteSpace(attempt.GetProperty("detail").GetString())));
+    }
+
+    [Fact]
     public async Task ProgressReportsWhatHasBeenWalkedSoFar()
     {
         await using var feature = new ScanFeature
