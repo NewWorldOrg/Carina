@@ -61,6 +61,33 @@ API はコンテナ内のポート 8080 で待ち受け、ホストのポート 
 アドレスがセッションの代わりになる箇所はこのプロセスのどこにもないため、ここにネットワークを書いても資格情報を持たないリクエストは他と同じく拒否されます。
 書かれていれば起動時にその内容を読み上げるので、忘れられた値が黙って残り続けることはありません。
 
+### 番組表の収集
+
+番組表を集める間隔と待ち時間は `Collection` セクションにあります。
+環境変数から与えるときは `Collection__BetweenSweeps` のように書きます。
+書かなかった項目は下の既定のままです。時間は `[d.]hh:mm:ss` で読み、読めない値・負の待ち時間・
+長さを持たない間隔は該当項目を示して起動を停止します。
+
+| 設定 | 既定 | 用途 |
+| --- | --- | --- |
+| `Collection:BetweenSweeps` | `00:30:00` | 一巡してから次の一巡までの間隔 |
+| `Collection:WantedCoverage` | `8.00:00:00` | どこまで先まで埋まっていてほしいか |
+| `Collection:RevisitsBelow` | `3.00:00:00` | これを割った放送を優先して取り直す |
+| `Collection:BetweenVisits` | `06:00:00` | 同じ放送へ戻るまでの間隔 |
+| `Collection:BeforeRetrying` | `02:00:00` | 取りそこねた放送を試し直すまでの間隔 |
+| `Collection:LongestVisit` | `00:03:00` | 一度の訪問に許す長さ |
+| `Collection:KeepEndedProgrammes` | `24:00:00` | 終わった番組を現用に残す長さ |
+| `Collection:ArchiveRetention` | 無期限 | 書けばその長さで past 側を手放す |
+| `Collection:LongestBackOff` | `24:00:00` | 届かない放送を待つ上限 |
+| `Collection:BetweenBoosts` | `00:10:00` | 手で急かせる間隔 |
+| `Collection:LongestBoost` | `00:30:00` | 急かした状態を続ける上限 |
+| `Collection:RidesAlong` | `true` | 開いている受信に相乗りして集めるか |
+| `Collection:BetweenRideAlongSaves` | `00:05:00` | 相乗りで集めた分を書き出す間隔 |
+| `Collection:BetweenSessionChecks` | `00:00:30` | 相乗り先がまだ生きているかを見る間隔 |
+| `Collection:WhenTunersAreFull` | `00:00:30` / `2` / `00:05:00` / `4` | チューナーが埋まっているときの待ち方(`FirstDelay` / `Factor` / `MaximumDelay` / `FailureCeiling`) |
+
+`RidesAlong` を `false` にすると、録画や視聴で開いている受信からの吸い上げを行わなくなります。
+
 ## イメージの役割
 
 `Dockerfile` が生成するイメージは1つで、`docker/entrypoint.sh` が役割を選択します。
