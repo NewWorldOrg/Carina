@@ -187,8 +187,13 @@ public sealed class TunerLedgerEndpointTests
         });
 
         (HttpStatusCode _, JsonElement body) = await ReadAsync(saving);
+        JsonElement data = body.GetProperty("data");
 
-        Assert.True(body.GetProperty("data").GetProperty("drifted").GetBoolean());
+        Assert.Equal(
+            ["adapter0"],
+            data.GetProperty("desired").EnumerateArray()
+                .Select(entry => entry.GetProperty("deviceId").GetString()));
+        Assert.True(data.GetProperty("drifted").GetBoolean());
     }
 
     [Fact]

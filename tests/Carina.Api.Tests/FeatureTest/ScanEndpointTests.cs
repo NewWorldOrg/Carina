@@ -184,9 +184,15 @@ public sealed class ScanEndpointTests
             ["noLock", "lockedWithoutData", "incompleteTables", "unexpectedStream"],
             data.GetProperty("attempts").EnumerateArray()
                 .Select(attempt => attempt.GetProperty("outcome").GetString()));
-        Assert.All(
-            data.GetProperty("attempts").EnumerateArray(),
-            attempt => Assert.False(string.IsNullOrWhiteSpace(attempt.GetProperty("detail").GetString())));
+        Assert.Equal(
+            [
+                "scripted NoLock",
+                "scripted LockedWithoutData",
+                "scripted IncompleteTables",
+                "scripted UnexpectedStream",
+            ],
+            data.GetProperty("attempts").EnumerateArray()
+                .Select(attempt => attempt.GetProperty("detail").GetString()));
     }
 
     [Fact]
