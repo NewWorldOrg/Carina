@@ -5,6 +5,7 @@ using Carina.Infrastructure.DependencyInjection;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 
 namespace Carina.Infrastructure.Tests.Configuration;
@@ -110,6 +111,42 @@ public sealed class CollectionOptionsTests
         Assert.Contains(
             $"{CollectionOptions.Section}:WhenTunersAreFull",
             Assert.Single(refused.Failures),
+            StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("RevisitsBelow", "9.00:00:00")]
+    [InlineData("BeforeRetrying", "36:00:00")]
+    public void ASettingThatContradictsAnotherStopsTheProcessAndNamesItself(string name, string value)
+    {
+        OptionsValidationException refused = Assert.Throws<OptionsValidationException>(
+            () => Read((name, value)));
+
+        Assert.Contains(
+            $"{CollectionOptions.Section}:{name}",
+            Assert.Single(refused.Failures),
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ASettingThatCannotBeReadStopsTheHostBeforeAnythingIsServed()
+    {
+        HostApplicationBuilder builder = Host.CreateApplicationBuilder();
+        builder.Configuration.AddInMemoryCollection(
+        [
+            new KeyValuePair<string, string?>(
+                "ConnectionStrings:Carina", "Host=db;Database=carina;Username=carina;Password=placeholder"),
+            new KeyValuePair<string, string?>(DriverOptions.SocketPathKey, "/run/carina/driver.sock"),
+            new KeyValuePair<string, string?>($"{CollectionOptions.Section}:BetweenSweeps", "half an hour"),
+        ]);
+        builder.Services.AddCarinaInfrastructure(builder.Configuration);
+
+        using IHost host = builder.Build();
+        OptionsValidationException refusal = Assert.Throws<OptionsValidationException>(host.Start);
+
+        Assert.Contains(
+            $"{CollectionOptions.Section}:BetweenSweeps",
+            refusal.Message,
             StringComparison.Ordinal);
     }
 

@@ -85,8 +85,7 @@ public sealed class CollectionOptions
     public CollectionSettings Read()
     {
         CollectionSettings unset = new();
-
-        return new CollectionSettings
+        CollectionSettings read = new()
         {
             BetweenSweeps = Positive(BetweenSweeps, nameof(BetweenSweeps), unset.BetweenSweeps),
             WantedCoverage = Positive(WantedCoverage, nameof(WantedCoverage), unset.WantedCoverage),
@@ -107,6 +106,29 @@ public sealed class CollectionOptions
                 BetweenSessionChecks, nameof(BetweenSessionChecks), unset.BetweenSessionChecks),
             WhenTunersAreFull = Backing(unset.WhenTunersAreFull),
         };
+
+        return Agreeing(read);
+    }
+
+    private static CollectionSettings Agreeing(CollectionSettings read)
+    {
+        if (read.RevisitsBelow > read.WantedCoverage)
+        {
+            throw new ArgumentException(
+                $"{Section}:{nameof(RevisitsBelow)} reaches past {Section}:{nameof(WantedCoverage)}, "
+                + "which leaves every stream below the threshold and none of them ever thick enough.",
+                nameof(RevisitsBelow));
+        }
+
+        if (read.BeforeRetrying > read.LongestBackOff)
+        {
+            throw new ArgumentException(
+                $"{Section}:{nameof(BeforeRetrying)} is longer than {Section}:{nameof(LongestBackOff)}, "
+                + "so the very first retry would be cut back to the ceiling and the wait never used.",
+                nameof(BeforeRetrying));
+        }
+
+        return read;
     }
 
     private RotationBackoff Backing(RotationBackoff unset)
