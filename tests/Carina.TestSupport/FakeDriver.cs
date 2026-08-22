@@ -17,6 +17,8 @@ public sealed class FakeDriver : IAsyncDisposable
     private readonly Dictionary<string, int> requests = new(StringComparer.Ordinal);
     private readonly Lock gate = new();
 
+    private int ledgerSaves;
+
     private FakeDriver(WebApplication app, string socketPath, DriverHello hello)
     {
         this.app = app;
@@ -289,6 +291,11 @@ public sealed class FakeDriver : IAsyncDisposable
                 DriverJson.Context.DriverProblem);
 
             return;
+        }
+
+        if (!entries.SequenceEqual(Ledger.Tuners))
+        {
+            Ledger = Ledger with { Tuners = entries, SavedHash = $"saved-{++ledgerSaves}" };
         }
 
         await WriteAsync(context, StatusCodes.Status200OK, Ledger, DriverJson.Context.TunerLedgerDto);

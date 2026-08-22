@@ -112,6 +112,85 @@ public sealed class TunerLedgerEndpointTests
         return (response.StatusCode, document.RootElement.Clone());
     }
 
+    private static void Unconfigured(FakeDriver driver)
+    {
+        driver.Ledger = new TunerLedgerDto { SavedHash = "empty", LoadedHash = "empty" };
+
+        driver.Tuners = [];
+
+        driver.DetectedDevices =
+        [
+            new DetectedDeviceDto
+            {
+                DeviceId = "adapter0",
+                Detection = DeviceDetection.Detected,
+                Kinds = [TunerKind.Terrestrial],
+            },
+            new DetectedDeviceDto
+            {
+                DeviceId = "adapter1",
+                Detection = DeviceDetection.Detected,
+                Kinds = [TunerKind.Satellite],
+            },
+        ];
+    }
+
+    [Fact]
+    public async Task AMachineWithNothingConfiguredIsSetUpThroughTheApiAndNowhereElse()
+    {
+        await using DriverFeature feature = await DriverFeature.StartAsync(Capable(), Unconfigured);
+
+        (HttpStatusCode empty, JsonElement nothing) = await ReadAsync(await feature.Client.GetAsync(Tuners));
+
+        Assert.Equal(HttpStatusCode.OK, empty);
+        Assert.Equal(0, nothing.GetProperty("data").GetProperty("desired").GetArrayLength());
+
+        (HttpStatusCode looked, JsonElement found) = await ReadAsync(await feature.Client.GetAsync(Detected));
+        JsonElement difference = found.GetProperty("data");
+
+        Assert.Equal(HttpStatusCode.OK, looked);
+        Assert.Equal(
+            ["adapter0", "adapter1"],
+            difference.GetProperty("added").EnumerateArray().Select(entry => entry.GetString()));
+        Assert.Equal(0, difference.GetProperty("missing").GetArrayLength());
+
+        using HttpResponseMessage saving = await feature.Client.PutAsJsonAsync(Tuners, new
+        {
+            tuners = new[]
+            {
+                new { deviceId = "adapter0", disabled = false, lnbPower = false },
+                new { deviceId = "adapter1", disabled = false, lnbPower = false },
+            },
+        });
+
+        (HttpStatusCode saved, JsonElement _) = await ReadAsync(saving);
+
+        Assert.Equal(HttpStatusCode.OK, saved);
+
+        (HttpStatusCode listed, JsonElement ledger) = await ReadAsync(await feature.Client.GetAsync(Tuners));
+
+        Assert.Equal(HttpStatusCode.OK, listed);
+        Assert.Equal(
+            ["adapter0", "adapter1"],
+            ledger.GetProperty("data").GetProperty("desired").EnumerateArray()
+                .Select(entry => entry.GetProperty("deviceId").GetString()));
+    }
+
+    [Fact]
+    public async Task AFreshlySavedLedgerSaysItIsAheadOfWhatTheDriverIsRunning()
+    {
+        await using DriverFeature feature = await DriverFeature.StartAsync(Capable(), Unconfigured);
+
+        using HttpResponseMessage saving = await feature.Client.PutAsJsonAsync(Tuners, new
+        {
+            tuners = new[] { new { deviceId = "adapter0", disabled = false, lnbPower = false } },
+        });
+
+        (HttpStatusCode _, JsonElement body) = await ReadAsync(saving);
+
+        Assert.True(body.GetProperty("data").GetProperty("drifted").GetBoolean());
+    }
+
     [Fact]
     public async Task TheLedgerKeepsWhatWasSavedApartFromWhatIsRunning()
     {
