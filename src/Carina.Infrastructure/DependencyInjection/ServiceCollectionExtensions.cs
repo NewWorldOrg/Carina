@@ -5,6 +5,7 @@ using Carina.Domain.Driver;
 using Carina.Domain.DriverStatus;
 using Carina.Domain.Events;
 using Carina.Domain.Programmes;
+using Carina.Domain.Reservations;
 using Carina.Domain.Scans;
 using Carina.Infrastructure.Auth;
 using Carina.Infrastructure.Collection;
@@ -66,6 +67,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICandidateChannelRepository, CandidateChannelRepository>();
         services.AddScoped<ISatelliteTransportStreamRepository, SatelliteTransportStreamRepository>();
         services.AddScoped<IScanRunRepository, ScanRunRepository>();
+        services.AddScoped<IReservationRecordingContract, ReservationRecordingContract>();
         services.AddScoped<IChannelScanOrchestrator, ChannelScanOrchestrator>();
         services.AddScoped<ScanApplier>();
         services.AddScoped<IBroadcastStreamDirectory, BroadcastStreamDirectory>();
