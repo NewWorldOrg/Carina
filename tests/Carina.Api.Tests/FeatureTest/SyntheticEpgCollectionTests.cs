@@ -462,6 +462,32 @@ public sealed class SyntheticEpgCollectionTests
                 .Select(service => service.GetProperty("serviceId").GetInt32()));
     }
 
+    [Fact]
+    public async Task APortableSimulcastIsNotAmongTheMatchesOfASearchNarrowedToItsType()
+    {
+        var driver = new ScriptedDriverClient();
+
+        driver.Script(Channel, ChannelScript.Carrying(GuideCarryingAPortableSimulcast().ToBytes()));
+
+        await using var feature = new EpgFeature([EverythingTheStreamCarries()], driver);
+
+        feature.Catalogue.Services.Add(Catalogued(Television, ServiceCategory.Television));
+        feature.Catalogue.Services.Add(Catalogued(SecondTelevision, ServiceCategory.Television));
+        feature.Catalogue.Services.Add(Catalogued(OneSegSimulcast, ServiceCategory.OneSeg));
+        feature.Catalogue.Services.Add(Catalogued(DataService, ServiceCategory.Data));
+
+        await CollectAsync(feature);
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync(
+            "/api/programs/search?type=isdbT&keyword=Evening%20Bulletin");
+        JsonElement data = body.GetProperty("data");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(
+            [$"{Network}-{Television}-1"],
+            data.GetProperty("items").EnumerateArray().Select(item => item.GetProperty("id").GetString()));
+    }
+
     private static string Stamp(DateTimeOffset at)
         => at.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
 

@@ -18,7 +18,8 @@ public sealed class ProgrammeSearchRepository(CarinaDbContext context) : IProgra
     {
         ArgumentNullException.ThrowIfNull(search);
 
-        IQueryable<ProgrammeMatch> found = context.Set<ProgrammeMatch>();
+        IQueryable<ProgrammeMatch> found = context.Set<ProgrammeMatch>()
+            .Where(match => !match.IsShadow);
 
         foreach (string word in search.Words)
         {

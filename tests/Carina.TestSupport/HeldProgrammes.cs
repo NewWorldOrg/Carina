@@ -186,6 +186,7 @@ public sealed class HeldSearches(HeldProgrammes programmes, HeldArchive archive)
         var already = held.Select(Key).ToHashSet();
         IEnumerable<ProgrammeMatch> narrowed = held
             .Concat(archive.Programmes.Select(ProgrammeMatch.Of).Where(match => !already.Contains(Key(match))))
+            .Where(match => !match.IsShadow)
             .Where(match => search.Words.All(word => Carries(match, word, search.Fields)))
             .Where(match => !search.ExcludedWords.Any(word => Carries(match, word, search.Fields)))
             .Where(match => search.Genres.Count == 0

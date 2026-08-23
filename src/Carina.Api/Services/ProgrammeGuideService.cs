@@ -120,8 +120,7 @@ public sealed class ProgrammeGuideService(
         CancellationToken cancellationToken)
         =>
         [
-            .. (await directory.ListAsync(cancellationToken))
-                .Where(stream => stream.Tuning.System == system)
+            .. (await ListedAsync(system, cancellationToken))
                 .SelectMany(stream => stream.Services.Select(service =>
                     new ProgrammeService(stream.NetworkId.Value, service.Value))),
         ];
