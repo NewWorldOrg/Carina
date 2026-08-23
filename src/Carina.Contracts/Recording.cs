@@ -48,13 +48,13 @@ public sealed record RecordingSessionDto
 
     public long BytesWritten { get; init; }
 
-    public long CcDropped { get; init; }
+    public long? CcDropped { get; init; }
 
-    public long CcTotal { get; init; }
+    public long? CcTotal { get; init; }
 
     public bool CcMeasured { get; init; }
 
-    public long ScrambledPackets { get; init; }
+    public long? ScrambledPackets { get; init; }
 
     public bool ScrambleMeasured { get; init; }
 
@@ -79,10 +79,10 @@ public sealed record RecordingSessionDto
             StartedAt = session.StartedAt,
             EndsAt = session.EndsAt,
             BytesWritten = session.BytesRecorded,
-            CcDropped = countedContinuity ? session.Counters.Drops : 0,
-            CcTotal = countedContinuity ? session.Counters.Packets : 0,
+            CcDropped = countedContinuity ? session.Counters.Drops : null,
+            CcTotal = countedContinuity ? session.Counters.Packets : null,
             CcMeasured = countedContinuity,
-            ScrambledPackets = countedScrambling ? session.Counters.ScrambledPackets : 0,
+            ScrambledPackets = countedScrambling ? session.Counters.ScrambledPackets : null,
             ScrambleMeasured = countedScrambling,
             EovfCount = session.Counters.DeviceOverflows,
         };

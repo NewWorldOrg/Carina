@@ -453,12 +453,27 @@ public sealed class VersionSkewTests
         RecordingSessionDto recording = RecordingSessionDto.Of(OlderDriver, session);
 
         Assert.False(recording.CcMeasured);
-        Assert.Equal(0, recording.CcDropped);
-        Assert.Equal(0, recording.CcTotal);
+        Assert.Null(recording.CcDropped);
+        Assert.Null(recording.CcTotal);
         Assert.False(recording.ScrambleMeasured);
-        Assert.Equal(0, recording.ScrambledPackets);
+        Assert.Null(recording.ScrambledPackets);
         Assert.Equal(9_400_000, recording.BytesWritten);
         Assert.Equal(2, recording.EovfCount);
+    }
+
+    [Fact]
+    public void ARecordingThatCountedNothingCarriesNoCountRatherThanAZero()
+    {
+        SessionSnapshot session = RecordingAnsweredWith(
+            """{"packets":50000,"drops":7,"scrambledPackets":3,"deviceOverflows":2}"""
+        );
+
+        RecordingSessionDto recording = RecordingSessionDto.Of(OlderDriver, session);
+
+        Assert.Equal(
+            """{"sessionId":"rec-1","recordingId":"k-90210","outputRoot":"primary","startedAt":"2026-08-08T21:04:00+09:00","endsAt":null,"bytesWritten":9400000,"ccDropped":null,"ccTotal":null,"ccMeasured":false,"scrambledPackets":null,"scrambleMeasured":false,"eovfCount":2}""",
+            DriverJson.Serialize(recording)
+        );
     }
 
     [Fact]
@@ -475,6 +490,10 @@ public sealed class VersionSkewTests
         Assert.Equal(50_000, recording.CcTotal);
         Assert.True(recording.ScrambleMeasured);
         Assert.Equal(0, recording.ScrambledPackets);
+        Assert.Equal(
+            """{"sessionId":"rec-1","recordingId":"k-90210","outputRoot":"primary","startedAt":"2026-08-08T21:04:00+09:00","endsAt":null,"bytesWritten":9400000,"ccDropped":0,"ccTotal":50000,"ccMeasured":true,"scrambledPackets":0,"scrambleMeasured":true,"eovfCount":0}""",
+            DriverJson.Serialize(recording)
+        );
     }
 
     [Fact]
@@ -487,9 +506,74 @@ public sealed class VersionSkewTests
         RecordingSessionDto recording = RecordingSessionDto.Of(OlderDriver, session);
 
         Assert.False(recording.CcMeasured);
-        Assert.Equal(0, recording.CcTotal);
+        Assert.Null(recording.CcTotal);
         Assert.False(recording.ScrambleMeasured);
-        Assert.Equal(0, recording.ScrambledPackets);
+        Assert.Null(recording.ScrambledPackets);
+    }
+
+    [Fact]
+    public void ADriverThatCountsContinuityAndNotScramblingDegradesOnlyTheCountItCannotMake()
+    {
+        SessionSnapshot session = RecordingAnsweredWith(
+            """{"packets":50000,"drops":7,"scrambledPackets":3,"deviceOverflows":2,"ccMeasured":true,"scrambleMeasured":true}"""
+        );
+
+        RecordingSessionDto recording = RecordingSessionDto.Of(ContinuityOnlyDriver, session);
+
+        Assert.True(recording.CcMeasured);
+        Assert.Equal(7, recording.CcDropped);
+        Assert.Equal(50_000, recording.CcTotal);
+        Assert.False(recording.ScrambleMeasured);
+        Assert.Null(recording.ScrambledPackets);
+        Assert.Equal(2, recording.EovfCount);
+    }
+
+    [Fact]
+    public void ADriverThatCountsScramblingAndNotContinuityDegradesOnlyTheCountItCannotMake()
+    {
+        SessionSnapshot session = RecordingAnsweredWith(
+            """{"packets":50000,"drops":7,"scrambledPackets":3,"deviceOverflows":2,"ccMeasured":true,"scrambleMeasured":true}"""
+        );
+
+        RecordingSessionDto recording = RecordingSessionDto.Of(ScrambleOnlyDriver, session);
+
+        Assert.False(recording.CcMeasured);
+        Assert.Null(recording.CcDropped);
+        Assert.Null(recording.CcTotal);
+        Assert.True(recording.ScrambleMeasured);
+        Assert.Equal(3, recording.ScrambledPackets);
+        Assert.Equal(2, recording.EovfCount);
+    }
+
+    [Fact]
+    public void ARecordingCountedForContinuityAndNotForScramblingCarriesOnlyTheCountItMade()
+    {
+        SessionSnapshot session = RecordingAnsweredWith(
+            """{"packets":50000,"drops":7,"scrambledPackets":3,"ccMeasured":true}"""
+        );
+
+        RecordingSessionDto recording = RecordingSessionDto.Of(MeasuringDriver, session);
+
+        Assert.True(recording.CcMeasured);
+        Assert.Equal(7, recording.CcDropped);
+        Assert.False(recording.ScrambleMeasured);
+        Assert.Null(recording.ScrambledPackets);
+    }
+
+    [Fact]
+    public void ARecordingCountedForScramblingAndNotForContinuityCarriesOnlyTheCountItMade()
+    {
+        SessionSnapshot session = RecordingAnsweredWith(
+            """{"packets":50000,"drops":7,"scrambledPackets":3,"scrambleMeasured":true}"""
+        );
+
+        RecordingSessionDto recording = RecordingSessionDto.Of(MeasuringDriver, session);
+
+        Assert.False(recording.CcMeasured);
+        Assert.Null(recording.CcDropped);
+        Assert.Null(recording.CcTotal);
+        Assert.True(recording.ScrambleMeasured);
+        Assert.Equal(3, recording.ScrambledPackets);
     }
 
     [Fact]
@@ -502,7 +586,7 @@ public sealed class VersionSkewTests
         RecordingSessionDto recording = RecordingSessionDto.Of(MeasuringDriver, session);
 
         Assert.False(recording.CcMeasured);
-        Assert.Equal(0, recording.CcTotal);
+        Assert.Null(recording.CcTotal);
         Assert.False(recording.ScrambleMeasured);
     }
 
@@ -516,7 +600,7 @@ public sealed class VersionSkewTests
         RecordingSessionDto recording = RecordingSessionDto.Of(MeasuringDriver, session);
 
         Assert.False(recording.CcMeasured);
-        Assert.Equal(0, recording.CcTotal);
+        Assert.Null(recording.CcTotal);
         Assert.False(recording.ScrambleMeasured);
     }
 
@@ -701,6 +785,28 @@ public sealed class VersionSkewTests
             DriverProtocol.Version,
             "older",
             [DriverCapabilities.Recording, DriverCapabilities.Live]
+        );
+
+    private static readonly DriverHello ContinuityOnlyDriver =
+        new(
+            DriverProtocol.Version,
+            "continuity-only",
+            [
+                DriverCapabilities.Recording,
+                DriverCapabilities.Live,
+                DriverCapabilities.CcMeasurement,
+            ]
+        );
+
+    private static readonly DriverHello ScrambleOnlyDriver =
+        new(
+            DriverProtocol.Version,
+            "scramble-only",
+            [
+                DriverCapabilities.Recording,
+                DriverCapabilities.Live,
+                DriverCapabilities.ScrambleMeasurement,
+            ]
         );
 
     private static readonly DriverHello MeasuringDriver =
