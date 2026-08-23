@@ -548,6 +548,27 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
         Assert.Equal([1], found.Items.Select(match => match.EventId.Value));
     }
 
+    [Fact]
+    public async Task AWithheldServiceIsDroppedAndTheRestAreLeftWhereTheyAre()
+    {
+        int network = BroadcastIds.NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        var repository = new ProgrammeRepository(context);
+        var searches = new ProgrammeSearchRepository(context);
+
+        await repository.AddAsync(On(network, 1049, 1, $"報道{network}"), Cancel);
+        await repository.AddAsync(On(network, 1080, 2, $"報道{network}"), Cancel);
+        await repository.AddAsync(On(network, 1091, 3, $"報道{network}"), Cancel);
+        await context.SaveChangesAsync(Cancel);
+
+        PaginatedList<ProgrammeMatch> found = await searches.SearchAsync(
+            Asking($"報道{network}").Except([new ProgrammeService(network, 1080)]),
+            Cancel);
+
+        Assert.Equal(2, found.Total);
+        Assert.Equal([1, 3], found.Items.Select(match => match.EventId.Value));
+    }
+
     private static Programme Skeleton(int network, int carried, string name)
         => Held(new ProgrammeBroadcast(
             new ProgrammeId(new NetworkId(network), new ServiceId(1049), new EventId(carried)),

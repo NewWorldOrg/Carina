@@ -193,6 +193,7 @@ public sealed class HeldSearches(HeldProgrammes programmes, HeldArchive archive)
                 || match.Genres.Any(genre => search.Genres.Contains(genre.Kind)))
             .Where(match => search.Channels.Count == 0 || On(match, search.Channels))
             .Where(match => search.Services is not { } within || On(match, within))
+            .Where(match => !On(match, search.Withheld))
             .Where(match => search.From is not { } from || match.EndsAt is null || match.EndsAt > from)
             .Where(match => search.To is not { } to || match.StartsAt < to);
         IOrderedEnumerable<ProgrammeMatch> ordered = (search.Sort, search.Descending) switch

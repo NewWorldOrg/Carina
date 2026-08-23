@@ -20,6 +20,7 @@ public sealed class SyntheticEpgCollectionTests
     private const int SecondTelevision = 1050;
     private const int DataService = 1088;
     private const int OneSegSimulcast = 1080;
+    private const int WithdrawnService = 1091;
 
     private const string ADay = "?type=isdbT&from=2026-09-01T00:00:00Z&to=2026-09-02T00:00:00Z";
 
@@ -488,6 +489,109 @@ public sealed class SyntheticEpgCollectionTests
             data.GetProperty("items").EnumerateArray().Select(item => item.GetProperty("id").GetString()));
     }
 
+    [Fact]
+    public async Task NeitherAPortableSimulcastNorACarouselIsAmongTheMatchesOfASearchThatNamesNoType()
+    {
+        var driver = new ScriptedDriverClient();
+
+        driver.Script(Channel, ChannelScript.Carrying(GuideCarryingAPortableSimulcast().ToBytes()));
+
+        await using var feature = new EpgFeature([EverythingTheStreamCarries()], driver);
+
+        feature.Catalogue.Services.Add(Catalogued(Television, ServiceCategory.Television));
+        feature.Catalogue.Services.Add(Catalogued(SecondTelevision, ServiceCategory.Television));
+        feature.Catalogue.Services.Add(Catalogued(OneSegSimulcast, ServiceCategory.OneSeg));
+        feature.Catalogue.Services.Add(Catalogued(DataService, ServiceCategory.Data));
+
+        await CollectAsync(feature);
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync(
+            "/api/programs/search?keyword=Evening");
+        JsonElement data = body.GetProperty("data");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(
+            [$"{Network}-{Television}-1"],
+            data.GetProperty("items").EnumerateArray().Select(item => item.GetProperty("id").GetString()));
+    }
+
+    [Fact]
+    public async Task AServiceTheCatalogueHasNoOpinionOnIsStillAmongTheMatches()
+    {
+        var driver = new ScriptedDriverClient();
+
+        driver.Script(Channel, ChannelScript.Carrying(GuideCarryingAPortableSimulcast().ToBytes()));
+
+        await using var feature = new EpgFeature([EverythingTheStreamCarries()], driver);
+
+        feature.Catalogue.Services.Add(Catalogued(Television, ServiceCategory.Television));
+        feature.Catalogue.Services.Add(Catalogued(SecondTelevision, ServiceCategory.Television));
+
+        await CollectAsync(feature);
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync(
+            "/api/programs/search?keyword=Evening");
+        JsonElement data = body.GetProperty("data");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(
+            [$"{Network}-{Television}-1", $"{Network}-{OneSegSimulcast}-3", $"{Network}-{DataService}-5"],
+            data.GetProperty("items").EnumerateArray().Select(item => item.GetProperty("id").GetString()));
+    }
+
+    [Fact]
+    public async Task AnArchivedProgrammeOnAWithheldServiceIsNotAmongTheMatches()
+    {
+        await using var feature = new EpgFeature([EverythingTheStreamCarries()], new ScriptedDriverClient());
+
+        feature.Catalogue.Services.Add(Catalogued(Television, ServiceCategory.Television));
+        feature.Catalogue.Services.Add(Catalogued(OneSegSimulcast, ServiceCategory.OneSeg));
+        feature.Archived.Programmes.Add(Archived(Television, 21, "Archived Bulletin"));
+        feature.Archived.Programmes.Add(Archived(OneSegSimulcast, 23, "Archived Bulletin"));
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync(
+            "/api/programs/search?keyword=Archived%20Bulletin");
+        JsonElement data = body.GetProperty("data");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(
+            [$"{Network}-{Television}-21"],
+            data.GetProperty("items").EnumerateArray().Select(item => item.GetProperty("id").GetString()));
+    }
+
+    [Fact]
+    public async Task AnArchivedProgrammeOnAServiceTheCatalogueHasForgottenIsStillAmongTheMatches()
+    {
+        await using var feature = new EpgFeature([EverythingTheStreamCarries()], new ScriptedDriverClient());
+
+        feature.Catalogue.Services.Add(Catalogued(Television, ServiceCategory.Television));
+        feature.Archived.Programmes.Add(Archived(Television, 21, "Archived Bulletin"));
+        feature.Archived.Programmes.Add(Archived(WithdrawnService, 25, "Archived Bulletin"));
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync(
+            "/api/programs/search?keyword=Archived%20Bulletin");
+        JsonElement data = body.GetProperty("data");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(
+            [$"{Network}-{Television}-21", $"{Network}-{WithdrawnService}-25"],
+            data.GetProperty("items").EnumerateArray().Select(item => item.GetProperty("id").GetString()));
+    }
+
+    private static ArchivedProgramme Archived(int serviceId, int eventId, string name)
+        => ArchivedProgramme.Rehydrate(
+            new NetworkId(Network),
+            new ServiceId(serviceId),
+            new EventId(eventId),
+            Airs.UtcDateTime,
+            Airs.UtcDateTime.AddMinutes(30),
+            name,
+            string.Empty,
+            false,
+            [],
+            [],
+            Airs.UtcDateTime.AddDays(1));
+
     private static string Stamp(DateTimeOffset at)
         => at.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
 
@@ -572,7 +676,7 @@ public sealed class SyntheticEpgCollectionTests
                     Kind = ServiceKind.Data,
                     Programmes =
                     [
-                        new SyntheticProgramme(5, Airs, TimeSpan.FromHours(1)) { Name = "Data Carousel" },
+                        new SyntheticProgramme(5, Airs, TimeSpan.FromHours(1)) { Name = "Evening Carousel" },
                     ],
                 },
             ],
