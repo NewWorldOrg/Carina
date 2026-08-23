@@ -41,6 +41,14 @@ public static class PersistenceBoundaryRules
             .Order(StringComparer.Ordinal)
             .ToArray();
 
+    public static IReadOnlyList<string> TablesOf(IModel model, PersistenceFamily family)
+        => model.GetEntityTypes()
+            .Where(entityType => FamilyOf(entityType) == family)
+            .Select(TableName)
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
     private static bool BreaksABoundary(IForeignKey foreignKey)
     {
         PersistenceFamily? declaring = FamilyOf(foreignKey.DeclaringEntityType);
