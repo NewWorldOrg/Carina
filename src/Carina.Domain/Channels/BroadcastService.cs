@@ -27,6 +27,9 @@ public sealed class BroadcastService
     public bool ReservableByDefault
         => Category is ServiceCategory.Television or ServiceCategory.Radio;
 
+    public bool ListedInTheGuide
+        => Category is not (ServiceCategory.OneSeg or ServiceCategory.Data);
+
     public static BroadcastService Discover(
         NetworkId networkId,
         ServiceId serviceId,

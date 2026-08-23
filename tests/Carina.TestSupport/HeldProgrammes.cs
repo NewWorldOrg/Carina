@@ -43,6 +43,7 @@ public sealed class HeldProgrammes : IProgrammeRepository
         [
             .. Programmes
                 .Where(programme => wanted.Contains((programme.NetworkId.Value, programme.ServiceId.Value)))
+                .Where(programme => !programme.IsShadow)
                 .Where(programme => programme.StartsAt < to)
                 .Where(programme => programme.EndsAt is null || programme.EndsAt > from)
                 .OrderBy(programme => programme.StartsAt)

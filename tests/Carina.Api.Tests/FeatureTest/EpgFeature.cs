@@ -40,6 +40,7 @@ internal sealed class EpgFeature : IAsyncDisposable
                 services.AddSingleton<IProgrammeSearchRepository>(new HeldSearches(Programmes, Archived));
                 services.AddSingleton<ICollectionEpochRepository>(Epochs);
                 services.AddSingleton<ICandidateChannelRepository>(Candidates);
+                services.AddSingleton<IBroadcastServiceRepository>(Catalogue);
                 services.AddSingleton<IAtomicWrite, UnguardedWrites>();
                 services.RemoveAll<IHostedService>();
                 services.AddSingleton<IBroadcastStreamDirectory>(Streams);
@@ -79,6 +80,8 @@ internal sealed class EpgFeature : IAsyncDisposable
     public HeldStreams Streams { get; }
 
     public HeldCandidates Candidates { get; } = new();
+
+    public HeldServices Catalogue { get; } = new();
 
     public async Task<(HttpStatusCode Status, JsonElement Body)> GetAsync(string path)
     {

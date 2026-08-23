@@ -16,6 +16,7 @@ public sealed record GuidePage(
 
 public sealed class ProgrammeGuideService(
     IBroadcastStreamDirectory directory,
+    IBroadcastServiceRepository catalogue,
     IProgrammeRepository programmes,
     IArchivedProgrammeRepository archive,
     IProgrammeSearchRepository searches,
@@ -28,11 +29,7 @@ public sealed class ProgrammeGuideService(
     {
         ArgumentNullException.ThrowIfNull(window);
 
-        BroadcastStream[] carried =
-        [
-            .. (await directory.ListAsync(cancellationToken))
-                .Where(stream => stream.Tuning.System == system),
-        ];
+        BroadcastStream[] carried = [.. await ListedAsync(system, cancellationToken)];
         ProgrammeService[] wanted =
         [
             .. carried.SelectMany(stream =>
@@ -89,6 +86,31 @@ public sealed class ProgrammeGuideService(
 
         return ServiceResult<PaginatedList<ProgrammeMatch>>.Success(
             await searches.SearchAsync(asked, cancellationToken));
+    }
+
+    private async Task<IReadOnlyList<BroadcastStream>> ListedAsync(
+        TuneSystem system,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyList<BroadcastService> known = await catalogue.ListAsync(cancellationToken);
+        var withheld = known
+            .Where(service => !service.ListedInTheGuide)
+            .Select(service => (service.NetworkId.Value, service.ServiceId.Value))
+            .ToHashSet();
+
+        return
+        [
+            .. (await directory.ListAsync(cancellationToken))
+                .Where(stream => stream.Tuning.System == system)
+                .Select(stream => stream with
+                {
+                    Services =
+                    [
+                        .. stream.Services.Where(service =>
+                            !withheld.Contains((stream.NetworkId.Value, service.Value))),
+                    ],
+                }),
+        ];
     }
 
     private async Task<IReadOnlyList<ProgrammeService>> CarriedOnAsync(

@@ -18,6 +18,7 @@ public sealed class SyntheticEpgCollectionTests
     private const int Television = 1049;
     private const int SecondTelevision = 1050;
     private const int DataService = 1088;
+    private const int OneSegSimulcast = 1080;
 
     private const string ADay = "?type=isdbT&from=2026-09-01T00:00:00Z&to=2026-09-02T00:00:00Z";
 
@@ -51,11 +52,6 @@ public sealed class SyntheticEpgCollectionTests
         Assert.Contains(
             feature.Programmes.Programmes,
             held => held.ServiceId.Value == DataService && held.EventId.Value == 5);
-
-        JsonElement shadow = data.GetProperty("programmes").EnumerateArray()
-            .Single(programme => programme.GetProperty("id").GetString() == $"{Network}-{Television}-9");
-
-        Assert.True(shadow.GetProperty("isShadow").GetBoolean());
 
         (_, JsonElement ledger) = await feature.GetAsync("/api/epg/collection-status");
         JsonElement visited = Assert.Single(ledger.GetProperty("data").GetProperty("streams").EnumerateArray());
@@ -282,6 +278,90 @@ public sealed class SyntheticEpgCollectionTests
         Assert.Contains("event: epgCollection", arrived);
     }
 
+    [Fact]
+    public async Task WhatTheGuideLeavesOutOfItsColumnsIsStillHeldInTheStore()
+    {
+        var driver = new ScriptedDriverClient();
+
+        driver.Script(Channel, ChannelScript.Carrying(GuideCarryingAPortableSimulcast().ToBytes()));
+
+        await using var feature = new EpgFeature([EverythingTheStreamCarries()], driver);
+
+        feature.Catalogue.Services.Add(Catalogued(Television, ServiceCategory.Television));
+        feature.Catalogue.Services.Add(Catalogued(SecondTelevision, ServiceCategory.Television));
+        feature.Catalogue.Services.Add(Catalogued(OneSegSimulcast, ServiceCategory.OneSeg));
+        feature.Catalogue.Services.Add(Catalogued(DataService, ServiceCategory.Data));
+
+        await CollectAsync(feature);
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync($"/api/programs{ADay}");
+        JsonElement data = body.GetProperty("data");
+        string?[] served = [.. data.GetProperty("programmes").EnumerateArray()
+            .Select(programme => programme.GetProperty("id").GetString())];
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(
+            [Television, SecondTelevision],
+            data.GetProperty("services").EnumerateArray().Select(service => service.GetProperty("serviceId").GetInt32()));
+        Assert.Contains($"{Network}-{Television}-1", served);
+        Assert.DoesNotContain($"{Network}-{OneSegSimulcast}-3", served);
+        Assert.DoesNotContain($"{Network}-{DataService}-5", served);
+        Assert.DoesNotContain($"{Network}-{Television}-9", served);
+
+        Assert.Contains(
+            feature.Programmes.Programmes,
+            held => held.ServiceId.Value == OneSegSimulcast && held.EventId.Value == 3);
+        Assert.Contains(
+            feature.Programmes.Programmes,
+            held => held.ServiceId.Value == DataService && held.EventId.Value == 5);
+        Assert.Contains(
+            feature.Programmes.Programmes,
+            held => held.ServiceId.Value == Television && held.EventId.Value == 9 && held.IsShadow);
+    }
+
+    [Fact]
+    public async Task AServiceTheChannelListHasNotMetYetKeepsItsColumn()
+    {
+        var driver = new ScriptedDriverClient();
+
+        driver.Script(Channel, ChannelScript.Carrying(GuideCarryingAPortableSimulcast().ToBytes()));
+
+        await using var feature = new EpgFeature([EverythingTheStreamCarries()], driver);
+
+        await CollectAsync(feature);
+
+        (_, JsonElement body) = await feature.GetAsync($"/api/programs{ADay}");
+
+        Assert.Equal(
+            [Television, SecondTelevision, OneSegSimulcast, DataService],
+            body.GetProperty("data").GetProperty("services").EnumerateArray()
+                .Select(service => service.GetProperty("serviceId").GetInt32()));
+    }
+
+    private static BroadcastService Catalogued(int serviceId, ServiceCategory category)
+        => BroadcastService.Discover(
+            new NetworkId(Network),
+            new ServiceId(serviceId),
+            "Synthetic",
+            category,
+            DateTime.UtcNow);
+
+    private static SyntheticGuide GuideCarryingAPortableSimulcast()
+        => Guide() with
+        {
+            Services =
+            [
+                .. Guide().Services,
+                new SyntheticGuideService(OneSegSimulcast, "Synthetic One (portable)")
+                {
+                    Programmes =
+                    [
+                        new SyntheticProgramme(3, Airs, TimeSpan.FromMinutes(30)) { Name = "Evening Bulletin" },
+                    ],
+                },
+            ],
+        };
+
     private static SyntheticGuide Guide()
         => new()
         {
@@ -335,6 +415,18 @@ public sealed class SyntheticEpgCollectionTests
             new TransportStreamId(Stream),
             Channel,
             [new ServiceId(Television), new ServiceId(SecondTelevision)]);
+
+    private static BroadcastStream EverythingTheStreamCarries()
+        => OnAir() with
+        {
+            Services =
+            [
+                new ServiceId(Television),
+                new ServiceId(SecondTelevision),
+                new ServiceId(OneSegSimulcast),
+                new ServiceId(DataService),
+            ],
+        };
 
     private static PacedStream Stalling(byte[] bytes)
     {

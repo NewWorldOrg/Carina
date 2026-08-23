@@ -101,6 +101,7 @@ public sealed class ProgrammeRepository(CarinaDbContext context) : IProgrammeRep
         List<Programme> found = await context.Set<Programme>()
             .Where(programme => networks.Contains(programme.NetworkId))
             .Where(programme => carried.Contains(programme.ServiceId))
+            .Where(programme => !programme.IsShadow)
             .Where(programme => programme.StartsAt < to)
             .Where(programme => programme.EndsAt == null || programme.EndsAt > from)
             .OrderBy(programme => programme.StartsAt)

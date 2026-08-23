@@ -47,6 +47,23 @@ public sealed class BroadcastServiceTests
         Assert.Equal(reservable, service.ReservableByDefault);
     }
 
+    [Theory]
+    [InlineData(ServiceCategory.Television, true)]
+    [InlineData(ServiceCategory.Radio, true)]
+    [InlineData(ServiceCategory.Temporary, true)]
+    [InlineData(ServiceCategory.Other, true)]
+    [InlineData(ServiceCategory.OneSeg, false)]
+    [InlineData(ServiceCategory.Data, false)]
+    public void NeitherAOneSegSimulcastNorACarouselEarnsAColumnInTheGuide(
+        ServiceCategory category,
+        bool listed)
+    {
+        var service = BroadcastService.Discover(
+            new NetworkId(4), new ServiceId(101), "Fixture Service", category, At);
+
+        Assert.Equal(listed, service.ListedInTheGuide);
+    }
+
     [Fact]
     public void ANameLongerThanTheColumnIsRefusedBeforeItReachesTheDatabase()
     {

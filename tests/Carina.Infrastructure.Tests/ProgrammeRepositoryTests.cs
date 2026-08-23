@@ -260,6 +260,32 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
         Assert.Equal(1, Assert.Single(found).EventId.Value);
     }
 
+    [Fact]
+    public async Task ASkeletonEventIsHeldButNeverHandedToTheGuide()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        var programmes = new ProgrammeRepository(context);
+
+        await programmes.AddAsync(Programme.Discover(Carried(network, 1049, 1, At.AddHours(22)), At), Cancel);
+        await programmes.AddAsync(
+            Programme.Discover(Carried(network, 1049, 2, At.AddHours(22)) with { IsShadow = true }, At),
+            Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        var asked = new ProgrammeRepository(reading);
+        IReadOnlyList<Programme> found = await asked.ListForServicesAsync(
+            [new ProgrammeService(network, 1049)],
+            At.AddHours(21),
+            At.AddHours(24),
+            Cancel);
+
+        Assert.Equal(1, Assert.Single(found).EventId.Value);
+        Assert.NotNull(await asked.FindAsync(
+            new ProgrammeId(new NetworkId(network), new ServiceId(1049), new EventId(2)),
+            Cancel));
+    }
+
     private static int NextNetwork() => BroadcastIds.NextNetwork();
 
     private static ProgrammeId Id(int network, int carried = 1)
