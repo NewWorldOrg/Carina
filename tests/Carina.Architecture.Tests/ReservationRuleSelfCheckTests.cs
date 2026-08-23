@@ -105,6 +105,36 @@ public sealed class ReservationRuleSelfCheckTests
             "*.cs"));
     }
 
+    [Fact]
+    public void DetectsTheClaimWrittenByAFileThatOnlyBorrowsTheContractsName()
+    {
+        using var tree = new SourceTree();
+        tree.Write("Carina.Api/Reservations/ReservationRecordingContract.cs", ClaimingUpdate);
+
+        Assert.Equal(
+            ["/Carina.Api/Reservations/ReservationRecordingContract.cs"],
+            ReservationRules.WritersOfWhatRecordingOwns(tree.Root));
+    }
+
+    [Fact]
+    public void DetectsAMatcherInReservationCodeThatSitsOutsideTheFeatureFolders()
+    {
+        using var tree = new SourceTree();
+        tree.Write(
+            "Carina.Infrastructure/Persistence/Repositories/ReservationPlanRepository.cs",
+            """
+            using Carina.Domain.Reservations;
+            internal static class ReservationPlanRepository
+            {
+                private static bool Matches(Programme programme, RuleQuery query) => true;
+            }
+            """);
+
+        Assert.Equal(
+            ["/Carina.Infrastructure/Persistence/Repositories/ReservationPlanRepository.cs"],
+            ReservationRules.ProgrammeMatchersOutsideTheGuide(tree.Root));
+    }
+
     private sealed class SourceTree : IDisposable
     {
         private readonly DirectoryInfo directory = Directory.CreateTempSubdirectory("carina-reservation-rules-");
