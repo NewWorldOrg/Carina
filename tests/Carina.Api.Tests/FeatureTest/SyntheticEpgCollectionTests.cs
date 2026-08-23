@@ -318,10 +318,14 @@ public sealed class SyntheticEpgCollectionTests
         Assert.Contains(
             feature.Programmes.Programmes,
             held => held.ServiceId.Value == Television && held.EventId.Value == 9 && held.IsShadow);
+
+        (_, JsonElement skeleton) = await feature.GetAsync($"/api/programs/{Network}-{Television}-9");
+
+        Assert.True(skeleton.GetProperty("data").GetProperty("isShadow").GetBoolean());
     }
 
     [Fact]
-    public async Task AServiceTheChannelListHasNotMetYetKeepsItsColumn()
+    public async Task AServiceTheCatalogueHasNoOpinionOnIsNotWithheld()
     {
         var driver = new ScriptedDriverClient();
 
@@ -340,12 +344,54 @@ public sealed class SyntheticEpgCollectionTests
     }
 
     [Fact]
+    public async Task AColumnThatALaterScanWithdrawsIsNotAnsweredFromACachedGuide()
+    {
+        var driver = new ScriptedDriverClient();
+
+        driver.Script(Channel, ChannelScript.Carrying(GuideCarryingAPortableSimulcast().ToBytes()));
+
+        await using var feature = new EpgFeature([EverythingTheStreamCarries()], driver);
+        BroadcastService portable = Catalogued(OneSegSimulcast, ServiceCategory.Television);
+
+        feature.Catalogue.Services.Add(Catalogued(Television, ServiceCategory.Television));
+        feature.Catalogue.Services.Add(Catalogued(SecondTelevision, ServiceCategory.Television));
+        feature.Catalogue.Services.Add(portable);
+        feature.Catalogue.Services.Add(Catalogued(DataService, ServiceCategory.Television));
+
+        await CollectAsync(feature);
+
+        using HttpResponseMessage held = await feature.Client.GetAsync(
+            new Uri($"/api/programs{ADay}", UriKind.Relative));
+
+        Assert.Equal(HttpStatusCode.OK, held.StatusCode);
+
+        portable.Describe("Synthetic", ServiceCategory.OneSeg, DateTime.UtcNow.AddMinutes(1));
+
+        using var asking = new HttpRequestMessage(
+            HttpMethod.Get,
+            new Uri($"/api/programs{ADay}", UriKind.Relative));
+
+        asking.Headers.IfNoneMatch.Add(held.Headers.ETag!);
+
+        using HttpResponseMessage answered = await feature.Client.SendAsync(asking);
+
+        Assert.Equal(HttpStatusCode.OK, answered.StatusCode);
+
+        using JsonDocument served = JsonDocument.Parse(await answered.Content.ReadAsStringAsync());
+
+        Assert.Equal(
+            [Television, SecondTelevision, DataService],
+            served.RootElement.GetProperty("data").GetProperty("services").EnumerateArray()
+                .Select(service => service.GetProperty("serviceId").GetInt32()));
+    }
+
+    [Fact]
     public async Task AGuideGatheredOverEightDaysIsStillReadableOnItsEighthDay()
     {
         var driver = new ScriptedDriverClient();
         DateTimeOffset opens = DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(9));
 
-        driver.Script(Channel, ChannelScript.Carrying(OverEightDays(opens.AddHours(1)).ToBytes()));
+        driver.Script(Channel, ChannelScript.Carrying(OverEightDays(opens.AddHours(2)).ToBytes()));
 
         await using var feature = new EpgFeature([OnlyTheOneService()], driver);
 

@@ -29,7 +29,8 @@ public sealed class ProgrammeGuideService(
     {
         ArgumentNullException.ThrowIfNull(window);
 
-        BroadcastStream[] carried = [.. await ListedAsync(system, cancellationToken)];
+        IReadOnlyList<BroadcastService> known = await catalogue.ListAsync(cancellationToken);
+        BroadcastStream[] carried = [.. await ListedAsync(system, known, cancellationToken)];
         ProgrammeService[] wanted =
         [
             .. carried.SelectMany(stream =>
@@ -64,7 +65,7 @@ public sealed class ProgrammeGuideService(
                     programme.StartsAt))),
             ],
             carried,
-            await ETagAsync(carried, window, cancellationToken)));
+            await ETagAsync(carried, known, window, cancellationToken)));
     }
 
     public async Task<ServiceResult<Programme>> FindAsync(
@@ -90,9 +91,9 @@ public sealed class ProgrammeGuideService(
 
     private async Task<IReadOnlyList<BroadcastStream>> ListedAsync(
         TuneSystem system,
+        IReadOnlyList<BroadcastService> known,
         CancellationToken cancellationToken)
     {
-        IReadOnlyList<BroadcastService> known = await catalogue.ListAsync(cancellationToken);
         var withheld = known
             .Where(service => !service.ListedInTheGuide)
             .Select(service => (service.NetworkId.Value, service.ServiceId.Value))
@@ -126,6 +127,7 @@ public sealed class ProgrammeGuideService(
 
     private async Task<string> ETagAsync(
         IReadOnlyList<BroadcastStream> carried,
+        IReadOnlyList<BroadcastService> known,
         GuideWindow window,
         CancellationToken cancellationToken)
     {
@@ -140,9 +142,12 @@ public sealed class ProgrammeGuideService(
         long stamp = mine.Length == 0
             ? 0
             : mine.Max(visit => visit.LastAttemptedAt.Ticks);
+        long catalogued = known.Count == 0
+            ? 0
+            : known.Max(service => service.LastSeenAt.Ticks);
 
         return string.Create(
             CultureInfo.InvariantCulture,
-            $"\"{mine.Length:x}-{stamp:x}-{window.From.Ticks:x}-{window.To.Ticks:x}\"");
+            $"\"{mine.Length:x}-{stamp:x}-{known.Count:x}-{catalogued:x}-{window.From.Ticks:x}-{window.To.Ticks:x}\"");
     }
 }
