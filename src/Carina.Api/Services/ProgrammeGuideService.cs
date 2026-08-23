@@ -84,20 +84,26 @@ public sealed class ProgrammeGuideService(
 
         ProgrammeSearch asked = search.System is { } system
             ? search.Over(await CarriedOnAsync(system, cancellationToken))
-            : search;
+            : search.Except(WithheldIn(await catalogue.ListAsync(cancellationToken)));
 
         return ServiceResult<PaginatedList<ProgrammeMatch>>.Success(
             await searches.SearchAsync(asked, cancellationToken));
     }
 
+    private static IReadOnlyList<ProgrammeService> WithheldIn(IReadOnlyList<BroadcastService> known)
+        =>
+        [
+            .. known
+                .Where(service => !service.ListedInTheGuide)
+                .Select(service => new ProgrammeService(service.NetworkId.Value, service.ServiceId.Value)),
+        ];
+
     private async Task<IReadOnlyList<BroadcastStream>> ListedAsync(
         TuneSystem system,
         CancellationToken cancellationToken)
     {
-        IReadOnlyList<BroadcastService> known = await catalogue.ListAsync(cancellationToken);
-        var withheld = known
-            .Where(service => !service.ListedInTheGuide)
-            .Select(service => (service.NetworkId.Value, service.ServiceId.Value))
+        var withheld = WithheldIn(await catalogue.ListAsync(cancellationToken))
+            .Select(service => (service.NetworkId, service.ServiceId))
             .ToHashSet();
 
         return

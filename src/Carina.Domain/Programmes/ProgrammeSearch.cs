@@ -57,6 +57,7 @@ public sealed class ProgrammeSearch
         TuneSystem? system,
         IReadOnlyList<ProgrammeService> channels,
         IReadOnlyList<ProgrammeService>? services,
+        IReadOnlyList<ProgrammeService> withheld,
         DateTime? from,
         DateTime? to,
         ProgrammeSort sort,
@@ -72,6 +73,7 @@ public sealed class ProgrammeSearch
         System = system;
         Channels = channels;
         Services = services;
+        Withheld = withheld;
         From = from;
         To = to;
         Sort = sort;
@@ -95,6 +97,8 @@ public sealed class ProgrammeSearch
     public IReadOnlyList<ProgrammeService> Channels { get; }
 
     public IReadOnlyList<ProgrammeService>? Services { get; }
+
+    public IReadOnlyList<ProgrammeService> Withheld { get; }
 
     public DateTime? From { get; }
 
@@ -173,6 +177,7 @@ public sealed class ProgrammeSearch
             beside.System is TuneSystem.Unspecified ? null : beside.System,
             channels,
             null,
+            [],
             from,
             to,
             sort,
@@ -193,12 +198,35 @@ public sealed class ProgrammeSearch
             System,
             Channels,
             services,
+            Withheld,
             From,
             To,
             Sort,
             Descending,
             Page,
             PerPage);
+
+    public ProgrammeSearch Except(IReadOnlyList<ProgrammeService> withheld)
+    {
+        ArgumentNullException.ThrowIfNull(withheld);
+
+        return new(
+            Keyword,
+            Words,
+            ExcludedWords,
+            Fields,
+            Genres,
+            System,
+            Channels,
+            Services,
+            withheld,
+            From,
+            To,
+            Sort,
+            Descending,
+            Page,
+            PerPage);
+    }
 
     private static IReadOnlyList<string>? WordsIn(string asked)
     {

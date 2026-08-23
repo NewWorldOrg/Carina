@@ -49,6 +49,11 @@ public sealed class ProgrammeSearchRepository(CarinaDbContext context) : IProgra
             found = OnAnyOf(found, within);
         }
 
+        if (search.Withheld.Count > 0)
+        {
+            found = OnNoneOf(found, search.Withheld);
+        }
+
         if (search.From is { } from)
         {
             found = found.Where(match => match.EndsAt == null || match.EndsAt > from);
@@ -121,6 +126,19 @@ public sealed class ProgrammeSearchRepository(CarinaDbContext context) : IProgra
         Expression<Func<ProgrammeMatch, bool>> nowhere = match => false;
 
         return found.Where(services.Aggregate(nowhere, (carried, service) => Either(carried, On(service))));
+    }
+
+    private static IQueryable<ProgrammeMatch> OnNoneOf(
+        IQueryable<ProgrammeMatch> found,
+        IReadOnlyList<ProgrammeService> services)
+    {
+        Expression<Func<ProgrammeMatch, bool>> nowhere = match => false;
+        Expression<Func<ProgrammeMatch, bool>> anywhere =
+            services.Aggregate(nowhere, (carried, service) => Either(carried, On(service)));
+
+        return found.Where(Expression.Lambda<Func<ProgrammeMatch, bool>>(
+            Expression.Not(anywhere.Body),
+            anywhere.Parameters[0]));
     }
 
     private static Expression<Func<ProgrammeMatch, bool>> On(ProgrammeService service)

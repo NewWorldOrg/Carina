@@ -268,6 +268,30 @@ public sealed class ProgrammeSearchAcrossLayersTests(RepositoryDatabase database
         Assert.Equal([2, 1], found.Items.Select(match => match.EventId.Value));
     }
 
+    [Fact]
+    public async Task AWithheldServiceIsDroppedFromTheArchiveToo()
+    {
+        int network = BroadcastIds.NextNetwork();
+        await using CarinaDbContext context = database.Open();
+
+        await new ArchivedProgrammeRepository(context).KeepAsync(
+            [
+                Archived(network, 1, $"紀行{network}", service: 1049),
+                Archived(network, 2, $"紀行{network}", service: 1080),
+                Archived(network, 3, $"紀行{network}", service: 1091),
+            ],
+            Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        PaginatedList<ProgrammeMatch> found = await new ProgrammeSearchRepository(reading).SearchAsync(
+            Asking($"紀行{network}").Except([new ProgrammeService(network, 1080)]),
+            Cancel);
+
+        Assert.Equal(2, found.Total);
+        Assert.Equal([1, 3], found.Items.Select(match => match.EventId.Value));
+        Assert.All(found.Items, match => Assert.True(match.IsArchived));
+    }
+
     private static ProgrammeSearch Asking(string keyword, ProgrammeConditions? conditions = null)
         => ProgrammeSearch.For(keyword, At.AddDays(-30), At.AddDays(1), conditions: conditions)!;
 
