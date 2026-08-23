@@ -101,6 +101,8 @@ public sealed record StartSessionRequest
 
     public TuneParams? Tune { get; init; }
 
+    public string? RecordingId { get; init; }
+
     public IReadOnlyList<string> Validate(DateTimeOffset now)
     {
         var problems = new List<string>();
@@ -123,6 +125,7 @@ public sealed record StartSessionRequest
         }
 
         problems.AddRange(OutputRootProblems());
+        problems.AddRange(RecordingIdProblems());
 
         if (Tuning is null)
         {
@@ -225,6 +228,31 @@ public sealed record StartSessionRequest
             ? []
             : [$"outputRoot: expected {WireName.Description}; got '{OutputRoot}'."];
     }
+
+    private IReadOnlyList<string> RecordingIdProblems()
+    {
+        if (Purpose is not SessionPurpose.Recording)
+        {
+            return RecordingId is null
+                ? []
+                :
+                [
+                    $"recordingId: only a recording writes a file, and this request is a {Purpose.ToString().ToLowerInvariant()} one; got '{RecordingId}'.",
+                ];
+        }
+
+        if (RecordingId is null)
+        {
+            return
+            [
+                "recordingId: a recording names the recording its file belongs to, so that the file can be found again without deriving a name from programme text.",
+            ];
+        }
+
+        return WireName.IsUsable(RecordingId)
+            ? []
+            : [$"recordingId: expected {WireName.Description}; got '{RecordingId}'."];
+    }
 }
 
 public sealed record SessionCounters(
@@ -238,7 +266,9 @@ public sealed record SessionCounters(
     long DiscardedBytes = 0,
     long Resyncs = 0,
     long DeviceOverflows = 0,
-    long LockLosses = 0
+    long LockLosses = 0,
+    bool CcMeasured = false,
+    bool ScrambleMeasured = false
 )
 {
     public static readonly SessionCounters Nothing = new();
@@ -280,6 +310,8 @@ public sealed record SessionSnapshot(
         get => counters;
         init => counters = value ?? SessionCounters.Nothing;
     }
+
+    public string? RecordingId { get; init; }
 }
 
 public sealed record DriverProblem(string Title, IReadOnlyList<string> Problems)

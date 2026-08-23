@@ -180,6 +180,10 @@ public sealed class WireSpellingTests
         Assert.Equal("deviceDetection", DriverCapabilities.DeviceDetection);
         Assert.Equal("tunerLedger", DriverCapabilities.TunerLedger);
         Assert.Equal("gracefulRestart", DriverCapabilities.GracefulRestart);
+        Assert.Equal("ccMeasurement", DriverCapabilities.CcMeasurement);
+        Assert.Equal("scrambleMeasurement", DriverCapabilities.ScrambleMeasurement);
+        Assert.Equal("recordingExtension", DriverCapabilities.RecordingExtension);
+        Assert.Equal("storage", DriverCapabilities.Storage);
     }
 
     [Fact]

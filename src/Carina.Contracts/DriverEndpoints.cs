@@ -18,6 +18,8 @@ public static class DriverEndpoints
 
     public const string Restart = "/restart";
 
+    public const string Storage = "/storage";
+
     public const string SubscriberQuery = "as";
 
     public const string ViewerSubscriber = "viewer";
@@ -57,5 +59,6 @@ public static class DriverEndpoints
         DevicesDetected,
         TunerLedger,
         Restart,
+        Storage,
     ];
 }

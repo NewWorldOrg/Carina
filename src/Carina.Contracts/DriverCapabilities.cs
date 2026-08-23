@@ -24,6 +24,14 @@ public static class DriverCapabilities
 
     public const string GracefulRestart = "gracefulRestart";
 
+    public const string CcMeasurement = "ccMeasurement";
+
+    public const string ScrambleMeasurement = "scrambleMeasurement";
+
+    public const string RecordingExtension = "recordingExtension";
+
+    public const string Storage = "storage";
+
     public const string SignalQualityMetricPrefix = "signalQuality.";
 
     public const string SessionPurposePrefix = "sessionPurpose.";

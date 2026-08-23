@@ -188,6 +188,7 @@ public sealed class DriverUnderTest : IAsyncDisposable
             Tuning = new TuningRequest(TunerKind.Terrestrial, 55),
             OutputRoot = outputRoot,
             EndsAt = endsAt,
+            RecordingId = "k-90210",
         };
 
     public async ValueTask DisposeAsync()

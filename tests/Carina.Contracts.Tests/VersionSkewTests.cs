@@ -443,6 +443,270 @@ public sealed class VersionSkewTests
         );
     }
 
+    [Fact]
+    public void ARecordingFromADriverThatCannotCountContinuityIsNotReadAsMeasured()
+    {
+        SessionSnapshot session = RecordingAnsweredWith(
+            """{"packets":50000,"drops":7,"scrambledPackets":3,"deviceOverflows":2}"""
+        );
+
+        RecordingSessionDto recording = RecordingSessionDto.Of(OlderDriver, session);
+
+        Assert.False(recording.CcMeasured);
+        Assert.Null(recording.CcDropped);
+        Assert.Null(recording.CcTotal);
+        Assert.False(recording.ScrambleMeasured);
+        Assert.Null(recording.ScrambledPackets);
+        Assert.Equal(9_400_000, recording.BytesWritten);
+        Assert.Equal(2, recording.EovfCount);
+    }
+
+    [Fact]
+    public void ARecordingThatCountedNothingCarriesNoCountRatherThanAZero()
+    {
+        SessionSnapshot session = RecordingAnsweredWith(
+            """{"packets":50000,"drops":7,"scrambledPackets":3,"deviceOverflows":2}"""
+        );
+
+        RecordingSessionDto recording = RecordingSessionDto.Of(OlderDriver, session);
+
+        Assert.Equal(
+            """{"sessionId":"rec-1","recordingId":"k-90210","outputRoot":"primary","startedAt":"2026-08-08T21:04:00+09:00","endsAt":null,"bytesWritten":9400000,"ccDropped":null,"ccTotal":null,"ccMeasured":false,"scrambledPackets":null,"scrambleMeasured":false,"eovfCount":2}""",
+            DriverJson.Serialize(recording)
+        );
+    }
+
+    [Fact]
+    public void ARecordingThatCountedAndFoundNothingIsNotReadAsUnmeasured()
+    {
+        SessionSnapshot session = RecordingAnsweredWith(
+            """{"packets":50000,"drops":0,"scrambledPackets":0,"deviceOverflows":0,"ccMeasured":true,"scrambleMeasured":true}"""
+        );
+
+        RecordingSessionDto recording = RecordingSessionDto.Of(MeasuringDriver, session);
+
+        Assert.True(recording.CcMeasured);
+        Assert.Equal(0, recording.CcDropped);
+        Assert.Equal(50_000, recording.CcTotal);
+        Assert.True(recording.ScrambleMeasured);
+        Assert.Equal(0, recording.ScrambledPackets);
+        Assert.Equal(
+            """{"sessionId":"rec-1","recordingId":"k-90210","outputRoot":"primary","startedAt":"2026-08-08T21:04:00+09:00","endsAt":null,"bytesWritten":9400000,"ccDropped":0,"ccTotal":50000,"ccMeasured":true,"scrambledPackets":0,"scrambleMeasured":true,"eovfCount":0}""",
+            DriverJson.Serialize(recording)
+        );
+    }
+
+    [Fact]
+    public void ADriverThatDoesNotDeclareTheCountIsNotTakenAtItsWordAboutHavingMadeIt()
+    {
+        SessionSnapshot session = RecordingAnsweredWith(
+            """{"packets":50000,"drops":7,"scrambledPackets":3,"ccMeasured":true,"scrambleMeasured":true}"""
+        );
+
+        RecordingSessionDto recording = RecordingSessionDto.Of(OlderDriver, session);
+
+        Assert.False(recording.CcMeasured);
+        Assert.Null(recording.CcTotal);
+        Assert.False(recording.ScrambleMeasured);
+        Assert.Null(recording.ScrambledPackets);
+    }
+
+    [Fact]
+    public void ADriverThatCountsContinuityAndNotScramblingDegradesOnlyTheCountItCannotMake()
+    {
+        SessionSnapshot session = RecordingAnsweredWith(
+            """{"packets":50000,"drops":7,"scrambledPackets":3,"deviceOverflows":2,"ccMeasured":true,"scrambleMeasured":true}"""
+        );
+
+        RecordingSessionDto recording = RecordingSessionDto.Of(ContinuityOnlyDriver, session);
+
+        Assert.True(recording.CcMeasured);
+        Assert.Equal(7, recording.CcDropped);
+        Assert.Equal(50_000, recording.CcTotal);
+        Assert.False(recording.ScrambleMeasured);
+        Assert.Null(recording.ScrambledPackets);
+        Assert.Equal(2, recording.EovfCount);
+    }
+
+    [Fact]
+    public void ADriverThatCountsScramblingAndNotContinuityDegradesOnlyTheCountItCannotMake()
+    {
+        SessionSnapshot session = RecordingAnsweredWith(
+            """{"packets":50000,"drops":7,"scrambledPackets":3,"deviceOverflows":2,"ccMeasured":true,"scrambleMeasured":true}"""
+        );
+
+        RecordingSessionDto recording = RecordingSessionDto.Of(ScrambleOnlyDriver, session);
+
+        Assert.False(recording.CcMeasured);
+        Assert.Null(recording.CcDropped);
+        Assert.Null(recording.CcTotal);
+        Assert.True(recording.ScrambleMeasured);
+        Assert.Equal(3, recording.ScrambledPackets);
+        Assert.Equal(2, recording.EovfCount);
+    }
+
+    [Fact]
+    public void ARecordingCountedForContinuityAndNotForScramblingCarriesOnlyTheCountItMade()
+    {
+        SessionSnapshot session = RecordingAnsweredWith(
+            """{"packets":50000,"drops":7,"scrambledPackets":3,"ccMeasured":true}"""
+        );
+
+        RecordingSessionDto recording = RecordingSessionDto.Of(MeasuringDriver, session);
+
+        Assert.True(recording.CcMeasured);
+        Assert.Equal(7, recording.CcDropped);
+        Assert.False(recording.ScrambleMeasured);
+        Assert.Null(recording.ScrambledPackets);
+    }
+
+    [Fact]
+    public void ARecordingCountedForScramblingAndNotForContinuityCarriesOnlyTheCountItMade()
+    {
+        SessionSnapshot session = RecordingAnsweredWith(
+            """{"packets":50000,"drops":7,"scrambledPackets":3,"scrambleMeasured":true}"""
+        );
+
+        RecordingSessionDto recording = RecordingSessionDto.Of(MeasuringDriver, session);
+
+        Assert.False(recording.CcMeasured);
+        Assert.Null(recording.CcDropped);
+        Assert.Null(recording.CcTotal);
+        Assert.True(recording.ScrambleMeasured);
+        Assert.Equal(3, recording.ScrambledPackets);
+    }
+
+    [Fact]
+    public void ADriverThatCanCountButSaidNothingOfThisRecordingHasNotCountedIt()
+    {
+        SessionSnapshot session = RecordingAnsweredWith(
+            """{"packets":50000,"drops":0,"scrambledPackets":0}"""
+        );
+
+        RecordingSessionDto recording = RecordingSessionDto.Of(MeasuringDriver, session);
+
+        Assert.False(recording.CcMeasured);
+        Assert.Null(recording.CcTotal);
+        Assert.False(recording.ScrambleMeasured);
+    }
+
+    [Fact]
+    public void ACountThatFaultedPartWayThroughIsNotReadAsACleanZero()
+    {
+        SessionSnapshot session = RecordingAnsweredWith(
+            """{"packets":50000,"drops":0,"scrambledPackets":0,"ccMeasured":false,"scrambleMeasured":false}"""
+        );
+
+        RecordingSessionDto recording = RecordingSessionDto.Of(MeasuringDriver, session);
+
+        Assert.False(recording.CcMeasured);
+        Assert.Null(recording.CcTotal);
+        Assert.False(recording.ScrambleMeasured);
+    }
+
+    [Fact]
+    public void ARecordingFromADriverThatPredatesAllOfThisStillReadsForWhatItDidSay()
+    {
+        SessionSnapshot? session = DriverJson.Deserialize(
+            """{"sessionId":"rec-1","purpose":"recording","deviceId":"a0","state":"active","startedAt":"2026-08-08T21:04:00+09:00","outputRoot":"primary","bytesRecorded":9400000}""",
+            DriverJson.Context.SessionSnapshot
+        );
+
+        Assert.NotNull(session);
+        Assert.Null(session.RecordingId);
+
+        RecordingSessionDto recording = RecordingSessionDto.Of(OlderDriver, session);
+
+        Assert.Equal(string.Empty, recording.RecordingId);
+        Assert.Equal("primary", recording.OutputRoot);
+        Assert.Equal(9_400_000, recording.BytesWritten);
+        Assert.False(recording.CcMeasured);
+    }
+
+    [Fact]
+    public void ARecordingIdIsIgnoredByADriverThatNeverHeardOfIt()
+    {
+        string json = DriverJson.Serialize(
+            new StartSessionRequest
+            {
+                SessionId = SessionId.Parse("rec-1"),
+                Purpose = SessionPurpose.Recording,
+                Tuning = new TuningRequest(TunerKind.Terrestrial, 55, 50001),
+                OutputRoot = "primary",
+                EndsAt = Moment.AddHours(1),
+                RecordingId = "k-90210",
+            }
+        );
+
+        JsonObject body = JsonNode.Parse(json)!.AsObject();
+        body.Remove("recordingId");
+
+        StartSessionRequest? read = DriverJson.Deserialize(
+            body.ToJsonString(),
+            DriverJson.Context.StartSessionRequest
+        );
+
+        Assert.NotNull(read);
+        Assert.Equal("primary", read.OutputRoot);
+        Assert.Equal(SessionPurpose.Recording, read.Purpose);
+    }
+
+    [Fact]
+    public void ADriverThatPredatesTheExtensionIsNotAskedToFollowAProgramme()
+    {
+        Assert.False(OlderDriver.Supports(DriverCapabilities.RecordingExtension));
+        Assert.False(OlderDriver.Supports(DriverCapabilities.Storage));
+        Assert.True(MeasuringDriver.Supports(DriverCapabilities.RecordingExtension));
+        Assert.True(MeasuringDriver.Supports(DriverCapabilities.Storage));
+    }
+
+    [Fact]
+    public void AnExtensionOnlyEverMovesTheEndLater()
+    {
+        var request = new ExtendSessionRequest { EndsAt = Moment.AddMinutes(10) };
+
+        Assert.Empty(request.Validate(Moment));
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-10)]
+    public void AnExtensionThatWouldCutARecordingShortIsRefused(int minutes)
+    {
+        var request = new ExtendSessionRequest { EndsAt = Moment.AddMinutes(minutes) };
+
+        Assert.Contains(
+            request.Validate(Moment),
+            problem => problem.StartsWith("endsAt:", StringComparison.Ordinal)
+        );
+    }
+
+    [Fact]
+    public void ARootThisDriverNeverDeclaredIsNotOneARecordingMayBeSentTo()
+    {
+        IReadOnlyList<StorageRootDto> roots =
+        [
+            new StorageRootDto { Name = "primary", FreeBytes = 1024, Writable = true },
+        ];
+
+        Assert.True(StorageRoots.Declares(roots, "primary"));
+        Assert.False(StorageRoots.Declares(roots, "secondary"));
+        Assert.False(StorageRoots.Declares(roots, "PRIMARY"));
+        Assert.False(StorageRoots.Declares([], "primary"));
+    }
+
+    private static SessionSnapshot RecordingAnsweredWith(string counters)
+    {
+        SessionSnapshot? session = DriverJson.Deserialize(
+            $$"""{"sessionId":"rec-1","purpose":"recording","deviceId":"a0","state":"active","startedAt":"2026-08-08T21:04:00+09:00","outputRoot":"primary","recordingId":"k-90210","bytesRecorded":9400000,"counters":{{counters}}}""",
+            DriverJson.Context.SessionSnapshot
+        );
+
+        Assert.NotNull(session);
+
+        return session;
+    }
+
     public static TheoryData<SessionPurpose> PurposesThisBuildCanAskFor()
     {
         var purposes = new TheoryData<SessionPurpose>();
@@ -471,6 +735,7 @@ public sealed class VersionSkewTests
                 Tune = tune,
                 OutputRoot = records ? "primary" : null,
                 EndsAt = records ? Moment.AddHours(1) : null,
+                RecordingId = records ? "k-90210" : null,
             }
         );
 
@@ -520,5 +785,41 @@ public sealed class VersionSkewTests
             DriverProtocol.Version,
             "older",
             [DriverCapabilities.Recording, DriverCapabilities.Live]
+        );
+
+    private static readonly DriverHello ContinuityOnlyDriver =
+        new(
+            DriverProtocol.Version,
+            "continuity-only",
+            [
+                DriverCapabilities.Recording,
+                DriverCapabilities.Live,
+                DriverCapabilities.CcMeasurement,
+            ]
+        );
+
+    private static readonly DriverHello ScrambleOnlyDriver =
+        new(
+            DriverProtocol.Version,
+            "scramble-only",
+            [
+                DriverCapabilities.Recording,
+                DriverCapabilities.Live,
+                DriverCapabilities.ScrambleMeasurement,
+            ]
+        );
+
+    private static readonly DriverHello MeasuringDriver =
+        new(
+            DriverProtocol.Version,
+            "current",
+            [
+                DriverCapabilities.Recording,
+                DriverCapabilities.Live,
+                DriverCapabilities.CcMeasurement,
+                DriverCapabilities.ScrambleMeasurement,
+                DriverCapabilities.RecordingExtension,
+                DriverCapabilities.Storage,
+            ]
         );
 }
