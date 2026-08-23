@@ -29,4 +29,34 @@ public sealed class PersistenceBoundaryRuleTests
 
         Assert.Empty(PersistenceBoundaryRules.UnclassifiedEntityTypes(context.Model));
     }
+
+    [Fact]
+    public void BothSidesOfTheReservationBoundaryAreInTheModelForTheRuleToWeigh()
+    {
+        using CarinaDbContext context = Carina();
+
+        Assert.Equal(
+            ["reservation", "reservation_outcome", "rule"],
+            PersistenceBoundaryRules.TablesOf(context.Model, PersistenceFamily.Reservations));
+
+        Assert.NotEmpty(PersistenceBoundaryRules.TablesOf(context.Model, PersistenceFamily.ChannelDefinitions));
+        Assert.NotEmpty(PersistenceBoundaryRules.TablesOf(context.Model, PersistenceFamily.ProgrammeCache));
+    }
+
+    [Fact]
+    public void AReservationStillReachesTheServiceItRecordsByValue()
+    {
+        using CarinaDbContext context = Carina();
+
+        IReadOnlyList<string> columns = [.. context.Model
+            .GetEntityTypes()
+            .Single(entityType => entityType.GetTableName() == "reservation")
+            .GetProperties()
+            .Select(property => property.GetColumnName())];
+
+        Assert.Contains("network_id", columns, StringComparer.Ordinal);
+        Assert.Contains("service_id", columns, StringComparer.Ordinal);
+        Assert.Contains("event_id", columns, StringComparer.Ordinal);
+        Assert.Contains("programme_start_at", columns, StringComparer.Ordinal);
+    }
 }

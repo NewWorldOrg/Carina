@@ -24,7 +24,11 @@ public sealed class ReservationConfiguration : IEntityTypeConfiguration<Reservat
 
     public const string CompositeState = "composite_state";
 
-    public static readonly IReadOnlyList<string> RecordingOwnedColumns = ["started_at", "recording_outcome"];
+    public const string ClaimColumn = "started_at";
+
+    public const string OutcomeColumn = "recording_outcome";
+
+    public static readonly IReadOnlyList<string> RecordingOwnedColumns = [ClaimColumn, OutcomeColumn];
 
     private const string CompositeStateSql = """
         CASE
