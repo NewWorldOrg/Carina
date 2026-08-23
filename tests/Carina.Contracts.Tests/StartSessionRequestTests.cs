@@ -13,7 +13,8 @@ public sealed class StartSessionRequestTests
         DateTimeOffset? endsAt = null,
         string? deviceId = null,
         string? outputRoot = null,
-        string sessionId = "s-1"
+        string sessionId = "s-1",
+        string? recordingId = null
     ) =>
         new()
         {
@@ -23,16 +24,19 @@ public sealed class StartSessionRequestTests
             EndsAt = endsAt,
             DeviceId = deviceId,
             OutputRoot = outputRoot,
+            RecordingId = recordingId,
         };
 
     private static StartSessionRequest Recording(
         string? outputRoot = "primary",
-        DateTimeOffset? endsAt = null
+        DateTimeOffset? endsAt = null,
+        string? recordingId = "k-90210"
     ) =>
         Request(
             purpose: SessionPurpose.Recording,
             endsAt: endsAt ?? Now.AddHours(1),
-            outputRoot: outputRoot
+            outputRoot: outputRoot,
+            recordingId: recordingId
         );
 
     [Theory]

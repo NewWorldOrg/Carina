@@ -83,6 +83,40 @@ public sealed class WireStabilityTests
         "detail",
     ];
 
+    private static readonly string[] RecordingSessionFields =
+    [
+        "sessionId",
+        "recordingId",
+        "outputRoot",
+        "startedAt",
+        "endsAt",
+        "bytesWritten",
+        "ccDropped",
+        "ccTotal",
+        "ccMeasured",
+        "scrambledPackets",
+        "scrambleMeasured",
+        "eovfCount",
+    ];
+
+    private static readonly string[] RecordingProgressFields =
+    [
+        "sessionId",
+        "recordingId",
+        "observedAt",
+        "bytesWritten",
+        "endsAt",
+        "counters",
+    ];
+
+    private static readonly string[] StorageRootFields =
+    [
+        "name",
+        "freeBytes",
+        "totalBytes",
+        "writable",
+    ];
+
     private static readonly string[] EndpointsTheFrontendReaches =
     [
         "/health",
@@ -111,18 +145,21 @@ public sealed class WireStabilityTests
     }
 
     [Fact]
-    public void ASessionRequestKeepsItsFieldsAndTakesTheNewOneAtTheEnd()
+    public void ASessionRequestKeepsItsFieldsAndTakesTheNewOnesAtTheEnd()
     {
         IReadOnlyList<string> fields = FieldsOf(DriverJson.Serialize(LegacyRequest));
 
         Assert.Equal(StartSessionRequestFields, fields.Take(StartSessionRequestFields.Length));
-        Assert.Equal(["tune"], fields.Skip(StartSessionRequestFields.Length));
+        Assert.Equal(["tune", "recordingId"], fields.Skip(StartSessionRequestFields.Length));
     }
 
     [Fact]
-    public void ASessionSnapshotKeepsExactlyTheFieldsItHad()
+    public void ASessionSnapshotKeepsItsFieldsAndTakesTheNewOneAtTheEnd()
     {
-        Assert.Equal(SessionSnapshotFields, FieldsOf(DriverJson.Serialize(LiveSession)));
+        IReadOnlyList<string> fields = FieldsOf(DriverJson.Serialize(LiveSession));
+
+        Assert.Equal(SessionSnapshotFields, fields.Take(SessionSnapshotFields.Length));
+        Assert.Equal(["recordingId"], fields.Skip(SessionSnapshotFields.Length));
     }
 
     [Fact]
@@ -132,7 +169,7 @@ public sealed class WireStabilityTests
 
         Assert.Equal(SessionCountersFields, fields.Take(SessionCountersFields.Length));
         Assert.Equal(
-            ["deviceOverflows", "lockLosses"],
+            ["deviceOverflows", "lockLosses", "ccMeasured", "scrambleMeasured"],
             fields.Skip(SessionCountersFields.Length)
         );
     }
@@ -192,7 +229,7 @@ public sealed class WireStabilityTests
     public void TheValuesOfASessionRequestAreUntouchedByTheNewField()
     {
         Assert.Equal(
-            """{"sessionId":"rec-1","purpose":"recording","tuning":{"kind":"terrestrial","physicalChannel":55,"serviceId":50001},"deviceId":"adapter0","outputRoot":"primary","endsAt":"2026-08-08T21:04:00+09:00","tune":null}""",
+            """{"sessionId":"rec-1","purpose":"recording","tuning":{"kind":"terrestrial","physicalChannel":55,"serviceId":50001},"deviceId":"adapter0","outputRoot":"primary","endsAt":"2026-08-08T21:04:00+09:00","tune":null,"recordingId":"k-90210"}""",
             DriverJson.Serialize(LegacyRequest)
         );
     }
@@ -201,7 +238,7 @@ public sealed class WireStabilityTests
     public void ARequestWrittenBeforeAnyOfThisStillValidatesTheSameWay()
     {
         StartSessionRequest? request = DriverJson.Deserialize(
-            """{"sessionId":"rec-1","purpose":"recording","tuning":{"kind":"terrestrial","physicalChannel":55},"outputRoot":"primary","endsAt":"2026-08-08T22:04:00+09:00"}""",
+            """{"sessionId":"rec-1","purpose":"recording","tuning":{"kind":"terrestrial","physicalChannel":55},"outputRoot":"primary","endsAt":"2026-08-08T22:04:00+09:00","recordingId":"k-90210"}""",
             DriverJson.Context.StartSessionRequest
         );
 
@@ -214,7 +251,7 @@ public sealed class WireStabilityTests
     public void ARequestWrittenBeforeAnyOfThisIsRefusedForTheSameReasons()
     {
         StartSessionRequest? request = DriverJson.Deserialize(
-            """{"sessionId":"rec-1","purpose":"recording","tuning":{"kind":"terrestrial","physicalChannel":900}}""",
+            """{"sessionId":"rec-1","purpose":"recording","tuning":{"kind":"terrestrial","physicalChannel":900},"recordingId":"k-90210"}""",
             DriverJson.Context.StartSessionRequest
         );
 
@@ -226,6 +263,91 @@ public sealed class WireStabilityTests
                 "endsAt: a recording session has to carry its own end time.",
             ],
             request.Validate(Moment)
+        );
+    }
+
+    [Fact]
+    public void ARecordingViewKeepsExactlyTheFieldsItHad()
+    {
+        Assert.Equal(
+            RecordingSessionFields,
+            FieldsOf(DriverJson.Serialize(new RecordingSessionDto()))
+        );
+    }
+
+    [Fact]
+    public void AProgressNoteKeepsExactlyTheFieldsItHad()
+    {
+        Assert.Equal(
+            RecordingProgressFields,
+            FieldsOf(DriverJson.Serialize(new RecordingProgressDto()))
+        );
+    }
+
+    [Fact]
+    public void AnOutputRootKeepsExactlyTheFieldsItHad()
+    {
+        Assert.Equal(
+            StorageRootFields,
+            FieldsOf(DriverJson.Serialize(new StorageRootDto()))
+        );
+    }
+
+    [Fact]
+    public void AnExtensionCarriesNothingButTheTimeItMovesTo()
+    {
+        Assert.Equal(
+            ["endsAt"],
+            FieldsOf(DriverJson.Serialize(new ExtendSessionRequest { EndsAt = Moment }))
+        );
+    }
+
+    [Fact]
+    public void ARecordingRequestThatNamesNoRecordingIsRefused()
+    {
+        StartSessionRequest? request = DriverJson.Deserialize(
+            """{"sessionId":"rec-1","purpose":"recording","tuning":{"kind":"terrestrial","physicalChannel":55},"outputRoot":"primary","endsAt":"2026-08-08T22:04:00+09:00"}""",
+            DriverJson.Context.StartSessionRequest
+        );
+
+        Assert.NotNull(request);
+        Assert.Equal(
+            [
+                "recordingId: a recording names the recording its file belongs to, so that the file can be found again without deriving a name from programme text.",
+            ],
+            request.Validate(Moment)
+        );
+    }
+
+    [Theory]
+    [InlineData("../../etc/passwd")]
+    [InlineData("k 90210")]
+    [InlineData("sub/dir")]
+    [InlineData("")]
+    public void ARecordingIdOutsideTheShapeNeverReachesTheFileSystem(string recordingId)
+    {
+        StartSessionRequest request = LegacyRequest with { RecordingId = recordingId };
+
+        Assert.Contains(
+            request.Validate(Moment),
+            problem => problem.StartsWith("recordingId:", StringComparison.Ordinal)
+        );
+    }
+
+    [Fact]
+    public void ASessionThatWritesNoFileCarriesNoRecordingId()
+    {
+        StartSessionRequest request = new()
+        {
+            SessionId = SessionId.Parse("live-1"),
+            Purpose = SessionPurpose.Live,
+            Tuning = new TuningRequest(TunerKind.Terrestrial, 55, 50001),
+            RecordingId = "k-90210",
+        };
+
+        Assert.Contains(
+            request.Validate(Moment),
+            problem => problem.StartsWith("recordingId:", StringComparison.Ordinal)
         );
     }
 
@@ -384,8 +506,14 @@ public sealed class WireStabilityTests
     [Fact]
     public void AskingTheDriverToRestartTakesItsPlaceAfterEverythingThatCameBefore()
     {
-        Assert.Equal("/restart", DriverEndpoints.All[^1]);
-        Assert.Equal(EndpointsTheFrontendReaches.Length + 3, DriverEndpoints.All.Count);
+        Assert.Equal("/restart", DriverEndpoints.All[EndpointsTheFrontendReaches.Length + 2]);
+    }
+
+    [Fact]
+    public void AskingWhatRoomIsLeftTakesItsPlaceAfterEverythingThatCameBefore()
+    {
+        Assert.Equal("/storage", DriverEndpoints.All[^1]);
+        Assert.Equal(EndpointsTheFrontendReaches.Length + 4, DriverEndpoints.All.Count);
     }
 
     private static StartSessionRequest LegacyRequest =>
@@ -397,6 +525,7 @@ public sealed class WireStabilityTests
             DeviceId = "adapter0",
             OutputRoot = "primary",
             EndsAt = Moment,
+            RecordingId = "k-90210",
         };
 
     private static SessionSnapshot LiveSession =>

@@ -14,6 +14,7 @@ public sealed class DriverEventsTests
         "sessionLockLost",
         "tunerHealthChanged",
         "sessionStopRequested",
+        "recordingProgress",
     ];
 
     [Fact]

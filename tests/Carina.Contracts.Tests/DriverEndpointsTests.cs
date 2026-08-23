@@ -13,6 +13,7 @@ public sealed class DriverEndpointsTests
         Assert.Equal("/devices/detected", DriverEndpoints.DevicesDetected);
         Assert.Equal("/tuners/ledger", DriverEndpoints.TunerLedger);
         Assert.Equal("/restart", DriverEndpoints.Restart);
+        Assert.Equal("/storage", DriverEndpoints.Storage);
     }
 
     [Fact]

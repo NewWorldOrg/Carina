@@ -57,6 +57,7 @@ public sealed class TunerPoolSessionTests : IDisposable
             DeviceId = deviceId,
             OutputRoot = purpose is SessionPurpose.Recording ? "primary" : null,
             EndsAt = Start.AddHours(1),
+            RecordingId = purpose is SessionPurpose.Recording ? "k-90210" : null,
         };
 
     private TunerSession Started(TunerSessionManager manager, StartSessionRequest request)

@@ -18,6 +18,8 @@ public static class DriverEvents
 
     public const string SessionStopRequested = "sessionStopRequested";
 
+    public const string RecordingProgress = "recordingProgress";
+
     public static readonly IReadOnlyList<string> All =
     [
         Tuners,
@@ -28,6 +30,7 @@ public static class DriverEvents
         SessionLockLost,
         TunerHealthChanged,
         SessionStopRequested,
+        RecordingProgress,
     ];
 
     public static bool IsKnown(string? name) =>

@@ -471,6 +471,7 @@ public sealed class VersionSkewTests
                 Tune = tune,
                 OutputRoot = records ? "primary" : null,
                 EndsAt = records ? Moment.AddHours(1) : null,
+                RecordingId = records ? "k-90210" : null,
             }
         );
 

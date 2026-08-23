@@ -26,6 +26,8 @@ public static class SessionRefusalTitles
 
     public const string CapabilityMissing = "capabilityMissing";
 
+    public const string NotAnExtension = "notAnExtension";
+
     public const string Draining = "draining";
 
     public const string OutputUnavailable = "outputUnavailable";

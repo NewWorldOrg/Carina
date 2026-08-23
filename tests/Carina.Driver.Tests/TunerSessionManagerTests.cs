@@ -70,6 +70,7 @@ public sealed class TunerSessionManagerTests : IDisposable
             DeviceId = deviceId,
             OutputRoot = purpose is SessionPurpose.Recording ? outputRoot : null,
             EndsAt = endsAt ?? (purpose is SessionPurpose.Recording ? Start.AddHours(1) : null),
+            RecordingId = purpose is SessionPurpose.Recording ? "k-90210" : null,
         };
 
     private static TunerSession Begin(
