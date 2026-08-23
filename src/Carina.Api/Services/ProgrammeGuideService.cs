@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 
 using Carina.Api.Common;
 using Carina.Contracts;
@@ -29,8 +31,7 @@ public sealed class ProgrammeGuideService(
     {
         ArgumentNullException.ThrowIfNull(window);
 
-        IReadOnlyList<BroadcastService> known = await catalogue.ListAsync(cancellationToken);
-        BroadcastStream[] carried = [.. await ListedAsync(system, known, cancellationToken)];
+        BroadcastStream[] carried = [.. await ListedAsync(system, cancellationToken)];
         ProgrammeService[] wanted =
         [
             .. carried.SelectMany(stream =>
@@ -65,7 +66,7 @@ public sealed class ProgrammeGuideService(
                     programme.StartsAt))),
             ],
             carried,
-            await ETagAsync(carried, known, window, cancellationToken)));
+            await ETagAsync(carried, window, cancellationToken)));
     }
 
     public async Task<ServiceResult<Programme>> FindAsync(
@@ -91,9 +92,9 @@ public sealed class ProgrammeGuideService(
 
     private async Task<IReadOnlyList<BroadcastStream>> ListedAsync(
         TuneSystem system,
-        IReadOnlyList<BroadcastService> known,
         CancellationToken cancellationToken)
     {
+        IReadOnlyList<BroadcastService> known = await catalogue.ListAsync(cancellationToken);
         var withheld = known
             .Where(service => !service.ListedInTheGuide)
             .Select(service => (service.NetworkId.Value, service.ServiceId.Value))
@@ -125,9 +126,19 @@ public sealed class ProgrammeGuideService(
                     new ProgrammeService(stream.NetworkId.Value, service.Value))),
         ];
 
+    private static string Columns(IReadOnlyList<BroadcastStream> carried)
+    {
+        string spelt = string.Join(
+            ";",
+            carried.Select(stream => string.Create(
+                CultureInfo.InvariantCulture,
+                $"{stream.NetworkId.Value}.{stream.TransportStreamId.Value}.{stream.Tuning.System}.{stream.Tuning.PhysicalChannel}.{string.Join(",", stream.Services.Select(service => service.Value))}")));
+
+        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(spelt)).AsSpan(0, 8));
+    }
+
     private async Task<string> ETagAsync(
         IReadOnlyList<BroadcastStream> carried,
-        IReadOnlyList<BroadcastService> known,
         GuideWindow window,
         CancellationToken cancellationToken)
     {
@@ -142,12 +153,9 @@ public sealed class ProgrammeGuideService(
         long stamp = mine.Length == 0
             ? 0
             : mine.Max(visit => visit.LastAttemptedAt.Ticks);
-        long catalogued = known.Count == 0
-            ? 0
-            : known.Max(service => service.LastSeenAt.Ticks);
 
         return string.Create(
             CultureInfo.InvariantCulture,
-            $"\"{mine.Length:x}-{stamp:x}-{known.Count:x}-{catalogued:x}-{window.From.Ticks:x}-{window.To.Ticks:x}\"");
+            $"\"{mine.Length:x}-{stamp:x}-{Columns(carried)}-{window.From.Ticks:x}-{window.To.Ticks:x}\"");
     }
 }

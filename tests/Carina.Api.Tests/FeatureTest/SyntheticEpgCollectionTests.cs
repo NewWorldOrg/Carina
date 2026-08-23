@@ -418,6 +418,50 @@ public sealed class SyntheticEpgCollectionTests
         Assert.True(coverage.GetProperty("meetsWantedCoverage").GetBoolean());
     }
 
+    [Fact]
+    public async Task AColumnTheChannelScreenWithdrawsIsNotAnsweredFromACachedGuide()
+    {
+        var driver = new ScriptedDriverClient();
+
+        driver.Script(Channel, ChannelScript.Carrying(GuideCarryingAPortableSimulcast().ToBytes()));
+
+        await using var feature = new EpgFeature([EverythingTheStreamCarries()], driver);
+
+        feature.Catalogue.Services.Add(Catalogued(Television, ServiceCategory.Television));
+        feature.Catalogue.Services.Add(Catalogued(SecondTelevision, ServiceCategory.Television));
+        feature.Catalogue.Services.Add(Catalogued(OneSegSimulcast, ServiceCategory.Television));
+        feature.Catalogue.Services.Add(Catalogued(DataService, ServiceCategory.Television));
+
+        await CollectAsync(feature);
+
+        using HttpResponseMessage held = await feature.Client.GetAsync(
+            new Uri($"/api/programs{ADay}", UriKind.Relative));
+
+        Assert.Equal(HttpStatusCode.OK, held.StatusCode);
+
+        feature.Streams.Carried[0] = feature.Streams.Carried[0] with
+        {
+            Services = [new ServiceId(Television), new ServiceId(SecondTelevision), new ServiceId(DataService)],
+        };
+
+        using var asking = new HttpRequestMessage(
+            HttpMethod.Get,
+            new Uri($"/api/programs{ADay}", UriKind.Relative));
+
+        asking.Headers.IfNoneMatch.Add(held.Headers.ETag!);
+
+        using HttpResponseMessage answered = await feature.Client.SendAsync(asking);
+
+        Assert.Equal(HttpStatusCode.OK, answered.StatusCode);
+
+        using JsonDocument served = JsonDocument.Parse(await answered.Content.ReadAsStringAsync());
+
+        Assert.Equal(
+            [Television, SecondTelevision, DataService],
+            served.RootElement.GetProperty("data").GetProperty("services").EnumerateArray()
+                .Select(service => service.GetProperty("serviceId").GetInt32()));
+    }
+
     private static string Stamp(DateTimeOffset at)
         => at.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
 
