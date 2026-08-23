@@ -146,6 +146,92 @@ public sealed class ReservationRecordingContractTests(MigratedScratchDatabase da
         Assert.True(await Claim(airing, Tick));
     }
 
+    [Fact]
+    public async Task ADriverThatReachesForAClaimAnotherIsHoldingLosesIt()
+    {
+        await Clear();
+        ReservationId airing = await Plan(21901, ReservationState.Scheduled);
+
+        await using NpgsqlConnection holder = await database.OpenAsync();
+        await using NpgsqlTransaction held = await holder.BeginTransactionAsync();
+        await using (var winner = new NpgsqlCommand(
+            $"UPDATE reservation SET started_at = '{Sql(Tick)}' WHERE id = '{airing.Value}' "
+            + "AND started_at IS NULL AND state = 'Scheduled'",
+            holder,
+            held))
+        {
+            Assert.Equal(1, await winner.ExecuteNonQueryAsync());
+        }
+
+        Task<bool> latecomer = Claim(airing, Tick.AddSeconds(1));
+
+        Assert.True(
+            await QueuedBehindTheHolder(),
+            "The second claim never queued behind the first, so the database was not the one deciding it.");
+
+        await held.CommitAsync();
+
+        Assert.False(await latecomer);
+        Assert.Equal(Tick, await Read(airing, "started_at"));
+    }
+
+    [Fact]
+    public async Task TheTickIsOverAtTheInstantTheEffectiveWindowEnds()
+    {
+        await Clear();
+        await Plan(22001, ReservationState.Scheduled, airs: Tick.AddHours(-1));
+
+        Assert.Single(await DueAt(Tick.AddSeconds(-1)));
+        Assert.Empty(await DueAt(Tick));
+    }
+
+    [Fact]
+    public async Task WhatIsDueComesBackInTheOrderTheRecorderCanPlanAgainst()
+    {
+        await Clear();
+        ReservationId last = await Plan(22103, ReservationState.Scheduled, airs: Airs.AddMinutes(20));
+        ReservationId first = await Plan(22101, ReservationState.Scheduled, airs: Airs);
+        ReservationId middle = await Plan(22102, ReservationState.Scheduled, airs: Airs.AddMinutes(10));
+
+        Assert.Equal([first.Value, middle.Value, last.Value], await DueAt(Tick));
+    }
+
+    [Fact]
+    public async Task ATickIsAskedForAsAUtcInstantOrNotAtAll()
+    {
+        await Clear();
+        await Plan(22201, ReservationState.Scheduled);
+
+        foreach (DateTimeKind kind in new[] { DateTimeKind.Unspecified, DateTimeKind.Local })
+        {
+            DateTime ambiguous = DateTime.SpecifyKind(Tick, kind);
+
+            await Assert.ThrowsAsync<ArgumentException>(() => Ticks(ambiguous));
+            await Assert.ThrowsAsync<ArgumentException>(() => Claim(ReservationId.New(), ambiguous));
+        }
+    }
+
+    private async Task<bool> QueuedBehindTheHolder()
+    {
+        for (int attempt = 0; attempt < 100; attempt++)
+        {
+            await using NpgsqlConnection watcher = await database.OpenAsync();
+            await using var waiting = new NpgsqlCommand(
+                "SELECT count(*) FROM pg_stat_activity "
+                + "WHERE wait_event_type = 'Lock' AND query LIKE '%UPDATE reservation SET started_at%'",
+                watcher);
+
+            if (Convert.ToInt64(await waiting.ExecuteScalarAsync(), null) > 0)
+            {
+                return true;
+            }
+
+            await Task.Delay(50);
+        }
+
+        return false;
+    }
+
     private static IReadOnlyList<Guid> Sorted(params ReservationId[] ids)
         => [.. ids.Select(id => id.Value).Order()];
 

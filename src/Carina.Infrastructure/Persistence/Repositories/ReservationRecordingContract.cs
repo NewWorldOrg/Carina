@@ -23,6 +23,8 @@ public sealed class ReservationRecordingContract(CarinaDbContext context) : IRes
 
     public async Task<IReadOnlyList<RecordingTick>> DueAtAsync(DateTime at, CancellationToken cancellationToken)
     {
+        DateTime moment = InUtc(at);
+
         await context.Database.OpenConnectionAsync(cancellationToken);
 
         try
@@ -30,7 +32,7 @@ public sealed class ReservationRecordingContract(CarinaDbContext context) : IRes
             DbConnection connection = context.Database.GetDbConnection();
             await using DbCommand command = connection.CreateCommand();
             command.CommandText = DueAt;
-            command.Parameters.Add(Moment(command, at));
+            command.Parameters.Add(Moment(command, moment));
 
             await using DbDataReader reader = await command.ExecuteReaderAsync(cancellationToken);
             List<RecordingTick> due = [];
@@ -52,12 +54,19 @@ public sealed class ReservationRecordingContract(CarinaDbContext context) : IRes
     {
         ArgumentNullException.ThrowIfNull(id);
 
+        DateTime moment = InUtc(at);
+
         int claimed = await context.Database.ExecuteSqlInterpolatedAsync(
-            $"UPDATE reservation SET started_at = {at} WHERE id = {id.Value} AND started_at IS NULL AND state = 'Scheduled'",
+            $"UPDATE reservation SET started_at = {moment} WHERE id = {id.Value} AND started_at IS NULL AND state = 'Scheduled'",
             cancellationToken);
 
         return claimed is 1;
     }
+
+    private static DateTime InUtc(DateTime at)
+        => at.Kind is DateTimeKind.Utc
+            ? at
+            : throw new ArgumentException($"A tick is a UTC instant, but this one has Kind={at.Kind}.", nameof(at));
 
     private static DbParameter Moment(DbCommand command, DateTime at)
     {
