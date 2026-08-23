@@ -490,7 +490,7 @@ public sealed class SyntheticEpgCollectionTests
     }
 
     [Fact]
-    public async Task APortableSimulcastIsNotAmongTheMatchesOfASearchThatNamesNoType()
+    public async Task NeitherAPortableSimulcastNorACarouselIsAmongTheMatchesOfASearchThatNamesNoType()
     {
         var driver = new ScriptedDriverClient();
 
@@ -506,7 +506,7 @@ public sealed class SyntheticEpgCollectionTests
         await CollectAsync(feature);
 
         (HttpStatusCode status, JsonElement body) = await feature.GetAsync(
-            "/api/programs/search?keyword=Bulletin");
+            "/api/programs/search?keyword=Evening");
         JsonElement data = body.GetProperty("data");
 
         Assert.Equal(HttpStatusCode.OK, status);
@@ -530,12 +530,12 @@ public sealed class SyntheticEpgCollectionTests
         await CollectAsync(feature);
 
         (HttpStatusCode status, JsonElement body) = await feature.GetAsync(
-            "/api/programs/search?keyword=Bulletin");
+            "/api/programs/search?keyword=Evening");
         JsonElement data = body.GetProperty("data");
 
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal(
-            [$"{Network}-{Television}-1", $"{Network}-{OneSegSimulcast}-3"],
+            [$"{Network}-{Television}-1", $"{Network}-{OneSegSimulcast}-3", $"{Network}-{DataService}-5"],
             data.GetProperty("items").EnumerateArray().Select(item => item.GetProperty("id").GetString()));
     }
 
@@ -676,7 +676,7 @@ public sealed class SyntheticEpgCollectionTests
                     Kind = ServiceKind.Data,
                     Programmes =
                     [
-                        new SyntheticProgramme(5, Airs, TimeSpan.FromHours(1)) { Name = "Data Carousel" },
+                        new SyntheticProgramme(5, Airs, TimeSpan.FromHours(1)) { Name = "Evening Carousel" },
                     ],
                 },
             ],
