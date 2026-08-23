@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Text.Json;
 
@@ -338,6 +339,42 @@ public sealed class SyntheticEpgCollectionTests
                 .Select(service => service.GetProperty("serviceId").GetInt32()));
     }
 
+    [Fact]
+    public async Task AGuideGatheredOverEightDaysIsStillReadableOnItsEighthDay()
+    {
+        var driver = new ScriptedDriverClient();
+        DateTimeOffset opens = DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(9));
+
+        driver.Script(Channel, ChannelScript.Carrying(OverEightDays(opens.AddHours(1)).ToBytes()));
+
+        await using var feature = new EpgFeature([OnlyTheOneService()], driver);
+
+        feature.Catalogue.Services.Add(Catalogued(Television, ServiceCategory.Television));
+
+        await CollectAsync(feature);
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync(
+            $"/api/programs?type=isdbT&from={Stamp(opens.AddDays(8))}&to={Stamp(opens.AddDays(9))}");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(
+            [$"{Network}-{Television}-9"],
+            body.GetProperty("data").GetProperty("programmes").EnumerateArray()
+                .Select(programme => programme.GetProperty("id").GetString()));
+
+        (_, JsonElement ledger) = await feature.GetAsync("/api/epg/collection-status");
+        JsonElement reported = ledger.GetProperty("data");
+        JsonElement coverage = Assert.Single(
+            Assert.Single(reported.GetProperty("streams").EnumerateArray())
+                .GetProperty("coverage").EnumerateArray());
+
+        Assert.Equal(192, reported.GetProperty("wantedCoverageHours").GetInt32());
+        Assert.True(coverage.GetProperty("meetsWantedCoverage").GetBoolean());
+    }
+
+    private static string Stamp(DateTimeOffset at)
+        => at.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
+
     private static BroadcastService Catalogued(int serviceId, ServiceCategory category)
         => BroadcastService.Discover(
             new NetworkId(Network),
@@ -345,6 +382,29 @@ public sealed class SyntheticEpgCollectionTests
             "Synthetic",
             category,
             DateTime.UtcNow);
+
+    private static SyntheticGuide OverEightDays(DateTimeOffset opens)
+        => new()
+        {
+            NetworkId = Network,
+            TransportStreamId = Stream,
+            Services =
+            [
+                new SyntheticGuideService(Television, "Synthetic One")
+                {
+                    Programmes =
+                    [
+                        .. Enumerable.Range(0, 9).Select(day => new SyntheticProgramme(
+                            day + 1,
+                            opens.AddDays(day),
+                            TimeSpan.FromHours(1))
+                        {
+                            Name = $"Day {day} Bulletin",
+                        }),
+                    ],
+                },
+            ],
+        };
 
     private static SyntheticGuide GuideCarryingAPortableSimulcast()
         => Guide() with
@@ -427,6 +487,9 @@ public sealed class SyntheticEpgCollectionTests
                 new ServiceId(DataService),
             ],
         };
+
+    private static BroadcastStream OnlyTheOneService()
+        => OnAir() with { Services = [new ServiceId(Television)] };
 
     private static PacedStream Stalling(byte[] bytes)
     {
