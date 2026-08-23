@@ -530,6 +530,34 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
             reading.Entry(held).Property<string>(ProgrammeConfiguration.Searchable).CurrentValue);
     }
 
+    [Fact]
+    public async Task ASkeletonEventIsNeverAmongTheMatches()
+    {
+        int network = BroadcastIds.NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        var repository = new ProgrammeRepository(context);
+        var searches = new ProgrammeSearchRepository(context);
+
+        await repository.AddAsync(Programme(network, 1, $"報道{network}", string.Empty), Cancel);
+        await repository.AddAsync(Skeleton(network, 2, $"報道{network}"), Cancel);
+        await context.SaveChangesAsync(Cancel);
+
+        PaginatedList<ProgrammeMatch> found = await searches.SearchAsync(Asking($"報道{network}"), Cancel);
+
+        Assert.Equal(1, found.Total);
+        Assert.Equal([1], found.Items.Select(match => match.EventId.Value));
+    }
+
+    private static Programme Skeleton(int network, int carried, string name)
+        => Held(new ProgrammeBroadcast(
+            new ProgrammeId(new NetworkId(network), new ServiceId(1049), new EventId(carried)),
+            new TransportStreamId(1),
+            At.AddMinutes(carried),
+            At.AddMinutes(carried + 30),
+            name,
+            string.Empty,
+            true));
+
     private static ProgrammeSearch Asking(string keyword, ProgrammeConditions? conditions = null)
         => ProgrammeSearch.For(keyword, At.AddHours(-1), At.AddDays(1), conditions: conditions)!;
 

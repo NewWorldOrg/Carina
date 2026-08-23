@@ -32,15 +32,17 @@ public sealed class HeldStreamVisits : IStreamVisitRepository
 
 public sealed class HeldStreams(IReadOnlyList<BroadcastStream> streams) : IBroadcastStreamDirectory
 {
+    public List<BroadcastStream> Carried { get; } = [.. streams];
+
     public List<IntendedStream> Unreachable { get; } = [];
 
     public Task<IReadOnlyList<BroadcastStream>> ListAsync(CancellationToken cancellationToken)
-        => Task.FromResult(streams);
+        => Task.FromResult<IReadOnlyList<BroadcastStream>>([.. Carried]);
 
     public Task<IReadOnlyList<IntendedStream>> ListIntendedAsync(CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<IntendedStream>>(
         [
-            .. streams.Select(stream => new IntendedStream(
+            .. Carried.Select(stream => new IntendedStream(
                 stream.NetworkId,
                 stream.TransportStreamId,
                 stream.Tuning,

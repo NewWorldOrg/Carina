@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
 
 using Carina.Api.Common;
 using Carina.Contracts;
@@ -16,6 +18,7 @@ public sealed record GuidePage(
 
 public sealed class ProgrammeGuideService(
     IBroadcastStreamDirectory directory,
+    IBroadcastServiceRepository catalogue,
     IProgrammeRepository programmes,
     IArchivedProgrammeRepository archive,
     IProgrammeSearchRepository searches,
@@ -28,11 +31,7 @@ public sealed class ProgrammeGuideService(
     {
         ArgumentNullException.ThrowIfNull(window);
 
-        BroadcastStream[] carried =
-        [
-            .. (await directory.ListAsync(cancellationToken))
-                .Where(stream => stream.Tuning.System == system),
-        ];
+        BroadcastStream[] carried = [.. await ListedAsync(system, cancellationToken)];
         ProgrammeService[] wanted =
         [
             .. carried.SelectMany(stream =>
@@ -91,16 +90,51 @@ public sealed class ProgrammeGuideService(
             await searches.SearchAsync(asked, cancellationToken));
     }
 
+    private async Task<IReadOnlyList<BroadcastStream>> ListedAsync(
+        TuneSystem system,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyList<BroadcastService> known = await catalogue.ListAsync(cancellationToken);
+        var withheld = known
+            .Where(service => !service.ListedInTheGuide)
+            .Select(service => (service.NetworkId.Value, service.ServiceId.Value))
+            .ToHashSet();
+
+        return
+        [
+            .. (await directory.ListAsync(cancellationToken))
+                .Where(stream => stream.Tuning.System == system)
+                .Select(stream => stream with
+                {
+                    Services =
+                    [
+                        .. stream.Services.Where(service =>
+                            !withheld.Contains((stream.NetworkId.Value, service.Value))),
+                    ],
+                }),
+        ];
+    }
+
     private async Task<IReadOnlyList<ProgrammeService>> CarriedOnAsync(
         TuneSystem system,
         CancellationToken cancellationToken)
         =>
         [
-            .. (await directory.ListAsync(cancellationToken))
-                .Where(stream => stream.Tuning.System == system)
+            .. (await ListedAsync(system, cancellationToken))
                 .SelectMany(stream => stream.Services.Select(service =>
                     new ProgrammeService(stream.NetworkId.Value, service.Value))),
         ];
+
+    private static string Columns(IReadOnlyList<BroadcastStream> carried)
+    {
+        string spelt = string.Join(
+            ";",
+            carried.Select(stream => string.Create(
+                CultureInfo.InvariantCulture,
+                $"{stream.NetworkId.Value}.{stream.TransportStreamId.Value}.{stream.Tuning.System}.{stream.Tuning.PhysicalChannel}.{string.Join(",", stream.Services.Select(service => service.Value))}")));
+
+        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(spelt)).AsSpan(0, 8));
+    }
 
     private async Task<string> ETagAsync(
         IReadOnlyList<BroadcastStream> carried,
@@ -121,6 +155,6 @@ public sealed class ProgrammeGuideService(
 
         return string.Create(
             CultureInfo.InvariantCulture,
-            $"\"{mine.Length:x}-{stamp:x}-{window.From.Ticks:x}-{window.To.Ticks:x}\"");
+            $"\"{mine.Length:x}-{stamp:x}-{Columns(carried)}-{window.From.Ticks:x}-{window.To.Ticks:x}\"");
     }
 }
