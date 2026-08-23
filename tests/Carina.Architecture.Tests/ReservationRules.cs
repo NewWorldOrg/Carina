@@ -10,37 +10,49 @@ public static partial class ReservationRules
     [
         "/Recordings/",
         "/Migration/",
-        "ReservationRecordingContract.cs",
+        "/Carina.Infrastructure/Persistence/Repositories/ReservationRecordingContract.cs",
     ];
 
-    private static readonly IReadOnlyList<string> ReservationFeature = ["/Reservations/", "/Rules/"];
+    private static readonly IReadOnlyList<string> ReservationFolders = ["/Reservations/", "/Rules/"];
+
+    private static readonly IReadOnlyList<string> ReservationNamespaces =
+    [
+        "Carina.Domain.Reservations",
+        "Carina.Domain.Rules",
+    ];
 
     public static IReadOnlyList<string> WritersOfWhatRecordingOwns(string directory)
-        => Files(directory)
-            .Where(file => WritesARecordingOwnedColumn(File.ReadAllText(file.Full)))
+        => Scanned(directory)
+            .Where(file => WritesARecordingOwnedColumn(file.Source))
             .Where(file => !AllowedToWriteThem.Any(allowed => file.Relative.Contains(allowed, StringComparison.Ordinal)))
             .Select(file => file.Relative)
             .Order(StringComparer.Ordinal)
             .ToArray();
 
     public static IReadOnlyList<string> ProgrammeMatchersOutsideTheGuide(string directory)
-        => Files(directory)
-            .Where(file => ReservationFeature.Any(feature => file.Relative.Contains(feature, StringComparison.Ordinal)))
-            .Where(file => Matcher().IsMatch(File.ReadAllText(file.Full)))
+        => Scanned(directory)
+            .Where(BelongsToTheReservationFeature)
+            .Where(file => Matcher().IsMatch(file.Source))
             .Select(file => file.Relative)
             .Order(StringComparer.Ordinal)
             .ToArray();
+
+    private static bool BelongsToTheReservationFeature(SourceFile file)
+        => ReservationFolders.Any(folder => file.Relative.Contains(folder, StringComparison.Ordinal))
+           || ReservationNamespaces.Any(space => file.Source.Contains(space, StringComparison.Ordinal));
 
     private static bool WritesARecordingOwnedColumn(string source)
         => UpdatesTheClaim().IsMatch(source)
            || UpdatesTheOutcome().IsMatch(source)
            || SetsWhatRecordingOwns().IsMatch(source);
 
-    private static IEnumerable<SourceFile> Files(string directory)
+    private static IEnumerable<SourceFile> Scanned(string directory)
         => Directory
             .EnumerateFiles(directory, "*.cs", SearchOption.AllDirectories)
             .Where(file => !IsBuildOutput(file))
-            .Select(file => new SourceFile(file, "/" + Path.GetRelativePath(directory, file).Replace('\\', '/')));
+            .Select(file => new SourceFile(
+                "/" + Path.GetRelativePath(directory, file).Replace('\\', '/'),
+                File.ReadAllText(file)));
 
     private static bool IsBuildOutput(string path)
     {
@@ -64,5 +76,5 @@ public static partial class ReservationRules
         + @"|\bIQueryable<\s*(Programme|ProgrammeMatch)\s*>")]
     private static partial Regex Matcher();
 
-    private readonly record struct SourceFile(string Full, string Relative);
+    private readonly record struct SourceFile(string Relative, string Source);
 }
