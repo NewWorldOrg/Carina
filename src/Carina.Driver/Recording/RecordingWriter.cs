@@ -33,6 +33,7 @@ public sealed class RecordingWriter : IRecordingWriter
 
     private readonly FileStream stream;
     private readonly long flushEvery;
+    private readonly long openedAt;
 
     private long bytesWritten;
     private long bytesSinceFlush;
@@ -56,6 +57,7 @@ public sealed class RecordingWriter : IRecordingWriter
                 BufferSize = 0,
             }
         );
+        openedAt = stream.Length;
     }
 
     public string Path { get; }
@@ -66,7 +68,16 @@ public sealed class RecordingWriter : IRecordingWriter
 
     public void Write(ReadOnlySpan<byte> bytes)
     {
-        stream.Write(bytes);
+        try
+        {
+            stream.Write(bytes);
+        }
+        catch (Exception)
+        {
+            Interlocked.Exchange(ref bytesWritten, Landed());
+
+            throw;
+        }
 
         Interlocked.Add(ref bytesWritten, bytes.Length);
 
@@ -76,6 +87,18 @@ public sealed class RecordingWriter : IRecordingWriter
             stream.Flush(flushToDisk: true);
             Interlocked.Increment(ref flushes);
             bytesSinceFlush = 0;
+        }
+    }
+
+    private long Landed()
+    {
+        try
+        {
+            return stream.Length - openedAt;
+        }
+        catch (Exception error) when (error is IOException or ObjectDisposedException)
+        {
+            return BytesWritten;
         }
     }
 
