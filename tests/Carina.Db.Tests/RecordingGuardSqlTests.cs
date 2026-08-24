@@ -39,6 +39,19 @@ public sealed class RecordingGuardSqlTests
     }
 
     [Fact]
+    public void TheMigrationRunsThoseThreeAndNothingElse()
+    {
+        string newest = Migrations()
+            .Where(migration => File.ReadAllText(migration).Contains("CREATE OR REPLACE", StringComparison.Ordinal))
+            .Order(StringComparer.Ordinal)
+            .Last();
+
+        Assert.Equal(
+            [RecordingGuards.Functions, RecordingGuards.Projection, RecordingGuards.Immutability],
+            Ran(File.ReadAllText(newest)));
+    }
+
+    [Fact]
     public void TheMigrationLeavesTheSystemColumnToPostgres()
     {
         foreach (string migration in Migrations())
@@ -49,6 +62,31 @@ public sealed class RecordingGuardSqlTests
                 StringComparison.Ordinal);
         }
     }
+
+    private static IReadOnlyList<string> Ran(string migration)
+    {
+        string fence = new('"', 3);
+        string opening = $"        migrationBuilder.Sql(\n            {fence}\n";
+        string closing = $"\n            {fence});";
+        var blocks = new List<string>();
+
+        for (int at = 0; (at = migration.IndexOf(opening, at, StringComparison.Ordinal)) >= 0;)
+        {
+            int from = at + opening.Length;
+            int to = migration.IndexOf(closing, from, StringComparison.Ordinal);
+            blocks.Add(Dedented(migration[from..to]));
+            at = to + closing.Length;
+        }
+
+        return blocks;
+    }
+
+    private static string Dedented(string block)
+        => string.Join(
+            '\n',
+            block.Split('\n').Select(line => line.StartsWith(new string(' ', 12), StringComparison.Ordinal)
+                ? line[12..]
+                : line));
 
     private static string Marker(string sql)
         => sql.Split('\n').First(line => line.StartsWith("CREATE", StringComparison.Ordinal));

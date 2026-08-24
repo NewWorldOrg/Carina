@@ -37,8 +37,16 @@ public sealed class RepositoryDatabase : IAsyncLifetime
         await using (var server = new NpgsqlConnection(maintenance))
         {
             await server.OpenAsync();
-            await using var creating = new NpgsqlCommand($"CREATE DATABASE {ScratchDatabase}", server);
-            await creating.ExecuteNonQueryAsync();
+
+            await using var asking = new NpgsqlCommand(
+                $"SELECT count(*) FROM pg_database WHERE datname = '{ScratchDatabase}'",
+                server);
+
+            if ((long)(await asking.ExecuteScalarAsync())! is 0)
+            {
+                await using var creating = new NpgsqlCommand($"CREATE DATABASE {ScratchDatabase}", server);
+                await creating.ExecuteNonQueryAsync();
+            }
         }
 
         await RunAsync(RecordingGuards.Functions);
