@@ -34,7 +34,7 @@ public sealed class RecordingWriteThroughTests(MigratedScratchDatabase database)
     }
 
     [Fact]
-    public async Task TwoWritersThatReadTheSameRowDoNotSilentlyLoseOneAddition()
+    public async Task TheSecondOfTwoAdditionsIsRefusedRatherThanQuietlyDropped()
     {
         Recording recording = Begin(60102);
         await Add(recording);
@@ -45,15 +45,70 @@ public sealed class RecordingWriteThroughTests(MigratedScratchDatabase database)
         Recording theirs = await Load(second, recording.Id);
 
         mine.Wrote(TimeSpan.FromMinutes(10));
-        await first.SaveChangesAsync();
+        theirs.Wrote(TimeSpan.FromMinutes(12));
 
-        theirs.Extend(theirs.ExpectedWindowEnd.AddMinutes(15));
+        await first.SaveChangesAsync();
 
         await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => second.SaveChangesAsync());
 
         await using CarinaDbContext reader = Context();
         Recording read = await Load(reader, recording.Id);
+
         Assert.Equal(600_000, read.WrittenDurationMs);
+        Assert.NotEqual(1_320_000, read.WrittenDurationMs);
+    }
+
+    [Fact]
+    public async Task AMeasurementAndAnExtensionOnTheSameRowCannotBothLandUnnoticed()
+    {
+        Recording recording = Begin(60104);
+        recording.Acquire(new TunerDeviceId("pt3-1"));
+        await Add(recording);
+
+        await using CarinaDbContext measuring = Context();
+        await using CarinaDbContext extending = Context();
+        Recording counted = await Load(measuring, recording.Id);
+        Recording followed = await Load(extending, recording.Id);
+
+        counted.Measure(DropCounters.Counted(3, 1000), DropTimeline.Unlocated, null, 0, Now.AddMinutes(20));
+        followed.Extend(followed.ExpectedWindowEnd.AddMinutes(15));
+
+        await measuring.SaveChangesAsync();
+
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => extending.SaveChangesAsync());
+
+        await using CarinaDbContext reader = Context();
+        Recording read = await Load(reader, recording.Id);
+
+        Assert.Equal(DropCounters.Counted(3, 1000), read.Counters);
+        Assert.Equal(Now.AddHours(1), read.ExpectedWindowEnd);
+    }
+
+    [Fact]
+    public async Task AWriterThatReadsAgainAfterBeingRefusedAddsOnTopOfWhatLanded()
+    {
+        Recording recording = Begin(60105);
+        await Add(recording);
+
+        await using (CarinaDbContext first = Context())
+        await using (CarinaDbContext second = Context())
+        {
+            Recording mine = await Load(first, recording.Id);
+            Recording theirs = await Load(second, recording.Id);
+
+            mine.Wrote(TimeSpan.FromMinutes(10));
+            theirs.Wrote(TimeSpan.FromMinutes(12));
+
+            await first.SaveChangesAsync();
+            await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => second.SaveChangesAsync());
+        }
+
+        await Reload(recording.Id, loaded => loaded.Wrote(TimeSpan.FromMinutes(12)));
+
+        await using CarinaDbContext reader = Context();
+        Recording read = await Load(reader, recording.Id);
+
+        Assert.Equal(1_320_000, read.WrittenDurationMs);
     }
 
     [Fact]
