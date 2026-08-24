@@ -1,4 +1,5 @@
 using Carina.Contracts;
+using Carina.Driver.Configuration;
 using Carina.Driver.Diagnostics;
 using Carina.Driver.Recording;
 using Carina.Driver.Transport;
@@ -62,7 +63,8 @@ public sealed class TunerSession : IDisposable
         DiagnosticsStore? diagnostics = null,
         SignalQualityWatch? watch = null,
         TuneParams? tune = null,
-        TunerSession? ridesOn = null
+        TunerSession? ridesOn = null,
+        int demuxBufferBytes = TunerSettings.DefaultDemuxBufferBytes
     )
     {
         if (endsAt <= startedAt)
@@ -95,7 +97,10 @@ public sealed class TunerSession : IDisposable
             surveyBlockLimit: SessionPurposes.ReadsEveryPacket(purpose)
                 ? SessionBroadcaster.DefaultSurveyBlockLimit
                 : TimeSpan.Zero,
-            report: RecordFault
+            report: RecordFault,
+            recordingBlockLimit: purpose is SessionPurpose.Recording
+                ? TimeSpan.Zero
+                : RecordingBackPressure.WithinTheDemuxWindow(demuxBufferBytes)
         );
 
         if (watch is not null && device.Quality is { } source)

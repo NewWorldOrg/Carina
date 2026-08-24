@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 using Carina.Contracts;
 using Carina.Driver.Configuration;
 using Carina.Driver.Recording;
@@ -418,6 +420,122 @@ public sealed class RecordingRiderTests : IDisposable
         rider.WaitForEnd(Deadlock);
         host.Stop();
         host.WaitForEnd(Deadlock);
+    }
+
+    [Theory]
+    [InlineData(TunerSettings.DefaultDemuxBufferBytes)]
+    [InlineData(4 * 1024 * 1024)]
+    [InlineData(64 * 1024 * 1024)]
+    public void TheWaitForARiderFitsInsideTheWindowTheDemuxBufferGivesTheHost(int demuxBufferBytes)
+    {
+        const long fastestBytesPerSecond = 16_500_000 / 8;
+
+        TimeSpan waited = RecordingBackPressure.WithinTheDemuxWindow(demuxBufferBytes);
+
+        Assert.True(
+            waited.TotalSeconds * fastestBytesPerSecond <= demuxBufferBytes,
+            $"Waiting {waited} costs the host {waited.TotalSeconds * fastestBytesPerSecond} bytes of a {demuxBufferBytes} byte buffer, so the host overruns before the rider is cut."
+        );
+        Assert.True(waited > TimeSpan.Zero);
+    }
+
+    [Fact]
+    public void AHostThatIsItselfRecordingNeverWaitsForARider()
+    {
+        using var host = new TunerSession(
+            SessionId.Parse("host"),
+            SessionPurpose.Recording,
+            "adapter0",
+            new ScriptedTunerDevice(),
+            Start,
+            Start.AddHours(1),
+            clock,
+            recordingId: "k-host"
+        );
+
+        Assert.Equal(TimeSpan.Zero, host.Broadcaster.RecordingWait);
+    }
+
+    [Fact]
+    public void AHostThatIsWatchingWaitsForTheWindowItsOwnBufferGives()
+    {
+        using var host = new TunerSession(
+            SessionId.Parse("host"),
+            SessionPurpose.Live,
+            "adapter0",
+            new ScriptedTunerDevice(),
+            Start,
+            Start.AddHours(1),
+            clock,
+            demuxBufferBytes: 4 * 1024 * 1024
+        );
+
+        Assert.Equal(
+            RecordingBackPressure.WithinTheDemuxWindow(4 * 1024 * 1024),
+            host.Broadcaster.RecordingWait
+        );
+        Assert.NotEqual(
+            RecordingBackPressure.WithinTheDemuxWindow(TunerSettings.DefaultDemuxBufferBytes),
+            host.Broadcaster.RecordingWait
+        );
+    }
+
+    [Fact]
+    public void TheBufferTheConfigurationNamesIsTheOneTheWaitIsDrawnFrom()
+    {
+        var manager = new TunerSessionManager(
+            Configuration with
+            {
+                Tuner = new TunerSettings(TunerBackend.Fake, DemuxBufferBytes: 4 * 1024 * 1024),
+            },
+            new ScriptedTunerDeviceFactory(),
+            clock,
+            NullLogger<TunerSessionManager>.Instance
+        );
+
+        TunerSession host = Started(manager, Request("s-1", SessionPurpose.Live));
+
+        Assert.Equal(
+            RecordingBackPressure.WithinTheDemuxWindow(4 * 1024 * 1024),
+            host.Broadcaster.RecordingWait
+        );
+
+        host.Stop();
+        host.WaitForEnd(Deadlock);
+    }
+
+    [Fact]
+    public void ARiderOnARecordingHostIsCutOffAtOnceRatherThanHeldOn()
+    {
+        using var host = new TunerSession(
+            SessionId.Parse("host"),
+            SessionPurpose.Recording,
+            "adapter0",
+            new ScriptedTunerDevice(),
+            Start,
+            Start.AddHours(1),
+            clock,
+            recordingId: "k-host"
+        );
+
+        using var seats = new SessionBroadcaster(
+            recordingCapacity: 1,
+            recordingBlockLimit: host.Broadcaster.RecordingWait
+        );
+        SessionSubscription seat = seats.Subscribe(SubscriberKind.Recording);
+
+        seats.Publish(Chunk(1));
+
+        long start = Stopwatch.GetTimestamp();
+
+        seats.Publish(Chunk(2));
+
+        Assert.True(
+            Stopwatch.GetElapsedTime(start) < TimeSpan.FromSeconds(2),
+            "The host was held up waiting for a rider although it is writing a recording of its own."
+        );
+        Assert.True(seat.IsDisconnected);
+        Assert.Equal(SessionStopReason.RecordingFailed, seat.EndedWith);
     }
 
     [Fact]

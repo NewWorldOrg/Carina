@@ -733,7 +733,9 @@ public sealed class TunerSessionManager(
                 diagnostics: diagnostics,
                 watch: Watch(request.Purpose),
                 tune: request.Tune,
-                ridesOn: ridesOn
+                ridesOn: ridesOn,
+                demuxBufferBytes: configuration.Tuner?.DemuxBufferBytes
+                    ?? TunerSettings.DefaultDemuxBufferBytes
             );
 
             if (!sessions.TryAdd(sessionId, session))

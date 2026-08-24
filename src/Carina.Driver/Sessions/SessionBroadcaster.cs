@@ -62,8 +62,6 @@ public sealed class SessionBroadcaster(
 
     public static readonly TimeSpan DefaultSurveyBlockLimit = TimeSpan.FromSeconds(5);
 
-    public static readonly TimeSpan DefaultRecordingBlockLimit = TimeSpan.FromSeconds(30);
-
     private enum Delivery
     {
         Delivered,
@@ -73,7 +71,7 @@ public sealed class SessionBroadcaster(
 
     private readonly ConcurrentDictionary<SessionSubscription, byte> subscriptions = [];
     private readonly TimeSpan blockLimit = surveyBlockLimit ?? DefaultSurveyBlockLimit;
-    private readonly TimeSpan recordingBlock = recordingBlockLimit ?? DefaultRecordingBlockLimit;
+    private readonly TimeSpan recordingBlock = recordingBlockLimit ?? TimeSpan.Zero;
     private readonly Lock gate = new();
 
     private bool closed;
@@ -82,6 +80,8 @@ public sealed class SessionBroadcaster(
     private long droppedChunks;
 
     public int SubscriberCount => subscriptions.Count;
+
+    public TimeSpan RecordingWait => recordingBlock;
 
     public IReadOnlyList<SubscriberKind> KindsInUse =>
         [.. subscriptions.Keys.Select(subscription => subscription.Kind)];
