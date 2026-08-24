@@ -13,7 +13,7 @@ namespace Carina.Driver.Tests;
 
 public sealed class RecordingFailureTests : IDisposable
 {
-    private const int ARoomOfOneChunk = TunerSession.DefaultChunkSize;
+    private const int ARoomThatRunsOutMidChunk = TunerSession.DefaultChunkSize + 500;
 
     private static readonly DateTimeOffset Start = new(2026, 8, 13, 21, 0, 0, TimeSpan.Zero);
 
@@ -83,7 +83,7 @@ public sealed class RecordingFailureTests : IDisposable
     [Fact]
     public async Task ARecordingThatRanOutOfRoomLeavesOneStubAndIsNotOpenedAgain()
     {
-        var writers = new RationedRecordingWriterFactory(ARoomOfOneChunk);
+        var writers = new RationedRecordingWriterFactory(ARoomThatRunsOutMidChunk);
 
         await using DriverUnderTest driver = await DriverUnderTest.Start(
             reshapeServices: services => services.AddSingleton<IRecordingWriterFactory>(writers)
@@ -114,7 +114,8 @@ public sealed class RecordingFailureTests : IDisposable
         string file = Assert.Single(Directory.GetFiles(output));
 
         Assert.Equal(Path.Combine(output, "k-starved.ts"), file);
-        Assert.Equal(ARoomOfOneChunk, new FileInfo(file).Length);
+        Assert.Equal(ARoomThatRunsOutMidChunk, new FileInfo(file).Length);
+        Assert.Equal(new FileInfo(file).Length, settled.Single().BytesRecorded);
     }
 
     [Fact]
@@ -123,7 +124,7 @@ public sealed class RecordingFailureTests : IDisposable
         await using DriverUnderTest driver = await DriverUnderTest.Start(
             reshapeServices: services =>
                 services.AddSingleton<IRecordingWriterFactory>(
-                    new RationedRecordingWriterFactory(ARoomOfOneChunk)
+                    new RationedRecordingWriterFactory(ARoomThatRunsOutMidChunk)
                 )
         );
         using HttpClient client = driver.Client();

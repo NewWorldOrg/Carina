@@ -130,36 +130,75 @@ public sealed class RecordingSinkTests : IDisposable
     }
 
     [Fact]
-    public void TheBytesGoPastTheWriterWhileTheRecordingIsStillRunning()
+    public void EveryByteIsOnDiskBeforeTheWriterIsAskedForTheNextChunk()
     {
+        byte[] chunk = Bytes(TsPacketReader.PacketLength, 5);
+
         using var writer = new RecordingWriter(root, "k-1");
 
-        writer.Write(Bytes(RecordingWriter.WriteBufferBytes * 2, 5));
+        writer.Write(chunk);
 
-        Assert.True(
-            new FileInfo(Path.Combine(root, "k-1.ts")).Length >= RecordingWriter.WriteBufferBytes,
-            "Nothing had reached the file yet, so a recording in progress would be invisible on disk."
-        );
+        Assert.Equal(chunk, File.ReadAllBytes(Path.Combine(root, "k-1.ts")));
     }
 
     [Fact]
-    public void EveryWholePacketIsHandedToTheObserverInTheOrderItIsWritten()
+    public void AWriteThatDidNotHappenIsNotCountedAsBytesRecorded()
     {
-        var seen = new RememberedPackets();
-        byte[] chunk = Bytes((TsPacketReader.PacketLength * 3) + 11, 7);
+        byte[] chunk = Bytes(TsPacketReader.PacketLength, 9);
+        var writer = new RecordingWriter(root, "k-1");
 
-        using (var writer = new RecordingWriter(root, "k-1", seen))
+        writer.Write(chunk);
+        writer.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() => writer.Write(chunk));
+        Assert.Equal(chunk.Length, writer.BytesWritten);
+        Assert.Equal(writer.BytesWritten, new FileInfo(Path.Combine(root, "k-1.ts")).Length);
+    }
+
+    [Fact]
+    public void AShortReadIsWrittenWholeAndTheNextChunkFollowsItByteForByte()
+    {
+        byte[] ragged = Bytes(TsPacketReader.PacketLength - 38, 1);
+        byte[] whole = Bytes(TsPacketReader.PacketLength, 60);
+
+        using (var writer = new RecordingWriter(root, "k-1"))
         {
-            writer.Write(chunk);
+            writer.Write(ragged);
+            writer.Write(whole);
         }
 
-        Assert.Equal(3, seen.Packets.Count);
-        Assert.Equal(chunk[..TsPacketReader.PacketLength], seen.Packets[0]);
-        Assert.Equal(
-            chunk[(TsPacketReader.PacketLength * 2)..(TsPacketReader.PacketLength * 3)],
-            seen.Packets[2]
+        byte[] both = [.. ragged, .. whole];
+
+        Assert.Equal(both, File.ReadAllBytes(Path.Combine(root, "k-1.ts")));
+    }
+
+    [Fact]
+    public void EveryRecordingIdTheContractAcceptsNamesOneFileAndNothingBesideIt()
+    {
+        var accepted = new List<string>();
+
+        for (int code = 1; code < 128; code++)
+        {
+            string candidate = $"k{(char)code}1";
+
+            if (!WireName.IsUsable(candidate))
+            {
+                continue;
+            }
+
+            accepted.Add(candidate);
+
+            string name = RecordingFileName.Of(candidate);
+
+            Assert.Equal(name, Path.GetFileName(name));
+        }
+
+        Assert.Contains("k-1", accepted);
+        Assert.DoesNotContain($"k{Path.DirectorySeparatorChar}1", accepted);
+        Assert.True(
+            accepted.Count > 60,
+            $"Only {accepted.Count} single-character ids were accepted, so the sweep measures next to nothing."
         );
-        Assert.Equal(chunk, File.ReadAllBytes(Path.Combine(root, "k-1.ts")));
     }
 
     [Fact]
@@ -207,11 +246,3 @@ public sealed class RecordingSinkTests : IDisposable
     }
 }
 
-public sealed class RememberedPackets : IRecordedPacketObserver
-{
-    private readonly List<byte[]> packets = [];
-
-    public IReadOnlyList<byte[]> Packets => packets;
-
-    public void Observe(ReadOnlySpan<byte> packet) => packets.Add(packet.ToArray());
-}

@@ -485,12 +485,21 @@ public sealed class RationedRecordingWriter(IRecordingWriter inner, long room) :
 
     public void Write(ReadOnlySpan<byte> bytes)
     {
-        if (inner.BytesWritten + bytes.Length > room)
+        long left = room - inner.BytesWritten;
+
+        if (left >= bytes.Length)
         {
-            throw new IOException("No space left on device");
+            inner.Write(bytes);
+
+            return;
         }
 
-        inner.Write(bytes);
+        if (left > 0)
+        {
+            inner.Write(bytes[..(int)left]);
+        }
+
+        throw new IOException("No space left on device");
     }
 
     public void Dispose() => inner.Dispose();
