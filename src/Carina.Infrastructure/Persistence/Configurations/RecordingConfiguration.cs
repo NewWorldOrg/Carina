@@ -21,9 +21,16 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
 
     public const string ReservationIndexName = "ix_recording_reservation";
 
+    private static string Vocabulary<T>()
+        where T : struct, Enum
+        => "ARRAY[" + string.Join(", ", Enum.GetNames<T>().Select(name => $"'{name}'")) + "]::text[]";
+
     public void Configure(EntityTypeBuilder<Recording> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
+
+        string faults = Vocabulary<RecordingFault>();
+        string tuneFailures = Vocabulary<TuneFailureKind>();
 
         builder.ToTable("recording", table =>
         {
@@ -45,8 +52,20 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
                 """
                 recording_outcome IS NULL
                 OR recording_outcome = 'Complete'
-                OR jsonb_array_length(outcome_detail) > 0
+                OR recording_json_count(outcome_detail) > 0
                 """);
+            table.HasCheckConstraint(
+                "ck_recording_history",
+                $"recording_history_holds(interruptions, resume_count, {faults})");
+            table.HasCheckConstraint(
+                "ck_recording_reasons",
+                $"recording_reasons_hold(outcome_detail, {faults}, {tuneFailures})");
+            table.HasCheckConstraint(
+                "ck_recording_positions",
+                "recording_positions_hold(drop_positions, cc_dropped_packets, scrambled_packets)");
+            table.HasCheckConstraint(
+                "ck_recording_reanchors",
+                $"recording_reanchors_hold(pcr_reanchors, {DropTimeline.PcrWrapsAt})");
             table.HasCheckConstraint(
                 "ck_recording_measurement",
                 """
@@ -80,7 +99,7 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
                 "ck_recording_drop_positions",
                 $"""
                 (pcr_anchor IS NOT NULL
-                    OR (jsonb_array_length(drop_positions) = 0 AND jsonb_array_length(pcr_reanchors) = 0))
+                    OR (recording_json_count(drop_positions) = 0 AND recording_json_count(pcr_reanchors) = 0))
                 AND (pcr_anchor IS NULL OR cc_measured)
                 AND (pcr_anchor IS NULL OR pcr_anchor BETWEEN 0 AND {DropTimeline.PcrWrapsAt - 1})
                 """);
