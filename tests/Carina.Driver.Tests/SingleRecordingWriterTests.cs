@@ -90,6 +90,9 @@ public sealed class SingleRecordingWriterTests : IDisposable
 
         Assert.Equal(SessionRefusal.RecordingAlreadyExists, second.Refusal);
         Assert.Contains("k-shared", second.Detail, StringComparison.Ordinal);
+        Assert.Contains("orphan", second.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("one file", second.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain(root, second.Detail, StringComparison.Ordinal);
 
         LetGo(manager);
     }

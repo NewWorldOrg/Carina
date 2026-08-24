@@ -697,7 +697,7 @@ public sealed class TunerSessionManager(
 
                 return SessionStart.Refused(
                     SessionRefusal.RecordingAlreadyExists,
-                    $"The session '{HolderOf(recordingId)}' is writing the recording '{recordingId}', and two writers on one file would interleave."
+                    $"The session '{HolderOf(recordingId)}' is already writing the recording '{recordingId}'; a second one would split it across two files and leave one of them an orphan."
                 );
             }
 
