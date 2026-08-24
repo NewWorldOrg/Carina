@@ -526,13 +526,16 @@ public sealed class TunerSession : IDisposable
         }
 
         bool failed = causes.Count > 0;
+        SessionStopReason ending = ReasonFor(reason, cause, writerFault, deviceFault);
 
-        Exception? closeFault = Close(() => Broadcaster.Close(failed ? Combine(causes) : null));
+        Exception? closeFault = Close(
+            () => Broadcaster.Close(failed ? Combine(causes) : null, ending)
+        );
 
         lock (gate)
         {
             state = failed ? SessionState.Failed : outcome;
-            stopReason = ReasonFor(reason, cause, writerFault, deviceFault);
+            stopReason = ending;
             failureCause = failed ? Combine(causes) : null;
         }
 

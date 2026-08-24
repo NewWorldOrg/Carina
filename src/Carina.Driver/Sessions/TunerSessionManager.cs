@@ -128,7 +128,8 @@ public sealed class TunerSessionManager(
             session.Broadcaster.Close(
                 new OperationCanceledException(
                     $"The driver is shutting down; the stream of '{session.SessionId}' ends here and is incomplete."
-                )
+                ),
+                SessionStopReason.Requested
             );
         }
     }

@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading.Channels;
 
+using Carina.Contracts;
 using Carina.Driver.Recording;
 
 namespace Carina.Driver.Sessions;
@@ -34,6 +35,8 @@ public sealed class SessionSubscription
     public bool IsDisconnected { get; internal set; }
 
     public bool IsTruncated { get; internal set; }
+
+    public SessionStopReason EndedWith { get; internal set; }
 
     public long DroppedChunks => Interlocked.Read(ref droppedChunks);
 
@@ -75,6 +78,7 @@ public sealed class SessionBroadcaster(
 
     private bool closed;
     private Exception? closedBecause;
+    private SessionStopReason closedReason;
     private long droppedChunks;
 
     public int SubscriberCount => subscriptions.Count;
@@ -149,6 +153,7 @@ public sealed class SessionBroadcaster(
                 }
 
                 subscription.IsDisconnected = true;
+                subscription.EndedWith = closedReason;
                 subscription.Channel.Writer.TryComplete(closedBecause);
 
                 return subscription;
@@ -165,10 +170,15 @@ public sealed class SessionBroadcaster(
         return subscription;
     }
 
-    public void Unsubscribe(SessionSubscription subscription, Exception? because = null)
+    public void Unsubscribe(
+        SessionSubscription subscription,
+        Exception? because = null,
+        SessionStopReason endedWith = SessionStopReason.Unspecified
+    )
     {
         if (subscriptions.TryRemove(subscription, out _))
         {
+            subscription.EndedWith = endedWith;
             subscription.Channel.Writer.TryComplete(because);
         }
     }
@@ -200,7 +210,7 @@ public sealed class SessionBroadcaster(
 
     public void Dispose() => Close(null);
 
-    public void Close(Exception? because)
+    public void Close(Exception? because, SessionStopReason endedWith = SessionStopReason.Unspecified)
     {
         lock (gate)
         {
@@ -211,11 +221,12 @@ public sealed class SessionBroadcaster(
 
             closed = true;
             closedBecause = because;
+            closedReason = endedWith;
         }
 
         foreach (KeyValuePair<SessionSubscription, byte> entry in subscriptions)
         {
-            Unsubscribe(entry.Key, because ?? Truncation(entry.Key));
+            Unsubscribe(entry.Key, because ?? Truncation(entry.Key), endedWith);
         }
     }
 
@@ -251,7 +262,13 @@ public sealed class SessionBroadcaster(
                 subscription.IsTruncated = true;
                 subscription.CountDrop();
                 Tally();
-                Unsubscribe(subscription, TooSlow(limit));
+                Unsubscribe(
+                    subscription,
+                    TooSlow(limit),
+                    subscription.Kind is SubscriberKind.Recording
+                        ? SessionStopReason.RecordingFailed
+                        : SessionStopReason.Unspecified
+                );
 
                 return;
         }

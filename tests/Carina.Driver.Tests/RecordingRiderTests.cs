@@ -162,8 +162,14 @@ public sealed class RecordingRiderTests : IDisposable
         host.WaitForEnd(Deadlock);
     }
 
-    [Fact]
-    public void ARecordingRiderThatWasCutOffWhileItsHostRanOnFailsAsARecording()
+    [Theory]
+    [InlineData(SessionStopReason.EndTimeReached)]
+    [InlineData(SessionStopReason.Requested)]
+    [InlineData(SessionStopReason.Preempted)]
+    [InlineData(SessionStopReason.DrainCapReached)]
+    public void ARiderReadsTheReasonOffItsSeatWhileTheHostIsStillPuttingItselfAway(
+        SessionStopReason ending
+    )
     {
         var host = new TunerSession(
             SessionId.Parse("host"),
@@ -176,50 +182,138 @@ public sealed class RecordingRiderTests : IDisposable
         );
 
         SessionSubscription seat = host.Broadcaster.Subscribe(SubscriberKind.Recording);
-        using var device = new PiggybackTunerDevice(host, seat);
-
-        host.Broadcaster.Unsubscribe(seat, new TimeoutException("the recording was too slow"));
-
-        StreamCutException cut = Assert.Throws<StreamCutException>(
-            () => device.Read(1, CancellationToken.None)
-        );
-
-        Assert.Equal(SessionStopReason.RecordingFailed, cut.Reason);
-
-        host.Dispose();
-    }
-
-    [Fact]
-    public async Task ARiderWhoseHostSimplyEndedCarriesTheHostsOwnReason()
-    {
-        var device = new PacedTunerDevice();
-        var host = new TunerSession(
-            SessionId.Parse("host"),
-            SessionPurpose.Live,
-            "adapter0",
-            device,
-            Start,
-            Start.AddHours(1),
-            clock
-        );
-
-        SessionSubscription seat = host.Broadcaster.Subscribe(SubscriberKind.Recording);
         using var rider = new PiggybackTunerDevice(host, seat);
 
-        host.Start();
-        device.AwaitParkedBefore(1);
-        host.Stop(SessionStopReason.Preempted);
+        host.Broadcaster.Close(null, ending);
 
-        await host.Completion.WaitAsync(Deadlock);
-
-        Assert.True(host.Concluded);
-        Assert.Equal(SessionStopReason.Preempted, host.StopReason);
+        Assert.False(
+            host.Concluded,
+            "The host had already finished, so this is not the window a rider actually wakes in."
+        );
+        Assert.Equal(SessionStopReason.Running, host.StopReason);
 
         StreamCutException cut = Assert.Throws<StreamCutException>(
             () => rider.Read(1, CancellationToken.None)
         );
 
-        Assert.Equal(SessionStopReason.Preempted, cut.Reason);
+        Assert.Equal(ending, cut.Reason);
+
+        host.Dispose();
+    }
+
+    [Theory]
+    [InlineData(SessionStopReason.EndTimeReached)]
+    [InlineData(SessionStopReason.Requested)]
+    [InlineData(SessionStopReason.Preempted)]
+    public async Task ARecordingRidingAlongEndsWithTheReasonItsHostEndedFor(
+        SessionStopReason ending
+    )
+    {
+        var device = new PacedTunerDevice();
+        var manager = new TunerSessionManager(
+            Configuration,
+            new OneTunerDeviceFactory(device),
+            clock,
+            NullLogger<TunerSessionManager>.Instance
+        );
+
+        TunerSession host = Started(manager, Request("s-1", SessionPurpose.Live));
+
+        device.AwaitParkedBefore(1);
+
+        TunerSession rider = Started(manager, Request("s-2", SessionPurpose.Recording));
+
+        Assert.Equal(host.DeviceId, rider.DeviceId);
+
+        switch (ending)
+        {
+            case SessionStopReason.Requested:
+                await manager.StopAsync(
+                    host.SessionId,
+                    "the operator said so",
+                    CancellationToken.None
+                );
+
+                break;
+
+            case SessionStopReason.Preempted:
+                host.Preempt("something more important wanted the tuner");
+
+                break;
+
+            default:
+                host.Stop(ending);
+
+                break;
+        }
+
+        await rider.Completion.WaitAsync(Deadlock);
+
+        Assert.Equal(SessionState.Failed, rider.State);
+        Assert.Equal(ending, rider.StopReason);
+
+        host.Dispose();
+    }
+
+    [Fact]
+    public async Task ARecordingRidingAlongThroughAShutdownSaysItWasAskedToStop()
+    {
+        var device = new PacedTunerDevice();
+        var manager = new TunerSessionManager(
+            Configuration,
+            new OneTunerDeviceFactory(device),
+            clock,
+            NullLogger<TunerSessionManager>.Instance
+        );
+
+        TunerSession host = Started(manager, Request("s-1", SessionPurpose.Live));
+
+        device.AwaitParkedBefore(1);
+
+        TunerSession rider = Started(manager, Request("s-2", SessionPurpose.Recording));
+
+        manager.DetachEverySubscriber();
+
+        await rider.Completion.WaitAsync(Deadlock);
+
+        Assert.Equal(SessionState.Failed, rider.State);
+        Assert.Equal(SessionStopReason.Requested, rider.StopReason);
+
+        host.Dispose();
+    }
+
+    [Fact]
+    public void ARiderCutOffForBeingTooSlowIsTheOneThatFailedAndSaysSo()
+    {
+        var host = new TunerSession(
+            SessionId.Parse("host"),
+            SessionPurpose.Live,
+            "adapter0",
+            new ScriptedTunerDevice(),
+            Start,
+            Start.AddHours(1),
+            clock
+        );
+
+        using var seats = new SessionBroadcaster(
+            recordingCapacity: 1,
+            recordingBlockLimit: TimeSpan.Zero
+        );
+        SessionSubscription seat = seats.Subscribe(SubscriberKind.Recording);
+        using var rider = new PiggybackTunerDevice(host, seat);
+
+        seats.Publish(Chunk(1));
+        seats.Publish(Chunk(2));
+
+        Assert.Equal(Chunk(1), rider.Read(1, CancellationToken.None));
+
+        StreamCutException cut = Assert.Throws<StreamCutException>(
+            () => rider.Read(1, CancellationToken.None)
+        );
+
+        Assert.Equal(SessionStopReason.RecordingFailed, cut.Reason);
+
+        host.Dispose();
     }
 
     [Fact]
