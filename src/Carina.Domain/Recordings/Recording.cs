@@ -236,6 +236,11 @@ public sealed class Recording
         RefuseAPositionNothingCounted(counters, positions, scrambledPackets);
         RefuseAMeasurementFromNoTuner(counters, eovfCount, tunerDeviceId);
 
+        RefuseATimeBeforeTheRecordingBegan(startedAtActual, stoppedAtActual, nameof(stoppedAtActual));
+        RefuseATimeBeforeTheRecordingBegan(startedAtActual, abortedAt, nameof(abortedAt));
+        RefuseATimeBeforeTheRecordingBegan(startedAtActual, observedAt, nameof(observedAt));
+        RefuseATimeBeforeTheRecordingBegan(startedAtActual, measuredUpdatedAt, nameof(measuredUpdatedAt));
+
         if (counters.Measured && measuredUpdatedAt is null)
         {
             throw new ArgumentException("Counted packets say when they were last counted.", nameof(measuredUpdatedAt));
@@ -360,6 +365,7 @@ public sealed class Recording
 
         RefuseAPositionNothingCounted(counters, positions, scrambledPackets);
         RefuseAMeasurementFromNoTuner(counters, eovfCount, TunerDeviceId);
+        RefuseATimeBeforeTheRecordingBegan(StartedAtActual, at, nameof(at));
 
         CcMeasured = counters.Measured;
         CcDroppedPackets = counters.Dropped;
@@ -380,6 +386,8 @@ public sealed class Recording
             throw new InvalidOperationException("This recording is already interrupted.");
         }
 
+        RefuseATimeBeforeTheRecordingBegan(StartedAtActual, at, nameof(at));
+
         interruptions.Add(new Interruption(fault, UtcTimes.Required(at, nameof(at)), null));
     }
 
@@ -391,6 +399,8 @@ public sealed class Recording
         {
             throw new InvalidOperationException("This recording was not interrupted.");
         }
+
+        RefuseATimeBeforeTheRecordingBegan(interruptions[^1].OccurredAt, at, nameof(at));
 
         interruptions[^1] = interruptions[^1] with { ResumedAt = UtcTimes.Required(at, nameof(at)) };
         ResumeCount++;
@@ -407,6 +417,7 @@ public sealed class Recording
     public void Abort(DateTime at)
     {
         RefuseUnlessInFlight();
+        RefuseATimeBeforeTheRecordingBegan(StartedAtActual, at, nameof(at));
 
         AbortedAt = UtcTimes.Required(at, nameof(at));
     }
@@ -430,6 +441,7 @@ public sealed class Recording
 
         DateTime stopped = UtcTimes.Required(at, nameof(at));
 
+        RefuseATimeBeforeTheRecordingBegan(StartedAtActual, stopped, nameof(at));
         RefuseAnUnreachableOutcome(outcome, AbortedAt, fileSizeObserved, stopped, outcomeDetail);
 
         Outcome = outcome;
@@ -527,6 +539,16 @@ public sealed class Recording
         throw new ArgumentException(
             "A count came off a tuner, so the recording names which one it came off.",
             nameof(tunerDeviceId));
+    }
+
+    private static void RefuseATimeBeforeTheRecordingBegan(DateTime began, DateTime? at, string parameterName)
+    {
+        if (at is { } moment && moment < began)
+        {
+            throw new ArgumentException(
+                $"A recording runs forwards, so nothing about it happens before {began:O}.",
+                parameterName);
+        }
     }
 
     private static void RefuseAnUnnamedFault(RecordingFault fault)

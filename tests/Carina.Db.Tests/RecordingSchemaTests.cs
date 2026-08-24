@@ -19,6 +19,8 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
 
     private const string Now = "timestamptz '2026-08-24 12:00:00+00'";
 
+    private const string Counted = "timestamptz '2026-08-24 20:30:00+00'";
+
     private const string OneFault = """
         '[{"fault":"DriverLost","tuneFailure":null,"note":"","noticedAt":"2026-08-24T12:00:00Z"}]'::jsonb
         """;
@@ -125,7 +127,7 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
         Assert.Equal("ck_recording_measurement", zeroed.ConstraintName);
 
         PostgresException halfCounted = await Assert.ThrowsAsync<PostgresException>(
-            () => Record(connection, 80004, ccMeasured: "true", ccDropped: "0", measuredAt: Now));
+            () => Record(connection, 80004, ccMeasured: "true", ccDropped: "0", measuredAt: Counted));
 
         Assert.Equal("ck_recording_measurement", halfCounted.ConstraintName);
 
@@ -135,7 +137,7 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
         Assert.Equal("ck_recording_measurement", undated.ConstraintName);
 
         PostgresException impossible = await Assert.ThrowsAsync<PostgresException>(
-            () => Record(connection, 80004, ccMeasured: "true", ccDropped: "11", ccTotal: "10", measuredAt: Now));
+            () => Record(connection, 80004, ccMeasured: "true", ccDropped: "11", ccTotal: "10", measuredAt: Counted));
 
         Assert.Equal("ck_recording_measurement", impossible.ConstraintName);
 
@@ -145,7 +147,7 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
             ccMeasured: "true",
             ccDropped: "0",
             ccTotal: "1000",
-            measuredAt: Now);
+            measuredAt: Counted);
         Guid uncounted = await Record(connection, 80004, eventId: 4002);
 
         Assert.Equal(0L, await Scalar(connection, $"SELECT cc_dropped_packets FROM recording WHERE id = '{counted}'"));
@@ -343,7 +345,7 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
                 ccMeasured: "true",
                 ccDropped: "0",
                 ccTotal: "1000",
-                measuredAt: Now,
+                measuredAt: Counted,
                 tuner: "NULL"));
 
         Assert.Equal(PostgresErrorCodes.CheckViolation, counted.SqlState);
@@ -372,7 +374,7 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
             ccMeasured: "true",
             ccDropped: "4",
             ccTotal: "1000",
-            measuredAt: Now,
+            measuredAt: Counted,
             tuner: "'pt3-2'");
 
         Assert.Equal(
@@ -388,6 +390,27 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
         await Record(connection, 80014, tuner: "NULL");
 
         Assert.Null(await Scalar(connection, "SELECT tuner_device_id FROM recording WHERE network_id = 80014"));
+    }
+
+    [Theory]
+    [InlineData("stopped_at_actual", 80021)]
+    [InlineData("aborted_at", 80022)]
+    [InlineData("observed_at", 80023)]
+    [InlineData("measured_updated_at", 80024)]
+    public async Task NothingAboutARecordingHappensBeforeItStarted(string column, int networkId)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        Guid id = await Record(connection, networkId);
+
+        string also = column is "observed_at" ? ", file_size_observed = 12" : string.Empty;
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Execute(
+                connection,
+                $"UPDATE recording SET {column} = {Airs} - interval '1 second'{also} WHERE id = '{id}'"));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
+        Assert.Equal("ck_recording_runs_forwards", refusal.ConstraintName);
     }
 
     private static async Task<string> IndexDefinition(NpgsqlConnection connection, string name)

@@ -15,6 +15,8 @@ public sealed class RecordingDropPositionSchemaTests(MigratedScratchDatabase dat
 
     private const string Now = "timestamptz '2026-08-24 12:00:00+00'";
 
+    private const string Counted = "timestamptz '2026-08-24 20:30:00+00'";
+
     private const string OneBucket = """'[{"second":12,"continuity":3,"scrambled":0}]'::jsonb""";
 
     [Fact]
@@ -23,7 +25,7 @@ public sealed class RecordingDropPositionSchemaTests(MigratedScratchDatabase dat
         await using NpgsqlConnection connection = await database.OpenAsync();
 
         PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
-            () => Record(connection, 83001, positions: OneBucket, ccMeasured: "true", ccDropped: "3", ccTotal: "1000", measuredAt: Now));
+            () => Record(connection, 83001, positions: OneBucket, ccMeasured: "true", ccDropped: "3", ccTotal: "1000", measuredAt: Counted));
 
         Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
         Assert.Equal("ck_recording_drop_positions", refusal.ConstraintName);
@@ -58,8 +60,8 @@ public sealed class RecordingDropPositionSchemaTests(MigratedScratchDatabase dat
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
 
-        await Record(connection, 83004, anchor: "900000", ccMeasured: "true", ccDropped: "0", ccTotal: "1000", measuredAt: Now);
-        await Record(connection, 83004, eventId: 4002, ccMeasured: "true", ccDropped: "0", ccTotal: "1000", measuredAt: Now);
+        await Record(connection, 83004, anchor: "900000", ccMeasured: "true", ccDropped: "0", ccTotal: "1000", measuredAt: Counted);
+        await Record(connection, 83004, eventId: 4002, ccMeasured: "true", ccDropped: "0", ccTotal: "1000", measuredAt: Counted);
 
         Assert.Equal(900_000L, await Scalar(connection, Reads(83004, 4001, "pcr_anchor")));
         Assert.Null(await Scalar(connection, Reads(83004, 4002, "pcr_anchor")));
@@ -97,7 +99,7 @@ public sealed class RecordingDropPositionSchemaTests(MigratedScratchDatabase dat
             ccMeasured: "true",
             ccDropped: "3",
             ccTotal: "1000",
-            measuredAt: Now);
+            measuredAt: Counted);
 
         Assert.Equal("3", await Scalar(connection, Reads(83006, 4001, "drop_positions -> 0 ->> 'continuity'")));
         Assert.Equal("188", await Scalar(connection, Reads(83006, 4001, "drop_positions -> 1 ->> 'scrambled'")));
@@ -110,7 +112,7 @@ public sealed class RecordingDropPositionSchemaTests(MigratedScratchDatabase dat
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
 
-        await Record(connection, networkId, anchor: anchor, ccMeasured: "true", ccDropped: "0", ccTotal: "1000", measuredAt: Now);
+        await Record(connection, networkId, anchor: anchor, ccMeasured: "true", ccDropped: "0", ccTotal: "1000", measuredAt: Counted);
 
         Assert.Equal(long.Parse(anchor, System.Globalization.CultureInfo.InvariantCulture),
             await Scalar(connection, Reads(networkId, 4001, "pcr_anchor")));
@@ -124,7 +126,7 @@ public sealed class RecordingDropPositionSchemaTests(MigratedScratchDatabase dat
         await using NpgsqlConnection connection = await database.OpenAsync();
 
         PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
-            () => Record(connection, networkId, anchor: anchor, ccMeasured: "true", ccDropped: "0", ccTotal: "1000", measuredAt: Now));
+            () => Record(connection, networkId, anchor: anchor, ccMeasured: "true", ccDropped: "0", ccTotal: "1000", measuredAt: Counted));
 
         Assert.Equal("ck_recording_drop_positions", refusal.ConstraintName);
     }
@@ -143,7 +145,7 @@ public sealed class RecordingDropPositionSchemaTests(MigratedScratchDatabase dat
             ccMeasured: "true",
             ccDropped: "3",
             ccTotal: "1000",
-            measuredAt: Now);
+            measuredAt: Counted);
 
         Assert.Equal("1", await Scalar(connection, Reads(83015, 4001, "drop_positions -> 0 ->> 'second'")));
         Assert.Equal("4", await Scalar(connection, Reads(83015, 4001, "drop_positions -> 1 ->> 'second'")));
@@ -164,7 +166,7 @@ public sealed class RecordingDropPositionSchemaTests(MigratedScratchDatabase dat
             ccMeasured: "true",
             ccDropped: "0",
             ccTotal: "1000",
-            measuredAt: Now);
+            measuredAt: Counted);
 
         Assert.Equal(
             1,

@@ -67,6 +67,7 @@ public partial class Recordings : Migration
                 table.CheckConstraint("ck_recording_observation", "(file_size_observed IS NULL) = (observed_at IS NULL)");
                 table.CheckConstraint("ck_recording_outcome", "(recording_outcome IS NULL OR recording_outcome IN ('Complete', 'Truncated', 'Failed'))\nAND (recording_outcome IS NULL OR stopped_at_actual IS NOT NULL)\nAND (recording_outcome IS NULL OR file_size_observed IS NOT NULL)");
                 table.CheckConstraint("ck_recording_outcome_detail", "recording_outcome IS NULL\nOR recording_outcome = 'Complete'\nOR jsonb_array_length(outcome_detail) > 0");
+                table.CheckConstraint("ck_recording_runs_forwards", "(stopped_at_actual IS NULL OR stopped_at_actual >= started_at_actual)\nAND (aborted_at IS NULL OR aborted_at >= started_at_actual)\nAND (observed_at IS NULL OR observed_at >= started_at_actual)\nAND (measured_updated_at IS NULL OR measured_updated_at >= started_at_actual)");
                 table.CheckConstraint("ck_recording_tuner", "tuner_device_id IS NOT NULL\nOR (NOT cc_measured AND eovf_count = 0)");
                 table.CheckConstraint("ck_recording_window", "expected_window_end > expected_window_start");
             });

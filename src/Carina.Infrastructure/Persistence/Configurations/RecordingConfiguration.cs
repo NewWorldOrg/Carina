@@ -63,6 +63,14 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
                 "(file_size_observed IS NULL) = (observed_at IS NULL)");
             table.HasCheckConstraint("ck_recording_window", "expected_window_end > expected_window_start");
             table.HasCheckConstraint(
+                "ck_recording_runs_forwards",
+                """
+                (stopped_at_actual IS NULL OR stopped_at_actual >= started_at_actual)
+                AND (aborted_at IS NULL OR aborted_at >= started_at_actual)
+                AND (observed_at IS NULL OR observed_at >= started_at_actual)
+                AND (measured_updated_at IS NULL OR measured_updated_at >= started_at_actual)
+                """);
+            table.HasCheckConstraint(
                 "ck_recording_tuner",
                 """
                 tuner_device_id IS NOT NULL
