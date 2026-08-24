@@ -21,11 +21,9 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
 
     public const string ConcurrencyToken = "xmin";
 
-    public const string ReservationIndexName = "ix_recording_reservation";
-
     public const string FileIndexName = "ux_recording_file";
 
-    public const string InFlightReservationIndexName = "ux_recording_in_flight_reservation";
+    public const string ReservationIndexName = "ux_recording_reservation";
 
     private static string Vocabulary<T>()
         where T : struct, Enum
@@ -307,18 +305,14 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
         builder.HasIndex(recording => new { recording.Outcome, recording.StoppedAtActual })
             .HasDatabaseName(SettledIndexName);
 
-        builder.HasIndex(recording => recording.ReservationId)
-            .HasFilter("reservation_id IS NOT NULL")
-            .HasDatabaseName(ReservationIndexName);
-
         builder.HasIndex(recording => new { recording.OutputRoot, recording.FileName })
             .IsUnique()
             .HasDatabaseName(FileIndexName);
 
         builder.HasIndex(recording => recording.ReservationId)
             .IsUnique()
-            .HasFilter("reservation_id IS NOT NULL AND recording_outcome IS NULL")
-            .HasDatabaseName(InFlightReservationIndexName);
+            .HasFilter("reservation_id IS NOT NULL")
+            .HasDatabaseName(ReservationIndexName);
 
         builder.HasIndex(recording => recording.CcDroppedPackets)
             .HasFilter("cc_measured AND cc_dropped_packets > 0")

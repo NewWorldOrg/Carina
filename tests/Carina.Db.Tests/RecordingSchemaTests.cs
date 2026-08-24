@@ -324,8 +324,16 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
             .OfType<string>()
             .Order(StringComparer.Ordinal)];
 
+        Assert.Equal(
+            [
+                RecordingConfiguration.DroppedIndexName,
+                RecordingConfiguration.InFlightIndexName,
+                RecordingConfiguration.SettledIndexName,
+                RecordingConfiguration.FileIndexName,
+                RecordingConfiguration.ReservationIndexName,
+            ],
+            declared.Order(StringComparer.Ordinal));
         Assert.Equal(declared, built);
-        Assert.Contains(RecordingConfiguration.DroppedIndexName, declared, StringComparer.Ordinal);
     }
 
     [Fact]

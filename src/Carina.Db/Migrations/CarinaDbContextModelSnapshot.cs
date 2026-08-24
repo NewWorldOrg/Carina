@@ -1035,8 +1035,8 @@ namespace Carina.Db.Migrations
 
                     b.HasIndex("ReservationId")
                         .IsUnique()
-                        .HasDatabaseName("ux_recording_in_flight_reservation")
-                        .HasFilter("reservation_id IS NOT NULL AND recording_outcome IS NULL");
+                        .HasDatabaseName("ux_recording_reservation")
+                        .HasFilter("reservation_id IS NOT NULL");
 
                     b.HasIndex("StartedAtActual")
                         .HasDatabaseName("ix_recording_in_flight")

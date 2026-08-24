@@ -198,6 +198,22 @@ public partial class Recordings : Migration
             CREATE TRIGGER recording_projects_its_outcome
             AFTER INSERT OR UPDATE OF recording_outcome, reservation_id ON recording
             FOR EACH ROW EXECUTE FUNCTION recording_projects_its_outcome();
+
+            CREATE OR REPLACE FUNCTION recording_keeps_its_reservation() RETURNS trigger
+            LANGUAGE plpgsql AS $fn$
+            BEGIN
+                IF OLD.reservation_id IS DISTINCT FROM NEW.reservation_id THEN
+                    RAISE EXCEPTION 'a recording keeps the reservation it was started for'
+                        USING ERRCODE = '23514', CONSTRAINT = 'ck_recording_keeps_its_reservation';
+                END IF;
+
+                RETURN NEW;
+            END;
+            $fn$;
+
+            CREATE TRIGGER recording_keeps_its_reservation
+            BEFORE UPDATE OF reservation_id ON recording
+            FOR EACH ROW EXECUTE FUNCTION recording_keeps_its_reservation();
             """);
 
         migrationBuilder.CreateIndex(
@@ -207,11 +223,11 @@ public partial class Recordings : Migration
             unique: true);
 
         migrationBuilder.CreateIndex(
-            name: "ux_recording_in_flight_reservation",
+            name: "ux_recording_reservation",
             table: "recording",
             column: "reservation_id",
             unique: true,
-            filter: "reservation_id IS NOT NULL AND recording_outcome IS NULL");
+            filter: "reservation_id IS NOT NULL");
     }
 
     protected override void Down(MigrationBuilder migrationBuilder)
@@ -222,6 +238,7 @@ public partial class Recordings : Migration
             name: "recording");
 
         migrationBuilder.Sql("DROP FUNCTION IF EXISTS recording_projects_its_outcome();");
+        migrationBuilder.Sql("DROP FUNCTION IF EXISTS recording_keeps_its_reservation();");
         migrationBuilder.Sql("DROP FUNCTION IF EXISTS recording_json_count(jsonb);");
         migrationBuilder.Sql("DROP FUNCTION IF EXISTS recording_history_holds(jsonb, integer, text[]);");
         migrationBuilder.Sql("DROP FUNCTION IF EXISTS recording_reasons_hold(jsonb, text[], text[]);");

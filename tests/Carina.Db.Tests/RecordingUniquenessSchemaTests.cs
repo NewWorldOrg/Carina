@@ -45,20 +45,20 @@ public sealed class RecordingUniquenessSchemaTests(MigratedScratchDatabase datab
     }
 
     [Fact]
-    public async Task TheInFlightReservationIndexNarrowsToWhatIsStillRunning()
+    public async Task TheReservationIndexReachesEveryRecordingAReservationEverHad()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
 
         Assert.Equal(
-            "CREATE UNIQUE INDEX ux_recording_in_flight_reservation ON public.recording "
-            + "USING btree (reservation_id) WHERE ((reservation_id IS NOT NULL) AND (recording_outcome IS NULL))",
+            "CREATE UNIQUE INDEX ux_recording_reservation ON public.recording "
+            + "USING btree (reservation_id) WHERE (reservation_id IS NOT NULL)",
             await Scalar(
                 connection,
-                "SELECT indexdef FROM pg_indexes WHERE indexname = 'ux_recording_in_flight_reservation'"));
+                "SELECT indexdef FROM pg_indexes WHERE indexname = 'ux_recording_reservation'"));
     }
 
     [Fact]
-    public async Task AReservationHasAtMostOneRecordingInFlight()
+    public async Task AReservationHasOneRecordingAndNoMoreWhileItRuns()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
         Guid reservation = await Reserve(connection, 85003);
@@ -70,29 +70,109 @@ public sealed class RecordingUniquenessSchemaTests(MigratedScratchDatabase datab
             () => Record(connection, 85003, second, Named(second), eventId: 4002, reservationId: reservation));
 
         Assert.Equal(PostgresErrorCodes.UniqueViolation, refusal.SqlState);
-        Assert.Equal("ux_recording_in_flight_reservation", refusal.ConstraintName);
+        Assert.Equal("ux_recording_reservation", refusal.ConstraintName);
+        Assert.Equal(1L, await Count(connection, 85003));
+    }
+
+    [Theory]
+    [InlineData("Complete", "3400000000", 85101)]
+    [InlineData("Truncated", "1200000", 85102)]
+    [InlineData("Failed", "0", 85103)]
+    public async Task AReservationIsNotTriedAgainOnceItsRecordingHasEnded(
+        string outcome,
+        string size,
+        int networkId)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        Guid reservation = await Reserve(connection, networkId);
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+        await Record(connection, networkId, first, Named(first), reservationId: reservation);
+        await Settle(connection, first, outcome, size);
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(connection, networkId, second, Named(second), eventId: 4002, reservationId: reservation));
+
+        Assert.Equal(PostgresErrorCodes.UniqueViolation, refusal.SqlState);
+        Assert.Equal("ux_recording_reservation", refusal.ConstraintName);
+        Assert.Equal(1L, await Count(connection, networkId));
     }
 
     [Fact]
-    public async Task AReservationMayBeTriedAgainOnceTheFirstAttemptHasSettled()
+    public async Task ACompletedRecordingIsNotDraggedBackToRecordingByASecondRow()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
-        Guid reservation = await Reserve(connection, 85004);
+        Guid reservation = await Reserve(connection, 85104);
         var first = Guid.NewGuid();
+        await Record(connection, 85104, first, Named(first), reservationId: reservation);
+        await Settle(connection, first, "Complete", "3400000000");
+
+        Assert.Equal("Complete", await Composite(connection, reservation));
+
         var second = Guid.NewGuid();
-        await Record(connection, 85004, first, Named(first), reservationId: reservation);
+        await Assert.ThrowsAsync<PostgresException>(
+            () => Record(connection, 85104, second, Named(second), eventId: 4002, reservationId: reservation));
+
+        Assert.Equal("Complete", await Composite(connection, reservation));
+    }
+
+    [Fact]
+    public async Task ARecordingKeepsTheReservationItWasStartedFor()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        Guid mine = await Reserve(connection, 85011);
+        Guid theirs = await Reserve(connection, 85011, eventId: 4002);
+        var id = Guid.NewGuid();
+        await Record(connection, 85011, id, Named(id), reservationId: mine);
+
+        PostgresException moved = await Assert.ThrowsAsync<PostgresException>(
+            () => Execute(connection, $"UPDATE recording SET reservation_id = '{theirs}' WHERE id = '{id}'"));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, moved.SqlState);
+        Assert.Equal(mine, await Scalar(connection, $"SELECT reservation_id FROM recording WHERE id = '{id}'"));
+    }
+
+    [Fact]
+    public async Task ARecordingIsNotDetachedFromItsReservationLater()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        Guid reservation = await Reserve(connection, 85012);
+        var id = Guid.NewGuid();
+        await Record(connection, 85012, id, Named(id), reservationId: reservation);
+
+        await Assert.ThrowsAsync<PostgresException>(
+            () => Execute(connection, $"UPDATE recording SET reservation_id = NULL WHERE id = '{id}'"));
+
+        Assert.Equal(reservation, await Scalar(connection, $"SELECT reservation_id FROM recording WHERE id = '{id}'"));
+    }
+
+    [Fact]
+    public async Task ARecordingNobodyReservedIsNotAttachedToOneLater()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        Guid reservation = await Reserve(connection, 85013);
+        var id = Guid.NewGuid();
+        await Record(connection, 85013, id, Named(id));
+
+        await Assert.ThrowsAsync<PostgresException>(
+            () => Execute(connection, $"UPDATE recording SET reservation_id = '{reservation}' WHERE id = '{id}'"));
+
+        Assert.Null(await Scalar(connection, $"SELECT reservation_id FROM recording WHERE id = '{id}'"));
+    }
+
+    [Fact]
+    public async Task AWriteThatLeavesTheReservationWhereItIsIsNotRefused()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        Guid reservation = await Reserve(connection, 85014);
+        var id = Guid.NewGuid();
+        await Record(connection, 85014, id, Named(id), reservationId: reservation);
 
         await Execute(
             connection,
-            $"""
-            UPDATE recording
-            SET recording_outcome = 'Failed', stopped_at_actual = {Ends}, observed_at = {Ends},
-                file_size_observed = 0, outcome_detail = {OneReason}
-            WHERE id = '{first}'
-            """);
-        await Record(connection, 85004, second, Named(second), eventId: 4002, reservationId: reservation);
+            $"UPDATE recording SET reservation_id = '{reservation}', written_duration_ms = 600000 WHERE id = '{id}'");
 
-        Assert.Equal(2L, await Count(connection, 85004));
+        Assert.Equal(600_000L, await Scalar(connection, $"SELECT written_duration_ms FROM recording WHERE id = '{id}'"));
     }
 
     [Fact]
@@ -150,7 +230,21 @@ public sealed class RecordingUniquenessSchemaTests(MigratedScratchDatabase datab
 
     private static string Named(Guid id) => id.ToString("N") + ".m2ts";
 
-    private static async Task<Guid> Reserve(NpgsqlConnection connection, int networkId)
+    private static Task Settle(NpgsqlConnection connection, Guid recording, string outcome, string size)
+        => Execute(
+            connection,
+            $"""
+            UPDATE recording
+            SET recording_outcome = '{outcome}', stopped_at_actual = {Ends}, observed_at = {Ends},
+                aborted_at = {Ends}, file_size_observed = {size},
+                outcome_detail = {(outcome == "Complete" ? "'[]'::jsonb" : OneReason)}
+            WHERE id = '{recording}'
+            """);
+
+    private static async Task<string?> Composite(NpgsqlConnection connection, Guid reservation)
+        => await Scalar(connection, $"SELECT composite_state FROM reservation WHERE id = '{reservation}'") as string;
+
+    private static async Task<Guid> Reserve(NpgsqlConnection connection, int networkId, int eventId = 4001)
     {
         var id = Guid.NewGuid();
 
@@ -164,7 +258,7 @@ public sealed class RecordingUniquenessSchemaTests(MigratedScratchDatabase datab
                 epg_diverged, epg_diverged_detail, epg_missing, acknowledged_at,
                 broadcast_group_key, broadcast_group_role, state, started_at, recording_outcome, created_at)
             VALUES (
-                '{id}', {networkId}, 1024, 4001, {Airs}, NULL, 10,
+                '{id}', {networkId}, 1024, {eventId}, {Airs}, NULL, 10,
                 {Airs}, {Ends}, true, 0, 0,
                 'A programme', 'What it is about', '', '[]'::jsonb, {Now},
                 false, '[]'::jsonb, false, NULL,
