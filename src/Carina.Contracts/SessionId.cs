@@ -6,7 +6,7 @@ namespace Carina.Contracts;
 [JsonConverter(typeof(SessionIdJsonConverter))]
 public readonly record struct SessionId
 {
-    public const int MaxLength = 64;
+    public static readonly int MaxLength = 64;
 
     private SessionId(string value) => Value = value;
 
@@ -24,7 +24,7 @@ public readonly record struct SessionId
     public static bool TryParse(string? value, out SessionId id)
     {
         id = default;
-        if (value is null || value.Length is 0 or > MaxLength)
+        if (value is null || value.Length is 0 || value.Length > MaxLength)
         {
             return false;
         }

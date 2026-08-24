@@ -2,14 +2,14 @@ namespace Carina.Contracts;
 
 public static class WireName
 {
-    public const int MaxLength = 64;
+    public static readonly int MaxLength = 64;
 
-    public const string Description =
+    public static readonly string Description =
         "1 to 64 characters of A-Z, a-z, 0-9, '-', '_' or '.'";
 
     public static bool IsUsable(string? value)
     {
-        if (value is null || value.Length is 0 or > MaxLength)
+        if (value is null || value.Length is 0 || value.Length > MaxLength)
         {
             return false;
         }

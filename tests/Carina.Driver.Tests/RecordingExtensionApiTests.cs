@@ -160,6 +160,44 @@ public sealed class RecordingExtensionApiTests
     }
 
     [Fact]
+    public async Task ASessionThatWritesNoFileIsTurnedAwayForThatAndNotForItsTime()
+    {
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
+
+        using HttpResponseMessage created = await client.PostAsync(
+            DriverEndpoints.Sessions,
+            DriverUnderTest.Body(DriverUnderTest.Live("watching")),
+            Soon()
+        );
+
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+
+        using HttpResponseMessage patched = await client.PatchAsync(
+            DriverEndpoints.Session(SessionId.Parse("watching")),
+            Body(DateTimeOffset.UtcNow.AddHours(-1)),
+            Soon()
+        );
+
+        Assert.Equal(HttpStatusCode.BadRequest, patched.StatusCode);
+        Assert.Equal(SessionRefusalTitles.NotARecording, (await ProblemIn(patched))?.Title);
+    }
+
+    [Fact]
+    public async Task ABodyThatIsTheWordNullNamesNoTimeAndIsRefused()
+    {
+        await using RecordingUnderTest recording = await Recording("empty");
+
+        using var body = new StringContent("null", Encoding.UTF8, "application/json");
+
+        using HttpResponseMessage patched = await recording.PatchWith(body);
+
+        Assert.Equal(HttpStatusCode.BadRequest, patched.StatusCode);
+        Assert.Equal("malformedRequest", (await ProblemIn(patched))?.Title);
+        Assert.Equal(recording.EndsAt, await recording.CurrentEnd());
+    }
+
+    [Fact]
     public async Task ASessionThisDriverNeverHeldHasNoEndToMove()
     {
         await using DriverUnderTest driver = await DriverUnderTest.Start();
