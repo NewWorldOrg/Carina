@@ -328,7 +328,10 @@ public sealed class RecordingJsonShapeSchemaTests(MigratedScratchDatabase databa
         string? ccTotal = null,
         string? measuredAt = null,
         string? scrambled = null)
-        => await Execute(
+    {
+        var id = Guid.NewGuid();
+
+        await Execute(
             connection,
             $"""
             INSERT INTO recording (
@@ -344,8 +347,8 @@ public sealed class RecordingJsonShapeSchemaTests(MigratedScratchDatabase databa
                 cc_measured, cc_dropped_packets, cc_total_packets,
                 pcr_anchor, drop_positions, pcr_reanchors, tuner_device_id)
             VALUES (
-                gen_random_uuid(), NULL, {networkId}, 1024, {eventId}, {Airs},
-                'bulk', 'recording.m2ts', NULL, NULL,
+                '{id}', NULL, {networkId}, 1024, {eventId}, {Airs},
+                'bulk', '{id:N}.m2ts', NULL, NULL,
                 {Airs}, NULL, NULL,
                 0, {resumeCount}, {interruptions ?? "'[]'::jsonb"},
                 {Airs}, {Ends},
@@ -356,6 +359,7 @@ public sealed class RecordingJsonShapeSchemaTests(MigratedScratchDatabase databa
                 {ccMeasured}, {ccDropped ?? "NULL"}, {ccTotal ?? "NULL"},
                 {anchor ?? "NULL"}, {positions ?? "'[]'::jsonb"}, {reanchors ?? "'[]'::jsonb"}, 'pt3-0')
             """);
+    }
 
     private static async Task Execute(NpgsqlConnection connection, string sql)
     {

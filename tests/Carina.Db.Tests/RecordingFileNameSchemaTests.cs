@@ -1,3 +1,5 @@
+using System.Globalization;
+
 using Npgsql;
 
 namespace Carina.Db.Tests;
@@ -14,16 +16,31 @@ public sealed class RecordingFileNameSchemaTests(MigratedScratchDatabase databas
     private const string Now = "timestamptz '2026-08-24 12:00:00+00'";
 
     [Theory]
-    [InlineData("../escaped.m2ts", 81011)]
-    [InlineData("held..out.m2ts", 81012)]
-    [InlineData("a/b.m2ts", 81013)]
-    [InlineData("/absolute.m2ts", 81014)]
-    [InlineData(".", 81015)]
-    [InlineData("", 81016)]
-    [InlineData("   ", 81017)]
-    [InlineData(" leading.m2ts", 81018)]
-    [InlineData("trailing.m2ts ", 81019)]
-    public async Task TheDatabaseRefusesAFileNameThatCanLeaveItsRoom(string name, int networkId)
+    [InlineData("../{0}.m2ts", 81011)]
+    [InlineData("held..{0}.m2ts", 81012)]
+    [InlineData("a/{0}.m2ts", 81013)]
+    [InlineData("/{0}.m2ts", 81014)]
+    [InlineData(" {0}.m2ts", 81015)]
+    [InlineData("{0}.m2ts ", 81016)]
+    public async Task TheDatabaseRefusesAFileNameThatCanLeaveItsRoom(string shape, int networkId)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        var id = Guid.NewGuid();
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(connection, string.Format(CultureInfo.InvariantCulture, shape, id.ToString("N")), networkId, id));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
+        Assert.Equal("ck_recording_file_name", refusal.ConstraintName);
+        Assert.Equal(0L, await Count(connection, networkId));
+    }
+
+    [Theory]
+    [InlineData(".", 81021)]
+    [InlineData("", 81022)]
+    [InlineData("   ", 81023)]
+    [InlineData("someone-elses-recording.m2ts", 81024)]
+    public async Task ANameThatCouldNeverBelongToThisRecordingIsRefused(string name, int networkId)
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
 
@@ -40,8 +57,10 @@ public sealed class RecordingFileNameSchemaTests(MigratedScratchDatabase databas
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
 
+        var id = Guid.NewGuid();
+
         PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
-            () => Record(connection, "a" + '\\' + "b.m2ts", 81002));
+            () => Record(connection, "a" + '\\' + id.ToString("N") + ".m2ts", 81002, id));
 
         Assert.Equal("ck_recording_file_name", refusal.ConstraintName);
         Assert.Equal(0L, await Count(connection, 81002));
@@ -52,8 +71,12 @@ public sealed class RecordingFileNameSchemaTests(MigratedScratchDatabase databas
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
 
-        await Assert.ThrowsAnyAsync<Exception>(() => Record(connection, "recording\0.m2ts", 81003));
+        var id = Guid.NewGuid();
 
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(connection, id.ToString("N") + "\0.m2ts", 81003, id));
+
+        Assert.Equal("22021", refusal.SqlState);
         Assert.Equal(0L, await Count(connection, 81003));
     }
 
@@ -62,7 +85,9 @@ public sealed class RecordingFileNameSchemaTests(MigratedScratchDatabase databas
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
 
-        await Record(connection, "6f9619ff8b86d011b42d00c04fc964ff.m2ts", 81004);
+        var id = new Guid("6f9619ff-8b86-d011-b42d-00c04fc964ff");
+
+        await Record(connection, "carina-6f9619ff8b86d011b42d00c04fc964ff.m2ts", 81004, id);
 
         Assert.Equal(1L, await Count(connection, 81004));
     }
@@ -82,7 +107,11 @@ public sealed class RecordingFileNameSchemaTests(MigratedScratchDatabase databas
                 """));
     }
 
-    private static async Task Record(NpgsqlConnection connection, string fileName, int networkId)
+    private static async Task Record(
+        NpgsqlConnection connection,
+        string fileName,
+        int networkId,
+        Guid? recordingId = null)
     {
         await using var command = new NpgsqlCommand(
             """
@@ -99,7 +128,7 @@ public sealed class RecordingFileNameSchemaTests(MigratedScratchDatabase databas
                 cc_measured, cc_dropped_packets, cc_total_packets,
                 pcr_anchor, drop_positions, pcr_reanchors, tuner_device_id)
             VALUES (
-                gen_random_uuid(), NULL, @networkId, 1024, 4001, @airs,
+                @id, NULL, @networkId, 1024, 4001, @airs,
                 'bulk', @fileName, NULL, NULL,
                 @airs, NULL, NULL,
                 0, 0, '[]'::jsonb,
@@ -116,6 +145,7 @@ public sealed class RecordingFileNameSchemaTests(MigratedScratchDatabase databas
             connection);
         command.Parameters.AddWithValue("fileName", fileName);
         command.Parameters.AddWithValue("networkId", networkId);
+        command.Parameters.AddWithValue("id", recordingId ?? Guid.NewGuid());
 
         await command.ExecuteNonQueryAsync();
     }

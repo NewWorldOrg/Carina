@@ -21,6 +21,10 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
 
     public const string ReservationIndexName = "ix_recording_reservation";
 
+    public const string FileIndexName = "ux_recording_file";
+
+    public const string InFlightReservationIndexName = "ux_recording_in_flight_reservation";
+
     private static string Vocabulary<T>()
         where T : struct, Enum
         => "ARRAY[" + string.Join(", ", Enum.GetNames<T>().Select(name => $"'{name}'")) + "]::text[]";
@@ -118,6 +122,7 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
                 AND strpos(file_name, '/') = 0
                 AND strpos(file_name, chr(92)) = 0
                 AND strpos(file_name, '..') = 0
+                AND strpos(file_name, replace(id::text, '-', '')) > 0
                 """);
             table.HasCheckConstraint(
                 "ck_recording_counts",
@@ -286,6 +291,15 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
         builder.HasIndex(recording => recording.ReservationId)
             .HasFilter("reservation_id IS NOT NULL")
             .HasDatabaseName(ReservationIndexName);
+
+        builder.HasIndex(recording => new { recording.OutputRoot, recording.FileName })
+            .IsUnique()
+            .HasDatabaseName(FileIndexName);
+
+        builder.HasIndex(recording => recording.ReservationId)
+            .IsUnique()
+            .HasFilter("reservation_id IS NOT NULL AND recording_outcome IS NULL")
+            .HasDatabaseName(InFlightReservationIndexName);
 
         builder.HasIndex(recording => recording.CcDroppedPackets)
             .HasFilter("cc_measured AND cc_dropped_packets > 0")

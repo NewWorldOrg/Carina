@@ -1025,8 +1025,9 @@ namespace Carina.Db.Migrations
                         .HasFilter("cc_measured AND cc_dropped_packets > 0");
 
                     b.HasIndex("ReservationId")
-                        .HasDatabaseName("ix_recording_reservation")
-                        .HasFilter("reservation_id IS NOT NULL");
+                        .IsUnique()
+                        .HasDatabaseName("ux_recording_in_flight_reservation")
+                        .HasFilter("reservation_id IS NOT NULL AND recording_outcome IS NULL");
 
                     b.HasIndex("StartedAtActual")
                         .HasDatabaseName("ix_recording_in_flight")
@@ -1034,6 +1035,10 @@ namespace Carina.Db.Migrations
 
                     b.HasIndex("Outcome", "StoppedAtActual")
                         .HasDatabaseName("ix_recording_settled");
+
+                    b.HasIndex("OutputRoot", "FileName")
+                        .IsUnique()
+                        .HasDatabaseName("ux_recording_file");
 
                     b.ToTable("recording", null, t =>
                         {
@@ -1047,7 +1052,7 @@ namespace Carina.Db.Migrations
 
                             t.HasCheckConstraint("ck_recording_empty_file_failed", "recording_outcome IS NULL OR file_size_observed <> 0 OR recording_outcome = 'Failed'");
 
-                            t.HasCheckConstraint("ck_recording_file_name", "btrim(file_name) = file_name\nAND length(file_name) > 0\nAND file_name <> '.'\nAND strpos(file_name, '/') = 0\nAND strpos(file_name, chr(92)) = 0\nAND strpos(file_name, '..') = 0");
+                            t.HasCheckConstraint("ck_recording_file_name", "btrim(file_name) = file_name\nAND length(file_name) > 0\nAND file_name <> '.'\nAND strpos(file_name, '/') = 0\nAND strpos(file_name, chr(92)) = 0\nAND strpos(file_name, '..') = 0\nAND strpos(file_name, replace(id::text, '-', '')) > 0");
 
                             t.HasCheckConstraint("ck_recording_history", "recording_history_holds(interruptions, resume_count, ARRAY['TuneFailed', 'RefusedByDiskPrecheck', 'DiskExhausted', 'DriverLost', 'DrainGraceExpired', 'StoppedByHand', 'TunerContended', 'ScramblingUnresolved', 'ShortOfTheWindow']::text[])");
 

@@ -420,7 +420,7 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
         NpgsqlConnection connection,
         int networkId,
         int eventId = 4001,
-        string fileName = "recording.m2ts",
+        string? fileName = null,
         string? outcome = null,
         string? size = null,
         string? observedAt = null,
@@ -454,7 +454,7 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
                 pcr_anchor, drop_positions, pcr_reanchors, tuner_device_id)
             VALUES (
                 '{id}', {(reservationId is { } held ? $"'{held}'" : "NULL")}, {networkId}, 1024, {eventId}, {Airs},
-                'bulk', '{fileName}', {size ?? "NULL"}, {observedAt ?? "NULL"},
+                'bulk', '{fileName ?? $"{id:N}.m2ts"}', {size ?? "NULL"}, {observedAt ?? "NULL"},
                 {Airs}, {stoppedAt ?? "NULL"}, {abortedAt ?? "NULL"},
                 0, 0, '[]'::jsonb,
                 {Airs}, {windowEnd ?? Ends},

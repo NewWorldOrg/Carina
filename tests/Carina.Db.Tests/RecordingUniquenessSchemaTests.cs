@@ -1,0 +1,231 @@
+using Npgsql;
+
+namespace Carina.Db.Tests;
+
+[Collection(ConnectionEnvironmentCollection.Name)]
+[Trait("Category", "DbIntegration")]
+public sealed class RecordingUniquenessSchemaTests(MigratedScratchDatabase database)
+    : IClassFixture<MigratedScratchDatabase>
+{
+    private const string Airs = "timestamptz '2026-08-24 20:00:00+00'";
+
+    private const string Ends = "timestamptz '2026-08-24 21:00:00+00'";
+
+    private const string Now = "timestamptz '2026-08-24 12:00:00+00'";
+
+    private const string OneReason = """
+        '[{"fault":"DriverLost","tuneFailure":null,"note":"","noticedAt":"2026-08-24T20:10:00Z"}]'::jsonb
+        """;
+
+    [Fact]
+    public async Task OneFileIsClaimedByOneRowAndNoMore()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+        await Record(connection, 85001, first, Named(first));
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(connection, 85001, second, Named(first), eventId: 4002));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
+        Assert.Equal("ck_recording_file_name", refusal.ConstraintName);
+        Assert.Equal(1L, await Count(connection, 85001));
+    }
+
+    [Fact]
+    public async Task TheFileIndexStandsBehindThatEvenSo()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        Assert.Equal(
+            "CREATE UNIQUE INDEX ux_recording_file ON public.recording "
+            + "USING btree (output_root, file_name)",
+            await Scalar(connection, "SELECT indexdef FROM pg_indexes WHERE indexname = 'ux_recording_file'"));
+    }
+
+    [Fact]
+    public async Task TheInFlightReservationIndexNarrowsToWhatIsStillRunning()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        Assert.Equal(
+            "CREATE UNIQUE INDEX ux_recording_in_flight_reservation ON public.recording "
+            + "USING btree (reservation_id) WHERE ((reservation_id IS NOT NULL) AND (recording_outcome IS NULL))",
+            await Scalar(
+                connection,
+                "SELECT indexdef FROM pg_indexes WHERE indexname = 'ux_recording_in_flight_reservation'"));
+    }
+
+    [Fact]
+    public async Task AReservationHasAtMostOneRecordingInFlight()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        Guid reservation = await Reserve(connection, 85003);
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+        await Record(connection, 85003, first, Named(first), reservationId: reservation);
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(connection, 85003, second, Named(second), eventId: 4002, reservationId: reservation));
+
+        Assert.Equal(PostgresErrorCodes.UniqueViolation, refusal.SqlState);
+        Assert.Equal("ux_recording_in_flight_reservation", refusal.ConstraintName);
+    }
+
+    [Fact]
+    public async Task AReservationMayBeTriedAgainOnceTheFirstAttemptHasSettled()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        Guid reservation = await Reserve(connection, 85004);
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+        await Record(connection, 85004, first, Named(first), reservationId: reservation);
+
+        await Execute(
+            connection,
+            $"""
+            UPDATE recording
+            SET recording_outcome = 'Failed', stopped_at_actual = {Ends}, observed_at = {Ends},
+                file_size_observed = 0, outcome_detail = {OneReason}
+            WHERE id = '{first}'
+            """);
+        await Record(connection, 85004, second, Named(second), eventId: 4002, reservationId: reservation);
+
+        Assert.Equal(2L, await Count(connection, 85004));
+    }
+
+    [Fact]
+    public async Task ARecordingWithNoReservationDoesNotCollideWithAnother()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+        await Record(connection, 85005, first, Named(first));
+
+        await Record(connection, 85005, second, Named(second), eventId: 4002);
+
+        Assert.Equal(2L, await Count(connection, 85005));
+    }
+
+    [Fact]
+    public async Task AFileThatNamesAnotherRecordingIsRefused()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        var id = Guid.NewGuid();
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(connection, 85006, id, Named(Guid.NewGuid())));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
+        Assert.Equal("ck_recording_file_name", refusal.ConstraintName);
+        Assert.Equal(0L, await Count(connection, 85006));
+    }
+
+    [Fact]
+    public async Task AFileNamedForItsRecordingIsAccepted()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        var id = Guid.NewGuid();
+
+        await Record(connection, 85007, id, $"carina-{Named(id)}");
+
+        Assert.Equal(1L, await Count(connection, 85007));
+    }
+
+    [Fact]
+    public async Task RenamingARowOntoAnotherRecordingsNameIsRefused()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        var id = Guid.NewGuid();
+        await Record(connection, 85008, id, Named(id));
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Execute(
+                connection,
+                $"UPDATE recording SET file_name = '{Named(Guid.NewGuid())}' WHERE id = '{id}'"));
+
+        Assert.Equal("ck_recording_file_name", refusal.ConstraintName);
+    }
+
+    private static string Named(Guid id) => id.ToString("N") + ".m2ts";
+
+    private static async Task<Guid> Reserve(NpgsqlConnection connection, int networkId)
+    {
+        var id = Guid.NewGuid();
+
+        await Execute(
+            connection,
+            $"""
+            INSERT INTO reservation (
+                id, network_id, service_id, event_id, programme_start_at, rule_id, priority,
+                start_at, end_at, end_at_confirmed, margin_before, margin_after,
+                snapshot_name, snapshot_summary, snapshot_extended, snapshot_genres, captured_at,
+                epg_diverged, epg_diverged_detail, epg_missing, acknowledged_at,
+                broadcast_group_key, broadcast_group_role, state, started_at, recording_outcome, created_at)
+            VALUES (
+                '{id}', {networkId}, 1024, 4001, {Airs}, NULL, 10,
+                {Airs}, {Ends}, true, 0, 0,
+                'A programme', 'What it is about', '', '[]'::jsonb, {Now},
+                false, '[]'::jsonb, false, NULL,
+                NULL, 'Standalone', 'Scheduled', {Airs}, NULL, {Now})
+            """);
+
+        return id;
+    }
+
+    private static async Task Record(
+        NpgsqlConnection connection,
+        int networkId,
+        Guid id,
+        string fileName,
+        int eventId = 4001,
+        string outputRoot = "bulk",
+        Guid? reservationId = null)
+        => await Execute(
+            connection,
+            $"""
+            INSERT INTO recording (
+                id, reservation_id, network_id, service_id, event_id, programme_start_at,
+                output_root, file_name, file_size_observed, observed_at,
+                started_at_actual, stopped_at_actual, aborted_at,
+                written_duration_ms, resume_count, interruptions,
+                expected_window_start, expected_window_end,
+                recording_outcome, outcome_detail,
+                scrambled_packets, eovf_count, measured_updated_at,
+                snapshot_name, snapshot_summary, snapshot_extended, snapshot_genres, captured_at,
+                broadcast_group_key, broadcast_group_role,
+                cc_measured, cc_dropped_packets, cc_total_packets,
+                pcr_anchor, drop_positions, pcr_reanchors, tuner_device_id)
+            VALUES (
+                '{id}', {(reservationId is { } held ? $"'{held}'" : "NULL")},
+                {networkId}, 1024, {eventId}, {Airs},
+                '{outputRoot}', '{fileName}', NULL, NULL,
+                {Airs}, NULL, NULL,
+                0, 0, '[]'::jsonb,
+                {Airs}, {Ends},
+                NULL, '[]'::jsonb,
+                NULL, 0, NULL,
+                'A programme', 'What it is about', '', '[]'::jsonb, {Now},
+                NULL, 'Standalone',
+                false, NULL, NULL,
+                NULL, '[]'::jsonb, '[]'::jsonb, 'pt3-0')
+            """);
+
+    private static async Task Execute(NpgsqlConnection connection, string sql)
+    {
+        await using var command = new NpgsqlCommand(sql, connection);
+        await command.ExecuteNonQueryAsync();
+    }
+
+    private static async Task<long> Count(NpgsqlConnection connection, int networkId)
+        => (long)(await Scalar(connection, $"SELECT count(*) FROM recording WHERE network_id = {networkId}"))!;
+
+    private static async Task<object?> Scalar(NpgsqlConnection connection, string sql)
+    {
+        await using var command = new NpgsqlCommand(sql, connection);
+        object? read = await command.ExecuteScalarAsync();
+
+        return read is DBNull ? null : read;
+    }
+}

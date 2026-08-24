@@ -146,7 +146,7 @@ public partial class Recordings : Migration
                 table.CheckConstraint("ck_recording_counts", "written_duration_ms >= 0\nAND resume_count >= 0\nAND eovf_count >= 0\nAND (file_size_observed IS NULL OR file_size_observed >= 0)\nAND (scrambled_packets IS NULL OR scrambled_packets >= 0)");
                 table.CheckConstraint("ck_recording_drop_positions", "(pcr_anchor IS NOT NULL\n    OR (recording_json_count(drop_positions) = 0 AND recording_json_count(pcr_reanchors) = 0))\nAND (pcr_anchor IS NULL OR cc_measured)\nAND (pcr_anchor IS NULL OR pcr_anchor BETWEEN 0 AND 8589934591)");
                 table.CheckConstraint("ck_recording_empty_file_failed", "recording_outcome IS NULL OR file_size_observed <> 0 OR recording_outcome = 'Failed'");
-                table.CheckConstraint("ck_recording_file_name", "btrim(file_name) = file_name\nAND length(file_name) > 0\nAND file_name <> '.'\nAND strpos(file_name, '/') = 0\nAND strpos(file_name, chr(92)) = 0\nAND strpos(file_name, '..') = 0");
+                table.CheckConstraint("ck_recording_file_name", "btrim(file_name) = file_name\nAND length(file_name) > 0\nAND file_name <> '.'\nAND strpos(file_name, '/') = 0\nAND strpos(file_name, chr(92)) = 0\nAND strpos(file_name, '..') = 0\nAND strpos(file_name, replace(id::text, '-', '')) > 0");
                 table.CheckConstraint("ck_recording_history", "recording_history_holds(interruptions, resume_count, ARRAY['TuneFailed', 'RefusedByDiskPrecheck', 'DiskExhausted', 'DriverLost', 'DrainGraceExpired', 'StoppedByHand', 'TunerContended', 'ScramblingUnresolved', 'ShortOfTheWindow']::text[])");
                 table.CheckConstraint("ck_recording_measurement", "(cc_measured\n    OR (cc_dropped_packets IS NULL AND cc_total_packets IS NULL))\nAND (NOT cc_measured\n    OR (cc_dropped_packets IS NOT NULL\n        AND cc_total_packets IS NOT NULL\n        AND cc_dropped_packets <= cc_total_packets\n        AND measured_updated_at IS NOT NULL))");
                 table.CheckConstraint("ck_recording_observation", "(file_size_observed IS NULL) = (observed_at IS NULL)");
@@ -173,15 +173,22 @@ public partial class Recordings : Migration
             filter: "recording_outcome IS NULL");
 
         migrationBuilder.CreateIndex(
-            name: "ix_recording_reservation",
-            table: "recording",
-            column: "reservation_id",
-            filter: "reservation_id IS NOT NULL");
-
-        migrationBuilder.CreateIndex(
             name: "ix_recording_settled",
             table: "recording",
             columns: new[] { "recording_outcome", "stopped_at_actual" });
+
+        migrationBuilder.CreateIndex(
+            name: "ux_recording_file",
+            table: "recording",
+            columns: new[] { "output_root", "file_name" },
+            unique: true);
+
+        migrationBuilder.CreateIndex(
+            name: "ux_recording_in_flight_reservation",
+            table: "recording",
+            column: "reservation_id",
+            unique: true,
+            filter: "reservation_id IS NOT NULL AND recording_outcome IS NULL");
     }
 
     protected override void Down(MigrationBuilder migrationBuilder)

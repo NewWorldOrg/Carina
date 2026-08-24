@@ -127,7 +127,10 @@ public sealed class RecordingBroadcastGroupSchemaTests(MigratedScratchDatabase d
         Guid? reservationId = null,
         string? groupKey = null,
         string groupRole = "Standalone")
-        => await Execute(
+    {
+        var id = Guid.NewGuid();
+
+        await Execute(
             connection,
             $"""
             INSERT INTO recording (
@@ -143,9 +146,9 @@ public sealed class RecordingBroadcastGroupSchemaTests(MigratedScratchDatabase d
                 cc_measured, cc_dropped_packets, cc_total_packets,
                 pcr_anchor, drop_positions, pcr_reanchors, tuner_device_id)
             VALUES (
-                gen_random_uuid(), {(reservationId is { } held ? $"'{held}'" : "NULL")},
+                '{id}', {(reservationId is { } held ? $"'{held}'" : "NULL")},
                 {networkId}, 1024, 4001, {Airs},
-                'bulk', 'recording.m2ts', NULL, NULL,
+                'bulk', '{id:N}.m2ts', NULL, NULL,
                 {Airs}, NULL, NULL,
                 0, 0, '[]'::jsonb,
                 {Airs}, {Ends},
@@ -156,6 +159,7 @@ public sealed class RecordingBroadcastGroupSchemaTests(MigratedScratchDatabase d
                 false, NULL, NULL,
                 NULL, '[]'::jsonb, '[]'::jsonb, 'pt3-0')
             """);
+    }
 
     private static async Task Execute(NpgsqlConnection connection, string sql)
     {
