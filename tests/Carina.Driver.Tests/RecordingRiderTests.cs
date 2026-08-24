@@ -666,12 +666,70 @@ public sealed class RecordingRiderTests : IDisposable
     }
 
     [Fact]
-    public void TheRecordingSeatIsDeepEnoughToCoverTheWriterBetweenTwoFlushes()
+    public void TheRecordingSeatHoldsHalfAMinuteOfTheFastestBroadcastThereIs()
     {
+        const long fastestBytesPerSecond = 16_500_000 / 8;
+
+        long depth =
+            (long)SessionBroadcaster.DefaultRecordingCapacity * TunerSession.DefaultChunkSize;
+
         Assert.True(
-            (long)SessionBroadcaster.DefaultRecordingCapacity * TunerSession.DefaultChunkSize
-                >= RecordingWriter.FlushInterval,
-            "A recording rider cannot survive one flush interval of the writer stalling."
+            depth >= 30 * fastestBytesPerSecond,
+            $"The seat holds {depth} bytes, under thirty seconds of a 16.5 Mbit broadcast, so a rider cannot ride out one settling of the writer."
         );
+    }
+
+    [Fact]
+    public async Task ARecordingSeatWaitsOnItsOwnLimitAndNotOnTheOneSurveyorsAreGiven()
+    {
+        using var seats = new SessionBroadcaster(
+            surveyCapacity: 1,
+            surveyBlockLimit: TimeSpan.Zero,
+            recordingCapacity: 1,
+            recordingBlockLimit: TimeSpan.FromSeconds(30)
+        );
+
+        SessionSubscription recording = seats.Subscribe(SubscriberKind.Recording);
+
+        seats.Publish(Chunk(3));
+
+        Task fourth = Task.Run(() => seats.Publish(Chunk(4)));
+
+        Assert.True(recording.Reader.TryRead(out byte[]? third));
+
+        await fourth.WaitAsync(Deadlock);
+
+        Assert.Equal(Chunk(3), third);
+        Assert.False(
+            recording.IsDisconnected,
+            "The recording seat was cut on the limit surveyors are given instead of waiting on its own."
+        );
+        Assert.Equal(0, recording.DroppedChunks);
+        Assert.True(recording.Reader.TryRead(out byte[]? fourthChunk));
+        Assert.Equal(Chunk(4), fourthChunk);
+    }
+
+    [Fact]
+    public void ASurveySeatWaitsOnItsOwnLimitAndNotOnTheOneRecordingsAreGiven()
+    {
+        using var seats = new SessionBroadcaster(
+            surveyCapacity: 1,
+            surveyBlockLimit: TimeSpan.Zero,
+            recordingCapacity: 1,
+            recordingBlockLimit: TimeSpan.FromSeconds(30)
+        );
+
+        SessionSubscription surveying = seats.Subscribe(SubscriberKind.Survey);
+
+        long start = Stopwatch.GetTimestamp();
+
+        seats.Publish(Chunk(1));
+        seats.Publish(Chunk(2));
+
+        Assert.True(
+            Stopwatch.GetElapsedTime(start) < TimeSpan.FromSeconds(2),
+            "The surveyor was held on the recording limit instead of being cut on its own."
+        );
+        Assert.True(surveying.IsDisconnected);
     }
 }
