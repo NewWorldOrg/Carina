@@ -19,6 +19,8 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
 
     public const string DroppedIndexName = "ix_recording_cc_dropped";
 
+    public const string ConcurrencyToken = "xmin";
+
     public const string ReservationIndexName = "ix_recording_reservation";
 
     public const string FileIndexName = "ux_recording_file";
@@ -140,6 +142,12 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
                 AND (scrambled_packets IS NULL OR scrambled_packets >= 0)
                 """);
         });
+
+        builder.Property<uint>(ConcurrencyToken)
+            .HasColumnName(ConcurrencyToken)
+            .HasColumnType("xid")
+            .ValueGeneratedOnAddOrUpdate()
+            .IsConcurrencyToken();
 
         builder.HasKey(recording => recording.Id);
 

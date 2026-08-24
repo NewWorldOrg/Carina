@@ -1001,6 +1001,12 @@ namespace Carina.Db.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("written_duration_ms");
 
+                    b.Property<uint>("xmin")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.ComplexProperty(typeof(Dictionary<string, object>), "Positions", "Carina.Domain.Recordings.Recording.Positions#DropTimeline", b1 =>
                         {
                             b1.IsRequired();

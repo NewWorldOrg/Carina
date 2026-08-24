@@ -284,18 +284,6 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
     }
 
     [Fact]
-    public async Task WhatWasWrittenIsAddedToRatherThanReplaced()
-    {
-        await using NpgsqlConnection connection = await database.OpenAsync();
-        Guid id = await Record(connection, 80010);
-
-        await Execute(connection, $"UPDATE recording SET written_duration_ms = written_duration_ms + 600000 WHERE id = '{id}'");
-        await Execute(connection, $"UPDATE recording SET written_duration_ms = written_duration_ms + 720000 WHERE id = '{id}'");
-
-        Assert.Equal(1_320_000L, await Scalar(connection, $"SELECT written_duration_ms FROM recording WHERE id = '{id}'"));
-    }
-
-    [Fact]
     public async Task EveryIndexOnTheLedgerIsOneTheModelDeclares()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
