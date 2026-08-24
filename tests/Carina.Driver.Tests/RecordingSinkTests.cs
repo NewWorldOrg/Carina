@@ -142,6 +142,36 @@ public sealed class RecordingSinkTests : IDisposable
     }
 
     [Fact]
+    public void TheWriterAsksTheDiskToKeepWhatItHasOncePerFlushInterval()
+    {
+        byte[] packet = Bytes(TsPacketReader.PacketLength, 2);
+
+        using var writer = new RecordingWriter(
+            root,
+            "k-1",
+            flushEvery: TsPacketReader.PacketLength * 3
+        );
+
+        for (int written = 0; written < 7; written++)
+        {
+            writer.Write(packet);
+        }
+
+        Assert.Equal(2, writer.Flushes);
+    }
+
+    [Fact]
+    public void TheFlushIntervalIsAtMostAMinuteOfTheFastestBroadcastThereIs()
+    {
+        const long fastestBytesPerSecond = 16_500_000 / 8;
+
+        Assert.True(
+            RecordingWriter.FlushInterval <= fastestBytesPerSecond * 60,
+            $"{RecordingWriter.FlushInterval} bytes is more than a minute of a {fastestBytesPerSecond * 8} bit broadcast, so a crash loses more than a minute."
+        );
+    }
+
+    [Fact]
     public void AWriteThatDidNotHappenIsNotCountedAsBytesRecorded()
     {
         byte[] chunk = Bytes(TsPacketReader.PacketLength, 9);
