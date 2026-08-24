@@ -1,4 +1,5 @@
 using Carina.Domain.Channels;
+using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 
 namespace Carina.Domain.Tests.Reservations;
