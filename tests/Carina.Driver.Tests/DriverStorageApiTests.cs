@@ -115,6 +115,52 @@ public sealed class DriverStorageApiTests
     }
 
     [Fact]
+    public void AProbeLeftBehindByADriverThatDiedIsSweptUpByTheNextOne()
+    {
+        string root = DriverUnderTest.NewRoot();
+        string leftover = Path.Combine(root, $"{StorageViews.WriteProbePrefix}fromadriverthatdied");
+
+        File.WriteAllBytes(leftover, [0x47]);
+
+        try
+        {
+            StorageRootDto answered = Assert.Single(
+                StorageViews.Of(Declaring(new OutputRootSettings("primary", root)))
+            );
+
+            Assert.True(answered.Writable);
+            Assert.False(File.Exists(leftover));
+            Assert.Empty(Directory.GetFileSystemEntries(root));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ARecordingAlreadyOnDiskIsLeftAloneByTheProbeSweep()
+    {
+        string root = DriverUnderTest.NewRoot();
+        string recording = Path.Combine(root, "k-90210.ts");
+
+        File.WriteAllBytes(recording, [0x47]);
+
+        try
+        {
+            Assert.True(
+                Assert.Single(StorageViews.Of(Declaring(new OutputRootSettings("primary", root))))
+                    .Writable
+            );
+            Assert.True(File.Exists(recording));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void EveryOneOfManyAnswersAtOnceTellsTheTruthAboutAHealthyRoot()
     {
         string root = DriverUnderTest.NewRoot();

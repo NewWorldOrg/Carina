@@ -40,10 +40,26 @@ public static class StorageViews
         }
     }
 
+    private static void SweepLeftoverProbes(string path)
+    {
+        foreach (string leftover in Directory.EnumerateFiles(path, WriteProbePrefix + "*"))
+        {
+            try
+            {
+                File.Delete(leftover);
+            }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+            {
+            }
+        }
+    }
+
     private static bool CanWrite(string path)
     {
         try
         {
+            SweepLeftoverProbes(path);
+
             using FileStream probe = new(
                 Path.Combine(path, WriteProbePrefix + Guid.NewGuid().ToString("N")),
                 new FileStreamOptions
