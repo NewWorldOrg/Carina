@@ -5,7 +5,7 @@ namespace Carina.Driver.Ipc;
 
 public static class StorageViews
 {
-    public const string WriteProbeName = ".carina-write-probe";
+    public const string WriteProbePrefix = ".carina-write-probe.";
 
     public static IReadOnlyList<StorageRootDto> Of(DriverConfiguration configuration)
     {
@@ -45,10 +45,10 @@ public static class StorageViews
         try
         {
             using FileStream probe = new(
-                Path.Combine(path, WriteProbeName),
+                Path.Combine(path, WriteProbePrefix + Guid.NewGuid().ToString("N")),
                 new FileStreamOptions
                 {
-                    Mode = FileMode.Create,
+                    Mode = FileMode.CreateNew,
                     Access = FileAccess.Write,
                     Share = FileShare.None,
                     Options = FileOptions.DeleteOnClose,

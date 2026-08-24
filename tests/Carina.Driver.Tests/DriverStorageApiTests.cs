@@ -59,24 +59,18 @@ public sealed class DriverStorageApiTests
     }
 
     [Fact]
-    public void ARootTheDriverCannotWriteToIsStillNamedRatherThanLeftOut()
+    public void ARootTheDriverCannotReachIsNamedWithNoRoomAtAll()
     {
         string root = DriverUnderTest.NewRoot();
 
         try
         {
-            var configuration = new DriverConfiguration(
-                "/run/carina/driver.sock",
-                [
+            IReadOnlyList<StorageRootDto> roots = StorageViews.Of(
+                Declaring(
                     new OutputRootSettings("primary", root),
-                    new OutputRootSettings("archive", Path.Combine(root, "not-mounted")),
-                ],
-                6,
-                new TunerSettings(TunerBackend.Fake),
-                []
+                    new OutputRootSettings("archive", Path.Combine(root, "not-mounted"))
+                )
             );
-
-            IReadOnlyList<StorageRootDto> roots = StorageViews.Of(configuration);
 
             Assert.Equal(["primary", "archive"], roots.Select(candidate => candidate.Name));
 
@@ -86,6 +80,57 @@ public sealed class DriverStorageApiTests
             Assert.Equal(0, missing.FreeBytes);
             Assert.Equal(0, missing.TotalBytes);
             Assert.True(roots.Single(candidate => candidate.Name is "primary").Writable);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void ARootTheDriverCanReachButNotWriteToIsNamedWithTheRoomItHas()
+    {
+        string root = DriverUnderTest.NewRoot();
+        string notADirectory = Path.Combine(root, "archive");
+
+        File.WriteAllBytes(notADirectory, [0x47]);
+
+        try
+        {
+            StorageRootDto blocked = Assert.Single(
+                StorageViews.Of(Declaring(new OutputRootSettings("archive", notADirectory)))
+            );
+
+            Assert.False(blocked.Writable);
+            Assert.True(
+                blocked.FreeBytes > 0,
+                "The root reported no room, so the writability answer came from never reaching it."
+            );
+            Assert.True(blocked.TotalBytes > 0);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void EveryOneOfManyAnswersAtOnceTellsTheTruthAboutAHealthyRoot()
+    {
+        string root = DriverUnderTest.NewRoot();
+
+        try
+        {
+            DriverConfiguration configuration = Declaring(
+                new OutputRootSettings("primary", root)
+            );
+
+            StorageRootDto[] answers = new StorageRootDto[16];
+
+            Parallel.For(0, answers.Length, at => answers[at] = StorageViews.Of(configuration).Single());
+
+            Assert.All(answers, answer => Assert.True(answer.Writable));
+            Assert.Empty(Directory.GetFileSystemEntries(root));
         }
         finally
         {
@@ -192,14 +237,22 @@ public sealed class DriverStorageApiTests
     [Fact]
     public void ARootWhoseSettingsAreHalfWrittenIsNotListedAtAll()
     {
-        var configuration = new DriverConfiguration(
+        Assert.Empty(
+            StorageViews.Of(
+                Declaring(
+                    new OutputRootSettings("primary", null),
+                    new OutputRootSettings(null, "/srv")
+                )
+            )
+        );
+    }
+
+    private static DriverConfiguration Declaring(params OutputRootSettings[] roots) =>
+        new(
             "/run/carina/driver.sock",
-            [new OutputRootSettings("primary", null), new OutputRootSettings(null, "/srv")],
+            roots,
             6,
             new TunerSettings(TunerBackend.Fake),
             []
         );
-
-        Assert.Empty(StorageViews.Of(configuration));
-    }
 }
