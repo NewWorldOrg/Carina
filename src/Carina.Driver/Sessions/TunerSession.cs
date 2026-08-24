@@ -61,7 +61,8 @@ public sealed class TunerSession : IDisposable
         string? recordingId = null,
         DiagnosticsStore? diagnostics = null,
         SignalQualityWatch? watch = null,
-        TuneParams? tune = null
+        TuneParams? tune = null,
+        TunerSession? ridesOn = null
     )
     {
         if (endsAt <= startedAt)
@@ -78,6 +79,7 @@ public sealed class TunerSession : IDisposable
         Tune = tune;
         OutputRoot = outputRoot;
         RecordingId = recordingId;
+        RidesOn = ridesOn;
         StartedAt = startedAt;
         endsAtTicks = endsAt.UtcTicks;
         this.device = device;
@@ -117,6 +119,8 @@ public sealed class TunerSession : IDisposable
     public string? OutputRoot { get; }
 
     public string? RecordingId { get; }
+
+    public TunerSession? RidesOn { get; }
 
     public TuneParams? Tune { get; }
 

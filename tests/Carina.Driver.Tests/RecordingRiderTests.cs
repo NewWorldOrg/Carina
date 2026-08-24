@@ -223,6 +223,110 @@ public sealed class RecordingRiderTests : IDisposable
     }
 
     [Fact]
+    public void ARecordingRidingOnAnotherSessionIsNotHeldOpenPastItsHost()
+    {
+        TunerSessionManager manager = Manager();
+        TunerSession host = Started(
+            manager,
+            Request("s-1", SessionPurpose.Live) with { EndsAt = Start.AddMinutes(30) }
+        );
+        TunerSession rider = Started(
+            manager,
+            Request("s-2", SessionPurpose.Recording) with { EndsAt = Start.AddMinutes(10) }
+        );
+
+        Assert.Same(host, rider.RidesOn);
+
+        SessionExtension beyond = manager.Extend(
+            rider.SessionId,
+            new ExtendSessionRequest { EndsAt = Start.AddMinutes(45) }
+        );
+
+        Assert.Equal(SessionExtendOutcome.NotAnExtension, beyond.Outcome);
+        Assert.Contains(host.SessionId.Value!, beyond.Detail, StringComparison.Ordinal);
+        Assert.Equal(Start.AddMinutes(10), rider.EndsAt);
+
+        SessionExtension within = manager.Extend(
+            rider.SessionId,
+            new ExtendSessionRequest { EndsAt = Start.AddMinutes(30) }
+        );
+
+        Assert.Equal(SessionExtendOutcome.Extended, within.Outcome);
+        Assert.Equal(Start.AddMinutes(30), rider.EndsAt);
+
+        rider.Stop();
+        rider.WaitForEnd(Deadlock);
+        host.Stop();
+        host.WaitForEnd(Deadlock);
+    }
+
+    [Fact]
+    public void ARecordingHoldingItsOwnTunerIsHeldToNoOneElsesEnd()
+    {
+        TunerSessionManager manager = Manager();
+        TunerSession alone = Started(
+            manager,
+            Request("s-1", SessionPurpose.Recording) with { EndsAt = Start.AddMinutes(10) }
+        );
+
+        Assert.Null(alone.RidesOn);
+
+        SessionExtension extended = manager.Extend(
+            alone.SessionId,
+            new ExtendSessionRequest { EndsAt = Start.AddMinutes(45) }
+        );
+
+        Assert.Equal(SessionExtendOutcome.Extended, extended.Outcome);
+        Assert.Equal(Start.AddMinutes(45), alone.EndsAt);
+
+        alone.Stop();
+        alone.WaitForEnd(Deadlock);
+    }
+
+    [Fact]
+    public void ARiderFollowsItsHostOnceTheHostItselfHasBeenGivenLonger()
+    {
+        TunerSessionManager manager = Manager();
+        TunerSession host = Started(
+            manager,
+            Request("s-1", SessionPurpose.Recording) with
+            {
+                EndsAt = Start.AddMinutes(30),
+                RecordingId = "k-host",
+            }
+        );
+        TunerSession rider = Started(
+            manager,
+            Request("s-2", SessionPurpose.Recording) with
+            {
+                EndsAt = Start.AddMinutes(10),
+                RecordingId = "k-rider",
+            }
+        );
+
+        Assert.Same(host, rider.RidesOn);
+        Assert.Equal(
+            SessionExtendOutcome.NotAnExtension,
+            manager.Extend(rider.SessionId, new ExtendSessionRequest { EndsAt = Start.AddMinutes(45) }).Outcome
+        );
+
+        Assert.Equal(
+            SessionExtendOutcome.Extended,
+            manager.Extend(host.SessionId, new ExtendSessionRequest { EndsAt = Start.AddMinutes(50) }).Outcome
+        );
+        Assert.Equal(
+            SessionExtendOutcome.Extended,
+            manager.Extend(rider.SessionId, new ExtendSessionRequest { EndsAt = Start.AddMinutes(45) }).Outcome
+        );
+        Assert.Equal(Start.AddMinutes(45), rider.EndsAt);
+
+        rider.Stop();
+        rider.WaitForEnd(Deadlock);
+        host.Stop();
+        host.WaitForEnd(Deadlock);
+    }
+
+    [Fact]
     public void TheRecordingSeatIsDeepEnoughToCoverTheWriterBetweenTwoFlushes()
     {
         Assert.True(

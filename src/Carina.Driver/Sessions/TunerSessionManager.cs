@@ -654,7 +654,8 @@ public sealed class TunerSessionManager(
             now,
             endsAt,
             holds: false,
-            tuned: false
+            tuned: false,
+            ridesOn: host
         );
     }
 
@@ -666,7 +667,8 @@ public sealed class TunerSessionManager(
         DateTimeOffset now,
         DateTimeOffset endsAt,
         bool holds,
-        bool tuned
+        bool tuned,
+        TunerSession? ridesOn = null
     )
     {
         SessionId sessionId = request.SessionId;
@@ -729,7 +731,8 @@ public sealed class TunerSessionManager(
                 recordingId: request.RecordingId,
                 diagnostics: diagnostics,
                 watch: Watch(request.Purpose),
-                tune: request.Tune
+                tune: request.Tune,
+                ridesOn: ridesOn
             );
 
             if (!sessions.TryAdd(sessionId, session))
@@ -881,6 +884,14 @@ public sealed class TunerSessionManager(
             return SessionExtension.Refused(
                 SessionExtendOutcome.NotAnExtension,
                 string.Join(" ", problems)
+            );
+        }
+
+        if (session.RidesOn is { } host && request.EndsAt > host.EndsAt)
+        {
+            return SessionExtension.Refused(
+                SessionExtendOutcome.NotAnExtension,
+                $"endsAt: '{sessionId}' reads the tuner through '{host.SessionId}', which stops at {host.EndsAt:O}, so it cannot be held open until {request.EndsAt:O}."
             );
         }
 
