@@ -63,6 +63,12 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
                 "(file_size_observed IS NULL) = (observed_at IS NULL)");
             table.HasCheckConstraint("ck_recording_window", "expected_window_end > expected_window_start");
             table.HasCheckConstraint(
+                "ck_recording_tuner",
+                """
+                tuner_device_id IS NOT NULL
+                OR (NOT cc_measured AND eovf_count = 0)
+                """);
+            table.HasCheckConstraint(
                 "ck_recording_drop_positions",
                 $"""
                 (pcr_anchor IS NOT NULL
@@ -201,6 +207,10 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
         builder.Property(recording => recording.ScrambledPackets);
         builder.Property(recording => recording.EovfCount).IsRequired();
         builder.Property(recording => recording.MeasuredUpdatedAt);
+
+        builder.Property(recording => recording.TunerDeviceId)
+            .HasConversion(id => id!.Value, value => new TunerDeviceId(value))
+            .HasMaxLength(Carina.Domain.Recordings.TunerDeviceId.MaxLength);
 
         builder.Property(recording => recording.SnapshotName)
             .HasMaxLength(Reservation.NameMaxLength)

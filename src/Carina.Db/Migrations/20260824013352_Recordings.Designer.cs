@@ -989,6 +989,11 @@ namespace Carina.Db.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("stopped_at_actual");
 
+                    b.Property<string>("TunerDeviceId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("tuner_device_id");
+
                     b.Property<long>("WrittenDurationMs")
                         .HasColumnType("bigint")
                         .HasColumnName("written_duration_ms");
@@ -1051,6 +1056,8 @@ namespace Carina.Db.Migrations
                             t.HasCheckConstraint("ck_recording_outcome", "(recording_outcome IS NULL OR recording_outcome IN ('Complete', 'Truncated', 'Failed'))\nAND (recording_outcome IS NULL OR stopped_at_actual IS NOT NULL)\nAND (recording_outcome IS NULL OR file_size_observed IS NOT NULL)");
 
                             t.HasCheckConstraint("ck_recording_outcome_detail", "recording_outcome IS NULL\nOR recording_outcome = 'Complete'\nOR jsonb_array_length(outcome_detail) > 0");
+
+                            t.HasCheckConstraint("ck_recording_tuner", "tuner_device_id IS NOT NULL\nOR (NOT cc_measured AND eovf_count = 0)");
 
                             t.HasCheckConstraint("ck_recording_window", "expected_window_end > expected_window_start");
                         });

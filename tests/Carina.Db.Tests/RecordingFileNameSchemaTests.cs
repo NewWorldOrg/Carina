@@ -97,7 +97,7 @@ public sealed class RecordingFileNameSchemaTests(MigratedScratchDatabase databas
                 snapshot_name, snapshot_summary, snapshot_extended, snapshot_genres, captured_at,
                 broadcast_group_key, broadcast_group_role,
                 cc_measured, cc_dropped_packets, cc_total_packets,
-                pcr_anchor, drop_positions, pcr_reanchors)
+                pcr_anchor, drop_positions, pcr_reanchors, tuner_device_id)
             VALUES (
                 gen_random_uuid(), NULL, @networkId, 1024, 4001, @airs,
                 'bulk', @fileName, NULL, NULL,
@@ -109,7 +109,7 @@ public sealed class RecordingFileNameSchemaTests(MigratedScratchDatabase databas
                 'A programme', 'What it is about', '', '[]'::jsonb, @now,
                 NULL, 'Standalone',
                 false, NULL, NULL,
-                NULL, '[]'::jsonb, '[]'::jsonb)
+                NULL, '[]'::jsonb, '[]'::jsonb, 'pt3-0')
             """.Replace("@airs", Airs, StringComparison.Ordinal)
                .Replace("@ends", Ends, StringComparison.Ordinal)
                .Replace("@now", Now, StringComparison.Ordinal),

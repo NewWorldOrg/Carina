@@ -135,6 +135,7 @@ public sealed class RecordingPositionTests
             null,
             0,
             null,
+            RecordingFactory.Tuner,
             RecordingFactory.Snapshot(),
             null,
             BroadcastGroupRole.Standalone));

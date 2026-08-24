@@ -22,7 +22,8 @@ internal static class RecordingFactory
         RecordingId? id = null,
         ReservationId? reservationId = null,
         BroadcastGroupKey? groupKey = null,
-        BroadcastGroupRole groupRole = BroadcastGroupRole.Standalone)
+        BroadcastGroupRole groupRole = BroadcastGroupRole.Standalone,
+        TunerDeviceId? tuner = null)
     {
         RecordingId recordingId = id ?? RecordingId.New();
 
@@ -37,6 +38,27 @@ internal static class RecordingFactory
             Snapshot(),
             groupKey,
             groupRole,
+            Now,
+            tuner ?? Tuner);
+    }
+
+    public static TunerDeviceId Tuner { get; } = new("pt3-0");
+
+    public static Recording Unclaimed()
+    {
+        RecordingId id = RecordingId.New();
+
+        return Recording.Begin(
+            id,
+            null,
+            Programme(),
+            new OutputRoot("bulk"),
+            RecordingFileName.For(id, ".m2ts"),
+            Now.AddMinutes(-5),
+            Now.AddMinutes(55),
+            Snapshot(),
+            null,
+            BroadcastGroupRole.Standalone,
             Now);
     }
 

@@ -41,6 +41,7 @@ public partial class Recordings : Migration
                 cc_total_packets = table.Column<long>(type: "bigint", nullable: true),
                 scrambled_packets = table.Column<long>(type: "bigint", nullable: true),
                 eovf_count = table.Column<long>(type: "bigint", nullable: false),
+                tuner_device_id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
                 measured_updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                 snapshot_name = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: false),
                 snapshot_summary = table.Column<string>(type: "character varying(4096)", maxLength: 4096, nullable: false),
@@ -66,6 +67,7 @@ public partial class Recordings : Migration
                 table.CheckConstraint("ck_recording_observation", "(file_size_observed IS NULL) = (observed_at IS NULL)");
                 table.CheckConstraint("ck_recording_outcome", "(recording_outcome IS NULL OR recording_outcome IN ('Complete', 'Truncated', 'Failed'))\nAND (recording_outcome IS NULL OR stopped_at_actual IS NOT NULL)\nAND (recording_outcome IS NULL OR file_size_observed IS NOT NULL)");
                 table.CheckConstraint("ck_recording_outcome_detail", "recording_outcome IS NULL\nOR recording_outcome = 'Complete'\nOR jsonb_array_length(outcome_detail) > 0");
+                table.CheckConstraint("ck_recording_tuner", "tuner_device_id IS NOT NULL\nOR (NOT cc_measured AND eovf_count = 0)");
                 table.CheckConstraint("ck_recording_window", "expected_window_end > expected_window_start");
             });
 

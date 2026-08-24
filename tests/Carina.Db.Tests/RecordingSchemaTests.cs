@@ -331,6 +331,65 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
         Assert.Contains("ix_recording_cc_dropped", declared, StringComparer.Ordinal);
     }
 
+    [Fact]
+    public async Task ACountThatCameOffNoTunerIsRefused()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException counted = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(
+                connection,
+                80011,
+                ccMeasured: "true",
+                ccDropped: "0",
+                ccTotal: "1000",
+                measuredAt: Now,
+                tuner: "NULL"));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, counted.SqlState);
+        Assert.Equal("ck_recording_tuner", counted.ConstraintName);
+    }
+
+    [Fact]
+    public async Task AnOverflowThatCameOffNoTunerIsRefused()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        Guid id = await Record(connection, 80012, tuner: "NULL");
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Execute(connection, $"UPDATE recording SET eovf_count = 3 WHERE id = '{id}'"));
+
+        Assert.Equal("ck_recording_tuner", refusal.ConstraintName);
+    }
+
+    [Fact]
+    public async Task ARecordingThatCountedSomethingCanBeTracedBackToTheTunerThatWroteIt()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        await Record(
+            connection,
+            80013,
+            ccMeasured: "true",
+            ccDropped: "4",
+            ccTotal: "1000",
+            measuredAt: Now,
+            tuner: "'pt3-2'");
+
+        Assert.Equal(
+            "pt3-2",
+            await Scalar(connection, "SELECT tuner_device_id FROM recording WHERE network_id = 80013"));
+    }
+
+    [Fact]
+    public async Task ARecordingThatCountedNothingNeedNotNameATuner()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        await Record(connection, 80014, tuner: "NULL");
+
+        Assert.Null(await Scalar(connection, "SELECT tuner_device_id FROM recording WHERE network_id = 80014"));
+    }
+
     private static async Task<string> IndexDefinition(NpgsqlConnection connection, string name)
         => (string)(await Scalar(connection, $"SELECT indexdef FROM pg_indexes WHERE indexname = '{name}'"))!;
 
@@ -350,7 +409,8 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
         string? ccTotal = null,
         string? measuredAt = null,
         string? windowEnd = null,
-        Guid? reservationId = null)
+        Guid? reservationId = null,
+        string? tuner = null)
     {
         var id = Guid.NewGuid();
 
@@ -368,7 +428,7 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
                 snapshot_name, snapshot_summary, snapshot_extended, snapshot_genres, captured_at,
                 broadcast_group_key, broadcast_group_role,
                 cc_measured, cc_dropped_packets, cc_total_packets,
-                pcr_anchor, drop_positions, pcr_reanchors)
+                pcr_anchor, drop_positions, pcr_reanchors, tuner_device_id)
             VALUES (
                 '{id}', {(reservationId is { } held ? $"'{held}'" : "NULL")}, {networkId}, 1024, {eventId}, {Airs},
                 'bulk', '{fileName}', {size ?? "NULL"}, {observedAt ?? "NULL"},
@@ -380,7 +440,7 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
                 'A programme', 'What it is about', '', '[]'::jsonb, {Now},
                 NULL, 'Standalone',
                 {ccMeasured}, {ccDropped ?? "NULL"}, {ccTotal ?? "NULL"},
-                NULL, '[]'::jsonb, '[]'::jsonb)
+                NULL, '[]'::jsonb, '[]'::jsonb, {tuner ?? "'pt3-0'"})
             """);
 
         return id;

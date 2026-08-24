@@ -398,6 +398,7 @@ public sealed class RecordingTests
             12,
             3,
             Now.AddHours(1),
+            RecordingFactory.Tuner,
             RecordingFactory.Snapshot(),
             null,
             BroadcastGroupRole.Standalone);
@@ -447,6 +448,7 @@ public sealed class RecordingTests
             scrambledPackets,
             0,
             measuredUpdatedAt,
+            RecordingFactory.Tuner,
             RecordingFactory.Snapshot(),
             null,
             BroadcastGroupRole.Standalone);

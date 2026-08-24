@@ -77,6 +77,8 @@ public sealed class Recording
 
     public long EovfCount { get; private set; }
 
+    public TunerDeviceId? TunerDeviceId { get; private set; }
+
     public DateTime? MeasuredUpdatedAt { get; private set; }
 
     public string SnapshotName { get; private set; } = string.Empty;
@@ -110,7 +112,8 @@ public sealed class Recording
         ProgrammeSnapshot snapshot,
         BroadcastGroupKey? broadcastGroupKey,
         BroadcastGroupRole broadcastGroupRole,
-        DateTime at)
+        DateTime at,
+        TunerDeviceId? tunerDeviceId = null)
         => Rehydrate(
             id,
             reservationId,
@@ -134,6 +137,7 @@ public sealed class Recording
             null,
             0,
             null,
+            tunerDeviceId,
             snapshot,
             broadcastGroupKey,
             broadcastGroupRole);
@@ -161,6 +165,7 @@ public sealed class Recording
         long? scrambledPackets,
         long eovfCount,
         DateTime? measuredUpdatedAt,
+        TunerDeviceId? tunerDeviceId,
         ProgrammeSnapshot snapshot,
         BroadcastGroupKey? broadcastGroupKey,
         BroadcastGroupRole broadcastGroupRole)
@@ -229,6 +234,7 @@ public sealed class Recording
         }
 
         RefuseAPositionNothingCounted(counters, positions, scrambledPackets);
+        RefuseAMeasurementFromNoTuner(counters, eovfCount, tunerDeviceId);
 
         if (counters.Measured && measuredUpdatedAt is null)
         {
@@ -282,6 +288,7 @@ public sealed class Recording
             ScrambledPackets = scrambledPackets,
             EovfCount = eovfCount,
             MeasuredUpdatedAt = UtcTimes.Optional(measuredUpdatedAt, nameof(measuredUpdatedAt)),
+            TunerDeviceId = tunerDeviceId,
             SnapshotName = snapshot.Name,
             SnapshotSummary = snapshot.Summary,
             SnapshotExtended = snapshot.Extended,
@@ -320,6 +327,14 @@ public sealed class Recording
         WrittenDurationMs += (long)written.TotalMilliseconds;
     }
 
+    public void Acquire(TunerDeviceId tunerDeviceId)
+    {
+        ArgumentNullException.ThrowIfNull(tunerDeviceId);
+        RefuseUnlessInFlight();
+
+        TunerDeviceId = tunerDeviceId;
+    }
+
     public void Measure(
         DropCounters counters,
         DropTimeline positions,
@@ -344,6 +359,7 @@ public sealed class Recording
         }
 
         RefuseAPositionNothingCounted(counters, positions, scrambledPackets);
+        RefuseAMeasurementFromNoTuner(counters, eovfCount, TunerDeviceId);
 
         CcMeasured = counters.Measured;
         CcDroppedPackets = counters.Dropped;
@@ -496,6 +512,21 @@ public sealed class Recording
                 $"A timeline places {positions.Scrambled} scrambled packets, but only {scrambledPackets ?? 0} were counted.",
                 nameof(positions));
         }
+    }
+
+    private static void RefuseAMeasurementFromNoTuner(
+        DropCounters counters,
+        long eovfCount,
+        TunerDeviceId? tunerDeviceId)
+    {
+        if (tunerDeviceId is not null || (!counters.Measured && eovfCount is 0))
+        {
+            return;
+        }
+
+        throw new ArgumentException(
+            "A count came off a tuner, so the recording names which one it came off.",
+            nameof(tunerDeviceId));
     }
 
     private static void RefuseAnUnnamedFault(RecordingFault fault)
