@@ -13,6 +13,10 @@ public static partial class ReservationRules
         "/Carina.Infrastructure/Persistence/Repositories/ReservationRecordingContract.cs",
     ];
 
+    public const string ProjectionTrigger = "recording_projects_its_outcome";
+
+    private const string Migrations = "/Carina.Db/Migrations/";
+
     private static readonly IReadOnlyList<string> ReservationFolders = ["/Reservations/", "/Rules/"];
 
     private static readonly IReadOnlyList<string> ReservationNamespaces =
@@ -25,6 +29,7 @@ public static partial class ReservationRules
         => Scanned(directory)
             .Where(file => WritesARecordingOwnedColumn(file.Source))
             .Where(file => !AllowedToWriteThem.Any(allowed => file.Relative.Contains(allowed, StringComparison.Ordinal)))
+            .Where(file => !InstallsTheProjection(file))
             .Select(file => file.Relative)
             .Order(StringComparer.Ordinal)
             .ToArray();
@@ -36,6 +41,10 @@ public static partial class ReservationRules
             .Select(file => file.Relative)
             .Order(StringComparer.Ordinal)
             .ToArray();
+
+    private static bool InstallsTheProjection(SourceFile file)
+        => file.Relative.StartsWith(Migrations, StringComparison.Ordinal)
+           && file.Source.Contains(ProjectionTrigger, StringComparison.Ordinal);
 
     private static bool BelongsToTheReservationFeature(SourceFile file)
         => ReservationFolders.Any(folder => file.Relative.Contains(folder, StringComparison.Ordinal))

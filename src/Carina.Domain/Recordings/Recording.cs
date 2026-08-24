@@ -363,6 +363,7 @@ public sealed class Recording
     {
         ArgumentNullException.ThrowIfNull(counters);
         ArgumentNullException.ThrowIfNull(positions);
+        RefuseUnlessInFlight();
 
         if (scrambledPackets is < 0)
         {
@@ -426,6 +427,7 @@ public sealed class Recording
     public void Note(OutcomeDetail detail)
     {
         ArgumentNullException.ThrowIfNull(detail);
+        RefuseUnlessInFlight();
         RefuseAnUnnamedFault(detail.Fault);
 
         outcomeDetail.Add(detail);

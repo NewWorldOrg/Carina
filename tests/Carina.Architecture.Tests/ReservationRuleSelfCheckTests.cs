@@ -53,6 +53,37 @@ public sealed class ReservationRuleSelfCheckTests
     }
 
     [Fact]
+    public void LeavesTheMigrationThatInstallsTheProjectionAlone()
+    {
+        using var tree = new SourceTree();
+        tree.Write(
+            "Carina.Db/Migrations/20260824013352_Recordings.cs",
+            $"""
+            migrationBuilder.Sql(
+                "CREATE FUNCTION {ReservationRules.ProjectionTrigger}() RETURNS trigger AS $$ BEGIN "
+                + "UPDATE reservation SET recording_outcome = NEW.recording_outcome WHERE id = NEW.reservation_id; "
+                + "RETURN NULL; END; $$;");
+            """);
+
+        Assert.Empty(ReservationRules.WritersOfWhatRecordingOwns(tree.Root));
+    }
+
+    [Fact]
+    public void DetectsAMigrationThatWritesTheOutcomeWithoutInstallingTheProjection()
+    {
+        using var tree = new SourceTree();
+        tree.Write(
+            "Carina.Db/Migrations/20260901000000_Backfill.cs",
+            """
+            migrationBuilder.Sql("UPDATE reservation SET recording_outcome = 'Complete' WHERE started_at IS NOT NULL;");
+            """);
+
+        Assert.Equal(
+            ["/Carina.Db/Migrations/20260901000000_Backfill.cs"],
+            ReservationRules.WritersOfWhatRecordingOwns(tree.Root));
+    }
+
+    [Fact]
     public void ReadingWhatRecordingOwnsIsNotWritingIt()
     {
         using var tree = new SourceTree();

@@ -1,7 +1,9 @@
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Persistence;
+using Carina.Infrastructure.Persistence.Configurations;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 
 using Npgsql;
@@ -159,10 +161,10 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
 
-        string definition = await IndexDefinition(connection, "ix_recording_cc_dropped");
-
-        Assert.Contains("cc_dropped_packets", definition, StringComparison.Ordinal);
-        Assert.Contains("cc_measured", definition, StringComparison.Ordinal);
+        Assert.Equal(
+            "CREATE INDEX ix_recording_cc_dropped ON public.recording USING btree (cc_dropped_packets) "
+            + "WHERE (cc_measured AND (cc_dropped_packets > 0))",
+            await IndexDefinition(connection, RecordingConfiguration.DroppedIndexName));
     }
 
     [Fact]
@@ -170,10 +172,10 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
 
-        Assert.Contains(
-            "recording_outcome IS NULL",
-            await IndexDefinition(connection, "ix_recording_in_flight"),
-            StringComparison.Ordinal);
+        Assert.Equal(
+            "CREATE INDEX ix_recording_in_flight ON public.recording USING btree (started_at_actual) "
+            + "WHERE (recording_outcome IS NULL)",
+            await IndexDefinition(connection, RecordingConfiguration.InFlightIndexName));
     }
 
     [Fact]
@@ -181,10 +183,10 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
 
-        string definition = await IndexDefinition(connection, "ix_recording_settled");
-
-        Assert.Contains("recording_outcome", definition, StringComparison.Ordinal);
-        Assert.Contains("stopped_at_actual", definition, StringComparison.Ordinal);
+        Assert.Equal(
+            "CREATE INDEX ix_recording_settled ON public.recording "
+            + "USING btree (recording_outcome, stopped_at_actual)",
+            await IndexDefinition(connection, RecordingConfiguration.SettledIndexName));
     }
 
     [Fact]
@@ -250,10 +252,15 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
 
-        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+        PostgresException unstamped = await Assert.ThrowsAsync<PostgresException>(
             () => Record(connection, 80007, size: "12"));
 
-        Assert.Equal("ck_recording_observation", refusal.ConstraintName);
+        Assert.Equal("ck_recording_observation", unstamped.ConstraintName);
+
+        PostgresException unweighed = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(connection, 80007, eventId: 4002, observedAt: Ends));
+
+        Assert.Equal("ck_recording_observation", unweighed.ConstraintName);
     }
 
     [Fact]
@@ -318,7 +325,66 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
             .Order(StringComparer.Ordinal)];
 
         Assert.Equal(declared, built);
-        Assert.Contains("ix_recording_cc_dropped", declared, StringComparer.Ordinal);
+        Assert.Contains(RecordingConfiguration.DroppedIndexName, declared, StringComparer.Ordinal);
+    }
+
+    [Fact]
+    public async Task EveryColumnAndConstraintOnTheLedgerIsOneTheModelDeclares()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        await using CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString);
+        IEntityType ledger = context.GetService<IDesignTimeModel>().Model
+            .GetEntityTypes()
+            .Single(entityType => entityType.ClrType == typeof(Recording));
+
+        Assert.Equal(
+            [.. Columns(ledger)
+                .Where(column => column != RecordingConfiguration.ConcurrencyToken)
+                .Order(StringComparer.Ordinal)],
+            await Names(
+                connection,
+                """
+                SELECT column_name FROM information_schema.columns
+                WHERE table_name = 'recording' ORDER BY column_name
+                """));
+
+        Assert.Contains(RecordingConfiguration.ConcurrencyToken, Columns(ledger), StringComparer.Ordinal);
+
+        Assert.Equal(
+            [.. ledger.GetCheckConstraints()
+                .Select(constraint => constraint.Name)
+                .OfType<string>()
+                .Order(StringComparer.Ordinal)],
+            await Names(
+                connection,
+                """
+                SELECT constraint_of.conname
+                FROM pg_constraint AS constraint_of
+                JOIN pg_class AS table_of ON table_of.oid = constraint_of.conrelid
+                WHERE table_of.relname = 'recording' AND constraint_of.contype = 'c'
+                ORDER BY constraint_of.conname
+                """));
+    }
+
+    private static IEnumerable<string> Columns(ITypeBase declaring)
+        => declaring.GetProperties()
+            .Select(property => property.GetColumnName())
+            .OfType<string>()
+            .Concat(declaring.GetComplexProperties()
+                .SelectMany(complex => Columns(complex.ComplexType)));
+
+    private static async Task<IReadOnlyList<string>> Names(NpgsqlConnection connection, string sql)
+    {
+        await using var command = new NpgsqlCommand(sql, connection);
+        await using NpgsqlDataReader reader = await command.ExecuteReaderAsync();
+
+        var read = new List<string>();
+        while (await reader.ReadAsync())
+        {
+            read.Add(reader.GetString(0));
+        }
+
+        return read;
     }
 
     [Fact]

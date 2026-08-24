@@ -41,8 +41,39 @@ public sealed class RecordingRuleTests
     [Fact]
     public void WhatRecordingOwnsOnTheReservationIsWrittenByRecordingAndByMigration()
     {
-        Assert.Contains("/Recordings/", ReservationRules.AllowedToWriteThem, StringComparer.Ordinal);
-        Assert.Contains("/Migration/", ReservationRules.AllowedToWriteThem, StringComparer.Ordinal);
+        Assert.Equal(
+            [
+                "/Recordings/",
+                "/Migration/",
+                "/Carina.Infrastructure/Persistence/Repositories/ReservationRecordingContract.cs",
+            ],
+            ReservationRules.AllowedToWriteThem);
         Assert.Empty(ReservationRules.WritersOfWhatRecordingOwns(RepositoryLayout.SourceDirectory));
+    }
+
+    [Fact]
+    public void TheSchemaLevelWriterIsTheProjectionAndOnlyTheProjection()
+    {
+        IReadOnlyList<string> installing = SourceScan.FilesMentioning(
+            RepositoryLayout.SourceDirectory,
+            ReservationRules.ProjectionTrigger);
+
+        Assert.Equal(
+            ["Carina.Db/Migrations/20260824013352_Recordings.cs"],
+            installing);
+    }
+
+    [Fact]
+    public void TheOneFileOutsideThoseTwoFoldersIsTheClaimTheContractMakes()
+    {
+        string contract = Path.Combine(
+            RepositoryLayout.SourceDirectory,
+            "Carina.Infrastructure",
+            "Persistence",
+            "Repositories",
+            "ReservationRecordingContract.cs");
+
+        Assert.True(File.Exists(contract));
+        Assert.Contains("started_at", File.ReadAllText(contract), StringComparison.Ordinal);
     }
 }
