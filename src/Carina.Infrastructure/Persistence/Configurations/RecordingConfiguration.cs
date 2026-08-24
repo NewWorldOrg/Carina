@@ -63,6 +63,14 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
                 "(file_size_observed IS NULL) = (observed_at IS NULL)");
             table.HasCheckConstraint("ck_recording_window", "expected_window_end > expected_window_start");
             table.HasCheckConstraint(
+                "ck_recording_drop_positions",
+                $"""
+                (pcr_anchor IS NOT NULL
+                    OR (jsonb_array_length(drop_positions) = 0 AND jsonb_array_length(pcr_reanchors) = 0))
+                AND (pcr_anchor IS NULL OR cc_measured)
+                AND (pcr_anchor IS NULL OR pcr_anchor BETWEEN 0 AND {DropTimeline.PcrWrapsAt - 1})
+                """);
+            table.HasCheckConstraint(
                 "ck_recording_broadcast_group",
                 """
                 broadcast_group_role IN ('Standalone', 'MovementPrimary', 'MovementSuppressed', 'RelaySegment')
@@ -164,6 +172,35 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
             counters.Property(reading => reading.Measured).HasColumnName("cc_measured");
             counters.Property(reading => reading.Dropped).HasColumnName("cc_dropped_packets");
             counters.Property(reading => reading.Total).HasColumnName("cc_total_packets");
+        });
+
+        builder.ComplexProperty(recording => recording.Positions, positions =>
+        {
+            positions.IsRequired();
+
+            positions.Ignore(timeline => timeline.Located);
+            positions.Ignore(timeline => timeline.Continuity);
+            positions.Ignore(timeline => timeline.Scrambled);
+
+            positions.Property(timeline => timeline.AnchorPcr).HasColumnName("pcr_anchor");
+
+            positions.Property(timeline => timeline.Buckets)
+                .HasConversion(
+                    buckets => JsonSerializer.Serialize(buckets, ProgrammeJson.Options),
+                    stored => Read<DropBucket>(stored),
+                    Compared<DropBucket>())
+                .HasColumnName("drop_positions")
+                .HasColumnType("jsonb")
+                .IsRequired();
+
+            positions.Property(timeline => timeline.Reanchors)
+                .HasConversion(
+                    reanchors => JsonSerializer.Serialize(reanchors, ProgrammeJson.Options),
+                    stored => Read<PcrReanchor>(stored),
+                    Compared<PcrReanchor>())
+                .HasColumnName("pcr_reanchors")
+                .HasColumnType("jsonb")
+                .IsRequired();
         });
 
         builder.Property(recording => recording.ScrambledPackets);

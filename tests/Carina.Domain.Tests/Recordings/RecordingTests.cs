@@ -165,7 +165,7 @@ public sealed class RecordingTests
     {
         Recording recording = RecordingFactory.Started();
 
-        recording.Measure(DropCounters.Counted(4, 900), 12, 3, Now.AddMinutes(1));
+        recording.Measure(DropCounters.Counted(4, 900), DropTimeline.Unlocated, 12, 3, Now.AddMinutes(1));
 
         Assert.Equal(DropCounters.Counted(4, 900), recording.Counters);
         Assert.Equal(12, recording.ScrambledPackets);
@@ -177,9 +177,9 @@ public sealed class RecordingTests
     public void MeasurementThatBreaksMidWayGoesBackToUnmeasuredRatherThanToZero()
     {
         Recording recording = RecordingFactory.Started();
-        recording.Measure(DropCounters.Counted(4, 900), 12, 3, Now.AddMinutes(1));
+        recording.Measure(DropCounters.Counted(4, 900), DropTimeline.Unlocated, 12, 3, Now.AddMinutes(1));
 
-        recording.Measure(DropCounters.Unmeasured, null, 3, Now.AddMinutes(2));
+        recording.Measure(DropCounters.Unmeasured, DropTimeline.Unlocated, null, 3, Now.AddMinutes(2));
 
         Assert.False(recording.Counters.Measured);
         Assert.Null(recording.Counters.Dropped);
@@ -394,6 +394,7 @@ public sealed class RecordingTests
             RecordingOutcome.Complete,
             [],
             DropCounters.Counted(4, 900),
+            DropTimeline.Unlocated,
             12,
             3,
             Now.AddHours(1),
@@ -417,6 +418,8 @@ public sealed class RecordingTests
         DateTime? observedAt = null,
         IReadOnlyList<OutcomeDetail>? outcomeDetail = null,
         DropCounters? counters = null,
+        DropTimeline? positions = null,
+        long? scrambledPackets = null,
         DateTime? measuredUpdatedAt = null)
     {
         RecordingId id = RecordingId.New();
@@ -440,7 +443,8 @@ public sealed class RecordingTests
             outcome,
             outcomeDetail ?? [],
             counters ?? DropCounters.Unmeasured,
-            null,
+            positions ?? DropTimeline.Unlocated,
+            scrambledPackets,
             0,
             measuredUpdatedAt,
             RecordingFactory.Snapshot(),

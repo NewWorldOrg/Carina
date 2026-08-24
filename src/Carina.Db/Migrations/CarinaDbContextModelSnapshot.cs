@@ -995,6 +995,25 @@ namespace Carina.Db.Migrations
                                 .HasColumnName("cc_total_packets");
                         });
 
+                    b.ComplexProperty(typeof(Dictionary<string, object>), "Positions", "Carina.Domain.Recordings.Recording.Positions#DropTimeline", b1 =>
+                        {
+                            b1.IsRequired();
+
+                            b1.Property<long?>("AnchorPcr")
+                                .HasColumnType("bigint")
+                                .HasColumnName("pcr_anchor");
+
+                            b1.Property<string>("Buckets")
+                                .IsRequired()
+                                .HasColumnType("jsonb")
+                                .HasColumnName("drop_positions");
+
+                            b1.Property<string>("Reanchors")
+                                .IsRequired()
+                                .HasColumnType("jsonb")
+                                .HasColumnName("pcr_reanchors");
+                        });
+
                     b.HasKey("Id")
                         .HasName("pk_recording");
 
@@ -1016,6 +1035,8 @@ namespace Carina.Db.Migrations
                             t.HasCheckConstraint("ck_recording_complete_was_asked_for", "recording_outcome IS DISTINCT FROM 'Complete' OR aborted_at IS NOT NULL");
 
                             t.HasCheckConstraint("ck_recording_counts", "written_duration_ms >= 0\nAND resume_count >= 0\nAND eovf_count >= 0\nAND (file_size_observed IS NULL OR file_size_observed >= 0)\nAND (scrambled_packets IS NULL OR scrambled_packets >= 0)");
+
+                            t.HasCheckConstraint("ck_recording_drop_positions", "(pcr_anchor IS NOT NULL\n    OR (jsonb_array_length(drop_positions) = 0 AND jsonb_array_length(pcr_reanchors) = 0))\nAND (pcr_anchor IS NULL OR cc_measured)\nAND (pcr_anchor IS NULL OR pcr_anchor BETWEEN 0 AND 8589934591)");
 
                             t.HasCheckConstraint("ck_recording_empty_file_failed", "recording_outcome IS NULL OR file_size_observed <> 0 OR recording_outcome = 'Failed'");
 

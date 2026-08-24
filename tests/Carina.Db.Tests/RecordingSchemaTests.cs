@@ -323,7 +323,8 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
                 scrambled_packets, eovf_count, measured_updated_at,
                 snapshot_name, snapshot_summary, snapshot_extended, snapshot_genres, captured_at,
                 broadcast_group_key, broadcast_group_role,
-                cc_measured, cc_dropped_packets, cc_total_packets)
+                cc_measured, cc_dropped_packets, cc_total_packets,
+                pcr_anchor, drop_positions, pcr_reanchors)
             VALUES (
                 '{id}', {(reservationId is { } held ? $"'{held}'" : "NULL")}, {networkId}, 1024, {eventId}, {Airs},
                 'bulk', '{fileName}', {size ?? "NULL"}, {observedAt ?? "NULL"},
@@ -334,7 +335,8 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
                 NULL, 0, {measuredAt ?? "NULL"},
                 'A programme', 'What it is about', '', '[]'::jsonb, {Now},
                 NULL, 'Standalone',
-                {ccMeasured}, {ccDropped ?? "NULL"}, {ccTotal ?? "NULL"})
+                {ccMeasured}, {ccDropped ?? "NULL"}, {ccTotal ?? "NULL"},
+                NULL, '[]'::jsonb, '[]'::jsonb)
             """);
 
         return id;

@@ -65,6 +65,8 @@ public sealed class Recording
 
     public DropCounters Counters { get; private set; } = DropCounters.Unmeasured;
 
+    public DropTimeline Positions { get; private set; } = DropTimeline.Unlocated;
+
     public long? ScrambledPackets { get; private set; }
 
     public long EovfCount { get; private set; }
@@ -122,6 +124,7 @@ public sealed class Recording
             null,
             [],
             DropCounters.Unmeasured,
+            DropTimeline.Unlocated,
             null,
             0,
             null,
@@ -148,6 +151,7 @@ public sealed class Recording
         RecordingOutcome? outcome,
         IReadOnlyList<OutcomeDetail> outcomeDetail,
         DropCounters counters,
+        DropTimeline positions,
         long? scrambledPackets,
         long eovfCount,
         DateTime? measuredUpdatedAt,
@@ -162,6 +166,7 @@ public sealed class Recording
         ArgumentNullException.ThrowIfNull(interruptions);
         ArgumentNullException.ThrowIfNull(outcomeDetail);
         ArgumentNullException.ThrowIfNull(counters);
+        ArgumentNullException.ThrowIfNull(positions);
         ArgumentNullException.ThrowIfNull(snapshot);
 
         if (!fileName.Names(id))
@@ -217,6 +222,8 @@ public sealed class Recording
             throw new ArgumentOutOfRangeException(nameof(eovfCount), eovfCount, "An overflow count is not negative.");
         }
 
+        RefuseAPositionNothingCounted(counters, positions, scrambledPackets);
+
         if (counters.Measured && measuredUpdatedAt is null)
         {
             throw new ArgumentException("Counted packets say when they were last counted.", nameof(measuredUpdatedAt));
@@ -263,6 +270,7 @@ public sealed class Recording
             ExpectedWindowEnd = UtcTimes.Required(expectedWindowEnd, nameof(expectedWindowEnd)),
             Outcome = outcome,
             Counters = counters,
+            Positions = positions,
             ScrambledPackets = scrambledPackets,
             EovfCount = eovfCount,
             MeasuredUpdatedAt = UtcTimes.Optional(measuredUpdatedAt, nameof(measuredUpdatedAt)),
@@ -304,9 +312,15 @@ public sealed class Recording
         WrittenDurationMs += (long)written.TotalMilliseconds;
     }
 
-    public void Measure(DropCounters counters, long? scrambledPackets, long eovfCount, DateTime at)
+    public void Measure(
+        DropCounters counters,
+        DropTimeline positions,
+        long? scrambledPackets,
+        long eovfCount,
+        DateTime at)
     {
         ArgumentNullException.ThrowIfNull(counters);
+        ArgumentNullException.ThrowIfNull(positions);
 
         if (scrambledPackets is < 0)
         {
@@ -321,7 +335,10 @@ public sealed class Recording
             throw new ArgumentOutOfRangeException(nameof(eovfCount), eovfCount, "An overflow count is not negative.");
         }
 
+        RefuseAPositionNothingCounted(counters, positions, scrambledPackets);
+
         Counters = counters;
+        Positions = positions;
         ScrambledPackets = scrambledPackets;
         EovfCount = eovfCount;
         MeasuredUpdatedAt = UtcTimes.Required(at, nameof(at));
@@ -436,6 +453,38 @@ public sealed class Recording
             throw new ArgumentException(
                 $"A recording that ended {outcome} says why, in the classes the ledger holds.",
                 nameof(detail));
+        }
+    }
+
+    private static void RefuseAPositionNothingCounted(
+        DropCounters counters,
+        DropTimeline positions,
+        long? scrambledPackets)
+    {
+        if (!positions.Located)
+        {
+            return;
+        }
+
+        if (!counters.Measured)
+        {
+            throw new ArgumentException(
+                "Nothing counted these packets, so there is nowhere in the stream to put them.",
+                nameof(positions));
+        }
+
+        if (positions.Continuity > counters.Dropped)
+        {
+            throw new ArgumentException(
+                $"A timeline places {positions.Continuity} lost packets, but only {counters.Dropped} were counted.",
+                nameof(positions));
+        }
+
+        if (positions.Scrambled > (scrambledPackets ?? 0))
+        {
+            throw new ArgumentException(
+                $"A timeline places {positions.Scrambled} scrambled packets, but only {scrambledPackets ?? 0} were counted.",
+                nameof(positions));
         }
     }
 

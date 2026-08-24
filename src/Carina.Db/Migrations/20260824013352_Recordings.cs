@@ -48,7 +48,10 @@ public partial class Recordings : Migration
                 broadcast_group_role = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
                 cc_dropped_packets = table.Column<long>(type: "bigint", nullable: true),
                 cc_measured = table.Column<bool>(type: "boolean", nullable: false),
-                cc_total_packets = table.Column<long>(type: "bigint", nullable: true)
+                cc_total_packets = table.Column<long>(type: "bigint", nullable: true),
+                pcr_anchor = table.Column<long>(type: "bigint", nullable: true),
+                drop_positions = table.Column<string>(type: "jsonb", nullable: false),
+                pcr_reanchors = table.Column<string>(type: "jsonb", nullable: false)
             },
             constraints: table =>
             {
@@ -56,6 +59,7 @@ public partial class Recordings : Migration
                 table.CheckConstraint("ck_recording_broadcast_group", "broadcast_group_role IN ('Standalone', 'MovementPrimary', 'MovementSuppressed', 'RelaySegment')\nAND (broadcast_group_role = 'Standalone' OR broadcast_group_key IS NOT NULL)");
                 table.CheckConstraint("ck_recording_complete_was_asked_for", "recording_outcome IS DISTINCT FROM 'Complete' OR aborted_at IS NOT NULL");
                 table.CheckConstraint("ck_recording_counts", "written_duration_ms >= 0\nAND resume_count >= 0\nAND eovf_count >= 0\nAND (file_size_observed IS NULL OR file_size_observed >= 0)\nAND (scrambled_packets IS NULL OR scrambled_packets >= 0)");
+                table.CheckConstraint("ck_recording_drop_positions", "(pcr_anchor IS NOT NULL\n    OR (jsonb_array_length(drop_positions) = 0 AND jsonb_array_length(pcr_reanchors) = 0))\nAND (pcr_anchor IS NULL OR cc_measured)\nAND (pcr_anchor IS NULL OR pcr_anchor BETWEEN 0 AND 8589934591)");
                 table.CheckConstraint("ck_recording_empty_file_failed", "recording_outcome IS NULL OR file_size_observed <> 0 OR recording_outcome = 'Failed'");
                 table.CheckConstraint("ck_recording_file_name", "btrim(file_name) = file_name\nAND length(file_name) > 0\nAND file_name <> '.'\nAND strpos(file_name, '/') = 0\nAND strpos(file_name, chr(92)) = 0\nAND strpos(file_name, '..') = 0");
                 table.CheckConstraint("ck_recording_measurement", "(cc_measured\n    OR (cc_dropped_packets IS NULL AND cc_total_packets IS NULL))\nAND (NOT cc_measured\n    OR (cc_dropped_packets IS NOT NULL\n        AND cc_total_packets IS NOT NULL\n        AND cc_dropped_packets <= cc_total_packets\n        AND measured_updated_at IS NOT NULL))");
