@@ -413,6 +413,83 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
         Assert.Equal("ck_recording_runs_forwards", refusal.ConstraintName);
     }
 
+    [Theory]
+    [InlineData("Pending", 80031)]
+    [InlineData("Ready", 80032)]
+    [InlineData("Failed", 80033)]
+    [InlineData("Skipped", 80034)]
+    public async Task TheLedgerHoldsTheFourThumbnailStates(string state, int networkId)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        await Record(connection, networkId, thumbnail: $"'{state}'");
+
+        Assert.Equal(
+            state,
+            await Scalar(connection, $"SELECT thumbnail_state FROM recording WHERE network_id = {networkId}"));
+    }
+
+    [Fact]
+    public async Task AThumbnailStateTheLedgerDoesNotHoldIsRefused()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(connection, 80035, thumbnail: "'Generating'"));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
+        Assert.Equal("ck_recording_thumbnail", refusal.ConstraintName);
+    }
+
+    [Fact]
+    public async Task ARecordingThatFailedGetsNoPicture()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(
+                connection,
+                80036,
+                outcome: "'Failed'",
+                size: "0",
+                observedAt: Ends,
+                stoppedAt: Ends,
+                detail: OneFault,
+                thumbnail: "'Ready'"));
+
+        Assert.Equal("ck_recording_thumbnail", refusal.ConstraintName);
+
+        await Record(
+            connection,
+            80036,
+            outcome: "'Failed'",
+            size: "0",
+            observedAt: Ends,
+            stoppedAt: Ends,
+            detail: OneFault,
+            thumbnail: "'Skipped'");
+    }
+
+    [Fact]
+    public async Task ATruncatedRecordingMayStillHaveAPicture()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        await Record(
+            connection,
+            80037,
+            outcome: "'Truncated'",
+            size: "1200000",
+            observedAt: Ends,
+            stoppedAt: Ends,
+            detail: OneFault,
+            thumbnail: "'Ready'");
+
+        Assert.Equal(
+            "Ready",
+            await Scalar(connection, "SELECT thumbnail_state FROM recording WHERE network_id = 80037"));
+    }
+
     private static async Task<string> IndexDefinition(NpgsqlConnection connection, string name)
         => (string)(await Scalar(connection, $"SELECT indexdef FROM pg_indexes WHERE indexname = '{name}'"))!;
 
@@ -433,7 +510,8 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
         string? measuredAt = null,
         string? windowEnd = null,
         Guid? reservationId = null,
-        string? tuner = null)
+        string? tuner = null,
+        string? thumbnail = null)
     {
         var id = Guid.NewGuid();
 
@@ -451,7 +529,7 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
                 snapshot_name, snapshot_summary, snapshot_extended, snapshot_genres, captured_at,
                 broadcast_group_key, broadcast_group_role,
                 cc_measured, cc_dropped_packets, cc_total_packets,
-                pcr_anchor, drop_positions, pcr_reanchors, tuner_device_id)
+                pcr_anchor, drop_positions, pcr_reanchors, tuner_device_id, thumbnail_state)
             VALUES (
                 '{id}', {(reservationId is { } held ? $"'{held}'" : "NULL")}, {networkId}, 1024, {eventId}, {Airs},
                 'bulk', '{fileName ?? $"{id:N}.m2ts"}', {size ?? "NULL"}, {observedAt ?? "NULL"},
@@ -463,7 +541,7 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
                 'A programme', 'What it is about', '', '[]'::jsonb, {Now},
                 NULL, 'Standalone',
                 {ccMeasured}, {ccDropped ?? "NULL"}, {ccTotal ?? "NULL"},
-                NULL, '[]'::jsonb, '[]'::jsonb, {tuner ?? "'pt3-0'"})
+                NULL, '[]'::jsonb, '[]'::jsonb, {tuner ?? "'pt3-0'"}, {thumbnail ?? "'Pending'"})
             """);
 
         return id;

@@ -402,6 +402,7 @@ public sealed class RecordingTests
             3,
             Now.AddHours(1),
             RecordingFactory.Tuner,
+            ThumbnailState.Pending,
             RecordingFactory.Snapshot(),
             null,
             BroadcastGroupRole.Standalone);
@@ -452,6 +453,7 @@ public sealed class RecordingTests
             0,
             measuredUpdatedAt,
             RecordingFactory.Tuner,
+            ThumbnailState.Pending,
             RecordingFactory.Snapshot(),
             null,
             BroadcastGroupRole.Standalone);

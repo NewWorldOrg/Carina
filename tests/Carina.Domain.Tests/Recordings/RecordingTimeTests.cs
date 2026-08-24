@@ -91,6 +91,7 @@ public sealed class RecordingTimeTests
             0,
             column is "measuredUpdatedAt" ? before : null,
             RecordingFactory.Tuner,
+            ThumbnailState.Pending,
             RecordingFactory.Snapshot(),
             null,
             BroadcastGroupRole.Standalone));

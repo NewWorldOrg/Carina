@@ -126,6 +126,7 @@ public partial class Recordings : Migration
                 scrambled_packets = table.Column<long>(type: "bigint", nullable: true),
                 eovf_count = table.Column<long>(type: "bigint", nullable: false),
                 tuner_device_id = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true),
+                thumbnail_state = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
                 measured_updated_at = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                 snapshot_name = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: false),
                 snapshot_summary = table.Column<string>(type: "character varying(4096)", maxLength: 4096, nullable: false),
@@ -156,6 +157,7 @@ public partial class Recordings : Migration
                 table.CheckConstraint("ck_recording_reanchors", "recording_reanchors_hold(pcr_reanchors, 8589934592)");
                 table.CheckConstraint("ck_recording_reasons", "recording_reasons_hold(outcome_detail, ARRAY['TuneFailed', 'RefusedByDiskPrecheck', 'DiskExhausted', 'DriverLost', 'DrainGraceExpired', 'StoppedByHand', 'TunerContended', 'ScramblingUnresolved', 'ShortOfTheWindow']::text[], ARRAY['NoLock', 'NoData', 'IncompletePsi', 'StreamMismatch']::text[])");
                 table.CheckConstraint("ck_recording_runs_forwards", "(stopped_at_actual IS NULL OR stopped_at_actual >= started_at_actual)\nAND (aborted_at IS NULL OR aborted_at >= started_at_actual)\nAND (observed_at IS NULL OR observed_at >= started_at_actual)\nAND (measured_updated_at IS NULL OR measured_updated_at >= started_at_actual)");
+                table.CheckConstraint("ck_recording_thumbnail", "thumbnail_state IN ('Pending', 'Ready', 'Failed', 'Skipped')\nAND (recording_outcome IS DISTINCT FROM 'Failed' OR thumbnail_state <> 'Ready')");
                 table.CheckConstraint("ck_recording_tuner", "tuner_device_id IS NOT NULL\nOR (NOT cc_measured AND eovf_count = 0)");
                 table.CheckConstraint("ck_recording_window", "expected_window_end > expected_window_start");
             });

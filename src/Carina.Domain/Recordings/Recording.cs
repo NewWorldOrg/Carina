@@ -79,6 +79,8 @@ public sealed class Recording
 
     public TunerDeviceId? TunerDeviceId { get; private set; }
 
+    public ThumbnailState ThumbnailState { get; private set; } = ThumbnailState.Pending;
+
     public DateTime? MeasuredUpdatedAt { get; private set; }
 
     public string SnapshotName { get; private set; } = string.Empty;
@@ -138,6 +140,7 @@ public sealed class Recording
             0,
             null,
             tunerDeviceId,
+            ThumbnailState.Pending,
             snapshot,
             broadcastGroupKey,
             broadcastGroupRole);
@@ -166,6 +169,7 @@ public sealed class Recording
         long eovfCount,
         DateTime? measuredUpdatedAt,
         TunerDeviceId? tunerDeviceId,
+        ThumbnailState thumbnailState,
         ProgrammeSnapshot snapshot,
         BroadcastGroupKey? broadcastGroupKey,
         BroadcastGroupRole broadcastGroupRole)
@@ -236,6 +240,7 @@ public sealed class Recording
         RefuseAPositionNothingCounted(counters, positions, scrambledPackets);
         RefuseAMeasurementFromNoTuner(counters, eovfCount, tunerDeviceId);
 
+        RefuseAThumbnailForAFailure(outcome, thumbnailState);
         RefuseAHistoryThatDoesNotAddUp(interruptions, resumeCount, startedAtActual);
         RefuseATimeBeforeTheRecordingBegan(startedAtActual, stoppedAtActual, nameof(stoppedAtActual));
         RefuseATimeBeforeTheRecordingBegan(startedAtActual, abortedAt, nameof(abortedAt));
@@ -295,6 +300,7 @@ public sealed class Recording
             EovfCount = eovfCount,
             MeasuredUpdatedAt = UtcTimes.Optional(measuredUpdatedAt, nameof(measuredUpdatedAt)),
             TunerDeviceId = tunerDeviceId,
+            ThumbnailState = thumbnailState,
             SnapshotName = snapshot.Name,
             SnapshotSummary = snapshot.Summary,
             SnapshotExtended = snapshot.Extended,
@@ -331,6 +337,13 @@ public sealed class Recording
         }
 
         WrittenDurationMs += (long)written.TotalMilliseconds;
+    }
+
+    public void Illustrate(ThumbnailState thumbnailState)
+    {
+        RefuseAThumbnailForAFailure(Outcome, thumbnailState);
+
+        ThumbnailState = thumbnailState;
     }
 
     public void Acquire(TunerDeviceId tunerDeviceId)
@@ -447,6 +460,7 @@ public sealed class Recording
 
         RefuseATimeBeforeTheRecordingBegan(StartedAtActual, stopped, nameof(at));
         RefuseAnUnreachableOutcome(outcome, AbortedAt, fileSizeObserved, stopped, outcomeDetail);
+        RefuseAThumbnailForAFailure(outcome, ThumbnailState);
 
         Outcome = outcome;
         FileSizeObserved = fileSizeObserved;
@@ -527,6 +541,24 @@ public sealed class Recording
             throw new ArgumentException(
                 $"A timeline places {positions.Scrambled} scrambled packets, but only {scrambledPackets ?? 0} were counted.",
                 nameof(positions));
+        }
+    }
+
+    private static void RefuseAThumbnailForAFailure(RecordingOutcome? outcome, ThumbnailState thumbnailState)
+    {
+        if (!Enum.IsDefined(thumbnailState))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(thumbnailState),
+                thumbnailState,
+                "A thumbnail is in one of the four states the ledger holds.");
+        }
+
+        if (outcome is RecordingOutcome.Failed && thumbnailState is ThumbnailState.Ready)
+        {
+            throw new ArgumentException(
+                "A recording that failed has no picture, because a picture of it would say it was recorded.",
+                nameof(thumbnailState));
         }
     }
 

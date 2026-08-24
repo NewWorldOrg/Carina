@@ -94,6 +94,12 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
                 AND (measured_updated_at IS NULL OR measured_updated_at >= started_at_actual)
                 """);
             table.HasCheckConstraint(
+                "ck_recording_thumbnail",
+                $"""
+                thumbnail_state IN ({string.Join(", ", Enum.GetNames<ThumbnailState>().Select(name => $"'{name}'"))})
+                AND (recording_outcome IS DISTINCT FROM 'Failed' OR thumbnail_state <> 'Ready')
+                """);
+            table.HasCheckConstraint(
                 "ck_recording_tuner",
                 """
                 tuner_device_id IS NOT NULL
@@ -239,6 +245,11 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
         builder.Property(recording => recording.ScrambledPackets);
         builder.Property(recording => recording.EovfCount).IsRequired();
         builder.Property(recording => recording.MeasuredUpdatedAt);
+
+        builder.Property(recording => recording.ThumbnailState)
+            .HasConversion<string>()
+            .HasMaxLength(32)
+            .IsRequired();
 
         builder.Property(recording => recording.TunerDeviceId)
             .HasConversion(id => id!.Value, value => new TunerDeviceId(value))

@@ -196,7 +196,7 @@ public sealed class RecordingUniquenessSchemaTests(MigratedScratchDatabase datab
                 snapshot_name, snapshot_summary, snapshot_extended, snapshot_genres, captured_at,
                 broadcast_group_key, broadcast_group_role,
                 cc_measured, cc_dropped_packets, cc_total_packets,
-                pcr_anchor, drop_positions, pcr_reanchors, tuner_device_id)
+                pcr_anchor, drop_positions, pcr_reanchors, tuner_device_id, thumbnail_state)
             VALUES (
                 '{id}', {(reservationId is { } held ? $"'{held}'" : "NULL")},
                 {networkId}, 1024, {eventId}, {Airs},
@@ -209,7 +209,7 @@ public sealed class RecordingUniquenessSchemaTests(MigratedScratchDatabase datab
                 'A programme', 'What it is about', '', '[]'::jsonb, {Now},
                 NULL, 'Standalone',
                 false, NULL, NULL,
-                NULL, '[]'::jsonb, '[]'::jsonb, 'pt3-0')
+                NULL, '[]'::jsonb, '[]'::jsonb, 'pt3-0', 'Pending')
             """);
 
     private static async Task Execute(NpgsqlConnection connection, string sql)

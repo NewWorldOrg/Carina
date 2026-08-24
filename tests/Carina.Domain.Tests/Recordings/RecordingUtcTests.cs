@@ -209,6 +209,7 @@ public sealed class RecordingUtcTests
             0,
             parameter is "measuredUpdatedAt" ? local : null,
             RecordingFactory.Tuner,
+            ThumbnailState.Pending,
             RecordingFactory.Snapshot(),
             null,
             BroadcastGroupRole.Standalone);

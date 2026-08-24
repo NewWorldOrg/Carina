@@ -327,7 +327,8 @@ public sealed class RecordingJsonShapeSchemaTests(MigratedScratchDatabase databa
         string? ccDropped = null,
         string? ccTotal = null,
         string? measuredAt = null,
-        string? scrambled = null)
+        string? scrambled = null,
+        string? thumbnail = null)
     {
         var id = Guid.NewGuid();
 
@@ -345,7 +346,7 @@ public sealed class RecordingJsonShapeSchemaTests(MigratedScratchDatabase databa
                 snapshot_name, snapshot_summary, snapshot_extended, snapshot_genres, captured_at,
                 broadcast_group_key, broadcast_group_role,
                 cc_measured, cc_dropped_packets, cc_total_packets,
-                pcr_anchor, drop_positions, pcr_reanchors, tuner_device_id)
+                pcr_anchor, drop_positions, pcr_reanchors, tuner_device_id, thumbnail_state)
             VALUES (
                 '{id}', NULL, {networkId}, 1024, {eventId}, {Airs},
                 'bulk', '{id:N}.m2ts', NULL, NULL,
@@ -357,7 +358,7 @@ public sealed class RecordingJsonShapeSchemaTests(MigratedScratchDatabase databa
                 'A programme', 'What it is about', '', '[]'::jsonb, {Now},
                 NULL, 'Standalone',
                 {ccMeasured}, {ccDropped ?? "NULL"}, {ccTotal ?? "NULL"},
-                {anchor ?? "NULL"}, {positions ?? "'[]'::jsonb"}, {reanchors ?? "'[]'::jsonb"}, 'pt3-0')
+                {anchor ?? "NULL"}, {positions ?? "'[]'::jsonb"}, {reanchors ?? "'[]'::jsonb"}, 'pt3-0', {thumbnail ?? "'Pending'"})
             """);
     }
 
