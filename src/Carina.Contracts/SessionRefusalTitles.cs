@@ -28,6 +28,10 @@ public static class SessionRefusalTitles
 
     public const string NotAnExtension = "notAnExtension";
 
+    public const string NotARecording = "notARecording";
+
+    public const string SessionEnded = "sessionEnded";
+
     public const string Draining = "draining";
 
     public const string OutputUnavailable = "outputUnavailable";

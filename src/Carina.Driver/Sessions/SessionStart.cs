@@ -23,6 +23,15 @@ public enum SessionRefusal
     NoLock,
 }
 
+public enum SessionExtendOutcome
+{
+    Extended,
+    NoSuchSession,
+    AlreadyEnded,
+    NotARecording,
+    NotAnExtension,
+}
+
 public enum SessionStopOutcome
 {
     NoSuchSession,
@@ -51,6 +60,35 @@ public sealed record SessionStart
 
     public static SessionStart Refused(SessionRefusal refusal, string detail) =>
         new(null, refusal, detail);
+
+    public bool TryGetSession([NotNullWhen(true)] out TunerSession? session)
+    {
+        session = Session;
+
+        return session is not null;
+    }
+}
+
+public sealed record SessionExtension
+{
+    private SessionExtension(TunerSession? session, SessionExtendOutcome outcome, string detail)
+    {
+        Session = session;
+        Outcome = outcome;
+        Detail = detail;
+    }
+
+    public TunerSession? Session { get; }
+
+    public SessionExtendOutcome Outcome { get; }
+
+    public string Detail { get; }
+
+    public static SessionExtension Extended(TunerSession session) =>
+        new(session, SessionExtendOutcome.Extended, string.Empty);
+
+    public static SessionExtension Refused(SessionExtendOutcome outcome, string detail) =>
+        new(null, outcome, detail);
 
     public bool TryGetSession([NotNullWhen(true)] out TunerSession? session)
     {

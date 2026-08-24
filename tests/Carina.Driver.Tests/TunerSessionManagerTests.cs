@@ -831,6 +831,45 @@ public sealed class TunerSessionManagerTests : IDisposable
     }
 
     [Fact]
+    public void AnEndThatTheDriverHasAlreadyPassedIsNoExtensionEvenThoughItFollowsTheCurrentOne()
+    {
+        var device = new PacedTunerDevice();
+        var manager = new TunerSessionManager(
+            Configuration,
+            new OneTunerDeviceFactory(device),
+            clock,
+            NullLogger<TunerSessionManager>.Instance
+        );
+
+        SessionStart start = manager.Begin(
+            Request("s-1", "adapter0", endsAt: Start.AddMinutes(5))
+        );
+
+        Assert.True(start.TryGetSession(out TunerSession? session), start.Detail);
+
+        device.AwaitParkedBefore(1);
+        clock.Advance(TimeSpan.FromMinutes(10));
+
+        SessionExtension refused = manager.Extend(
+            session.SessionId,
+            new ExtendSessionRequest { EndsAt = Start.AddMinutes(7) }
+        );
+
+        Assert.Equal(SessionExtendOutcome.NotAnExtension, refused.Outcome);
+        Assert.Equal(Start.AddMinutes(5), session.EndsAt);
+
+        SessionExtension accepted = manager.Extend(
+            session.SessionId,
+            new ExtendSessionRequest { EndsAt = Start.AddMinutes(20) }
+        );
+
+        Assert.Equal(SessionExtendOutcome.Extended, accepted.Outcome);
+        Assert.Equal(Start.AddMinutes(20), session.EndsAt);
+
+        session.Dispose();
+    }
+
+    [Fact]
     public void TwoSessionsAreNeverBothWritingTheOneRecording()
     {
         TunerSessionManager manager = Manager();
@@ -1204,6 +1243,7 @@ public sealed class TunerSessionManagerTests : IDisposable
                 DriverCapabilities.TypedTuning,
                 DriverCapabilities.SignalQuality,
                 DriverCapabilities.GracefulRestart,
+                DriverCapabilities.RecordingExtension,
                 "signalQuality.cnr",
                 "signalQuality.postViterbiBitError",
                 "sessionPurpose.surveyNow",

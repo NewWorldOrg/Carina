@@ -80,6 +80,8 @@ public static class DriverApi
 
         RequestDelegate stopSession = context => StopSession(context, manager, hub, hello);
 
+        RequestDelegate extendSession = context => ExtendSession(context, manager, hello);
+
         DriverLifecycle lifecycle = app.Services.GetRequiredService<DriverLifecycle>();
 
         RequestDelegate stream = context =>
@@ -116,6 +118,7 @@ public static class DriverApi
         app.MapGet(DriverEndpoints.Sessions, sessions);
         app.MapPost(DriverEndpoints.Sessions, startSession);
         app.MapGet($"{DriverEndpoints.Sessions}/{{id}}", session);
+        app.MapPatch($"{DriverEndpoints.Sessions}/{{id}}", extendSession);
         app.MapDelete($"{DriverEndpoints.Sessions}/{{id}}", stopSession);
         app.MapGet($"{DriverEndpoints.Sessions}/{{id}}/stream", stream);
         app.MapGet(DriverEndpoints.Events, events);
@@ -447,6 +450,99 @@ public static class DriverApi
             DriverJson.Context.SessionSnapshot
         );
     }
+
+    private static async Task ExtendSession(
+        HttpContext context,
+        TunerSessionManager manager,
+        DriverHello hello
+    )
+    {
+        if (!SessionId.TryParse(context.Request.RouteValues["id"] as string, out SessionId sessionId))
+        {
+            await Problem(
+                context,
+                StatusCodes.Status400BadRequest,
+                "badSessionId",
+                $"A session id is 1 to {SessionId.MaxLength} characters of A-Z, a-z, 0-9 or '-'."
+            );
+
+            return;
+        }
+
+        ExtendSessionRequest? request;
+
+        try
+        {
+            request = await context.Request.ReadFromJsonAsync(
+                DriverJson.Context.ExtendSessionRequest,
+                context.RequestAborted
+            );
+        }
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception error)
+            when (error is JsonException or InvalidOperationException or BadHttpRequestException)
+        {
+            await Problem(
+                context,
+                StatusCodes.Status400BadRequest,
+                "malformedRequest",
+                $"The body is not the JSON this driver reads: {error.Message}"
+            );
+
+            return;
+        }
+
+        if (request is null)
+        {
+            await Problem(
+                context,
+                StatusCodes.Status400BadRequest,
+                "malformedRequest",
+                "The body was empty; an extension names the time the recording now runs to."
+            );
+
+            return;
+        }
+
+        SessionExtension extension = manager.Extend(sessionId, request);
+
+        if (!extension.TryGetSession(out TunerSession? session))
+        {
+            (int status, string title) = Outcome(extension.Outcome);
+
+            await Problem(context, status, title, extension.Detail);
+
+            return;
+        }
+
+        await Write(
+            context,
+            StatusCodes.Status200OK,
+            SessionViews.Of(session, hello),
+            DriverJson.Context.SessionSnapshot
+        );
+    }
+
+    private static (int Status, string Title) Outcome(SessionExtendOutcome outcome) =>
+        outcome switch
+        {
+            SessionExtendOutcome.NoSuchSession => (
+                StatusCodes.Status404NotFound,
+                "noSuchSession"
+            ),
+            SessionExtendOutcome.AlreadyEnded => (
+                StatusCodes.Status409Conflict,
+                SessionRefusalTitles.SessionEnded
+            ),
+            SessionExtendOutcome.NotARecording => (
+                StatusCodes.Status400BadRequest,
+                SessionRefusalTitles.NotARecording
+            ),
+            _ => (StatusCodes.Status400BadRequest, SessionRefusalTitles.NotAnExtension),
+        };
 
     private static async Task StopSession(
         HttpContext context,

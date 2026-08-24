@@ -833,6 +833,63 @@ public sealed class TunerSessionManager(
         return session is not null;
     }
 
+    public SessionExtension Extend(SessionId sessionId, ExtendSessionRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (!sessions.TryGetValue(sessionId, out TunerSession? session))
+        {
+            return ended.Any(candidate => candidate.SessionId == sessionId)
+                ? SessionExtension.Refused(
+                    SessionExtendOutcome.AlreadyEnded,
+                    $"The session '{sessionId}' has already ended, so there is no end left to move."
+                )
+                : SessionExtension.Refused(
+                    SessionExtendOutcome.NoSuchSession,
+                    $"This driver holds no session called '{sessionId}'."
+                );
+        }
+
+        if (session.Purpose is not SessionPurpose.Recording)
+        {
+            return SessionExtension.Refused(
+                SessionExtendOutcome.NotARecording,
+                $"The session '{sessionId}' is a {SessionPurposeConverter.WireName(session.Purpose)} one, and this driver holds its end to the limit its purpose is given."
+            );
+        }
+
+        IReadOnlyList<string> problems = request.Validate(
+            session.EndsAt,
+            timeProvider.GetUtcNow()
+        );
+
+        if (problems.Count > 0)
+        {
+            return SessionExtension.Refused(
+                SessionExtendOutcome.NotAnExtension,
+                string.Join(" ", problems)
+            );
+        }
+
+        if (!session.Extend(request.EndsAt))
+        {
+            return SessionExtension.Refused(
+                SessionExtendOutcome.AlreadyEnded,
+                $"The session '{sessionId}' is {session.State} and is no longer taking a later end."
+            );
+        }
+
+        logger.LogInformation(
+            "Session {SessionId} now runs until {EndsAt}.",
+            sessionId.Value,
+            session.EndsAt
+        );
+
+        events?.Signal(DriverEvents.Sessions);
+
+        return SessionExtension.Extended(session);
+    }
+
     public async Task<SessionStopOutcome> StopAsync(
         SessionId sessionId,
         string reason,

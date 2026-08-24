@@ -16,6 +16,7 @@ public static class DriverGreeting
         DriverCapabilities.TypedTuning,
         DriverCapabilities.SignalQuality,
         DriverCapabilities.GracefulRestart,
+        DriverCapabilities.RecordingExtension,
         .. SignalQualityMetrics.All.Select(DriverCapabilities.SignalQualityMetric),
         .. SessionPurposes.Capabilities,
     ];
