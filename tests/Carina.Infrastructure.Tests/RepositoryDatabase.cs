@@ -25,6 +25,8 @@ public sealed class RepositoryDatabase : IAsyncLifetime
 
         await using CarinaDbContext context = Open();
         await context.Database.EnsureCreatedAsync();
+
+        await RunAsync(RecordingGuards.Projection, RecordingGuards.Immutability);
     }
 
     private async Task MakeTheDatabaseAndWhatItsConstraintsCallAsync()
@@ -39,10 +41,19 @@ public sealed class RepositoryDatabase : IAsyncLifetime
             await creating.ExecuteNonQueryAsync();
         }
 
+        await RunAsync(RecordingGuards.Functions);
+    }
+
+    private async Task RunAsync(params string[] statements)
+    {
         await using var scratch = new NpgsqlConnection(connectionString);
         await scratch.OpenAsync();
-        await using var declaring = new NpgsqlCommand(RecordingGuards.Functions, scratch);
-        await declaring.ExecuteNonQueryAsync();
+
+        foreach (string sql in statements)
+        {
+            await using var running = new NpgsqlCommand(sql, scratch);
+            await running.ExecuteNonQueryAsync();
+        }
     }
 
     public Task DisposeAsync() => Task.CompletedTask;

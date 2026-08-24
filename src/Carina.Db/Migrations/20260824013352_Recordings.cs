@@ -209,7 +209,10 @@ public partial class Recordings : Migration
             CREATE TRIGGER recording_projects_its_outcome
             AFTER INSERT OR UPDATE OF recording_outcome, reservation_id ON recording
             FOR EACH ROW EXECUTE FUNCTION recording_projects_its_outcome();
+            """);
 
+        migrationBuilder.Sql(
+            """
             CREATE OR REPLACE FUNCTION recording_keeps_its_reservation() RETURNS trigger
             LANGUAGE plpgsql AS $fn$
             BEGIN

@@ -95,4 +95,42 @@ public static class RecordingGuards
                  CASE WHEN jsonb_typeof(entries) = 'array' THEN entries ELSE '[]'::jsonb END) AS listed(entry);
         $fn$;
         """;
+
+    public const string Projection = """
+        CREATE OR REPLACE FUNCTION recording_projects_its_outcome() RETURNS trigger
+        LANGUAGE plpgsql AS $fn$
+        BEGIN
+            IF NEW.reservation_id IS NOT NULL THEN
+                UPDATE reservation
+                SET recording_outcome = NEW.recording_outcome
+                WHERE id = NEW.reservation_id
+                  AND recording_outcome IS DISTINCT FROM NEW.recording_outcome;
+            END IF;
+
+            RETURN NULL;
+        END;
+        $fn$;
+
+        CREATE TRIGGER recording_projects_its_outcome
+        AFTER INSERT OR UPDATE OF recording_outcome, reservation_id ON recording
+        FOR EACH ROW EXECUTE FUNCTION recording_projects_its_outcome();
+        """;
+
+    public const string Immutability = """
+        CREATE OR REPLACE FUNCTION recording_keeps_its_reservation() RETURNS trigger
+        LANGUAGE plpgsql AS $fn$
+        BEGIN
+            IF OLD.reservation_id IS DISTINCT FROM NEW.reservation_id THEN
+                RAISE EXCEPTION 'a recording keeps the reservation it was started for'
+                    USING ERRCODE = '23514', CONSTRAINT = 'ck_recording_keeps_its_reservation';
+            END IF;
+
+            RETURN NEW;
+        END;
+        $fn$;
+
+        CREATE TRIGGER recording_keeps_its_reservation
+        BEFORE UPDATE OF reservation_id ON recording
+        FOR EACH ROW EXECUTE FUNCTION recording_keeps_its_reservation();
+        """;
 }
