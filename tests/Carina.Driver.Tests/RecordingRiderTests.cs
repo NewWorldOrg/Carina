@@ -93,18 +93,26 @@ public sealed class RecordingRiderTests : IDisposable
         broadcaster.Publish(Chunk(1));
         broadcaster.Publish(Chunk(2));
 
-        Task third = Task.Run(() => broadcaster.Publish(Chunk(3)));
+        var entered = new ManualResetEventSlim(false);
+        int readsWhenThePublisherReturned = -1;
+        int reads = 0;
 
-        await Task.Delay(TimeSpan.FromMilliseconds(50));
+        Task third = Task.Run(() =>
+        {
+            entered.Set();
+            broadcaster.Publish(Chunk(3));
+            readsWhenThePublisherReturned = Volatile.Read(ref reads);
+        });
 
-        Assert.False(
-            third.IsCompleted,
-            "The publisher carried on with a full recording channel, so a chunk went nowhere."
-        );
+        Assert.True(entered.Wait(Deadlock), "The publisher never reached the full channel.");
+
+        Interlocked.Increment(ref reads);
 
         Assert.True(rider.Reader.TryRead(out byte[]? first));
 
         await third.WaitAsync(Deadlock);
+
+        Assert.Equal(1, readsWhenThePublisherReturned);
 
         Assert.Equal(Chunk(1), first);
         Assert.True(rider.Reader.TryRead(out byte[]? second));
@@ -680,33 +688,32 @@ public sealed class RecordingRiderTests : IDisposable
     }
 
     [Fact]
-    public async Task ARecordingSeatWaitsOnItsOwnLimitAndNotOnTheOneSurveyorsAreGiven()
+    public void ARecordingSeatWaitsOnItsOwnLimitAndNotOnTheOneSurveyorsAreGiven()
     {
+        TimeSpan itsOwn = TimeSpan.FromMilliseconds(400);
+
         using var seats = new SessionBroadcaster(
             surveyCapacity: 1,
             surveyBlockLimit: TimeSpan.Zero,
             recordingCapacity: 1,
-            recordingBlockLimit: TimeSpan.FromSeconds(30)
+            recordingBlockLimit: itsOwn
         );
 
         SessionSubscription recording = seats.Subscribe(SubscriberKind.Recording);
 
-        seats.Publish(Chunk(3));
+        seats.Publish(Chunk(1));
 
-        Task fourth = Task.Run(() => seats.Publish(Chunk(4)));
+        long start = Stopwatch.GetTimestamp();
 
-        Assert.True(recording.Reader.TryRead(out byte[]? third));
+        seats.Publish(Chunk(2));
 
-        await fourth.WaitAsync(Deadlock);
+        TimeSpan waited = Stopwatch.GetElapsedTime(start);
 
-        Assert.Equal(Chunk(3), third);
-        Assert.False(
-            recording.IsDisconnected,
-            "The recording seat was cut on the limit surveyors are given instead of waiting on its own."
+        Assert.True(
+            waited >= itsOwn - TimeSpan.FromMilliseconds(50),
+            $"The publisher gave up after {waited} on a seat whose own limit is {itsOwn}, so the recording is being held to the limit surveyors are given."
         );
-        Assert.Equal(0, recording.DroppedChunks);
-        Assert.True(recording.Reader.TryRead(out byte[]? fourthChunk));
-        Assert.Equal(Chunk(4), fourthChunk);
+        Assert.True(recording.IsDisconnected);
     }
 
     [Fact]

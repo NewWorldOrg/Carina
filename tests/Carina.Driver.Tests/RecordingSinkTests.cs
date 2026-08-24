@@ -271,10 +271,7 @@ public sealed class RecordingSinkTests : IDisposable
 
         Assert.Contains("k-1", accepted);
         Assert.DoesNotContain($"k{Path.DirectorySeparatorChar}1", accepted);
-        Assert.True(
-            accepted.Count > 60,
-            $"Only {accepted.Count} single-character ids were accepted, so the sweep measures next to nothing."
-        );
+        Assert.Equal(65, accepted.Count);
     }
 
     [Fact]
