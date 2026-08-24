@@ -63,6 +63,20 @@ public sealed class DropTimelineTests
     }
 
     [Fact]
+    public void ATimelineStartsAtTheBeginningOfTheStreamOrLater()
+    {
+        Assert.Equal(
+            "buckets",
+            Assert.Throws<ArgumentException>(
+                () => DropTimeline.Rehydrate(0, [new DropBucket(-1, 1, 0)], [])).ParamName);
+        Assert.Equal(
+            "reanchors",
+            Assert.Throws<ArgumentException>(
+                () => DropTimeline.Rehydrate(0, [], [new PcrReanchor(-1, 1, 0)])).ParamName);
+        Assert.Equal(0, Assert.Single(DropTimeline.Rehydrate(0, [new DropBucket(0, 1, 0)], []).Buckets).Second);
+    }
+
+    [Fact]
     public void ATimelineNamesOnlyTheSecondsWhereSomethingHappened()
         => Assert.Equal(
             "buckets",

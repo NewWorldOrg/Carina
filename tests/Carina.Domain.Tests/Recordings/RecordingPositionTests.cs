@@ -63,6 +63,21 @@ public sealed class RecordingPositionTests
     }
 
     [Fact]
+    public void ATimelineCannotPlaceScrambledPacketsWhenNoneWereCountedAtAll()
+    {
+        Recording recording = RecordingFactory.Started();
+
+        ArgumentException refusal = Assert.Throws<ArgumentException>(() => recording.Measure(
+            DropCounters.Counted(0, 1000),
+            DropTimeline.Rehydrate(900_000, [new DropBucket(12, 0, 1)], []),
+            null,
+            0,
+            Now));
+
+        Assert.Equal("positions", refusal.ParamName);
+    }
+
+    [Fact]
     public void AMeasurementWithPositionsKeepsBoth()
     {
         Recording recording = RecordingFactory.Started();

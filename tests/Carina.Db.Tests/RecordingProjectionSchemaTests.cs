@@ -94,6 +94,43 @@ public sealed class RecordingProjectionSchemaTests(MigratedScratchDatabase datab
         Assert.Null(await Outcome(connection, reservation));
     }
 
+    [Theory]
+    [InlineData("Complete", "3400000000", 46051)]
+    [InlineData("Truncated", "1200000", 46052)]
+    [InlineData("Failed", "0", 46053)]
+    public async Task ARecordingThatArrivesAlreadyEndedProjectsAsItLands(
+        string outcome,
+        string size,
+        int networkId)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        Guid reservation = await Reserve(connection, networkId);
+
+        await Record(connection, networkId, reservation, settledAs: outcome, size: size);
+
+        Assert.Equal(outcome, await Outcome(connection, reservation));
+        Assert.Equal(outcome, await Composite(connection, reservation));
+    }
+
+    [Fact]
+    public async Task TheProjectionWatchesTheOutcomeAndNothingElse()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        Assert.Equal(
+            "CREATE TRIGGER recording_projects_its_outcome AFTER INSERT OR UPDATE OF recording_outcome "
+            + "ON public.recording FOR EACH ROW EXECUTE FUNCTION recording_projects_its_outcome()",
+            await Scalar(
+                connection,
+                """
+                SELECT pg_get_triggerdef(trigger.oid)
+                FROM pg_trigger AS trigger
+                JOIN pg_class AS table_of ON table_of.oid = trigger.tgrelid
+                WHERE table_of.relname = 'recording'
+                  AND trigger.tgname = 'recording_projects_its_outcome'
+                """));
+    }
+
     [Fact]
     public async Task TheProjectionIsTheDatabasesJobAndItSaysSoByName()
     {
@@ -139,7 +176,9 @@ public sealed class RecordingProjectionSchemaTests(MigratedScratchDatabase datab
         NpgsqlConnection connection,
         int networkId,
         Guid? reservationId,
-        int eventId = 4001)
+        int eventId = 4001,
+        string? settledAs = null,
+        string size = "1200000")
     {
         var id = Guid.NewGuid();
 
@@ -161,16 +200,18 @@ public sealed class RecordingProjectionSchemaTests(MigratedScratchDatabase datab
             VALUES (
                 '{id}', {(reservationId is { } held ? $"'{held}'" : "NULL")},
                 {networkId}, 1024, {eventId}, {Airs},
-                'bulk', '{id:N}.m2ts', NULL, NULL,
-                {Airs}, NULL, NULL,
+                'bulk', '{id:N}.m2ts',
+                {(settledAs is null ? "NULL" : size)}, {(settledAs is null ? "NULL" : Ends)},
+                {Airs}, {(settledAs is null ? "NULL" : Ends)}, {(settledAs is null ? "NULL" : Ends)},
                 0, 0, '[]'::jsonb,
                 {Airs}, {Ends},
-                NULL, '[]'::jsonb,
+                {(settledAs is null ? "NULL" : $"'{settledAs}'")},
+                {(settledAs is null or "Complete" ? "'[]'::jsonb" : OneReason)},
                 NULL, 0, NULL,
                 'A programme', 'What it is about', '', '[]'::jsonb, {Now},
                 NULL, 'Standalone',
                 false, NULL, NULL,
-                NULL, '[]'::jsonb, '[]'::jsonb, 'pt3-0', 'Pending')
+                NULL, '[]'::jsonb, '[]'::jsonb, 'pt3-0', {(settledAs == "Failed" ? "'Skipped'" : "'Pending'")})
             """);
 
         return id;

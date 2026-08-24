@@ -139,7 +139,7 @@ public static class RecordingGuards
         $fn$;
 
         CREATE TRIGGER recording_projects_its_outcome
-        AFTER INSERT OR UPDATE OF recording_outcome, reservation_id ON recording
+        AFTER INSERT OR UPDATE OF recording_outcome ON recording
         FOR EACH ROW EXECUTE FUNCTION recording_projects_its_outcome();
         """;
 
