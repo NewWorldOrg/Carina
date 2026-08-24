@@ -1,4 +1,5 @@
 using Carina.Infrastructure.Persistence;
+using Carina.Infrastructure.Persistence.Configurations;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -15,9 +16,52 @@ public sealed class RepositoryDatabase : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
+        await using (CarinaDbContext dropping = Open())
+        {
+            await dropping.Database.EnsureDeletedAsync();
+        }
+
+        await MakeTheDatabaseAndWhatItsConstraintsCallAsync();
+
         await using CarinaDbContext context = Open();
-        await context.Database.EnsureDeletedAsync();
         await context.Database.EnsureCreatedAsync();
+
+        await RunAsync(RecordingGuards.Projection, RecordingGuards.Immutability);
+    }
+
+    private async Task MakeTheDatabaseAndWhatItsConstraintsCallAsync()
+    {
+        string maintenance = new NpgsqlConnectionStringBuilder(connectionString) { Database = "postgres" }
+            .ConnectionString;
+
+        await using (var server = new NpgsqlConnection(maintenance))
+        {
+            await server.OpenAsync();
+
+            await using var asking = new NpgsqlCommand(
+                $"SELECT count(*) FROM pg_database WHERE datname = '{ScratchDatabase}'",
+                server);
+
+            if ((long)(await asking.ExecuteScalarAsync())! is 0)
+            {
+                await using var creating = new NpgsqlCommand($"CREATE DATABASE {ScratchDatabase}", server);
+                await creating.ExecuteNonQueryAsync();
+            }
+        }
+
+        await RunAsync(RecordingGuards.Functions);
+    }
+
+    private async Task RunAsync(params string[] statements)
+    {
+        await using var scratch = new NpgsqlConnection(connectionString);
+        await scratch.OpenAsync();
+
+        foreach (string sql in statements)
+        {
+            await using var running = new NpgsqlCommand(sql, scratch);
+            await running.ExecuteNonQueryAsync();
+        }
     }
 
     public Task DisposeAsync() => Task.CompletedTask;

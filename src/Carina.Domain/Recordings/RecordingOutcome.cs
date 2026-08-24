@@ -1,4 +1,4 @@
-namespace Carina.Domain.Reservations;
+namespace Carina.Domain.Recordings;
 
 public enum RecordingOutcome
 {

@@ -112,6 +112,14 @@ nothing.
 - **Configuration is validated at startup** and the process stops with a message
   naming the offending setting. There is no hot reload. Secrets never enter
   committed configuration: placeholders only, real values from the environment.
+- **The recording ledger's `CHECK` constraints call SQL functions, and those
+  functions are labelled `IMMUTABLE` on one condition:** every timestamp they
+  read is required by regular expression to be an ISO-8601 instant ending in
+  `Z` before it is cast, so `TimeZone` cannot change the answer. Relax that
+  shape and the label becomes a lie the planner believes. The definitions live
+  in one place and the migration carries a frozen copy of it; changing the
+  definition means writing a new migration, and a test says so.
+
 - **A stop the driver was asked for exits 0; anything else exits 70.** Coming
   back is the supervisor's half of the deal, which is why `on-failure` is the one
   restart policy the driver must never be given.

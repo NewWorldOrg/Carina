@@ -1,0 +1,716 @@
+using Carina.Domain.Recordings;
+using Carina.Infrastructure.Persistence;
+using Carina.Infrastructure.Persistence.Configurations;
+
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
+
+using Npgsql;
+
+namespace Carina.Db.Tests;
+
+[Collection(ConnectionEnvironmentCollection.Name)]
+[Trait("Category", "DbIntegration")]
+public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
+    : IClassFixture<MigratedScratchDatabase>
+{
+    private const string Airs = "timestamptz '2026-08-24 20:00:00+00'";
+
+    private const string Ends = "timestamptz '2026-08-24 21:00:00+00'";
+
+    private const string Now = "timestamptz '2026-08-24 12:00:00+00'";
+
+    private const string Counted = "timestamptz '2026-08-24 20:30:00+00'";
+
+    private const string OneFault = """
+        '[{"fault":"DriverLost","tuneFailure":null,"note":"","noticedAt":"2026-08-24T20:10:00Z"}]'::jsonb
+        """;
+
+    [Fact]
+    public async Task ACompleteNobodyAskedForIsRefused()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(connection, 40001, outcome: "'Complete'", size: "3400000000", observedAt: Ends, stoppedAt: Ends));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
+        Assert.Equal("ck_recording_complete_was_asked_for", refusal.ConstraintName);
+
+        await Record(
+            connection,
+            40001,
+            outcome: "'Complete'",
+            size: "3400000000",
+            observedAt: Ends,
+            stoppedAt: Ends,
+            abortedAt: Ends);
+    }
+
+    [Fact]
+    public async Task AnEmptyFileIsAFailureWhateverElseWasObserved()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        foreach (string wishful in new[] { "'Complete'", "'Truncated'" })
+        {
+            PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+                () => Record(
+                    connection,
+                    40002,
+                    outcome: wishful,
+                    size: "0",
+                    observedAt: Ends,
+                    stoppedAt: Ends,
+                    abortedAt: Ends,
+                    detail: OneFault));
+
+            Assert.Equal("ck_recording_empty_file_failed", refusal.ConstraintName);
+        }
+
+        await Record(
+            connection,
+            40002,
+            outcome: "'Failed'",
+            size: "0",
+            observedAt: Ends,
+            stoppedAt: Ends,
+            detail: OneFault);
+    }
+
+    [Fact]
+    public async Task AnEndingThatIsNotACompleteSaysWhyInClasses()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(connection, 40003, outcome: "'Truncated'", size: "12", observedAt: Ends, stoppedAt: Ends));
+
+        Assert.Equal("ck_recording_outcome_detail", refusal.ConstraintName);
+
+        Guid id = await Record(
+            connection,
+            40003,
+            outcome: "'Truncated'",
+            size: "12",
+            observedAt: Ends,
+            stoppedAt: Ends,
+            detail: OneFault);
+
+        Assert.Equal(
+            "DriverLost",
+            await Scalar(connection, $"SELECT outcome_detail -> 0 ->> 'fault' FROM recording WHERE id = '{id}'"));
+    }
+
+    [Fact]
+    public async Task TheReasonIsAListRatherThanOneSentence()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        Assert.Equal(
+            "jsonb",
+            await Scalar(
+                connection,
+                """
+                SELECT data_type FROM information_schema.columns
+                WHERE table_name = 'recording' AND column_name = 'outcome_detail'
+                """));
+    }
+
+    [Fact]
+    public async Task CountersNobodyTookCarryNoNumberAtAll()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException zeroed = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(connection, 40004, ccMeasured: "false", ccDropped: "0", ccTotal: "0"));
+
+        Assert.Equal("ck_recording_measurement", zeroed.ConstraintName);
+
+        PostgresException halfCounted = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(connection, 40004, ccMeasured: "true", ccDropped: "0", measuredAt: Counted));
+
+        Assert.Equal("ck_recording_measurement", halfCounted.ConstraintName);
+
+        PostgresException undated = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(connection, 40004, ccMeasured: "true", ccDropped: "0", ccTotal: "1000"));
+
+        Assert.Equal("ck_recording_measurement", undated.ConstraintName);
+
+        PostgresException impossible = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(connection, 40004, ccMeasured: "true", ccDropped: "11", ccTotal: "10", measuredAt: Counted));
+
+        Assert.Equal("ck_recording_measurement", impossible.ConstraintName);
+
+        Guid counted = await Record(
+            connection,
+            40004,
+            ccMeasured: "true",
+            ccDropped: "0",
+            ccTotal: "1000",
+            measuredAt: Counted);
+        Guid uncounted = await Record(connection, 40004, eventId: 4002);
+
+        Assert.Equal(0L, await Scalar(connection, $"SELECT cc_dropped_packets FROM recording WHERE id = '{counted}'"));
+        Assert.Null(await Scalar(connection, $"SELECT cc_dropped_packets FROM recording WHERE id = '{uncounted}'"));
+    }
+
+    [Fact]
+    public async Task TheDropIndexCannotReachARecordingNobodyMeasured()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        Assert.Equal(
+            "CREATE INDEX ix_recording_cc_dropped ON public.recording USING btree (cc_dropped_packets) "
+            + "WHERE (cc_measured AND (cc_dropped_packets > 0))",
+            await IndexDefinition(connection, RecordingConfiguration.DroppedIndexName));
+    }
+
+    [Fact]
+    public async Task TheInFlightIndexNarrowsToWhatHasNoOutcomeYet()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        Assert.Equal(
+            "CREATE INDEX ix_recording_in_flight ON public.recording USING btree (started_at_actual) "
+            + "WHERE (recording_outcome IS NULL)",
+            await IndexDefinition(connection, RecordingConfiguration.InFlightIndexName));
+    }
+
+    [Fact]
+    public async Task TheSettledIndexReadsTheOutcomeAndWhenItStopped()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        Assert.Equal(
+            "CREATE INDEX ix_recording_settled ON public.recording "
+            + "USING btree (recording_outcome, stopped_at_actual)",
+            await IndexDefinition(connection, RecordingConfiguration.SettledIndexName));
+    }
+
+    [Fact]
+    public async Task TheLedgerHoldsNoForeignKeyAtAll()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        Assert.Equal(
+            0L,
+            await Scalar(
+                connection,
+                """
+                SELECT count(*)
+                FROM pg_constraint AS c
+                JOIN pg_class AS child ON child.oid = c.conrelid
+                WHERE c.contype = 'f' AND child.relname = 'recording'
+                """));
+    }
+
+    [Fact]
+    public async Task ARecordingOutlivesTheGuideAndTheChannelsItWasMadeFrom()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        Guid id = await Record(connection, 40005);
+
+        await Execute(connection, "TRUNCATE broadcast_service, programme CASCADE");
+
+        Assert.Equal(
+            "A programme",
+            await Scalar(connection, $"SELECT snapshot_name FROM recording WHERE id = '{id}'"));
+    }
+
+    [Fact]
+    public async Task AnOutcomeWithoutAStopOrASizeIsRefused()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException unstopped = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(connection, 40006, outcome: "'Failed'", size: "0", observedAt: Ends, detail: OneFault));
+
+        Assert.Equal("ck_recording_outcome", unstopped.ConstraintName);
+
+        PostgresException unweighed = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(connection, 40006, outcome: "'Failed'", stoppedAt: Ends, detail: OneFault));
+
+        Assert.Equal("ck_recording_outcome", unweighed.ConstraintName);
+
+        PostgresException borrowed = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(
+                connection,
+                40006,
+                outcome: "'Recording'",
+                size: "12",
+                observedAt: Ends,
+                stoppedAt: Ends,
+                detail: OneFault));
+
+        Assert.Equal("ck_recording_outcome", borrowed.ConstraintName);
+    }
+
+    [Fact]
+    public async Task ASizeReadOffTheDiskSaysWhenItWasRead()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException unstamped = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(connection, 40007, size: "12"));
+
+        Assert.Equal("ck_recording_observation", unstamped.ConstraintName);
+
+        PostgresException unweighed = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(connection, 40007, eventId: 4002, observedAt: Ends));
+
+        Assert.Equal("ck_recording_observation", unweighed.ConstraintName);
+    }
+
+    [Fact]
+    public async Task AWindowEndsAfterItStarts()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(connection, 40008, windowEnd: Airs));
+
+        Assert.Equal("ck_recording_window", refusal.ConstraintName);
+    }
+
+    [Fact]
+    public async Task NothingCountsBackwards()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        foreach (string backwards in new[] { "written_duration_ms", "resume_count", "eovf_count" })
+        {
+            Guid id = await Record(connection, 40009, eventId: 4001 + backwards.Length);
+
+            PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+                () => Execute(connection, $"UPDATE recording SET {backwards} = -1 WHERE id = '{id}'"));
+
+            Assert.Equal("ck_recording_counts", refusal.ConstraintName);
+        }
+    }
+
+    [Fact]
+    public async Task EveryIndexOnTheLedgerIsOneTheModelDeclares()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        await using var command = new NpgsqlCommand(
+            """
+            SELECT indexes.indexname
+            FROM pg_indexes AS indexes
+            JOIN pg_class AS relation ON relation.relname = indexes.indexname
+            LEFT JOIN pg_constraint AS backing ON backing.conindid = relation.oid
+            WHERE indexes.schemaname = 'public'
+              AND indexes.tablename = 'recording'
+              AND backing.oid IS NULL
+            ORDER BY indexes.indexname
+            """,
+            connection);
+        await using NpgsqlDataReader reader = await command.ExecuteReaderAsync();
+
+        var built = new List<string>();
+        while (await reader.ReadAsync())
+        {
+            built.Add(reader.GetString(0));
+        }
+
+        await using CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString);
+        IReadOnlyList<string> declared = [.. context.Model
+            .GetEntityTypes()
+            .Single(entityType => entityType.ClrType == typeof(Recording))
+            .GetIndexes()
+            .Select(index => index.GetDatabaseName())
+            .OfType<string>()
+            .Order(StringComparer.Ordinal)];
+
+        Assert.Equal(
+            [
+                RecordingConfiguration.DroppedIndexName,
+                RecordingConfiguration.InFlightIndexName,
+                RecordingConfiguration.SettledIndexName,
+                RecordingConfiguration.FileIndexName,
+                RecordingConfiguration.ReservationIndexName,
+            ],
+            declared.Order(StringComparer.Ordinal));
+        Assert.Equal(declared, built);
+    }
+
+    [Fact]
+    public async Task EveryColumnAndConstraintOnTheLedgerIsOneTheModelDeclares()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        await using CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString);
+        IEntityType ledger = context.GetService<IDesignTimeModel>().Model
+            .GetEntityTypes()
+            .Single(entityType => entityType.ClrType == typeof(Recording));
+
+        Assert.Equal(
+            [.. Columns(ledger)
+                .Where(column => column != RecordingConfiguration.ConcurrencyToken)
+                .Order(StringComparer.Ordinal)],
+            await Names(
+                connection,
+                """
+                SELECT column_name FROM information_schema.columns
+                WHERE table_name = 'recording' ORDER BY column_name
+                """));
+
+        Assert.Contains(RecordingConfiguration.ConcurrencyToken, Columns(ledger), StringComparer.Ordinal);
+
+        Assert.Equal(
+            [.. ledger.GetCheckConstraints()
+                .Select(constraint => constraint.Name)
+                .OfType<string>()
+                .Order(StringComparer.Ordinal)],
+            await Names(
+                connection,
+                """
+                SELECT constraint_of.conname
+                FROM pg_constraint AS constraint_of
+                JOIN pg_class AS table_of ON table_of.oid = constraint_of.conrelid
+                WHERE table_of.relname = 'recording' AND constraint_of.contype = 'c'
+                ORDER BY constraint_of.conname
+                """));
+    }
+
+    private static IEnumerable<string> Columns(ITypeBase declaring)
+        => declaring.GetProperties()
+            .Select(property => property.GetColumnName())
+            .OfType<string>()
+            .Concat(declaring.GetComplexProperties()
+                .SelectMany(complex => Columns(complex.ComplexType)));
+
+    private static async Task<IReadOnlyList<string>> Names(NpgsqlConnection connection, string sql)
+    {
+        await using var command = new NpgsqlCommand(sql, connection);
+        await using NpgsqlDataReader reader = await command.ExecuteReaderAsync();
+
+        var read = new List<string>();
+        while (await reader.ReadAsync())
+        {
+            read.Add(reader.GetString(0));
+        }
+
+        return read;
+    }
+
+    [Fact]
+    public async Task ACountThatCameOffNoTunerIsRefused()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException counted = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(
+                connection,
+                40011,
+                ccMeasured: "true",
+                ccDropped: "0",
+                ccTotal: "1000",
+                measuredAt: Counted,
+                tuner: "NULL"));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, counted.SqlState);
+        Assert.Equal("ck_recording_tuner", counted.ConstraintName);
+    }
+
+    [Fact]
+    public async Task AnOverflowThatCameOffNoTunerIsRefused()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        Guid id = await Record(connection, 40012, tuner: "NULL");
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Execute(connection, $"UPDATE recording SET eovf_count = 3 WHERE id = '{id}'"));
+
+        Assert.Equal("ck_recording_tuner", refusal.ConstraintName);
+    }
+
+    [Fact]
+    public async Task ARecordingThatCountedSomethingCanBeTracedBackToTheTunerThatWroteIt()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        await Record(
+            connection,
+            40013,
+            ccMeasured: "true",
+            ccDropped: "4",
+            ccTotal: "1000",
+            measuredAt: Counted,
+            tuner: "'pt3-2'");
+
+        Assert.Equal(
+            "pt3-2",
+            await Scalar(connection, "SELECT tuner_device_id FROM recording WHERE network_id = 40013"));
+    }
+
+    [Fact]
+    public async Task ARecordingThatCountedNothingNeedNotNameATuner()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        await Record(connection, 40014, tuner: "NULL");
+
+        Assert.Null(await Scalar(connection, "SELECT tuner_device_id FROM recording WHERE network_id = 40014"));
+    }
+
+    [Theory]
+    [InlineData("stopped_at_actual", 40021)]
+    [InlineData("aborted_at", 40022)]
+    [InlineData("observed_at", 40023)]
+    [InlineData("measured_updated_at", 40024)]
+    public async Task NothingAboutARecordingHappensBeforeItStarted(string column, int networkId)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        Guid id = await Record(connection, networkId);
+
+        string also = column is "observed_at" ? ", file_size_observed = 12" : string.Empty;
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Execute(
+                connection,
+                $"UPDATE recording SET {column} = {Airs} - interval '1 second'{also} WHERE id = '{id}'"));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
+        Assert.Equal("ck_recording_runs_forwards", refusal.ConstraintName);
+    }
+
+    [Theory]
+    [InlineData("Pending", 40031)]
+    [InlineData("Ready", 40032)]
+    [InlineData("Failed", 40033)]
+    [InlineData("Skipped", 40034)]
+    public async Task TheLedgerHoldsTheFourThumbnailStates(string state, int networkId)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        await Record(connection, networkId, thumbnail: $"'{state}'");
+
+        Assert.Equal(
+            state,
+            await Scalar(connection, $"SELECT thumbnail_state FROM recording WHERE network_id = {networkId}"));
+    }
+
+    [Fact]
+    public async Task AThumbnailStateTheLedgerDoesNotHoldIsRefused()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(connection, 40035, thumbnail: "'Generating'"));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
+        Assert.Equal("ck_recording_thumbnail", refusal.ConstraintName);
+    }
+
+    [Fact]
+    public async Task ARecordingThatFailedGetsNoPicture()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(
+                connection,
+                40036,
+                outcome: "'Failed'",
+                size: "0",
+                observedAt: Ends,
+                stoppedAt: Ends,
+                detail: OneFault,
+                thumbnail: "'Ready'"));
+
+        Assert.Equal("ck_recording_thumbnail", refusal.ConstraintName);
+
+        await Record(
+            connection,
+            40036,
+            outcome: "'Failed'",
+            size: "0",
+            observedAt: Ends,
+            stoppedAt: Ends,
+            detail: OneFault,
+            thumbnail: "'Skipped'");
+    }
+
+    [Fact]
+    public async Task ATruncatedRecordingMayStillHaveAPicture()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        await Record(
+            connection,
+            40037,
+            outcome: "'Truncated'",
+            size: "1200000",
+            observedAt: Ends,
+            stoppedAt: Ends,
+            detail: OneFault,
+            thumbnail: "'Ready'");
+
+        Assert.Equal(
+            "Ready",
+            await Scalar(connection, "SELECT thumbnail_state FROM recording WHERE network_id = 40037"));
+    }
+
+    [Theory]
+    [InlineData("TuneFailed", 40041)]
+    [InlineData("DriverLost", 40042)]
+    [InlineData("TunerContended", 40043)]
+    [InlineData("ScramblingUnresolved", 40044)]
+    public async Task ARecordingThatReachedATunerNamesItEvenWhenItRecordedNothing(string fault, int networkId)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(
+                connection,
+                networkId,
+                outcome: "'Failed'",
+                size: "0",
+                observedAt: Ends,
+                stoppedAt: Ends,
+                detail: Reason(fault),
+                thumbnail: "'Skipped'",
+                tuner: "NULL"));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
+        Assert.Equal("ck_recording_tuner", refusal.ConstraintName);
+
+        await Record(
+            connection,
+            networkId,
+            outcome: "'Failed'",
+            size: "0",
+            observedAt: Ends,
+            stoppedAt: Ends,
+            detail: Reason(fault),
+            thumbnail: "'Skipped'",
+            tuner: "'pt3-2'");
+
+        Assert.Equal(
+            "pt3-2",
+            await Scalar(connection, $"SELECT tuner_device_id FROM recording WHERE network_id = {networkId}"));
+    }
+
+    [Theory]
+    [InlineData("RefusedByDiskPrecheck", 40051)]
+    [InlineData("DiskExhausted", 40052)]
+    [InlineData("StoppedByHand", 40053)]
+    [InlineData("DrainGraceExpired", 40054)]
+    [InlineData("ShortOfTheWindow", 40055)]
+    public async Task ARecordingThatNeverReachedATunerNeedNotNameOne(string fault, int networkId)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        await Record(
+            connection,
+            networkId,
+            outcome: "'Failed'",
+            size: "0",
+            observedAt: Ends,
+            stoppedAt: Ends,
+            detail: Reason(fault),
+            thumbnail: "'Skipped'",
+            tuner: "NULL");
+
+        Assert.Null(
+            await Scalar(connection, $"SELECT tuner_device_id FROM recording WHERE network_id = {networkId}"));
+    }
+
+    [Fact]
+    public async Task OneTunerReasonAmongSeveralIsEnoughToRequireTheTuner()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(
+                connection,
+                40056,
+                outcome: "'Failed'",
+                size: "0",
+                observedAt: Ends,
+                stoppedAt: Ends,
+                detail: """
+                    '[{"fault":"DiskExhausted","tuneFailure":null,"note":"","noticedAt":"2026-08-24T20:10:00Z"},
+                      {"fault":"TuneFailed","tuneFailure":"NoLock","note":"","noticedAt":"2026-08-24T20:11:00Z"}]'::jsonb
+                    """,
+                thumbnail: "'Skipped'",
+                tuner: "NULL"));
+
+        Assert.Equal("ck_recording_tuner", refusal.ConstraintName);
+    }
+
+    private static string Reason(string fault)
+        => $$"""'[{"fault":"{{fault}}","tuneFailure":null,"note":"","noticedAt":"2026-08-24T20:10:00Z"}]'::jsonb""";
+
+    private static async Task<string> IndexDefinition(NpgsqlConnection connection, string name)
+        => (string)(await Scalar(connection, $"SELECT indexdef FROM pg_indexes WHERE indexname = '{name}'"))!;
+
+    private static async Task<Guid> Record(
+        NpgsqlConnection connection,
+        int networkId,
+        int eventId = 4001,
+        string? fileName = null,
+        string? outcome = null,
+        string? size = null,
+        string? observedAt = null,
+        string? stoppedAt = null,
+        string? abortedAt = null,
+        string? detail = null,
+        string ccMeasured = "false",
+        string? ccDropped = null,
+        string? ccTotal = null,
+        string? measuredAt = null,
+        string? windowEnd = null,
+        Guid? reservationId = null,
+        string? tuner = null,
+        string? thumbnail = null)
+    {
+        var id = Guid.NewGuid();
+
+        await Execute(
+            connection,
+            $"""
+            INSERT INTO recording (
+                id, reservation_id, network_id, service_id, event_id, programme_start_at,
+                output_root, file_name, file_size_observed, observed_at,
+                started_at_actual, stopped_at_actual, aborted_at,
+                written_duration_ms, resume_count, interruptions,
+                expected_window_start, expected_window_end,
+                recording_outcome, outcome_detail,
+                scrambled_packets, eovf_count, measured_updated_at,
+                snapshot_name, snapshot_summary, snapshot_extended, snapshot_genres, captured_at,
+                broadcast_group_key, broadcast_group_role,
+                cc_measured, cc_dropped_packets, cc_total_packets,
+                pcr_anchor, drop_positions, pcr_reanchors, tuner_device_id, thumbnail_state)
+            VALUES (
+                '{id}', {(reservationId is { } held ? $"'{held}'" : "NULL")}, {networkId}, 1024, {eventId}, {Airs},
+                'bulk', '{fileName ?? $"{id:N}.m2ts"}', {size ?? "NULL"}, {observedAt ?? "NULL"},
+                {Airs}, {stoppedAt ?? "NULL"}, {abortedAt ?? "NULL"},
+                0, 0, '[]'::jsonb,
+                {Airs}, {windowEnd ?? Ends},
+                {outcome ?? "NULL"}, {detail ?? "'[]'::jsonb"},
+                NULL, 0, {measuredAt ?? "NULL"},
+                'A programme', 'What it is about', '', '[]'::jsonb, {Now},
+                NULL, 'Standalone',
+                {ccMeasured}, {ccDropped ?? "NULL"}, {ccTotal ?? "NULL"},
+                NULL, '[]'::jsonb, '[]'::jsonb, {tuner ?? "'pt3-0'"}, {thumbnail ?? "'Pending'"})
+            """);
+
+        return id;
+    }
+
+    private static async Task Execute(NpgsqlConnection connection, string sql)
+    {
+        await using var command = new NpgsqlCommand(sql, connection);
+        await command.ExecuteNonQueryAsync();
+    }
+
+    private static async Task<object?> Scalar(NpgsqlConnection connection, string sql)
+    {
+        await using var command = new NpgsqlCommand(sql, connection);
+        object? read = await command.ExecuteScalarAsync();
+
+        return read is DBNull ? null : read;
+    }
+}
