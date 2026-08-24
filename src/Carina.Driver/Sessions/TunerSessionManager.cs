@@ -632,7 +632,11 @@ public sealed class TunerSessionManager(
             );
         }
 
-        if (!host.Broadcaster.TrySubscribe(SubscriberKind.Piggyback, out SessionSubscription? seat))
+        SubscriberKind kind = request.Purpose is SessionPurpose.Recording
+            ? SubscriberKind.Recording
+            : SubscriberKind.Piggyback;
+
+        if (!host.Broadcaster.TrySubscribe(kind, out SessionSubscription? seat))
         {
             pool.Leave(request.SessionId);
 

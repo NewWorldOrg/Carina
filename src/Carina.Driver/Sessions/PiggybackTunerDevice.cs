@@ -37,11 +37,18 @@ public sealed class PiggybackTunerDevice(TunerSession host, SessionSubscription 
 
     public void Dispose() => host.Broadcaster.Unsubscribe(seat);
 
-    private StreamCutException Cut(Exception? cause) =>
-        new(
-            host.StopReason,
-            $"The stream of '{host.SessionId}' on the tuner '{host.DeviceId}' ended, so this one ends here and is incomplete"
-                + (cause is null ? "." : $": {cause.Message}"),
+    private StreamCutException Cut(Exception? cause)
+    {
+        bool ourOwnDoing = seat.Kind is SubscriberKind.Recording && !host.Concluded;
+
+        string what = ourOwnDoing
+            ? $"This recording did not take the stream of '{host.SessionId}' on the tuner '{host.DeviceId}' quickly enough, so it ends here and is incomplete"
+            : $"The stream of '{host.SessionId}' on the tuner '{host.DeviceId}' ended, so this one ends here and is incomplete";
+
+        return new StreamCutException(
+            ourOwnDoing ? SessionStopReason.RecordingFailed : host.StopReason,
+            what + (cause is null ? "." : $": {cause.Message}"),
             cause
         );
+    }
 }
