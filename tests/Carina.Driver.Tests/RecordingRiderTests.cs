@@ -2,6 +2,7 @@ using System.Diagnostics;
 
 using Carina.Contracts;
 using Carina.Driver.Configuration;
+using Carina.Driver.Ipc;
 using Carina.Driver.Recording;
 using Carina.Driver.Sessions;
 using Carina.Driver.Tuning;
@@ -354,6 +355,83 @@ public sealed class RecordingRiderTests : IDisposable
         rider.WaitForEnd(Deadlock);
         host.Stop();
         host.WaitForEnd(Deadlock);
+    }
+
+    [Fact]
+    public void ARecordingThatAsksForLongerThanItsHostIsGivenTheHostsWindow()
+    {
+        TunerSessionManager manager = Manager();
+        TunerSession host = Started(
+            manager,
+            Request("s-1", SessionPurpose.Live) with { EndsAt = Start.AddMinutes(30) }
+        );
+        TunerSession rider = Started(
+            manager,
+            Request("s-2", SessionPurpose.Recording) with { EndsAt = Start.AddMinutes(60) }
+        );
+
+        Assert.Same(host, rider.RidesOn);
+        Assert.Equal(Start.AddMinutes(30), rider.EndsAt);
+        Assert.Equal(
+            Start.AddMinutes(30),
+            SessionViews.Of(rider, new DriverHello(DriverProtocol.Version, "instance", [])).EndsAt
+        );
+
+        rider.Stop();
+        rider.WaitForEnd(Deadlock);
+        host.Stop();
+        host.WaitForEnd(Deadlock);
+    }
+
+    [Fact]
+    public void ARecordingThatAsksForLessThanItsHostKeepsItsOwnWindow()
+    {
+        TunerSessionManager manager = Manager();
+        TunerSession host = Started(
+            manager,
+            Request("s-1", SessionPurpose.Live) with { EndsAt = Start.AddMinutes(30) }
+        );
+        TunerSession rider = Started(
+            manager,
+            Request("s-2", SessionPurpose.Recording) with { EndsAt = Start.AddMinutes(20) }
+        );
+
+        Assert.Equal(Start.AddMinutes(20), rider.EndsAt);
+
+        rider.Stop();
+        rider.WaitForEnd(Deadlock);
+        host.Stop();
+        host.WaitForEnd(Deadlock);
+    }
+
+    [Fact]
+    public void ARecordingIsNotStartedOnAHostWhoseWindowHasAlreadyRunOut()
+    {
+        var device = new PacedTunerDevice();
+        var manager = new TunerSessionManager(
+            Configuration,
+            new OneTunerDeviceFactory(device),
+            clock,
+            NullLogger<TunerSessionManager>.Instance
+        );
+
+        TunerSession host = Started(
+            manager,
+            Request("s-1", SessionPurpose.Live) with { EndsAt = Start.AddMinutes(5) }
+        );
+
+        device.AwaitParkedBefore(1);
+        clock.Advance(TimeSpan.FromMinutes(10));
+
+        SessionStart refused = manager.Begin(
+            Request("s-2", SessionPurpose.Recording) with { EndsAt = Start.AddMinutes(20) }
+        );
+
+        Assert.Equal(SessionRefusal.DeviceUnavailable, refused.Refusal);
+        Assert.Contains(host.SessionId.Value!, refused.Detail, StringComparison.Ordinal);
+        Assert.Single(manager.Sessions);
+
+        host.Dispose();
     }
 
     [Fact]

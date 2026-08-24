@@ -633,6 +633,16 @@ public sealed class TunerSessionManager(
             );
         }
 
+        if (host.EndsAt <= now)
+        {
+            pool.Leave(request.SessionId);
+
+            return SessionStart.Refused(
+                SessionRefusal.DeviceUnavailable,
+                $"The session '{host.SessionId}' that '{request.SessionId}' would read the device '{grant.DeviceId}' through stops at {host.EndsAt:O}, so there is no window left to share."
+            );
+        }
+
         SubscriberKind kind = request.Purpose is SessionPurpose.Recording
             ? SubscriberKind.Recording
             : SubscriberKind.Piggyback;
@@ -653,7 +663,7 @@ public sealed class TunerSessionManager(
             new PiggybackTunerDevice(host, seat),
             directory,
             now,
-            endsAt,
+            endsAt > host.EndsAt ? host.EndsAt : endsAt,
             holds: false,
             tuned: false,
             ridesOn: host
