@@ -617,6 +617,55 @@ public sealed class RecordingRiderTests : IDisposable
     }
 
     [Fact]
+    public void ASessionReportsWhatItsOwnSeatLostAndNotWhatItsReadersLost()
+    {
+        var hello = new DriverHello(DriverProtocol.Version, "instance", []);
+
+        using var host = new TunerSession(
+            SessionId.Parse("host"),
+            SessionPurpose.Live,
+            "adapter0",
+            new ScriptedTunerDevice(),
+            Start,
+            Start.AddHours(1),
+            clock
+        );
+
+        SessionSubscription watching = host.Broadcaster.Subscribe(SubscriberKind.Viewer);
+
+        for (int published = 0; published <= SessionBroadcaster.DefaultViewerCapacity; published++)
+        {
+            host.Broadcaster.Publish(Chunk(1));
+        }
+
+        Assert.Equal(1, watching.DroppedChunks);
+        Assert.Equal(1, host.Broadcaster.DroppedChunks);
+        Assert.Equal(0, SessionViews.Of(host, hello).DroppedChunks);
+
+        using var seats = new SessionBroadcaster(viewerCapacity: 1);
+        SessionSubscription seat = seats.Subscribe(SubscriberKind.Piggyback);
+
+        seats.Publish(Chunk(1));
+        seats.Publish(Chunk(2));
+
+        Assert.Equal(1, seat.DroppedChunks);
+
+        using var rider = new TunerSession(
+            SessionId.Parse("rider"),
+            SessionPurpose.Live,
+            "adapter0",
+            new ScriptedTunerDevice(),
+            Start,
+            Start.AddHours(1),
+            clock,
+            ridesOn: host,
+            seat: seat
+        );
+
+        Assert.Equal(1, SessionViews.Of(rider, hello).DroppedChunks);
+    }
+
+    [Fact]
     public void TheRecordingSeatIsDeepEnoughToCoverTheWriterBetweenTwoFlushes()
     {
         Assert.True(

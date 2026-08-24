@@ -666,7 +666,8 @@ public sealed class TunerSessionManager(
             endsAt > host.EndsAt ? host.EndsAt : endsAt,
             holds: false,
             tuned: false,
-            ridesOn: host
+            ridesOn: host,
+            seat: seat
         );
     }
 
@@ -679,7 +680,8 @@ public sealed class TunerSessionManager(
         DateTimeOffset endsAt,
         bool holds,
         bool tuned,
-        TunerSession? ridesOn = null
+        TunerSession? ridesOn = null,
+        SessionSubscription? seat = null
     )
     {
         SessionId sessionId = request.SessionId;
@@ -744,6 +746,7 @@ public sealed class TunerSessionManager(
                 watch: Watch(request.Purpose),
                 tune: request.Tune,
                 ridesOn: ridesOn,
+                seat: seat,
                 demuxBufferBytes: configuration.Tuner?.DemuxBufferBytes
                     ?? TunerSettings.DefaultDemuxBufferBytes
             );

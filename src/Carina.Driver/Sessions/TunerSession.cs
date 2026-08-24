@@ -24,6 +24,7 @@ public sealed class TunerSession : IDisposable
     private readonly SignalQualityReader? quality;
     private readonly long overflowsBefore;
     private readonly IRecordingWriter? recordingWriter;
+    private readonly SessionSubscription? seat;
     private readonly TimeProvider timeProvider;
     private readonly ILogger? logger;
     private readonly DiagnosticsStore? diagnostics;
@@ -64,6 +65,7 @@ public sealed class TunerSession : IDisposable
         SignalQualityWatch? watch = null,
         TuneParams? tune = null,
         TunerSession? ridesOn = null,
+        SessionSubscription? seat = null,
         int demuxBufferBytes = TunerSettings.DefaultDemuxBufferBytes
     )
     {
@@ -82,6 +84,7 @@ public sealed class TunerSession : IDisposable
         OutputRoot = outputRoot;
         RecordingId = recordingId;
         RidesOn = ridesOn;
+        this.seat = seat;
         StartedAt = startedAt;
         endsAtTicks = endsAt.UtcTicks;
         this.device = device;
@@ -178,6 +181,8 @@ public sealed class TunerSession : IDisposable
     }
 
     public long FaultCount => Interlocked.Read(ref faultCount);
+
+    public long DroppedChunks => seat?.DroppedChunks ?? 0;
 
     public long DiscardedBytes => Interlocked.Read(ref discardedBytes);
 
