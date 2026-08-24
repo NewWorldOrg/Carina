@@ -100,6 +100,14 @@ public static class DriverApi
 
         RequestDelegate events = context => DriverEventStream.Invoke(context, hub);
 
+        RequestDelegate storage = context =>
+            Write(
+                context,
+                StatusCodes.Status200OK,
+                StorageViews.Of(configuration),
+                DriverJson.Context.IReadOnlyListStorageRootDto
+            );
+
         RequestDelegate diagnostics = context =>
             Write(
                 context,
@@ -121,6 +129,7 @@ public static class DriverApi
         app.MapPatch($"{DriverEndpoints.Sessions}/{{id}}", extendSession);
         app.MapDelete($"{DriverEndpoints.Sessions}/{{id}}", stopSession);
         app.MapGet($"{DriverEndpoints.Sessions}/{{id}}/stream", stream);
+        app.MapGet(DriverEndpoints.Storage, storage);
         app.MapGet(DriverEndpoints.Events, events);
         app.MapPost(DriverEndpoints.Restart, restart);
     }
