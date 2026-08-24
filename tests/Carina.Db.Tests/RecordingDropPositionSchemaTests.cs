@@ -25,11 +25,11 @@ public sealed class RecordingDropPositionSchemaTests(MigratedScratchDatabase dat
         await using NpgsqlConnection connection = await database.OpenAsync();
 
         PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
-            () => Record(connection, 83001, positions: OneBucket, ccMeasured: "true", ccDropped: "3", ccTotal: "1000", measuredAt: Counted));
+            () => Record(connection, 43001, positions: OneBucket, ccMeasured: "true", ccDropped: "3", ccTotal: "1000", measuredAt: Counted));
 
         Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
         Assert.Equal("ck_recording_drop_positions", refusal.ConstraintName);
-        Assert.Equal(0L, await Count(connection, 83001));
+        Assert.Equal(0L, await Count(connection, 43001));
     }
 
     [Fact]
@@ -38,7 +38,7 @@ public sealed class RecordingDropPositionSchemaTests(MigratedScratchDatabase dat
         await using NpgsqlConnection connection = await database.OpenAsync();
 
         PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
-            () => Record(connection, 83002, reanchors: """'[{"second":2,"before":8589934591,"after":0}]'::jsonb"""));
+            () => Record(connection, 43002, reanchors: """'[{"second":2,"before":8589934591,"after":0}]'::jsonb"""));
 
         Assert.Equal("ck_recording_drop_positions", refusal.ConstraintName);
     }
@@ -49,10 +49,10 @@ public sealed class RecordingDropPositionSchemaTests(MigratedScratchDatabase dat
         await using NpgsqlConnection connection = await database.OpenAsync();
 
         PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
-            () => Record(connection, 83003, anchor: "900000", ccMeasured: "false"));
+            () => Record(connection, 43003, anchor: "900000", ccMeasured: "false"));
 
         Assert.Equal("ck_recording_drop_positions", refusal.ConstraintName);
-        Assert.Equal(0L, await Count(connection, 83003));
+        Assert.Equal(0L, await Count(connection, 43003));
     }
 
     [Fact]
@@ -60,13 +60,13 @@ public sealed class RecordingDropPositionSchemaTests(MigratedScratchDatabase dat
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
 
-        await Record(connection, 83004, anchor: "900000", ccMeasured: "true", ccDropped: "0", ccTotal: "1000", measuredAt: Counted);
-        await Record(connection, 83004, eventId: 4002, ccMeasured: "true", ccDropped: "0", ccTotal: "1000", measuredAt: Counted);
+        await Record(connection, 43004, anchor: "900000", ccMeasured: "true", ccDropped: "0", ccTotal: "1000", measuredAt: Counted);
+        await Record(connection, 43004, eventId: 4002, ccMeasured: "true", ccDropped: "0", ccTotal: "1000", measuredAt: Counted);
 
-        Assert.Equal(900_000L, await Scalar(connection, Reads(83004, 4001, "pcr_anchor")));
-        Assert.Null(await Scalar(connection, Reads(83004, 4002, "pcr_anchor")));
-        Assert.Equal(0, await Scalar(connection, Reads(83004, 4001, "jsonb_array_length(drop_positions)")));
-        Assert.Equal(0, await Scalar(connection, Reads(83004, 4002, "jsonb_array_length(drop_positions)")));
+        Assert.Equal(900_000L, await Scalar(connection, Reads(43004, 4001, "pcr_anchor")));
+        Assert.Null(await Scalar(connection, Reads(43004, 4002, "pcr_anchor")));
+        Assert.Equal(0, await Scalar(connection, Reads(43004, 4001, "jsonb_array_length(drop_positions)")));
+        Assert.Equal(0, await Scalar(connection, Reads(43004, 4002, "jsonb_array_length(drop_positions)")));
     }
 
     [Fact]
@@ -74,7 +74,7 @@ public sealed class RecordingDropPositionSchemaTests(MigratedScratchDatabase dat
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
 
-        await Record(connection, 83005);
+        await Record(connection, 43005);
 
         Assert.Equal(
             0L,
@@ -93,7 +93,7 @@ public sealed class RecordingDropPositionSchemaTests(MigratedScratchDatabase dat
 
         await Record(
             connection,
-            83006,
+            43006,
             anchor: "900000",
             positions: """'[{"second":12,"continuity":3,"scrambled":0},{"second":40,"continuity":0,"scrambled":188}]'::jsonb""",
             ccMeasured: "true",
@@ -101,13 +101,13 @@ public sealed class RecordingDropPositionSchemaTests(MigratedScratchDatabase dat
             ccTotal: "1000",
             measuredAt: Counted);
 
-        Assert.Equal("3", await Scalar(connection, Reads(83006, 4001, "drop_positions -> 0 ->> 'continuity'")));
-        Assert.Equal("188", await Scalar(connection, Reads(83006, 4001, "drop_positions -> 1 ->> 'scrambled'")));
+        Assert.Equal("3", await Scalar(connection, Reads(43006, 4001, "drop_positions -> 0 ->> 'continuity'")));
+        Assert.Equal("188", await Scalar(connection, Reads(43006, 4001, "drop_positions -> 1 ->> 'scrambled'")));
     }
 
     [Theory]
-    [InlineData("0", 83011)]
-    [InlineData("8589934591", 83012)]
+    [InlineData("0", 43011)]
+    [InlineData("8589934591", 43012)]
     public async Task TheAnchorFitsTheWholeClock(string anchor, int networkId)
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -119,8 +119,8 @@ public sealed class RecordingDropPositionSchemaTests(MigratedScratchDatabase dat
     }
 
     [Theory]
-    [InlineData("8589934592", 83013)]
-    [InlineData("-1", 83014)]
+    [InlineData("8589934592", 43013)]
+    [InlineData("-1", 43014)]
     public async Task AnAnchorOutsideTheClockIsRefused(string anchor, int networkId)
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -138,7 +138,7 @@ public sealed class RecordingDropPositionSchemaTests(MigratedScratchDatabase dat
 
         await Record(
             connection,
-            83015,
+            43015,
             anchor: (PcrWrapsAt - 90_000).ToString(System.Globalization.CultureInfo.InvariantCulture),
             positions: """'[{"second":1,"continuity":2,"scrambled":0},{"second":4,"continuity":1,"scrambled":0}]'::jsonb""",
             reanchors: """'[{"second":2,"before":8589934591,"after":0}]'::jsonb""",
@@ -147,10 +147,10 @@ public sealed class RecordingDropPositionSchemaTests(MigratedScratchDatabase dat
             ccTotal: "1000",
             measuredAt: Counted);
 
-        Assert.Equal("1", await Scalar(connection, Reads(83015, 4001, "drop_positions -> 0 ->> 'second'")));
-        Assert.Equal("4", await Scalar(connection, Reads(83015, 4001, "drop_positions -> 1 ->> 'second'")));
-        Assert.Equal("8589934591", await Scalar(connection, Reads(83015, 4001, "pcr_reanchors -> 0 ->> 'before'")));
-        Assert.Equal("0", await Scalar(connection, Reads(83015, 4001, "pcr_reanchors -> 0 ->> 'after'")));
+        Assert.Equal("1", await Scalar(connection, Reads(43015, 4001, "drop_positions -> 0 ->> 'second'")));
+        Assert.Equal("4", await Scalar(connection, Reads(43015, 4001, "drop_positions -> 1 ->> 'second'")));
+        Assert.Equal("8589934591", await Scalar(connection, Reads(43015, 4001, "pcr_reanchors -> 0 ->> 'before'")));
+        Assert.Equal("0", await Scalar(connection, Reads(43015, 4001, "pcr_reanchors -> 0 ->> 'after'")));
     }
 
     [Fact]
@@ -160,7 +160,7 @@ public sealed class RecordingDropPositionSchemaTests(MigratedScratchDatabase dat
 
         await Record(
             connection,
-            83016,
+            43016,
             anchor: "900000",
             reanchors: """'[{"second":2,"before":8589934591,"after":0}]'::jsonb""",
             ccMeasured: "true",
@@ -170,10 +170,10 @@ public sealed class RecordingDropPositionSchemaTests(MigratedScratchDatabase dat
 
         Assert.Equal(
             1,
-            await Scalar(connection, Reads(83016, 4001, "jsonb_array_length(pcr_reanchors)")));
+            await Scalar(connection, Reads(43016, 4001, "jsonb_array_length(pcr_reanchors)")));
         Assert.Equal(
             0,
-            await Scalar(connection, Reads(83016, 4001, "jsonb_array_length(outcome_detail)")));
+            await Scalar(connection, Reads(43016, 4001, "jsonb_array_length(outcome_detail)")));
     }
 
     [Fact]

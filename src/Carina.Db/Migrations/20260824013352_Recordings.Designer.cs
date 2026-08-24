@@ -1068,6 +1068,8 @@ namespace Carina.Db.Migrations
 
                             t.HasCheckConstraint("ck_recording_history", "recording_history_holds(interruptions, resume_count, ARRAY['TuneFailed', 'RefusedByDiskPrecheck', 'DiskExhausted', 'DriverLost', 'DrainGraceExpired', 'StoppedByHand', 'TunerContended', 'ScramblingUnresolved', 'ShortOfTheWindow']::text[], started_at_actual)");
 
+                            t.HasCheckConstraint("ck_recording_identifiers", "network_id BETWEEN 0 AND 65535\nAND service_id BETWEEN 0 AND 65535\nAND event_id BETWEEN 1 AND 65534");
+
                             t.HasCheckConstraint("ck_recording_measurement", "(cc_measured\n    OR (cc_dropped_packets IS NULL AND cc_total_packets IS NULL))\nAND (NOT cc_measured\n    OR (cc_dropped_packets IS NOT NULL\n        AND cc_total_packets IS NOT NULL\n        AND cc_dropped_packets <= cc_total_packets\n        AND measured_updated_at IS NOT NULL))");
 
                             t.HasCheckConstraint("ck_recording_observation", "(file_size_observed IS NULL) = (observed_at IS NULL)");

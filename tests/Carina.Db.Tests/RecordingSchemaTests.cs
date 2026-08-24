@@ -33,14 +33,14 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
         await using NpgsqlConnection connection = await database.OpenAsync();
 
         PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
-            () => Record(connection, 80001, outcome: "'Complete'", size: "3400000000", observedAt: Ends, stoppedAt: Ends));
+            () => Record(connection, 40001, outcome: "'Complete'", size: "3400000000", observedAt: Ends, stoppedAt: Ends));
 
         Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
         Assert.Equal("ck_recording_complete_was_asked_for", refusal.ConstraintName);
 
         await Record(
             connection,
-            80001,
+            40001,
             outcome: "'Complete'",
             size: "3400000000",
             observedAt: Ends,
@@ -58,7 +58,7 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
             PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
                 () => Record(
                     connection,
-                    80002,
+                    40002,
                     outcome: wishful,
                     size: "0",
                     observedAt: Ends,
@@ -71,7 +71,7 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
 
         await Record(
             connection,
-            80002,
+            40002,
             outcome: "'Failed'",
             size: "0",
             observedAt: Ends,
@@ -85,13 +85,13 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
         await using NpgsqlConnection connection = await database.OpenAsync();
 
         PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
-            () => Record(connection, 80003, outcome: "'Truncated'", size: "12", observedAt: Ends, stoppedAt: Ends));
+            () => Record(connection, 40003, outcome: "'Truncated'", size: "12", observedAt: Ends, stoppedAt: Ends));
 
         Assert.Equal("ck_recording_outcome_detail", refusal.ConstraintName);
 
         Guid id = await Record(
             connection,
-            80003,
+            40003,
             outcome: "'Truncated'",
             size: "12",
             observedAt: Ends,
@@ -124,33 +124,33 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
         await using NpgsqlConnection connection = await database.OpenAsync();
 
         PostgresException zeroed = await Assert.ThrowsAsync<PostgresException>(
-            () => Record(connection, 80004, ccMeasured: "false", ccDropped: "0", ccTotal: "0"));
+            () => Record(connection, 40004, ccMeasured: "false", ccDropped: "0", ccTotal: "0"));
 
         Assert.Equal("ck_recording_measurement", zeroed.ConstraintName);
 
         PostgresException halfCounted = await Assert.ThrowsAsync<PostgresException>(
-            () => Record(connection, 80004, ccMeasured: "true", ccDropped: "0", measuredAt: Counted));
+            () => Record(connection, 40004, ccMeasured: "true", ccDropped: "0", measuredAt: Counted));
 
         Assert.Equal("ck_recording_measurement", halfCounted.ConstraintName);
 
         PostgresException undated = await Assert.ThrowsAsync<PostgresException>(
-            () => Record(connection, 80004, ccMeasured: "true", ccDropped: "0", ccTotal: "1000"));
+            () => Record(connection, 40004, ccMeasured: "true", ccDropped: "0", ccTotal: "1000"));
 
         Assert.Equal("ck_recording_measurement", undated.ConstraintName);
 
         PostgresException impossible = await Assert.ThrowsAsync<PostgresException>(
-            () => Record(connection, 80004, ccMeasured: "true", ccDropped: "11", ccTotal: "10", measuredAt: Counted));
+            () => Record(connection, 40004, ccMeasured: "true", ccDropped: "11", ccTotal: "10", measuredAt: Counted));
 
         Assert.Equal("ck_recording_measurement", impossible.ConstraintName);
 
         Guid counted = await Record(
             connection,
-            80004,
+            40004,
             ccMeasured: "true",
             ccDropped: "0",
             ccTotal: "1000",
             measuredAt: Counted);
-        Guid uncounted = await Record(connection, 80004, eventId: 4002);
+        Guid uncounted = await Record(connection, 40004, eventId: 4002);
 
         Assert.Equal(0L, await Scalar(connection, $"SELECT cc_dropped_packets FROM recording WHERE id = '{counted}'"));
         Assert.Null(await Scalar(connection, $"SELECT cc_dropped_packets FROM recording WHERE id = '{uncounted}'"));
@@ -210,7 +210,7 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
     public async Task ARecordingOutlivesTheGuideAndTheChannelsItWasMadeFrom()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
-        Guid id = await Record(connection, 80005);
+        Guid id = await Record(connection, 40005);
 
         await Execute(connection, "TRUNCATE broadcast_service, programme CASCADE");
 
@@ -225,19 +225,19 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
         await using NpgsqlConnection connection = await database.OpenAsync();
 
         PostgresException unstopped = await Assert.ThrowsAsync<PostgresException>(
-            () => Record(connection, 80006, outcome: "'Failed'", size: "0", observedAt: Ends, detail: OneFault));
+            () => Record(connection, 40006, outcome: "'Failed'", size: "0", observedAt: Ends, detail: OneFault));
 
         Assert.Equal("ck_recording_outcome", unstopped.ConstraintName);
 
         PostgresException unweighed = await Assert.ThrowsAsync<PostgresException>(
-            () => Record(connection, 80006, outcome: "'Failed'", stoppedAt: Ends, detail: OneFault));
+            () => Record(connection, 40006, outcome: "'Failed'", stoppedAt: Ends, detail: OneFault));
 
         Assert.Equal("ck_recording_outcome", unweighed.ConstraintName);
 
         PostgresException borrowed = await Assert.ThrowsAsync<PostgresException>(
             () => Record(
                 connection,
-                80006,
+                40006,
                 outcome: "'Recording'",
                 size: "12",
                 observedAt: Ends,
@@ -253,12 +253,12 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
         await using NpgsqlConnection connection = await database.OpenAsync();
 
         PostgresException unstamped = await Assert.ThrowsAsync<PostgresException>(
-            () => Record(connection, 80007, size: "12"));
+            () => Record(connection, 40007, size: "12"));
 
         Assert.Equal("ck_recording_observation", unstamped.ConstraintName);
 
         PostgresException unweighed = await Assert.ThrowsAsync<PostgresException>(
-            () => Record(connection, 80007, eventId: 4002, observedAt: Ends));
+            () => Record(connection, 40007, eventId: 4002, observedAt: Ends));
 
         Assert.Equal("ck_recording_observation", unweighed.ConstraintName);
     }
@@ -269,7 +269,7 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
         await using NpgsqlConnection connection = await database.OpenAsync();
 
         PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
-            () => Record(connection, 80008, windowEnd: Airs));
+            () => Record(connection, 40008, windowEnd: Airs));
 
         Assert.Equal("ck_recording_window", refusal.ConstraintName);
     }
@@ -281,7 +281,7 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
 
         foreach (string backwards in new[] { "written_duration_ms", "resume_count", "eovf_count" })
         {
-            Guid id = await Record(connection, 80009, eventId: 4001 + backwards.Length);
+            Guid id = await Record(connection, 40009, eventId: 4001 + backwards.Length);
 
             PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
                 () => Execute(connection, $"UPDATE recording SET {backwards} = -1 WHERE id = '{id}'"));
@@ -403,7 +403,7 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
         PostgresException counted = await Assert.ThrowsAsync<PostgresException>(
             () => Record(
                 connection,
-                80011,
+                40011,
                 ccMeasured: "true",
                 ccDropped: "0",
                 ccTotal: "1000",
@@ -418,7 +418,7 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
     public async Task AnOverflowThatCameOffNoTunerIsRefused()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
-        Guid id = await Record(connection, 80012, tuner: "NULL");
+        Guid id = await Record(connection, 40012, tuner: "NULL");
 
         PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
             () => Execute(connection, $"UPDATE recording SET eovf_count = 3 WHERE id = '{id}'"));
@@ -432,7 +432,7 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
         await using NpgsqlConnection connection = await database.OpenAsync();
         await Record(
             connection,
-            80013,
+            40013,
             ccMeasured: "true",
             ccDropped: "4",
             ccTotal: "1000",
@@ -441,7 +441,7 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
 
         Assert.Equal(
             "pt3-2",
-            await Scalar(connection, "SELECT tuner_device_id FROM recording WHERE network_id = 80013"));
+            await Scalar(connection, "SELECT tuner_device_id FROM recording WHERE network_id = 40013"));
     }
 
     [Fact]
@@ -449,16 +449,16 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
 
-        await Record(connection, 80014, tuner: "NULL");
+        await Record(connection, 40014, tuner: "NULL");
 
-        Assert.Null(await Scalar(connection, "SELECT tuner_device_id FROM recording WHERE network_id = 80014"));
+        Assert.Null(await Scalar(connection, "SELECT tuner_device_id FROM recording WHERE network_id = 40014"));
     }
 
     [Theory]
-    [InlineData("stopped_at_actual", 80021)]
-    [InlineData("aborted_at", 80022)]
-    [InlineData("observed_at", 80023)]
-    [InlineData("measured_updated_at", 80024)]
+    [InlineData("stopped_at_actual", 40021)]
+    [InlineData("aborted_at", 40022)]
+    [InlineData("observed_at", 40023)]
+    [InlineData("measured_updated_at", 40024)]
     public async Task NothingAboutARecordingHappensBeforeItStarted(string column, int networkId)
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -476,10 +476,10 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
     }
 
     [Theory]
-    [InlineData("Pending", 80031)]
-    [InlineData("Ready", 80032)]
-    [InlineData("Failed", 80033)]
-    [InlineData("Skipped", 80034)]
+    [InlineData("Pending", 40031)]
+    [InlineData("Ready", 40032)]
+    [InlineData("Failed", 40033)]
+    [InlineData("Skipped", 40034)]
     public async Task TheLedgerHoldsTheFourThumbnailStates(string state, int networkId)
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -497,7 +497,7 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
         await using NpgsqlConnection connection = await database.OpenAsync();
 
         PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
-            () => Record(connection, 80035, thumbnail: "'Generating'"));
+            () => Record(connection, 40035, thumbnail: "'Generating'"));
 
         Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
         Assert.Equal("ck_recording_thumbnail", refusal.ConstraintName);
@@ -511,7 +511,7 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
         PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
             () => Record(
                 connection,
-                80036,
+                40036,
                 outcome: "'Failed'",
                 size: "0",
                 observedAt: Ends,
@@ -523,7 +523,7 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
 
         await Record(
             connection,
-            80036,
+            40036,
             outcome: "'Failed'",
             size: "0",
             observedAt: Ends,
@@ -539,7 +539,7 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
 
         await Record(
             connection,
-            80037,
+            40037,
             outcome: "'Truncated'",
             size: "1200000",
             observedAt: Ends,
@@ -549,14 +549,14 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
 
         Assert.Equal(
             "Ready",
-            await Scalar(connection, "SELECT thumbnail_state FROM recording WHERE network_id = 80037"));
+            await Scalar(connection, "SELECT thumbnail_state FROM recording WHERE network_id = 40037"));
     }
 
     [Theory]
-    [InlineData("TuneFailed", 80041)]
-    [InlineData("DriverLost", 80042)]
-    [InlineData("TunerContended", 80043)]
-    [InlineData("ScramblingUnresolved", 80044)]
+    [InlineData("TuneFailed", 40041)]
+    [InlineData("DriverLost", 40042)]
+    [InlineData("TunerContended", 40043)]
+    [InlineData("ScramblingUnresolved", 40044)]
     public async Task ARecordingThatReachedATunerNamesItEvenWhenItRecordedNothing(string fault, int networkId)
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -593,11 +593,11 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
     }
 
     [Theory]
-    [InlineData("RefusedByDiskPrecheck", 80051)]
-    [InlineData("DiskExhausted", 80052)]
-    [InlineData("StoppedByHand", 80053)]
-    [InlineData("DrainGraceExpired", 80054)]
-    [InlineData("ShortOfTheWindow", 80055)]
+    [InlineData("RefusedByDiskPrecheck", 40051)]
+    [InlineData("DiskExhausted", 40052)]
+    [InlineData("StoppedByHand", 40053)]
+    [InlineData("DrainGraceExpired", 40054)]
+    [InlineData("ShortOfTheWindow", 40055)]
     public async Task ARecordingThatNeverReachedATunerNeedNotNameOne(string fault, int networkId)
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -625,7 +625,7 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
         PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
             () => Record(
                 connection,
-                80056,
+                40056,
                 outcome: "'Failed'",
                 size: "0",
                 observedAt: Ends,

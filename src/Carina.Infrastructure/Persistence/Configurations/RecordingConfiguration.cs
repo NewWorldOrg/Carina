@@ -89,6 +89,13 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
                 "(file_size_observed IS NULL) = (observed_at IS NULL)");
             table.HasCheckConstraint("ck_recording_window", "expected_window_end > expected_window_start");
             table.HasCheckConstraint(
+                "ck_recording_identifiers",
+                $"""
+                network_id BETWEEN {NetworkId.MinValue} AND {NetworkId.MaxValue}
+                AND service_id BETWEEN {ServiceId.MinValue} AND {ServiceId.MaxValue}
+                AND event_id BETWEEN {EventId.MinValue} AND {EventId.MaxValue}
+                """);
+            table.HasCheckConstraint(
                 "ck_recording_runs_forwards",
                 """
                 (stopped_at_actual IS NULL OR stopped_at_actual >= started_at_actual)

@@ -23,14 +23,14 @@ public sealed class RecordingUniquenessSchemaTests(MigratedScratchDatabase datab
         await using NpgsqlConnection connection = await database.OpenAsync();
         var first = Guid.NewGuid();
         var second = Guid.NewGuid();
-        await Record(connection, 85001, first, Named(first));
+        await Record(connection, 45001, first, Named(first));
 
         PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
-            () => Record(connection, 85001, second, Named(first), eventId: 4002));
+            () => Record(connection, 45001, second, Named(first), eventId: 4002));
 
         Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
         Assert.Equal("ck_recording_file_name", refusal.ConstraintName);
-        Assert.Equal(1L, await Count(connection, 85001));
+        Assert.Equal(1L, await Count(connection, 45001));
     }
 
     [Fact]
@@ -41,14 +41,14 @@ public sealed class RecordingUniquenessSchemaTests(MigratedScratchDatabase datab
         var second = Guid.NewGuid();
         string shared = $"{first:N}-{second:N}.m2ts";
 
-        await Record(connection, 85201, first, shared);
+        await Record(connection, 45201, first, shared);
 
         PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
-            () => Record(connection, 85201, second, shared, eventId: 4002));
+            () => Record(connection, 45201, second, shared, eventId: 4002));
 
         Assert.Equal(PostgresErrorCodes.UniqueViolation, refusal.SqlState);
         Assert.Equal("ux_recording_file", refusal.ConstraintName);
-        Assert.Equal(1L, await Count(connection, 85201));
+        Assert.Equal(1L, await Count(connection, 45201));
     }
 
     [Fact]
@@ -59,10 +59,10 @@ public sealed class RecordingUniquenessSchemaTests(MigratedScratchDatabase datab
         var second = Guid.NewGuid();
         string shared = $"{first:N}-{second:N}.m2ts";
 
-        await Record(connection, 85202, first, shared);
-        await Record(connection, 85202, second, shared, eventId: 4002, outputRoot: "archive");
+        await Record(connection, 45202, first, shared);
+        await Record(connection, 45202, second, shared, eventId: 4002, outputRoot: "archive");
 
-        Assert.Equal(2L, await Count(connection, 85202));
+        Assert.Equal(2L, await Count(connection, 45202));
     }
 
     [Fact]
@@ -93,23 +93,23 @@ public sealed class RecordingUniquenessSchemaTests(MigratedScratchDatabase datab
     public async Task AReservationHasOneRecordingAndNoMoreWhileItRuns()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
-        Guid reservation = await Reserve(connection, 85003);
+        Guid reservation = await Reserve(connection, 45003);
         var first = Guid.NewGuid();
         var second = Guid.NewGuid();
-        await Record(connection, 85003, first, Named(first), reservationId: reservation);
+        await Record(connection, 45003, first, Named(first), reservationId: reservation);
 
         PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
-            () => Record(connection, 85003, second, Named(second), eventId: 4002, reservationId: reservation));
+            () => Record(connection, 45003, second, Named(second), eventId: 4002, reservationId: reservation));
 
         Assert.Equal(PostgresErrorCodes.UniqueViolation, refusal.SqlState);
         Assert.Equal("ux_recording_reservation", refusal.ConstraintName);
-        Assert.Equal(1L, await Count(connection, 85003));
+        Assert.Equal(1L, await Count(connection, 45003));
     }
 
     [Theory]
-    [InlineData("Complete", "3400000000", 85101)]
-    [InlineData("Truncated", "1200000", 85102)]
-    [InlineData("Failed", "0", 85103)]
+    [InlineData("Complete", "3400000000", 45101)]
+    [InlineData("Truncated", "1200000", 45102)]
+    [InlineData("Failed", "0", 45103)]
     public async Task AReservationIsNotTriedAgainOnceItsRecordingHasEnded(
         string outcome,
         string size,
@@ -134,16 +134,16 @@ public sealed class RecordingUniquenessSchemaTests(MigratedScratchDatabase datab
     public async Task ACompletedRecordingIsNotDraggedBackToRecordingByASecondRow()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
-        Guid reservation = await Reserve(connection, 85104);
+        Guid reservation = await Reserve(connection, 45104);
         var first = Guid.NewGuid();
-        await Record(connection, 85104, first, Named(first), reservationId: reservation);
+        await Record(connection, 45104, first, Named(first), reservationId: reservation);
         await Settle(connection, first, "Complete", "3400000000");
 
         Assert.Equal("Complete", await Composite(connection, reservation));
 
         var second = Guid.NewGuid();
         await Assert.ThrowsAsync<PostgresException>(
-            () => Record(connection, 85104, second, Named(second), eventId: 4002, reservationId: reservation));
+            () => Record(connection, 45104, second, Named(second), eventId: 4002, reservationId: reservation));
 
         Assert.Equal("Complete", await Composite(connection, reservation));
     }
@@ -152,10 +152,10 @@ public sealed class RecordingUniquenessSchemaTests(MigratedScratchDatabase datab
     public async Task ARecordingKeepsTheReservationItWasStartedFor()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
-        Guid mine = await Reserve(connection, 85011);
-        Guid theirs = await Reserve(connection, 85011, eventId: 4002);
+        Guid mine = await Reserve(connection, 45011);
+        Guid theirs = await Reserve(connection, 45011, eventId: 4002);
         var id = Guid.NewGuid();
-        await Record(connection, 85011, id, Named(id), reservationId: mine);
+        await Record(connection, 45011, id, Named(id), reservationId: mine);
 
         PostgresException moved = await Assert.ThrowsAsync<PostgresException>(
             () => Execute(connection, $"UPDATE recording SET reservation_id = '{theirs}' WHERE id = '{id}'"));
@@ -168,9 +168,9 @@ public sealed class RecordingUniquenessSchemaTests(MigratedScratchDatabase datab
     public async Task ARecordingIsNotDetachedFromItsReservationLater()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
-        Guid reservation = await Reserve(connection, 85012);
+        Guid reservation = await Reserve(connection, 45012);
         var id = Guid.NewGuid();
-        await Record(connection, 85012, id, Named(id), reservationId: reservation);
+        await Record(connection, 45012, id, Named(id), reservationId: reservation);
 
         await Assert.ThrowsAsync<PostgresException>(
             () => Execute(connection, $"UPDATE recording SET reservation_id = NULL WHERE id = '{id}'"));
@@ -182,9 +182,9 @@ public sealed class RecordingUniquenessSchemaTests(MigratedScratchDatabase datab
     public async Task ARecordingNobodyReservedIsNotAttachedToOneLater()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
-        Guid reservation = await Reserve(connection, 85013);
+        Guid reservation = await Reserve(connection, 45013);
         var id = Guid.NewGuid();
-        await Record(connection, 85013, id, Named(id));
+        await Record(connection, 45013, id, Named(id));
 
         await Assert.ThrowsAsync<PostgresException>(
             () => Execute(connection, $"UPDATE recording SET reservation_id = '{reservation}' WHERE id = '{id}'"));
@@ -196,9 +196,9 @@ public sealed class RecordingUniquenessSchemaTests(MigratedScratchDatabase datab
     public async Task AWriteThatLeavesTheReservationWhereItIsIsNotRefused()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
-        Guid reservation = await Reserve(connection, 85014);
+        Guid reservation = await Reserve(connection, 45014);
         var id = Guid.NewGuid();
-        await Record(connection, 85014, id, Named(id), reservationId: reservation);
+        await Record(connection, 45014, id, Named(id), reservationId: reservation);
 
         await Execute(
             connection,
@@ -213,11 +213,11 @@ public sealed class RecordingUniquenessSchemaTests(MigratedScratchDatabase datab
         await using NpgsqlConnection connection = await database.OpenAsync();
         var first = Guid.NewGuid();
         var second = Guid.NewGuid();
-        await Record(connection, 85005, first, Named(first));
+        await Record(connection, 45005, first, Named(first));
 
-        await Record(connection, 85005, second, Named(second), eventId: 4002);
+        await Record(connection, 45005, second, Named(second), eventId: 4002);
 
-        Assert.Equal(2L, await Count(connection, 85005));
+        Assert.Equal(2L, await Count(connection, 45005));
     }
 
     [Fact]
@@ -227,11 +227,11 @@ public sealed class RecordingUniquenessSchemaTests(MigratedScratchDatabase datab
         var id = Guid.NewGuid();
 
         PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
-            () => Record(connection, 85006, id, Named(Guid.NewGuid())));
+            () => Record(connection, 45006, id, Named(Guid.NewGuid())));
 
         Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
         Assert.Equal("ck_recording_file_name", refusal.ConstraintName);
-        Assert.Equal(0L, await Count(connection, 85006));
+        Assert.Equal(0L, await Count(connection, 45006));
     }
 
     [Fact]
@@ -240,9 +240,9 @@ public sealed class RecordingUniquenessSchemaTests(MigratedScratchDatabase datab
         await using NpgsqlConnection connection = await database.OpenAsync();
         var id = Guid.NewGuid();
 
-        await Record(connection, 85007, id, $"carina-{Named(id)}");
+        await Record(connection, 45007, id, $"carina-{Named(id)}");
 
-        Assert.Equal(1L, await Count(connection, 85007));
+        Assert.Equal(1L, await Count(connection, 45007));
     }
 
     [Fact]
@@ -250,7 +250,7 @@ public sealed class RecordingUniquenessSchemaTests(MigratedScratchDatabase datab
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
         var id = Guid.NewGuid();
-        await Record(connection, 85008, id, Named(id));
+        await Record(connection, 45008, id, Named(id));
 
         PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
             () => Execute(

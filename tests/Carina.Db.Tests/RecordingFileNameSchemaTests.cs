@@ -16,12 +16,12 @@ public sealed class RecordingFileNameSchemaTests(MigratedScratchDatabase databas
     private const string Now = "timestamptz '2026-08-24 12:00:00+00'";
 
     [Theory]
-    [InlineData("../{0}.m2ts", 81011)]
-    [InlineData("held..{0}.m2ts", 81012)]
-    [InlineData("a/{0}.m2ts", 81013)]
-    [InlineData("/{0}.m2ts", 81014)]
-    [InlineData(" {0}.m2ts", 81015)]
-    [InlineData("{0}.m2ts ", 81016)]
+    [InlineData("../{0}.m2ts", 41011)]
+    [InlineData("held..{0}.m2ts", 41012)]
+    [InlineData("a/{0}.m2ts", 41013)]
+    [InlineData("/{0}.m2ts", 41014)]
+    [InlineData(" {0}.m2ts", 41015)]
+    [InlineData("{0}.m2ts ", 41016)]
     public async Task TheDatabaseRefusesAFileNameThatCanLeaveItsRoom(string shape, int networkId)
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -36,10 +36,10 @@ public sealed class RecordingFileNameSchemaTests(MigratedScratchDatabase databas
     }
 
     [Theory]
-    [InlineData(".", 81021)]
-    [InlineData("", 81022)]
-    [InlineData("   ", 81023)]
-    [InlineData("someone-elses-recording.m2ts", 81024)]
+    [InlineData(".", 41021)]
+    [InlineData("", 41022)]
+    [InlineData("   ", 41023)]
+    [InlineData("someone-elses-recording.m2ts", 41024)]
     public async Task ANameThatCouldNeverBelongToThisRecordingIsRefused(string name, int networkId)
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -60,10 +60,10 @@ public sealed class RecordingFileNameSchemaTests(MigratedScratchDatabase databas
         var id = Guid.NewGuid();
 
         PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
-            () => Record(connection, "a" + '\\' + id.ToString("N") + ".m2ts", 81002, id));
+            () => Record(connection, "a" + '\\' + id.ToString("N") + ".m2ts", 41002, id));
 
         Assert.Equal("ck_recording_file_name", refusal.ConstraintName);
-        Assert.Equal(0L, await Count(connection, 81002));
+        Assert.Equal(0L, await Count(connection, 41002));
     }
 
     [Fact]
@@ -74,10 +74,10 @@ public sealed class RecordingFileNameSchemaTests(MigratedScratchDatabase databas
         var id = Guid.NewGuid();
 
         PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
-            () => Record(connection, id.ToString("N") + "\0.m2ts", 81003, id));
+            () => Record(connection, id.ToString("N") + "\0.m2ts", 41003, id));
 
         Assert.Equal("22021", refusal.SqlState);
-        Assert.Equal(0L, await Count(connection, 81003));
+        Assert.Equal(0L, await Count(connection, 41003));
     }
 
     [Fact]
@@ -87,9 +87,9 @@ public sealed class RecordingFileNameSchemaTests(MigratedScratchDatabase databas
 
         var id = new Guid("6f9619ff-8b86-d011-b42d-00c04fc964ff");
 
-        await Record(connection, "carina-6f9619ff8b86d011b42d00c04fc964ff.m2ts", 81004, id);
+        await Record(connection, "carina-6f9619ff8b86d011b42d00c04fc964ff.m2ts", 41004, id);
 
-        Assert.Equal(1L, await Count(connection, 81004));
+        Assert.Equal(1L, await Count(connection, 41004));
     }
 
     [Fact]

@@ -21,17 +21,17 @@ public sealed class RecordingProjectionSchemaTests(MigratedScratchDatabase datab
     public async Task ARecordingThatHasNotEndedLeavesTheReservationSayingNothing()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
-        Guid reservation = await Reserve(connection, 86001);
-        await Record(connection, 86001, reservation);
+        Guid reservation = await Reserve(connection, 46001);
+        await Record(connection, 46001, reservation);
 
         Assert.Null(await Outcome(connection, reservation));
         Assert.Equal("Recording", await Composite(connection, reservation));
     }
 
     [Theory]
-    [InlineData("Complete", 86011)]
-    [InlineData("Truncated", 86012)]
-    [InlineData("Failed", 86013)]
+    [InlineData("Complete", 46011)]
+    [InlineData("Truncated", 46012)]
+    [InlineData("Failed", 46013)]
     public async Task SettlingTheRecordingIsWhatWritesTheReservation(string outcome, int networkId)
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -48,8 +48,8 @@ public sealed class RecordingProjectionSchemaTests(MigratedScratchDatabase datab
     public async Task TheProjectionRidesOnTheSameStatementSoNothingCanBeLeftHalfWritten()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
-        Guid reservation = await Reserve(connection, 86021);
-        Guid recording = await Record(connection, 86021, reservation);
+        Guid reservation = await Reserve(connection, 46021);
+        Guid recording = await Record(connection, 46021, reservation);
 
         await using (NpgsqlTransaction rolled = await connection.BeginTransactionAsync())
         {
@@ -66,8 +66,8 @@ public sealed class RecordingProjectionSchemaTests(MigratedScratchDatabase datab
     public async Task NoStateOfTheLedgerLeavesTheTwoSayingDifferentThings()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
-        Guid reservation = await Reserve(connection, 86031);
-        Guid recording = await Record(connection, 86031, reservation);
+        Guid reservation = await Reserve(connection, 46031);
+        Guid recording = await Record(connection, 46031, reservation);
         await Settle(connection, recording, "Truncated");
 
         Assert.Equal(
@@ -86,8 +86,8 @@ public sealed class RecordingProjectionSchemaTests(MigratedScratchDatabase datab
     public async Task ARecordingNobodyReservedWritesNothingAnywhere()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
-        Guid reservation = await Reserve(connection, 86041);
-        Guid recording = await Record(connection, 86041, null, eventId: 4002);
+        Guid reservation = await Reserve(connection, 46041);
+        Guid recording = await Record(connection, 46041, null, eventId: 4002);
 
         await Settle(connection, recording, "Complete", size: "3400000000");
 

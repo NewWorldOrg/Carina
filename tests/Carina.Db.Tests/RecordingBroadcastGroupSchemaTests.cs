@@ -14,10 +14,10 @@ public sealed class RecordingBroadcastGroupSchemaTests(MigratedScratchDatabase d
     private const string Now = "timestamptz '2026-08-24 12:00:00+00'";
 
     [Theory]
-    [InlineData("Standalone", 82011)]
-    [InlineData("MovementPrimary", 82012)]
-    [InlineData("MovementSuppressed", 82013)]
-    [InlineData("RelaySegment", 82014)]
+    [InlineData("Standalone", 42011)]
+    [InlineData("MovementPrimary", 42012)]
+    [InlineData("MovementSuppressed", 42013)]
+    [InlineData("RelaySegment", 42014)]
     public async Task ARecordingHoldsTheRolesThisDomainKnows(string role, int networkId)
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -33,7 +33,7 @@ public sealed class RecordingBroadcastGroupSchemaTests(MigratedScratchDatabase d
         await using NpgsqlConnection connection = await database.OpenAsync();
 
         PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
-            () => Record(connection, 82021, groupKey: "'32736-1024-4001'", groupRole: "Primary"));
+            () => Record(connection, 42021, groupKey: "'32736-1024-4001'", groupRole: "Primary"));
 
         Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
         Assert.Equal("ck_recording_broadcast_group", refusal.ConstraintName);
@@ -45,7 +45,7 @@ public sealed class RecordingBroadcastGroupSchemaTests(MigratedScratchDatabase d
         await using NpgsqlConnection connection = await database.OpenAsync();
 
         PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
-            () => Record(connection, 82022, groupRole: "RelaySegment"));
+            () => Record(connection, 42022, groupRole: "RelaySegment"));
 
         Assert.Equal("ck_recording_broadcast_group", refusal.ConstraintName);
     }
@@ -54,30 +54,30 @@ public sealed class RecordingBroadcastGroupSchemaTests(MigratedScratchDatabase d
     public async Task DeletingTheReservationLeavesTheRecordingAndItsGroupBehind()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
-        Guid reservation = await Reserve(connection, 82031);
+        Guid reservation = await Reserve(connection, 42031);
         await Record(
             connection,
-            82031,
+            42031,
             reservationId: reservation,
             groupKey: "'32736-1024-4001'",
             groupRole: "MovementPrimary");
 
         await Execute(connection, $"DELETE FROM reservation WHERE id = '{reservation}'");
 
-        Assert.Equal(1L, await Count(connection, 82031));
-        Assert.Equal("32736-1024-4001", await Scalar(connection, Reads(82031, "broadcast_group_key")));
-        Assert.Equal("MovementPrimary", await Scalar(connection, Reads(82031, "broadcast_group_role")));
-        Assert.Equal(reservation, await Scalar(connection, Reads(82031, "reservation_id")));
+        Assert.Equal(1L, await Count(connection, 42031));
+        Assert.Equal("32736-1024-4001", await Scalar(connection, Reads(42031, "broadcast_group_key")));
+        Assert.Equal("MovementPrimary", await Scalar(connection, Reads(42031, "broadcast_group_role")));
+        Assert.Equal(reservation, await Scalar(connection, Reads(42031, "reservation_id")));
     }
 
     [Fact]
     public async Task RegroupingTheReservationDoesNotRewriteWhatWasRecorded()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
-        Guid reservation = await Reserve(connection, 82032);
+        Guid reservation = await Reserve(connection, 42032);
         await Record(
             connection,
-            82032,
+            42032,
             reservationId: reservation,
             groupKey: "'32736-1024-4001'",
             groupRole: "MovementPrimary");
@@ -90,8 +90,8 @@ public sealed class RecordingBroadcastGroupSchemaTests(MigratedScratchDatabase d
             WHERE id = '{reservation}'
             """);
 
-        Assert.Equal("32736-1024-4001", await Scalar(connection, Reads(82032, "broadcast_group_key")));
-        Assert.Equal("MovementPrimary", await Scalar(connection, Reads(82032, "broadcast_group_role")));
+        Assert.Equal("32736-1024-4001", await Scalar(connection, Reads(42032, "broadcast_group_key")));
+        Assert.Equal("MovementPrimary", await Scalar(connection, Reads(42032, "broadcast_group_role")));
     }
 
     private static string Reads(int networkId, string column)
