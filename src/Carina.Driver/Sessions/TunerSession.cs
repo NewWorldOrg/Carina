@@ -58,6 +58,7 @@ public sealed class TunerSession : IDisposable
         int chunkSize = DefaultChunkSize,
         ILogger? logger = null,
         string? outputRoot = null,
+        string? recordingId = null,
         DiagnosticsStore? diagnostics = null,
         SignalQualityWatch? watch = null,
         TuneParams? tune = null
@@ -76,6 +77,7 @@ public sealed class TunerSession : IDisposable
         DeviceId = deviceId;
         Tune = tune;
         OutputRoot = outputRoot;
+        RecordingId = recordingId;
         StartedAt = startedAt;
         endsAtTicks = endsAt.UtcTicks;
         this.device = device;
@@ -113,6 +115,8 @@ public sealed class TunerSession : IDisposable
     public string DeviceId { get; }
 
     public string? OutputRoot { get; }
+
+    public string? RecordingId { get; }
 
     public TuneParams? Tune { get; }
 

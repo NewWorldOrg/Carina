@@ -243,11 +243,62 @@ public sealed class BrittleRecordingWriter(string path, long failAfterBytes = 0)
 public sealed class BrittleRecordingWriterFactory(long failAfterBytes = 0)
     : IRecordingWriterFactory
 {
-    public IRecordingWriter Open(string recordingsDirectory, SessionId sessionId) =>
-        new BrittleRecordingWriter(
-            System.IO.Path.Combine(recordingsDirectory, $"{sessionId.Value}.ts"),
+    private long opened;
+
+    public long Opened => Interlocked.Read(ref opened);
+
+    public IRecordingWriter Open(string recordingsDirectory, string recordingId)
+    {
+        Interlocked.Increment(ref opened);
+
+        return new BrittleRecordingWriter(
+            System.IO.Path.Combine(recordingsDirectory, $"{recordingId}.ts"),
             failAfterBytes
         );
+    }
+}
+
+public sealed class StallingRecordingWriter(string path, long stallAfterBytes)
+    : IRecordingWriter
+{
+    private readonly SemaphoreSlim released = new(0);
+    private readonly SemaphoreSlim stalled = new(0);
+
+    private long bytesWritten;
+    private int held;
+
+    public string Path { get; } = path;
+
+    public bool Disposed { get; private set; }
+
+    public long BytesWritten => Interlocked.Read(ref bytesWritten);
+
+    public void Write(ReadOnlySpan<byte> bytes)
+    {
+        if (BytesWritten >= stallAfterBytes && Interlocked.Exchange(ref held, 1) is 0)
+        {
+            stalled.Release();
+            released.Wait();
+        }
+
+        Interlocked.Add(ref bytesWritten, bytes.Length);
+    }
+
+    public void AwaitStall(TimeSpan within) =>
+        Assert.True(stalled.Wait(within), "The writer was never asked to take a chunk it could not take.");
+
+    public void LetGo() => released.Release();
+
+    public void Dispose()
+    {
+        Disposed = true;
+        released.Release();
+    }
+}
+
+public sealed class OneRecordingWriterFactory(IRecordingWriter writer) : IRecordingWriterFactory
+{
+    public IRecordingWriter Open(string recordingsDirectory, string recordingId) => writer;
 }
 
 public sealed class CapturingLogger<T> : ILogger<T>

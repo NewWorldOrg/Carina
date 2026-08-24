@@ -40,7 +40,7 @@ public sealed class TunerSessionTests : IDisposable
             watch: watch
         );
 
-    private RecordingWriter Writer(string name = "s-1") => new(root, SessionId.Parse(name));
+    private RecordingWriter Writer(string name = "s-1") => new(root, name);
 
     [Fact]
     public void TheSessionPassesOnWhatTheDeviceLostToRingBufferOverruns()

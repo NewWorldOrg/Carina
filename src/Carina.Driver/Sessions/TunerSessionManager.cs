@@ -670,7 +670,13 @@ public sealed class TunerSessionManager(
         IRecordingWriter? writer = null;
         if (directory is not null)
         {
-            SessionStart? refusal = TryOpenRecording(directory, sessionId, out writer);
+            SessionStart? refusal = TryOpenRecording(
+                directory,
+                sessionId,
+                request.RecordingId!,
+                out writer
+            );
+
             if (refusal is not null)
             {
                 tunerDevice.Dispose();
@@ -690,6 +696,7 @@ public sealed class TunerSessionManager(
             writer,
             logger: logger,
             outputRoot: request.OutputRoot,
+            recordingId: request.RecordingId,
             diagnostics: diagnostics,
             watch: Watch(request.Purpose),
             tune: request.Tune
@@ -705,6 +712,17 @@ public sealed class TunerSessionManager(
                 return SessionStart.Refused(
                     SessionRefusal.Draining,
                     "The driver is shutting down, so no session can start."
+                );
+            }
+
+            if (AlreadyWriting(request) is { } holder)
+            {
+                pool.Leave(sessionId);
+                session.Dispose();
+
+                return SessionStart.Refused(
+                    SessionRefusal.RecordingAlreadyExists,
+                    $"The session '{holder}' is writing the recording '{request.RecordingId}' into '{request.OutputRoot}', and two writers on one file would interleave."
                 );
             }
 
@@ -756,9 +774,31 @@ public sealed class TunerSessionManager(
         return SessionStart.Started(session);
     }
 
+    private SessionId? AlreadyWriting(StartSessionRequest request)
+    {
+        if (request.RecordingId is null)
+        {
+            return null;
+        }
+
+        foreach (TunerSession candidate in sessions.Values)
+        {
+            if (
+                string.Equals(candidate.RecordingId, request.RecordingId, StringComparison.Ordinal)
+                && string.Equals(candidate.OutputRoot, request.OutputRoot, StringComparison.Ordinal)
+            )
+            {
+                return candidate.SessionId;
+            }
+        }
+
+        return null;
+    }
+
     private SessionStart? TryOpenRecording(
         string directory,
         SessionId sessionId,
+        string recordingId,
         out IRecordingWriter? writer
     )
     {
@@ -766,18 +806,9 @@ public sealed class TunerSessionManager(
 
         try
         {
-            writer = writerFactory.Open(directory, sessionId);
+            writer = writerFactory.Open(directory, recordingId);
 
             return null;
-        }
-        catch (IOException error) when (File.Exists(Path.Combine(directory, $"{sessionId}.ts")))
-        {
-            pool.Leave(sessionId);
-
-            return SessionStart.Refused(
-                SessionRefusal.RecordingAlreadyExists,
-                $"A recording for '{sessionId}' is already on disk, and this driver never appends to one: {error.Message}"
-            );
         }
         catch (Exception error)
         {
@@ -785,7 +816,7 @@ public sealed class TunerSessionManager(
 
             return SessionStart.Refused(
                 SessionRefusal.OutputUnavailable,
-                $"The recording for '{sessionId}' could not be opened: {error.Message}"
+                $"The recording '{recordingId}' for '{sessionId}' could not be opened: {error.Message}"
             );
         }
     }

@@ -179,7 +179,8 @@ public sealed class DriverUnderTest : IAsyncDisposable
     public static StartSessionRequest Recording(
         string sessionId,
         DateTimeOffset endsAt,
-        string outputRoot = "primary"
+        string outputRoot = "primary",
+        string? recordingId = null
     ) =>
         new()
         {
@@ -188,7 +189,7 @@ public sealed class DriverUnderTest : IAsyncDisposable
             Tuning = new TuningRequest(TunerKind.Terrestrial, 55),
             OutputRoot = outputRoot,
             EndsAt = endsAt,
-            RecordingId = "k-90210",
+            RecordingId = recordingId ?? $"k-{sessionId}",
         };
 
     public async ValueTask DisposeAsync()
