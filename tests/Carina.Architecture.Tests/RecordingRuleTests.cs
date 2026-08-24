@@ -59,7 +59,10 @@ public sealed class RecordingRuleTests
             ReservationRules.ProjectionTrigger);
 
         Assert.Equal(
-            ["Carina.Db/Migrations/20260824013352_Recordings.cs"],
+            [
+                "Carina.Db/Migrations/20260824013352_Recordings.cs",
+                ReservationRules.GuardDefinition.TrimStart('/'),
+            ],
             installing);
     }
 

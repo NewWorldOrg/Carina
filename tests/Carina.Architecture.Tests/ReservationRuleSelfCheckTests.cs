@@ -69,6 +69,36 @@ public sealed class ReservationRuleSelfCheckTests
     }
 
     [Fact]
+    public void LeavesTheOneFileThatDefinesTheProjectionAlone()
+    {
+        using var tree = new SourceTree();
+        tree.Write(
+            ReservationRules.GuardDefinition.TrimStart('/'),
+            $"""
+            public const string Projection = "CREATE FUNCTION {ReservationRules.ProjectionTrigger}() ... "
+                + "UPDATE reservation SET recording_outcome = NEW.recording_outcome WHERE id = NEW.reservation_id;";
+            """);
+
+        Assert.Empty(ReservationRules.WritersOfWhatRecordingOwns(tree.Root));
+    }
+
+    [Fact]
+    public void DetectsAnotherPlaceThatDefinesAProjectionOfItsOwn()
+    {
+        using var tree = new SourceTree();
+        tree.Write(
+            "Carina.Infrastructure/Persistence/Configurations/ReservationGuards.cs",
+            $"""
+            public const string Projection = "CREATE FUNCTION {ReservationRules.ProjectionTrigger}() ... "
+                + "UPDATE reservation SET recording_outcome = NEW.recording_outcome WHERE id = NEW.reservation_id;";
+            """);
+
+        Assert.Equal(
+            ["/Carina.Infrastructure/Persistence/Configurations/ReservationGuards.cs"],
+            ReservationRules.WritersOfWhatRecordingOwns(tree.Root));
+    }
+
+    [Fact]
     public void DetectsAMigrationThatWritesTheOutcomeWithoutInstallingTheProjection()
     {
         using var tree = new SourceTree();

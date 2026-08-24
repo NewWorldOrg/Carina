@@ -15,6 +15,9 @@ public static partial class ReservationRules
 
     public const string ProjectionTrigger = "recording_projects_its_outcome";
 
+    public const string GuardDefinition =
+        "/Carina.Infrastructure/Persistence/Configurations/RecordingGuards.cs";
+
     private const string Migrations = "/Carina.Db/Migrations/";
 
     private static readonly IReadOnlyList<string> ReservationFolders = ["/Reservations/", "/Rules/"];
@@ -43,8 +46,9 @@ public static partial class ReservationRules
             .ToArray();
 
     private static bool InstallsTheProjection(SourceFile file)
-        => file.Relative.StartsWith(Migrations, StringComparison.Ordinal)
-           && file.Source.Contains(ProjectionTrigger, StringComparison.Ordinal);
+        => file.Source.Contains(ProjectionTrigger, StringComparison.Ordinal)
+           && (file.Relative.StartsWith(Migrations, StringComparison.Ordinal)
+               || string.Equals(file.Relative, GuardDefinition, StringComparison.Ordinal));
 
     private static bool BelongsToTheReservationFeature(SourceFile file)
         => ReservationFolders.Any(folder => file.Relative.Contains(folder, StringComparison.Ordinal))
