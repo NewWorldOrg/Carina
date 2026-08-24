@@ -252,6 +252,7 @@ public sealed class ChannelSchemaTests
                 "local_account",
                 "oidc_config",
                 "programme",
+                "recording",
                 "reservation",
                 "reservation_outcome",
                 "rule",
