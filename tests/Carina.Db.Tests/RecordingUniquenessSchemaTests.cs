@@ -34,7 +34,39 @@ public sealed class RecordingUniquenessSchemaTests(MigratedScratchDatabase datab
     }
 
     [Fact]
-    public async Task TheFileIndexStandsBehindThatEvenSo()
+    public async Task ANameThatCarriesBothIdsIsStillClaimedByOnlyOneRow()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+        string shared = $"{first:N}-{second:N}.m2ts";
+
+        await Record(connection, 85201, first, shared);
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(connection, 85201, second, shared, eventId: 4002));
+
+        Assert.Equal(PostgresErrorCodes.UniqueViolation, refusal.SqlState);
+        Assert.Equal("ux_recording_file", refusal.ConstraintName);
+        Assert.Equal(1L, await Count(connection, 85201));
+    }
+
+    [Fact]
+    public async Task TheSameNameUnderAnotherRootIsAnotherFile()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+        string shared = $"{first:N}-{second:N}.m2ts";
+
+        await Record(connection, 85202, first, shared);
+        await Record(connection, 85202, second, shared, eventId: 4002, outputRoot: "archive");
+
+        Assert.Equal(2L, await Count(connection, 85202));
+    }
+
+    [Fact]
+    public async Task TheFileIndexIsHowAScanLooksARecordingUpAndIsUniqueWhileItIsAtIt()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
 
