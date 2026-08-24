@@ -157,7 +157,27 @@ public sealed class RecordingSinkTests : IDisposable
             writer.Write(packet);
         }
 
-        Assert.Equal(2, writer.Flushes);
+        Assert.Equal(2, writer.DurableFlushes);
+    }
+
+    [Fact]
+    public void AWriterNobodyGaveAnIntervalToUsesTheOneTheDriverSettledOn()
+    {
+        byte[] chunk = Bytes(TsPacketReader.PacketLength * 100, 3);
+        long toTheInterval = RecordingWriter.FlushInterval / chunk.Length;
+
+        using var writer = new RecordingWriter(root, "k-1");
+
+        for (long written = 0; written < toTheInterval; written++)
+        {
+            writer.Write(chunk);
+        }
+
+        Assert.Equal(0, writer.DurableFlushes);
+
+        writer.Write(chunk);
+
+        Assert.Equal(1, writer.DurableFlushes);
     }
 
     [Fact]
@@ -166,8 +186,19 @@ public sealed class RecordingSinkTests : IDisposable
         const long fastestBytesPerSecond = 16_500_000 / 8;
 
         Assert.True(
-            RecordingWriter.FlushInterval <= fastestBytesPerSecond * 60,
-            $"{RecordingWriter.FlushInterval} bytes is more than a minute of a {fastestBytesPerSecond * 8} bit broadcast, so a crash loses more than a minute."
+            RecordingWriter.FlushInterval <= 60 * fastestBytesPerSecond,
+            $"{RecordingWriter.FlushInterval} bytes is more than a minute of a 16.5 Mbit broadcast, so a crash loses more than a minute of it."
+        );
+    }
+
+    [Fact]
+    public void TheFlushIntervalIsAtLeastTenSecondsOfTheFastestBroadcastThereIs()
+    {
+        const long fastestBytesPerSecond = 16_500_000 / 8;
+
+        Assert.True(
+            RecordingWriter.FlushInterval >= 10 * fastestBytesPerSecond,
+            $"{RecordingWriter.FlushInterval} bytes is under ten seconds of a 16.5 Mbit broadcast, so the disk is asked to settle far more often than a recording needs."
         );
     }
 

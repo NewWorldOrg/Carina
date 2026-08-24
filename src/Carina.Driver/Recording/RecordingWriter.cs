@@ -64,7 +64,7 @@ public sealed class RecordingWriter : IRecordingWriter
 
     public long BytesWritten => Interlocked.Read(ref bytesWritten);
 
-    public long Flushes => Interlocked.Read(ref flushes);
+    public long DurableFlushes => Interlocked.Read(ref flushes);
 
     public void Write(ReadOnlySpan<byte> bytes)
     {
@@ -84,9 +84,18 @@ public sealed class RecordingWriter : IRecordingWriter
         bytesSinceFlush += bytes.Length;
         if (bytesSinceFlush >= flushEvery)
         {
-            stream.Flush(flushToDisk: true);
-            Interlocked.Increment(ref flushes);
+            Flush(toTheDisk: true);
             bytesSinceFlush = 0;
+        }
+    }
+
+    private void Flush(bool toTheDisk)
+    {
+        stream.Flush(toTheDisk);
+
+        if (toTheDisk)
+        {
+            Interlocked.Increment(ref flushes);
         }
     }
 
