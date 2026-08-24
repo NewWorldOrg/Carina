@@ -12,7 +12,7 @@ namespace Carina.Infrastructure.Tests;
 
 public sealed class PersistenceBoundaryRuleSelfCheckTests
 {
-    private static readonly string[] FamilyPrefixes = ["reservation", "channel", "programme", "epg"];
+    private static readonly string[] FamilyPrefixes = ["reservation", "channel", "programme", "epg", "recording"];
 
     private sealed class ViolatingDbContext(DbContextOptions<CarinaDbContext> options) : CarinaDbContext(options)
     {
@@ -32,6 +32,11 @@ public sealed class PersistenceBoundaryRuleSelfCheckTests
                     .HasForeignKey(entity => entity.ChannelLineupId));
             modelBuilder.Entity<RecordingJob>(job =>
                 job.HasOne<GuideEntry>().WithMany().HasForeignKey(entity => entity.GuideEntryId));
+            modelBuilder.Entity<TapeEntry>(tape =>
+            {
+                tape.HasOne<ChannelLineup>().WithMany().HasForeignKey(entity => entity.ChannelLineupId);
+                tape.HasOne<Booking>().WithMany().HasForeignKey(entity => entity.BookingId);
+            });
             modelBuilder.Entity<ShelfItem>();
         }
     }
@@ -75,12 +80,38 @@ public sealed class PersistenceBoundaryRuleSelfCheckTests
     }
 
     [Fact]
+    public void DetectsARecordingThatHoldsAForeignKeyToAChannelDefinition()
+    {
+        using ViolatingDbContext context = Violating();
+
+        Assert.Contains(
+            "tape_entry -> channel_lineup",
+            PersistenceBoundaryRules.BoundaryBreakingForeignKeys(context.Model));
+    }
+
+    [Fact]
+    public void DetectsARecordingThatWouldBeDraggedAwayWithTheReservation()
+    {
+        using ViolatingDbContext context = Violating();
+
+        Assert.Contains(
+            "tape_entry -> booking",
+            PersistenceBoundaryRules.BoundaryBreakingForeignKeys(context.Model));
+    }
+
+    [Fact]
     public void LeavesForeignKeysInsideTheReservationAggregateAlone()
     {
         using ViolatingDbContext context = Violating();
 
         Assert.Equal(
-            ["booking -> channel_lineup", "guide_entry -> channel_lineup", "recording_job -> guide_entry"],
+            [
+                "booking -> channel_lineup",
+                "guide_entry -> channel_lineup",
+                "recording_job -> guide_entry",
+                "tape_entry -> booking",
+                "tape_entry -> channel_lineup",
+            ],
             PersistenceBoundaryRules.BoundaryBreakingForeignKeys(context.Model));
     }
 
@@ -90,10 +121,16 @@ public sealed class PersistenceBoundaryRuleSelfCheckTests
         using ViolatingDbContext context = Violating();
 
         Assert.DoesNotContain(
-            new[] { "booking", "guide_entry", "recording_job" },
+            new[] { "booking", "guide_entry", "tape_entry" },
             table => FamilyPrefixes.Any(prefix => table.StartsWith(prefix, StringComparison.Ordinal)));
         Assert.Equal(
-            ["booking -> channel_lineup", "guide_entry -> channel_lineup", "recording_job -> guide_entry"],
+            [
+                "booking -> channel_lineup",
+                "guide_entry -> channel_lineup",
+                "recording_job -> guide_entry",
+                "tape_entry -> booking",
+                "tape_entry -> channel_lineup",
+            ],
             PersistenceBoundaryRules.BoundaryBreakingForeignKeys(context.Model));
     }
 

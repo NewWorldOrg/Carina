@@ -44,6 +44,34 @@ public sealed class PersistenceBoundaryRuleTests
     }
 
     [Fact]
+    public void TheLedgerIsInTheModelForThoseRulesToWeigh()
+    {
+        using CarinaDbContext context = Carina();
+
+        Assert.Equal(
+            ["recording"],
+            PersistenceBoundaryRules.TablesOf(context.Model, PersistenceFamily.Recordings));
+    }
+
+    [Fact]
+    public void ARecordingStillReachesTheServiceAndTheProgrammeItRecordedByValue()
+    {
+        using CarinaDbContext context = Carina();
+
+        IReadOnlyList<string> columns = [.. context.Model
+            .GetEntityTypes()
+            .Single(entityType => entityType.GetTableName() == "recording")
+            .GetProperties()
+            .Select(property => property.GetColumnName())];
+
+        Assert.Contains("network_id", columns, StringComparer.Ordinal);
+        Assert.Contains("service_id", columns, StringComparer.Ordinal);
+        Assert.Contains("event_id", columns, StringComparer.Ordinal);
+        Assert.Contains("programme_start_at", columns, StringComparer.Ordinal);
+        Assert.Contains("reservation_id", columns, StringComparer.Ordinal);
+    }
+
+    [Fact]
     public void AReservationStillReachesTheServiceItRecordsByValue()
     {
         using CarinaDbContext context = Carina();
