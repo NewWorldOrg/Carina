@@ -1,4 +1,5 @@
 using Carina.Contracts;
+using Carina.Driver.Configuration;
 using Carina.Driver.Diagnostics;
 using Carina.Driver.Recording;
 using Carina.Driver.Transport;
@@ -23,6 +24,7 @@ public sealed class TunerSession : IDisposable
     private readonly SignalQualityReader? quality;
     private readonly long overflowsBefore;
     private readonly IRecordingWriter? recordingWriter;
+    private readonly SessionSubscription? seat;
     private readonly TimeProvider timeProvider;
     private readonly ILogger? logger;
     private readonly DiagnosticsStore? diagnostics;
@@ -58,9 +60,13 @@ public sealed class TunerSession : IDisposable
         int chunkSize = DefaultChunkSize,
         ILogger? logger = null,
         string? outputRoot = null,
+        string? recordingId = null,
         DiagnosticsStore? diagnostics = null,
         SignalQualityWatch? watch = null,
-        TuneParams? tune = null
+        TuneParams? tune = null,
+        TunerSession? ridesOn = null,
+        SessionSubscription? seat = null,
+        int demuxBufferBytes = TunerSettings.DefaultDemuxBufferBytes
     )
     {
         if (endsAt <= startedAt)
@@ -76,6 +82,9 @@ public sealed class TunerSession : IDisposable
         DeviceId = deviceId;
         Tune = tune;
         OutputRoot = outputRoot;
+        RecordingId = recordingId;
+        RidesOn = ridesOn;
+        this.seat = seat;
         StartedAt = startedAt;
         endsAtTicks = endsAt.UtcTicks;
         this.device = device;
@@ -91,7 +100,10 @@ public sealed class TunerSession : IDisposable
             surveyBlockLimit: SessionPurposes.ReadsEveryPacket(purpose)
                 ? SessionBroadcaster.DefaultSurveyBlockLimit
                 : TimeSpan.Zero,
-            report: RecordFault
+            report: RecordFault,
+            recordingBlockLimit: purpose is SessionPurpose.Recording
+                ? TimeSpan.Zero
+                : RecordingBackPressure.WithinTheDemuxWindow(demuxBufferBytes)
         );
 
         if (watch is not null && device.Quality is { } source)
@@ -113,6 +125,10 @@ public sealed class TunerSession : IDisposable
     public string DeviceId { get; }
 
     public string? OutputRoot { get; }
+
+    public string? RecordingId { get; }
+
+    public TunerSession? RidesOn { get; }
 
     public TuneParams? Tune { get; }
 
@@ -165,6 +181,8 @@ public sealed class TunerSession : IDisposable
     }
 
     public long FaultCount => Interlocked.Read(ref faultCount);
+
+    public long DroppedChunks => seat?.DroppedChunks ?? 0;
 
     public long DiscardedBytes => Interlocked.Read(ref discardedBytes);
 
@@ -518,13 +536,16 @@ public sealed class TunerSession : IDisposable
         }
 
         bool failed = causes.Count > 0;
+        SessionStopReason ending = ReasonFor(reason, cause, writerFault, deviceFault);
 
-        Exception? closeFault = Close(() => Broadcaster.Close(failed ? Combine(causes) : null));
+        Exception? closeFault = Close(
+            () => Broadcaster.Close(failed ? Combine(causes) : null, ending)
+        );
 
         lock (gate)
         {
             state = failed ? SessionState.Failed : outcome;
-            stopReason = ReasonFor(reason, cause, writerFault, deviceFault);
+            stopReason = ending;
             failureCause = failed ? Combine(causes) : null;
         }
 

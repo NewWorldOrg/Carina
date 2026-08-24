@@ -70,7 +70,7 @@ public sealed class TunerSessionManagerTests : IDisposable
             DeviceId = deviceId,
             OutputRoot = purpose is SessionPurpose.Recording ? outputRoot : null,
             EndsAt = endsAt ?? (purpose is SessionPurpose.Recording ? Start.AddHours(1) : null),
-            RecordingId = purpose is SessionPurpose.Recording ? "k-90210" : null,
+            RecordingId = purpose is SessionPurpose.Recording ? $"k-{sessionId}" : null,
         };
 
     private static TunerSession Begin(
@@ -149,7 +149,7 @@ public sealed class TunerSessionManagerTests : IDisposable
 
         Assert.True(session.BytesRecorded > 0);
         Assert.Equal("primary", session.OutputRoot);
-        Assert.Equal(new FileInfo(Path.Combine(root, "s-1.ts")).Length, session.BytesRecorded);
+        Assert.Equal(new FileInfo(Path.Combine(root, "k-s-1.ts")).Length, session.BytesRecorded);
     }
 
     [Fact]
@@ -183,7 +183,7 @@ public sealed class TunerSessionManagerTests : IDisposable
 
         StopAndWait(Begin(manager, "s-2", "adapter0", SessionPurpose.Live));
 
-        Assert.False(File.Exists(Path.Combine(root, "s-2.ts")));
+        Assert.Empty(Directory.GetFiles(root));
     }
 
     [Fact]
@@ -359,10 +359,10 @@ public sealed class TunerSessionManagerTests : IDisposable
     {
         TunerSessionManager manager = Manager();
 
-        File.WriteAllBytes(Path.Combine(root, "s-1.ts"), [0x47]);
+        Directory.CreateDirectory(Path.Combine(root, "k-s-1.ts"));
 
         Assert.Equal(
-            SessionRefusal.RecordingAlreadyExists,
+            SessionRefusal.OutputUnavailable,
             RefusalFor(manager, Request("s-1", "adapter0"))
         );
 
@@ -807,19 +807,80 @@ public sealed class TunerSessionManagerTests : IDisposable
     }
 
     [Fact]
-    public void ARecordingIsNeverAppendedToAnExistingFile()
+    public void ARecordingThatComesBackCarriesOnInTheFileItLeftBehind()
+    {
+        TunerSessionManager manager = Manager();
+        string file = Path.Combine(root, "k-s-1.ts");
+
+        TunerSession interrupted = StopAndWait(WaitForBytes(Begin(manager, "s-1", "adapter0")));
+        long written = new FileInfo(file).Length;
+
+        Assert.Equal(interrupted.BytesRecorded, written);
+
+        SessionStart resumed = manager.Begin(
+            Request("s-5", "adapter0") with { RecordingId = "k-s-1" }
+        );
+
+        Assert.True(resumed.TryGetSession(out TunerSession? carrying), resumed.Detail);
+
+        StopAndWait(WaitForBytes(carrying));
+
+        Assert.Equal(file, carrying.RecordingPath);
+        Assert.Equal(written + carrying.BytesRecorded, new FileInfo(file).Length);
+        Assert.Single(Directory.GetFiles(root));
+    }
+
+    [Fact]
+    public void AnEndThatTheDriverHasAlreadyPassedIsNoExtensionEvenThoughItFollowsTheCurrentOne()
+    {
+        var device = new PacedTunerDevice();
+        var manager = new TunerSessionManager(
+            Configuration,
+            new OneTunerDeviceFactory(device),
+            clock,
+            NullLogger<TunerSessionManager>.Instance
+        );
+
+        SessionStart start = manager.Begin(
+            Request("s-1", "adapter0", endsAt: Start.AddMinutes(5))
+        );
+
+        Assert.True(start.TryGetSession(out TunerSession? session), start.Detail);
+
+        device.AwaitParkedBefore(1);
+        clock.Advance(TimeSpan.FromMinutes(10));
+
+        SessionExtension refused = manager.Extend(
+            session.SessionId,
+            new ExtendSessionRequest { EndsAt = Start.AddMinutes(7) }
+        );
+
+        Assert.Equal(SessionExtendOutcome.NotAnExtension, refused.Outcome);
+        Assert.Equal(Start.AddMinutes(5), session.EndsAt);
+
+        SessionExtension accepted = manager.Extend(
+            session.SessionId,
+            new ExtendSessionRequest { EndsAt = Start.AddMinutes(20) }
+        );
+
+        Assert.Equal(SessionExtendOutcome.Extended, accepted.Outcome);
+        Assert.Equal(Start.AddMinutes(20), session.EndsAt);
+
+        session.Dispose();
+    }
+
+    [Fact]
+    public void TwoSessionsAreNeverBothWritingTheOneRecording()
     {
         TunerSessionManager manager = Manager();
 
-        StopAndWait(WaitForBytes(Begin(manager, "s-1", "adapter0")));
-
-        File.Copy(Path.Combine(root, "s-1.ts"), Path.Combine(root, "s-5.ts"));
+        Begin(manager, "s-1", "adapter0");
 
         Assert.Equal(
             SessionRefusal.RecordingAlreadyExists,
-            RefusalFor(manager, Request("s-5", "adapter0"))
+            RefusalFor(manager, Request("s-5", "adapter3") with { RecordingId = "k-s-1" })
         );
-        Assert.Empty(manager.Sessions);
+        Assert.Single(manager.Sessions);
     }
 
     [Fact]
@@ -1182,6 +1243,8 @@ public sealed class TunerSessionManagerTests : IDisposable
                 DriverCapabilities.TypedTuning,
                 DriverCapabilities.SignalQuality,
                 DriverCapabilities.GracefulRestart,
+                DriverCapabilities.RecordingExtension,
+                DriverCapabilities.Storage,
                 "signalQuality.cnr",
                 "signalQuality.postViterbiBitError",
                 "sessionPurpose.surveyNow",

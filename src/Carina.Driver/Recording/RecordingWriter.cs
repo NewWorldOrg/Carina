@@ -14,52 +14,100 @@ public interface IRecordingWriter : IDisposable
     void Write(ReadOnlySpan<byte> bytes);
 }
 
+public static class RecordingFileName
+{
+    public const string Extension = ".ts";
+
+    public static string Of(string? recordingId) =>
+        WireName.IsUsable(recordingId)
+            ? recordingId + Extension
+            : throw new ArgumentException(
+                $"A recording names its own file, so a recording id is {WireName.Description}; got '{recordingId}'.",
+                nameof(recordingId)
+            );
+}
+
 public sealed class RecordingWriter : IRecordingWriter
 {
     public const long FlushInterval = 64L * 1024 * 1024;
 
     private readonly FileStream stream;
+    private readonly long flushEvery;
+    private readonly long openedAt;
 
     private long bytesWritten;
     private long bytesSinceFlush;
+    private long flushes;
 
-    public RecordingWriter(string recordingsDirectory, SessionId opaqueId)
+    public RecordingWriter(
+        string recordingsDirectory,
+        string recordingId,
+        long flushEvery = FlushInterval
+    )
     {
-        if (opaqueId.IsUnset)
-        {
-            throw new ArgumentException(
-                "A recording needs an identifier to name its file.",
-                nameof(opaqueId)
-            );
-        }
-
-        Path = System.IO.Path.Combine(recordingsDirectory, $"{opaqueId.Value}.ts");
+        this.flushEvery = flushEvery;
+        Path = System.IO.Path.Combine(recordingsDirectory, RecordingFileName.Of(recordingId));
         stream = new FileStream(
             Path,
             new FileStreamOptions
             {
-                Mode = FileMode.CreateNew,
+                Mode = FileMode.Append,
                 Access = FileAccess.Write,
                 Share = FileShare.Read,
                 BufferSize = 0,
             }
         );
+        openedAt = stream.Length;
     }
 
     public string Path { get; }
 
     public long BytesWritten => Interlocked.Read(ref bytesWritten);
 
+    public long DurableFlushes => Interlocked.Read(ref flushes);
+
     public void Write(ReadOnlySpan<byte> bytes)
     {
-        stream.Write(bytes);
+        try
+        {
+            stream.Write(bytes);
+        }
+        catch (Exception)
+        {
+            Interlocked.Exchange(ref bytesWritten, Landed());
+
+            throw;
+        }
+
         Interlocked.Add(ref bytesWritten, bytes.Length);
 
         bytesSinceFlush += bytes.Length;
-        if (bytesSinceFlush >= FlushInterval)
+        if (bytesSinceFlush >= flushEvery)
         {
-            stream.Flush(flushToDisk: true);
+            Flush(toTheDisk: true);
             bytesSinceFlush = 0;
+        }
+    }
+
+    private void Flush(bool toTheDisk)
+    {
+        stream.Flush(toTheDisk);
+
+        if (toTheDisk)
+        {
+            Interlocked.Increment(ref flushes);
+        }
+    }
+
+    private long Landed()
+    {
+        try
+        {
+            return stream.Length - openedAt;
+        }
+        catch (Exception error) when (error is IOException or ObjectDisposedException)
+        {
+            return BytesWritten;
         }
     }
 

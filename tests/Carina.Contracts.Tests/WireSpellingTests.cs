@@ -187,6 +187,31 @@ public sealed class WireSpellingTests
     }
 
     [Fact]
+    public void TheTitleARefusalCarriesIsSpelledThisWay()
+    {
+        Assert.Equal("rejected", SessionRefusalTitles.Rejected);
+        Assert.Equal("unknownDevice", SessionRefusalTitles.UnknownDevice);
+        Assert.Equal("wrongDeviceKind", SessionRefusalTitles.WrongDeviceKind);
+        Assert.Equal("noDeviceOfThatKind", SessionRefusalTitles.NoDeviceOfThatKind);
+        Assert.Equal("unknownOutputRoot", SessionRefusalTitles.UnknownOutputRoot);
+        Assert.Equal("duplicateSession", SessionRefusalTitles.DuplicateSession);
+        Assert.Equal("disabledDevice", SessionRefusalTitles.DisabledDevice);
+        Assert.Equal("faultedDevice", SessionRefusalTitles.FaultedDevice);
+        Assert.Equal("deviceBusy", SessionRefusalTitles.DeviceBusy);
+        Assert.Equal("noDeviceFree", SessionRefusalTitles.NoDeviceFree);
+        Assert.Equal("recordingAlreadyExists", SessionRefusalTitles.RecordingAlreadyExists);
+        Assert.Equal("capabilityMissing", SessionRefusalTitles.CapabilityMissing);
+        Assert.Equal("notAnExtension", SessionRefusalTitles.NotAnExtension);
+        Assert.Equal("notARecording", SessionRefusalTitles.NotARecording);
+        Assert.Equal("sessionEnded", SessionRefusalTitles.SessionEnded);
+        Assert.Equal("draining", SessionRefusalTitles.Draining);
+        Assert.Equal("outputUnavailable", SessionRefusalTitles.OutputUnavailable);
+        Assert.Equal("deviceUnavailable", SessionRefusalTitles.DeviceUnavailable);
+        Assert.Equal("noLock", SessionRefusalTitles.NoLock);
+        Assert.Equal("refused", SessionRefusalTitles.Refused);
+    }
+
+    [Fact]
     public void AMetricIsNamedUnderTheCapabilityItBelongsTo()
     {
         Assert.Equal(

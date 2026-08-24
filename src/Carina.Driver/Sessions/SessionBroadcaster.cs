@@ -3,6 +3,9 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading.Channels;
 
+using Carina.Contracts;
+using Carina.Driver.Recording;
+
 namespace Carina.Driver.Sessions;
 
 public enum SubscriberKind
@@ -10,6 +13,7 @@ public enum SubscriberKind
     Viewer,
     Piggyback,
     Survey,
+    Recording,
 }
 
 public sealed class SessionSubscription
@@ -32,6 +36,8 @@ public sealed class SessionSubscription
 
     public bool IsTruncated { get; internal set; }
 
+    public SessionStopReason EndedWith { get; internal set; }
+
     public long DroppedChunks => Interlocked.Read(ref droppedChunks);
 
     internal void CountDrop() => Interlocked.Increment(ref droppedChunks);
@@ -42,12 +48,17 @@ public sealed class SessionBroadcaster(
     int surveyCapacity = SessionBroadcaster.DefaultSurveyCapacity,
     TimeSpan? surveyBlockLimit = null,
     Action<Exception>? report = null,
-    int subscriberLimit = SessionBroadcaster.DefaultSubscriberLimit
+    int subscriberLimit = SessionBroadcaster.DefaultSubscriberLimit,
+    int recordingCapacity = SessionBroadcaster.DefaultRecordingCapacity,
+    TimeSpan? recordingBlockLimit = null
 ) : IDisposable
 {
     public const int DefaultViewerCapacity = 64;
     public const int DefaultSurveyCapacity = 256;
     public const int DefaultSubscriberLimit = 8;
+
+    public const int DefaultRecordingCapacity =
+        (int)(RecordingWriter.FlushInterval / TunerSession.DefaultChunkSize) + 1;
 
     public static readonly TimeSpan DefaultSurveyBlockLimit = TimeSpan.FromSeconds(5);
 
@@ -60,13 +71,20 @@ public sealed class SessionBroadcaster(
 
     private readonly ConcurrentDictionary<SessionSubscription, byte> subscriptions = [];
     private readonly TimeSpan blockLimit = surveyBlockLimit ?? DefaultSurveyBlockLimit;
+    private readonly TimeSpan recordingBlock = recordingBlockLimit ?? TimeSpan.Zero;
     private readonly Lock gate = new();
 
     private bool closed;
     private Exception? closedBecause;
+    private SessionStopReason closedReason;
     private long droppedChunks;
 
     public int SubscriberCount => subscriptions.Count;
+
+    public TimeSpan RecordingWait => recordingBlock;
+
+    public IReadOnlyList<SubscriberKind> KindsInUse =>
+        [.. subscriptions.Keys.Select(subscription => subscription.Kind)];
 
     public bool IsClosed
     {
@@ -102,9 +120,11 @@ public sealed class SessionBroadcaster(
     {
         SessionSubscription? subscription = null;
 
-        Channel<byte[]> channel = kind is SubscriberKind.Survey
+        Channel<byte[]> channel = Waits(kind)
             ? Channel.CreateBounded<byte[]>(
-                new BoundedChannelOptions(surveyCapacity)
+                new BoundedChannelOptions(
+                    kind is SubscriberKind.Recording ? recordingCapacity : surveyCapacity
+                )
                 {
                     FullMode = BoundedChannelFullMode.Wait,
                 }
@@ -133,6 +153,7 @@ public sealed class SessionBroadcaster(
                 }
 
                 subscription.IsDisconnected = true;
+                subscription.EndedWith = closedReason;
                 subscription.Channel.Writer.TryComplete(closedBecause);
 
                 return subscription;
@@ -149,10 +170,15 @@ public sealed class SessionBroadcaster(
         return subscription;
     }
 
-    public void Unsubscribe(SessionSubscription subscription, Exception? because = null)
+    public void Unsubscribe(
+        SessionSubscription subscription,
+        Exception? because = null,
+        SessionStopReason endedWith = SessionStopReason.Unspecified
+    )
     {
         if (subscriptions.TryRemove(subscription, out _))
         {
+            subscription.EndedWith = endedWith;
             subscription.Channel.Writer.TryComplete(because);
         }
     }
@@ -184,7 +210,7 @@ public sealed class SessionBroadcaster(
 
     public void Dispose() => Close(null);
 
-    public void Close(Exception? because)
+    public void Close(Exception? because, SessionStopReason endedWith = SessionStopReason.Unspecified)
     {
         lock (gate)
         {
@@ -195,11 +221,12 @@ public sealed class SessionBroadcaster(
 
             closed = true;
             closedBecause = because;
+            closedReason = endedWith;
         }
 
         foreach (KeyValuePair<SessionSubscription, byte> entry in subscriptions)
         {
-            Unsubscribe(entry.Key, because ?? Truncation(entry.Key));
+            Unsubscribe(entry.Key, because ?? Truncation(entry.Key), endedWith);
         }
     }
 
@@ -209,14 +236,16 @@ public sealed class SessionBroadcaster(
         CancellationToken cancellationToken
     )
     {
-        if (subscription.Kind is not SubscriberKind.Survey)
+        if (!Waits(subscription.Kind))
         {
             subscription.Channel.Writer.TryWrite(chunk);
 
             return;
         }
 
-        switch (DeliverWithinLimit(subscription, chunk, cancellationToken))
+        TimeSpan limit = LimitFor(subscription.Kind);
+
+        switch (DeliverWithinLimit(subscription, chunk, limit, cancellationToken))
         {
             case Delivery.Delivered:
                 return;
@@ -233,15 +262,28 @@ public sealed class SessionBroadcaster(
                 subscription.IsTruncated = true;
                 subscription.CountDrop();
                 Tally();
-                Unsubscribe(subscription, TooSlow());
+                Unsubscribe(
+                    subscription,
+                    TooSlow(limit),
+                    subscription.Kind is SubscriberKind.Recording
+                        ? SessionStopReason.RecordingFailed
+                        : SessionStopReason.Unspecified
+                );
 
                 return;
         }
     }
 
-    private Delivery DeliverWithinLimit(
+    private static bool Waits(SubscriberKind kind) =>
+        kind is SubscriberKind.Survey or SubscriberKind.Recording;
+
+    private TimeSpan LimitFor(SubscriberKind kind) =>
+        kind is SubscriberKind.Recording ? recordingBlock : blockLimit;
+
+    private static Delivery DeliverWithinLimit(
         SessionSubscription subscription,
         byte[] chunk,
+        TimeSpan limit,
         CancellationToken cancellationToken
     )
     {
@@ -259,7 +301,7 @@ public sealed class SessionBroadcaster(
                 return Delivery.Abandoned;
             }
 
-            TimeSpan left = blockLimit - Stopwatch.GetElapsedTime(start);
+            TimeSpan left = limit - Stopwatch.GetElapsedTime(start);
             if (left <= TimeSpan.Zero)
             {
                 return Delivery.Refused;
@@ -286,13 +328,13 @@ public sealed class SessionBroadcaster(
         }
     }
 
-    private Exception TooSlow() =>
-        blockLimit <= TimeSpan.Zero
+    private static Exception TooSlow(TimeSpan limit) =>
+        limit <= TimeSpan.Zero
             ? new IOException(
                 "The subscriber's buffer filled up, and this session never waits for a subscriber, so it was disconnected."
             )
             : new TimeoutException(
-                $"The subscriber did not take the stream within {blockLimit}, so it was disconnected."
+                $"The subscriber did not take the stream within {limit}, so it was disconnected."
             );
 
     private static Exception? Truncation(SessionSubscription subscription) =>

@@ -21,9 +21,10 @@ public static class SessionViews
             Concluded = session.Concluded,
             InstanceId = hello.InstanceId,
             OutputRoot = session.OutputRoot,
+            RecordingId = session.RecordingId,
             BytesRecorded = session.BytesRecorded,
             FaultCount = session.FaultCount,
-            DroppedChunks = session.Broadcaster.DroppedChunks,
+            DroppedChunks = session.DroppedChunks,
             FirstFault = session.FirstFault?.Message,
             FailureCause = session.FailureCause?.Message,
             Counters = new SessionCounters(

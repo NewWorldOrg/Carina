@@ -11,6 +11,18 @@ public sealed record ExtendSessionRequest
             [
                 $"endsAt: a recording only ever follows a programme later, so expected a time after {currentEndsAt:O}; got {EndsAt:O}.",
             ];
+
+    public IReadOnlyList<string> Validate(DateTimeOffset currentEndsAt, DateTimeOffset now)
+    {
+        var problems = new List<string>(Validate(currentEndsAt));
+
+        if (EndsAt <= now)
+        {
+            problems.Add($"endsAt: expected a time after {now:O}, got {EndsAt:O}.");
+        }
+
+        return problems;
+    }
 }
 
 public sealed record RecordingProgressDto

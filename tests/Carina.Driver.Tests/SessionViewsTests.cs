@@ -135,6 +135,39 @@ public sealed class SessionViewsTests : IDisposable
     }
 
     [Fact]
+    public void ARecordingSaysWhichRecordingItIsWritingAndALiveSessionSaysNone()
+    {
+        TunerSessionManager manager = Manager();
+
+        SessionStart start = manager.Begin(
+            new StartSessionRequest
+            {
+                SessionId = SessionId.Parse("rec"),
+                Purpose = SessionPurpose.Recording,
+                Tuning = new TuningRequest(TunerKind.Terrestrial, 55),
+                DeviceId = "adapter0",
+                OutputRoot = "primary",
+                RecordingId = "k-90210",
+                EndsAt = Start.AddMinutes(30),
+            }
+        );
+
+        Assert.True(start.TryGetSession(out TunerSession? recording), start.Detail);
+
+        TunerSession live = Begin(manager, "live", "adapter1", TunerKind.Satellite);
+
+        Assert.Equal("k-90210", SessionViews.Of(recording, Hello).RecordingId);
+        Assert.Null(SessionViews.Of(live, Hello).RecordingId);
+
+        IReadOnlyList<SessionSnapshot> listed = SessionViews.All(manager, Hello);
+
+        Assert.Equal(
+            "k-90210",
+            listed.Single(snapshot => snapshot.SessionId == recording.SessionId).RecordingId
+        );
+    }
+
+    [Fact]
     public void ASessionCarriesItsStateAndItsCounters()
     {
         TunerSessionManager manager = Manager();

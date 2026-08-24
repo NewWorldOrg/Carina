@@ -51,6 +51,7 @@ public sealed class TunerSessionManager(
     );
     private readonly ConcurrentQueue<TunerSession> ended = new();
     private readonly ConcurrentDictionary<SessionId, TuningKey> tunings = [];
+    private readonly ConcurrentDictionary<string, SessionId> writing = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Dictionary<TuningKey, int>> tuneFailureStreaks = new(
         StringComparer.Ordinal
     );
@@ -128,7 +129,8 @@ public sealed class TunerSessionManager(
             session.Broadcaster.Close(
                 new OperationCanceledException(
                     $"The driver is shutting down; the stream of '{session.SessionId}' ends here and is incomplete."
-                )
+                ),
+                SessionStopReason.Requested
             );
         }
     }
@@ -229,7 +231,7 @@ public sealed class TunerSessionManager(
         }
     }
 
-    private static async Task<bool> Settles(
+    private async Task<bool> Settles(
         Task everyone,
         TimeSpan limit,
         CancellationToken cancellationToken
@@ -237,7 +239,7 @@ public sealed class TunerSessionManager(
     {
         try
         {
-            await everyone.WaitAsync(limit, cancellationToken);
+            await everyone.WaitAsync(limit, timeProvider, cancellationToken);
 
             return true;
         }
@@ -632,7 +634,21 @@ public sealed class TunerSessionManager(
             );
         }
 
-        if (!host.Broadcaster.TrySubscribe(SubscriberKind.Piggyback, out SessionSubscription? seat))
+        if (host.EndsAt <= now)
+        {
+            pool.Leave(request.SessionId);
+
+            return SessionStart.Refused(
+                SessionRefusal.DeviceUnavailable,
+                $"The session '{host.SessionId}' that '{request.SessionId}' would read the device '{grant.DeviceId}' through stops at {host.EndsAt:O}, so there is no window left to share."
+            );
+        }
+
+        SubscriberKind kind = request.Purpose is SessionPurpose.Recording
+            ? SubscriberKind.Recording
+            : SubscriberKind.Piggyback;
+
+        if (!host.Broadcaster.TrySubscribe(kind, out SessionSubscription? seat))
         {
             pool.Leave(request.SessionId);
 
@@ -648,9 +664,11 @@ public sealed class TunerSessionManager(
             new PiggybackTunerDevice(host, seat),
             directory,
             now,
-            endsAt,
+            endsAt > host.EndsAt ? host.EndsAt : endsAt,
             holds: false,
-            tuned: false
+            tuned: false,
+            ridesOn: host,
+            seat: seat
         );
     }
 
@@ -662,17 +680,44 @@ public sealed class TunerSessionManager(
         DateTimeOffset now,
         DateTimeOffset endsAt,
         bool holds,
-        bool tuned
+        bool tuned,
+        TunerSession? ridesOn = null,
+        SessionSubscription? seat = null
     )
     {
         SessionId sessionId = request.SessionId;
+        string? claimed = null;
+
+        if (request.RecordingId is { } recordingId)
+        {
+            if (!writing.TryAdd(recordingId, sessionId))
+            {
+                pool.Leave(sessionId);
+                tunerDevice.Dispose();
+
+                return SessionStart.Refused(
+                    SessionRefusal.RecordingAlreadyExists,
+                    $"The session '{HolderOf(recordingId)}' is already writing the recording '{recordingId}'; a second one would split it across two files and leave one of them an orphan."
+                );
+            }
+
+            claimed = recordingId;
+        }
 
         IRecordingWriter? writer = null;
         if (directory is not null)
         {
-            SessionStart? refusal = TryOpenRecording(directory, sessionId, out writer);
+            SessionStart? refusal = TryOpenRecording(
+                directory,
+                sessionId,
+                request.OutputRoot!,
+                request.RecordingId!,
+                out writer
+            );
+
             if (refusal is not null)
             {
+                LetGoOfTheRecording(claimed, sessionId);
                 tunerDevice.Dispose();
 
                 return refusal;
@@ -690,9 +735,14 @@ public sealed class TunerSessionManager(
             writer,
             logger: logger,
             outputRoot: request.OutputRoot,
+            recordingId: request.RecordingId,
             diagnostics: diagnostics,
             watch: Watch(request.Purpose),
-            tune: request.Tune
+            tune: request.Tune,
+            ridesOn: ridesOn,
+            seat: seat,
+            demuxBufferBytes: configuration.Tuner?.DemuxBufferBytes
+                ?? TunerSettings.DefaultDemuxBufferBytes
         );
 
         lock (drainGate)
@@ -700,6 +750,7 @@ public sealed class TunerSessionManager(
             if (draining)
             {
                 pool.Leave(sessionId);
+                LetGoOfTheRecording(claimed, sessionId);
                 session.Dispose();
 
                 return SessionStart.Refused(
@@ -711,6 +762,7 @@ public sealed class TunerSessionManager(
             if (!sessions.TryAdd(sessionId, session))
             {
                 pool.Leave(sessionId);
+                LetGoOfTheRecording(claimed, sessionId);
                 session.Dispose();
 
                 return SessionStart.Refused(
@@ -734,6 +786,8 @@ public sealed class TunerSessionManager(
             tunings.TryRemove(sessionId, out _);
             session.Ended -= Forget;
             pool.Leave(sessionId);
+            LetGoOfTheRecording(claimed, sessionId);
+            session.Dispose();
 
             return SessionStart.Refused(
                 SessionRefusal.DeviceUnavailable,
@@ -756,9 +810,22 @@ public sealed class TunerSessionManager(
         return SessionStart.Started(session);
     }
 
+    private SessionId HolderOf(string recordingId) =>
+        writing.TryGetValue(recordingId, out SessionId holder) ? holder : default;
+
+    private void LetGoOfTheRecording(string? recordingId, SessionId sessionId)
+    {
+        if (recordingId is not null)
+        {
+            writing.TryRemove(new KeyValuePair<string, SessionId>(recordingId, sessionId));
+        }
+    }
+
     private SessionStart? TryOpenRecording(
         string directory,
         SessionId sessionId,
+        string outputRoot,
+        string recordingId,
         out IRecordingWriter? writer
     )
     {
@@ -766,26 +833,25 @@ public sealed class TunerSessionManager(
 
         try
         {
-            writer = writerFactory.Open(directory, sessionId);
+            writer = writerFactory.Open(directory, recordingId);
 
             return null;
-        }
-        catch (IOException error) when (File.Exists(Path.Combine(directory, $"{sessionId}.ts")))
-        {
-            pool.Leave(sessionId);
-
-            return SessionStart.Refused(
-                SessionRefusal.RecordingAlreadyExists,
-                $"A recording for '{sessionId}' is already on disk, and this driver never appends to one: {error.Message}"
-            );
         }
         catch (Exception error)
         {
             pool.Leave(sessionId);
 
+            logger.LogError(
+                error,
+                "The recording {RecordingId} for {SessionId} could not be opened under {OutputRoot}.",
+                recordingId,
+                sessionId.Value,
+                outputRoot
+            );
+
             return SessionStart.Refused(
                 SessionRefusal.OutputUnavailable,
-                $"The recording for '{sessionId}' could not be opened: {error.Message}"
+                $"The recording '{recordingId}' could not be opened under the output root '{outputRoot}'; the driver log says why."
             );
         }
     }
@@ -800,6 +866,71 @@ public sealed class TunerSessionManager(
         session = ended.FirstOrDefault(candidate => candidate.SessionId == sessionId);
 
         return session is not null;
+    }
+
+    public SessionExtension Extend(SessionId sessionId, ExtendSessionRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (!sessions.TryGetValue(sessionId, out TunerSession? session))
+        {
+            return ended.Any(candidate => candidate.SessionId == sessionId)
+                ? SessionExtension.Refused(
+                    SessionExtendOutcome.AlreadyEnded,
+                    $"The session '{sessionId}' has already ended, so there is no end left to move."
+                )
+                : SessionExtension.Refused(
+                    SessionExtendOutcome.NoSuchSession,
+                    $"This driver holds no session called '{sessionId}'."
+                );
+        }
+
+        if (session.Purpose is not SessionPurpose.Recording)
+        {
+            return SessionExtension.Refused(
+                SessionExtendOutcome.NotARecording,
+                $"The session '{sessionId}' is a {SessionPurposeConverter.WireName(session.Purpose)} one, and this driver holds its end to the limit its purpose is given."
+            );
+        }
+
+        IReadOnlyList<string> problems = request.Validate(
+            session.EndsAt,
+            timeProvider.GetUtcNow()
+        );
+
+        if (problems.Count > 0)
+        {
+            return SessionExtension.Refused(
+                SessionExtendOutcome.NotAnExtension,
+                string.Join(" ", problems)
+            );
+        }
+
+        if (session.RidesOn is { } host && request.EndsAt > host.EndsAt)
+        {
+            return SessionExtension.Refused(
+                SessionExtendOutcome.NotAnExtension,
+                $"endsAt: '{sessionId}' reads the tuner through '{host.SessionId}', which stops at {host.EndsAt:O}, so it cannot be held open until {request.EndsAt:O}."
+            );
+        }
+
+        if (!session.Extend(request.EndsAt))
+        {
+            return SessionExtension.Refused(
+                SessionExtendOutcome.AlreadyEnded,
+                $"The session '{sessionId}' is {session.State} and is no longer taking a later end."
+            );
+        }
+
+        logger.LogInformation(
+            "Session {SessionId} now runs until {EndsAt}.",
+            sessionId.Value,
+            session.EndsAt
+        );
+
+        events?.Signal(DriverEvents.Sessions);
+
+        return SessionExtension.Extended(session);
     }
 
     public async Task<SessionStopOutcome> StopAsync(
@@ -864,6 +995,8 @@ public sealed class TunerSessionManager(
 
             pool.Discard(session.DeviceId);
         }
+
+        LetGoOfTheRecording(session.RecordingId, session.SessionId);
 
         pool.Leave(session.SessionId);
         pool.Sweep();
