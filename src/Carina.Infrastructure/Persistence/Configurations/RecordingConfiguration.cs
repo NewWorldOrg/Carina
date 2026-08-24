@@ -63,6 +63,16 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
                 "(file_size_observed IS NULL) = (observed_at IS NULL)");
             table.HasCheckConstraint("ck_recording_window", "expected_window_end > expected_window_start");
             table.HasCheckConstraint(
+                "ck_recording_file_name",
+                """
+                btrim(file_name) = file_name
+                AND length(file_name) > 0
+                AND file_name <> '.'
+                AND strpos(file_name, '/') = 0
+                AND strpos(file_name, chr(92)) = 0
+                AND strpos(file_name, '..') = 0
+                """);
+            table.HasCheckConstraint(
                 "ck_recording_counts",
                 """
                 written_duration_ms >= 0
