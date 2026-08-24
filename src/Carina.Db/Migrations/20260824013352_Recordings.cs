@@ -179,6 +179,27 @@ public partial class Recordings : Migration
             table: "recording",
             columns: new[] { "recording_outcome", "stopped_at_actual" });
 
+        migrationBuilder.Sql(
+            """
+            CREATE OR REPLACE FUNCTION recording_projects_its_outcome() RETURNS trigger
+            LANGUAGE plpgsql AS $fn$
+            BEGIN
+                IF NEW.reservation_id IS NOT NULL THEN
+                    UPDATE reservation
+                    SET recording_outcome = NEW.recording_outcome
+                    WHERE id = NEW.reservation_id
+                      AND recording_outcome IS DISTINCT FROM NEW.recording_outcome;
+                END IF;
+
+                RETURN NULL;
+            END;
+            $fn$;
+
+            CREATE TRIGGER recording_projects_its_outcome
+            AFTER INSERT OR UPDATE OF recording_outcome, reservation_id ON recording
+            FOR EACH ROW EXECUTE FUNCTION recording_projects_its_outcome();
+            """);
+
         migrationBuilder.CreateIndex(
             name: "ux_recording_file",
             table: "recording",
@@ -200,6 +221,7 @@ public partial class Recordings : Migration
         migrationBuilder.DropTable(
             name: "recording");
 
+        migrationBuilder.Sql("DROP FUNCTION IF EXISTS recording_projects_its_outcome();");
         migrationBuilder.Sql("DROP FUNCTION IF EXISTS recording_json_count(jsonb);");
         migrationBuilder.Sql("DROP FUNCTION IF EXISTS recording_history_holds(jsonb, integer, text[]);");
         migrationBuilder.Sql("DROP FUNCTION IF EXISTS recording_reasons_hold(jsonb, text[], text[]);");
