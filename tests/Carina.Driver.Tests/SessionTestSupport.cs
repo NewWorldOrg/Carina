@@ -216,6 +216,26 @@ public sealed class CountingRecordingWriter : IRecordingWriter
     }
 }
 
+public sealed class CountingRecordingWriterFactory : IRecordingWriterFactory
+{
+    private long opened;
+
+    public long Opened => Interlocked.Read(ref opened);
+
+    public CountingRecordingWriter? Last { get; private set; }
+
+    public IRecordingWriter Open(string recordingsDirectory, string recordingId)
+    {
+        Interlocked.Increment(ref opened);
+
+        Last = new CountingRecordingWriter(
+            System.IO.Path.Combine(recordingsDirectory, $"{recordingId}.ts")
+        );
+
+        return Last;
+    }
+}
+
 public sealed class BrittleRecordingWriter(string path, long failAfterBytes = 0)
     : IRecordingWriter
 {
