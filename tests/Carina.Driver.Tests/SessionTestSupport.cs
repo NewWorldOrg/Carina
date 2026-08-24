@@ -320,3 +320,195 @@ public sealed class CapturingLogger<T> : ILogger<T>
         Func<TState, Exception?, string> formatter
     ) => lines.Enqueue($"{logLevel} {formatter(state, exception)}");
 }
+
+public sealed class SteppedTimeProvider(DateTimeOffset start) : TimeProvider
+{
+    private readonly Lock gate = new();
+    private readonly List<SteppedTimer> waiting = [];
+
+    private long ticks = start.UtcTicks;
+
+    public override DateTimeOffset GetUtcNow() => new(Interlocked.Read(ref ticks), TimeSpan.Zero);
+
+    public int Waiting
+    {
+        get
+        {
+            lock (gate)
+            {
+                return waiting.Count;
+            }
+        }
+    }
+
+    public void Advance(TimeSpan by)
+    {
+        Interlocked.Add(ref ticks, by.Ticks);
+
+        SteppedTimer[] due;
+
+        lock (gate)
+        {
+            due = [.. waiting];
+        }
+
+        foreach (SteppedTimer timer in due)
+        {
+            timer.FireIfDue(GetUtcNow());
+        }
+    }
+
+    public void AwaitSomethingWaitingOnTheClock(TimeSpan within)
+    {
+        DateTime deadline = DateTime.UtcNow + within;
+
+        while (Waiting is 0)
+        {
+            Assert.True(
+                DateTime.UtcNow < deadline,
+                "Nothing ever asked this clock to wake it, so advancing it would prove nothing."
+            );
+
+            Thread.Sleep(1);
+        }
+    }
+
+    public override ITimer CreateTimer(
+        TimerCallback callback,
+        object? state,
+        TimeSpan dueTime,
+        TimeSpan period
+    )
+    {
+        var timer = new SteppedTimer(this, callback, state);
+
+        timer.Change(dueTime, period);
+
+        return timer;
+    }
+
+    internal void Keep(SteppedTimer timer)
+    {
+        lock (gate)
+        {
+            if (!waiting.Contains(timer))
+            {
+                waiting.Add(timer);
+            }
+        }
+    }
+
+    internal void Forget(SteppedTimer timer)
+    {
+        lock (gate)
+        {
+            waiting.Remove(timer);
+        }
+    }
+}
+
+public sealed class SteppedTimer(
+    SteppedTimeProvider clock,
+    TimerCallback callback,
+    object? state
+) : ITimer
+{
+    private readonly Lock gate = new();
+
+    private DateTimeOffset? dueAt;
+    private TimeSpan period = Timeout.InfiniteTimeSpan;
+
+    public bool Change(TimeSpan dueTime, TimeSpan every)
+    {
+        lock (gate)
+        {
+            period = every;
+            dueAt = dueTime == Timeout.InfiniteTimeSpan ? null : clock.GetUtcNow() + dueTime;
+        }
+
+        if (dueAt is null)
+        {
+            clock.Forget(this);
+
+            return true;
+        }
+
+        clock.Keep(this);
+        FireIfDue(clock.GetUtcNow());
+
+        return true;
+    }
+
+    public void Dispose()
+    {
+        lock (gate)
+        {
+            dueAt = null;
+        }
+
+        clock.Forget(this);
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        Dispose();
+
+        return ValueTask.CompletedTask;
+    }
+
+    internal void FireIfDue(DateTimeOffset now)
+    {
+        lock (gate)
+        {
+            if (dueAt is not { } at || now < at)
+            {
+                return;
+            }
+
+            dueAt = period == Timeout.InfiniteTimeSpan ? null : now + period;
+        }
+
+        if (dueAt is null)
+        {
+            clock.Forget(this);
+        }
+
+        callback(state);
+    }
+}
+
+public sealed class RationedRecordingWriter(IRecordingWriter inner, long room) : IRecordingWriter
+{
+    public string Path => inner.Path;
+
+    public long BytesWritten => inner.BytesWritten;
+
+    public void Write(ReadOnlySpan<byte> bytes)
+    {
+        if (inner.BytesWritten + bytes.Length > room)
+        {
+            throw new IOException("No space left on device");
+        }
+
+        inner.Write(bytes);
+    }
+
+    public void Dispose() => inner.Dispose();
+}
+
+public sealed class RationedRecordingWriterFactory(long room) : IRecordingWriterFactory
+{
+    private long opened;
+
+    public long Opened => Interlocked.Read(ref opened);
+
+    public IRecordingWriter Open(string recordingsDirectory, string recordingId)
+    {
+        Interlocked.Increment(ref opened);
+
+        return new RationedRecordingWriter(
+            new RecordingWriter(recordingsDirectory, recordingId),
+            room
+        );
+    }
+}

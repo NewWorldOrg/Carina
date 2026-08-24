@@ -229,7 +229,7 @@ public sealed class TunerSessionManager(
         }
     }
 
-    private static async Task<bool> Settles(
+    private async Task<bool> Settles(
         Task everyone,
         TimeSpan limit,
         CancellationToken cancellationToken
@@ -237,7 +237,7 @@ public sealed class TunerSessionManager(
     {
         try
         {
-            await everyone.WaitAsync(limit, cancellationToken);
+            await everyone.WaitAsync(limit, timeProvider, cancellationToken);
 
             return true;
         }
