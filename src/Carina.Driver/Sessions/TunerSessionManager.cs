@@ -51,6 +51,7 @@ public sealed class TunerSessionManager(
     );
     private readonly ConcurrentQueue<TunerSession> ended = new();
     private readonly ConcurrentDictionary<SessionId, TuningKey> tunings = [];
+    private readonly ConcurrentDictionary<string, SessionId> writing = new(StringComparer.Ordinal);
     private readonly Dictionary<string, Dictionary<TuningKey, int>> tuneFailureStreaks = new(
         StringComparer.Ordinal
     );
@@ -685,14 +686,72 @@ public sealed class TunerSessionManager(
     )
     {
         SessionId sessionId = request.SessionId;
-        TunerSession session;
+        string? claimed = null;
+
+        if (request.RecordingId is { } recordingId)
+        {
+            if (!writing.TryAdd(recordingId, sessionId))
+            {
+                pool.Leave(sessionId);
+                tunerDevice.Dispose();
+
+                return SessionStart.Refused(
+                    SessionRefusal.RecordingAlreadyExists,
+                    $"The session '{HolderOf(recordingId)}' is writing the recording '{recordingId}', and two writers on one file would interleave."
+                );
+            }
+
+            claimed = recordingId;
+        }
+
+        IRecordingWriter? writer = null;
+        if (directory is not null)
+        {
+            SessionStart? refusal = TryOpenRecording(
+                directory,
+                sessionId,
+                request.OutputRoot!,
+                request.RecordingId!,
+                out writer
+            );
+
+            if (refusal is not null)
+            {
+                LetGoOfTheRecording(claimed, sessionId);
+                tunerDevice.Dispose();
+
+                return refusal;
+            }
+        }
+
+        var session = new TunerSession(
+            sessionId,
+            request.Purpose,
+            deviceId,
+            tunerDevice,
+            now,
+            endsAt,
+            timeProvider,
+            writer,
+            logger: logger,
+            outputRoot: request.OutputRoot,
+            recordingId: request.RecordingId,
+            diagnostics: diagnostics,
+            watch: Watch(request.Purpose),
+            tune: request.Tune,
+            ridesOn: ridesOn,
+            seat: seat,
+            demuxBufferBytes: configuration.Tuner?.DemuxBufferBytes
+                ?? TunerSettings.DefaultDemuxBufferBytes
+        );
 
         lock (drainGate)
         {
             if (draining)
             {
                 pool.Leave(sessionId);
-                tunerDevice.Dispose();
+                LetGoOfTheRecording(claimed, sessionId);
+                session.Dispose();
 
                 return SessionStart.Refused(
                     SessionRefusal.Draining,
@@ -700,60 +759,10 @@ public sealed class TunerSessionManager(
                 );
             }
 
-            if (AlreadyWriting(request.RecordingId) is { } holder)
-            {
-                pool.Leave(sessionId);
-                tunerDevice.Dispose();
-
-                return SessionStart.Refused(
-                    SessionRefusal.RecordingAlreadyExists,
-                    $"The session '{holder}' is writing the recording '{request.RecordingId}', and two writers on one file would interleave."
-                );
-            }
-
-            IRecordingWriter? writer = null;
-            if (directory is not null)
-            {
-                SessionStart? refusal = TryOpenRecording(
-                    directory,
-                    sessionId,
-                    request.OutputRoot!,
-                    request.RecordingId!,
-                    out writer
-                );
-
-                if (refusal is not null)
-                {
-                    tunerDevice.Dispose();
-
-                    return refusal;
-                }
-            }
-
-            session = new TunerSession(
-                sessionId,
-                request.Purpose,
-                deviceId,
-                tunerDevice,
-                now,
-                endsAt,
-                timeProvider,
-                writer,
-                logger: logger,
-                outputRoot: request.OutputRoot,
-                recordingId: request.RecordingId,
-                diagnostics: diagnostics,
-                watch: Watch(request.Purpose),
-                tune: request.Tune,
-                ridesOn: ridesOn,
-                seat: seat,
-                demuxBufferBytes: configuration.Tuner?.DemuxBufferBytes
-                    ?? TunerSettings.DefaultDemuxBufferBytes
-            );
-
             if (!sessions.TryAdd(sessionId, session))
             {
                 pool.Leave(sessionId);
+                LetGoOfTheRecording(claimed, sessionId);
                 session.Dispose();
 
                 return SessionStart.Refused(
@@ -777,6 +786,7 @@ public sealed class TunerSessionManager(
             tunings.TryRemove(sessionId, out _);
             session.Ended -= Forget;
             pool.Leave(sessionId);
+            LetGoOfTheRecording(claimed, sessionId);
             session.Dispose();
 
             return SessionStart.Refused(
@@ -800,22 +810,15 @@ public sealed class TunerSessionManager(
         return SessionStart.Started(session);
     }
 
-    private SessionId? AlreadyWriting(string? recordingId)
+    private SessionId HolderOf(string recordingId) =>
+        writing.TryGetValue(recordingId, out SessionId holder) ? holder : default;
+
+    private void LetGoOfTheRecording(string? recordingId, SessionId sessionId)
     {
-        if (recordingId is null)
+        if (recordingId is not null)
         {
-            return null;
+            writing.TryRemove(new KeyValuePair<string, SessionId>(recordingId, sessionId));
         }
-
-        foreach (TunerSession candidate in sessions.Values)
-        {
-            if (string.Equals(candidate.RecordingId, recordingId, StringComparison.Ordinal))
-            {
-                return candidate.SessionId;
-            }
-        }
-
-        return null;
     }
 
     private SessionStart? TryOpenRecording(
@@ -992,6 +995,8 @@ public sealed class TunerSessionManager(
 
             pool.Discard(session.DeviceId);
         }
+
+        LetGoOfTheRecording(session.RecordingId, session.SessionId);
 
         pool.Leave(session.SessionId);
         pool.Sweep();

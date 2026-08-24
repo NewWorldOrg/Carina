@@ -60,6 +60,15 @@ public sealed class SingleRecordingWriterTests : IDisposable
             EndsAt = Start.AddHours(1),
         };
 
+    private static StartSessionRequest Watching(string sessionId, int channel) =>
+        new()
+        {
+            SessionId = SessionId.Parse(sessionId),
+            Purpose = SessionPurpose.Live,
+            Tuning = new TuningRequest(TunerKind.Terrestrial, channel, 50001),
+            EndsAt = Start.AddHours(1),
+        };
+
     private static void LetGo(TunerSessionManager manager)
     {
         foreach (TunerSession session in manager.Sessions)
@@ -170,6 +179,40 @@ public sealed class SingleRecordingWriterTests : IDisposable
         }
 
         Assert.Equal(Rounds, refusedForTheRightReason);
+    }
+
+    [Fact]
+    public async Task AnOutputRootThatDoesNotAnswerHoldsUpNothingButItsOwnSession()
+    {
+        var stuck = new StallingRecordingWriterFactory();
+        var manager = new TunerSessionManager(
+            Configuration,
+            new ScriptedTunerDeviceFactory(),
+            clock,
+            NullLogger<TunerSessionManager>.Instance,
+            recordingWriters: stuck
+        );
+
+        Task<SessionStart> hanging = Task.Run(() => manager.Begin(Recording("s-1", "k-stuck", 55)));
+
+        stuck.AwaitOpening(Deadlock);
+
+        SessionStart other = await Task.Run(() => manager.Begin(Watching("s-2", 56)))
+            .WaitAsync(Deadlock);
+
+        Assert.True(other.TryGetSession(out _), other.Detail);
+
+        await Task.Run(manager.EnterDraining).WaitAsync(Deadlock);
+
+        Assert.True(manager.IsDraining);
+
+        stuck.LetGo();
+
+        SessionStart late = await hanging.WaitAsync(Deadlock);
+
+        Assert.Equal(SessionRefusal.Draining, late.Refusal);
+
+        LetGo(manager);
     }
 
     [Fact]

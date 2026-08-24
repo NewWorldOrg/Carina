@@ -236,6 +236,30 @@ public sealed class CountingRecordingWriterFactory : IRecordingWriterFactory
     }
 }
 
+public sealed class StallingRecordingWriterFactory : IRecordingWriterFactory
+{
+    private readonly SemaphoreSlim opening = new(0);
+    private readonly SemaphoreSlim released = new(0);
+
+    public IRecordingWriter Open(string recordingsDirectory, string recordingId)
+    {
+        opening.Release();
+        released.Wait();
+
+        return new CountingRecordingWriter(
+            System.IO.Path.Combine(recordingsDirectory, $"{recordingId}.ts")
+        );
+    }
+
+    public void AwaitOpening(TimeSpan within) =>
+        Assert.True(
+            opening.Wait(within),
+            "The driver never reached the point of opening a recording file."
+        );
+
+    public void LetGo() => released.Release();
+}
+
 public sealed class BrittleRecordingWriter(string path, long failAfterBytes = 0)
     : IRecordingWriter
 {
