@@ -63,6 +63,12 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
                 "(file_size_observed IS NULL) = (observed_at IS NULL)");
             table.HasCheckConstraint("ck_recording_window", "expected_window_end > expected_window_start");
             table.HasCheckConstraint(
+                "ck_recording_broadcast_group",
+                """
+                broadcast_group_role IN ('Standalone', 'MovementPrimary', 'MovementSuppressed', 'RelaySegment')
+                AND (broadcast_group_role = 'Standalone' OR broadcast_group_key IS NOT NULL)
+                """);
+            table.HasCheckConstraint(
                 "ck_recording_file_name",
                 """
                 btrim(file_name) = file_name

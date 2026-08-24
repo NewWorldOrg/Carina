@@ -53,6 +53,7 @@ public partial class Recordings : Migration
             constraints: table =>
             {
                 table.PrimaryKey("pk_recording", x => x.id);
+                table.CheckConstraint("ck_recording_broadcast_group", "broadcast_group_role IN ('Standalone', 'MovementPrimary', 'MovementSuppressed', 'RelaySegment')\nAND (broadcast_group_role = 'Standalone' OR broadcast_group_key IS NOT NULL)");
                 table.CheckConstraint("ck_recording_complete_was_asked_for", "recording_outcome IS DISTINCT FROM 'Complete' OR aborted_at IS NOT NULL");
                 table.CheckConstraint("ck_recording_counts", "written_duration_ms >= 0\nAND resume_count >= 0\nAND eovf_count >= 0\nAND (file_size_observed IS NULL OR file_size_observed >= 0)\nAND (scrambled_packets IS NULL OR scrambled_packets >= 0)");
                 table.CheckConstraint("ck_recording_empty_file_failed", "recording_outcome IS NULL OR file_size_observed <> 0 OR recording_outcome = 'Failed'");
