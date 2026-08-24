@@ -236,6 +236,7 @@ public sealed class Recording
         RefuseAPositionNothingCounted(counters, positions, scrambledPackets);
         RefuseAMeasurementFromNoTuner(counters, eovfCount, tunerDeviceId);
 
+        RefuseAHistoryThatDoesNotAddUp(interruptions, resumeCount, startedAtActual);
         RefuseATimeBeforeTheRecordingBegan(startedAtActual, stoppedAtActual, nameof(stoppedAtActual));
         RefuseATimeBeforeTheRecordingBegan(startedAtActual, abortedAt, nameof(abortedAt));
         RefuseATimeBeforeTheRecordingBegan(startedAtActual, observedAt, nameof(observedAt));
@@ -402,7 +403,10 @@ public sealed class Recording
 
         RefuseATimeBeforeTheRecordingBegan(interruptions[^1].OccurredAt, at, nameof(at));
 
-        interruptions[^1] = interruptions[^1] with { ResumedAt = UtcTimes.Required(at, nameof(at)) };
+        interruptions[^1] = new Interruption(
+            interruptions[^1].Fault,
+            interruptions[^1].OccurredAt,
+            UtcTimes.Required(at, nameof(at)));
         ResumeCount++;
     }
 
@@ -539,6 +543,49 @@ public sealed class Recording
         throw new ArgumentException(
             "A count came off a tuner, so the recording names which one it came off.",
             nameof(tunerDeviceId));
+    }
+
+    private static void RefuseAHistoryThatDoesNotAddUp(
+        IReadOnlyList<Interruption> interruptions,
+        int resumeCount,
+        DateTime startedAtActual)
+    {
+        DateTime previous = startedAtActual;
+        int closed = 0;
+
+        foreach (Interruption interruption in interruptions)
+        {
+            if (interruption.OccurredAt < previous)
+            {
+                throw new ArgumentException(
+                    "Interruptions are kept in the order they happened, and none of them overlap.",
+                    nameof(interruptions));
+            }
+
+            if (interruption.ResumedAt is { } resumedAt)
+            {
+                closed++;
+                previous = resumedAt;
+            }
+            else
+            {
+                previous = interruption.OccurredAt;
+            }
+        }
+
+        if (interruptions.Take(Math.Max(interruptions.Count - 1, 0)).Any(interruption => interruption.IsOpen))
+        {
+            throw new ArgumentException(
+                "Only the last interruption is still open.",
+                nameof(interruptions));
+        }
+
+        if (closed != resumeCount)
+        {
+            throw new ArgumentException(
+                $"A recording that closed {closed} interruptions resumed {closed} times, not {resumeCount}.",
+                nameof(resumeCount));
+        }
     }
 
     private static void RefuseATimeBeforeTheRecordingBegan(DateTime began, DateTime? at, string parameterName)

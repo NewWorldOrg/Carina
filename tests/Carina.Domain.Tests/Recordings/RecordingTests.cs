@@ -388,7 +388,10 @@ public sealed class RecordingTests
             Now.AddHours(1),
             3_600_000,
             2,
-            [new Interruption(RecordingFault.DriverLost, Now, Now.AddSeconds(9))],
+            [
+                new Interruption(RecordingFault.DriverLost, Now, Now.AddSeconds(9)),
+                new Interruption(RecordingFault.DriverLost, Now.AddMinutes(4), Now.AddMinutes(4).AddSeconds(3)),
+            ],
             Now.AddMinutes(-5),
             Now.AddMinutes(55),
             RecordingOutcome.Complete,
@@ -404,7 +407,7 @@ public sealed class RecordingTests
             BroadcastGroupRole.Standalone);
 
         Assert.Equal(2, recording.ResumeCount);
-        Assert.Single(recording.Interruptions);
+        Assert.Equal(2, recording.Interruptions.Count);
         Assert.Equal(TimeSpan.FromHours(1), recording.Written);
         Assert.Equal(RecordingOutcome.Complete, recording.Outcome);
         Assert.Equal("A programme", recording.SnapshotName);
