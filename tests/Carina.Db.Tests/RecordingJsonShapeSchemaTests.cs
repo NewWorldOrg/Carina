@@ -313,6 +313,52 @@ public sealed class RecordingJsonShapeSchemaTests(MigratedScratchDatabase databa
         Assert.Equal(2, await Scalar(connection, "SELECT jsonb_array_length(drop_positions) FROM recording WHERE network_id = 84091"));
     }
 
+    [Fact]
+    public async Task AnInterruptionBeforeTheRecordingStartedIsRefused()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(
+                connection,
+                84101,
+                interruptions: """'[{"fault":"DriverLost","occurredAt":"2026-08-24T19:59:59Z","resumedAt":null}]'::jsonb"""));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
+        Assert.Equal("ck_recording_history", refusal.ConstraintName);
+    }
+
+    [Fact]
+    public async Task AReasonNoticedBeforeTheRecordingStartedIsRefused()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(
+                connection,
+                84102,
+                detail: """
+                    '[{"fault":"DiskExhausted","tuneFailure":null,"note":"","noticedAt":"2026-08-24T19:59:59Z"}]'::jsonb
+                    """));
+
+        Assert.Equal("ck_recording_reasons", refusal.ConstraintName);
+    }
+
+    [Fact]
+    public async Task AnInterruptionAtTheVeryMomentItStartedIsAccepted()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        await Record(
+            connection,
+            84103,
+            interruptions: """'[{"fault":"DriverLost","occurredAt":"2026-08-24T20:00:00Z","resumedAt":null}]'::jsonb""");
+
+        Assert.Equal(
+            1,
+            await Scalar(connection, "SELECT jsonb_array_length(interruptions) FROM recording WHERE network_id = 84103"));
+    }
+
     private static async Task Record(
         NpgsqlConnection connection,
         int networkId,

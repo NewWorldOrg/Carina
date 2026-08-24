@@ -1063,7 +1063,7 @@ namespace Carina.Db.Migrations
 
                             t.HasCheckConstraint("ck_recording_file_name", "btrim(file_name) = file_name\nAND length(file_name) > 0\nAND file_name <> '.'\nAND strpos(file_name, '/') = 0\nAND strpos(file_name, chr(92)) = 0\nAND strpos(file_name, '..') = 0\nAND strpos(file_name, replace(id::text, '-', '')) > 0");
 
-                            t.HasCheckConstraint("ck_recording_history", "recording_history_holds(interruptions, resume_count, ARRAY['TuneFailed', 'RefusedByDiskPrecheck', 'DiskExhausted', 'DriverLost', 'DrainGraceExpired', 'StoppedByHand', 'TunerContended', 'ScramblingUnresolved', 'ShortOfTheWindow']::text[])");
+                            t.HasCheckConstraint("ck_recording_history", "recording_history_holds(interruptions, resume_count, ARRAY['TuneFailed', 'RefusedByDiskPrecheck', 'DiskExhausted', 'DriverLost', 'DrainGraceExpired', 'StoppedByHand', 'TunerContended', 'ScramblingUnresolved', 'ShortOfTheWindow']::text[], started_at_actual)");
 
                             t.HasCheckConstraint("ck_recording_measurement", "(cc_measured\n    OR (cc_dropped_packets IS NULL AND cc_total_packets IS NULL))\nAND (NOT cc_measured\n    OR (cc_dropped_packets IS NOT NULL\n        AND cc_total_packets IS NOT NULL\n        AND cc_dropped_packets <= cc_total_packets\n        AND measured_updated_at IS NOT NULL))");
 
@@ -1077,7 +1077,7 @@ namespace Carina.Db.Migrations
 
                             t.HasCheckConstraint("ck_recording_reanchors", "recording_reanchors_hold(pcr_reanchors, 8589934592)");
 
-                            t.HasCheckConstraint("ck_recording_reasons", "recording_reasons_hold(outcome_detail, ARRAY['TuneFailed', 'RefusedByDiskPrecheck', 'DiskExhausted', 'DriverLost', 'DrainGraceExpired', 'StoppedByHand', 'TunerContended', 'ScramblingUnresolved', 'ShortOfTheWindow']::text[], ARRAY['NoLock', 'NoData', 'IncompletePsi', 'StreamMismatch']::text[])");
+                            t.HasCheckConstraint("ck_recording_reasons", "recording_reasons_hold(outcome_detail, ARRAY['TuneFailed', 'RefusedByDiskPrecheck', 'DiskExhausted', 'DriverLost', 'DrainGraceExpired', 'StoppedByHand', 'TunerContended', 'ScramblingUnresolved', 'ShortOfTheWindow']::text[], ARRAY['NoLock', 'NoData', 'IncompletePsi', 'StreamMismatch']::text[], started_at_actual)");
 
                             t.HasCheckConstraint("ck_recording_runs_forwards", "(stopped_at_actual IS NULL OR stopped_at_actual >= started_at_actual)\nAND (aborted_at IS NULL OR aborted_at >= started_at_actual)\nAND (observed_at IS NULL OR observed_at >= started_at_actual)\nAND (measured_updated_at IS NULL OR measured_updated_at >= started_at_actual)");
 

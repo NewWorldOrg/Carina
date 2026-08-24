@@ -8,12 +8,14 @@ public static class RecordingGuards
         SELECT CASE WHEN jsonb_typeof(entries) = 'array' THEN jsonb_array_length(entries) ELSE 0 END;
         $fn$;
 
-        CREATE OR REPLACE FUNCTION recording_history_holds(entries jsonb, resumes integer, faults text[])
+        CREATE OR REPLACE FUNCTION recording_history_holds(
+            entries jsonb, resumes integer, faults text[], began timestamptz)
         RETURNS boolean LANGUAGE sql IMMUTABLE AS $fn$
         SELECT jsonb_typeof(entries) = 'array'
            AND COALESCE(bool_and(
                    entry ->> 'fault' = ANY (faults)
                    AND entry ->> 'occurredAt' LIKE '%Z'
+                   AND (entry ->> 'occurredAt')::timestamptz >= began
                    AND (entry ->> 'resumedAt' IS NULL OR entry ->> 'resumedAt' LIKE '%Z')
                    AND (entry ->> 'resumedAt' IS NULL
                         OR (entry ->> 'resumedAt')::timestamptz >= (entry ->> 'occurredAt')::timestamptz)
@@ -33,12 +35,14 @@ public static class RecordingGuards
         ) AS ordered;
         $fn$;
 
-        CREATE OR REPLACE FUNCTION recording_reasons_hold(entries jsonb, faults text[], tune_failures text[])
+        CREATE OR REPLACE FUNCTION recording_reasons_hold(
+            entries jsonb, faults text[], tune_failures text[], began timestamptz)
         RETURNS boolean LANGUAGE sql IMMUTABLE AS $fn$
         SELECT jsonb_typeof(entries) = 'array'
            AND COALESCE(bool_and(
                    entry ->> 'fault' = ANY (faults)
                    AND entry ->> 'noticedAt' LIKE '%Z'
+                   AND (entry ->> 'noticedAt')::timestamptz >= began
                    AND (entry ->> 'tuneFailure' IS NULL OR entry ->> 'tuneFailure' = ANY (tune_failures))
                ), true)
         FROM jsonb_array_elements(
@@ -82,6 +86,13 @@ public static class RecordingGuards
                      CASE WHEN jsonb_typeof(entries) = 'array' THEN entries ELSE '[]'::jsonb END)
                  WITH ORDINALITY AS listed(value, ordinality)
         ) AS ordered;
+        $fn$;
+
+        CREATE OR REPLACE FUNCTION recording_reasons_name_any(entries jsonb, faults text[])
+        RETURNS boolean LANGUAGE sql IMMUTABLE AS $fn$
+        SELECT COALESCE(bool_or(entry ->> 'fault' = ANY (faults)), false)
+        FROM jsonb_array_elements(
+                 CASE WHEN jsonb_typeof(entries) = 'array' THEN entries ELSE '[]'::jsonb END) AS listed(entry);
         $fn$;
         """;
 }

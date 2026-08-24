@@ -240,6 +240,7 @@ public sealed class Recording
         RefuseAPositionNothingCounted(counters, positions, scrambledPackets);
         RefuseAMeasurementFromNoTuner(counters, eovfCount, tunerDeviceId);
         RefuseAReasonFromNoTuner(outcomeDetail, tunerDeviceId);
+        RefuseAReasonBeforeTheRecordingBegan(outcomeDetail, startedAtActual);
 
         RefuseAThumbnailForAFailure(outcome, thumbnailState);
         RefuseAHistoryThatDoesNotAddUp(interruptions, resumeCount, startedAtActual);
@@ -402,7 +403,7 @@ public sealed class Recording
             throw new InvalidOperationException("This recording is already interrupted.");
         }
 
-        RefuseATimeBeforeTheRecordingBegan(StartedAtActual, at, nameof(at));
+        RefuseATimeBeforeTheRecordingBegan(LatestMoment(), at, nameof(at));
 
         interruptions.Add(new Interruption(fault, UtcTimes.Required(at, nameof(at)), null));
     }
@@ -431,6 +432,7 @@ public sealed class Recording
         RefuseUnlessInFlight();
         RefuseAnUnnamedFault(detail.Fault);
         RefuseAReasonFromNoTuner([detail], TunerDeviceId);
+        RefuseAReasonBeforeTheRecordingBegan([detail], StartedAtActual);
 
         outcomeDetail.Add(detail);
     }
@@ -563,6 +565,21 @@ public sealed class Recording
             throw new ArgumentException(
                 "A recording that failed has no picture, because a picture of it would say it was recorded.",
                 nameof(thumbnailState));
+        }
+    }
+
+    private DateTime LatestMoment()
+        => interruptions.Count is 0
+            ? StartedAtActual
+            : interruptions[^1].ResumedAt ?? interruptions[^1].OccurredAt;
+
+    private static void RefuseAReasonBeforeTheRecordingBegan(
+        IReadOnlyList<OutcomeDetail> outcomeDetail,
+        DateTime startedAtActual)
+    {
+        foreach (OutcomeDetail detail in outcomeDetail)
+        {
+            RefuseATimeBeforeTheRecordingBegan(startedAtActual, detail.NoticedAt, nameof(outcomeDetail));
         }
     }
 

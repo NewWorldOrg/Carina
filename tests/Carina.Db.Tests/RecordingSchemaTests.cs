@@ -24,7 +24,7 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
     private const string Counted = "timestamptz '2026-08-24 20:30:00+00'";
 
     private const string OneFault = """
-        '[{"fault":"DriverLost","tuneFailure":null,"note":"","noticedAt":"2026-08-24T12:00:00Z"}]'::jsonb
+        '[{"fault":"DriverLost","tuneFailure":null,"note":"","noticedAt":"2026-08-24T20:10:00Z"}]'::jsonb
         """;
 
     [Fact]

@@ -63,10 +63,10 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
                 """);
             table.HasCheckConstraint(
                 "ck_recording_history",
-                $"recording_history_holds(interruptions, resume_count, {faults})");
+                $"recording_history_holds(interruptions, resume_count, {faults}, started_at_actual)");
             table.HasCheckConstraint(
                 "ck_recording_reasons",
-                $"recording_reasons_hold(outcome_detail, {faults}, {tuneFailures})");
+                $"recording_reasons_hold(outcome_detail, {faults}, {tuneFailures}, started_at_actual)");
             table.HasCheckConstraint(
                 "ck_recording_positions",
                 "recording_positions_hold(drop_positions, cc_dropped_packets, scrambled_packets)");

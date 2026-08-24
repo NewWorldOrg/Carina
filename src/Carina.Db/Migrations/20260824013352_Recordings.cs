@@ -19,12 +19,14 @@ public partial class Recordings : Migration
             SELECT CASE WHEN jsonb_typeof(entries) = 'array' THEN jsonb_array_length(entries) ELSE 0 END;
             $fn$;
 
-            CREATE OR REPLACE FUNCTION recording_history_holds(entries jsonb, resumes integer, faults text[])
+            CREATE OR REPLACE FUNCTION recording_history_holds(
+                entries jsonb, resumes integer, faults text[], began timestamptz)
             RETURNS boolean LANGUAGE sql IMMUTABLE AS $fn$
             SELECT jsonb_typeof(entries) = 'array'
                AND COALESCE(bool_and(
                        entry ->> 'fault' = ANY (faults)
                        AND entry ->> 'occurredAt' LIKE '%Z'
+                       AND (entry ->> 'occurredAt')::timestamptz >= began
                        AND (entry ->> 'resumedAt' IS NULL OR entry ->> 'resumedAt' LIKE '%Z')
                        AND (entry ->> 'resumedAt' IS NULL
                             OR (entry ->> 'resumedAt')::timestamptz >= (entry ->> 'occurredAt')::timestamptz)
@@ -44,12 +46,14 @@ public partial class Recordings : Migration
             ) AS ordered;
             $fn$;
 
-            CREATE OR REPLACE FUNCTION recording_reasons_hold(entries jsonb, faults text[], tune_failures text[])
+            CREATE OR REPLACE FUNCTION recording_reasons_hold(
+                entries jsonb, faults text[], tune_failures text[], began timestamptz)
             RETURNS boolean LANGUAGE sql IMMUTABLE AS $fn$
             SELECT jsonb_typeof(entries) = 'array'
                AND COALESCE(bool_and(
                        entry ->> 'fault' = ANY (faults)
                        AND entry ->> 'noticedAt' LIKE '%Z'
+                       AND (entry ->> 'noticedAt')::timestamptz >= began
                        AND (entry ->> 'tuneFailure' IS NULL OR entry ->> 'tuneFailure' = ANY (tune_failures))
                    ), true)
             FROM jsonb_array_elements(
@@ -155,14 +159,14 @@ public partial class Recordings : Migration
                 table.CheckConstraint("ck_recording_drop_positions", "(pcr_anchor IS NOT NULL\n    OR (recording_json_count(drop_positions) = 0 AND recording_json_count(pcr_reanchors) = 0))\nAND (pcr_anchor IS NULL OR cc_measured)\nAND (pcr_anchor IS NULL OR pcr_anchor BETWEEN 0 AND 8589934591)");
                 table.CheckConstraint("ck_recording_empty_file_failed", "recording_outcome IS NULL OR file_size_observed <> 0 OR recording_outcome = 'Failed'");
                 table.CheckConstraint("ck_recording_file_name", "btrim(file_name) = file_name\nAND length(file_name) > 0\nAND file_name <> '.'\nAND strpos(file_name, '/') = 0\nAND strpos(file_name, chr(92)) = 0\nAND strpos(file_name, '..') = 0\nAND strpos(file_name, replace(id::text, '-', '')) > 0");
-                table.CheckConstraint("ck_recording_history", "recording_history_holds(interruptions, resume_count, ARRAY['TuneFailed', 'RefusedByDiskPrecheck', 'DiskExhausted', 'DriverLost', 'DrainGraceExpired', 'StoppedByHand', 'TunerContended', 'ScramblingUnresolved', 'ShortOfTheWindow']::text[])");
+                table.CheckConstraint("ck_recording_history", "recording_history_holds(interruptions, resume_count, ARRAY['TuneFailed', 'RefusedByDiskPrecheck', 'DiskExhausted', 'DriverLost', 'DrainGraceExpired', 'StoppedByHand', 'TunerContended', 'ScramblingUnresolved', 'ShortOfTheWindow']::text[], started_at_actual)");
                 table.CheckConstraint("ck_recording_measurement", "(cc_measured\n    OR (cc_dropped_packets IS NULL AND cc_total_packets IS NULL))\nAND (NOT cc_measured\n    OR (cc_dropped_packets IS NOT NULL\n        AND cc_total_packets IS NOT NULL\n        AND cc_dropped_packets <= cc_total_packets\n        AND measured_updated_at IS NOT NULL))");
                 table.CheckConstraint("ck_recording_observation", "(file_size_observed IS NULL) = (observed_at IS NULL)");
                 table.CheckConstraint("ck_recording_outcome", "(recording_outcome IS NULL OR recording_outcome IN ('Complete', 'Truncated', 'Failed'))\nAND (recording_outcome IS NULL OR stopped_at_actual IS NOT NULL)\nAND (recording_outcome IS NULL OR file_size_observed IS NOT NULL)");
                 table.CheckConstraint("ck_recording_outcome_detail", "recording_outcome IS NULL\nOR recording_outcome = 'Complete'\nOR recording_json_count(outcome_detail) > 0");
                 table.CheckConstraint("ck_recording_positions", "recording_positions_hold(drop_positions, cc_dropped_packets, scrambled_packets)");
                 table.CheckConstraint("ck_recording_reanchors", "recording_reanchors_hold(pcr_reanchors, 8589934592)");
-                table.CheckConstraint("ck_recording_reasons", "recording_reasons_hold(outcome_detail, ARRAY['TuneFailed', 'RefusedByDiskPrecheck', 'DiskExhausted', 'DriverLost', 'DrainGraceExpired', 'StoppedByHand', 'TunerContended', 'ScramblingUnresolved', 'ShortOfTheWindow']::text[], ARRAY['NoLock', 'NoData', 'IncompletePsi', 'StreamMismatch']::text[])");
+                table.CheckConstraint("ck_recording_reasons", "recording_reasons_hold(outcome_detail, ARRAY['TuneFailed', 'RefusedByDiskPrecheck', 'DiskExhausted', 'DriverLost', 'DrainGraceExpired', 'StoppedByHand', 'TunerContended', 'ScramblingUnresolved', 'ShortOfTheWindow']::text[], ARRAY['NoLock', 'NoData', 'IncompletePsi', 'StreamMismatch']::text[], started_at_actual)");
                 table.CheckConstraint("ck_recording_runs_forwards", "(stopped_at_actual IS NULL OR stopped_at_actual >= started_at_actual)\nAND (aborted_at IS NULL OR aborted_at >= started_at_actual)\nAND (observed_at IS NULL OR observed_at >= started_at_actual)\nAND (measured_updated_at IS NULL OR measured_updated_at >= started_at_actual)");
                 table.CheckConstraint("ck_recording_thumbnail", "thumbnail_state IN ('Pending', 'Ready', 'Failed', 'Skipped')\nAND (recording_outcome IS DISTINCT FROM 'Failed' OR thumbnail_state <> 'Ready')");
                 table.CheckConstraint("ck_recording_tuner", "tuner_device_id IS NOT NULL\nOR (NOT cc_measured\n    AND eovf_count = 0\n    AND NOT recording_reasons_name_any(outcome_detail, ARRAY['TuneFailed', 'DriverLost', 'TunerContended', 'ScramblingUnresolved']::text[]))");
@@ -247,8 +251,8 @@ public partial class Recordings : Migration
         migrationBuilder.Sql("DROP FUNCTION IF EXISTS recording_projects_its_outcome();");
         migrationBuilder.Sql("DROP FUNCTION IF EXISTS recording_keeps_its_reservation();");
         migrationBuilder.Sql("DROP FUNCTION IF EXISTS recording_json_count(jsonb);");
-        migrationBuilder.Sql("DROP FUNCTION IF EXISTS recording_history_holds(jsonb, integer, text[]);");
-        migrationBuilder.Sql("DROP FUNCTION IF EXISTS recording_reasons_hold(jsonb, text[], text[]);");
+        migrationBuilder.Sql("DROP FUNCTION IF EXISTS recording_history_holds(jsonb, integer, text[], timestamptz);");
+        migrationBuilder.Sql("DROP FUNCTION IF EXISTS recording_reasons_hold(jsonb, text[], text[], timestamptz);");
         migrationBuilder.Sql("DROP FUNCTION IF EXISTS recording_positions_hold(jsonb, bigint, bigint);");
         migrationBuilder.Sql("DROP FUNCTION IF EXISTS recording_reanchors_hold(jsonb, bigint);");
         migrationBuilder.Sql("DROP FUNCTION IF EXISTS recording_reasons_name_any(jsonb, text[]);");
