@@ -1,3 +1,4 @@
+using Carina.Domain.Channels;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 
@@ -106,6 +107,85 @@ public sealed class RecordingTunerTests
             Now,
             null,
             ThumbnailState.Pending,
+            RecordingFactory.Snapshot(),
+            null,
+            BroadcastGroupRole.Standalone));
+
+        Assert.Equal("tunerDeviceId", refusal.ParamName);
+    }
+
+    [Theory]
+    [InlineData(RecordingFault.TuneFailed)]
+    [InlineData(RecordingFault.DriverLost)]
+    [InlineData(RecordingFault.TunerContended)]
+    [InlineData(RecordingFault.ScramblingUnresolved)]
+    public void AReasonThatReachedATunerNamesWhichTunerItReached(RecordingFault fault)
+    {
+        Recording recording = RecordingFactory.Unclaimed();
+
+        ArgumentException refusal = Assert.Throws<ArgumentException>(
+            () => recording.Note(new OutcomeDetail(fault, null, string.Empty, Now)));
+
+        Assert.Equal("tunerDeviceId", refusal.ParamName);
+        Assert.Empty(recording.OutcomeDetail);
+    }
+
+    [Theory]
+    [InlineData(RecordingFault.RefusedByDiskPrecheck)]
+    [InlineData(RecordingFault.DiskExhausted)]
+    [InlineData(RecordingFault.StoppedByHand)]
+    [InlineData(RecordingFault.DrainGraceExpired)]
+    [InlineData(RecordingFault.ShortOfTheWindow)]
+    public void AReasonThatNeverReachedATunerNeedNotNameOne(RecordingFault fault)
+    {
+        Recording recording = RecordingFactory.Unclaimed();
+
+        recording.Note(new OutcomeDetail(fault, null, string.Empty, Now));
+
+        Assert.Single(recording.OutcomeDetail);
+    }
+
+    [Fact]
+    public void AReasonThatReachedATunerIsTakenOnceTheTunerIsKnown()
+    {
+        Recording recording = RecordingFactory.Unclaimed();
+        recording.Acquire(new TunerDeviceId("pt3-2"));
+
+        recording.Note(new OutcomeDetail(RecordingFault.TuneFailed, TuneFailureKind.NoLock, string.Empty, Now));
+
+        Assert.Single(recording.OutcomeDetail);
+    }
+
+    [Fact]
+    public void ARehydratedReasonThatReachedATunerNamesWhichOne()
+    {
+        RecordingId id = RecordingId.New();
+
+        ArgumentException refusal = Assert.Throws<ArgumentException>(() => Recording.Rehydrate(
+            id,
+            null,
+            RecordingFactory.Programme(),
+            new OutputRoot("bulk"),
+            RecordingFileName.For(id, ".m2ts"),
+            0,
+            Now.AddHours(1),
+            Now,
+            Now.AddHours(1),
+            null,
+            0,
+            0,
+            [],
+            Now.AddMinutes(-5),
+            Now.AddMinutes(55),
+            RecordingOutcome.Failed,
+            [new OutcomeDetail(RecordingFault.TunerContended, null, string.Empty, Now)],
+            DropCounters.Unmeasured,
+            DropTimeline.Unlocated,
+            null,
+            0,
+            null,
+            null,
+            ThumbnailState.Skipped,
             RecordingFactory.Snapshot(),
             null,
             BroadcastGroupRole.Standalone));

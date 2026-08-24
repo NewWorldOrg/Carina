@@ -1083,7 +1083,7 @@ namespace Carina.Db.Migrations
 
                             t.HasCheckConstraint("ck_recording_thumbnail", "thumbnail_state IN ('Pending', 'Ready', 'Failed', 'Skipped')\nAND (recording_outcome IS DISTINCT FROM 'Failed' OR thumbnail_state <> 'Ready')");
 
-                            t.HasCheckConstraint("ck_recording_tuner", "tuner_device_id IS NOT NULL\nOR (NOT cc_measured AND eovf_count = 0)");
+                            t.HasCheckConstraint("ck_recording_tuner", "tuner_device_id IS NOT NULL\nOR (NOT cc_measured\n    AND eovf_count = 0\n    AND NOT recording_reasons_name_any(outcome_detail, ARRAY['TuneFailed', 'DriverLost', 'TunerContended', 'ScramblingUnresolved']::text[]))");
 
                             t.HasCheckConstraint("ck_recording_window", "expected_window_end > expected_window_start");
                         });

@@ -46,8 +46,16 @@ public sealed record Interruption(RecordingFault Fault, DateTime OccurredAt, Dat
     public bool IsOpen => ResumedAt is null;
 }
 
-internal static class RecordingFaults
+public static class RecordingFaults
 {
+    public static readonly IReadOnlyList<RecordingFault> ThatReachedTheTuner =
+    [
+        RecordingFault.TuneFailed,
+        RecordingFault.DriverLost,
+        RecordingFault.TunerContended,
+        RecordingFault.ScramblingUnresolved,
+    ];
+
     internal static RecordingFault Named(RecordingFault fault)
         => Enum.IsDefined(fault)
             ? fault

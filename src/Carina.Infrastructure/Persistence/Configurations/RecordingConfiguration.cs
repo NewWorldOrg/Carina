@@ -34,6 +34,9 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
         ArgumentNullException.ThrowIfNull(builder);
 
         string faults = Vocabulary<RecordingFault>();
+        string tunerFaults = "ARRAY["
+            + string.Join(", ", RecordingFaults.ThatReachedTheTuner.Select(fault => $"'{fault}'"))
+            + "]::text[]";
         string tuneFailures = Vocabulary<TuneFailureKind>();
 
         builder.ToTable("recording", table =>
@@ -101,9 +104,11 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
                 """);
             table.HasCheckConstraint(
                 "ck_recording_tuner",
-                """
+                $"""
                 tuner_device_id IS NOT NULL
-                OR (NOT cc_measured AND eovf_count = 0)
+                OR (NOT cc_measured
+                    AND eovf_count = 0
+                    AND NOT recording_reasons_name_any(outcome_detail, {tunerFaults}))
                 """);
             table.HasCheckConstraint(
                 "ck_recording_drop_positions",

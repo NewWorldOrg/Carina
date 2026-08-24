@@ -552,6 +552,97 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
             await Scalar(connection, "SELECT thumbnail_state FROM recording WHERE network_id = 80037"));
     }
 
+    [Theory]
+    [InlineData("TuneFailed", 80041)]
+    [InlineData("DriverLost", 80042)]
+    [InlineData("TunerContended", 80043)]
+    [InlineData("ScramblingUnresolved", 80044)]
+    public async Task ARecordingThatReachedATunerNamesItEvenWhenItRecordedNothing(string fault, int networkId)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(
+                connection,
+                networkId,
+                outcome: "'Failed'",
+                size: "0",
+                observedAt: Ends,
+                stoppedAt: Ends,
+                detail: Reason(fault),
+                thumbnail: "'Skipped'",
+                tuner: "NULL"));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
+        Assert.Equal("ck_recording_tuner", refusal.ConstraintName);
+
+        await Record(
+            connection,
+            networkId,
+            outcome: "'Failed'",
+            size: "0",
+            observedAt: Ends,
+            stoppedAt: Ends,
+            detail: Reason(fault),
+            thumbnail: "'Skipped'",
+            tuner: "'pt3-2'");
+
+        Assert.Equal(
+            "pt3-2",
+            await Scalar(connection, $"SELECT tuner_device_id FROM recording WHERE network_id = {networkId}"));
+    }
+
+    [Theory]
+    [InlineData("RefusedByDiskPrecheck", 80051)]
+    [InlineData("DiskExhausted", 80052)]
+    [InlineData("StoppedByHand", 80053)]
+    [InlineData("DrainGraceExpired", 80054)]
+    [InlineData("ShortOfTheWindow", 80055)]
+    public async Task ARecordingThatNeverReachedATunerNeedNotNameOne(string fault, int networkId)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        await Record(
+            connection,
+            networkId,
+            outcome: "'Failed'",
+            size: "0",
+            observedAt: Ends,
+            stoppedAt: Ends,
+            detail: Reason(fault),
+            thumbnail: "'Skipped'",
+            tuner: "NULL");
+
+        Assert.Null(
+            await Scalar(connection, $"SELECT tuner_device_id FROM recording WHERE network_id = {networkId}"));
+    }
+
+    [Fact]
+    public async Task OneTunerReasonAmongSeveralIsEnoughToRequireTheTuner()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(
+                connection,
+                80056,
+                outcome: "'Failed'",
+                size: "0",
+                observedAt: Ends,
+                stoppedAt: Ends,
+                detail: """
+                    '[{"fault":"DiskExhausted","tuneFailure":null,"note":"","noticedAt":"2026-08-24T20:10:00Z"},
+                      {"fault":"TuneFailed","tuneFailure":"NoLock","note":"","noticedAt":"2026-08-24T20:11:00Z"}]'::jsonb
+                    """,
+                thumbnail: "'Skipped'",
+                tuner: "NULL"));
+
+        Assert.Equal("ck_recording_tuner", refusal.ConstraintName);
+    }
+
+    private static string Reason(string fault)
+        => $$"""'[{"fault":"{{fault}}","tuneFailure":null,"note":"","noticedAt":"2026-08-24T20:10:00Z"}]'::jsonb""";
+
     private static async Task<string> IndexDefinition(NpgsqlConnection connection, string name)
         => (string)(await Scalar(connection, $"SELECT indexdef FROM pg_indexes WHERE indexname = '{name}'"))!;
 

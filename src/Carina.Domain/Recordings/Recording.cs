@@ -239,6 +239,7 @@ public sealed class Recording
 
         RefuseAPositionNothingCounted(counters, positions, scrambledPackets);
         RefuseAMeasurementFromNoTuner(counters, eovfCount, tunerDeviceId);
+        RefuseAReasonFromNoTuner(outcomeDetail, tunerDeviceId);
 
         RefuseAThumbnailForAFailure(outcome, thumbnailState);
         RefuseAHistoryThatDoesNotAddUp(interruptions, resumeCount, startedAtActual);
@@ -429,6 +430,7 @@ public sealed class Recording
         ArgumentNullException.ThrowIfNull(detail);
         RefuseUnlessInFlight();
         RefuseAnUnnamedFault(detail.Fault);
+        RefuseAReasonFromNoTuner([detail], TunerDeviceId);
 
         outcomeDetail.Add(detail);
     }
@@ -561,6 +563,26 @@ public sealed class Recording
             throw new ArgumentException(
                 "A recording that failed has no picture, because a picture of it would say it was recorded.",
                 nameof(thumbnailState));
+        }
+    }
+
+    private static void RefuseAReasonFromNoTuner(
+        IReadOnlyList<OutcomeDetail> outcomeDetail,
+        TunerDeviceId? tunerDeviceId)
+    {
+        if (tunerDeviceId is not null)
+        {
+            return;
+        }
+
+        foreach (OutcomeDetail detail in outcomeDetail)
+        {
+            if (RecordingFaults.ThatReachedTheTuner.Contains(detail.Fault))
+            {
+                throw new ArgumentException(
+                    $"A recording that ended in {detail.Fault} had a tuner, so it names which one it had.",
+                    nameof(tunerDeviceId));
+            }
         }
     }
 
