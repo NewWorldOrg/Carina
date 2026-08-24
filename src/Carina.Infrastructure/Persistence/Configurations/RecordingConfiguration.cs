@@ -165,14 +165,9 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
             .HasColumnType("jsonb")
             .IsRequired();
 
-        builder.ComplexProperty(recording => recording.Counters, counters =>
-        {
-            counters.IsRequired();
-
-            counters.Property(reading => reading.Measured).HasColumnName("cc_measured");
-            counters.Property(reading => reading.Dropped).HasColumnName("cc_dropped_packets");
-            counters.Property(reading => reading.Total).HasColumnName("cc_total_packets");
-        });
+        builder.Property(recording => recording.CcMeasured).HasColumnName("cc_measured").IsRequired();
+        builder.Property(recording => recording.CcDroppedPackets).HasColumnName("cc_dropped_packets");
+        builder.Property(recording => recording.CcTotalPackets).HasColumnName("cc_total_packets");
 
         builder.ComplexProperty(recording => recording.Positions, positions =>
         {
@@ -239,6 +234,7 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
             .HasMaxLength(32)
             .IsRequired();
 
+        builder.Ignore(recording => recording.Counters);
         builder.Ignore(recording => recording.Programme);
         builder.Ignore(recording => recording.IsInFlight);
         builder.Ignore(recording => recording.Written);
@@ -253,6 +249,10 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
         builder.HasIndex(recording => recording.ReservationId)
             .HasFilter("reservation_id IS NOT NULL")
             .HasDatabaseName(ReservationIndexName);
+
+        builder.HasIndex(recording => recording.CcDroppedPackets)
+            .HasFilter("cc_measured AND cc_dropped_packets > 0")
+            .HasDatabaseName(DroppedIndexName);
     }
 
     private static IReadOnlyList<T> Read<T>(string stored)

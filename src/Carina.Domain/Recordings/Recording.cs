@@ -63,7 +63,13 @@ public sealed class Recording
         private set => outcomeDetail = [.. value];
     }
 
-    public DropCounters Counters { get; private set; } = DropCounters.Unmeasured;
+    public bool CcMeasured { get; private set; }
+
+    public long? CcDroppedPackets { get; private set; }
+
+    public long? CcTotalPackets { get; private set; }
+
+    public DropCounters Counters => DropCounters.Rehydrate(CcMeasured, CcDroppedPackets, CcTotalPackets);
 
     public DropTimeline Positions { get; private set; } = DropTimeline.Unlocated;
 
@@ -269,7 +275,9 @@ public sealed class Recording
             ExpectedWindowStart = UtcTimes.Required(expectedWindowStart, nameof(expectedWindowStart)),
             ExpectedWindowEnd = UtcTimes.Required(expectedWindowEnd, nameof(expectedWindowEnd)),
             Outcome = outcome,
-            Counters = counters,
+            CcMeasured = counters.Measured,
+            CcDroppedPackets = counters.Dropped,
+            CcTotalPackets = counters.Total,
             Positions = positions,
             ScrambledPackets = scrambledPackets,
             EovfCount = eovfCount,
@@ -337,7 +345,9 @@ public sealed class Recording
 
         RefuseAPositionNothingCounted(counters, positions, scrambledPackets);
 
-        Counters = counters;
+        CcMeasured = counters.Measured;
+        CcDroppedPackets = counters.Dropped;
+        CcTotalPackets = counters.Total;
         Positions = positions;
         ScrambledPackets = scrambledPackets;
         EovfCount = eovfCount;

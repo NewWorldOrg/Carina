@@ -1,3 +1,9 @@
+using Carina.Domain.Recordings;
+using Carina.Infrastructure.Persistence;
+
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
+
 using Npgsql;
 
 namespace Carina.Db.Tests;
@@ -285,6 +291,44 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
         await Execute(connection, $"UPDATE recording SET written_duration_ms = written_duration_ms + 720000 WHERE id = '{id}'");
 
         Assert.Equal(1_320_000L, await Scalar(connection, $"SELECT written_duration_ms FROM recording WHERE id = '{id}'"));
+    }
+
+    [Fact]
+    public async Task EveryIndexOnTheLedgerIsOneTheModelDeclares()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        await using var command = new NpgsqlCommand(
+            """
+            SELECT indexes.indexname
+            FROM pg_indexes AS indexes
+            JOIN pg_class AS relation ON relation.relname = indexes.indexname
+            LEFT JOIN pg_constraint AS backing ON backing.conindid = relation.oid
+            WHERE indexes.schemaname = 'public'
+              AND indexes.tablename = 'recording'
+              AND backing.oid IS NULL
+            ORDER BY indexes.indexname
+            """,
+            connection);
+        await using NpgsqlDataReader reader = await command.ExecuteReaderAsync();
+
+        var built = new List<string>();
+        while (await reader.ReadAsync())
+        {
+            built.Add(reader.GetString(0));
+        }
+
+        await using CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString);
+        IReadOnlyList<string> declared = [.. context.Model
+            .GetEntityTypes()
+            .Single(entityType => entityType.ClrType == typeof(Recording))
+            .GetIndexes()
+            .Select(index => index.GetDatabaseName())
+            .OfType<string>()
+            .Order(StringComparer.Ordinal)];
+
+        Assert.Equal(declared, built);
+        Assert.Contains("ix_recording_cc_dropped", declared, StringComparer.Ordinal);
     }
 
     private static async Task<string> IndexDefinition(NpgsqlConnection connection, string name)

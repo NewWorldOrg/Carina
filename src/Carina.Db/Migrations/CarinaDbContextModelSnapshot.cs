@@ -864,6 +864,18 @@ namespace Carina.Db.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("captured_at");
 
+                    b.Property<long?>("CcDroppedPackets")
+                        .HasColumnType("bigint")
+                        .HasColumnName("cc_dropped_packets");
+
+                    b.Property<bool>("CcMeasured")
+                        .HasColumnType("boolean")
+                        .HasColumnName("cc_measured");
+
+                    b.Property<long?>("CcTotalPackets")
+                        .HasColumnType("bigint")
+                        .HasColumnName("cc_total_packets");
+
                     b.Property<long>("EovfCount")
                         .HasColumnType("bigint")
                         .HasColumnName("eovf_count");
@@ -978,23 +990,6 @@ namespace Carina.Db.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("written_duration_ms");
 
-                    b.ComplexProperty(typeof(Dictionary<string, object>), "Counters", "Carina.Domain.Recordings.Recording.Counters#DropCounters", b1 =>
-                        {
-                            b1.IsRequired();
-
-                            b1.Property<long?>("Dropped")
-                                .HasColumnType("bigint")
-                                .HasColumnName("cc_dropped_packets");
-
-                            b1.Property<bool>("Measured")
-                                .HasColumnType("boolean")
-                                .HasColumnName("cc_measured");
-
-                            b1.Property<long?>("Total")
-                                .HasColumnType("bigint")
-                                .HasColumnName("cc_total_packets");
-                        });
-
                     b.ComplexProperty(typeof(Dictionary<string, object>), "Positions", "Carina.Domain.Recordings.Recording.Positions#DropTimeline", b1 =>
                         {
                             b1.IsRequired();
@@ -1016,6 +1011,10 @@ namespace Carina.Db.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_recording");
+
+                    b.HasIndex("CcDroppedPackets")
+                        .HasDatabaseName("ix_recording_cc_dropped")
+                        .HasFilter("cc_measured AND cc_dropped_packets > 0");
 
                     b.HasIndex("ReservationId")
                         .HasDatabaseName("ix_recording_reservation")
