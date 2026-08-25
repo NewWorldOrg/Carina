@@ -92,5 +92,8 @@ public sealed class ProgrammeMatch
 
 public interface IProgrammeSearchRepository
 {
-    Task<PaginatedList<ProgrammeMatch>> SearchAsync(ProgrammeSearch search, CancellationToken cancellationToken);
+    Task<PaginatedList<ProgrammeMatch>> SearchAsync(
+        ProgrammeSearch search,
+        DateTime now,
+        CancellationToken cancellationToken);
 }

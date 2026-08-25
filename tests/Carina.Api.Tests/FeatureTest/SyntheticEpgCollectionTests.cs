@@ -24,6 +24,8 @@ public sealed class SyntheticEpgCollectionTests
 
     private const string ADay = "?type=isdbT&from=2026-09-01T00:00:00Z&to=2026-09-02T00:00:00Z";
 
+    private const string TheDay = "from=2026-09-01T00:00:00Z&to=2026-09-02T00:00:00Z";
+
     private static readonly DateTimeOffset Airs = new(2026, 9, 1, 21, 0, 0, TimeSpan.FromHours(9));
 
     private static readonly TuningParameters Channel = TuningParameters.Terrestrial(22);
@@ -480,7 +482,7 @@ public sealed class SyntheticEpgCollectionTests
         await CollectAsync(feature);
 
         (HttpStatusCode status, JsonElement body) = await feature.GetAsync(
-            "/api/programs/search?type=isdbT&keyword=Evening%20Bulletin");
+            $"/api/programs/search?type=isdbT&keyword=Evening%20Bulletin&{TheDay}");
         JsonElement data = body.GetProperty("data");
 
         Assert.Equal(HttpStatusCode.OK, status);
@@ -506,7 +508,7 @@ public sealed class SyntheticEpgCollectionTests
         await CollectAsync(feature);
 
         (HttpStatusCode status, JsonElement body) = await feature.GetAsync(
-            "/api/programs/search?keyword=Evening");
+            $"/api/programs/search?keyword=Evening&{TheDay}");
         JsonElement data = body.GetProperty("data");
 
         Assert.Equal(HttpStatusCode.OK, status);
@@ -530,7 +532,7 @@ public sealed class SyntheticEpgCollectionTests
         await CollectAsync(feature);
 
         (HttpStatusCode status, JsonElement body) = await feature.GetAsync(
-            "/api/programs/search?keyword=Evening");
+            $"/api/programs/search?keyword=Evening&{TheDay}");
         JsonElement data = body.GetProperty("data");
 
         Assert.Equal(HttpStatusCode.OK, status);
@@ -542,7 +544,10 @@ public sealed class SyntheticEpgCollectionTests
     [Fact]
     public async Task AnArchivedProgrammeOnAWithheldServiceIsNotAmongTheMatches()
     {
-        await using var feature = new EpgFeature([EverythingTheStreamCarries()], new ScriptedDriverClient());
+        await using var feature = new EpgFeature(
+            [EverythingTheStreamCarries()],
+            new ScriptedDriverClient(),
+            clock: new WoundClock(Airs));
 
         feature.Catalogue.Services.Add(Catalogued(Television, ServiceCategory.Television));
         feature.Catalogue.Services.Add(Catalogued(OneSegSimulcast, ServiceCategory.OneSeg));
@@ -550,7 +555,7 @@ public sealed class SyntheticEpgCollectionTests
         feature.Archived.Programmes.Add(Archived(OneSegSimulcast, 23, "Archived Bulletin"));
 
         (HttpStatusCode status, JsonElement body) = await feature.GetAsync(
-            "/api/programs/search?keyword=Archived%20Bulletin");
+            $"/api/programs/search?keyword=Archived%20Bulletin&{TheDay}");
         JsonElement data = body.GetProperty("data");
 
         Assert.Equal(HttpStatusCode.OK, status);
@@ -562,14 +567,17 @@ public sealed class SyntheticEpgCollectionTests
     [Fact]
     public async Task AnArchivedProgrammeOnAServiceTheCatalogueHasForgottenIsStillAmongTheMatches()
     {
-        await using var feature = new EpgFeature([EverythingTheStreamCarries()], new ScriptedDriverClient());
+        await using var feature = new EpgFeature(
+            [EverythingTheStreamCarries()],
+            new ScriptedDriverClient(),
+            clock: new WoundClock(Airs));
 
         feature.Catalogue.Services.Add(Catalogued(Television, ServiceCategory.Television));
         feature.Archived.Programmes.Add(Archived(Television, 21, "Archived Bulletin"));
         feature.Archived.Programmes.Add(Archived(WithdrawnService, 25, "Archived Bulletin"));
 
         (HttpStatusCode status, JsonElement body) = await feature.GetAsync(
-            "/api/programs/search?keyword=Archived%20Bulletin");
+            $"/api/programs/search?keyword=Archived%20Bulletin&{TheDay}");
         JsonElement data = body.GetProperty("data");
 
         Assert.Equal(HttpStatusCode.OK, status);

@@ -28,6 +28,7 @@ public sealed class ProgrammeSearchAcrossLayersTests(RepositoryDatabase database
         await using CarinaDbContext reading = database.Open();
         PaginatedList<ProgrammeMatch> found = await new ProgrammeSearchRepository(reading).SearchAsync(
             Asking($"紀行{network}"),
+            At,
             Cancel);
 
         Assert.Equal(1, found.Total);
@@ -56,6 +57,7 @@ public sealed class ProgrammeSearchAcrossLayersTests(RepositoryDatabase database
         await using CarinaDbContext reading = database.Open();
         PaginatedList<ProgrammeMatch> found = await new ProgrammeSearchRepository(reading).SearchAsync(
             Asking($"紀行{network}"),
+            At,
             Cancel);
 
         Assert.Equal(4, found.Total);
@@ -83,6 +85,7 @@ public sealed class ProgrammeSearchAcrossLayersTests(RepositoryDatabase database
         await using CarinaDbContext reading = database.Open();
         PaginatedList<ProgrammeMatch> second = await new ProgrammeSearchRepository(reading).SearchAsync(
             ProgrammeSearch.For($"紀行{network}", At.AddDays(-1), At.AddDays(1), page: 2, perPage: 2)!,
+            At,
             Cancel);
 
         Assert.Equal(4, second.Total);
@@ -106,11 +109,13 @@ public sealed class ProgrammeSearchAcrossLayersTests(RepositoryDatabase database
             1,
             (await searches.SearchAsync(
                 ProgrammeSearch.For($"紀行{network}", At.AddDays(-30), At, page: 1)!,
+                At,
                 Cancel)).Total);
         Assert.Equal(
             0,
             (await searches.SearchAsync(
                 ProgrammeSearch.For($"紀行{network}", At.AddDays(-3), At, page: 1)!,
+                At,
                 Cancel)).Total);
     }
 
@@ -130,6 +135,7 @@ public sealed class ProgrammeSearchAcrossLayersTests(RepositoryDatabase database
         await using CarinaDbContext reading = database.Open();
         PaginatedList<ProgrammeMatch> found = await new ProgrammeSearchRepository(reading).SearchAsync(
             Asking($"番組{network}", new ProgrammeConditions { Genres = [8] }),
+            At,
             Cancel);
 
         Assert.Equal(1, found.Total);
@@ -152,6 +158,7 @@ public sealed class ProgrammeSearchAcrossLayersTests(RepositoryDatabase database
         await using CarinaDbContext reading = database.Open();
         PaginatedList<ProgrammeMatch> found = await new ProgrammeSearchRepository(reading).SearchAsync(
             Asking($"番組{network}", new ProgrammeConditions { Channels = [new ProgrammeService(network, 1050)] }),
+            At,
             Cancel);
 
         Assert.Equal(1, found.Total);
@@ -174,6 +181,7 @@ public sealed class ProgrammeSearchAcrossLayersTests(RepositoryDatabase database
         await using CarinaDbContext reading = database.Open();
         PaginatedList<ProgrammeMatch> found = await new ProgrammeSearchRepository(reading).SearchAsync(
             Asking($"紀行{network}", new ProgrammeConditions { Exclude = "再放送" }),
+            At,
             Cancel);
 
         Assert.Equal(1, found.Total);
@@ -196,6 +204,7 @@ public sealed class ProgrammeSearchAcrossLayersTests(RepositoryDatabase database
         await using CarinaDbContext reading = database.Open();
         PaginatedList<ProgrammeMatch> found = await new ProgrammeSearchRepository(reading).SearchAsync(
             Asking($"ﾆｭｰｽ{network}", new ProgrammeConditions { Fields = [ProgrammeField.Title] }),
+            At,
             Cancel);
 
         Assert.Equal(1, found.Total);
@@ -218,6 +227,7 @@ public sealed class ProgrammeSearchAcrossLayersTests(RepositoryDatabase database
         await using CarinaDbContext reading = database.Open();
         PaginatedList<ProgrammeMatch> found = await new ProgrammeSearchRepository(reading).SearchAsync(
             Asking($"紀行{network}"),
+            At,
             Cancel);
 
         Assert.Equal(1, found.Total);
@@ -241,6 +251,7 @@ public sealed class ProgrammeSearchAcrossLayersTests(RepositoryDatabase database
         await using CarinaDbContext reading = database.Open();
         PaginatedList<ProgrammeMatch> found = await new ProgrammeSearchRepository(reading).SearchAsync(
             ProgrammeSearch.For($"紀行{network}", At.AddDays(-30), At.AddDays(1))!,
+            At,
             Cancel);
 
         Assert.Equal(2, found.Total);
@@ -263,6 +274,7 @@ public sealed class ProgrammeSearchAcrossLayersTests(RepositoryDatabase database
         await using CarinaDbContext reading = database.Open();
         PaginatedList<ProgrammeMatch> found = await new ProgrammeSearchRepository(reading).SearchAsync(
             ProgrammeSearch.For($"番組{network}", At.AddDays(-1), At.AddDays(1), ProgrammeSort.Name)!,
+            At,
             Cancel);
 
         Assert.Equal([2, 1], found.Items.Select(match => match.EventId.Value));
@@ -285,6 +297,7 @@ public sealed class ProgrammeSearchAcrossLayersTests(RepositoryDatabase database
         await using CarinaDbContext reading = database.Open();
         PaginatedList<ProgrammeMatch> found = await new ProgrammeSearchRepository(reading).SearchAsync(
             Asking($"紀行{network}").Except([new ProgrammeService(network, 1080)]),
+            At,
             Cancel);
 
         Assert.Equal(2, found.Total);

@@ -14,12 +14,24 @@ public sealed class ProgrammeSearchRepository(CarinaDbContext context) : IProgra
 {
     public async Task<PaginatedList<ProgrammeMatch>> SearchAsync(
         ProgrammeSearch search,
+        DateTime now,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(search);
 
+        ProgrammeReach reach = search.ReachAt(now);
         IQueryable<ProgrammeMatch> found = context.Set<ProgrammeMatch>()
             .Where(match => !match.IsShadow);
+
+        if (!reach.History)
+        {
+            found = found.Where(match => !match.IsArchived);
+        }
+
+        if (reach.NotOverBy is { } instant)
+        {
+            found = found.Where(match => match.EndsAt == null || match.EndsAt > instant);
+        }
 
         foreach (string word in search.Words)
         {
