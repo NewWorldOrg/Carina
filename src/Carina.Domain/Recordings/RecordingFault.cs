@@ -58,6 +58,18 @@ public sealed record Interruption(RecordingFault Fault, DateTime OccurredAt, Dat
 
 public static class RecordingFaults
 {
+    public static readonly IReadOnlyList<RecordingFault> ThatCanInterrupt =
+    [
+        RecordingFault.TuneFailed,
+        RecordingFault.RefusedByDiskPrecheck,
+        RecordingFault.DiskExhausted,
+        RecordingFault.DriverLost,
+        RecordingFault.DrainGraceExpired,
+        RecordingFault.StoppedByHand,
+        RecordingFault.TunerContended,
+        RecordingFault.ScramblingUnresolved,
+    ];
+
     public static readonly IReadOnlyList<RecordingFault> ThatReachedTheTuner =
     [
         RecordingFault.TuneFailed,
@@ -65,6 +77,14 @@ public static class RecordingFaults
         RecordingFault.TunerContended,
         RecordingFault.ScramblingUnresolved,
     ];
+
+    internal static RecordingFault BreaksARecording(RecordingFault fault)
+        => ThatCanInterrupt.Contains(Named(fault))
+            ? fault
+            : throw new ArgumentOutOfRangeException(
+                nameof(fault),
+                fault,
+                $"A recording breaks on something that happens while it runs, and {fault} is only known once it has ended.");
 
     internal static RecordingFault Named(RecordingFault fault)
         => Enum.IsDefined(fault)

@@ -15,19 +15,12 @@ public sealed class RecordingFaultVocabularyTests(MigratedScratchDatabase databa
 
     private const string Now = "timestamptz '2026-08-24 12:00:00+00'";
 
-    public static TheoryData<string> Faults
-    {
-        get
-        {
-            var named = new TheoryData<string>();
-            foreach (RecordingFault fault in Enum.GetValues<RecordingFault>())
-            {
-                named.Add(fault.ToString());
-            }
+    public static TheoryData<string> Faults => Named(Enum.GetValues<RecordingFault>());
 
-            return named;
-        }
-    }
+    public static TheoryData<string> BreakingFaults => Named(RecordingFaults.ThatCanInterrupt);
+
+    public static TheoryData<string> ConcludingFaults
+        => Named(Enum.GetValues<RecordingFault>().Except(RecordingFaults.ThatCanInterrupt));
 
     [Theory]
     [MemberData(nameof(Faults))]
@@ -38,21 +31,9 @@ public sealed class RecordingFaultVocabularyTests(MigratedScratchDatabase databa
         await Record(connection, Guid.NewGuid(), Reason(fault));
     }
 
-    [Fact]
-    public async Task AFaultTheApplicationCannotNameIsRefused()
-    {
-        await using NpgsqlConnection connection = await database.OpenAsync();
-
-        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
-            () => Record(connection, Guid.NewGuid(), Reason("WentSideways")));
-
-        Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
-        Assert.Equal("ck_recording_reasons", refusal.ConstraintName);
-    }
-
     [Theory]
-    [MemberData(nameof(Faults))]
-    public async Task EveryFaultTheApplicationCanNameIsOneAnInterruptionMayCarry(string fault)
+    [MemberData(nameof(BreakingFaults))]
+    public async Task EveryFaultThatBreaksARecordingIsOneAnInterruptionMayCarry(string fault)
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
 
@@ -61,6 +42,33 @@ public sealed class RecordingFaultVocabularyTests(MigratedScratchDatabase databa
             Guid.NewGuid(),
             Reason("ShortOfTheWindow"),
             $$"""'[{"fault":"{{fault}}","occurredAt":"2026-08-24T20:10:00Z","resumedAt":null}]'::jsonb""");
+    }
+
+    [Theory]
+    [MemberData(nameof(ConcludingFaults))]
+    public async Task AFaultOnlyTheCrossCheckCanNameIsRefusedInTheHistory(string fault)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(() => Record(
+            connection,
+            Guid.NewGuid(),
+            Reason("ShortOfTheWindow"),
+            $$"""'[{"fault":"{{fault}}","occurredAt":"2026-08-24T20:10:00Z","resumedAt":null}]'::jsonb"""));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
+        Assert.Equal("ck_recording_history", refusal.ConstraintName);
+    }
+
+    private static TheoryData<string> Named(IEnumerable<RecordingFault> faults)
+    {
+        var named = new TheoryData<string>();
+        foreach (RecordingFault fault in faults)
+        {
+            named.Add(fault.ToString());
+        }
+
+        return named;
     }
 
     private static string Reason(string fault)

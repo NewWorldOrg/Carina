@@ -16,6 +16,16 @@ internal static class CompletionFactory
 
     public const long TypicalBytes = 2_500_000_000;
 
+    public static readonly IReadOnlyList<RecordingFault> FaultsTheCrossCheckNames =
+    [
+        RecordingFault.NothingLanded,
+        RecordingFault.SizeUnobserved,
+        RecordingFault.StoppedUnasked,
+        RecordingFault.ShortOfTheWindow,
+        RecordingFault.LighterThanTheStream,
+        RecordingFault.HeavierThanTheStream,
+    ];
+
     public static RecordingEvidence Evidence(
         long? bytes = TypicalBytes,
         TimeSpan? written = null,

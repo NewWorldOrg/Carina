@@ -76,8 +76,7 @@ public sealed class CompletionLedgerTests
     [Fact]
     public void EveryFaultTheVerdictCanNameIsOneTheLedgerAccepts()
     {
-        foreach (RecordingFault fault in Enum.GetValues<RecordingFault>()
-            .Except(CompletionVerdictTests.FaultsOnlyTheSupervisorCanName))
+        foreach (RecordingFault fault in CompletionFactory.FaultsTheCrossCheckNames)
         {
             Recording recording = RecordingFactory.Started();
             recording.Note(new OutcomeDetail(fault, null, string.Empty, Now));
