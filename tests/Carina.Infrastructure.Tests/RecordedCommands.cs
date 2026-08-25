@@ -9,7 +9,11 @@ namespace Carina.Infrastructure.Tests;
 
 public sealed record RecordedCommand(string Text, IReadOnlyList<KeyValuePair<string, object?>> Parameters);
 
-public sealed record QueryPlan(string Json, IReadOnlyList<string> NodeTypes, long SharedBlocks);
+public sealed record QueryPlan(
+    string Json,
+    IReadOnlyList<string> NodeTypes,
+    IReadOnlyList<string> Relations,
+    long SharedBlocks);
 
 public sealed class RecordedCommands : DbCommandInterceptor
 {
@@ -63,23 +67,30 @@ public sealed class RecordedCommands : DbCommandInterceptor
         using JsonDocument read = JsonDocument.Parse(json);
         JsonElement root = read.RootElement[0].GetProperty("Plan");
         List<string> nodes = [];
-        Collect(root, nodes);
+        List<string> relations = [];
+        Collect(root, nodes, relations);
 
         return new QueryPlan(
             json,
             nodes,
+            relations,
             root.GetProperty("Shared Hit Blocks").GetInt64() + root.GetProperty("Shared Read Blocks").GetInt64());
     }
 
-    private static void Collect(JsonElement node, List<string> nodes)
+    private static void Collect(JsonElement node, List<string> nodes, List<string> relations)
     {
         nodes.Add(node.GetProperty("Node Type").GetString() ?? string.Empty);
+
+        if (node.TryGetProperty("Relation Name", out JsonElement relation))
+        {
+            relations.Add(relation.GetString() ?? string.Empty);
+        }
 
         if (node.TryGetProperty("Plans", out JsonElement children))
         {
             foreach (JsonElement child in children.EnumerateArray())
             {
-                Collect(child, nodes);
+                Collect(child, nodes, relations);
             }
         }
     }

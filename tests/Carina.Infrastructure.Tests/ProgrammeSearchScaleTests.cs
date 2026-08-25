@@ -33,6 +33,8 @@ public sealed class ProgrammeSearchScaleTests(ProgrammeSearchScale scale, ITestO
         Assert.Contains("Merge Append", taken.Page.NodeTypes);
         Assert.DoesNotContain("Subquery Scan", taken.Page.NodeTypes);
         Assert.Contains("Index Only Scan", taken.Count.NodeTypes);
+        Assert.Contains("archived_programme", taken.Page.Relations);
+        Assert.Contains("programme", taken.Page.Relations);
 
         Assert.Equal(418_660, taken.Found.Total);
         Assert.Equal(50, taken.Found.Items.Count);
@@ -51,6 +53,11 @@ public sealed class ProgrammeSearchScaleTests(ProgrammeSearchScale scale, ITestO
         Measured taken = await MeasuredAsync(
             ProgrammeSearch.For(null, null, ProgrammeSearchScale.Anchor.AddDays(3))!,
             nameof(ASearchThatOnlyNamesAnEndDateNeverReachesTheArchive));
+
+        Assert.Contains("programme", taken.Page.Relations);
+        Assert.Contains("programme", taken.Count.Relations);
+        Assert.DoesNotContain("archived_programme", taken.Page.Relations);
+        Assert.DoesNotContain("archived_programme", taken.Count.Relations);
 
         Assert.Equal(3_410, taken.Found.Total);
         Assert.All(taken.Found.Items, match => Assert.False(match.IsArchived));
@@ -112,14 +119,16 @@ public sealed class ProgrammeSearchScaleTests(ProgrammeSearchScale scale, ITestO
         Assert.NotNull(paging);
 
         Assert.True(
-            paging.SharedBlocks <= MostBlocksForOnePage,
-            $"{shape} read {paging.SharedBlocks} shared blocks to hand back one page, over {MostBlocksForOnePage}. "
-            + "Sorting the archive instead of merging it in index order costs about sixty thousand.");
+            paging.SharedBlocks is > 0 && paging.SharedBlocks <= MostBlocksForOnePage,
+            $"{shape} read {paging.SharedBlocks} shared blocks to hand back one page, wanted between 1 and "
+            + $"{MostBlocksForOnePage}. Sorting the archive instead of merging it in index order costs about "
+            + "sixty thousand; zero means the plan was never measured at all.");
 
         Assert.True(
-            counting.SharedBlocks <= MostBlocksForOneCount,
-            $"{shape} read {counting.SharedBlocks} shared blocks to count, over {MostBlocksForOneCount}. "
-            + "Counting from the heap instead of the covering index costs about sixty thousand.");
+            counting.SharedBlocks is > 0 && counting.SharedBlocks <= MostBlocksForOneCount,
+            $"{shape} read {counting.SharedBlocks} shared blocks to count, wanted between 1 and "
+            + $"{MostBlocksForOneCount}. Counting from the heap instead of the covering index costs about "
+            + "sixty thousand; zero means the plan was never measured at all.");
 
         var runs = new List<TimeSpan>();
 
