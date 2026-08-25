@@ -88,6 +88,25 @@ API はコンテナ内のポート 8080 で待ち受け、ホストのポート 
 
 `RidesAlong` を `false` にすると、録画や視聴で開いている受信からの吸い上げを行わなくなります。
 
+### 台帳と録画ファイルの突き合わせ
+
+定期的に走る点検が、録画の台帳と出力ルート配下の実ファイルを突き合わせ、食い違いを分類つきで
+`Integrity:ReportPath` に書き出します。点検はファイルを1つも消さず、書き換えもしません。
+
+出力ルートは driver が名前で宣言するもので、app からはどこにマウントされているかを
+`Integrity:OutputRoots` で教えます。`名前=/絶対パス` を `;` で並べます。1つも書かなければ点検は
+走らず、その旨を起動時に一度だけ書き残します。app 側の読み取り専用マウントで足ります。
+
+| 設定 | 既定 | 用途 |
+| --- | --- | --- |
+| `Integrity:OutputRoots` | 空 | 出力ルートの名前とマウント先(`primary=/srv/recordings;bulk=/mnt/bulk`) |
+| `Integrity:BeforeFirstSweep` | `00:05:00` | 起動してから最初の点検までの間隔 |
+| `Integrity:BetweenSweeps` | `06:00:00` | 点検と点検の間隔 |
+| `Integrity:ReportPath` | `/var/lib/carina/integrity-report.json` | 直近の点検結果の置き場所 |
+
+書き込み中の録画は突き合わせの対象外です。読めなかった出力ルートは、そこにある録画をまとめて
+「無い」と呼ばずに、丸ごと判定から外します。
+
 ## イメージの役割
 
 `Dockerfile` が生成するイメージは1つで、`docker/entrypoint.sh` が役割を選択します。
