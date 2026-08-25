@@ -72,7 +72,9 @@ public sealed class MeasurementRuleSelfCheckTests
             Write(
                 directory,
                 "Carina.Driver/Ipc/Permissions.cs",
-                Parser("private const uint Mode = 0x0FFF;", "private const int Wait = 1880;"));
+                Parser(
+                    "private const uint Mode = 0x0FFF;",
+                    "private const int RetryAfterMilliseconds = 188;"));
 
             Assert.Empty(MeasurementRules.PlacesThatShowTheMarksOfAParser(directory.FullName));
         }
