@@ -120,6 +120,13 @@ nothing.
   in one place and the migration carries a frozen copy of it; changing the
   definition means writing a new migration, and a test says so.
 
+- **The search across both layers keeps the "already held in the hot layer"
+  exclusion above the union, never inside the archive arm.** A `NOT EXISTS` in the
+  arm makes that arm a subquery the planner cannot merge into the append, and the
+  ordered index path goes with it: a search whose start date reaches into the
+  archive then sorts the whole archive to hand back one page. Above the union the
+  same exclusion reads as an anti-join the primary key answers.
+
 - **A stop the driver was asked for exits 0; anything else exits 70.** Coming
   back is the supervisor's half of the deal, which is why `on-failure` is the one
   restart policy the driver must never be given.
