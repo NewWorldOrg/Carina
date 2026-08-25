@@ -132,7 +132,7 @@ public sealed class ContinuityCounterTracker
 
         if (packet.Pcr is { } reference)
         {
-            timeline.Observe(packet.Pid, reference);
+            timeline.Observe(packet.Pid, reference, packet.Discontinuity);
         }
 
         packets++;

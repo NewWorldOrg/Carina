@@ -8,7 +8,9 @@ public sealed class PcrTimeline
 
     public const long TicksPerSecond = 90_000;
 
-    public const long ContinuousWithin = TicksPerSecond * 10;
+    public const long RepeatedAtLeastEvery = TicksPerSecond / 10;
+
+    public const long ContinuousWithin = RepeatedAtLeastEvery * 100;
 
     private readonly List<PcrReanchorDto> reanchors = [];
 
@@ -25,7 +27,7 @@ public sealed class PcrTimeline
 
     public IReadOnlyList<PcrReanchorDto> Reanchors => [.. reanchors];
 
-    public void Observe(int pid, long reference)
+    public void Observe(int pid, long reference, bool declaredDiscontinuous)
     {
         if (reference < 0 || reference >= WrapsAt)
         {
@@ -43,6 +45,13 @@ public sealed class PcrTimeline
 
         if (pid != followed)
         {
+            return;
+        }
+
+        if (declaredDiscontinuous)
+        {
+            Reanchor(reference);
+
             return;
         }
 

@@ -28,7 +28,7 @@ public sealed class PcrTimelineTests
 
         for (int reading = 0; reading < 1000; reading++)
         {
-            timeline.Observe(VideoPid, -1);
+            timeline.Observe(VideoPid, -1, declaredDiscontinuous: false);
         }
 
         Assert.False(timeline.Located);
@@ -40,7 +40,7 @@ public sealed class PcrTimelineTests
     {
         var timeline = new PcrTimeline();
 
-        timeline.Observe(VideoPid, 4_500_000);
+        timeline.Observe(VideoPid, 4_500_000, declaredDiscontinuous: false);
 
         Assert.True(timeline.Located);
         Assert.Equal(4_500_000, timeline.Anchor);
@@ -52,8 +52,8 @@ public sealed class PcrTimelineTests
     {
         var timeline = new PcrTimeline();
 
-        timeline.Observe(VideoPid, 4_500_000);
-        timeline.Observe(VideoPid, 4_500_000 + (3 * Second));
+        timeline.Observe(VideoPid, 4_500_000, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 4_500_000 + (3 * Second), declaredDiscontinuous: false);
 
         Assert.Equal(3, timeline.Second);
         Assert.Equal(4_500_000, timeline.Anchor);
@@ -66,7 +66,7 @@ public sealed class PcrTimelineTests
 
         for (int reading = 0; reading <= 50; reading++)
         {
-            timeline.Observe(VideoPid, 100 + (reading * Second / 10));
+            timeline.Observe(VideoPid, 100 + (reading * Second / 10), declaredDiscontinuous: false);
         }
 
         Assert.Equal(5, timeline.Second);
@@ -78,12 +78,12 @@ public sealed class PcrTimelineTests
     {
         var timeline = new PcrTimeline();
 
-        timeline.Observe(VideoPid, 0);
-        timeline.Observe(VideoPid, 7 * Second);
+        timeline.Observe(VideoPid, 0, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 7 * Second, declaredDiscontinuous: false);
 
         for (int reading = 0; reading < 1000; reading++)
         {
-            timeline.Observe(VideoPid, -1);
+            timeline.Observe(VideoPid, -1, declaredDiscontinuous: false);
         }
 
         Assert.Equal(7, timeline.Second);
@@ -95,9 +95,9 @@ public sealed class PcrTimelineTests
     {
         var timeline = new PcrTimeline();
 
-        timeline.Observe(VideoPid, Wrap - Second);
-        timeline.Observe(VideoPid, 0);
-        timeline.Observe(VideoPid, Second);
+        timeline.Observe(VideoPid, Wrap - Second, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 0, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, Second, declaredDiscontinuous: false);
 
         Assert.Equal(2, timeline.Second);
         Assert.Empty(timeline.Reanchors);
@@ -108,9 +108,9 @@ public sealed class PcrTimelineTests
     {
         var timeline = new PcrTimeline();
 
-        timeline.Observe(VideoPid, 0);
-        timeline.Observe(VideoPid, Wrap);
-        timeline.Observe(VideoPid, Wrap + Second);
+        timeline.Observe(VideoPid, 0, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, Wrap, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, Wrap + Second, declaredDiscontinuous: false);
 
         Assert.Equal(0, timeline.Anchor);
         Assert.Equal(0, timeline.Second);
@@ -122,9 +122,9 @@ public sealed class PcrTimelineTests
     {
         var timeline = new PcrTimeline();
 
-        timeline.Observe(VideoPid, 100 * Second);
-        timeline.Observe(VideoPid, 104 * Second);
-        timeline.Observe(VideoPid, 20 * Second);
+        timeline.Observe(VideoPid, 100 * Second, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 104 * Second, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 20 * Second, declaredDiscontinuous: false);
 
         Assert.Equal(4, timeline.Second);
         Assert.Equal([new PcrReanchorDto(4, 104 * Second, 20 * Second)], timeline.Reanchors);
@@ -135,9 +135,9 @@ public sealed class PcrTimelineTests
     {
         var timeline = new PcrTimeline();
 
-        timeline.Observe(VideoPid, 0);
-        timeline.Observe(VideoPid, 4 * Second);
-        timeline.Observe(VideoPid, 3600 * Second);
+        timeline.Observe(VideoPid, 0, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 4 * Second, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 3600 * Second, declaredDiscontinuous: false);
 
         Assert.Equal(4, timeline.Second);
         Assert.Equal([new PcrReanchorDto(4, 4 * Second, 3600 * Second)], timeline.Reanchors);
@@ -148,10 +148,10 @@ public sealed class PcrTimelineTests
     {
         var timeline = new PcrTimeline();
 
-        timeline.Observe(VideoPid, 100 * Second);
-        timeline.Observe(VideoPid, 104 * Second);
-        timeline.Observe(VideoPid, 20 * Second);
-        timeline.Observe(VideoPid, 26 * Second);
+        timeline.Observe(VideoPid, 100 * Second, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 104 * Second, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 20 * Second, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 26 * Second, declaredDiscontinuous: false);
 
         Assert.Equal(10, timeline.Second);
         Assert.Single(timeline.Reanchors);
@@ -168,8 +168,8 @@ public sealed class PcrTimelineTests
     {
         var timeline = new PcrTimeline();
 
-        timeline.Observe(VideoPid, 0);
-        timeline.Observe(VideoPid, gap * Second);
+        timeline.Observe(VideoPid, 0, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, gap * Second, declaredDiscontinuous: false);
 
         Assert.Equal(expectedSecond, timeline.Second);
         Assert.Equal(expectedReanchors, timeline.Reanchors.Count);
@@ -180,9 +180,9 @@ public sealed class PcrTimelineTests
     {
         var timeline = new PcrTimeline();
 
-        timeline.Observe(VideoPid, 100 * Second);
-        timeline.Observe(VideoPid, 20 * Second);
-        timeline.Observe(VideoPid, 700 * Second);
+        timeline.Observe(VideoPid, 100 * Second, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 20 * Second, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 700 * Second, declaredDiscontinuous: false);
 
         Assert.Equal([new PcrReanchorDto(0, 100 * Second, 700 * Second)], timeline.Reanchors);
     }
@@ -192,10 +192,10 @@ public sealed class PcrTimelineTests
     {
         var timeline = new PcrTimeline();
 
-        timeline.Observe(VideoPid, 0);
-        timeline.Observe(VideoPid, 500 * Second);
-        timeline.Observe(VideoPid, 502 * Second);
-        timeline.Observe(VideoPid, 90 * Second);
+        timeline.Observe(VideoPid, 0, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 500 * Second, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 502 * Second, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 90 * Second, declaredDiscontinuous: false);
 
         Assert.Equal([0, 2], timeline.Reanchors.Select(reanchor => reanchor.Second));
     }
@@ -205,10 +205,10 @@ public sealed class PcrTimelineTests
     {
         var timeline = new PcrTimeline();
 
-        timeline.Observe(VideoPid, 0);
-        timeline.Observe(OtherServicePid, 5_000_000_000);
-        timeline.Observe(VideoPid, 2 * Second);
-        timeline.Observe(OtherServicePid, 6_000_000_000);
+        timeline.Observe(VideoPid, 0, declaredDiscontinuous: false);
+        timeline.Observe(OtherServicePid, 5_000_000_000, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 2 * Second, declaredDiscontinuous: false);
+        timeline.Observe(OtherServicePid, 6_000_000_000, declaredDiscontinuous: false);
 
         Assert.Equal(0, timeline.Anchor);
         Assert.Equal(2, timeline.Second);
@@ -220,9 +220,9 @@ public sealed class PcrTimelineTests
     {
         var timeline = new PcrTimeline();
 
-        timeline.Observe(VideoPid, 3 * Second);
-        timeline.Observe(VideoPid, 3 * Second);
-        timeline.Observe(VideoPid, 3 * Second);
+        timeline.Observe(VideoPid, 3 * Second, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 3 * Second, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 3 * Second, declaredDiscontinuous: false);
 
         Assert.Equal(0, timeline.Second);
         Assert.Empty(timeline.Reanchors);
@@ -233,8 +233,8 @@ public sealed class PcrTimelineTests
     {
         var timeline = new PcrTimeline();
 
-        timeline.Observe(VideoPid, Wrap - 1);
-        timeline.Observe(VideoPid, 700 * Second);
+        timeline.Observe(VideoPid, Wrap - 1, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 700 * Second, declaredDiscontinuous: false);
 
         Assert.All(
             timeline.Reanchors,
@@ -245,5 +245,54 @@ public sealed class PcrTimelineTests
             }
         );
         Assert.Equal(Wrap - 1, timeline.Reanchors[0].Before);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(90_000)]
+    [InlineData(5 * 90_000)]
+    public void AClockTheBroadcastSaysItBrokeIsWrittenDownHoweverSmallTheJump(long jump)
+    {
+        var timeline = new PcrTimeline();
+
+        timeline.Observe(VideoPid, 100 * Second, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, (100 * Second) + jump, declaredDiscontinuous: true);
+
+        Assert.Equal(0, timeline.Second);
+        Assert.Equal(
+            [new PcrReanchorDto(0, 100 * Second, (100 * Second) + jump)],
+            timeline.Reanchors
+        );
+    }
+
+    [Fact]
+    public void ABreakDeclaredOnTheFirstReadingIsStillWhereTheTimelineStarts()
+    {
+        var timeline = new PcrTimeline();
+
+        timeline.Observe(VideoPid, 4_500_000, declaredDiscontinuous: true);
+
+        Assert.Equal(4_500_000, timeline.Anchor);
+        Assert.Empty(timeline.Reanchors);
+    }
+
+    [Fact]
+    public void ABreakDeclaredByAServiceWeAreNotFollowingChangesNothing()
+    {
+        var timeline = new PcrTimeline();
+
+        timeline.Observe(VideoPid, 0, declaredDiscontinuous: false);
+        timeline.Observe(OtherServicePid, 5_000_000_000, declaredDiscontinuous: true);
+        timeline.Observe(VideoPid, 2 * Second, declaredDiscontinuous: false);
+
+        Assert.Equal(2, timeline.Second);
+        Assert.Empty(timeline.Reanchors);
+    }
+
+    [Fact]
+    public void TheWindowIsAHundredTimesTheLongestGapTheStandardAllowsBetweenReadings()
+    {
+        Assert.Equal(9_000, PcrTimeline.RepeatedAtLeastEvery);
+        Assert.Equal(900_000, PcrTimeline.ContinuousWithin);
     }
 }

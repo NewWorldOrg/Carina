@@ -522,4 +522,24 @@ public sealed class ContinuityCounterTrackerTests
             positions.Buckets.Select(bucket => bucket.Second)
         );
     }
+
+    [Fact]
+    public void ABreakTheBroadcastDeclaredIsCarriedEvenWhenTheClockBarelyMoved()
+    {
+        var tracker = new ContinuityCounterTracker();
+
+        tracker.Observe(Packet(0x100, 0, pcr: 0));
+        tracker.Observe(Packet(0x100, 1, pcr: 6 * 90_000, discontinuity: true));
+        tracker.Observe(Packet(0x100, 7));
+
+        DropPositionsDto? positions = tracker.Snapshot().Positions;
+
+        Assert.Equal(1, tracker.Discontinuities);
+        Assert.NotNull(positions);
+        Assert.Equal(
+            [new PcrReanchorDto(0, 0, 6 * 90_000)],
+            positions.Reanchors
+        );
+        Assert.Equal([new DropBucketDto(0, 5, 0)], positions.Buckets);
+    }
 }
