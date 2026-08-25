@@ -194,6 +194,14 @@ category by name and nothing else selects it; `task test:scale` runs it by hand,
 which is what to do when the search or the shape of either programme table
 changes. Being compiled with everything else is what keeps it from rotting.
 
+What it asserts is the plan and the blocks read, not the clock. Wall clock on the
+same machine and the same data moves three to five times with how much of the
+half gigabyte the page cache happens to hold, so a budget in milliseconds is worth
+stating but cannot hold on its own: it was measured passing against the very
+regression it exists to catch. The plan shape and the block counts do not move
+with cache temperature, and between the two shapes they differ by two hundred
+times.
+
 ## Commands
 
 Everything runs inside the containers.

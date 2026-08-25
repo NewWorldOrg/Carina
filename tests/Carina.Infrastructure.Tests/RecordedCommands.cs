@@ -1,4 +1,5 @@
 using System.Data.Common;
+using System.Text.Json;
 
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
@@ -8,13 +9,13 @@ namespace Carina.Infrastructure.Tests;
 
 public sealed record RecordedCommand(string Text, IReadOnlyList<KeyValuePair<string, object?>> Parameters);
 
+public sealed record QueryPlan(string Json, IReadOnlyList<string> NodeTypes, long SharedBlocks);
+
 public sealed class RecordedCommands : DbCommandInterceptor
 {
     private readonly List<RecordedCommand> seen = [];
 
     public IReadOnlyList<RecordedCommand> Seen => seen;
-
-    public void Forget() => seen.Clear();
 
     public override InterceptionResult<DbDataReader> ReaderExecuting(
         DbCommand command,
@@ -37,7 +38,7 @@ public sealed class RecordedCommands : DbCommandInterceptor
         return base.ReaderExecutingAsync(command, eventData, result, cancellationToken);
     }
 
-    public static async Task<string> PlanForAsync(
+    public static async Task<QueryPlan> PlanForAsync(
         string connectionString,
         RecordedCommand recorded,
         CancellationToken cancellationToken)
@@ -48,7 +49,7 @@ public sealed class RecordedCommands : DbCommandInterceptor
         await connection.OpenAsync(cancellationToken);
 
         await using var explaining = new NpgsqlCommand(
-            "EXPLAIN (ANALYZE, BUFFERS) " + recorded.Text,
+            "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) " + recorded.Text,
             connection);
 
         foreach (KeyValuePair<string, object?> carried in recorded.Parameters)
@@ -56,15 +57,31 @@ public sealed class RecordedCommands : DbCommandInterceptor
             explaining.Parameters.Add(new NpgsqlParameter(carried.Key, carried.Value ?? DBNull.Value));
         }
 
-        var lines = new List<string>();
-        await using DbDataReader reader = await explaining.ExecuteReaderAsync(cancellationToken);
+        string json = (await explaining.ExecuteScalarAsync(cancellationToken))?.ToString()
+            ?? throw new InvalidOperationException("EXPLAIN answered nothing.");
 
-        while (await reader.ReadAsync(cancellationToken))
+        using JsonDocument read = JsonDocument.Parse(json);
+        JsonElement root = read.RootElement[0].GetProperty("Plan");
+        List<string> nodes = [];
+        Collect(root, nodes);
+
+        return new QueryPlan(
+            json,
+            nodes,
+            root.GetProperty("Shared Hit Blocks").GetInt64() + root.GetProperty("Shared Read Blocks").GetInt64());
+    }
+
+    private static void Collect(JsonElement node, List<string> nodes)
+    {
+        nodes.Add(node.GetProperty("Node Type").GetString() ?? string.Empty);
+
+        if (node.TryGetProperty("Plans", out JsonElement children))
         {
-            lines.Add(reader.GetString(0));
+            foreach (JsonElement child in children.EnumerateArray())
+            {
+                Collect(child, nodes);
+            }
         }
-
-        return string.Join('\n', lines);
     }
 
     private void Remember(DbCommand command)

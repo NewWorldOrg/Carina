@@ -13,65 +13,64 @@ namespace Carina.Infrastructure.Tests;
 public sealed class ProgrammeSearchScaleTests(ProgrammeSearchScale scale, ITestOutputHelper output)
     : IClassFixture<ProgrammeSearchScale>
 {
-    private static readonly TimeSpan Budget = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan BudgetOnAWarmCache = TimeSpan.FromSeconds(1);
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
     private const int MeasuredRuns = 3;
 
+    private const long MostBlocksForOnePage = 2_000;
+
+    private const long MostBlocksForOneCount = 20_000;
+
     [Fact]
-    public async Task ASearchThatStartsAYearBackAnswersInsideASecond()
+    public async Task ASearchThatStartsAYearBackMergesTheLayersInIndexOrderRatherThanSortingTheArchive()
     {
-        ProgrammeSearch looking = ProgrammeSearch.For(
-            null,
-            ProgrammeSearchScale.Anchor.AddDays(-365),
-            null)!;
+        Measured taken = await MeasuredAsync(
+            ProgrammeSearch.For(null, ProgrammeSearchScale.Anchor.AddDays(-365), null)!,
+            nameof(ASearchThatStartsAYearBackMergesTheLayersInIndexOrderRatherThanSortingTheArchive));
 
-        PaginatedList<ProgrammeMatch> found = await MeasuredAsync(looking, nameof(
-            ASearchThatStartsAYearBackAnswersInsideASecond));
+        Assert.Contains("Merge Append", taken.Page.NodeTypes);
+        Assert.DoesNotContain("Subquery Scan", taken.Page.NodeTypes);
+        Assert.Contains("Index Only Scan", taken.Count.NodeTypes);
 
-        Assert.Equal(418_660, found.Total);
-        Assert.Equal(50, found.Items.Count);
-        Assert.All(found.Items, match => Assert.True(match.IsArchived));
-        Assert.Equal(ProgrammeSearchScale.ArchiveStartOfSlot(57), found.Items[0].StartsAt);
-        Assert.Equal(1024, found.Items[0].ServiceId.Value);
-        Assert.Equal(11_140, found.Items[0].EventId.Value);
-        Assert.Equal(ProgrammeSearchScale.ArchiveStartOfSlot(59), found.Items[49].StartsAt);
-        Assert.Equal(1033, found.Items[49].ServiceId.Value);
-        Assert.Equal(11_189, found.Items[49].EventId.Value);
+        Assert.Equal(418_660, taken.Found.Total);
+        Assert.Equal(50, taken.Found.Items.Count);
+        Assert.All(taken.Found.Items, match => Assert.True(match.IsArchived));
+        Assert.Equal(ProgrammeSearchScale.ArchiveStartOfSlot(57), taken.Found.Items[0].StartsAt);
+        Assert.Equal(1024, taken.Found.Items[0].ServiceId.Value);
+        Assert.Equal(11_140, taken.Found.Items[0].EventId.Value);
+        Assert.Equal(ProgrammeSearchScale.ArchiveStartOfSlot(59), taken.Found.Items[49].StartsAt);
+        Assert.Equal(1033, taken.Found.Items[49].ServiceId.Value);
+        Assert.Equal(11_189, taken.Found.Items[49].EventId.Value);
     }
 
     [Fact]
     public async Task ASearchThatOnlyNamesAnEndDateNeverReachesTheArchive()
     {
-        ProgrammeSearch looking = ProgrammeSearch.For(
-            null,
-            null,
-            ProgrammeSearchScale.Anchor.AddDays(3))!;
+        Measured taken = await MeasuredAsync(
+            ProgrammeSearch.For(null, null, ProgrammeSearchScale.Anchor.AddDays(3))!,
+            nameof(ASearchThatOnlyNamesAnEndDateNeverReachesTheArchive));
 
-        PaginatedList<ProgrammeMatch> found = await MeasuredAsync(looking, nameof(
-            ASearchThatOnlyNamesAnEndDateNeverReachesTheArchive));
-
-        Assert.Equal(3_410, found.Total);
-        Assert.All(found.Items, match => Assert.False(match.IsArchived));
+        Assert.Equal(3_410, taken.Found.Total);
+        Assert.All(taken.Found.Items, match => Assert.False(match.IsArchived));
     }
 
     [Fact]
-    public async Task AKeywordSearchThatStartsAYearBackAnswersInsideASecond()
+    public async Task AKeywordSearchThatStartsAYearBackTakesTheSameOrderedPath()
     {
-        ProgrammeSearch looking = ProgrammeSearch.For(
-            "第7回",
-            ProgrammeSearchScale.Anchor.AddDays(-365),
-            null)!;
+        Measured taken = await MeasuredAsync(
+            ProgrammeSearch.For("第7回", ProgrammeSearchScale.Anchor.AddDays(-365), null)!,
+            nameof(AKeywordSearchThatStartsAYearBackTakesTheSameOrderedPath));
 
-        PaginatedList<ProgrammeMatch> found = await MeasuredAsync(looking, nameof(
-            AKeywordSearchThatStartsAYearBackAnswersInsideASecond));
+        Assert.Contains("Merge Append", taken.Page.NodeTypes);
+        Assert.DoesNotContain("Subquery Scan", taken.Page.NodeTypes);
 
-        Assert.Equal(4_317, found.Total);
-        Assert.Equal(50, found.Items.Count);
+        Assert.Equal(4_317, taken.Found.Total);
+        Assert.Equal(50, taken.Found.Items.Count);
     }
 
-    private async Task<PaginatedList<ProgrammeMatch>> MeasuredAsync(ProgrammeSearch looking, string shape)
+    private async Task<Measured> MeasuredAsync(ProgrammeSearch looking, string shape)
     {
         var recorded = new RecordedCommands();
         await using CarinaDbContext context = scale.Open(recorded);
@@ -82,13 +81,45 @@ public sealed class ProgrammeSearchScaleTests(ProgrammeSearchScale scale, ITestO
             ProgrammeSearchScale.Anchor,
             Cancel);
 
+        Assert.Equal(2, recorded.Seen.Count);
+
+        QueryPlan? counting = null;
+        QueryPlan? paging = null;
+
         foreach (RecordedCommand carried in recorded.Seen)
         {
-            output.WriteLine($"--- {shape}: sql ---");
+            QueryPlan plan = await RecordedCommands.PlanForAsync(scale.ConnectionString, carried, Cancel);
+            bool page = carried.Text.Contains("LIMIT", StringComparison.Ordinal);
+            string which = page ? "page" : "count";
+
+            output.WriteLine($"--- {shape}: {which} sql ---");
             output.WriteLine(carried.Text);
-            output.WriteLine($"--- {shape}: plan ---");
-            output.WriteLine(await RecordedCommands.PlanForAsync(scale.ConnectionString, carried, Cancel));
+            output.WriteLine($"--- {shape}: {which} plan, {plan.SharedBlocks} shared blocks ---");
+            output.WriteLine(string.Join(" / ", plan.NodeTypes));
+            output.WriteLine(plan.Json);
+
+            if (page)
+            {
+                paging = plan;
+            }
+            else
+            {
+                counting = plan;
+            }
         }
+
+        Assert.NotNull(counting);
+        Assert.NotNull(paging);
+
+        Assert.True(
+            paging.SharedBlocks <= MostBlocksForOnePage,
+            $"{shape} read {paging.SharedBlocks} shared blocks to hand back one page, over {MostBlocksForOnePage}. "
+            + "Sorting the archive instead of merging it in index order costs about sixty thousand.");
+
+        Assert.True(
+            counting.SharedBlocks <= MostBlocksForOneCount,
+            $"{shape} read {counting.SharedBlocks} shared blocks to count, over {MostBlocksForOneCount}. "
+            + "Counting from the heap instead of the covering index costs about sixty thousand.");
 
         var runs = new List<TimeSpan>();
 
@@ -100,7 +131,8 @@ public sealed class ProgrammeSearchScaleTests(ProgrammeSearchScale scale, ITestO
         }
 
         output.WriteLine($"--- {shape}: {ProgrammeSearchScale.ArchivedRows} archived + "
-            + $"{ProgrammeSearchScale.HotRows} hot, total {found.Total} ---");
+            + $"{ProgrammeSearchScale.HotRows} hot, total {found.Total}. The wall clock below moves three to "
+            + "five times with the page cache; the block counts above do not, which is why they are the gate ---");
 
         foreach (TimeSpan took in runs)
         {
@@ -108,9 +140,12 @@ public sealed class ProgrammeSearchScaleTests(ProgrammeSearchScale scale, ITestO
         }
 
         Assert.All(runs, took => Assert.True(
-            took < Budget,
-            $"{shape} answered in {took.TotalMilliseconds:F1} ms, over the {Budget.TotalMilliseconds:F0} ms budget."));
+            took < BudgetOnAWarmCache,
+            $"{shape} answered in {took.TotalMilliseconds:F1} ms, over the "
+            + $"{BudgetOnAWarmCache.TotalMilliseconds:F0} ms budget on a warm cache."));
 
-        return found;
+        return new Measured(found, counting, paging);
     }
+
+    private sealed record Measured(PaginatedList<ProgrammeMatch> Found, QueryPlan Count, QueryPlan Page);
 }
