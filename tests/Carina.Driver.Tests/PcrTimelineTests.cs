@@ -348,4 +348,39 @@ public sealed class PcrTimelineTests
         Assert.Equal(0, timeline.Second);
         Assert.Empty(timeline.Reanchors);
     }
+
+    [Theory]
+    [InlineData(10, 10, 0)]
+    [InlineData(11, 0, 1)]
+    public void TheClockComingAroundExactlyAtTheEdgeOfTheWindowIsStillTheSameStream(
+        int gap,
+        int expectedSecond,
+        int expectedReanchors
+    )
+    {
+        var timeline = new PcrTimeline();
+
+        timeline.Observe(VideoPid, Wrap - Second, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, (gap - 1) * Second, declaredDiscontinuous: false);
+
+        Assert.Equal(expectedSecond, timeline.Second);
+        Assert.Equal(expectedReanchors, timeline.Reanchors.Count);
+    }
+
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(89_999, 0)]
+    [InlineData(90_000, 1)]
+    [InlineData(171_000, 1)]
+    [InlineData(179_999, 1)]
+    [InlineData(180_000, 2)]
+    public void APartSecondCountsAsTheSecondItHasNotFinished(long ticks, int expected)
+    {
+        var timeline = new PcrTimeline();
+
+        timeline.Observe(VideoPid, 0, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, ticks, declaredDiscontinuous: false);
+
+        Assert.Equal(expected, timeline.Second);
+    }
 }

@@ -20,17 +20,34 @@ public sealed class RecordingMeasurementTests
     private static readonly DriverHello Hello =
         new(DriverProtocol.Version, "instance-1", DriverGreeting.Capabilities);
 
-    private static byte[] Packet(int pid, int counter, long? pcr = null, bool scrambled = false)
+    private static byte[] Packet(
+        int pid,
+        int counter,
+        long? pcr = null,
+        bool scrambled = false,
+        bool transportError = false,
+        bool discontinuity = false
+    )
     {
         byte[] packet = new byte[PacketLength];
         Array.Fill(packet, (byte)(counter + 1), 4, PacketLength - 4);
 
         packet[0] = TsPacketReader.SyncByte;
-        packet[1] = (byte)((pid >> 8) & 0x1F);
+        packet[1] = (byte)((transportError ? 0x80 : 0x00) | ((pid >> 8) & 0x1F));
         packet[2] = (byte)(pid & 0xFF);
         packet[3] = (byte)(
-            (scrambled ? 0xC0 : 0x00) | (pcr is null ? 0x10 : 0x30) | (counter & 0x0F)
+            (scrambled ? 0xC0 : 0x00)
+            | (pcr is null && !discontinuity ? 0x10 : 0x30)
+            | (counter & 0x0F)
         );
+
+        if (discontinuity && pcr is null)
+        {
+            packet[4] = 7;
+            packet[5] = 0x80;
+
+            return packet;
+        }
 
         if (pcr is not { } reference)
         {
@@ -38,7 +55,7 @@ public sealed class RecordingMeasurementTests
         }
 
         packet[4] = 7;
-        packet[5] = 0x10;
+        packet[5] = (byte)(discontinuity ? 0x90 : 0x10);
         packet[6] = (byte)(reference >> 25);
         packet[7] = (byte)((reference >> 17) & 0xFF);
         packet[8] = (byte)((reference >> 9) & 0xFF);
@@ -284,5 +301,41 @@ public sealed class RecordingMeasurementTests
             );
 
         public void Dispose() => Disposed = true;
+    }
+
+    [Fact]
+    public void EveryCountTheSessionKeepsTravelsIntoTheAnswerTheAppReads()
+    {
+        var stream = new List<byte>();
+
+        stream.AddRange(Packet(VideoPid, 0, pcr: 0));
+        stream.AddRange(Packet(VideoPid, 1));
+        stream.AddRange(Packet(VideoPid, 1));
+        stream.AddRange(Packet(VideoPid, 9, transportError: true));
+        stream.AddRange(Packet(VideoPid, 5, discontinuity: true));
+        stream.AddRange(new byte[PacketLength]);
+        stream.AddRange(Packet(VideoPid, 6));
+        stream.AddRange(Packet(VideoPid, 7, scrambled: true));
+
+        using TunerSession session = Ran([.. stream], PacketLength);
+        SessionCounters counters = SessionViews.Of(session, Hello).Counters;
+
+        Assert.True(counters.Packets > 0, "packets");
+        Assert.True(counters.Duplicates > 0, "duplicates");
+        Assert.True(counters.Discontinuities > 0, "discontinuities");
+        Assert.True(counters.TransportErrors > 0, "transportErrors");
+        Assert.True(counters.ScrambledPackets > 0, "scrambledPackets");
+        Assert.True(counters.ProvisionalPackets > 0, "provisionalPackets");
+        Assert.True(counters.DiscardedBytes > 0, "discardedBytes");
+        Assert.True(counters.Resyncs > 0, "resyncs");
+
+        Assert.Equal(session.Counters.Packets, counters.Packets);
+        Assert.Equal(session.Counters.ScrambledPackets, counters.ScrambledPackets);
+        Assert.Equal(session.Counters.Duplicates, counters.Duplicates);
+        Assert.Equal(session.Counters.Discontinuities, counters.Discontinuities);
+        Assert.Equal(session.Counters.TransportErrors, counters.TransportErrors);
+        Assert.Equal(session.Counters.ProvisionalPackets, counters.ProvisionalPackets);
+        Assert.Equal(session.DiscardedBytes, counters.DiscardedBytes);
+        Assert.Equal(session.Resyncs, counters.Resyncs);
     }
 }

@@ -293,6 +293,35 @@ public sealed class WireStabilityTests
     }
 
     [Fact]
+    public void APositionThatNamesNoSecondsAtAllReadsAsNoneRatherThanAsNothing()
+    {
+        SessionCounters? counters = DriverJson.Deserialize(
+            """{"packets":1000,"drops":7,"ccMeasured":true,"positions":{"anchorPcr":900}}""",
+            DriverJson.Context.SessionCounters
+        );
+
+        Assert.NotNull(counters);
+        Assert.NotNull(counters.Positions);
+        Assert.Equal(900, counters.Positions.AnchorPcr);
+        Assert.Empty(counters.Positions.Buckets);
+        Assert.Empty(counters.Positions.Reanchors);
+    }
+
+    [Fact]
+    public void APositionWhoseListsAreSpeltNullReadsAsNoneRatherThanAsNothing()
+    {
+        SessionCounters? counters = DriverJson.Deserialize(
+            """{"ccMeasured":true,"positions":{"anchorPcr":900,"buckets":null,"reanchors":null}}""",
+            DriverJson.Context.SessionCounters
+        );
+
+        Assert.NotNull(counters);
+        Assert.NotNull(counters.Positions);
+        Assert.Empty(counters.Positions.Buckets);
+        Assert.Empty(counters.Positions.Reanchors);
+    }
+
+    [Fact]
     public void PositionsFromADriverThatLeftThemOutStillRead()
     {
         SessionCounters? counters = DriverJson.Deserialize(

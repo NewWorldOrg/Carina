@@ -137,12 +137,26 @@ nothing.
   running while a recording is interrupted — which is the recording with the
   most losses to place. The 33-bit clock coming around is followed through; a
   jump the broadcast spliced in is written down as a re-anchor instead, so the
-  timeline only ever reads forwards.
+  timeline only ever reads forwards. A packet that sets the discontinuity
+  indicator is taken at its word however small the jump; the size test behind it
+  admits a hundred times the longest gap the standard leaves between two clock
+  readings, and is there only for the breaks nobody declared.
 
-- **The count reaches the app while the recording is still running.** The driver
-  signals progress every thirty seconds for as long as anything is being
-  recorded, so a recording that dies part way through is not left looking like a
-  perfect one.
+- **The driver announces progress every thirty seconds** for as long as anything
+  is being recorded, so that a recording which dies part way through need not be
+  indistinguishable from a perfect one. Only the driver's half of that is in
+  place: nothing yet subscribes to the signal and nothing yet writes the counts
+  into the ledger, so today the numbers still only reach the ledger when the
+  recording ends.
+
+- **The clock the positions are measured against is the one the recorded service
+  carries, and the driver cannot yet know which that is.** Measurement runs on
+  the raw chunk, which is the whole multiplex, so the timeline follows the first
+  programme clock it hears and hands over to another only when that one goes
+  silent. That is right while the recording is the whole multiplex; the moment a
+  PID filter narrows the file to one service, the followed clock may belong to a
+  service the file no longer contains. Deciding how the recorded service's clock
+  reaches the session is a precondition for adding that filter, not a follow-up.
 
 - **The search across both layers keeps the "already held in the hot layer"
   exclusion above the union, never inside the archive arm.** A `NOT EXISTS` in the

@@ -191,4 +191,20 @@ public sealed class TsHeaderTests
 
         Assert.Null(ReadOne(packet).Pcr);
     }
+
+    [Theory]
+    [InlineData(0x20)]
+    [InlineData(0x30)]
+    public void APacketCarryingOnlyAnAdaptationFieldStillSaysTheTimeAndTheBreak(int byte3High)
+    {
+        byte[] packet = WithClock(4_500_000);
+        packet[3] = (byte)byte3High;
+        packet[5] = 0x90;
+
+        TsPacket read = ReadOne(packet);
+
+        Assert.Equal(4_500_000, read.Pcr);
+        Assert.True(read.Discontinuity);
+        Assert.Equal(byte3High is 0x30, read.HasPayload);
+    }
 }
