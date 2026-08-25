@@ -149,6 +149,8 @@ public sealed class SeatSwapTests : IDisposable
 
     private static readonly TimeSpan NoPatience = TimeSpan.FromMilliseconds(200);
 
+    private static readonly TimeSpan FarLongerThanThisTestWaits = TimeSpan.FromMinutes(5);
+
     private readonly string root = Directory.CreateTempSubdirectory("carina-seat-").FullName;
     private readonly ManualTimeProvider clock = new(Start);
 
@@ -285,7 +287,7 @@ public sealed class SeatSwapTests : IDisposable
     }
 
     [Fact]
-    public void ASessionThatHasEndedTakesNoNewStream()
+    public async Task ASessionThatHasEndedTurnsANewStreamDownRatherThanSittingOnIt()
     {
         var device = new ScriptedTunerDevice();
         TunerSession watching = Watching(device);
@@ -296,10 +298,42 @@ public sealed class SeatSwapTests : IDisposable
         watching.WaitForEnd(Deadlock);
 
         SessionSubscription seat = seats.Subscribe(SubscriberKind.Piggyback);
+        Task<bool> handOver = Task.Run(() =>
+            watching.ReadFromInstead(
+                new SeatedTunerDevice(seat),
+                null,
+                seat,
+                FarLongerThanThisTestWaits
+            )
+        );
 
-        Assert.False(watching.ReadFromInstead(new SeatedTunerDevice(seat), null, seat, NoPatience));
+        Assert.Same(handOver, await Task.WhenAny(handOver, Task.Delay(Deadlock)));
+        Assert.False(await handOver);
 
         watching.Dispose();
+    }
+
+    [Fact]
+    public async Task TheHandOverIsAnsweredWhenTheReaderMovesAndNotWhenPatienceRunsOut()
+    {
+        var device = new ScriptedTunerDevice();
+        using TunerSession watching = Watching(device);
+        using var seats = new SessionBroadcaster();
+
+        watching.Start();
+
+        SessionSubscription seat = seats.Subscribe(SubscriberKind.Piggyback);
+        Task<bool> handOver = Task.Run(() =>
+            watching.ReadFromInstead(
+                new SeatedTunerDevice(seat),
+                null,
+                seat,
+                FarLongerThanThisTestWaits
+            )
+        );
+
+        Assert.Same(handOver, await Task.WhenAny(handOver, Task.Delay(Deadlock)));
+        Assert.True(await handOver);
     }
 
     [Fact]
@@ -448,20 +482,32 @@ public sealed class SeatSwapTests : IDisposable
         Assert.Equal(2, device.Reads);
         Assert.Equal(3, device.Parks);
 
-        device.Allow(1);
+        while (!begun.IsCompleted)
+        {
+            device.Allow(1);
+
+            await Task.WhenAny(begun, Task.Delay(NoPatience));
+        }
 
         SessionStart start = await begun;
 
         Assert.True(start.TryGetSession(out TunerSession? recording), start.Detail);
         Assert.Same(recording, watching.RidesOn);
 
+        int lastTheWatcherTook = (int)device.Reads;
+
         device.Allow(2);
 
         Assert.NotNull(writers.Last);
         writers.Last.AwaitChunks(2, Deadlock);
 
-        Assert.Equal([4, 5], writers.Last.Marks);
-        Assert.Equal([1, 2, 3, 4, 5], Taken(viewer, 5));
+        IReadOnlyList<int> recorded = writers.Last.Marks;
+        int[] unbroken = [.. Enumerable.Range(recorded[0], recorded.Count)];
+        int[] everythingTheTunerGave = [.. Enumerable.Range(1, recorded[^1])];
+
+        Assert.Equal(lastTheWatcherTook + 1, recorded[0]);
+        Assert.Equal(unbroken, recorded);
+        Assert.Equal(everythingTheTunerGave, Taken(viewer, recorded[^1]));
 
         StopAll(recording, watching);
     }
@@ -502,7 +548,7 @@ public sealed class SeatSwapTests : IDisposable
 
         clock.Advance(TimeSpan.FromHours(2));
 
-        await draining;
+        await draining.WaitAsync(Deadlock);
 
         Assert.Equal(SessionState.Stopped, recording.State);
         Assert.Equal(SessionStopReason.EndTimeReached, recording.StopReason);

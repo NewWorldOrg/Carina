@@ -42,6 +42,7 @@ public sealed class TunerSession : IDisposable
     private ITunerDevice? handover;
     private TunerSession? handoverHost;
     private SessionSubscription? handoverSeat;
+
     private Thread? loop;
     private SessionState state;
     private SessionStopReason stopReason;
