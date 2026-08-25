@@ -145,7 +145,7 @@ public sealed class RecordingRiderTests : IDisposable
     public void ARecordingRidingOnAnotherSessionTakesTheSeatThatWaits()
     {
         TunerSessionManager manager = Manager();
-        TunerSession host = Started(manager, Request("s-1", SessionPurpose.Live));
+        TunerSession host = Started(manager, Request("s-1", SessionPurpose.Recording));
         TunerSession rider = Started(manager, Request("s-2", SessionPurpose.Recording));
 
         Assert.Equal(host.DeviceId, rider.DeviceId);
@@ -228,7 +228,7 @@ public sealed class RecordingRiderTests : IDisposable
             NullLogger<TunerSessionManager>.Instance
         );
 
-        TunerSession host = Started(manager, Request("s-1", SessionPurpose.Live));
+        TunerSession host = Started(manager, Request("s-1", SessionPurpose.Recording));
 
         device.AwaitParkedBefore(1);
 
@@ -277,7 +277,7 @@ public sealed class RecordingRiderTests : IDisposable
             NullLogger<TunerSessionManager>.Instance
         );
 
-        TunerSession host = Started(manager, Request("s-1", SessionPurpose.Live));
+        TunerSession host = Started(manager, Request("s-1", SessionPurpose.Recording));
 
         device.AwaitParkedBefore(1);
 
@@ -333,7 +333,7 @@ public sealed class RecordingRiderTests : IDisposable
         TunerSessionManager manager = Manager();
         TunerSession host = Started(
             manager,
-            Request("s-1", SessionPurpose.Live) with { EndsAt = Start.AddMinutes(30) }
+            Request("s-1", SessionPurpose.Recording) with { EndsAt = Start.AddMinutes(30) }
         );
         TunerSession rider = Started(
             manager,
@@ -371,7 +371,7 @@ public sealed class RecordingRiderTests : IDisposable
         TunerSessionManager manager = Manager();
         TunerSession host = Started(
             manager,
-            Request("s-1", SessionPurpose.Live) with { EndsAt = Start.AddMinutes(30) }
+            Request("s-1", SessionPurpose.Recording) with { EndsAt = Start.AddMinutes(30) }
         );
         TunerSession rider = Started(
             manager,
@@ -397,7 +397,7 @@ public sealed class RecordingRiderTests : IDisposable
         TunerSessionManager manager = Manager();
         TunerSession host = Started(
             manager,
-            Request("s-1", SessionPurpose.Live) with { EndsAt = Start.AddMinutes(30) }
+            Request("s-1", SessionPurpose.Recording) with { EndsAt = Start.AddMinutes(30) }
         );
         TunerSession rider = Started(
             manager,
@@ -412,8 +412,10 @@ public sealed class RecordingRiderTests : IDisposable
         host.WaitForEnd(Deadlock);
     }
 
-    [Fact]
-    public void ARecordingIsNotStartedOnAHostWhoseWindowHasAlreadyRunOut()
+    [Theory]
+    [InlineData(SessionPurpose.Live)]
+    [InlineData(SessionPurpose.Recording)]
+    public void ARecordingIsNotStartedOnAHostWhoseWindowHasAlreadyRunOut(SessionPurpose holding)
     {
         var device = new PacedTunerDevice();
         var manager = new TunerSessionManager(
@@ -425,7 +427,7 @@ public sealed class RecordingRiderTests : IDisposable
 
         TunerSession host = Started(
             manager,
-            Request("s-1", SessionPurpose.Live) with { EndsAt = Start.AddMinutes(5) }
+            Request("s-1", holding) with { EndsAt = Start.AddMinutes(5) }
         );
 
         device.AwaitParkedBefore(1);
