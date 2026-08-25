@@ -383,4 +383,18 @@ public sealed class PcrTimelineTests
 
         Assert.Equal(expected, timeline.Second);
     }
+
+    [Fact]
+    public void AnotherServiceSpeakingBrieflyWhileOursIsQuietIsNotAHandover()
+    {
+        var timeline = new PcrTimeline();
+
+        timeline.Observe(VideoPid, 0, declaredDiscontinuous: false);
+        timeline.Observe(OtherServicePid, 5_000_000, declaredDiscontinuous: false);
+        timeline.Observe(OtherServicePid, 5_000_000 + (5 * Second), declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 2 * Second, declaredDiscontinuous: false);
+
+        Assert.Equal(2, timeline.Second);
+        Assert.Empty(timeline.Reanchors);
+    }
 }

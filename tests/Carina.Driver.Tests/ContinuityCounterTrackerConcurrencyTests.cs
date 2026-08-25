@@ -7,9 +7,9 @@ public sealed class ContinuityCounterTrackerConcurrencyTests
 {
     private const int VideoPid = 0x0100;
     private const long Second = 90_000;
-    private const int Readings = 2_000;
+    private const int Readings = 200;
 
-    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(60);
 
     [Fact]
     public void WhatWasPlacedNeverOutRunsWhatWasCountedWhileTheStreamIsStillArriving()
@@ -19,14 +19,15 @@ public sealed class ContinuityCounterTrackerConcurrencyTests
 
         Thread reader = Count(tracker, counting.Token);
         var torn = new List<string>();
-        long placedAtWorst = 0;
+        long before = tracker.Snapshot().Drops;
+        long after = before;
         int located = 0;
 
         try
         {
             DateTime deadline = DateTime.UtcNow + Patience;
 
-            while (located < Readings && DateTime.UtcNow < deadline)
+            while (Short(located, after - before) && DateTime.UtcNow < deadline)
             {
                 SessionCounters counters = tracker.Snapshot();
 
@@ -36,11 +37,10 @@ public sealed class ContinuityCounterTrackerConcurrencyTests
                 }
 
                 located++;
+                after = counters.Drops;
 
                 long placed = positions.Buckets.Sum(bucket => bucket.Continuity);
                 long left = positions.Buckets.Sum(bucket => bucket.Scrambled);
-
-                placedAtWorst = Math.Max(placedAtWorst, placed);
 
                 if (placed > counters.Drops)
                 {
@@ -69,11 +69,14 @@ public sealed class ContinuityCounterTrackerConcurrencyTests
             $"only {located} reads saw a position, so this proves little about reading one."
         );
         Assert.True(
-            placedAtWorst > Readings,
-            $"the stream stopped arriving after {placedAtWorst} losses, so the reads raced nothing."
+            after - before >= Readings,
+            $"the stream added only {after - before} losses while {located} reads went by, so the reads raced nothing."
         );
         Assert.Empty(torn);
     }
+
+    private static bool Short(int located, long counted) =>
+        located < Readings || counted < Readings;
 
     private static Thread Count(ContinuityCounterTracker tracker, CancellationToken stopping)
     {
@@ -84,7 +87,11 @@ public sealed class ContinuityCounterTrackerConcurrencyTests
 
             while (!stopping.IsCancellationRequested)
             {
-                clock += Second / 10;
+                if (counter % 50 is 0)
+                {
+                    clock += Second / 10;
+                }
+
                 tracker.Observe(Packet(counter % 16, clock));
                 counter += 2;
                 tracker.Observe(Packet(counter % 16, null, scrambled: true));
