@@ -54,6 +54,24 @@ public sealed class PersistenceBoundaryRuleTests
     }
 
     [Fact]
+    public void WhatTheLedgerCheckWritesIsItsOwnFamilyAndHoldsNoKeyIntoTheLedger()
+    {
+        using CarinaDbContext context = Carina();
+
+        Assert.Equal(
+            ["integrity_check", "integrity_finding"],
+            PersistenceBoundaryRules.TablesOf(context.Model, PersistenceFamily.Integrity));
+
+        IReadOnlyList<string> pointing = [.. context.Model
+            .GetEntityTypes()
+            .Single(entityType => entityType.GetTableName() == "integrity_finding")
+            .GetForeignKeys()
+            .Select(key => key.PrincipalEntityType.GetTableName() ?? string.Empty)];
+
+        Assert.Equal(["integrity_check"], pointing);
+    }
+
+    [Fact]
     public void ARecordingStillReachesTheServiceAndTheProgrammeItRecordedByValue()
     {
         using CarinaDbContext context = Carina();

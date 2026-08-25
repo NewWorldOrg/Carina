@@ -17,61 +17,72 @@ public sealed class NoRecordingIsEverDeletedTests
 
     private static RecordingId Id(int seed) => new(new Guid(seed, 0, 0, [0, 0, 0, 0, 0, 0, 0, 1]));
 
+    private static LedgerFile Ended(string fileName, LedgerClaim claim, long size, int seed)
+        => LedgerFile.Ended(Id(seed), Primary, new RecordingFileName(fileName), claim, size);
+
     [Fact]
     public async Task ASweepOverEveryKindOfTroubleLeavesEveryByteWhereItWas()
     {
         using var recordings = new TempTree();
-        using var state = new TempTree();
 
         recordings
             .Holding("agrees.m2ts", 400)
             .Holding("disagrees.m2ts", 300)
             .Holding("empty.m2ts", 0)
+            .Holding("hollow.m2ts", 0)
+            .Holding("nothing-landed.m2ts", 0)
             .Holding("stray.m2ts", 200)
             .Holding("still-writing.m2ts", 100)
-            .HoldingDirectory("thumbnails");
+            .Holding("thumbnails/buried.jpg", 40)
+            .HoldingDirectory("empty-room");
 
         IReadOnlyList<string> before = recordings.Snapshot();
 
         var ledger = new HeldLedger(
-            LedgerFile.Ended(Id(1), Primary, new RecordingFileName("agrees.m2ts"), 400),
-            LedgerFile.Ended(Id(2), Primary, new RecordingFileName("disagrees.m2ts"), 999),
-            LedgerFile.Ended(Id(3), Primary, new RecordingFileName("empty.m2ts"), 500),
-            LedgerFile.Ended(Id(4), Primary, new RecordingFileName("gone.m2ts"), 600),
-            LedgerFile.StillWriting(Id(5), Primary, new RecordingFileName("still-writing.m2ts")));
+            Ended("agrees.m2ts", LedgerClaim.EverythingLanded, 400, 1),
+            Ended("disagrees.m2ts", LedgerClaim.EverythingLanded, 999, 2),
+            Ended("empty.m2ts", LedgerClaim.SomethingLanded, 500, 3),
+            Ended("hollow.m2ts", LedgerClaim.EverythingLanded, 500, 4),
+            Ended("nothing-landed.m2ts", LedgerClaim.NothingLanded, 0, 5),
+            Ended("gone.m2ts", LedgerClaim.EverythingLanded, 600, 6),
+            LedgerFile.StillWriting(Id(7), Primary, new RecordingFileName("still-writing.m2ts")));
 
-        using IntegrityCheckJob job = Job(ledger, recordings, state);
+        var checks = new HeldChecks();
+        using IntegrityCheckJob job = Job(ledger, checks, recordings);
         IntegrityRun run = await job.RunAsync(Cancel);
 
-        IntegritySweep swept = Assert.IsType<IntegritySweep>(run.Swept);
+        IntegrityReport swept = Assert.IsType<IntegrityReport>(run.Swept);
 
         Assert.Equal(
-            ["FileEmpty", "FileMissing", "NoLedgerRow", "SizeDisagrees"],
+            ["EmptyThoughComplete", "FileEmpty", "FileMissing", "NoLedgerRow", "NoLedgerRow", "SizeDisagrees"],
             swept.Findings.Select(finding => finding.Fault.ToString()).Order(StringComparer.Ordinal).ToArray());
-        Assert.Equal(4, swept.LedgerRowsJudged);
-        Assert.Equal(5, swept.FilesRead);
+        Assert.Equal(
+            ["disagrees.m2ts", "empty.m2ts", "gone.m2ts", "hollow.m2ts", "stray.m2ts", "thumbnails/buried.jpg"],
+            swept.Findings.Select(finding => finding.Path).Order(StringComparer.Ordinal).ToArray());
+        Assert.Equal(6, swept.Check.LedgerRowsJudged);
+        Assert.Equal(8, swept.Check.FilesRead);
         Assert.Equal(before, recordings.Snapshot());
-        Assert.Equal(6, before.Count);
+        Assert.Equal(10, before.Count);
     }
 
     [Fact]
     public async Task ASweepThatFindsNothingWrongStillLeavesEveryByteWhereItWas()
     {
         using var recordings = new TempTree();
-        using var state = new TempTree();
 
         recordings.Holding("agrees.m2ts", 400);
 
         IReadOnlyList<string> before = recordings.Snapshot();
 
-        var ledger = new HeldLedger(
-            LedgerFile.Ended(Id(1), Primary, new RecordingFileName("agrees.m2ts"), 400));
-
-        using IntegrityCheckJob job = Job(ledger, recordings, state);
-        IntegritySweep swept = (await job.RunAsync(Cancel)).Swept!;
+        var checks = new HeldChecks();
+        using IntegrityCheckJob job = Job(
+            new HeldLedger(Ended("agrees.m2ts", LedgerClaim.EverythingLanded, 400, 1)),
+            checks,
+            recordings);
+        IntegrityReport swept = (await job.RunAsync(Cancel)).Swept!;
 
         Assert.Empty(swept.Findings);
-        Assert.Equal(1, swept.FilesRead);
+        Assert.Equal(1, swept.Check.FilesRead);
         Assert.Equal(before, recordings.Snapshot());
         Assert.Single(before);
     }
@@ -80,16 +91,16 @@ public sealed class NoRecordingIsEverDeletedTests
     public async Task SweepingTheSameTroubleAgainAndAgainStillLeavesEveryByteWhereItWas()
     {
         using var recordings = new TempTree();
-        using var state = new TempTree();
 
-        recordings.Holding("empty.m2ts", 0).Holding("stray.m2ts", 200);
+        recordings.Holding("empty.m2ts", 0).Holding("nested/stray.m2ts", 200);
 
         IReadOnlyList<string> before = recordings.Snapshot();
 
-        var ledger = new HeldLedger(
-            LedgerFile.Ended(Id(3), Primary, new RecordingFileName("empty.m2ts"), 500));
-
-        using IntegrityCheckJob job = Job(ledger, recordings, state);
+        var checks = new HeldChecks();
+        using IntegrityCheckJob job = Job(
+            new HeldLedger(Ended("empty.m2ts", LedgerClaim.SomethingLanded, 500, 3)),
+            checks,
+            recordings);
 
         for (int round = 0; round < 5; round++)
         {
@@ -97,41 +108,41 @@ public sealed class NoRecordingIsEverDeletedTests
         }
 
         Assert.Equal(before, recordings.Snapshot());
-        Assert.Equal(2, before.Count);
+        Assert.Equal(3, before.Count);
     }
 
     [Fact]
-    public async Task TheSweepWritesItsReportSomewhereThatIsNotTheRecordingStore()
+    public async Task ASweepPutsNothingOfItsOwnUnderTheRecordingStore()
     {
         using var recordings = new TempTree();
-        using var state = new TempTree();
 
         recordings.Holding("agrees.m2ts", 400);
 
         IReadOnlyList<string> before = recordings.Snapshot();
 
-        using IntegrityCheckJob job = Job(new HeldLedger(), recordings, state);
+        var checks = new HeldChecks();
+        using IntegrityCheckJob job = Job(new HeldLedger(), checks, recordings);
         await job.RunAsync(Cancel);
 
         Assert.Equal(before, recordings.Snapshot());
-        Assert.NotEmpty(state.Snapshot());
+        Assert.Single(checks.Saved);
+        Assert.Single(checks.Saved[0].Findings);
     }
 
-    private static IntegrityCheckJob Job(HeldLedger ledger, TempTree recordings, TempTree state)
+    private static IntegrityCheckJob Job(HeldLedger ledger, HeldChecks checks, TempTree recordings)
     {
         var settings = new IntegritySettings
         {
             OutputRoots = [new StorageRootPath(Primary, recordings.Root)],
-            ReportPath = state.Under("report.json"),
         };
 
         var services = new ServiceCollection();
         services.AddScoped<IRecordingLedger>(_ => ledger);
+        services.AddScoped<IIntegrityCheckRepository>(_ => checks);
 
         return new IntegrityCheckJob(
             services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),
             new LocalRecordingFileSurvey(settings, NullLogger<LocalRecordingFileSurvey>.Instance),
-            new JsonIntegrityReportStore(settings),
             settings,
             new StoppedClock(Now),
             NullLogger<IntegrityCheckJob>.Instance);

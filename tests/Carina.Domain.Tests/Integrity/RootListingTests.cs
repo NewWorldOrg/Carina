@@ -9,21 +9,28 @@ public sealed class RootListingTests
     [Fact]
     public void AListingFindsTheFileItHolds()
     {
-        RootListing listing = Holding(Primary, ("one.m2ts", 100));
-
-        Assert.Equal(100, listing.Named("one.m2ts")?.SizeBytes);
+        Assert.Equal(100, Holding(Primary, ("one.m2ts", 100)).At("one.m2ts")?.SizeBytes);
     }
 
     [Fact]
-    public void AListingFindsNothingUnderANameItDoesNotHold()
+    public void AListingFindsAFileDeeperDownByItsWholePath()
     {
-        Assert.Null(Holding(Primary, ("one.m2ts", 100)).Named("two.m2ts"));
+        RootListing listing = Holding(Primary, ("nested/one.m2ts", 100));
+
+        Assert.Equal(100, listing.At("nested/one.m2ts")?.SizeBytes);
+        Assert.Null(listing.At("one.m2ts"));
     }
 
     [Fact]
-    public void ANameIsMatchedExactlyAndNotByCase()
+    public void AListingFindsNothingUnderAPathItDoesNotHold()
     {
-        Assert.Null(Holding(Primary, ("one.m2ts", 100)).Named("ONE.M2TS"));
+        Assert.Null(Holding(Primary, ("one.m2ts", 100)).At("two.m2ts"));
+    }
+
+    [Fact]
+    public void APathIsMatchedExactlyAndNotByCase()
+    {
+        Assert.Null(Holding(Primary, ("one.m2ts", 100)).At("ONE.M2TS"));
     }
 
     [Fact]
@@ -46,9 +53,19 @@ public sealed class RootListingTests
     }
 
     [Fact]
-    public void OneNameListedTwiceIsRefused()
+    public void OnePathListedTwiceIsRefused()
     {
         Assert.Throws<ArgumentException>(() => Holding(Primary, ("one.m2ts", 1), ("one.m2ts", 2)));
+    }
+
+    [Fact]
+    public void TheSameNameInTwoDirectoriesIsTwoDifferentFiles()
+    {
+        RootListing listing = Holding(Primary, ("one.m2ts", 1), ("nested/one.m2ts", 2));
+
+        Assert.Equal(2, listing.Files.Count);
+        Assert.Equal(1, listing.At("one.m2ts")?.SizeBytes);
+        Assert.Equal(2, listing.At("nested/one.m2ts")?.SizeBytes);
     }
 
     [Fact]
@@ -72,7 +89,7 @@ public sealed class RootListingTests
     [Fact]
     public void LookingUpNothingIsRefused()
     {
-        Assert.Throws<ArgumentNullException>(() => Empty(Primary).Named(null!));
+        Assert.Throws<ArgumentNullException>(() => Empty(Primary).At(null!));
     }
 
     [Fact]

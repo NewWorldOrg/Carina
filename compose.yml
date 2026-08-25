@@ -7,7 +7,6 @@ services:
       - nuget:/root/.nuget/packages
       - driver-run:/run/carina
       - recordings:/srv/recordings:ro
-      - app-state:/var/lib/carina
     tty: true
     ports:
       - ${API_PORT:-8081}:8080
@@ -62,7 +61,6 @@ services:
 
 volumes:
   nuget:
-  app-state:
   driver-run:
   driver-build:
   recordings:

@@ -21,36 +21,49 @@ public sealed class IntegrityCheckJobTests
 
     private static RecordingId Id(int seed) => new(new Guid(seed, 0, 0, [0, 0, 0, 0, 0, 0, 0, 1]));
 
-    private static LedgerFile Ended(OutputRoot root, string fileName, long size, int seed = 1)
-        => LedgerFile.Ended(Id(seed), root, new RecordingFileName(fileName), size);
+    private static LedgerFile Complete(OutputRoot root, string fileName, long size, int seed = 1)
+        => LedgerFile.Ended(Id(seed), root, new RecordingFileName(fileName), LedgerClaim.EverythingLanded, size);
 
     [Fact]
-    public async Task ARunCompareTheLedgerWithTheFilesAndKeepsWhatItFound()
+    public async Task ARunComparesTheLedgerWithTheFilesAndKeepsWhatItFound()
     {
-        var reports = new HeldReports();
+        var checks = new HeldChecks();
         using IntegrityCheckJob job = Job(
-            new HeldLedger(Ended(Primary, "one.m2ts", 100, 7)),
+            new HeldLedger(Complete(Primary, "one.m2ts", 100, 7)),
             new HeldSurvey().Declaring(Primary, ("one.m2ts", 99)),
-            reports);
+            checks);
 
         IntegrityRun run = await job.RunAsync(Cancel);
 
         Assert.False(run.AlreadyRunning);
-        IntegritySweep swept = Assert.IsType<IntegritySweep>(run.Swept);
+        IntegrityReport swept = Assert.IsType<IntegrityReport>(run.Swept);
         IntegrityFinding found = Assert.Single(swept.Findings);
         Assert.Equal(IntegrityFault.SizeDisagrees, found.Fault);
         Assert.Equal(Id(7), found.RecordingId);
-        Assert.Same(swept, Assert.Single(reports.Saved));
+        Assert.Same(swept, Assert.Single(checks.Saved));
     }
 
     [Fact]
-    public async Task ARunStampsTheSweepWithTheClockItWasGiven()
+    public async Task ARunStampsTheCheckWithTheClockItWasGiven()
     {
-        using IntegrityCheckJob job = Job(new HeldLedger(), new HeldSurvey(), new HeldReports());
+        using IntegrityCheckJob job = Job(new HeldLedger(), new HeldSurvey(), new HeldChecks());
 
         IntegrityRun run = await job.RunAsync(Cancel);
 
-        Assert.Equal(Now, run.Swept!.RanAt);
+        Assert.Equal(Now, run.Swept!.Check.StartedAt);
+        Assert.Equal(Now, run.Swept!.Check.FinishedAt);
+    }
+
+    [Fact]
+    public async Task EveryRunIsItsOwnCheck()
+    {
+        var checks = new HeldChecks();
+        using IntegrityCheckJob job = Job(new HeldLedger(), new HeldSurvey(), checks);
+
+        await job.RunAsync(Cancel);
+        await job.RunAsync(Cancel);
+
+        Assert.NotEqual(checks.Saved[0].Check.Id, checks.Saved[1].Check.Id);
     }
 
     [Fact]
@@ -58,9 +71,9 @@ public sealed class IntegrityCheckJobTests
     {
         HeldSurvey survey = new HeldSurvey().Declaring(Primary, ("one.m2ts", 100));
         using IntegrityCheckJob job = Job(
-            new HeldLedger(Ended(Bulk, "two.m2ts", 100)),
+            new HeldLedger(Complete(Bulk, "two.m2ts", 100)),
             survey,
-            new HeldReports());
+            new HeldChecks());
 
         await job.RunAsync(Cancel);
 
@@ -72,9 +85,9 @@ public sealed class IntegrityCheckJobTests
     {
         HeldSurvey survey = new HeldSurvey().Declaring(Primary, ("one.m2ts", 100));
         using IntegrityCheckJob job = Job(
-            new HeldLedger(Ended(Primary, "one.m2ts", 100, 1), Ended(Primary, "two.m2ts", 100, 2)),
+            new HeldLedger(Complete(Primary, "one.m2ts", 100, 1), Complete(Primary, "two.m2ts", 100, 2)),
             survey,
-            new HeldReports());
+            new HeldChecks());
 
         await job.RunAsync(Cancel);
 
@@ -84,8 +97,8 @@ public sealed class IntegrityCheckJobTests
     [Fact]
     public async Task ASecondRunIsRefusedWhileTheFirstIsStillGoing()
     {
-        var ledger = new HeldLedger(Ended(Primary, "one.m2ts", 100)) { Gate = new TaskCompletionSource() };
-        using IntegrityCheckJob job = Job(ledger, new HeldSurvey(), new HeldReports());
+        var ledger = new HeldLedger(Complete(Primary, "one.m2ts", 100)) { Gate = new TaskCompletionSource() };
+        using IntegrityCheckJob job = Job(ledger, new HeldSurvey(), new HeldChecks());
 
         Task<IntegrityRun> first = job.RunAsync(Cancel);
         await Eventually.Happens(() => ledger.Reads is 1, "the first run never reached the ledger");
@@ -104,8 +117,8 @@ public sealed class IntegrityCheckJobTests
     [Fact]
     public async Task ARunIsAllowedAgainOnceTheOneBeforeItHasFinished()
     {
-        var ledger = new HeldLedger(Ended(Primary, "one.m2ts", 100));
-        using IntegrityCheckJob job = Job(ledger, new HeldSurvey(), new HeldReports());
+        var ledger = new HeldLedger(Complete(Primary, "one.m2ts", 100));
+        using IntegrityCheckJob job = Job(ledger, new HeldSurvey(), new HeldChecks());
 
         Assert.False((await job.RunAsync(Cancel)).AlreadyRunning);
         Assert.False((await job.RunAsync(Cancel)).AlreadyRunning);
@@ -115,8 +128,8 @@ public sealed class IntegrityCheckJobTests
     [Fact]
     public async Task ARunThatThrowsStillLetsTheNextOneStart()
     {
-        var ledger = new HeldLedger(Ended(Primary, "one.m2ts", 100)) { Gate = new TaskCompletionSource() };
-        using IntegrityCheckJob job = Job(ledger, new HeldSurvey(), new HeldReports());
+        var ledger = new HeldLedger(Complete(Primary, "one.m2ts", 100)) { Gate = new TaskCompletionSource() };
+        using IntegrityCheckJob job = Job(ledger, new HeldSurvey(), new HeldChecks());
 
         ledger.Gate!.SetException(new InvalidOperationException("the ledger could not be read"));
 
@@ -131,11 +144,11 @@ public sealed class IntegrityCheckJobTests
     public async Task TheLoopSweepsOnceItsFirstWaitIsOverAndKeepsSweepingAfterThat()
     {
         var clock = new HurriedClock();
-        var reports = new HeldReports();
+        var checks = new HeldChecks();
         using IntegrityCheckJob job = Job(
-            new HeldLedger(Ended(Primary, "one.m2ts", 100)),
+            new HeldLedger(Complete(Primary, "one.m2ts", 100)),
             new HeldSurvey().Declaring(Primary, ("one.m2ts", 99)),
-            reports,
+            checks,
             new IntegritySettings
             {
                 BeforeFirstSweep = TimeSpan.FromMinutes(3),
@@ -146,24 +159,22 @@ public sealed class IntegrityCheckJobTests
         using var stopping = new CancellationTokenSource();
 
         await job.StartAsync(stopping.Token);
-        await Eventually.Happens(() => reports.Saved.Count >= 2, "the loop never swept twice");
+        await Eventually.Happens(() => checks.Saved.Count >= 2, "the loop never swept twice");
         await stopping.CancelAsync();
         await job.StopAsync(Cancel);
 
-        Assert.Equal(
-            [TimeSpan.FromMinutes(3), TimeSpan.FromHours(2)],
-            clock.Waits.Take(2).ToArray());
+        Assert.Equal([TimeSpan.FromMinutes(3), TimeSpan.FromHours(2)], clock.Waits.Take(2).ToArray());
     }
 
     [Fact]
     public async Task TheLoopDoesNotStartWhenNoRootIsMountedIntoThisProcess()
     {
-        var reports = new HeldReports();
-        var ledger = new HeldLedger(Ended(Primary, "one.m2ts", 100));
+        var checks = new HeldChecks();
+        var ledger = new HeldLedger(Complete(Primary, "one.m2ts", 100));
         using IntegrityCheckJob job = Job(
             ledger,
             new HeldSurvey().Declaring(Primary, ("one.m2ts", 99)),
-            reports,
+            checks,
             new IntegritySettings { OutputRoots = [] },
             new HurriedClock());
         using var stopping = new CancellationTokenSource();
@@ -173,39 +184,39 @@ public sealed class IntegrityCheckJobTests
         await stopping.CancelAsync();
         await job.StopAsync(Cancel);
 
-        Assert.Empty(reports.Saved);
+        Assert.Empty(checks.Saved);
         Assert.Equal(0, ledger.Reads);
     }
 
     [Fact]
-    public async Task TheLoopStillSweepsByHandWhenNoRootIsMounted()
+    public async Task TheJobStillSweepsByHandWhenNoRootIsMounted()
     {
-        var reports = new HeldReports();
+        var checks = new HeldChecks();
         using IntegrityCheckJob job = Job(
             new HeldLedger(),
             new HeldSurvey(),
-            reports,
+            checks,
             new IntegritySettings { OutputRoots = [] },
             new HurriedClock());
 
         Assert.False((await job.RunAsync(Cancel)).AlreadyRunning);
-        Assert.Single(reports.Saved);
+        Assert.Single(checks.Saved);
     }
 
     private static IntegrityCheckJob Job(
         HeldLedger ledger,
         HeldSurvey survey,
-        HeldReports reports,
+        HeldChecks checks,
         IntegritySettings? settings = null,
         TimeProvider? clock = null)
     {
         var services = new ServiceCollection();
         services.AddScoped<IRecordingLedger>(_ => ledger);
+        services.AddScoped<IIntegrityCheckRepository>(_ => checks);
 
         return new IntegrityCheckJob(
             services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),
             survey,
-            reports,
             settings ?? new IntegritySettings
             {
                 OutputRoots = [new StorageRootPath(Primary, "/srv/recordings")],

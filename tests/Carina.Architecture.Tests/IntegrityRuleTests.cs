@@ -9,29 +9,10 @@ public sealed class IntegrityRuleTests
     }
 
     [Fact]
-    public void TheOnlyFileAllowedToWriteIsTheOneThatKeepsTheReport()
+    public void NothingThatChecksTheLedgerAgainstTheFilesCanWriteAFileEither()
     {
-        Assert.Equal(
-            ["/Carina.Infrastructure/Integrity/JsonIntegrityReportStore.cs"],
-            IntegrityRules.AllowedToWriteAFile);
+        Assert.Empty(IntegrityRules.AllowedToWriteAFile);
         Assert.Empty(IntegrityRules.FilesThatCouldWriteSomethingTheyMayNot(RepositoryLayout.SourceDirectory));
-    }
-
-    [Fact]
-    public void TheOneFileThatWritesWritesWhereTheSettingsSayAndNowhereNearAnOutputRoot()
-    {
-        string store = Path.Combine(
-            RepositoryLayout.SourceDirectory,
-            "Carina.Infrastructure",
-            "Integrity",
-            "JsonIntegrityReportStore.cs");
-
-        Assert.True(File.Exists(store));
-
-        string source = File.ReadAllText(store);
-
-        Assert.Contains("settings.ReportPath", source, StringComparison.Ordinal);
-        Assert.DoesNotContain("OutputRoots", source, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -50,6 +31,7 @@ public sealed class IntegrityRuleTests
     [Fact]
     public void TheRestOfTheRepositoryStillHasSomethingForThoseRulesToHaveFound()
     {
-        Assert.NotEmpty(SourceScan.FilesMentioning(RepositoryLayout.SourceDirectory, "File.WriteAllTextAsync"));
+        Assert.NotEmpty(SourceScan.FilesMentioning(RepositoryLayout.SourceDirectory, "new FileStream"));
+        Assert.NotEmpty(SourceScan.FilesMentioning(RepositoryLayout.SourceDirectory, ".Delete("));
     }
 }

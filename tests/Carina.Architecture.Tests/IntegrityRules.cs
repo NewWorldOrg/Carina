@@ -6,8 +6,7 @@ public static partial class IntegrityRules
 {
     public const string FeatureFolder = "/Integrity/";
 
-    public static readonly IReadOnlyList<string> AllowedToWriteAFile =
-        ["/Carina.Infrastructure/Integrity/JsonIntegrityReportStore.cs"];
+    public static readonly IReadOnlyList<string> AllowedToWriteAFile = [];
 
     public static IReadOnlyList<string> FilesThatCouldDeleteSomething(string directory)
         => Scanned(directory)

@@ -110,23 +110,23 @@ public sealed class IntegrityRuleSelfCheckTests
     }
 
     [Fact]
-    public void LeavesTheOneFileThatIsAllowedToWrite()
+    public void LeavesAWriterThatSitsOutsideTheFeature()
     {
         using var tree = new SourceTree();
-        tree.Write("Carina.Infrastructure/Integrity/JsonIntegrityReportStore.cs", OpensForWriting);
+        tree.Write("Carina.Infrastructure/Collection/GuideCache.cs", OpensForWriting);
 
         Assert.Empty(IntegrityRules.FilesThatCouldWriteSomethingTheyMayNot(tree.Root));
     }
 
     [Fact]
-    public void StillRefusesADeleteInTheOneFileThatIsAllowedToWrite()
+    public void SeesAWriterWhateverTheFileUnderTheFeatureIsCalled()
     {
         using var tree = new SourceTree();
-        tree.Write("Carina.Infrastructure/Integrity/JsonIntegrityReportStore.cs", TidiesUpAfterItself);
+        tree.Write("Carina.Infrastructure/Integrity/IntegrityCheckJob.cs", OpensForWriting);
 
         Assert.Equal(
-            ["/Carina.Infrastructure/Integrity/JsonIntegrityReportStore.cs"],
-            IntegrityRules.FilesThatCouldDeleteSomething(tree.Root));
+            ["/Carina.Infrastructure/Integrity/IntegrityCheckJob.cs"],
+            IntegrityRules.FilesThatCouldWriteSomethingTheyMayNot(tree.Root));
     }
 
     private sealed class SourceTree : IDisposable

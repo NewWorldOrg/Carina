@@ -10,38 +10,60 @@ public sealed class LedgerFileTests
     private static readonly RecordingFileName Name = new("one.m2ts");
 
     [Fact]
-    public void ARecordingThatEndedCarriesTheSizeItWasWeighedAt()
+    public void ARecordingThatEndedCarriesTheSizeItWasWeighedAtAndWhatTheLedgerClaims()
     {
-        LedgerFile row = LedgerFile.Ended(Id(3), Primary, Name, 100);
+        LedgerFile row = LedgerFile.Ended(Id(3), Primary, Name, LedgerClaim.EverythingLanded, 100);
 
         Assert.Equal(100, row.SizeObserved);
+        Assert.Equal(LedgerClaim.EverythingLanded, row.Claim);
         Assert.Equal(Id(3), row.Id);
         Assert.Equal("primary", row.Root.Value);
         Assert.Equal("one.m2ts", row.FileName.Value);
     }
 
-    [Fact]
-    public void ARecordingThatEndedEmptyStillCarriesThatSize()
+    [Theory]
+    [InlineData(LedgerClaim.NothingLanded)]
+    [InlineData(LedgerClaim.SomethingLanded)]
+    [InlineData(LedgerClaim.EverythingLanded)]
+    public void EveryClaimTheLedgerCanMakeIsKept(LedgerClaim claim)
     {
-        Assert.Equal(0, LedgerFile.Ended(Id(3), Primary, Name, 0).SizeObserved);
+        Assert.Equal(claim, LedgerFile.Ended(Id(3), Primary, Name, claim, 1).Claim);
     }
 
     [Fact]
-    public void ARecordingStillBeingWrittenCarriesNoSizeAtAll()
+    public void ARecordingThatEndedEmptyStillCarriesThatSize()
     {
-        Assert.Null(LedgerFile.StillWriting(Id(3), Primary, Name).SizeObserved);
+        Assert.Equal(0, LedgerFile.Ended(Id(3), Primary, Name, LedgerClaim.NothingLanded, 0).SizeObserved);
+    }
+
+    [Fact]
+    public void ARecordingStillBeingWrittenCarriesNeitherSizeNorClaim()
+    {
+        LedgerFile row = LedgerFile.StillWriting(Id(3), Primary, Name);
+
+        Assert.Null(row.SizeObserved);
+        Assert.Null(row.Claim);
+    }
+
+    [Fact]
+    public void AClaimNobodyHoldsIsRefused()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => LedgerFile.Ended(Id(3), Primary, Name, (LedgerClaim)99, 1));
     }
 
     [Fact]
     public void ASizeSmallerThanEmptyIsRefused()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => LedgerFile.Ended(Id(3), Primary, Name, -1));
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => LedgerFile.Ended(Id(3), Primary, Name, LedgerClaim.SomethingLanded, -1));
     }
 
     [Fact]
     public void ARowWithNoRecordingIsRefused()
     {
-        Assert.Throws<ArgumentNullException>(() => LedgerFile.Ended(null!, Primary, Name, 1));
+        Assert.Throws<ArgumentNullException>(
+            () => LedgerFile.Ended(null!, Primary, Name, LedgerClaim.SomethingLanded, 1));
     }
 
     [Fact]

@@ -4,23 +4,23 @@ namespace Carina.Domain.Integrity;
 
 public sealed class RootListing
 {
-    private readonly Dictionary<string, StoredFile> byName;
+    private readonly Dictionary<string, StoredFile> byPath;
 
     private RootListing(OutputRoot root, bool reachable, IReadOnlyList<StoredFile> files)
     {
         ArgumentNullException.ThrowIfNull(root);
         ArgumentNullException.ThrowIfNull(files);
 
-        byName = new Dictionary<string, StoredFile>(StringComparer.Ordinal);
+        byPath = new Dictionary<string, StoredFile>(StringComparer.Ordinal);
 
         foreach (StoredFile file in files)
         {
             ArgumentNullException.ThrowIfNull(file);
 
-            if (!byName.TryAdd(file.Name, file))
+            if (!byPath.TryAdd(file.Path, file))
             {
                 throw new ArgumentException(
-                    $"A directory holds one file per name, so '{file.Name}' cannot be listed twice.",
+                    $"A directory holds one file per path, so '{file.Path}' cannot be listed twice.",
                     nameof(files));
             }
         }
@@ -40,10 +40,10 @@ public sealed class RootListing
 
     public static RootListing OutOfReach(OutputRoot root) => new(root, false, []);
 
-    public StoredFile? Named(string fileName)
+    public StoredFile? At(string path)
     {
-        ArgumentNullException.ThrowIfNull(fileName);
+        ArgumentNullException.ThrowIfNull(path);
 
-        return byName.GetValueOrDefault(fileName);
+        return byPath.GetValueOrDefault(path);
     }
 }

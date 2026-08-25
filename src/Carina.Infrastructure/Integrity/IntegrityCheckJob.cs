@@ -10,7 +10,6 @@ namespace Carina.Infrastructure.Integrity;
 public sealed class IntegrityCheckJob(
     IServiceScopeFactory scopes,
     IRecordingFileSurvey survey,
-    IIntegrityReportStore reports,
     IntegritySettings settings,
     TimeProvider clock,
     ILogger<IntegrityCheckJob> logger) : BackgroundService
@@ -74,9 +73,9 @@ public sealed class IntegrityCheckJob(
         }
     }
 
-    private async Task<IntegritySweep> SweepAsync(CancellationToken cancellationToken)
+    private async Task<IntegrityReport> SweepAsync(CancellationToken cancellationToken)
     {
-        DateTime at = clock.GetUtcNow().UtcDateTime;
+        DateTime startedAt = clock.GetUtcNow().UtcDateTime;
 
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
         IReadOnlyList<LedgerFile> ledger = await scope.ServiceProvider
@@ -91,15 +90,23 @@ public sealed class IntegrityCheckJob(
             listings.Add(await survey.ListAsync(root, cancellationToken));
         }
 
-        IntegritySweep swept = IntegrityScan.Compare(ledger, listings, at);
-        await reports.SaveAsync(swept, cancellationToken);
+        IntegrityReport swept = IntegrityScan.Compare(
+            IntegrityCheckId.New(),
+            ledger,
+            listings,
+            startedAt,
+            clock.GetUtcNow().UtcDateTime);
+
+        await scope.ServiceProvider
+            .GetRequiredService<IIntegrityCheckRepository>()
+            .SaveAsync(swept, cancellationToken);
 
         logger.LogInformation(
             "A ledger check read {Rows} row(s) and {Files} file(s) across {Roots} output root(s) "
             + "and found {Findings} disagreement(s).",
-            swept.LedgerRowsRead,
-            swept.FilesRead,
-            swept.RootsWalked,
+            swept.Check.LedgerRowsRead,
+            swept.Check.FilesRead,
+            swept.Check.RootsWalked,
             swept.Findings.Count);
 
         return swept;

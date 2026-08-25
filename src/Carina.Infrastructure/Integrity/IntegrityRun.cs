@@ -4,16 +4,16 @@ namespace Carina.Infrastructure.Integrity;
 
 public sealed record IntegrityRun
 {
-    private IntegrityRun(IntegritySweep? swept)
+    private IntegrityRun(IntegrityReport? swept)
     {
         Swept = swept;
     }
 
-    public IntegritySweep? Swept { get; }
+    public IntegrityReport? Swept { get; }
 
     public bool AlreadyRunning => Swept is null;
 
-    public static IntegrityRun Of(IntegritySweep swept)
+    public static IntegrityRun Of(IntegrityReport swept)
     {
         ArgumentNullException.ThrowIfNull(swept);
 

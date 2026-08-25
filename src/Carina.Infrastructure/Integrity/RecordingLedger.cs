@@ -27,7 +27,7 @@ public sealed class RecordingLedger(CarinaDbContext context) : IRecordingLedger
 
     private static LedgerFile Read(Row row)
     {
-        if (row.Outcome is null)
+        if (row.Outcome is not { } outcome)
         {
             return LedgerFile.StillWriting(row.Id, row.OutputRoot, row.FileName);
         }
@@ -35,11 +35,23 @@ public sealed class RecordingLedger(CarinaDbContext context) : IRecordingLedger
         if (row.FileSizeObserved is not { } observed)
         {
             throw new InvalidOperationException(
-                $"Recording {row.Id.Wire} ended {row.Outcome} without a size read off the disk.");
+                $"Recording {row.Id.Wire} ended {outcome} without a size read off the disk.");
         }
 
-        return LedgerFile.Ended(row.Id, row.OutputRoot, row.FileName, observed);
+        return LedgerFile.Ended(row.Id, row.OutputRoot, row.FileName, Claimed(outcome), observed);
     }
+
+    private static LedgerClaim Claimed(RecordingOutcome outcome)
+        => outcome switch
+        {
+            RecordingOutcome.Complete => LedgerClaim.EverythingLanded,
+            RecordingOutcome.Truncated => LedgerClaim.SomethingLanded,
+            RecordingOutcome.Failed => LedgerClaim.NothingLanded,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(outcome),
+                outcome,
+                "A recording ends in one of three ways."),
+        };
 
     private sealed record Row(
         RecordingId Id,

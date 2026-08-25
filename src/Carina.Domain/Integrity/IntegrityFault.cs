@@ -9,4 +9,6 @@ public enum IntegrityFault
     FileMissing = 3,
 
     FileEmpty = 4,
+
+    EmptyThoughComplete = 5,
 }

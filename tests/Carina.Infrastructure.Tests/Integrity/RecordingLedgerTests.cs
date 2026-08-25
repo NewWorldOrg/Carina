@@ -24,6 +24,7 @@ public sealed class RecordingLedgerTests(RepositoryDatabase database)
         LedgerFile row = await FindAsync(recording.Id);
 
         Assert.Null(row.SizeObserved);
+        Assert.Null(row.Claim);
         Assert.Equal("primary", row.Root.Value);
         Assert.Equal(recording.FileName.Value, row.FileName.Value);
     }
@@ -34,7 +35,28 @@ public sealed class RecordingLedgerTests(RepositoryDatabase database)
         Recording recording = await AddAsync(6102, "primary");
         await SettleAsync(recording.Id, RecordingOutcome.Complete, 3_400_000_000);
 
-        Assert.Equal(3_400_000_000, (await FindAsync(recording.Id)).SizeObserved);
+        LedgerFile row = await FindAsync(recording.Id);
+
+        Assert.Equal(3_400_000_000, row.SizeObserved);
+        Assert.Equal(LedgerClaim.EverythingLanded, row.Claim);
+    }
+
+    [Fact]
+    public async Task ARecordingTheLedgerCallsTruncatedSaysSomethingLanded()
+    {
+        Recording recording = await AddAsync(6107, "primary");
+        await SettleAsync(recording.Id, RecordingOutcome.Truncated, 1_200_000);
+
+        Assert.Equal(LedgerClaim.SomethingLanded, (await FindAsync(recording.Id)).Claim);
+    }
+
+    [Fact]
+    public async Task ARecordingTheLedgerCallsFailedSaysNothingLanded()
+    {
+        Recording recording = await AddAsync(6108, "primary");
+        await SettleAsync(recording.Id, RecordingOutcome.Failed, 4_096);
+
+        Assert.Equal(LedgerClaim.NothingLanded, (await FindAsync(recording.Id)).Claim);
     }
 
     [Fact]
@@ -43,7 +65,10 @@ public sealed class RecordingLedgerTests(RepositoryDatabase database)
         Recording recording = await AddAsync(6103, "primary");
         await SettleAsync(recording.Id, RecordingOutcome.Failed, 0);
 
-        Assert.Equal(0, (await FindAsync(recording.Id)).SizeObserved);
+        LedgerFile row = await FindAsync(recording.Id);
+
+        Assert.Equal(0, row.SizeObserved);
+        Assert.Equal(LedgerClaim.NothingLanded, row.Claim);
     }
 
     [Fact]

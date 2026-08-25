@@ -10,6 +10,7 @@ public enum PersistenceFamily
     ChannelDefinitions,
     ProgrammeCache,
     Recordings,
+    Integrity,
 }
 
 public static class PersistenceBoundaryRules
@@ -23,6 +24,7 @@ public static class PersistenceBoundaryRules
             ["Scans"] = PersistenceFamily.ChannelDefinitions,
             ["Programmes"] = PersistenceFamily.ProgrammeCache,
             ["Recordings"] = PersistenceFamily.Recordings,
+            ["Integrity"] = PersistenceFamily.Integrity,
             ["Auth"] = PersistenceFamily.Unrelated,
         };
 

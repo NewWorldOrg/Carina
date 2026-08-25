@@ -36,12 +36,12 @@ internal sealed class HeldSurvey : IRecordingFileSurvey
 
     public List<string> Asked { get; } = [];
 
-    public HeldSurvey Declaring(OutputRoot root, params (string Name, long SizeBytes)[] files)
+    public HeldSurvey Declaring(OutputRoot root, params (string Path, long SizeBytes)[] files)
     {
         roots.Add(root);
         listings[root.Value] = RootListing.Of(
             root,
-            [.. files.Select(file => new StoredFile(file.Name, file.SizeBytes))]);
+            [.. files.Select(file => new StoredFile(file.Path, file.SizeBytes))]);
 
         return this;
     }
@@ -68,17 +68,23 @@ internal sealed class HeldSurvey : IRecordingFileSurvey
     }
 }
 
-internal sealed class HeldReports : IIntegrityReportStore
+internal sealed class HeldChecks : IIntegrityCheckRepository
 {
-    public List<IntegritySweep> Saved { get; } = [];
+    public List<IntegrityReport> Saved { get; } = [];
 
-    public Task SaveAsync(IntegritySweep sweep, CancellationToken cancellationToken)
+    public Task SaveAsync(IntegrityReport report, CancellationToken cancellationToken)
     {
-        Saved.Add(sweep);
+        Saved.Add(report);
 
         return Task.CompletedTask;
     }
 
-    public Task<IntegritySweep?> LatestAsync(CancellationToken cancellationToken)
-        => Task.FromResult(Saved.Count is 0 ? null : Saved[^1]);
+    public Task<IntegrityCheck?> LatestAsync(CancellationToken cancellationToken)
+        => Task.FromResult(Saved.Count is 0 ? null : Saved[^1].Check);
+
+    public Task<IReadOnlyList<IntegrityFinding>> ListFindingsAsync(
+        IntegrityCheckId checkId,
+        CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<IntegrityFinding>>(
+            [.. Saved.Where(report => report.Check.Id.Equals(checkId)).SelectMany(report => report.Findings)]);
 }

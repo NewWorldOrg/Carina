@@ -33,7 +33,5 @@ public sealed record IntegritySettings
 
     public IReadOnlyList<StorageRootPath> OutputRoots { get; init; } = [];
 
-    public string ReportPath { get; init; } = "/var/lib/carina/integrity-report.json";
-
     public bool WalksAnything => OutputRoots.Count > 0;
 }

@@ -12,7 +12,9 @@ internal sealed class TempTree : IDisposable
 
     public TempTree Holding(string name, byte[] bytes)
     {
-        File.WriteAllBytes(Under(name), bytes);
+        string full = Path.Combine(Root, name.Replace('/', Path.DirectorySeparatorChar));
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        File.WriteAllBytes(full, bytes);
 
         return this;
     }
@@ -22,7 +24,7 @@ internal sealed class TempTree : IDisposable
 
     public TempTree HoldingDirectory(string name)
     {
-        Directory.CreateDirectory(Under(name));
+        Directory.CreateDirectory(Path.Combine(Root, name.Replace('/', Path.DirectorySeparatorChar)));
 
         return this;
     }

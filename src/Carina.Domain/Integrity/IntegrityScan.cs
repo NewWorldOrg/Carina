@@ -4,11 +4,14 @@ namespace Carina.Domain.Integrity;
 
 public static class IntegrityScan
 {
-    public static IntegritySweep Compare(
+    public static IntegrityReport Compare(
+        IntegrityCheckId id,
         IReadOnlyList<LedgerFile> ledger,
         IReadOnlyList<RootListing> listings,
-        DateTime at)
+        DateTime startedAt,
+        DateTime finishedAt)
     {
+        ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(ledger);
         ArgumentNullException.ThrowIfNull(listings);
 
@@ -36,23 +39,30 @@ public static class IntegrityScan
 
             judged++;
 
-            if (listing.Named(row.FileName.Value) is not { } file)
+            if (listing.At(row.FileName.Value) is not { } file)
             {
-                findings.Add(IntegrityFinding.FileMissing(row.Root, row.Id, row.FileName, ledgerSize, at));
+                findings.Add(
+                    IntegrityFinding.FileMissing(id, row.Root, row.Id, row.FileName, ledgerSize, startedAt));
                 continue;
             }
 
-            if (file.SizeBytes is 0)
+            if (file.SizeBytes is 0 && row.Claim is not LedgerClaim.NothingLanded)
             {
-                findings.Add(
-                    IntegrityFinding.FileEmpty(row.Root, row.Id, row.FileName, ledgerSize, file.SizeBytes, at));
+                findings.Add(Empty(id, row, ledgerSize, file.SizeBytes, startedAt));
                 continue;
             }
 
             if (ledgerSize != file.SizeBytes)
             {
                 findings.Add(
-                    IntegrityFinding.SizeDisagrees(row.Root, row.Id, row.FileName, ledgerSize, file.SizeBytes, at));
+                    IntegrityFinding.SizeDisagrees(
+                        id,
+                        row.Root,
+                        row.Id,
+                        row.FileName,
+                        ledgerSize,
+                        file.SizeBytes,
+                        startedAt));
             }
         }
 
@@ -64,24 +74,45 @@ public static class IntegrityScan
             {
                 filesRead++;
 
-                if (!claimed.Contains(Key(listing.Root, file.Name)))
+                if (!claimed.Contains(Key(listing.Root, file.Path)))
                 {
-                    findings.Add(IntegrityFinding.NoLedgerRow(listing.Root, file.Name, file.SizeBytes, at));
+                    findings.Add(
+                        IntegrityFinding.NoLedgerRow(id, listing.Root, file.Path, file.SizeBytes, startedAt));
                 }
             }
         }
 
-        return IntegritySweep.Of(
-            at,
+        IntegrityCheck check = IntegrityCheck.Rehydrate(
+            id,
+            startedAt,
+            finishedAt,
             reachable.Count,
             outOfReach,
             filesRead,
             ledger.Count,
             judged,
             stillWriting,
-            beyondReach,
-            InAStableOrder(findings));
+            beyondReach);
+
+        return IntegrityReport.Of(check, InAStableOrder(findings));
     }
+
+    private static IntegrityFinding Empty(
+        IntegrityCheckId id,
+        LedgerFile row,
+        long ledgerSize,
+        long observedSize,
+        DateTime at)
+        => row.Claim is LedgerClaim.EverythingLanded
+            ? IntegrityFinding.EmptyThoughComplete(
+                id,
+                row.Root,
+                row.Id,
+                row.FileName,
+                ledgerSize,
+                observedSize,
+                at)
+            : IntegrityFinding.FileEmpty(id, row.Root, row.Id, row.FileName, ledgerSize, observedSize, at);
 
     private static Dictionary<string, RootListing> Reachable(
         IReadOnlyList<RootListing> listings,
@@ -138,7 +169,7 @@ public static class IntegrityScan
     private static IReadOnlyList<IntegrityFinding> InAStableOrder(List<IntegrityFinding> findings)
         => [.. findings
             .OrderBy(finding => finding.Root.Value, StringComparer.Ordinal)
-            .ThenBy(finding => finding.FileName, StringComparer.Ordinal)];
+            .ThenBy(finding => finding.Path, StringComparer.Ordinal)];
 
-    private static string Key(OutputRoot root, string fileName) => root.Value + "/" + fileName;
+    private static string Key(OutputRoot root, string path) => root.Value + "/" + path;
 }

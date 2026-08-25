@@ -9,6 +9,13 @@ public sealed class LocalRecordingFileSurvey(
     IntegritySettings settings,
     ILogger<LocalRecordingFileSurvey> logger) : IRecordingFileSurvey
 {
+    private static readonly EnumerationOptions Everything = new()
+    {
+        RecurseSubdirectories = true,
+        IgnoreInaccessible = false,
+        AttributesToSkip = FileAttributes.ReparsePoint,
+    };
+
     public Task<IReadOnlyList<OutputRoot>> RootsAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -54,7 +61,7 @@ public sealed class LocalRecordingFileSurvey(
 
             List<StoredFile> files = [];
 
-            foreach (string entry in Directory.EnumerateFiles(path, "*", SearchOption.TopDirectoryOnly))
+            foreach (string entry in Directory.EnumerateFiles(path, "*", Everything))
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
@@ -62,7 +69,7 @@ public sealed class LocalRecordingFileSurvey(
 
                 if (found.Exists)
                 {
-                    files.Add(new StoredFile(found.Name, found.Length));
+                    files.Add(new StoredFile(Under(path, entry), found.Length));
                 }
             }
 
@@ -79,4 +86,7 @@ public sealed class LocalRecordingFileSurvey(
             return RootListing.OutOfReach(root);
         }
     }
+
+    private static string Under(string root, string entry)
+        => Path.GetRelativePath(root, entry).Replace('\\', '/');
 }

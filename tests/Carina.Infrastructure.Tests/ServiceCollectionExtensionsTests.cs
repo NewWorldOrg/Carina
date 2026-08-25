@@ -180,7 +180,8 @@ public sealed class ServiceCollectionExtensionsTests
         using IServiceScope scope = provider.CreateScope();
 
         Assert.IsType<LocalRecordingFileSurvey>(provider.GetRequiredService<IRecordingFileSurvey>());
-        Assert.IsType<JsonIntegrityReportStore>(provider.GetRequiredService<IIntegrityReportStore>());
+        Assert.IsType<IntegrityCheckRepository>(
+            scope.ServiceProvider.GetRequiredService<IIntegrityCheckRepository>());
         Assert.IsType<RecordingLedger>(scope.ServiceProvider.GetRequiredService<IRecordingLedger>());
     }
 

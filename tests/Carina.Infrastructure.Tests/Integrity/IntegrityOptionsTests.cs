@@ -15,7 +15,6 @@ public sealed class IntegrityOptionsTests
 
         Assert.Equal(TimeSpan.FromMinutes(5), read.BeforeFirstSweep);
         Assert.Equal(TimeSpan.FromHours(6), read.BetweenSweeps);
-        Assert.Equal("/var/lib/carina/integrity-report.json", read.ReportPath);
         Assert.Empty(read.OutputRoots);
         Assert.False(read.WalksAnything);
     }
@@ -27,13 +26,11 @@ public sealed class IntegrityOptionsTests
         {
             ["Integrity:BeforeFirstSweep"] = "00:02:00",
             ["Integrity:BetweenSweeps"] = "1.00:00:00",
-            ["Integrity:ReportPath"] = "/srv/state/report.json",
             ["Integrity:OutputRoots"] = "primary=/srv/recordings",
         });
 
         Assert.Equal(TimeSpan.FromMinutes(2), read.BeforeFirstSweep);
         Assert.Equal(TimeSpan.FromDays(1), read.BetweenSweeps);
-        Assert.Equal("/srv/state/report.json", read.ReportPath);
         Assert.Equal("primary", Assert.Single(read.OutputRoots).Root.Value);
         Assert.Equal("/srv/recordings", read.OutputRoots[0].Path);
     }
@@ -145,13 +142,6 @@ public sealed class IntegrityOptionsTests
     public void AWaitThatRunsBackwardsIsRefused(string key)
     {
         Assert.Throws<ArgumentException>(() => Read(new Dictionary<string, string?> { [key] = "-00:01:00" }));
-    }
-
-    [Fact]
-    public void AReportKeptSomewhereRelativeIsRefused()
-    {
-        Assert.Throws<ArgumentException>(
-            () => Read(new Dictionary<string, string?> { ["Integrity:ReportPath"] = "state/report.json" }));
     }
 
     [Fact]
