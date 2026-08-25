@@ -2,10 +2,130 @@ namespace Carina.Architecture.Tests;
 
 public sealed class MeasurementRuleSelfCheckTests
 {
+    private const string Anchor = "private const byte Sync = 0x47;";
+
+    private const string SecondAnchor = "private const int Stride = 188;";
+
+    public static TheoryData<string, string, string> EachMarkBesideAnother() =>
+        new()
+        {
+            { "names", "private readonly TsPacketReader reader = new();", Anchor },
+            { "sync", "private const byte Marker = 0x47;", SecondAnchor },
+            { "stride", "private const int Length = 188;", Anchor },
+            { "payload", "private const int Body = 184;", Anchor },
+            { "pid", "private const int Mask = 0x1FFF;", Anchor },
+            { "counter", "private const int Sequence = 0xF;", Anchor },
+        };
+
+    [Theory]
+    [MemberData(nameof(EachMarkBesideAnother))]
+    public void EveryMarkIsWhatMakesTheDifferenceForAtLeastOneParser(
+        string mark,
+        string writes,
+        string beside
+    )
+    {
+        DirectoryInfo directory = Directory.CreateTempSubdirectory("carina-mark-");
+
+        try
+        {
+            Write(directory, $"Carina.Driver/Recording/{mark}.cs", Parser(writes, beside));
+            Write(directory, $"Carina.Driver/Recording/only-{mark}.cs", Parser(beside));
+
+            Assert.Equal(
+                [$"Carina.Driver/Recording/{mark}.cs"],
+                MeasurementRules.PlacesThatShowTheMarksOfAParser(directory.FullName));
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void AProjectWhoseTradeIsParsingIsExcusedByNameRatherThanByWhereItSits()
+    {
+        DirectoryInfo directory = Directory.CreateTempSubdirectory("carina-trade-");
+
+        try
+        {
+            Write(directory, "Carina.Broadcast/Reader.cs", Parser(Anchor, SecondAnchor));
+            Write(directory, "Carina.Contracts/Reader.cs", Parser(Anchor, SecondAnchor));
+
+            Assert.Equal(
+                ["Carina.Contracts/Reader.cs"],
+                MeasurementRules.PlacesThatShowTheMarksOfAParser(directory.FullName));
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void AMaskThatMerelyLooksLikeOneOfThemIsNotAParser()
+    {
+        DirectoryInfo directory = Directory.CreateTempSubdirectory("carina-innocent-");
+
+        try
+        {
+            Write(
+                directory,
+                "Carina.Driver/Ipc/Permissions.cs",
+                Parser("private const uint Mode = 0x0FFF;", "private const int Wait = 1880;"));
+
+            Assert.Empty(MeasurementRules.PlacesThatShowTheMarksOfAParser(directory.FullName));
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void AParserThatWritesNoneOfTheMarksWalksPastThisRule()
+    {
+        DirectoryInfo directory = Directory.CreateTempSubdirectory("carina-quiet-");
+
+        try
+        {
+            Write(
+                directory,
+                "Carina.Driver/Recording/QuietAudit.cs",
+                """
+                namespace Sample;
+                public sealed class QuietAudit
+                {
+                    private const int Stride = 4 + 180 + 4;
+                    private const byte Marker = 0x40 + 0x07;
+
+                    public long Lost { get; private set; }
+
+                    public void Take(byte[] chunk)
+                    {
+                        for (int at = 0; at + Stride <= chunk.Length; at += Stride)
+                        {
+                            if (chunk[at] == Marker)
+                            {
+                                Lost++;
+                            }
+                        }
+                    }
+                }
+                """);
+
+            Assert.Empty(MeasurementRules.PlacesThatShowTheMarksOfAParser(directory.FullName));
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
     [Fact]
     public void DetectsASecondPlaceThatCountsAndLeavesTheDefinitionAlone()
     {
-        DirectoryInfo directory = Planted();
+        DirectoryInfo directory = Counting();
 
         try
         {
@@ -25,7 +145,7 @@ public sealed class MeasurementRuleSelfCheckTests
     [Fact]
     public void DetectsAWriterThatReadsPacketsAndLeavesAByteSinkAlone()
     {
-        DirectoryInfo directory = Planted();
+        DirectoryInfo directory = Counting();
 
         try
         {
@@ -39,54 +159,12 @@ public sealed class MeasurementRuleSelfCheckTests
         }
     }
 
-    [Fact]
-    public void DetectsAReaderSuppliedFromSomewhereTheAllowListDoesNotName()
-    {
-        DirectoryInfo directory = Planted();
+    private static string Parser(params string[] lines) =>
+        "namespace Sample;\npublic sealed class Sample\n{\n    "
+        + string.Join("\n    ", lines)
+        + "\n}\n";
 
-        try
-        {
-            Assert.Contains(
-                "Transport/PacketTap.cs",
-                MeasurementRules.PlacesThatTakeTheStreamApart(directory.FullName),
-                StringComparer.Ordinal);
-            Assert.DoesNotContain(
-                "Transport/PacketTap.cs",
-                MeasurementRules.AllowedToTakeTheStreamApart,
-                StringComparer.Ordinal);
-        }
-        finally
-        {
-            directory.Delete(recursive: true);
-        }
-    }
-
-    [Fact]
-    public void DetectsAParserThatNamesNoneOfThoseTypesAtAll()
-    {
-        DirectoryInfo directory = Planted();
-
-        try
-        {
-            string audit = File.ReadAllText(
-                Path.Combine(directory.FullName, "Carina.Driver", "Recording", "StreamAudit.cs"));
-
-            Assert.DoesNotContain(MeasurementRules.Counter, audit, StringComparison.Ordinal);
-            Assert.DoesNotContain(MeasurementRules.Packet, audit, StringComparison.Ordinal);
-            Assert.DoesNotContain(MeasurementRules.Reader, audit, StringComparison.Ordinal);
-
-            Assert.Contains(
-                "Recording/StreamAudit.cs",
-                MeasurementRules.PlacesThatTakeTheStreamApart(directory.FullName),
-                StringComparer.Ordinal);
-        }
-        finally
-        {
-            directory.Delete(recursive: true);
-        }
-    }
-
-    private static DirectoryInfo Planted()
+    private static DirectoryInfo Counting()
     {
         DirectoryInfo directory = Directory.CreateTempSubdirectory("carina-measurement-");
 
@@ -97,7 +175,7 @@ public sealed class MeasurementRuleSelfCheckTests
             namespace Sample;
             public sealed class ContinuityCounterTracker
             {
-                public void Observe(TsPacket packet) { }
+                public void Observe(int counter) { }
             }
             """);
         Write(
@@ -119,13 +197,7 @@ public sealed class MeasurementRuleSelfCheckTests
             {
                 private readonly ContinuityCounterTracker counters = new();
 
-                public void Write(byte[] chunk)
-                {
-                    foreach (TsPacket packet in Read(chunk))
-                    {
-                        counters.Observe(packet);
-                    }
-                }
+                public void Write(byte[] chunk) => counters.Observe(chunk.Length);
             }
             """);
         Write(
@@ -136,53 +208,6 @@ public sealed class MeasurementRuleSelfCheckTests
             public sealed class RecordingWriter
             {
                 public void Write(byte[] chunk) { }
-            }
-            """);
-
-        Write(
-            directory,
-            "Carina.Driver/Transport/PacketTap.cs",
-            """
-            namespace Sample;
-            public sealed class PacketTap
-            {
-                private readonly TsPacketReader reader = new();
-
-                public IReadOnlyList<TsPacket> Read(byte[] chunk) => reader.Read(chunk);
-            }
-            """);
-
-        Write(
-            directory,
-            "Carina.Driver/Recording/StreamAudit.cs",
-            """
-            namespace Sample;
-            public sealed class StreamAudit
-            {
-                private readonly Dictionary<int, int> last = [];
-
-                public long Lost { get; private set; }
-
-                public void Take(byte[] chunk)
-                {
-                    for (int at = 0; at + 188 <= chunk.Length; at += 188)
-                    {
-                        if (chunk[at] != 0x47)
-                        {
-                            continue;
-                        }
-
-                        int pid = ((chunk[at + 1] & 0x1F) << 8) | chunk[at + 2];
-                        int counter = chunk[at + 3] & 0x0F;
-
-                        if (last.TryGetValue(pid, out int seen) && counter != (seen + 1) % 16)
-                        {
-                            Lost++;
-                        }
-
-                        last[pid] = counter;
-                    }
-                }
             }
             """);
 

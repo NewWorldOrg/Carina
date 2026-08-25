@@ -87,11 +87,11 @@ public sealed class TunerSessionManager(
             AnythingIsBeingRecorded,
             () => events?.Signal(DriverEvents.RecordingProgress),
             timeProvider,
-            progressInterval,
             error => logger.LogWarning(
                 error,
                 "The driver could not announce how a recording is going; the next round will try again."
-            )
+            ),
+            progressInterval
         );
 
         return Task.CompletedTask;

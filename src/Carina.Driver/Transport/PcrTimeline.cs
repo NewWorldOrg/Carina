@@ -63,12 +63,12 @@ public sealed class PcrTimeline
         }
 
         long step = reference - previous;
-        if (step < 0 && step + WrapsAt <= ContinuousWithin)
+        if (step < 0)
         {
             step += WrapsAt;
         }
 
-        if (step < 0 || step > ContinuousWithin)
+        if (step > ContinuousWithin)
         {
             Reanchor(reference);
 

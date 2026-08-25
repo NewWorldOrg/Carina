@@ -12,26 +12,35 @@ public static partial class MeasurementRules
 
     public const string CounterDefinition = "ContinuityCounterTracker.cs";
 
-    public const string DriverProject = "Carina.Driver";
-
     public const string RecordingFolder = "Carina.Driver/Recording/";
+
+    public const int MarksThatMakeAParser = 2;
+
+    public static readonly IReadOnlyList<string> ParsersByTrade = ["Carina.Broadcast"];
 
     public static readonly IReadOnlyList<string> AllowedToTakeTheStreamApart =
     [
-        "Sessions/TunerSession.cs",
-        "Transport/ContinuityCounterTracker.cs",
-        "Transport/TsPacketReader.cs",
-        "Tuning/FakeTunerDevice.cs",
+        "Carina.Driver/Transport/TsPacketReader.cs",
+        "Carina.Driver/Tuning/FakeTunerDevice.cs",
     ];
 
-    public static IReadOnlyList<string> PlacesThatTakeTheStreamApart(string directory)
-    {
-        string driver = Path.Combine(directory, DriverProject);
+    public static IReadOnlyList<Regex> Marks =>
+        [Names(), SyncByte(), PacketStride(), PayloadStride(), PidMask(), CounterMask()];
 
-        return Directory.Exists(driver)
-            ? Matching(driver, source => TakesAStreamApart().IsMatch(source))
-            : Matching(directory, source => TakesAStreamApart().IsMatch(source));
-    }
+    public static int MarksIn(string source) => Marks.Count(mark => mark.IsMatch(source));
+
+    public static IReadOnlyList<string> PlacesThatShowTheMarksOfAParser(string directory) =>
+        [
+            .. Directory
+                .EnumerateFiles(directory, "*.cs", SearchOption.AllDirectories)
+                .Where(file => !IsBuildOutput(file))
+                .Select(file => Path.GetRelativePath(directory, file).Replace('\\', '/'))
+                .Where(file => !PliesTheTrade(file))
+                .Where(file =>
+                    MarksIn(File.ReadAllText(Path.Combine(directory, file)))
+                    >= MarksThatMakeAParser)
+                .Order(StringComparer.Ordinal),
+        ];
 
     public static IReadOnlyList<string> PlacesThatCountWhatTheTunerGave(string directory) =>
         [
@@ -47,15 +56,9 @@ public static partial class MeasurementRules
                 .Where(file => file.Contains(RecordingFolder, StringComparison.Ordinal)),
         ];
 
-    private static IReadOnlyList<string> Matching(string directory, Func<string, bool> holds) =>
-        [
-            .. Directory
-                .EnumerateFiles(directory, "*.cs", SearchOption.AllDirectories)
-                .Where(file => !IsBuildOutput(file))
-                .Where(file => holds(File.ReadAllText(file)))
-                .Select(file => Path.GetRelativePath(directory, file).Replace('\\', '/'))
-                .Order(StringComparer.Ordinal),
-        ];
+    private static bool PliesTheTrade(string relative) =>
+        ParsersByTrade.Any(project =>
+            relative.StartsWith(project + "/", StringComparison.Ordinal));
 
     private static bool IsBuildOutput(string path)
     {
@@ -65,13 +68,21 @@ public static partial class MeasurementRules
                || segments.Contains("bin", StringComparer.Ordinal);
     }
 
-    [GeneratedRegex(
-        @"\bTsPacketReader\b"
-        + @"|\bTsPacket\b"
-        + @"|\bContinuityCounterTracker\b"
-        + @"|0x47"
-        + @"|(?<![\w.])188(?![\w])"
-        + @"|&\s*0x1F\b"
-        + @"|&\s*0x0F\b")]
-    private static partial Regex TakesAStreamApart();
+    [GeneratedRegex(@"\bTsPacketReader\b|\bTsPacket\b|\bContinuityCounterTracker\b")]
+    private static partial Regex Names();
+
+    [GeneratedRegex(@"0x47")]
+    private static partial Regex SyncByte();
+
+    [GeneratedRegex(@"(?<![\w.])188(?![\w])")]
+    private static partial Regex PacketStride();
+
+    [GeneratedRegex(@"(?<![\w.])184(?![\w])")]
+    private static partial Regex PayloadStride();
+
+    [GeneratedRegex(@"0x1F{1,3}\b")]
+    private static partial Regex PidMask();
+
+    [GeneratedRegex(@"0x0?F\b")]
+    private static partial Regex CounterMask();
 }

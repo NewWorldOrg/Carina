@@ -121,10 +121,14 @@ nothing.
   definition means writing a new migration, and a test says so.
 
 - **The recording and the count come from the same chunk.** The session's read
-  loop hands each chunk to the writer and then to the counter, and nothing else
-  in the driver reads the transport stream: a second pipeline over the same
-  stream puts its own back pressure on the read the recording depends on.
-  Counting is always on — there is no setting that turns it off.
+  loop hands each chunk to the writer and then to the counter, because a second
+  pipeline over the same stream puts its own back pressure on the read the
+  recording depends on. Counting is always on — there is no setting that turns
+  it off. A rule test names the places allowed to count and the places that
+  carry the marks of a parser, but it reads source text: it is a trip wire
+  across the obvious ways of writing a second loop, not a proof that none
+  exists. A parser that spells none of the marks walks past it, and a test says
+  so out loud rather than leaving the rule looking stronger than it is.
 
 - **"Nothing counted this" and "this was counted and was clean" are different
   answers,** and so are "nowhere" and "somewhere, with nothing in it". A driver

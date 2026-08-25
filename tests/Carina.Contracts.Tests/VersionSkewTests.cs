@@ -608,7 +608,7 @@ public sealed class VersionSkewTests
     public void ADriverThatCannotSayWhereTheLossesWereHasItsPositionsLeftBehind()
     {
         SessionSnapshot session = RecordingAnsweredWith(
-            """{"packets":50000,"drops":7,"ccMeasured":true,"positions":{"anchorPcr":900,"buckets":[{"second":4,"continuity":7,"scrambled":0}],"reanchors":[]}}"""
+            """{"packets":50000,"drops":7,"ccMeasured":true,"scrambleMeasured":true,"positions":{"anchorPcr":900,"buckets":[{"second":4,"continuity":7,"scrambled":0}],"reanchors":[]}}"""
         );
 
         RecordingSessionDto recording = RecordingSessionDto.Of(MeasuringDriver, session);
@@ -616,6 +616,59 @@ public sealed class VersionSkewTests
         Assert.True(recording.CcMeasured);
         Assert.Equal(7, recording.CcDropped);
         Assert.Null(recording.Positions);
+    }
+
+    public static TheoryData<string, bool, bool, bool> OneLegAtATime() =>
+        new()
+        {
+            { "everything", true, true, true },
+            { "capability", false, true, true },
+            { "continuity", true, false, true },
+            { "scrambling", true, true, false },
+        };
+
+    [Theory]
+    [MemberData(nameof(OneLegAtATime))]
+    public void APositionRidesOnTheDeclaredCapabilityAndOnBothCountsSeparately(
+        string leg,
+        bool declaresPositions,
+        bool countsContinuity,
+        bool countsScrambling
+    )
+    {
+        var capabilities = new List<string> { DriverCapabilities.Recording };
+
+        if (declaresPositions)
+        {
+            capabilities.Add(DriverCapabilities.DropPositions);
+        }
+
+        if (countsContinuity)
+        {
+            capabilities.Add(DriverCapabilities.CcMeasurement);
+        }
+
+        if (countsScrambling)
+        {
+            capabilities.Add(DriverCapabilities.ScrambleMeasurement);
+        }
+
+        string counted = countsContinuity ? "true" : "false";
+        string unresolved = countsScrambling ? "true" : "false";
+        SessionSnapshot session = RecordingAnsweredWith(
+            @"{""packets"":50000,""drops"":7,""scrambledPackets"":2,""ccMeasured"":"
+                + counted
+                + @",""scrambleMeasured"":"
+                + unresolved
+                + @",""positions"":{""anchorPcr"":900,""buckets"":[],""reanchors"":[]}}"
+        );
+
+        RecordingSessionDto recording = RecordingSessionDto.Of(
+            new DriverHello(DriverProtocol.Version, leg, capabilities),
+            session
+        );
+
+        Assert.Equal(leg is "everything", recording.Positions is not null);
     }
 
     [Fact]

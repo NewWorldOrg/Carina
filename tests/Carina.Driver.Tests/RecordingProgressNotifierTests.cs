@@ -8,6 +8,8 @@ public sealed class RecordingProgressNotifierTests
 
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(30);
 
+    private static readonly Action<Exception> Ignored = _ => { };
+
     [Fact]
     public void ADriverWithNothingToRecordSaysNothingHoweverLongItRuns()
     {
@@ -17,6 +19,7 @@ public sealed class RecordingProgressNotifierTests
             () => false,
             () => told.Add(told.Count),
             clock,
+            Ignored,
             Interval
         );
 
@@ -35,6 +38,7 @@ public sealed class RecordingProgressNotifierTests
             () => true,
             () => told.Add(told.Count),
             clock,
+            Ignored,
             Interval
         );
 
@@ -71,7 +75,8 @@ public sealed class RecordingProgressNotifierTests
         using var notifier = new RecordingProgressNotifier(
             () => true,
             () => told.Add(told.Count),
-            clock
+            clock,
+            Ignored
         );
 
         clock.Advance(TimeSpan.FromSeconds(29));
@@ -93,6 +98,7 @@ public sealed class RecordingProgressNotifierTests
             () => recording,
             () => told.Add(told.Count),
             clock,
+            Ignored,
             Interval
         );
 
@@ -131,6 +137,7 @@ public sealed class RecordingProgressNotifierTests
             () => true,
             () => spoken.Add(spoken.Count),
             clock,
+            Ignored,
             Interval
         );
     }
@@ -144,14 +151,15 @@ public sealed class RecordingProgressNotifierTests
             () => true,
             () => throw new InvalidOperationException("the hub is gone"),
             clock,
-            Interval,
-            met.Add
+            met.Add,
+            Interval
         );
 
         clock.Advance(Interval);
         clock.Advance(Interval);
 
         Assert.Equal(2, notifier.Faults);
+        Assert.Equal(0, notifier.Notices);
         Assert.Equal(2, met.Count);
         Assert.All(met, error => Assert.IsType<InvalidOperationException>(error));
     }
@@ -165,8 +173,8 @@ public sealed class RecordingProgressNotifierTests
             () => throw new InvalidOperationException("the sessions are gone"),
             () => { },
             clock,
-            Interval,
-            met.Add
+            met.Add,
+            Interval
         );
 
         clock.Advance(Interval);
