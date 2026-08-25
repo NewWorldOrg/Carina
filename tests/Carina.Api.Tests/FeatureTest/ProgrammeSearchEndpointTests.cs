@@ -56,7 +56,7 @@ public sealed class ProgrammeSearchEndpointTests
         await using EpgFeature feature = Feature();
 
         feature.Programmes.Programmes.Add(Programme(1, "ニュース7"));
-        feature.Archived.Programmes.Add(Archived(2, "ニュース特集"));
+        feature.Archived.Programmes.Add(Kept(2, "ニュース特集", At.AddDays(2)));
 
         (HttpStatusCode status, JsonElement body) = await feature.GetAsync("/api/programs/search?keyword=ニュース");
         JsonElement data = body.GetProperty("data");
@@ -532,12 +532,15 @@ public sealed class ProgrammeSearchEndpointTests
         => On(1049, carried, name, summary);
 
     private static ArchivedProgramme Archived(int carried, string name)
+        => Kept(carried, name, At.AddDays(-3));
+
+    private static ArchivedProgramme Kept(int carried, string name, DateTime began)
         => ArchivedProgramme.Rehydrate(
             new NetworkId(4),
             new ServiceId(1049),
             new EventId(carried),
-            At.AddDays(-3),
-            At.AddDays(-3).AddMinutes(30),
+            began,
+            began.AddMinutes(30),
             name,
             string.Empty,
             false,
