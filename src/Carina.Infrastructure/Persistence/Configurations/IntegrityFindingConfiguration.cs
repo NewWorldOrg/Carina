@@ -12,8 +12,8 @@ public sealed class IntegrityFindingConfiguration : IEntityTypeConfiguration<Int
 
     public const string RecordingIndexName = "ix_integrity_finding_recording";
 
-    private static string Vocabulary()
-        => string.Join(", ", Enum.GetNames<IntegrityFault>().Select(name => $"'{name}'"));
+    private static string Vocabulary(IEnumerable<IntegrityFault> faults)
+        => string.Join(", ", faults.Select(fault => $"'{fault}'"));
 
     public void Configure(EntityTypeBuilder<IntegrityFinding> builder)
     {
@@ -21,23 +21,21 @@ public sealed class IntegrityFindingConfiguration : IEntityTypeConfiguration<Int
 
         builder.ToTable("integrity_finding", table =>
         {
-            table.HasCheckConstraint("ck_integrity_finding_fault", $"fault IN ({Vocabulary()})");
+            string named = Vocabulary(IntegrityFaults.ThatNameARecording);
+            string weighed = Vocabulary(IntegrityFaults.ThatWeighedTheFile);
+
             table.HasCheckConstraint(
-                "ck_integrity_finding_orphan",
-                """
-                (fault = 'NoLedgerRow')
-                    = (recording_id IS NULL AND ledger_size IS NULL AND observed_size IS NOT NULL)
-                """);
+                "ck_integrity_finding_fault",
+                $"fault IN ({Vocabulary(Enum.GetValues<IntegrityFault>())})");
             table.HasCheckConstraint(
-                "ck_integrity_finding_missing",
-                "(fault = 'FileMissing') = (recording_id IS NOT NULL AND observed_size IS NULL)");
+                "ck_integrity_finding_recording",
+                $"(fault IN ({named})) = (recording_id IS NOT NULL)");
             table.HasCheckConstraint(
-                "ck_integrity_finding_weighed",
-                """
-                fault = 'NoLedgerRow'
-                OR fault = 'FileMissing'
-                OR (recording_id IS NOT NULL AND ledger_size IS NOT NULL AND observed_size IS NOT NULL)
-                """);
+                "ck_integrity_finding_ledger_size",
+                $"(fault IN ({named})) = (ledger_size IS NOT NULL)");
+            table.HasCheckConstraint(
+                "ck_integrity_finding_observed_size",
+                $"(fault IN ({weighed})) = (observed_size IS NOT NULL)");
             table.HasCheckConstraint(
                 "ck_integrity_finding_sizes",
                 "(ledger_size IS NULL OR ledger_size >= 0) AND (observed_size IS NULL OR observed_size >= 0)");

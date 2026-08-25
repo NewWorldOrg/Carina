@@ -43,11 +43,6 @@ public sealed class IntegrityFinding
         ArgumentNullException.ThrowIfNull(root);
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
-        if (!Enum.IsDefined(fault))
-        {
-            throw new ArgumentOutOfRangeException(nameof(fault), fault, "A finding is one the sweep can class.");
-        }
-
         if (path.Length > StoredFile.MaxPathLength)
         {
             throw new ArgumentException(
@@ -73,7 +68,7 @@ public sealed class IntegrityFinding
         {
             Id = id,
             CheckId = checkId,
-            Fault = fault,
+            Fault = IntegrityFaults.Named(fault),
             Root = root,
             Path = path,
             RecordingId = recordingId,

@@ -162,6 +162,7 @@ public sealed class IntegrityCheckRepositoryTests(RepositoryDatabase database)
     [InlineData("'SizeDisagrees', NULL, 5, 1")]
     [InlineData("'SizeDisagrees', '00000001-0000-0000-0000-000000000002', NULL, 1")]
     [InlineData("'FileEmpty', '00000001-0000-0000-0000-000000000002', 5, NULL")]
+    [InlineData("'FileMissing', '00000001-0000-0000-0000-000000000002', NULL, NULL")]
     [InlineData("'EmptyThoughComplete', '00000001-0000-0000-0000-000000000002', NULL, 0")]
     [InlineData("'Whatever', '00000001-0000-0000-0000-000000000002', 5, 1")]
     [InlineData("'SizeDisagrees', '00000001-0000-0000-0000-000000000002', -1, 1")]
