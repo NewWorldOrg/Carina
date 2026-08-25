@@ -15,6 +15,19 @@ tasks:
     cmd: docker compose exec app dotnet build
   test:
     cmd: docker compose exec app dotnet test
+  test:scale:
+    cmds:
+      - |
+        set -o pipefail
+        log="$(mktemp)"
+        trap 'rm -f "${log}"' EXIT
+        docker compose exec app dotnet test --filter "Category=Scale" --logger "console;verbosity=detailed" | tee "${log}"
+        passed="$(sed -n 's/.*Passed: *\([0-9]\+\).*/\1/p' "${log}" | awk '{ total += $1 } END { print total + 0 }')"
+        if [ "${passed}" -lt 1 ]; then
+          echo "the filter ran ${passed} measurements: dotnet test exits 0 when a filter matches nothing, so this would be green having measured nothing" >&2
+          exit 1
+        fi
+        echo "${passed} scale measurements ran."
   format:
     cmd: docker compose exec app dotnet format
   lint:

@@ -73,51 +73,72 @@ public sealed class ProgrammeMatchConfiguration : IEntityTypeConfiguration<Progr
 
     public const string BothLayers = """
         SELECT
-            network_id,
-            service_id,
-            event_id,
-            start_at,
-            end_at,
-            name,
-            summary,
-            is_shadow,
-            has_subtitles,
-            source,
-            revision,
-            genres,
-            items,
-            related,
-            searchable,
-            genre_kinds,
-            false AS is_archived
-        FROM programme
-        UNION ALL
-        SELECT
-            kept.network_id,
-            kept.service_id,
-            kept.event_id,
-            kept.start_at,
-            kept.end_at,
-            kept.name,
-            kept.summary,
-            false,
-            kept.has_subtitles,
-            NULL::character varying(32),
-            NULL::bigint,
-            kept.genres,
-            kept.items,
-            '[]'::jsonb,
-            kept.searchable,
-            kept.genre_kinds,
-            true
-        FROM archived_programme AS kept
+            layered.network_id,
+            layered.service_id,
+            layered.event_id,
+            layered.start_at,
+            layered.end_at,
+            layered.name,
+            layered.summary,
+            layered.is_shadow,
+            layered.has_subtitles,
+            layered.source,
+            layered.revision,
+            layered.genres,
+            layered.items,
+            layered.related,
+            layered.searchable,
+            layered.genre_kinds,
+            layered.is_archived
+        FROM (
+            SELECT
+                network_id,
+                service_id,
+                event_id,
+                start_at,
+                end_at,
+                name,
+                summary,
+                is_shadow,
+                has_subtitles,
+                source,
+                revision,
+                genres,
+                items,
+                related,
+                searchable,
+                genre_kinds,
+                false AS is_archived
+            FROM programme
+            UNION ALL
+            SELECT
+                kept.network_id,
+                kept.service_id,
+                kept.event_id,
+                kept.start_at,
+                kept.end_at,
+                kept.name,
+                kept.summary,
+                false,
+                kept.has_subtitles,
+                NULL::character varying(32),
+                NULL::bigint,
+                kept.genres,
+                kept.items,
+                '[]'::jsonb,
+                kept.searchable,
+                kept.genre_kinds,
+                true
+            FROM archived_programme AS kept
+        ) AS layered
         WHERE NOT EXISTS (
             SELECT 1
             FROM programme AS held
-            WHERE held.network_id = kept.network_id
-              AND held.service_id = kept.service_id
-              AND held.event_id = kept.event_id
-              AND held.start_at = kept.start_at)
+            WHERE layered.is_archived
+              AND held.network_id = layered.network_id
+              AND held.service_id = layered.service_id
+              AND held.event_id = layered.event_id
+              AND held.start_at = layered.start_at)
         """;
 
     private static IReadOnlyList<T> Read<T>(string stored)

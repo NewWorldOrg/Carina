@@ -85,7 +85,16 @@ public sealed class ArchivedProgrammeConfiguration : IEntityTypeConfiguration<Ar
             .HasColumnName(ProgrammeConfiguration.GenreKinds)
             .HasComputedColumnSql(ProgrammeConfiguration.GenreKindsSql, stored: true);
 
-        builder.HasIndex(programme => programme.EndsAt);
+        builder.HasIndex(programme => programme.EndsAt)
+            .IncludeProperties(
+                programme => new
+                {
+                    programme.NetworkId,
+                    programme.ServiceId,
+                    programme.EventId,
+                    programme.StartsAt,
+                });
+
         builder.HasIndex(programme => programme.StartsAt);
     }
 

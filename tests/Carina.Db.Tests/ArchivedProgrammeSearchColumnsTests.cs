@@ -58,6 +58,25 @@ public sealed class ArchivedProgrammeSearchColumnsTests
             StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task TheEndIndexCarriesWhatTheSearchJoinsOnSoTheCountNeverTouchesTheHeap()
+    {
+        await using CarinaDbContext context = CarinaDbContextFactory.Create(Scratch());
+        await context.Database.EnsureDeletedAsync(Cancel);
+        await context.GetService<IMigrator>().MigrateAsync(cancellationToken: Cancel);
+
+        await using NpgsqlConnection connection = await OpenAsync();
+        await using NpgsqlCommand command = connection.CreateCommand();
+        command.CommandText =
+            "SELECT indexdef FROM pg_indexes "
+            + "WHERE tablename = 'archived_programme' AND indexname = 'ix_archived_programme_end_at'";
+
+        Assert.Equal(
+            "CREATE INDEX ix_archived_programme_end_at ON public.archived_programme "
+            + "USING btree (end_at) INCLUDE (network_id, service_id, event_id, start_at)",
+            (string?)await command.ExecuteScalarAsync(Cancel));
+    }
+
     private static async Task KeptAsync(NpgsqlConnection connection, int carried, string name, string summary)
     {
         await using NpgsqlCommand command = connection.CreateCommand();

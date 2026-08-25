@@ -120,6 +120,22 @@ nothing.
   in one place and the migration carries a frozen copy of it; changing the
   definition means writing a new migration, and a test says so.
 
+- **The search across both layers keeps the "already held in the hot layer"
+  exclusion above the union, never inside the archive arm.** A `NOT EXISTS` in the
+  arm makes that arm a subquery the planner cannot merge into the append, and the
+  ordered index path goes with it: a search whose start date reaches into the
+  archive then sorts the whole archive to hand back one page. Above the union the
+  same exclusion reads as an anti-join the primary key answers.
+
+- **The page a search hands back is bounded; the count beside it is not.** The
+  ordered path stops at fifty rows however far back the start date reaches, but
+  `Total` still walks every archived row that matches — measured at roughly 53 ms
+  per year held, so three years is about 160 ms and ten about 530 ms, spent before
+  the page itself is read. Reaching back as far as the archive goes is the
+  decision, so this arrives on its own as the archive grows. The ways out are an
+  estimated total, cursor paging in place of a page count, or a count that stops
+  at a ceiling and answers "more than". None of them is in place.
+
 - **A stop the driver was asked for exits 0; anything else exits 70.** Coming
   back is the supervisor's half of the deal, which is why `on-failure` is the one
   restart policy the driver must never be given.
@@ -178,6 +194,27 @@ Three filters divide the suite, and CI runs one job per filter:
 Each job counts the tests it ran and fails on zero, because `dotnet test` exits 0
 when a filter matches nothing and a mistyped name would otherwise be green having
 verified nothing.
+
+A fourth filter, `Category=Scale`, is the one no job runs. It builds a year of the
+programme archive — 410,000 archived rows beside 10,000 held ones, about half a
+gigabyte — and times the search across both layers against a one-second budget.
+That is not something to pay for on every push, so the unit job excludes the
+category by name and nothing else selects it; `task test:scale` runs it by hand,
+which is what to do when the search or the shape of either programme table
+changes. Being compiled with everything else is what keeps it from rotting.
+
+What it asserts is the plan and the blocks read, not the clock. Wall clock on the
+same machine and the same data moves three to five times with how much of the
+half gigabyte the page cache happens to hold, so a budget in milliseconds is worth
+stating but cannot hold on its own: it was measured passing against the very
+regression it exists to catch. The plan shape and the block counts do not move
+with cache temperature, and between the two shapes they differ by two hundred
+times.
+
+The year-back search without a keyword is the shape that guards this. The keyword
+shape beside it reads well but flips its plan with the statistics sample, and was
+measured passing against both of the regressions it looks like it covers. Deleting
+the plain one as redundant would leave the measurement non-deterministic.
 
 ## Commands
 
