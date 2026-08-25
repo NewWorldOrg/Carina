@@ -17,8 +17,6 @@ public sealed class RecordingProgressNotifier : IDisposable
         TimeSpan? every = null
     )
     {
-        ArgumentNullException.ThrowIfNull(timeProvider);
-
         this.anythingRecording = anythingRecording;
         this.tell = tell;
 

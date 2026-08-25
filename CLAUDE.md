@@ -120,6 +120,30 @@ nothing.
   in one place and the migration carries a frozen copy of it; changing the
   definition means writing a new migration, and a test says so.
 
+- **The recording and the count come from the same chunk.** The session's read
+  loop hands each chunk to the writer and then to the counter, and nothing else
+  in the driver reads the transport stream: a second pipeline over the same
+  stream puts its own back pressure on the read the recording depends on.
+  Counting is always on — there is no setting that turns it off.
+
+- **"Nothing counted this" and "this was counted and was clean" are different
+  answers,** and so are "nowhere" and "somewhere, with nothing in it". A driver
+  that cannot count says so in its greeting rather than answering zero, and a
+  reader that does not find the capability reads no number at all.
+
+- **Where a loss happened is kept as a second of the stream's own clock.** The
+  programme clock reference is what the file is played back against: a byte
+  offset only approximates it at a variable bit rate, and the wall clock keeps
+  running while a recording is interrupted — which is the recording with the
+  most losses to place. The 33-bit clock coming around is followed through; a
+  jump the broadcast spliced in is written down as a re-anchor instead, so the
+  timeline only ever reads forwards.
+
+- **The count reaches the app while the recording is still running.** The driver
+  signals progress every thirty seconds for as long as anything is being
+  recorded, so a recording that dies part way through is not left looking like a
+  perfect one.
+
 - **The search across both layers keeps the "already held in the hot layer"
   exclusion above the union, never inside the archive arm.** A `NOT EXISTS` in the
   arm makes that arm a subquery the planner cannot merge into the append, and the

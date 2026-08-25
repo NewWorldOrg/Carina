@@ -44,13 +44,13 @@ public sealed class ContinuityCounterTracker
             lock (gate)
             {
                 return timeline.Anchor is { } anchor
-                    ? new DropPositionsDto(anchor, [.. Located()], timeline.Reanchors)
+                    ? new DropPositionsDto(anchor, [.. Placed()], timeline.Reanchors)
                     : null;
             }
         }
     }
 
-    private IEnumerable<DropBucketDto> Located() =>
+    private IEnumerable<DropBucketDto> Placed() =>
         buckets.Select(bucket => new DropBucketDto(
             bucket.Key,
             bucket.Value.Continuity,
