@@ -225,6 +225,24 @@ public sealed class CompletionSizeTests
         Assert.False(verdict.Names(RecordingFault.HeavierThanTheStream));
     }
 
+    [Fact]
+    public void ALengthNoClockCouldHaveRunIsStillWeighedAgainstAWeightAboveNothing()
+    {
+        RecordingVerdict verdict = CompletionFactory.Judge(bytes: 1, written: TimeSpan.MaxValue);
+
+        Assert.True(verdict.Names(RecordingFault.LighterThanTheStream));
+        Assert.False(verdict.Names(RecordingFault.HeavierThanTheStream));
+    }
+
+    [Fact]
+    public void TheHeaviestFileThereCanBeIsHeavyEvenForTheLongestStreamThereCanBe()
+    {
+        RecordingVerdict verdict = CompletionFactory.Judge(bytes: long.MaxValue, written: TimeSpan.MaxValue);
+
+        Assert.False(verdict.Names(RecordingFault.LighterThanTheStream));
+        Assert.True(verdict.Names(RecordingFault.HeavierThanTheStream));
+    }
+
     private static IReadOnlyList<RecordingVerdict> Weighings =>
     [
         CompletionFactory.Judge(),
@@ -236,5 +254,7 @@ public sealed class CompletionSizeTests
         CompletionFactory.Judge(bytes: 1, written: TimeSpan.FromDays(365 * 900)),
         CompletionFactory.Judge(bytes: long.MaxValue, written: TimeSpan.FromDays(365 * 900)),
         CompletionFactory.Judge(bytes: long.MaxValue, written: TimeSpan.FromSeconds(1000)),
+        CompletionFactory.Judge(bytes: 1, written: TimeSpan.MaxValue),
+        CompletionFactory.Judge(bytes: long.MaxValue, written: TimeSpan.MaxValue),
     ];
 }

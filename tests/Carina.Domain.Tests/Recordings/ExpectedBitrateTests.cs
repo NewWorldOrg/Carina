@@ -149,5 +149,23 @@ public sealed class ExpectedBitrateTests
         => Assert.True(ExpectedBitrate.Satellite.MostBitsPerSecond * 100
             < ExpectedBitrate.Satellite.LeastBitsPerSecond * (100 + Slack));
 
+    [Fact]
+    public void AStreamCanWeighMoreThanALongCanHold()
+    {
+        var bitrate = new ExpectedBitrate(1_000_000_000, 2_000_000_000);
+
+        Assert.True(bitrate.LeastBytesOver(TimeSpan.MaxValue) > (Int128)long.MaxValue);
+        Assert.True(bitrate.MostBytesOver(TimeSpan.MaxValue) > bitrate.LeastBytesOver(TimeSpan.MaxValue));
+    }
+
+    [Fact]
+    public void AStreamThatWeighsMoreThanALongIsStillWeighedTheRightWayRound()
+    {
+        var bitrate = new ExpectedBitrate(1_000_000_000, 2_000_000_000);
+
+        Assert.True(bitrate.LeastBytesOver(TimeSpan.MaxValue) > Int128.Zero);
+        Assert.True(bitrate.MostBytesOver(TimeSpan.MaxValue) > Int128.Zero);
+    }
+
     private static int Slack => CompletionTolerance.Default.SizeSlackPercent;
 }
