@@ -7,6 +7,7 @@ public enum PoolVerdict
 {
     Granted,
     Shared,
+    Swapped,
     NoDeviceFree,
     DeviceBusy,
 }
@@ -30,13 +31,15 @@ public sealed record PoolGrant(
     SessionId Holder,
     bool NeedsTuning,
     IReadOnlyList<SessionId> Displaced,
-    string Detail
+    string Detail,
+    SessionId Outgoing = default
 )
 {
     public static PoolGrant Refused(PoolVerdict verdict, string detail) =>
         new(verdict, string.Empty, default, false, [], detail);
 
-    public bool IsGranted => Verdict is PoolVerdict.Granted or PoolVerdict.Shared;
+    public bool IsGranted =>
+        Verdict is PoolVerdict.Granted or PoolVerdict.Shared or PoolVerdict.Swapped;
 }
 
 public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null) : IDisposable
@@ -52,6 +55,8 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
         public TuningKey Tuning { get; set; } = tuning;
 
         public SessionId Holder { get; set; } = holder;
+
+        public SessionId? Displacing { get; set; }
 
         public List<Sink> Sinks { get; } = [];
 
@@ -120,6 +125,11 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
                 return Rehold(lease, request);
             }
 
+            if (request.Purpose is SessionPurpose.Recording && lease.Priority < request.Priority)
+            {
+                return TakeTheSeat(lease, request);
+            }
+
             Attach(lease, request);
 
             return new PoolGrant(
@@ -133,6 +143,36 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
         }
 
         return null;
+    }
+
+    private PoolGrant TakeTheSeat(Lease lease, PoolRequest request)
+    {
+        SessionId outgoing = lease.Holder;
+
+        lease.Displacing = outgoing;
+        lease.Holder = request.SessionId;
+        Attach(lease, request);
+
+        return new PoolGrant(
+            PoolVerdict.Swapped,
+            lease.DeviceId,
+            request.SessionId,
+            NeedsTuning: false,
+            [],
+            $"The tuner '{lease.DeviceId}' is on {request.Tuning} for '{outgoing}', which a recording outranks, so '{request.SessionId}' reads the tuner and '{outgoing}' reads the stream through it.",
+            outgoing
+        );
+    }
+
+    public void SeatTaken(string deviceId, SessionId holder)
+    {
+        lock (gate)
+        {
+            if (leases.TryGetValue(deviceId, out Lease? lease) && lease.Holder == holder)
+            {
+                lease.Displacing = null;
+            }
+        }
     }
 
     private PoolGrant Rehold(Lease lease, PoolRequest request)
@@ -416,6 +456,16 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
             }
 
             lease.Sinks.RemoveAll(sink => sink.SessionId == sessionId);
+
+            if (lease.Holder == sessionId && lease.Displacing is { } previous)
+            {
+                lease.Displacing = null;
+
+                if (lease.Sinks.Any(sink => sink.SessionId == previous))
+                {
+                    lease.Holder = previous;
+                }
+            }
 
             if (lease.IsIdle)
             {

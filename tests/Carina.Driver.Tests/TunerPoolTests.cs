@@ -225,6 +225,146 @@ public sealed class TunerPoolTests
     }
 
     [Fact]
+    public void ARecordingTakesTheSeatOfTheWatcherAlreadyOnThatTuning()
+    {
+        TunerPool pool = Pool();
+
+        Take(pool, "s-1", SessionPurpose.Live);
+        PoolGrant second = pool.Acquire(Wanting("s-2", SessionPurpose.Recording));
+
+        Assert.Equal(PoolVerdict.Swapped, second.Verdict);
+        Assert.Equal("adapter0", second.DeviceId);
+        Assert.Equal(SessionId.Parse("s-1"), second.Outgoing);
+        Assert.Equal(SessionId.Parse("s-2"), second.Holder);
+        Assert.False(second.NeedsTuning);
+        Assert.Empty(second.Displaced);
+        Assert.Equal(
+            [SessionId.Parse("s-1"), SessionId.Parse("s-2")],
+            pool.SinksOn("adapter0")
+        );
+    }
+
+    [Fact]
+    public void ARecordingDoesNotTakeTheSeatOfAnotherRecording()
+    {
+        TunerPool pool = Pool();
+
+        Take(pool, "s-1", SessionPurpose.Recording);
+        PoolGrant second = pool.Acquire(Wanting("s-2", SessionPurpose.Recording));
+
+        Assert.Equal(PoolVerdict.Shared, second.Verdict);
+        Assert.Equal(SessionId.Parse("s-1"), second.Holder);
+        Assert.Equal(default, second.Outgoing);
+    }
+
+    [Theory]
+    [InlineData(SessionPurpose.Live, SessionPurpose.Live)]
+    [InlineData(SessionPurpose.Scan, SessionPurpose.Live)]
+    [InlineData(SessionPurpose.Survey, SessionPurpose.Scan)]
+    [InlineData(SessionPurpose.Survey, SessionPurpose.SurveyNow)]
+    public void NothingButARecordingTakesTheSeatOfWhoeverIsReading(
+        SessionPurpose holding,
+        SessionPurpose asking
+    )
+    {
+        TunerPool pool = Pool();
+
+        Take(pool, "s-1", holding);
+        PoolGrant second = pool.Acquire(Wanting("s-2", asking));
+
+        Assert.Equal(PoolVerdict.Shared, second.Verdict);
+        Assert.Equal(SessionId.Parse("s-1"), second.Holder);
+    }
+
+    [Fact]
+    public void ATunerNobodyIsReadingIsTakenBackRatherThanTakenOver()
+    {
+        TunerPool pool = Pool();
+
+        Take(pool, "s-1", SessionPurpose.Live);
+        pool.Leave(SessionId.Parse("s-1"));
+
+        PoolGrant second = pool.Acquire(Wanting("s-2", SessionPurpose.Recording));
+
+        Assert.Equal(PoolVerdict.Granted, second.Verdict);
+        Assert.Equal(default, second.Outgoing);
+    }
+
+    [Fact]
+    public void TheRecordingIsWhoTheTunerAnswersForOnceItHasTakenTheSeat()
+    {
+        TunerPool pool = Pool();
+
+        Take(pool, "s-1", SessionPurpose.Live);
+        pool.Acquire(Wanting("s-2", SessionPurpose.Recording));
+
+        PoolGrant third = pool.Acquire(Wanting("s-3", SessionPurpose.Live));
+
+        Assert.Equal(PoolVerdict.Shared, third.Verdict);
+        Assert.Equal(SessionId.Parse("s-2"), third.Holder);
+    }
+
+    [Fact]
+    public void ASeatThatWasNeverTakenGoesBackToTheSessionThatWasReading()
+    {
+        TunerPool pool = Pool();
+
+        Take(pool, "s-1", SessionPurpose.Live);
+        pool.Acquire(Wanting("s-2", SessionPurpose.Recording));
+        pool.Leave(SessionId.Parse("s-2"));
+
+        PoolGrant third = pool.Acquire(Wanting("s-3", SessionPurpose.Live));
+
+        Assert.Equal(PoolVerdict.Shared, third.Verdict);
+        Assert.Equal(SessionId.Parse("s-1"), third.Holder);
+    }
+
+    [Fact]
+    public void ASeatOnceTakenIsNotGivenBackWhenTheRecordingEnds()
+    {
+        TunerPool pool = Pool();
+
+        Take(pool, "s-1", SessionPurpose.Live);
+        pool.Acquire(Wanting("s-2", SessionPurpose.Recording));
+        pool.SeatTaken("adapter0", SessionId.Parse("s-2"));
+        pool.Leave(SessionId.Parse("s-2"));
+
+        PoolGrant third = pool.Acquire(Wanting("s-3", SessionPurpose.Live));
+
+        Assert.Equal(PoolVerdict.Shared, third.Verdict);
+        Assert.Equal(SessionId.Parse("s-2"), third.Holder);
+    }
+
+    [Fact]
+    public void ASeatIsOnlyHandedOnToTheOneTheTunerIsBeingAnsweredFor()
+    {
+        TunerPool pool = Pool();
+
+        Take(pool, "s-1", SessionPurpose.Live);
+        pool.Acquire(Wanting("s-2", SessionPurpose.Recording));
+        pool.SeatTaken("adapter0", SessionId.Parse("s-1"));
+        pool.Leave(SessionId.Parse("s-2"));
+
+        PoolGrant third = pool.Acquire(Wanting("s-3", SessionPurpose.Live));
+
+        Assert.Equal(SessionId.Parse("s-1"), third.Holder);
+    }
+
+    [Fact]
+    public void TheGrantThatTakesASeatSaysWhoIsHandingTheTunerOn()
+    {
+        TunerPool pool = Pool();
+
+        Take(pool, "s-1", SessionPurpose.Live);
+
+        PoolGrant second = pool.Acquire(Wanting("s-2", SessionPurpose.Recording));
+
+        Assert.Contains("s-1", second.Detail, StringComparison.Ordinal);
+        Assert.Contains("s-2", second.Detail, StringComparison.Ordinal);
+        Assert.Contains("recording", second.Detail, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void TheLeastImportantHolderIsTheOneThatLosesItsTuner()
     {
         TunerPool pool = Pool();

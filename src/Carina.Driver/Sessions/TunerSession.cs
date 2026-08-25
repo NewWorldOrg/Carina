@@ -20,11 +20,8 @@ public sealed class TunerSession : IDisposable
     public const int DefaultChunkSize = TsPacketReader.PacketLength * 100;
     public const long FaultReportInterval = 1000;
 
-    private readonly ITunerDevice device;
     private readonly SignalQualityReader? quality;
-    private readonly long overflowsBefore;
     private readonly IRecordingWriter? recordingWriter;
-    private readonly SessionSubscription? seat;
     private readonly TimeProvider timeProvider;
     private readonly ILogger? logger;
     private readonly DiagnosticsStore? diagnostics;
@@ -35,7 +32,16 @@ public sealed class TunerSession : IDisposable
     private readonly TaskCompletionSource completion = new(
         TaskCreationOptions.RunContinuationsAsynchronously
     );
+    private readonly ManualResetEventSlim seatIsMine;
+    private readonly ManualResetEventSlim handedOver = new(false);
 
+    private ITunerDevice device;
+    private SessionSubscription? seat;
+    private long overflowsBefore;
+    private long overflowsCarried;
+    private ITunerDevice? handover;
+    private TunerSession? handoverHost;
+    private SessionSubscription? handoverSeat;
     private Thread? loop;
     private SessionState state;
     private SessionStopReason stopReason;
@@ -66,7 +72,8 @@ public sealed class TunerSession : IDisposable
         TuneParams? tune = null,
         TunerSession? ridesOn = null,
         SessionSubscription? seat = null,
-        int demuxBufferBytes = TunerSettings.DefaultDemuxBufferBytes
+        int demuxBufferBytes = TunerSettings.DefaultDemuxBufferBytes,
+        bool takesTheSeatFromAnother = false
     )
     {
         if (endsAt <= startedAt)
@@ -96,6 +103,7 @@ public sealed class TunerSession : IDisposable
         this.diagnostics = diagnostics;
         state = SessionState.Requested;
         stopReason = SessionStopReason.Running;
+        seatIsMine = new ManualResetEventSlim(!takesTheSeatFromAnother);
         Broadcaster = new SessionBroadcaster(
             surveyBlockLimit: SessionPurposes.ReadsEveryPacket(purpose)
                 ? SessionBroadcaster.DefaultSurveyBlockLimit
@@ -128,7 +136,7 @@ public sealed class TunerSession : IDisposable
 
     public string? RecordingId { get; }
 
-    public TunerSession? RidesOn { get; }
+    public TunerSession? RidesOn { get; private set; }
 
     public TuneParams? Tune { get; }
 
@@ -182,13 +190,31 @@ public sealed class TunerSession : IDisposable
 
     public long FaultCount => Interlocked.Read(ref faultCount);
 
-    public long DroppedChunks => seat?.DroppedChunks ?? 0;
+    public long DroppedChunks
+    {
+        get
+        {
+            lock (gate)
+            {
+                return seat?.DroppedChunks ?? 0;
+            }
+        }
+    }
 
     public long DiscardedBytes => Interlocked.Read(ref discardedBytes);
 
     public long Resyncs => Interlocked.Read(ref resyncs);
 
-    public long DeviceOverflows => Math.Max(0, device.Overflows - overflowsBefore);
+    public long DeviceOverflows
+    {
+        get
+        {
+            lock (gate)
+            {
+                return overflowsCarried + Math.Max(0, device.Overflows - overflowsBefore);
+            }
+        }
+    }
 
     public SignalQualitySample? Quality => quality?.Latest;
 
@@ -257,6 +283,50 @@ public sealed class TunerSession : IDisposable
         }
     }
 
+    public bool ReadFromInstead(
+        ITunerDevice replacement,
+        TunerSession? host,
+        SessionSubscription? takenSeat,
+        TimeSpan within
+    )
+    {
+        ArgumentNullException.ThrowIfNull(replacement);
+
+        lock (gate)
+        {
+            if (state is not SessionState.Active || handover is not null)
+            {
+                return false;
+            }
+
+            handedOver.Reset();
+            handover = replacement;
+            handoverHost = host;
+            handoverSeat = takenSeat;
+        }
+
+        if (handedOver.Wait(within))
+        {
+            return true;
+        }
+
+        lock (gate)
+        {
+            if (handover is null)
+            {
+                return true;
+            }
+
+            handover = null;
+            handoverHost = null;
+            handoverSeat = null;
+
+            return false;
+        }
+    }
+
+    public void TheSeatIsYours() => seatIsMine.Set();
+
     public void Preempt(string because)
     {
         lock (gate)
@@ -312,9 +382,11 @@ public sealed class TunerSession : IDisposable
 
         try
         {
+            seatIsMine.Wait(token);
+
             while (!token.IsCancellationRequested && timeProvider.GetUtcNow() < EndsAt)
             {
-                byte[] chunk = device.Read(chunkSize, token);
+                byte[] chunk = Reading().Read(chunkSize, token);
 
                 if (chunk.Length is 0)
                 {
@@ -364,6 +436,47 @@ public sealed class TunerSession : IDisposable
         {
             Finish(SessionState.Failed, SessionStopReason.DeviceFailed, error);
         }
+    }
+
+    private ITunerDevice Reading()
+    {
+        ITunerDevice? previous = null;
+        ITunerDevice current;
+
+        lock (gate)
+        {
+            if (handover is { } replacement)
+            {
+                previous = device;
+                overflowsCarried += Math.Max(0, previous.Overflows - overflowsBefore);
+                overflowsBefore = replacement.Overflows;
+                device = replacement;
+                seat = handoverSeat;
+                RidesOn = handoverHost;
+                handover = null;
+                handoverHost = null;
+                handoverSeat = null;
+                handedOver.Set();
+            }
+
+            current = device;
+        }
+
+        previous?.Dispose();
+
+        return current;
+    }
+
+    private void DisposeDevice()
+    {
+        ITunerDevice current;
+
+        lock (gate)
+        {
+            current = device;
+        }
+
+        current.Dispose();
     }
 
     private void WriteOut(byte[] chunk)
@@ -529,7 +642,7 @@ public sealed class TunerSession : IDisposable
             causes.Add(writerFault);
         }
 
-        Exception? deviceFault = Close(device.Dispose);
+        Exception? deviceFault = Close(DisposeDevice);
         if (deviceFault is not null)
         {
             causes.Add(deviceFault);
