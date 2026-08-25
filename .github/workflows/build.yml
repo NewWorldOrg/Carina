@@ -40,7 +40,7 @@ jobs:
       - name: Unit tests, taken from the Unit folders and from everything not yet moved into one
         run: |
           set -o pipefail
-          dotnet test --no-restore --filter "FullyQualifiedName~Unit|(FullyQualifiedName!~FeatureTest&FullyQualifiedName!~DbIntegration&Category!=DbIntegration)" | tee unit.log
+          dotnet test --no-restore --filter "FullyQualifiedName~Unit|(FullyQualifiedName!~FeatureTest&FullyQualifiedName!~DbIntegration&Category!=DbIntegration&Category!=Scale)" | tee unit.log
       - name: The filter selected tests, rather than passing by selecting none
         run: |
           passed="$(sed -n 's/.*Passed: *\([0-9]\+\).*/\1/p' unit.log | awk '{ total += $1 } END { print total + 0 }')"

@@ -15,6 +15,8 @@ tasks:
     cmd: docker compose exec app dotnet build
   test:
     cmd: docker compose exec app dotnet test
+  test:scale:
+    cmd: docker compose exec app dotnet test --filter "Category=Scale" --logger "console;verbosity=detailed"
   format:
     cmd: docker compose exec app dotnet format
   lint:

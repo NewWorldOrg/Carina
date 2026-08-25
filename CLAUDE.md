@@ -179,6 +179,14 @@ Each job counts the tests it ran and fails on zero, because `dotnet test` exits 
 when a filter matches nothing and a mistyped name would otherwise be green having
 verified nothing.
 
+A fourth filter, `Category=Scale`, is the one no job runs. It builds a year of the
+programme archive — 410,000 archived rows beside 10,000 held ones, about half a
+gigabyte — and times the search across both layers against a one-second budget.
+That is not something to pay for on every push, so the unit job excludes the
+category by name and nothing else selects it; `task test:scale` runs it by hand,
+which is what to do when the search or the shape of either programme table
+changes. Being compiled with everything else is what keeps it from rotting.
+
 ## Commands
 
 Everything runs inside the containers.
