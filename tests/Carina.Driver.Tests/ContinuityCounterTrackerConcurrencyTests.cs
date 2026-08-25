@@ -1,35 +1,44 @@
 using Carina.Contracts;
+using Carina.Driver.Ipc;
+using Carina.Driver.Sessions;
 using Carina.Driver.Transport;
+using Carina.Driver.Tuning;
 
 namespace Carina.Driver.Tests;
 
 public sealed class ContinuityCounterTrackerConcurrencyTests
 {
     private const int VideoPid = 0x0100;
-    private const long Second = 90_000;
-    private const int Readings = 200;
+    private const int PacketLength = 188;
+    private const int PacketsPerChunk = 8;
+    private const int Reads = 200_000;
 
-    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(60);
+    private static readonly DateTimeOffset Start = new(2026, 8, 13, 21, 0, 0, TimeSpan.Zero);
+
+    private static readonly TimeSpan Patience = TimeSpan.FromMinutes(5);
+
+    private static readonly DriverHello Hello =
+        new(DriverProtocol.Version, "instance-1", DriverGreeting.Capabilities);
 
     [Fact]
-    public void WhatWasPlacedNeverOutRunsWhatWasCountedWhileTheStreamIsStillArriving()
+    public void WhatTheAppIsToldNeverPlacesMoreThanItSaysWasCounted()
     {
-        var tracker = new ContinuityCounterTracker();
-        using var counting = new CancellationTokenSource();
+        var device = new EndlessDroppingDevice();
+        using TunerSession session = Watching(device);
 
-        Thread reader = Count(tracker, counting.Token);
+        session.Start();
+        device.AwaitFirstRead(Patience);
+
         var torn = new List<string>();
-        long before = tracker.Snapshot().Drops;
-        long after = before;
+        long first = 0;
+        long last = 0;
         int located = 0;
 
         try
         {
-            DateTime deadline = DateTime.UtcNow + Patience;
-
-            while (Short(located, after - before) && DateTime.UtcNow < deadline)
+            for (int read = 0; read < Reads; read++)
             {
-                SessionCounters counters = tracker.Snapshot();
+                SessionCounters counters = SessionViews.Of(session, Hello).Counters;
 
                 if (counters.Positions is not { } positions)
                 {
@@ -37,88 +46,128 @@ public sealed class ContinuityCounterTrackerConcurrencyTests
                 }
 
                 located++;
-                after = counters.Drops;
+                last = counters.Drops;
+                if (first is 0)
+                {
+                    first = counters.Drops;
+                }
 
                 long placed = positions.Buckets.Sum(bucket => bucket.Continuity);
                 long left = positions.Buckets.Sum(bucket => bucket.Scrambled);
 
                 if (placed > counters.Drops)
                 {
-                    torn.Add($"{placed} losses placed against {counters.Drops} counted");
+                    torn.Add($"read {read}: {placed} losses placed against {counters.Drops} counted");
                 }
 
                 if (left > counters.ScrambledPackets)
                 {
-                    torn.Add($"{left} scrambled placed against {counters.ScrambledPackets} counted");
+                    torn.Add($"read {read}: {left} scrambled placed against {counters.ScrambledPackets} counted");
                 }
 
                 if (!counters.CcMeasured)
                 {
-                    torn.Add("a position on a stream nothing had counted");
+                    torn.Add($"read {read}: a position on a stream nothing had counted");
                 }
             }
         }
         finally
         {
-            counting.Cancel();
-            reader.Join(Patience);
+            session.Stop();
+            session.WaitForEnd(Patience);
         }
 
         Assert.True(
-            located >= Readings,
-            $"only {located} reads saw a position, so this proves little about reading one."
+            located > Reads / 2,
+            $"only {located} of {Reads} reads saw a position, so most of them measured nothing."
         );
         Assert.True(
-            after - before >= Readings,
-            $"the stream added only {after - before} losses while {located} reads went by, so the reads raced nothing."
+            last - first >= Reads / 10,
+            $"the stream added only {last - first} losses across {located} reads, so the reads raced nothing."
         );
         Assert.Empty(torn);
     }
 
-    private static bool Short(int located, long counted) =>
-        located < Readings || counted < Readings;
+    private static TunerSession Watching(ITunerDevice device) =>
+        new(
+            SessionId.Parse("torn-1"),
+            SessionPurpose.Live,
+            "adapter0",
+            device,
+            Start,
+            Start + TimeSpan.FromHours(1),
+            new ManualTimeProvider(Start),
+            chunkSize: PacketLength * PacketsPerChunk
+        );
 
-    private static Thread Count(ContinuityCounterTracker tracker, CancellationToken stopping)
+    private static byte[] Packet(int counter, long? pcr = null, bool scrambled = false)
     {
-        var thread = new Thread(() =>
+        byte[] packet = new byte[PacketLength];
+        Array.Fill(packet, (byte)(counter + 1), 4, PacketLength - 4);
+
+        packet[0] = TsPacketReader.SyncByte;
+        packet[1] = (byte)((VideoPid >> 8) & 0x1F);
+        packet[2] = (byte)(VideoPid & 0xFF);
+        packet[3] = (byte)(
+            (scrambled ? 0xC0 : 0x00) | (pcr is null ? 0x10 : 0x30) | (counter & 0x0F)
+        );
+
+        if (pcr is not { } reference)
         {
-            int counter = 0;
-            long clock = 0;
+            return packet;
+        }
 
-            while (!stopping.IsCancellationRequested)
-            {
-                if (counter % 50 is 0)
-                {
-                    clock += Second / 10;
-                }
+        packet[4] = 7;
+        packet[5] = 0x10;
+        packet[6] = (byte)(reference >> 25);
+        packet[7] = (byte)((reference >> 17) & 0xFF);
+        packet[8] = (byte)((reference >> 9) & 0xFF);
+        packet[9] = (byte)((reference >> 1) & 0xFF);
+        packet[10] = (byte)(((int)(reference & 1) << 7) | 0x7E);
 
-                tracker.Observe(Packet(counter % 16, clock));
-                counter += 2;
-                tracker.Observe(Packet(counter % 16, null, scrambled: true));
-                counter++;
-            }
-        })
-        {
-            IsBackground = true,
-            Name = "counting",
-        };
-
-        thread.Start();
-
-        return thread;
+        return packet;
     }
 
-    private static TsPacket Packet(int counter, long? pcr, bool scrambled = false) =>
-        new(
-            VideoPid,
-            counter,
-            HasPayload: true,
-            TransportError: false,
-            Scrambled: scrambled,
-            Discontinuity: false,
-            PayloadUnitStart: false,
-            PayloadHash: counter + 1,
-            Provisional: false,
-            Pcr: pcr
-        );
+    private sealed class EndlessDroppingDevice : ITunerDevice
+    {
+        private static readonly byte[] Opening = Build(withClock: true);
+        private static readonly byte[] Rest = Build(withClock: false);
+
+        private readonly SemaphoreSlim reading = new(0);
+
+        private int reads;
+
+        public long Overflows => 0;
+
+        public bool Disposed { get; private set; }
+
+        public byte[] Read(int count, CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            reading.Release();
+
+            return Interlocked.Increment(ref reads) is 1 ? Opening : Rest;
+        }
+
+        public void AwaitFirstRead(TimeSpan within) =>
+            Assert.True(reading.Wait(within), "The session never read a byte from the tuner.");
+
+        public void Dispose() => Disposed = true;
+
+        private static byte[] Build(bool withClock)
+        {
+            var chunk = new List<byte>();
+
+            for (int index = 0; index < PacketsPerChunk; index++)
+            {
+                chunk.AddRange(
+                    Packet(
+                        (index * 2) % 16,
+                        withClock && index is 0 ? 4_500_000 : null,
+                        scrambled: index is PacketsPerChunk - 1));
+            }
+
+            return [.. chunk];
+        }
+    }
 }

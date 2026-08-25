@@ -19,28 +19,12 @@ public sealed class ContinuityCounterTracker
     private long scrambledPackets;
     private long provisionalPackets;
 
-    public long Packets => Read(ref packets);
-
-    public long Drops => Read(ref drops);
-
-    public long Duplicates => Read(ref duplicates);
-
-    public long Discontinuities => Read(ref discontinuities);
-
-    public long TransportErrors => Read(ref transportErrors);
-
-    public long ScrambledPackets => Read(ref scrambledPackets);
-
-    public long ProvisionalPackets => Read(ref provisionalPackets);
-
-    public bool CcMeasured => Packets > 0;
-
-    public bool ScrambleMeasured => Packets > 0;
-
     public SessionCounters Snapshot()
     {
         lock (gate)
         {
+            bool measured = packets > 0;
+
             return new SessionCounters(
                 packets,
                 drops,
@@ -49,8 +33,8 @@ public sealed class ContinuityCounterTracker
                 transportErrors,
                 scrambledPackets,
                 provisionalPackets,
-                CcMeasured: packets > 0,
-                ScrambleMeasured: packets > 0,
+                CcMeasured: measured,
+                ScrambleMeasured: measured,
                 Positions: WhereTheyWere()
             );
         }
@@ -76,28 +60,11 @@ public sealed class ContinuityCounterTracker
         }
     }
 
-    public void Retuned()
-    {
-        lock (gate)
-        {
-            lastCounter.Clear();
-            lastPayloadHash.Clear();
-        }
-    }
-
     public void Observe(TsPacket packet)
     {
         lock (gate)
         {
             Record(packet);
-        }
-    }
-
-    private long Read(ref long counter)
-    {
-        lock (gate)
-        {
-            return counter;
         }
     }
 

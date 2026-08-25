@@ -37,8 +37,8 @@ public sealed class ContinuityCounterTrackerTests
             tracker.Observe(Packet(0x100, counter % 16));
         }
 
-        Assert.Equal(0, tracker.Drops);
-        Assert.Equal(32, tracker.Packets);
+        Assert.Equal(0, tracker.Snapshot().Drops);
+        Assert.Equal(32, tracker.Snapshot().Packets);
     }
 
     [Fact]
@@ -49,7 +49,7 @@ public sealed class ContinuityCounterTrackerTests
         tracker.Observe(Packet(0x100, 15));
         tracker.Observe(Packet(0x100, 0));
 
-        Assert.Equal(0, tracker.Drops);
+        Assert.Equal(0, tracker.Snapshot().Drops);
     }
 
     [Theory]
@@ -63,7 +63,7 @@ public sealed class ContinuityCounterTrackerTests
         tracker.Observe(Packet(0x100, before));
         tracker.Observe(Packet(0x100, after));
 
-        Assert.Equal(expected, tracker.Drops);
+        Assert.Equal(expected, tracker.Snapshot().Drops);
     }
 
     [Fact]
@@ -76,7 +76,7 @@ public sealed class ContinuityCounterTrackerTests
         tracker.Observe(Packet(0x100, 1));
         tracker.Observe(Packet(0x200, 8));
 
-        Assert.Equal(0, tracker.Drops);
+        Assert.Equal(0, tracker.Snapshot().Drops);
     }
 
     [Fact]
@@ -89,7 +89,7 @@ public sealed class ContinuityCounterTrackerTests
         tracker.Observe(Packet(0x200, 0));
         tracker.Observe(Packet(0x200, 1));
 
-        Assert.Equal(2, tracker.Drops);
+        Assert.Equal(2, tracker.Snapshot().Drops);
         Assert.Equal(2, tracker.DropsFor(0x100));
         Assert.Equal(0, tracker.DropsFor(0x200));
     }
@@ -102,8 +102,8 @@ public sealed class ContinuityCounterTrackerTests
         tracker.Observe(Packet(TsPacket.NullPid, 0));
         tracker.Observe(Packet(TsPacket.NullPid, 9));
 
-        Assert.Equal(0, tracker.Drops);
-        Assert.Equal(0, tracker.Packets);
+        Assert.Equal(0, tracker.Snapshot().Drops);
+        Assert.Equal(0, tracker.Snapshot().Packets);
     }
 
     [Fact]
@@ -114,7 +114,7 @@ public sealed class ContinuityCounterTrackerTests
         tracker.Observe(Packet(0x100, 4));
         tracker.Observe(Packet(0x100, 4, hasPayload: false));
 
-        Assert.Equal(0, tracker.Drops);
+        Assert.Equal(0, tracker.Snapshot().Drops);
     }
 
     [Fact]
@@ -125,8 +125,8 @@ public sealed class ContinuityCounterTrackerTests
         tracker.Observe(Packet(0x100, 4, payloadHash: 99));
         tracker.Observe(Packet(0x100, 4, payloadHash: 99));
 
-        Assert.Equal(0, tracker.Drops);
-        Assert.Equal(1, tracker.Duplicates);
+        Assert.Equal(0, tracker.Snapshot().Drops);
+        Assert.Equal(1, tracker.Snapshot().Duplicates);
     }
 
     [Fact]
@@ -137,8 +137,8 @@ public sealed class ContinuityCounterTrackerTests
         tracker.Observe(Packet(0x100, 4, payloadHash: 99));
         tracker.Observe(Packet(0x100, 4, payloadHash: 12345));
 
-        Assert.Equal(16, tracker.Drops);
-        Assert.Equal(0, tracker.Duplicates);
+        Assert.Equal(16, tracker.Snapshot().Drops);
+        Assert.Equal(0, tracker.Snapshot().Duplicates);
     }
 
     [Fact]
@@ -149,8 +149,8 @@ public sealed class ContinuityCounterTrackerTests
         tracker.Observe(Packet(0x100, 4));
         tracker.Observe(Packet(0x100, 9, discontinuity: true));
 
-        Assert.Equal(0, tracker.Drops);
-        Assert.Equal(1, tracker.Discontinuities);
+        Assert.Equal(0, tracker.Snapshot().Drops);
+        Assert.Equal(1, tracker.Snapshot().Discontinuities);
     }
 
     [Fact]
@@ -162,9 +162,9 @@ public sealed class ContinuityCounterTrackerTests
         tracker.Observe(Packet(0x100, 12, transportError: true));
         tracker.Observe(Packet(0x100, 5));
 
-        Assert.Equal(0, tracker.Drops);
-        Assert.Equal(1, tracker.TransportErrors);
-        Assert.Equal(2, tracker.Packets);
+        Assert.Equal(0, tracker.Snapshot().Drops);
+        Assert.Equal(1, tracker.Snapshot().TransportErrors);
+        Assert.Equal(2, tracker.Snapshot().Packets);
     }
 
     [Fact]
@@ -175,20 +175,8 @@ public sealed class ContinuityCounterTrackerTests
         tracker.Observe(Packet(0x100, 0, scrambled: true));
         tracker.Observe(Packet(0x100, 1));
 
-        Assert.Equal(1, tracker.ScrambledPackets);
-        Assert.Equal(2, tracker.Packets);
-    }
-
-    [Fact]
-    public void ARetuneDoesNotCarryTheOldCountersIntoTheNewStream()
-    {
-        var tracker = new ContinuityCounterTracker();
-
-        tracker.Observe(Packet(0x100, 2));
-        tracker.Retuned();
-        tracker.Observe(Packet(0x100, 11));
-
-        Assert.Equal(0, tracker.Drops);
+        Assert.Equal(1, tracker.Snapshot().ScrambledPackets);
+        Assert.Equal(2, tracker.Snapshot().Packets);
     }
 
     [Theory]
@@ -203,8 +191,8 @@ public sealed class ContinuityCounterTrackerTests
         tracker.Observe(Packet(0x100, 0));
         tracker.Observe(Packet(pid, continuityCounter));
 
-        Assert.Equal(0, tracker.Drops);
-        Assert.Equal(1, tracker.Packets);
+        Assert.Equal(0, tracker.Snapshot().Drops);
+        Assert.Equal(1, tracker.Snapshot().Packets);
     }
 
     [Fact]
@@ -216,9 +204,9 @@ public sealed class ContinuityCounterTrackerTests
         tracker.Observe(Packet(0x100, 9) with { Provisional = true });
         tracker.Observe(Packet(0x100, 1));
 
-        Assert.Equal(0, tracker.Drops);
-        Assert.Equal(2, tracker.Packets);
-        Assert.Equal(1, tracker.ProvisionalPackets);
+        Assert.Equal(0, tracker.Snapshot().Drops);
+        Assert.Equal(2, tracker.Snapshot().Packets);
+        Assert.Equal(1, tracker.Snapshot().ProvisionalPackets);
     }
 
     [Fact]
@@ -228,7 +216,7 @@ public sealed class ContinuityCounterTrackerTests
 
         tracker.Observe(Packet(0x100, 9));
 
-        Assert.Equal(0, tracker.Drops);
+        Assert.Equal(0, tracker.Snapshot().Drops);
     }
 
     [Fact]
@@ -236,8 +224,8 @@ public sealed class ContinuityCounterTrackerTests
     {
         var tracker = new ContinuityCounterTracker();
 
-        Assert.False(tracker.CcMeasured);
-        Assert.False(tracker.ScrambleMeasured);
+        Assert.False(tracker.Snapshot().CcMeasured);
+        Assert.False(tracker.Snapshot().ScrambleMeasured);
         Assert.Null(tracker.Snapshot().Positions);
     }
 
@@ -249,9 +237,9 @@ public sealed class ContinuityCounterTrackerTests
         tracker.Observe(Packet(0x100, 0, pcr: 4_500_000));
         tracker.Observe(Packet(0x100, 1));
 
-        Assert.True(tracker.CcMeasured);
-        Assert.True(tracker.ScrambleMeasured);
-        Assert.Equal(0, tracker.Drops);
+        Assert.True(tracker.Snapshot().CcMeasured);
+        Assert.True(tracker.Snapshot().ScrambleMeasured);
+        Assert.Equal(0, tracker.Snapshot().Drops);
         DropPositionsDto? positions = tracker.Snapshot().Positions;
 
         Assert.NotNull(positions);
@@ -267,8 +255,8 @@ public sealed class ContinuityCounterTrackerTests
         tracker.Observe(Packet(TsPacket.NullPid, 0));
         tracker.Observe(Packet(TsPacket.NullPid, 5));
 
-        Assert.False(tracker.CcMeasured);
-        Assert.False(tracker.ScrambleMeasured);
+        Assert.False(tracker.Snapshot().CcMeasured);
+        Assert.False(tracker.Snapshot().ScrambleMeasured);
     }
 
     [Fact]
@@ -279,8 +267,8 @@ public sealed class ContinuityCounterTrackerTests
         tracker.Observe(Packet(0x100, 0) with { Provisional = true });
         tracker.Observe(Packet(0x100, 5) with { Provisional = true });
 
-        Assert.False(tracker.CcMeasured);
-        Assert.False(tracker.ScrambleMeasured);
+        Assert.False(tracker.Snapshot().CcMeasured);
+        Assert.False(tracker.Snapshot().ScrambleMeasured);
     }
 
     [Fact]
@@ -291,8 +279,8 @@ public sealed class ContinuityCounterTrackerTests
         tracker.Observe(Packet(0x100, 0));
         tracker.Observe(Packet(0x100, 4));
 
-        Assert.True(tracker.CcMeasured);
-        Assert.Equal(3, tracker.Drops);
+        Assert.True(tracker.Snapshot().CcMeasured);
+        Assert.Equal(3, tracker.Snapshot().Drops);
         Assert.Null(tracker.Snapshot().Positions);
     }
 
@@ -373,11 +361,11 @@ public sealed class ContinuityCounterTrackerTests
 
         Assert.NotNull(positions);
         Assert.Equal(
-            tracker.Drops,
+            tracker.Snapshot().Drops,
             positions.Buckets.Sum(bucket => bucket.Continuity)
         );
         Assert.Equal(
-            tracker.ScrambledPackets,
+            tracker.Snapshot().ScrambledPackets,
             positions.Buckets.Sum(bucket => bucket.Scrambled)
         );
     }
@@ -425,7 +413,7 @@ public sealed class ContinuityCounterTrackerTests
         tracker.Observe(Packet(0x100, 4, payloadHash: 99, pcr: 3 * 90_000));
         tracker.Observe(Packet(0x100, 4, payloadHash: 99));
 
-        Assert.Equal(1, tracker.Duplicates);
+        Assert.Equal(1, tracker.Snapshot().Duplicates);
         DropPositionsDto? positions = tracker.Snapshot().Positions;
 
         Assert.NotNull(positions);
@@ -440,7 +428,7 @@ public sealed class ContinuityCounterTrackerTests
         tracker.Observe(Packet(0x100, 4, pcr: 3 * 90_000));
         tracker.Observe(Packet(0x100, 9, discontinuity: true));
 
-        Assert.Equal(1, tracker.Discontinuities);
+        Assert.Equal(1, tracker.Snapshot().Discontinuities);
         DropPositionsDto? positions = tracker.Snapshot().Positions;
 
         Assert.NotNull(positions);
@@ -534,7 +522,7 @@ public sealed class ContinuityCounterTrackerTests
 
         DropPositionsDto? positions = tracker.Snapshot().Positions;
 
-        Assert.Equal(1, tracker.Discontinuities);
+        Assert.Equal(1, tracker.Snapshot().Discontinuities);
         Assert.NotNull(positions);
         Assert.Equal(
             [new PcrReanchorDto(0, 0, 6 * 90_000)],
@@ -565,10 +553,10 @@ public sealed class ContinuityCounterTrackerTests
         Assert.Single(positions.Reanchors);
         Assert.True(
             positions.Buckets.Count > 500,
-            $"{tracker.Drops} losses over ten minutes were placed into {positions.Buckets.Count} seconds."
+            $"{tracker.Snapshot().Drops} losses over ten minutes were placed into {positions.Buckets.Count} seconds."
         );
         Assert.Equal(
-            tracker.Drops,
+            tracker.Snapshot().Drops,
             positions.Buckets.Sum(bucket => bucket.Continuity)
         );
     }

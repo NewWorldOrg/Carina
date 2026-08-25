@@ -148,11 +148,11 @@ public sealed class RecordingMeasurementTests
 
         using TunerSession session = Ran(stream, PacketLength * 100);
 
-        Assert.Equal(300, session.Counters.Packets);
-        Assert.Equal(0, session.Counters.Drops);
+        Assert.Equal(300, session.Counters.Snapshot().Packets);
+        Assert.Equal(0, session.Counters.Snapshot().Drops);
         Assert.Equal(0, session.DiscardedBytes);
         Assert.Equal(0, session.Resyncs);
-        Assert.True(session.Counters.CcMeasured);
+        Assert.True(session.Counters.Snapshot().CcMeasured);
     }
 
     [Fact]
@@ -162,8 +162,8 @@ public sealed class RecordingMeasurementTests
 
         using TunerSession session = Ran(stream, 100, 251, 37, 1024, 7);
 
-        Assert.Equal(300, session.Counters.Packets);
-        Assert.Equal(0, session.Counters.Drops);
+        Assert.Equal(300, session.Counters.Snapshot().Packets);
+        Assert.Equal(0, session.Counters.Snapshot().Drops);
         Assert.Equal(0, session.DiscardedBytes);
         Assert.Equal(0, session.Resyncs);
     }
@@ -175,7 +175,7 @@ public sealed class RecordingMeasurementTests
 
         using TunerSession session = Ran(stream, 100, 251, 37, 1024, 7);
 
-        Assert.Equal(3, session.Counters.Drops);
+        Assert.Equal(3, session.Counters.Snapshot().Drops);
         Assert.Equal(3, session.Counters.DropsFor(VideoPid));
     }
 
@@ -203,8 +203,8 @@ public sealed class RecordingMeasurementTests
 
         DropPositionsDto? positions = session.Counters.Snapshot().Positions;
 
-        Assert.Equal(100, session.Counters.ScrambledPackets);
-        Assert.Equal(0, session.Counters.Drops);
+        Assert.Equal(100, session.Counters.Snapshot().ScrambledPackets);
+        Assert.Equal(0, session.Counters.Snapshot().Drops);
         Assert.NotNull(positions);
         Assert.Equal(
             100,
@@ -244,8 +244,8 @@ public sealed class RecordingMeasurementTests
 
         using TunerSession session = Ran([.. stream], 100, 251, 37, 1024, 7);
 
-        Assert.True(session.Counters.CcMeasured);
-        Assert.Equal(300, session.Counters.Packets);
+        Assert.True(session.Counters.Snapshot().CcMeasured);
+        Assert.Equal(300, session.Counters.Snapshot().Packets);
         Assert.Null(session.Counters.Snapshot().Positions);
 
         SessionSnapshot snapshot = SessionViews.Of(session, Hello);
@@ -329,12 +329,12 @@ public sealed class RecordingMeasurementTests
         Assert.True(counters.DiscardedBytes > 0, "discardedBytes");
         Assert.True(counters.Resyncs > 0, "resyncs");
 
-        Assert.Equal(session.Counters.Packets, counters.Packets);
-        Assert.Equal(session.Counters.ScrambledPackets, counters.ScrambledPackets);
-        Assert.Equal(session.Counters.Duplicates, counters.Duplicates);
-        Assert.Equal(session.Counters.Discontinuities, counters.Discontinuities);
-        Assert.Equal(session.Counters.TransportErrors, counters.TransportErrors);
-        Assert.Equal(session.Counters.ProvisionalPackets, counters.ProvisionalPackets);
+        Assert.Equal(session.Counters.Snapshot().Packets, counters.Packets);
+        Assert.Equal(session.Counters.Snapshot().ScrambledPackets, counters.ScrambledPackets);
+        Assert.Equal(session.Counters.Snapshot().Duplicates, counters.Duplicates);
+        Assert.Equal(session.Counters.Snapshot().Discontinuities, counters.Discontinuities);
+        Assert.Equal(session.Counters.Snapshot().TransportErrors, counters.TransportErrors);
+        Assert.Equal(session.Counters.Snapshot().ProvisionalPackets, counters.ProvisionalPackets);
         Assert.Equal(session.DiscardedBytes, counters.DiscardedBytes);
         Assert.Equal(session.Resyncs, counters.Resyncs);
     }
