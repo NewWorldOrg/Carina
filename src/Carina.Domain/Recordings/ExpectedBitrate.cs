@@ -47,17 +47,17 @@ public sealed record ExpectedBitrate
                 "A recording was weighed against the rates measured off a tuner of a named kind."),
         };
 
-    public long LeastBytesOver(TimeSpan span) => BytesOver(LeastBitsPerSecond, span);
+    public Int128 LeastBytesOver(TimeSpan span) => BytesOver(LeastBitsPerSecond, span);
 
-    public long MostBytesOver(TimeSpan span) => BytesOver(MostBitsPerSecond, span);
+    public Int128 MostBytesOver(TimeSpan span) => BytesOver(MostBitsPerSecond, span);
 
-    private static long BytesOver(long bitsPerSecond, TimeSpan span)
+    private static Int128 BytesOver(long bitsPerSecond, TimeSpan span)
     {
         if (span < TimeSpan.Zero)
         {
             throw new ArgumentOutOfRangeException(nameof(span), span, "A stream runs forwards.");
         }
 
-        return (long)(bitsPerSecond * span.TotalSeconds / 8.0);
+        return (Int128)(bitsPerSecond * span.TotalSeconds / 8.0);
     }
 }

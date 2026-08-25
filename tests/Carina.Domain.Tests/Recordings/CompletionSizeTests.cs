@@ -184,4 +184,57 @@ public sealed class CompletionSizeTests
         Assert.True(tight.Names(RecordingFault.HeavierThanTheStream));
         Assert.False(loose.Names(RecordingFault.HeavierThanTheStream));
     }
+
+    [Fact]
+    public void AFileIsNeverBothLighterAndHeavierThanTheStream()
+    {
+        foreach (RecordingVerdict verdict in Weighings)
+        {
+            Assert.False(
+                verdict.Names(RecordingFault.LighterThanTheStream)
+                    && verdict.Names(RecordingFault.HeavierThanTheStream));
+        }
+    }
+
+    [Fact]
+    public void TheWeighingsReachBothSidesOfTheRange()
+    {
+        Assert.Contains(Weighings, verdict => verdict.Names(RecordingFault.LighterThanTheStream));
+        Assert.Contains(Weighings, verdict => verdict.Names(RecordingFault.HeavierThanTheStream));
+    }
+
+    [Fact]
+    public void ALengthNoStreamCouldHaveRunIsStillWeighedOneWayOnly()
+    {
+        RecordingVerdict verdict = CompletionFactory.Judge(
+            bytes: 2_000_000_000_000_000_000,
+            written: TimeSpan.FromDays(365 * 900));
+
+        Assert.False(verdict.Names(RecordingFault.LighterThanTheStream));
+        Assert.True(verdict.Names(RecordingFault.HeavierThanTheStream));
+    }
+
+    [Fact]
+    public void AWeightThatWouldOverflowTheArithmeticIsStillCarriedOnTheRightSide()
+    {
+        RecordingVerdict verdict = CompletionFactory.Judge(
+            bytes: 1,
+            written: TimeSpan.FromDays(365 * 900));
+
+        Assert.True(verdict.Names(RecordingFault.LighterThanTheStream));
+        Assert.False(verdict.Names(RecordingFault.HeavierThanTheStream));
+    }
+
+    private static IReadOnlyList<RecordingVerdict> Weighings =>
+    [
+        CompletionFactory.Judge(),
+        CompletionFactory.Judge(bytes: 1),
+        CompletionFactory.Judge(bytes: 1_800_000_000),
+        CompletionFactory.Judge(bytes: 3_300_000_001),
+        CompletionFactory.Judge(bytes: 1000, written: TimeSpan.Zero),
+        CompletionFactory.Judge(bytes: 2_000_000_000_000_000_000, written: TimeSpan.FromDays(365 * 900)),
+        CompletionFactory.Judge(bytes: 1, written: TimeSpan.FromDays(365 * 900)),
+        CompletionFactory.Judge(bytes: long.MaxValue, written: TimeSpan.FromDays(365 * 900)),
+        CompletionFactory.Judge(bytes: long.MaxValue, written: TimeSpan.FromSeconds(1000)),
+    ];
 }

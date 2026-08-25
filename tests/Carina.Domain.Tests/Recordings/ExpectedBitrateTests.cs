@@ -142,10 +142,12 @@ public sealed class ExpectedBitrateTests
     [Fact]
     public void TheTerrestrialRangeIsWiderThanTheSlackItIsJudgedWith()
         => Assert.True(ExpectedBitrate.Terrestrial.MostBitsPerSecond * 100
-            > ExpectedBitrate.Terrestrial.LeastBitsPerSecond * 110);
+            > ExpectedBitrate.Terrestrial.LeastBitsPerSecond * (100 + Slack));
 
     [Fact]
-    public void TheSatelliteRangeIsNarrowerThanTheSlackItIsJudgedWith()
+    public void TheSatelliteRangeIsNarrowerThanTheSlackItIsJudgedWithAndNobodyHasDecidedWhatToDoAboutIt()
         => Assert.True(ExpectedBitrate.Satellite.MostBitsPerSecond * 100
-            < ExpectedBitrate.Satellite.LeastBitsPerSecond * 110);
+            < ExpectedBitrate.Satellite.LeastBitsPerSecond * (100 + Slack));
+
+    private static int Slack => CompletionTolerance.Default.SizeSlackPercent;
 }

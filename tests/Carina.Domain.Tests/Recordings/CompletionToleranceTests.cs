@@ -111,7 +111,8 @@ public sealed class CompletionToleranceTests
     {
         var tolerance = new CompletionTolerance(0.99, 0.99, 0);
 
-        Assert.Equal(tolerance.CompleteCoverage, tolerance.TruncatedCoverage, 12);
+        Assert.Equal(0.99, tolerance.CompleteCoverage, 12);
+        Assert.Equal(0.99, tolerance.TruncatedCoverage, 12);
     }
 
     [Fact]

@@ -50,13 +50,14 @@ public static class CompletionEvaluator
         }
 
         TimeSpan written = evidence.Written;
+        Int128 weighed = (Int128)bytes * 100;
 
-        if (bytes > 0 && (bytes * 100) < (bitrate.LeastBytesOver(written) * (100 - tolerance.SizeSlackPercent)))
+        if (bytes > 0 && weighed < (bitrate.LeastBytesOver(written) * (100 - tolerance.SizeSlackPercent)))
         {
             faults.Add(RecordingFault.LighterThanTheStream);
         }
 
-        if ((bytes * 100) > (bitrate.MostBytesOver(written) * (100 + tolerance.SizeSlackPercent)))
+        if (weighed > (bitrate.MostBytesOver(written) * (100 + tolerance.SizeSlackPercent)))
         {
             faults.Add(RecordingFault.HeavierThanTheStream);
         }
@@ -67,17 +68,9 @@ public static class CompletionEvaluator
         double coverage,
         CompletionTolerance tolerance)
     {
-        if (faults.Contains(RecordingFault.NothingLanded))
-        {
-            return RecordingOutcome.Failed;
-        }
-
-        if (faults.Contains(RecordingFault.SizeUnobserved))
-        {
-            return RecordingOutcome.Failed;
-        }
-
-        if (coverage < tolerance.TruncatedCoverage)
+        if (faults.Contains(RecordingFault.NothingLanded)
+            || faults.Contains(RecordingFault.SizeUnobserved)
+            || coverage < tolerance.TruncatedCoverage)
         {
             return RecordingOutcome.Failed;
         }

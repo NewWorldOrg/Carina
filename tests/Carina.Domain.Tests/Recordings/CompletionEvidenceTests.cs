@@ -9,6 +9,35 @@ public sealed class CompletionEvidenceTests
     private static readonly DateTime End = CompletionFactory.WindowEnd;
 
     [Fact]
+    public void AFileNobodyWeighedFailsARecordingThatCoveredItsWholeWindow()
+    {
+        RecordingVerdict verdict = CompletionFactory.Judge(bytes: null);
+
+        Assert.Equal(1.0, verdict.Coverage, 12);
+        Assert.Equal(RecordingOutcome.Failed, verdict.Outcome);
+    }
+
+    [Fact]
+    public void AnEmptyFileFailsARecordingThatCoveredItsWholeWindow()
+    {
+        RecordingVerdict verdict = CompletionFactory.Judge(bytes: 0);
+
+        Assert.Equal(1.0, verdict.Coverage, 12);
+        Assert.Equal(RecordingOutcome.Failed, verdict.Outcome);
+    }
+
+    [Fact]
+    public void AWindowLeftFurtherShortThanTheFloorFailsAFileOfTheRightWeight()
+    {
+        RecordingVerdict verdict = CompletionFactory.Judge(
+            bytes: 2_250_000_000,
+            written: TimeSpan.FromSeconds(900));
+
+        Assert.Equal([RecordingFault.ShortOfTheWindow], verdict.Faults);
+        Assert.Equal(RecordingOutcome.Failed, verdict.Outcome);
+    }
+
+    [Fact]
     public void AFileNobodyWeighedIsAFailure()
     {
         RecordingVerdict verdict = CompletionFactory.Judge(bytes: null);
