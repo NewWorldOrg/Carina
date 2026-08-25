@@ -396,7 +396,7 @@ public sealed class Recording
     public void Interrupt(RecordingFault fault, DateTime at)
     {
         RefuseUnlessInFlight();
-        RefuseAnUnnamedFault(fault);
+        RecordingFaults.BreaksARecording(fault);
 
         if (interruptions.Count > 0 && interruptions[^1].ResumedAt is null)
         {
