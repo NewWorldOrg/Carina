@@ -4,6 +4,7 @@ using System.Text.Json;
 using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
+using Carina.TestSupport;
 
 namespace Carina.Api.Tests.FeatureTest;
 
@@ -15,7 +16,7 @@ public sealed class ProgrammeSearchEndpointTests
     [Fact]
     public async Task AKeywordBringsBackWhatCarriesIt()
     {
-        await using var feature = new EpgFeature();
+        await using EpgFeature feature = Feature();
 
         feature.Programmes.Programmes.Add(Programme(1, "ニュース7"));
         feature.Programmes.Programmes.Add(Programme(2, "天気予報"));
@@ -29,14 +30,15 @@ public sealed class ProgrammeSearchEndpointTests
     }
 
     [Fact]
-    public async Task AProgrammeInTheArchiveComesBackMarkedAsACopy()
+    public async Task ASpanThatReachesBackBringsTheArchiveWithItMarkedAsACopy()
     {
-        await using var feature = new EpgFeature();
+        await using EpgFeature feature = Feature();
 
         feature.Programmes.Programmes.Add(Programme(1, "ニュース7"));
         feature.Archived.Programmes.Add(Archived(2, "ニュース特集"));
 
-        (HttpStatusCode status, JsonElement body) = await feature.GetAsync("/api/programs/search?keyword=ニュース");
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync(
+            "/api/programs/search?keyword=ニュース&from=2026-08-14T00:00:00Z&to=2026-08-19T00:00:00Z");
         JsonElement data = body.GetProperty("data");
         var copied = data.GetProperty("items").EnumerateArray().ToDictionary(
             item => item.GetProperty("name").GetString()!,
@@ -49,9 +51,69 @@ public sealed class ProgrammeSearchEndpointTests
     }
 
     [Fact]
+    public async Task ASearchThatNamesNoSpanLeavesTheArchiveOut()
+    {
+        await using EpgFeature feature = Feature();
+
+        feature.Programmes.Programmes.Add(Programme(1, "ニュース7"));
+        feature.Archived.Programmes.Add(Kept(2, "ニュース特集", At.AddDays(2)));
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync("/api/programs/search?keyword=ニュース");
+        JsonElement data = body.GetProperty("data");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(1, data.GetProperty("total").GetInt32());
+        Assert.Equal("ニュース7", data.GetProperty("items")[0].GetProperty("name").GetString());
+    }
+
+    [Fact]
+    public async Task ASearchThatNamesNoSpanLeavesOutWhatHasFinishedBroadcasting()
+    {
+        await using EpgFeature feature = Feature();
+
+        feature.Programmes.Programmes.Add(Ran(1, "ニュース昨日", At.AddDays(-1)));
+        feature.Programmes.Programmes.Add(Ran(2, "ニュース明日", At.AddDays(1)));
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync("/api/programs/search?keyword=ニュース");
+        JsonElement data = body.GetProperty("data");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(1, data.GetProperty("total").GetInt32());
+        Assert.Equal("ニュース明日", data.GetProperty("items")[0].GetProperty("name").GetString());
+    }
+
+    [Fact]
+    public async Task ASpanThatReachesBackBringsBackWhatHasFinishedBroadcasting()
+    {
+        await using EpgFeature feature = Feature();
+
+        feature.Programmes.Programmes.Add(Ran(1, "ニュース昨日", At.AddDays(-1)));
+        feature.Programmes.Programmes.Add(Ran(2, "ニュース明日", At.AddDays(1)));
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync(
+            "/api/programs/search?keyword=ニュース&from=2026-08-16T00:00:00Z&to=2026-08-20T00:00:00Z");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(2, body.GetProperty("data").GetProperty("total").GetInt32());
+    }
+
+    [Fact]
+    public async Task ASearchThatNamesNoSpanKeepsWhatIsOnTheAirRightNow()
+    {
+        await using EpgFeature feature = Feature();
+
+        feature.Programmes.Programmes.Add(Ran(1, "ニュース進行中", At.AddMinutes(-10)));
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync("/api/programs/search?keyword=ニュース");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(1, body.GetProperty("data").GetProperty("total").GetInt32());
+    }
+
+    [Fact]
     public async Task AKeywordOfOneLetterIsRefusedBeforeItReachesTheStore()
     {
-        await using var feature = new EpgFeature();
+        await using EpgFeature feature = Feature();
 
         (HttpStatusCode status, _) = await feature.GetAsync("/api/programs/search?keyword=あ");
 
@@ -61,7 +123,7 @@ public sealed class ProgrammeSearchEndpointTests
     [Fact]
     public async Task ASearchNobodyNarrowedIsRefused()
     {
-        await using var feature = new EpgFeature();
+        await using EpgFeature feature = Feature();
 
         (HttpStatusCode status, _) = await feature.GetAsync("/api/programs/search");
 
@@ -71,7 +133,7 @@ public sealed class ProgrammeSearchEndpointTests
     [Fact]
     public async Task SortingAndPagingOnTheirOwnDoNotMakeASearch()
     {
-        await using var feature = new EpgFeature();
+        await using EpgFeature feature = Feature();
 
         (HttpStatusCode status, _) = await feature.GetAsync(
             "/api/programs/search?sort=name&descending=true&page=2&perPage=100");
@@ -82,7 +144,7 @@ public sealed class ProgrammeSearchEndpointTests
     [Fact]
     public async Task NamingWhereToLookWithoutAWordToLookForIsRefused()
     {
-        await using var feature = new EpgFeature();
+        await using EpgFeature feature = Feature();
 
         (HttpStatusCode status, _) = await feature.GetAsync("/api/programs/search?fields=title");
 
@@ -92,7 +154,7 @@ public sealed class ProgrammeSearchEndpointTests
     [Fact]
     public async Task AGenreOnItsOwnBringsBackWhatIsFiledUnderIt()
     {
-        await using var feature = new EpgFeature();
+        await using EpgFeature feature = Feature();
 
         feature.Programmes.Programmes.Add(Filed(1, "紀行その一", 8));
         feature.Programmes.Programmes.Add(Filed(2, "紀行その二", 6));
@@ -108,7 +170,7 @@ public sealed class ProgrammeSearchEndpointTests
     [Fact]
     public async Task AChannelOnItsOwnBringsBackWhatThatServiceBroadcast()
     {
-        await using var feature = new EpgFeature();
+        await using EpgFeature feature = Feature();
 
         feature.Programmes.Programmes.Add(On(1049, 1, "紀行その一"));
         feature.Programmes.Programmes.Add(On(1032, 2, "紀行その二"));
@@ -124,7 +186,7 @@ public sealed class ProgrammeSearchEndpointTests
     [Fact]
     public async Task ABroadcastTypeOnItsOwnBringsBackWhatTheServicesItCarriesBroadcast()
     {
-        await using var feature = new EpgFeature([Terrestrial(4, 1049), Satellite(4, 1032)]);
+        await using EpgFeature feature = Feature([Terrestrial(4, 1049), Satellite(4, 1032)]);
 
         feature.Programmes.Programmes.Add(On(1049, 1, "紀行その一"));
         feature.Programmes.Programmes.Add(On(1032, 2, "紀行その二"));
@@ -140,7 +202,7 @@ public sealed class ProgrammeSearchEndpointTests
     [Fact]
     public async Task AnExcludedWordOnItsOwnLeavesOutWhatCarriesIt()
     {
-        await using var feature = new EpgFeature();
+        await using EpgFeature feature = Feature();
 
         feature.Programmes.Programmes.Add(Programme(1, "絶景紀行"));
         feature.Programmes.Programmes.Add(Programme(2, "絶景紀行 再放送"));
@@ -156,7 +218,7 @@ public sealed class ProgrammeSearchEndpointTests
     [Fact]
     public async Task ASpanOnItsOwnBringsBackWhatFallsInsideIt()
     {
-        await using var feature = new EpgFeature();
+        await using EpgFeature feature = Feature();
 
         feature.Programmes.Programmes.Add(Programme(1, "紀行その一"));
 
@@ -170,7 +232,7 @@ public sealed class ProgrammeSearchEndpointTests
     [Fact]
     public async Task AConditionBesideTheKeywordDoesNotBuyAKeywordOfOneLetterItsWayIn()
     {
-        await using var feature = new EpgFeature();
+        await using EpgFeature feature = Feature();
 
         (HttpStatusCode status, _) = await feature.GetAsync("/api/programs/search?keyword=あ&genre=8");
 
@@ -180,7 +242,7 @@ public sealed class ProgrammeSearchEndpointTests
     [Fact]
     public async Task APageSizeBeyondTheCeilingComesBackAtTheCeiling()
     {
-        await using var feature = new EpgFeature();
+        await using EpgFeature feature = Feature();
 
         (_, JsonElement body) = await feature.GetAsync("/api/programs/search?keyword=news&perPage=100000");
 
@@ -192,7 +254,7 @@ public sealed class ProgrammeSearchEndpointTests
     [Fact]
     public async Task ASpanLongerThanTheCeilingIsRefused()
     {
-        await using var feature = new EpgFeature();
+        await using EpgFeature feature = Feature();
 
         (HttpStatusCode status, _) = await feature.GetAsync(
             "/api/programs/search?keyword=news&from=2026-01-01T00:00:00Z&to=2026-06-01T00:00:00Z");
@@ -203,7 +265,7 @@ public sealed class ProgrammeSearchEndpointTests
     [Fact]
     public async Task ASortNobodyDefinedIsRefusedRatherThanPassedToTheStore()
     {
-        await using var feature = new EpgFeature();
+        await using EpgFeature feature = Feature();
 
         (HttpStatusCode status, _) = await feature.GetAsync(
             "/api/programs/search?keyword=news&sort=name;DROP TABLE programme");
@@ -214,7 +276,7 @@ public sealed class ProgrammeSearchEndpointTests
     [Fact]
     public async Task ASortSpelledAsANumberOutsideTheListIsRefusedToo()
     {
-        await using var feature = new EpgFeature();
+        await using EpgFeature feature = Feature();
 
         (HttpStatusCode status, _) = await feature.GetAsync("/api/programs/search?keyword=news&sort=7");
 
@@ -224,7 +286,7 @@ public sealed class ProgrammeSearchEndpointTests
     [Fact]
     public async Task EveryWordOfTheKeywordHasToAppear()
     {
-        await using var feature = new EpgFeature();
+        await using EpgFeature feature = Feature();
 
         feature.Programmes.Programmes.Add(Programme(1, "夏の絶景"));
         feature.Programmes.Programmes.Add(Programme(2, "夏の思い出"));
@@ -237,7 +299,7 @@ public sealed class ProgrammeSearchEndpointTests
     [Fact]
     public async Task AnExcludedWordDropsWhatCarriesIt()
     {
-        await using var feature = new EpgFeature();
+        await using EpgFeature feature = Feature();
 
         feature.Programmes.Programmes.Add(Programme(1, "絶景紀行"));
         feature.Programmes.Programmes.Add(Programme(2, "絶景紀行 再放送"));
@@ -252,7 +314,7 @@ public sealed class ProgrammeSearchEndpointTests
     [Fact]
     public async Task AnExcludedWordOfOneLetterIsRefusedBeforeItReachesTheStore()
     {
-        await using var feature = new EpgFeature();
+        await using EpgFeature feature = Feature();
 
         (HttpStatusCode status, _) = await feature.GetAsync("/api/programs/search?keyword=絶景&exclude=再");
 
@@ -262,7 +324,7 @@ public sealed class ProgrammeSearchEndpointTests
     [Fact]
     public async Task NamingOnlyTheTitleLeavesTheSummaryOutOfIt()
     {
-        await using var feature = new EpgFeature();
+        await using EpgFeature feature = Feature();
 
         feature.Programmes.Programmes.Add(Programme(1, "大河ドラマ", "絶景をめぐる"));
         feature.Programmes.Programmes.Add(Programme(2, "絶景紀行"));
@@ -277,7 +339,7 @@ public sealed class ProgrammeSearchEndpointTests
     [Fact]
     public async Task BothFieldsCanBeNamedAtOnce()
     {
-        await using var feature = new EpgFeature();
+        await using EpgFeature feature = Feature();
 
         feature.Programmes.Programmes.Add(Programme(1, "大河ドラマ", "絶景をめぐる"));
         feature.Programmes.Programmes.Add(Programme(2, "絶景紀行"));
@@ -291,7 +353,7 @@ public sealed class ProgrammeSearchEndpointTests
     [Fact]
     public async Task AFieldNobodyDefinedIsRefusedRatherThanPassedToTheStore()
     {
-        await using var feature = new EpgFeature();
+        await using EpgFeature feature = Feature();
 
         (HttpStatusCode status, _) = await feature.GetAsync(
             "/api/programs/search?keyword=news&fields=summary;DROP TABLE programme");
@@ -302,7 +364,7 @@ public sealed class ProgrammeSearchEndpointTests
     [Fact]
     public async Task AGenreNarrowsTheAnswerToWhatIsFiledUnderIt()
     {
-        await using var feature = new EpgFeature();
+        await using EpgFeature feature = Feature();
 
         feature.Programmes.Programmes.Add(Filed(1, "紀行その一", 8));
         feature.Programmes.Programmes.Add(Filed(2, "紀行その二", 6));
@@ -317,7 +379,7 @@ public sealed class ProgrammeSearchEndpointTests
     [Fact]
     public async Task AnyOfTheGenresAskedForIsEnough()
     {
-        await using var feature = new EpgFeature();
+        await using EpgFeature feature = Feature();
 
         feature.Programmes.Programmes.Add(Filed(1, "紀行その一", 8));
         feature.Programmes.Programmes.Add(Filed(2, "紀行その二", 6));
@@ -331,7 +393,7 @@ public sealed class ProgrammeSearchEndpointTests
     [Fact]
     public async Task AGenreOutsideTheFourBitsTheStandardGivesItIsRefused()
     {
-        await using var feature = new EpgFeature();
+        await using EpgFeature feature = Feature();
 
         (HttpStatusCode status, _) = await feature.GetAsync("/api/programs/search?keyword=news&genre=99");
 
@@ -341,7 +403,7 @@ public sealed class ProgrammeSearchEndpointTests
     [Fact]
     public async Task AGenreThatIsNotANumberIsRefusedRatherThanPassedToTheStore()
     {
-        await using var feature = new EpgFeature();
+        await using EpgFeature feature = Feature();
 
         (HttpStatusCode status, _) = await feature.GetAsync("/api/programs/search?keyword=news&genre=kind");
 
@@ -351,7 +413,7 @@ public sealed class ProgrammeSearchEndpointTests
     [Fact]
     public async Task ABroadcastTypeNarrowsToTheServicesItCarries()
     {
-        await using var feature = new EpgFeature([Terrestrial(4, 1049), Satellite(4, 1032)]);
+        await using EpgFeature feature = Feature([Terrestrial(4, 1049), Satellite(4, 1032)]);
 
         feature.Programmes.Programmes.Add(On(1049, 1, "紀行その一"));
         feature.Programmes.Programmes.Add(On(1032, 2, "紀行その二"));
@@ -366,7 +428,7 @@ public sealed class ProgrammeSearchEndpointTests
     [Fact]
     public async Task ABroadcastTypeThatCarriesNoServiceFindsNothingRatherThanEverything()
     {
-        await using var feature = new EpgFeature([Terrestrial(4, 1049)]);
+        await using EpgFeature feature = Feature([Terrestrial(4, 1049)]);
 
         feature.Programmes.Programmes.Add(On(1049, 1, "紀行その一"));
 
@@ -378,7 +440,7 @@ public sealed class ProgrammeSearchEndpointTests
     [Fact]
     public async Task ABroadcastTypeNobodyDefinedIsRefused()
     {
-        await using var feature = new EpgFeature();
+        await using EpgFeature feature = Feature();
 
         (HttpStatusCode status, _) = await feature.GetAsync("/api/programs/search?keyword=news&type=vhf");
 
@@ -388,7 +450,7 @@ public sealed class ProgrammeSearchEndpointTests
     [Fact]
     public async Task AChannelNarrowsToWhatThatServiceBroadcast()
     {
-        await using var feature = new EpgFeature();
+        await using EpgFeature feature = Feature();
 
         feature.Programmes.Programmes.Add(On(1049, 1, "紀行その一"));
         feature.Programmes.Programmes.Add(On(1032, 2, "紀行その二"));
@@ -403,7 +465,7 @@ public sealed class ProgrammeSearchEndpointTests
     [Fact]
     public async Task SeveralChannelsAreAskedForTogether()
     {
-        await using var feature = new EpgFeature();
+        await using EpgFeature feature = Feature();
 
         feature.Programmes.Programmes.Add(On(1049, 1, "紀行その一"));
         feature.Programmes.Programmes.Add(On(1032, 2, "紀行その二"));
@@ -418,7 +480,7 @@ public sealed class ProgrammeSearchEndpointTests
     [Fact]
     public async Task AChannelThatIsNotTwoNumbersIsRefusedRatherThanLookedUp()
     {
-        await using var feature = new EpgFeature();
+        await using EpgFeature feature = Feature();
 
         (HttpStatusCode status, _) = await feature.GetAsync(
             "/api/programs/search?keyword=news&channel=not-a-channel");
@@ -429,7 +491,7 @@ public sealed class ProgrammeSearchEndpointTests
     [Fact]
     public async Task AChannelOutsideTheRangeAnIdentifierHasIsRefused()
     {
-        await using var feature = new EpgFeature();
+        await using EpgFeature feature = Feature();
 
         (HttpStatusCode status, _) = await feature.GetAsync("/api/programs/search?keyword=news&channel=4-99999");
 
@@ -439,7 +501,7 @@ public sealed class ProgrammeSearchEndpointTests
     [Fact]
     public async Task MoreChannelsThanTheCeilingIsRefused()
     {
-        await using var feature = new EpgFeature();
+        await using EpgFeature feature = Feature();
         string asking = string.Join(
             '&',
             Enumerable.Range(0, ProgrammeSearch.MostChannels + 1).Select(carried => $"channel=4-{carried}"));
@@ -448,6 +510,9 @@ public sealed class ProgrammeSearchEndpointTests
 
         Assert.Equal(HttpStatusCode.BadRequest, status);
     }
+
+    private static EpgFeature Feature(IReadOnlyList<BroadcastStream>? streams = null)
+        => new(streams, clock: new WoundClock(At));
 
     private static BroadcastStream Terrestrial(int network, int service)
         => new(
@@ -467,17 +532,32 @@ public sealed class ProgrammeSearchEndpointTests
         => On(1049, carried, name, summary);
 
     private static ArchivedProgramme Archived(int carried, string name)
+        => Kept(carried, name, At.AddDays(-3));
+
+    private static ArchivedProgramme Kept(int carried, string name, DateTime began)
         => ArchivedProgramme.Rehydrate(
             new NetworkId(4),
             new ServiceId(1049),
             new EventId(carried),
-            At.AddDays(-3),
-            At.AddDays(-3).AddMinutes(30),
+            began,
+            began.AddMinutes(30),
             name,
             string.Empty,
             false,
             [],
             [],
+            At);
+
+    private static Programme Ran(int carried, string name, DateTime began)
+        => Domain.Programmes.Programme.Discover(
+            new ProgrammeBroadcast(
+                new ProgrammeId(new NetworkId(4), new ServiceId(1049), new EventId(carried)),
+                new TransportStreamId(32_736),
+                began,
+                began.AddMinutes(30),
+                name,
+                string.Empty,
+                false),
             At);
 
     private static Programme Filed(int carried, string name, int genre)

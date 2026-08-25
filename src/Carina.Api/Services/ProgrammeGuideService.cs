@@ -22,7 +22,8 @@ public sealed class ProgrammeGuideService(
     IProgrammeRepository programmes,
     IArchivedProgrammeRepository archive,
     IProgrammeSearchRepository searches,
-    IStreamVisitRepository visits)
+    IStreamVisitRepository visits,
+    TimeProvider clock)
 {
     public async Task<ServiceResult<GuidePage>> ReadAsync(
         TuneSystem system,
@@ -87,7 +88,7 @@ public sealed class ProgrammeGuideService(
             : search.Except(WithheldIn(await catalogue.ListAsync(cancellationToken)));
 
         return ServiceResult<PaginatedList<ProgrammeMatch>>.Success(
-            await searches.SearchAsync(asked, cancellationToken));
+            await searches.SearchAsync(asked, clock.GetUtcNow().UtcDateTime, cancellationToken));
     }
 
     private static IReadOnlyList<ProgrammeService> WithheldIn(IReadOnlyList<BroadcastService> known)

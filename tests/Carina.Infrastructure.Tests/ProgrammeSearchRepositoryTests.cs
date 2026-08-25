@@ -29,7 +29,7 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
         await repository.AddAsync(Programme(network, 3, "天気予報", "あすの空"), Cancel);
         await context.SaveChangesAsync(Cancel);
 
-        PaginatedList<ProgrammeMatch> found = await searches.SearchAsync(Asking($"ニュース{network}"), Cancel);
+        PaginatedList<ProgrammeMatch> found = await searches.SearchAsync(Asking($"ニュース{network}"), At, Cancel);
 
         Assert.Equal(2, found.Total);
         Assert.Equal([1, 2], found.Items.Select(programme => programme.EventId.Value));
@@ -46,7 +46,7 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
         await repository.AddAsync(Programme(network, 1, $"Morning NEWS{network}", string.Empty), Cancel);
         await context.SaveChangesAsync(Cancel);
 
-        Assert.Equal(1, (await searches.SearchAsync(Asking($"news{network}"), Cancel)).Total);
+        Assert.Equal(1, (await searches.SearchAsync(Asking($"news{network}"), At, Cancel)).Total);
     }
 
     [Fact]
@@ -66,6 +66,7 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
 
         PaginatedList<ProgrammeMatch> second = await searches.SearchAsync(
             ProgrammeSearch.For($"報道{network}", At.AddHours(-1), At.AddDays(1), page: 2, perPage: 2)!,
+            At,
             Cancel);
 
         Assert.Equal(5, second.Total);
@@ -85,7 +86,7 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
         await repository.AddAsync(Programme(network, 2, $"夏{network}の思い出", "海と山"), Cancel);
         await context.SaveChangesAsync(Cancel);
 
-        PaginatedList<ProgrammeMatch> found = await searches.SearchAsync(Asking($"夏{network} 絶景"), Cancel);
+        PaginatedList<ProgrammeMatch> found = await searches.SearchAsync(Asking($"夏{network} 絶景"), At, Cancel);
 
         Assert.Equal(1, found.Total);
         Assert.Equal(1, found.Items[0].EventId.Value);
@@ -105,6 +106,7 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
 
         PaginatedList<ProgrammeMatch> found = await searches.SearchAsync(
             Asking($"絶景{network}", new ProgrammeConditions { Fields = [ProgrammeField.Title] }),
+            At,
             Cancel);
 
         Assert.Equal(1, found.Total);
@@ -125,6 +127,7 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
 
         PaginatedList<ProgrammeMatch> found = await searches.SearchAsync(
             Asking($"絶景{network}", new ProgrammeConditions { Fields = [ProgrammeField.Description] }),
+            At,
             Cancel);
 
         Assert.Equal(1, found.Total);
@@ -145,6 +148,7 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
 
         PaginatedList<ProgrammeMatch> found = await searches.SearchAsync(
             Asking($"紀行{network}", new ProgrammeConditions { Exclude = "再放送" }),
+            At,
             Cancel);
 
         Assert.Equal(1, found.Total);
@@ -166,6 +170,7 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
 
         PaginatedList<ProgrammeMatch> found = await searches.SearchAsync(
             Asking($"紀行{network}", new ProgrammeConditions { Exclude = "再放送 ダイジェスト" }),
+            At,
             Cancel);
 
         Assert.Equal(1, found.Total);
@@ -187,6 +192,7 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
             Asking(
                 $"紀行{network}",
                 new ProgrammeConditions { Exclude = "再放送", Fields = [ProgrammeField.Title] }),
+            At,
             Cancel);
 
         Assert.Equal(1, found.Total);
@@ -207,6 +213,7 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
 
         PaginatedList<ProgrammeMatch> found = await searches.SearchAsync(
             Asking($"番組{network}", new ProgrammeConditions { Genres = [8] }),
+            At,
             Cancel);
 
         Assert.Equal(1, found.Total);
@@ -228,6 +235,7 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
 
         PaginatedList<ProgrammeMatch> found = await searches.SearchAsync(
             Asking($"番組{network}", new ProgrammeConditions { Genres = [8, 6] }),
+            At,
             Cancel);
 
         Assert.Equal(2, found.Total);
@@ -248,6 +256,7 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
             1,
             (await searches.SearchAsync(
                 Asking($"番組{network}", new ProgrammeConditions { Genres = [6] }),
+                At,
                 Cancel)).Total);
     }
 
@@ -267,6 +276,7 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
             Asking(
                 $"番組{network}",
                 new ProgrammeConditions { Channels = [new ProgrammeService(network, 1024)] }),
+            At,
             Cancel);
 
         Assert.Equal(1, found.Total);
@@ -293,6 +303,7 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
                 {
                     Channels = [new ProgrammeService(network, 1024), new ProgrammeService(network, 1040)],
                 }),
+            At,
             Cancel);
 
         Assert.Equal(2, found.Total);
@@ -312,6 +323,7 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
 
         PaginatedList<ProgrammeMatch> found = await searches.SearchAsync(
             Asking($"番組{network}").Over([new ProgrammeService(network, 1032)]),
+            At,
             Cancel);
 
         Assert.Equal(1, found.Total);
@@ -329,7 +341,7 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
         await repository.AddAsync(On(network, 1024, 1, $"番組{network}"), Cancel);
         await context.SaveChangesAsync(Cancel);
 
-        Assert.Equal(0, (await searches.SearchAsync(Asking($"番組{network}").Over([]), Cancel)).Total);
+        Assert.Equal(0, (await searches.SearchAsync(Asking($"番組{network}").Over([]), At, Cancel)).Total);
     }
 
     [Fact]
@@ -354,6 +366,7 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
                     Genres = [8],
                     Channels = [new ProgrammeService(network, 1049)],
                 })!,
+            At,
             Cancel);
 
         Assert.Equal(1, found.Total);
@@ -382,6 +395,7 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
                     Exclude = $"再放送{network}",
                     Channels = [new ProgrammeService(network, 1049)],
                 })!,
+            At,
             Cancel);
 
         Assert.Equal(1, found.Total);
@@ -399,7 +413,7 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
         await repository.AddAsync(Programme(network, 1, $"ニュース{network}", "きょうのできごと"), Cancel);
         await context.SaveChangesAsync(Cancel);
 
-        Assert.Equal(1, (await searches.SearchAsync(Asking($"ﾆｭｰｽ{network}"), Cancel)).Total);
+        Assert.Equal(1, (await searches.SearchAsync(Asking($"ﾆｭｰｽ{network}"), At, Cancel)).Total);
     }
 
     [Fact]
@@ -413,7 +427,7 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
         await repository.AddAsync(Programme(network, 1, $"ﾆｭｰｽ{network}", "きょうのできごと"), Cancel);
         await context.SaveChangesAsync(Cancel);
 
-        Assert.Equal(1, (await searches.SearchAsync(Asking($"ニュース{network}"), Cancel)).Total);
+        Assert.Equal(1, (await searches.SearchAsync(Asking($"ニュース{network}"), At, Cancel)).Total);
     }
 
     [Fact]
@@ -427,7 +441,7 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
         await repository.AddAsync(Programme(network, 1, $"紀行{network}①", "はじまり"), Cancel);
         await context.SaveChangesAsync(Cancel);
 
-        Assert.Equal(1, (await searches.SearchAsync(Asking($"紀行{network}1"), Cancel)).Total);
+        Assert.Equal(1, (await searches.SearchAsync(Asking($"紀行{network}1"), At, Cancel)).Total);
     }
 
     [Fact]
@@ -441,7 +455,7 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
         await repository.AddAsync(Programme(network, 1, $"ＮＥＷＳ{network}", "きょうのできごと"), Cancel);
         await context.SaveChangesAsync(Cancel);
 
-        Assert.Equal(1, (await searches.SearchAsync(Asking($"news{network}"), Cancel)).Total);
+        Assert.Equal(1, (await searches.SearchAsync(Asking($"news{network}"), At, Cancel)).Total);
     }
 
     [Fact]
@@ -459,6 +473,7 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
             1,
             (await searches.SearchAsync(
                 Asking($"ﾆｭｰｽ{network}", new ProgrammeConditions { Fields = [ProgrammeField.Title] }),
+                At,
                 Cancel)).Total);
     }
 
@@ -477,6 +492,7 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
             1,
             (await searches.SearchAsync(
                 Asking($"ﾆｭｰｽ{network}", new ProgrammeConditions { Fields = [ProgrammeField.Description] }),
+                At,
                 Cancel)).Total);
     }
 
@@ -494,6 +510,7 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
 
         PaginatedList<ProgrammeMatch> found = await searches.SearchAsync(
             Asking($"紀行{network}", new ProgrammeConditions { Exclude = "ダイジェスト" }),
+            At,
             Cancel);
 
         Assert.Equal(1, found.Total);
@@ -542,7 +559,7 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
         await repository.AddAsync(Skeleton(network, 2, $"報道{network}"), Cancel);
         await context.SaveChangesAsync(Cancel);
 
-        PaginatedList<ProgrammeMatch> found = await searches.SearchAsync(Asking($"報道{network}"), Cancel);
+        PaginatedList<ProgrammeMatch> found = await searches.SearchAsync(Asking($"報道{network}"), At, Cancel);
 
         Assert.Equal(1, found.Total);
         Assert.Equal([1], found.Items.Select(match => match.EventId.Value));
@@ -563,6 +580,7 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
 
         PaginatedList<ProgrammeMatch> found = await searches.SearchAsync(
             Asking($"報道{network}").Except([new ProgrammeService(network, 1080)]),
+            At,
             Cancel);
 
         Assert.Equal(2, found.Total);

@@ -178,14 +178,18 @@ public sealed class HeldSearches(HeldProgrammes programmes, HeldArchive archive)
 {
     public Task<PaginatedList<ProgrammeMatch>> SearchAsync(
         ProgrammeSearch search,
+        DateTime now,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(search);
 
+        ProgrammeReach reach = search.ReachAt(now);
         ProgrammeMatch[] held = [.. programmes.Programmes.Select(ProgrammeMatch.Of)];
         var already = held.Select(Key).ToHashSet();
         IEnumerable<ProgrammeMatch> narrowed = held
             .Concat(archive.Programmes.Select(ProgrammeMatch.Of).Where(match => !already.Contains(Key(match))))
+            .Where(match => reach.History || !match.IsArchived)
+            .Where(match => reach.NotOverBy is not { } instant || match.EndsAt is null || match.EndsAt > instant)
             .Where(match => !match.IsShadow)
             .Where(match => search.Words.All(word => Carries(match, word, search.Fields)))
             .Where(match => !search.ExcludedWords.Any(word => Carries(match, word, search.Fields)))

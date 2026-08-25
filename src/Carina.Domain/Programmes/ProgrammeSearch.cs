@@ -1,4 +1,5 @@
 using Carina.Contracts;
+using Carina.Domain.Base;
 
 namespace Carina.Domain.Programmes;
 
@@ -15,6 +16,8 @@ public enum ProgrammeField
 
     Description = 2,
 }
+
+public readonly record struct ProgrammeReach(bool History, DateTime? NotOverBy);
 
 public sealed record ProgrammeConditions
 {
@@ -186,6 +189,15 @@ public sealed class ProgrammeSearch
             Clamped(perPage));
 
         return looking.NarrowsNothing ? null : looking;
+    }
+
+    public ProgrammeReach ReachAt(DateTime now)
+    {
+        UtcTimes.Required(now, nameof(now));
+
+        return From is { } began
+            ? new ProgrammeReach(began < now, null)
+            : new ProgrammeReach(false, now);
     }
 
     public ProgrammeSearch Over(IReadOnlyList<ProgrammeService>? services)
