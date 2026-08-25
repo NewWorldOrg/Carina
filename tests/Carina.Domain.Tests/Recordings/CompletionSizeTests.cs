@@ -10,8 +10,8 @@ public sealed class CompletionSizeTests
         RecordingVerdict verdict = CompletionFactory.Judge(bytes: 0);
 
         Assert.Equal(RecordingOutcome.Failed, verdict.Outcome);
-        Assert.True(verdict.Names(RecordingFinding.NothingLanded));
-        Assert.Equal(1.0, verdict.Coverage!.Value, 12);
+        Assert.True(verdict.Names(RecordingFault.NothingLanded));
+        Assert.Equal(1.0, verdict.Coverage, 12);
     }
 
     [Fact]
@@ -19,7 +19,7 @@ public sealed class CompletionSizeTests
     {
         RecordingVerdict verdict = CompletionFactory.Judge(bytes: 0);
 
-        Assert.Equal([RecordingFinding.NothingLanded], verdict.Findings);
+        Assert.Equal([RecordingFault.NothingLanded], verdict.Faults);
     }
 
     [Fact]
@@ -27,7 +27,7 @@ public sealed class CompletionSizeTests
     {
         RecordingVerdict verdict = CompletionFactory.Judge(bytes: 1);
 
-        Assert.False(verdict.Names(RecordingFinding.NothingLanded));
+        Assert.False(verdict.Names(RecordingFault.NothingLanded));
     }
 
     [Fact]
@@ -36,7 +36,7 @@ public sealed class CompletionSizeTests
         RecordingVerdict verdict = CompletionFactory.Judge(bytes: 1_800_000_000);
 
         Assert.Equal(RecordingOutcome.Complete, verdict.Outcome);
-        Assert.Empty(verdict.Findings);
+        Assert.Empty(verdict.Faults);
     }
 
     [Fact]
@@ -45,7 +45,7 @@ public sealed class CompletionSizeTests
         RecordingVerdict verdict = CompletionFactory.Judge(bytes: 1_799_999_999);
 
         Assert.Equal(RecordingOutcome.Truncated, verdict.Outcome);
-        Assert.Equal([RecordingFinding.LighterThanTheStream], verdict.Findings);
+        Assert.Equal([RecordingFault.LighterThanTheStream], verdict.Faults);
     }
 
     [Fact]
@@ -54,7 +54,7 @@ public sealed class CompletionSizeTests
         RecordingVerdict verdict = CompletionFactory.Judge(bytes: 1);
 
         Assert.Equal(RecordingOutcome.Truncated, verdict.Outcome);
-        Assert.True(verdict.Names(RecordingFinding.LighterThanTheStream));
+        Assert.True(verdict.Names(RecordingFault.LighterThanTheStream));
     }
 
     [Fact]
@@ -65,7 +65,7 @@ public sealed class CompletionSizeTests
             written: TimeSpan.FromSeconds(900));
 
         Assert.Equal(RecordingOutcome.Failed, verdict.Outcome);
-        Assert.Equal([RecordingFinding.ShortOfTheWindow], verdict.Findings);
+        Assert.Equal([RecordingFault.ShortOfTheWindow], verdict.Faults);
     }
 
     [Fact]
@@ -76,7 +76,7 @@ public sealed class CompletionSizeTests
             written: TimeSpan.FromSeconds(960));
 
         Assert.Equal(RecordingOutcome.Truncated, verdict.Outcome);
-        Assert.Equal([RecordingFinding.ShortOfTheWindow], verdict.Findings);
+        Assert.Equal([RecordingFault.ShortOfTheWindow], verdict.Faults);
     }
 
     [Fact]
@@ -85,7 +85,7 @@ public sealed class CompletionSizeTests
         RecordingVerdict verdict = CompletionFactory.Judge(bytes: 3_300_000_000);
 
         Assert.Equal(RecordingOutcome.Complete, verdict.Outcome);
-        Assert.Empty(verdict.Findings);
+        Assert.Empty(verdict.Faults);
     }
 
     [Fact]
@@ -94,7 +94,7 @@ public sealed class CompletionSizeTests
         RecordingVerdict verdict = CompletionFactory.Judge(bytes: 3_300_000_001);
 
         Assert.Equal(RecordingOutcome.Complete, verdict.Outcome);
-        Assert.Equal([RecordingFinding.HeavierThanTheStream], verdict.Findings);
+        Assert.Equal([RecordingFault.HeavierThanTheStream], verdict.Faults);
     }
 
     [Fact]
@@ -105,8 +105,8 @@ public sealed class CompletionSizeTests
             written: TimeSpan.FromSeconds(960));
 
         Assert.Equal(RecordingOutcome.Truncated, verdict.Outcome);
-        Assert.True(verdict.Names(RecordingFinding.HeavierThanTheStream));
-        Assert.True(verdict.Names(RecordingFinding.ShortOfTheWindow));
+        Assert.True(verdict.Names(RecordingFault.HeavierThanTheStream));
+        Assert.True(verdict.Names(RecordingFault.ShortOfTheWindow));
     }
 
     [Fact]
@@ -116,8 +116,8 @@ public sealed class CompletionSizeTests
             bytes: 1_750_000_000,
             written: TimeSpan.FromSeconds(950));
 
-        Assert.False(verdict.Names(RecordingFinding.LighterThanTheStream));
-        Assert.False(verdict.Names(RecordingFinding.HeavierThanTheStream));
+        Assert.False(verdict.Names(RecordingFault.LighterThanTheStream));
+        Assert.False(verdict.Names(RecordingFault.HeavierThanTheStream));
     }
 
     [Fact]
@@ -127,23 +127,61 @@ public sealed class CompletionSizeTests
             bytes: 3_500_000_000,
             written: TimeSpan.FromSeconds(1200));
 
-        Assert.False(verdict.Names(RecordingFinding.HeavierThanTheStream));
-        Assert.False(verdict.Names(RecordingFinding.LighterThanTheStream));
+        Assert.False(verdict.Names(RecordingFault.HeavierThanTheStream));
+        Assert.False(verdict.Names(RecordingFault.LighterThanTheStream));
     }
 
     [Fact]
-    public void AFileIsOnlyWeighedOnceTheLengthWrittenIsKnown()
+    public void AFileNobodyWeighedIsNeitherLightNorHeavy()
     {
-        var evidence = new RecordingEvidence(
-            9_000_000_000_000,
-            null,
-            CompletionFactory.WindowStart,
-            CompletionFactory.WindowEnd,
-            CompletionFactory.WindowEnd);
+        RecordingVerdict verdict = CompletionFactory.Judge(bytes: null);
 
-        RecordingVerdict verdict = CompletionFactory.Judge(evidence);
+        Assert.False(verdict.Names(RecordingFault.HeavierThanTheStream));
+        Assert.False(verdict.Names(RecordingFault.LighterThanTheStream));
+    }
 
-        Assert.False(verdict.Names(RecordingFinding.HeavierThanTheStream));
-        Assert.False(verdict.Names(RecordingFinding.LighterThanTheStream));
+    [Fact]
+    public void AFileThatLandedWhileTheClockCountedNothingIsHeavierThanTheStream()
+    {
+        RecordingVerdict verdict = CompletionFactory.Judge(bytes: 1000, written: TimeSpan.Zero);
+
+        Assert.Equal(RecordingOutcome.Failed, verdict.Outcome);
+        Assert.Equal(
+            [RecordingFault.ShortOfTheWindow, RecordingFault.HeavierThanTheStream],
+            verdict.Faults);
+    }
+
+    [Fact]
+    public void AnEmptyFileWithNothingWrittenIsNeitherLightNorHeavy()
+    {
+        RecordingVerdict verdict = CompletionFactory.Judge(bytes: 0, written: TimeSpan.Zero);
+
+        Assert.Equal(
+            [RecordingFault.NothingLanded, RecordingFault.ShortOfTheWindow],
+            verdict.Faults);
+    }
+
+    [Fact]
+    public void TheSlackBelowTheRangeIsReadFromTheToleranceItWasHanded()
+    {
+        RecordingEvidence evidence = CompletionFactory.Evidence(bytes: 1_700_000_000);
+
+        RecordingVerdict tight = CompletionFactory.JudgeBy(evidence, new CompletionTolerance(0.995, 0.95, 10));
+        RecordingVerdict loose = CompletionFactory.JudgeBy(evidence, new CompletionTolerance(0.995, 0.95, 20));
+
+        Assert.True(tight.Names(RecordingFault.LighterThanTheStream));
+        Assert.False(loose.Names(RecordingFault.LighterThanTheStream));
+    }
+
+    [Fact]
+    public void TheSlackAboveTheRangeIsReadFromTheToleranceItWasHanded()
+    {
+        RecordingEvidence evidence = CompletionFactory.Evidence(bytes: 3_500_000_000);
+
+        RecordingVerdict tight = CompletionFactory.JudgeBy(evidence, new CompletionTolerance(0.995, 0.95, 10));
+        RecordingVerdict loose = CompletionFactory.JudgeBy(evidence, new CompletionTolerance(0.995, 0.95, 20));
+
+        Assert.True(tight.Names(RecordingFault.HeavierThanTheStream));
+        Assert.False(loose.Names(RecordingFault.HeavierThanTheStream));
     }
 }

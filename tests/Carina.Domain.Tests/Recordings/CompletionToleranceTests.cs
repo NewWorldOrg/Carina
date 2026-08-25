@@ -51,18 +51,12 @@ public sealed class CompletionToleranceTests
     }
 
     [Fact]
-    public void TheSlackOnWeightIsReadFromTheToleranceItWasHanded()
+    public void TheSlackOnWeightMovesWhatTheOutcomeIs()
     {
         RecordingEvidence evidence = CompletionFactory.Evidence(bytes: 1_700_000_000);
 
-        RecordingVerdict tight = CompletionEvaluator.Judge(
-            evidence,
-            CompletionFactory.Bitrate,
-            new CompletionTolerance(0.995, 0.95, 10));
-        RecordingVerdict loose = CompletionEvaluator.Judge(
-            evidence,
-            CompletionFactory.Bitrate,
-            new CompletionTolerance(0.995, 0.95, 20));
+        RecordingVerdict tight = CompletionFactory.JudgeBy(evidence, new CompletionTolerance(0.995, 0.95, 10));
+        RecordingVerdict loose = CompletionFactory.JudgeBy(evidence, new CompletionTolerance(0.995, 0.95, 20));
 
         Assert.Equal(RecordingOutcome.Truncated, tight.Outcome);
         Assert.Equal(RecordingOutcome.Complete, loose.Outcome);
@@ -165,6 +159,6 @@ public sealed class CompletionToleranceTests
             new CompletionTolerance(0.995, 0.95, 0));
 
         Assert.Equal(RecordingOutcome.Truncated, verdict.Outcome);
-        Assert.True(verdict.Names(RecordingFinding.LighterThanTheStream));
+        Assert.True(verdict.Names(RecordingFault.LighterThanTheStream));
     }
 }

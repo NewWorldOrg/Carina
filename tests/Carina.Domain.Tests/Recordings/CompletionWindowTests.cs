@@ -7,42 +7,19 @@ public sealed class CompletionWindowTests
     private static readonly DateTime Start = CompletionFactory.WindowStart;
 
     [Fact]
-    public void AWindowWithNoStartIsNothingToMeasureAgainst()
+    public void AWindowThatEndsWhenItStartsIsRefusedRatherThanJudged()
     {
-        RecordingVerdict verdict = Judge(null, Start.AddSeconds(1000));
+        ArgumentException refusal = Assert.Throws<ArgumentException>(() => Evidence(Start, Start));
 
-        Assert.Equal(RecordingOutcome.Failed, verdict.Outcome);
-        Assert.True(verdict.Names(RecordingFinding.WindowUnknown));
-        Assert.Null(verdict.Coverage);
+        Assert.Equal("windowEnd", refusal.ParamName);
     }
 
     [Fact]
-    public void AWindowWithNoEndIsNothingToMeasureAgainst()
+    public void AWindowThatEndsBeforeItStartsIsRefusedRatherThanJudged()
     {
-        RecordingVerdict verdict = Judge(Start, null);
+        ArgumentException refusal = Assert.Throws<ArgumentException>(() => Evidence(Start, Start.AddTicks(-1)));
 
-        Assert.Equal(RecordingOutcome.Failed, verdict.Outcome);
-        Assert.True(verdict.Names(RecordingFinding.WindowUnknown));
-        Assert.Null(verdict.Coverage);
-    }
-
-    [Fact]
-    public void AWindowThatEndsWhenItStartsIsNothingToMeasureAgainst()
-    {
-        RecordingVerdict verdict = Judge(Start, Start);
-
-        Assert.Equal(RecordingOutcome.Failed, verdict.Outcome);
-        Assert.True(verdict.Names(RecordingFinding.WindowUnknown));
-        Assert.Null(verdict.Coverage);
-    }
-
-    [Fact]
-    public void AWindowThatEndsBeforeItStartsIsNothingToMeasureAgainst()
-    {
-        RecordingVerdict verdict = Judge(Start, Start.AddTicks(-1));
-
-        Assert.Equal(RecordingOutcome.Failed, verdict.Outcome);
-        Assert.True(verdict.Names(RecordingFinding.WindowUnknown));
+        Assert.Equal("windowEnd", refusal.ParamName);
     }
 
     [Fact]
@@ -55,8 +32,7 @@ public sealed class CompletionWindowTests
             Start.AddTicks(1),
             Start));
 
-        Assert.False(verdict.Names(RecordingFinding.WindowUnknown));
-        Assert.Equal(1.0, verdict.Coverage!.Value, 12);
+        Assert.Equal(1.0, verdict.Coverage, 12);
     }
 
     [Fact]
@@ -70,22 +46,32 @@ public sealed class CompletionWindowTests
             Start.AddSeconds(1)));
 
         Assert.Equal(RecordingOutcome.Complete, verdict.Outcome);
-        Assert.Empty(verdict.Findings);
+        Assert.Empty(verdict.Faults);
     }
 
     [Fact]
-    public void AWindowLeftUndeterminedIsNotReportedAsALengthNobodyCounted()
+    public void TheWindowIsTheDistanceBetweenItsTwoEnds()
     {
-        RecordingVerdict verdict = Judge(Start, null);
+        RecordingEvidence evidence = Evidence(Start, Start.AddSeconds(1000));
 
-        Assert.False(verdict.Names(RecordingFinding.LengthUnknown));
+        Assert.Equal(TimeSpan.FromSeconds(1000), evidence.Window);
     }
 
-    private static RecordingVerdict Judge(DateTime? windowStart, DateTime? windowEnd)
-        => CompletionFactory.Judge(new RecordingEvidence(
+    [Fact]
+    public void CoverageIsWhatWasWrittenOverThatDistance()
+    {
+        RecordingVerdict verdict = CompletionFactory.Judge(
+            bytes: 1_250_000_000,
+            written: TimeSpan.FromSeconds(500));
+
+        Assert.Equal(0.5, verdict.Coverage, 12);
+    }
+
+    private static RecordingEvidence Evidence(DateTime windowStart, DateTime windowEnd)
+        => new(
             CompletionFactory.TypicalBytes,
             CompletionFactory.WholeWindow,
             windowStart,
             windowEnd,
-            CompletionFactory.WindowEnd));
+            CompletionFactory.WindowEnd);
 }

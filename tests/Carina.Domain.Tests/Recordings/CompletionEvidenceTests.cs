@@ -14,7 +14,7 @@ public sealed class CompletionEvidenceTests
         RecordingVerdict verdict = CompletionFactory.Judge(bytes: null);
 
         Assert.Equal(RecordingOutcome.Failed, verdict.Outcome);
-        Assert.True(verdict.Names(RecordingFinding.SizeUnknown));
+        Assert.True(verdict.Names(RecordingFault.SizeUnobserved));
     }
 
     [Fact]
@@ -22,7 +22,7 @@ public sealed class CompletionEvidenceTests
     {
         RecordingVerdict verdict = CompletionFactory.Judge(bytes: null);
 
-        Assert.False(verdict.Names(RecordingFinding.NothingLanded));
+        Assert.False(verdict.Names(RecordingFault.NothingLanded));
     }
 
     [Fact]
@@ -30,44 +30,17 @@ public sealed class CompletionEvidenceTests
     {
         RecordingVerdict verdict = CompletionFactory.Judge(bytes: null);
 
-        Assert.Equal(1.0, verdict.Coverage!.Value, 12);
-        Assert.Equal([RecordingFinding.SizeUnknown], verdict.Findings);
+        Assert.Equal(1.0, verdict.Coverage, 12);
+        Assert.Equal([RecordingFault.SizeUnobserved], verdict.Faults);
     }
 
     [Fact]
-    public void ALengthNobodyCountedIsAFailure()
+    public void AnEmptyFileAndAnUnweighedOneAreDifferentThings()
     {
-        RecordingVerdict verdict = CompletionFactory.Judge(
-            new RecordingEvidence(CompletionFactory.TypicalBytes, null, Start, End, End));
+        RecordingVerdict weighed = CompletionFactory.Judge(bytes: 0);
+        RecordingVerdict unweighed = CompletionFactory.Judge(bytes: null);
 
-        Assert.Equal(RecordingOutcome.Failed, verdict.Outcome);
-        Assert.True(verdict.Names(RecordingFinding.LengthUnknown));
-        Assert.Null(verdict.Coverage);
-    }
-
-    [Fact]
-    public void ALengthNobodyCountedIsNotReportedAsAWindowLeftShort()
-    {
-        RecordingVerdict verdict = CompletionFactory.Judge(
-            new RecordingEvidence(CompletionFactory.TypicalBytes, null, Start, End, End));
-
-        Assert.False(verdict.Names(RecordingFinding.ShortOfTheWindow));
-    }
-
-    [Fact]
-    public void EvidenceThatIsMissingEverywhereNamesEveryPieceItLacks()
-    {
-        RecordingVerdict verdict = CompletionFactory.Judge(new RecordingEvidence(null, null, null, null, null));
-
-        Assert.Equal(RecordingOutcome.Failed, verdict.Outcome);
-        Assert.Equal(
-            [
-                RecordingFinding.WindowUnknown,
-                RecordingFinding.SizeUnknown,
-                RecordingFinding.LengthUnknown,
-                RecordingFinding.NobodyAskedItToStop,
-            ],
-            verdict.Findings);
+        Assert.NotEqual(weighed.Faults, unweighed.Faults);
     }
 
     [Fact]
@@ -86,6 +59,14 @@ public sealed class CompletionEvidenceTests
             () => new RecordingEvidence(1, TimeSpan.FromMilliseconds(-1), Start, End, End));
 
         Assert.Equal("written", refusal.ParamName);
+    }
+
+    [Fact]
+    public void NothingWrittenAtAllIsEvidence()
+    {
+        var evidence = new RecordingEvidence(1, TimeSpan.Zero, Start, End, End);
+
+        Assert.Equal(TimeSpan.Zero, evidence.Written);
     }
 
     [Fact]
@@ -141,26 +122,29 @@ public sealed class CompletionEvidenceTests
     }
 
     [Fact]
-    public void AnEmptyFileAndAnUnweighedOneAreDifferentThings()
+    public void ThereIsNoVerdictWithoutEvidence()
     {
-        RecordingVerdict weighed = CompletionFactory.Judge(bytes: 0);
-        RecordingVerdict unweighed = CompletionFactory.Judge(bytes: null);
+        ArgumentNullException refusal = Assert.Throws<ArgumentNullException>(
+            () => CompletionEvaluator.Judge(null!, CompletionFactory.Bitrate, CompletionFactory.Tolerance));
 
-        Assert.NotEqual(weighed.Findings, unweighed.Findings);
+        Assert.Equal("evidence", refusal.ParamName);
     }
 
     [Fact]
-    public void ThereIsNoVerdictWithoutEvidence()
-        => Assert.Throws<ArgumentNullException>(
-            () => CompletionEvaluator.Judge(null!, CompletionFactory.Bitrate, CompletionFactory.Tolerance));
-
-    [Fact]
     public void ThereIsNoVerdictWithoutAStreamToWeighAgainst()
-        => Assert.Throws<ArgumentNullException>(
+    {
+        ArgumentNullException refusal = Assert.Throws<ArgumentNullException>(
             () => CompletionEvaluator.Judge(CompletionFactory.Evidence(), null!, CompletionFactory.Tolerance));
+
+        Assert.Equal("bitrate", refusal.ParamName);
+    }
 
     [Fact]
     public void ThereIsNoVerdictWithoutATolerance()
-        => Assert.Throws<ArgumentNullException>(
+    {
+        ArgumentNullException refusal = Assert.Throws<ArgumentNullException>(
             () => CompletionEvaluator.Judge(CompletionFactory.Evidence(), CompletionFactory.Bitrate, null!));
+
+        Assert.Equal("tolerance", refusal.ParamName);
+    }
 }

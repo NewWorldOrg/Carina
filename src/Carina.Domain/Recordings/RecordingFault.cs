@@ -22,6 +22,16 @@ public enum RecordingFault
     ScramblingUnresolved = 8,
 
     ShortOfTheWindow = 9,
+
+    NothingLanded = 10,
+
+    SizeUnobserved = 11,
+
+    StoppedUnasked = 12,
+
+    LighterThanTheStream = 13,
+
+    HeavierThanTheStream = 14,
 }
 
 public sealed record OutcomeDetail(RecordingFault Fault, TuneFailureKind? TuneFailure, string Note, DateTime NoticedAt)

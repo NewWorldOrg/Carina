@@ -30,4 +30,7 @@ internal static class CompletionFactory
 
     public static RecordingVerdict Judge(RecordingEvidence evidence)
         => CompletionEvaluator.Judge(evidence, Bitrate, Tolerance);
+
+    public static RecordingVerdict JudgeBy(RecordingEvidence evidence, CompletionTolerance tolerance)
+        => CompletionEvaluator.Judge(evidence, Bitrate, tolerance);
 }

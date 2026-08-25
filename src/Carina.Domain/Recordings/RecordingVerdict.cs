@@ -1,44 +1,37 @@
 namespace Carina.Domain.Recordings;
 
-public enum RecordingFinding
-{
-    NothingLanded = 1,
-
-    SizeUnknown = 2,
-
-    LengthUnknown = 3,
-
-    WindowUnknown = 4,
-
-    NobodyAskedItToStop = 5,
-
-    ShortOfTheWindow = 6,
-
-    LighterThanTheStream = 7,
-
-    HeavierThanTheStream = 8,
-}
-
 public sealed record RecordingVerdict
 {
-    private RecordingVerdict(RecordingOutcome outcome, double? coverage, IReadOnlyList<RecordingFinding> findings)
+    private RecordingVerdict(RecordingOutcome outcome, double coverage, IReadOnlyList<RecordingFault> faults)
     {
         Outcome = outcome;
         Coverage = coverage;
-        Findings = findings;
+        Faults = faults;
     }
 
     public RecordingOutcome Outcome { get; }
 
-    public double? Coverage { get; }
+    public double Coverage { get; }
 
-    public IReadOnlyList<RecordingFinding> Findings { get; }
+    public IReadOnlyList<RecordingFault> Faults { get; }
 
-    public bool Names(RecordingFinding finding) => Findings.Contains(finding);
-
-    internal static RecordingVerdict Of(
+    public static RecordingVerdict Of(
         RecordingOutcome outcome,
-        double? coverage,
-        IReadOnlyList<RecordingFinding> findings)
-        => new(outcome, coverage, [.. findings]);
+        double coverage,
+        IReadOnlyList<RecordingFault> faults)
+    {
+        ArgumentNullException.ThrowIfNull(faults);
+
+        if (!Enum.IsDefined(outcome))
+        {
+            throw new ArgumentOutOfRangeException(nameof(outcome), outcome, "A recording ends in one of three ways.");
+        }
+
+        return new RecordingVerdict(outcome, coverage, [.. faults]);
+    }
+
+    public bool Names(RecordingFault fault) => Faults.Contains(fault);
+
+    public IReadOnlyList<OutcomeDetail> Detail(DateTime noticedAt)
+        => [.. Faults.Select(fault => new OutcomeDetail(fault, null, string.Empty, noticedAt))];
 }

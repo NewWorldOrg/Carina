@@ -11,110 +11,88 @@ public static class CompletionEvaluator
         ArgumentNullException.ThrowIfNull(bitrate);
         ArgumentNullException.ThrowIfNull(tolerance);
 
-        List<RecordingFinding> findings = [];
-        TimeSpan? window = WindowOf(evidence);
-
-        if (window is null)
-        {
-            findings.Add(RecordingFinding.WindowUnknown);
-        }
+        List<RecordingFault> faults = [];
+        double coverage = (double)evidence.Written.Ticks / evidence.Window.Ticks;
 
         if (evidence.FileSizeBytes is null)
         {
-            findings.Add(RecordingFinding.SizeUnknown);
+            faults.Add(RecordingFault.SizeUnobserved);
         }
         else if (evidence.FileSizeBytes is 0)
         {
-            findings.Add(RecordingFinding.NothingLanded);
-        }
-
-        if (evidence.Written is null)
-        {
-            findings.Add(RecordingFinding.LengthUnknown);
+            faults.Add(RecordingFault.NothingLanded);
         }
 
         if (evidence.AbortedAt is null)
         {
-            findings.Add(RecordingFinding.NobodyAskedItToStop);
+            faults.Add(RecordingFault.StoppedUnasked);
         }
 
-        double? coverage = window is { } span && evidence.Written is { } written
-            ? (double)written.Ticks / span.Ticks
-            : null;
-
-        if (coverage is { } reached && reached < tolerance.CompleteCoverage)
+        if (coverage < tolerance.CompleteCoverage)
         {
-            findings.Add(RecordingFinding.ShortOfTheWindow);
+            faults.Add(RecordingFault.ShortOfTheWindow);
         }
 
-        WeighTheFile(evidence, bitrate, tolerance, findings);
+        WeighTheFile(evidence, bitrate, tolerance, faults);
 
-        return RecordingVerdict.Of(Decide(findings, coverage, tolerance), coverage, findings);
+        return RecordingVerdict.Of(Decide(faults, coverage, tolerance), coverage, faults);
     }
-
-    private static TimeSpan? WindowOf(RecordingEvidence evidence)
-        => evidence.WindowStart is { } start && evidence.WindowEnd is { } end && end > start
-            ? end - start
-            : null;
 
     private static void WeighTheFile(
         RecordingEvidence evidence,
         ExpectedBitrate bitrate,
         CompletionTolerance tolerance,
-        List<RecordingFinding> findings)
+        List<RecordingFault> faults)
     {
-        if (evidence.FileSizeBytes is not { } bytes || evidence.Written is not { } written)
+        if (evidence.FileSizeBytes is not { } bytes)
         {
             return;
         }
 
+        TimeSpan written = evidence.Written;
+
         if (bytes > 0 && (bytes * 100) < (bitrate.LeastBytesOver(written) * (100 - tolerance.SizeSlackPercent)))
         {
-            findings.Add(RecordingFinding.LighterThanTheStream);
+            faults.Add(RecordingFault.LighterThanTheStream);
         }
 
         if ((bytes * 100) > (bitrate.MostBytesOver(written) * (100 + tolerance.SizeSlackPercent)))
         {
-            findings.Add(RecordingFinding.HeavierThanTheStream);
+            faults.Add(RecordingFault.HeavierThanTheStream);
         }
     }
 
     private static RecordingOutcome Decide(
-        IReadOnlyList<RecordingFinding> findings,
-        double? coverage,
+        IReadOnlyList<RecordingFault> faults,
+        double coverage,
         CompletionTolerance tolerance)
     {
-        if (findings.Contains(RecordingFinding.NothingLanded))
+        if (faults.Contains(RecordingFault.NothingLanded))
         {
             return RecordingOutcome.Failed;
         }
 
-        if (findings.Contains(RecordingFinding.SizeUnknown))
+        if (faults.Contains(RecordingFault.SizeUnobserved))
         {
             return RecordingOutcome.Failed;
         }
 
-        if (coverage is not { } reached)
+        if (coverage < tolerance.TruncatedCoverage)
         {
             return RecordingOutcome.Failed;
         }
 
-        if (reached < tolerance.TruncatedCoverage)
-        {
-            return RecordingOutcome.Failed;
-        }
-
-        if (findings.Contains(RecordingFinding.NobodyAskedItToStop))
+        if (faults.Contains(RecordingFault.StoppedUnasked))
         {
             return RecordingOutcome.Truncated;
         }
 
-        if (findings.Contains(RecordingFinding.ShortOfTheWindow))
+        if (faults.Contains(RecordingFault.ShortOfTheWindow))
         {
             return RecordingOutcome.Truncated;
         }
 
-        if (findings.Contains(RecordingFinding.LighterThanTheStream))
+        if (faults.Contains(RecordingFault.LighterThanTheStream))
         {
             return RecordingOutcome.Truncated;
         }

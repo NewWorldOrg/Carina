@@ -10,7 +10,7 @@ public sealed class CompletionAbortTests
         RecordingVerdict verdict = CompletionFactory.Judge(asked: false);
 
         Assert.Equal(RecordingOutcome.Truncated, verdict.Outcome);
-        Assert.True(verdict.Names(RecordingFinding.NobodyAskedItToStop));
+        Assert.True(verdict.Names(RecordingFault.StoppedUnasked));
     }
 
     [Fact]
@@ -19,7 +19,7 @@ public sealed class CompletionAbortTests
         RecordingVerdict verdict = CompletionFactory.Judge(asked: true);
 
         Assert.Equal(RecordingOutcome.Complete, verdict.Outcome);
-        Assert.False(verdict.Names(RecordingFinding.NobodyAskedItToStop));
+        Assert.False(verdict.Names(RecordingFault.StoppedUnasked));
     }
 
     [Fact]
@@ -27,7 +27,7 @@ public sealed class CompletionAbortTests
     {
         RecordingVerdict verdict = CompletionFactory.Judge(asked: false);
 
-        Assert.Equal([RecordingFinding.NobodyAskedItToStop], verdict.Findings);
+        Assert.Equal([RecordingFault.StoppedUnasked], verdict.Faults);
     }
 
     [Fact]
@@ -60,7 +60,7 @@ public sealed class CompletionAbortTests
     }
 
     [Fact]
-    public void TheMomentTheStopWasAskedForIsWhatTheVerdictReadsRatherThanTheWindow()
+    public void WhetherTheStopWasAskedForIsAllThatIsRead()
     {
         var evidence = new RecordingEvidence(
             CompletionFactory.TypicalBytes,

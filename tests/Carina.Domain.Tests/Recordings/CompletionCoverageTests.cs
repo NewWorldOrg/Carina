@@ -10,8 +10,8 @@ public sealed class CompletionCoverageTests
         RecordingVerdict verdict = CompletionFactory.Judge();
 
         Assert.Equal(RecordingOutcome.Complete, verdict.Outcome);
-        Assert.Empty(verdict.Findings);
-        Assert.Equal(1.0, verdict.Coverage!.Value, 12);
+        Assert.Empty(verdict.Faults);
+        Assert.Equal(1.0, verdict.Coverage, 12);
     }
 
     [Fact]
@@ -20,8 +20,8 @@ public sealed class CompletionCoverageTests
         RecordingVerdict verdict = CompletionFactory.Judge(written: TimeSpan.FromMilliseconds(995_000));
 
         Assert.Equal(RecordingOutcome.Complete, verdict.Outcome);
-        Assert.Empty(verdict.Findings);
-        Assert.Equal(0.995, verdict.Coverage!.Value, 12);
+        Assert.Empty(verdict.Faults);
+        Assert.Equal(0.995, verdict.Coverage, 12);
     }
 
     [Fact]
@@ -30,7 +30,7 @@ public sealed class CompletionCoverageTests
         RecordingVerdict verdict = CompletionFactory.Judge(written: TimeSpan.FromMilliseconds(994_999));
 
         Assert.Equal(RecordingOutcome.Truncated, verdict.Outcome);
-        Assert.True(verdict.Names(RecordingFinding.ShortOfTheWindow));
+        Assert.True(verdict.Names(RecordingFault.ShortOfTheWindow));
     }
 
     [Fact]
@@ -39,7 +39,7 @@ public sealed class CompletionCoverageTests
         RecordingVerdict verdict = CompletionFactory.Judge(written: TimeSpan.FromMilliseconds(995_001));
 
         Assert.Equal(RecordingOutcome.Complete, verdict.Outcome);
-        Assert.False(verdict.Names(RecordingFinding.ShortOfTheWindow));
+        Assert.False(verdict.Names(RecordingFault.ShortOfTheWindow));
     }
 
     [Fact]
@@ -48,8 +48,8 @@ public sealed class CompletionCoverageTests
         RecordingVerdict verdict = CompletionFactory.Judge(written: TimeSpan.FromMilliseconds(950_000));
 
         Assert.Equal(RecordingOutcome.Truncated, verdict.Outcome);
-        Assert.Equal(0.95, verdict.Coverage!.Value, 12);
-        Assert.True(verdict.Names(RecordingFinding.ShortOfTheWindow));
+        Assert.Equal(0.95, verdict.Coverage, 12);
+        Assert.True(verdict.Names(RecordingFault.ShortOfTheWindow));
     }
 
     [Fact]
@@ -58,7 +58,7 @@ public sealed class CompletionCoverageTests
         RecordingVerdict verdict = CompletionFactory.Judge(written: TimeSpan.FromMilliseconds(949_999));
 
         Assert.Equal(RecordingOutcome.Failed, verdict.Outcome);
-        Assert.True(verdict.Names(RecordingFinding.ShortOfTheWindow));
+        Assert.True(verdict.Names(RecordingFault.ShortOfTheWindow));
     }
 
     [Fact]
@@ -77,7 +77,7 @@ public sealed class CompletionCoverageTests
             written: TimeSpan.FromSeconds(1200));
 
         Assert.Equal(RecordingOutcome.Complete, verdict.Outcome);
-        Assert.Equal(1.2, verdict.Coverage!.Value, 12);
+        Assert.Equal(1.2, verdict.Coverage, 12);
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public sealed class CompletionCoverageTests
         RecordingVerdict verdict = CompletionFactory.Judge(bytes: 2_500, written: TimeSpan.FromMilliseconds(1));
 
         Assert.Equal(RecordingOutcome.Failed, verdict.Outcome);
-        Assert.Equal([RecordingFinding.ShortOfTheWindow], verdict.Findings);
+        Assert.Equal([RecordingFault.ShortOfTheWindow], verdict.Faults);
     }
 
     [Fact]
@@ -94,7 +94,7 @@ public sealed class CompletionCoverageTests
     {
         RecordingVerdict verdict = CompletionFactory.Judge(bytes: 1_250_000_000, written: TimeSpan.FromSeconds(500));
 
-        Assert.Equal(0.5, verdict.Coverage!.Value, 12);
+        Assert.Equal(0.5, verdict.Coverage, 12);
     }
 
     [Fact]
@@ -111,8 +111,8 @@ public sealed class CompletionCoverageTests
         RecordingVerdict verdict = CompletionFactory.Judge(evidence);
 
         Assert.Equal(RecordingOutcome.Complete, verdict.Outcome);
-        Assert.Empty(verdict.Findings);
-        Assert.Equal(0.995, verdict.Coverage!.Value, 12);
+        Assert.Empty(verdict.Faults);
+        Assert.Equal(0.995, verdict.Coverage, 12);
     }
 
     [Fact]
