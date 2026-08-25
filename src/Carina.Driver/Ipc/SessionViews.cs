@@ -27,22 +27,13 @@ public static class SessionViews
             DroppedChunks = session.DroppedChunks,
             FirstFault = session.FirstFault?.Message,
             FailureCause = session.FailureCause?.Message,
-            Counters = new SessionCounters(
-                session.Counters.Packets,
-                session.Counters.Drops,
-                session.Counters.Duplicates,
-                session.Counters.Discontinuities,
-                session.Counters.TransportErrors,
-                session.Counters.ScrambledPackets,
-                session.Counters.ProvisionalPackets,
-                session.DiscardedBytes,
-                session.Resyncs,
-                session.DeviceOverflows,
-                session.LockLosses,
-                session.Counters.CcMeasured,
-                session.Counters.ScrambleMeasured,
-                session.Counters.Positions
-            ),
+            Counters = session.Counters.Snapshot() with
+            {
+                DiscardedBytes = session.DiscardedBytes,
+                Resyncs = session.Resyncs,
+                DeviceOverflows = session.DeviceOverflows,
+                LockLosses = session.LockLosses,
+            },
         };
 
     public static IReadOnlyList<SessionSnapshot> All(

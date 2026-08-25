@@ -37,18 +37,29 @@ public sealed class ContinuityCounterTracker
 
     public bool ScrambleMeasured => Packets > 0;
 
-    public DropPositionsDto? Positions
+    public SessionCounters Snapshot()
     {
-        get
+        lock (gate)
         {
-            lock (gate)
-            {
-                return timeline.Anchor is { } anchor
-                    ? new DropPositionsDto(anchor, [.. Placed()], timeline.Reanchors)
-                    : null;
-            }
+            return new SessionCounters(
+                packets,
+                drops,
+                duplicates,
+                discontinuities,
+                transportErrors,
+                scrambledPackets,
+                provisionalPackets,
+                CcMeasured: packets > 0,
+                ScrambleMeasured: packets > 0,
+                Positions: WhereTheyWere()
+            );
         }
     }
+
+    private DropPositionsDto? WhereTheyWere() =>
+        timeline.Anchor is { } anchor
+            ? new DropPositionsDto(anchor, [.. Placed()], timeline.Reanchors)
+            : null;
 
     private IEnumerable<DropBucketDto> Placed() =>
         buckets.Select(bucket => new DropBucketDto(

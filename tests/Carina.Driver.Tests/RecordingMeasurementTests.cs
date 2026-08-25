@@ -169,7 +169,7 @@ public sealed class RecordingMeasurementTests
 
         using TunerSession session = Ran(stream, 100, 251, 37, 1024, 7);
 
-        DropPositionsDto? positions = session.Counters.Positions;
+        DropPositionsDto? positions = session.Counters.Snapshot().Positions;
 
         Assert.NotNull(positions);
         Assert.Equal(0, positions.AnchorPcr);
@@ -184,7 +184,7 @@ public sealed class RecordingMeasurementTests
 
         using TunerSession session = Ran(stream, 100, 251, 37, 1024, 7);
 
-        DropPositionsDto? positions = session.Counters.Positions;
+        DropPositionsDto? positions = session.Counters.Snapshot().Positions;
 
         Assert.Equal(100, session.Counters.ScrambledPackets);
         Assert.Equal(0, session.Counters.Drops);
@@ -229,7 +229,7 @@ public sealed class RecordingMeasurementTests
 
         Assert.True(session.Counters.CcMeasured);
         Assert.Equal(300, session.Counters.Packets);
-        Assert.Null(session.Counters.Positions);
+        Assert.Null(session.Counters.Snapshot().Positions);
 
         SessionSnapshot snapshot = SessionViews.Of(session, Hello);
 

@@ -238,7 +238,7 @@ public sealed class ContinuityCounterTrackerTests
 
         Assert.False(tracker.CcMeasured);
         Assert.False(tracker.ScrambleMeasured);
-        Assert.Null(tracker.Positions);
+        Assert.Null(tracker.Snapshot().Positions);
     }
 
     [Fact]
@@ -252,9 +252,11 @@ public sealed class ContinuityCounterTrackerTests
         Assert.True(tracker.CcMeasured);
         Assert.True(tracker.ScrambleMeasured);
         Assert.Equal(0, tracker.Drops);
-        Assert.NotNull(tracker.Positions);
-        Assert.Empty(tracker.Positions.Buckets);
-        Assert.Equal(4_500_000, tracker.Positions.AnchorPcr);
+        DropPositionsDto? positions = tracker.Snapshot().Positions;
+
+        Assert.NotNull(positions);
+        Assert.Empty(positions.Buckets);
+        Assert.Equal(4_500_000, positions.AnchorPcr);
     }
 
     [Fact]
@@ -291,7 +293,7 @@ public sealed class ContinuityCounterTrackerTests
 
         Assert.True(tracker.CcMeasured);
         Assert.Equal(3, tracker.Drops);
-        Assert.Null(tracker.Positions);
+        Assert.Null(tracker.Snapshot().Positions);
     }
 
     [Fact]
@@ -303,8 +305,10 @@ public sealed class ContinuityCounterTrackerTests
         tracker.Observe(Packet(0x100, 1, pcr: 4 * 90_000));
         tracker.Observe(Packet(0x100, 4));
 
-        Assert.NotNull(tracker.Positions);
-        Assert.Equal([new DropBucketDto(4, 2, 0)], tracker.Positions.Buckets);
+        DropPositionsDto? positions = tracker.Snapshot().Positions;
+
+        Assert.NotNull(positions);
+        Assert.Equal([new DropBucketDto(4, 2, 0)], positions.Buckets);
     }
 
     [Fact]
@@ -315,8 +319,10 @@ public sealed class ContinuityCounterTrackerTests
         tracker.Observe(Packet(0x100, 0, pcr: 0));
         tracker.Observe(Packet(0x100, 4, pcr: 6 * 90_000));
 
-        Assert.NotNull(tracker.Positions);
-        Assert.Equal([new DropBucketDto(6, 3, 0)], tracker.Positions.Buckets);
+        DropPositionsDto? positions = tracker.Snapshot().Positions;
+
+        Assert.NotNull(positions);
+        Assert.Equal([new DropBucketDto(6, 3, 0)], positions.Buckets);
     }
 
     [Fact]
@@ -328,8 +334,10 @@ public sealed class ContinuityCounterTrackerTests
         tracker.Observe(Packet(0x100, 4));
         tracker.Observe(Packet(0x100, 5, pcr: 4_500_000));
 
-        Assert.NotNull(tracker.Positions);
-        Assert.Equal([new DropBucketDto(0, 3, 0)], tracker.Positions.Buckets);
+        DropPositionsDto? positions = tracker.Snapshot().Positions;
+
+        Assert.NotNull(positions);
+        Assert.Equal([new DropBucketDto(0, 3, 0)], positions.Buckets);
     }
 
     [Fact]
@@ -344,9 +352,11 @@ public sealed class ContinuityCounterTrackerTests
         tracker.Observe(Packet(0x100, 5, pcr: 12 * 90_000));
         tracker.Observe(Packet(0x100, 9));
 
-        Assert.NotNull(tracker.Positions);
-        Assert.Equal([5, 12], tracker.Positions.Buckets.Select(bucket => bucket.Second));
-        Assert.Equal([1, 3], tracker.Positions.Buckets.Select(bucket => bucket.Continuity));
+        DropPositionsDto? positions = tracker.Snapshot().Positions;
+
+        Assert.NotNull(positions);
+        Assert.Equal([5, 12], positions.Buckets.Select(bucket => bucket.Second));
+        Assert.Equal([1, 3], positions.Buckets.Select(bucket => bucket.Continuity));
     }
 
     [Fact]
@@ -359,14 +369,16 @@ public sealed class ContinuityCounterTrackerTests
         tracker.Observe(Packet(0x100, 5, scrambled: true));
         tracker.Observe(Packet(0x100, 9, pcr: 8 * 90_000, scrambled: true));
 
-        Assert.NotNull(tracker.Positions);
+        DropPositionsDto? positions = tracker.Snapshot().Positions;
+
+        Assert.NotNull(positions);
         Assert.Equal(
             tracker.Drops,
-            tracker.Positions.Buckets.Sum(bucket => bucket.Continuity)
+            positions.Buckets.Sum(bucket => bucket.Continuity)
         );
         Assert.Equal(
             tracker.ScrambledPackets,
-            tracker.Positions.Buckets.Sum(bucket => bucket.Scrambled)
+            positions.Buckets.Sum(bucket => bucket.Scrambled)
         );
     }
 
@@ -379,10 +391,12 @@ public sealed class ContinuityCounterTrackerTests
         tracker.Observe(Packet(0x100, 1, pcr: 6 * 90_000, scrambled: true));
         tracker.Observe(Packet(0x100, 4, pcr: 9 * 90_000));
 
-        Assert.NotNull(tracker.Positions);
+        DropPositionsDto? positions = tracker.Snapshot().Positions;
+
+        Assert.NotNull(positions);
         Assert.Equal(
             [new DropBucketDto(6, 0, 1), new DropBucketDto(9, 2, 0)],
-            tracker.Positions.Buckets
+            positions.Buckets
         );
     }
 
@@ -397,8 +411,10 @@ public sealed class ContinuityCounterTrackerTests
         tracker.Observe(Packet(0x100, 4));
         tracker.Observe(Packet(0x200, 5));
 
-        Assert.NotNull(tracker.Positions);
-        Assert.Equal([new DropBucketDto(7, 6, 0)], tracker.Positions.Buckets);
+        DropPositionsDto? positions = tracker.Snapshot().Positions;
+
+        Assert.NotNull(positions);
+        Assert.Equal([new DropBucketDto(7, 6, 0)], positions.Buckets);
     }
 
     [Fact]
@@ -410,8 +426,10 @@ public sealed class ContinuityCounterTrackerTests
         tracker.Observe(Packet(0x100, 4, payloadHash: 99));
 
         Assert.Equal(1, tracker.Duplicates);
-        Assert.NotNull(tracker.Positions);
-        Assert.Empty(tracker.Positions.Buckets);
+        DropPositionsDto? positions = tracker.Snapshot().Positions;
+
+        Assert.NotNull(positions);
+        Assert.Empty(positions.Buckets);
     }
 
     [Fact]
@@ -423,8 +441,10 @@ public sealed class ContinuityCounterTrackerTests
         tracker.Observe(Packet(0x100, 9, discontinuity: true));
 
         Assert.Equal(1, tracker.Discontinuities);
-        Assert.NotNull(tracker.Positions);
-        Assert.Empty(tracker.Positions.Buckets);
+        DropPositionsDto? positions = tracker.Snapshot().Positions;
+
+        Assert.NotNull(positions);
+        Assert.Empty(positions.Buckets);
     }
 
     [Fact]
@@ -437,8 +457,10 @@ public sealed class ContinuityCounterTrackerTests
         tracker.Observe(Packet(TsPacket.NullPid, 9));
         tracker.Observe(Packet(0x100, 5));
 
-        Assert.NotNull(tracker.Positions);
-        Assert.Empty(tracker.Positions.Buckets);
+        DropPositionsDto? positions = tracker.Snapshot().Positions;
+
+        Assert.NotNull(positions);
+        Assert.Empty(positions.Buckets);
     }
 
     [Fact]
@@ -450,9 +472,11 @@ public sealed class ContinuityCounterTrackerTests
         tracker.Observe(Packet(0x100, 12, transportError: true, pcr: 900 * 90_000));
         tracker.Observe(Packet(0x100, 5));
 
-        Assert.NotNull(tracker.Positions);
-        Assert.Empty(tracker.Positions.Buckets);
-        Assert.Empty(tracker.Positions.Reanchors);
+        DropPositionsDto? positions = tracker.Snapshot().Positions;
+
+        Assert.NotNull(positions);
+        Assert.Empty(positions.Buckets);
+        Assert.Empty(positions.Reanchors);
     }
 
     [Fact]
@@ -465,13 +489,15 @@ public sealed class ContinuityCounterTrackerTests
         tracker.Observe(Packet(0x100, 2, pcr: 20 * 90_000));
         tracker.Observe(Packet(0x100, 6));
 
-        Assert.NotNull(tracker.Positions);
-        Assert.Equal(100 * 90_000, tracker.Positions.AnchorPcr);
+        DropPositionsDto? positions = tracker.Snapshot().Positions;
+
+        Assert.NotNull(positions);
+        Assert.Equal(100 * 90_000, positions.AnchorPcr);
         Assert.Equal(
             [new PcrReanchorDto(4, 104 * 90_000, 20 * 90_000)],
-            tracker.Positions.Reanchors
+            positions.Reanchors
         );
-        Assert.Equal([new DropBucketDto(4, 3, 0)], tracker.Positions.Buckets);
+        Assert.Equal([new DropBucketDto(4, 3, 0)], positions.Buckets);
     }
 
     [Fact]
@@ -484,14 +510,16 @@ public sealed class ContinuityCounterTrackerTests
         tracker.Observe(Packet(0x100, 5, pcr: 30 * 90_000));
         tracker.Observe(Packet(0x100, 9, pcr: 34 * 90_000));
 
-        Assert.NotNull(tracker.Positions);
+        DropPositionsDto? positions = tracker.Snapshot().Positions;
+
+        Assert.NotNull(positions);
         Assert.Equal(
-            tracker.Positions.Buckets.Select(bucket => bucket.Second).Order(),
-            tracker.Positions.Buckets.Select(bucket => bucket.Second)
+            positions.Buckets.Select(bucket => bucket.Second).Order(),
+            positions.Buckets.Select(bucket => bucket.Second)
         );
         Assert.Equal(
             [10, 14],
-            tracker.Positions.Buckets.Select(bucket => bucket.Second)
+            positions.Buckets.Select(bucket => bucket.Second)
         );
     }
 }
