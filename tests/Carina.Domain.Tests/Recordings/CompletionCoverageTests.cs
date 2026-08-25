@@ -20,6 +20,7 @@ public sealed class CompletionCoverageTests
         RecordingVerdict verdict = CompletionFactory.Judge(written: TimeSpan.FromMilliseconds(995_000));
 
         Assert.Equal(RecordingOutcome.Complete, verdict.Outcome);
+        Assert.Empty(verdict.Findings);
         Assert.Equal(0.995, verdict.Coverage!.Value, 12);
     }
 
@@ -110,6 +111,7 @@ public sealed class CompletionCoverageTests
         RecordingVerdict verdict = CompletionFactory.Judge(evidence);
 
         Assert.Equal(RecordingOutcome.Complete, verdict.Outcome);
+        Assert.Empty(verdict.Findings);
         Assert.Equal(0.995, verdict.Coverage!.Value, 12);
     }
 

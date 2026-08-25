@@ -109,7 +109,7 @@ public static class CompletionEvaluator
             return RecordingOutcome.Truncated;
         }
 
-        if (reached < tolerance.CompleteCoverage)
+        if (findings.Contains(RecordingFinding.ShortOfTheWindow))
         {
             return RecordingOutcome.Truncated;
         }
