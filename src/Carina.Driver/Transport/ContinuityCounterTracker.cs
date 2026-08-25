@@ -1,3 +1,5 @@
+using Carina.Contracts;
+
 namespace Carina.Driver.Transport;
 
 public sealed class ContinuityCounterTracker
@@ -5,6 +7,8 @@ public sealed class ContinuityCounterTracker
     private readonly Dictionary<int, int> lastCounter = [];
     private readonly Dictionary<int, int> lastPayloadHash = [];
     private readonly Dictionary<int, long> dropsByPid = [];
+    private readonly SortedDictionary<int, (long Continuity, long Scrambled)> buckets = [];
+    private readonly PcrTimeline timeline = new();
     private readonly Lock gate = new();
 
     private long packets;
@@ -28,6 +32,30 @@ public sealed class ContinuityCounterTracker
     public long ScrambledPackets => Read(ref scrambledPackets);
 
     public long ProvisionalPackets => Read(ref provisionalPackets);
+
+    public bool CcMeasured => Packets > 0;
+
+    public bool ScrambleMeasured => Packets > 0;
+
+    public DropPositionsDto? Positions
+    {
+        get
+        {
+            lock (gate)
+            {
+                return timeline.Anchor is { } anchor
+                    ? new DropPositionsDto(anchor, [.. Located()], timeline.Reanchors)
+                    : null;
+            }
+        }
+    }
+
+    private IEnumerable<DropBucketDto> Located() =>
+        buckets.Select(bucket => new DropBucketDto(
+            bucket.Key,
+            bucket.Value.Continuity,
+            bucket.Value.Scrambled
+        ));
 
     public long DropsFor(int pid)
     {
@@ -91,11 +119,17 @@ public sealed class ContinuityCounterTracker
             return;
         }
 
+        if (packet.Pcr is { } reference)
+        {
+            timeline.Observe(packet.Pid, reference);
+        }
+
         packets++;
 
         if (packet.Scrambled)
         {
             scrambledPackets++;
+            Locate(0, 1);
         }
 
         if (packet.Discontinuity)
@@ -151,5 +185,13 @@ public sealed class ContinuityCounterTracker
     {
         drops += missing;
         dropsByPid[pid] = dropsByPid.GetValueOrDefault(pid) + missing;
+        Locate(missing, 0);
+    }
+
+    private void Locate(long continuity, long scrambled)
+    {
+        (long lost, long unresolved) = buckets.GetValueOrDefault(timeline.Second);
+
+        buckets[timeline.Second] = (lost + continuity, unresolved + scrambled);
     }
 }

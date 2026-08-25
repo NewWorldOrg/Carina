@@ -1,3 +1,4 @@
+using Carina.Contracts;
 using Carina.Driver.Transport;
 
 namespace Carina.Driver.Tests;
@@ -11,7 +12,8 @@ public sealed class ContinuityCounterTrackerTests
         int payloadHash = 1,
         bool transportError = false,
         bool scrambled = false,
-        bool discontinuity = false
+        bool discontinuity = false,
+        long? pcr = null
     ) =>
         new(
             pid,
@@ -21,7 +23,8 @@ public sealed class ContinuityCounterTrackerTests
             scrambled,
             discontinuity,
             PayloadUnitStart: false,
-            payloadHash
+            payloadHash,
+            Pcr: pcr
         );
 
     [Fact]
@@ -226,5 +229,257 @@ public sealed class ContinuityCounterTrackerTests
         tracker.Observe(Packet(0x100, 9));
 
         Assert.Equal(0, tracker.Drops);
+    }
+
+    [Fact]
+    public void AStreamNobodyHasReadYetHasCountedNothingRatherThanCountedZero()
+    {
+        var tracker = new ContinuityCounterTracker();
+
+        Assert.False(tracker.CcMeasured);
+        Assert.False(tracker.ScrambleMeasured);
+        Assert.Null(tracker.Positions);
+    }
+
+    [Fact]
+    public void AStreamThatWasReadAndLostNothingHasCountedZeroRatherThanCountedNothing()
+    {
+        var tracker = new ContinuityCounterTracker();
+
+        tracker.Observe(Packet(0x100, 0, pcr: 4_500_000));
+        tracker.Observe(Packet(0x100, 1));
+
+        Assert.True(tracker.CcMeasured);
+        Assert.True(tracker.ScrambleMeasured);
+        Assert.Equal(0, tracker.Drops);
+        Assert.NotNull(tracker.Positions);
+        Assert.Empty(tracker.Positions.Buckets);
+        Assert.Equal(4_500_000, tracker.Positions.AnchorPcr);
+    }
+
+    [Fact]
+    public void PaddingAloneIsNotAMeasurement()
+    {
+        var tracker = new ContinuityCounterTracker();
+
+        tracker.Observe(Packet(TsPacket.NullPid, 0));
+        tracker.Observe(Packet(TsPacket.NullPid, 5));
+
+        Assert.False(tracker.CcMeasured);
+        Assert.False(tracker.ScrambleMeasured);
+    }
+
+    [Fact]
+    public void PacketsFromAnUnprovenBoundaryAloneAreNotAMeasurement()
+    {
+        var tracker = new ContinuityCounterTracker();
+
+        tracker.Observe(Packet(0x100, 0) with { Provisional = true });
+        tracker.Observe(Packet(0x100, 5) with { Provisional = true });
+
+        Assert.False(tracker.CcMeasured);
+        Assert.False(tracker.ScrambleMeasured);
+    }
+
+    [Fact]
+    public void AStreamThatNeverSaysWhatTimeItIsIsCountedWithoutBeingPlaced()
+    {
+        var tracker = new ContinuityCounterTracker();
+
+        tracker.Observe(Packet(0x100, 0));
+        tracker.Observe(Packet(0x100, 4));
+
+        Assert.True(tracker.CcMeasured);
+        Assert.Equal(3, tracker.Drops);
+        Assert.Null(tracker.Positions);
+    }
+
+    [Fact]
+    public void ALossIsWrittenAgainstTheSecondTheClockWasReadingWhenItHappened()
+    {
+        var tracker = new ContinuityCounterTracker();
+
+        tracker.Observe(Packet(0x100, 0, pcr: 0));
+        tracker.Observe(Packet(0x100, 1, pcr: 4 * 90_000));
+        tracker.Observe(Packet(0x100, 4));
+
+        Assert.NotNull(tracker.Positions);
+        Assert.Equal([new DropBucketDto(4, 2, 0)], tracker.Positions.Buckets);
+    }
+
+    [Fact]
+    public void ALossBeforeTheClockWasEverReadIsPlacedAtTheStart()
+    {
+        var tracker = new ContinuityCounterTracker();
+
+        tracker.Observe(Packet(0x100, 0));
+        tracker.Observe(Packet(0x100, 4));
+        tracker.Observe(Packet(0x100, 5, pcr: 4_500_000));
+
+        Assert.NotNull(tracker.Positions);
+        Assert.Equal([new DropBucketDto(0, 3, 0)], tracker.Positions.Buckets);
+    }
+
+    [Fact]
+    public void OnlyTheSecondsWhereSomethingHappenedAreNamed()
+    {
+        var tracker = new ContinuityCounterTracker();
+
+        tracker.Observe(Packet(0x100, 0, pcr: 0));
+        tracker.Observe(Packet(0x100, 1, pcr: 5 * 90_000));
+        tracker.Observe(Packet(0x100, 3));
+        tracker.Observe(Packet(0x100, 4, pcr: 9 * 90_000));
+        tracker.Observe(Packet(0x100, 5, pcr: 12 * 90_000));
+        tracker.Observe(Packet(0x100, 9));
+
+        Assert.NotNull(tracker.Positions);
+        Assert.Equal([5, 12], tracker.Positions.Buckets.Select(bucket => bucket.Second));
+        Assert.Equal([1, 3], tracker.Positions.Buckets.Select(bucket => bucket.Continuity));
+    }
+
+    [Fact]
+    public void EverythingPlacedAddsUpToWhatWasCounted()
+    {
+        var tracker = new ContinuityCounterTracker();
+
+        tracker.Observe(Packet(0x100, 0, pcr: 0));
+        tracker.Observe(Packet(0x100, 4, pcr: 3 * 90_000));
+        tracker.Observe(Packet(0x100, 5, scrambled: true));
+        tracker.Observe(Packet(0x100, 9, pcr: 8 * 90_000, scrambled: true));
+
+        Assert.NotNull(tracker.Positions);
+        Assert.Equal(
+            tracker.Drops,
+            tracker.Positions.Buckets.Sum(bucket => bucket.Continuity)
+        );
+        Assert.Equal(
+            tracker.ScrambledPackets,
+            tracker.Positions.Buckets.Sum(bucket => bucket.Scrambled)
+        );
+    }
+
+    [Fact]
+    public void PacketsLeftScrambledArePlacedApartFromPacketsThatWentMissing()
+    {
+        var tracker = new ContinuityCounterTracker();
+
+        tracker.Observe(Packet(0x100, 0, pcr: 0));
+        tracker.Observe(Packet(0x100, 1, pcr: 6 * 90_000, scrambled: true));
+        tracker.Observe(Packet(0x100, 4, pcr: 9 * 90_000));
+
+        Assert.NotNull(tracker.Positions);
+        Assert.Equal(
+            [new DropBucketDto(6, 0, 1), new DropBucketDto(9, 2, 0)],
+            tracker.Positions.Buckets
+        );
+    }
+
+    [Fact]
+    public void SeveralLossesInOneSecondAreOneEntry()
+    {
+        var tracker = new ContinuityCounterTracker();
+
+        tracker.Observe(Packet(0x100, 0, pcr: 0));
+        tracker.Observe(Packet(0x100, 1, pcr: 7 * 90_000));
+        tracker.Observe(Packet(0x200, 0));
+        tracker.Observe(Packet(0x100, 4));
+        tracker.Observe(Packet(0x200, 5));
+
+        Assert.NotNull(tracker.Positions);
+        Assert.Equal([new DropBucketDto(7, 6, 0)], tracker.Positions.Buckets);
+    }
+
+    [Fact]
+    public void ARepeatedPacketPlacesNothing()
+    {
+        var tracker = new ContinuityCounterTracker();
+
+        tracker.Observe(Packet(0x100, 4, payloadHash: 99, pcr: 3 * 90_000));
+        tracker.Observe(Packet(0x100, 4, payloadHash: 99));
+
+        Assert.Equal(1, tracker.Duplicates);
+        Assert.NotNull(tracker.Positions);
+        Assert.Empty(tracker.Positions.Buckets);
+    }
+
+    [Fact]
+    public void AMarkedDiscontinuityPlacesNothing()
+    {
+        var tracker = new ContinuityCounterTracker();
+
+        tracker.Observe(Packet(0x100, 4, pcr: 3 * 90_000));
+        tracker.Observe(Packet(0x100, 9, discontinuity: true));
+
+        Assert.Equal(1, tracker.Discontinuities);
+        Assert.NotNull(tracker.Positions);
+        Assert.Empty(tracker.Positions.Buckets);
+    }
+
+    [Fact]
+    public void PaddingPlacesNothing()
+    {
+        var tracker = new ContinuityCounterTracker();
+
+        tracker.Observe(Packet(0x100, 4, pcr: 3 * 90_000));
+        tracker.Observe(Packet(TsPacket.NullPid, 0));
+        tracker.Observe(Packet(TsPacket.NullPid, 9));
+        tracker.Observe(Packet(0x100, 5));
+
+        Assert.NotNull(tracker.Positions);
+        Assert.Empty(tracker.Positions.Buckets);
+    }
+
+    [Fact]
+    public void APacketTheHardwareFlaggedPlacesNothingAndMovesNoClock()
+    {
+        var tracker = new ContinuityCounterTracker();
+
+        tracker.Observe(Packet(0x100, 4, pcr: 3 * 90_000));
+        tracker.Observe(Packet(0x100, 12, transportError: true, pcr: 900 * 90_000));
+        tracker.Observe(Packet(0x100, 5));
+
+        Assert.NotNull(tracker.Positions);
+        Assert.Empty(tracker.Positions.Buckets);
+        Assert.Empty(tracker.Positions.Reanchors);
+    }
+
+    [Fact]
+    public void AClockThatBreaksIsCarriedBesideTheSecondsItPlaced()
+    {
+        var tracker = new ContinuityCounterTracker();
+
+        tracker.Observe(Packet(0x100, 0, pcr: 100 * 90_000));
+        tracker.Observe(Packet(0x100, 1, pcr: 104 * 90_000));
+        tracker.Observe(Packet(0x100, 2, pcr: 20 * 90_000));
+        tracker.Observe(Packet(0x100, 6));
+
+        Assert.NotNull(tracker.Positions);
+        Assert.Equal(100 * 90_000, tracker.Positions.AnchorPcr);
+        Assert.Equal(
+            [new PcrReanchorDto(4, 104 * 90_000, 20 * 90_000)],
+            tracker.Positions.Reanchors
+        );
+        Assert.Equal([new DropBucketDto(4, 3, 0)], tracker.Positions.Buckets);
+    }
+
+    [Fact]
+    public void TheSecondsAPositionNamesOnlyEverReadForwards()
+    {
+        var tracker = new ContinuityCounterTracker();
+
+        tracker.Observe(Packet(0x100, 0, pcr: 100 * 90_000));
+        tracker.Observe(Packet(0x100, 4, pcr: 110 * 90_000));
+        tracker.Observe(Packet(0x100, 5, pcr: 30 * 90_000));
+        tracker.Observe(Packet(0x100, 9, pcr: 34 * 90_000));
+
+        Assert.NotNull(tracker.Positions);
+        Assert.Equal(
+            tracker.Positions.Buckets.Select(bucket => bucket.Second).Order(),
+            tracker.Positions.Buckets.Select(bucket => bucket.Second)
+        );
+        Assert.Equal(
+            [10, 14],
+            tracker.Positions.Buckets.Select(bucket => bucket.Second)
+        );
     }
 }

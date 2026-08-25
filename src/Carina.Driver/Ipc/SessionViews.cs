@@ -38,7 +38,10 @@ public static class SessionViews
                 session.DiscardedBytes,
                 session.Resyncs,
                 session.DeviceOverflows,
-                session.LockLosses
+                session.LockLosses,
+                session.Counters.CcMeasured,
+                session.Counters.ScrambleMeasured,
+                session.Counters.Positions
             ),
         };
 
