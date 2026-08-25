@@ -211,6 +211,11 @@ regression it exists to catch. The plan shape and the block counts do not move
 with cache temperature, and between the two shapes they differ by two hundred
 times.
 
+The year-back search without a keyword is the shape that guards this. The keyword
+shape beside it reads well but flips its plan with the statistics sample, and was
+measured passing against both of the regressions it looks like it covers. Deleting
+the plain one as redundant would leave the measurement non-deterministic.
+
 ## Commands
 
 Everything runs inside the containers.

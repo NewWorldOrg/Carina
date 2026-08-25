@@ -23,6 +23,11 @@ public sealed class ProgrammeSearchScaleTests(ProgrammeSearchScale scale, ITestO
 
     private const long MostBlocksForOneCount = 20_000;
 
+    private const string TheOneShapeThatGuardsBothRegressions =
+        "The year-back search without a keyword is the only shape that catches both the union reshape and the "
+        + "index cover on every run. The keyword shape beside it flips its plan with the statistics sample, and "
+        + "was measured passing against both regressions on some runs: it corroborates, it cannot stand in.";
+
     [Fact]
     public async Task ASearchThatStartsAYearBackMergesTheLayersInIndexOrderRatherThanSortingTheArchive()
     {
@@ -30,9 +35,9 @@ public sealed class ProgrammeSearchScaleTests(ProgrammeSearchScale scale, ITestO
             ProgrammeSearch.For(null, ProgrammeSearchScale.Anchor.AddDays(-365), null)!,
             nameof(ASearchThatStartsAYearBackMergesTheLayersInIndexOrderRatherThanSortingTheArchive));
 
-        Assert.Contains("Merge Append", taken.Page.NodeTypes);
-        Assert.DoesNotContain("Subquery Scan", taken.Page.NodeTypes);
-        Assert.Contains("Index Only Scan", taken.Count.NodeTypes);
+        Assert.True(taken.Page.NodeTypes.Contains("Merge Append"), TheOneShapeThatGuardsBothRegressions);
+        Assert.True(!taken.Page.NodeTypes.Contains("Subquery Scan"), TheOneShapeThatGuardsBothRegressions);
+        Assert.True(taken.Count.NodeTypes.Contains("Index Only Scan"), TheOneShapeThatGuardsBothRegressions);
         Assert.Contains("archived_programme", taken.Page.Relations);
         Assert.Contains("programme", taken.Page.Relations);
 
