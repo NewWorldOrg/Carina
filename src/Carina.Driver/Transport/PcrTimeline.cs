@@ -15,6 +15,9 @@ public sealed class PcrTimeline
     private readonly List<PcrReanchorDto> reanchors = [];
 
     private int followed;
+    private int candidate;
+    private bool watching;
+    private long candidateFirst;
     private long? anchor;
     private long previous;
     private long elapsed;
@@ -45,8 +48,12 @@ public sealed class PcrTimeline
 
         if (pid != followed)
         {
+            Consider(pid, reference);
+
             return;
         }
+
+        watching = false;
 
         if (declaredDiscontinuous)
         {
@@ -70,6 +77,33 @@ public sealed class PcrTimeline
 
         elapsed += step;
         previous = reference;
+    }
+
+    private void Consider(int pid, long reference)
+    {
+        if (!watching || candidate != pid)
+        {
+            watching = true;
+            candidate = pid;
+            candidateFirst = reference;
+
+            return;
+        }
+
+        long span = reference - candidateFirst;
+        if (span < 0)
+        {
+            span += WrapsAt;
+        }
+
+        if (span <= ContinuousWithin)
+        {
+            return;
+        }
+
+        Reanchor(reference);
+        followed = pid;
+        watching = false;
     }
 
     private void Reanchor(long reference)

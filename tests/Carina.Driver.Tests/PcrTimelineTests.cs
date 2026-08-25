@@ -295,4 +295,57 @@ public sealed class PcrTimelineTests
         Assert.Equal(9_000, PcrTimeline.RepeatedAtLeastEvery);
         Assert.Equal(900_000, PcrTimeline.ContinuousWithin);
     }
+
+    [Fact]
+    public void AClockThatGoesSilentWhileAnotherKeepsSpeakingIsHandedOver()
+    {
+        var timeline = new PcrTimeline();
+
+        timeline.Observe(VideoPid, 0, declaredDiscontinuous: false);
+
+        for (int reading = 1; reading <= 600; reading++)
+        {
+            timeline.Observe(OtherServicePid, reading * Second, declaredDiscontinuous: false);
+        }
+
+        Assert.Equal(0, timeline.Anchor);
+        Assert.Single(timeline.Reanchors);
+        Assert.Equal(0, timeline.Reanchors[0].Second);
+        Assert.Equal(0, timeline.Reanchors[0].Before);
+        Assert.True(
+            timeline.Second > 500,
+            $"the timeline froze at second {timeline.Second} while a clock was still speaking."
+        );
+    }
+
+    [Fact]
+    public void AClockThatSpeaksAgainInTimeIsNotHandedOver()
+    {
+        var timeline = new PcrTimeline();
+
+        for (int reading = 0; reading <= 60; reading++)
+        {
+            timeline.Observe(VideoPid, reading * Second, declaredDiscontinuous: false);
+            timeline.Observe(OtherServicePid, 5_000_000 + (reading * Second), declaredDiscontinuous: false);
+        }
+
+        Assert.Equal(60, timeline.Second);
+        Assert.Empty(timeline.Reanchors);
+    }
+
+    [Fact]
+    public void AServiceThatSaysTheTimeOnceIsNotMistakenForTheClockGoingSilent()
+    {
+        var timeline = new PcrTimeline();
+
+        timeline.Observe(VideoPid, 0, declaredDiscontinuous: false);
+
+        for (int reading = 1; reading <= 600; reading++)
+        {
+            timeline.Observe(reading + 0x200, reading * Second, declaredDiscontinuous: false);
+        }
+
+        Assert.Equal(0, timeline.Second);
+        Assert.Empty(timeline.Reanchors);
+    }
 }

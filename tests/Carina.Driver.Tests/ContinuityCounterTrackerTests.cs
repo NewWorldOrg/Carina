@@ -542,4 +542,34 @@ public sealed class ContinuityCounterTrackerTests
         );
         Assert.Equal([new DropBucketDto(0, 5, 0)], positions.Buckets);
     }
+
+    [Fact]
+    public void LossesSpreadOverATenMinuteSilenceAreNotAllHeapedOntoTheFirstSecond()
+    {
+        var tracker = new ContinuityCounterTracker();
+        const int OneSeg = 0x1FC;
+
+        tracker.Observe(Packet(0x100, 0, pcr: 0));
+
+        int counter = 0;
+        for (int reading = 1; reading <= 600; reading++)
+        {
+            tracker.Observe(Packet(OneSeg, reading % 16, pcr: reading * 90_000L));
+            counter += 2;
+            tracker.Observe(Packet(0x100, counter % 16));
+        }
+
+        DropPositionsDto? positions = tracker.Snapshot().Positions;
+
+        Assert.NotNull(positions);
+        Assert.Single(positions.Reanchors);
+        Assert.True(
+            positions.Buckets.Count > 500,
+            $"{tracker.Drops} losses over ten minutes were placed into {positions.Buckets.Count} seconds."
+        );
+        Assert.Equal(
+            tracker.Drops,
+            positions.Buckets.Sum(bucket => bucket.Continuity)
+        );
+    }
 }
