@@ -1,0 +1,81 @@
+using Carina.Contracts;
+
+namespace Carina.Driver.Transport;
+
+public sealed class PcrTimeline
+{
+    public const long WrapsAt = 8_589_934_592;
+
+    public const long TicksPerSecond = 90_000;
+
+    public const long ContinuousWithin = TicksPerSecond * 10;
+
+    private readonly List<PcrReanchorDto> reanchors = [];
+
+    private int followed;
+    private long? anchor;
+    private long previous;
+    private long elapsed;
+
+    public long? Anchor => anchor;
+
+    public bool Located => anchor is not null;
+
+    public int Second => (int)(elapsed / TicksPerSecond);
+
+    public IReadOnlyList<PcrReanchorDto> Reanchors => [.. reanchors];
+
+    public void Observe(int pid, long reference)
+    {
+        if (reference < 0 || reference >= WrapsAt)
+        {
+            return;
+        }
+
+        if (anchor is null)
+        {
+            followed = pid;
+            anchor = reference;
+            previous = reference;
+
+            return;
+        }
+
+        if (pid != followed)
+        {
+            return;
+        }
+
+        long step = reference - previous;
+        if (step < 0 && step + WrapsAt <= ContinuousWithin)
+        {
+            step += WrapsAt;
+        }
+
+        if (step < 0 || step > ContinuousWithin)
+        {
+            Reanchor(reference);
+
+            return;
+        }
+
+        elapsed += step;
+        previous = reference;
+    }
+
+    private void Reanchor(long reference)
+    {
+        int second = Second;
+
+        if (reanchors.Count > 0 && reanchors[^1].Second == second)
+        {
+            reanchors[^1] = reanchors[^1] with { After = reference };
+        }
+        else
+        {
+            reanchors.Add(new PcrReanchorDto(second, previous, reference));
+        }
+
+        previous = reference;
+    }
+}
