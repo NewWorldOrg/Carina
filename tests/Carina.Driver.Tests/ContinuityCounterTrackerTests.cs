@@ -308,6 +308,18 @@ public sealed class ContinuityCounterTrackerTests
     }
 
     [Fact]
+    public void APacketThatBothSaysTheTimeAndFinishesAGapIsPlacedAtTheTimeItSays()
+    {
+        var tracker = new ContinuityCounterTracker();
+
+        tracker.Observe(Packet(0x100, 0, pcr: 0));
+        tracker.Observe(Packet(0x100, 4, pcr: 6 * 90_000));
+
+        Assert.NotNull(tracker.Positions);
+        Assert.Equal([new DropBucketDto(6, 3, 0)], tracker.Positions.Buckets);
+    }
+
+    [Fact]
     public void ALossBeforeTheClockWasEverReadIsPlacedAtTheStart()
     {
         var tracker = new ContinuityCounterTracker();
