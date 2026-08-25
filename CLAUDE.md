@@ -127,6 +127,15 @@ nothing.
   archive then sorts the whole archive to hand back one page. Above the union the
   same exclusion reads as an anti-join the primary key answers.
 
+- **The page a search hands back is bounded; the count beside it is not.** The
+  ordered path stops at fifty rows however far back the start date reaches, but
+  `Total` still walks every archived row that matches — measured at roughly 53 ms
+  per year held, so three years is about 160 ms and ten about 530 ms, spent before
+  the page itself is read. Reaching back as far as the archive goes is the
+  decision, so this arrives on its own as the archive grows. The ways out are an
+  estimated total, cursor paging in place of a page count, or a count that stops
+  at a ceiling and answers "more than". None of them is in place.
+
 - **A stop the driver was asked for exits 0; anything else exits 70.** Coming
   back is the supervisor's half of the deal, which is why `on-failure` is the one
   restart policy the driver must never be given.
