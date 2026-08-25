@@ -227,7 +227,7 @@ public sealed class RecordingMeasurementTests
         Assert.True(recording.CcMeasured);
         Assert.True(recording.ScrambleMeasured);
         Assert.Equal(3, recording.CcDropped);
-        Assert.Equal(300, recording.CcTotal);
+        Assert.Equal(303, recording.CcTotal);
         Assert.Equal(0, recording.ScrambledPackets);
         Assert.NotNull(recording.Positions);
         Assert.Equal([new DropBucketDto(5, 3, 0)], recording.Positions.Buckets);

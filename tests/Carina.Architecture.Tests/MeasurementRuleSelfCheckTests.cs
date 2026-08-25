@@ -47,12 +47,37 @@ public sealed class MeasurementRuleSelfCheckTests
         try
         {
             Assert.Contains(
-                "Carina.Driver/Transport/PacketTap.cs",
+                "Transport/PacketTap.cs",
                 MeasurementRules.PlacesThatTakeTheStreamApart(directory.FullName),
                 StringComparer.Ordinal);
             Assert.DoesNotContain(
-                "Carina.Driver/Transport/PacketTap.cs",
+                "Transport/PacketTap.cs",
                 MeasurementRules.AllowedToTakeTheStreamApart,
+                StringComparer.Ordinal);
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void DetectsAParserThatNamesNoneOfThoseTypesAtAll()
+    {
+        DirectoryInfo directory = Planted();
+
+        try
+        {
+            string audit = File.ReadAllText(
+                Path.Combine(directory.FullName, "Carina.Driver", "Recording", "StreamAudit.cs"));
+
+            Assert.DoesNotContain(MeasurementRules.Counter, audit, StringComparison.Ordinal);
+            Assert.DoesNotContain(MeasurementRules.Packet, audit, StringComparison.Ordinal);
+            Assert.DoesNotContain(MeasurementRules.Reader, audit, StringComparison.Ordinal);
+
+            Assert.Contains(
+                "Recording/StreamAudit.cs",
+                MeasurementRules.PlacesThatTakeTheStreamApart(directory.FullName),
                 StringComparer.Ordinal);
         }
         finally
@@ -124,6 +149,40 @@ public sealed class MeasurementRuleSelfCheckTests
                 private readonly TsPacketReader reader = new();
 
                 public IReadOnlyList<TsPacket> Read(byte[] chunk) => reader.Read(chunk);
+            }
+            """);
+
+        Write(
+            directory,
+            "Carina.Driver/Recording/StreamAudit.cs",
+            """
+            namespace Sample;
+            public sealed class StreamAudit
+            {
+                private readonly Dictionary<int, int> last = [];
+
+                public long Lost { get; private set; }
+
+                public void Take(byte[] chunk)
+                {
+                    for (int at = 0; at + 188 <= chunk.Length; at += 188)
+                    {
+                        if (chunk[at] != 0x47)
+                        {
+                            continue;
+                        }
+
+                        int pid = ((chunk[at + 1] & 0x1F) << 8) | chunk[at + 2];
+                        int counter = chunk[at + 3] & 0x0F;
+
+                        if (last.TryGetValue(pid, out int seen) && counter != (seen + 1) % 16)
+                        {
+                            Lost++;
+                        }
+
+                        last[pid] = counter;
+                    }
+                }
             }
             """);
 

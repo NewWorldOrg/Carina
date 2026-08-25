@@ -94,14 +94,19 @@ public sealed record RecordingSessionDto
             EndsAt = session.EndsAt,
             BytesWritten = session.BytesRecorded,
             CcDropped = countedContinuity ? session.Counters.Drops : null,
-            CcTotal = countedContinuity ? session.Counters.Packets : null,
+            CcTotal = countedContinuity
+                ? session.Counters.Packets + session.Counters.Drops
+                : null,
             CcMeasured = countedContinuity,
             ScrambledPackets = countedScrambling ? session.Counters.ScrambledPackets : null,
             ScrambleMeasured = countedScrambling,
             EovfCount = session.Counters.DeviceOverflows,
-            Positions = hello.Supports(DriverCapabilities.DropPositions)
-                ? session.Counters.Positions
-                : null,
+            Positions =
+                countedContinuity
+                && countedScrambling
+                && hello.Supports(DriverCapabilities.DropPositions)
+                    ? session.Counters.Positions
+                    : null,
         };
     }
 }

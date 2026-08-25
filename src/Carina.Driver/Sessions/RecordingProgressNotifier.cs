@@ -6,19 +6,23 @@ public sealed class RecordingProgressNotifier : IDisposable
 
     private readonly Func<bool> anythingRecording;
     private readonly Action tell;
+    private readonly Action<Exception>? faulted;
     private readonly ITimer timer;
 
     private long notices;
+    private long faults;
 
     public RecordingProgressNotifier(
         Func<bool> anythingRecording,
         Action tell,
         TimeProvider timeProvider,
-        TimeSpan? every = null
+        TimeSpan? every = null,
+        Action<Exception>? faulted = null
     )
     {
         this.anythingRecording = anythingRecording;
         this.tell = tell;
+        this.faulted = faulted;
 
         TimeSpan interval = every ?? DefaultInterval;
 
@@ -27,16 +31,26 @@ public sealed class RecordingProgressNotifier : IDisposable
 
     public long Notices => Interlocked.Read(ref notices);
 
+    public long Faults => Interlocked.Read(ref faults);
+
     public void Dispose() => timer.Dispose();
 
     private void Tick()
     {
-        if (!anythingRecording())
+        try
         {
-            return;
-        }
+            if (!anythingRecording())
+            {
+                return;
+            }
 
-        Interlocked.Increment(ref notices);
-        tell();
+            Interlocked.Increment(ref notices);
+            tell();
+        }
+        catch (Exception error)
+        {
+            Interlocked.Increment(ref faults);
+            faulted?.Invoke(error);
+        }
     }
 }

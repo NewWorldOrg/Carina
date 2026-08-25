@@ -397,4 +397,93 @@ public sealed class PcrTimelineTests
         Assert.Equal(2, timeline.Second);
         Assert.Empty(timeline.Reanchors);
     }
+
+    [Theory]
+    [InlineData(900_000, 10, 0)]
+    [InlineData(900_001, 0, 1)]
+    public void TheForwardEdgeOfTheWindowFallsBetweenNineHundredThousandAndOneMore(
+        long step,
+        int expectedSecond,
+        int expectedReanchors
+    )
+    {
+        var timeline = new PcrTimeline();
+
+        timeline.Observe(VideoPid, 0, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, step, declaredDiscontinuous: false);
+
+        Assert.Equal(expectedSecond, timeline.Second);
+        Assert.Equal(expectedReanchors, timeline.Reanchors.Count);
+    }
+
+    [Theory]
+    [InlineData(899_999, 10, 0)]
+    [InlineData(900_000, 0, 1)]
+    public void TheWrappingEdgeOfTheWindowFallsInTheSamePlaceAsTheForwardOne(
+        long after,
+        int expectedSecond,
+        int expectedReanchors
+    )
+    {
+        var timeline = new PcrTimeline();
+
+        timeline.Observe(VideoPid, Wrap - 1, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, after, declaredDiscontinuous: false);
+
+        Assert.Equal(expectedSecond, timeline.Second);
+        Assert.Equal(expectedReanchors, timeline.Reanchors.Count);
+    }
+
+    [Theory]
+    [InlineData(900_000, 0)]
+    [InlineData(900_001, 1)]
+    public void TheHandoverEdgeFallsBetweenNineHundredThousandAndOneMore(
+        long span,
+        int expectedReanchors
+    )
+    {
+        var timeline = new PcrTimeline();
+
+        timeline.Observe(VideoPid, 0, declaredDiscontinuous: false);
+        timeline.Observe(OtherServicePid, 5_000_000, declaredDiscontinuous: false);
+        timeline.Observe(OtherServicePid, 5_000_000 + span, declaredDiscontinuous: false);
+
+        Assert.Equal(expectedReanchors, timeline.Reanchors.Count);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(7)]
+    [InlineData(20_260_826)]
+    public void ATimelineOnlyEverReadsForwardsHoweverTheClocksBehave(int seed)
+    {
+        var timeline = new PcrTimeline();
+        var noise = new Random(seed);
+        int[] services = [VideoPid, OtherServicePid, 0x0200, 0x1FC];
+        int highest = 0;
+
+        for (int reading = 0; reading < 400; reading++)
+        {
+            long value = noise.Next(4) switch
+            {
+                0 => noise.NextInt64(0, Wrap),
+                1 => Wrap - noise.NextInt64(0, 3),
+                2 => noise.NextInt64(0, 2) is 0 ? 900_000 : 900_001,
+                _ => noise.NextInt64(-2, 4 * Second),
+            };
+
+            timeline.Observe(
+                services[noise.Next(services.Length)],
+                value,
+                declaredDiscontinuous: noise.Next(8) is 0);
+
+            Assert.True(
+                timeline.Second >= highest,
+                $"reading {reading} took the timeline back from {highest} to {timeline.Second}."
+            );
+
+            highest = timeline.Second;
+        }
+    }
 }

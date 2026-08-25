@@ -134,4 +134,44 @@ public sealed class RecordingProgressNotifierTests
             Interval
         );
     }
+
+    [Fact]
+    public void AnAnnouncementThatThrowsDoesNotBringTheTimerThreadDown()
+    {
+        var clock = new SteppedTimeProvider(Start);
+        var met = new List<Exception>();
+        using var notifier = new RecordingProgressNotifier(
+            () => true,
+            () => throw new InvalidOperationException("the hub is gone"),
+            clock,
+            Interval,
+            met.Add
+        );
+
+        clock.Advance(Interval);
+        clock.Advance(Interval);
+
+        Assert.Equal(2, notifier.Faults);
+        Assert.Equal(2, met.Count);
+        Assert.All(met, error => Assert.IsType<InvalidOperationException>(error));
+    }
+
+    [Fact]
+    public void AskingWhetherAnythingIsRecordingIsAllowedToThrowToo()
+    {
+        var clock = new SteppedTimeProvider(Start);
+        var met = new List<Exception>();
+        using var notifier = new RecordingProgressNotifier(
+            () => throw new InvalidOperationException("the sessions are gone"),
+            () => { },
+            clock,
+            Interval,
+            met.Add
+        );
+
+        clock.Advance(Interval);
+
+        Assert.Equal(1, notifier.Faults);
+        Assert.Equal(0, notifier.Notices);
+    }
 }

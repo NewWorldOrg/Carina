@@ -31,6 +31,7 @@ public sealed class MeasurementRuleTests
         Assert.NotEmpty(
             Directory.EnumerateFiles(
                 Path.Combine(RepositoryLayout.SourceDirectory, "Carina.Driver", "Recording"),
-                "*.cs"));
+                "*.cs",
+                SearchOption.AllDirectories));
     }
 }

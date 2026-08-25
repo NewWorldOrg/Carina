@@ -522,7 +522,7 @@ public sealed class VersionSkewTests
 
         Assert.True(recording.CcMeasured);
         Assert.Equal(7, recording.CcDropped);
-        Assert.Equal(50_000, recording.CcTotal);
+        Assert.Equal(50_007, recording.CcTotal);
         Assert.False(recording.ScrambleMeasured);
         Assert.Null(recording.ScrambledPackets);
         Assert.Equal(2, recording.EovfCount);
@@ -641,10 +641,10 @@ public sealed class VersionSkewTests
     public void ACountWithNoPositionAtAllIsNotTheSameAsAPositionWithNothingInIt()
     {
         SessionSnapshot located = RecordingAnsweredWith(
-            """{"packets":50000,"drops":0,"ccMeasured":true,"positions":{"anchorPcr":900,"buckets":[],"reanchors":[]}}"""
+            """{"packets":50000,"drops":0,"ccMeasured":true,"scrambleMeasured":true,"positions":{"anchorPcr":900,"buckets":[],"reanchors":[]}}"""
         );
         SessionSnapshot unlocated = RecordingAnsweredWith(
-            """{"packets":50000,"drops":0,"ccMeasured":true}"""
+            """{"packets":50000,"drops":0,"ccMeasured":true,"scrambleMeasured":true}"""
         );
 
         RecordingSessionDto withAPosition = RecordingSessionDto.Of(LocatingDriver, located);
@@ -657,6 +657,53 @@ public sealed class VersionSkewTests
 
         Assert.True(withNone.CcMeasured);
         Assert.Null(withNone.Positions);
+    }
+
+    [Fact]
+    public void APositionFromADriverThatDoesNotCountContinuityIsLeftBehind()
+    {
+        SessionSnapshot session = RecordingAnsweredWith(
+            """{"packets":50000,"drops":7,"scrambleMeasured":true,"positions":{"anchorPcr":900,"buckets":[],"reanchors":[]}}"""
+        );
+
+        Assert.Null(RecordingSessionDto.Of(PositionsWithoutContinuityDriver, session).Positions);
+    }
+
+    [Fact]
+    public void APositionFromADriverThatDoesNotCountScramblingIsLeftBehind()
+    {
+        SessionSnapshot session = RecordingAnsweredWith(
+            """{"packets":50000,"drops":7,"ccMeasured":true,"positions":{"anchorPcr":900,"buckets":[{"second":3,"continuity":0,"scrambled":4}],"reanchors":[]}}"""
+        );
+
+        Assert.Null(RecordingSessionDto.Of(PositionsWithoutScrambleDriver, session).Positions);
+    }
+
+    [Fact]
+    public void APositionOnCountersThatSayNothingWasCountedIsLeftBehind()
+    {
+        SessionSnapshot session = RecordingAnsweredWith(
+            """{"packets":50000,"drops":7,"ccMeasured":false,"scrambleMeasured":false,"positions":{"anchorPcr":900,"buckets":[],"reanchors":[]}}"""
+        );
+
+        RecordingSessionDto recording = RecordingSessionDto.Of(LocatingDriver, session);
+
+        Assert.False(recording.CcMeasured);
+        Assert.Null(recording.CcDropped);
+        Assert.Null(recording.Positions);
+    }
+
+    [Fact]
+    public void TheTotalOnTheWireIsWhatTheStreamShouldHaveCarried()
+    {
+        SessionSnapshot session = RecordingAnsweredWith(
+            """{"packets":40,"drops":117,"ccMeasured":true,"scrambleMeasured":true}"""
+        );
+
+        RecordingSessionDto recording = RecordingSessionDto.Of(LocatingDriver, session);
+
+        Assert.Equal(117, recording.CcDropped);
+        Assert.Equal(157, recording.CcTotal);
     }
 
     [Fact]
@@ -861,6 +908,28 @@ public sealed class VersionSkewTests
                 DriverCapabilities.Recording,
                 DriverCapabilities.Live,
                 DriverCapabilities.ScrambleMeasurement,
+            ]
+        );
+
+    private static readonly DriverHello PositionsWithoutContinuityDriver =
+        new(
+            DriverProtocol.Version,
+            "positions-no-continuity",
+            [
+                DriverCapabilities.Recording,
+                DriverCapabilities.ScrambleMeasurement,
+                DriverCapabilities.DropPositions,
+            ]
+        );
+
+    private static readonly DriverHello PositionsWithoutScrambleDriver =
+        new(
+            DriverProtocol.Version,
+            "positions-no-scramble",
+            [
+                DriverCapabilities.Recording,
+                DriverCapabilities.CcMeasurement,
+                DriverCapabilities.DropPositions,
             ]
         );
 

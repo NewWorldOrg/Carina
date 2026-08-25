@@ -129,7 +129,21 @@ nothing.
 - **"Nothing counted this" and "this was counted and was clean" are different
   answers,** and so are "nowhere" and "somewhere, with nothing in it". A driver
   that cannot count says so in its greeting rather than answering zero, and a
-  reader that does not find the capability reads no number at all.
+  reader that does not find the capability reads no number at all. A position
+  needs both counts behind it: it rides on the continuity count and the
+  scrambling count together, because the seconds it names carry both.
+
+- **A total is what the stream should have carried, not what arrived.** The
+  driver counts the packets it read and the packets it never saw separately, and
+  the total the ledger stores is the two added together — a recording that lost
+  more than it received is ordinary in heavy rain, and "lost 117 of 40" is not a
+  number the ledger can hold.
+
+- **Every count and the position beside it are read in one breath.** They are
+  taken under a single lock and handed over together, because a position read a
+  moment after its counts can place more losses than the count admits to, and
+  both the entity and the table reject that pairing. Reading them apart is the
+  bug this rule exists for.
 
 - **Where a loss happened is kept as a second of the stream's own clock.** The
   programme clock reference is what the file is played back against: a byte
