@@ -3,12 +3,14 @@ using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.DriverStatus;
 using Carina.Domain.Events;
+using Carina.Domain.Integrity;
 using Carina.Domain.Scans;
 using Carina.Infrastructure.Collection;
 using Carina.Infrastructure.Configuration;
 using Carina.Infrastructure.DependencyInjection;
 using Carina.Infrastructure.Driver;
 using Carina.Infrastructure.Events;
+using Carina.Infrastructure.Integrity;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Scanning;
 
@@ -159,6 +161,53 @@ public sealed class ServiceCollectionExtensionsTests
             () => provider.GetRequiredService<IOptions<DatabaseOptions>>().Value);
 
         Assert.Contains("ConnectionStrings:Carina", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RegistersTheLedgerCheckAlongsideTheOtherHostedServices()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        Assert.Contains(
+            provider.GetServices<IHostedService>(),
+            service => ReferenceEquals(service, provider.GetRequiredService<IntegrityCheckJob>()));
+    }
+
+    [Fact]
+    public void RegistersEverythingTheLedgerCheckReachesFor()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.IsType<LocalRecordingFileSurvey>(provider.GetRequiredService<IRecordingFileSurvey>());
+        Assert.IsType<JsonIntegrityReportStore>(provider.GetRequiredService<IIntegrityReportStore>());
+        Assert.IsType<RecordingLedger>(scope.ServiceProvider.GetRequiredService<IRecordingLedger>());
+    }
+
+    [Fact]
+    public void ReadsWhereTheOutputRootsAreMountedIntoThisProcess()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings["Integrity:OutputRoots"] = "primary=/srv/recordings";
+        using ServiceProvider provider = Build(settings);
+
+        IntegritySettings read = provider.GetRequiredService<IntegritySettings>();
+
+        Assert.Equal("primary", Assert.Single(read.OutputRoots).Root.Value);
+        Assert.Equal("/srv/recordings", read.OutputRoots[0].Path);
+    }
+
+    [Fact]
+    public void RejectsAnOutputRootMountedNowhere()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings["Integrity:OutputRoots"] = "primary";
+        using ServiceProvider provider = Build(settings);
+
+        OptionsValidationException exception = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<IntegrityOptions>>().Value);
+
+        Assert.Contains("Integrity:OutputRoots", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
