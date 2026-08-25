@@ -39,6 +39,28 @@ public sealed class MeasurementRuleSelfCheckTests
         }
     }
 
+    [Fact]
+    public void DetectsAReaderSuppliedFromSomewhereTheAllowListDoesNotName()
+    {
+        DirectoryInfo directory = Planted();
+
+        try
+        {
+            Assert.Contains(
+                "Carina.Driver/Transport/PacketTap.cs",
+                MeasurementRules.PlacesThatTakeTheStreamApart(directory.FullName),
+                StringComparer.Ordinal);
+            Assert.DoesNotContain(
+                "Carina.Driver/Transport/PacketTap.cs",
+                MeasurementRules.AllowedToTakeTheStreamApart,
+                StringComparer.Ordinal);
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
     private static DirectoryInfo Planted()
     {
         DirectoryInfo directory = Directory.CreateTempSubdirectory("carina-measurement-");
@@ -89,6 +111,19 @@ public sealed class MeasurementRuleSelfCheckTests
             public sealed class RecordingWriter
             {
                 public void Write(byte[] chunk) { }
+            }
+            """);
+
+        Write(
+            directory,
+            "Carina.Driver/Transport/PacketTap.cs",
+            """
+            namespace Sample;
+            public sealed class PacketTap
+            {
+                private readonly TsPacketReader reader = new();
+
+                public IReadOnlyList<TsPacket> Read(byte[] chunk) => reader.Read(chunk);
             }
             """);
 

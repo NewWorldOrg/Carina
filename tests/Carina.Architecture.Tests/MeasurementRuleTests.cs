@@ -11,6 +11,14 @@ public sealed class MeasurementRuleTests
     }
 
     [Fact]
+    public void EveryPlaceThatTakesTheStreamApartIsOneOfTheFourNamedHere()
+    {
+        Assert.Equal(
+            MeasurementRules.AllowedToTakeTheStreamApart,
+            MeasurementRules.PlacesThatTakeTheStreamApart(RepositoryLayout.SourceDirectory));
+    }
+
+    [Fact]
     public void TheRecordingWriterTakesBytesAndReadsNoPacketOfItsOwn()
     {
         Assert.Empty(
