@@ -196,13 +196,13 @@ public sealed class ProgrammeSearchLooksForwardTests(RepositoryDatabase database
     }
 
     [Fact]
-    public async Task AnEndOnItsOwnReachesBackToTheArchive()
+    public async Task AnEndOnItsOwnDoesNotReadTheArchiveWhateverTheTimesInItSay()
     {
         int network = BroadcastIds.NextNetwork();
         await using CarinaDbContext context = database.Open();
 
         await new ArchivedProgrammeRepository(context).KeepAsync(
-            [Kept(network, 1, $"報道{network}", Now.AddDays(-2))],
+            [Kept(network, 1, $"報道{network}", Now.AddHours(2))],
             Cancel);
 
         await using CarinaDbContext reading = database.Open();
@@ -211,7 +211,28 @@ public sealed class ProgrammeSearchLooksForwardTests(RepositoryDatabase database
             Now,
             Cancel);
 
+        Assert.Equal(0, found.Total);
+    }
+
+    [Fact]
+    public async Task AnEndOnItsOwnRunsFromNowRatherThanFromTheStartOfTheRecord()
+    {
+        int network = BroadcastIds.NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        var programmes = new ProgrammeRepository(context);
+
+        await programmes.AddAsync(Ran(network, 1, $"報道{network}", Now.AddHours(-3), Now.AddHours(-2)), Cancel);
+        await programmes.AddAsync(Ran(network, 2, $"報道{network}", Now.AddHours(2), Now.AddHours(3)), Cancel);
+        await programmes.AddAsync(Ran(network, 3, $"報道{network}", Now.AddDays(2), Now.AddDays(2).AddMinutes(30)), Cancel);
+        await context.SaveChangesAsync(Cancel);
+
+        PaginatedList<ProgrammeMatch> found = await new ProgrammeSearchRepository(context).SearchAsync(
+            ProgrammeSearch.For($"報道{network}", null, Now.AddDays(1))!,
+            Now,
+            Cancel);
+
         Assert.Equal(1, found.Total);
+        Assert.Equal(2, found.Items[0].EventId.Value);
     }
 
     [Fact]

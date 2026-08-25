@@ -115,8 +115,6 @@ public sealed class ProgrammeSearch
 
     public int PerPage { get; }
 
-    public bool NamesASpan => From is not null || To is not null;
-
     private bool NarrowsNothing
         => Words.Count is 0
             && ExcludedWords.Count is 0
@@ -197,8 +195,8 @@ public sealed class ProgrammeSearch
     {
         UtcTimes.Required(now, nameof(now));
 
-        return NamesASpan
-            ? new ProgrammeReach(From is null || From < now, null)
+        return From is { } began
+            ? new ProgrammeReach(began < now, null)
             : new ProgrammeReach(false, now);
     }
 

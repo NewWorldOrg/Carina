@@ -351,7 +351,7 @@ public sealed class ProgrammeSearchTests
         => Assert.Empty(Asking("news").Over([]).Services!);
 
     [Fact]
-    public void ASearchThatNamesNoSpanLooksAheadFromNowAndLeavesTheHistoryOut()
+    public void NoBeginningAndNoEndLooksAheadFromNowAndLeavesTheHistoryOut()
     {
         ProgrammeReach reach = Asking("news").ReachAt(Now);
 
@@ -360,7 +360,7 @@ public sealed class ProgrammeSearchTests
     }
 
     [Fact]
-    public void ASpanThatBeginsBeforeNowReachesTheHistory()
+    public void ABeginningBeforeNowWithAnEndReachesTheHistoryAndAsksForNoInstant()
     {
         ProgrammeReach reach = ProgrammeSearch.For("news", Now.AddDays(-1), Now.AddDays(1))!.ReachAt(Now);
 
@@ -369,7 +369,7 @@ public sealed class ProgrammeSearchTests
     }
 
     [Fact]
-    public void ASpanThatBeginsAfterNowLeavesTheHistoryOut()
+    public void ABeginningAfterNowWithAnEndLeavesTheHistoryOutAndAsksForNoInstant()
     {
         ProgrammeReach reach = ProgrammeSearch.For("news", Now.AddDays(1), Now.AddDays(2))!.ReachAt(Now);
 
@@ -378,45 +378,60 @@ public sealed class ProgrammeSearchTests
     }
 
     [Fact]
-    public void ASpanThatBeginsAtNowItselfLeavesTheHistoryOut()
+    public void ABeginningInThePastOnItsOwnReachesTheHistoryAndAsksForNoInstant()
     {
-        ProgrammeReach reach = ProgrammeSearch.For("news", Now, Now.AddDays(1))!.ReachAt(Now);
+        ProgrammeReach reach = ProgrammeSearch.For("news", Now.AddDays(-1), null)!.ReachAt(Now);
+
+        Assert.True(reach.History);
+        Assert.Null(reach.NotOverBy);
+    }
+
+    [Fact]
+    public void ABeginningInTheFutureOnItsOwnLeavesTheHistoryOutAndAsksForNoInstant()
+    {
+        ProgrammeReach reach = ProgrammeSearch.For("news", Now.AddDays(1), null)!.ReachAt(Now);
 
         Assert.False(reach.History);
         Assert.Null(reach.NotOverBy);
     }
 
     [Fact]
-    public void ASpanOneTickBeforeNowAlreadyReachesTheHistory()
-        => Assert.True(
-            ProgrammeSearch.For("news", Now.AddTicks(-1), Now.AddDays(1))!.ReachAt(Now).History);
-
-    [Fact]
-    public void ABeginningOnItsOwnDecidesTheHistoryByWhereItFalls()
+    public void AnEndOnItsOwnMeansFromNowUntilThatEnd()
     {
-        Assert.True(ProgrammeSearch.For("news", Now.AddDays(-1), null)!.ReachAt(Now).History);
-        Assert.False(ProgrammeSearch.For("news", Now.AddDays(1), null)!.ReachAt(Now).History);
+        ProgrammeReach ahead = ProgrammeSearch.For("news", null, Now.AddDays(1))!.ReachAt(Now);
+        ProgrammeReach behind = ProgrammeSearch.For("news", null, Now.AddDays(-1))!.ReachAt(Now);
+
+        Assert.False(ahead.History);
+        Assert.Equal(Now, ahead.NotOverBy);
+        Assert.False(behind.History);
+        Assert.Equal(Now, behind.NotOverBy);
     }
 
     [Fact]
-    public void AnEndOnItsOwnReachesTheHistoryBecauseNobodySaidWhereToStart()
+    public void ABeginningAtNowItselfIsNotYetAskingForTheHistory()
     {
-        Assert.True(ProgrammeSearch.For("news", null, Now.AddDays(1))!.ReachAt(Now).History);
-        Assert.True(ProgrammeSearch.For("news", null, Now.AddDays(-1))!.ReachAt(Now).History);
+        Assert.False(ProgrammeSearch.For("news", Now, Now.AddDays(1))!.ReachAt(Now).History);
+        Assert.True(ProgrammeSearch.For("news", Now.AddTicks(-1), Now.AddDays(1))!.ReachAt(Now).History);
     }
 
     [Fact]
-    public void ASpanAsksForWhatItNamesRatherThanForWhatIsStillToCome()
+    public void OnlyAnEndLeavesTheBeginningToNowWhicheverOtherConditionsAreAskedFor()
     {
-        Assert.Null(ProgrammeSearch.For("news", Now.AddDays(-1), Now.AddDays(1))!.ReachAt(Now).NotOverBy);
-        Assert.Null(ProgrammeSearch.For("news", null, Now.AddDays(1))!.ReachAt(Now).NotOverBy);
-        Assert.Null(ProgrammeSearch.For("news", Now.AddDays(1), null)!.ReachAt(Now).NotOverBy);
+        ProgrammeReach reach = ProgrammeSearch.For(
+            "news",
+            null,
+            Now.AddDays(1),
+            conditions: new ProgrammeConditions { Genres = [8], Channels = [Channel] })!
+            .ReachAt(Now);
+
+        Assert.False(reach.History);
+        Assert.Equal(Now, reach.NotOverBy);
     }
 
     [Fact]
-    public void EverySpanlessConditionLooksAheadRatherThanOnlyAKeywordOne()
+    public void EveryConditionWithNoBeginningLooksAheadRatherThanOnlyAKeywordOne()
     {
-        ProgrammeConditions[] spanless =
+        ProgrammeConditions[] beginningless =
         [
             new ProgrammeConditions { Exclude = "再放送" },
             new ProgrammeConditions { Genres = [8] },
@@ -425,7 +440,7 @@ public sealed class ProgrammeSearchTests
         ];
 
         Assert.All(
-            spanless,
+            beginningless,
             conditions =>
             {
                 ProgrammeReach reach = ProgrammeSearch.For(null, null, null, conditions: conditions)!.ReachAt(Now);
@@ -441,15 +456,6 @@ public sealed class ProgrammeSearchTests
         Assert.Throws<ArgumentException>(() => Asking("news").ReachAt(DateTime.SpecifyKind(Now, DateTimeKind.Local)));
         Assert.Throws<ArgumentException>(
             () => Asking("news").ReachAt(DateTime.SpecifyKind(Now, DateTimeKind.Unspecified)));
-    }
-
-    [Fact]
-    public void WhetherASpanWasNamedIsReadFromEitherEndOfIt()
-    {
-        Assert.False(Asking("news").NamesASpan);
-        Assert.True(ProgrammeSearch.For("news", Now, null)!.NamesASpan);
-        Assert.True(ProgrammeSearch.For("news", null, Now)!.NamesASpan);
-        Assert.True(ProgrammeSearch.For("news", Now, Now.AddDays(1))!.NamesASpan);
     }
 
     private static ProgrammeSearch Asking(string keyword, ProgrammeConditions? conditions = null)
