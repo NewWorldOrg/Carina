@@ -7,6 +7,8 @@ public sealed class ProgrammeSearchTests
 {
     private static readonly DateTime From = new(2026, 8, 18, 0, 0, 0, DateTimeKind.Utc);
 
+    private static readonly DateTime Now = new(2026, 8, 25, 9, 0, 0, DateTimeKind.Utc);
+
     private static readonly ProgrammeService Channel = new(4, 1024);
 
     [Fact]
@@ -347,6 +349,108 @@ public sealed class ProgrammeSearchTests
     [Fact]
     public void ABroadcastTypeThatCarriesNoServiceNarrowsToNothingRatherThanToEverything()
         => Assert.Empty(Asking("news").Over([]).Services!);
+
+    [Fact]
+    public void ASearchThatNamesNoSpanLooksAheadFromNowAndLeavesTheHistoryOut()
+    {
+        ProgrammeReach reach = Asking("news").ReachAt(Now);
+
+        Assert.False(reach.History);
+        Assert.Equal(Now, reach.NotOverBy);
+    }
+
+    [Fact]
+    public void ASpanThatBeginsBeforeNowReachesTheHistory()
+    {
+        ProgrammeReach reach = ProgrammeSearch.For("news", Now.AddDays(-1), Now.AddDays(1))!.ReachAt(Now);
+
+        Assert.True(reach.History);
+        Assert.Null(reach.NotOverBy);
+    }
+
+    [Fact]
+    public void ASpanThatBeginsAfterNowLeavesTheHistoryOut()
+    {
+        ProgrammeReach reach = ProgrammeSearch.For("news", Now.AddDays(1), Now.AddDays(2))!.ReachAt(Now);
+
+        Assert.False(reach.History);
+        Assert.Null(reach.NotOverBy);
+    }
+
+    [Fact]
+    public void ASpanThatBeginsAtNowItselfLeavesTheHistoryOut()
+    {
+        ProgrammeReach reach = ProgrammeSearch.For("news", Now, Now.AddDays(1))!.ReachAt(Now);
+
+        Assert.False(reach.History);
+        Assert.Null(reach.NotOverBy);
+    }
+
+    [Fact]
+    public void ASpanOneTickBeforeNowAlreadyReachesTheHistory()
+        => Assert.True(
+            ProgrammeSearch.For("news", Now.AddTicks(-1), Now.AddDays(1))!.ReachAt(Now).History);
+
+    [Fact]
+    public void ABeginningOnItsOwnDecidesTheHistoryByWhereItFalls()
+    {
+        Assert.True(ProgrammeSearch.For("news", Now.AddDays(-1), null)!.ReachAt(Now).History);
+        Assert.False(ProgrammeSearch.For("news", Now.AddDays(1), null)!.ReachAt(Now).History);
+    }
+
+    [Fact]
+    public void AnEndOnItsOwnReachesTheHistoryBecauseNobodySaidWhereToStart()
+    {
+        Assert.True(ProgrammeSearch.For("news", null, Now.AddDays(1))!.ReachAt(Now).History);
+        Assert.True(ProgrammeSearch.For("news", null, Now.AddDays(-1))!.ReachAt(Now).History);
+    }
+
+    [Fact]
+    public void ASpanAsksForWhatItNamesRatherThanForWhatIsStillToCome()
+    {
+        Assert.Null(ProgrammeSearch.For("news", Now.AddDays(-1), Now.AddDays(1))!.ReachAt(Now).NotOverBy);
+        Assert.Null(ProgrammeSearch.For("news", null, Now.AddDays(1))!.ReachAt(Now).NotOverBy);
+        Assert.Null(ProgrammeSearch.For("news", Now.AddDays(1), null)!.ReachAt(Now).NotOverBy);
+    }
+
+    [Fact]
+    public void EverySpanlessConditionLooksAheadRatherThanOnlyAKeywordOne()
+    {
+        ProgrammeConditions[] spanless =
+        [
+            new ProgrammeConditions { Exclude = "再放送" },
+            new ProgrammeConditions { Genres = [8] },
+            new ProgrammeConditions { System = TuneSystem.IsdbT },
+            new ProgrammeConditions { Channels = [Channel] },
+        ];
+
+        Assert.All(
+            spanless,
+            conditions =>
+            {
+                ProgrammeReach reach = ProgrammeSearch.For(null, null, null, conditions: conditions)!.ReachAt(Now);
+
+                Assert.False(reach.History);
+                Assert.Equal(Now, reach.NotOverBy);
+            });
+    }
+
+    [Fact]
+    public void AMomentWithoutAnOffsetIsNotAnInstantToReadASearchAt()
+    {
+        Assert.Throws<ArgumentException>(() => Asking("news").ReachAt(DateTime.SpecifyKind(Now, DateTimeKind.Local)));
+        Assert.Throws<ArgumentException>(
+            () => Asking("news").ReachAt(DateTime.SpecifyKind(Now, DateTimeKind.Unspecified)));
+    }
+
+    [Fact]
+    public void WhetherASpanWasNamedIsReadFromEitherEndOfIt()
+    {
+        Assert.False(Asking("news").NamesASpan);
+        Assert.True(ProgrammeSearch.For("news", Now, null)!.NamesASpan);
+        Assert.True(ProgrammeSearch.For("news", null, Now)!.NamesASpan);
+        Assert.True(ProgrammeSearch.For("news", Now, Now.AddDays(1))!.NamesASpan);
+    }
 
     private static ProgrammeSearch Asking(string keyword, ProgrammeConditions? conditions = null)
         => ProgrammeSearch.For(keyword, null, null, conditions: conditions)!;
