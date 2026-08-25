@@ -7,7 +7,9 @@ public sealed class ContinuityCounterTrackerConcurrencyTests
 {
     private const int VideoPid = 0x0100;
     private const long Second = 90_000;
-    private const int Readings = 400;
+    private const int Readings = 2_000;
+
+    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(30);
 
     [Fact]
     public void WhatWasPlacedNeverOutRunsWhatWasCountedWhileTheStreamIsStillArriving()
@@ -17,10 +19,14 @@ public sealed class ContinuityCounterTrackerConcurrencyTests
 
         Thread reader = Count(tracker, counting.Token);
         var torn = new List<string>();
+        long placedAtWorst = 0;
+        int located = 0;
 
         try
         {
-            for (int read = 0; read < Readings; read++)
+            DateTime deadline = DateTime.UtcNow + Patience;
+
+            while (located < Readings && DateTime.UtcNow < deadline)
             {
                 SessionCounters counters = tracker.Snapshot();
 
@@ -29,8 +35,12 @@ public sealed class ContinuityCounterTrackerConcurrencyTests
                     continue;
                 }
 
+                located++;
+
                 long placed = positions.Buckets.Sum(bucket => bucket.Continuity);
                 long left = positions.Buckets.Sum(bucket => bucket.Scrambled);
+
+                placedAtWorst = Math.Max(placedAtWorst, placed);
 
                 if (placed > counters.Drops)
                 {
@@ -51,9 +61,17 @@ public sealed class ContinuityCounterTrackerConcurrencyTests
         finally
         {
             counting.Cancel();
-            reader.Join(TimeSpan.FromSeconds(30));
+            reader.Join(Patience);
         }
 
+        Assert.True(
+            located >= Readings,
+            $"only {located} reads saw a position, so this proves little about reading one."
+        );
+        Assert.True(
+            placedAtWorst > Readings,
+            $"the stream stopped arriving after {placedAtWorst} losses, so the reads raced nothing."
+        );
         Assert.Empty(torn);
     }
 
