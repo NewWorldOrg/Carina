@@ -688,7 +688,6 @@ public sealed class TunerSessionManager(
         if (
             !pool.AwaitReady(grant.DeviceId, handOver)
             || !sessions.TryGetValue(grant.Outgoing, out TunerSession? outgoing)
-            || pool.DeviceOf(grant.DeviceId) is not { } held
         )
         {
             pool.Leave(request.SessionId);
@@ -709,10 +708,15 @@ public sealed class TunerSessionManager(
             );
         }
 
+        if (!TryTune(request, grant, out ITunerDevice? tuner, out SessionStart? refusal))
+        {
+            return refusal;
+        }
+
         return Open(
             request,
             grant.DeviceId,
-            new LeasedTunerDevice(held),
+            tuner,
             directory,
             now,
             endsAt,
@@ -729,18 +733,18 @@ public sealed class TunerSessionManager(
                 SubscriberKind.Piggyback,
                 out SessionSubscription? seat
             )
+            || !outgoing.ReadFromInstead(
+                new PiggybackTunerDevice(taking, seat),
+                taking,
+                seat,
+                handOver
+            )
         )
         {
             return false;
         }
 
-        if (!outgoing.ReadFromInstead(new PiggybackTunerDevice(taking, seat), taking, seat, handOver))
-        {
-            taking.Broadcaster.Unsubscribe(seat);
-
-            return false;
-        }
-
+        outgoing.EndsNoLaterThan(taking.EndsAt);
         pool.SeatTaken(taking.DeviceId, taking.SessionId);
 
         logger.LogInformation(
@@ -865,12 +869,7 @@ public sealed class TunerSessionManager(
         }
         catch (Exception error)
         {
-            sessions.TryRemove(new KeyValuePair<SessionId, TunerSession>(sessionId, session));
-            tunings.TryRemove(sessionId, out _);
-            session.Ended -= Forget;
-            pool.Leave(sessionId);
-            LetGoOfTheRecording(claimed, sessionId);
-            session.Dispose();
+            Abandon(session, claimed);
 
             return SessionStart.Refused(
                 SessionRefusal.DeviceUnavailable,
@@ -882,12 +881,7 @@ public sealed class TunerSessionManager(
         {
             if (!Demote(outgoing, session))
             {
-                sessions.TryRemove(new KeyValuePair<SessionId, TunerSession>(sessionId, session));
-                tunings.TryRemove(sessionId, out _);
-                session.Ended -= Forget;
-                pool.Leave(sessionId);
-                LetGoOfTheRecording(claimed, sessionId);
-                session.Dispose();
+                Abandon(session, claimed);
 
                 return SessionStart.Refused(
                     SessionRefusal.DeviceBusy,
@@ -911,6 +905,18 @@ public sealed class TunerSessionManager(
         Announce();
 
         return SessionStart.Started(session);
+    }
+
+    private void Abandon(TunerSession session, string? claimed)
+    {
+        sessions.TryRemove(
+            new KeyValuePair<SessionId, TunerSession>(session.SessionId, session)
+        );
+        tunings.TryRemove(session.SessionId, out _);
+        session.Ended -= Forget;
+        pool.Leave(session.SessionId);
+        LetGoOfTheRecording(claimed, session.SessionId);
+        session.Dispose();
     }
 
     private SessionId HolderOf(string recordingId) =>

@@ -39,7 +39,7 @@ public sealed class PiggybackTunerDevice(TunerSession host, SessionSubscription 
 
     private StreamCutException Cut(Exception? cause)
     {
-        SessionStopReason ended = seat.EndedWith;
+        SessionStopReason ended = HowThisOneEnds();
         bool ourOwnDoing = ended is SessionStopReason.RecordingFailed;
 
         string what = ourOwnDoing
@@ -52,4 +52,9 @@ public sealed class PiggybackTunerDevice(TunerSession host, SessionSubscription 
             cause
         );
     }
+
+    private SessionStopReason HowThisOneEnds() =>
+        seat.EndedWith is SessionStopReason.RecordingFailed && !seat.FellBehind
+            ? SessionStopReason.Unspecified
+            : seat.EndedWith;
 }

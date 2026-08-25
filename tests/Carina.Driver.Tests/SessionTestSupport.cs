@@ -129,8 +129,16 @@ public sealed class HeldOpenTunerDevice : ITunerDevice
 
 public sealed class OneTunerDeviceFactory(ITunerDevice device) : ITunerDeviceFactory
 {
-    public ITunerDevice Create(DeviceSettings settings, TuningRequest tuning, TuneParams? tune) =>
-        device;
+    private long created;
+
+    public long Created => Interlocked.Read(ref created);
+
+    public ITunerDevice Create(DeviceSettings settings, TuningRequest tuning, TuneParams? tune)
+    {
+        Interlocked.Increment(ref created);
+
+        return device;
+    }
 }
 
 public sealed class StubbornTunerDevice(TimeSpan readTakes) : ITunerDevice

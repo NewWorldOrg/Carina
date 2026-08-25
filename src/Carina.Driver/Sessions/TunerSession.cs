@@ -20,6 +20,43 @@ public sealed class TunerSession : IDisposable
     public const int DefaultChunkSize = TsPacketReader.PacketLength * 100;
     public const long FaultReportInterval = 1000;
 
+    private sealed class Handover(
+        ITunerDevice replacement,
+        TunerSession? host,
+        SessionSubscription? seat
+    )
+    {
+        private readonly TaskCompletionSource takenUp = new(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
+
+        private int settled;
+
+        public ITunerDevice Replacement { get; } = replacement;
+
+        public TunerSession? Host { get; } = host;
+
+        public SessionSubscription? Seat { get; } = seat;
+
+        public Task TakenUp => takenUp.Task;
+
+        public bool TryTakeUp()
+        {
+            if (!Claim())
+            {
+                return false;
+            }
+
+            takenUp.SetResult();
+
+            return true;
+        }
+
+        public bool TryGiveUp() => Claim();
+
+        private bool Claim() => Interlocked.Exchange(ref settled, 1) is 0;
+    }
+
     private readonly SignalQualityReader? quality;
     private readonly IRecordingWriter? recordingWriter;
     private readonly TimeProvider timeProvider;
@@ -33,15 +70,12 @@ public sealed class TunerSession : IDisposable
         TaskCreationOptions.RunContinuationsAsynchronously
     );
     private readonly ManualResetEventSlim seatIsMine;
-    private readonly ManualResetEventSlim handedOver = new(false);
 
     private ITunerDevice device;
     private SessionSubscription? seat;
     private long overflowsBefore;
     private long overflowsCarried;
-    private ITunerDevice? handover;
-    private TunerSession? handoverHost;
-    private SessionSubscription? handoverSeat;
+    private Handover? handover;
 
     private Thread? loop;
     private SessionState state;
@@ -284,6 +318,26 @@ public sealed class TunerSession : IDisposable
         }
     }
 
+    public bool EndsNoLaterThan(DateTimeOffset limit)
+    {
+        lock (gate)
+        {
+            if (state is not (SessionState.Requested or SessionState.Active))
+            {
+                return false;
+            }
+
+            if (limit.UtcTicks >= endsAtTicks)
+            {
+                return false;
+            }
+
+            Interlocked.Exchange(ref endsAtTicks, limit.UtcTicks);
+
+            return true;
+        }
+    }
+
     public bool ReadFromInstead(
         ITunerDevice replacement,
         TunerSession? host,
@@ -293,6 +347,8 @@ public sealed class TunerSession : IDisposable
     {
         ArgumentNullException.ThrowIfNull(replacement);
 
+        var asked = new Handover(replacement, host, takenSeat);
+
         lock (gate)
         {
             if (state is not SessionState.Active || handover is not null)
@@ -300,28 +356,35 @@ public sealed class TunerSession : IDisposable
                 return false;
             }
 
-            handedOver.Reset();
-            handover = replacement;
-            handoverHost = host;
-            handoverSeat = takenSeat;
+            handover = asked;
         }
 
-        if (handedOver.Wait(within))
+        if (Answered(asked.TakenUp, within) || !asked.TryGiveUp())
         {
             return true;
         }
 
         lock (gate)
         {
-            if (handover is null)
+            if (ReferenceEquals(handover, asked))
             {
-                return true;
+                handover = null;
             }
+        }
 
-            handover = null;
-            handoverHost = null;
-            handoverSeat = null;
+        return false;
+    }
 
+    private bool Answered(Task takenUp, TimeSpan within)
+    {
+        try
+        {
+            takenUp.WaitAsync(within, timeProvider).GetAwaiter().GetResult();
+
+            return true;
+        }
+        catch (TimeoutException)
+        {
             return false;
         }
     }
@@ -446,18 +509,19 @@ public sealed class TunerSession : IDisposable
 
         lock (gate)
         {
-            if (handover is { } replacement)
+            if (handover is { } asked)
             {
-                previous = device;
-                overflowsCarried += Math.Max(0, previous.Overflows - overflowsBefore);
-                overflowsBefore = replacement.Overflows;
-                device = replacement;
-                seat = handoverSeat;
-                RidesOn = handoverHost;
+                if (asked.TryTakeUp())
+                {
+                    previous = device;
+                    overflowsCarried += Math.Max(0, previous.Overflows - overflowsBefore);
+                    overflowsBefore = asked.Replacement.Overflows;
+                    device = asked.Replacement;
+                    seat = asked.Seat;
+                    RidesOn = asked.Host;
+                }
+
                 handover = null;
-                handoverHost = null;
-                handoverSeat = null;
-                handedOver.Set();
             }
 
             current = device;

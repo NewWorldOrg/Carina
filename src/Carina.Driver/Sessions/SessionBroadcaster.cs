@@ -36,6 +36,8 @@ public sealed class SessionSubscription
 
     public bool IsTruncated { get; internal set; }
 
+    public bool FellBehind { get; internal set; }
+
     public SessionStopReason EndedWith { get; internal set; }
 
     public long DroppedChunks => Interlocked.Read(ref droppedChunks);
@@ -260,6 +262,7 @@ public sealed class SessionBroadcaster(
             default:
                 subscription.IsDisconnected = true;
                 subscription.IsTruncated = true;
+                subscription.FellBehind = true;
                 subscription.CountDrop();
                 Tally();
                 Unsubscribe(
