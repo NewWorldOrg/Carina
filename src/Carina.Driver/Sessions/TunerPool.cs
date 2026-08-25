@@ -457,14 +457,18 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
 
             lease.Sinks.RemoveAll(sink => sink.SessionId == sessionId);
 
-            if (lease.Holder == sessionId && lease.Displacing is { } previous)
+            if (lease.Holder == sessionId)
             {
-                lease.Displacing = null;
-
-                if (lease.Sinks.Any(sink => sink.SessionId == previous))
+                if (TheOneItWasTakenFrom(lease) is { } previous)
                 {
                     lease.Holder = previous;
                 }
+                else
+                {
+                    EveryoneReadingThroughTheHolderLeavesWithIt(lease);
+                }
+
+                lease.Displacing = null;
             }
 
             if (lease.IsIdle)
@@ -472,6 +476,21 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
                 lease.IdleSince = timeProvider.GetUtcNow();
             }
         }
+    }
+
+    private static SessionId? TheOneItWasTakenFrom(Lease lease) =>
+        lease.Displacing is { } previous && lease.Sinks.Any(sink => sink.SessionId == previous)
+            ? previous
+            : null;
+
+    private void EveryoneReadingThroughTheHolderLeavesWithIt(Lease lease)
+    {
+        foreach (Sink sink in lease.Sinks)
+        {
+            bySink.Remove(sink.SessionId);
+        }
+
+        lease.Sinks.Clear();
     }
 
     public void Sweep()
