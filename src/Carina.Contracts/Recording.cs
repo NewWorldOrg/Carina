@@ -72,6 +72,8 @@ public sealed record RecordingSessionDto
 
     public long EovfCount { get; init; }
 
+    public DropPositionsDto? Positions { get; init; }
+
     public static RecordingSessionDto Of(DriverHello hello, SessionSnapshot session)
     {
         ArgumentNullException.ThrowIfNull(hello);
@@ -97,6 +99,9 @@ public sealed record RecordingSessionDto
             ScrambledPackets = countedScrambling ? session.Counters.ScrambledPackets : null,
             ScrambleMeasured = countedScrambling,
             EovfCount = session.Counters.DeviceOverflows,
+            Positions = hello.Supports(DriverCapabilities.DropPositions)
+                ? session.Counters.Positions
+                : null,
         };
     }
 }
