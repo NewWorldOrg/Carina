@@ -22,7 +22,8 @@ public sealed record CompletionTolerance
             throw new ArgumentOutOfRangeException(
                 nameof(sizeSlackPercent),
                 sizeSlackPercent,
-                "A slack of a hundred percent lets a file of any weight pass, which is the same as not weighing it.");
+                "A slack of a hundred percent puts the bottom of the allowed weight at nothing, "
+                + "so no file is ever light enough to be doubted.");
         }
 
         CompleteCoverage = completeCoverage;

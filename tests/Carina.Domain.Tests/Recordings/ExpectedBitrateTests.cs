@@ -1,3 +1,5 @@
+using Carina.Contracts;
+
 using Carina.Domain.Recordings;
 
 namespace Carina.Domain.Tests.Recordings;
@@ -90,10 +92,60 @@ public sealed class ExpectedBitrateTests
     }
 
     [Fact]
-    public void ARangeMayBeASinglePoint()
+    public void ARangeThatIsASinglePointIsRefused()
     {
-        var bitrate = new ExpectedBitrate(16_000_000, 16_000_000);
+        ArgumentOutOfRangeException refusal =
+            Assert.Throws<ArgumentOutOfRangeException>(() => new ExpectedBitrate(16_000_000, 16_000_000));
 
-        Assert.Equal(bitrate.LeastBytesOver(TimeSpan.FromSeconds(1)), bitrate.MostBytesOver(TimeSpan.FromSeconds(1)));
+        Assert.Equal("mostBitsPerSecond", refusal.ParamName);
     }
+
+    [Fact]
+    public void ARangeOneBitWideIsAllowed()
+    {
+        var bitrate = new ExpectedBitrate(16_000_000, 16_000_001);
+
+        Assert.Equal(16_000_001L, bitrate.MostBitsPerSecond);
+    }
+
+    [Fact]
+    public void TheRateMeasuredOffTerrestrialBroadcastsIsTheOneTheLedgerCarries()
+    {
+        Assert.Equal(14_300_000L, ExpectedBitrate.Terrestrial.LeastBitsPerSecond);
+        Assert.Equal(16_500_000L, ExpectedBitrate.Terrestrial.MostBitsPerSecond);
+    }
+
+    [Fact]
+    public void TheRateMeasuredOffSatelliteBroadcastsIsTheOneTheLedgerCarries()
+    {
+        Assert.Equal(11_100_000L, ExpectedBitrate.Satellite.LeastBitsPerSecond);
+        Assert.Equal(12_200_000L, ExpectedBitrate.Satellite.MostBitsPerSecond);
+    }
+
+    [Fact]
+    public void ATerrestrialTunerIsWeighedAgainstTheTerrestrialRate()
+        => Assert.Equal(ExpectedBitrate.Terrestrial, ExpectedBitrate.Of(TunerKind.Terrestrial));
+
+    [Fact]
+    public void ASatelliteTunerIsWeighedAgainstTheSatelliteRate()
+        => Assert.Equal(ExpectedBitrate.Satellite, ExpectedBitrate.Of(TunerKind.Satellite));
+
+    [Fact]
+    public void ATunerOfNoNamedKindHasNoMeasuredRate()
+    {
+        ArgumentOutOfRangeException refusal =
+            Assert.Throws<ArgumentOutOfRangeException>(() => ExpectedBitrate.Of(TunerKind.Unspecified));
+
+        Assert.Equal("kind", refusal.ParamName);
+    }
+
+    [Fact]
+    public void TheTerrestrialRangeIsWiderThanTheSlackItIsJudgedWith()
+        => Assert.True(ExpectedBitrate.Terrestrial.MostBitsPerSecond * 100
+            > ExpectedBitrate.Terrestrial.LeastBitsPerSecond * 110);
+
+    [Fact]
+    public void TheSatelliteRangeIsNarrowerThanTheSlackItIsJudgedWith()
+        => Assert.True(ExpectedBitrate.Satellite.MostBitsPerSecond * 100
+            < ExpectedBitrate.Satellite.LeastBitsPerSecond * 110);
 }
