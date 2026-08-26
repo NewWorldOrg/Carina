@@ -138,8 +138,8 @@ public sealed class ProgrammeSearchScale : IAsyncLifetime
         "CREATE EXTENSION IF NOT EXISTS pg_trgm",
         "CREATE INDEX ix_programme_searchable ON programme USING gin (searchable gin_trgm_ops)",
         "CREATE INDEX ix_archived_programme_searchable ON archived_programme USING gin (searchable gin_trgm_ops)",
-        "ALTER TABLE programme ALTER COLUMN searchable SET STATISTICS 1000",
-        "ALTER TABLE archived_programme ALTER COLUMN searchable SET STATISTICS 1000",
+        $"ALTER TABLE programme ALTER COLUMN searchable SET STATISTICS {ProgrammeConfiguration.SearchableStatisticsTarget}",
+        $"ALTER TABLE archived_programme ALTER COLUMN searchable SET STATISTICS {ProgrammeConfiguration.SearchableStatisticsTarget}",
     ];
 
     private const string HotLayer = """

@@ -1,4 +1,5 @@
 using Carina.Infrastructure.Persistence;
+using Carina.Infrastructure.Persistence.Configurations;
 
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
@@ -81,7 +82,12 @@ public sealed class ArchivedProgrammeSearchColumnsTests
             read.Add(rows.GetString(0));
         }
 
-        Assert.Equal(["archived_programme 1000", "programme 1000"], read);
+        Assert.Equal(
+            [
+                $"archived_programme {ProgrammeConfiguration.SearchableStatisticsTarget}",
+                $"programme {ProgrammeConfiguration.SearchableStatisticsTarget}",
+            ],
+            read);
     }
 
     [Fact]

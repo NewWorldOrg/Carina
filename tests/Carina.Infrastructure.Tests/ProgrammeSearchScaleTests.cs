@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Carina.Domain.Base;
 using Carina.Domain.Programmes;
 using Carina.Infrastructure.Persistence;
+using Carina.Infrastructure.Persistence.Configurations;
 using Carina.Infrastructure.Persistence.Repositories;
 
 using Npgsql;
@@ -105,7 +106,12 @@ public sealed class ProgrammeSearchScaleTests(ProgrammeSearchScale scale, ITestO
             read.Add(rows.GetString(0));
         }
 
-        Assert.Equal(["archived_programme 1000", "programme 1000"], read);
+        Assert.Equal(
+            [
+                $"archived_programme {ProgrammeConfiguration.SearchableStatisticsTarget}",
+                $"programme {ProgrammeConfiguration.SearchableStatisticsTarget}",
+            ],
+            read);
     }
 
     private async Task<Measured> MeasuredAsync(ProgrammeSearch looking, string shape)
