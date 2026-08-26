@@ -53,7 +53,8 @@ public static partial class FileSystemRules
         + @"|\bDllImport\b|\bLibraryImport\b|\bNativeLibrary\b"
         + @"|\bProcess\s*\.\s*Start\b|\bProcessStartInfo\b"
         + @"|\bunlink\b|\bftruncate\b"
-        + @"|\bGetMethod\s*\(|\bGetMember\s*\(|\bActivator\s*\.\s*CreateInstance|\bCreateDelegate\b")]
+        + @"|\bGetMethod\s*\(|\bGetMember\s*\(|\bGetProperty\s*\(|\bGetField\s*\("
+        + @"|\bActivator\s*\.\s*CreateInstance|\bCreateDelegate\b")]
     private static partial Regex Reaches();
 
     [GeneratedRegex(@"\s+")]

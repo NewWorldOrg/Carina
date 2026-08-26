@@ -19,6 +19,8 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
 
     public const string DroppedIndexName = "ix_recording_cc_dropped";
 
+    public const string AwaitingThumbnailIndexName = "ix_recording_awaiting_thumbnail";
+
     public const string ConcurrencyToken = "xmin";
 
     public const string FileIndexName = "ux_recording_file";
@@ -27,7 +29,11 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
 
     private static string Vocabulary<T>()
         where T : struct, Enum
-        => "ARRAY[" + string.Join(", ", Enum.GetNames<T>().Select(name => $"'{name}'")) + "]::text[]";
+        => "ARRAY[" + Vocabulary<T>(quoted: true) + "]::text[]";
+
+    private static string Vocabulary<T>(bool quoted)
+        where T : struct, Enum
+        => string.Join(", ", Enum.GetNames<T>().Select(name => quoted ? $"'{name}'" : name));
 
     public void Configure(EntityTypeBuilder<Recording> builder)
     {
@@ -109,8 +115,10 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
             table.HasCheckConstraint(
                 "ck_recording_thumbnail",
                 $"""
-                thumbnail_state IN ({string.Join(", ", Enum.GetNames<ThumbnailState>().Select(name => $"'{name}'"))})
+                thumbnail_state IN ({Vocabulary<ThumbnailState>(quoted: true)})
                 AND (recording_outcome IS DISTINCT FROM 'Failed' OR thumbnail_state <> 'Ready')
+                AND (thumbnail_state = 'Failed') = (thumbnail_fault IS NOT NULL)
+                AND (thumbnail_fault IS NULL OR thumbnail_fault IN ({Vocabulary<ThumbnailFault>(quoted: true)}))
                 """);
             table.HasCheckConstraint(
                 "ck_recording_tuner",
@@ -272,6 +280,10 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
             .HasMaxLength(32)
             .IsRequired();
 
+        builder.Property(recording => recording.ThumbnailFault)
+            .HasConversion<string>()
+            .HasMaxLength(32);
+
         builder.Property(recording => recording.TunerDeviceId)
             .HasConversion(id => id!.Value, value => new TunerDeviceId(value))
             .HasMaxLength(Carina.Domain.Recordings.TunerDeviceId.MaxLength);
@@ -312,6 +324,7 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
         builder.Ignore(recording => recording.Programme);
         builder.Ignore(recording => recording.IsInFlight);
         builder.Ignore(recording => recording.Written);
+        builder.Ignore(recording => recording.ThumbnailShowsAnUnfinishedRecording);
 
         builder.HasIndex(recording => recording.StartedAtActual)
             .HasFilter("recording_outcome IS NULL")
@@ -328,6 +341,10 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
             .IsUnique()
             .HasFilter("reservation_id IS NOT NULL")
             .HasDatabaseName(ReservationIndexName);
+
+        builder.HasIndex(recording => recording.StoppedAtActual)
+            .HasFilter("recording_outcome IS NOT NULL AND thumbnail_state = 'Pending'")
+            .HasDatabaseName(AwaitingThumbnailIndexName);
 
         builder.HasIndex(recording => recording.CcDroppedPackets)
             .HasFilter("cc_measured AND cc_dropped_packets > 0")

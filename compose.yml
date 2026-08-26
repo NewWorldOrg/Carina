@@ -1,12 +1,15 @@
 services:
   app:
-    image: mcr.microsoft.com/dotnet/sdk:10.0
+    build:
+      context: .
+      target: develop
     working_dir: /code
     volumes:
       - .:/code
       - nuget:/root/.nuget/packages
       - driver-run:/run/carina
       - recordings:/srv/recordings:ro
+      - thumbnails:/srv/thumbnails
     tty: true
     ports:
       - ${API_PORT:-8081}:8080
@@ -21,6 +24,7 @@ services:
       CARINA_PUBLIC_ORIGIN: ${CARINA_PUBLIC_ORIGIN:-}
       CARINA_ANONYMOUS_NETWORKS: ${CARINA_ANONYMOUS_NETWORKS:-}
       Integrity__OutputRoots: primary=/srv/recordings
+      Thumbnails__WrittenTo: /srv/thumbnails
     depends_on:
       db:
         condition: service_healthy
@@ -64,4 +68,5 @@ volumes:
   driver-run:
   driver-build:
   recordings:
+  thumbnails:
   pgdata:
