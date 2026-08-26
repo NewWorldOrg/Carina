@@ -40,16 +40,14 @@ reported="$(cat ${files} \
 unfinished=""
 
 for file in ${files}; do
-  reason="$(tr '<' '\n' < "${file}" \
-    | sed -n 's/^Text>\(The active test run was aborted.*\)$/\1/p' \
-    | head -1 \
-    | unescaped || true)"
+  reason="$(sed -n '/<Text>The active test run was aborted/{ s|.*<Text>||; s|</Text>.*||; p; q; }' "${file}")"
 
   if [ -z "${reason}" ]; then
     continue
   fi
 
-  assembly="$(grep -o 'codeBase="[^"]*"' "${file}" | head -1 | sed 's/^codeBase="//; s/"$//' || true)"
+  reason="$(printf '%s' "${reason}" | unescaped)"
+  assembly="$(sed -n '/codeBase="/{ s|.*codeBase="\([^"]*\)".*|\1|; p; q; }' "${file}")"
   unfinished="${unfinished}$(basename "${assembly:-${file}}"): ${reason}
 "
 done
