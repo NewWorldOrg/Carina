@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="../../src/Carina.Api/Carina.Api.csproj" />
     <ProjectReference Include="../../src/Carina.Db/Carina.Db.csproj" />
+    <ProjectReference Include="../Carina.TestSupport/Carina.TestSupport.csproj" />
   </ItemGroup>
 
 </Project>

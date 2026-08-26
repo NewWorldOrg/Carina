@@ -17,6 +17,16 @@ public sealed record TuningParameters
 
     public TransportStreamId? TransportStreamId { get; }
 
+    public TuneParams Typed()
+        => System switch
+        {
+            TuneSystem.IsdbT => TuneParams.Terrestrial(PhysicalChannel),
+            TuneSystem.IsdbSBs => TuneParams.Bs(PhysicalChannel, TransportStreamId!.Value),
+            TuneSystem.IsdbSCs110 => TuneParams.Cs110(PhysicalChannel),
+            _ => throw new InvalidOperationException(
+                $"There is no tune for {System}, which is a system this build cannot name."),
+        };
+
     public static TuningParameters Terrestrial(int physicalChannel)
     {
         if (!BroadcastStandards.IsTerrestrialChannel(physicalChannel))
