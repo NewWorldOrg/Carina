@@ -213,6 +213,32 @@ public sealed class RecordingDirectoryTests(MigratedScratchDatabase database)
             await directory.HaltAsync(RecordingId.New(), reason, Noon, CancellationToken.None));
     }
 
+    [Fact]
+    public async Task AskingForMoreThanAPageEverHoldsIsAnsweredWithAsMuchAsItHoldsAndSaysSo()
+    {
+        int network = await StockedAsync(0);
+        await FloodAsync(network, RecordingQuery.MostPerPage + 1);
+
+        PaginatedList<Recording> found = await ListAsync(
+            Query(network, perPage: RecordingQuery.MostPerPage + 1));
+
+        Assert.Equal(RecordingQuery.MostPerPage + 1, found.Total);
+        Assert.Equal(RecordingQuery.MostPerPage, found.Items.Count);
+        Assert.Equal(RecordingQuery.MostPerPage, found.PerPage);
+        Assert.Equal(2, found.LastPage);
+    }
+
+    [Fact]
+    public async Task ThePageSizeAnsweredIsTheNumberOfRowsThePageWasCutTo()
+    {
+        int network = await StockedAsync(7);
+
+        PaginatedList<Recording> found = await ListAsync(Query(network, perPage: 3));
+
+        Assert.Equal(found.Items.Count, found.PerPage);
+        Assert.Equal(3, found.PerPage);
+    }
+
     private static RecordingQuery Query(
         int network,
         RecordingStanding? standing = null,
@@ -252,6 +278,33 @@ public sealed class RecordingDirectoryTests(MigratedScratchDatabase database)
         await using CarinaDbContext context = Context();
 
         return await new RecordingDirectory(context).ListAsync(query, CancellationToken.None);
+    }
+
+    private async Task FloodAsync(int network, int rows)
+    {
+        await using CarinaDbContext context = Context();
+
+        foreach (int eventId in Enumerable.Range(1, rows))
+        {
+            RecordingId id = RecordingId.New();
+            DateTime started = Noon.AddSeconds(eventId);
+
+            context.Add(Recording.Begin(
+                id,
+                null,
+                new ProgrammeRef(new NetworkId(network), new ServiceId(1024), new EventId(eventId), started),
+                new OutputRoot("bulk"),
+                RecordingFileName.For(id, ".m2ts"),
+                started,
+                started.AddHours(1),
+                new ProgrammeSnapshot("A programme", string.Empty, string.Empty, [], started),
+                null,
+                BroadcastGroupRole.Standalone,
+                started,
+                new TunerDeviceId("pt3-0")));
+        }
+
+        await context.SaveChangesAsync();
     }
 
     private async Task<int> StockedAsync(int recordings)

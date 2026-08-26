@@ -131,7 +131,7 @@ public sealed class RecordingQuery
             return null;
         }
 
-        if (page is < 1 || perPage is < 1 or > MostPerPage)
+        if (page is < 1)
         {
             return null;
         }
@@ -146,8 +146,16 @@ public sealed class RecordingQuery
             sort,
             descending,
             page ?? 1,
-            perPage ?? DefaultPerPage);
+            Clamped(perPage));
     }
+
+    private static int Clamped(int? perPage)
+        => perPage switch
+        {
+            null or < 1 => DefaultPerPage,
+            > MostPerPage => MostPerPage,
+            { } asked => asked,
+        };
 
     private static bool SpanIsUnusable(DateTime? from, DateTime? to)
     {

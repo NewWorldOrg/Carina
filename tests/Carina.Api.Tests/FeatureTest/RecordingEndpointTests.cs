@@ -35,8 +35,6 @@ public sealed class RecordingEndpointTests
     }
 
     [Theory]
-    [InlineData("perPage=201")]
-    [InlineData("perPage=0")]
     [InlineData("page=0")]
     [InlineData("from=2026-01-01T00:00:00Z&to=2027-06-01T00:00:00Z")]
     [InlineData("from=2026-08-24T12:00:00Z&to=2026-08-24T11:00:00Z")]
@@ -57,23 +55,55 @@ public sealed class RecordingEndpointTests
     }
 
     [Fact]
-    public async Task APageSizeOverTheCeilingIsRefusedRatherThanQuietlyCutDownToIt()
+    public async Task APageSizeOverTheCeilingIsCutDownToItAndAnsweredAsTheSizeThatWasUsed()
     {
         await using var feature = new RecordingFeature();
 
-        foreach (int eventId in Enumerable.Range(1, 3))
+        foreach (int eventId in Enumerable.Range(1, RecordingQuery.MostPerPage + 1))
         {
             feature.Held(eventId: eventId);
         }
 
         (HttpStatusCode status, JsonElement body) = await feature.GetAsync(
             $"/api/recordings?perPage={RecordingQuery.MostPerPage + 1}");
+        JsonElement data = body.GetProperty("data");
 
-        Assert.Equal(HttpStatusCode.BadRequest, status);
-        Assert.Contains(
-            RecordingQuery.MostPerPage.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            body.GetProperty("message").GetString(),
-            StringComparison.Ordinal);
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(RecordingQuery.MostPerPage + 1, data.GetProperty("total").GetInt32());
+        Assert.Equal(RecordingQuery.MostPerPage, data.GetProperty("items").GetArrayLength());
+        Assert.Equal(RecordingQuery.MostPerPage, data.GetProperty("perPage").GetInt32());
+        Assert.Equal(2, data.GetProperty("lastPage").GetInt32());
+    }
+
+    [Fact]
+    public async Task ThePageSizeAnsweredIsTheOneTheAnswerWasCutTo()
+    {
+        await using var feature = new RecordingFeature();
+
+        foreach (int eventId in Enumerable.Range(1, 5))
+        {
+            feature.Held(eventId: eventId);
+        }
+
+        (_, JsonElement body) = await feature.GetAsync("/api/recordings?perPage=2");
+        JsonElement data = body.GetProperty("data");
+
+        Assert.Equal(data.GetProperty("items").GetArrayLength(), data.GetProperty("perPage").GetInt32());
+        Assert.Equal(2, data.GetProperty("perPage").GetInt32());
+    }
+
+    [Fact]
+    public async Task APageSizeBelowOneIsAnsweredAsTheSizeThatWasUsedInstead()
+    {
+        await using var feature = new RecordingFeature();
+        feature.Held();
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync("/api/recordings?perPage=0");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(
+            RecordingQuery.DefaultPerPage,
+            body.GetProperty("data").GetProperty("perPage").GetInt32());
     }
 
     [Fact]

@@ -24,6 +24,7 @@ public sealed class RecordingQueryTests
 
     [Theory]
     [InlineData(1, 1)]
+    [InlineData(RecordingQuery.MostPerPage - 1, RecordingQuery.MostPerPage - 1)]
     [InlineData(RecordingQuery.MostPerPage, RecordingQuery.MostPerPage)]
     [InlineData(null, RecordingQuery.DefaultPerPage)]
     public void APageSizeWithinTheCeilingIsTheOneThatWasAskedFor(int? asked, int carried)
@@ -37,10 +38,24 @@ public sealed class RecordingQueryTests
     [Theory]
     [InlineData(RecordingQuery.MostPerPage + 1)]
     [InlineData(int.MaxValue)]
+    public void APageSizeAboveTheCeilingIsCutDownToItRatherThanRefused(int asked)
+    {
+        RecordingQuery query = Assert.IsType<RecordingQuery>(
+            RecordingQuery.For(null, null, perPage: asked));
+
+        Assert.Equal(RecordingQuery.MostPerPage, query.PerPage);
+    }
+
+    [Theory]
     [InlineData(0)]
     [InlineData(-1)]
-    public void APageSizeOutsideTheCeilingIsRefusedRatherThanQuietlyCutDownToIt(int asked)
-        => Assert.Null(RecordingQuery.For(null, null, perPage: asked));
+    public void APageSizeBelowOneIsReadAsTheSizeNobodyAskedForAnythingElseThan(int asked)
+    {
+        RecordingQuery query = Assert.IsType<RecordingQuery>(
+            RecordingQuery.For(null, null, perPage: asked));
+
+        Assert.Equal(RecordingQuery.DefaultPerPage, query.PerPage);
+    }
 
     [Theory]
     [InlineData(0)]

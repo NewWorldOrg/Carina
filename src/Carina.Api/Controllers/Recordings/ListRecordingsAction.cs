@@ -60,8 +60,8 @@ public sealed class ListRecordingsAction(RecordingService recordings) : Controll
     }
 
     private static string Refusal
-        => $"A page holds between 1 and {RecordingQuery.MostPerPage} recordings and is asked for by a page number "
-            + "of at least 1; a request over that ceiling is refused rather than quietly cut down to it. "
+        => "A page is asked for by a page number of at least 1, and a page size above "
+            + $"{RecordingQuery.MostPerPage} is cut down to it and answered as the size that was used. "
             + $"A span runs forwards and reaches back at most {RecordingQuery.LongestSpan.TotalDays:0} days, "
             + $"at most {RecordingQuery.MostChannels} channels are named as network-service, "
             + "and the state, the outcome, the drop reading and the sort are each one of the values this "
