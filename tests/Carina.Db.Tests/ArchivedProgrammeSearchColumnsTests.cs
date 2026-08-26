@@ -59,6 +59,32 @@ public sealed class ArchivedProgrammeSearchColumnsTests
     }
 
     [Fact]
+    public async Task BothSearchColumnsAreSampledDeeplyEnoughForOnePlanToKeepWinning()
+    {
+        await using CarinaDbContext context = CarinaDbContextFactory.Create(Scratch());
+        await context.Database.EnsureDeletedAsync(Cancel);
+        await context.GetService<IMigrator>().MigrateAsync(cancellationToken: Cancel);
+
+        await using NpgsqlConnection connection = await OpenAsync();
+        await using NpgsqlCommand command = connection.CreateCommand();
+        command.CommandText =
+            "SELECT attrelid::regclass::text || ' ' || coalesce(attstattarget::text, 'the default') "
+            + "FROM pg_attribute "
+            + "WHERE attrelid IN ('programme'::regclass, 'archived_programme'::regclass) "
+            + "AND attname = 'searchable' ORDER BY 1";
+
+        await using NpgsqlDataReader rows = await command.ExecuteReaderAsync(Cancel);
+        List<string> read = [];
+
+        while (await rows.ReadAsync(Cancel))
+        {
+            read.Add(rows.GetString(0));
+        }
+
+        Assert.Equal(["archived_programme 1000", "programme 1000"], read);
+    }
+
+    [Fact]
     public async Task TheEndIndexCarriesWhatTheSearchJoinsOnSoTheCountNeverTouchesTheHeap()
     {
         await using CarinaDbContext context = CarinaDbContextFactory.Create(Scratch());
