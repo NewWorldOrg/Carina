@@ -11,6 +11,42 @@ public sealed class ReferenceRuleSelfCheckTests
         new ProjectNode("Carina.Driver", ["Carina.Contracts", "Carina.Infrastructure"], []));
 
     [Fact]
+    public void DetectsAProjectOnDiskTheSolutionDoesNotList()
+    {
+        DirectoryInfo held = Directory.CreateTempSubdirectory();
+
+        try
+        {
+            Laid(held, "Carina.Kept.Tests");
+            Laid(held, "Carina.Forgotten.Tests");
+
+            string solution = Path.Combine(held.FullName, "Carina.slnx");
+            File.WriteAllText(
+                solution,
+                """
+                <Solution>
+                  <Project Path="tests/Carina.Kept.Tests/Carina.Kept.Tests.csproj" />
+                </Solution>
+                """);
+
+            Assert.Equal(
+                ["tests/Carina.Forgotten.Tests/Carina.Forgotten.Tests.csproj"],
+                ProjectGraph.ProjectsOutsideTheSolution(solution, Path.Combine(held.FullName, "tests")));
+        }
+        finally
+        {
+            held.Delete(recursive: true);
+        }
+    }
+
+    private static void Laid(DirectoryInfo held, string project)
+    {
+        string directory = Path.Combine(held.FullName, "tests", project);
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, $"{project}.csproj"), "<Project />");
+    }
+
+    [Fact]
     public void DetectsADriverThatReachesTheDomain()
     {
         IReadOnlyList<string> forbidden = ViolatingGraph().ForbiddenReferencesOf("Carina.Driver", "Carina.Contracts");

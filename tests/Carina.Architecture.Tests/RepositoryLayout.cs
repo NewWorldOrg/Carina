@@ -10,6 +10,8 @@ public static class RepositoryLayout
 
     public static string TestDirectory { get; } = Path.Combine(Root, "tests");
 
+    public static string SolutionFile { get; } = Path.Combine(Root, RootMarker);
+
     private static string FindRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
