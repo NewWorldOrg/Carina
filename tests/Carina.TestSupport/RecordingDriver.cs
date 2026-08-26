@@ -25,11 +25,26 @@ public sealed class RecordingDriver : IDriverClient
 
     public List<string> StopReasons { get; } = [];
 
+    public List<SessionId> Stopped { get; } = [];
+
+    public Exception? RefusingStorage { get; set; }
+
+    public List<SessionId> Asked { get; } = [];
+
+    public DriverCall<SessionSnapshot>? AnswersWhenAsked { get; set; }
+
+    public bool HoldsWhatItStarted { get; set; }
+
     public Task<DriverCall<IReadOnlyList<StorageRootDto>>> GetStorageAsync(CancellationToken cancellationToken)
     {
         lock (gate)
         {
             Log.Add("storage");
+        }
+
+        if (RefusingStorage is { } refusal)
+        {
+            return Task.FromException<DriverCall<IReadOnlyList<StorageRootDto>>>(refusal);
         }
 
         return Task.FromResult(DriverCall<IReadOnlyList<StorageRootDto>>.Reached(
@@ -77,6 +92,7 @@ public sealed class RecordingDriver : IDriverClient
         {
             Log.Add($"stop:{sessionId}");
             StopReasons.Add(reason);
+            Stopped.Add(sessionId);
         }
 
         return Task.FromResult(RefusesToStop ?? DriverCall<SessionSnapshot>.Reached(
@@ -122,7 +138,28 @@ public sealed class RecordingDriver : IDriverClient
     public Task<DriverCall<SessionSnapshot>> GetSessionAsync(
         SessionId sessionId,
         CancellationToken cancellationToken)
-        => throw new NotSupportedException();
+    {
+        lock (gate)
+        {
+            Log.Add($"ask:{sessionId}");
+            Asked.Add(sessionId);
+        }
+
+        if (AnswersWhenAsked is { } scripted)
+        {
+            return Task.FromResult(scripted);
+        }
+
+        return Task.FromResult(HoldsWhatItStarted
+            ? DriverCall<SessionSnapshot>.Reached(
+                new SessionSnapshot(
+                    sessionId,
+                    SessionPurpose.Recording,
+                    DeviceId,
+                    SessionState.Active,
+                    Epoch))
+            : DriverCall<SessionSnapshot>.Refused(new DriverProblem("noSuchSession", [])));
+    }
 
     public Task<DriverCall<IReadOnlyList<DiagnosticSnapshot>>> GetDiagnosticsAsync(
         CancellationToken cancellationToken)

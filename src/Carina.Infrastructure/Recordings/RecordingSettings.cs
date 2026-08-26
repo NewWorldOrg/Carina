@@ -6,10 +6,21 @@ public sealed record RecordingSettings
 {
     public const string FileExtension = ".ts";
 
+    public static readonly TimeSpan NoticingItIsDue = TimeSpan.FromSeconds(5);
+
+    public static readonly TimeSpan WaitingForASeat = TimeSpan.FromSeconds(10);
+
+    public static readonly TimeSpan WaitingForALock = TimeSpan.FromSeconds(5);
+
+    public static readonly TimeSpan WaitingForTheFirstByte = TimeSpan.FromSeconds(5);
+
+    public static readonly TimeSpan LongestWayToTheFirstByte =
+        NoticingItIsDue + WaitingForASeat + WaitingForALock + WaitingForTheFirstByte;
+
     public static readonly RecordingSettings Default = new(
         TimeSpan.FromSeconds(10),
-        TimeSpan.FromSeconds(5),
-        TimeSpan.FromSeconds(15),
+        NoticingItIsDue,
+        LongestWayToTheFirstByte,
         new OutputRoot("primary"));
 
     public RecordingSettings(

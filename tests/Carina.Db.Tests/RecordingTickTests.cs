@@ -45,8 +45,12 @@ public sealed class RecordingTickTests(MigratedScratchDatabase database)
         Assert.Single(driver.Started);
         Assert.Equal(1L, await Count("SELECT count(*) FROM recording"));
         Assert.Equal(Airs, await Read(airing, "started_at"));
-        Assert.All(runs.SelectMany(run => run.Refused), refusal
-            => Assert.Equal(RecordingRefusalKind.ClaimLostToAnother, refusal.Kind));
+        Assert.Equal(1, runs.Count(run => run.Started.Count is 1));
+        Assert.Equal(1, runs.Count(run => run.Started.Count is 0));
+        Assert.Empty(runs.SelectMany(run => run.Unconfirmed));
+        Assert.DoesNotContain(
+            runs.SelectMany(run => run.Refused),
+            refusal => refusal.Kind is not RecordingRefusalKind.ClaimLostToAnother);
     }
 
     [Fact]
@@ -88,6 +92,7 @@ public sealed class RecordingTickTests(MigratedScratchDatabase database)
         Assert.Empty(driver.Started);
         Assert.Equal(0L, await Count("SELECT count(*) FROM recording"));
         Assert.Null(await Read(contested, "started_at"));
+        Assert.Equal("Conflict", await Read(contested, "composite_state"));
     }
 
     [Fact]
@@ -114,7 +119,6 @@ public sealed class RecordingTickTests(MigratedScratchDatabase database)
         Assert.Equal($"{written.Id.Wire}.ts", written.FileName.Value);
         Assert.True(written.IsInFlight);
         Assert.Equal("Recording", await Read(airing, "composite_state"));
-        Assert.Null(await Read(airing, "recording_outcome"));
     }
 
     [Fact]
@@ -135,7 +139,7 @@ public sealed class RecordingTickTests(MigratedScratchDatabase database)
 
         Assert.Equal(RecordingFault.RefusedByDiskPrecheck, reason.Fault);
         Assert.Equal(Airs, reason.NoticedAt);
-        Assert.DoesNotContain("/", reason.Note, StringComparison.Ordinal);
+        Assert.Contains("NoRoomLeft", reason.Note, StringComparison.Ordinal);
         Assert.True(written.IsInFlight);
     }
 

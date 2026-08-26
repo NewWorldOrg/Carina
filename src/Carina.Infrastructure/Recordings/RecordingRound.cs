@@ -3,6 +3,7 @@ using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
+using Carina.Infrastructure.Collection;
 
 namespace Carina.Infrastructure.Recordings;
 
@@ -17,6 +18,8 @@ public enum RecordingRefusalKind
     DriverRefused = 4,
 
     DriverUnreachable = 5,
+
+    StartAbandoned = 6,
 }
 
 public sealed record RecordingRefusal(
@@ -28,6 +31,7 @@ public sealed record RecordingRefusal(
 public sealed record RecordingRun(
     IReadOnlyList<RecordingId> Started,
     IReadOnlyList<RecordingId> Stopped,
+    IReadOnlyList<RecordingId> Unconfirmed,
     IReadOnlyList<RecordingRefusal> Refused);
 
 public sealed class RecordingRound(
@@ -41,6 +45,10 @@ public sealed class RecordingRound(
 {
     public const string WindowClosed = "the window this recording was promised has closed";
 
+    public const string StartAbandoned = "the ledger would not take the row this session belongs to";
+
+    private const string ClaimHeldElsewhere = "another recorder holds the claim on this reservation";
+
     private const string NothingSaidWhy = "the driver said nothing about why";
 
     private static readonly TunerKind HeaviestKind =
@@ -48,16 +56,24 @@ public sealed class RecordingRound(
             ? TunerKind.Terrestrial
             : TunerKind.Satellite;
 
+    private enum SessionStanding
+    {
+        Standing = 1,
+
+        NothingStarted = 2,
+
+        Unknowable = 3,
+    }
+
     public async Task<RecordingRun> RunAsync(CancellationToken cancellationToken)
     {
         DateTime now = clock.GetUtcNow().UtcDateTime;
         List<Recording> running = [.. await recordings.ListInFlightAsync(cancellationToken)];
 
         IReadOnlyList<RecordingId> stopped = await StopAsync(running, now, cancellationToken);
-        (IReadOnlyList<RecordingId> started, IReadOnlyList<RecordingRefusal> refused) =
-            await StartAsync(running, now, cancellationToken);
+        Starting starting = await StartAsync(running, now, cancellationToken);
 
-        return new RecordingRun(started, stopped, refused);
+        return new RecordingRun(starting.Started, stopped, starting.Unconfirmed, starting.Refused);
     }
 
     private async Task<IReadOnlyList<RecordingId>> StopAsync(
@@ -95,13 +111,12 @@ public sealed class RecordingRound(
         return stopped;
     }
 
-    private async Task<(IReadOnlyList<RecordingId> Started, IReadOnlyList<RecordingRefusal> Refused)> StartAsync(
+    private async Task<Starting> StartAsync(
         List<Recording> running,
         DateTime now,
         CancellationToken cancellationToken)
     {
-        List<RecordingId> started = [];
-        List<RecordingRefusal> refused = [];
+        var starting = new Starting();
 
         foreach (RecordingTick due in await reservations.DueAtAsync(now, cancellationToken))
         {
@@ -117,7 +132,7 @@ public sealed class RecordingRound(
 
             if (resolution.Tuning is not { } tuning)
             {
-                refused.Add(new RecordingRefusal(
+                starting.Refused.Add(new RecordingRefusal(
                     due.Id,
                     RecordingRefusalKind.TuningRefused,
                     resolution.Refusal,
@@ -128,21 +143,39 @@ public sealed class RecordingRound(
 
             if (!await reservations.ClaimAsync(due.Id, now, cancellationToken))
             {
-                refused.Add(new RecordingRefusal(
+                starting.Refused.Add(new RecordingRefusal(
                     due.Id,
                     RecordingRefusalKind.ClaimLostToAnother,
                     TuningRefusal.None,
-                    "another recorder holds the claim on this reservation"));
+                    ClaimHeldElsewhere));
 
                 continue;
             }
 
+            await ClaimedAsync(due, tuning, running, starting, now, cancellationToken);
+        }
+
+        return starting;
+    }
+
+    private async Task ClaimedAsync(
+        RecordingTick due,
+        TuningParameters tuning,
+        List<Recording> running,
+        Starting starting,
+        DateTime now,
+        CancellationToken cancellationToken)
+    {
+        var id = RecordingId.New();
+        SessionId? issued = null;
+
+        try
+        {
             RecordingWindow window = RecordingWindow.Promised(
                 due.EffectiveStartAt,
                 due.EffectiveEndAt,
                 settings.TuningLead);
             TuneParams tune = tuning.Typed();
-            var id = RecordingId.New();
 
             DiskPrecheckVerdict verdict = await disks.WeighAsync(
                 settings.OutputRoot,
@@ -151,16 +184,25 @@ public sealed class RecordingRound(
                 now,
                 cancellationToken);
 
+            issued = RecordingSessions.Named(id);
+
             DriverCall<SessionSnapshot> answer = await driver.StartSessionAsync(
                 Request(id, tune, due.EffectiveEndAt),
                 cancellationToken);
+            (SessionStanding standing, SessionSnapshot? session) = await StandingAsync(
+                answer,
+                issued.Value,
+                cancellationToken);
 
-            if (!answer.TryGetValue(out SessionSnapshot? session))
+            if (standing is SessionStanding.NothingStarted)
             {
-                await reservations.ReleaseAsync(due.Id, now, cancellationToken);
-                refused.Add(Refusal(due.Id, answer));
+                issued = null;
 
-                continue;
+                await reservations.ReleaseAsync(due.Id, now, CancellationToken.None);
+
+                starting.Refused.Add(Refusal(due.Id, answer));
+
+                return;
             }
 
             Recording recording = Recording.Begin(
@@ -175,7 +217,7 @@ public sealed class RecordingRound(
                 due.BroadcastGroupKey,
                 due.BroadcastGroupRole,
                 now,
-                session.DeviceId is { Length: > 0 } named ? new TunerDeviceId(named) : null);
+                session?.DeviceId is { Length: > 0 } named ? new TunerDeviceId(named) : null);
 
             if (!verdict.HasRoom)
             {
@@ -185,10 +227,65 @@ public sealed class RecordingRound(
             await recordings.AddAsync(recording, cancellationToken);
 
             running.Add(recording);
-            started.Add(id);
+            starting.Started.Add(id);
+
+            if (standing is SessionStanding.Unknowable)
+            {
+                starting.Unconfirmed.Add(id);
+            }
+        }
+        catch (Exception failure)
+        {
+            await AbandonAsync(due.Id, issued, now);
+
+            if (failure is OperationCanceledException)
+            {
+                throw;
+            }
+
+            starting.Refused.Add(new RecordingRefusal(
+                due.Id,
+                RecordingRefusalKind.StartAbandoned,
+                TuningRefusal.None,
+                failure.GetType().Name));
+        }
+    }
+
+    private async Task<(SessionStanding Standing, SessionSnapshot? Session)> StandingAsync(
+        DriverCall<SessionSnapshot> answer,
+        SessionId issued,
+        CancellationToken cancellationToken)
+    {
+        if (answer.TryGetValue(out SessionSnapshot? session))
+        {
+            return (SessionStanding.Standing, session);
         }
 
-        return (started, refused);
+        if (answer.Outcome is DriverCallOutcome.Refused)
+        {
+            return (SessionStanding.NothingStarted, null);
+        }
+
+        DriverCall<SessionSnapshot> asked = await driver.GetSessionAsync(issued, cancellationToken);
+
+        if (asked.TryGetValue(out SessionSnapshot? held))
+        {
+            return (SessionStanding.Standing, held);
+        }
+
+        return asked.Outcome is DriverCallOutcome.Refused
+            ? (SessionStanding.NothingStarted, null)
+            : (SessionStanding.Unknowable, null);
+    }
+
+    private async Task AbandonAsync(ReservationId reservation, SessionId? issued, DateTime claimedAt)
+    {
+        if (issued is { } sessionId)
+        {
+            await driver.StopSessionAsync(sessionId, StartAbandoned, CancellationToken.None);
+        }
+
+        await reservations.ReleaseAsync(reservation, claimedAt, CancellationToken.None);
     }
 
     private static RecordingRefusal Refusal(ReservationId reservation, DriverCall<SessionSnapshot> answer)
@@ -197,7 +294,7 @@ public sealed class RecordingRound(
 
         RecordingRefusalKind kind = answer.Outcome is DriverCallOutcome.Unreachable
             ? RecordingRefusalKind.DriverUnreachable
-            : title is SessionRefusalTitles.NoDeviceFree or SessionRefusalTitles.DeviceBusy
+            : SessionRefusalReading.IsContended(answer.Problem)
                 ? RecordingRefusalKind.TunerContended
                 : RecordingRefusalKind.DriverRefused;
 
@@ -218,4 +315,13 @@ public sealed class RecordingRound(
             RecordingId = id.Wire,
             EndsAt = endsAt,
         };
+
+    private sealed class Starting
+    {
+        public List<RecordingId> Started { get; } = [];
+
+        public List<RecordingId> Unconfirmed { get; } = [];
+
+        public List<RecordingRefusal> Refused { get; } = [];
+    }
 }

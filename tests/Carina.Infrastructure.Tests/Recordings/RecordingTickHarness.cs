@@ -11,16 +11,32 @@ namespace Carina.Infrastructure.Tests.Recordings;
 
 internal sealed class HeldRecordings : IRecordingRepository
 {
+    private int listings;
+
     public List<Recording> Rows { get; } = [];
 
     public List<RecordingId> Saved { get; } = [];
+
+    public Exception? Refusing { get; set; }
+
+    public Exception? RefusingToAdd { get; set; }
+
+    public bool RefusingToAddOnce { get; set; }
+
+    public int Listings => Volatile.Read(ref listings);
 
     public Task<Recording?> FindAsync(RecordingId id, CancellationToken cancellationToken)
         => Task.FromResult(Rows.FirstOrDefault(row => row.Id.Equals(id)));
 
     public Task<IReadOnlyList<Recording>> ListInFlightAsync(CancellationToken cancellationToken)
-        => Task.FromResult<IReadOnlyList<Recording>>(
-            [.. Rows.Where(row => row.IsInFlight).OrderBy(row => row.ExpectedWindowEnd)]);
+    {
+        Interlocked.Increment(ref listings);
+
+        return Refusing is { } refusal
+            ? Task.FromException<IReadOnlyList<Recording>>(refusal)
+            : Task.FromResult<IReadOnlyList<Recording>>(
+                [.. Rows.Where(row => row.IsInFlight).OrderBy(row => row.ExpectedWindowEnd)]);
+    }
 
     public Task<IReadOnlyList<Recording>> ListForReservationAsync(
         ReservationId reservationId,
@@ -30,6 +46,16 @@ internal sealed class HeldRecordings : IRecordingRepository
 
     public Task AddAsync(Recording recording, CancellationToken cancellationToken)
     {
+        if (RefusingToAdd is { } refusal)
+        {
+            if (RefusingToAddOnce)
+            {
+                RefusingToAdd = null;
+            }
+
+            return Task.FromException(refusal);
+        }
+
         Rows.Add(recording);
 
         return Task.CompletedTask;
@@ -49,6 +75,8 @@ internal sealed class PlannedReservations : IReservationRecordingContract
 
     public HashSet<Guid> Unclaimable { get; } = [];
 
+    public bool DueOnlyOnce { get; set; }
+
     public List<ReservationId> Claimed { get; } = [];
 
     public List<ReservationId> Released { get; } = [];
@@ -61,7 +89,19 @@ internal sealed class PlannedReservations : IReservationRecordingContract
     }
 
     public Task<IReadOnlyList<RecordingTick>> DueAtAsync(DateTime at, CancellationToken cancellationToken)
-        => Task.FromResult<IReadOnlyList<RecordingTick>>([.. due]);
+    {
+        lock (due)
+        {
+            IReadOnlyList<RecordingTick> answering = [.. due];
+
+            if (DueOnlyOnce)
+            {
+                due.Clear();
+            }
+
+            return Task.FromResult(answering);
+        }
+    }
 
     public Task<bool> ClaimAsync(ReservationId id, DateTime at, CancellationToken cancellationToken)
     {

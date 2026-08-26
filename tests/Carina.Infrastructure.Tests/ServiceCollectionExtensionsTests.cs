@@ -11,7 +11,10 @@ using Carina.Infrastructure.DependencyInjection;
 using Carina.Infrastructure.Driver;
 using Carina.Infrastructure.Events;
 using Carina.Infrastructure.Integrity;
+using Carina.Domain.Recordings;
 using Carina.Infrastructure.Persistence;
+using Carina.Infrastructure.Persistence.Repositories;
+using Carina.Infrastructure.Recordings;
 using Carina.Infrastructure.Scanning;
 
 using Microsoft.Extensions.Configuration;
@@ -54,6 +57,37 @@ public sealed class ServiceCollectionExtensionsTests
 
         Assert.IsType<ChannelScanOrchestrator>(
             scope.ServiceProvider.GetRequiredService<IChannelScanOrchestrator>());
+    }
+
+    [Fact]
+    public void RegistersEverythingARecordingTickReachesFor()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.IsType<RecordingRepository>(
+            scope.ServiceProvider.GetRequiredService<IRecordingRepository>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<RecordingRound>());
+        Assert.NotNull(provider.GetRequiredService<RecordingSettings>());
+    }
+
+    [Fact]
+    public void TheRecordingTickIsOneOfTheJobsTheHostStarts()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        Assert.Single(provider.GetServices<IHostedService>().OfType<RecordingTickJob>());
+    }
+
+    [Fact]
+    public void TheHeadTheRecorderRunsWithIsReadFromConfiguration()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings["Recording:TuningLead"] = "00:00:40";
+
+        using ServiceProvider provider = Build(settings);
+
+        Assert.Equal(TimeSpan.FromSeconds(40), provider.GetRequiredService<RecordingSettings>().TuningLead);
     }
 
     [Fact]

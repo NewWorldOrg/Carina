@@ -400,6 +400,166 @@ public sealed class RecordingRoundTests
         Assert.Equal(2, recordings.Rows.Select(row => row.FileName).Distinct().Count());
     }
 
+    [Fact]
+    public async Task ALedgerThatWillNotTakeTheRowStopsTheSessionAndGivesTheClaimBack()
+    {
+        RecordingTick due = Due(1);
+        PlannedReservations reservations = Holding(due);
+        var recordings = new HeldRecordings
+        {
+            RefusingToAdd = new InvalidOperationException("the ledger would not take it"),
+        };
+        var driver = new RecordingDriver();
+
+        RecordingRun run = await Round(reservations, recordings, driver).RunAsync(CancellationToken.None);
+
+        Assert.Equal(due.Id, Assert.Single(reservations.Claimed));
+        Assert.Equal(due.Id, Assert.Single(reservations.Released));
+        Assert.Empty(recordings.Rows);
+        Assert.Empty(run.Started);
+        Assert.Equal(RecordingRefusalKind.StartAbandoned, Assert.Single(run.Refused).Kind);
+
+        StartSessionRequest asked = Assert.Single(driver.Started);
+
+        Assert.Equal(asked.SessionId, Assert.Single(driver.Stopped));
+        Assert.Equal(
+            "the ledger would not take the row this session belongs to",
+            Assert.Single(driver.StopReasons));
+    }
+
+    [Fact]
+    public async Task AnythingThatThrowsBeforeTheDriverWasAskedGivesTheClaimBackWithoutStoppingAnything()
+    {
+        RecordingTick due = Due(1, until: Airs.AddMinutes(30));
+        PlannedReservations reservations = Holding(due);
+        var driver = new RecordingDriver { RefusingStorage = new InvalidOperationException("no storage") };
+
+        RecordingRun run = await Round(reservations, new HeldRecordings(), driver).RunAsync(CancellationToken.None);
+
+        Assert.Equal(due.Id, Assert.Single(reservations.Released));
+        Assert.Empty(driver.Started);
+        Assert.Empty(driver.Stopped);
+        Assert.Equal(RecordingRefusalKind.StartAbandoned, Assert.Single(run.Refused).Kind);
+    }
+
+    [Fact]
+    public async Task OneReservationThatCouldNotBeStartedDoesNotStopTheNextOne()
+    {
+        RecordingTick first = Due(1);
+        RecordingTick second = Due(2);
+        PlannedReservations reservations = Holding(first, second);
+        var recordings = new HeldRecordings
+        {
+            RefusingToAdd = new InvalidOperationException("the ledger would not take it"),
+            RefusingToAddOnce = true,
+        };
+        var driver = new RecordingDriver();
+
+        RecordingRun run = await Round(reservations, recordings, driver).RunAsync(CancellationToken.None);
+
+        Assert.Single(run.Started);
+        Assert.Equal(second.Id, Assert.Single(recordings.Rows).ReservationId);
+        Assert.Equal(RecordingRefusalKind.StartAbandoned, Assert.Single(run.Refused).Kind);
+    }
+
+    [Fact]
+    public async Task ADriverThatDidNotAnswerIsAskedWhetherTheSessionStandsBeforeTheClaimIsGivenBack()
+    {
+        RecordingTick due = Due(1);
+        PlannedReservations reservations = Holding(due);
+        var recordings = new HeldRecordings();
+        var driver = new RecordingDriver
+        {
+            RefusesToStart = DriverCall<SessionSnapshot>.Unreachable("the answer never came"),
+            HoldsWhatItStarted = true,
+        };
+
+        RecordingRun run = await Round(reservations, recordings, driver).RunAsync(CancellationToken.None);
+
+        Recording written = Assert.Single(recordings.Rows);
+
+        Assert.Equal(Assert.Single(driver.Started).SessionId, Assert.Single(driver.Asked));
+        Assert.Empty(reservations.Released);
+        Assert.Equal(written.Id, Assert.Single(run.Started));
+        Assert.Empty(run.Unconfirmed);
+        Assert.Equal("adapter0", written.TunerDeviceId!.Value);
+    }
+
+    [Fact]
+    public async Task ADriverThatSaysItHoldsNoSuchSessionGetsTheClaimBack()
+    {
+        RecordingTick due = Due(1);
+        PlannedReservations reservations = Holding(due);
+        var recordings = new HeldRecordings();
+        var driver = new RecordingDriver
+        {
+            RefusesToStart = DriverCall<SessionSnapshot>.Unreachable("the answer never came"),
+            HoldsWhatItStarted = false,
+        };
+
+        RecordingRun run = await Round(reservations, recordings, driver).RunAsync(CancellationToken.None);
+
+        Assert.Equal(due.Id, Assert.Single(reservations.Released));
+        Assert.Empty(recordings.Rows);
+        Assert.Equal(RecordingRefusalKind.DriverUnreachable, Assert.Single(run.Refused).Kind);
+    }
+
+    [Fact]
+    public async Task ASessionNobodyCanAskAboutIsWrittenDownRatherThanLeftForASecondAttempt()
+    {
+        RecordingTick due = Due(1);
+        PlannedReservations reservations = Holding(due);
+        var recordings = new HeldRecordings();
+        var driver = new RecordingDriver
+        {
+            RefusesToStart = DriverCall<SessionSnapshot>.Unreachable("the answer never came"),
+            AnswersWhenAsked = DriverCall<SessionSnapshot>.Unreachable("still nothing"),
+        };
+
+        RecordingRun run = await Round(reservations, recordings, driver).RunAsync(CancellationToken.None);
+
+        Recording written = Assert.Single(recordings.Rows);
+
+        Assert.Empty(reservations.Released);
+        Assert.Equal(written.Id, Assert.Single(run.Started));
+        Assert.Equal(written.Id, Assert.Single(run.Unconfirmed));
+        Assert.Null(written.TunerDeviceId);
+        Assert.Equal($"{written.Id.Wire}.ts", written.FileName.Value);
+    }
+
+    [Fact]
+    public async Task ARefusedStartIsNotAskedAboutTwice()
+    {
+        var driver = new RecordingDriver
+        {
+            RefusesToStart = DriverCall<SessionSnapshot>.Refused(
+                new DriverProblem(SessionRefusalTitles.NoDeviceFree, [])),
+        };
+
+        await Round(Holding(Due(1)), new HeldRecordings(), driver).RunAsync(CancellationToken.None);
+
+        Assert.Empty(driver.Asked);
+    }
+
+    [Fact]
+    public async Task ARecordingStartedThisTickIsWeighedAgainstTheDiskForTheNextOne()
+    {
+        var recordings = new HeldRecordings();
+        var driver = new RecordingDriver { FreeBytes = 1 };
+
+        await Round(Holding(Due(1), Due(2)), recordings, driver).RunAsync(CancellationToken.None);
+
+        Assert.Equal(2, recordings.Rows.Count);
+        Assert.Contains(
+            "1 recordings weigh",
+            Assert.Single(recordings.Rows[0].OutcomeDetail).Note,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "2 recordings weigh 7363125000 bytes",
+            Assert.Single(recordings.Rows[1].OutcomeDetail).Note,
+            StringComparison.Ordinal);
+    }
+
     private static async Task<IReadOnlyList<OutcomeDetail>> Weighing(IReadOnlyList<Recording> running, long free)
     {
         var recordings = new HeldRecordings();

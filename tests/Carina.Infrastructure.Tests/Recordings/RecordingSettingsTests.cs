@@ -15,9 +15,27 @@ public sealed class RecordingSettingsTests
 
         Assert.Equal(TimeSpan.FromSeconds(10), unset.BeforeFirstTick);
         Assert.Equal(TimeSpan.FromSeconds(5), unset.BetweenTicks);
-        Assert.Equal(TimeSpan.FromSeconds(15), unset.TuningLead);
+        Assert.Equal(TimeSpan.FromSeconds(25), unset.TuningLead);
         Assert.Equal("primary", unset.OutputRoot.Value);
         Assert.Equal(".ts", RecordingSettings.FileExtension);
+    }
+
+    [Fact]
+    public void TheHeadIsEveryWaitBetweenBecomingDueAndTheFirstByteLanding()
+    {
+        Assert.Equal(TimeSpan.FromSeconds(5), RecordingSettings.NoticingItIsDue);
+        Assert.Equal(TimeSpan.FromSeconds(10), RecordingSettings.WaitingForASeat);
+        Assert.Equal(TimeSpan.FromSeconds(5), RecordingSettings.WaitingForALock);
+        Assert.Equal(TimeSpan.FromSeconds(5), RecordingSettings.WaitingForTheFirstByte);
+
+        Assert.Equal(
+            RecordingSettings.NoticingItIsDue
+                + RecordingSettings.WaitingForASeat
+                + RecordingSettings.WaitingForALock
+                + RecordingSettings.WaitingForTheFirstByte,
+            RecordingSettings.LongestWayToTheFirstByte);
+        Assert.Equal(RecordingSettings.LongestWayToTheFirstByte, RecordingSettings.Default.TuningLead);
+        Assert.Equal(RecordingSettings.NoticingItIsDue, RecordingSettings.Default.BetweenTicks);
     }
 
     [Fact]
