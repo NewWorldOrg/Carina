@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Carina.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Carina.Db.Migrations
 {
     [DbContext(typeof(CarinaDbContext))]
-    partial class CarinaDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260825154657_RecordingOutcomeFaults")]
+    partial class RecordingOutcomeFaults
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1065,7 +1068,7 @@ namespace Carina.Db.Migrations
 
                             t.HasCheckConstraint("ck_recording_file_name", "btrim(file_name) = file_name\nAND length(file_name) > 0\nAND file_name <> '.'\nAND strpos(file_name, '/') = 0\nAND strpos(file_name, chr(92)) = 0\nAND strpos(file_name, '..') = 0\nAND strpos(file_name, replace(id::text, '-', '')) > 0");
 
-                            t.HasCheckConstraint("ck_recording_history", "recording_history_holds(interruptions, resume_count, ARRAY['TuneFailed', 'RefusedByDiskPrecheck', 'DiskExhausted', 'DriverLost', 'DrainGraceExpired', 'StoppedByHand', 'TunerContended', 'ScramblingUnresolved']::text[], started_at_actual)");
+                            t.HasCheckConstraint("ck_recording_history", "recording_history_holds(interruptions, resume_count, ARRAY['TuneFailed', 'RefusedByDiskPrecheck', 'DiskExhausted', 'DriverLost', 'DrainGraceExpired', 'StoppedByHand', 'TunerContended', 'ScramblingUnresolved', 'ShortOfTheWindow', 'NothingLanded', 'SizeUnobserved', 'StoppedUnasked', 'LighterThanTheStream', 'HeavierThanTheStream']::text[], started_at_actual)");
 
                             t.HasCheckConstraint("ck_recording_identifiers", "network_id BETWEEN 0 AND 65535\nAND service_id BETWEEN 0 AND 65535\nAND event_id BETWEEN 1 AND 65534");
 

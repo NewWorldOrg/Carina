@@ -54,9 +54,9 @@ public sealed class FakeTunerDeviceTests
             }
         }
 
-        Assert.Equal(0, tracker.Drops);
-        Assert.Equal(0, tracker.Duplicates);
-        Assert.Equal(500, tracker.Packets);
+        Assert.Equal(0, tracker.Snapshot().Drops);
+        Assert.Equal(0, tracker.Snapshot().Duplicates);
+        Assert.Equal(500, tracker.Snapshot().Packets);
     }
 
     [Fact]

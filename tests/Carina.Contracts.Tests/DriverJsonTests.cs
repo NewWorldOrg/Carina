@@ -43,7 +43,7 @@ public sealed class DriverJsonTests
     }
 
     private const string LiveSessionForm =
-        """{"sessionId":"s-1","purpose":"live","state":"active","startedAt":"2026-08-08T21:04:00+09:00","endsAt":null,"deviceId":"adapter1","stopReason":"unspecified","concluded":false,"instanceId":null,"outputRoot":null,"bytesRecorded":0,"faultCount":0,"droppedChunks":0,"firstFault":null,"failureCause":null,"counters":{"packets":0,"drops":0,"duplicates":0,"discontinuities":0,"transportErrors":0,"scrambledPackets":0,"provisionalPackets":0,"discardedBytes":0,"resyncs":0,"deviceOverflows":0,"lockLosses":0,"ccMeasured":false,"scrambleMeasured":false},"recordingId":null}""";
+        """{"sessionId":"s-1","purpose":"live","state":"active","startedAt":"2026-08-08T21:04:00+09:00","endsAt":null,"deviceId":"adapter1","stopReason":"unspecified","concluded":false,"instanceId":null,"outputRoot":null,"bytesRecorded":0,"faultCount":0,"droppedChunks":0,"firstFault":null,"failureCause":null,"counters":{"packets":0,"drops":0,"duplicates":0,"discontinuities":0,"transportErrors":0,"scrambledPackets":0,"provisionalPackets":0,"discardedBytes":0,"resyncs":0,"deviceOverflows":0,"lockLosses":0,"ccMeasured":false,"scrambleMeasured":false,"positions":null},"recordingId":null}""";
 
     private static SessionSnapshot LiveSession =>
         new(SessionId.Parse("s-1"), SessionPurpose.Live, "adapter1", SessionState.Active, Moment);

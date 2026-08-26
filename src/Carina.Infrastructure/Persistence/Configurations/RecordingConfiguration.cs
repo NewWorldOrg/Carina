@@ -38,6 +38,9 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
             + string.Join(", ", RecordingFaults.ThatReachedTheTuner.Select(fault => $"'{fault}'"))
             + "]::text[]";
         string tuneFailures = Vocabulary<TuneFailureKind>();
+        string breakingFaults = "ARRAY["
+            + string.Join(", ", RecordingFaults.ThatCanInterrupt.Select(fault => $"'{fault}'"))
+            + "]::text[]";
 
         builder.ToTable("recording", table =>
         {
@@ -63,7 +66,7 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
                 """);
             table.HasCheckConstraint(
                 "ck_recording_history",
-                $"recording_history_holds(interruptions, resume_count, {faults}, started_at_actual)");
+                $"recording_history_holds(interruptions, resume_count, {breakingFaults}, started_at_actual)");
             table.HasCheckConstraint(
                 "ck_recording_reasons",
                 $"recording_reasons_hold(outcome_detail, {faults}, {tuneFailures}, started_at_actual)");

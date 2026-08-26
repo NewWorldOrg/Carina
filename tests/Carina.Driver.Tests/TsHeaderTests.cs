@@ -121,4 +121,90 @@ public sealed class TsHeaderTests
             ReadOne(Packet(fill: 0x02)).PayloadHash
         );
     }
+
+    private static byte[] WithClock(long baseValue, int extension = 0, byte adaptationLength = 7, bool flagged = true)
+    {
+        byte[] packet = new byte[TsPacketReader.PacketLength];
+        packet[0] = TsPacketReader.SyncByte;
+        packet[1] = 0x01;
+        packet[2] = 0x00;
+        packet[3] = 0x30;
+        packet[4] = adaptationLength;
+        packet[5] = (byte)(flagged ? 0x10 : 0x00);
+        packet[6] = (byte)(baseValue >> 25);
+        packet[7] = (byte)((baseValue >> 17) & 0xFF);
+        packet[8] = (byte)((baseValue >> 9) & 0xFF);
+        packet[9] = (byte)((baseValue >> 1) & 0xFF);
+        int lowest = (int)(baseValue & 1);
+        packet[10] = (byte)((lowest << 7) | 0x7E | ((extension >> 8) & 0x01));
+        packet[11] = (byte)(extension & 0xFF);
+
+        return packet;
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(90_000)]
+    [InlineData(123_456_789)]
+    [InlineData(8_589_934_591)]
+    public void TheProgrammeClockIsReadFromTheAdaptationField(long reference)
+    {
+        Assert.Equal(reference, ReadOne(WithClock(reference)).Pcr);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(255)]
+    [InlineData(299)]
+    public void TheNineBitExtensionIsNotPartOfTheClock(int extension)
+    {
+        Assert.Equal(90_000, ReadOne(WithClock(90_000, extension)).Pcr);
+    }
+
+    [Fact]
+    public void AnAdaptationFieldThatCarriesNoClockSaysNothingAboutTheTime()
+    {
+        Assert.Null(ReadOne(WithClock(90_000, flagged: false)).Pcr);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(6)]
+    public void AClockFlaggedInAFieldTooShortToHoldItIsNotRead(byte adaptationLength)
+    {
+        Assert.Null(ReadOne(WithClock(90_000, adaptationLength: adaptationLength)).Pcr);
+    }
+
+    [Fact]
+    public void APacketWithNoAdaptationFieldSaysNothingAboutTheTime()
+    {
+        Assert.Null(ReadOne(Packet(byte3High: 0x10)).Pcr);
+    }
+
+    [Fact]
+    public void AnEmptyAdaptationFieldSaysNothingAboutTheTime()
+    {
+        byte[] packet = WithClock(90_000);
+        packet[4] = 0;
+
+        Assert.Null(ReadOne(packet).Pcr);
+    }
+
+    [Theory]
+    [InlineData(0x20)]
+    [InlineData(0x30)]
+    public void APacketCarryingOnlyAnAdaptationFieldStillSaysTheTimeAndTheBreak(int byte3High)
+    {
+        byte[] packet = WithClock(4_500_000);
+        packet[3] = (byte)byte3High;
+        packet[5] = 0x90;
+
+        TsPacket read = ReadOne(packet);
+
+        Assert.Equal(4_500_000, read.Pcr);
+        Assert.True(read.Discontinuity);
+        Assert.Equal(byte3High is 0x30, read.HasPayload);
+    }
 }

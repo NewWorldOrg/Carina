@@ -120,6 +120,68 @@ nothing.
   in one place and the migration carries a frozen copy of it; changing the
   definition means writing a new migration, and a test says so.
 
+- **The recording and the count are meant to come from the same chunk.** The
+  session's read loop hands each chunk to the writer and then to the counter,
+  because a second pipeline over the same stream puts its own back pressure on
+  the read the recording depends on. Counting is always on — there is no setting
+  that turns it off.
+
+  **What holds that is a trip wire, not a proof, and it is worth knowing where
+  it stops.** One rule names the files allowed to mention the counter; another
+  lists the files carrying two or more of the marks a transport-stream parser
+  leaves behind — the three type names, the sync byte, the 188 and 184 strides,
+  the pid and continuity masks. Both read source text. **A second loop that
+  shows one mark or none walks straight past**: written with `4 + 180 + 4` for
+  the stride, or in lower-case hex, it is invisible to them, and tests assert
+  that plainly so nobody reads the rules as a guarantee. What the rules do catch
+  is the ordinary way somebody would write one.
+
+- **"Nothing counted this" and "this was counted and was clean" are different
+  answers,** and so are "nowhere" and "somewhere, with nothing in it". A driver
+  that cannot count says so in its greeting rather than answering zero, and a
+  reader that does not find the capability reads no number at all. A position
+  needs both counts behind it: it rides on the continuity count and the
+  scrambling count together, because the seconds it names carry both.
+
+- **A total is what the stream should have carried, not what arrived.** The
+  driver counts the packets it read and the packets it never saw separately, and
+  the total the ledger stores is the two added together — a recording that lost
+  more than it received is ordinary in heavy rain, and "lost 117 of 40" is not a
+  number the ledger can hold.
+
+- **Every count and the position beside it are read in one breath.** They are
+  taken under a single lock and handed over together, because a position read a
+  moment after its counts can place more losses than the count admits to, and
+  both the entity and the table reject that pairing. Reading them apart is the
+  bug this rule exists for.
+
+- **Where a loss happened is kept as a second of the stream's own clock.** The
+  programme clock reference is what the file is played back against: a byte
+  offset only approximates it at a variable bit rate, and the wall clock keeps
+  running while a recording is interrupted — which is the recording with the
+  most losses to place. The 33-bit clock coming around is followed through; a
+  jump the broadcast spliced in is written down as a re-anchor instead, so the
+  timeline only ever reads forwards. A packet that sets the discontinuity
+  indicator is taken at its word however small the jump; the size test behind it
+  admits a hundred times the longest gap the standard leaves between two clock
+  readings, and is there only for the breaks nobody declared.
+
+- **The driver announces progress every thirty seconds** for as long as anything
+  is being recorded, so that a recording which dies part way through need not be
+  indistinguishable from a perfect one. Only the driver's half of that is in
+  place: nothing yet subscribes to the signal and nothing yet writes the counts
+  into the ledger, so today the numbers still only reach the ledger when the
+  recording ends.
+
+- **The clock the positions are measured against is the one the recorded service
+  carries, and the driver cannot yet know which that is.** Measurement runs on
+  the raw chunk, which is the whole multiplex, so the timeline follows the first
+  programme clock it hears and hands over to another only when that one goes
+  silent. That is right while the recording is the whole multiplex; the moment a
+  PID filter narrows the file to one service, the followed clock may belong to a
+  service the file no longer contains. Deciding how the recorded service's clock
+  reaches the session is a precondition for adding that filter, not a follow-up.
+
 - **The search across both layers keeps the "already held in the hot layer"
   exclusion above the union, never inside the archive arm.** A `NOT EXISTS` in the
   arm makes that arm a subquery the planner cannot merge into the append, and the

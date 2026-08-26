@@ -9,7 +9,8 @@ public readonly record struct TsPacket(
     bool Discontinuity = false,
     bool PayloadUnitStart = false,
     int PayloadHash = 0,
-    bool Provisional = false
+    bool Provisional = false,
+    long? Pcr = null
 )
 {
     public const int NullPid = 0x1FFF;
@@ -25,6 +26,8 @@ public sealed class TsPacketReader
     public const byte SyncByte = 0x47;
 
     private const int HeaderLength = 4;
+
+    private const int PcrFieldLength = 7;
 
     private readonly List<byte> buffer = [];
     private bool aligned;
@@ -132,9 +135,11 @@ public sealed class TsPacketReader
         bool hasPayload = adaptationField is 0x01 or 0x03;
 
         bool discontinuity = false;
+        long? pcr = null;
         if (hasAdaptation && buffer[HeaderLength] > 0)
         {
             discontinuity = (buffer[HeaderLength + 1] & 0x80) is not 0;
+            pcr = ReadProgrammeClock();
         }
 
         return new TsPacket(
@@ -145,8 +150,23 @@ public sealed class TsPacketReader
             Scrambled: scrambling is not 0,
             discontinuity,
             payloadUnitStart,
-            PayloadHash: HashPayload(hasAdaptation)
+            PayloadHash: HashPayload(hasAdaptation),
+            Pcr: pcr
         );
+    }
+
+    private long? ReadProgrammeClock()
+    {
+        if ((buffer[HeaderLength + 1] & 0x10) is 0 || buffer[HeaderLength] < PcrFieldLength)
+        {
+            return null;
+        }
+
+        return ((long)buffer[HeaderLength + 2] << 25)
+            | ((long)buffer[HeaderLength + 3] << 17)
+            | ((long)buffer[HeaderLength + 4] << 9)
+            | ((long)buffer[HeaderLength + 5] << 1)
+            | ((long)buffer[HeaderLength + 6] >> 7);
     }
 
     private int HashPayload(bool hasAdaptation)

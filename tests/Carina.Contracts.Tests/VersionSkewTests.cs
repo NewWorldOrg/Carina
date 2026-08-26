@@ -471,7 +471,7 @@ public sealed class VersionSkewTests
         RecordingSessionDto recording = RecordingSessionDto.Of(OlderDriver, session);
 
         Assert.Equal(
-            """{"sessionId":"rec-1","recordingId":"k-90210","outputRoot":"primary","startedAt":"2026-08-08T21:04:00+09:00","endsAt":null,"bytesWritten":9400000,"ccDropped":null,"ccTotal":null,"ccMeasured":false,"scrambledPackets":null,"scrambleMeasured":false,"eovfCount":2}""",
+            """{"sessionId":"rec-1","recordingId":"k-90210","outputRoot":"primary","startedAt":"2026-08-08T21:04:00+09:00","endsAt":null,"bytesWritten":9400000,"ccDropped":null,"ccTotal":null,"ccMeasured":false,"scrambledPackets":null,"scrambleMeasured":false,"eovfCount":2,"positions":null}""",
             DriverJson.Serialize(recording)
         );
     }
@@ -491,7 +491,7 @@ public sealed class VersionSkewTests
         Assert.True(recording.ScrambleMeasured);
         Assert.Equal(0, recording.ScrambledPackets);
         Assert.Equal(
-            """{"sessionId":"rec-1","recordingId":"k-90210","outputRoot":"primary","startedAt":"2026-08-08T21:04:00+09:00","endsAt":null,"bytesWritten":9400000,"ccDropped":0,"ccTotal":50000,"ccMeasured":true,"scrambledPackets":0,"scrambleMeasured":true,"eovfCount":0}""",
+            """{"sessionId":"rec-1","recordingId":"k-90210","outputRoot":"primary","startedAt":"2026-08-08T21:04:00+09:00","endsAt":null,"bytesWritten":9400000,"ccDropped":0,"ccTotal":50000,"ccMeasured":true,"scrambledPackets":0,"scrambleMeasured":true,"eovfCount":0,"positions":null}""",
             DriverJson.Serialize(recording)
         );
     }
@@ -522,7 +522,7 @@ public sealed class VersionSkewTests
 
         Assert.True(recording.CcMeasured);
         Assert.Equal(7, recording.CcDropped);
-        Assert.Equal(50_000, recording.CcTotal);
+        Assert.Equal(50_007, recording.CcTotal);
         Assert.False(recording.ScrambleMeasured);
         Assert.Null(recording.ScrambledPackets);
         Assert.Equal(2, recording.EovfCount);
@@ -602,6 +602,161 @@ public sealed class VersionSkewTests
         Assert.False(recording.CcMeasured);
         Assert.Null(recording.CcTotal);
         Assert.False(recording.ScrambleMeasured);
+    }
+
+    [Fact]
+    public void ADriverThatCannotSayWhereTheLossesWereHasItsPositionsLeftBehind()
+    {
+        SessionSnapshot session = RecordingAnsweredWith(
+            """{"packets":50000,"drops":7,"ccMeasured":true,"scrambleMeasured":true,"positions":{"anchorPcr":900,"buckets":[{"second":4,"continuity":7,"scrambled":0}],"reanchors":[]}}"""
+        );
+
+        RecordingSessionDto recording = RecordingSessionDto.Of(MeasuringDriver, session);
+
+        Assert.True(recording.CcMeasured);
+        Assert.Equal(7, recording.CcDropped);
+        Assert.Null(recording.Positions);
+    }
+
+    public static TheoryData<string, bool, bool, bool> OneLegAtATime() =>
+        new()
+        {
+            { "everything", true, true, true },
+            { "capability", false, true, true },
+            { "continuity", true, false, true },
+            { "scrambling", true, true, false },
+        };
+
+    [Theory]
+    [MemberData(nameof(OneLegAtATime))]
+    public void APositionRidesOnTheDeclaredCapabilityAndOnBothCountsSeparately(
+        string leg,
+        bool declaresPositions,
+        bool countsContinuity,
+        bool countsScrambling
+    )
+    {
+        var capabilities = new List<string> { DriverCapabilities.Recording };
+
+        if (declaresPositions)
+        {
+            capabilities.Add(DriverCapabilities.DropPositions);
+        }
+
+        if (countsContinuity)
+        {
+            capabilities.Add(DriverCapabilities.CcMeasurement);
+        }
+
+        if (countsScrambling)
+        {
+            capabilities.Add(DriverCapabilities.ScrambleMeasurement);
+        }
+
+        string counted = countsContinuity ? "true" : "false";
+        string unresolved = countsScrambling ? "true" : "false";
+        SessionSnapshot session = RecordingAnsweredWith(
+            @"{""packets"":50000,""drops"":7,""scrambledPackets"":2,""ccMeasured"":"
+                + counted
+                + @",""scrambleMeasured"":"
+                + unresolved
+                + @",""positions"":{""anchorPcr"":900,""buckets"":[],""reanchors"":[]}}"
+        );
+
+        RecordingSessionDto recording = RecordingSessionDto.Of(
+            new DriverHello(DriverProtocol.Version, leg, capabilities),
+            session
+        );
+
+        Assert.Equal(leg is "everything", recording.Positions is not null);
+    }
+
+    [Fact]
+    public void ADriverThatSaysWhereTheLossesWereIsBelievedAboutTheSecondsItNames()
+    {
+        SessionSnapshot session = RecordingAnsweredWith(
+            """{"packets":50000,"drops":9,"scrambledPackets":2,"ccMeasured":true,"scrambleMeasured":true,"positions":{"anchorPcr":900,"buckets":[{"second":4,"continuity":7,"scrambled":0},{"second":11,"continuity":2,"scrambled":2}],"reanchors":[{"second":8,"before":123,"after":456}]}}"""
+        );
+
+        RecordingSessionDto recording = RecordingSessionDto.Of(LocatingDriver, session);
+
+        Assert.NotNull(recording.Positions);
+        Assert.Equal(900, recording.Positions.AnchorPcr);
+        Assert.Equal([4, 11], recording.Positions.Buckets.Select(bucket => bucket.Second));
+        Assert.Equal([7, 2], recording.Positions.Buckets.Select(bucket => bucket.Continuity));
+        Assert.Equal([0, 2], recording.Positions.Buckets.Select(bucket => bucket.Scrambled));
+        Assert.Equal([8], recording.Positions.Reanchors.Select(reanchor => reanchor.Second));
+        Assert.Equal(123, recording.Positions.Reanchors[0].Before);
+        Assert.Equal(456, recording.Positions.Reanchors[0].After);
+    }
+
+    [Fact]
+    public void ACountWithNoPositionAtAllIsNotTheSameAsAPositionWithNothingInIt()
+    {
+        SessionSnapshot located = RecordingAnsweredWith(
+            """{"packets":50000,"drops":0,"ccMeasured":true,"scrambleMeasured":true,"positions":{"anchorPcr":900,"buckets":[],"reanchors":[]}}"""
+        );
+        SessionSnapshot unlocated = RecordingAnsweredWith(
+            """{"packets":50000,"drops":0,"ccMeasured":true,"scrambleMeasured":true}"""
+        );
+
+        RecordingSessionDto withAPosition = RecordingSessionDto.Of(LocatingDriver, located);
+        RecordingSessionDto withNone = RecordingSessionDto.Of(LocatingDriver, unlocated);
+
+        Assert.True(withAPosition.CcMeasured);
+        Assert.NotNull(withAPosition.Positions);
+        Assert.Empty(withAPosition.Positions.Buckets);
+        Assert.Equal(900, withAPosition.Positions.AnchorPcr);
+
+        Assert.True(withNone.CcMeasured);
+        Assert.Null(withNone.Positions);
+    }
+
+    [Fact]
+    public void APositionFromADriverThatDoesNotCountContinuityIsLeftBehind()
+    {
+        SessionSnapshot session = RecordingAnsweredWith(
+            """{"packets":50000,"drops":7,"scrambleMeasured":true,"positions":{"anchorPcr":900,"buckets":[],"reanchors":[]}}"""
+        );
+
+        Assert.Null(RecordingSessionDto.Of(PositionsWithoutContinuityDriver, session).Positions);
+    }
+
+    [Fact]
+    public void APositionFromADriverThatDoesNotCountScramblingIsLeftBehind()
+    {
+        SessionSnapshot session = RecordingAnsweredWith(
+            """{"packets":50000,"drops":7,"ccMeasured":true,"positions":{"anchorPcr":900,"buckets":[{"second":3,"continuity":0,"scrambled":4}],"reanchors":[]}}"""
+        );
+
+        Assert.Null(RecordingSessionDto.Of(PositionsWithoutScrambleDriver, session).Positions);
+    }
+
+    [Fact]
+    public void APositionOnCountersThatSayNothingWasCountedIsLeftBehind()
+    {
+        SessionSnapshot session = RecordingAnsweredWith(
+            """{"packets":50000,"drops":7,"ccMeasured":false,"scrambleMeasured":false,"positions":{"anchorPcr":900,"buckets":[],"reanchors":[]}}"""
+        );
+
+        RecordingSessionDto recording = RecordingSessionDto.Of(LocatingDriver, session);
+
+        Assert.False(recording.CcMeasured);
+        Assert.Null(recording.CcDropped);
+        Assert.Null(recording.Positions);
+    }
+
+    [Fact]
+    public void TheTotalOnTheWireIsWhatTheStreamShouldHaveCarried()
+    {
+        SessionSnapshot session = RecordingAnsweredWith(
+            """{"packets":40,"drops":117,"ccMeasured":true,"scrambleMeasured":true}"""
+        );
+
+        RecordingSessionDto recording = RecordingSessionDto.Of(LocatingDriver, session);
+
+        Assert.Equal(117, recording.CcDropped);
+        Assert.Equal(157, recording.CcTotal);
     }
 
     [Fact]
@@ -806,6 +961,41 @@ public sealed class VersionSkewTests
                 DriverCapabilities.Recording,
                 DriverCapabilities.Live,
                 DriverCapabilities.ScrambleMeasurement,
+            ]
+        );
+
+    private static readonly DriverHello PositionsWithoutContinuityDriver =
+        new(
+            DriverProtocol.Version,
+            "positions-no-continuity",
+            [
+                DriverCapabilities.Recording,
+                DriverCapabilities.ScrambleMeasurement,
+                DriverCapabilities.DropPositions,
+            ]
+        );
+
+    private static readonly DriverHello PositionsWithoutScrambleDriver =
+        new(
+            DriverProtocol.Version,
+            "positions-no-scramble",
+            [
+                DriverCapabilities.Recording,
+                DriverCapabilities.CcMeasurement,
+                DriverCapabilities.DropPositions,
+            ]
+        );
+
+    private static readonly DriverHello LocatingDriver =
+        new(
+            DriverProtocol.Version,
+            "locating",
+            [
+                DriverCapabilities.Recording,
+                DriverCapabilities.Live,
+                DriverCapabilities.CcMeasurement,
+                DriverCapabilities.ScrambleMeasurement,
+                DriverCapabilities.DropPositions,
             ]
         );
 

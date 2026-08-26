@@ -255,6 +255,21 @@ public sealed record StartSessionRequest
     }
 }
 
+public sealed record DropBucketDto(int Second, long Continuity, long Scrambled);
+
+public sealed record PcrReanchorDto(int Second, long Before, long After);
+
+public sealed record DropPositionsDto(
+    long AnchorPcr,
+    IReadOnlyList<DropBucketDto> Buckets,
+    IReadOnlyList<PcrReanchorDto> Reanchors
+)
+{
+    public IReadOnlyList<DropBucketDto> Buckets { get; init; } = Buckets ?? [];
+
+    public IReadOnlyList<PcrReanchorDto> Reanchors { get; init; } = Reanchors ?? [];
+}
+
 public sealed record SessionCounters(
     long Packets = 0,
     long Drops = 0,
@@ -268,7 +283,8 @@ public sealed record SessionCounters(
     long DeviceOverflows = 0,
     long LockLosses = 0,
     bool CcMeasured = false,
-    bool ScrambleMeasured = false
+    bool ScrambleMeasured = false,
+    DropPositionsDto? Positions = null
 )
 {
     public static readonly SessionCounters Nothing = new();
