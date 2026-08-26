@@ -9,7 +9,7 @@ public sealed record RecordingTick(
     ServiceId ServiceId,
     EventId EventId,
     DateTime ProgrammeStartsAt,
-    string Name,
+    ProgrammeSnapshot Snapshot,
     Priority Priority,
     BroadcastGroupKey? BroadcastGroupKey,
     BroadcastGroupRole BroadcastGroupRole,
@@ -28,4 +28,6 @@ public interface IReservationRecordingContract
     Task<IReadOnlyList<RecordingTick>> DueAtAsync(DateTime at, CancellationToken cancellationToken);
 
     Task<bool> ClaimAsync(ReservationId id, DateTime at, CancellationToken cancellationToken);
+
+    Task<bool> ReleaseAsync(ReservationId id, DateTime claimedAt, CancellationToken cancellationToken);
 }

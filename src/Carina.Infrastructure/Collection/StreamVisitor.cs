@@ -40,7 +40,7 @@ public sealed class StreamVisitor(
         ArgumentNullException.ThrowIfNull(tuning);
 
         var sessionId = SessionId.Parse($"epg-{Guid.NewGuid():n}");
-        TuneParams tune = TuneParamsOf(tuning);
+        TuneParams tune = tuning.Typed();
         DriverCall<SessionSnapshot> start = await driver.StartSessionAsync(
             new StartSessionRequest
             {
@@ -174,16 +174,4 @@ public sealed class StreamVisitor(
 
         return quality?.Lock is SignalLock.NotLocked;
     }
-
-    private static TuneParams TuneParamsOf(TuningParameters tuning)
-        => tuning.System switch
-        {
-            TuneSystem.IsdbT => TuneParams.Terrestrial(tuning.PhysicalChannel),
-            TuneSystem.IsdbSBs => TuneParams.Bs(tuning.PhysicalChannel, tuning.TransportStreamId!.Value),
-            TuneSystem.IsdbSCs110 => TuneParams.Cs110(tuning.PhysicalChannel),
-            _ => throw new ArgumentOutOfRangeException(
-                nameof(tuning),
-                tuning.System,
-                "A visit tunes terrestrial, BS or CS110."),
-        };
 }

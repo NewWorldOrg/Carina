@@ -1,8 +1,10 @@
 using System.Data.Common;
+using System.Text.Json;
 
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
+using Carina.Infrastructure.Persistence.Configurations;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -15,7 +17,8 @@ public sealed class ReservationRecordingContract(CarinaDbContext context) : IRes
     private const string DueAt = $"""
         SELECT id, network_id, service_id, event_id, programme_start_at, snapshot_name, priority,
                broadcast_group_key, broadcast_group_role, effective_start_at, effective_end_at,
-               end_at_confirmed, started_at
+               end_at_confirmed, started_at, snapshot_summary, snapshot_extended, snapshot_genres,
+               captured_at
         FROM {View}
         WHERE in_flight OR (effective_start_at <= $1 AND $1 < effective_end_at)
         ORDER BY effective_start_at, id
@@ -63,6 +66,19 @@ public sealed class ReservationRecordingContract(CarinaDbContext context) : IRes
         return claimed is 1;
     }
 
+    public async Task<bool> ReleaseAsync(ReservationId id, DateTime claimedAt, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(id);
+
+        DateTime moment = InUtc(claimedAt);
+
+        int released = await context.Database.ExecuteSqlInterpolatedAsync(
+            $"UPDATE reservation SET started_at = NULL WHERE id = {id.Value} AND started_at = {moment} AND recording_outcome IS NULL",
+            cancellationToken);
+
+        return released is 1;
+    }
+
     private static DateTime InUtc(DateTime at)
         => at.Kind is DateTimeKind.Utc
             ? at
@@ -83,7 +99,12 @@ public sealed class ReservationRecordingContract(CarinaDbContext context) : IRes
             new ServiceId(reader.GetInt32(2)),
             new EventId(reader.GetInt32(3)),
             reader.GetDateTime(4),
-            reader.GetString(5),
+            new ProgrammeSnapshot(
+                reader.GetString(5),
+                reader.GetString(13),
+                reader.GetString(14),
+                JsonSerializer.Deserialize<List<ProgrammeGenre>>(reader.GetString(15), ProgrammeJson.Options) ?? [],
+                reader.GetDateTime(16)),
             new Priority(reader.GetInt32(6)),
             reader.IsDBNull(7) ? null : new BroadcastGroupKey(reader.GetString(7)),
             Enum.Parse<BroadcastGroupRole>(reader.GetString(8)),
