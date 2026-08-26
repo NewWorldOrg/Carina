@@ -63,6 +63,9 @@ internal sealed class LedgerOnlyDriverClient : IDriverClient
     public Task<DriverCall<IReadOnlyList<DiagnosticSnapshot>>> GetDiagnosticsAsync(CancellationToken cancellationToken)
         => throw new NotSupportedException();
 
+    public Task<DriverCall<IReadOnlyList<StorageRootDto>>> GetStorageAsync(CancellationToken cancellationToken)
+        => throw new NotSupportedException();
+
     public Task<DriverCall<Stream>> OpenSessionStreamAsync(
         SessionId sessionId,
         string? subscriber,
