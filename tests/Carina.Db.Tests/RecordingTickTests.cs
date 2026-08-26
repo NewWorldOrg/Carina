@@ -118,6 +118,28 @@ public sealed class RecordingTickTests(MigratedScratchDatabase database)
     }
 
     [Fact]
+    public async Task ARootWithNoRoomLeftIsWrittenIntoARowTheDatabaseTakes()
+    {
+        await Clear();
+        await Plan(51401, ReservationState.Scheduled);
+        var driver = new RecordingDriver { FreeBytes = 0 };
+
+        await using (CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString))
+        {
+            Assert.Single((await Round(context, driver).RunAsync(CancellationToken.None)).Started);
+        }
+
+        await using CarinaDbContext reading = CarinaDbContextFactory.Create(database.ConnectionString);
+        Recording written = await reading.Set<Recording>().SingleAsync();
+        OutcomeDetail reason = Assert.Single(written.OutcomeDetail);
+
+        Assert.Equal(RecordingFault.RefusedByDiskPrecheck, reason.Fault);
+        Assert.Equal(Airs, reason.NoticedAt);
+        Assert.DoesNotContain("/", reason.Note, StringComparison.Ordinal);
+        Assert.True(written.IsInFlight);
+    }
+
+    [Fact]
     public async Task AReservationTheDriverWouldNotTakeIsLeftForTheNextTick()
     {
         await Clear();
