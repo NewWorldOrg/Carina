@@ -30,7 +30,16 @@ COPY src/ src/
 RUN dotnet publish src/Carina.Api/Carina.Api.csproj -c Release --no-restore -o /out/app \
     && dotnet publish src/Carina.Db/Carina.Db.csproj -c Release --no-restore -o /out/db
 
+FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS develop
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
 FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS runtime
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 
 ARG CARINA_UID=10001
 ARG CARINA_GID=10001

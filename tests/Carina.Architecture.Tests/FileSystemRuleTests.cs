@@ -26,6 +26,9 @@ public sealed class FileSystemRuleTests
         "/Carina.Driver/Tuning/TunerLedgerStore.cs .Replace(",
         "/Carina.Infrastructure/Collection/StreamHarvest.cs .CopyTo(",
         "/Carina.Infrastructure/Integrity/LocalRecordingFileSurvey.cs .Replace(",
+        "/Carina.Infrastructure/Thumbnails/FfmpegThumbnailRenderer.cs Directory.CreateDirectory",
+        "/Carina.Infrastructure/Thumbnails/FfmpegThumbnailRenderer.cs Process.Start",
+        "/Carina.Infrastructure/Thumbnails/FfmpegThumbnailRenderer.cs ProcessStartInfo",
     ];
 
     [Fact]
@@ -51,6 +54,29 @@ public sealed class FileSystemRuleTests
         Assert.Equal(
             ["/Carina.Infrastructure/Integrity/LocalRecordingFileSurvey.cs .Replace("],
             Inventory.Where(entry => entry.Contains("/Integrity/", StringComparison.Ordinal)).ToArray());
+    }
+
+    [Fact]
+    public void TheOnlyPlaceThatStartsAProgrammeOfItsOwnIsTheOneThatDrawsThumbnails()
+    {
+        Assert.Equal(
+            [
+                "/Carina.Infrastructure/Thumbnails/FfmpegThumbnailRenderer.cs Process.Start",
+                "/Carina.Infrastructure/Thumbnails/FfmpegThumbnailRenderer.cs ProcessStartInfo",
+            ],
+            Inventory.Where(entry => entry.Contains("Process", StringComparison.Ordinal)).ToArray());
+    }
+
+    [Fact]
+    public void WhatDrawsThumbnailsMakesTheRoomForThemAndOpensNoFileOfTheRecordingItself()
+    {
+        Assert.Equal(
+            [
+                "/Carina.Infrastructure/Thumbnails/FfmpegThumbnailRenderer.cs Directory.CreateDirectory",
+                "/Carina.Infrastructure/Thumbnails/FfmpegThumbnailRenderer.cs Process.Start",
+                "/Carina.Infrastructure/Thumbnails/FfmpegThumbnailRenderer.cs ProcessStartInfo",
+            ],
+            Inventory.Where(entry => entry.Contains("/Thumbnails/", StringComparison.Ordinal)).ToArray());
     }
 
     [Fact]

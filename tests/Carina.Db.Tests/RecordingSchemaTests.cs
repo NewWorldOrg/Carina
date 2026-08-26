@@ -326,6 +326,7 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
 
         Assert.Equal(
             [
+                RecordingConfiguration.AwaitingThumbnailIndexName,
                 RecordingConfiguration.DroppedIndexName,
                 RecordingConfiguration.InFlightIndexName,
                 RecordingConfiguration.SettledIndexName,
@@ -476,19 +477,84 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
     }
 
     [Theory]
-    [InlineData("Pending", 40031)]
-    [InlineData("Ready", 40032)]
-    [InlineData("Failed", 40033)]
-    [InlineData("Skipped", 40034)]
-    public async Task TheLedgerHoldsTheFourThumbnailStates(string state, int networkId)
+    [InlineData("Pending", 40031, null)]
+    [InlineData("Ready", 40032, null)]
+    [InlineData("Failed", 40033, "'TimedOut'")]
+    [InlineData("Skipped", 40034, null)]
+    public async Task TheLedgerHoldsTheFourThumbnailStates(string state, int networkId, string? fault)
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
 
-        await Record(connection, networkId, thumbnail: $"'{state}'");
+        await Record(connection, networkId, thumbnail: $"'{state}'", thumbnailFault: fault);
 
         Assert.Equal(
             state,
             await Scalar(connection, $"SELECT thumbnail_state FROM recording WHERE network_id = {networkId}"));
+    }
+
+    [Theory]
+    [InlineData("ProgrammeMissing", 40061)]
+    [InlineData("SourceOutOfReach", 40062)]
+    [InlineData("Refused", 40063)]
+    [InlineData("TimedOut", 40064)]
+    [InlineData("NothingWasWritten", 40065)]
+    public async Task APictureThatCouldNotBeDrawnSaysWhichWayItWentWrong(string fault, int networkId)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        await Record(connection, networkId, thumbnail: "'Failed'", thumbnailFault: $"'{fault}'");
+
+        Assert.Equal(
+            fault,
+            await Scalar(connection, $"SELECT thumbnail_fault FROM recording WHERE network_id = {networkId}"));
+    }
+
+    [Fact]
+    public async Task AThumbnailFaultTheLedgerDoesNotHoldIsRefused()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(connection, 40066, thumbnail: "'Failed'", thumbnailFault: "'DiskWasFull'"));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
+        Assert.Equal("ck_recording_thumbnail", refusal.ConstraintName);
+    }
+
+    [Fact]
+    public async Task APictureThatCouldNotBeDrawnAndNamesNothingIsRefused()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(connection, 40067, thumbnail: "'Failed'"));
+
+        Assert.Equal("ck_recording_thumbnail", refusal.ConstraintName);
+    }
+
+    [Theory]
+    [InlineData("Pending", 40068)]
+    [InlineData("Ready", 40069)]
+    [InlineData("Skipped", 40070)]
+    public async Task AFaultOnAPictureNothingStoppedIsRefused(string state, int networkId)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(connection, networkId, thumbnail: $"'{state}'", thumbnailFault: "'TimedOut'"));
+
+        Assert.Equal("ck_recording_thumbnail", refusal.ConstraintName);
+    }
+
+    [Fact]
+    public async Task TheThumbnailQueueIndexReachesOnlyWhatHasEndedAndHasNoPictureYet()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        Assert.Equal(
+            "CREATE INDEX ix_recording_awaiting_thumbnail ON public.recording USING btree (stopped_at_actual) "
+            + "WHERE ((recording_outcome IS NOT NULL) AND ((thumbnail_state)::text = 'Pending'::text))",
+            await IndexDefinition(connection, RecordingConfiguration.AwaitingThumbnailIndexName));
     }
 
     [Fact]
@@ -664,7 +730,8 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
         string? windowEnd = null,
         Guid? reservationId = null,
         string? tuner = null,
-        string? thumbnail = null)
+        string? thumbnail = null,
+        string? thumbnailFault = null)
     {
         var id = Guid.NewGuid();
 
@@ -682,7 +749,7 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
                 snapshot_name, snapshot_summary, snapshot_extended, snapshot_genres, captured_at,
                 broadcast_group_key, broadcast_group_role,
                 cc_measured, cc_dropped_packets, cc_total_packets,
-                pcr_anchor, drop_positions, pcr_reanchors, tuner_device_id, thumbnail_state)
+                pcr_anchor, drop_positions, pcr_reanchors, tuner_device_id, thumbnail_state, thumbnail_fault)
             VALUES (
                 '{id}', {(reservationId is { } held ? $"'{held}'" : "NULL")}, {networkId}, 1024, {eventId}, {Airs},
                 'bulk', '{fileName ?? $"{id:N}.m2ts"}', {size ?? "NULL"}, {observedAt ?? "NULL"},
@@ -694,7 +761,8 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
                 'A programme', 'What it is about', '', '[]'::jsonb, {Now},
                 NULL, 'Standalone',
                 {ccMeasured}, {ccDropped ?? "NULL"}, {ccTotal ?? "NULL"},
-                NULL, '[]'::jsonb, '[]'::jsonb, {tuner ?? "'pt3-0'"}, {thumbnail ?? "'Pending'"})
+                NULL, '[]'::jsonb, '[]'::jsonb, {tuner ?? "'pt3-0'"}, {thumbnail ?? "'Pending'"},
+                {thumbnailFault ?? "NULL"})
             """);
 
         return id;

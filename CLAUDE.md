@@ -198,6 +198,18 @@ nothing.
   estimated total, cursor paging in place of a page count, or a count that stops
   at a ceiling and answers "more than". None of them is in place.
 
+- **A picture of a recording can never change how the recording ended.** Nothing
+  on the completion path calls the thumbnail code at all: the job reads the ledger
+  for recordings that have ended and have no picture yet, and the only thing it may
+  write back is the picture's own state. A rule test says which files outside the
+  feature are allowed to name it — the two places it is built — and another says
+  that nothing inside the feature calls any of the methods that say how a recording
+  ended. A recording that failed is skipped rather than illustrated, because a
+  picture of it would say it was recorded; one that was cut short is illustrated,
+  and the ledger still says it was cut short. When the picture cannot be drawn, the
+  class of the failure is kept on the row beside the state, never in
+  `outcome_detail`, which belongs to the recording's own result.
+
 - **A stop the driver was asked for exits 0; anything else exits 70.** Coming
   back is the supervisor's half of the deal, which is why `on-failure` is the one
   restart policy the driver must never be given.
