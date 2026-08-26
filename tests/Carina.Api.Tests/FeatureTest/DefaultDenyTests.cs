@@ -64,6 +64,7 @@ public sealed class DefaultDenyTests(TestingWebApplicationFactory factory)
         "/api/driver/status",
         "/api/tuners",
         "/api/tuners/detected",
+        "/api/tuners/health",
         "/api/tuners/scan-runs",
         "/api/services",
         AppEventStream.Path,
