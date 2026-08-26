@@ -90,7 +90,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IScanRunRepository, ScanRunRepository>();
         services.AddScoped<IReservationRecordingContract, ReservationRecordingContract>();
         services.AddScoped<IRecordingLedger, RecordingLedger>();
-        services.AddRecordingDirectory();
         services.AddScoped<IIntegrityCheckRepository, IntegrityCheckRepository>();
         services.AddScoped<IThumbnailWorklist, ThumbnailWorklist>();
         services.AddScoped<IChannelScanOrchestrator, ChannelScanOrchestrator>();

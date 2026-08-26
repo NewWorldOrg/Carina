@@ -12,6 +12,7 @@ public static class RecordingServices
         ArgumentNullException.ThrowIfNull(services);
 
         services.AddScoped<IRecordingRepository, RecordingRepository>();
+        services.AddScoped<IRecordingDirectory, RecordingDirectory>();
         services.AddScoped<RecordingRound>();
         services.AddHostedService<RecordingTickJob>();
 
