@@ -19,6 +19,30 @@ public sealed class ProjectGraph
 
     public static ProjectGraph FromNodes(params ProjectNode[] projects) => new(projects);
 
+    public static IReadOnlyList<string> ProjectsOutsideTheSolution(
+        string solution,
+        params string[] directories)
+    {
+        string root = Path.GetDirectoryName(solution)!;
+
+        HashSet<string> built = XDocument
+            .Load(solution)
+            .Descendants("Project")
+            .Select(project => (string?)project.Attribute("Path"))
+            .Where(path => !string.IsNullOrWhiteSpace(path))
+            .Select(path => Path.GetFullPath(Path.Combine(root, path!.Replace('\\', '/'))))
+            .ToHashSet(StringComparer.Ordinal);
+
+        return directories
+            .SelectMany(directory =>
+                Directory.EnumerateFiles(directory, "*.csproj", SearchOption.AllDirectories))
+            .Select(Path.GetFullPath)
+            .Where(project => !built.Contains(project))
+            .Select(project => Path.GetRelativePath(root, project).Replace('\\', '/'))
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+    }
+
     public ProjectNode Node(string name)
         => nodes.TryGetValue(name, out ProjectNode? node)
             ? node

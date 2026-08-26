@@ -114,6 +114,8 @@ public sealed class ProgrammeConfiguration : IEntityTypeConfiguration<Programme>
 
     public const string GenreKinds = "genre_kinds";
 
+    public const int SearchableStatisticsTarget = 1000;
+
     public const string SearchableSql =
         $"lower(pg_catalog.normalize(name || ' ' || summary, '{BroadcastText.Compatibility}'))";
 

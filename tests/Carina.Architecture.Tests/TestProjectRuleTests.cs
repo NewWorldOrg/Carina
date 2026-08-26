@@ -7,6 +7,15 @@ public sealed class TestProjectRuleTests
         RepositoryLayout.TestDirectory);
 
     [Fact]
+    public void EveryProjectOnDiskIsOneTheSolutionBuilds()
+    {
+        Assert.Empty(ProjectGraph.ProjectsOutsideTheSolution(
+            RepositoryLayout.SolutionFile,
+            RepositoryLayout.SourceDirectory,
+            RepositoryLayout.TestDirectory));
+    }
+
+    [Fact]
     public void NoTestProjectReferencesAnotherTestProject()
     {
         Assert.Empty(Graph.TestProjectsReferencingAnotherTestProject());

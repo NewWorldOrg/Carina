@@ -1,4 +1,5 @@
 using Carina.Infrastructure.Persistence;
+using Carina.Infrastructure.Persistence.Configurations;
 
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
@@ -56,6 +57,37 @@ public sealed class ArchivedProgrammeSearchColumnsTests
             "gin (searchable gin_trgm_ops)",
             (string?)await command.ExecuteScalarAsync(Cancel) ?? string.Empty,
             StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task BothSearchColumnsAreSampledDeeplyEnoughForOnePlanToKeepWinning()
+    {
+        await using CarinaDbContext context = CarinaDbContextFactory.Create(Scratch());
+        await context.Database.EnsureDeletedAsync(Cancel);
+        await context.GetService<IMigrator>().MigrateAsync(cancellationToken: Cancel);
+
+        await using NpgsqlConnection connection = await OpenAsync();
+        await using NpgsqlCommand command = connection.CreateCommand();
+        command.CommandText =
+            "SELECT attrelid::regclass::text || ' ' || coalesce(attstattarget::text, 'the default') "
+            + "FROM pg_attribute "
+            + "WHERE attrelid IN ('programme'::regclass, 'archived_programme'::regclass) "
+            + "AND attname = 'searchable' ORDER BY 1";
+
+        await using NpgsqlDataReader rows = await command.ExecuteReaderAsync(Cancel);
+        List<string> read = [];
+
+        while (await rows.ReadAsync(Cancel))
+        {
+            read.Add(rows.GetString(0));
+        }
+
+        Assert.Equal(
+            [
+                $"archived_programme {ProgrammeConfiguration.SearchableStatisticsTarget}",
+                $"programme {ProgrammeConfiguration.SearchableStatisticsTarget}",
+            ],
+            read);
     }
 
     [Fact]

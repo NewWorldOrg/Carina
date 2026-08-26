@@ -24,6 +24,7 @@ public sealed class FileSystemRuleTests
         "/Carina.Driver/Tuning/Dvb/DvbSystemCalls.cs LibraryImport",
         "/Carina.Driver/Tuning/Dvb/DvbTunerDetector.cs .Replace(",
         "/Carina.Driver/Tuning/TunerLedgerStore.cs .Replace(",
+        "/Carina.Infrastructure/Auth/SigningKeys.cs .Create()",
         "/Carina.Infrastructure/Collection/StreamHarvest.cs .CopyTo(",
         "/Carina.Infrastructure/Integrity/LocalRecordingFileSurvey.cs .Replace(",
     ];
@@ -51,6 +52,23 @@ public sealed class FileSystemRuleTests
         Assert.Equal(
             ["/Carina.Infrastructure/Integrity/LocalRecordingFileSurvey.cs .Replace("],
             Inventory.Where(entry => entry.Contains("/Integrity/", StringComparison.Ordinal)).ToArray());
+    }
+
+    [Fact]
+    public void TheOneBareCreateLeftIsAKeyFactoryAndNotAFile()
+    {
+        Assert.Equal(
+            ["/Carina.Infrastructure/Auth/SigningKeys.cs .Create()"],
+            Inventory.Where(entry => entry.EndsWith(".Create()", StringComparison.Ordinal)).ToArray());
+
+        string source = File.ReadAllText(Path.Combine(
+            RepositoryLayout.SourceDirectory,
+            "Carina.Infrastructure",
+            "Auth",
+            "SigningKeys.cs"));
+
+        Assert.Equal([".Create()"], FileSystemRules.WhatCouldChangeWhatIsOnDiskIn(source));
+        Assert.Contains("using RSA rsa = RSA.Create();", source, StringComparison.Ordinal);
     }
 
     [Fact]
