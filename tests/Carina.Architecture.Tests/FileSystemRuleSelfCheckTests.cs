@@ -19,8 +19,9 @@ public sealed class FileSystemRuleSelfCheckTests
     [InlineData("found.MoveTo(elsewhere);", ".MoveTo(")]
     [InlineData(
         "if (found.LastWriteTimeUtc < DateTime.UtcNow.AddDays(-30)) { found.Create().Dispose(); }",
-        ".Create(")]
-    [InlineData("using (StreamWriter writing = found.CreateText()) { }", ".CreateText(")]
+        ".Create()")]
+    [InlineData("using (StreamWriter writing = found.CreateText()) { }", ".CreateText()")]
+    [InlineData("held.Create( );", ".Create()")]
     [InlineData("held.SetLength(0);", ".SetLength(")]
     [InlineData("new FileStream(path, FileMode.Create);", "FileMode.")]
     [InlineData("new StreamWriter(path);", "newStreamWriter")]
@@ -46,6 +47,17 @@ public sealed class FileSystemRuleSelfCheckTests
     [InlineData("string held = File.ReadAllText(path);")]
     [InlineData("bool room = Directory.Exists(path);")]
     public void TheRuleLeavesAWayOfOnlyLookingAlone(string source)
+    {
+        Assert.Empty(FileSystemRules.WhatCouldChangeWhatIsOnDiskIn(source));
+    }
+
+    [Theory]
+    [InlineData("return string.Create(CultureInfo.InvariantCulture, $\"{one}:{two}\");")]
+    [InlineData("using var body = JsonContent.Create(payload, Context.Thing);")]
+    [InlineData("ITunerDevice opened = deviceFactory.Create(settings, tuning, tune);")]
+    [InlineData("using var stopping = PosixSignalRegistration.Create(PosixSignal.SIGTERM, stop);")]
+    [InlineData("using ECDsa algorithm = ECDsa.Create(new ECParameters());")]
+    public void TheRuleLeavesAFactoryThatIsHandedSomethingAlone(string source)
     {
         Assert.Empty(FileSystemRules.WhatCouldChangeWhatIsOnDiskIn(source));
     }
