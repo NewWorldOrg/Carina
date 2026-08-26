@@ -75,20 +75,16 @@ public sealed class ThumbnailWorklistTests(RepositoryDatabase database)
     [Fact]
     public async Task TheOldestRecordingWithoutAPictureComesFirst()
     {
-        Recording later = await AddAsync(7120);
-        Recording earlier = await AddAsync(7121);
+        var alone = new OutputRoot("oldestfirst");
+        Recording later = await AddAsync(7120, alone);
+        Recording earlier = await AddAsync(7121, alone);
         await SettleAsync(later.Id, RecordingOutcome.Complete, 1_200_000, Now.AddHours(2));
         await SettleAsync(earlier.Id, RecordingOutcome.Complete, 1_200_000, Now.AddHours(1));
 
-        IReadOnlyList<ThumbnailSubject> waiting = await AwaitingAsync();
-        IReadOnlyList<RecordingId> both =
-        [
-            .. waiting
-                .Where(subject => subject.Id.Equals(earlier.Id) || subject.Id.Equals(later.Id))
-                .Select(subject => subject.Id),
-        ];
+        IReadOnlyList<ThumbnailSubject> waiting = await AwaitingAsync(64, "oldestfirst");
 
-        Assert.Equal([earlier.Id, later.Id], both);
+        Assert.Equal([earlier.Id, later.Id], waiting.Select(subject => subject.Id).ToArray());
+        Assert.Equal(earlier.Id, Assert.Single(await AwaitingAsync(1, "oldestfirst")).Id);
     }
 
     [Fact]

@@ -7,6 +7,7 @@ using Carina.Infrastructure.Thumbnails;
 using Carina.TestSupport;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Carina.Infrastructure.Tests.Thumbnails;
@@ -279,6 +280,56 @@ public sealed class ThumbnailJobTests
     }
 
     [Fact]
+    public async Task TheLoopSaysOutLoudWhatThePassLeftBehindAndWhatItCouldNotReach()
+    {
+        ThumbnailSubject stubborn = Subject(RecordingOutcome.Complete);
+        HeldWorklist worklist = new HeldWorklist().Holding(
+            stubborn,
+            Subject(RecordingOutcome.Complete),
+            Subject(RecordingOutcome.Complete, root: Elsewhere),
+            Subject(RecordingOutcome.Complete, root: Elsewhere));
+        HeardOf<ThumbnailJob> heard = new();
+        using ThumbnailJob job = Job(
+            worklist,
+            new HeldRenderer(request =>
+                request.Source.Contains(stubborn.Id.Wire, StringComparison.Ordinal)
+                    ? throw new InvalidOperationException("the renderer fell over")
+                    : ThumbnailRender.Drawn()),
+            clock: new HurriedClock(),
+            heard: heard);
+        using var stopping = new CancellationTokenSource();
+
+        await job.StartAsync(stopping.Token);
+        await Eventually.Happens(() => heard.Warnings.Count() >= 2, "the loop never said what it left behind");
+        await stopping.CancelAsync();
+        await job.StopAsync(Cancel);
+
+        Assert.Contains(
+            heard.Warnings,
+            said => said.Contains("1 of the 2 recording(s) this pass read", StringComparison.Ordinal));
+        Assert.Contains(
+            heard.Warnings,
+            said => said.Contains("2 recording(s) are waiting for a picture", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task TheLoopSaysNothingOfTheSortWhenEveryRecordingWasSettledAndNoneWereOutOfReach()
+    {
+        HeldWorklist worklist = new HeldWorklist().Holding(Subject(RecordingOutcome.Complete));
+        HeardOf<ThumbnailJob> heard = new();
+        using ThumbnailJob job = Job(worklist, new HeldRenderer(), clock: new HurriedClock(), heard: heard);
+        using var stopping = new CancellationTokenSource();
+
+        await job.StartAsync(stopping.Token);
+        await Eventually.Happens(() => worklist.Reads >= 1, "the loop never passed at all");
+        await stopping.CancelAsync();
+        await job.StopAsync(Cancel);
+
+        Assert.Empty(heard.Warnings);
+        Assert.NotEmpty(heard.Said);
+    }
+
+    [Fact]
     public async Task AskingForAPictureAgainDrawsItThereAndThen()
     {
         ThumbnailSubject subject = Subject(RecordingOutcome.Truncated);
@@ -384,7 +435,8 @@ public sealed class ThumbnailJobTests
         HeldWorklist worklist,
         IThumbnailRenderer renderer,
         ThumbnailSettings? settings = null,
-        TimeProvider? clock = null)
+        TimeProvider? clock = null,
+        ILogger<ThumbnailJob>? heard = null)
     {
         var services = new ServiceCollection();
         services.AddScoped<IThumbnailWorklist>(_ => worklist);
@@ -395,6 +447,6 @@ public sealed class ThumbnailJobTests
             settings ?? Settings,
             new IntegritySettings { OutputRoots = [new StorageRootPath(Bulk, "/srv/bulk")] },
             clock ?? new StoppedClock(new DateTime(2026, 8, 26, 4, 30, 0, DateTimeKind.Utc)),
-            NullLogger<ThumbnailJob>.Instance);
+            heard ?? NullLogger<ThumbnailJob>.Instance);
     }
 }

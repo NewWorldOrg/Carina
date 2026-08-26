@@ -198,13 +198,16 @@ nothing.
   estimated total, cursor paging in place of a page count, or a count that stops
   at a ceiling and answers "more than". None of them is in place.
 
-- **A recording that has ended is frozen except for its picture, and the aggregate
-  is what holds that.** Every public method on `Recording` but one refuses once an
-  outcome is set; `Illustrate` is the exception, and it moves the two thumbnail
-  columns and nothing else. A reflection test asserts the whole set of methods, so
-  a new one cannot appear without being accounted for, and a database round trip
-  says the outcome, the size and the reasons come back unchanged after a picture
-  is drawn. **That pair is the guarantee.**
+- **A recording that has ended is frozen except for its picture — as long as it is
+  reached through the aggregate's own methods.** Every public method on `Recording`
+  but one refuses once an outcome is set; `Illustrate` is the exception, and it
+  moves the two thumbnail columns and nothing else. Reflection tests assert the
+  whole set of methods, that no property carries a public setter, and that the only
+  static entry points are the two that make a recording — so a new way in cannot
+  appear without being accounted for. A database round trip says the outcome, the
+  size and the reasons come back unchanged after a picture is drawn. **That is the
+  guarantee, and it stops at the aggregate's surface:** the change tracker, raw SQL
+  and reflection all reach past it, and only the trip wires below look for those.
 
   Around it, the thumbnail pass never asks for a recording that has not ended:
   it reads the ledger for rows with no picture yet rather than being called from
@@ -217,7 +220,9 @@ nothing.
   **Two source rules sit on top of that, and they are trip wires rather than
   proof.** One reads every file whose path carries the word thumbnail — the feature
   folder and anything named beside it — and reports a call that says how a
-  recording ended, or a reach past the aggregate through reflection or raw SQL.
+  recording ended, or a reach past the aggregate through reflection, raw SQL or the
+  change tracker's `Entry`/`Property`/`CurrentValue`, which is the way somebody who
+  knows this mapper would write it by accident.
   The other reports a file outside the feature folder that names any of the types
   the feature is made of, allowing only the two places it is built. **A helper
   whose name says nothing about thumbnails walks straight past both**, and a test

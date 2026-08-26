@@ -25,6 +25,10 @@ public sealed class ThumbnailRuleSelfCheckTests
         { "activator.CreateInstance(typeof(Recording));", ".CreateInstance(" },
         { "context.Database.ExecuteSqlRaw(\"UPDATE recording SET recording_outcome = 'Failed'\");", ".ExecuteSqlRaw(" },
         { "context.Set<Recording>().FromSqlRaw(\"SELECT 1\");", ".FromSqlRaw(" },
+        { "held.Entry(recording);", ".Entry(" },
+        { "held.Property(named);", ".Property(" },
+        { "held.CurrentValue = DateTime.UtcNow;", ".CurrentValue" },
+        { "held.OriginalValue = DateTime.UtcNow;", ".OriginalValue" },
     };
 
     public static TheoryData<string> EveryTypeTheTripWireWatches
@@ -52,6 +56,27 @@ public sealed class ThumbnailRuleSelfCheckTests
 
         Assert.Equal(
             [$"/Carina.Infrastructure/Thumbnails/Reaching.cs {named}"],
+            ThumbnailRules.WhatNamedForThumbnailsReachesForARecordingsResult(tree.Root));
+    }
+
+    [Fact]
+    public void DetectsTheWayEveryoneWhoKnowsThisMapperWouldWriteIt()
+    {
+        using var tree = new SourceTree();
+        tree.Write(
+            "Carina.Infrastructure/Thumbnails/PictureWriteBack.cs",
+            """
+            context.Entry(recording)
+                .Property(nameof(Recording.StoppedAtActual))
+                .CurrentValue = DateTime.UtcNow;
+            """);
+
+        Assert.Equal(
+            [
+                "/Carina.Infrastructure/Thumbnails/PictureWriteBack.cs .CurrentValue",
+                "/Carina.Infrastructure/Thumbnails/PictureWriteBack.cs .Entry(",
+                "/Carina.Infrastructure/Thumbnails/PictureWriteBack.cs .Property(",
+            ],
             ThumbnailRules.WhatNamedForThumbnailsReachesForARecordingsResult(tree.Root));
     }
 
@@ -173,11 +198,33 @@ public sealed class ThumbnailRuleSelfCheckTests
     }
 
     [Fact]
+    public void TheTypeScanSeesEveryShapeAFeatureFileCanDeclare()
+    {
+        using var tree = new SourceTree();
+        tree.Write(
+            "Carina.Infrastructure/Thumbnails/Shapes.cs",
+            """
+            public sealed class Drawn { }
+            public sealed record Asked { }
+            public readonly record struct Placed { }
+            public enum Wanted { One }
+            public interface IAsked { }
+            public delegate Task Drawing(int width);
+            public static class Helping { }
+            """);
+
+        Assert.Equal(
+            ["Asked", "Drawing", "Drawn", "Helping", "IAsked", "Placed", "Wanted"],
+            ThumbnailRules.TypesTheFeatureDeclares(tree.Root));
+    }
+
+    [Fact]
     public void ReadsNothingOutOfAnEmptyTree()
     {
         using var tree = new SourceTree();
 
         Assert.Empty(ThumbnailRules.FilesInTheFeature(tree.Root));
+        Assert.Empty(ThumbnailRules.TypesTheFeatureDeclares(tree.Root));
         Assert.Empty(ThumbnailRules.FilesNamedForThumbnails(tree.Root));
         Assert.Empty(ThumbnailRules.WhatNamedForThumbnailsReachesForARecordingsResult(tree.Root));
         Assert.Empty(ThumbnailRules.FilesOutsideTheFeatureThatReachIntoIt(tree.Root));

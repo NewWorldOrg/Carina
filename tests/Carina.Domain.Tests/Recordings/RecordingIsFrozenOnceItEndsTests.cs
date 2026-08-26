@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Globalization;
 using System.Reflection;
 
 using Carina.Domain.Recordings;
@@ -16,9 +17,7 @@ public sealed class RecordingIsFrozenOnceItEndsTests
     {
         string[] offered =
         [
-            .. typeof(Recording)
-                .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
-                .Where(method => !method.IsSpecialName)
+            .. Declared(BindingFlags.Public | BindingFlags.Instance)
                 .Select(method => method.Name)
                 .Distinct(StringComparer.Ordinal)
                 .Order(StringComparer.Ordinal),
@@ -27,7 +26,35 @@ public sealed class RecordingIsFrozenOnceItEndsTests
         Assert.Equal(
             ["Abort", "Acquire", "Extend", "Illustrate", "Interrupt", "Measure", "Note", "Resume", "Settle", "Wrote"],
             offered);
+        Assert.Equal(offered.Length, Declared(BindingFlags.Public | BindingFlags.Instance).Length);
     }
+
+    [Fact]
+    public void NothingChangesARecordingFromOutsideItsOwnMethods()
+    {
+        Assert.Empty(typeof(Recording)
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Where(property => property.SetMethod is { IsPublic: true })
+            .Select(property => property.Name));
+        Assert.Empty(typeof(Recording)
+            .GetFields(BindingFlags.Public | BindingFlags.Instance)
+            .Select(field => field.Name));
+    }
+
+    [Fact]
+    public void TheOnlyThingsARecordingOffersWithoutOneAreTheTwoThatMakeOne()
+        => Assert.Equal(
+            ["Begin", "Rehydrate"],
+            Declared(BindingFlags.Public | BindingFlags.Static)
+                .Select(method => method.Name)
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal)
+                .ToArray());
+
+    private static MethodInfo[] Declared(BindingFlags reaching)
+        => [.. typeof(Recording)
+            .GetMethods(reaching | BindingFlags.DeclaredOnly)
+            .Where(method => !method.IsSpecialName)];
 
     [Fact]
     public void EveryOneOfThemButTheOneThatDrawsThePictureRefusesOnceTheRecordingHasEnded()
@@ -107,7 +134,9 @@ public sealed class RecordingIsFrozenOnceItEndsTests
         {
             null => "<none>",
             string text => text,
+            DateTime moment => moment.ToString("O", CultureInfo.InvariantCulture),
             IEnumerable listed => string.Join('|', listed.Cast<object?>().Select(Rendered)),
+            IFormattable measured => measured.ToString(null, CultureInfo.InvariantCulture),
             _ => held.ToString() ?? "<none>",
         };
 }

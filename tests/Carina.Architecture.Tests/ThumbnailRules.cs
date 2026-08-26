@@ -12,7 +12,10 @@ public static class ThumbnailRules
         ["Settle", "Note", "Interrupt", "Resume", "Abort", "Measure", "Extend", "Wrote", "Acquire"];
 
     public static readonly IReadOnlyList<string> WaysToReachPastTheAggregate =
-        ["GetProperty", "GetField", "GetMethod", "SetValue", "CreateInstance", "ExecuteSql", "FromSql"];
+        ["GetProperty", "GetField", "GetMethod", "SetValue", "CreateInstance", "ExecuteSql", "FromSql", "Entry", "Property"];
+
+    public static readonly IReadOnlyList<string> WaysToWriteAValuePastTheAggregate =
+        ["CurrentValue", "OriginalValue"];
 
     public static readonly IReadOnlyList<string> Machinery =
     [
@@ -45,14 +48,20 @@ public static class ThumbnailRules
         RegexOptions.None,
         TimeSpan.FromSeconds(5));
 
+    private static readonly Regex WritesAValuePastTheAggregate = new(
+        @"\.\s*(" + string.Join('|', WaysToWriteAValuePastTheAggregate) + @")\b",
+        RegexOptions.None,
+        TimeSpan.FromSeconds(5));
+
     private static readonly Regex NamesTheMachinery = new(
         string.Join('|', Machinery.Select(name => @"\b" + name + @"\b")),
         RegexOptions.None,
         TimeSpan.FromSeconds(5));
 
     private static readonly Regex DeclaresAType = new(
-        @"^public\s+(?:static\s+|sealed\s+|abstract\s+|partial\s+)*(?:class|record|struct|enum|interface)\s+"
-        + @"(?<named>\w+)",
+        @"^public\s+(?:static\s+|sealed\s+|abstract\s+|partial\s+|readonly\s+|ref\s+)*"
+        + @"(?:class|record\s+struct|record|struct|enum|interface|delegate)\s+"
+        + @"(?:[\w<>?\[\],\s]+?\s+)?(?<named>\w+)\s*[<({:]",
         RegexOptions.Multiline,
         TimeSpan.FromSeconds(5));
 
@@ -87,6 +96,7 @@ public static class ThumbnailRules
             .Where(IsNamedForThumbnails)
             .SelectMany(file => ReachesForTheResult
                 .Matches(file.Source)
+                .Concat(WritesAValuePastTheAggregate.Matches(file.Source))
                 .Select(match => $"{file.Relative} {Squeezed(match.Value)}"))
             .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)

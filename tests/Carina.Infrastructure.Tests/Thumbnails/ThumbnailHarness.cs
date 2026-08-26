@@ -3,6 +3,8 @@ using System.Collections.Concurrent;
 using Carina.Domain.Recordings;
 using Carina.Domain.Thumbnails;
 
+using Microsoft.Extensions.Logging;
+
 namespace Carina.Infrastructure.Tests.Thumbnails;
 
 internal sealed record Illustrated(RecordingId Id, ThumbnailState State, ThumbnailFault? Fault);
@@ -89,4 +91,31 @@ internal sealed class ThrowingRenderer : IThumbnailRenderer
 {
     public Task<ThumbnailRender> RenderAsync(ThumbnailRequest request, CancellationToken cancellationToken)
         => throw new InvalidOperationException("the renderer fell over");
+}
+
+internal sealed class HeardOf<T> : ILogger<T>
+{
+    private readonly ConcurrentQueue<string> said = new();
+
+    public IReadOnlyCollection<string> Said => said;
+
+    public IEnumerable<string> Warnings => said.Where(line => line.StartsWith("Warning ", StringComparison.Ordinal));
+
+    public IDisposable? BeginScope<TState>(TState state)
+        where TState : notnull
+        => null;
+
+    public bool IsEnabled(LogLevel logLevel) => true;
+
+    public void Log<TState>(
+        LogLevel logLevel,
+        EventId eventId,
+        TState state,
+        Exception? exception,
+        Func<TState, Exception?, string> formatter)
+    {
+        ArgumentNullException.ThrowIfNull(formatter);
+
+        said.Enqueue($"{logLevel} {formatter(state, exception)}");
+    }
 }
