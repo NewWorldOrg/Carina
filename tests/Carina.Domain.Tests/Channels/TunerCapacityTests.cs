@@ -132,6 +132,19 @@ public sealed class TunerCapacityTests
     }
 
     [Fact]
+    public void AMachineWhoseEveryTunerIsFaultedStillReachesTheSystemsThoseTunersServe()
+    {
+        TunerCapacity capacity = Holding(
+            new TunerSeat("adapter0", BroadcastReception.Of(TunerKind.Terrestrial), Faulted: true),
+            new TunerSeat("adapter1", BroadcastReception.Of(TunerKind.Satellite), Faulted: true));
+
+        Assert.Equal(
+            [TuneSystem.IsdbT, TuneSystem.IsdbSBs, TuneSystem.IsdbSCs110],
+            capacity.Reachable.Order());
+        Assert.Empty(capacity.Healthy.Reachable);
+    }
+
+    [Fact]
     public void TheHealthyViewLeavesFaultedTunersOut()
     {
         TunerCapacity capacity = Holding(

@@ -172,6 +172,31 @@ public sealed class TunerHealthEndpointTests
     }
 
     [Fact]
+    public async Task AMachineWhoseEveryTunerIsFaultedIsStillJudgedOnWhatThoseTunersReceive()
+    {
+        await using DriverFeature feature = await DriverFeature.StartAsync(
+            FakeDriver.HelloFor("instance-a", capabilities: Everything),
+            driver =>
+            {
+                Stocked(
+                    driver,
+                    [Entry("adapter0", TunerKind.Terrestrial), Entry("adapter1", TunerKind.Satellite)]);
+
+                driver.Tuners =
+                [
+                    new TunerSnapshot("adapter0", TunerKind.Terrestrial, TunerState.Faulted),
+                    new TunerSnapshot("adapter1", TunerKind.Satellite, TunerState.Faulted),
+                ];
+            });
+
+        JsonElement systems = await SystemsAsync(feature);
+
+        Assert.Equal(
+            ["isdbT", "isdbSBs", "isdbSCs110"],
+            systems.EnumerateArray().Select(system => system.GetProperty("system").GetString()));
+    }
+
+    [Fact]
     public async Task TheAnswerCarriesTheWaitCurrentlyInForce()
     {
         await using DriverFeature feature = await StartAsync(TunerKind.Terrestrial);

@@ -20,25 +20,25 @@ public sealed record SystemReach(
 public static class ServiceReach
 {
     public static IReadOnlyList<SystemReach> Assess(
-        IReadOnlyList<TuneSystem> served,
+        IReadOnlyList<TuneSystem> servedByKnownTuners,
         bool undescribedTuners,
         IReadOnlyList<CandidateChannel> candidates,
         TimeSpan silence,
         DateTime now)
     {
-        ArgumentNullException.ThrowIfNull(served);
+        ArgumentNullException.ThrowIfNull(servedByKnownTuners);
         ArgumentNullException.ThrowIfNull(candidates);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(silence, TimeSpan.Zero, nameof(silence));
 
         IReadOnlyList<TuneSystem> assessed = undescribedTuners
             ? BroadcastReception.EverySystem
-            : [.. served.Distinct().Order()];
+            : [.. servedByKnownTuners.Distinct().Order()];
 
         return
         [
             .. assessed.Select(system => On(
                 system,
-                served.Contains(system),
+                servedByKnownTuners.Contains(system),
                 [.. candidates.Where(candidate => candidate.Tuning.System == system)],
                 silence,
                 now)),

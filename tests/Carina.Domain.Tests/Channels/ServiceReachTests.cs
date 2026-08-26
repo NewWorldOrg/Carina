@@ -153,7 +153,7 @@ public sealed class ServiceReachTests
     public void AnAssessmentOfNothingAtAllIsRefused()
     {
         Assert.Equal(
-            "served",
+            "servedByKnownTuners",
             Assert.Throws<ArgumentNullException>(
                 () => ServiceReach.Assess(null!, false, [], Day, Now)).ParamName);
         Assert.Equal(
