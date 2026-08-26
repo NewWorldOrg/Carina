@@ -85,6 +85,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IScanRunRepository, ScanRunRepository>();
         services.AddScoped<IReservationRecordingContract, ReservationRecordingContract>();
         services.AddScoped<IRecordingLedger, RecordingLedger>();
+        services.AddRecordingDirectory();
         services.AddScoped<IIntegrityCheckRepository, IntegrityCheckRepository>();
         services.AddScoped<IThumbnailWorklist, ThumbnailWorklist>();
         services.AddScoped<IChannelScanOrchestrator, ChannelScanOrchestrator>();
@@ -131,6 +132,8 @@ public static class ServiceCollectionExtensions
             provider.GetRequiredService<IOptions<ThumbnailOptions>>().Value.Read());
         services.TryAddSingleton<IThumbnailRenderer, FfmpegThumbnailRenderer>();
         services.AddSingleton<ThumbnailJob>();
+        services.TryAddSingleton<IThumbnailRemaker>(provider =>
+            provider.GetRequiredService<ThumbnailJob>());
         services.TryAddSingleton<CollectionSettings>(provider =>
             provider.GetRequiredService<IOptions<CollectionOptions>>().Value.Read());
         services.TryAddSingleton<RescanNoticeBoard>();

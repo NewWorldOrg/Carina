@@ -33,6 +33,7 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
                 "POST /api/auth/password",
                 "POST /api/epg/archive/forget-service",
                 "POST /api/epg/rebuild",
+                "POST /api/recordings/{id}/stop",
                 "POST /api/tuners/scan/{scanId:guid}/apply",
                 "PUT /api/auth/oidc-config",
             ],
