@@ -9,6 +9,7 @@ using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
 using Carina.Domain.Scans;
 using Carina.Infrastructure.Auth;
+using Carina.Infrastructure.Channels;
 using Carina.Infrastructure.Collection;
 using Carina.Infrastructure.Configuration;
 using Carina.Infrastructure.Driver;
@@ -81,6 +82,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IChannelScanOrchestrator, ChannelScanOrchestrator>();
         services.AddScoped<ScanApplier>();
         services.AddScoped<IBroadcastStreamDirectory, BroadcastStreamDirectory>();
+        services.AddScoped<ITunerCapacityDirectory, TunerCapacityDirectory>();
+        services.AddScoped<IServiceTuningDirectory, ServiceTuningDirectory>();
+        services.AddScoped<IServiceReachSettingsRepository, ServiceReachSettingsRepository>();
         services.AddScoped<ITuneFailureReporter, CandidateTuneFailureReporter>();
         services.AddScoped<ProgrammeWriter>();
         services.AddScoped<StreamVisitor>();

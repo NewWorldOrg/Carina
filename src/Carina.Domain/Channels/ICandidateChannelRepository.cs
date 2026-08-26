@@ -18,6 +18,8 @@ public interface ICandidateChannelRepository
 
     Task<IReadOnlyList<CandidateChannel>> ListSelectedAsync(CancellationToken cancellationToken);
 
+    Task<IReadOnlyList<CandidateChannel>> ListAllAsync(CancellationToken cancellationToken);
+
     Task<IReadOnlyList<CandidateChannel>> ListNeedingAttentionAsync(CancellationToken cancellationToken);
 
     Task AddAsync(CandidateChannel candidate, CancellationToken cancellationToken);

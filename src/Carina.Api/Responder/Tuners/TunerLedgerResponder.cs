@@ -4,13 +4,13 @@ using Carina.Contracts;
 
 namespace Carina.Api.Responder.Tuners;
 
-public sealed record TunerEntryResponder(string DeviceId, bool Disabled, bool LnbPower)
+public sealed record TunerEntryResponder(string DeviceId, bool Disabled, bool LnbPower, TunerKind Kind)
 {
     public static TunerEntryResponder Of(TunerConfigEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
 
-        return new TunerEntryResponder(entry.DeviceId, entry.Disabled, entry.LnbPower);
+        return new TunerEntryResponder(entry.DeviceId, entry.Disabled, entry.LnbPower, entry.Kind);
     }
 }
 

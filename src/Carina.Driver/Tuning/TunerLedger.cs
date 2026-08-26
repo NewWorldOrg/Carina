@@ -63,6 +63,7 @@ public static class TunerLedger
                     DeviceId = device.Id!,
                     Disabled = !device.Enabled,
                     LnbPower = device.LnbPower,
+                    Kind = Receives(device.Kind),
                 }),
         ];
 
@@ -188,6 +189,14 @@ public static class TunerLedger
 
         return declared is not DeviceKind.Unspecified;
     }
+
+    public static TunerKind Receives(DeviceKind kind) =>
+        kind switch
+        {
+            DeviceKind.Terrestrial => TunerKind.Terrestrial,
+            DeviceKind.Satellite => TunerKind.Satellite,
+            _ => TunerKind.Unspecified,
+        };
 
     private static string Render(DeviceSettings device) =>
         string.Join(

@@ -50,6 +50,52 @@ public sealed class TunerLedgerTests
     }
 
     [Fact]
+    public void TheLedgerCarriesWhatEachTunerReceivesSoThatCapacityNeedNotAskTheHardware()
+    {
+        IReadOnlyList<TunerConfigEntry> entries = TunerLedger.Entries(
+            [
+                new("adapter0.frontend0", DeviceKind.Terrestrial, "/dev/dvb/adapter0/frontend0"),
+                new("adapter1.frontend0", DeviceKind.Satellite, "/dev/dvb/adapter1/frontend0"),
+                new("adapter2.frontend0", DeviceKind.Unspecified, "/dev/dvb/adapter2/frontend0"),
+            ]
+        );
+
+        Assert.Equal(
+            [TunerKind.Terrestrial, TunerKind.Satellite, TunerKind.Unspecified],
+            entries.Select(entry => entry.Kind)
+        );
+    }
+
+    [Theory]
+    [InlineData(DeviceKind.Terrestrial, TunerKind.Terrestrial)]
+    [InlineData(DeviceKind.Satellite, TunerKind.Satellite)]
+    [InlineData(DeviceKind.Unspecified, TunerKind.Unspecified)]
+    public void EveryKindTheDriverHoldsHasAWireNameOfItsOwn(DeviceKind held, TunerKind wire)
+    {
+        Assert.Equal(wire, TunerLedger.Receives(held));
+    }
+
+    [Fact]
+    public void AKindTheCallerAskedForCannotChangeWhatTheDriverSaves()
+    {
+        LedgerRevision revised = TunerLedger.Revise(
+            [
+                new TunerConfigEntry
+                {
+                    DeviceId = "adapter0.frontend0",
+                    Kind = TunerKind.Satellite,
+                },
+            ],
+            [Terrestrial],
+            Running
+        );
+
+        Assert.True(revised.TryGetDevices(out IReadOnlyList<DeviceSettings>? devices));
+        Assert.Equal(DeviceKind.Terrestrial, Assert.Single(devices).Kind);
+        Assert.Equal(TunerKind.Terrestrial, TunerLedger.Entries(devices)[0].Kind);
+    }
+
+    [Fact]
     public void TheEntriesTheOperatorEditsCarryNoDevicePath()
     {
         string json = DriverJson.Serialize<IReadOnlyList<TunerConfigEntry>>(

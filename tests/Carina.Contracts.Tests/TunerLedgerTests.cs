@@ -8,13 +8,13 @@ public sealed class TunerLedgerTests
         string json = DriverJson.Serialize(new TunerConfigEntry { DeviceId = "adapter0" });
 
         Assert.Equal(
-            """{"deviceId":"adapter0","disabled":false,"lnbPower":false}""",
+            """{"deviceId":"adapter0","disabled":false,"lnbPower":false,"kind":"unspecified"}""",
             json
         );
     }
 
     [Fact]
-    public void AnEntryCannotCarryADevicePathOrAKindOfItsOwn()
+    public void AnEntryCannotCarryADevicePathOfItsOwn()
     {
         string json = DriverJson.Serialize(
             new TunerConfigEntry { DeviceId = "adapter0", LnbPower = true }
@@ -24,7 +24,30 @@ public sealed class TunerLedgerTests
         Assert.DoesNotContain("dvb", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("frontend", json, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("types", json, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("kind", json, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void AnEntryFromADriverThatPredatesTheKindSaysItDoesNotKnow()
+    {
+        TunerConfigEntry? entry = DriverJson.Deserialize(
+            """{"deviceId":"adapter0","disabled":false,"lnbPower":false}""",
+            DriverJson.Context.TunerConfigEntry
+        );
+
+        Assert.NotNull(entry);
+        Assert.Equal(TunerKind.Unspecified, entry.Kind);
+    }
+
+    [Theory]
+    [InlineData(TunerKind.Terrestrial, "terrestrial")]
+    [InlineData(TunerKind.Satellite, "satellite")]
+    [InlineData(TunerKind.Unspecified, "unspecified")]
+    public void TheKindTheDriverSavedComesBackTheWayItWentOut(TunerKind kind, string wire)
+    {
+        string json = DriverJson.Serialize(new TunerConfigEntry { DeviceId = "adapter0", Kind = kind });
+
+        Assert.Contains($"\"kind\":\"{wire}\"", json, StringComparison.Ordinal);
+        Assert.Equal(kind, DriverJson.Deserialize(json, DriverJson.Context.TunerConfigEntry)!.Kind);
     }
 
     [Fact]
@@ -73,7 +96,7 @@ public sealed class TunerLedgerTests
     public void TheLedgerIsABareArray()
     {
         Assert.Equal(
-            """[{"deviceId":"adapter0","disabled":false,"lnbPower":false}]""",
+            """[{"deviceId":"adapter0","disabled":false,"lnbPower":false,"kind":"unspecified"}]""",
             DriverJson.Serialize<IReadOnlyList<TunerConfigEntry>>(
                 [new TunerConfigEntry { DeviceId = "adapter0" }]
             )
@@ -166,7 +189,7 @@ public sealed class TunerLedgerTests
     public void ASavedLedgerAnswersWithWhatWasWrittenAndWhatIsRunning()
     {
         Assert.Equal(
-            """{"tuners":[{"deviceId":"adapter0","disabled":false,"lnbPower":false}],"loadedHash":"aaaa","savedHash":"bbbb"}""",
+            """{"tuners":[{"deviceId":"adapter0","disabled":false,"lnbPower":false,"kind":"unspecified"}],"loadedHash":"aaaa","savedHash":"bbbb"}""",
             DriverJson.Serialize(
                 new TunerLedgerDto
                 {

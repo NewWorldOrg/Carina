@@ -24,6 +24,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<DriverStatusService>();
         services.AddScoped<DriverRestartService>();
         services.AddScoped<TunerLedgerService>();
+        services.AddScoped<TunerHealthService>();
         services.AddScoped<ScanService>();
         services.AddScoped<ChannelCatalogService>();
         services.AddScoped<CollectionStatusService>();

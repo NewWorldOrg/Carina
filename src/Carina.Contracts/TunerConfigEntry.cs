@@ -8,6 +8,8 @@ public sealed record TunerConfigEntry
 
     public bool LnbPower { get; init; }
 
+    public TunerKind Kind { get; init; }
+
     public IReadOnlyList<string> Validate() =>
         WireName.IsUsable(DeviceId)
             ? []
