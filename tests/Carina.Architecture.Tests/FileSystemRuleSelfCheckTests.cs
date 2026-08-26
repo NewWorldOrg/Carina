@@ -17,6 +17,10 @@ public sealed class FileSystemRuleSelfCheckTests
     [InlineData("Directory.Move(from, to);", "Directory.Move")]
     [InlineData("found.Delete();", ".Delete(")]
     [InlineData("found.MoveTo(elsewhere);", ".MoveTo(")]
+    [InlineData(
+        "if (found.LastWriteTimeUtc < DateTime.UtcNow.AddDays(-30)) { found.Create().Dispose(); }",
+        ".Create(")]
+    [InlineData("using (StreamWriter writing = found.CreateText()) { }", ".CreateText(")]
     [InlineData("held.SetLength(0);", ".SetLength(")]
     [InlineData("new FileStream(path, FileMode.Create);", "FileMode.")]
     [InlineData("new StreamWriter(path);", "newStreamWriter")]

@@ -4,10 +4,15 @@ public sealed class FileSystemRuleTests
 {
     private static readonly string[] Inventory =
     [
+        "/Carina.Api/Common/ProgrammeIdText.cs .Create(",
         "/Carina.Api/Controllers/Auth/LogOutAction.cs .Delete(",
         "/Carina.Api/Events/ProgrammeFeedStream.cs newStreamWriter",
+        "/Carina.Api/Services/ProgrammeGuideService.cs .Create(",
         "/Carina.Broadcast/Descriptors/ExtendedEventDescription.cs .CopyTo(",
         "/Carina.Broadcast/Sections/SectionAssembler.cs .CopyTo(",
+        "/Carina.Domain/Programmes/BulkCursor.cs .Create(",
+        "/Carina.Domain/Recordings/DiskPrecheckVerdict.cs .Create(",
+        "/Carina.Domain/Recordings/RecordingVerdict.cs .Create(",
         "/Carina.Driver/Configuration/AtomicFile.cs File.Delete",
         "/Carina.Driver/Configuration/AtomicFile.cs File.Move",
         "/Carina.Driver/Configuration/AtomicFile.cs FileMode.",
@@ -19,12 +24,16 @@ public sealed class FileSystemRuleTests
         "/Carina.Driver/Ipc/StorageViews.cs File.Delete",
         "/Carina.Driver/Ipc/StorageViews.cs FileMode.",
         "/Carina.Driver/Ipc/UnixFile.cs LibraryImport",
+        "/Carina.Driver/Program.cs .Create(",
         "/Carina.Driver/Recording/RecordingWriter.cs FileMode.",
         "/Carina.Driver/Recording/RecordingWriter.cs newFileStream",
+        "/Carina.Driver/Sessions/TunerSessionManager.cs .Create(",
         "/Carina.Driver/Tuning/Dvb/DvbSystemCalls.cs LibraryImport",
         "/Carina.Driver/Tuning/Dvb/DvbTunerDetector.cs .Replace(",
         "/Carina.Driver/Tuning/TunerLedgerStore.cs .Replace(",
+        "/Carina.Infrastructure/Auth/SigningKeys.cs .Create(",
         "/Carina.Infrastructure/Collection/StreamHarvest.cs .CopyTo(",
+        "/Carina.Infrastructure/Driver/DriverIpcClient.cs .Create(",
         "/Carina.Infrastructure/Integrity/LocalRecordingFileSurvey.cs .Replace(",
     ];
 

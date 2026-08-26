@@ -46,7 +46,7 @@ public sealed class ProgrammeSearchScale : IAsyncLifetime
         await RunAsync(ArchiveLayer, Anchored(ArchivedRows));
         await RunAsync(HeldInBothLayers, [new NpgsqlParameter("rows", RowsHeldInBothLayers)]);
 
-        foreach (string statement in TrigramIndexes)
+        foreach (string statement in SearchIndexesAndStatistics)
         {
             await RunAsync(statement, []);
         }
@@ -133,11 +133,13 @@ public sealed class ProgrammeSearchScale : IAsyncLifetime
         return new NpgsqlConnectionStringBuilder(configured) { Database = ScaleDatabase }.ConnectionString;
     }
 
-    private static readonly string[] TrigramIndexes =
+    private static readonly string[] SearchIndexesAndStatistics =
     [
         "CREATE EXTENSION IF NOT EXISTS pg_trgm",
         "CREATE INDEX ix_programme_searchable ON programme USING gin (searchable gin_trgm_ops)",
         "CREATE INDEX ix_archived_programme_searchable ON archived_programme USING gin (searchable gin_trgm_ops)",
+        "ALTER TABLE programme ALTER COLUMN searchable SET STATISTICS 1000",
+        "ALTER TABLE archived_programme ALTER COLUMN searchable SET STATISTICS 1000",
     ];
 
     private const string HotLayer = """
