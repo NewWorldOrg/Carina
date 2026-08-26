@@ -62,6 +62,7 @@ public sealed record RecordingSessionDto
 
     public long? CcDropped { get; init; }
 
+    // received + missing: the packets the stream should have carried, not the packets that arrived.
     public long? CcTotal { get; init; }
 
     public bool CcMeasured { get; init; }
@@ -71,6 +72,8 @@ public sealed record RecordingSessionDto
     public bool ScrambleMeasured { get; init; }
 
     public long EovfCount { get; init; }
+
+    public DropPositionsDto? Positions { get; init; }
 
     public static RecordingSessionDto Of(DriverHello hello, SessionSnapshot session)
     {
@@ -92,11 +95,19 @@ public sealed record RecordingSessionDto
             EndsAt = session.EndsAt,
             BytesWritten = session.BytesRecorded,
             CcDropped = countedContinuity ? session.Counters.Drops : null,
-            CcTotal = countedContinuity ? session.Counters.Packets : null,
+            CcTotal = countedContinuity
+                ? session.Counters.Packets + session.Counters.Drops
+                : null,
             CcMeasured = countedContinuity,
             ScrambledPackets = countedScrambling ? session.Counters.ScrambledPackets : null,
             ScrambleMeasured = countedScrambling,
             EovfCount = session.Counters.DeviceOverflows,
+            Positions =
+                countedContinuity
+                && countedScrambling
+                && hello.Supports(DriverCapabilities.DropPositions)
+                    ? session.Counters.Positions
+                    : null,
         };
     }
 }

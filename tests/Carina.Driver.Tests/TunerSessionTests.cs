@@ -575,7 +575,7 @@ public sealed class TunerSessionTests : IDisposable
         session.Stop();
         WaitForEnd(session);
 
-        long seen = session.Counters.Packets + session.Counters.ProvisionalPackets;
+        long seen = session.Counters.Snapshot().Packets + session.Counters.Snapshot().ProvisionalPackets;
 
         Assert.Equal(4, device.Reads);
         Assert.Equal(device.Reads * 4L, seen);
@@ -801,8 +801,8 @@ public sealed class TunerSessionTests : IDisposable
         session.Stop();
         WaitForEnd(session);
 
-        Assert.Equal(0, session.Counters.Drops);
-        Assert.Equal(8 * 4L, session.Counters.Packets + session.Counters.ProvisionalPackets);
+        Assert.Equal(0, session.Counters.Snapshot().Drops);
+        Assert.Equal(8 * 4L, session.Counters.Snapshot().Packets + session.Counters.Snapshot().ProvisionalPackets);
     }
 
     [Fact]

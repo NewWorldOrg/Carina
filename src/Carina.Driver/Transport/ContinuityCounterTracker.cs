@@ -1,3 +1,5 @@
+using Carina.Contracts;
+
 namespace Carina.Driver.Transport;
 
 public sealed class ContinuityCounterTracker
@@ -5,6 +7,8 @@ public sealed class ContinuityCounterTracker
     private readonly Dictionary<int, int> lastCounter = [];
     private readonly Dictionary<int, int> lastPayloadHash = [];
     private readonly Dictionary<int, long> dropsByPid = [];
+    private readonly SortedDictionary<int, (long Continuity, long Scrambled)> buckets = [];
+    private readonly PcrTimeline timeline = new();
     private readonly Lock gate = new();
 
     private long packets;
@@ -15,19 +19,38 @@ public sealed class ContinuityCounterTracker
     private long scrambledPackets;
     private long provisionalPackets;
 
-    public long Packets => Read(ref packets);
+    public SessionCounters Snapshot()
+    {
+        lock (gate)
+        {
+            bool measured = packets > 0;
 
-    public long Drops => Read(ref drops);
+            return new SessionCounters(
+                packets,
+                drops,
+                duplicates,
+                discontinuities,
+                transportErrors,
+                scrambledPackets,
+                provisionalPackets,
+                CcMeasured: measured,
+                ScrambleMeasured: measured,
+                Positions: WhereTheyWere()
+            );
+        }
+    }
 
-    public long Duplicates => Read(ref duplicates);
+    private DropPositionsDto? WhereTheyWere() =>
+        timeline.Anchor is { } anchor
+            ? new DropPositionsDto(anchor, [.. Placed()], timeline.Reanchors)
+            : null;
 
-    public long Discontinuities => Read(ref discontinuities);
-
-    public long TransportErrors => Read(ref transportErrors);
-
-    public long ScrambledPackets => Read(ref scrambledPackets);
-
-    public long ProvisionalPackets => Read(ref provisionalPackets);
+    private IEnumerable<DropBucketDto> Placed() =>
+        buckets.Select(bucket => new DropBucketDto(
+            bucket.Key,
+            bucket.Value.Continuity,
+            bucket.Value.Scrambled
+        ));
 
     public long DropsFor(int pid)
     {
@@ -37,28 +60,11 @@ public sealed class ContinuityCounterTracker
         }
     }
 
-    public void Retuned()
-    {
-        lock (gate)
-        {
-            lastCounter.Clear();
-            lastPayloadHash.Clear();
-        }
-    }
-
     public void Observe(TsPacket packet)
     {
         lock (gate)
         {
             Record(packet);
-        }
-    }
-
-    private long Read(ref long counter)
-    {
-        lock (gate)
-        {
-            return counter;
         }
     }
 
@@ -91,11 +97,17 @@ public sealed class ContinuityCounterTracker
             return;
         }
 
+        if (packet.Pcr is { } reference)
+        {
+            timeline.Observe(packet.Pid, reference, packet.Discontinuity);
+        }
+
         packets++;
 
         if (packet.Scrambled)
         {
             scrambledPackets++;
+            Locate(0, 1);
         }
 
         if (packet.Discontinuity)
@@ -151,5 +163,13 @@ public sealed class ContinuityCounterTracker
     {
         drops += missing;
         dropsByPid[pid] = dropsByPid.GetValueOrDefault(pid) + missing;
+        Locate(missing, 0);
+    }
+
+    private void Locate(long continuity, long scrambled)
+    {
+        (long lost, long unresolved) = buckets.GetValueOrDefault(timeline.Second);
+
+        buckets[timeline.Second] = (lost + continuity, unresolved + scrambled);
     }
 }

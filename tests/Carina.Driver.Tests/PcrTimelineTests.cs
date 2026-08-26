@@ -1,0 +1,489 @@
+using Carina.Contracts;
+using Carina.Driver.Transport;
+
+namespace Carina.Driver.Tests;
+
+public sealed class PcrTimelineTests
+{
+    private const int VideoPid = 0x0100;
+    private const int OtherServicePid = 0x0200;
+    private const long Wrap = 8_589_934_592;
+    private const long Second = 90_000;
+
+    [Fact]
+    public void AStreamNothingHasBeenReadFromIsNowhere()
+    {
+        var timeline = new PcrTimeline();
+
+        Assert.False(timeline.Located);
+        Assert.Null(timeline.Anchor);
+        Assert.Equal(0, timeline.Second);
+        Assert.Empty(timeline.Reanchors);
+    }
+
+    [Fact]
+    public void AStreamThatNeverSaysWhatTimeItIsStaysNowhere()
+    {
+        var timeline = new PcrTimeline();
+
+        for (int reading = 0; reading < 1000; reading++)
+        {
+            timeline.Observe(VideoPid, -1, declaredDiscontinuous: false);
+        }
+
+        Assert.False(timeline.Located);
+        Assert.Null(timeline.Anchor);
+    }
+
+    [Fact]
+    public void TheFirstReadingIsWhereTheTimelineStarts()
+    {
+        var timeline = new PcrTimeline();
+
+        timeline.Observe(VideoPid, 4_500_000, declaredDiscontinuous: false);
+
+        Assert.True(timeline.Located);
+        Assert.Equal(4_500_000, timeline.Anchor);
+        Assert.Equal(0, timeline.Second);
+    }
+
+    [Fact]
+    public void TheSecondIsCountedFromTheFirstReadingAndNotFromZero()
+    {
+        var timeline = new PcrTimeline();
+
+        timeline.Observe(VideoPid, 4_500_000, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 4_500_000 + (3 * Second), declaredDiscontinuous: false);
+
+        Assert.Equal(3, timeline.Second);
+        Assert.Equal(4_500_000, timeline.Anchor);
+    }
+
+    [Fact]
+    public void ReadingsThatCreepForwardAddUpToTheSecondsBetweenThem()
+    {
+        var timeline = new PcrTimeline();
+
+        for (int reading = 0; reading <= 50; reading++)
+        {
+            timeline.Observe(VideoPid, 100 + (reading * Second / 10), declaredDiscontinuous: false);
+        }
+
+        Assert.Equal(5, timeline.Second);
+        Assert.Empty(timeline.Reanchors);
+    }
+
+    [Fact]
+    public void AClockThatStopsLeavesTheTimelineWhereItWas()
+    {
+        var timeline = new PcrTimeline();
+
+        timeline.Observe(VideoPid, 0, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 7 * Second, declaredDiscontinuous: false);
+
+        for (int reading = 0; reading < 1000; reading++)
+        {
+            timeline.Observe(VideoPid, -1, declaredDiscontinuous: false);
+        }
+
+        Assert.Equal(7, timeline.Second);
+        Assert.Empty(timeline.Reanchors);
+    }
+
+    [Fact]
+    public void TheClockComingBackAroundIsNotABreakInTheStream()
+    {
+        var timeline = new PcrTimeline();
+
+        timeline.Observe(VideoPid, Wrap - Second, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 0, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, Second, declaredDiscontinuous: false);
+
+        Assert.Equal(2, timeline.Second);
+        Assert.Empty(timeline.Reanchors);
+    }
+
+    [Fact]
+    public void ReadingsPastTheEndOfTheClockAreNotBelieved()
+    {
+        var timeline = new PcrTimeline();
+
+        timeline.Observe(VideoPid, 0, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, Wrap, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, Wrap + Second, declaredDiscontinuous: false);
+
+        Assert.Equal(0, timeline.Anchor);
+        Assert.Equal(0, timeline.Second);
+        Assert.Empty(timeline.Reanchors);
+    }
+
+    [Fact]
+    public void AClockThatJumpsBackwardsIsWrittenDownRatherThanFollowed()
+    {
+        var timeline = new PcrTimeline();
+
+        timeline.Observe(VideoPid, 100 * Second, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 104 * Second, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 20 * Second, declaredDiscontinuous: false);
+
+        Assert.Equal(4, timeline.Second);
+        Assert.Equal([new PcrReanchorDto(4, 104 * Second, 20 * Second)], timeline.Reanchors);
+    }
+
+    [Fact]
+    public void AClockThatJumpsForwardsOutOfReachIsWrittenDownRatherThanFollowed()
+    {
+        var timeline = new PcrTimeline();
+
+        timeline.Observe(VideoPid, 0, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 4 * Second, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 3600 * Second, declaredDiscontinuous: false);
+
+        Assert.Equal(4, timeline.Second);
+        Assert.Equal([new PcrReanchorDto(4, 4 * Second, 3600 * Second)], timeline.Reanchors);
+    }
+
+    [Fact]
+    public void TheTimelineGoesOnFromWhereItWasAfterABreak()
+    {
+        var timeline = new PcrTimeline();
+
+        timeline.Observe(VideoPid, 100 * Second, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 104 * Second, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 20 * Second, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 26 * Second, declaredDiscontinuous: false);
+
+        Assert.Equal(10, timeline.Second);
+        Assert.Single(timeline.Reanchors);
+    }
+
+    [Theory]
+    [InlineData(9, 9, 0)]
+    [InlineData(11, 0, 1)]
+    public void AGapWiderThanAnyBroadcastLeavesItIsABreakRatherThanTime(
+        int gap,
+        int expectedSecond,
+        int expectedReanchors
+    )
+    {
+        var timeline = new PcrTimeline();
+
+        timeline.Observe(VideoPid, 0, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, gap * Second, declaredDiscontinuous: false);
+
+        Assert.Equal(expectedSecond, timeline.Second);
+        Assert.Equal(expectedReanchors, timeline.Reanchors.Count);
+    }
+
+    [Fact]
+    public void TwoBreaksInTheSameSecondAreOneEntryNamingWhereItEndedUp()
+    {
+        var timeline = new PcrTimeline();
+
+        timeline.Observe(VideoPid, 100 * Second, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 20 * Second, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 700 * Second, declaredDiscontinuous: false);
+
+        Assert.Equal([new PcrReanchorDto(0, 100 * Second, 700 * Second)], timeline.Reanchors);
+    }
+
+    [Fact]
+    public void EachBreakIsWrittenDownAgainstALaterSecondThanTheOneBefore()
+    {
+        var timeline = new PcrTimeline();
+
+        timeline.Observe(VideoPid, 0, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 500 * Second, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 502 * Second, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 90 * Second, declaredDiscontinuous: false);
+
+        Assert.Equal([0, 2], timeline.Reanchors.Select(reanchor => reanchor.Second));
+    }
+
+    [Fact]
+    public void OnlyTheClockOfOneServiceIsFollowedThroughAWholeMultiplex()
+    {
+        var timeline = new PcrTimeline();
+
+        timeline.Observe(VideoPid, 0, declaredDiscontinuous: false);
+        timeline.Observe(OtherServicePid, 5_000_000_000, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 2 * Second, declaredDiscontinuous: false);
+        timeline.Observe(OtherServicePid, 6_000_000_000, declaredDiscontinuous: false);
+
+        Assert.Equal(0, timeline.Anchor);
+        Assert.Equal(2, timeline.Second);
+        Assert.Empty(timeline.Reanchors);
+    }
+
+    [Fact]
+    public void AReadingThatRepeatsItselfIsNeitherTimeNorABreak()
+    {
+        var timeline = new PcrTimeline();
+
+        timeline.Observe(VideoPid, 3 * Second, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 3 * Second, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 3 * Second, declaredDiscontinuous: false);
+
+        Assert.Equal(0, timeline.Second);
+        Assert.Empty(timeline.Reanchors);
+    }
+
+    [Fact]
+    public void EveryBreakNamesClockReadingsTheStandardCanHold()
+    {
+        var timeline = new PcrTimeline();
+
+        timeline.Observe(VideoPid, Wrap - 1, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 700 * Second, declaredDiscontinuous: false);
+
+        Assert.All(
+            timeline.Reanchors,
+            reanchor =>
+            {
+                Assert.InRange(reanchor.Before, 0, Wrap - 1);
+                Assert.InRange(reanchor.After, 0, Wrap - 1);
+            }
+        );
+        Assert.Equal(Wrap - 1, timeline.Reanchors[0].Before);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(90_000)]
+    [InlineData(5 * 90_000)]
+    public void AClockTheBroadcastSaysItBrokeIsWrittenDownHoweverSmallTheJump(long jump)
+    {
+        var timeline = new PcrTimeline();
+
+        timeline.Observe(VideoPid, 100 * Second, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, (100 * Second) + jump, declaredDiscontinuous: true);
+
+        Assert.Equal(0, timeline.Second);
+        Assert.Equal(
+            [new PcrReanchorDto(0, 100 * Second, (100 * Second) + jump)],
+            timeline.Reanchors
+        );
+    }
+
+    [Fact]
+    public void ABreakDeclaredOnTheFirstReadingIsStillWhereTheTimelineStarts()
+    {
+        var timeline = new PcrTimeline();
+
+        timeline.Observe(VideoPid, 4_500_000, declaredDiscontinuous: true);
+
+        Assert.Equal(4_500_000, timeline.Anchor);
+        Assert.Empty(timeline.Reanchors);
+    }
+
+    [Fact]
+    public void ABreakDeclaredByAServiceWeAreNotFollowingChangesNothing()
+    {
+        var timeline = new PcrTimeline();
+
+        timeline.Observe(VideoPid, 0, declaredDiscontinuous: false);
+        timeline.Observe(OtherServicePid, 5_000_000_000, declaredDiscontinuous: true);
+        timeline.Observe(VideoPid, 2 * Second, declaredDiscontinuous: false);
+
+        Assert.Equal(2, timeline.Second);
+        Assert.Empty(timeline.Reanchors);
+    }
+
+    [Fact]
+    public void TheWindowIsAHundredTimesTheLongestGapTheStandardAllowsBetweenReadings()
+    {
+        Assert.Equal(9_000, PcrTimeline.RepeatedAtLeastEvery);
+        Assert.Equal(900_000, PcrTimeline.ContinuousWithin);
+    }
+
+    [Fact]
+    public void AClockThatGoesSilentWhileAnotherKeepsSpeakingIsHandedOver()
+    {
+        var timeline = new PcrTimeline();
+
+        timeline.Observe(VideoPid, 0, declaredDiscontinuous: false);
+
+        for (int reading = 1; reading <= 600; reading++)
+        {
+            timeline.Observe(OtherServicePid, reading * Second, declaredDiscontinuous: false);
+        }
+
+        Assert.Equal(0, timeline.Anchor);
+        Assert.Single(timeline.Reanchors);
+        Assert.Equal(0, timeline.Reanchors[0].Second);
+        Assert.Equal(0, timeline.Reanchors[0].Before);
+        Assert.True(
+            timeline.Second > 500,
+            $"the timeline froze at second {timeline.Second} while a clock was still speaking."
+        );
+    }
+
+    [Fact]
+    public void AClockThatSpeaksAgainInTimeIsNotHandedOver()
+    {
+        var timeline = new PcrTimeline();
+
+        for (int reading = 0; reading <= 60; reading++)
+        {
+            timeline.Observe(VideoPid, reading * Second, declaredDiscontinuous: false);
+            timeline.Observe(OtherServicePid, 5_000_000 + (reading * Second), declaredDiscontinuous: false);
+        }
+
+        Assert.Equal(60, timeline.Second);
+        Assert.Empty(timeline.Reanchors);
+    }
+
+    [Fact]
+    public void AServiceThatSaysTheTimeOnceIsNotMistakenForTheClockGoingSilent()
+    {
+        var timeline = new PcrTimeline();
+
+        timeline.Observe(VideoPid, 0, declaredDiscontinuous: false);
+
+        for (int reading = 1; reading <= 600; reading++)
+        {
+            timeline.Observe(reading + 0x200, reading * Second, declaredDiscontinuous: false);
+        }
+
+        Assert.Equal(0, timeline.Second);
+        Assert.Empty(timeline.Reanchors);
+    }
+
+    [Theory]
+    [InlineData(10, 10, 0)]
+    [InlineData(11, 0, 1)]
+    public void TheClockComingAroundExactlyAtTheEdgeOfTheWindowIsStillTheSameStream(
+        int gap,
+        int expectedSecond,
+        int expectedReanchors
+    )
+    {
+        var timeline = new PcrTimeline();
+
+        timeline.Observe(VideoPid, Wrap - Second, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, (gap - 1) * Second, declaredDiscontinuous: false);
+
+        Assert.Equal(expectedSecond, timeline.Second);
+        Assert.Equal(expectedReanchors, timeline.Reanchors.Count);
+    }
+
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(89_999, 0)]
+    [InlineData(90_000, 1)]
+    [InlineData(171_000, 1)]
+    [InlineData(179_999, 1)]
+    [InlineData(180_000, 2)]
+    public void APartSecondCountsAsTheSecondItHasNotFinished(long ticks, int expected)
+    {
+        var timeline = new PcrTimeline();
+
+        timeline.Observe(VideoPid, 0, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, ticks, declaredDiscontinuous: false);
+
+        Assert.Equal(expected, timeline.Second);
+    }
+
+    [Fact]
+    public void AnotherServiceSpeakingBrieflyWhileOursIsQuietIsNotAHandover()
+    {
+        var timeline = new PcrTimeline();
+
+        timeline.Observe(VideoPid, 0, declaredDiscontinuous: false);
+        timeline.Observe(OtherServicePid, 5_000_000, declaredDiscontinuous: false);
+        timeline.Observe(OtherServicePid, 5_000_000 + (5 * Second), declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, 2 * Second, declaredDiscontinuous: false);
+
+        Assert.Equal(2, timeline.Second);
+        Assert.Empty(timeline.Reanchors);
+    }
+
+    [Theory]
+    [InlineData(900_000, 10, 0)]
+    [InlineData(900_001, 0, 1)]
+    public void TheForwardEdgeOfTheWindowFallsBetweenNineHundredThousandAndOneMore(
+        long step,
+        int expectedSecond,
+        int expectedReanchors
+    )
+    {
+        var timeline = new PcrTimeline();
+
+        timeline.Observe(VideoPid, 0, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, step, declaredDiscontinuous: false);
+
+        Assert.Equal(expectedSecond, timeline.Second);
+        Assert.Equal(expectedReanchors, timeline.Reanchors.Count);
+    }
+
+    [Theory]
+    [InlineData(899_999, 10, 0)]
+    [InlineData(900_000, 0, 1)]
+    public void TheWrappingEdgeOfTheWindowFallsInTheSamePlaceAsTheForwardOne(
+        long after,
+        int expectedSecond,
+        int expectedReanchors
+    )
+    {
+        var timeline = new PcrTimeline();
+
+        timeline.Observe(VideoPid, Wrap - 1, declaredDiscontinuous: false);
+        timeline.Observe(VideoPid, after, declaredDiscontinuous: false);
+
+        Assert.Equal(expectedSecond, timeline.Second);
+        Assert.Equal(expectedReanchors, timeline.Reanchors.Count);
+    }
+
+    [Theory]
+    [InlineData(900_000, 0)]
+    [InlineData(900_001, 1)]
+    public void TheHandoverEdgeFallsBetweenNineHundredThousandAndOneMore(
+        long span,
+        int expectedReanchors
+    )
+    {
+        var timeline = new PcrTimeline();
+
+        timeline.Observe(VideoPid, 0, declaredDiscontinuous: false);
+        timeline.Observe(OtherServicePid, 5_000_000, declaredDiscontinuous: false);
+        timeline.Observe(OtherServicePid, 5_000_000 + span, declaredDiscontinuous: false);
+
+        Assert.Equal(expectedReanchors, timeline.Reanchors.Count);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(7)]
+    [InlineData(20_260_826)]
+    public void ATimelineOnlyEverReadsForwardsHoweverTheClocksBehave(int seed)
+    {
+        var timeline = new PcrTimeline();
+        var noise = new Random(seed);
+        int[] services = [VideoPid, OtherServicePid, 0x0200, 0x1FC];
+        int highest = 0;
+
+        for (int reading = 0; reading < 400; reading++)
+        {
+            long value = noise.Next(4) switch
+            {
+                0 => noise.NextInt64(0, Wrap),
+                1 => Wrap - noise.NextInt64(0, 3),
+                2 => noise.NextInt64(0, 2) is 0 ? 900_000 : 900_001,
+                _ => noise.NextInt64(-2, 4 * Second),
+            };
+
+            timeline.Observe(
+                services[noise.Next(services.Length)],
+                value,
+                declaredDiscontinuous: noise.Next(8) is 0);
+
+            Assert.True(
+                timeline.Second >= highest,
+                $"reading {reading} took the timeline back from {highest} to {timeline.Second}."
+            );
+
+            highest = timeline.Second;
+        }
+    }
+}

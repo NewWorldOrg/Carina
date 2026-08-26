@@ -24,7 +24,8 @@ public sealed class TunerSessionManager(
     DiagnosticsStore? diagnostics = null,
     IRecordingWriterFactory? recordingWriters = null,
     TimeSpan? tunerGrace = null,
-    TimeSpan? letGoLimit = null
+    TimeSpan? letGoLimit = null,
+    TimeSpan? progressInterval = null
 ) : IHostedService
 {
     public const int RetainedSessions = 64;
@@ -68,6 +69,7 @@ public sealed class TunerSessionManager(
 
     private volatile bool draining;
     private Task? drain;
+    private RecordingProgressNotifier? progress;
 
     public IReadOnlyCollection<TunerSession> Sessions => [.. sessions.Values];
 
@@ -79,7 +81,24 @@ public sealed class TunerSessionManager(
 
     public TimeSpan HardStopBudget => hardStop;
 
-    public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task StartAsync(CancellationToken cancellationToken)
+    {
+        progress = new RecordingProgressNotifier(
+            AnythingIsBeingRecorded,
+            () => events?.Signal(DriverEvents.RecordingProgress),
+            timeProvider,
+            error => logger.LogWarning(
+                error,
+                "The driver could not announce how a recording is going; the next round will try again."
+            ),
+            progressInterval
+        );
+
+        return Task.CompletedTask;
+    }
+
+    private bool AnythingIsBeingRecorded() =>
+        sessions.Values.Any(session => session.Purpose is SessionPurpose.Recording);
 
     public void EnterDraining()
     {
@@ -148,6 +167,18 @@ public sealed class TunerSessionManager(
     public Task StopAsync(CancellationToken cancellationToken) => DrainAsync(cancellationToken);
 
     private async Task Drain(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await DrainEverySession(cancellationToken);
+        }
+        finally
+        {
+            progress?.Dispose();
+        }
+    }
+
+    private async Task DrainEverySession(CancellationToken cancellationToken)
     {
         TunerSession[] running;
 

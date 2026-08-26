@@ -28,6 +28,8 @@ public static class DriverCapabilities
 
     public const string ScrambleMeasurement = "scrambleMeasurement";
 
+    public const string DropPositions = "dropPositions";
+
     public const string RecordingExtension = "recordingExtension";
 
     public const string Storage = "storage";

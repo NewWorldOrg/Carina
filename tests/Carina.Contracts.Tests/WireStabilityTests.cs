@@ -169,7 +169,7 @@ public sealed class WireStabilityTests
 
         Assert.Equal(SessionCountersFields, fields.Take(SessionCountersFields.Length));
         Assert.Equal(
-            ["deviceOverflows", "lockLosses", "ccMeasured", "scrambleMeasured"],
+            ["deviceOverflows", "lockLosses", "ccMeasured", "scrambleMeasured", "positions"],
             fields.Skip(SessionCountersFields.Length)
         );
     }
@@ -267,12 +267,71 @@ public sealed class WireStabilityTests
     }
 
     [Fact]
-    public void ARecordingViewKeepsExactlyTheFieldsItHad()
+    public void ARecordingViewKeepsItsFieldsAndTakesTheNewOneAtTheEnd()
+    {
+        IReadOnlyList<string> fields = FieldsOf(DriverJson.Serialize(new RecordingSessionDto()));
+
+        Assert.Equal(RecordingSessionFields, fields.Take(RecordingSessionFields.Length));
+        Assert.Equal(["positions"], fields.Skip(RecordingSessionFields.Length));
+    }
+
+    [Fact]
+    public void WhereTheLossesWereKeepsExactlyTheFieldsItHad()
     {
         Assert.Equal(
-            RecordingSessionFields,
-            FieldsOf(DriverJson.Serialize(new RecordingSessionDto()))
+            ["anchorPcr", "buckets", "reanchors"],
+            FieldsOf(DriverJson.Serialize(new DropPositionsDto(900, [], [])))
         );
+        Assert.Equal(
+            ["second", "continuity", "scrambled"],
+            FieldsOf(DriverJson.Serialize(new DropBucketDto(4, 7, 0)))
+        );
+        Assert.Equal(
+            ["second", "before", "after"],
+            FieldsOf(DriverJson.Serialize(new PcrReanchorDto(8, 123, 456)))
+        );
+    }
+
+    [Fact]
+    public void APositionThatNamesNoSecondsAtAllReadsAsNoneRatherThanAsNothing()
+    {
+        SessionCounters? counters = DriverJson.Deserialize(
+            """{"packets":1000,"drops":7,"ccMeasured":true,"positions":{"anchorPcr":900}}""",
+            DriverJson.Context.SessionCounters
+        );
+
+        Assert.NotNull(counters);
+        Assert.NotNull(counters.Positions);
+        Assert.Equal(900, counters.Positions.AnchorPcr);
+        Assert.Empty(counters.Positions.Buckets);
+        Assert.Empty(counters.Positions.Reanchors);
+    }
+
+    [Fact]
+    public void APositionWhoseListsAreSpeltNullReadsAsNoneRatherThanAsNothing()
+    {
+        SessionCounters? counters = DriverJson.Deserialize(
+            """{"ccMeasured":true,"positions":{"anchorPcr":900,"buckets":null,"reanchors":null}}""",
+            DriverJson.Context.SessionCounters
+        );
+
+        Assert.NotNull(counters);
+        Assert.NotNull(counters.Positions);
+        Assert.Empty(counters.Positions.Buckets);
+        Assert.Empty(counters.Positions.Reanchors);
+    }
+
+    [Fact]
+    public void PositionsFromADriverThatLeftThemOutStillRead()
+    {
+        SessionCounters? counters = DriverJson.Deserialize(
+            """{"packets":1000,"drops":7,"ccMeasured":true}""",
+            DriverJson.Context.SessionCounters
+        );
+
+        Assert.NotNull(counters);
+        Assert.True(counters.CcMeasured);
+        Assert.Null(counters.Positions);
     }
 
     [Fact]
