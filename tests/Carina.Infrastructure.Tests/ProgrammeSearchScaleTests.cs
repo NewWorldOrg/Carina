@@ -86,7 +86,7 @@ public sealed class ProgrammeSearchScaleTests(ProgrammeSearchScale scale, ITestO
     }
 
     [Fact]
-    public async Task TheArchiveThisMeasuresIsSampledTheWayTheMigratedOneIs()
+    public async Task TheArchiveThisMeasuresCarriesTheStatisticsTargetTheModelNames()
     {
         await using var connection = new NpgsqlConnection(scale.ConnectionString);
         await connection.OpenAsync(Cancel);
