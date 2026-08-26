@@ -166,10 +166,6 @@ public sealed class IntegritySchemaTests(MigratedScratchDatabase database)
 
     [Theory]
     [InlineData("'/one.m2ts'")]
-    [InlineData("'../one.m2ts'")]
-    [InlineData("'a/../../one.m2ts'")]
-    [InlineData("' one.m2ts'")]
-    [InlineData("'one.m2ts '")]
     [InlineData("''")]
     public async Task AFindingWhosePathLeavesTheRoomIsRefusedByTheNamedCheck(string path)
     {
@@ -180,6 +176,38 @@ public sealed class IntegritySchemaTests(MigratedScratchDatabase database)
             () => FindingAsync(connection, check, Shaped(IntegrityFault.NoLedgerRow), path));
 
         Assert.Equal("ck_integrity_finding_path", refusal.ConstraintName);
+    }
+
+    [Theory]
+    [InlineData("2026..08.m2ts")]
+    [InlineData("trailing.m2ts ")]
+    [InlineData(" leading.m2ts")]
+    [InlineData("a\\b.m2ts")]
+    [InlineData("   ")]
+    [InlineData("one'quote.m2ts")]
+    [InlineData("a/../b.m2ts")]
+    [InlineData(".hidden")]
+    public async Task ANameTheDiskAllowsButTheLedgerNeverCouldIsKept(string path)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        Guid check = await CheckAsync(connection);
+
+        await FindingAsync(connection, check, Shaped(IntegrityFault.NoLedgerRow), Quoted(path));
+
+        Assert.Equal([path], await PathsAsync(connection, check));
+    }
+
+    [Fact]
+    public async Task APathFarLongerThanAnyLedgerNameIsKept()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        Guid check = await CheckAsync(connection);
+        string deep = string.Join("/", Enumerable.Repeat(new string('a', 200), 12));
+
+        await FindingAsync(connection, check, Shaped(IntegrityFault.NoLedgerRow), Quoted(deep));
+
+        Assert.Equal([deep], await PathsAsync(connection, check));
+        Assert.True(deep.Length > 2000);
     }
 
     [Fact]
@@ -304,6 +332,17 @@ public sealed class IntegritySchemaTests(MigratedScratchDatabase database)
     {
         await using var reading = new NpgsqlCommand(
             $"SELECT fault FROM integrity_finding WHERE check_id = '{check}' ORDER BY fault",
+            connection);
+
+        return await ReadAllAsync(reading);
+    }
+
+    private static string Quoted(string path) => "'" + path.Replace("'", "''", StringComparison.Ordinal) + "'";
+
+    private static async Task<IReadOnlyList<string>> PathsAsync(NpgsqlConnection connection, Guid check)
+    {
+        await using var reading = new NpgsqlCommand(
+            $"SELECT path FROM integrity_finding WHERE check_id = '{check}' ORDER BY path",
             connection);
 
         return await ReadAllAsync(reading);

@@ -41,13 +41,7 @@ public sealed class IntegrityFindingConfiguration : IEntityTypeConfiguration<Int
                 "(ledger_size IS NULL OR ledger_size >= 0) AND (observed_size IS NULL OR observed_size >= 0)");
             table.HasCheckConstraint(
                 "ck_integrity_finding_path",
-                """
-                btrim(path) = path
-                AND length(path) > 0
-                AND strpos(path, '..') = 0
-                AND strpos(path, chr(92)) = 0
-                AND left(path, 1) <> '/'
-                """);
+                "length(path) > 0 AND left(path, 1) <> '/'");
         });
 
         builder.HasKey(finding => finding.Id);
@@ -74,7 +68,7 @@ public sealed class IntegrityFindingConfiguration : IEntityTypeConfiguration<Int
             .IsRequired();
 
         builder.Property(finding => finding.Path)
-            .HasMaxLength(StoredFile.MaxPathLength)
+            .HasColumnType("text")
             .HasColumnName("path")
             .IsRequired();
 

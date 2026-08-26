@@ -63,6 +63,32 @@ public sealed class IntegrityCheckReachesTheTableTests(RepositoryDatabase databa
     }
 
     [Fact]
+    public async Task ANameTheDiskAllowsButTheLedgerNeverCouldStillReachesTheTable()
+    {
+        using var tree = new TempTree();
+        tree
+            .Holding("2026..08.m2ts", 11)
+            .Holding("trailing.m2ts ", 12)
+            .Holding("a\\b.m2ts", 13)
+            .Holding(string.Join("/", Enumerable.Repeat(new string('a', 200), 6)), 14);
+
+        IntegrityCheckId ran = await SweepAsync(new HeldLedger(), tree.Root);
+
+        IReadOnlyList<IntegrityFinding> written = await FindingsAsync(ran);
+
+        Assert.Equal(
+            [
+                "2026..08.m2ts",
+                "a\\b.m2ts",
+                string.Join("/", Enumerable.Repeat(new string('a', 200), 6)),
+                "trailing.m2ts ",
+            ],
+            written.Select(finding => finding.Path).Order(StringComparer.Ordinal).ToArray());
+        Assert.All(written, finding => Assert.Equal(IntegrityFault.NoLedgerRow, finding.Fault));
+        Assert.Equal(4, (await ReadAsync(ran)).FilesRead);
+    }
+
+    [Fact]
     public async Task EveryClassASweepCanFindLandsInTheTableWithItsReason()
     {
         using var tree = new TempTree();

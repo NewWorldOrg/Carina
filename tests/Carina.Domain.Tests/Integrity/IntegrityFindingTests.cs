@@ -143,16 +143,21 @@ public sealed class IntegrityFindingTests
     }
 
     [Fact]
-    public void APathLongerThanTheColumnHoldsIsRefused()
+    public void APathFarLongerThanAnyLedgerNameIsCarriedAsItIs()
     {
-        Assert.Throws<ArgumentException>(
-            () => IntegrityFinding.NoLedgerRow(Check, Primary, new string('a', 1025), 1, At));
+        string deep = new('a', 4096);
+
+        Assert.Equal(deep, IntegrityFinding.NoLedgerRow(Check, Primary, deep, 1, At).Path);
     }
 
-    [Fact]
-    public void APathExactlyAsLongAsTheColumnHoldsIsAllowed()
+    [Theory]
+    [InlineData("2026..08.m2ts")]
+    [InlineData("one.m2ts ")]
+    [InlineData("a\\b.m2ts")]
+    [InlineData("   ")]
+    public void AnyNameTheDiskAllowsIsOneAFindingCanName(string path)
     {
-        Assert.Equal(1024, IntegrityFinding.NoLedgerRow(Check, Primary, new string('a', 1024), 1, At).Path.Length);
+        Assert.Equal(path, IntegrityFinding.NoLedgerRow(Check, Primary, path, 1, At).Path);
     }
 
     [Fact]
@@ -183,12 +188,11 @@ public sealed class IntegrityFindingTests
             () => IntegrityFinding.FileMissing(Check, Primary, Id(3), null!, 1, At));
     }
 
-    [Theory]
-    [InlineData("")]
-    [InlineData("   ")]
-    public void AnOrphanWithNoPathIsRefused(string path)
+    [Fact]
+    public void AnOrphanWithNoPathIsRefused()
     {
-        Assert.Throws<ArgumentException>(() => IntegrityFinding.NoLedgerRow(Check, Primary, path, 1, At));
+        Assert.Throws<ArgumentException>(
+            () => IntegrityFinding.NoLedgerRow(Check, Primary, string.Empty, 1, At));
     }
 
     [Fact]

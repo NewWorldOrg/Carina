@@ -176,8 +176,6 @@ public sealed class IntegrityCheckRepositoryTests(RepositoryDatabase database)
 
     [Theory]
     [InlineData("'/a.m2ts'")]
-    [InlineData("'../a.m2ts'")]
-    [InlineData("' a.m2ts'")]
     [InlineData("''")]
     public async Task AFindingWhosePathLeavesTheRoomIsRefusedByTheDatabase(string path)
     {

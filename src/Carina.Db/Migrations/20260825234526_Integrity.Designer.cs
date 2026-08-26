@@ -13,7 +13,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Carina.Db.Migrations
 {
     [DbContext(typeof(CarinaDbContext))]
-    [Migration("20260825200648_Integrity")]
+    [Migration("20260825234526_Integrity")]
     partial class Integrity
     {
         /// <inheritdoc />
@@ -537,8 +537,7 @@ namespace Carina.Db.Migrations
 
                     b.Property<string>("Path")
                         .IsRequired()
-                        .HasMaxLength(1024)
-                        .HasColumnType("character varying(1024)")
+                        .HasColumnType("text")
                         .HasColumnName("path");
 
                     b.Property<Guid?>("RecordingId")
@@ -569,7 +568,7 @@ namespace Carina.Db.Migrations
 
                             t.HasCheckConstraint("ck_integrity_finding_observed_size", "(fault IN ('SizeDisagrees', 'NoLedgerRow', 'FileEmpty', 'EmptyThoughComplete')) = (observed_size IS NOT NULL)");
 
-                            t.HasCheckConstraint("ck_integrity_finding_path", "btrim(path) = path\nAND length(path) > 0\nAND strpos(path, '..') = 0\nAND strpos(path, chr(92)) = 0\nAND left(path, 1) <> '/'");
+                            t.HasCheckConstraint("ck_integrity_finding_path", "length(path) > 0 AND left(path, 1) <> '/'");
 
                             t.HasCheckConstraint("ck_integrity_finding_recording", "(fault IN ('SizeDisagrees', 'FileMissing', 'FileEmpty', 'EmptyThoughComplete')) = (recording_id IS NOT NULL)");
 

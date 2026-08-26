@@ -5,7 +5,7 @@ namespace Carina.Domain.Tests.Integrity;
 public sealed class StoredFileTests
 {
     [Fact]
-    public void AFileKeepsItsPathAndItsSize()
+    public void AFileKeepsThePathAndTheSizeItWasReadWith()
     {
         var file = new StoredFile("one.m2ts", 100);
 
@@ -17,6 +17,33 @@ public sealed class StoredFileTests
     public void AFileDeeperDownKeepsThePathItWasReachedBy()
     {
         Assert.Equal("a/b/one.m2ts", new StoredFile("a/b/one.m2ts", 1).Path);
+    }
+
+    [Theory]
+    [InlineData("2026..08.m2ts")]
+    [InlineData("..hidden.m2ts")]
+    [InlineData("one.m2ts ")]
+    [InlineData(" one.m2ts")]
+    [InlineData("   ")]
+    [InlineData("a\\b.m2ts")]
+    [InlineData(".")]
+    [InlineData("..")]
+    [InlineData("a/../b.m2ts")]
+    [InlineData("one\nm2ts")]
+    [InlineData("あ.m2ts")]
+    [InlineData("-")]
+    public void AnyNameTheDiskAllowsIsANameThePointOfComparisonCanCarry(string path)
+    {
+        Assert.Equal(path, new StoredFile(path, 1).Path);
+    }
+
+    [Fact]
+    public void APathFarLongerThanAnyLedgerNameIsStillCarried()
+    {
+        string deep = string.Join("/", Enumerable.Repeat(new string('a', 200), 12));
+
+        Assert.Equal(deep, new StoredFile(deep, 1).Path);
+        Assert.True(deep.Length > 2000);
     }
 
     [Fact]
@@ -31,12 +58,10 @@ public sealed class StoredFileTests
         Assert.Throws<ArgumentOutOfRangeException>(() => new StoredFile("one.m2ts", -1));
     }
 
-    [Theory]
-    [InlineData("")]
-    [InlineData("   ")]
-    public void AFileWithNoPathIsRefused(string path)
+    [Fact]
+    public void AFileWithNoPathIsRefused()
     {
-        Assert.Throws<ArgumentException>(() => new StoredFile(path, 1));
+        Assert.Throws<ArgumentException>(() => new StoredFile(string.Empty, 1));
     }
 
     [Fact]
@@ -51,46 +76,5 @@ public sealed class StoredFileTests
     public void APathReadFromTheTopOfTheDiskIsRefused(string path)
     {
         Assert.Throws<ArgumentException>(() => new StoredFile(path, 1));
-    }
-
-    [Theory]
-    [InlineData("../one.m2ts")]
-    [InlineData("a/../../one.m2ts")]
-    [InlineData("..")]
-    public void APathThatLeavesTheRoomIsRefused(string path)
-    {
-        Assert.Throws<ArgumentException>(() => new StoredFile(path, 1));
-    }
-
-    [Fact]
-    public void APathThatSeparatesItsPartsTheOtherWayIsRefused()
-    {
-        Assert.Throws<ArgumentException>(() => new StoredFile("a\\one.m2ts", 1));
-    }
-
-    [Theory]
-    [InlineData(" one.m2ts")]
-    [InlineData("one.m2ts ")]
-    public void APathWithSurroundingSpaceIsRefused(string path)
-    {
-        Assert.Throws<ArgumentException>(() => new StoredFile(path, 1));
-    }
-
-    [Fact]
-    public void APathExactlyAsLongAsTheColumnHoldsIsAllowed()
-    {
-        Assert.Equal(1024, new StoredFile(new string('a', 1024), 1).Path.Length);
-    }
-
-    [Fact]
-    public void APathOneCharacterLongerIsRefused()
-    {
-        Assert.Throws<ArgumentException>(() => new StoredFile(new string('a', 1025), 1));
-    }
-
-    [Fact]
-    public void APathOneCharacterShorterIsAllowed()
-    {
-        Assert.Equal(1023, new StoredFile(new string('a', 1023), 1).Path.Length);
     }
 }

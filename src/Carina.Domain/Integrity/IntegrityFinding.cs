@@ -41,15 +41,7 @@ public sealed class IntegrityFinding
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(checkId);
         ArgumentNullException.ThrowIfNull(root);
-        ArgumentException.ThrowIfNullOrWhiteSpace(path);
-
-        if (path.Length > StoredFile.MaxPathLength)
-        {
-            throw new ArgumentException(
-                $"A path under an output root is at most {StoredFile.MaxPathLength} characters, "
-                + $"and this one has {path.Length}.",
-                nameof(path));
-        }
+        ArgumentException.ThrowIfNullOrEmpty(path);
 
         if (ledgerSize is < 0)
         {

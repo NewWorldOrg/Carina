@@ -9,7 +9,7 @@ public sealed class LocalRecordingFileSurvey(
     IntegritySettings settings,
     ILogger<LocalRecordingFileSurvey> logger) : IRecordingFileSurvey
 {
-    private static readonly EnumerationOptions Everything = new()
+    public static readonly EnumerationOptions HowItWalks = new()
     {
         RecurseSubdirectories = true,
         IgnoreInaccessible = false,
@@ -61,7 +61,7 @@ public sealed class LocalRecordingFileSurvey(
 
             List<StoredFile> files = [];
 
-            foreach (string entry in Directory.EnumerateFiles(path, "*", Everything))
+            foreach (string entry in Directory.EnumerateFiles(path, "*", HowItWalks))
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
@@ -88,5 +88,5 @@ public sealed class LocalRecordingFileSurvey(
     }
 
     private static string Under(string root, string entry)
-        => Path.GetRelativePath(root, entry).Replace('\\', '/');
+        => Path.GetRelativePath(root, entry).Replace(Path.DirectorySeparatorChar, '/');
 }

@@ -42,7 +42,7 @@ public partial class Integrity : Migration
                 check_id = table.Column<Guid>(type: "uuid", nullable: false),
                 fault = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
                 output_root = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: false),
-                path = table.Column<string>(type: "character varying(1024)", maxLength: 1024, nullable: false),
+                path = table.Column<string>(type: "text", nullable: false),
                 recording_id = table.Column<Guid>(type: "uuid", nullable: true),
                 ledger_size = table.Column<long>(type: "bigint", nullable: true),
                 observed_size = table.Column<long>(type: "bigint", nullable: true),
@@ -54,7 +54,7 @@ public partial class Integrity : Migration
                 table.CheckConstraint("ck_integrity_finding_fault", "fault IN ('SizeDisagrees', 'NoLedgerRow', 'FileMissing', 'FileEmpty', 'EmptyThoughComplete')");
                 table.CheckConstraint("ck_integrity_finding_ledger_size", "(fault IN ('SizeDisagrees', 'FileMissing', 'FileEmpty', 'EmptyThoughComplete')) = (ledger_size IS NOT NULL)");
                 table.CheckConstraint("ck_integrity_finding_observed_size", "(fault IN ('SizeDisagrees', 'NoLedgerRow', 'FileEmpty', 'EmptyThoughComplete')) = (observed_size IS NOT NULL)");
-                table.CheckConstraint("ck_integrity_finding_path", "btrim(path) = path\nAND length(path) > 0\nAND strpos(path, '..') = 0\nAND strpos(path, chr(92)) = 0\nAND left(path, 1) <> '/'");
+                table.CheckConstraint("ck_integrity_finding_path", "length(path) > 0 AND left(path, 1) <> '/'");
                 table.CheckConstraint("ck_integrity_finding_recording", "(fault IN ('SizeDisagrees', 'FileMissing', 'FileEmpty', 'EmptyThoughComplete')) = (recording_id IS NOT NULL)");
                 table.CheckConstraint("ck_integrity_finding_sizes", "(ledger_size IS NULL OR ledger_size >= 0) AND (observed_size IS NULL OR observed_size >= 0)");
                 table.ForeignKey(
