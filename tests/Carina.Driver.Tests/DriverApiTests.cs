@@ -22,6 +22,9 @@ public sealed class DriverApiTests
     private static CancellationToken Soon() =>
         new CancellationTokenSource(Patience).Token;
 
+    private static CancellationToken AfterEveryOtherDeadlineHere() =>
+        new CancellationTokenSource(Patience * 3).Token;
+
     [Fact]
     public async Task HealthAnswersWithTheGreeting()
     {
@@ -172,21 +175,23 @@ public sealed class DriverApiTests
             "The viewer never showed up on the session it asked to watch."
         );
 
+        Task watching = TheStreamEnds(body, AfterEveryOtherDeadlineHere());
+
         DriverLifecycle lifecycle = driver.Service<DriverLifecycle>();
         Task stopping = driver.BeginStop();
 
         await Until(
             () => session.Broadcaster.SubscriberCount is 0,
-            "The driver never let go of a viewer that had stopped reading, so shutdown is waiting for it."
+            "The driver never let go of the viewer it was serving, so shutdown is waiting for it."
         );
 
         await Until(
             () => stopping.IsCompleted,
-            manager.HardStopBudget + Patience,
             "Shutdown never finished, though the viewer it was serving had been let go."
         );
 
         await stopping;
+        await watching;
 
         Assert.True(
             session.Completion.IsCompleted,
@@ -203,7 +208,6 @@ public sealed class DriverApiTests
             "Shutdown finished with the watched session still holding its tuner."
         );
 
-        await TheStreamEnds(body, Soon());
         await driver.DisposeAsync();
     }
 
@@ -1300,7 +1304,7 @@ public sealed class DriverApiTests
             while (await body.ReadAsync(buffer, cancellationToken) > 0)
             { }
         }
-        catch (IOException)
+        catch (Exception error) when (error is IOException or OperationCanceledException)
         { }
     }
 

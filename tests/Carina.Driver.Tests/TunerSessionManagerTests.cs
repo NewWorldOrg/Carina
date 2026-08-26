@@ -15,6 +15,8 @@ public sealed class TunerSessionManagerTests : IDisposable
 {
     private static readonly DateTimeOffset Start = new(2026, 8, 13, 21, 0, 0, TimeSpan.Zero);
 
+    private static readonly TimeSpan Deadlock = TimeSpan.FromSeconds(30);
+
     private readonly string root = Directory.CreateTempSubdirectory("carina-manager-").FullName;
 
     private readonly ManualTimeProvider clock = new(Start);
@@ -529,22 +531,42 @@ public sealed class TunerSessionManagerTests : IDisposable
     [Fact]
     public async Task ShutdownGivesUpOnASessionThatWillNotLetGo()
     {
+        TimeSpan hardStop = TimeSpan.FromSeconds(1);
+        var clockOfItsOwn = new SteppedTimeProvider(Start);
+        var device = new HeldOpenTunerDevice();
         var manager = new TunerSessionManager(
             Configuration with { ShutdownGraceHours = 0 },
-            new StubbornTunerDeviceFactory(TimeSpan.FromSeconds(20)),
-            clock,
+            new OneTunerDeviceFactory(device),
+            clockOfItsOwn,
             NullLogger<TunerSessionManager>.Instance,
-            hardStopLimit: TimeSpan.FromSeconds(1)
+            hardStopLimit: hardStop
         );
 
         TunerSession recording = Begin(manager, "s-1", "adapter0");
-        DateTime started = DateTime.UtcNow;
 
-        await manager.DrainAsync(CancellationToken.None);
+        Assert.True(
+            device.Reading.Wait(Deadlock),
+            "The session never reached the device that will not give it back, so there was nothing for the drain to give up on."
+        );
 
-        Assert.True(DateTime.UtcNow - started < TimeSpan.FromSeconds(10));
+        Task draining = manager.DrainAsync(CancellationToken.None);
+
+        clockOfItsOwn.AwaitSomethingWaitingOnTheClock(Deadlock);
+
+        Assert.False(
+            draining.IsCompleted,
+            "The drain let go of a session that still held its device, before the hard stop it promised had run out."
+        );
+
+        clockOfItsOwn.Advance(hardStop);
+
+        await draining;
+
         Assert.False(recording.Completion.IsCompleted);
         Assert.False(recording.Concluded);
+
+        device.LetGo();
+        recording.WaitForEnd(Deadlock);
     }
 
     [Fact]
