@@ -15,6 +15,8 @@ public sealed class TunerAllocationPlannerTests
 
     private static readonly TuningParameters Terrestrial31 = TuningParameters.Terrestrial(31);
 
+    private static readonly TuningParameters Terrestrial33 = TuningParameters.Terrestrial(33);
+
     private static readonly TuningParameters BsSlotOneStream = TuningParameters.Bs(15, new TransportStreamId(16625));
 
     private static readonly TuningParameters BsSlotOtherStream = TuningParameters.Bs(15, new TransportStreamId(16626));
@@ -664,6 +666,143 @@ public sealed class TunerAllocationPlannerTests
         Assert.Equal(AllocationVerdict.Secured, Verdict(plan, earlier));
         Assert.Equal(AllocationVerdict.Secured, Verdict(plan, other));
         Assert.Equal(AllocationVerdict.Contended, Verdict(plan, late));
+    }
+
+    [Fact]
+    public void ARiderLosesTheChannelWhenWhatItRidesEndsFirst()
+    {
+        AllocationCandidate ridden = Candidate(
+            Terrestrial27,
+            from: Now,
+            to: Now.AddMinutes(30),
+            pinned: true,
+            eventId: 4001);
+        AllocationCandidate other = Candidate(
+            Terrestrial29,
+            from: Now,
+            to: Now.AddMinutes(120),
+            pinned: true,
+            eventId: 4002);
+        AllocationCandidate rider = Candidate(
+            Terrestrial27,
+            from: Now,
+            to: Now.AddMinutes(120),
+            eventId: 4003);
+
+        AllocationPlan plan = Planned([ridden, other, rider], Capacity(TunerKind.Terrestrial));
+
+        Assert.Equal(AllocationVerdict.Pinned, Verdict(plan, ridden));
+        Assert.Equal(AllocationVerdict.Pinned, Verdict(plan, other));
+        Assert.Equal(AllocationVerdict.Contended, Verdict(plan, rider));
+    }
+
+    [Fact]
+    public void ARiderThatOutlastsNothingKeepsTheChannelItRides()
+    {
+        AllocationCandidate ridden = Candidate(
+            Terrestrial27,
+            from: Now,
+            to: Now.AddMinutes(120),
+            pinned: true,
+            eventId: 4001);
+        AllocationCandidate other = Candidate(
+            Terrestrial29,
+            from: Now,
+            to: Now.AddMinutes(120),
+            pinned: true,
+            eventId: 4002);
+        AllocationCandidate rider = Candidate(
+            Terrestrial27,
+            from: Now,
+            to: Now.AddMinutes(30),
+            eventId: 4003);
+
+        AllocationPlan plan = Planned([ridden, other, rider], Capacity(TunerKind.Terrestrial));
+
+        Assert.Equal(AllocationVerdict.Secured, Verdict(plan, rider));
+    }
+
+    [Fact]
+    public void WhereTwoSeatsAreShortOfThreeRecordingsTheyAreAllRecordedInstead()
+    {
+        AllocationCandidate first = Candidate(Terrestrial27, priority: 30, pinned: true, eventId: 4001);
+        AllocationCandidate second = Candidate(Terrestrial29, priority: 20, pinned: true, eventId: 4002);
+        AllocationCandidate third = Candidate(Terrestrial31, priority: 15, pinned: true, eventId: 4003);
+        AllocationCandidate lost = Candidate(Terrestrial33, priority: 10, eventId: 4004);
+
+        AllocationPlan plan = Planned(
+            [first, second, third, lost],
+            Capacity(TunerKind.Terrestrial, TunerKind.Terrestrial));
+
+        Assert.Equal(AllocationVerdict.Contended, Verdict(plan, lost));
+        Assert.Equal([first.Id, second.Id, third.Id], plan.For(lost.Id).Instead);
+    }
+
+    [Fact]
+    public void ARecordingOnASystemWithNoSeatAtAllIsNotRecordedInstead()
+    {
+        AllocationCandidate satellite = Candidate(BsSlotOneStream, priority: 30, pinned: true, eventId: 4001);
+        AllocationCandidate terrestrial = Candidate(Terrestrial27, priority: 20, pinned: true, eventId: 4002);
+        AllocationCandidate lost = Candidate(Terrestrial29, priority: 10, eventId: 4003);
+
+        AllocationPlan plan = Planned(
+            [satellite, terrestrial, lost],
+            Capacity(TunerKind.Terrestrial));
+
+        Assert.Equal(AllocationVerdict.Contended, Verdict(plan, lost));
+        Assert.Equal([terrestrial.Id], plan.For(lost.Id).Instead);
+    }
+
+    [Fact]
+    public void WhatWasRecordedInsteadIsWeighedOverTheLosersWindowAndNotItsOwn()
+    {
+        AllocationCandidate satellite = Candidate(
+            BsSlotOneStream,
+            priority: 30,
+            from: Now.AddMinutes(60),
+            to: Now.AddMinutes(90),
+            eventId: 4001);
+        AllocationCandidate taken = Candidate(
+            Terrestrial27,
+            priority: 20,
+            from: Now,
+            to: Now.AddMinutes(120),
+            eventId: 4002);
+        AllocationCandidate lost = Candidate(
+            Terrestrial29,
+            priority: 10,
+            from: Now,
+            to: Now.AddMinutes(120),
+            eventId: 4003);
+
+        AllocationPlan plan = Planned(
+            [satellite, taken, lost],
+            Capacity(TunerKind.Terrestrial, TunerKind.Satellite));
+
+        Assert.Equal(AllocationVerdict.Secured, Verdict(plan, satellite));
+        Assert.Equal(AllocationVerdict.Contended, Verdict(plan, lost));
+        Assert.Equal([taken.Id], plan.For(lost.Id).Instead);
+    }
+
+    [Fact]
+    public void ARecordingThatWouldHaveLetTheSeatsFallIntoPlaceIsRecordedInstead()
+    {
+        AllocationCandidate communication = Candidate(Cs110, priority: 30, eventId: 4001);
+        AllocationCandidate broadcasting = Candidate(BsSlotOneStream, priority: 20, eventId: 4002);
+        AllocationCandidate lost = Candidate(Terrestrial27, priority: 10, eventId: 4003);
+        TunerCapacity convertible = new(
+            [
+                new TunerSeat("seat0", [TuneSystem.IsdbSBs, TuneSystem.IsdbSCs110], Faulted: false),
+                new TunerSeat("seat1", [TuneSystem.IsdbT, TuneSystem.IsdbSBs], Faulted: false),
+            ],
+            []);
+
+        AllocationPlan plan = Planned([communication, broadcasting, lost], convertible);
+
+        Assert.Equal(AllocationVerdict.Secured, Verdict(plan, communication));
+        Assert.Equal(AllocationVerdict.Secured, Verdict(plan, broadcasting));
+        Assert.Equal(AllocationVerdict.Contended, Verdict(plan, lost));
+        Assert.Equal([communication.Id, broadcasting.Id], plan.For(lost.Id).Instead);
     }
 
     [Fact]

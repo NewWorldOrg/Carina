@@ -193,6 +193,24 @@ public sealed class ReservationSchemaTests(MigratedScratchDatabase database)
     }
 
     [Fact]
+    public async Task TheMomentWithoutTheMarkIsRefusedJustAsTheMarkWithoutTheMomentIs()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Reserve(
+                connection,
+                70014,
+                4001,
+                Airs,
+                receptionUnavailable: false,
+                receptionUnavailableSince: Now));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
+        Assert.Equal("ck_reservation_reception", refusal.ConstraintName);
+    }
+
+    [Fact]
     public async Task TheClaimableIndexNarrowsToWhatRecordingMayStart()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();

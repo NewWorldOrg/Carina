@@ -117,6 +117,7 @@ public static class TunerAllocationPlanner
     private static IEnumerable<DateTime> Instants(List<Held> held, Held added)
         => held
             .Select(hold => hold.StartsAt)
+            .Concat(held.Where(hold => hold.Tuning == added.Tuning).Select(hold => hold.EndsAt))
             .Where(added.Covers)
             .Distinct();
 
@@ -132,36 +133,21 @@ public static class TunerAllocationPlanner
         List<Held> held,
         Held loser,
         TunerCapacity capacity)
-    {
-        if (!capacity.CanSeat(Wanting(loser.Tuning.System)))
-        {
-            return [];
-        }
-
-        return
-        [
-            .. held
-                .Where(hold => hold.Overlaps(loser))
-                .Where(hold => !hold.Tuning.Equals(loser.Tuning))
-                .Where(hold => HoldsASeatTheLoserWanted(held, hold, loser, capacity))
-                .Select(hold => hold.Candidate)
-                .Order(Ranking.Order)
-                .Select(candidate => candidate.Id),
-        ];
-    }
+        => [.. held
+            .Where(hold => hold.Overlaps(loser))
+            .Where(hold => !hold.Tuning.Equals(loser.Tuning))
+            .Where(hold => HoldsASeatTheLoserWanted(held, hold, loser, capacity))
+            .Select(hold => hold.Candidate)
+            .Order(Ranking.Order)
+            .Select(candidate => candidate.Id)];
 
     private static bool HoldsASeatTheLoserWanted(
         List<Held> held,
         Held hold,
         Held loser,
         TunerCapacity capacity)
-        => !capacity.CanSeat(Wanting(hold.Tuning.System, loser.Tuning.System))
+        => capacity.SharesSeats(hold.Tuning.System, loser.Tuning.System)
            || Seatable([.. held.Where(other => !ReferenceEquals(other, hold)), loser], loser, capacity);
-
-    private static Dictionary<TuneSystem, int> Wanting(params TuneSystem[] systems)
-        => systems
-            .GroupBy(system => system)
-            .ToDictionary(group => group.Key, group => group.Count());
 
     private sealed record Held(AllocationCandidate Candidate, TuningParameters Tuning, DateTime EndsAt)
     {

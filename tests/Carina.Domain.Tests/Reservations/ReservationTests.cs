@@ -271,6 +271,41 @@ public sealed class ReservationTests
     }
 
     [Fact]
+    public void AReservationWithNowhereToTuneIsNotSecured()
+    {
+        Reservation reservation = ReservationFactory.Planned();
+        reservation.LoseReception(ReservationFactory.Now);
+
+        Assert.Throws<InvalidOperationException>(reservation.Secure);
+        Assert.Equal(ReservationState.Scheduled, reservation.State);
+    }
+
+    [Fact]
+    public void SomewhereToTuneAgainIsWhatLetsAReservationBeSecured()
+    {
+        Reservation reservation = ReservationFactory.Rehydrated(ReservationState.Conflict, null, null);
+        reservation.LoseReception(ReservationFactory.Now);
+
+        reservation.RegainReception();
+        reservation.Secure();
+
+        Assert.Equal(ReservationState.Scheduled, reservation.State);
+    }
+
+    [Fact]
+    public void TheMomentReceptionWasLostIsReadBackInUtc()
+    {
+        ArgumentException refused = Assert.Throws<ArgumentException>(() => ReservationFactory.Rehydrated(
+            ReservationState.Scheduled,
+            null,
+            null,
+            receptionUnavailable: true,
+            receptionUnavailableSince: DateTime.SpecifyKind(ReservationFactory.Now, DateTimeKind.Local)));
+
+        Assert.Equal("receptionUnavailableSince", refused.ParamName);
+    }
+
+    [Fact]
     public void TheFourStatesAreTheOnlyOnesThisDomainOwns()
     {
         Assert.Equal(

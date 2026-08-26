@@ -245,6 +245,12 @@ public sealed class Reservation
     {
         RefuseUnless(State is ReservationState.Scheduled or ReservationState.Conflict);
 
+        if (ReceptionUnavailable)
+        {
+            throw new InvalidOperationException(
+                "A reservation with nowhere to tune is not secured until there is somewhere to tune again.");
+        }
+
         State = ReservationState.Scheduled;
     }
 
