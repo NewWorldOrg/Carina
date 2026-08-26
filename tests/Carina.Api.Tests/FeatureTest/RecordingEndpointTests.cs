@@ -368,6 +368,7 @@ public sealed class RecordingEndpointTests
         recording.Wrote(TimeSpan.FromHours(1));
         recording.Abort(RecordingFeature.Noon.AddHours(1));
         recording.Settle(RecordingOutcome.Complete, 1_000, RecordingFeature.Noon.AddHours(1));
+        feature.Driver.Writing(Session, recording.Id.Wire);
 
         (HttpStatusCode status, _) = await feature.PostAsync(
             $"/api/recordings/{recording.Id.Wire}/stop",
@@ -629,6 +630,25 @@ public sealed class RecordingEndpointTests
 
         Assert.Equal(HttpStatusCode.NotFound, status);
         Assert.Empty(feature.Driver.Stopped);
+    }
+
+    [Fact]
+    public async Task AStopNeverReachesForTheSessionOfADifferentRecording()
+    {
+        await using var feature = new RecordingFeature();
+        Recording mine = feature.Held(eventId: 1);
+        Recording other = feature.Held(eventId: 2);
+        feature.Driver.Writing(Session, other.Id.Wire);
+
+        (HttpStatusCode status, _) = await feature.PostAsync(
+            $"/api/recordings/{mine.Id.Wire}/stop",
+            new { reason = "the wrong programme" });
+
+        Assert.Equal(HttpStatusCode.Conflict, status);
+        Assert.Empty(feature.Driver.Stopped);
+        Assert.Empty(mine.OutcomeDetail);
+        Assert.Empty(other.OutcomeDetail);
+        Assert.Null(other.AbortedAt);
     }
 
     private static Recording Ended(RecordingFeature feature)
