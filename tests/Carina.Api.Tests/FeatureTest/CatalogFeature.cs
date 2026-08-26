@@ -86,6 +86,10 @@ internal sealed class TunerHoldingDriverClient : IDriverClient
 
     public Task<DriverCall<Stream>> OpenEventsAsync(CancellationToken cancellationToken)
         => throw new NotSupportedException();
+
+    public Task<DriverCall<IReadOnlyList<StorageRootDto>>> GetStorageAsync(
+        CancellationToken cancellationToken)
+        => throw new NotSupportedException();
 }
 
 internal sealed class CatalogFeature : IAsyncDisposable

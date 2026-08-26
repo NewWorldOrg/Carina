@@ -244,6 +244,23 @@ public sealed class ScriptedDriverClient : IDriverClient
     public Task<DriverCall<Stream>> OpenEventsAsync(CancellationToken cancellationToken)
         => throw new NotSupportedException();
 
+    public DriverCall<IReadOnlyList<StorageRootDto>>? StorageAnswer { get; set; }
+
+    public int StorageReads { get; private set; }
+
+    public Task<DriverCall<IReadOnlyList<StorageRootDto>>> GetStorageAsync(
+        CancellationToken cancellationToken)
+    {
+        lock (gate)
+        {
+            StorageReads++;
+
+            return Task.FromResult(
+                StorageAnswer
+                ?? DriverCall<IReadOnlyList<StorageRootDto>>.Unreachable("No storage was scripted."));
+        }
+    }
+
     private ChannelScript Script(TuningParameters tuning)
         => scripts.TryGetValue(tuning, out ChannelScript? script) ? script : ChannelScript.NoLock();
 
