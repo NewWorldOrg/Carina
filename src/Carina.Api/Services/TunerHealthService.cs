@@ -35,7 +35,12 @@ public sealed class TunerHealthService(
 
         return ServiceResult<TunerHealthView, TunerHealthFailure>.Success(
             new TunerHealthView(
-                ServiceReach.Assess(reachable.Served, known, held.Silence, clock.GetUtcNow().UtcDateTime),
+                ServiceReach.Assess(
+                    [.. reachable.Reachable],
+                    reachable.Undetermined.Count > 0,
+                    known,
+                    held.Silence,
+                    clock.GetUtcNow().UtcDateTime),
                 held.HoursOfSilence,
                 reachable.Undetermined));
     }

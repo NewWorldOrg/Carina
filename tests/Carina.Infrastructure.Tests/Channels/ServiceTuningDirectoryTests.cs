@@ -15,6 +15,8 @@ public sealed class ServiceTuningDirectoryTests
 
     private static readonly ServiceId Service = new(101);
 
+    private static readonly ServiceId Unknown = new(999);
+
     [Fact]
     public async Task AServiceWithASelectedChannelAndATunerForItResolvesToWhereItTunes()
     {
@@ -25,30 +27,40 @@ public sealed class ServiceTuningDirectoryTests
         Assert.True(resolved.CanTune);
         Assert.Equal(TuningParameters.Terrestrial(27), resolved.Tuning);
         Assert.Equal(fixture.Selected.Id, resolved.CandidateChannelId);
+        Assert.False(resolved.Impaired);
+    }
+
+    [Theory]
+    [InlineData(TuningRefusal.None)]
+    [InlineData(TuningRefusal.NoSuchService)]
+    [InlineData(TuningRefusal.NoSelectedChannel)]
+    [InlineData(TuningRefusal.NoTunerForSystem)]
+    [InlineData(TuningRefusal.CapacityUnknown)]
+    public async Task WhetherAServiceCanBeTunedIsTheSameAnswerAsResolvingItForEveryReason(
+        TuningRefusal expected)
+    {
+        (Fixture fixture, ServiceId asked) = Arranged(expected);
+
+        TuningResolution resolved = await fixture.Directory.ResolveTuningAsync(Network, asked, Cancel);
+        bool canTune = await fixture.Directory.CanTuneAsync(Network, asked, Cancel);
+
+        Assert.Equal(expected, resolved.Refusal);
+        Assert.Equal(resolved.CanTune, canTune);
+        Assert.Equal(expected is TuningRefusal.None, canTune);
     }
 
     [Fact]
-    public async Task AServiceNobodyHasHeardOfIsRefusedAsUnknown()
+    public async Task ALedgerTunerTheDriverHasNotLoadedLeavesTheAnswerUnknownRatherThanRefusedForever()
     {
-        Fixture fixture = Ready();
-
-        TuningResolution resolved = await fixture.Directory.ResolveTuningAsync(Network, new ServiceId(999), Cancel);
-
-        Assert.Equal(TuningRefusal.NoSuchService, resolved.Refusal);
-    }
-
-    [Fact]
-    public async Task AServiceWithNowhereToTuneIsRefusedForThatAndNotForWantOfATuner()
-    {
-        Fixture fixture = Ready(selected: false);
+        Fixture fixture = Ready(kind: TunerKind.Satellite, undetermined: ["adapter9"]);
 
         TuningResolution resolved = await fixture.Directory.ResolveTuningAsync(Network, Service, Cancel);
 
-        Assert.Equal(TuningRefusal.NoSelectedChannel, resolved.Refusal);
+        Assert.Equal(TuningRefusal.CapacityUnknown, resolved.Refusal);
     }
 
     [Fact]
-    public async Task AServiceNoConfiguredTunerCanReceiveIsRefusedForWantOfATuner()
+    public async Task AMachineThatDescribesEveryTunerRefusesForWantOfOneRatherThanForNotKnowing()
     {
         Fixture fixture = Ready(kind: TunerKind.Satellite);
 
@@ -58,14 +70,27 @@ public sealed class ServiceTuningDirectoryTests
     }
 
     [Fact]
-    public async Task ALedgerThatCannotBeReadIsUnknownRatherThanAMachineWithoutTuners()
+    public async Task AServiceWhoseOnlyTunerIsFaultedStillTunesButIsCalledImpaired()
     {
-        Fixture fixture = Ready(capacityKnown: false);
+        Fixture fixture = Ready(faulted: true);
 
         TuningResolution resolved = await fixture.Directory.ResolveTuningAsync(Network, Service, Cancel);
 
-        Assert.Equal(TuningRefusal.CapacityUnknown, resolved.Refusal);
-        Assert.False(resolved.CanTune);
+        Assert.True(resolved.CanTune);
+        Assert.True(resolved.Impaired);
+        Assert.True(await fixture.Directory.CanTuneAsync(Network, Service, Cancel));
+    }
+
+    [Fact]
+    public async Task AServiceWithOneFaultedAndOneWorkingTunerIsNotImpaired()
+    {
+        Fixture fixture = Ready(seats:
+        [
+            new TunerSeat("adapter0", BroadcastReception.Of(TunerKind.Terrestrial), Faulted: true),
+            new TunerSeat("adapter1", BroadcastReception.Of(TunerKind.Terrestrial), Faulted: false),
+        ]);
+
+        Assert.False((await fixture.Directory.ResolveTuningAsync(Network, Service, Cancel)).Impaired);
     }
 
     [Fact]
@@ -86,20 +111,6 @@ public sealed class ServiceTuningDirectoryTests
         Assert.True((await fixture.Directory.ResolveTuningAsync(Network, Service, Cancel)).CanTune);
     }
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task WhetherAServiceCanBeTunedIsTheSameAnswerAsResolvingIt(bool reachable)
-    {
-        Fixture fixture = Ready(kind: reachable ? TunerKind.Terrestrial : TunerKind.Satellite);
-
-        TuningResolution resolved = await fixture.Directory.ResolveTuningAsync(Network, Service, Cancel);
-        bool canTune = await fixture.Directory.CanTuneAsync(Network, Service, Cancel);
-
-        Assert.Equal(resolved.CanTune, canTune);
-        Assert.Equal(reachable, canTune);
-    }
-
     [Fact]
     public async Task TheSelectedChannelIsReadAgainRatherThanRememberedFromTheFirstCall()
     {
@@ -116,6 +127,15 @@ public sealed class ServiceTuningDirectoryTests
             TuningParameters.Terrestrial(31),
             (await fixture.Directory.ResolveTuningAsync(Network, Service, Cancel)).Tuning);
     }
+
+    private static (Fixture Fixture, ServiceId Asked) Arranged(TuningRefusal refusal) => refusal switch
+    {
+        TuningRefusal.None => (Ready(), Service),
+        TuningRefusal.NoSuchService => (Ready(), Unknown),
+        TuningRefusal.NoSelectedChannel => (Ready(selected: false), Service),
+        TuningRefusal.NoTunerForSystem => (Ready(kind: TunerKind.Satellite), Service),
+        _ => (Ready(capacityKnown: false), Service),
+    };
 
     private static CandidateChannel Candidate(TuningParameters tuning, bool selected)
         => CandidateChannel.Rehydrate(
@@ -141,7 +161,10 @@ public sealed class ServiceTuningDirectoryTests
         bool selected = true,
         TuningParameters? tuning = null,
         TunerKind kind = TunerKind.Terrestrial,
-        bool capacityKnown = true)
+        bool capacityKnown = true,
+        bool faulted = false,
+        IReadOnlyList<string>? undetermined = null,
+        IReadOnlyList<TunerSeat>? seats = null)
     {
         var services = new HeldServices();
         var candidates = new HeldCandidates();
@@ -157,7 +180,9 @@ public sealed class ServiceTuningDirectoryTests
         candidates.Candidates.Add(candidate);
 
         TunerCapacity? capacity = capacityKnown
-            ? new TunerCapacity([new TunerSeat("adapter0", BroadcastReception.Of(kind), Faulted: false)], [])
+            ? new TunerCapacity(
+                seats ?? [new TunerSeat("adapter0", BroadcastReception.Of(kind), faulted)],
+                undetermined ?? [])
             : null;
 
         return new Fixture(

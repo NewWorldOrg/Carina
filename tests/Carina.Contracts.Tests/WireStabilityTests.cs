@@ -505,7 +505,7 @@ public sealed class WireStabilityTests
     public void ALedgerEntryKeepsExactlyTheFieldsItWasGiven()
     {
         Assert.Equal(
-            ["deviceId", "disabled", "lnbPower"],
+            ["deviceId", "disabled", "lnbPower", "kind"],
             FieldsOf(DriverJson.Serialize(new TunerConfigEntry { DeviceId = "adapter0" }))
         );
     }

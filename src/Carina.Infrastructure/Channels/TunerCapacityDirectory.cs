@@ -17,29 +17,23 @@ public sealed class TunerCapacityDirectory(IDriverClient driver) : ITunerCapacit
 
         DriverCall<IReadOnlyList<TunerSnapshot>> tuners = await driver.GetTunersAsync(cancellationToken);
 
-        if (!tuners.TryGetValue(out IReadOnlyList<TunerSnapshot>? snapshots))
-        {
-            return null;
-        }
-
-        var observed = snapshots
-            .GroupBy(snapshot => snapshot.DeviceId, StringComparer.Ordinal)
-            .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        HashSet<string> faulted = tuners.TryGetValue(out IReadOnlyList<TunerSnapshot>? snapshots)
+            ? [.. snapshots.Where(snapshot => snapshot.State is TunerState.Faulted).Select(snapshot => snapshot.DeviceId)]
+            : new HashSet<string>(StringComparer.Ordinal);
 
         var seats = new List<TunerSeat>();
         var undetermined = new List<string>();
 
         foreach (TunerConfigEntry entry in document.Tuners.Where(entry => !entry.Disabled))
         {
-            if (!observed.TryGetValue(entry.DeviceId, out TunerSnapshot? snapshot)
-                || BroadcastReception.Of(snapshot.Kind) is not { Count: > 0 } serves)
+            if (BroadcastReception.Of(entry.Kind) is not { Count: > 0 } serves)
             {
                 undetermined.Add(entry.DeviceId);
 
                 continue;
             }
 
-            seats.Add(new TunerSeat(entry.DeviceId, serves, snapshot.State is TunerState.Faulted));
+            seats.Add(new TunerSeat(entry.DeviceId, serves, faulted.Contains(entry.DeviceId)));
         }
 
         return new TunerCapacity(

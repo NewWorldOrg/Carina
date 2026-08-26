@@ -49,12 +49,7 @@ public sealed class TunerHealthEndpointTests
         Quiet(feature, TimeSpan.FromHours(25));
 
         Assert.Equal("missing", LevelOf(await SystemsAsync(feature), "isdbSBs"));
-
-        using HttpResponseMessage raised = await feature.Client.PutAsJsonAsync(
-            Settings,
-            new { hoursOfSilence = 48 });
-
-        Assert.Equal(HttpStatusCode.OK, raised.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, await AllowAsync(feature, 48));
         Assert.Equal("silent", LevelOf(await SystemsAsync(feature), "isdbSBs"));
     }
 
@@ -65,13 +60,44 @@ public sealed class TunerHealthEndpointTests
         Quiet(feature, TimeSpan.FromHours(5));
 
         Assert.Equal("silent", LevelOf(await SystemsAsync(feature), "isdbSBs"));
-
-        using HttpResponseMessage lowered = await feature.Client.PutAsJsonAsync(
-            Settings,
-            new { hoursOfSilence = 4 });
-
-        Assert.Equal(HttpStatusCode.OK, lowered.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, await AllowAsync(feature, 4));
         Assert.Equal("missing", LevelOf(await SystemsAsync(feature), "isdbSBs"));
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(719)]
+    [InlineData(720)]
+    public async Task AWaitInsideTheRangeIsTakenAndComesBackOnTheNextReading(int hours)
+    {
+        await using DriverFeature feature = await StartAsync(TunerKind.Terrestrial);
+
+        Assert.Equal(HttpStatusCode.OK, await AllowAsync(feature, hours));
+
+        (HttpStatusCode _, JsonElement body) = await ReadAsync(await feature.Client.GetAsync(Health));
+
+        Assert.Equal(hours, body.GetProperty("data").GetProperty("hoursOfSilence").GetInt32());
+    }
+
+    [Fact]
+    public async Task AWaitOfOneHourCallsAnHourOfSilenceMissing()
+    {
+        await using DriverFeature feature = await StartAsync(TunerKind.Satellite);
+        Quiet(feature, TimeSpan.FromHours(2));
+
+        Assert.Equal(HttpStatusCode.OK, await AllowAsync(feature, 1));
+        Assert.Equal("missing", LevelOf(await SystemsAsync(feature), "isdbSBs"));
+    }
+
+    [Fact]
+    public async Task AWaitOfThirtyDaysLeavesAWeekOfSilenceMerelySilent()
+    {
+        await using DriverFeature feature = await StartAsync(TunerKind.Satellite);
+        Quiet(feature, TimeSpan.FromDays(7));
+
+        Assert.Equal(HttpStatusCode.OK, await AllowAsync(feature, 720));
+        Assert.Equal("silent", LevelOf(await SystemsAsync(feature), "isdbSBs"));
     }
 
     [Fact]
@@ -90,11 +116,10 @@ public sealed class TunerHealthEndpointTests
     {
         await using DriverFeature feature = await StartAsync(TunerKind.Satellite);
 
-        JsonElement systems = await SystemsAsync(feature);
-
         Assert.Equal(
             ["isdbSBs", "isdbSCs110"],
-            systems.EnumerateArray().Select(system => system.GetProperty("system").GetString()));
+            (await SystemsAsync(feature)).EnumerateArray()
+                .Select(system => system.GetProperty("system").GetString()));
     }
 
     [Fact]
@@ -103,11 +128,47 @@ public sealed class TunerHealthEndpointTests
         await using DriverFeature feature = await StartAsync(TunerKind.Terrestrial);
         Quiet(feature, TimeSpan.FromDays(9));
 
-        JsonElement systems = await SystemsAsync(feature);
-
         Assert.Equal(
             ["isdbT"],
+            (await SystemsAsync(feature)).EnumerateArray()
+                .Select(system => system.GetProperty("system").GetString()));
+    }
+
+    [Fact]
+    public async Task AMachineWhoseTunersAreAllUndeterminedDoesNotAnswerAllClear()
+    {
+        await using DriverFeature feature = await StartAsync(TunerKind.Unspecified);
+
+        (HttpStatusCode status, JsonElement body) = await ReadAsync(await feature.Client.GetAsync(Health));
+        JsonElement data = body.GetProperty("data");
+        JsonElement systems = data.GetProperty("systems");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.NotEmpty(systems.EnumerateArray());
+        Assert.Equal(
+            ["isdbT", "isdbSBs", "isdbSCs110"],
             systems.EnumerateArray().Select(system => system.GetProperty("system").GetString()));
+        Assert.All(
+            systems.EnumerateArray(),
+            system => Assert.Equal("undetermined", system.GetProperty("level").GetString()));
+        Assert.Equal(
+            ["adapter0"],
+            data.GetProperty("undetermined").EnumerateArray().Select(entry => entry.GetString()));
+    }
+
+    [Fact]
+    public async Task ATunerNobodyCouldDescribeDoesNotHideAKnownTypeThatIsFine()
+    {
+        await using DriverFeature feature = await DriverFeature.StartAsync(
+            FakeDriver.HelloFor("instance-a", capabilities: Everything),
+            driver => Stocked(
+                driver,
+                [Entry("adapter0", TunerKind.Terrestrial), Entry("adapter1", TunerKind.Unspecified)]));
+
+        JsonElement systems = await SystemsAsync(feature);
+
+        Assert.Equal("unmeasured", LevelOf(systems, "isdbT"));
+        Assert.Equal("undetermined", LevelOf(systems, "isdbSBs"));
     }
 
     [Fact]
@@ -129,11 +190,7 @@ public sealed class TunerHealthEndpointTests
     {
         await using DriverFeature feature = await StartAsync(TunerKind.Terrestrial);
 
-        using HttpResponseMessage refused = await feature.Client.PutAsJsonAsync(
-            Settings,
-            new { hoursOfSilence = hours });
-
-        Assert.Equal(HttpStatusCode.BadRequest, refused.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, await AllowAsync(feature, hours));
 
         (HttpStatusCode _, JsonElement body) = await ReadAsync(await feature.Client.GetAsync(Health));
 
@@ -163,44 +220,54 @@ public sealed class TunerHealthEndpointTests
     }
 
     [Fact]
-    public async Task ATunerTheDriverNeverDescribedIsNamedRatherThanDroppedQuietly()
+    public async Task ATunerSavedButNotYetLoadedByTheDriverIsStillJudgedOnItsOwnType()
     {
         await using DriverFeature feature = await DriverFeature.StartAsync(
             FakeDriver.HelloFor("instance-a", capabilities: Everything),
             driver =>
             {
-                driver.Ledger = new TunerLedgerDto
-                {
-                    Tuners = [new TunerConfigEntry { DeviceId = "adapter0" }],
-                    SavedHash = "saved",
-                    LoadedHash = "saved",
-                };
+                Stocked(driver, [Entry("adapter0", TunerKind.Satellite)]);
                 driver.Tuners = [];
             });
 
-        (HttpStatusCode status, JsonElement body) = await ReadAsync(await feature.Client.GetAsync(Health));
+        JsonElement systems = await SystemsAsync(feature);
 
-        Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal(
-            ["adapter0"],
-            body.GetProperty("data").GetProperty("undetermined").EnumerateArray()
-                .Select(entry => entry.GetString()));
+            ["isdbSBs", "isdbSCs110"],
+            systems.EnumerateArray().Select(system => system.GetProperty("system").GetString()));
+    }
+
+    private static TunerConfigEntry Entry(string deviceId, TunerKind kind)
+        => new() { DeviceId = deviceId, Kind = kind };
+
+    private static void Stocked(FakeDriver driver, IReadOnlyList<TunerConfigEntry> ledger)
+    {
+        driver.Ledger = new TunerLedgerDto
+        {
+            Tuners = ledger,
+            SavedHash = "saved",
+            LoadedHash = "saved",
+        };
+
+        driver.Tuners =
+        [
+            .. ledger.Select(entry => new TunerSnapshot(entry.DeviceId, entry.Kind, TunerState.Idle)),
+        ];
     }
 
     private static async Task<DriverFeature> StartAsync(TunerKind kind)
         => await DriverFeature.StartAsync(
             FakeDriver.HelloFor("instance-a", capabilities: Everything),
-            driver =>
-            {
-                driver.Ledger = new TunerLedgerDto
-                {
-                    Tuners = [new TunerConfigEntry { DeviceId = "adapter0" }],
-                    SavedHash = "saved",
-                    LoadedHash = "saved",
-                };
+            driver => Stocked(driver, [Entry("adapter0", kind)]));
 
-                driver.Tuners = [new TunerSnapshot("adapter0", kind, TunerState.Idle)];
-            });
+    private static async Task<HttpStatusCode> AllowAsync(DriverFeature feature, int hours)
+    {
+        using HttpResponseMessage response = await feature.Client.PutAsJsonAsync(
+            Settings,
+            new { hoursOfSilence = hours });
+
+        return response.StatusCode;
+    }
 
     private static void Quiet(DriverFeature feature, TimeSpan ago)
     {

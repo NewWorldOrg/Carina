@@ -1,3 +1,4 @@
+using Carina.Contracts;
 using Carina.Domain.Channels;
 
 namespace Carina.Infrastructure.Channels;
@@ -28,9 +29,20 @@ public sealed class ServiceTuningDirectory(
             return TuningResolution.Refused(TuningRefusal.CapacityUnknown);
         }
 
-        return reachable.CanServe(selected.Tuning.System)
-            ? TuningResolution.Tunable(selected.Id, selected.Tuning)
-            : TuningResolution.Refused(TuningRefusal.NoTunerForSystem);
+        TuneSystem system = selected.Tuning.System;
+
+        if (reachable.CanServe(system))
+        {
+            return TuningResolution.Tunable(
+                selected.Id,
+                selected.Tuning,
+                !reachable.Healthy.CanServe(system));
+        }
+
+        return TuningResolution.Refused(
+            reachable.Undetermined.Count > 0
+                ? TuningRefusal.CapacityUnknown
+                : TuningRefusal.NoTunerForSystem);
     }
 
     public async Task<bool> CanTuneAsync(

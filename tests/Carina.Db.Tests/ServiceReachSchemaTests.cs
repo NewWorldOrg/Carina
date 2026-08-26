@@ -13,9 +13,10 @@ public sealed class ServiceReachSchemaTests(MigratedScratchDatabase database)
 
     public static TheoryData<int> EveryWaitTheApplicationCanName =>
     [
-        .. Enumerable.Range(
-            ServiceReachSettings.ShortestHoursOfSilence,
-            ServiceReachSettings.LongestHoursOfSilence - ServiceReachSettings.ShortestHoursOfSilence + 1),
+        ServiceReachSettings.ShortestHoursOfSilence,
+        ServiceReachSettings.ShortestHoursOfSilence + 1,
+        ServiceReachSettings.LongestHoursOfSilence - 1,
+        ServiceReachSettings.LongestHoursOfSilence,
     ];
 
     public static TheoryData<int> EveryWaitTheApplicationRefuses =>
@@ -31,19 +32,13 @@ public sealed class ServiceReachSchemaTests(MigratedScratchDatabase database)
 
     [Theory]
     [MemberData(nameof(EveryWaitTheApplicationCanName))]
-    public async Task EveryWaitTheApplicationCanNameIsOneTheTableTakes(int hours)
+    public async Task AWaitOnTheEdgeOfWhatTheApplicationAllowsIsOneTheTableTakes(int hours)
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
 
         await WriteAsync(connection, hours);
 
         Assert.Equal(hours, await ReadAsync(connection));
-    }
-
-    [Fact]
-    public void TheWaitsWalkedAreTheWholeRangeTheApplicationCanName()
-    {
-        Assert.Equal(720, EveryWaitTheApplicationCanName.Count);
     }
 
     [Theory]
@@ -57,6 +52,27 @@ public sealed class ServiceReachSchemaTests(MigratedScratchDatabase database)
             () => InsertAsync(connection, ServiceReachSettings.TheOnlyRow, hours));
 
         Assert.Equal("ck_service_reach_config_hours_of_silence", refusal.ConstraintName);
+    }
+
+    [Fact]
+    public async Task TheStoredCheckIsTheRangeTheApplicationAllowsAndNotMerelyOneThatAdmitsIt()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        Assert.Equal(
+            $"CHECK (((hours_of_silence >= {ServiceReachSettings.ShortestHoursOfSilence})"
+            + $" AND (hours_of_silence <= {ServiceReachSettings.LongestHoursOfSilence})))",
+            await DefinitionOf(connection, "ck_service_reach_config_hours_of_silence"));
+    }
+
+    [Fact]
+    public async Task TheStoredCheckKeepsTheSettingsToASingleRow()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        Assert.Equal(
+            $"CHECK ((id = {ServiceReachSettings.TheOnlyRow}))",
+            await DefinitionOf(connection, "ck_service_reach_config_single_row"));
     }
 
     [Fact]
@@ -80,6 +96,16 @@ public sealed class ServiceReachSchemaTests(MigratedScratchDatabase database)
         await using var command = new NpgsqlCommand("SELECT count(*) FROM service_reach_config", connection);
 
         Assert.Equal(1L, (long)(await command.ExecuteScalarAsync())!);
+    }
+
+    private static async Task<string> DefinitionOf(NpgsqlConnection connection, string constraint)
+    {
+        await using var command = new NpgsqlCommand(
+            "SELECT pg_get_constraintdef(oid) FROM pg_constraint"
+            + $" WHERE conrelid = 'service_reach_config'::regclass AND conname = '{constraint}'",
+            connection);
+
+        return (string)(await command.ExecuteScalarAsync())!;
     }
 
     private static async Task ClearAsync(NpgsqlConnection connection)

@@ -12,63 +12,68 @@ public sealed class TunerCapacityDirectoryTests
     [Fact]
     public async Task ASatelliteTunerIsOneSeatBothSatelliteSystemsShareRatherThanOneEach()
     {
-        TunerCapacity capacity = await ReadAsync(
-            [Wanted("adapter0")],
-            [new TunerSnapshot("adapter0", TunerKind.Satellite, TunerState.Idle)]);
+        TunerCapacity capacity = await ReadAsync([Wanted("adapter0", TunerKind.Satellite)], []);
 
-        TunerSeat seat = Assert.Single(capacity.Seats);
-
-        Assert.Equal([TuneSystem.IsdbSBs, TuneSystem.IsdbSCs110], seat.Serves);
+        Assert.Equal(1, capacity.SeatCount);
         Assert.True(capacity.CanServe(TuneSystem.IsdbSBs));
         Assert.True(capacity.CanServe(TuneSystem.IsdbSCs110));
+        Assert.False(capacity.CanSeat(
+            new Dictionary<TuneSystem, int> { [TuneSystem.IsdbSBs] = 1, [TuneSystem.IsdbSCs110] = 1 }));
+    }
+
+    [Fact]
+    public async Task WhatATunerReceivesIsReadFromTheSavedLedgerAndNotFromTheRunningDriver()
+    {
+        TunerCapacity capacity = await ReadAsync(
+            [Wanted("adapter0", TunerKind.Satellite)],
+            [new TunerSnapshot("adapter0", TunerKind.Terrestrial, TunerState.Idle)]);
+
+        Assert.True(capacity.CanServe(TuneSystem.IsdbSBs));
+        Assert.False(capacity.CanServe(TuneSystem.IsdbT));
+    }
+
+    [Fact]
+    public async Task ATunerSavedButNotYetLoadedByTheDriverStillHoldsItsSeat()
+    {
+        TunerCapacity capacity = await ReadAsync([Wanted("adapter0", TunerKind.Terrestrial)], []);
+
+        Assert.Equal(1, capacity.SeatCount);
+        Assert.True(capacity.CanServe(TuneSystem.IsdbT));
+        Assert.Empty(capacity.Undetermined);
     }
 
     [Fact]
     public async Task TwoSatelliteTunersAreTwoSeatsAndNotFour()
     {
         TunerCapacity capacity = await ReadAsync(
-            [Wanted("adapter0"), Wanted("adapter1")],
-            [
-                new TunerSnapshot("adapter0", TunerKind.Satellite, TunerState.Idle),
-                new TunerSnapshot("adapter1", TunerKind.Satellite, TunerState.Idle),
-            ]);
+            [Wanted("adapter0", TunerKind.Satellite), Wanted("adapter1", TunerKind.Satellite)],
+            []);
 
-        Assert.Equal(2, capacity.Seats.Count);
-        Assert.Equal([TuneSystem.IsdbSBs, TuneSystem.IsdbSCs110], capacity.Served);
+        Assert.Equal(2, capacity.SeatCount);
+        Assert.Equal([TuneSystem.IsdbSBs, TuneSystem.IsdbSCs110], capacity.Reachable.Order());
     }
 
     [Fact]
     public async Task ATunerTakenOutOfServiceHoldsNoSeat()
     {
         TunerCapacity capacity = await ReadAsync(
-            [Wanted("adapter0"), new TunerConfigEntry { DeviceId = "adapter1", Disabled = true }],
             [
-                new TunerSnapshot("adapter0", TunerKind.Terrestrial, TunerState.Idle),
-                new TunerSnapshot("adapter1", TunerKind.Satellite, TunerState.Disabled),
-            ]);
+                Wanted("adapter0", TunerKind.Terrestrial),
+                new TunerConfigEntry { DeviceId = "adapter1", Kind = TunerKind.Satellite, Disabled = true },
+            ],
+            []);
 
-        Assert.Equal("adapter0", Assert.Single(capacity.Seats).DeviceId);
+        Assert.Equal(1, capacity.SeatCount);
         Assert.False(capacity.CanServe(TuneSystem.IsdbSBs));
         Assert.Empty(capacity.Undetermined);
     }
 
     [Fact]
-    public async Task ATunerTheDriverNeverDescribedIsUndeterminedRatherThanAbsent()
+    public async Task ATunerAnOlderDriverNeverDescribedIsUndeterminedRatherThanAbsent()
     {
-        TunerCapacity capacity = await ReadAsync([Wanted("adapter0")], []);
+        TunerCapacity capacity = await ReadAsync([Wanted("adapter0", TunerKind.Unspecified)], []);
 
-        Assert.Empty(capacity.Seats);
-        Assert.Equal("adapter0", Assert.Single(capacity.Undetermined));
-    }
-
-    [Fact]
-    public async Task ATunerThatNeverSaidWhatItReceivesIsUndeterminedRatherThanASeatServingNothing()
-    {
-        TunerCapacity capacity = await ReadAsync(
-            [Wanted("adapter0")],
-            [new TunerSnapshot("adapter0", TunerKind.Unspecified, TunerState.Idle)]);
-
-        Assert.Empty(capacity.Seats);
+        Assert.Equal(0, capacity.SeatCount);
         Assert.Equal("adapter0", Assert.Single(capacity.Undetermined));
     }
 
@@ -76,23 +81,34 @@ public sealed class TunerCapacityDirectoryTests
     public async Task AFaultedTunerKeepsItsSeatAndSaysSo()
     {
         TunerCapacity capacity = await ReadAsync(
-            [Wanted("adapter0")],
+            [Wanted("adapter0", TunerKind.Terrestrial)],
             [new TunerSnapshot("adapter0", TunerKind.Terrestrial, TunerState.Faulted)]);
 
-        TunerSeat seat = Assert.Single(capacity.Seats);
-
-        Assert.True(seat.Faulted);
-        Assert.True(capacity.CanServe(TuneSystem.IsdbT));
+        Assert.Equal(1, capacity.SeatCount);
+        Assert.Equal(0, capacity.Healthy.SeatCount);
     }
 
     [Fact]
     public async Task AnIdleTunerIsNotFaulted()
     {
         TunerCapacity capacity = await ReadAsync(
-            [Wanted("adapter0")],
+            [Wanted("adapter0", TunerKind.Terrestrial)],
             [new TunerSnapshot("adapter0", TunerKind.Terrestrial, TunerState.Idle)]);
 
-        Assert.False(Assert.Single(capacity.Seats).Faulted);
+        Assert.Equal(1, capacity.Healthy.SeatCount);
+    }
+
+    [Theory]
+    [InlineData(TunerState.Idle)]
+    [InlineData(TunerState.Busy)]
+    [InlineData(TunerState.Draining)]
+    public async Task ATunerThatIsMerelyInUseIsNotABrokenOne(TunerState state)
+    {
+        TunerCapacity capacity = await ReadAsync(
+            [Wanted("adapter0", TunerKind.Terrestrial)],
+            [new TunerSnapshot("adapter0", TunerKind.Terrestrial, state)]);
+
+        Assert.Equal(1, capacity.Healthy.SeatCount);
     }
 
     [Fact]
@@ -107,34 +123,39 @@ public sealed class TunerCapacityDirectoryTests
     }
 
     [Fact]
-    public async Task TunersThatCannotBeReadLeaveTheCapacityUnknownRatherThanUndetermined()
+    public async Task TunersThatCannotBeReadLeaveTheLedgerSeatsStandingWithNothingCalledFaulted()
     {
         var driver = new LedgerOnlyDriverClient
         {
-            Ledger = DriverCall<TunerLedgerDto>.Reached(new TunerLedgerDto { Tuners = [Wanted("adapter0")] }),
+            Ledger = DriverCall<TunerLedgerDto>.Reached(
+                new TunerLedgerDto { Tuners = [Wanted("adapter0", TunerKind.Terrestrial)] }),
             Tuners = DriverCall<IReadOnlyList<TunerSnapshot>>.Unreachable("no socket"),
         };
 
-        Assert.Null(await new TunerCapacityDirectory(driver).ReadAsync(Cancel));
+        TunerCapacity capacity = await new TunerCapacityDirectory(driver).ReadAsync(Cancel)
+                                 ?? throw new InvalidOperationException("The capacity was expected to be known.");
+
+        Assert.Equal(1, capacity.SeatCount);
+        Assert.Equal(1, capacity.Healthy.SeatCount);
     }
 
     [Fact]
     public async Task SeatsComeBackInAStableOrder()
     {
         TunerCapacity capacity = await ReadAsync(
-            [Wanted("adapter2"), Wanted("adapter0"), Wanted("adapter1")],
             [
-                new TunerSnapshot("adapter2", TunerKind.Terrestrial, TunerState.Idle),
-                new TunerSnapshot("adapter0", TunerKind.Terrestrial, TunerState.Idle),
-                new TunerSnapshot("adapter1", TunerKind.Terrestrial, TunerState.Idle),
-            ]);
+                Wanted("adapter2", TunerKind.Terrestrial),
+                Wanted("adapter0", TunerKind.Unspecified),
+                Wanted("adapter1", TunerKind.Unspecified),
+            ],
+            []);
 
-        Assert.Equal(
-            ["adapter0", "adapter1", "adapter2"],
-            capacity.Seats.Select(seat => seat.DeviceId));
+        Assert.Equal(["adapter0", "adapter1"], capacity.Undetermined);
+        Assert.Equal(1, capacity.SeatCount);
     }
 
-    private static TunerConfigEntry Wanted(string deviceId) => new() { DeviceId = deviceId };
+    private static TunerConfigEntry Wanted(string deviceId, TunerKind kind)
+        => new() { DeviceId = deviceId, Kind = kind };
 
     private static async Task<TunerCapacity> ReadAsync(
         IReadOnlyList<TunerConfigEntry> ledger,

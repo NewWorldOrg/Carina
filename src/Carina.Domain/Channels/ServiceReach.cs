@@ -8,6 +8,7 @@ public enum ServiceReachLevel
     Reaching,
     Silent,
     Missing,
+    Undetermined,
 }
 
 public sealed record SystemReach(
@@ -20,6 +21,7 @@ public static class ServiceReach
 {
     public static IReadOnlyList<SystemReach> Assess(
         IReadOnlyList<TuneSystem> served,
+        bool undescribedTuners,
         IReadOnlyList<CandidateChannel> candidates,
         TimeSpan silence,
         DateTime now)
@@ -28,24 +30,35 @@ public static class ServiceReach
         ArgumentNullException.ThrowIfNull(candidates);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(silence, TimeSpan.Zero, nameof(silence));
 
+        IReadOnlyList<TuneSystem> assessed = undescribedTuners
+            ? BroadcastReception.EverySystem
+            : [.. served.Distinct().Order()];
+
         return
         [
-            .. served
-                .Distinct()
-                .Order()
-                .Select(system => On(system, [.. candidates.Where(candidate => candidate.Tuning.System == system)], silence, now)),
+            .. assessed.Select(system => On(
+                system,
+                served.Contains(system),
+                [.. candidates.Where(candidate => candidate.Tuning.System == system)],
+                silence,
+                now)),
         ];
     }
 
     private static SystemReach On(
         TuneSystem system,
+        bool servedByAKnownTuner,
         IReadOnlyList<CandidateChannel> candidates,
         TimeSpan silence,
         DateTime now)
     {
         if (candidates.Count is 0)
         {
-            return new SystemReach(system, ServiceReachLevel.Unmeasured, 0, null);
+            return new SystemReach(
+                system,
+                servedByAKnownTuner ? ServiceReachLevel.Unmeasured : ServiceReachLevel.Undetermined,
+                0,
+                null);
         }
 
         int reaching = candidates
