@@ -7,6 +7,7 @@ public enum PoolVerdict
 {
     Granted,
     Shared,
+    Swapped,
     NoDeviceFree,
     DeviceBusy,
 }
@@ -30,13 +31,15 @@ public sealed record PoolGrant(
     SessionId Holder,
     bool NeedsTuning,
     IReadOnlyList<SessionId> Displaced,
-    string Detail
+    string Detail,
+    SessionId Outgoing = default
 )
 {
     public static PoolGrant Refused(PoolVerdict verdict, string detail) =>
         new(verdict, string.Empty, default, false, [], detail);
 
-    public bool IsGranted => Verdict is PoolVerdict.Granted or PoolVerdict.Shared;
+    public bool IsGranted =>
+        Verdict is PoolVerdict.Granted or PoolVerdict.Shared or PoolVerdict.Swapped;
 }
 
 public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null) : IDisposable
@@ -53,6 +56,8 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
 
         public SessionId Holder { get; set; } = holder;
 
+        public SessionId? Displacing { get; set; }
+
         public List<Sink> Sinks { get; } = [];
 
         public ITunerDevice? Device { get; set; }
@@ -61,7 +66,8 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
 
         public DateTimeOffset? IdleSince { get; set; }
 
-        public ManualResetEventSlim Ready { get; set; } = new(false);
+        public TaskCompletionSource Ready { get; set; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public bool Established { get; set; }
 
@@ -120,6 +126,11 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
                 return Rehold(lease, request);
             }
 
+            if (request.Purpose is SessionPurpose.Recording && lease.Priority < request.Priority)
+            {
+                return TakeTheSeat(lease, request);
+            }
+
             Attach(lease, request);
 
             return new PoolGrant(
@@ -135,13 +146,43 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
         return null;
     }
 
+    private PoolGrant TakeTheSeat(Lease lease, PoolRequest request)
+    {
+        SessionId outgoing = lease.Holder;
+
+        lease.Displacing = outgoing;
+        lease.Holder = request.SessionId;
+        Attach(lease, request);
+
+        return new PoolGrant(
+            PoolVerdict.Swapped,
+            lease.DeviceId,
+            request.SessionId,
+            NeedsTuning: false,
+            [],
+            $"The tuner '{lease.DeviceId}' is on {request.Tuning} for '{outgoing}', which a recording outranks, so '{request.SessionId}' reads the tuner and '{outgoing}' reads the stream through it.",
+            outgoing
+        );
+    }
+
+    public void SeatTaken(string deviceId, SessionId holder)
+    {
+        lock (gate)
+        {
+            if (leases.TryGetValue(deviceId, out Lease? lease) && lease.Holder == holder)
+            {
+                lease.Displacing = null;
+            }
+        }
+    }
+
     private PoolGrant Rehold(Lease lease, PoolRequest request)
     {
         bool wasOpen = lease.Device is not null;
 
         lease.Holder = request.SessionId;
         lease.Established = false;
-        lease.Ready = new ManualResetEventSlim(false);
+        lease.Ready = Unset();
         Attach(lease, request);
 
         return new PoolGrant(
@@ -249,7 +290,7 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
         lease.Tuning = request.Tuning;
         lease.Holder = request.SessionId;
         lease.Established = false;
-        lease.Ready = new ManualResetEventSlim(false);
+        lease.Ready = Unset();
         Attach(lease, request);
 
         return new PoolGrant(
@@ -327,7 +368,7 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
             }
 
             lease.Established = true;
-            lease.Ready.Set();
+            lease.Ready.TrySetResult();
         }
     }
 
@@ -349,13 +390,13 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
             lease.TuneFailure = cause;
             lease.Established = false;
             lease.IdleSince = timeProvider.GetUtcNow();
-            lease.Ready.Set();
+            lease.Ready.TrySetResult();
         }
     }
 
     public bool AwaitReady(string deviceId, TimeSpan limit)
     {
-        ManualResetEventSlim ready;
+        Task ready;
 
         lock (gate)
         {
@@ -369,10 +410,14 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
                 return true;
             }
 
-            ready = lease.Ready;
+            ready = lease.Ready.Task;
         }
 
-        if (!ready.Wait(limit))
+        try
+        {
+            ready.WaitAsync(limit, timeProvider).GetAwaiter().GetResult();
+        }
+        catch (TimeoutException)
         {
             return false;
         }
@@ -382,6 +427,9 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
             return leases.TryGetValue(deviceId, out Lease? lease) && lease.Established;
         }
     }
+
+    private static TaskCompletionSource Unset() =>
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public ITunerDevice? DeviceOf(string deviceId)
     {
@@ -417,11 +465,40 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
 
             lease.Sinks.RemoveAll(sink => sink.SessionId == sessionId);
 
+            if (lease.Holder == sessionId)
+            {
+                if (TheOneItWasTakenFrom(lease) is { } previous)
+                {
+                    lease.Holder = previous;
+                }
+                else
+                {
+                    EveryoneReadingThroughTheHolderLeavesWithIt(lease);
+                }
+
+                lease.Displacing = null;
+            }
+
             if (lease.IsIdle)
             {
                 lease.IdleSince = timeProvider.GetUtcNow();
             }
         }
+    }
+
+    private static SessionId? TheOneItWasTakenFrom(Lease lease) =>
+        lease.Displacing is { } previous && lease.Sinks.Any(sink => sink.SessionId == previous)
+            ? previous
+            : null;
+
+    private void EveryoneReadingThroughTheHolderLeavesWithIt(Lease lease)
+    {
+        foreach (Sink sink in lease.Sinks)
+        {
+            bySink.Remove(sink.SessionId);
+        }
+
+        lease.Sinks.Clear();
     }
 
     public void Sweep()
@@ -567,7 +644,6 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
         }
 
         lease.Device = null;
-        lease.Ready.Dispose();
     }
 
     private static void Close(ITunerDevice device)

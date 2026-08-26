@@ -833,6 +833,33 @@ public sealed class TunerSessionTests : IDisposable
     }
 
     [Fact]
+    public void AnEndTimeIsCutShortAndNeverPushedOut()
+    {
+        var clock = new ManualTimeProvider(Start);
+        using TunerSession session = Session(new ScriptedTunerDevice(), clock, Writer());
+
+        Assert.True(session.EndsNoLaterThan(Start.AddMinutes(30)));
+        Assert.Equal(Start.AddMinutes(30), session.EndsAt);
+
+        Assert.False(session.EndsNoLaterThan(Start.AddHours(2)));
+        Assert.Equal(Start.AddMinutes(30), session.EndsAt);
+    }
+
+    [Fact]
+    public void AnEndedSessionCannotBeCutShort()
+    {
+        var clock = new ManualTimeProvider(Start);
+        using TunerSession session = Session(new ScriptedTunerDevice(), clock, Writer());
+
+        session.Start();
+        session.Stop();
+        WaitForEnd(session);
+
+        Assert.False(session.EndsNoLaterThan(Start.AddMinutes(30)));
+        Assert.Equal(Start.AddHours(1), session.EndsAt);
+    }
+
+    [Fact]
     public void ASessionCannotEndBeforeItBegins()
     {
         Assert.Throws<ArgumentOutOfRangeException>(

@@ -20,11 +20,31 @@ public sealed class TunerSession : IDisposable
     public const int DefaultChunkSize = TsPacketReader.PacketLength * 100;
     public const long FaultReportInterval = 1000;
 
-    private readonly ITunerDevice device;
+    private sealed class Handover(
+        ITunerDevice replacement,
+        TunerSession? host,
+        SessionSubscription? seat
+    )
+    {
+        private readonly SettledOnce settled = new();
+
+        public ITunerDevice Replacement { get; } = replacement;
+
+        public TunerSession? Host { get; } = host;
+
+        public SessionSubscription? Seat { get; } = seat;
+
+        public Task TakenUp => settled.Finished;
+
+        public bool TryTakeUp() => settled.TrySettle();
+
+        public void HasBeenTakenUp() => settled.HasFinished();
+
+        public bool TryGiveUp() => settled.SettleUnlessAnotherAlreadyHas();
+    }
+
     private readonly SignalQualityReader? quality;
-    private readonly long overflowsBefore;
     private readonly IRecordingWriter? recordingWriter;
-    private readonly SessionSubscription? seat;
     private readonly TimeProvider timeProvider;
     private readonly ILogger? logger;
     private readonly DiagnosticsStore? diagnostics;
@@ -35,6 +55,13 @@ public sealed class TunerSession : IDisposable
     private readonly TaskCompletionSource completion = new(
         TaskCreationOptions.RunContinuationsAsynchronously
     );
+    private readonly ManualResetEventSlim seatIsMine;
+
+    private ITunerDevice device;
+    private SessionSubscription? seat;
+    private long overflowsBefore;
+    private long overflowsCarried;
+    private Handover? handover;
 
     private Thread? loop;
     private SessionState state;
@@ -66,7 +93,8 @@ public sealed class TunerSession : IDisposable
         TuneParams? tune = null,
         TunerSession? ridesOn = null,
         SessionSubscription? seat = null,
-        int demuxBufferBytes = TunerSettings.DefaultDemuxBufferBytes
+        int demuxBufferBytes = TunerSettings.DefaultDemuxBufferBytes,
+        bool takesTheSeatFromAnother = false
     )
     {
         if (endsAt <= startedAt)
@@ -96,6 +124,7 @@ public sealed class TunerSession : IDisposable
         this.diagnostics = diagnostics;
         state = SessionState.Requested;
         stopReason = SessionStopReason.Running;
+        seatIsMine = new ManualResetEventSlim(!takesTheSeatFromAnother);
         Broadcaster = new SessionBroadcaster(
             surveyBlockLimit: SessionPurposes.ReadsEveryPacket(purpose)
                 ? SessionBroadcaster.DefaultSurveyBlockLimit
@@ -128,7 +157,7 @@ public sealed class TunerSession : IDisposable
 
     public string? RecordingId { get; }
 
-    public TunerSession? RidesOn { get; }
+    public TunerSession? RidesOn { get; private set; }
 
     public TuneParams? Tune { get; }
 
@@ -182,13 +211,31 @@ public sealed class TunerSession : IDisposable
 
     public long FaultCount => Interlocked.Read(ref faultCount);
 
-    public long DroppedChunks => seat?.DroppedChunks ?? 0;
+    public long DroppedChunks
+    {
+        get
+        {
+            lock (gate)
+            {
+                return seat?.DroppedChunks ?? 0;
+            }
+        }
+    }
 
     public long DiscardedBytes => Interlocked.Read(ref discardedBytes);
 
     public long Resyncs => Interlocked.Read(ref resyncs);
 
-    public long DeviceOverflows => Math.Max(0, device.Overflows - overflowsBefore);
+    public long DeviceOverflows
+    {
+        get
+        {
+            lock (gate)
+            {
+                return overflowsCarried + Math.Max(0, device.Overflows - overflowsBefore);
+            }
+        }
+    }
 
     public SignalQualitySample? Quality => quality?.Latest;
 
@@ -257,6 +304,79 @@ public sealed class TunerSession : IDisposable
         }
     }
 
+    public bool EndsNoLaterThan(DateTimeOffset limit)
+    {
+        lock (gate)
+        {
+            if (state is not (SessionState.Requested or SessionState.Active))
+            {
+                return false;
+            }
+
+            if (limit.UtcTicks >= endsAtTicks)
+            {
+                return false;
+            }
+
+            Interlocked.Exchange(ref endsAtTicks, limit.UtcTicks);
+
+            return true;
+        }
+    }
+
+    public bool ReadFromInstead(
+        ITunerDevice replacement,
+        TunerSession? host,
+        SessionSubscription? takenSeat,
+        TimeSpan within
+    )
+    {
+        ArgumentNullException.ThrowIfNull(replacement);
+
+        var asked = new Handover(replacement, host, takenSeat);
+
+        lock (gate)
+        {
+            if (state is not SessionState.Active || handover is not null)
+            {
+                return false;
+            }
+
+            handover = asked;
+        }
+
+        if (Answered(asked.TakenUp, within) || !asked.TryGiveUp())
+        {
+            return true;
+        }
+
+        lock (gate)
+        {
+            if (ReferenceEquals(handover, asked))
+            {
+                handover = null;
+            }
+        }
+
+        return false;
+    }
+
+    private bool Answered(Task takenUp, TimeSpan within)
+    {
+        try
+        {
+            takenUp.WaitAsync(within, timeProvider).GetAwaiter().GetResult();
+
+            return true;
+        }
+        catch (TimeoutException)
+        {
+            return false;
+        }
+    }
+
+    public void TheSeatIsYours() => seatIsMine.Set();
+
     public void Preempt(string because)
     {
         lock (gate)
@@ -312,9 +432,11 @@ public sealed class TunerSession : IDisposable
 
         try
         {
+            seatIsMine.Wait(token);
+
             while (!token.IsCancellationRequested && timeProvider.GetUtcNow() < EndsAt)
             {
-                byte[] chunk = device.Read(chunkSize, token);
+                byte[] chunk = Reading().Read(chunkSize, token);
 
                 if (chunk.Length is 0)
                 {
@@ -344,6 +466,12 @@ public sealed class TunerSession : IDisposable
         {
             Conclude(ReasonForEnd(token));
         }
+        catch (StreamCutException cut) when (
+            cut.Reason is SessionStopReason.EndTimeReached && cut.InnerException is null
+        )
+        {
+            Conclude(SessionStopReason.EndTimeReached);
+        }
         catch (StreamCutException cut)
         {
             Finish(
@@ -364,6 +492,49 @@ public sealed class TunerSession : IDisposable
         {
             Finish(SessionState.Failed, SessionStopReason.DeviceFailed, error);
         }
+    }
+
+    private ITunerDevice Reading()
+    {
+        ITunerDevice? previous = null;
+        ITunerDevice current;
+
+        lock (gate)
+        {
+            if (handover is { } asked)
+            {
+                if (asked.TryTakeUp())
+                {
+                    previous = device;
+                    overflowsCarried += Math.Max(0, previous.Overflows - overflowsBefore);
+                    overflowsBefore = asked.Replacement.Overflows;
+                    device = asked.Replacement;
+                    seat = asked.Seat;
+                    RidesOn = asked.Host;
+                    asked.HasBeenTakenUp();
+                }
+
+                handover = null;
+            }
+
+            current = device;
+        }
+
+        previous?.Dispose();
+
+        return current;
+    }
+
+    private void DisposeDevice()
+    {
+        ITunerDevice current;
+
+        lock (gate)
+        {
+            current = device;
+        }
+
+        current.Dispose();
     }
 
     private void WriteOut(byte[] chunk)
@@ -529,7 +700,7 @@ public sealed class TunerSession : IDisposable
             causes.Add(writerFault);
         }
 
-        Exception? deviceFault = Close(device.Dispose);
+        Exception? deviceFault = Close(DisposeDevice);
         if (deviceFault is not null)
         {
             causes.Add(deviceFault);
