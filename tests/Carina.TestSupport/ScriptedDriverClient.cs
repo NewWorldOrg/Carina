@@ -248,16 +248,30 @@ public sealed class ScriptedDriverClient : IDriverClient
 
     public int StorageReads { get; private set; }
 
-    public Task<DriverCall<IReadOnlyList<StorageRootDto>>> GetStorageAsync(
+    public TaskCompletionSource? StorageHold { get; set; }
+
+    public TaskCompletionSource StorageEntered { get; } =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    public async Task<DriverCall<IReadOnlyList<StorageRootDto>>> GetStorageAsync(
         CancellationToken cancellationToken)
     {
         lock (gate)
         {
             StorageReads++;
+        }
 
-            return Task.FromResult(
-                StorageAnswer
-                ?? DriverCall<IReadOnlyList<StorageRootDto>>.Unreachable("No storage was scripted."));
+        StorageEntered.TrySetResult();
+
+        if (StorageHold is { } hold)
+        {
+            await hold.Task;
+        }
+
+        lock (gate)
+        {
+            return StorageAnswer
+                ?? DriverCall<IReadOnlyList<StorageRootDto>>.Unreachable("No storage was scripted.");
         }
     }
 

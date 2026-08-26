@@ -78,6 +78,26 @@ public sealed class StorageMonitorTests
     }
 
     [Fact]
+    public async Task TwoPrechecksThatArriveAtOnceMakeTheDriverWriteOnce()
+    {
+        var hold = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        ScriptedDriverClient client = Answering();
+        client.StorageHold = hold;
+        StorageMonitor monitor = Watching(client, new WoundClock(DateTimeOffset.UnixEpoch));
+
+        Task<DriverCall<IReadOnlyList<StorageRootDto>>> first = monitor.ReadAsync(CancellationToken.None);
+        await client.StorageEntered.Task;
+
+        Task<DriverCall<IReadOnlyList<StorageRootDto>>> second = monitor.ReadAsync(CancellationToken.None);
+
+        hold.SetResult();
+        await Task.WhenAll(first, second);
+
+        Assert.Equal(1, client.StorageReads);
+        Assert.Same(await first, await second);
+    }
+
+    [Fact]
     public void ARestOfNoTimeAtAllIsNotAPolicy()
     {
         Assert.Equal(

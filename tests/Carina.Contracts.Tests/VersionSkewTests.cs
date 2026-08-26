@@ -850,6 +850,19 @@ public sealed class VersionSkewTests
         Assert.False(StorageRoots.Declares([], "primary"));
     }
 
+    [Fact]
+    public void ARootWhoseNameNeverArrivedIsNotTheRootNobodyNamed()
+    {
+        IReadOnlyList<StorageRootDto>? roots = DriverJson.Deserialize(
+            """[{"name":null,"freeBytes":1024,"totalBytes":2048,"writable":true}]""",
+            DriverJson.Context.IReadOnlyListStorageRootDto
+        );
+
+        Assert.NotNull(roots);
+        Assert.Null(Assert.Single(roots).Name);
+        Assert.False(StorageRoots.Declares(roots, null));
+    }
+
     private static SessionSnapshot RecordingAnsweredWith(string counters)
     {
         SessionSnapshot? session = DriverJson.Deserialize(

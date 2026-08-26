@@ -53,14 +53,14 @@ public static class DiskPrecheck
             return DiskShortfall.RootUnmeasured;
         }
 
-        if (!declared.Writable)
-        {
-            return DiskShortfall.RootNotWritable;
-        }
-
         if (declared.FreeBytes <= 0)
         {
             return DiskShortfall.NoRoomLeft;
+        }
+
+        if (!declared.Writable)
+        {
+            return DiskShortfall.RootNotWritable;
         }
 
         return estimate > declared.FreeBytes ? DiskShortfall.ShortOfTheEstimate : null;

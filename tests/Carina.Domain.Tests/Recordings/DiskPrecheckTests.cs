@@ -134,6 +134,18 @@ public sealed class DiskPrecheckTests
         Assert.Equal(
             DiskShortfall.RootNotWritable,
             Against(Room(free: 100_000_000_000L, writable: false)).Shortfall);
+
+        Assert.Equal(
+            DiskShortfall.RootNotWritable,
+            Against(Room(free: 1, writable: false)).Shortfall);
+    }
+
+    [Fact]
+    public void ARootWithNothingLeftIsNamedForThatWhetherOrNotTheProbeAlsoFailed()
+    {
+        Assert.Equal(DiskShortfall.NoRoomLeft, Against(Room(free: 0, writable: false)).Shortfall);
+        Assert.Equal(DiskShortfall.NoRoomLeft, Against(Room(free: 0, writable: true)).Shortfall);
+        Assert.Equal(DiskShortfall.NoRoomLeft, Against(Room(free: -1, writable: false)).Shortfall);
     }
 
     [Fact]

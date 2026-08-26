@@ -14,9 +14,9 @@ public sealed record StorageRootDto
 public static class StorageRoots
 {
     public static bool Declares(IReadOnlyList<StorageRootDto>? roots, string? name) =>
-        Find(roots, name) is not null;
+        name is not null && Find(roots, name) is not null;
 
-    public static StorageRootDto? Find(IReadOnlyList<StorageRootDto>? roots, string? name)
+    public static StorageRootDto? Find(IReadOnlyList<StorageRootDto>? roots, string name)
     {
         if (roots is null)
         {

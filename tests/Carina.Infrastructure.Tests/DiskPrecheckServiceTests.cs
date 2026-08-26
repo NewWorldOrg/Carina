@@ -12,6 +12,8 @@ public sealed class DiskPrecheckServiceTests
 
     private static readonly OutputRoot Recorded = new("recorded");
 
+    private static readonly OutputRoot Archive = new("archive");
+
     [Fact]
     public async Task ADriverThatCouldNotBeReachedLeavesTheRootsUnknownRatherThanUndeclared()
     {
@@ -30,8 +32,8 @@ public sealed class DiskPrecheckServiceTests
             (DiskShortfall.RootsUnknown, DriverCall<IReadOnlyList<StorageRootDto>>.Unreachable("no socket")),
             (DiskShortfall.RootUndeclared, Answering()),
             (DiskShortfall.RootUnmeasured, Answering(new StorageRootDto { Name = "recorded" })),
-            (DiskShortfall.RootNotWritable, Answering(Room(free: 100_000_000_000L, writable: false))),
             (DiskShortfall.NoRoomLeft, Answering(Room(free: 0))),
+            (DiskShortfall.RootNotWritable, Answering(Room(free: 100_000_000_000L, writable: false))),
             (DiskShortfall.ShortOfTheEstimate, Answering(Room(free: 1))),
         ];
 
@@ -44,11 +46,12 @@ public sealed class DiskPrecheckServiceTests
             Assert.Equal(expected, verdict.Shortfall);
             Assert.False(verdict.HasRoom);
             Assert.Equal(1, verdict.Weighed);
+            Assert.NotNull(verdict.Shortfall);
 
-            named.Add(expected);
+            named.Add(verdict.Shortfall.Value);
         }
 
-        Assert.Equal(Enum.GetValues<DiskShortfall>(), named);
+        Assert.Equal(Enum.GetValues<DiskShortfall>().Order(), named.Order());
     }
 
     [Fact]
@@ -62,11 +65,41 @@ public sealed class DiskPrecheckServiceTests
     }
 
     [Fact]
+    public async Task ItIsTheRootTheCallerNamedThatGetsMeasured()
+    {
+        DriverCall<IReadOnlyList<StorageRootDto>> answer = Answering(
+            Room(free: 100_000_000_000L),
+            Room(free: 7) with { Name = "archive" });
+
+        DiskPrecheckVerdict spacious = await Weighing(answer, Recorded, []);
+        DiskPrecheckVerdict cramped = await Weighing(answer, Archive, []);
+
+        Assert.Equal(100_000_000_000L, spacious.FreeBytes);
+        Assert.True(spacious.HasRoom);
+
+        Assert.Equal(7L, cramped.FreeBytes);
+        Assert.Equal(DiskShortfall.ShortOfTheEstimate, cramped.Shortfall);
+    }
+
+    [Fact]
+    public async Task TheRecordingsAlreadyRunningReachTheEstimate()
+    {
+        var running = new RecordingDemand(TunerKind.Satellite, Noon.AddMinutes(-30), Noon.AddMinutes(30));
+
+        DiskPrecheckVerdict verdict = await Weighing(
+            Answering(Room(free: 100_000_000_000L)),
+            Recorded,
+            [running]);
+
+        Assert.Equal((Int128)(7_425_000_000L + 2_745_000_000L), verdict.EstimatedBytes);
+        Assert.Equal(2, verdict.Weighed);
+    }
+
+    [Fact]
     public async Task TwoPrechecksInsideTheRestCostTheDriverOneWrite()
     {
         var client = new ScriptedDriverClient { StorageAnswer = Answering(Room(free: 100_000_000_000L)) };
-        var service = new DiskPrecheckService(
-            new StorageMonitor(client, new WoundClock(DateTimeOffset.UnixEpoch), StorageMonitorSettings.Default));
+        DiskPrecheckService service = Serving(client);
 
         await service.WeighAsync(Recorded, Starting(), [], Noon, CancellationToken.None);
         await service.WeighAsync(Recorded, Starting(), [], Noon, CancellationToken.None);
@@ -74,14 +107,18 @@ public sealed class DiskPrecheckServiceTests
         Assert.Equal(1, client.StorageReads);
     }
 
-    private static async Task<DiskPrecheckVerdict> Weighing(DriverCall<IReadOnlyList<StorageRootDto>> answer)
-    {
-        var client = new ScriptedDriverClient { StorageAnswer = answer };
-        var service = new DiskPrecheckService(
-            new StorageMonitor(client, new WoundClock(DateTimeOffset.UnixEpoch), StorageMonitorSettings.Default));
+    private static Task<DiskPrecheckVerdict> Weighing(DriverCall<IReadOnlyList<StorageRootDto>> answer)
+        => Weighing(answer, Recorded, []);
 
-        return await service.WeighAsync(Recorded, Starting(), [], Noon, CancellationToken.None);
-    }
+    private static Task<DiskPrecheckVerdict> Weighing(
+        DriverCall<IReadOnlyList<StorageRootDto>> answer,
+        OutputRoot root,
+        IReadOnlyList<RecordingDemand> alreadyRunning)
+        => Serving(new ScriptedDriverClient { StorageAnswer = answer })
+            .WeighAsync(root, Starting(), alreadyRunning, Noon, CancellationToken.None);
+
+    private static DiskPrecheckService Serving(ScriptedDriverClient client)
+        => new(new StorageMonitor(client, new WoundClock(DateTimeOffset.UnixEpoch), StorageMonitorSettings.Default));
 
     private static RecordingDemand Starting()
         => new(TunerKind.Terrestrial, Noon, Noon.AddHours(1));
