@@ -81,6 +81,8 @@ public sealed class Recording
 
     public ThumbnailState ThumbnailState { get; private set; } = ThumbnailState.Pending;
 
+    public ThumbnailFault? ThumbnailFault { get; private set; }
+
     public DateTime? MeasuredUpdatedAt { get; private set; }
 
     public string SnapshotName { get; private set; } = string.Empty;
@@ -100,6 +102,9 @@ public sealed class Recording
     public ProgrammeRef Programme => new(NetworkId, ServiceId, EventId, ProgrammeStartsAt);
 
     public bool IsInFlight => Outcome is null;
+
+    public bool ThumbnailShowsAnUnfinishedRecording
+        => ThumbnailState is ThumbnailState.Ready && Outcome is RecordingOutcome.Truncated;
 
     public TimeSpan Written => TimeSpan.FromMilliseconds(WrittenDurationMs);
 
@@ -172,7 +177,8 @@ public sealed class Recording
         ThumbnailState thumbnailState,
         ProgrammeSnapshot snapshot,
         BroadcastGroupKey? broadcastGroupKey,
-        BroadcastGroupRole broadcastGroupRole)
+        BroadcastGroupRole broadcastGroupRole,
+        ThumbnailFault? thumbnailFault = null)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(programme);
@@ -243,6 +249,7 @@ public sealed class Recording
         RefuseAReasonBeforeTheRecordingBegan(outcomeDetail, startedAtActual);
 
         RefuseAThumbnailForAFailure(outcome, thumbnailState);
+        RefuseAPictureThatDoesNotSayWhyItIsMissing(thumbnailState, thumbnailFault);
         RefuseAHistoryThatDoesNotAddUp(interruptions, resumeCount, startedAtActual);
         RefuseATimeBeforeTheRecordingBegan(startedAtActual, stoppedAtActual, nameof(stoppedAtActual));
         RefuseATimeBeforeTheRecordingBegan(startedAtActual, abortedAt, nameof(abortedAt));
@@ -303,6 +310,7 @@ public sealed class Recording
             MeasuredUpdatedAt = UtcTimes.Optional(measuredUpdatedAt, nameof(measuredUpdatedAt)),
             TunerDeviceId = tunerDeviceId,
             ThumbnailState = thumbnailState,
+            ThumbnailFault = thumbnailFault,
             SnapshotName = snapshot.Name,
             SnapshotSummary = snapshot.Summary,
             SnapshotExtended = snapshot.Extended,
@@ -341,11 +349,13 @@ public sealed class Recording
         WrittenDurationMs += (long)written.TotalMilliseconds;
     }
 
-    public void Illustrate(ThumbnailState thumbnailState)
+    public void Illustrate(ThumbnailState thumbnailState, ThumbnailFault? thumbnailFault = null)
     {
         RefuseAThumbnailForAFailure(Outcome, thumbnailState);
+        RefuseAPictureThatDoesNotSayWhyItIsMissing(thumbnailState, thumbnailFault);
 
         ThumbnailState = thumbnailState;
+        ThumbnailFault = thumbnailFault;
     }
 
     public void Acquire(TunerDeviceId tunerDeviceId)
@@ -565,6 +575,33 @@ public sealed class Recording
             throw new ArgumentException(
                 "A recording that failed has no picture, because a picture of it would say it was recorded.",
                 nameof(thumbnailState));
+        }
+    }
+
+    private static void RefuseAPictureThatDoesNotSayWhyItIsMissing(
+        ThumbnailState thumbnailState,
+        ThumbnailFault? thumbnailFault)
+    {
+        if (thumbnailFault is { } named && !Enum.IsDefined(named))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(thumbnailFault),
+                thumbnailFault,
+                "A thumbnail fault is one the ledger holds.");
+        }
+
+        if (thumbnailState is ThumbnailState.Failed && thumbnailFault is null)
+        {
+            throw new ArgumentException(
+                "A picture that could not be drawn says what stopped it, in the classes the ledger holds.",
+                nameof(thumbnailFault));
+        }
+
+        if (thumbnailState is not ThumbnailState.Failed && thumbnailFault is not null)
+        {
+            throw new ArgumentException(
+                $"A picture that is {thumbnailState} was not stopped by anything, so it names no fault.",
+                nameof(thumbnailFault));
         }
     }
 

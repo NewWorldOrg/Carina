@@ -8,6 +8,7 @@ using Carina.Domain.Integrity;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
 using Carina.Domain.Scans;
+using Carina.Domain.Thumbnails;
 using Carina.Infrastructure.Auth;
 using Carina.Infrastructure.Channels;
 using Carina.Infrastructure.Collection;
@@ -19,6 +20,7 @@ using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Recordings;
 using Carina.Infrastructure.Scanning;
+using Carina.Infrastructure.Thumbnails;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -54,6 +56,11 @@ public static class ServiceCollectionExtensions
             .Configure(options => options.ReadFrom(configuration))
             .ValidateOnStart();
 
+        services.AddSingleton<IValidateOptions<ThumbnailOptions>, ThumbnailValidation>();
+        services.AddOptions<ThumbnailOptions>()
+            .Configure(options => options.ReadFrom(configuration))
+            .ValidateOnStart();
+
         services.AddSingleton<IValidateOptions<CollectionOptions>, CollectionValidation>();
         services.AddOptions<CollectionOptions>()
             .Configure(options => options.ReadFrom(configuration))
@@ -79,6 +86,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IReservationRecordingContract, ReservationRecordingContract>();
         services.AddScoped<IRecordingLedger, RecordingLedger>();
         services.AddScoped<IIntegrityCheckRepository, IntegrityCheckRepository>();
+        services.AddScoped<IThumbnailWorklist, ThumbnailWorklist>();
         services.AddScoped<IChannelScanOrchestrator, ChannelScanOrchestrator>();
         services.AddScoped<ScanApplier>();
         services.AddScoped<IBroadcastStreamDirectory, BroadcastStreamDirectory>();
@@ -119,6 +127,10 @@ public static class ServiceCollectionExtensions
             provider.GetRequiredService<IOptions<IntegrityOptions>>().Value.Read());
         services.TryAddSingleton<IRecordingFileSurvey, LocalRecordingFileSurvey>();
         services.AddSingleton<IntegrityCheckJob>();
+        services.TryAddSingleton<ThumbnailSettings>(provider =>
+            provider.GetRequiredService<IOptions<ThumbnailOptions>>().Value.Read());
+        services.TryAddSingleton<IThumbnailRenderer, FfmpegThumbnailRenderer>();
+        services.AddSingleton<ThumbnailJob>();
         services.TryAddSingleton<CollectionSettings>(provider =>
             provider.GetRequiredService<IOptions<CollectionOptions>>().Value.Read());
         services.TryAddSingleton<RescanNoticeBoard>();
@@ -134,6 +146,7 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<EpgCollector>();
         services.AddHostedService<RideAlongHarvester>();
         services.AddHostedService(provider => provider.GetRequiredService<IntegrityCheckJob>());
+        services.AddHostedService(provider => provider.GetRequiredService<ThumbnailJob>());
 
         return services;
     }
