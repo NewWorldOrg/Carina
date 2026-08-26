@@ -16,5 +16,7 @@ public static class SessionRefusalReading
             or SessionRefusalTitles.DeviceUnavailable;
 
     public static bool IsWorthWaitingOut(DriverProblem? problem)
-        => IsContended(problem) || problem?.Title is SessionRefusalTitles.Draining;
+        => problem?.Title is SessionRefusalTitles.DeviceBusy
+            or SessionRefusalTitles.NoDeviceFree
+            or SessionRefusalTitles.Draining;
 }

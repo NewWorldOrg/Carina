@@ -236,7 +236,10 @@ public sealed class RecordingRound(
         }
         catch (Exception failure)
         {
-            await AbandonAsync(due.Id, issued, now);
+            if (!await AbandonAsync(due.Id, issued, now))
+            {
+                starting.Unconfirmed.Add(id);
+            }
 
             if (failure is OperationCanceledException)
             {
@@ -278,14 +281,31 @@ public sealed class RecordingRound(
             : (SessionStanding.Unknowable, null);
     }
 
-    private async Task AbandonAsync(ReservationId reservation, SessionId? issued, DateTime claimedAt)
+    private async Task<bool> AbandonAsync(ReservationId reservation, SessionId? issued, DateTime claimedAt)
     {
-        if (issued is { } sessionId)
+        try
         {
-            await driver.StopSessionAsync(sessionId, StartAbandoned, CancellationToken.None);
-        }
+            if (issued is { } sessionId)
+            {
+                DriverCall<SessionSnapshot> stopped = await driver.StopSessionAsync(
+                    sessionId,
+                    StartAbandoned,
+                    CancellationToken.None);
 
-        await reservations.ReleaseAsync(reservation, claimedAt, CancellationToken.None);
+                if (stopped.Outcome is not DriverCallOutcome.Reached)
+                {
+                    return false;
+                }
+            }
+
+            await reservations.ReleaseAsync(reservation, claimedAt, CancellationToken.None);
+
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
     }
 
     private static RecordingRefusal Refusal(ReservationId reservation, DriverCall<SessionSnapshot> answer)

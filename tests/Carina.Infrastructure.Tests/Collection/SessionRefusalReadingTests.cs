@@ -43,10 +43,42 @@ public sealed class SessionRefusalReadingTests
     [InlineData(SessionRefusalTitles.DeviceBusy, true)]
     [InlineData(SessionRefusalTitles.NoDeviceFree, true)]
     [InlineData(SessionRefusalTitles.Draining, true)]
+    [InlineData(SessionRefusalTitles.DeviceUnavailable, false)]
     [InlineData(SessionRefusalTitles.NoLock, false)]
     [InlineData(SessionRefusalTitles.FaultedDevice, false)]
     public void OnlyAFullTunerIsWorthWaitingOut(string title, bool worthWaiting)
         => Assert.Equal(
             worthWaiting,
             SessionRefusalReading.IsWorthWaitingOut(new DriverProblem(title, [])));
+
+    [Theory]
+    [InlineData(SessionRefusalTitles.DeviceBusy, true)]
+    [InlineData(SessionRefusalTitles.NoDeviceFree, true)]
+    [InlineData(SessionRefusalTitles.DeviceUnavailable, true)]
+    [InlineData(SessionRefusalTitles.Draining, false)]
+    [InlineData(SessionRefusalTitles.NoLock, false)]
+    [InlineData(SessionRefusalTitles.FaultedDevice, false)]
+    public void ATunerSomebodyElseHasIsAContest(string title, bool contended)
+        => Assert.Equal(
+            contended,
+            SessionRefusalReading.IsContended(new DriverProblem(title, [])));
+
+    [Fact]
+    public void TheTwoQuestionsOverlapWithoutOneAnsweringTheOther()
+    {
+        Assert.True(SessionRefusalReading.IsContended(Named(SessionRefusalTitles.DeviceUnavailable)));
+        Assert.False(SessionRefusalReading.IsWorthWaitingOut(Named(SessionRefusalTitles.DeviceUnavailable)));
+
+        Assert.True(SessionRefusalReading.IsWorthWaitingOut(Named(SessionRefusalTitles.Draining)));
+        Assert.False(SessionRefusalReading.IsContended(Named(SessionRefusalTitles.Draining)));
+    }
+
+    [Fact]
+    public void NeitherQuestionHasAnAnswerWhenNothingWasSaid()
+    {
+        Assert.False(SessionRefusalReading.IsContended(null));
+        Assert.False(SessionRefusalReading.IsWorthWaitingOut(null));
+    }
+
+    private static DriverProblem Named(string title) => new(title, []);
 }

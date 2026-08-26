@@ -81,6 +81,8 @@ internal sealed class PlannedReservations : IReservationRecordingContract
 
     public List<ReservationId> Released { get; } = [];
 
+    public List<CancellationToken> ReleaseTokens { get; } = [];
+
     public PlannedReservations Holding(params RecordingTick[] ticks)
     {
         due.AddRange(ticks);
@@ -117,7 +119,10 @@ internal sealed class PlannedReservations : IReservationRecordingContract
 
     public Task<bool> ReleaseAsync(ReservationId id, DateTime claimedAt, CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         Released.Add(id);
+        ReleaseTokens.Add(cancellationToken);
 
         return Task.FromResult(true);
     }

@@ -560,6 +560,122 @@ public sealed class RecordingRoundTests
             StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task AStopThatNeverLandedKeepsTheClaimRatherThanGuessingNothingStands()
+    {
+        RecordingTick due = Due(1);
+        PlannedReservations reservations = Holding(due);
+        var recordings = new HeldRecordings
+        {
+            RefusingToAdd = new InvalidOperationException("the ledger would not take it"),
+        };
+        var driver = new RecordingDriver
+        {
+            RefusesToStop = DriverCall<SessionSnapshot>.Unreachable("the socket went away too"),
+        };
+
+        RecordingRun run = await Round(reservations, recordings, driver).RunAsync(CancellationToken.None);
+
+        Assert.Single(driver.Stopped);
+        Assert.Empty(reservations.Released);
+        Assert.Single(run.Unconfirmed);
+        Assert.Equal(RecordingRefusalKind.StartAbandoned, Assert.Single(run.Refused).Kind);
+    }
+
+    [Fact]
+    public async Task AnUndoThatItselfThrowsLeavesTheClaimHeldAndTheTickRunning()
+    {
+        RecordingTick first = Due(1);
+        RecordingTick second = Due(2);
+        PlannedReservations reservations = Holding(first, second);
+        var recordings = new HeldRecordings
+        {
+            RefusingToAdd = new InvalidOperationException("the ledger would not take it"),
+            RefusingToAddOnce = true,
+        };
+        var driver = new RecordingDriver
+        {
+            ThrowingOnStop = new InvalidOperationException("the stop went nowhere either"),
+        };
+
+        RecordingRun run = await Round(reservations, recordings, driver).RunAsync(CancellationToken.None);
+
+        Assert.Empty(reservations.Released);
+        Assert.Single(run.Unconfirmed);
+        Assert.Single(run.Started);
+        Assert.Equal(second.Id, Assert.Single(recordings.Rows).ReservationId);
+    }
+
+    [Fact]
+    public async Task ASessionTheStartCallThrewOverIsStillStopped()
+    {
+        RecordingTick due = Due(1);
+        PlannedReservations reservations = Holding(due);
+        var driver = new RecordingDriver
+        {
+            ThrowingOnStart = new InvalidOperationException("the request came apart"),
+        };
+
+        RecordingRun run = await Round(reservations, new HeldRecordings(), driver).RunAsync(CancellationToken.None);
+
+        Assert.Equal(Assert.Single(driver.Started).SessionId, Assert.Single(driver.Stopped));
+        Assert.Equal(due.Id, Assert.Single(reservations.Released));
+        Assert.Empty(run.Unconfirmed);
+        Assert.Equal(RecordingRefusalKind.StartAbandoned, Assert.Single(run.Refused).Kind);
+    }
+
+    [Fact]
+    public async Task ATickThatWasCancelledSaysSoRatherThanCallingItARefusal()
+    {
+        RecordingTick due = Due(1);
+        PlannedReservations reservations = Holding(due);
+        var driver = new RecordingDriver
+        {
+            ThrowingOnStart = new OperationCanceledException("the host is going down"),
+        };
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => Round(reservations, new HeldRecordings(), driver).RunAsync(CancellationToken.None));
+
+        Assert.Equal(due.Id, Assert.Single(reservations.Released));
+        Assert.Single(driver.Stopped);
+    }
+
+    [Fact]
+    public async Task GivingAClaimBackNeverRidesOnTheTokenTheTickWasGiven()
+    {
+        PlannedReservations reservations = Holding(Due(1));
+        var driver = new RecordingDriver
+        {
+            RefusesToStart = DriverCall<SessionSnapshot>.Refused(
+                new DriverProblem(SessionRefusalTitles.UnknownOutputRoot, [])),
+        };
+        using var cancellable = new CancellationTokenSource();
+
+        RecordingRun run = await Round(reservations, new HeldRecordings(), driver).RunAsync(cancellable.Token);
+
+        Assert.True(cancellable.Token.CanBeCanceled);
+        Assert.False(Assert.Single(reservations.ReleaseTokens).CanBeCanceled);
+        Assert.Equal(RecordingRefusalKind.DriverRefused, Assert.Single(run.Refused).Kind);
+    }
+
+    [Fact]
+    public async Task NothingTheUndoDoesRidesOnTheTokenTheTickWasGiven()
+    {
+        PlannedReservations reservations = Holding(Due(1));
+        var recordings = new HeldRecordings
+        {
+            RefusingToAdd = new InvalidOperationException("the ledger would not take it"),
+        };
+        var driver = new RecordingDriver();
+        using var cancellable = new CancellationTokenSource();
+
+        await Round(reservations, recordings, driver).RunAsync(cancellable.Token);
+
+        Assert.False(Assert.Single(driver.StopTokens).CanBeCanceled);
+        Assert.False(Assert.Single(reservations.ReleaseTokens).CanBeCanceled);
+    }
+
     private static async Task<IReadOnlyList<OutcomeDetail>> Weighing(IReadOnlyList<Recording> running, long free)
     {
         var recordings = new HeldRecordings();

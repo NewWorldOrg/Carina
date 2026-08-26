@@ -29,6 +29,12 @@ public sealed class RecordingDriver : IDriverClient
 
     public Exception? RefusingStorage { get; set; }
 
+    public Exception? ThrowingOnStart { get; set; }
+
+    public Exception? ThrowingOnStop { get; set; }
+
+    public List<CancellationToken> StopTokens { get; } = [];
+
     public List<SessionId> Asked { get; } = [];
 
     public DriverCall<SessionSnapshot>? AnswersWhenAsked { get; set; }
@@ -69,6 +75,11 @@ public sealed class RecordingDriver : IDriverClient
             Started.Add(request);
         }
 
+        if (ThrowingOnStart is { } thrown)
+        {
+            return Task.FromException<DriverCall<SessionSnapshot>>(thrown);
+        }
+
         return Task.FromResult(RefusesToStart ?? DriverCall<SessionSnapshot>.Reached(
             new SessionSnapshot(
                 request.SessionId,
@@ -93,6 +104,12 @@ public sealed class RecordingDriver : IDriverClient
             Log.Add($"stop:{sessionId}");
             StopReasons.Add(reason);
             Stopped.Add(sessionId);
+            StopTokens.Add(cancellationToken);
+        }
+
+        if (ThrowingOnStop is { } thrown)
+        {
+            return Task.FromException<DriverCall<SessionSnapshot>>(thrown);
         }
 
         return Task.FromResult(RefusesToStop ?? DriverCall<SessionSnapshot>.Reached(

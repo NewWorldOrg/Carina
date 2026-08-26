@@ -57,12 +57,12 @@ public sealed class RecordingTickJob(
         }
 
         logger.LogInformation(
-            "A recording tick stopped {Stopped} recording(s) and started {Started} ({Unconfirmed} of which the "
-            + "driver did not confirm), and {Refused} reservation(s) did not start.",
+            "A recording tick stopped {Stopped} recording(s) and started {Started}, and {Refused} reservation(s) "
+            + "did not start; what the driver holds could not be confirmed either way for {Unconfirmed} of them.",
             run.Stopped.Count,
             run.Started.Count,
-            run.Unconfirmed.Count,
-            run.Refused.Count);
+            run.Refused.Count,
+            run.Unconfirmed.Count);
 
         foreach (RecordingRefusal refusal in run.Refused)
         {

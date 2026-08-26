@@ -91,6 +91,11 @@ public sealed class RecordingTickJobTests
 
         Assert.Contains(spoke.Lines, line => line.StartsWith("Information:", StringComparison.Ordinal));
         Assert.Empty(idle.Lines);
+
+        Assert.Equal(1, spoke.Counted("Started"));
+        Assert.Equal(0, spoke.Counted("Stopped"));
+        Assert.Equal(0, spoke.Counted("Refused"));
+        Assert.Equal(0, spoke.Counted("Unconfirmed"));
     }
 
     [Fact]
@@ -107,6 +112,8 @@ public sealed class RecordingTickJobTests
 
         Assert.Equal(2, said.Lines.Count(line => line.StartsWith("Warning:", StringComparison.Ordinal)));
         Assert.Single(said.Lines, line => line.StartsWith("Information:", StringComparison.Ordinal));
+        Assert.Equal(2, said.Counted("Refused"));
+        Assert.Equal(0, said.Counted("Started"));
     }
 
     private static async Task Ticked(
@@ -171,6 +178,8 @@ public sealed class RecordingTickJobTests
     {
         private readonly List<string> lines = [];
 
+        private readonly List<KeyValuePair<string, object?>> counted = [];
+
         public IReadOnlyList<string> Lines
         {
             get
@@ -184,11 +193,32 @@ public sealed class RecordingTickJobTests
 
         public ILogger<RecordingTickJob> Logger() => new Listening(this);
 
-        private void Heard(string line)
+        public int? Counted(string name)
+        {
+            lock (lines)
+            {
+                foreach (KeyValuePair<string, object?> pair in counted)
+                {
+                    if (pair.Key == name && pair.Value is int number)
+                    {
+                        return number;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        private void Heard(string line, IEnumerable<KeyValuePair<string, object?>>? named)
         {
             lock (lines)
             {
                 lines.Add(line);
+
+                if (named is not null)
+                {
+                    counted.AddRange(named);
+                }
             }
         }
 
@@ -206,7 +236,9 @@ public sealed class RecordingTickJobTests
                 TState state,
                 Exception? exception,
                 Func<TState, Exception?, string> formatter)
-                => said.Heard($"{logLevel}: {formatter(state, exception)}");
+                => said.Heard(
+                    $"{logLevel}: {formatter(state, exception)}",
+                    state as IEnumerable<KeyValuePair<string, object?>>);
         }
     }
 
