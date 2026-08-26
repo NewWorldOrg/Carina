@@ -65,7 +65,10 @@ public static class TunerAllocationPlanner
 
         held.RemoveAt(held.Count - 1);
 
-        return new AllocationDecision(candidate.Id, AllocationVerdict.Contended, RecordedInstead(held, wanted));
+        return new AllocationDecision(
+            candidate.Id,
+            AllocationVerdict.Contended,
+            RecordedInstead(held, wanted, capacity));
     }
 
     private static Held Hold(
@@ -91,6 +94,11 @@ public static class TunerAllocationPlanner
     {
         foreach (DateTime moment in Instants(held, added))
         {
+            if (RidesAlong(held, added, moment))
+            {
+                continue;
+            }
+
             if (!capacity.CanSeat(DemandAt(held, moment)))
             {
                 return false;
@@ -99,6 +107,12 @@ public static class TunerAllocationPlanner
 
         return true;
     }
+
+    private static bool RidesAlong(List<Held> held, Held added, DateTime moment)
+        => held.Any(hold =>
+            !ReferenceEquals(hold, added)
+            && hold.Covers(moment)
+            && hold.Tuning == added.Tuning);
 
     private static IEnumerable<DateTime> Instants(List<Held> held, Held added)
         => held
@@ -114,13 +128,40 @@ public static class TunerAllocationPlanner
             .GroupBy(tuning => tuning.System)
             .ToDictionary(group => group.Key, group => group.Count());
 
-    private static IReadOnlyList<ReservationId> RecordedInstead(List<Held> held, Held loser)
-        => [.. held
-            .Where(hold => hold.Overlaps(loser))
-            .Where(hold => !hold.Tuning.Equals(loser.Tuning))
-            .Select(hold => hold.Candidate)
-            .Order(Ranking.Order)
-            .Select(candidate => candidate.Id)];
+    private static IReadOnlyList<ReservationId> RecordedInstead(
+        List<Held> held,
+        Held loser,
+        TunerCapacity capacity)
+    {
+        if (!capacity.CanSeat(Wanting(loser.Tuning.System)))
+        {
+            return [];
+        }
+
+        return
+        [
+            .. held
+                .Where(hold => hold.Overlaps(loser))
+                .Where(hold => !hold.Tuning.Equals(loser.Tuning))
+                .Where(hold => HoldsASeatTheLoserWanted(held, hold, loser, capacity))
+                .Select(hold => hold.Candidate)
+                .Order(Ranking.Order)
+                .Select(candidate => candidate.Id),
+        ];
+    }
+
+    private static bool HoldsASeatTheLoserWanted(
+        List<Held> held,
+        Held hold,
+        Held loser,
+        TunerCapacity capacity)
+        => !capacity.CanSeat(Wanting(hold.Tuning.System, loser.Tuning.System))
+           || Seatable([.. held.Where(other => !ReferenceEquals(other, hold)), loser], loser, capacity);
+
+    private static Dictionary<TuneSystem, int> Wanting(params TuneSystem[] systems)
+        => systems
+            .GroupBy(system => system)
+            .ToDictionary(group => group.Key, group => group.Count());
 
     private sealed record Held(AllocationCandidate Candidate, TuningParameters Tuning, DateTime EndsAt)
     {

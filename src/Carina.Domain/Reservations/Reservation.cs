@@ -60,6 +60,10 @@ public sealed class Reservation
 
     public DateTime? AcknowledgedAt { get; private set; }
 
+    public bool ReceptionUnavailable { get; private set; }
+
+    public DateTime? ReceptionUnavailableSince { get; private set; }
+
     public BroadcastGroupKey? BroadcastGroupKey { get; private set; }
 
     public BroadcastGroupRole BroadcastGroupRole { get; private set; }
@@ -116,6 +120,8 @@ public sealed class Reservation
             [],
             false,
             null,
+            false,
+            null,
             at);
 
     public static Reservation Rehydrate(
@@ -138,6 +144,8 @@ public sealed class Reservation
         IReadOnlyList<EpgDivergence> epgDivergences,
         bool epgMissing,
         DateTime? acknowledgedAt,
+        bool receptionUnavailable,
+        DateTime? receptionUnavailableSince,
         DateTime createdAt)
     {
         ArgumentNullException.ThrowIfNull(id);
@@ -184,6 +192,13 @@ public sealed class Reservation
                 nameof(acknowledgedAt));
         }
 
+        if (receptionUnavailable != (receptionUnavailableSince is not null))
+        {
+            throw new ArgumentException(
+                "A reservation with nowhere to tune says when that was noticed, and one with somewhere says nothing.",
+                nameof(receptionUnavailableSince));
+        }
+
         if (broadcastGroupRole is not BroadcastGroupRole.Standalone && broadcastGroupKey is null)
         {
             throw new ArgumentException(
@@ -219,6 +234,9 @@ public sealed class Reservation
             EpgDivergences = epgDivergences,
             EpgMissing = epgMissing,
             AcknowledgedAt = UtcTimes.Optional(acknowledgedAt, nameof(acknowledgedAt)),
+            ReceptionUnavailable = receptionUnavailable,
+            ReceptionUnavailableSince =
+                UtcTimes.Optional(receptionUnavailableSince, nameof(receptionUnavailableSince)),
             CreatedAt = UtcTimes.Required(createdAt, nameof(createdAt)),
         };
     }
@@ -306,6 +324,18 @@ public sealed class Reservation
     {
         EpgMissing = true;
         AcknowledgedAt = null;
+    }
+
+    public void LoseReception(DateTime at)
+    {
+        ReceptionUnavailable = true;
+        ReceptionUnavailableSince = UtcTimes.Required(at, nameof(at));
+    }
+
+    public void RegainReception()
+    {
+        ReceptionUnavailable = false;
+        ReceptionUnavailableSince = null;
     }
 
     public void Acknowledge(DateTime at)

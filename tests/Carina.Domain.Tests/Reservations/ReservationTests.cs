@@ -197,6 +197,80 @@ public sealed class ReservationTests
     }
 
     [Fact]
+    public void APlannedReservationHasSomewhereToTune()
+    {
+        Reservation reservation = ReservationFactory.Planned();
+
+        Assert.False(reservation.ReceptionUnavailable);
+        Assert.Null(reservation.ReceptionUnavailableSince);
+    }
+
+    [Fact]
+    public void LosingReceptionIsAMarkAndNotAStateOfItsOwn()
+    {
+        Reservation reservation = ReservationFactory.Planned();
+
+        reservation.LoseReception(ReservationFactory.Now);
+
+        Assert.True(reservation.ReceptionUnavailable);
+        Assert.Equal(ReservationFactory.Now, reservation.ReceptionUnavailableSince);
+        Assert.Equal(ReservationState.Scheduled, reservation.State);
+    }
+
+    [Fact]
+    public void GainingReceptionBackTakesTheMarkOffAgain()
+    {
+        Reservation reservation = ReservationFactory.Planned();
+        reservation.LoseReception(ReservationFactory.Now);
+
+        reservation.RegainReception();
+
+        Assert.False(reservation.ReceptionUnavailable);
+        Assert.Null(reservation.ReceptionUnavailableSince);
+        Assert.Equal(ReservationState.Scheduled, reservation.State);
+    }
+
+    [Fact]
+    public void TheMomentReceptionWasLostIsKeptInUtc()
+    {
+        Reservation reservation = ReservationFactory.Planned();
+
+        ArgumentException refused = Assert.Throws<ArgumentException>(
+            () => reservation.LoseReception(DateTime.SpecifyKind(ReservationFactory.Now, DateTimeKind.Local)));
+
+        Assert.Equal("at", refused.ParamName);
+    }
+
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void AMarkAndTheMomentItWasNoticedComeTogether(bool unavailable, bool noticed)
+    {
+        ArgumentException refused = Assert.Throws<ArgumentException>(() => ReservationFactory.Rehydrated(
+            ReservationState.Scheduled,
+            null,
+            null,
+            receptionUnavailable: unavailable,
+            receptionUnavailableSince: noticed ? ReservationFactory.Now : null));
+
+        Assert.Equal("receptionUnavailableSince", refused.ParamName);
+    }
+
+    [Fact]
+    public void AMarkSurvivesBeingRehydrated()
+    {
+        Reservation reservation = ReservationFactory.Rehydrated(
+            ReservationState.Scheduled,
+            null,
+            null,
+            receptionUnavailable: true,
+            receptionUnavailableSince: ReservationFactory.Now);
+
+        Assert.True(reservation.ReceptionUnavailable);
+        Assert.Equal(ReservationFactory.Now, reservation.ReceptionUnavailableSince);
+    }
+
+    [Fact]
     public void TheFourStatesAreTheOnlyOnesThisDomainOwns()
     {
         Assert.Equal(

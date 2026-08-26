@@ -158,9 +158,13 @@ public sealed class TunerAllocationPlannerTests
         int eventId,
         int startsAtOffsetMinutes)
     {
-        AllocationCandidate winner = Candidate(Terrestrial27, programme: Programme(32736, 1024, 4001, 0));
+        AllocationCandidate winner = Candidate(
+            Terrestrial27,
+            id: new ReservationId(Guid.Parse("00000000-0000-0000-0000-000000000009")),
+            programme: Programme(32736, 1024, 4001, 0));
         AllocationCandidate loser = Candidate(
             Terrestrial29,
+            id: new ReservationId(Guid.Parse("00000000-0000-0000-0000-000000000001")),
             programme: Programme(networkId, serviceId, eventId, startsAtOffsetMinutes));
 
         AllocationPlan plan = Planned([loser, winner], Capacity(TunerKind.Terrestrial));
@@ -300,7 +304,9 @@ public sealed class TunerAllocationPlannerTests
         AllocationPlan plan = Planned([first, second, third], Capacity(TunerKind.Terrestrial));
 
         Assert.Equal(3, plan.Decisions.Count);
-        Assert.Empty(plan.Contended);
+        Assert.Equal(AllocationVerdict.Secured, Verdict(plan, first));
+        Assert.Equal(AllocationVerdict.Secured, Verdict(plan, second));
+        Assert.Equal(AllocationVerdict.Secured, Verdict(plan, third));
     }
 
     [Fact]
@@ -335,8 +341,8 @@ public sealed class TunerAllocationPlannerTests
 
         AllocationPlan plan = Planned([first, second], Capacity(TunerKind.Satellite));
 
-        Assert.Equal(2, plan.Decisions.Count);
-        Assert.Empty(plan.Contended);
+        Assert.Equal(AllocationVerdict.Secured, Verdict(plan, first));
+        Assert.Equal(AllocationVerdict.Secured, Verdict(plan, second));
     }
 
     [Fact]
@@ -377,8 +383,8 @@ public sealed class TunerAllocationPlannerTests
             [broadcasting, communication],
             Capacity(TunerKind.Satellite, TunerKind.Satellite));
 
-        Assert.Equal(2, plan.Decisions.Count);
-        Assert.Empty(plan.Contended);
+        Assert.Equal(AllocationVerdict.Secured, Verdict(plan, broadcasting));
+        Assert.Equal(AllocationVerdict.Secured, Verdict(plan, communication));
     }
 
     [Fact]
@@ -604,6 +610,105 @@ public sealed class TunerAllocationPlannerTests
     }
 
     [Fact]
+    public void ARiderOnAChannelAlreadyOpenNeedsNoTunerOfItsOwn()
+    {
+        AllocationCandidate recording = Candidate(Terrestrial27, pinned: true, eventId: 4001);
+        AllocationCandidate rider = Candidate(Terrestrial27, eventId: 4002);
+        AllocationCandidate another = Candidate(Terrestrial29, eventId: 4003);
+
+        AllocationPlan plan = Planned([recording, rider, another], Capacity(TunerKind.Terrestrial));
+
+        Assert.Equal(AllocationVerdict.Pinned, Verdict(plan, recording));
+        Assert.Equal(AllocationVerdict.Secured, Verdict(plan, rider));
+        Assert.Equal(AllocationVerdict.Contended, Verdict(plan, another));
+    }
+
+    [Fact]
+    public void ARiderIsSecuredEvenWhereTheRecordingsAlreadyOutnumberTheTuners()
+    {
+        AllocationCandidate first = Candidate(Terrestrial27, pinned: true, eventId: 4001);
+        AllocationCandidate second = Candidate(Terrestrial29, pinned: true, eventId: 4002);
+        AllocationCandidate rider = Candidate(Terrestrial27, eventId: 4003);
+
+        AllocationPlan plan = Planned([first, second, rider], Capacity(TunerKind.Terrestrial));
+
+        Assert.Equal(AllocationVerdict.Pinned, Verdict(plan, first));
+        Assert.Equal(AllocationVerdict.Pinned, Verdict(plan, second));
+        Assert.Equal(AllocationVerdict.Secured, Verdict(plan, rider));
+    }
+
+    [Fact]
+    public void RidingAlongNeedsTheChannelToBeOpenAtThatMoment()
+    {
+        AllocationCandidate earlier = Candidate(
+            Terrestrial27,
+            priority: 30,
+            from: Now,
+            to: Now.AddMinutes(30),
+            eventId: 4001);
+        AllocationCandidate other = Candidate(
+            Terrestrial29,
+            priority: 20,
+            from: Now.AddMinutes(30),
+            to: Now.AddMinutes(60),
+            eventId: 4002);
+        AllocationCandidate late = Candidate(
+            Terrestrial27,
+            priority: 10,
+            from: Now.AddMinutes(30),
+            to: Now.AddMinutes(60),
+            eventId: 4003);
+
+        AllocationPlan plan = Planned([earlier, other, late], Capacity(TunerKind.Terrestrial));
+
+        Assert.Equal(AllocationVerdict.Secured, Verdict(plan, earlier));
+        Assert.Equal(AllocationVerdict.Secured, Verdict(plan, other));
+        Assert.Equal(AllocationVerdict.Contended, Verdict(plan, late));
+    }
+
+    [Fact]
+    public void ARecordingOnASeatTheLoserCouldNeverHaveTakenIsNotRecordedInstead()
+    {
+        AllocationCandidate satellite = Candidate(BsSlotOneStream, priority: 30, eventId: 4001);
+        AllocationCandidate taken = Candidate(Terrestrial27, priority: 20, eventId: 4002);
+        AllocationCandidate lost = Candidate(Terrestrial29, priority: 10, eventId: 4003);
+
+        AllocationPlan plan = Planned(
+            [satellite, taken, lost],
+            Capacity(TunerKind.Terrestrial, TunerKind.Satellite));
+
+        Assert.Equal(AllocationVerdict.Secured, Verdict(plan, satellite));
+        Assert.Equal(AllocationVerdict.Secured, Verdict(plan, taken));
+        Assert.Equal(AllocationVerdict.Contended, Verdict(plan, lost));
+        Assert.Equal([taken.Id], plan.For(lost.Id).Instead);
+    }
+
+    [Fact]
+    public void NothingIsRecordedInsteadOfWhatNoTunerCouldHaveTakenAtAll()
+    {
+        AllocationCandidate taken = Candidate(Terrestrial27, priority: 20, eventId: 4001);
+        AllocationCandidate satellite = Candidate(BsSlotOneStream, priority: 10, eventId: 4002);
+
+        AllocationPlan plan = Planned([taken, satellite], Capacity(TunerKind.Terrestrial));
+
+        Assert.Equal(AllocationVerdict.Contended, Verdict(plan, satellite));
+        Assert.Empty(plan.For(satellite.Id).Instead);
+    }
+
+    [Fact]
+    public void WhereNoOneSeatWouldHaveBeenEnoughTheyAreAllRecordedInstead()
+    {
+        AllocationCandidate first = Candidate(Terrestrial27, pinned: true, priority: 20, eventId: 4001);
+        AllocationCandidate second = Candidate(Terrestrial29, pinned: true, priority: 15, eventId: 4002);
+        AllocationCandidate lost = Candidate(Terrestrial31, priority: 10, eventId: 4003);
+
+        AllocationPlan plan = Planned([first, second, lost], Capacity(TunerKind.Terrestrial));
+
+        Assert.Equal(AllocationVerdict.Contended, Verdict(plan, lost));
+        Assert.Equal([first.Id, second.Id], plan.For(lost.Id).Instead);
+    }
+
+    [Fact]
     public void WhatWasRecordedInsteadIsNamedInPlanningOrder()
     {
         AllocationCandidate first = Candidate(Terrestrial27, priority: 30, eventId: 4001);
@@ -778,6 +883,40 @@ public sealed class TunerAllocationPlannerTests
     }
 
     [Fact]
+    public void AServiceWithNowhereToTuneIsMarkedRatherThanContended()
+    {
+        Reservation nowhere = ReservationFactory.Planned(programme: ReservationFactory.Programme(4001));
+
+        AllocationPlan plan = Planned(
+            [AllocationCandidate.Of(nowhere, null)],
+            Capacity(TunerKind.Terrestrial));
+
+        Apply(plan, [nowhere]);
+
+        Assert.Equal(AllocationVerdict.Unreachable, plan.For(nowhere.Id).Verdict);
+        Assert.Equal(ReservationState.Scheduled, nowhere.State);
+        Assert.True(nowhere.ReceptionUnavailable);
+        Assert.Equal(Now, nowhere.ReceptionUnavailableSince);
+    }
+
+    [Fact]
+    public void AReservationThatCanBeTunedAgainStopsBeingMarked()
+    {
+        Reservation regained = ReservationFactory.Planned(programme: ReservationFactory.Programme(4001));
+        regained.LoseReception(Now.AddHours(-1));
+
+        AllocationPlan plan = Planned(
+            [AllocationCandidate.Of(regained, Terrestrial27)],
+            Capacity(TunerKind.Terrestrial));
+
+        Apply(plan, [regained]);
+
+        Assert.Equal(ReservationState.Scheduled, regained.State);
+        Assert.False(regained.ReceptionUnavailable);
+        Assert.Null(regained.ReceptionUnavailableSince);
+    }
+
+    [Fact]
     public void WhatWasRecordedInsteadIsWhatTheLedgerHolds()
     {
         Reservation kept = ReservationFactory.Planned(
@@ -808,13 +947,26 @@ public sealed class TunerAllocationPlannerTests
     {
         foreach (Reservation reservation in reservations)
         {
-            if (plan.For(reservation.Id).KeepsATuner)
+            switch (plan.For(reservation.Id).Verdict)
             {
-                reservation.Secure();
-            }
-            else
-            {
-                reservation.Contend();
+                case AllocationVerdict.Secured:
+                case AllocationVerdict.Pinned:
+                    reservation.RegainReception();
+                    reservation.Secure();
+                    break;
+
+                case AllocationVerdict.Contended:
+                    reservation.RegainReception();
+                    reservation.Contend();
+                    break;
+
+                case AllocationVerdict.Unreachable:
+                    reservation.LoseReception(Now);
+                    break;
+
+                default:
+                    throw new InvalidOperationException(
+                        $"{plan.For(reservation.Id).Verdict} has no move on a reservation yet.");
             }
         }
     }
