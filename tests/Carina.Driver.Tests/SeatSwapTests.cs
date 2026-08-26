@@ -163,6 +163,52 @@ public sealed class RecallingRecordingWriterFactory : IRecordingWriterFactory
     }
 }
 
+public sealed class FailOnCueRecordingWriter(string path) : IRecordingWriter
+{
+    private long bytesWritten;
+    private int failing;
+
+    public string Path { get; } = path;
+
+    public long BytesWritten => Interlocked.Read(ref bytesWritten);
+
+    public bool Disposed { get; private set; }
+
+    public void Write(ReadOnlySpan<byte> bytes)
+    {
+        if (Volatile.Read(ref failing) is 1)
+        {
+            throw new IOException("No space left on device");
+        }
+
+        Interlocked.Add(ref bytesWritten, bytes.Length);
+    }
+
+    public void FailFromHereOn() => Volatile.Write(ref failing, 1);
+
+    public void Dispose() => Disposed = true;
+}
+
+public sealed class OneBrittleRecordingWriterFactory(string brittleRecordingId)
+    : IRecordingWriterFactory
+{
+    public FailOnCueRecordingWriter? Brittle { get; private set; }
+
+    public IRecordingWriter Open(string recordingsDirectory, string recordingId)
+    {
+        string path = System.IO.Path.Combine(recordingsDirectory, $"{recordingId}.ts");
+
+        if (recordingId != brittleRecordingId)
+        {
+            return new CountingRecordingWriter(path);
+        }
+
+        Brittle = new FailOnCueRecordingWriter(path);
+
+        return Brittle;
+    }
+}
+
 public sealed class SeatSwapTests : IDisposable
 {
     private static readonly DateTimeOffset Start = new(2026, 8, 13, 21, 0, 0, TimeSpan.Zero);
@@ -459,32 +505,121 @@ public sealed class SeatSwapTests : IDisposable
     }
 
     [Fact]
-    public async Task AHandOverIsEitherTakenUpOrGivenUpAndTheAnswerSaysWhich()
+    public async Task NoHandOverIsEverSettledByMoreThanOneOfTheClaimsRacingForIt()
     {
-        for (int round = 0; round < 50; round++)
+        const int racers = 4;
+        const int handOvers = 1_000;
+
+        SettledOnce[] settled =
+        [
+            .. Enumerable.Range(0, handOvers).Select(_ => new SettledOnce()),
+        ];
+
+        int arrived = 0;
+        int go = 0;
+        int settledThem = 0;
+
+        Task[] racing =
+        [
+            .. Enumerable.Range(0, racers)
+                .Select(_ =>
+                    Task.Factory.StartNew(
+                        () =>
+                        {
+                            int mine = 0;
+
+                            for (int handOver = 0; handOver < handOvers; handOver++)
+                            {
+                                Interlocked.Increment(ref arrived);
+
+                                while (Volatile.Read(ref go) <= handOver)
+                                {
+                                    Thread.SpinWait(1);
+                                }
+
+                                if (settled[handOver].TrySettle())
+                                {
+                                    mine++;
+                                }
+                            }
+
+                            Interlocked.Add(ref settledThem, mine);
+                        },
+                        TaskCreationOptions.LongRunning
+                    )
+                ),
+        ];
+
+        for (int handOver = 0; handOver < handOvers; handOver++)
+        {
+            while (Volatile.Read(ref arrived) < (handOver + 1) * racers)
+            {
+                Thread.SpinWait(1);
+            }
+
+            Volatile.Write(ref go, handOver + 1);
+        }
+
+        await Task.WhenAll(racing).WaitAsync(Deadlock);
+
+        Assert.Equal(handOvers, settledThem);
+        Assert.All(settled, one => Assert.True(one.IsSettled));
+    }
+
+    [Fact]
+    public async Task WhoeverIsTooLateToSettleWaitsForTheOneThatGotThereFirst()
+    {
+        var settled = new SettledOnce();
+
+        Assert.True(settled.TrySettle());
+
+        Task<bool> late = Task.Run(settled.SettleUnlessAnotherAlreadyHas);
+
+        Assert.NotSame(late, await Task.WhenAny(late, Task.Delay(NoPatience)));
+
+        settled.HasFinished();
+
+        Assert.False(await late.WaitAsync(Deadlock));
+    }
+
+    [Fact]
+    public async Task TheFirstToSettleWaitsForNobody()
+    {
+        var settled = new SettledOnce();
+
+        Task<bool> first = Task.Run(settled.SettleUnlessAnotherAlreadyHas);
+
+        Assert.True(await first.WaitAsync(Deadlock));
+        Assert.True(settled.IsSettled);
+    }
+
+    [Fact]
+    public void AHandOverIsEitherTakenUpOrGivenUpAndNeverBoth()
+    {
+        using TunerSession theOneItWouldReadThrough = Watching(new ScriptedTunerDevice());
+
+        for (int round = 0; round < 200; round++)
         {
             var device = new MarkedTunerDevice();
+
+            device.Allow(100_000);
+
             using TunerSession watching = Watching(device);
             using var seats = new SessionBroadcaster();
-
-            SessionSubscription viewer = watching.Broadcaster.Subscribe(SubscriberKind.Viewer);
 
             watching.Start();
             device.AwaitParkedBefore(1);
 
             SessionSubscription seat = seats.Subscribe(SubscriberKind.Piggyback);
-            Task<bool> asked = Task.Run(() =>
-                watching.ReadFromInstead(new SeatedTunerDevice(seat), null, seat, TimeSpan.Zero)
+
+            bool takenUp = watching.ReadFromInstead(
+                new SeatedTunerDevice(seat),
+                theOneItWouldReadThrough,
+                seat,
+                TimeSpan.Zero
             );
 
-            device.Allow(1);
-
-            bool takenUp = await asked.WaitAsync(Deadlock);
-
-            seats.Publish(Marked(9));
-            device.Allow(1);
-
-            Assert.Equal([1, takenUp ? 9 : 2], Taken(viewer, 2));
+            Assert.Equal(takenUp, watching.RidesOn is not null);
 
             watching.Stop();
             watching.WaitForEnd(Deadlock);
@@ -907,8 +1042,16 @@ public sealed class SeatSwapTests : IDisposable
     [Fact]
     public async Task TheRecordingIsRefusedWhenTheTunerNeverBecomesReadyToBeTakenOver()
     {
+        TimeSpan patience = TimeSpan.FromMinutes(10);
+        var clockOfItsOwn = new SteppedTimeProvider(Start);
         var tuners = new BlockingTunerDeviceFactory(new ScriptedTunerDevice());
-        TunerSessionManager manager = Manager(tuners, handOverLimit: NoPatience);
+        var manager = new TunerSessionManager(
+            Configuration,
+            tuners,
+            clockOfItsOwn,
+            NullLogger<TunerSessionManager>.Instance,
+            handOverLimit: patience
+        );
 
         Task<SessionStart> watcher = Task.Run(() =>
             manager.Begin(Request("s-1", SessionPurpose.Live))
@@ -916,7 +1059,18 @@ public sealed class SeatSwapTests : IDisposable
 
         tuners.AwaitAsking(Deadlock);
 
-        SessionStart refused = manager.Begin(Request("s-2", SessionPurpose.Recording));
+        Task<SessionStart> taker = Task.Run(() =>
+            manager.Begin(Request("s-2", SessionPurpose.Recording))
+        );
+
+        clockOfItsOwn.AwaitSomethingWaitingOnTheClock(Deadlock);
+        clockOfItsOwn.Advance(patience - TimeSpan.FromSeconds(1));
+
+        Assert.NotSame(taker, await Task.WhenAny(taker, Task.Delay(NoPatience)));
+
+        clockOfItsOwn.Advance(TimeSpan.FromSeconds(2));
+
+        SessionStart refused = await taker.WaitAsync(Deadlock);
 
         Assert.Equal(SessionRefusal.DeviceUnavailable, refused.Refusal);
         Assert.Contains("s-1", refused.Detail, StringComparison.Ordinal);
@@ -967,6 +1121,75 @@ public sealed class SeatSwapTests : IDisposable
 
         device.LetGo();
         StopAll(watching);
+    }
+
+    [Fact]
+    public void ARecordingRidingOnAnotherStillOwnsTheFailureOfItsOwnRecording()
+    {
+        var writers = new OneBrittleRecordingWriterFactory("k-s-1");
+        var diagnostics = new DiagnosticsStore(clock);
+        var manager = new TunerSessionManager(
+            Configuration,
+            new ScriptedTunerDeviceFactory(),
+            clock,
+            NullLogger<TunerSessionManager>.Instance,
+            diagnostics: diagnostics,
+            recordingWriters: writers
+        );
+
+        TunerSession host = Started(manager, Request("s-1", SessionPurpose.Recording));
+        TunerSession rider = Started(manager, Request("s-2", SessionPurpose.Recording));
+
+        Assert.Same(host, rider.RidesOn);
+        Assert.Contains(SubscriberKind.Recording, host.Broadcaster.KindsInUse);
+        Assert.NotNull(writers.Brittle);
+
+        writers.Brittle.FailFromHereOn();
+
+        host.WaitForEnd(Deadlock);
+        rider.WaitForEnd(Deadlock);
+
+        Assert.Equal(SessionStopReason.RecordingFailed, host.StopReason);
+        Assert.Equal(SessionState.Failed, rider.State);
+        Assert.Equal(SessionStopReason.RecordingFailed, rider.StopReason);
+        Assert.DoesNotContain(
+            "quickly enough",
+            rider.FailureCause?.Message ?? string.Empty,
+            StringComparison.Ordinal
+        );
+        Assert.Contains(
+            diagnostics.Snapshot(),
+            entry =>
+                entry.Reason is DiagnosticReason.RecordingWriteFailed
+                && entry.SessionId == rider.SessionId
+        );
+    }
+
+    [Fact]
+    public void TheWatcherHandedDownEndsWithTheRecordingAndIsNotCalledAFailure()
+    {
+        TunerSessionManager manager = Manager(writers: new CountingRecordingWriterFactory());
+        TunerSession watching = Started(
+            manager,
+            Request("s-1", SessionPurpose.Live) with { EndsAt = Start.AddHours(1) }
+        );
+        TunerSession recording = Started(
+            manager,
+            Request("s-2", SessionPurpose.Recording) with { EndsAt = Start.AddMinutes(20) }
+        );
+
+        Assert.Equal(Start.AddMinutes(20), watching.EndsAt);
+
+        clock.Advance(TimeSpan.FromMinutes(21));
+
+        recording.WaitForEnd(Deadlock);
+        watching.WaitForEnd(Deadlock);
+
+        Assert.Equal(SessionState.Stopped, recording.State);
+        Assert.Equal(SessionStopReason.EndTimeReached, recording.StopReason);
+        Assert.Equal(SessionState.Stopped, watching.State);
+        Assert.Equal(SessionStopReason.EndTimeReached, watching.StopReason);
+        Assert.Null(watching.FailureCause);
     }
 
     private static byte[] Marked(byte mark)

@@ -66,7 +66,8 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
 
         public DateTimeOffset? IdleSince { get; set; }
 
-        public ManualResetEventSlim Ready { get; set; } = new(false);
+        public TaskCompletionSource Ready { get; set; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public bool Established { get; set; }
 
@@ -181,7 +182,7 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
 
         lease.Holder = request.SessionId;
         lease.Established = false;
-        lease.Ready = new ManualResetEventSlim(false);
+        lease.Ready = Unset();
         Attach(lease, request);
 
         return new PoolGrant(
@@ -289,7 +290,7 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
         lease.Tuning = request.Tuning;
         lease.Holder = request.SessionId;
         lease.Established = false;
-        lease.Ready = new ManualResetEventSlim(false);
+        lease.Ready = Unset();
         Attach(lease, request);
 
         return new PoolGrant(
@@ -367,7 +368,7 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
             }
 
             lease.Established = true;
-            lease.Ready.Set();
+            lease.Ready.TrySetResult();
         }
     }
 
@@ -389,13 +390,13 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
             lease.TuneFailure = cause;
             lease.Established = false;
             lease.IdleSince = timeProvider.GetUtcNow();
-            lease.Ready.Set();
+            lease.Ready.TrySetResult();
         }
     }
 
     public bool AwaitReady(string deviceId, TimeSpan limit)
     {
-        ManualResetEventSlim ready;
+        Task ready;
 
         lock (gate)
         {
@@ -409,10 +410,14 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
                 return true;
             }
 
-            ready = lease.Ready;
+            ready = lease.Ready.Task;
         }
 
-        if (!ready.Wait(limit))
+        try
+        {
+            ready.WaitAsync(limit, timeProvider).GetAwaiter().GetResult();
+        }
+        catch (TimeoutException)
         {
             return false;
         }
@@ -422,6 +427,9 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
             return leases.TryGetValue(deviceId, out Lease? lease) && lease.Established;
         }
     }
+
+    private static TaskCompletionSource Unset() =>
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public ITunerDevice? DeviceOf(string deviceId)
     {
@@ -636,7 +644,6 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
         }
 
         lease.Device = null;
-        lease.Ready.Dispose();
     }
 
     private static void Close(ITunerDevice device)

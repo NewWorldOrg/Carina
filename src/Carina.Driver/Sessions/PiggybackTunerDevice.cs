@@ -40,7 +40,7 @@ public sealed class PiggybackTunerDevice(TunerSession host, SessionSubscription 
     private StreamCutException Cut(Exception? cause)
     {
         SessionStopReason ended = HowThisOneEnds();
-        bool ourOwnDoing = ended is SessionStopReason.RecordingFailed;
+        bool ourOwnDoing = seat.FellBehind;
 
         string what = ourOwnDoing
             ? $"This recording did not take the stream of '{host.SessionId}' on the tuner '{host.DeviceId}' quickly enough, so it ends here and is incomplete"
@@ -54,7 +54,9 @@ public sealed class PiggybackTunerDevice(TunerSession host, SessionSubscription 
     }
 
     private SessionStopReason HowThisOneEnds() =>
-        seat.EndedWith is SessionStopReason.RecordingFailed && !seat.FellBehind
+        seat.EndedWith is SessionStopReason.RecordingFailed
+        && !seat.FellBehind
+        && seat.Kind is not SubscriberKind.Recording
             ? SessionStopReason.Unspecified
             : seat.EndedWith;
 }

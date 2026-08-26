@@ -212,8 +212,81 @@ public sealed class RecordingRiderTests : IDisposable
         host.Dispose();
     }
 
+    [Fact]
+    public void ARecordingThatLostPacketsIsAFailureEvenWhenItsHostEndedAtItsEndTime()
+    {
+        using var host = new TunerSession(
+            SessionId.Parse("host"),
+            SessionPurpose.Live,
+            "adapter0",
+            new ScriptedTunerDevice(),
+            Start,
+            Start.AddHours(1),
+            clock
+        );
+
+        using var seats = new SessionBroadcaster(
+            recordingCapacity: 1,
+            recordingBlockLimit: TimeSpan.Zero
+        );
+        SessionSubscription seat = seats.Subscribe(SubscriberKind.Recording);
+
+        using var gone = new CancellationTokenSource();
+
+        gone.Cancel();
+        seats.Publish(Chunk(1));
+        seats.Publish(Chunk(2), gone.Token);
+
+        Assert.True(seat.IsTruncated, "The seat was never made to miss a chunk.");
+
+        using var rider = new TunerSession(
+            SessionId.Parse("rider"),
+            SessionPurpose.Recording,
+            "adapter0",
+            new PiggybackTunerDevice(host, seat),
+            Start,
+            Start.AddHours(1),
+            clock
+        );
+
+        rider.Start();
+        seats.Close(null, SessionStopReason.EndTimeReached);
+        rider.WaitForEnd(Deadlock);
+
+        Assert.Equal(SessionState.Failed, rider.State);
+        Assert.Equal(SessionStopReason.EndTimeReached, rider.StopReason);
+        Assert.NotNull(rider.FailureCause);
+    }
+
+    [Fact]
+    public async Task ARecordingRidingAlongIsNotAFailureWhenItsHostReachesItsEndTime()
+    {
+        var device = new PacedTunerDevice();
+        var manager = new TunerSessionManager(
+            Configuration,
+            new OneTunerDeviceFactory(device),
+            clock,
+            NullLogger<TunerSessionManager>.Instance
+        );
+
+        TunerSession host = Started(manager, Request("s-1", SessionPurpose.Recording));
+
+        device.AwaitParkedBefore(1);
+
+        TunerSession rider = Started(manager, Request("s-2", SessionPurpose.Recording));
+
+        host.Stop(SessionStopReason.EndTimeReached);
+
+        await rider.Completion.WaitAsync(Deadlock);
+
+        Assert.Equal(SessionState.Stopped, rider.State);
+        Assert.Equal(SessionStopReason.EndTimeReached, rider.StopReason);
+        Assert.Null(rider.FailureCause);
+
+        host.Dispose();
+    }
+
     [Theory]
-    [InlineData(SessionStopReason.EndTimeReached)]
     [InlineData(SessionStopReason.Requested)]
     [InlineData(SessionStopReason.Preempted)]
     public async Task ARecordingRidingAlongEndsWithTheReasonItsHostEndedFor(
@@ -323,6 +396,7 @@ public sealed class RecordingRiderTests : IDisposable
         );
 
         Assert.Equal(SessionStopReason.RecordingFailed, cut.Reason);
+        Assert.Contains("quickly enough", cut.Message, StringComparison.Ordinal);
 
         host.Dispose();
     }

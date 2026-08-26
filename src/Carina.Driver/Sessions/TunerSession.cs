@@ -26,11 +26,7 @@ public sealed class TunerSession : IDisposable
         SessionSubscription? seat
     )
     {
-        private readonly TaskCompletionSource takenUp = new(
-            TaskCreationOptions.RunContinuationsAsynchronously
-        );
-
-        private int settled;
+        private readonly SettledOnce settled = new();
 
         public ITunerDevice Replacement { get; } = replacement;
 
@@ -38,23 +34,13 @@ public sealed class TunerSession : IDisposable
 
         public SessionSubscription? Seat { get; } = seat;
 
-        public Task TakenUp => takenUp.Task;
+        public Task TakenUp => settled.Finished;
 
-        public bool TryTakeUp()
-        {
-            if (!Claim())
-            {
-                return false;
-            }
+        public bool TryTakeUp() => settled.TrySettle();
 
-            takenUp.SetResult();
+        public void HasBeenTakenUp() => settled.HasFinished();
 
-            return true;
-        }
-
-        public bool TryGiveUp() => Claim();
-
-        private bool Claim() => Interlocked.Exchange(ref settled, 1) is 0;
+        public bool TryGiveUp() => settled.SettleUnlessAnotherAlreadyHas();
     }
 
     private readonly SignalQualityReader? quality;
@@ -480,6 +466,12 @@ public sealed class TunerSession : IDisposable
         {
             Conclude(ReasonForEnd(token));
         }
+        catch (StreamCutException cut) when (
+            cut.Reason is SessionStopReason.EndTimeReached && cut.InnerException is null
+        )
+        {
+            Conclude(SessionStopReason.EndTimeReached);
+        }
         catch (StreamCutException cut)
         {
             Finish(
@@ -519,6 +511,7 @@ public sealed class TunerSession : IDisposable
                     device = asked.Replacement;
                     seat = asked.Seat;
                     RidesOn = asked.Host;
+                    asked.HasBeenTakenUp();
                 }
 
                 handover = null;
