@@ -20,7 +20,7 @@ public sealed class TunedStreamProbe(IDriverClient driver, ScanSettings settings
         ArgumentNullException.ThrowIfNull(tuning);
 
         var sessionId = SessionId.Parse($"scan-{Guid.NewGuid():n}");
-        TuneParams tune = TuneParamsOf(tuning);
+        TuneParams tune = tuning.Typed();
         DriverCall<SessionSnapshot> start = await driver.StartSessionAsync(
             new StartSessionRequest
             {
@@ -242,16 +242,4 @@ public sealed class TunedStreamProbe(IDriverClient driver, ScanSettings settings
                 layer?.TotalBits),
             false);
     }
-
-    private static TuneParams TuneParamsOf(TuningParameters tuning)
-        => tuning.System switch
-        {
-            TuneSystem.IsdbT => TuneParams.Terrestrial(tuning.PhysicalChannel),
-            TuneSystem.IsdbSBs => TuneParams.Bs(tuning.PhysicalChannel, tuning.TransportStreamId!.Value),
-            TuneSystem.IsdbSCs110 => TuneParams.Cs110(tuning.PhysicalChannel),
-            _ => throw new ArgumentOutOfRangeException(
-                nameof(tuning),
-                tuning.System,
-                "There is no tune for a system this build cannot name."),
-        };
 }

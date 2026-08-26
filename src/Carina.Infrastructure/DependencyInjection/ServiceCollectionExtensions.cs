@@ -54,6 +54,11 @@ public static class ServiceCollectionExtensions
             .Configure(options => options.ReadFrom(configuration))
             .ValidateOnStart();
 
+        services.AddSingleton<IValidateOptions<RecordingOptions>, RecordingValidation>();
+        services.AddOptions<RecordingOptions>()
+            .Configure(options => options.ReadFrom(configuration))
+            .ValidateOnStart();
+
         services.AddSingleton<IValidateOptions<CollectionOptions>, CollectionValidation>();
         services.AddOptions<CollectionOptions>()
             .Configure(options => options.ReadFrom(configuration))
@@ -114,6 +119,8 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton(StorageMonitorSettings.Default);
         services.TryAddSingleton<StorageMonitor>();
         services.TryAddSingleton<DiskPrecheckService>();
+        services.TryAddSingleton<RecordingSettings>(provider =>
+            provider.GetRequiredService<IOptions<RecordingOptions>>().Value.Read());
         services.TryAddSingleton(ScanSettings.Default);
         services.TryAddSingleton<IntegritySettings>(provider =>
             provider.GetRequiredService<IOptions<IntegrityOptions>>().Value.Read());
@@ -134,6 +141,8 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<EpgCollector>();
         services.AddHostedService<RideAlongHarvester>();
         services.AddHostedService(provider => provider.GetRequiredService<IntegrityCheckJob>());
+
+        services.AddCarinaRecording();
 
         return services;
     }
