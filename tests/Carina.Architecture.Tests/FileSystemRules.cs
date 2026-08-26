@@ -47,6 +47,7 @@ public static partial class FileSystemRules
         + @"|AppendText|WriteAll\w*|AppendAll\w*|SetAttributes|SetUnixFileMode|SetLastWrite\w*|Encrypt|Decrypt)\b"
         + @"|\bDirectory\s*\.\s*(Delete|Move|CreateDirectory|CreateSymbolicLink|CreateTempSubdirectory)\b"
         + @"|\.\s*(Delete|MoveTo|CopyTo|Replace|SetLength|Encrypt|Decrypt)\s*\("
+        + @"|\.\s*(CreateText|Create)\s*\(\s*\)"
         + @"|\bnew\s+(FileStream|StreamWriter|BinaryWriter|SafeFileHandle)\b"
         + @"|\bFileMode\s*\."
         + @"|\bDllImport\b|\bLibraryImport\b|\bNativeLibrary\b"

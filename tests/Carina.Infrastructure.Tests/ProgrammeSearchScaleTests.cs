@@ -3,7 +3,10 @@ using System.Diagnostics;
 using Carina.Domain.Base;
 using Carina.Domain.Programmes;
 using Carina.Infrastructure.Persistence;
+using Carina.Infrastructure.Persistence.Configurations;
 using Carina.Infrastructure.Persistence.Repositories;
+
+using Npgsql;
 
 using Xunit.Abstractions;
 
@@ -80,6 +83,35 @@ public sealed class ProgrammeSearchScaleTests(ProgrammeSearchScale scale, ITestO
 
         Assert.Equal(4_317, taken.Found.Total);
         Assert.Equal(50, taken.Found.Items.Count);
+    }
+
+    [Fact]
+    public async Task TheArchiveThisMeasuresIsSampledTheWayTheMigratedOneIs()
+    {
+        await using var connection = new NpgsqlConnection(scale.ConnectionString);
+        await connection.OpenAsync(Cancel);
+
+        await using NpgsqlCommand reading = connection.CreateCommand();
+        reading.CommandText =
+            "SELECT attrelid::regclass::text || ' ' || coalesce(attstattarget::text, 'the default') "
+            + "FROM pg_attribute "
+            + "WHERE attrelid IN ('programme'::regclass, 'archived_programme'::regclass) "
+            + "AND attname = 'searchable' ORDER BY 1";
+
+        await using NpgsqlDataReader rows = await reading.ExecuteReaderAsync(Cancel);
+        List<string> read = [];
+
+        while (await rows.ReadAsync(Cancel))
+        {
+            read.Add(rows.GetString(0));
+        }
+
+        Assert.Equal(
+            [
+                $"archived_programme {ProgrammeConfiguration.SearchableStatisticsTarget}",
+                $"programme {ProgrammeConfiguration.SearchableStatisticsTarget}",
+            ],
+            read);
     }
 
     private async Task<Measured> MeasuredAsync(ProgrammeSearch looking, string shape)

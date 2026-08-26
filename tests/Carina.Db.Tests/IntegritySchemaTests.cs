@@ -1,4 +1,5 @@
 using Carina.Domain.Integrity;
+using Carina.Infrastructure.Persistence.Configurations;
 
 using Npgsql;
 
@@ -91,6 +92,47 @@ public sealed class IntegritySchemaTests(MigratedScratchDatabase database)
         Assert.Equal(
             ["EmptyThoughComplete", "FileEmpty", "FileMissing", "NoLedgerRow", "SizeDisagrees"],
             await FaultsAsync(connection, check));
+    }
+
+    [Fact]
+    public async Task TheIndexOverChecksReadsWhenEachOneFinished()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        Assert.Equal(
+            "CREATE INDEX ix_integrity_check_finished ON public.integrity_check USING btree (finished_at)",
+            await IndexDefinition(connection, IntegrityCheckConfiguration.FinishedIndexName));
+    }
+
+    [Fact]
+    public async Task TheIndexOverFindingsReadsTheCheckAndTheClassTogether()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        Assert.Equal(
+            "CREATE INDEX ix_integrity_finding_check ON public.integrity_finding "
+            + "USING btree (check_id, fault)",
+            await IndexDefinition(connection, IntegrityFindingConfiguration.CheckIndexName));
+    }
+
+    [Fact]
+    public async Task TheIndexBackToARecordingCannotReachAFindingThatNamesNone()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        Assert.Equal(
+            "CREATE INDEX ix_integrity_finding_recording ON public.integrity_finding "
+            + "USING btree (recording_id) WHERE (recording_id IS NOT NULL)",
+            await IndexDefinition(connection, IntegrityFindingConfiguration.RecordingIndexName));
+    }
+
+    private static async Task<string> IndexDefinition(NpgsqlConnection connection, string name)
+    {
+        await using var reading = new NpgsqlCommand(
+            $"SELECT indexdef FROM pg_indexes WHERE indexname = '{name}'",
+            connection);
+
+        return (string)(await reading.ExecuteScalarAsync())!;
     }
 
     [Fact]
