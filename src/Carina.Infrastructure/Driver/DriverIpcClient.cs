@@ -72,6 +72,14 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
             DriverJson.Context.IReadOnlyListDetectedDeviceDto,
             cancellationToken);
 
+    public Task<DriverCall<IReadOnlyList<StorageRootDto>>> GetStorageAsync(
+        CancellationToken cancellationToken)
+        => DeclaredGetAsync(
+            DriverCapabilities.Storage,
+            DriverEndpoints.Storage,
+            DriverJson.Context.IReadOnlyListStorageRootDto,
+            cancellationToken);
+
     public Task<DriverCall<TunerLedgerDto>> GetTunerLedgerAsync(CancellationToken cancellationToken)
         => DeclaredGetAsync(
             DriverCapabilities.TunerLedger,

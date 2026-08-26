@@ -16,6 +16,7 @@ using Carina.Infrastructure.Events;
 using Carina.Infrastructure.Integrity;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
+using Carina.Infrastructure.Recordings;
 using Carina.Infrastructure.Scanning;
 
 using Microsoft.Extensions.Configuration;
@@ -106,6 +107,9 @@ public static class ServiceCollectionExtensions
             provider.GetRequiredService<DriverSignalRelay>());
         services.TryAddSingleton<IDriverSessionResyncHook, NoopDriverSessionResyncHook>();
         services.TryAddSingleton(DriverSupervisionSettings.Default);
+        services.TryAddSingleton(StorageMonitorSettings.Default);
+        services.TryAddSingleton<StorageMonitor>();
+        services.TryAddSingleton<DiskPrecheckService>();
         services.TryAddSingleton(ScanSettings.Default);
         services.TryAddSingleton<IntegritySettings>(provider =>
             provider.GetRequiredService<IOptions<IntegrityOptions>>().Value.Read());
