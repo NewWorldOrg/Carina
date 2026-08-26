@@ -37,6 +37,7 @@ internal sealed class DriverFeature : IAsyncDisposable
                 services.AddSingleton<IDriverSessionResyncHook>(Hook);
                 services.AddSingleton(Impatient);
                 services.AddSingleton<ICandidateChannelRepository>(Candidates);
+                services.AddSingleton<IServiceReachSettingsRepository>(ReachSettings);
             }))
             .CreateAuthenticatedClient();
     }
@@ -46,6 +47,8 @@ internal sealed class DriverFeature : IAsyncDisposable
     public RecordingResyncHook Hook { get; }
 
     public HeldCandidates Candidates { get; } = new();
+
+    public HeldReachSettings ReachSettings { get; } = new();
 
     public FakeDriver Driver => driver
         ?? throw new InvalidOperationException("No driver double is running.");

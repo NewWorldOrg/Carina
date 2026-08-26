@@ -293,13 +293,23 @@ public sealed class FakeDriver : IAsyncDisposable
             return;
         }
 
-        if (!entries.SequenceEqual(Ledger.Tuners))
+        IReadOnlyList<TunerConfigEntry> saved =
+        [
+            .. entries.Select(entry => entry with { Kind = Receives(entry.DeviceId) }),
+        ];
+
+        if (!saved.SequenceEqual(Ledger.Tuners))
         {
-            Ledger = Ledger with { Tuners = entries, SavedHash = $"saved-{++ledgerSaves}" };
+            Ledger = Ledger with { Tuners = saved, SavedHash = $"saved-{++ledgerSaves}" };
         }
 
         await WriteAsync(context, StatusCodes.Status200OK, Ledger, DriverJson.Context.TunerLedgerDto);
     }
+
+    private TunerKind Receives(string deviceId) =>
+        DetectedDevices
+            .FirstOrDefault(device => string.Equals(device.DeviceId, deviceId, StringComparison.Ordinal))
+            ?.Kinds.FirstOrDefault() ?? TunerKind.Unspecified;
 
     private async Task ToggleTunerAsync(HttpContext context)
     {

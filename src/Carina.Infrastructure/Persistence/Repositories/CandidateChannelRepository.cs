@@ -66,6 +66,12 @@ public sealed class CandidateChannelRepository(CarinaDbContext context) : ICandi
             .ThenBy(candidate => candidate.ServiceId)
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<CandidateChannel>> ListAllAsync(CancellationToken cancellationToken)
+        => await Candidates()
+            .OrderBy(candidate => candidate.NetworkId)
+            .ThenBy(candidate => candidate.ServiceId)
+            .ToListAsync(cancellationToken);
+
     public async Task<IReadOnlyList<CandidateChannel>> ListSelectedAsync(CancellationToken cancellationToken)
         => await Candidates()
             .Where(candidate => candidate.IsSelected)

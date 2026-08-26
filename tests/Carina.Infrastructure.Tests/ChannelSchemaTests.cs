@@ -261,6 +261,7 @@ public sealed class ChannelSchemaTests
                 "satellite_transport_stream",
                 "scan_run",
                 "scan_run_attempt",
+                "service_reach_config",
                 "stream_visit",
                 "stream_visit_tally",
             ],
