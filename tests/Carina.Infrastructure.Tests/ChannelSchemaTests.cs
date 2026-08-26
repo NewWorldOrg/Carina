@@ -249,6 +249,8 @@ public sealed class ChannelSchemaTests
                 "broadcast_service",
                 "candidate_channel",
                 "collection_epoch",
+                "integrity_check",
+                "integrity_finding",
                 "local_account",
                 "oidc_config",
                 "programme",

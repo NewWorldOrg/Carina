@@ -6,6 +6,7 @@ services:
       - .:/code
       - nuget:/root/.nuget/packages
       - driver-run:/run/carina
+      - recordings:/srv/recordings:ro
     tty: true
     ports:
       - ${API_PORT:-8081}:8080
@@ -19,6 +20,7 @@ services:
       CARINA_KNOWN_NETWORKS: ${CARINA_KNOWN_NETWORKS:-172.16.0.0/12}
       CARINA_PUBLIC_ORIGIN: ${CARINA_PUBLIC_ORIGIN:-}
       CARINA_ANONYMOUS_NETWORKS: ${CARINA_ANONYMOUS_NETWORKS:-}
+      Integrity__OutputRoots: primary=/srv/recordings
     depends_on:
       db:
         condition: service_healthy

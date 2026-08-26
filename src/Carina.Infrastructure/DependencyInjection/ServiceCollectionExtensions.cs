@@ -4,6 +4,7 @@ using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.DriverStatus;
 using Carina.Domain.Events;
+using Carina.Domain.Integrity;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
 using Carina.Domain.Scans;
@@ -12,6 +13,7 @@ using Carina.Infrastructure.Collection;
 using Carina.Infrastructure.Configuration;
 using Carina.Infrastructure.Driver;
 using Carina.Infrastructure.Events;
+using Carina.Infrastructure.Integrity;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Scanning;
@@ -45,6 +47,11 @@ public static class ServiceCollectionExtensions
                 $"{DriverOptions.SocketPathKey} must be an absolute path.")
             .ValidateOnStart();
 
+        services.AddSingleton<IValidateOptions<IntegrityOptions>, IntegrityValidation>();
+        services.AddOptions<IntegrityOptions>()
+            .Configure(options => options.ReadFrom(configuration))
+            .ValidateOnStart();
+
         services.AddSingleton<IValidateOptions<CollectionOptions>, CollectionValidation>();
         services.AddOptions<CollectionOptions>()
             .Configure(options => options.ReadFrom(configuration))
@@ -68,6 +75,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISatelliteTransportStreamRepository, SatelliteTransportStreamRepository>();
         services.AddScoped<IScanRunRepository, ScanRunRepository>();
         services.AddScoped<IReservationRecordingContract, ReservationRecordingContract>();
+        services.AddScoped<IRecordingLedger, RecordingLedger>();
+        services.AddScoped<IIntegrityCheckRepository, IntegrityCheckRepository>();
         services.AddScoped<IChannelScanOrchestrator, ChannelScanOrchestrator>();
         services.AddScoped<ScanApplier>();
         services.AddScoped<IBroadcastStreamDirectory, BroadcastStreamDirectory>();
@@ -98,6 +107,10 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IDriverSessionResyncHook, NoopDriverSessionResyncHook>();
         services.TryAddSingleton(DriverSupervisionSettings.Default);
         services.TryAddSingleton(ScanSettings.Default);
+        services.TryAddSingleton<IntegritySettings>(provider =>
+            provider.GetRequiredService<IOptions<IntegrityOptions>>().Value.Read());
+        services.TryAddSingleton<IRecordingFileSurvey, LocalRecordingFileSurvey>();
+        services.AddSingleton<IntegrityCheckJob>();
         services.TryAddSingleton<CollectionSettings>(provider =>
             provider.GetRequiredService<IOptions<CollectionOptions>>().Value.Read());
         services.TryAddSingleton<RescanNoticeBoard>();
@@ -112,6 +125,7 @@ public static class ServiceCollectionExtensions
         services.AddHostedService(provider => provider.GetRequiredService<ScanRunner>());
         services.AddHostedService<EpgCollector>();
         services.AddHostedService<RideAlongHarvester>();
+        services.AddHostedService(provider => provider.GetRequiredService<IntegrityCheckJob>());
 
         return services;
     }
