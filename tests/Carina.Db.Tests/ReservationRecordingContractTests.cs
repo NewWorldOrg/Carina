@@ -127,8 +127,29 @@ public sealed class ReservationRecordingContractTests(MigratedScratchDatabase da
 
         Assert.Equal(reservation.EffectiveStartAt, tick.EffectiveStartAt);
         Assert.Equal(reservation.EffectiveEndAt, tick.EffectiveEndAt);
-        Assert.Equal(reservation.SnapshotName, tick.Name);
         Assert.Equal(reservation.Programme, tick.Programme);
+    }
+
+    [Fact]
+    public async Task TheProgrammeTheReservationCopiedIsHandedToTheRecorderWhole()
+    {
+        await Clear();
+        Reservation reservation = Build(21702, Airs, Margin.None, Margin.None);
+
+        await using (CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString))
+        {
+            context.Add(reservation);
+            await context.SaveChangesAsync();
+        }
+
+        RecordingTick tick = Assert.Single(await Ticks(Tick));
+
+        Assert.Equal("A programme", tick.Snapshot.Name);
+        Assert.Equal("What it is about", tick.Snapshot.Summary);
+        Assert.Equal(string.Empty, tick.Snapshot.Extended);
+        Assert.Equal([new ProgrammeGenre(7, 1)], tick.Snapshot.Genres);
+        Assert.Equal(Made, tick.Snapshot.CapturedAt);
+        Assert.Equal(DateTimeKind.Utc, tick.Snapshot.CapturedAt.Kind);
     }
 
     [Fact]
@@ -209,6 +230,59 @@ public sealed class ReservationRecordingContractTests(MigratedScratchDatabase da
             await Assert.ThrowsAsync<ArgumentException>(() => Ticks(ambiguous));
             await Assert.ThrowsAsync<ArgumentException>(() => Claim(ReservationId.New(), ambiguous));
         }
+    }
+
+    [Fact]
+    public async Task AClaimThatStartedNothingIsGivenBack()
+    {
+        await Clear();
+        ReservationId airing = await Plan(22301, ReservationState.Scheduled);
+
+        Assert.True(await Claim(airing, Tick));
+        Assert.True(await Release(airing, Tick));
+        Assert.Null(await Read(airing, "started_at"));
+        Assert.Equal("Scheduled", await Read(airing, "composite_state"));
+        Assert.True(await Claim(airing, Tick.AddSeconds(1)));
+    }
+
+    [Fact]
+    public async Task AClaimIsOnlyGivenBackByTheRecorderHoldingIt()
+    {
+        await Clear();
+        ReservationId airing = await Plan(22401, ReservationState.Scheduled);
+
+        Assert.True(await Claim(airing, Tick));
+        Assert.False(await Release(airing, Tick.AddSeconds(1)));
+        Assert.Equal(Tick, await Read(airing, "started_at"));
+    }
+
+    [Fact]
+    public async Task ARecordingThatAlreadyEndedKeepsTheClaimThatStartedIt()
+    {
+        await Clear();
+        ReservationId finished = await Plan(22501, ReservationState.Scheduled, claimed: true, outcome: "Complete");
+
+        Assert.False(await Release(finished, Airs));
+        Assert.Equal(Airs, await Read(finished, "started_at"));
+    }
+
+    [Fact]
+    public async Task AClaimIsGivenBackAsAUtcInstantOrNotAtAll()
+    {
+        await Clear();
+
+        foreach (DateTimeKind kind in new[] { DateTimeKind.Unspecified, DateTimeKind.Local })
+        {
+            await Assert.ThrowsAsync<ArgumentException>(
+                () => Release(ReservationId.New(), DateTime.SpecifyKind(Tick, kind)));
+        }
+    }
+
+    private async Task<bool> Release(ReservationId id, DateTime claimedAt)
+    {
+        await using CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString);
+
+        return await new ReservationRecordingContract(context).ReleaseAsync(id, claimedAt, CancellationToken.None);
     }
 
     private async Task<bool> QueuedBehindTheHolder()
