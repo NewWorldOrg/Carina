@@ -198,17 +198,31 @@ nothing.
   estimated total, cursor paging in place of a page count, or a count that stops
   at a ceiling and answers "more than". None of them is in place.
 
-- **A picture of a recording can never change how the recording ended.** Nothing
-  on the completion path calls the thumbnail code at all: the job reads the ledger
-  for recordings that have ended and have no picture yet, and the only thing it may
-  write back is the picture's own state. A rule test says which files outside the
-  feature are allowed to name it — the two places it is built — and another says
-  that nothing inside the feature calls any of the methods that say how a recording
-  ended. A recording that failed is skipped rather than illustrated, because a
-  picture of it would say it was recorded; one that was cut short is illustrated,
-  and the ledger still says it was cut short. When the picture cannot be drawn, the
-  class of the failure is kept on the row beside the state, never in
-  `outcome_detail`, which belongs to the recording's own result.
+- **A recording that has ended is frozen except for its picture, and the aggregate
+  is what holds that.** Every public method on `Recording` but one refuses once an
+  outcome is set; `Illustrate` is the exception, and it moves the two thumbnail
+  columns and nothing else. A reflection test asserts the whole set of methods, so
+  a new one cannot appear without being accounted for, and a database round trip
+  says the outcome, the size and the reasons come back unchanged after a picture
+  is drawn. **That pair is the guarantee.**
+
+  Around it, the thumbnail pass never asks for a recording that has not ended:
+  it reads the ledger for rows with no picture yet rather than being called from
+  the path that ends a recording. A recording that failed is skipped rather than
+  illustrated, because a picture of it would say it was recorded; one that was cut
+  short is illustrated, and the ledger still says it was cut short. When the
+  picture cannot be drawn, the class of the failure is kept on the row beside the
+  state, never in `outcome_detail`, which belongs to the recording's own result.
+
+  **Two source rules sit on top of that, and they are trip wires rather than
+  proof.** One reads every file whose path carries the word thumbnail — the feature
+  folder and anything named beside it — and reports a call that says how a
+  recording ended, or a reach past the aggregate through reflection or raw SQL.
+  The other reports a file outside the feature folder that names any of the types
+  the feature is made of, allowing only the two places it is built. **A helper
+  whose name says nothing about thumbnails walks straight past both**, and a test
+  asserts that plainly. What they catch is the ordinary way somebody would write
+  it, not every way there is.
 
 - **A stop the driver was asked for exits 0; anything else exits 70.** Coming
   back is the supervisor's half of the deal, which is why `on-failure` is the one

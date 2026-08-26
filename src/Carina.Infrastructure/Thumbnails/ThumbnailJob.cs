@@ -42,13 +42,13 @@ public sealed class ThumbnailJob(
         }
     }
 
-    public async Task<bool> RemakeAsync(RecordingId id, CancellationToken cancellationToken)
+    public async Task<ThumbnailRemake> RemakeAsync(RecordingId id, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(id);
 
         if (!settings.DrawsAnything)
         {
-            return false;
+            return ThumbnailRemake.NowhereToPutThem;
         }
 
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
@@ -57,12 +57,16 @@ public sealed class ThumbnailJob(
 
         if (subject is null)
         {
-            return false;
+            return ThumbnailRemake.NothingToAskAbout;
         }
 
-        await WorkOnAsync(worklist, subject, cancellationToken);
-
-        return true;
+        return await WorkOnAsync(worklist, subject, cancellationToken) switch
+        {
+            ThumbnailState.Ready => ThumbnailRemake.Drawn,
+            ThumbnailState.Skipped => ThumbnailRemake.Skipped,
+            ThumbnailState.Failed => ThumbnailRemake.Failed,
+            _ => ThumbnailRemake.OutOfReach,
+        };
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -92,7 +96,7 @@ public sealed class ThumbnailJob(
 
             try
             {
-                await RunAsync(stoppingToken);
+                Told(await RunAsync(stoppingToken));
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -105,12 +109,33 @@ public sealed class ThumbnailJob(
         }
     }
 
+    private void Told(ThumbnailPass pass)
+    {
+        if (pass.LeftForNextTime > 0)
+        {
+            logger.LogWarning(
+                "{Left} of the {Read} recording(s) this pass read are still without a picture and are tried again.",
+                pass.LeftForNextTime,
+                pass.Read);
+        }
+
+        if (pass.OutOfReach > 0)
+        {
+            logger.LogWarning(
+                "{OutOfReach} recording(s) are waiting for a picture under an output root nothing tells this process "
+                + "where to find, so they are not read at all until it is mounted.",
+                pass.OutOfReach);
+        }
+    }
+
     private async Task<ThumbnailPass> PassAsync(CancellationToken cancellationToken)
     {
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
         IThumbnailWorklist worklist = scope.ServiceProvider.GetRequiredService<IThumbnailWorklist>();
+        IReadOnlyList<OutputRoot> withinReach = WithinReach();
         IReadOnlyList<ThumbnailSubject> awaiting =
-            await worklist.AwaitingAsync(settings.AtMostAPass, cancellationToken);
+            await worklist.AwaitingAsync(withinReach, settings.AtMostAPass, cancellationToken);
+        int outOfReach = await worklist.WaitingOutOfReachAsync(withinReach, cancellationToken);
 
         int drawn = 0;
         int skipped = 0;
@@ -120,9 +145,7 @@ public sealed class ThumbnailJob(
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            ThumbnailState? settled = await WorkOnAsync(worklist, subject, cancellationToken);
-
-            switch (settled)
+            switch (await WorkOnAsync(worklist, subject, cancellationToken))
             {
                 case ThumbnailState.Ready:
                     drawn++;
@@ -139,13 +162,15 @@ public sealed class ThumbnailJob(
         }
 
         logger.LogInformation(
-            "A thumbnail pass read {Read} recording(s): {Drawn} drawn, {Skipped} skipped, {Failed} failed.",
+            "A thumbnail pass read {Read} recording(s): {Drawn} drawn, {Skipped} skipped, {Failed} failed, "
+            + "{OutOfReach} left unread under a root out of reach.",
             awaiting.Count,
             drawn,
             skipped,
-            failed);
+            failed,
+            outOfReach);
 
-        return ThumbnailPass.Of(awaiting.Count, drawn, skipped, failed);
+        return ThumbnailPass.Of(awaiting.Count, drawn, skipped, failed, outOfReach);
     }
 
     private async Task<ThumbnailState?> WorkOnAsync(
@@ -221,6 +246,8 @@ public sealed class ThumbnailJob(
             return null;
         }
     }
+
+    private IReadOnlyList<OutputRoot> WithinReach() => [.. mounts.OutputRoots.Select(mounted => mounted.Root)];
 
     private string? Mounted(OutputRoot root)
         => mounts.OutputRoots.FirstOrDefault(candidate => candidate.Root.Equals(root))?.Path;

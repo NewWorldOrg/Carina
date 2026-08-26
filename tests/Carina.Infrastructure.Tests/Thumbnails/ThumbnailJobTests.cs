@@ -31,7 +31,7 @@ public sealed class ThumbnailJobTests
         Assert.Empty(renderer.Asked);
         Assert.Equal(ThumbnailState.Skipped, Assert.Single(worklist.Written).State);
         Assert.Null(Assert.Single(worklist.Written).Fault);
-        Assert.Equal((1, 0, 1, 0), (pass.Read, pass.Drawn, pass.Skipped, pass.Failed));
+        Assert.Equal((1, 0, 1, 0, 0), (pass.Read, pass.Drawn, pass.Skipped, pass.Failed, pass.OutOfReach));
     }
 
     [Fact]
@@ -45,7 +45,7 @@ public sealed class ThumbnailJobTests
 
         Assert.Single(renderer.Asked);
         Assert.Equal(ThumbnailState.Ready, Assert.Single(worklist.Written).State);
-        Assert.Equal((1, 1, 0, 0), (pass.Read, pass.Drawn, pass.Skipped, pass.Failed));
+        Assert.Equal((1, 1, 0, 0, 0), (pass.Read, pass.Drawn, pass.Skipped, pass.Failed, pass.OutOfReach));
     }
 
     [Fact]
@@ -64,8 +64,8 @@ public sealed class ThumbnailJobTests
     [Fact]
     public async Task ThePictureIsTakenWhereTheRuleSaysAndReadOutOfTheRootTheLedgerNames()
     {
-        HeldWorklist worklist = new HeldWorklist().Holding(
-            Subject(RecordingOutcome.Truncated, TimeSpan.FromSeconds(90)));
+        ThumbnailSubject subject = Subject(RecordingOutcome.Truncated, TimeSpan.FromSeconds(90));
+        HeldWorklist worklist = new HeldWorklist().Holding(subject);
         HeldRenderer renderer = new();
         using ThumbnailJob job = Job(worklist, renderer);
 
@@ -73,9 +73,8 @@ public sealed class ThumbnailJobTests
 
         Assert.True(renderer.Asked.TryDequeue(out ThumbnailRequest? asked));
         Assert.Equal(TimeSpan.FromSeconds(30), asked!.At);
-        Assert.StartsWith("/srv/bulk/", asked.Source, StringComparison.Ordinal);
-        Assert.StartsWith("/srv/pictures/", asked.Destination, StringComparison.Ordinal);
-        Assert.EndsWith(".jpg", asked.Destination, StringComparison.Ordinal);
+        Assert.Equal($"/srv/bulk/{subject.FileName.Value}", asked.Source);
+        Assert.Equal($"/srv/pictures/{subject.Id.Wire}.jpg", asked.Destination);
     }
 
     [Fact]
@@ -94,7 +93,34 @@ public sealed class ThumbnailJobTests
         Illustrated written = Assert.Single(worklist.Written);
         Assert.Equal(ThumbnailState.Failed, written.State);
         Assert.Equal(ThumbnailFault.Refused, written.Fault);
-        Assert.Equal((1, 0, 0, 1), (pass.Read, pass.Drawn, pass.Skipped, pass.Failed));
+        Assert.Equal((1, 0, 0, 1, 0), (pass.Read, pass.Drawn, pass.Skipped, pass.Failed, pass.OutOfReach));
+    }
+
+    [Fact]
+    public async Task APassCountsEachOfTheThreeAnswersSeparately()
+    {
+        ThumbnailSubject unwanted = Subject(RecordingOutcome.Failed);
+        ThumbnailSubject stubborn = Subject(RecordingOutcome.Complete);
+        ThumbnailSubject willing = Subject(RecordingOutcome.Truncated);
+        HeldWorklist worklist = new HeldWorklist().Holding(unwanted, stubborn, willing);
+        using ThumbnailJob job = Job(
+            worklist,
+            new HeldRenderer(request =>
+                request.Source.Contains(stubborn.Id.Wire, StringComparison.Ordinal)
+                    ? ThumbnailRender.Failed(ThumbnailFault.TimedOut, "took too long")
+                    : ThumbnailRender.Drawn()));
+
+        ThumbnailPass pass = await job.RunAsync(Cancel);
+
+        Assert.Equal((3, 1, 1, 1, 0), (pass.Read, pass.Drawn, pass.Skipped, pass.Failed, pass.OutOfReach));
+        Assert.Equal(0, pass.LeftForNextTime);
+        Assert.Equal(
+            [
+                (unwanted.Id, ThumbnailState.Skipped),
+                (stubborn.Id, ThumbnailState.Failed),
+                (willing.Id, ThumbnailState.Ready),
+            ],
+            worklist.Written.Select(written => (written.Id, written.State)).ToArray());
     }
 
     [Fact]
@@ -106,7 +132,7 @@ public sealed class ThumbnailJobTests
         ThumbnailPass pass = await job.RunAsync(Cancel);
 
         Assert.Empty(worklist.Written);
-        Assert.Equal((1, 0, 0, 0), (pass.Read, pass.Drawn, pass.Skipped, pass.Failed));
+        Assert.Equal((1, 0, 0, 0, 0), (pass.Read, pass.Drawn, pass.Skipped, pass.Failed, pass.OutOfReach));
         Assert.Equal(1, pass.LeftForNextTime);
     }
 
@@ -126,21 +152,44 @@ public sealed class ThumbnailJobTests
         ThumbnailPass pass = await job.RunAsync(Cancel);
 
         Assert.Equal(second.Id, Assert.Single(worklist.Written).Id);
-        Assert.Equal((2, 1, 0, 0), (pass.Read, pass.Drawn, pass.Skipped, pass.Failed));
+        Assert.Equal((2, 1, 0, 0, 0), (pass.Read, pass.Drawn, pass.Skipped, pass.Failed, pass.OutOfReach));
     }
 
     [Fact]
-    public async Task ARootNobodyToldThisProcessAboutLeavesTheRecordingInTheQueue()
+    public async Task ARootNobodyToldThisProcessAboutIsNeverReadAndIsCountedWhereAPersonCanSeeIt()
     {
-        HeldWorklist worklist = new HeldWorklist().Holding(Subject(RecordingOutcome.Complete, root: Elsewhere));
+        HeldWorklist worklist = new HeldWorklist().Holding(
+            Subject(RecordingOutcome.Complete, root: Elsewhere),
+            Subject(RecordingOutcome.Complete, root: Elsewhere),
+            Subject(RecordingOutcome.Complete));
         HeldRenderer renderer = new();
-        using ThumbnailJob job = Job(worklist, renderer);
+        using ThumbnailJob job = Job(worklist, renderer, Settings with { AtMostAPass = 2 });
 
         ThumbnailPass pass = await job.RunAsync(Cancel);
 
-        Assert.Empty(renderer.Asked);
-        Assert.Empty(worklist.Written);
-        Assert.Equal(1, pass.LeftForNextTime);
+        Assert.Equal(["bulk"], worklist.AskedWithin.Select(root => root.Value));
+        Assert.Single(renderer.Asked);
+        Assert.Equal((1, 1, 0, 0, 2), (pass.Read, pass.Drawn, pass.Skipped, pass.Failed, pass.OutOfReach));
+        Assert.Equal(0, pass.LeftForNextTime);
+    }
+
+    [Fact]
+    public async Task RecordingsUnderARootOutOfReachDoNotHoldUpTheOnesUnderARootWithinIt()
+    {
+        ThumbnailSubject within = Subject(RecordingOutcome.Complete);
+        HeldWorklist worklist = new HeldWorklist();
+        worklist.Holding([.. Enumerable
+            .Range(0, 8)
+            .Select(_ => Subject(RecordingOutcome.Complete, root: Elsewhere))
+            .Append(within)]);
+        HeldRenderer renderer = new();
+        using ThumbnailJob job = Job(worklist, renderer, Settings with { AtMostAPass = 8 });
+
+        ThumbnailPass pass = await job.RunAsync(Cancel);
+
+        Assert.Equal(within.Id, Assert.Single(worklist.Written).Id);
+        Assert.Equal(ThumbnailState.Ready, worklist.Written[0].State);
+        Assert.Equal((1, 1, 0, 0, 8), (pass.Read, pass.Drawn, pass.Skipped, pass.Failed, pass.OutOfReach));
     }
 
     [Fact]
@@ -155,7 +204,7 @@ public sealed class ThumbnailJobTests
         ThumbnailPass pass = await job.RunAsync(Cancel);
 
         Assert.Equal(2, worklist.AskedFor);
-        Assert.Equal((2, 2, 0, 0), (pass.Read, pass.Drawn, pass.Skipped, pass.Failed));
+        Assert.Equal((2, 2, 0, 0, 0), (pass.Read, pass.Drawn, pass.Skipped, pass.Failed, pass.OutOfReach));
     }
 
     [Fact]
@@ -237,7 +286,7 @@ public sealed class ThumbnailJobTests
         HeldRenderer renderer = new();
         using ThumbnailJob job = Job(worklist, renderer);
 
-        Assert.True(await job.RemakeAsync(subject.Id, Cancel));
+        Assert.Equal(ThumbnailRemake.Drawn, await job.RemakeAsync(subject.Id, Cancel));
 
         Assert.Equal([subject.Id], worklist.AskedAgain);
         Assert.Single(renderer.Asked);
@@ -251,7 +300,7 @@ public sealed class ThumbnailJobTests
         HeldRenderer renderer = new();
         using ThumbnailJob job = Job(worklist, renderer);
 
-        Assert.False(await job.RemakeAsync(RecordingId.New(), Cancel));
+        Assert.Equal(ThumbnailRemake.NothingToAskAbout, await job.RemakeAsync(RecordingId.New(), Cancel));
 
         Assert.Empty(renderer.Asked);
         Assert.Empty(worklist.Written);
@@ -265,10 +314,49 @@ public sealed class ThumbnailJobTests
         HeldRenderer renderer = new();
         using ThumbnailJob job = Job(worklist, renderer);
 
-        Assert.True(await job.RemakeAsync(subject.Id, Cancel));
+        Assert.Equal(ThumbnailRemake.Skipped, await job.RemakeAsync(subject.Id, Cancel));
 
         Assert.Empty(renderer.Asked);
         Assert.Equal(ThumbnailState.Skipped, Assert.Single(worklist.Written).State);
+    }
+
+    [Fact]
+    public async Task AskingAgainForARecordingUnderARootOutOfReachSaysSoRatherThanFailingIt()
+    {
+        ThumbnailSubject subject = Subject(RecordingOutcome.Complete, root: Elsewhere);
+        HeldWorklist worklist = new HeldWorklist().Holding(subject);
+        HeldRenderer renderer = new();
+        using ThumbnailJob job = Job(worklist, renderer);
+
+        Assert.Equal(ThumbnailRemake.OutOfReach, await job.RemakeAsync(subject.Id, Cancel));
+
+        Assert.Empty(renderer.Asked);
+        Assert.Empty(worklist.Written);
+    }
+
+    [Fact]
+    public async Task AskingAgainWithNowhereToPutThemSaysSoBeforeTouchingTheLedger()
+    {
+        HeldWorklist worklist = new();
+        using ThumbnailJob job = Job(worklist, new HeldRenderer(), Settings with { WrittenTo = null });
+
+        Assert.Equal(ThumbnailRemake.NowhereToPutThem, await job.RemakeAsync(RecordingId.New(), Cancel));
+
+        Assert.Empty(worklist.AskedAgain);
+    }
+
+    [Fact]
+    public async Task AskingAgainForARecordingThatCannotBeDrawnCarriesTheFailureBack()
+    {
+        ThumbnailSubject subject = Subject(RecordingOutcome.Complete);
+        HeldWorklist worklist = new HeldWorklist().Holding(subject);
+        using ThumbnailJob job = Job(
+            worklist,
+            new HeldRenderer(_ => ThumbnailRender.Failed(ThumbnailFault.ProgrammeMissing, "no ffmpeg here")));
+
+        Assert.Equal(ThumbnailRemake.Failed, await job.RemakeAsync(subject.Id, Cancel));
+
+        Assert.Equal(ThumbnailFault.ProgrammeMissing, Assert.Single(worklist.Written).Fault);
     }
 
     private static ThumbnailSettings Settings { get; } = new()

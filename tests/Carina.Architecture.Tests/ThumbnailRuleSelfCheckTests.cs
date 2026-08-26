@@ -2,93 +2,122 @@ namespace Carina.Architecture.Tests;
 
 public sealed class ThumbnailRuleSelfCheckTests
 {
-    private const string SaysHowItEnded = """
-        using Carina.Domain.Recordings;
-        internal sealed class ThumbnailFailureReporter
-        {
-            public void Failed(Recording recording)
-                => recording.Settle(RecordingOutcome.Failed, 0, DateTime.UtcNow);
-        }
-        """;
-
-    private const string SaysOnlyWhatThePictureIs = """
-        using Carina.Domain.Recordings;
-        internal sealed class ThumbnailWriter
-        {
-            public void Failed(Recording recording)
-                => recording.Illustrate(ThumbnailState.Failed, ThumbnailFault.TimedOut);
-        }
-        """;
-
-    private const string ReachesIntoTheFeature = """
-        using Carina.Domain.Thumbnails;
-        internal sealed class RecordingCompletion(IThumbnailRenderer renderer)
-        {
-            public Task DoneAsync() => renderer.RenderAsync(null!, default);
-        }
-        """;
-
-    private const string NamesTheProgrammeRunner = """
-        internal sealed class RecordingCompletion
-        {
-            public void DoneAsync() => FfmpegThumbnailRenderer.Draw();
-        }
-        """;
-
-    [Fact]
-    public void DetectsAThumbnailFileThatWritesHowTheRecordingEnded()
+    public static TheoryData<string, string> EveryWayOfSayingHowARecordingEnded => new()
     {
-        using var tree = new SourceTree();
-        tree.Write("Carina.Infrastructure/Thumbnails/ThumbnailFailureReporter.cs", SaysHowItEnded);
+        { "recording.Settle(outcome, size, at);", ".Settle(" },
+        { "recording.Note(detail);", ".Note(" },
+        { "recording.Interrupt(fault, at);", ".Interrupt(" },
+        { "recording.Resume(at);", ".Resume(" },
+        { "recording.Abort(at);", ".Abort(" },
+        { "recording.Measure(counters, positions, null, 0, at);", ".Measure(" },
+        { "recording.Extend(endsAt);", ".Extend(" },
+        { "recording.Wrote(written);", ".Wrote(" },
+        { "recording.Acquire(tuner);", ".Acquire(" },
+        { "recording . Settle (outcome, size, at);", ".Settle(" },
+    };
 
-        Assert.Equal(
-            ["/Carina.Infrastructure/Thumbnails/ThumbnailFailureReporter.cs .Settle("],
-            ThumbnailRules.ThumbnailFilesThatSayHowARecordingEnded(tree.Root));
+    public static TheoryData<string, string> EveryWayOfReachingPastTheAggregate => new()
+    {
+        { "typeof(Recording).GetProperty(\"Outcome\");", ".GetProperty(" },
+        { "typeof(Recording).GetField(\"outcome\");", ".GetField(" },
+        { "typeof(Recording).GetMethod(\"Settle\");", ".GetMethod(" },
+        { "held.SetValue(recording, outcome);", ".SetValue(" },
+        { "activator.CreateInstance(typeof(Recording));", ".CreateInstance(" },
+        { "context.Database.ExecuteSqlRaw(\"UPDATE recording SET recording_outcome = 'Failed'\");", ".ExecuteSqlRaw(" },
+        { "context.Set<Recording>().FromSqlRaw(\"SELECT 1\");", ".FromSqlRaw(" },
+    };
+
+    public static TheoryData<string> EveryTypeTheTripWireWatches
+    {
+        get
+        {
+            var named = new TheoryData<string>();
+
+            foreach (string machinery in ThumbnailRules.Machinery)
+            {
+                named.Add(machinery);
+            }
+
+            return named;
+        }
     }
 
     [Theory]
-    [InlineData("recording.Note(detail);", ".Note(")]
-    [InlineData("recording.Interrupt(fault, at);", ".Interrupt(")]
-    [InlineData("recording.Resume(at);", ".Resume(")]
-    [InlineData("recording.Abort(at);", ".Abort(")]
-    [InlineData("recording.Measure(counters, positions, null, 0, at);", ".Measure(")]
-    [InlineData("recording.Extend(endsAt);", ".Extend(")]
-    [InlineData("recording.Wrote(written);", ".Wrote(")]
-    [InlineData("recording.Acquire(tuner);", ".Acquire(")]
-    [InlineData("recording . Settle (outcome, size, at);", ".Settle(")]
-    public void DetectsEveryOtherWayOfSayingHowARecordingEnded(string source, string named)
+    [MemberData(nameof(EveryWayOfSayingHowARecordingEnded))]
+    [MemberData(nameof(EveryWayOfReachingPastTheAggregate))]
+    public void DetectsThisWayOfReachingForARecordingsResultFromInsideTheFeature(string source, string named)
     {
         using var tree = new SourceTree();
-        tree.Write("Carina.Domain/Thumbnails/Reaching.cs", source);
+        tree.Write("Carina.Infrastructure/Thumbnails/Reaching.cs", source);
 
         Assert.Equal(
-            [$"/Carina.Domain/Thumbnails/Reaching.cs {named}"],
-            ThumbnailRules.ThumbnailFilesThatSayHowARecordingEnded(tree.Root));
+            [$"/Carina.Infrastructure/Thumbnails/Reaching.cs {named}"],
+            ThumbnailRules.WhatNamedForThumbnailsReachesForARecordingsResult(tree.Root));
+    }
+
+    [Fact]
+    public void DetectsAFileNamedForThumbnailsThatSitsBesideTheFeatureRatherThanInsideIt()
+    {
+        using var tree = new SourceTree();
+        tree.Write(
+            "Carina.Infrastructure/ThumbnailSupport/RecordingTouch.cs",
+            "recording.Settle(outcome, size, at);");
+
+        Assert.Equal(
+            ["/Carina.Infrastructure/ThumbnailSupport/RecordingTouch.cs .Settle("],
+            ThumbnailRules.WhatNamedForThumbnailsReachesForARecordingsResult(tree.Root));
+    }
+
+    [Fact]
+    public void DetectsAFileWhoseOwnNameIsTheOnlyThingSayingItIsAboutThumbnails()
+    {
+        using var tree = new SourceTree();
+        tree.Write("Carina.Infrastructure/Recordings/ThumbnailWriteBack.cs", "recording.Abort(at);");
+
+        Assert.Equal(
+            ["/Carina.Infrastructure/Recordings/ThumbnailWriteBack.cs .Abort("],
+            ThumbnailRules.WhatNamedForThumbnailsReachesForARecordingsResult(tree.Root));
+    }
+
+    [Fact]
+    public void CannotSeeAHelperWhoseNameSaysNothingAboutThumbnails()
+    {
+        using var tree = new SourceTree();
+        tree.Write("Carina.Infrastructure/Recordings/RecordingTouch.cs", "recording.Settle(outcome, size, at);");
+
+        Assert.Empty(ThumbnailRules.WhatNamedForThumbnailsReachesForARecordingsResult(tree.Root));
     }
 
     [Fact]
     public void LeavesTheOneCallTheFeatureIsThereToMake()
     {
         using var tree = new SourceTree();
-        tree.Write("Carina.Infrastructure/Thumbnails/ThumbnailWriter.cs", SaysOnlyWhatThePictureIs);
+        tree.Write(
+            "Carina.Infrastructure/Thumbnails/ThumbnailWriter.cs",
+            "recording.Illustrate(ThumbnailState.Failed, ThumbnailFault.TimedOut);");
 
-        Assert.Empty(ThumbnailRules.ThumbnailFilesThatSayHowARecordingEnded(tree.Root));
+        Assert.Empty(ThumbnailRules.WhatNamedForThumbnailsReachesForARecordingsResult(tree.Root));
     }
 
     [Fact]
     public void LeavesTheCompletionPathWritingItsOwnResult()
     {
         using var tree = new SourceTree();
-        tree.Write("Carina.Infrastructure/Recordings/RecordingCompletion.cs", SaysHowItEnded);
+        tree.Write(
+            "Carina.Infrastructure/Recordings/RecordingCompletion.cs",
+            "recording.Settle(outcome, size, at);");
 
-        Assert.Empty(ThumbnailRules.ThumbnailFilesThatSayHowARecordingEnded(tree.Root));
+        Assert.Empty(ThumbnailRules.WhatNamedForThumbnailsReachesForARecordingsResult(tree.Root));
     }
 
-    [Fact]
-    public void DetectsSomethingOutsideTheFeatureCallingIntoIt()
+    [Theory]
+    [MemberData(nameof(EveryTypeTheTripWireWatches))]
+    public void DetectsSomethingOutsideTheFeatureNamingThisPartOfTheMachinery(string machinery)
     {
         using var tree = new SourceTree();
-        tree.Write("Carina.Infrastructure/Recordings/RecordingCompletion.cs", ReachesIntoTheFeature);
+        tree.Write(
+            "Carina.Infrastructure/Recordings/RecordingCompletion.cs",
+            $"internal sealed class RecordingCompletion({machinery} reaching);");
 
         Assert.Equal(
             ["/Carina.Infrastructure/Recordings/RecordingCompletion.cs"],
@@ -96,21 +125,36 @@ public sealed class ThumbnailRuleSelfCheckTests
     }
 
     [Fact]
-    public void DetectsSomethingOutsideTheFeatureNamingWhatRunsTheProgramme()
+    public void DetectsSomethingBesideTheFeatureFolderNamingTheMachineryRatherThanReadingItAsInside()
     {
         using var tree = new SourceTree();
-        tree.Write("Carina.Api/Controllers/Recordings/StopRecordingAction.cs", NamesTheProgrammeRunner);
+        tree.Write(
+            "Carina.Infrastructure/ThumbnailSupport/Reaching.cs",
+            "internal sealed class Reaching(IThumbnailRenderer renderer);");
 
         Assert.Equal(
-            ["/Carina.Api/Controllers/Recordings/StopRecordingAction.cs"],
+            ["/Carina.Infrastructure/ThumbnailSupport/Reaching.cs"],
             ThumbnailRules.FilesOutsideTheFeatureThatReachIntoIt(tree.Root));
+    }
+
+    [Fact]
+    public void LeavesTheLedgerVocabularyToTheLedger()
+    {
+        using var tree = new SourceTree();
+        tree.Write(
+            "Carina.Domain/Recordings/Recording.cs",
+            "public ThumbnailState ThumbnailState { get; } public ThumbnailFault? ThumbnailFault { get; }");
+
+        Assert.Empty(ThumbnailRules.FilesOutsideTheFeatureThatReachIntoIt(tree.Root));
     }
 
     [Fact]
     public void LeavesTheFeatureTalkingToItself()
     {
         using var tree = new SourceTree();
-        tree.Write("Carina.Infrastructure/Thumbnails/ThumbnailJob.cs", ReachesIntoTheFeature);
+        tree.Write(
+            "Carina.Infrastructure/Thumbnails/ThumbnailJob.cs",
+            "internal sealed class ThumbnailJob(IThumbnailRenderer renderer);");
 
         Assert.Empty(ThumbnailRules.FilesOutsideTheFeatureThatReachIntoIt(tree.Root));
     }
@@ -122,7 +166,7 @@ public sealed class ThumbnailRuleSelfCheckTests
 
         foreach (string allowed in ThumbnailRules.AllowedToNameTheMachinery)
         {
-            tree.Write(allowed.TrimStart('/'), ReachesIntoTheFeature);
+            tree.Write(allowed.TrimStart('/'), "internal sealed class Built(IThumbnailRenderer renderer);");
         }
 
         Assert.Empty(ThumbnailRules.FilesOutsideTheFeatureThatReachIntoIt(tree.Root));
@@ -134,7 +178,8 @@ public sealed class ThumbnailRuleSelfCheckTests
         using var tree = new SourceTree();
 
         Assert.Empty(ThumbnailRules.FilesInTheFeature(tree.Root));
-        Assert.Empty(ThumbnailRules.ThumbnailFilesThatSayHowARecordingEnded(tree.Root));
+        Assert.Empty(ThumbnailRules.FilesNamedForThumbnails(tree.Root));
+        Assert.Empty(ThumbnailRules.WhatNamedForThumbnailsReachesForARecordingsResult(tree.Root));
         Assert.Empty(ThumbnailRules.FilesOutsideTheFeatureThatReachIntoIt(tree.Root));
     }
 

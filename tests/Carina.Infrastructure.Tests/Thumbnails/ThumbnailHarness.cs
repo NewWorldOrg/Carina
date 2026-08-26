@@ -19,6 +19,8 @@ internal sealed class HeldWorklist : IThumbnailWorklist
 
     public int? AskedFor { get; private set; }
 
+    public IReadOnlyList<OutputRoot> AskedWithin { get; private set; } = [];
+
     public TaskCompletionSource? Gate { get; set; }
 
     public HeldWorklist Holding(params ThumbnailSubject[] subjects)
@@ -28,18 +30,27 @@ internal sealed class HeldWorklist : IThumbnailWorklist
         return this;
     }
 
-    public async Task<IReadOnlyList<ThumbnailSubject>> AwaitingAsync(int atMost, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<ThumbnailSubject>> AwaitingAsync(
+        IReadOnlyList<OutputRoot> withinReach,
+        int atMost,
+        CancellationToken cancellationToken)
     {
         Reads++;
         AskedFor = atMost;
+        AskedWithin = withinReach;
 
         if (Gate is { } waiting)
         {
             await waiting.Task.WaitAsync(cancellationToken);
         }
 
-        return [.. awaiting.Take(atMost)];
+        return [.. awaiting.Where(subject => withinReach.Contains(subject.Root)).Take(atMost)];
     }
+
+    public Task<int> WaitingOutOfReachAsync(
+        IReadOnlyList<OutputRoot> withinReach,
+        CancellationToken cancellationToken)
+        => Task.FromResult(awaiting.Count(subject => !withinReach.Contains(subject.Root)));
 
     public Task IllustrateAsync(
         RecordingId id,
@@ -60,14 +71,9 @@ internal sealed class HeldWorklist : IThumbnailWorklist
     }
 }
 
-internal sealed class HeldRenderer : IThumbnailRenderer
+internal sealed class HeldRenderer(Func<ThumbnailRequest, ThumbnailRender>? answer = null) : IThumbnailRenderer
 {
-    private readonly Func<ThumbnailRequest, ThumbnailRender> answer;
-
-    public HeldRenderer(Func<ThumbnailRequest, ThumbnailRender>? answer = null)
-    {
-        this.answer = answer ?? (_ => ThumbnailRender.Drawn());
-    }
+    private readonly Func<ThumbnailRequest, ThumbnailRender> answer = answer ?? (_ => ThumbnailRender.Drawn());
 
     public ConcurrentQueue<ThumbnailRequest> Asked { get; } = new();
 

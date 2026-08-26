@@ -118,6 +118,35 @@ public sealed class FfmpegThumbnailRendererTests : IDisposable
         Assert.True(File.Exists(destination));
     }
 
+    [Theory]
+    [InlineData(null, "scale=960:trunc(960/dar/2)*2:flags=bicubic,setsar=1")]
+    [InlineData(640, "scale=640:trunc(640/dar/2)*2:flags=bicubic,setsar=1")]
+    public async Task TheWidthTheSettingsNameIsTheWidthTheProgrammeIsAskedFor(int? width, string expected)
+    {
+        string arguments = tree.Under("arguments");
+
+        ThumbnailRender render = await Renderer(Dumping(arguments), width: width).RenderAsync(Request(), Cancel);
+
+        Assert.True(render.Drew);
+        Assert.Contains(expected, await File.ReadAllLinesAsync(arguments, Cancel));
+    }
+
+    [Fact]
+    public async Task ThePositionTheRequestNamesIsThePositionTheProgrammeIsAskedFor()
+    {
+        string arguments = tree.Under("arguments");
+
+        await Renderer(Dumping(arguments)).RenderAsync(
+            new ThumbnailRequest(Source(), Destination(), TimeSpan.FromSeconds(90.5)),
+            Cancel);
+
+        string[] asked = await File.ReadAllLinesAsync(arguments, Cancel);
+
+        Assert.Equal("90.5", asked[Array.IndexOf(asked, "-ss") + 1]);
+        Assert.Equal(Source(), asked[Array.IndexOf(asked, "-i") + 1]);
+        Assert.True(Array.IndexOf(asked, "-ss") < Array.IndexOf(asked, "-i"));
+    }
+
     [Fact]
     public async Task NoRequestMeansNothingIsRun()
         => Assert.Equal(
@@ -125,14 +154,27 @@ public sealed class FfmpegThumbnailRendererTests : IDisposable
             (await Assert.ThrowsAsync<ArgumentNullException>(
                 () => Renderer(Standing("exit 0")).RenderAsync(null!, Cancel))).ParamName);
 
-    private FfmpegThumbnailRenderer Renderer(string programme, TimeProvider? clock = null)
+    private FfmpegThumbnailRenderer Renderer(string programme, TimeProvider? clock = null, int? width = null)
         => new(
-            new ThumbnailSettings
-            {
-                Programme = programme,
-                LongestRender = TimeSpan.FromMinutes(5),
-            },
+            width is { } asked
+                ? new ThumbnailSettings
+                {
+                    Programme = programme,
+                    LongestRender = TimeSpan.FromMinutes(5),
+                    Width = asked,
+                }
+                : new ThumbnailSettings
+                {
+                    Programme = programme,
+                    LongestRender = TimeSpan.FromMinutes(5),
+                },
             clock ?? TimeProvider.System);
+
+    private string Dumping(string arguments)
+        => Standing(
+            "for argument in \"$@\"; do printf '%s\\n' \"$argument\" >> \"" + arguments + "\"; done\n"
+            + "for argument in \"$@\"; do destination=$argument; done\n"
+            + "printf 'a picture' > \"$destination\"");
 
     private ThumbnailRequest Request() => new(Source(), Destination(), TimeSpan.FromSeconds(1));
 

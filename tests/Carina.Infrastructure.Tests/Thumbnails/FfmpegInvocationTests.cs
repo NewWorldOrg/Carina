@@ -22,7 +22,7 @@ public sealed class FfmpegInvocationTests
     }
 
     [Fact]
-    public void ThePositionIsWrittenTheSameWayWhateverTheMachineCallsADecimalPoint()
+    public void ThePositionIsWrittenInSecondsAndKeepsItsFraction()
     {
         IReadOnlyList<string> arguments = FfmpegInvocation.Arguments(
             new ThumbnailRequest("/a.m2ts", "/a.jpg", TimeSpan.FromSeconds(90.5)),

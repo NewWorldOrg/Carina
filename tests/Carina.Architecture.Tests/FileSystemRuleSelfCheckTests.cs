@@ -33,6 +33,8 @@ public sealed class FileSystemRuleSelfCheckTests
     [InlineData("new ProcessStartInfo(\"rm\");", "ProcessStartInfo")]
     [InlineData("typeof(File).GetMethod(\"Delete\");", "GetMethod(")]
     [InlineData("typeof(File).GetMember(\"Delete\");", "GetMember(")]
+    [InlineData("typeof(File).GetProperty(\"Length\");", "GetProperty(")]
+    [InlineData("typeof(File).GetField(\"held\");", "GetField(")]
     [InlineData("Activator.CreateInstance(type);", "Activator.CreateInstance")]
     [InlineData("Delegate.CreateDelegate(type, method);", "CreateDelegate")]
     public void TheRuleSeesThisWayOfChangingWhatIsOnDisk(string source, string named)
@@ -46,6 +48,7 @@ public sealed class FileSystemRuleSelfCheckTests
     [InlineData("foreach (string entry in Directory.EnumerateFiles(path)) { }")]
     [InlineData("string held = File.ReadAllText(path);")]
     [InlineData("bool room = Directory.Exists(path);")]
+    [InlineData("if (root.TryGetProperty(name, out JsonElement found)) { }")]
     public void TheRuleLeavesAWayOfOnlyLookingAlone(string source)
     {
         Assert.Empty(FileSystemRules.WhatCouldChangeWhatIsOnDiskIn(source));

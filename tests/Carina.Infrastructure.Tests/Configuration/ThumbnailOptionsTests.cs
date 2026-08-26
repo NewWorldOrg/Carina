@@ -50,6 +50,23 @@ public sealed class ThumbnailOptionsTests
         Assert.True(read.DrawsAnything);
     }
 
+    [Fact]
+    public void TheSmallestSettingsThatStillMeanSomethingAreAccepted()
+    {
+        ThumbnailSettings read = Read(
+            ("Thumbnails:OneOverAShareOf", "1"),
+            ("Thumbnails:AtMostAPass", "1"),
+            ("Thumbnails:Width", "2"),
+            ("Thumbnails:BeforeFirstPass", "00:00:00.001"),
+            ("Thumbnails:NoLaterThan", "00:00:00.001"));
+
+        Assert.Equal(1, read.OneOverAShareOf);
+        Assert.Equal(1, read.AtMostAPass);
+        Assert.Equal(2, read.Width);
+        Assert.Equal(TimeSpan.FromMilliseconds(1), read.BeforeFirstPass);
+        Assert.Equal(TimeSpan.FromMilliseconds(1), read.NoLaterThan);
+    }
+
     [Theory]
     [InlineData("Thumbnails:WrittenTo", "srv/thumbnails")]
     [InlineData("Thumbnails:Programme", " ffmpeg")]

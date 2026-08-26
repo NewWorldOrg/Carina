@@ -5,6 +5,7 @@ using Carina.Domain.DriverStatus;
 using Carina.Domain.Events;
 using Carina.Domain.Integrity;
 using Carina.Domain.Scans;
+using Carina.Domain.Thumbnails;
 using Carina.Infrastructure.Collection;
 using Carina.Infrastructure.Configuration;
 using Carina.Infrastructure.DependencyInjection;
@@ -13,6 +14,7 @@ using Carina.Infrastructure.Events;
 using Carina.Infrastructure.Integrity;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Scanning;
+using Carina.Infrastructure.Thumbnails;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -209,6 +211,55 @@ public sealed class ServiceCollectionExtensionsTests
             () => provider.GetRequiredService<IOptions<IntegrityOptions>>().Value);
 
         Assert.Contains("Integrity:OutputRoots", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RegistersTheThumbnailPassAlongsideTheOtherHostedServices()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        Assert.Contains(
+            provider.GetServices<IHostedService>(),
+            service => ReferenceEquals(service, provider.GetRequiredService<ThumbnailJob>()));
+    }
+
+    [Fact]
+    public void RegistersEverythingAThumbnailPassReachesFor()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.IsType<FfmpegThumbnailRenderer>(provider.GetRequiredService<IThumbnailRenderer>());
+        Assert.IsType<ThumbnailWorklist>(scope.ServiceProvider.GetRequiredService<IThumbnailWorklist>());
+        Assert.NotNull(provider.GetRequiredService<ThumbnailSettings>());
+    }
+
+    [Fact]
+    public void ReadsWhereThePicturesGo()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings["Thumbnails:WrittenTo"] = "/srv/thumbnails";
+        settings["Thumbnails:Width"] = "1280";
+        using ServiceProvider provider = Build(settings);
+
+        ThumbnailSettings read = provider.GetRequiredService<ThumbnailSettings>();
+
+        Assert.Equal("/srv/thumbnails", read.WrittenTo);
+        Assert.Equal(1280, read.Width);
+        Assert.True(read.DrawsAnything);
+    }
+
+    [Fact]
+    public void RejectsAPictureDirectoryThisProcessCouldNotReach()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings["Thumbnails:WrittenTo"] = "srv/thumbnails";
+        using ServiceProvider provider = Build(settings);
+
+        OptionsValidationException exception = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<ThumbnailOptions>>().Value);
+
+        Assert.Contains("Thumbnails:WrittenTo", exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]

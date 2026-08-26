@@ -8,17 +8,22 @@ namespace Carina.Infrastructure.Thumbnails;
 
 public sealed class ThumbnailWorklist(CarinaDbContext context) : IThumbnailWorklist
 {
-    public async Task<IReadOnlyList<ThumbnailSubject>> AwaitingAsync(int atMost, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<ThumbnailSubject>> AwaitingAsync(
+        IReadOnlyList<OutputRoot> withinReach,
+        int atMost,
+        CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(withinReach);
+
         if (atMost < 1)
         {
             throw new ArgumentOutOfRangeException(nameof(atMost), atMost, "A pass draws at least one picture.");
         }
 
-        List<Row> rows = await context.Set<Recording>()
-            .AsNoTracking()
-            .Where(recording =>
-                recording.Outcome != null && recording.ThumbnailState == ThumbnailState.Pending)
+        OutputRoot[] reachable = [.. withinReach];
+
+        List<Row> rows = await Waiting()
+            .Where(recording => reachable.Contains(recording.OutputRoot))
             .OrderBy(recording => recording.StoppedAtActual)
             .ThenBy(recording => recording.Id)
             .Take(atMost)
@@ -33,6 +38,19 @@ public sealed class ThumbnailWorklist(CarinaDbContext context) : IThumbnailWorkl
         return [.. rows.Select(Read)];
     }
 
+    public async Task<int> WaitingOutOfReachAsync(
+        IReadOnlyList<OutputRoot> withinReach,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(withinReach);
+
+        OutputRoot[] reachable = [.. withinReach];
+
+        return await Waiting()
+            .Where(recording => !reachable.Contains(recording.OutputRoot))
+            .CountAsync(cancellationToken);
+    }
+
     public async Task IllustrateAsync(
         RecordingId id,
         ThumbnailState state,
@@ -41,7 +59,10 @@ public sealed class ThumbnailWorklist(CarinaDbContext context) : IThumbnailWorkl
     {
         ArgumentNullException.ThrowIfNull(id);
 
-        Recording recording = await FoundAsync(id, cancellationToken);
+        Recording recording = await context.Set<Recording>()
+                                  .FirstOrDefaultAsync(held => held.Id == id, cancellationToken)
+                              ?? throw new InvalidOperationException(
+                                  $"There is no recording {id.Wire} to illustrate.");
 
         recording.Illustrate(state, fault);
 
@@ -72,9 +93,10 @@ public sealed class ThumbnailWorklist(CarinaDbContext context) : IThumbnailWorkl
             recording.Written);
     }
 
-    private async Task<Recording> FoundAsync(RecordingId id, CancellationToken cancellationToken)
-        => await context.Set<Recording>().FirstOrDefaultAsync(held => held.Id == id, cancellationToken)
-           ?? throw new InvalidOperationException($"There is no recording {id.Wire} to illustrate.");
+    private IQueryable<Recording> Waiting()
+        => context.Set<Recording>()
+            .AsNoTracking()
+            .Where(recording => recording.Outcome != null && recording.ThumbnailState == ThumbnailState.Pending);
 
     private static ThumbnailSubject Read(Row row)
     {
