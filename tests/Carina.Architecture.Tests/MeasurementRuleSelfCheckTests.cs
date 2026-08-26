@@ -9,7 +9,9 @@ public sealed class MeasurementRuleSelfCheckTests
     public static TheoryData<string, string, string> EachMarkBesideAnother() =>
         new()
         {
-            { "names", "private readonly TsPacketReader reader = new();", Anchor },
+            { "reader", "private readonly TsPacketReader reader = new();", Anchor },
+            { "packet", "private TsPacket Read() => default;", Anchor },
+            { "tracker", "private readonly ContinuityCounterTracker counters = new();", Anchor },
             { "sync", "private const byte Marker = 0x47;", SecondAnchor },
             { "stride", "private const int Length = 188;", Anchor },
             { "payload", "private const int Body = 184;", Anchor },
@@ -84,16 +86,12 @@ public sealed class MeasurementRuleSelfCheckTests
         }
     }
 
-    [Fact]
-    public void AParserThatWritesNoneOfTheMarksWalksPastThisRule()
-    {
-        DirectoryInfo directory = Directory.CreateTempSubdirectory("carina-quiet-");
-
-        try
+    public static TheoryData<string, int, string> QuietEnoughToWalkPast() =>
+        new()
         {
-            Write(
-                directory,
-                "Carina.Driver/Recording/QuietAudit.cs",
+            {
+                "none of them",
+                0,
                 """
                 namespace Sample;
                 public sealed class QuietAudit
@@ -114,8 +112,81 @@ public sealed class MeasurementRuleSelfCheckTests
                         }
                     }
                 }
-                """);
+                """
+            },
+            {
+                "the sync byte and nothing else",
+                1,
+                """
+                namespace Sample;
+                public sealed class PlainAudit
+                {
+                    private const int Stride = 4 + 180 + 4;
 
+                    public long Lost { get; private set; }
+
+                    public void Take(byte[] chunk)
+                    {
+                        for (int at = 0; at + Stride <= chunk.Length; at += Stride)
+                        {
+                            if (chunk[at] != 0x47)
+                            {
+                                continue;
+                            }
+
+                            int pid = ((chunk[at + 1] << 8) | chunk[at + 2]) & 8191;
+                            int counter = chunk[at + 3] & 15;
+
+                            Lost += pid + counter;
+                        }
+                    }
+                }
+                """
+            },
+            {
+                "lower case hex, which these marks are blind to",
+                0,
+                """
+                namespace Sample;
+                public sealed class QuietHexAudit
+                {
+                    private const int Stride = 4 + 180 + 4;
+
+                    public long Lost { get; private set; }
+
+                    public void Take(byte[] chunk)
+                    {
+                        for (int at = 0; at + Stride <= chunk.Length; at += Stride)
+                        {
+                            int pid = ((chunk[at + 1] << 8) | chunk[at + 2]) & 0x1fff;
+                            int counter = chunk[at + 3] & 0x0f;
+
+                            Lost += pid + counter;
+                        }
+                    }
+                }
+                """
+            },
+        };
+
+    [Theory]
+    [MemberData(nameof(QuietEnoughToWalkPast))]
+    public void AParserShowingNoMoreThanOneMarkWalksPastThisRule(
+        string how,
+        int marks,
+        string source
+    )
+    {
+        DirectoryInfo directory = Directory.CreateTempSubdirectory("carina-quiet-");
+
+        try
+        {
+            Write(directory, "Carina.Driver/Recording/QuietAudit.cs", source);
+
+            Assert.Equal(marks, MeasurementRules.MarksIn(source));
+            Assert.True(
+                marks < MeasurementRules.MarksThatMakeAParser,
+                $"a parser written with {how} shows {marks} marks, which this rule does catch.");
             Assert.Empty(MeasurementRules.PlacesThatShowTheMarksOfAParser(directory.FullName));
         }
         finally

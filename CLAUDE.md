@@ -120,15 +120,21 @@ nothing.
   in one place and the migration carries a frozen copy of it; changing the
   definition means writing a new migration, and a test says so.
 
-- **The recording and the count come from the same chunk.** The session's read
-  loop hands each chunk to the writer and then to the counter, because a second
-  pipeline over the same stream puts its own back pressure on the read the
-  recording depends on. Counting is always on — there is no setting that turns
-  it off. A rule test names the places allowed to count and the places that
-  carry the marks of a parser, but it reads source text: it is a trip wire
-  across the obvious ways of writing a second loop, not a proof that none
-  exists. A parser that spells none of the marks walks past it, and a test says
-  so out loud rather than leaving the rule looking stronger than it is.
+- **The recording and the count are meant to come from the same chunk.** The
+  session's read loop hands each chunk to the writer and then to the counter,
+  because a second pipeline over the same stream puts its own back pressure on
+  the read the recording depends on. Counting is always on — there is no setting
+  that turns it off.
+
+  **What holds that is a trip wire, not a proof, and it is worth knowing where
+  it stops.** One rule names the files allowed to mention the counter; another
+  lists the files carrying two or more of the marks a transport-stream parser
+  leaves behind — the three type names, the sync byte, the 188 and 184 strides,
+  the pid and continuity masks. Both read source text. **A second loop that
+  shows one mark or none walks straight past**: written with `4 + 180 + 4` for
+  the stride, or in lower-case hex, it is invisible to them, and tests assert
+  that plainly so nobody reads the rules as a guarantee. What the rules do catch
+  is the ordinary way somebody would write one.
 
 - **"Nothing counted this" and "this was counted and was clean" are different
   answers,** and so are "nowhere" and "somewhere, with nothing in it". A driver

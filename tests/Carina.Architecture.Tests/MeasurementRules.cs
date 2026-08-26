@@ -20,12 +20,23 @@ public static partial class MeasurementRules
 
     public static readonly IReadOnlyList<string> AllowedToTakeTheStreamApart =
     [
+        "Carina.Driver/Sessions/TunerSession.cs",
+        "Carina.Driver/Transport/ContinuityCounterTracker.cs",
         "Carina.Driver/Transport/TsPacketReader.cs",
         "Carina.Driver/Tuning/FakeTunerDevice.cs",
     ];
 
     public static IReadOnlyList<Regex> Marks =>
-        [Names(), SyncByte(), PacketStride(), PayloadStride(), PidMask(), CounterMask()];
+        [
+            ReaderName(),
+            PacketName(),
+            TrackerName(),
+            SyncByte(),
+            PacketStride(),
+            PayloadStride(),
+            PidMask(),
+            CounterMask(),
+        ];
 
     public static int MarksIn(string source) => Marks.Count(mark => mark.IsMatch(source));
 
@@ -68,8 +79,14 @@ public static partial class MeasurementRules
                || segments.Contains("bin", StringComparer.Ordinal);
     }
 
-    [GeneratedRegex(@"\bTsPacketReader\b|\bTsPacket\b|\bContinuityCounterTracker\b")]
-    private static partial Regex Names();
+    [GeneratedRegex(@"\bTsPacketReader\b")]
+    private static partial Regex ReaderName();
+
+    [GeneratedRegex(@"\bTsPacket\b")]
+    private static partial Regex PacketName();
+
+    [GeneratedRegex(@"\bContinuityCounterTracker\b")]
+    private static partial Regex TrackerName();
 
     [GeneratedRegex(@"0x47")]
     private static partial Regex SyncByte();
