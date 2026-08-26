@@ -11,7 +11,7 @@ public sealed class MeasurementRuleTests
     }
 
     [Fact]
-    public void EveryPlaceThatShowsTheMarksOfAParserIsOneOfTheTwoNamedHere()
+    public void EveryPlaceThatShowsTheMarksOfAParserIsOneOfTheFourNamedHere()
     {
         Assert.Equal(
             MeasurementRules.AllowedToTakeTheStreamApart,
