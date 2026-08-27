@@ -785,22 +785,49 @@ public sealed class TunerAllocationPlannerTests
     }
 
     [Fact]
-    public void ARecordingThatWouldHaveLetTheSeatsFallIntoPlaceIsRecordedInstead()
+    public void WhereTwoSeatsServeSetsThatOnlyPartlyOverlapAChainOfMovesIsRecordedInstead()
     {
         AllocationCandidate communication = Candidate(Cs110, priority: 30, eventId: 4001);
         AllocationCandidate broadcasting = Candidate(BsSlotOneStream, priority: 20, eventId: 4002);
         AllocationCandidate lost = Candidate(Terrestrial27, priority: 10, eventId: 4003);
-        TunerCapacity convertible = new(
+        TunerCapacity partlyOverlapping = new(
             [
                 new TunerSeat("seat0", [TuneSystem.IsdbSBs, TuneSystem.IsdbSCs110], Faulted: false),
                 new TunerSeat("seat1", [TuneSystem.IsdbT, TuneSystem.IsdbSBs], Faulted: false),
             ],
             []);
 
-        AllocationPlan plan = Planned([communication, broadcasting, lost], convertible);
+        Assert.False(partlyOverlapping.SharesSeats(TuneSystem.IsdbSCs110, TuneSystem.IsdbT));
+
+        AllocationPlan plan = Planned([communication, broadcasting, lost], partlyOverlapping);
 
         Assert.Equal(AllocationVerdict.Secured, Verdict(plan, communication));
         Assert.Equal(AllocationVerdict.Secured, Verdict(plan, broadcasting));
+        Assert.Equal(AllocationVerdict.Contended, Verdict(plan, lost));
+        Assert.Equal([communication.Id, broadcasting.Id], plan.For(lost.Id).Instead);
+    }
+
+    [Fact]
+    public void WhereEverySeatSetNestsInsideAnotherTheSharedSeatAnswersOnItsOwn()
+    {
+        AllocationCandidate communication = Candidate(Cs110, priority: 30, eventId: 4001);
+        AllocationCandidate broadcasting = Candidate(BsSlotOneStream, priority: 20, eventId: 4002);
+        AllocationCandidate lost = Candidate(Terrestrial27, priority: 10, eventId: 4003);
+        TunerCapacity nested = new(
+            [
+                new TunerSeat(
+                    "seat0",
+                    [TuneSystem.IsdbT, TuneSystem.IsdbSBs, TuneSystem.IsdbSCs110],
+                    Faulted: false),
+                new TunerSeat("seat1", [TuneSystem.IsdbSBs, TuneSystem.IsdbSCs110], Faulted: false),
+            ],
+            []);
+
+        Assert.True(nested.SharesSeats(TuneSystem.IsdbSCs110, TuneSystem.IsdbT));
+        Assert.True(nested.SharesSeats(TuneSystem.IsdbSBs, TuneSystem.IsdbT));
+
+        AllocationPlan plan = Planned([communication, broadcasting, lost], nested);
+
         Assert.Equal(AllocationVerdict.Contended, Verdict(plan, lost));
         Assert.Equal([communication.Id, broadcasting.Id], plan.For(lost.Id).Instead);
     }
@@ -959,6 +986,81 @@ public sealed class TunerAllocationPlannerTests
         Assert.Equal(AllocationVerdict.Secured, Verdict(plan, taken));
         Assert.Equal(AllocationVerdict.Contended, Verdict(plan, lost));
         Assert.Equal(AllocationVerdict.Secured, Verdict(plan, rider));
+    }
+
+    [Fact]
+    public void AHoldThatOnlySitsInsideTheLosersFreeRideIsNotRecordedInstead()
+    {
+        AllocationCandidate blockerA = Candidate(
+            Terrestrial27,
+            priority: 40,
+            from: Now,
+            to: Now.AddMinutes(30),
+            pinned: true,
+            eventId: 4001);
+        AllocationCandidate blockerB = Candidate(
+            Terrestrial29,
+            priority: 30,
+            from: Now,
+            to: Now.AddMinutes(30),
+            pinned: true,
+            eventId: 4002);
+        AllocationCandidate bystander = Candidate(
+            Terrestrial31,
+            priority: 20,
+            from: Now.AddMinutes(60),
+            to: Now.AddMinutes(70),
+            eventId: 4003);
+        AllocationCandidate lost = Candidate(
+            Terrestrial33,
+            priority: 10,
+            from: Now,
+            to: Now.AddMinutes(120),
+            eventId: 4004);
+
+        AllocationPlan plan = Planned(
+            [blockerA, blockerB, bystander, lost],
+            Capacity(TunerKind.Terrestrial, TunerKind.Terrestrial));
+
+        Assert.Equal(AllocationVerdict.Secured, Verdict(plan, bystander));
+        Assert.Equal(AllocationVerdict.Contended, Verdict(plan, lost));
+        Assert.Equal([blockerA.Id, blockerB.Id], plan.For(lost.Id).Instead);
+    }
+
+    [Fact]
+    public void TheEndOfARideOutsideTheWindowIsNotWalked()
+    {
+        AllocationCandidate ridden = Candidate(
+            Terrestrial27,
+            priority: 40,
+            from: Now,
+            to: Now.AddMinutes(60),
+            pinned: true,
+            eventId: 4001);
+        AllocationCandidate crowdA = Candidate(
+            Terrestrial29,
+            priority: 30,
+            from: Now,
+            to: Now.AddMinutes(65),
+            pinned: true,
+            eventId: 4002);
+        AllocationCandidate crowdB = Candidate(
+            Terrestrial31,
+            priority: 20,
+            from: Now,
+            to: Now.AddMinutes(65),
+            pinned: true,
+            eventId: 4003);
+        AllocationCandidate later = Candidate(
+            Terrestrial27,
+            priority: 10,
+            from: Now.AddMinutes(70),
+            to: Now.AddMinutes(120),
+            eventId: 4004);
+
+        AllocationPlan plan = Planned([ridden, crowdA, crowdB, later], Capacity(TunerKind.Terrestrial));
+
+        Assert.Equal(AllocationVerdict.Secured, Verdict(plan, later));
     }
 
     [Fact]

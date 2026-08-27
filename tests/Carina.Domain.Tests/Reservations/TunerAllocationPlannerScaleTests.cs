@@ -5,16 +5,37 @@ using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
 
+using Xunit.Abstractions;
+
 namespace Carina.Domain.Tests.Reservations;
 
+[CollectionDefinition(nameof(TunerAllocationPlannerScale), DisableParallelization = true)]
+public sealed class TunerAllocationPlannerScale;
+
 [Trait("Category", "Scale")]
-public sealed class TunerAllocationPlannerScaleTests
+[Collection(nameof(TunerAllocationPlannerScale))]
+public sealed class TunerAllocationPlannerScaleTests(ITestOutputHelper output)
 {
     private const int EightDays = 8;
 
     private const int Reservations = 1000;
 
     private const int RecordingsUnderWay = 4;
+
+    private const int MeasuredRuns = 5;
+
+    private const int FewestContended = 100;
+
+    private const int FewestNamed = 100;
+
+    private const string WhyTheProcessorClockIsTheGate =
+        "The whole suite runs nine test hosts at once, so a wall clock reading says as much about how busy the "
+        + "machine was as about the planning: the same run has been measured at 315 ms and at 2714 ms. What the "
+        + "budget is about is the work, so the gate is the processor time the work itself spent, which does not "
+        + "move with the load. Three things hold the reading steady: the collection is barred from running "
+        + "beside the rest of this assembly, so nothing else in this process is counted against it; a warm run "
+        + "is thrown away first; and the quickest of several runs is taken. The wall clock is printed beside it "
+        + "rather than asserted, because it is worth seeing and cannot hold on its own.";
 
     private static readonly TimeSpan Budget = TimeSpan.FromSeconds(1);
 
@@ -31,7 +52,88 @@ public sealed class TunerAllocationPlannerScaleTests
     public void EightDaysOfReservationsArePlannedInsideTheBudget()
     {
         AllocationCandidate[] candidates = [.. Enumerable.Range(0, Reservations).Select(Reservation)];
-        TunerCapacity capacity = new(
+        TunerCapacity capacity = Capacity();
+
+        TunerAllocationPlanner.Plan(candidates, capacity, RollingHorizon.Default, Now);
+
+        List<TimeSpan> onTheWallClock = [];
+        List<TimeSpan> onTheProcessorClock = [];
+        AllocationPlan plan = null!;
+
+        for (int run = 0; run < MeasuredRuns; run++)
+        {
+            TimeSpan spentBefore = Process.GetCurrentProcess().TotalProcessorTime;
+            long started = Stopwatch.GetTimestamp();
+            plan = TunerAllocationPlanner.Plan(candidates, capacity, RollingHorizon.Default, Now);
+            onTheWallClock.Add(Stopwatch.GetElapsedTime(started));
+            onTheProcessorClock.Add(Process.GetCurrentProcess().TotalProcessorTime - spentBefore);
+        }
+
+        TimeSpan quickest = onTheProcessorClock.Min();
+
+        output.WriteLine($"{Reservations} reservations over {EightDays} days across {Channels.Count} channels "
+            + $"on {capacity.SeatCount} seats: {plan.Contended.Count} contended, "
+            + $"{plan.Contended.Sum(decision => decision.Instead.Count)} named as recorded instead.");
+        output.WriteLine("processor: " + string.Join(
+            ", ",
+            onTheProcessorClock.Select(took => $"{took.TotalMilliseconds:F1} ms")));
+        output.WriteLine("wall: " + string.Join(
+            ", ",
+            onTheWallClock.Select(took => $"{took.TotalMilliseconds:F1} ms")));
+        output.WriteLine(WhyTheProcessorClockIsTheGate);
+
+        Assert.Equal(Reservations, plan.Decisions.Count);
+
+        Assert.True(
+            plan.Contended.Count > FewestContended,
+            $"only {plan.Contended.Count} of {Reservations} reservations were contended, so the contended path "
+            + $"and everything it names was barely measured; wanted more than {FewestContended}.");
+
+        int named = plan.Contended.Sum(decision => decision.Instead.Count);
+
+        Assert.True(
+            named > FewestNamed,
+            $"the {plan.Contended.Count} contended reservations between them named {named} recordings as "
+            + $"recorded instead, so the check below walked almost nothing; wanted more than {FewestNamed}.");
+
+        NothingFromAnotherPoolWasNamed(candidates, plan, capacity);
+
+        Assert.True(
+            quickest > TimeSpan.Zero,
+            $"the processor clock read {quickest.TotalMilliseconds:F1} ms for {Reservations} reservations, "
+            + "which is no reading at all rather than a fast one.");
+
+        Assert.True(
+            quickest < Budget,
+            $"the quickest of {MeasuredRuns} runs spent {quickest.TotalMilliseconds:F1} ms of processor time "
+            + $"planning {Reservations} reservations, over the {Budget.TotalMilliseconds:F0} ms budget.");
+    }
+
+    private static void NothingFromAnotherPoolWasNamed(
+        IReadOnlyList<AllocationCandidate> candidates,
+        AllocationPlan plan,
+        TunerCapacity capacity)
+    {
+        Dictionary<ReservationId, AllocationCandidate> byId = candidates.ToDictionary(candidate => candidate.Id);
+
+        foreach (AllocationDecision decision in plan.Contended)
+        {
+            TuneSystem lost = byId[decision.Id].Tuning!.System;
+
+            foreach (ReservationId named in decision.Instead)
+            {
+                TuneSystem took = byId[named].Tuning!.System;
+
+                Assert.True(
+                    capacity.SharesSeats(took, lost),
+                    $"a {took} recording was named as recorded instead of a {lost} reservation, and no seat "
+                    + "serves both, so it took nothing the reservation could have had.");
+            }
+        }
+    }
+
+    private static TunerCapacity Capacity()
+        => new(
             [
                 .. Enumerable.Range(0, 3).Select(seat =>
                     new TunerSeat($"seat{seat}", BroadcastReception.Of(TunerKind.Terrestrial), Faulted: false)),
@@ -39,19 +141,6 @@ public sealed class TunerAllocationPlannerScaleTests
                     new TunerSeat($"seat{seat}", BroadcastReception.Of(TunerKind.Satellite), Faulted: false)),
             ],
             []);
-
-        Stopwatch clock = Stopwatch.StartNew();
-        AllocationPlan plan = TunerAllocationPlanner.Plan(candidates, capacity, RollingHorizon.Default, Now);
-        clock.Stop();
-
-        Assert.Equal(Reservations, plan.Decisions.Count);
-        Assert.NotEmpty(plan.Contended);
-        Assert.NotEmpty(plan.Contended[0].Instead);
-        Assert.True(
-            clock.Elapsed < Budget,
-            $"planning {Reservations} reservations over {EightDays} days took {clock.ElapsedMilliseconds} ms, "
-            + $"and the budget is {Budget.TotalMilliseconds} ms");
-    }
 
     private static AllocationCandidate Reservation(int order)
     {

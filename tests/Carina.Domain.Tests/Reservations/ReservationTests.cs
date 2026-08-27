@@ -293,6 +293,18 @@ public sealed class ReservationTests
     }
 
     [Fact]
+    public void ACancelledReservationIsRefusedForBeingCancelledRatherThanForItsReception()
+    {
+        Reservation reservation = ReservationFactory.Planned();
+        reservation.LoseReception(ReservationFactory.Now);
+        reservation.Cancel();
+
+        InvalidOperationException refused = Assert.Throws<InvalidOperationException>(reservation.Secure);
+
+        Assert.Contains(nameof(ReservationState.Cancelled), refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TheMomentReceptionWasLostIsReadBackInUtc()
     {
         ArgumentException refused = Assert.Throws<ArgumentException>(() => ReservationFactory.Rehydrated(
