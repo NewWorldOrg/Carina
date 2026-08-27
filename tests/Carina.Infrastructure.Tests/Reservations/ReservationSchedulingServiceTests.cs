@@ -354,6 +354,103 @@ public sealed class ReservationSchedulingServiceTests
     }
 
     [Fact]
+    public async Task TheDriverIsNeverAskedWhileTheLedgerIsHeldOpenForWriting()
+    {
+        WatchedWrite write = new();
+        HeldReservations ledger = new(write);
+        TuningByService directory = new(write);
+        directory.Answer(1024, Terrestrial27);
+        directory.Answer(1032, Terrestrial29);
+        HeldSeating seats = new(Seats(TunerKind.Terrestrial, TunerKind.Terrestrial), write);
+
+        ledger.Standing(ReservationFixtures.Planned(
+            programme: ReservationFixtures.Programme(ReservationFixtures.NextEventId(), serviceId: 1032)));
+
+        ReservationSchedulingService scheduler = new(
+            ledger,
+            seats,
+            directory,
+            write,
+            RollingHorizon.Default,
+            new FixedClock(Now));
+
+        SchedulingRun run = await scheduler.CreateAsync(ReservationFixtures.Planned(), Cancel);
+
+        Assert.True(run.Settled);
+        Assert.Equal(1, write.Committed);
+        Assert.NotEmpty(directory.Asked);
+        Assert.True(seats.Reads > 0);
+        Assert.Equal(0, directory.AskedWhileWriting);
+        Assert.Equal(0, seats.ReadWhileWriting);
+    }
+
+    [Fact]
+    public async Task APreviewAsksNothingWhileTheLedgerIsHeldOpenEither()
+    {
+        WatchedWrite write = new();
+        HeldReservations ledger = new(write);
+        TuningByService directory = new(write);
+        directory.Answer(1024, Terrestrial27);
+        HeldSeating seats = new(Seats(TunerKind.Terrestrial), write);
+        ledger.Standing(ReservationFixtures.Planned());
+
+        ReservationSchedulingService scheduler = new(
+            ledger,
+            seats,
+            directory,
+            write,
+            RollingHorizon.Default,
+            new FixedClock(Now));
+
+        await scheduler.PreviewAsync([], Cancel);
+
+        Assert.Equal(0, write.Opened);
+        Assert.NotEmpty(directory.Asked);
+    }
+
+    [Fact]
+    public async Task AServiceThatArrivedAfterTheDriverWasAskedStopsTheRunRatherThanBeingGuessedAt()
+    {
+        WatchedWrite write = new();
+        HeldReservations ledger = new(write);
+        TuningByService directory = new(write);
+        directory.Answer(1024, Terrestrial27);
+        directory.Answer(1032, Terrestrial29);
+
+        ledger.ArrivesAfterTheFirstList.Add(ReservationFixtures.Planned(
+            programme: ReservationFixtures.Programme(ReservationFixtures.NextEventId(), serviceId: 1032)));
+
+        Reservation planned = ReservationFixtures.Planned();
+        SchedulingRun run = await Scheduler(ledger, directory, write, Seats(TunerKind.Terrestrial))
+            .CreateAsync(planned, Cancel);
+
+        Assert.False(run.Settled);
+        Assert.Equal(SchedulingRefusal.SomethingArrivedWhileReading, run.Refusal);
+        Assert.Equal(0, directory.AskedWhileWriting);
+        Assert.Empty(ledger.Wrote);
+        Assert.DoesNotContain(planned, ledger.Held);
+    }
+
+    [Fact]
+    public async Task AReservationThatArrivedOnAServiceAlreadyAskedAboutIsWeighedRatherThanRefused()
+    {
+        WatchedWrite write = new();
+        HeldReservations ledger = new(write);
+        TuningByService directory = new(write);
+        directory.Answer(1024, Terrestrial27);
+
+        ledger.ArrivesAfterTheFirstList.Add(ReservationFixtures.Planned(
+            programme: ReservationFixtures.Programme(ReservationFixtures.NextEventId())));
+
+        SchedulingRun run = await Scheduler(ledger, directory, write, Seats(TunerKind.Terrestrial))
+            .CreateAsync(ReservationFixtures.Planned(), Cancel);
+
+        Assert.True(run.Settled);
+        Assert.Equal(2, run.Plan.Decisions.Count);
+        Assert.Equal(0, directory.AskedWhileWriting);
+    }
+
+    [Fact]
     public async Task AWriteThatFailsHalfWayIsRolledBack()
     {
         WatchedWrite write = new();

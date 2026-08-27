@@ -5,6 +5,8 @@ public enum SchedulingRefusal
     None = 1,
 
     CapacityUnknown = 2,
+
+    SomethingArrivedWhileReading = 3,
 }
 
 public sealed class SchedulingRun

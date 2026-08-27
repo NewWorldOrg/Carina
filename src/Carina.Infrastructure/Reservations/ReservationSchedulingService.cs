@@ -36,8 +36,11 @@ public sealed class ReservationSchedulingService(
         }
 
         IReadOnlyList<Reservation> standing = await reservations.ListPendingAsync(Reaching(at), cancellationToken);
+        Reservation[] considered = [.. standing, .. proposed];
 
-        return await WeighAsync([.. standing, .. proposed], capacity, at, cancellationToken);
+        return await ResolveAsync(considered, cancellationToken) is { } selections
+            ? Weigh(considered, selections, capacity, at)
+            : SchedulingRun.Refused(SchedulingRefusal.CapacityUnknown);
     }
 
     private async Task<SchedulingRun> SettleAsync(
@@ -51,12 +54,25 @@ public sealed class ReservationSchedulingService(
             return SchedulingRun.Refused(SchedulingRefusal.CapacityUnknown);
         }
 
+        IReadOnlyList<Reservation> looked = await reservations.ListPendingAsync(Reaching(at), cancellationToken);
+
+        if (await ResolveAsync([.. looked, .. joining], cancellationToken) is not { } selections)
+        {
+            return SchedulingRun.Refused(SchedulingRefusal.CapacityUnknown);
+        }
+
         return await write.AllOrNothingAsync(
             async token =>
             {
                 IReadOnlyList<Reservation> standing = await reservations.ListPendingAsync(Reaching(at), token);
                 Reservation[] considered = [.. standing, .. joining];
-                SchedulingRun run = await WeighAsync(considered, capacity, at, token);
+
+                if (considered.Any(reservation => !selections.ContainsKey(Naming(reservation))))
+                {
+                    return SchedulingRun.Refused(SchedulingRefusal.SomethingArrivedWhileReading);
+                }
+
+                SchedulingRun run = Weigh(considered, selections, capacity, at);
 
                 if (!run.Settled)
                 {
@@ -103,41 +119,56 @@ public sealed class ReservationSchedulingService(
         }
     }
 
-    private async Task<SchedulingRun> WeighAsync(
+    private async Task<Dictionary<ServiceKey, TuningResolution>?> ResolveAsync(
         IReadOnlyList<Reservation> considered,
-        TunerCapacity capacity,
-        DateTime at,
         CancellationToken cancellationToken)
     {
         Dictionary<ServiceKey, TuningResolution> resolved = [];
-        List<AllocationCandidate> candidates = [];
 
         foreach (Reservation reservation in considered)
         {
-            ServiceKey key = new(reservation.NetworkId.Value, reservation.ServiceId.Value);
+            ServiceKey key = Naming(reservation);
 
-            if (!resolved.TryGetValue(key, out TuningResolution? resolution))
+            if (resolved.ContainsKey(key))
             {
-                resolution = await tuning.ResolveTuningAsync(
-                    reservation.NetworkId,
-                    reservation.ServiceId,
-                    cancellationToken);
-
-                resolved.Add(key, resolution);
+                continue;
             }
+
+            TuningResolution resolution = await tuning.ResolveTuningAsync(
+                reservation.NetworkId,
+                reservation.ServiceId,
+                cancellationToken);
 
             if (resolution.Refusal is TuningRefusal.LedgerUnreadable)
             {
-                return SchedulingRun.Refused(SchedulingRefusal.CapacityUnknown);
+                return null;
             }
 
-            candidates.Add(AllocationCandidate.Of(reservation, resolution.Tuning));
+            resolved.Add(key, resolution);
         }
+
+        return resolved;
+    }
+
+    private SchedulingRun Weigh(
+        IReadOnlyList<Reservation> considered,
+        IReadOnlyDictionary<ServiceKey, TuningResolution> selections,
+        TunerCapacity capacity,
+        DateTime at)
+    {
+        List<AllocationCandidate> candidates =
+        [
+            .. considered.Select(reservation =>
+                AllocationCandidate.Of(reservation, selections[Naming(reservation)].Tuning)),
+        ];
 
         return SchedulingRun.Of(
             TunerAllocationPlanner.Plan(candidates, capacity, horizon, at),
             capacity.Undetermined.Count);
     }
+
+    private static ServiceKey Naming(Reservation reservation)
+        => new(reservation.NetworkId.Value, reservation.ServiceId.Value);
 
     private static ReservationWindow Reaching(DateTime at)
         => new(at - Margin.Longest, DateTime.SpecifyKind(DateTime.MaxValue, DateTimeKind.Utc));

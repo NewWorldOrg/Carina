@@ -10,23 +10,32 @@ internal sealed class FixedClock(DateTime now) : TimeProvider
     public override DateTimeOffset GetUtcNow() => new(now, TimeSpan.Zero);
 }
 
-internal sealed class HeldSeating(TunerCapacity? capacity) : ITunerCapacityDirectory
+internal sealed class HeldSeating(TunerCapacity? capacity, WatchedWrite? write = null) : ITunerCapacityDirectory
 {
     public int Reads { get; private set; }
+
+    public int ReadWhileWriting { get; private set; }
 
     public Task<TunerCapacity?> ReadAsync(CancellationToken cancellationToken)
     {
         Reads++;
 
+        if (write is { Open: true })
+        {
+            ReadWhileWriting++;
+        }
+
         return Task.FromResult(capacity);
     }
 }
 
-internal sealed class TuningByService : IServiceTuningDirectory
+internal sealed class TuningByService(WatchedWrite? write = null) : IServiceTuningDirectory
 {
     private readonly Dictionary<int, TuningResolution> answers = [];
 
     public List<int> Asked { get; } = [];
+
+    public int AskedWhileWriting { get; private set; }
 
     public TuningResolution Otherwise { get; set; } =
         TuningResolution.Refused(TuningRefusal.NoSelectedChannel);
@@ -42,6 +51,11 @@ internal sealed class TuningByService : IServiceTuningDirectory
         CancellationToken cancellationToken)
     {
         Asked.Add(serviceId.Value);
+
+        if (write is { Open: true })
+        {
+            AskedWhileWriting++;
+        }
 
         return Task.FromResult(answers.TryGetValue(serviceId.Value, out TuningResolution? held) ? held : Otherwise);
     }
@@ -102,6 +116,10 @@ internal sealed class HeldReservations(IAtomicWrite? write = null) : IReservatio
 
     public Exception? RefuseToAdd { get; set; }
 
+    public List<Reservation> ArrivesAfterTheFirstList { get; } = [];
+
+    public int Lists { get; private set; }
+
     public Task<Reservation?> FindAsync(ReservationId id, CancellationToken cancellationToken)
         => Task.FromResult(held.FirstOrDefault(reservation => reservation.Id.Equals(id)));
 
@@ -111,17 +129,29 @@ internal sealed class HeldReservations(IAtomicWrite? write = null) : IReservatio
     public Task<IReadOnlyList<Reservation>> ListPendingAsync(
         ReservationWindow window,
         CancellationToken cancellationToken)
-        => Task.FromResult<IReadOnlyList<Reservation>>(
-            [
-                .. held
-                    .Where(reservation => reservation.RecordingOutcome is null)
-                    .Where(reservation => reservation.State
-                        is ReservationState.Scheduled or ReservationState.Conflict)
-                    .Where(reservation => reservation.IsPinned
-                                          || (reservation.EndAt >= window.From && reservation.StartAt <= window.To))
-                    .OrderBy(reservation => reservation.StartAt)
-                    .ThenBy(reservation => reservation.Id.Value),
-            ]);
+    {
+        Lists++;
+
+        IReadOnlyList<Reservation> pending =
+        [
+            .. held
+                .Where(reservation => reservation.RecordingOutcome is null)
+                .Where(reservation => reservation.State
+                    is ReservationState.Scheduled or ReservationState.Conflict)
+                .Where(reservation => reservation.IsPinned
+                                      || (reservation.EndAt >= window.From && reservation.StartAt <= window.To))
+                .OrderBy(reservation => reservation.StartAt)
+                .ThenBy(reservation => reservation.Id.Value),
+        ];
+
+        if (Lists is 1 && ArrivesAfterTheFirstList.Count > 0)
+        {
+            held.AddRange(ArrivesAfterTheFirstList);
+            ArrivesAfterTheFirstList.Clear();
+        }
+
+        return Task.FromResult(pending);
+    }
 
     public Task<IReadOnlyList<Reservation>> ListForRuleAsync(RuleId ruleId, CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<Reservation>>(

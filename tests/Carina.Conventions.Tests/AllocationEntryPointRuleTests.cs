@@ -10,7 +10,7 @@ namespace Carina.Conventions.Tests;
 public sealed class AllocationEntryPointRuleTests
 {
     private const string WhereItIsComputed =
-        "Carina.Infrastructure.Reservations.ReservationSchedulingService.WeighAsync";
+        "Carina.Infrastructure.Reservations.ReservationSchedulingService.Weigh";
 
     private const string WhereItIsApplied =
         "Carina.Infrastructure.Reservations.ReservationSchedulingService.Apply";
@@ -49,7 +49,7 @@ public sealed class AllocationEntryPointRuleTests
     public void EveryWayInReachesThatOnePlace()
     {
         IReadOnlyList<string> intoTheCalculation =
-            CallSiteCensus.CallersOf(Production, typeof(ReservationSchedulingService), "WeighAsync");
+            CallSiteCensus.CallersOf(Production, typeof(ReservationSchedulingService), "Weigh");
 
         Assert.Equal(
             [
@@ -57,6 +57,13 @@ public sealed class AllocationEntryPointRuleTests
                 "Carina.Infrastructure.Reservations.ReservationSchedulingService.SettleAsync",
             ],
             intoTheCalculation);
+
+        Assert.Equal(
+            [
+                "Carina.Infrastructure.Reservations.ReservationSchedulingService.PreviewAsync",
+                "Carina.Infrastructure.Reservations.ReservationSchedulingService.SettleAsync",
+            ],
+            CallSiteCensus.CallersOf(Production, typeof(ReservationSchedulingService), "ResolveAsync"));
 
         Assert.Equal(
             ["Carina.Infrastructure.Reservations.ReservationSchedulingService.SettleAsync"],
