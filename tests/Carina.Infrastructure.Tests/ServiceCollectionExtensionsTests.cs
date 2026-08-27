@@ -5,6 +5,7 @@ using Carina.Domain.DriverStatus;
 using Carina.Domain.Events;
 using Carina.Domain.Integrity;
 using Carina.Domain.Recordings;
+using Carina.Domain.Reservations;
 using Carina.Domain.Scans;
 using Carina.Domain.Thumbnails;
 using Carina.Infrastructure.Collection;
@@ -71,6 +72,16 @@ public sealed class ServiceCollectionExtensionsTests
             scope.ServiceProvider.GetRequiredService<IRecordingRepository>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<RecordingRound>());
         Assert.NotNull(provider.GetRequiredService<RecordingSettings>());
+    }
+
+    [Fact]
+    public void TheReservationLedgerIsReachableThroughItsRepository()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.IsType<ReservationRepository>(
+            scope.ServiceProvider.GetRequiredService<IReservationRepository>());
     }
 
     [Fact]

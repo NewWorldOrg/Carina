@@ -88,6 +88,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICandidateChannelRepository, CandidateChannelRepository>();
         services.AddScoped<ISatelliteTransportStreamRepository, SatelliteTransportStreamRepository>();
         services.AddScoped<IScanRunRepository, ScanRunRepository>();
+        services.AddScoped<IReservationRepository, ReservationRepository>();
         services.AddScoped<IReservationRecordingContract, ReservationRecordingContract>();
         services.AddScoped<IRecordingLedger, RecordingLedger>();
         services.AddScoped<IIntegrityCheckRepository, IntegrityCheckRepository>();
