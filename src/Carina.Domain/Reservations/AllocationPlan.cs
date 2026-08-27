@@ -73,6 +73,13 @@ public sealed class AllocationPlan
     public IReadOnlyList<AllocationDecision> Contended =>
         [.. Decisions.Where(decision => decision.Verdict is AllocationVerdict.Contended)];
 
+    public bool Answers(ReservationId id)
+    {
+        ArgumentNullException.ThrowIfNull(id);
+
+        return answered.ContainsKey(id);
+    }
+
     public AllocationDecision For(ReservationId id)
     {
         ArgumentNullException.ThrowIfNull(id);

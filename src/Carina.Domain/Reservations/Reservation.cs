@@ -14,6 +14,8 @@ public sealed class Reservation
 
     public const int ExtendedMaxLength = 65536;
 
+    public static readonly TimeSpan ProvisionalLengthWhenTheEndIsNotAnnounced = TimeSpan.FromHours(1);
+
     private Reservation()
     {
     }
