@@ -832,6 +832,31 @@ public sealed class ReservationEndpointTests
     }
 
     [Fact]
+    public async Task AMarginAskedForBeforeABroadcastThatIsAboutToStartIsTrimmedToTheMomentItWasReserved()
+    {
+        await using var feature = new ReservationFeature();
+        feature.Announced(4001, startsAt: Noon.AddMinutes(2), endsAt: Noon.AddMinutes(62));
+
+        (HttpStatusCode status, JsonElement body) = await feature.PostAsync(
+            "/api/reservations",
+            new
+            {
+                programme = $"{ReservationFeature.Network}-1024-4001",
+                programmeStartsAt = Noon.AddMinutes(2),
+                marginBeforeSeconds = 300,
+                marginAfterSeconds = 180,
+            });
+        JsonElement window = body.GetProperty("data").GetProperty("reservation").GetProperty("window");
+
+        Assert.Equal(HttpStatusCode.Created, status);
+        Assert.Equal(Noon.AddMinutes(2), window.GetProperty("startAt").GetDateTime());
+        Assert.Equal(120, window.GetProperty("marginBeforeSeconds").GetInt32());
+        Assert.Equal(Noon, window.GetProperty("effectiveStartAt").GetDateTime());
+        Assert.Equal(Noon.AddMinutes(62), window.GetProperty("endAt").GetDateTime());
+        Assert.Equal(180, window.GetProperty("marginAfterSeconds").GetInt32());
+    }
+
+    [Fact]
     public async Task ChangingTheMarginsOfAReservationDoesNotMoveThePromiseItWasMadeWith()
     {
         await using var feature = new ReservationFeature();

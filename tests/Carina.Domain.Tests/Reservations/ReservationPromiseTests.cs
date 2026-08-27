@@ -16,23 +16,24 @@ public sealed class ReservationPromiseTests
     private static readonly Margin Behind = Margin.OfSeconds(180);
 
     [Fact]
-    public void ABroadcastAskedForASecondBeforeItStartsIsPromisedFromItsOwnStart()
+    public void ABroadcastAskedForASecondBeforeItStartsKeepsItsOwnStartAndLosesOnlyTheMargin()
     {
-        Reservation asked = Planned(Airs.AddSeconds(-1));
+        DateTime asking = Airs.AddSeconds(-1);
+        Reservation asked = Planned(asking);
 
         Assert.Equal(Airs, asked.StartAt);
-        Assert.Equal(Ahead.Value, asked.MarginBefore.Value);
-        Assert.Equal(Airs - Ahead.Value, asked.EffectiveStartAt);
+        Assert.Equal(TimeSpan.FromSeconds(1), asked.MarginBefore.Value);
+        Assert.Equal(asking, asked.EffectiveStartAt);
     }
 
     [Fact]
-    public void ABroadcastAskedForAtTheInstantItStartsIsPromisedFromItsOwnStart()
+    public void ABroadcastAskedForAtTheInstantItStartsKeepsItsOwnStartAndLosesAllOfTheMargin()
     {
         Reservation asked = Planned(Airs);
 
         Assert.Equal(Airs, asked.StartAt);
-        Assert.Equal(Ahead.Value, asked.MarginBefore.Value);
-        Assert.Equal(Airs - Ahead.Value, asked.EffectiveStartAt);
+        Assert.Equal(TimeSpan.Zero, asked.MarginBefore.Value);
+        Assert.Equal(Airs, asked.EffectiveStartAt);
     }
 
     [Fact]
@@ -101,6 +102,66 @@ public sealed class ReservationPromiseTests
 
         Assert.Equal(Airs, asked.StartAt);
         Assert.Equal(Ahead.Value, asked.MarginBefore.Value);
+    }
+
+    [Fact]
+    public void AMarginReachingToASecondAfterTheAskingIsKeptWhole()
+    {
+        Reservation asked = Planned(Airs - Ahead.Value - TimeSpan.FromSeconds(1));
+
+        Assert.Equal(Airs, asked.StartAt);
+        Assert.Equal(Ahead.Value, asked.MarginBefore.Value);
+        Assert.Equal(Airs - Ahead.Value, asked.EffectiveStartAt);
+    }
+
+    [Fact]
+    public void AMarginReachingExactlyToTheAskingIsKeptWhole()
+    {
+        Reservation asked = Planned(Airs - Ahead.Value);
+
+        Assert.Equal(Airs, asked.StartAt);
+        Assert.Equal(Ahead.Value, asked.MarginBefore.Value);
+        Assert.Equal(Airs - Ahead.Value, asked.EffectiveStartAt);
+    }
+
+    [Fact]
+    public void AMarginReachingToASecondBeforeTheAskingIsTrimmedBackToIt()
+    {
+        DateTime asking = Airs - Ahead.Value + TimeSpan.FromSeconds(1);
+        Reservation asked = Planned(asking);
+
+        Assert.Equal(Airs, asked.StartAt);
+        Assert.Equal(Ahead.Value - TimeSpan.FromSeconds(1), asked.MarginBefore.Value);
+        Assert.Equal(asking, asked.EffectiveStartAt);
+    }
+
+    [Fact]
+    public void ATrimmedMarginLandsOnTheWholeSecondAfterTheAskingRatherThanBeforeIt()
+    {
+        DateTime asking = Airs - Ahead.Value + TimeSpan.FromMilliseconds(500);
+        Reservation asked = Planned(asking);
+
+        Assert.Equal(Airs, asked.StartAt);
+        Assert.Equal(Airs - Ahead.Value + TimeSpan.FromSeconds(1), asked.EffectiveStartAt);
+    }
+
+    [Theory]
+    [InlineData(-3601)]
+    [InlineData(-121)]
+    [InlineData(-120)]
+    [InlineData(-119)]
+    [InlineData(-1)]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(3000)]
+    [InlineData(11999)]
+    public void TheHeadOfTheWindowNeverReachesBackBeforeTheAskingWhileTheWindowIsStillOpen(int secondsFromTheStart)
+    {
+        DateTime asking = Airs.AddSeconds(secondsFromTheStart);
+
+        Assert.True(
+            Planned(asking).EffectiveStartAt >= asking,
+            "a reservation promised a window that had already begun when it was made");
     }
 
     [Fact]

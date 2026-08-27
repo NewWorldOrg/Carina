@@ -51,6 +51,21 @@ public sealed class PromisedWindowOutcomeTests
     }
 
     [Fact]
+    public void AskedForTooLateForItsOwnMarginItIsPromisedFromTheAskingAndCoversAlmostAllOfIt()
+    {
+        DateTime asking = Airs.AddSeconds(-60);
+        RecordingWindow window = Promised(asking);
+
+        Assert.Equal(asking + Lead, window.Start);
+        Assert.Equal(Ends.AddSeconds(180), window.End);
+
+        RecordingVerdict verdict = Judge(window, window.Length - OneRoundOfTheTick);
+
+        Assert.InRange(verdict.Coverage, 0.995, 1.0);
+        Assert.Equal(RecordingOutcome.Complete, verdict.Outcome);
+    }
+
+    [Fact]
     public void AskedForAheadOfTimeButStartedFiftyMinutesLateItIsShortOfItsWindowAndSaysSo()
     {
         RecordingWindow window = Promised(Airs.AddHours(-1));
