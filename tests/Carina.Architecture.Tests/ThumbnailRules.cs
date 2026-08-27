@@ -31,6 +31,7 @@ public static class ThumbnailRules
         "ThumbnailRender",
         "ThumbnailRequest",
         "ThumbnailRemake",
+        "IThumbnailRemaker",
         "ThumbnailOptions",
         "ThumbnailValidation",
         "FfmpegInvocation",
@@ -41,6 +42,8 @@ public static class ThumbnailRules
     [
         "/Carina.Infrastructure/Configuration/ThumbnailOptions.cs",
         "/Carina.Infrastructure/DependencyInjection/ServiceCollectionExtensions.cs",
+        "/Carina.Api/Services/RecordingService.cs",
+        "/Carina.Api/Responder/Recordings/RecordingDetailResponder.cs",
     ];
 
     private static readonly Regex ReachesForTheResult = new(

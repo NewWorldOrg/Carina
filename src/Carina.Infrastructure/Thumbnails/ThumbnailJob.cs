@@ -14,7 +14,7 @@ public sealed class ThumbnailJob(
     ThumbnailSettings settings,
     IntegritySettings mounts,
     TimeProvider clock,
-    ILogger<ThumbnailJob> logger) : BackgroundService
+    ILogger<ThumbnailJob> logger) : BackgroundService, IThumbnailRemaker
 {
     public const string Extension = ".jpg";
 

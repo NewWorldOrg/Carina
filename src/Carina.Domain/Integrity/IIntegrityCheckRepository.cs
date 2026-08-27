@@ -1,3 +1,5 @@
+using Carina.Domain.Base;
+
 namespace Carina.Domain.Integrity;
 
 public interface IIntegrityCheckRepository
@@ -6,7 +8,8 @@ public interface IIntegrityCheckRepository
 
     Task<IntegrityCheck?> LatestAsync(CancellationToken cancellationToken);
 
-    Task<IReadOnlyList<IntegrityFinding>> ListFindingsAsync(
+    Task<PaginatedList<IntegrityFinding>> ListFindingsAsync(
         IntegrityCheckId checkId,
+        IntegrityFindingQuery query,
         CancellationToken cancellationToken);
 }

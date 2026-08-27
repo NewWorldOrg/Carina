@@ -3,6 +3,7 @@ using System.Text.Json;
 
 using Carina.Api.Events;
 using Carina.Domain.Channels;
+using Carina.Domain.Recordings;
 using Carina.Domain.Scans;
 using Carina.TestSupport;
 
@@ -25,6 +26,7 @@ internal sealed class SeamProbe : IAsyncDisposable
             services.AddSingleton<IBroadcastServiceRepository>(Services);
             services.AddSingleton<ICandidateChannelRepository>(Candidates);
             services.AddSingleton<IScanRunRepository>(Runs);
+            services.AddSingleton<IRecordingDirectory>(Recordings);
             services.AddSingleton<ISatelliteTransportStreamRepository>(SatelliteStreams);
         }));
 
@@ -38,6 +40,8 @@ internal sealed class SeamProbe : IAsyncDisposable
     public HeldCandidates Candidates { get; } = new();
 
     public HeldScanRuns Runs { get; } = new();
+
+    public HeldRecordings Recordings { get; } = new();
 
     public HeldSatelliteStreams SatelliteStreams { get; } = new();
 
@@ -67,6 +71,7 @@ public sealed class DefaultDenyTests(TestingWebApplicationFactory factory)
         "/api/tuners/health",
         "/api/tuners/scan-runs",
         "/api/services",
+        "/api/recordings",
         AppEventStream.Path,
     ];
 

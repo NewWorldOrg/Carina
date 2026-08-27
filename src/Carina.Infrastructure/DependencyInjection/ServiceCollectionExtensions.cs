@@ -142,6 +142,8 @@ public static class ServiceCollectionExtensions
             provider.GetRequiredService<IOptions<ThumbnailOptions>>().Value.Read());
         services.TryAddSingleton<IThumbnailRenderer, FfmpegThumbnailRenderer>();
         services.AddSingleton<ThumbnailJob>();
+        services.TryAddSingleton<IThumbnailRemaker>(provider =>
+            provider.GetRequiredService<ThumbnailJob>());
         services.TryAddSingleton<CollectionSettings>(provider =>
             provider.GetRequiredService<IOptions<CollectionOptions>>().Value.Read());
         services.TryAddSingleton<RescanNoticeBoard>();

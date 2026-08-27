@@ -104,6 +104,24 @@ public sealed class ServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public void RegistersEverythingARecordingWatchReachesFor()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        Assert.NotNull(provider.GetRequiredService<RecordingStreamSupervisor>());
+        Assert.NotNull(provider.GetRequiredService<RecordingWatchSettings>());
+        Assert.IsType<LocalRecordingFileWeigher>(provider.GetRequiredService<IRecordingFileWeigher>());
+    }
+
+    [Fact]
+    public void TheRecordingWatchIsOneOfTheJobsTheHostStarts()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        Assert.Single(provider.GetServices<IHostedService>().OfType<RecordingStreamJob>());
+    }
+
+    [Fact]
     public void TheHeadTheRecorderRunsWithIsReadFromConfiguration()
     {
         Dictionary<string, string?> settings = ValidSettings();

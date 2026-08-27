@@ -20,9 +20,12 @@ public sealed class StringEnumSchemaTransformer : IOpenApiSchemaTransformer
             return Task.CompletedTask;
         }
 
-        if (schema.Enum.All(value => value is JsonValue text && text.TryGetValue<string>(out _)))
+        bool absent = schema.Enum.Any(value => value is null);
+
+        if (schema.Enum.Where(value => value is not null)
+            .All(value => value is JsonValue text && text.TryGetValue<string>(out _)))
         {
-            schema.Type = JsonSchemaType.String;
+            schema.Type = absent ? JsonSchemaType.String | JsonSchemaType.Null : JsonSchemaType.String;
         }
 
         return Task.CompletedTask;

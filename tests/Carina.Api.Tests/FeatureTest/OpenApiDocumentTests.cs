@@ -115,12 +115,16 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "getOidcConfig",
                 "getProgramme",
                 "getProgrammeGuide",
+                "getRecording",
+                "getRecordingIntegrity",
                 "getScan",
                 "getService",
                 "getSessions",
                 "getSignInOptions",
+                "getStorage",
                 "getTunerHealth",
                 "getTuners",
+                "listRecordings",
                 "listScanRuns",
                 "listServices",
                 "logIn",
@@ -131,9 +135,12 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "putTunerHealthSettings",
                 "putTuners",
                 "rebuildEpg",
+                "remakeThumbnail",
                 "restartDriver",
+                "runRecordingIntegrityCheck",
                 "searchProgrammes",
                 "startScan",
+                "stopRecording",
             ],
             named.Order(StringComparer.Ordinal).ToArray());
         Assert.Equal(named.Length, named.Distinct(StringComparer.Ordinal).Count());
@@ -155,7 +162,9 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
             .Select(tag => tag!["name"]!.GetValue<string>())
             .ToArray();
 
-        Assert.Equal(["tuners", "services", "health", "epg", "programs", "driver", "auth"], tags);
+        Assert.Equal(
+            ["tuners", "storage", "services", "recordings", "health", "epg", "programs", "driver", "auth"],
+            tags);
         Assert.Equal(tags, declared);
         Assert.DoesNotContain(tags, tag => tag.EndsWith("Action", StringComparison.Ordinal));
     }
@@ -181,12 +190,101 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
         string[] untyped = document["components"]!["schemas"]!
             .AsObject()
             .Where(schema => schema.Value!["enum"] is not null)
-            .Where(schema => schema.Value!["type"]?.GetValue<string>() != "string")
+            .Where(schema => !SaysItIsAString(schema.Value!["type"]))
             .Select(schema => schema.Key)
             .ToArray();
 
         Assert.Empty(untyped);
     }
+
+    [Fact]
+    public async Task AnEnumAValueCanBeAbsentFromSaysSoBesideTheValuesItHas()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode outcome = document["components"]!["schemas"]!["RecordingOutcome"]!;
+        string[] values = [.. outcome["enum"]!.AsArray().Select(value => value?.GetValue<string>() ?? "absent")];
+
+        Assert.Equal(
+            ["null", "string"],
+            outcome["type"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
+        Assert.Equal(["complete", "truncated", "failed", "absent"], values);
+    }
+
+    [Fact]
+    public async Task AStateChangingPostWithNoBodyDescribesNoBodyThoughOneStillHasToNameJson()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode run = document["paths"]!["/api/recordings/integrity/run"]!["post"]!;
+        JsonNode picture = document["paths"]!["/api/recordings/{id}/thumbnail"]!["post"]!;
+
+        Assert.Null(run["requestBody"]);
+        Assert.Null(picture["requestBody"]);
+    }
+
+    [Fact]
+    public async Task AShortfallAValueCanBeAbsentFromSaysSoBesideTheValuesItHas()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode shortfall = document["components"]!["schemas"]!["DiskShortfall"]!;
+
+        Assert.Equal(
+            ["null", "string"],
+            shortfall["type"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
+        Assert.Equal(
+            [
+                "rootsUnknown",
+                "rootUndeclared",
+                "rootUnmeasured",
+                "rootNotWritable",
+                "noRoomLeft",
+                "shortOfTheEstimate",
+                "absent",
+            ],
+            shortfall["enum"]!.AsArray().Select(value => value?.GetValue<string>() ?? "absent").ToArray());
+    }
+
+    [Fact]
+    public async Task TheClassesASweepCanNameAreSpelledInTheDocumentTheWayTheEndpointSpellsThem()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode fault = document["components"]!["schemas"]!["IntegrityFault"]!;
+
+        Assert.Equal("string", fault["type"]!.GetValue<string>());
+        Assert.Equal(
+            ["sizeDisagrees", "noLedgerRow", "fileMissing", "fileEmpty", "emptyThoughComplete"],
+            fault["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
+    }
+
+    [Fact]
+    public async Task TheWaysASweepCanBeRefusedAreSpelledInTheDocument()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode refusal = document["components"]!["schemas"]!["SweepRefusal"]!;
+
+        Assert.Equal("string", refusal["type"]!.GetValue<string>());
+        Assert.Equal(
+            ["none", "oneIsAlreadyRunning", "tooSoonAfterTheLastOne"],
+            refusal["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
+    }
+
+    [Fact]
+    public async Task WhatARootAnswersIsDescribedFieldByFieldAndNoneOfThemIsAPath()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode root = document["components"]!["schemas"]!["StorageRootResponder"]!;
+
+        Assert.Equal(
+            ["name", "freeBytes", "totalBytes", "writable", "committedBytes", "recordingsInFlight", "shortfall"],
+            root["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+    }
+
+    private static bool SaysItIsAString(JsonNode? declared)
+        => declared switch
+        {
+            JsonArray named => named.Any(value => value?.GetValue<string>() == "string"),
+            JsonValue named => named.GetValue<string>() == "string",
+            _ => false,
+        };
 
     [Fact]
     public async Task TheEnvelopeIsDescribedRatherThanLeftOpaque()

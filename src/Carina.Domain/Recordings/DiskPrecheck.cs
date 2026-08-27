@@ -33,7 +33,7 @@ public static class DiskPrecheck
             weighed);
     }
 
-    private static DiskShortfall? Shortfall(
+    public static DiskShortfall? Shortfall(
         IReadOnlyList<StorageRootDto>? roots,
         StorageRootDto? declared,
         Int128 estimate)

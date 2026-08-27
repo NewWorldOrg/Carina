@@ -13,6 +13,20 @@ public sealed class IntegritySettingsTests
     }
 
     [Fact]
+    public void SettingsNobodyTouchedHoldTheSweepBackForAWhileAfterEachOne()
+    {
+        Assert.Equal(TimeSpan.FromMinutes(5), new IntegritySettings().BetweenManualSweeps);
+    }
+
+    [Fact]
+    public void TheHoldBackBetweenSweepsAskedForByHandIsTheOneThatWasSet()
+    {
+        var settings = new IntegritySettings { BetweenManualSweeps = TimeSpan.FromMinutes(20) };
+
+        Assert.Equal(TimeSpan.FromMinutes(20), settings.BetweenManualSweeps);
+    }
+
+    [Fact]
     public void SettingsThatNameAMountedRootWalkSomething()
     {
         var settings = new IntegritySettings
