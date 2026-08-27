@@ -21,8 +21,8 @@ internal static class ReservationFixtures
             new EventId(eventId),
             startsAt ?? Now.AddHours(2));
 
-    public static ProgrammeSnapshot Snapshot()
-        => new("A programme", "What it is about", string.Empty, [new ProgrammeGenre(7, 1)], Now);
+    public static ProgrammeSnapshot Snapshot(string name = "A programme", string summary = "What it is about")
+        => new(name, summary, string.Empty, [new ProgrammeGenre(7, 1)], Now);
 
     public static Reservation Planned(
         ProgrammeRef? programme = null,
@@ -34,7 +34,8 @@ internal static class ReservationFixtures
         Margin? marginBefore = null,
         Margin? marginAfter = null,
         BroadcastGroupKey? groupKey = null,
-        BroadcastGroupRole groupRole = BroadcastGroupRole.Standalone)
+        BroadcastGroupRole groupRole = BroadcastGroupRole.Standalone,
+        ProgrammeSnapshot? snapshot = null)
     {
         ProgrammeRef reference = programme ?? Programme(NextEventId());
         DateTime opens = startAt ?? reference.StartsAt;
@@ -49,7 +50,7 @@ internal static class ReservationFixtures
             endAtConfirmed,
             marginBefore ?? Margin.None,
             marginAfter ?? Margin.None,
-            Snapshot(),
+            snapshot ?? Snapshot(),
             groupKey,
             groupRole,
             Now);
