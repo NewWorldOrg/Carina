@@ -63,6 +63,35 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
     }
 
     [Fact]
+    public void TheSurfacesThatCheckTheLedgerAgainstTheFilesAreTheThreeThatWereAskedFor()
+    {
+        Assert.Equal(
+            [
+                "GET /api/recordings/integrity",
+                "GET /api/storage",
+                "POST /api/recordings/integrity/run",
+            ],
+            Inventory()
+                .Where(surface => surface.Pattern
+                    is "/api/recordings/integrity"
+                    or "/api/recordings/integrity/run"
+                    or "/api/storage")
+                .Select(surface => surface.ToString())
+                .Order(StringComparer.Ordinal)
+                .ToArray());
+    }
+
+    [Fact]
+    public void AskingForTheLedgerToBeCheckedDiscardsNothing()
+    {
+        Assert.Equal(
+            EndpointEffect.Changing,
+            Inventory()
+                .Single(surface => surface.ToString() == "POST /api/recordings/integrity/run")
+                .Effect);
+    }
+
+    [Fact]
     public void TheInventoryHoldsTheSurfacesTheDocumentCannotDescribe()
     {
         string[] patterns = [.. Inventory().Select(surface => surface.Pattern)];

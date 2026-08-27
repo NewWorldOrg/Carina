@@ -8,6 +8,7 @@ using Carina.Domain.Driver;
 using Carina.Domain.DriverStatus;
 using Carina.Infrastructure.Configuration;
 
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Carina.Infrastructure.Driver;
@@ -18,9 +19,16 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
 
     private readonly HttpClient http;
 
-    public DriverIpcClient(IOptions<DriverOptions> driverOptions)
+    private readonly ILogger<DriverIpcClient> logger;
+
+    private readonly DriverSocketPath socketPath;
+
+    public DriverIpcClient(IOptions<DriverOptions> driverOptions, ILogger<DriverIpcClient> logger)
     {
-        var socketPath = new DriverSocketPath(driverOptions.Value.SocketPath!);
+        ArgumentNullException.ThrowIfNull(driverOptions);
+
+        this.logger = logger;
+        socketPath = new DriverSocketPath(driverOptions.Value.SocketPath!);
 
         http = new HttpClient(
             new SocketsHttpHandler
@@ -112,7 +120,7 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
         }
         catch (Exception error) when (IsTransport(error, cancellationToken))
         {
-            return DriverCall<TunerLedgerDto>.Unreachable(Describe(error));
+            return DriverCall<TunerLedgerDto>.Unreachable(WhyUnreachable(error));
         }
     }
 
@@ -141,7 +149,7 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
         }
         catch (Exception error) when (IsTransport(error, cancellationToken))
         {
-            return DriverCall<DriverRestartDto>.Unreachable(Describe(error));
+            return DriverCall<DriverRestartDto>.Unreachable(WhyUnreachable(error));
         }
     }
 
@@ -176,7 +184,7 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
         }
         catch (Exception error) when (IsTransport(error, cancellationToken))
         {
-            return DriverCall<TunerSnapshot>.Unreachable(Describe(error));
+            return DriverCall<TunerSnapshot>.Unreachable(WhyUnreachable(error));
         }
     }
 
@@ -241,7 +249,7 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
         }
         catch (Exception error) when (IsTransport(error, cancellationToken))
         {
-            return DriverCall<SessionSnapshot>.Unreachable(Describe(error));
+            return DriverCall<SessionSnapshot>.Unreachable(WhyUnreachable(error));
         }
     }
 
@@ -267,7 +275,7 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
         }
         catch (Exception error) when (IsTransport(error, cancellationToken))
         {
-            return DriverCall<SessionSnapshot>.Unreachable(Describe(error));
+            return DriverCall<SessionSnapshot>.Unreachable(WhyUnreachable(error));
         }
     }
 
@@ -338,7 +346,7 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
         }
         catch (Exception error) when (IsTransport(error, cancellationToken))
         {
-            return DriverCall<T>.Unreachable(Describe(error));
+            return DriverCall<T>.Unreachable(WhyUnreachable(error));
         }
     }
 
@@ -373,7 +381,7 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
         }
         catch (Exception error) when (IsTransport(error, cancellationToken))
         {
-            return DriverCall<Stream>.Unreachable(Describe(error));
+            return DriverCall<Stream>.Unreachable(WhyUnreachable(error));
         }
         finally
         {
@@ -456,10 +464,48 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
                or JsonException
                or OperationCanceledException;
 
-    private static string Describe(Exception error)
-        => error is OperationCanceledException
-            ? $"The driver did not answer within {RequestPatience.TotalSeconds:0} seconds."
-            : $"{error.GetType().Name}: {error.Message}";
+    private string WhyUnreachable(Exception error)
+    {
+        string reason = Reason(error);
+
+        logger.LogWarning(
+            error,
+            "The driver could not be reached over {Socket}; the caller is told {Reason}",
+            socketPath.Value,
+            reason);
+
+        return reason;
+    }
+
+    private static string Reason(Exception error)
+    {
+        if (error is OperationCanceledException)
+        {
+            return $"The driver did not answer within {RequestPatience.TotalSeconds:0} seconds.";
+        }
+
+        if (SocketErrorIn(error) is { } refused)
+        {
+            return $"The driver's socket could not be reached ({refused}).";
+        }
+
+        return error is JsonException
+            ? "The driver answered with something this app could not read."
+            : "The driver could not be reached over its socket.";
+    }
+
+    private static SocketError? SocketErrorIn(Exception error)
+    {
+        for (Exception? walking = error; walking is not null; walking = walking.InnerException)
+        {
+            if (walking is SocketException socket)
+            {
+                return socket.SocketErrorCode;
+            }
+        }
+
+        return null;
+    }
 
     private sealed class OwnedStream(
         Stream inner,

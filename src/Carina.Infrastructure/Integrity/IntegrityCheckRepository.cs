@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Integrity;
 using Carina.Infrastructure.Persistence;
 
@@ -24,17 +25,26 @@ public sealed class IntegrityCheckRepository(CarinaDbContext context) : IIntegri
             .ThenByDescending(check => check.StartedAt)
             .FirstOrDefaultAsync(cancellationToken);
 
-    public async Task<IReadOnlyList<IntegrityFinding>> ListFindingsAsync(
+    public async Task<PaginatedList<IntegrityFinding>> ListFindingsAsync(
         IntegrityCheckId checkId,
+        IntegrityFindingQuery query,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(checkId);
+        ArgumentNullException.ThrowIfNull(query);
 
-        return await context.Set<IntegrityFinding>()
+        IQueryable<IntegrityFinding> found = context.Set<IntegrityFinding>()
             .AsNoTracking()
-            .Where(finding => finding.CheckId == checkId)
+            .Where(finding => finding.CheckId == checkId);
+
+        int total = await found.CountAsync(cancellationToken);
+        List<IntegrityFinding> page = await found
             .OrderBy(finding => finding.Root)
             .ThenBy(finding => finding.Path)
+            .Skip((query.Page - 1) * query.PerPage)
+            .Take(query.PerPage)
             .ToListAsync(cancellationToken);
+
+        return new PaginatedList<IntegrityFinding>(page, total, query.Page, query.PerPage);
     }
 }

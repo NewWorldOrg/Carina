@@ -5,6 +5,11 @@ namespace Carina.Domain.Recordings;
 
 public sealed record RecordingDemand
 {
+    private static readonly TunerKind Heaviest =
+        ExpectedBitrate.Terrestrial.MostBitsPerSecond >= ExpectedBitrate.Satellite.MostBitsPerSecond
+            ? TunerKind.Terrestrial
+            : TunerKind.Satellite;
+
     public RecordingDemand(TunerKind kind, DateTime from, DateTime until)
     {
         DateTime start = UtcTimes.Required(from, nameof(from));
@@ -30,6 +35,9 @@ public sealed record RecordingDemand
     public DateTime Until { get; }
 
     public ExpectedBitrate Bitrate { get; }
+
+    public static RecordingDemand AtTheHeaviestRate(DateTime from, DateTime until)
+        => new(Heaviest, from, until);
 
     public TimeSpan Remaining(DateTime asOf)
     {

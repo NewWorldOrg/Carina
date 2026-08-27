@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Integrity;
 using Carina.Domain.Recordings;
 
@@ -82,9 +83,37 @@ internal sealed class HeldChecks : IIntegrityCheckRepository
     public Task<IntegrityCheck?> LatestAsync(CancellationToken cancellationToken)
         => Task.FromResult(Saved.Count is 0 ? null : Saved[^1].Check);
 
-    public Task<IReadOnlyList<IntegrityFinding>> ListFindingsAsync(
+    public Task<PaginatedList<IntegrityFinding>> ListFindingsAsync(
         IntegrityCheckId checkId,
+        IntegrityFindingQuery query,
         CancellationToken cancellationToken)
-        => Task.FromResult<IReadOnlyList<IntegrityFinding>>(
-            [.. Saved.Where(report => report.Check.Id.Equals(checkId)).SelectMany(report => report.Findings)]);
+    {
+        IntegrityFinding[] found =
+        [
+            .. Saved
+                .Where(report => report.Check.Id.Equals(checkId))
+                .SelectMany(report => report.Findings)
+                .OrderBy(finding => finding.Root.Value, StringComparer.Ordinal)
+                .ThenBy(finding => finding.Path, StringComparer.Ordinal),
+        ];
+
+        return Task.FromResult(new PaginatedList<IntegrityFinding>(
+            [.. found.Skip((query.Page - 1) * query.PerPage).Take(query.PerPage)],
+            found.Length,
+            query.Page,
+            query.PerPage));
+    }
+}
+
+internal sealed class ThrowingSurvey : IRecordingFileSurvey
+{
+    public bool Throws { get; set; } = true;
+
+    public Task<IReadOnlyList<OutputRoot>> RootsAsync(CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<OutputRoot>>([new OutputRoot("primary")]);
+
+    public Task<RootListing> ListAsync(OutputRoot root, CancellationToken cancellationToken)
+        => Throws
+            ? throw new UnauthorizedAccessException("the output root would not be read")
+            : Task.FromResult(RootListing.Of(root, []));
 }

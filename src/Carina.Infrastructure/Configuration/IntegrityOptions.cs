@@ -20,6 +20,8 @@ public sealed class IntegrityOptions
 
     public string? BetweenSweeps { get; set; }
 
+    public string? BetweenManualSweeps { get; set; }
+
     public string? OutputRoots { get; set; }
 
     public void ReadFrom(IConfiguration configuration)
@@ -30,6 +32,7 @@ public sealed class IntegrityOptions
 
         BeforeFirstSweep = named[nameof(BeforeFirstSweep)];
         BetweenSweeps = named[nameof(BetweenSweeps)];
+        BetweenManualSweeps = named[nameof(BetweenManualSweeps)];
         OutputRoots = named[nameof(OutputRoots)];
     }
 
@@ -41,6 +44,10 @@ public sealed class IntegrityOptions
         {
             BeforeFirstSweep = Positive(BeforeFirstSweep, nameof(BeforeFirstSweep), unset.BeforeFirstSweep),
             BetweenSweeps = Positive(BetweenSweeps, nameof(BetweenSweeps), unset.BetweenSweeps),
+            BetweenManualSweeps = Positive(
+                BetweenManualSweeps,
+                nameof(BetweenManualSweeps),
+                unset.BetweenManualSweeps),
             OutputRoots = Mounted(),
         };
     }

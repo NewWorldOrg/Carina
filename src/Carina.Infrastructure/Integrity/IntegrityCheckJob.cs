@@ -14,22 +14,45 @@ public sealed class IntegrityCheckJob(
     TimeProvider clock,
     ILogger<IntegrityCheckJob> logger) : BackgroundService
 {
-    private int running;
+    private readonly Lock gate = new();
+
+    private IntegrityCheckId? running;
+
+    public IntegrityCheckId? RunningCheck
+    {
+        get
+        {
+            lock (gate)
+            {
+                return running;
+            }
+        }
+    }
 
     public async Task<IntegrityRun> RunAsync(CancellationToken cancellationToken)
     {
-        if (Interlocked.CompareExchange(ref running, 1, 0) is not 0)
+        IntegrityCheckId asked = IntegrityCheckId.New();
+
+        lock (gate)
         {
-            return IntegrityRun.RefusedBecauseOneIsRunning();
+            if (running is { } walking)
+            {
+                return IntegrityRun.RefusedBecauseOneIsRunning(walking);
+            }
+
+            running = asked;
         }
 
         try
         {
-            return IntegrityRun.Of(await SweepAsync(cancellationToken));
+            return IntegrityRun.Of(await SweepAsync(asked, cancellationToken));
         }
         finally
         {
-            Interlocked.Exchange(ref running, 0);
+            lock (gate)
+            {
+                running = null;
+            }
         }
     }
 
@@ -73,7 +96,7 @@ public sealed class IntegrityCheckJob(
         }
     }
 
-    private async Task<IntegrityReport> SweepAsync(CancellationToken cancellationToken)
+    private async Task<IntegrityReport> SweepAsync(IntegrityCheckId id, CancellationToken cancellationToken)
     {
         DateTime startedAt = clock.GetUtcNow().UtcDateTime;
 
@@ -91,7 +114,7 @@ public sealed class IntegrityCheckJob(
         }
 
         IntegrityReport swept = IntegrityScan.Compare(
-            IntegrityCheckId.New(),
+            id,
             ledger,
             listings,
             startedAt,

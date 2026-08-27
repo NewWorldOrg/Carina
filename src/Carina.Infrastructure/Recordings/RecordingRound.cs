@@ -51,11 +51,6 @@ public sealed class RecordingRound(
 
     private const string NothingSaidWhy = "the driver said nothing about why";
 
-    private static readonly TunerKind HeaviestKind =
-        ExpectedBitrate.Terrestrial.MostBitsPerSecond >= ExpectedBitrate.Satellite.MostBitsPerSecond
-            ? TunerKind.Terrestrial
-            : TunerKind.Satellite;
-
     private enum SessionStanding
     {
         Standing = 1,
@@ -322,7 +317,7 @@ public sealed class RecordingRound(
     }
 
     private static RecordingDemand AtTheHeaviestRate(Recording recording)
-        => new(HeaviestKind, recording.ExpectedWindowStart, recording.ExpectedWindowEnd);
+        => RecordingDemand.AtTheHeaviestRate(recording.ExpectedWindowStart, recording.ExpectedWindowEnd);
 
     private StartSessionRequest Request(RecordingId id, TuneParams tune, DateTime endsAt)
         => new()
