@@ -116,10 +116,12 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "getProgramme",
                 "getProgrammeGuide",
                 "getRecording",
+                "getRecordingIntegrity",
                 "getScan",
                 "getService",
                 "getSessions",
                 "getSignInOptions",
+                "getStorage",
                 "getTunerHealth",
                 "getTuners",
                 "listRecordings",
@@ -135,6 +137,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "rebuildEpg",
                 "remakeThumbnail",
                 "restartDriver",
+                "runRecordingIntegrityCheck",
                 "searchProgrammes",
                 "startScan",
                 "stopRecording",
@@ -160,7 +163,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
             .ToArray();
 
         Assert.Equal(
-            ["tuners", "services", "recordings", "health", "epg", "programs", "driver", "auth"],
+            ["tuners", "storage", "services", "recordings", "health", "epg", "programs", "driver", "auth"],
             tags);
         Assert.Equal(tags, declared);
         Assert.DoesNotContain(tags, tag => tag.EndsWith("Action", StringComparison.Ordinal));
@@ -205,6 +208,63 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
             ["null", "string"],
             outcome["type"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
         Assert.Equal(["complete", "truncated", "failed", "absent"], values);
+    }
+
+    [Fact]
+    public async Task AShortfallAValueCanBeAbsentFromSaysSoBesideTheValuesItHas()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode shortfall = document["components"]!["schemas"]!["DiskShortfall"]!;
+
+        Assert.Equal(
+            ["null", "string"],
+            shortfall["type"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
+        Assert.Equal(
+            [
+                "rootsUnknown",
+                "rootUndeclared",
+                "rootUnmeasured",
+                "rootNotWritable",
+                "noRoomLeft",
+                "shortOfTheEstimate",
+                "absent",
+            ],
+            shortfall["enum"]!.AsArray().Select(value => value?.GetValue<string>() ?? "absent").ToArray());
+    }
+
+    [Fact]
+    public async Task TheClassesASweepCanNameAreSpelledInTheDocumentTheWayTheEndpointSpellsThem()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode fault = document["components"]!["schemas"]!["IntegrityFault"]!;
+
+        Assert.Equal("string", fault["type"]!.GetValue<string>());
+        Assert.Equal(
+            ["sizeDisagrees", "noLedgerRow", "fileMissing", "fileEmpty", "emptyThoughComplete"],
+            fault["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
+    }
+
+    [Fact]
+    public async Task TheWaysASweepCanBeRefusedAreSpelledInTheDocument()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode refusal = document["components"]!["schemas"]!["SweepRefusal"]!;
+
+        Assert.Equal("string", refusal["type"]!.GetValue<string>());
+        Assert.Equal(
+            ["none", "oneIsAlreadyRunning", "tooSoonAfterTheLastOne"],
+            refusal["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
+    }
+
+    [Fact]
+    public async Task WhatARootAnswersIsDescribedFieldByFieldAndNoneOfThemIsAPath()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode root = document["components"]!["schemas"]!["StorageRootResponder"]!;
+
+        Assert.Equal(
+            ["name", "freeBytes", "totalBytes", "writable", "committedBytes", "recordingsInFlight", "shortfall"],
+            root["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
     }
 
     private static bool SaysItIsAString(JsonNode? declared)
