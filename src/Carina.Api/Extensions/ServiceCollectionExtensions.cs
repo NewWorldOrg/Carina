@@ -33,6 +33,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ProgrammeGuideService>();
         services.AddScoped<ProgrammeFeedService>();
         services.AddScoped<ArchiveService>();
+        services.AddScoped<RecordingService>();
 
         return services;
     }

@@ -33,6 +33,7 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
                 "POST /api/auth/password",
                 "POST /api/epg/archive/forget-service",
                 "POST /api/epg/rebuild",
+                "POST /api/recordings/{id}/stop",
                 "POST /api/tuners/scan/{scanId:guid}/apply",
                 "PUT /api/auth/oidc-config",
             ],
@@ -41,6 +42,24 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
                 .Select(surface => surface.ToString())
                 .Order(StringComparer.Ordinal)
                 .ToArray());
+    }
+
+    [Fact]
+    public void TheSurfacesThatDeleteAreTheOnesTheLedgerNames()
+    {
+        Assert.Equal(
+            [
+                "DELETE /api/auth/sessions/{id}",
+                "DELETE /api/services/{networkId:int}-{serviceId:int}/candidate-channels/{candidateChannelId:guid}",
+            ],
+            EndpointRules.SurfacesThatDelete(Inventory()));
+    }
+
+    [Fact]
+    public void TheRecordingSurfaceOffersNoWayToDeleteAnything()
+    {
+        Assert.Empty(EndpointRules.SurfacesThatDeleteUnder(Inventory(), "/api/recordings"));
+        Assert.NotEmpty(EndpointRules.SurfacesThatDelete(Inventory()));
     }
 
     [Fact]

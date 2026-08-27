@@ -166,6 +166,68 @@ public sealed class TunerCapacityTests
     }
 
     [Fact]
+    public void OneSatelliteSeatIsTheSeatBothSatelliteSystemsWouldTake()
+    {
+        TunerCapacity capacity = Holding(Seat("adapter0", TunerKind.Satellite));
+
+        Assert.True(capacity.SharesSeats(TuneSystem.IsdbSBs, TuneSystem.IsdbSCs110));
+        Assert.True(capacity.SharesSeats(TuneSystem.IsdbSCs110, TuneSystem.IsdbSBs));
+    }
+
+    [Fact]
+    public void TwoSatelliteSeatsStillShareThemBetweenTheTwoSatelliteSystems()
+    {
+        TunerCapacity capacity = Holding(
+            Seat("adapter0", TunerKind.Satellite),
+            Seat("adapter1", TunerKind.Satellite));
+
+        Assert.True(capacity.SharesSeats(TuneSystem.IsdbSBs, TuneSystem.IsdbSCs110));
+    }
+
+    [Fact]
+    public void ATunerOfEachKindSharesNoSeatBetweenTheTwoKinds()
+    {
+        TunerCapacity capacity = Holding(
+            Seat("adapter0", TunerKind.Terrestrial),
+            Seat("adapter1", TunerKind.Satellite));
+
+        Assert.False(capacity.SharesSeats(TuneSystem.IsdbT, TuneSystem.IsdbSBs));
+        Assert.False(capacity.SharesSeats(TuneSystem.IsdbSBs, TuneSystem.IsdbT));
+    }
+
+    [Fact]
+    public void ATunerThatTakesEitherKindIsASeatThoseTwoSystemsShare()
+    {
+        var capacity = new TunerCapacity(
+            [new TunerSeat("adapter0", [TuneSystem.IsdbT, TuneSystem.IsdbSBs], Faulted: false)],
+            []);
+
+        Assert.True(capacity.SharesSeats(TuneSystem.IsdbT, TuneSystem.IsdbSBs));
+        Assert.False(capacity.SharesSeats(TuneSystem.IsdbT, TuneSystem.IsdbSCs110));
+    }
+
+    [Fact]
+    public void ASystemNoTunerServesSharesASeatWithNothingAtAll()
+    {
+        TunerCapacity capacity = Holding(Seat("adapter0", TunerKind.Terrestrial));
+
+        Assert.False(capacity.SharesSeats(TuneSystem.IsdbSBs, TuneSystem.IsdbSBs));
+        Assert.False(capacity.SharesSeats(TuneSystem.IsdbSBs, TuneSystem.IsdbT));
+        Assert.True(capacity.SharesSeats(TuneSystem.IsdbT, TuneSystem.IsdbT));
+    }
+
+    [Fact]
+    public void TheHealthyViewSharesOnlyTheSeatsThatStillWork()
+    {
+        var capacity = new TunerCapacity(
+            [new TunerSeat("adapter0", [TuneSystem.IsdbT, TuneSystem.IsdbSBs], Faulted: true)],
+            []);
+
+        Assert.True(capacity.SharesSeats(TuneSystem.IsdbT, TuneSystem.IsdbSBs));
+        Assert.False(capacity.Healthy.SharesSeats(TuneSystem.IsdbT, TuneSystem.IsdbSBs));
+    }
+
+    [Fact]
     public void ACapacityBuiltFromNothingIsRefused()
     {
         Assert.Equal("seats", Assert.Throws<ArgumentNullException>(() => new TunerCapacity(null!, [])).ParamName);

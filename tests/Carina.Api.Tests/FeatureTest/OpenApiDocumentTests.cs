@@ -115,12 +115,14 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "getOidcConfig",
                 "getProgramme",
                 "getProgrammeGuide",
+                "getRecording",
                 "getScan",
                 "getService",
                 "getSessions",
                 "getSignInOptions",
                 "getTunerHealth",
                 "getTuners",
+                "listRecordings",
                 "listScanRuns",
                 "listServices",
                 "logIn",
@@ -131,9 +133,11 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "putTunerHealthSettings",
                 "putTuners",
                 "rebuildEpg",
+                "remakeThumbnail",
                 "restartDriver",
                 "searchProgrammes",
                 "startScan",
+                "stopRecording",
             ],
             named.Order(StringComparer.Ordinal).ToArray());
         Assert.Equal(named.Length, named.Distinct(StringComparer.Ordinal).Count());
@@ -155,7 +159,9 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
             .Select(tag => tag!["name"]!.GetValue<string>())
             .ToArray();
 
-        Assert.Equal(["tuners", "services", "health", "epg", "programs", "driver", "auth"], tags);
+        Assert.Equal(
+            ["tuners", "services", "recordings", "health", "epg", "programs", "driver", "auth"],
+            tags);
         Assert.Equal(tags, declared);
         Assert.DoesNotContain(tags, tag => tag.EndsWith("Action", StringComparison.Ordinal));
     }
@@ -181,12 +187,33 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
         string[] untyped = document["components"]!["schemas"]!
             .AsObject()
             .Where(schema => schema.Value!["enum"] is not null)
-            .Where(schema => schema.Value!["type"]?.GetValue<string>() != "string")
+            .Where(schema => !SaysItIsAString(schema.Value!["type"]))
             .Select(schema => schema.Key)
             .ToArray();
 
         Assert.Empty(untyped);
     }
+
+    [Fact]
+    public async Task AnEnumAValueCanBeAbsentFromSaysSoBesideTheValuesItHas()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode outcome = document["components"]!["schemas"]!["RecordingOutcome"]!;
+        string[] values = [.. outcome["enum"]!.AsArray().Select(value => value?.GetValue<string>() ?? "absent")];
+
+        Assert.Equal(
+            ["null", "string"],
+            outcome["type"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
+        Assert.Equal(["complete", "truncated", "failed", "absent"], values);
+    }
+
+    private static bool SaysItIsAString(JsonNode? declared)
+        => declared switch
+        {
+            JsonArray named => named.Any(value => value?.GetValue<string>() == "string"),
+            JsonValue named => named.GetValue<string>() == "string",
+            _ => false,
+        };
 
     [Fact]
     public async Task TheEnvelopeIsDescribedRatherThanLeftOpaque()

@@ -26,37 +26,6 @@ public sealed class RecordingRuleSelfCheckTests
         }
         """;
 
-    private const string DeleteAction = """
-        [ApiController]
-        [Route("api/recordings/{recordingId:guid}")]
-        public sealed class DeleteRecordingAction : ControllerBase
-        {
-            [HttpDelete]
-            public Task<IActionResult> Invoke(Guid recordingId) => throw new NotImplementedException();
-        }
-        """;
-
-    private const string ActiveAction = """
-        [ApiController]
-        [Route("api/recordings/active")]
-        public sealed class GetActiveRecordingsAction : ControllerBase
-        {
-            [HttpGet]
-            public Task<IActionResult> Invoke() => throw new NotImplementedException();
-        }
-        """;
-
-    private const string LibraryDeleteAction = """
-        using Carina.Domain.Recordings;
-        [ApiController]
-        [Route("api/library/recordings/{recordingId:guid}")]
-        public sealed class DeleteLibraryRecordingAction : ControllerBase
-        {
-            [HttpDelete]
-            public Task<IActionResult> Invoke(RecordingId recordingId) => throw new NotImplementedException();
-        }
-        """;
-
     [Fact]
     public void DetectsARecordingFileThatReadsSectionsForItself()
     {
@@ -126,38 +95,6 @@ public sealed class RecordingRuleSelfCheckTests
 
         Assert.Empty(RecordingRules.GuideWritersInsideTheRecordingFeature(tree.Root));
         Assert.Empty(RecordingRules.EitReadersInsideTheRecordingFeature(tree.Root));
-    }
-
-    [Fact]
-    public void DetectsADeleteEndpointOnTheRecordingSurface()
-    {
-        using var tree = new SourceTree();
-        tree.Write("Carina.Api/Controllers/Recordings/DeleteRecordingAction.cs", DeleteAction);
-        tree.Write("Carina.Api/Controllers/Recordings/GetActiveRecordingsAction.cs", ActiveAction);
-
-        Assert.Equal(
-            ["/Carina.Api/Controllers/Recordings/DeleteRecordingAction.cs"],
-            RecordingRules.DeleteEndpointsOnTheRecordingSurface(tree.Root));
-    }
-
-    [Fact]
-    public void DetectsADeleteRoutedAtRecordingsFromAFolderThatDoesNotSaySo()
-    {
-        using var tree = new SourceTree();
-        tree.Write("Carina.Api/Controllers/Maintenance/PurgeAction.cs", DeleteAction);
-
-        Assert.Equal(
-            ["/Carina.Api/Controllers/Maintenance/PurgeAction.cs"],
-            RecordingRules.DeleteEndpointsOnTheRecordingSurface(tree.Root));
-    }
-
-    [Fact]
-    public void LeavesTheLibraryOwningTheDeletion()
-    {
-        using var tree = new SourceTree();
-        tree.Write("Carina.Api/Controllers/Library/DeleteLibraryRecordingAction.cs", LibraryDeleteAction);
-
-        Assert.Empty(RecordingRules.DeleteEndpointsOnTheRecordingSurface(tree.Root));
     }
 
     [Fact]

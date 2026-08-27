@@ -35,6 +35,40 @@ public static class EndpointRules
         ];
     }
 
+    public static IReadOnlyList<string> SurfacesThatDelete(IEnumerable<RoutedSurface> surfaces)
+    {
+        ArgumentNullException.ThrowIfNull(surfaces);
+
+        return
+        [
+            .. surfaces
+                .Where(surface => HttpMethods.IsDelete(surface.Method))
+                .Select(surface => surface.ToString())
+                .Order(StringComparer.Ordinal),
+        ];
+    }
+
+    public static IReadOnlyList<string> SurfacesThatDeleteUnder(
+        IEnumerable<RoutedSurface> surfaces,
+        string root)
+    {
+        ArgumentNullException.ThrowIfNull(surfaces);
+        ArgumentException.ThrowIfNullOrWhiteSpace(root);
+
+        return
+        [
+            .. surfaces
+                .Where(surface => HttpMethods.IsDelete(surface.Method))
+                .Where(surface => Under(surface.Pattern, root))
+                .Select(surface => surface.ToString())
+                .Order(StringComparer.Ordinal),
+        ];
+    }
+
+    private static bool Under(string pattern, string root)
+        => string.Equals(pattern, root, StringComparison.Ordinal)
+           || pattern.StartsWith(root + "/", StringComparison.Ordinal);
+
     private static bool Reads(string method)
         => HttpMethods.IsGet(method)
            || HttpMethods.IsHead(method)

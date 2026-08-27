@@ -69,6 +69,9 @@ public sealed class ReservationConfiguration : IEntityTypeConfiguration<Reservat
                 "ck_reservation_priority",
                 $"priority BETWEEN {Priority.MinValue} AND {Priority.MaxValue}");
             table.HasCheckConstraint(
+                "ck_reservation_reception",
+                "reception_unavailable = (reception_unavailable_since IS NOT NULL)");
+            table.HasCheckConstraint(
                 "ck_reservation_divergence",
                 """
                 epg_diverged = (jsonb_array_length(epg_diverged_detail) > 0)
@@ -157,6 +160,9 @@ public sealed class ReservationConfiguration : IEntityTypeConfiguration<Reservat
 
         builder.Property(reservation => reservation.EpgMissing).IsRequired();
         builder.Property(reservation => reservation.AcknowledgedAt);
+
+        builder.Property(reservation => reservation.ReceptionUnavailable).IsRequired();
+        builder.Property(reservation => reservation.ReceptionUnavailableSince);
 
         builder.Property(reservation => reservation.BroadcastGroupKey)
             .HasConversion(key => key!.Value, value => new BroadcastGroupKey(value))

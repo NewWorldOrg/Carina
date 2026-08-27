@@ -15,12 +15,6 @@ public sealed class RecordingRuleTests
     }
 
     [Fact]
-    public void TheRecordingSurfaceOffersNoWayToDeleteAnything()
-    {
-        Assert.Empty(RecordingRules.DeleteEndpointsOnTheRecordingSurface(RepositoryLayout.SourceDirectory));
-    }
-
-    [Fact]
     public void TheRecordingFeatureIsOnDiskForThoseRulesToRead()
     {
         IReadOnlyList<string> feature = SourceScan.FilesMentioning(
@@ -35,7 +29,6 @@ public sealed class RecordingRuleTests
     {
         Assert.NotEmpty(SourceScan.FilesMentioning(RepositoryLayout.SourceDirectory, "EventInformationTable"));
         Assert.NotEmpty(SourceScan.FilesMentioning(RepositoryLayout.SourceDirectory, "IProgrammeRepository"));
-        Assert.NotEmpty(SourceScan.FilesMentioning(RepositoryLayout.SourceDirectory, "[HttpDelete]"));
     }
 
     [Fact]
