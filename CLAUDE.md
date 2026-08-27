@@ -88,6 +88,26 @@ nothing.
 - **Reservations hold no foreign key to the channel definitions.** They persist
   by their broadcast identifiers, so editing a channel definition can never
   delete a reservation.
+- **What fits on the tuners is worked out in one place, and one place moves a
+  reservation on the answer.** Creating a reservation, recalculating, and
+  previewing an unsaved rule all join the same procedure before the same
+  calculation runs, and a reservation's moves between secured, contended and out
+  of reach are made from a single method. What holds that is a census of the
+  compiled call sites rather than a rule over source text: the IL of every method
+  in the application is walked and the callers of the planner and of those moves
+  are listed, so a second caller is caught wherever it sits, whatever it is
+  named, and even when the move is handed around as a method group rather than
+  called. **It is a trip wire, not a proof** — a move made through reflection
+  walks straight past it, and a test says so plainly. The walk refuses to answer
+  if it did not consume a method body exactly, so a misread operand width cannot
+  quietly turn into a shorter list.
+- **A tuner ledger that cannot be read is unknown, not empty.** Scheduling reads
+  the desired-state ledger once per run, and when it cannot be read it writes
+  nothing at all rather than deciding that nothing fits; a service whose
+  selection cannot be answered for the same reason stops the run too. The mark
+  that says a reservation has nowhere to tune is only ever written when the
+  answer really was "nowhere", because a driver that went away would otherwise
+  put that mark on everything.
 - **The programme cache is disposable.** Dropping it is recoverable by collecting
   again, so no table outside the cache may hold a foreign key into it.
 - **Which family a table belongs to is read from the feature namespace of its

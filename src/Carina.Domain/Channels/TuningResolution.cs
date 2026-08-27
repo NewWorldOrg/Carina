@@ -7,6 +7,7 @@ public enum TuningRefusal
     NoSelectedChannel,
     NoTunerForSystem,
     CapacityUnknown,
+    LedgerUnreadable,
 }
 
 public sealed record TuningResolution
