@@ -136,6 +136,32 @@ public sealed class RecordingStreamSettlementTests
         Assert.True(ledger.Read(recording.Id).IsInFlight);
     }
 
+    [Fact]
+    public async Task ARecordingStoppedByHandKeepsTheReasonItWasGivenAndGainsTheOnesTheJudgementFound()
+    {
+        Recording recording = InFlight();
+        recording.Wrote(TimeSpan.FromSeconds(1750));
+        recording.Note(new OutcomeDetail(RecordingFault.StoppedByHand, null, "the wrong programme", Airs.AddMinutes(29)));
+        recording.Abort(Airs.AddMinutes(29));
+        var ledger = new StreamLedger();
+        ledger.Hold(recording);
+
+        await Supervisor(
+                ledger,
+                new WatchedDriver(),
+                new WatchClock(Ended),
+                new WeighedFiles { Weighs = 3_300_000_000 })
+            .WatchAsync(Cancel);
+
+        Recording read = ledger.Read(recording.Id);
+
+        Assert.Equal(RecordingOutcome.Truncated, read.Outcome);
+        Assert.Equal(
+            [RecordingFault.StoppedByHand, RecordingFault.ShortOfTheWindow],
+            read.OutcomeDetail.Select(detail => detail.Fault).ToArray());
+        Assert.Equal("the wrong programme", read.OutcomeDetail[0].Note);
+    }
+
     private static Recording Ready(TimeSpan written, bool asked)
     {
         Recording recording = InFlight();
