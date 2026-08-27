@@ -17,6 +17,7 @@ using Carina.Infrastructure.Integrity;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Recordings;
+using Carina.Infrastructure.Reservations;
 using Carina.Infrastructure.Scanning;
 using Carina.Infrastructure.Thumbnails;
 
@@ -82,6 +83,16 @@ public sealed class ServiceCollectionExtensionsTests
 
         Assert.IsType<ReservationRepository>(
             scope.ServiceProvider.GetRequiredService<IReservationRepository>());
+    }
+
+    [Fact]
+    public void RegistersEverythingTheOneAllocationEntryPointReachesFor()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<ReservationSchedulingService>());
+        Assert.Same(RollingHorizon.Default, provider.GetRequiredService<RollingHorizon>());
     }
 
     [Fact]

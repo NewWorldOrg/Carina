@@ -19,6 +19,7 @@ using Carina.Infrastructure.Integrity;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Recordings;
+using Carina.Infrastructure.Reservations;
 using Carina.Infrastructure.Scanning;
 using Carina.Infrastructure.Thumbnails;
 
@@ -100,6 +101,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IServiceTuningDirectory, ServiceTuningDirectory>();
         services.AddScoped<IServiceReachSettingsRepository, ServiceReachSettingsRepository>();
         services.AddScoped<ITuneFailureReporter, CandidateTuneFailureReporter>();
+        services.AddScoped<ReservationSchedulingService>();
         services.AddScoped<ProgrammeWriter>();
         services.AddScoped<StreamVisitor>();
         services.AddScoped<CollectionRound>();
@@ -131,6 +133,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<RecordingSettings>(provider =>
             provider.GetRequiredService<IOptions<RecordingOptions>>().Value.Read());
         services.TryAddSingleton(ScanSettings.Default);
+        services.TryAddSingleton(RollingHorizon.Default);
         services.TryAddSingleton<IntegritySettings>(provider =>
             provider.GetRequiredService<IOptions<IntegrityOptions>>().Value.Read());
         services.TryAddSingleton<IRecordingFileSurvey, LocalRecordingFileSurvey>();
