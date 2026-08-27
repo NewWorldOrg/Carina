@@ -224,10 +224,14 @@ nothing.
   change tracker's `Entry`/`Property`/`CurrentValue`, which is the way somebody who
   knows this mapper would write it by accident.
   The other reports a file outside the feature folder that names any of the types
-  the feature is made of, allowing only the two places it is built. **A helper
-  whose name says nothing about thumbnails walks straight past both**, and a test
-  asserts that plainly. What they catch is the ordinary way somebody would write
-  it, not every way there is.
+  the feature is made of. Four files are allowed to: the two where the feature is
+  built, and the two on the HTTP surface that offer a picture to be drawn again —
+  a request to redraw one has to name the six answers the pass can give, so the
+  surface cannot be written without naming them. The list is asserted whole, so a
+  fifth is a deliberate act rather than a drift. **A helper whose name says
+  nothing about thumbnails walks straight past both**, and a test asserts that
+  plainly. What they catch is the ordinary way somebody would write it, not every
+  way there is.
 
 - **A stop the driver was asked for exits 0; anything else exits 70.** Coming
   back is the supervisor's half of the deal, which is why `on-failure` is the one
