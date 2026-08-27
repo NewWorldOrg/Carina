@@ -698,6 +698,44 @@ public sealed class RecordingRoundTests
         return run.Stopped;
     }
 
+    [Fact]
+    public async Task ARecordingStartedLateIsPromisedTheWindowItsReservationAskedFor()
+    {
+        var recordings = new HeldRecordings();
+        DateTime fiftyMinutesLate = Airs.AddMinutes(50);
+
+        await Round(
+                Holding(Due(1, until: Airs.AddMinutes(200))),
+                recordings,
+                new RecordingDriver(),
+                at: fiftyMinutesLate)
+            .RunAsync(CancellationToken.None);
+
+        Recording written = Assert.Single(recordings.Rows);
+
+        Assert.Equal(Airs + Head, written.ExpectedWindowStart);
+        Assert.Equal(Airs.AddMinutes(200), written.ExpectedWindowEnd);
+        Assert.Equal(fiftyMinutesLate, written.StartedAtActual);
+    }
+
+    [Fact]
+    public async Task AReservationThatOpensPartWayThroughIsPromisedFromWhereItOpensRatherThanFromTheRound()
+    {
+        var recordings = new HeldRecordings();
+        DateTime opens = Airs.AddMinutes(50);
+
+        await Round(
+                Holding(Due(1, from: opens, until: Airs.AddMinutes(200))),
+                recordings,
+                new RecordingDriver(),
+                at: opens.AddSeconds(4))
+            .RunAsync(CancellationToken.None);
+
+        Recording written = Assert.Single(recordings.Rows);
+
+        Assert.Equal(opens + Head, written.ExpectedWindowStart);
+    }
+
     private static PlannedReservations Holding(params RecordingTick[] ticks)
         => new PlannedReservations().Holding(ticks);
 
@@ -705,9 +743,10 @@ public sealed class RecordingRoundTests
         PlannedReservations reservations,
         HeldRecordings recordings,
         RecordingDriver driver,
-        TuningResolution? resolution = null)
+        TuningResolution? resolution = null,
+        DateTime? at = null)
     {
-        var clock = new HeldMoment(Airs);
+        var clock = new HeldMoment(at ?? Airs);
 
         return new RecordingRound(
             reservations,

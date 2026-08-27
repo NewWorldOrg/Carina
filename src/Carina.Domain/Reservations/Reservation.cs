@@ -110,15 +110,22 @@ public sealed class Reservation
         BroadcastGroupKey? broadcastGroupKey,
         BroadcastGroupRole broadcastGroupRole,
         DateTime at)
-        => Rehydrate(
+    {
+        ArgumentNullException.ThrowIfNull(marginBefore);
+
+        DateTime opens = UtcTimes.Required(startAt, nameof(startAt));
+        bool reachesBack = opens - marginBefore.Value < at && at < endAt;
+        DateTime head = reachesBack && at > opens ? at : opens;
+
+        return Rehydrate(
             id,
             programme,
             ruleId,
             priority,
-            startAt,
+            head,
             endAt,
             endAtConfirmed,
-            marginBefore,
+            reachesBack ? WholeSecondsBetween(at, head) : marginBefore,
             marginAfter,
             snapshot,
             broadcastGroupKey,
@@ -133,6 +140,7 @@ public sealed class Reservation
             false,
             null,
             at);
+    }
 
     public static Reservation Rehydrate(
         ReservationId id,
@@ -397,6 +405,9 @@ public sealed class Reservation
         BroadcastGroupKey = key;
         BroadcastGroupRole = role;
     }
+
+    private static Margin WholeSecondsBetween(DateTime at, DateTime head)
+        => Margin.OfSeconds((int)Math.Floor((head - at).TotalSeconds));
 
     private static ReservationStanding StandingOf(ReservationState state) => state switch
     {
