@@ -17,11 +17,15 @@ public sealed record RecordingWatch(
     int Resumed,
     int Settled,
     int Collisions,
-    int LeftOpen)
+    int LeftOpen,
+    int StoodDown,
+    int OutOfTouch)
 {
-    public static readonly RecordingWatch Nothing = new(0, 0, 0, 0, 0, 0, 0);
+    public static readonly RecordingWatch Nothing = new(0, 0, 0, 0, 0, 0, 0, 0, 0);
 
-    public bool SaysAnything => Broken > 0 || Resumed > 0 || Settled > 0 || Collisions > 0 || LeftOpen > 0;
+    public bool SaysAnything
+        => Broken > 0 || Resumed > 0 || Settled > 0 || Collisions > 0 || LeftOpen > 0 || StoodDown > 0
+           || OutOfTouch > 0;
 }
 
 public sealed class RecordingStreamSupervisor(
@@ -33,6 +37,10 @@ public sealed class RecordingStreamSupervisor(
     TimeProvider clock,
     ILogger<RecordingStreamSupervisor> logger)
 {
+    public const string AlreadyEnded = "this recording already ended on the other side";
+
+    private const string NoSuchSession = "noSuchSession";
+
     private enum Standing
     {
         Running = 1,
@@ -92,35 +100,110 @@ public sealed class RecordingStreamSupervisor(
         DriverCall<SessionSnapshot> asked = await driver.GetSessionAsync(
             RecordingSessions.Named(recording.Id),
             cancellationToken);
-        (Standing standing, SessionSnapshot? session) = StandingOf(asked);
-
-        if (standing is Standing.Running && session is { } live)
-        {
-            await KeepUpAsync(recording, live, hello, now, tally, cancellationToken);
-
-            return;
-        }
+        (Standing standing, SessionSnapshot? session) = StandingOf(asked, recording, logger);
 
         if (standing is Standing.Unknowable)
         {
+            OutOfTouch(recording, now, tally);
+
             return;
         }
 
-        if (recording.AbortedAt is not null || recording.ExpectedWindowEnd <= now)
+        if (await FreshAsync(recording.Id, cancellationToken) is not { } row)
         {
-            await SettleAsync(recording, now, tally, cancellationToken);
+            return;
+        }
+
+        if (standing is Standing.Running && session is { } live)
+        {
+            if (ItIsOver(row, now))
+            {
+                await StandDownAsync(row, live, tally, cancellationToken);
+            }
+            else
+            {
+                await KeepUpAsync(row, live, hello, now, tally, cancellationToken);
+            }
 
             return;
         }
 
-        await ReopenAsync(recording, session, now, tally, cancellationToken);
+        if (ItIsOver(row, now))
+        {
+            await SettleAsync(row, now, tally, cancellationToken);
+
+            return;
+        }
+
+        await ReopenAsync(row, session, now, tally, cancellationToken);
     }
 
-    private static (Standing Standing, SessionSnapshot? Session) StandingOf(DriverCall<SessionSnapshot> asked)
+    private static bool ItIsOver(Recording recording, DateTime now)
+        => recording.AbortedAt is not null || recording.ExpectedWindowEnd <= now;
+
+    private async Task<Recording?> FreshAsync(RecordingId id, CancellationToken cancellationToken)
+    {
+        await using AsyncServiceScope scope = scopes.CreateAsyncScope();
+        Recording? read = await scope.ServiceProvider
+            .GetRequiredService<IRecordingRepository>()
+            .FindAsync(id, cancellationToken);
+
+        return read is { IsInFlight: true } ? read : null;
+    }
+
+    private void OutOfTouch(Recording recording, DateTime now, Tally tally)
+    {
+        tally.OutOfTouch++;
+
+        if (ItIsOver(recording, now))
+        {
+            logger.LogWarning(
+                "Recording {Recording} is over and the driver will not say whether anything is still writing it, "
+                + "so it stays in flight for recovery rather than being given an outcome nothing observed.",
+                recording.Id.Wire);
+        }
+    }
+
+    private async Task StandDownAsync(
+        Recording recording,
+        SessionSnapshot session,
+        Tally tally,
+        CancellationToken cancellationToken)
+    {
+        if (session.State is SessionState.Stopping)
+        {
+            return;
+        }
+
+        tally.StoodDown++;
+
+        logger.LogWarning(
+            "Recording {Recording} has already ended on this side and the driver is still writing it, so the "
+            + "session is asked to stop rather than being counted into a recording that is over.",
+            recording.Id.Wire);
+
+        await driver.StopSessionAsync(RecordingSessions.Named(recording.Id), AlreadyEnded, cancellationToken);
+    }
+
+    private static (Standing Standing, SessionSnapshot? Session) StandingOf(
+        DriverCall<SessionSnapshot> asked,
+        Recording recording,
+        ILogger logger)
     {
         if (asked.Outcome is DriverCallOutcome.Refused)
         {
-            return (Standing.Ended, null);
+            if (string.Equals(asked.Problem?.Title, NoSuchSession, StringComparison.Ordinal))
+            {
+                return (Standing.Ended, null);
+            }
+
+            logger.LogWarning(
+                "The driver refused to say what it holds for recording {Recording} ({Problem}), which says nothing "
+                + "about whether the recording is still being written, so nothing is decided from it.",
+                recording.Id.Wire,
+                asked.Problem?.Title);
+
+            return (Standing.Unknowable, null);
         }
 
         if (!asked.TryGetValue(out SessionSnapshot? session))
@@ -164,6 +247,11 @@ public sealed class RecordingStreamSupervisor(
             recording.Id,
             loaded =>
             {
+                if (ItIsOver(loaded, now) || now <= AsFarAsItIsCounted(loaded))
+                {
+                    return false;
+                }
+
                 Adopt(loaded, session.DeviceId);
                 Advance(loaded, opened, now);
                 loaded.Measure(counters, positions, scrambled, reading.EovfCount, now);
@@ -195,8 +283,25 @@ public sealed class RecordingStreamSupervisor(
         CancellationToken cancellationToken)
     {
         RecordingFault fault = BrokeItOff(session);
+        bool over = false;
 
-        if (await ApplyAsync(recording.Id, loaded => OpenABreak(loaded, fault, now), tally, cancellationToken))
+        bool broke = await ApplyAsync(
+            recording.Id,
+            loaded =>
+            {
+                over = ItIsOver(loaded, now);
+
+                return !over && OpenABreak(loaded, fault, now);
+            },
+            tally,
+            cancellationToken);
+
+        if (over)
+        {
+            return;
+        }
+
+        if (broke)
         {
             tally.Broken++;
         }
@@ -284,6 +389,11 @@ public sealed class RecordingStreamSupervisor(
             recording.Id,
             loaded =>
             {
+                if (!ItIsOver(loaded, now))
+                {
+                    return false;
+                }
+
                 RecordingVerdict verdict = CompletionEvaluator.Judge(
                     new RecordingEvidence(
                         weighed,
@@ -422,9 +532,12 @@ public sealed class RecordingStreamSupervisor(
         }
     }
 
+    private static DateTime AsFarAsItIsCounted(Recording recording)
+        => recording.MeasuredUpdatedAt ?? recording.StartedAtActual;
+
     private static void Advance(Recording recording, DateTime opened, DateTime now)
     {
-        DateTime counted = recording.MeasuredUpdatedAt ?? recording.StartedAtActual;
+        DateTime counted = AsFarAsItIsCounted(recording);
         DateTime from = opened > counted ? opened : counted;
 
         if (now > from)
@@ -469,7 +582,11 @@ public sealed class RecordingStreamSupervisor(
 
         public int LeftOpen { get; set; }
 
+        public int StoodDown { get; set; }
+
+        public int OutOfTouch { get; set; }
+
         public RecordingWatch Read(int watched)
-            => new(watched, Kept, Broken, Resumed, Settled, Collisions, LeftOpen);
+            => new(watched, Kept, Broken, Resumed, Settled, Collisions, LeftOpen, StoodDown, OutOfTouch);
     }
 }

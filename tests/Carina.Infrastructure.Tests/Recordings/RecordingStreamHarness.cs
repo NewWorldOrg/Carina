@@ -153,6 +153,10 @@ internal sealed class WatchedDriver : IDriverClient
 
     public List<StartSessionRequest> Started { get; } = [];
 
+    public List<SessionId> Stopped { get; } = [];
+
+    public List<string> StopReasons { get; } = [];
+
     public Task<DriverCall<SessionSnapshot>> GetSessionAsync(SessionId sessionId, CancellationToken cancellationToken)
     {
         Asked.Add(sessionId);
@@ -212,7 +216,21 @@ internal sealed class WatchedDriver : IDriverClient
         SessionId sessionId,
         string reason,
         CancellationToken cancellationToken)
-        => throw new NotSupportedException();
+    {
+        Stopped.Add(sessionId);
+        StopReasons.Add(reason);
+
+        return Task.FromResult(DriverCall<SessionSnapshot>.Reached(
+            new SessionSnapshot(
+                sessionId,
+                SessionPurpose.Recording,
+                "adapter1",
+                SessionState.Stopped,
+                RecordingStreamFixture.Airs)
+            {
+                Concluded = true,
+            }));
+    }
 
     public Task<DriverCall<IReadOnlyList<DiagnosticSnapshot>>> GetDiagnosticsAsync(
         CancellationToken cancellationToken)
@@ -419,6 +437,23 @@ internal static class RecordingStreamFixture
             {
                 RecordingId = recording.Id.Wire,
                 OutputRoot = recording.OutputRoot.Value,
+                Counters = counters ?? SessionCounters.Nothing,
+            });
+
+    public static DriverCall<SessionSnapshot> In(
+        Recording recording,
+        SessionState state,
+        DateTime openedAt,
+        SessionCounters? counters = null)
+        => DriverCall<SessionSnapshot>.Reached(
+            new SessionSnapshot(
+                RecordingSessions.Named(recording.Id),
+                SessionPurpose.Recording,
+                "adapter1",
+                state,
+                openedAt)
+            {
+                RecordingId = recording.Id.Wire,
                 Counters = counters ?? SessionCounters.Nothing,
             });
 

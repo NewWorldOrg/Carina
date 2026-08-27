@@ -96,13 +96,16 @@ public sealed class RecordingStreamJob(
 
         logger.LogInformation(
             "A recording watch read {Watched} recording(s) in flight: {Broken} lost their stream, {Resumed} were "
-            + "written to again, {Settled} ended, {LeftOpen} are still without a stream, and {Collisions} write(s) "
+            + "written to again, {Settled} ended, {LeftOpen} are still without a stream, {StoodDown} were still "
+            + "being written after they had ended, {OutOfTouch} could not be asked about, and {Collisions} write(s) "
             + "landed on a row something else had moved.",
             watch.Watched,
             watch.Broken,
             watch.Resumed,
             watch.Settled,
             watch.LeftOpen,
+            watch.StoodDown,
+            watch.OutOfTouch,
             watch.Collisions);
     }
 }

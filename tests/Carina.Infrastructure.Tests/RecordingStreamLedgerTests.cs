@@ -105,17 +105,8 @@ public sealed class RecordingStreamLedgerTests(RepositoryDatabase database)
         OnceOnly once,
         Func<Task>? collide) : IRecordingRepository
     {
-        public async Task<Recording?> FindAsync(RecordingId id, CancellationToken cancellationToken)
-        {
-            Recording? found = await inner.FindAsync(id, cancellationToken);
-
-            if (collide is not null && watched.Equals(id) && once.First())
-            {
-                await collide();
-            }
-
-            return found;
-        }
+        public Task<Recording?> FindAsync(RecordingId id, CancellationToken cancellationToken)
+            => inner.FindAsync(id, cancellationToken);
 
         public async Task<IReadOnlyList<Recording>> ListInFlightAsync(CancellationToken cancellationToken)
             => [.. (await inner.ListInFlightAsync(cancellationToken)).Where(row => watched.Equals(row.Id))];
@@ -128,8 +119,15 @@ public sealed class RecordingStreamLedgerTests(RepositoryDatabase database)
         public Task AddAsync(Recording recording, CancellationToken cancellationToken)
             => inner.AddAsync(recording, cancellationToken);
 
-        public Task SaveAsync(Recording recording, CancellationToken cancellationToken)
-            => inner.SaveAsync(recording, cancellationToken);
+        public async Task SaveAsync(Recording recording, CancellationToken cancellationToken)
+        {
+            if (collide is not null && watched.Equals(recording.Id) && once.First())
+            {
+                await collide();
+            }
+
+            await inner.SaveAsync(recording, cancellationToken);
+        }
     }
 
     private async Task ExtendAsync(RecordingId id, DateTime until)
