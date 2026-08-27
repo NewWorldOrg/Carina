@@ -167,21 +167,39 @@ public sealed class ReservationPromiseTests
             Airs.AddMinutes(50)));
     }
 
-    [Fact]
-    public void APlanReadingAnInstantThatIsNotInUtcIsRefused()
+    [Theory]
+    [InlineData("startAt")]
+    [InlineData("endAt")]
+    [InlineData("at")]
+    public void APlanWhoseInstantsAreNotAllInUtcIsRefusedRatherThanClamped(string parameter)
     {
+        DateTime local = DateTime.SpecifyKind(
+            parameter switch
+            {
+                "startAt" => Airs,
+                "endAt" => Ends,
+                _ => Airs.AddMinutes(50),
+            },
+            DateTimeKind.Local);
+
         Assert.Throws<ArgumentException>(() => Planned(
-            DateTime.SpecifyKind(Airs.AddMinutes(50), DateTimeKind.Local)));
+            parameter is "at" ? local : Airs.AddMinutes(50),
+            startAt: parameter is "startAt" ? local : Airs,
+            endAt: parameter is "endAt" ? local : Ends));
     }
 
-    private static Reservation Planned(DateTime at, RuleId? ruleId = null)
+    private static Reservation Planned(
+        DateTime at,
+        RuleId? ruleId = null,
+        DateTime? startAt = null,
+        DateTime? endAt = null)
         => Reservation.Plan(
             ReservationId.New(),
             Programme(),
             ruleId,
             Priority.Default,
-            Airs,
-            Ends,
+            startAt ?? Airs,
+            endAt ?? Ends,
             true,
             Ahead,
             Behind,

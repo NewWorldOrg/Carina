@@ -131,6 +131,40 @@ public sealed class ReservationRecordingContractTests(MigratedScratchDatabase da
     }
 
     [Fact]
+    public async Task AReservationMadeWhileItsBroadcastIsRunningIsDueTheMomentItWasMade()
+    {
+        await Clear();
+        DateTime asking = Airs.AddMinutes(50);
+        Reservation reservation = Reservation.Plan(
+            ReservationId.New(),
+            new ProgrammeRef(new NetworkId(32736), new ServiceId(1024), new EventId(21703), Airs),
+            null,
+            Priority.Default,
+            Airs,
+            Airs.AddHours(3),
+            true,
+            Margin.OfSeconds(120),
+            Margin.OfSeconds(180),
+            new ProgrammeSnapshot("A programme", "What it is about", string.Empty, [new ProgrammeGenre(7, 1)], Made),
+            null,
+            BroadcastGroupRole.Standalone,
+            asking);
+
+        await using (CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString))
+        {
+            context.Add(reservation);
+            await context.SaveChangesAsync();
+        }
+
+        RecordingTick tick = Assert.Single(await Ticks(asking));
+
+        Assert.Equal(asking, tick.EffectiveStartAt);
+        Assert.Equal(Airs.AddHours(3).AddSeconds(180), tick.EffectiveEndAt);
+        Assert.Equal(Airs, tick.ProgrammeStartsAt);
+        Assert.Empty(await DueAt(asking.AddSeconds(-1)));
+    }
+
+    [Fact]
     public async Task TheProgrammeTheReservationCopiedIsHandedToTheRecorderWhole()
     {
         await Clear();

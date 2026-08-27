@@ -114,17 +114,15 @@ public sealed class Reservation
         ArgumentNullException.ThrowIfNull(marginBefore);
 
         DateTime opens = UtcTimes.Required(startAt, nameof(startAt));
-        DateTime closes = UtcTimes.Required(endAt, nameof(endAt));
-        DateTime asked = UtcTimes.Required(at, nameof(at));
-        bool underWay = opens < asked && asked < closes;
+        bool underWay = opens < at && at < endAt;
 
         return Rehydrate(
             id,
             programme,
             ruleId,
             priority,
-            underWay ? asked : opens,
-            closes,
+            underWay ? at : opens,
+            endAt,
             endAtConfirmed,
             underWay ? Margin.None : marginBefore,
             marginAfter,
@@ -140,7 +138,7 @@ public sealed class Reservation
             null,
             false,
             null,
-            asked);
+            at);
     }
 
     public static Reservation Rehydrate(
