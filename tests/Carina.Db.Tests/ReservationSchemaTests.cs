@@ -166,6 +166,51 @@ public sealed class ReservationSchemaTests(MigratedScratchDatabase database)
     }
 
     [Fact]
+    public async Task AReservationWithNowhereToTuneKeepsItsStateAndCarriesAMark()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        Guid marked = await Reserve(connection, 70012, 4001, Airs, receptionUnavailableSince: Now);
+
+        Assert.Equal(
+            "Scheduled",
+            await Scalar(connection, $"SELECT state FROM reservation WHERE id = '{marked}'"));
+        Assert.Equal(
+            true,
+            await Scalar(connection, $"SELECT reception_unavailable FROM reservation WHERE id = '{marked}'"));
+        Assert.Equal("Scheduled", await Composite(connection, 70012, 4001));
+    }
+
+    [Fact]
+    public async Task AMarkWithoutTheMomentItWasNoticedIsRefused()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Reserve(connection, 70013, 4001, Airs, receptionUnavailable: true));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
+        Assert.Equal("ck_reservation_reception", refusal.ConstraintName);
+    }
+
+    [Fact]
+    public async Task TheMomentWithoutTheMarkIsRefusedJustAsTheMarkWithoutTheMomentIs()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Reserve(
+                connection,
+                70014,
+                4001,
+                Airs,
+                receptionUnavailable: false,
+                receptionUnavailableSince: Now));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
+        Assert.Equal("ck_reservation_reception", refusal.ConstraintName);
+    }
+
+    [Fact]
     public async Task TheClaimableIndexNarrowsToWhatRecordingMayStart()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -211,7 +256,9 @@ public sealed class ReservationSchemaTests(MigratedScratchDatabase database)
         string? startedAt = null,
         string? recordingOutcome = null,
         string? acknowledgedAt = null,
-        Guid? ruleId = null)
+        Guid? ruleId = null,
+        bool? receptionUnavailable = null,
+        string? receptionUnavailableSince = null)
     {
         var id = Guid.NewGuid();
 
@@ -223,6 +270,7 @@ public sealed class ReservationSchemaTests(MigratedScratchDatabase database)
                 start_at, end_at, end_at_confirmed, margin_before, margin_after,
                 snapshot_name, snapshot_summary, snapshot_extended, snapshot_genres, captured_at,
                 epg_diverged, epg_diverged_detail, epg_missing, acknowledged_at,
+                reception_unavailable, reception_unavailable_since,
                 broadcast_group_key, broadcast_group_role, state, started_at, recording_outcome, created_at)
             VALUES (
                 '{id}', {networkId}, 1024, {eventId}, {programmeStartAt},
@@ -230,6 +278,8 @@ public sealed class ReservationSchemaTests(MigratedScratchDatabase database)
                 {Airs}, {Ends}, true, 10, 30,
                 'A programme', 'What it is about', '', '[]'::jsonb, {Now},
                 false, '[]'::jsonb, false, {acknowledgedAt ?? "NULL"},
+                {(receptionUnavailable ?? receptionUnavailableSince is not null).ToString().ToLowerInvariant()},
+                {receptionUnavailableSince ?? "NULL"},
                 NULL, 'Standalone', '{state}', {startedAt ?? "NULL"}, {recordingOutcome ?? "NULL"}, {Now})
             """);
 

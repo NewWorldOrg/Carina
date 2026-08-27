@@ -30,6 +30,9 @@ public sealed class TunerCapacity
     public bool CanServe(TuneSystem system) =>
         seats.Any(seat => seat.Serves.Contains(system));
 
+    public bool SharesSeats(TuneSystem first, TuneSystem second) =>
+        seats.Any(seat => seat.Serves.Contains(first) && seat.Serves.Contains(second));
+
     public bool CanSeat(IReadOnlyDictionary<TuneSystem, int> demand)
     {
         ArgumentNullException.ThrowIfNull(demand);

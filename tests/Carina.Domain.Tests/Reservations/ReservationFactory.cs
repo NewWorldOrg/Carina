@@ -53,7 +53,9 @@ internal static class ReservationFactory
         bool epgDiverged = false,
         IReadOnlyList<EpgDivergence>? divergences = null,
         bool epgMissing = false,
-        DateTime? acknowledgedAt = null)
+        DateTime? acknowledgedAt = null,
+        bool receptionUnavailable = false,
+        DateTime? receptionUnavailableSince = null)
     {
         ProgrammeRef programme = Programme();
 
@@ -77,6 +79,8 @@ internal static class ReservationFactory
             divergences ?? [],
             epgMissing,
             acknowledgedAt,
+            receptionUnavailable,
+            receptionUnavailableSince,
             Now);
     }
 }

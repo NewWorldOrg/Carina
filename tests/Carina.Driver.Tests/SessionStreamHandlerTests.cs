@@ -111,12 +111,52 @@ public sealed class SessionStreamHandlerTests : IDisposable
         }
     }
 
+    private sealed class TakesEveryByteAndSendsNone : MemoryStream
+    {
+        private readonly SemaphoreSlim goodbye = new(0);
+
+        public override async Task FlushAsync(CancellationToken cancellationToken)
+        {
+            if (Length is 0)
+            {
+                await base.FlushAsync(cancellationToken);
+
+                return;
+            }
+
+            goodbye.Release();
+
+            var neverSent = new TaskCompletionSource(
+                TaskCreationOptions.RunContinuationsAsynchronously
+            );
+
+            using CancellationTokenRegistration letGo = cancellationToken.Register(
+                () => neverSent.TrySetCanceled(cancellationToken)
+            );
+
+            await neverSent.Task;
+        }
+
+        public bool ReachedTheGoodbyeFlush(TimeSpan within) => goodbye.Wait(within);
+    }
+
     private static (HttpContext Context, RecordedLifetime Lifetime, RecordedBody Body) Ask(
         string sessionId,
         string? subscriber = null
     )
     {
         var body = new RecordedBody();
+        (HttpContext context, RecordedLifetime lifetime) = AskThrough(body, sessionId, subscriber);
+
+        return (context, lifetime, body);
+    }
+
+    private static (HttpContext Context, RecordedLifetime Lifetime) AskThrough(
+        Stream body,
+        string sessionId,
+        string? subscriber = null
+    )
+    {
         var lifetime = new RecordedLifetime();
 
         var features = new FeatureCollection();
@@ -136,7 +176,61 @@ public sealed class SessionStreamHandlerTests : IDisposable
         var context = new DefaultHttpContext(features);
         context.Request.RouteValues["id"] = sessionId;
 
-        return (context, lifetime, body);
+        return (context, lifetime);
+    }
+
+    private static async Task<bool> Settles(Task work, TimeSpan within)
+    {
+        try
+        {
+            await work.WaitAsync(within);
+
+            return true;
+        }
+        catch (TimeoutException)
+        {
+            return false;
+        }
+    }
+
+    [Fact]
+    public async Task AViewerThatStoppedReadingDoesNotHoldTheDriverOpen()
+    {
+        TunerSessionManager manager = Manager();
+        TunerSession session = Begin(manager, "wedged-one");
+        var body = new TakesEveryByteAndSendsNone();
+        (HttpContext context, RecordedLifetime lifetime) = AskThrough(body, "wedged-one");
+
+        using var detaching = new CancellationTokenSource();
+
+        Task streaming = SessionStreamHandler.Invoke(
+            context,
+            manager,
+            streamsDetaching: detaching.Token
+        );
+
+        await WaitForBytes(body);
+
+        session.Stop();
+
+        Assert.True(
+            body.ReachedTheGoodbyeFlush(Patience),
+            "The stream never reached the flush it says goodbye with, so this test never got near the socket it is about."
+        );
+
+        Assert.False(
+            streaming.IsCompleted,
+            "The stream let go of a socket that had taken every byte and sent none, before anything had told it to."
+        );
+
+        detaching.Cancel();
+
+        Assert.True(
+            await Settles(streaming, Patience),
+            "The driver said its streams are detaching and this one stayed in its goodbye flush, so shutdown waits for a viewer that stopped reading."
+        );
+
+        Assert.True(lifetime.Aborted);
     }
 
     private DriverConfiguration Configuration =>
