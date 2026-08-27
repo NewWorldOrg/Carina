@@ -211,6 +211,17 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task AStateChangingPostWithNoBodyDescribesNoBodyThoughOneStillHasToNameJson()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode run = document["paths"]!["/api/recordings/integrity/run"]!["post"]!;
+        JsonNode picture = document["paths"]!["/api/recordings/{id}/thumbnail"]!["post"]!;
+
+        Assert.Null(run["requestBody"]);
+        Assert.Null(picture["requestBody"]);
+    }
+
+    [Fact]
     public async Task AShortfallAValueCanBeAbsentFromSaysSoBesideTheValuesItHas()
     {
         JsonNode document = await ServedOpenApi.FetchAsync(factory);

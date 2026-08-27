@@ -185,6 +185,28 @@ public sealed class IntegrityCheckJobTests
     }
 
     [Fact]
+    public async Task NothingIsLeftWalkingWhenTheCallerGivesUpPartWayThrough()
+    {
+        var ledger = new HeldLedger(Complete(Primary, "one.m2ts", 100)) { Gate = new TaskCompletionSource() };
+        var checks = new HeldChecks();
+        using IntegrityCheckJob job = Job(ledger, new HeldSurvey(), checks);
+        using var giving = new CancellationTokenSource();
+
+        Task<IntegrityRun> walking = job.RunAsync(giving.Token);
+        await Eventually.Happens(() => ledger.Reads is 1, "the run never reached the ledger");
+        await giving.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => walking);
+
+        Assert.Null(job.RunningCheck);
+        Assert.Empty(checks.Saved);
+
+        ledger.Gate = null;
+
+        Assert.False((await job.RunAsync(Cancel)).AlreadyRunning);
+    }
+
+    [Fact]
     public async Task ARunIsAllowedAgainOnceTheOneBeforeItHasFinished()
     {
         var ledger = new HeldLedger(Complete(Primary, "one.m2ts", 100));

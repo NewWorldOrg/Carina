@@ -151,6 +151,25 @@ public sealed class IntegrityEndpointTests
     }
 
     [Fact]
+    public async Task ARootThatCouldNotBeReadIsCountedAsOutOfReachRatherThanJudgedAndFoundEmpty()
+    {
+        using var store = new RecordingStore();
+        await using var feature = new IntegrityFeature(walking: Path.Combine(store.Root, "not-mounted"));
+        feature.Ledger.Rows.Add(Ended(RecordingId.New(), "one.m2ts", LedgerClaim.EverythingLanded, 100));
+
+        await feature.PostAsync("/api/recordings/integrity/run");
+        (_, JsonElement page) = await feature.GetAsync("/api/recordings/integrity");
+        JsonElement check = page.GetProperty("data").GetProperty("check");
+
+        Assert.Equal(0, check.GetProperty("rootsWalked").GetInt32());
+        Assert.Equal(1, check.GetProperty("rootsOutOfReach").GetInt32());
+        Assert.Equal(1, check.GetProperty("ledgerRowsRead").GetInt32());
+        Assert.Equal(0, check.GetProperty("ledgerRowsJudged").GetInt32());
+        Assert.Equal(1, check.GetProperty("ledgerRowsInRootsOutOfReach").GetInt32());
+        Assert.Empty(page.GetProperty("data").GetProperty("items").EnumerateArray());
+    }
+
+    [Fact]
     public async Task ThePageSaysHowManyFindingsThereAreAndWhichPageThisIs()
     {
         await using var feature = new IntegrityFeature();

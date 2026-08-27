@@ -15,7 +15,6 @@ namespace Carina.Api.Controllers.Recordings;
 public sealed class RunRecordingIntegrityCheckAction(IntegrityService integrity) : ControllerBase
 {
     [HttpPost]
-    [Consumes("application/json")]
     [ProducesResponseType<BaseResponder<IntegritySweepResponder>>(StatusCodes.Status200OK)]
     [ProducesResponseType<BaseResponder<IntegritySweepRefusedResponder>>(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> Invoke(CancellationToken cancellationToken)
