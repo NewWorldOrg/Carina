@@ -525,6 +525,32 @@ public sealed class ReservationEndpointTests
         Assert.Equal(30, window.GetProperty("marginAfterSeconds").GetInt32());
     }
 
+    [Fact]
+    public async Task ChangingOnlyTheMarginAfterLeavesTheOneBeforeWhereItWas()
+    {
+        await using var feature = new ReservationFeature();
+        feature.Announced(4001);
+
+        (_, JsonElement made) = await feature.PostAsync(
+            "/api/reservations",
+            new
+            {
+                programme = $"{ReservationFeature.Network}-1024-4001",
+                programmeStartsAt = Noon.AddHours(2),
+                marginBeforeSeconds = 10,
+                marginAfterSeconds = 30,
+            });
+
+        (HttpStatusCode status, JsonElement revised) = await feature.PatchAsync(
+            $"/api/reservations/{Identifier(made)}",
+            new { marginAfterSeconds = 300 });
+        JsonElement window = revised.GetProperty("data").GetProperty("reservation").GetProperty("window");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(10, window.GetProperty("marginBeforeSeconds").GetInt32());
+        Assert.Equal(300, window.GetProperty("marginAfterSeconds").GetInt32());
+    }
+
     [Theory]
     [InlineData("{}")]
     [InlineData("""{"priority":0}""")]
