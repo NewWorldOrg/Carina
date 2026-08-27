@@ -1,9 +1,13 @@
+using System.Net.Sockets;
+
 using Carina.Contracts;
 using Carina.Domain.Driver;
 using Carina.Infrastructure.Configuration;
 using Carina.Infrastructure.Driver;
 using Carina.TestSupport;
 
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace Carina.Infrastructure.Tests;
@@ -16,7 +20,10 @@ public sealed class DriverIpcClientTests
             "driver.sock");
 
     private static DriverIpcClient ClientFor(string socketPath)
-        => new(Options.Create(new DriverOptions { SocketPath = socketPath }));
+        => ClientFor(socketPath, NullLogger<DriverIpcClient>.Instance);
+
+    private static DriverIpcClient ClientFor(string socketPath, ILogger<DriverIpcClient> logger)
+        => new(Options.Create(new DriverOptions { SocketPath = socketPath }), logger);
 
     private static string[] TunerKeepingCapabilities =>
     [
@@ -610,5 +617,121 @@ public sealed class DriverIpcClientTests
 
         Assert.Equal(DriverCallOutcome.Refused, call.Outcome);
         Assert.Equal("draining", call.Problem?.Title);
+    }
+
+    [Fact]
+    public async Task TheReasonACallCouldNotBeMadeCarriesNoPartOfWhereTheSocketIs()
+    {
+        string wherever = Path.Combine(
+            Directory.CreateTempSubdirectory("carina-ipc-").FullName,
+            new string('x', 200) + ".sock");
+        using DriverIpcClient client = ClientFor(wherever);
+
+        DriverCall<DriverHello> call = await client.GetHealthAsync(CancellationToken.None);
+
+        Assert.Equal(DriverCallOutcome.Unreachable, call.Outcome);
+        Assert.NotNull(call.Failure);
+
+        foreach (string segment in WhereItIs(wherever))
+        {
+            Assert.DoesNotContain(segment, call.Failure, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public async Task ThatSamePathIsWhatTheRuntimePutsInTheExceptionItThrows()
+    {
+        string wherever = Path.Combine(
+            Directory.CreateTempSubdirectory("carina-ipc-").FullName,
+            new string('x', 200) + ".sock");
+
+        ArgumentOutOfRangeException refused = Assert.Throws<ArgumentOutOfRangeException>(
+            () => new UnixDomainSocketEndPoint(wherever));
+
+        Assert.Contains(wherever, refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheReasonStillNamesWhatTheSocketItselfSaid()
+    {
+        string absent = NewSocketPath();
+        using DriverIpcClient client = ClientFor(absent);
+
+        DriverCall<DriverHello> call = await client.GetHealthAsync(CancellationToken.None);
+        SocketError said = await WhatTheSocketSaysAsync(absent);
+
+        Assert.Equal(DriverCallOutcome.Unreachable, call.Outcome);
+        Assert.Equal($"The driver's socket could not be reached ({said}).", call.Failure);
+    }
+
+    [Fact]
+    public async Task WhereTheSocketIsGoesToTheLogRatherThanToTheCaller()
+    {
+        string absent = NewSocketPath();
+        var kept = new KeptLog();
+        using DriverIpcClient client = ClientFor(absent, kept);
+
+        DriverCall<DriverHello> call = await client.GetHealthAsync(CancellationToken.None);
+
+        Assert.Equal(DriverCallOutcome.Unreachable, call.Outcome);
+        Assert.Contains(absent, Assert.Single(kept.Lines), StringComparison.Ordinal);
+        Assert.DoesNotContain(absent, call.Failure!, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ADriverAnsweringSomethingUnreadableIsSaidToBeUnreadableRatherThanQuoted()
+    {
+        string socketPath = NewSocketPath();
+        await using FakeDriver driver = await FakeDriver.StartAsync(
+            socketPath,
+            FakeDriver.HelloFor("instance-a", capabilities: TunerKeepingCapabilities));
+        driver.RawBodyByPath[DriverEndpoints.Tuners] = "{ this is not the answer of anything";
+        using DriverIpcClient client = ClientFor(socketPath);
+
+        DriverCall<IReadOnlyList<TunerSnapshot>> call = await client.GetTunersAsync(CancellationToken.None);
+
+        Assert.Equal(DriverCallOutcome.Unreachable, call.Outcome);
+        Assert.Equal("The driver answered with something this app could not read.", call.Failure);
+    }
+
+    private static IReadOnlyList<string> WhereItIs(string socketPath)
+        => [socketPath, Path.GetDirectoryName(socketPath)!, Path.GetFileName(socketPath)];
+
+    private static async Task<SocketError> WhatTheSocketSaysAsync(string socketPath)
+    {
+        try
+        {
+            using var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+            await socket.ConnectAsync(new UnixDomainSocketEndPoint(socketPath));
+        }
+        catch (SocketException refused)
+        {
+            return refused.SocketErrorCode;
+        }
+
+        throw new InvalidOperationException($"Something is listening on {socketPath}, so nothing was refused.");
+    }
+}
+
+internal sealed class KeptLog : ILogger<DriverIpcClient>
+{
+    public List<string> Lines { get; } = [];
+
+    public IDisposable? BeginScope<TState>(TState state)
+        where TState : notnull
+        => null;
+
+    public bool IsEnabled(LogLevel logLevel) => true;
+
+    public void Log<TState>(
+        LogLevel logLevel,
+        EventId eventId,
+        TState state,
+        Exception? exception,
+        Func<TState, Exception?, string> formatter)
+    {
+        ArgumentNullException.ThrowIfNull(formatter);
+
+        Lines.Add(formatter(state, exception));
     }
 }

@@ -82,7 +82,8 @@ public sealed class DriverConnectionSupervisorTests
             socketPath ??= NewSocketPath();
 
             var client = new DriverIpcClient(
-                Options.Create(new DriverOptions { SocketPath = socketPath }));
+                Options.Create(new DriverOptions { SocketPath = socketPath }),
+                NullLogger<DriverIpcClient>.Instance);
             var monitor = new DriverConnectionMonitor();
             var signals = new DriverSignalRelay(NullLogger<DriverSignalRelay>.Instance);
             var hook = new RecordingResyncHook { Failure = resyncFailure };
