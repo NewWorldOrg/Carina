@@ -161,6 +161,9 @@ public sealed class IntegrityCheckReachesTheTableTests(RepositoryDatabase databa
     {
         await using CarinaDbContext context = database.Open();
 
-        return await new IntegrityCheckRepository(context).ListFindingsAsync(id, Cancel);
+        return (await new IntegrityCheckRepository(context).ListFindingsAsync(
+            id,
+            IntegrityFindingQuery.For(null, IntegrityFindingQuery.MostPerPage)!,
+            Cancel)).Items;
     }
 }

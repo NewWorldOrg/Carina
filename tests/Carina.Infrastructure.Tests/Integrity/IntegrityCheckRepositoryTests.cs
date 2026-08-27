@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Integrity;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Integrity;
@@ -243,12 +244,96 @@ public sealed class IntegrityCheckRepositoryTests(RepositoryDatabase database)
     }
 
     [Fact]
+    public async Task TheFindingsComeBackAPageAtATimeInTheOrderTheSweepPutThemIn()
+    {
+        await ClearAsync();
+
+        IntegrityCheckId id = IntegrityCheckId.New();
+        await SaveAsync(IntegrityReport.Of(
+            IntegrityCheck.Rehydrate(id, At, At.AddSeconds(1), 1, 0, 3, 0, 0, 0, 0),
+            [
+                IntegrityFinding.NoLedgerRow(id, Primary, "c.m2ts", 3, At),
+                IntegrityFinding.NoLedgerRow(id, Primary, "a.m2ts", 1, At),
+                IntegrityFinding.NoLedgerRow(id, Primary, "b.m2ts", 2, At),
+            ]));
+
+        PaginatedList<IntegrityFinding> first = await PageAsync(id, page: 1, perPage: 2);
+        PaginatedList<IntegrityFinding> second = await PageAsync(id, page: 2, perPage: 2);
+
+        Assert.Equal(["a.m2ts", "b.m2ts"], first.Items.Select(finding => finding.Path).ToArray());
+        Assert.Equal(["c.m2ts"], second.Items.Select(finding => finding.Path).ToArray());
+        Assert.Equal(3, first.Total);
+        Assert.Equal(3, second.Total);
+        Assert.Equal(2, first.LastPage);
+        Assert.Equal(1, first.CurrentPage);
+        Assert.Equal(2, second.CurrentPage);
+        Assert.Equal(2, first.PerPage);
+    }
+
+    [Fact]
+    public async Task ThePageCountsEveryFindingOfThatCheckAndNoOthers()
+    {
+        await ClearAsync();
+
+        IntegrityCheckId mine = IntegrityCheckId.New();
+        IntegrityCheckId theirs = IntegrityCheckId.New();
+
+        await SaveAsync(IntegrityReport.Of(
+            IntegrityCheck.Rehydrate(mine, At, At.AddSeconds(1), 1, 0, 2, 0, 0, 0, 0),
+            [
+                IntegrityFinding.NoLedgerRow(mine, Primary, "mine-a.m2ts", 1, At),
+                IntegrityFinding.NoLedgerRow(mine, Primary, "mine-b.m2ts", 2, At),
+            ]));
+        await SaveAsync(IntegrityReport.Of(
+            IntegrityCheck.Rehydrate(theirs, At, At.AddSeconds(2), 1, 0, 1, 0, 0, 0, 0),
+            [IntegrityFinding.NoLedgerRow(theirs, Primary, "theirs.m2ts", 3, At)]));
+
+        PaginatedList<IntegrityFinding> page = await PageAsync(mine, page: 1, perPage: 50);
+
+        Assert.Equal(2, page.Total);
+        Assert.Equal(
+            ["mine-a.m2ts", "mine-b.m2ts"],
+            page.Items.Select(finding => finding.Path).ToArray());
+    }
+
+    [Fact]
+    public async Task APageBeyondTheLastOneIsEmptyRatherThanTheLastPageOver()
+    {
+        await ClearAsync();
+
+        IntegrityCheckId id = IntegrityCheckId.New();
+        await SaveAsync(IntegrityReport.Of(
+            IntegrityCheck.Rehydrate(id, At, At.AddSeconds(1), 1, 0, 1, 0, 0, 0, 0),
+            [IntegrityFinding.NoLedgerRow(id, Primary, "a.m2ts", 1, At)]));
+
+        PaginatedList<IntegrityFinding> page = await PageAsync(id, page: 9, perPage: 50);
+
+        Assert.Empty(page.Items);
+        Assert.Equal(1, page.Total);
+    }
+
+    [Fact]
+    public async Task ListingTheFindingsWithNoPageAtAllIsRefused()
+    {
+        await using CarinaDbContext context = database.Open();
+
+        await Assert.ThrowsAsync<ArgumentNullException>(
+            () => new IntegrityCheckRepository(context).ListFindingsAsync(
+                IntegrityCheckId.New(),
+                null!,
+                Cancel));
+    }
+
+    [Fact]
     public async Task ListingTheFindingsOfNoCheckAtAllIsRefused()
     {
         await using CarinaDbContext context = database.Open();
 
         await Assert.ThrowsAsync<ArgumentNullException>(
-            () => new IntegrityCheckRepository(context).ListFindingsAsync(null!, Cancel));
+            () => new IntegrityCheckRepository(context).ListFindingsAsync(
+                null!,
+                IntegrityFindingQuery.For(null, null)!,
+                Cancel));
     }
 
     [Fact]
@@ -316,7 +401,20 @@ public sealed class IntegrityCheckRepositoryTests(RepositoryDatabase database)
     {
         await using CarinaDbContext context = database.Open();
 
-        return await new IntegrityCheckRepository(context).ListFindingsAsync(id, Cancel);
+        return (await new IntegrityCheckRepository(context).ListFindingsAsync(
+            id,
+            IntegrityFindingQuery.For(null, IntegrityFindingQuery.MostPerPage)!,
+            Cancel)).Items;
+    }
+
+    private async Task<PaginatedList<IntegrityFinding>> PageAsync(IntegrityCheckId id, int page, int perPage)
+    {
+        await using CarinaDbContext context = database.Open();
+
+        return await new IntegrityCheckRepository(context).ListFindingsAsync(
+            id,
+            IntegrityFindingQuery.For(page, perPage)!,
+            Cancel);
     }
 
     private async Task<NpgsqlConnection> OpenAsync()
