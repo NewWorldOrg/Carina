@@ -115,6 +115,76 @@ public sealed class IntegrityCheckJobTests
     }
 
     [Fact]
+    public async Task TheRefusalNamesTheCheckTheRunItWaitedOnIsWriting()
+    {
+        var ledger = new HeldLedger(Complete(Primary, "one.m2ts", 100)) { Gate = new TaskCompletionSource() };
+        var checks = new HeldChecks();
+        using IntegrityCheckJob job = Job(ledger, new HeldSurvey(), checks);
+
+        Task<IntegrityRun> first = job.RunAsync(Cancel);
+        await Eventually.Happens(() => ledger.Reads is 1, "the first run never reached the ledger");
+
+        IntegrityCheckId? walking = job.RunningCheck;
+        IntegrityRun second = await job.RunAsync(Cancel).WaitAsync(Eventually.Patience);
+
+        Assert.NotNull(walking);
+        Assert.Equal(walking, second.Running);
+
+        ledger.Gate!.SetResult();
+        await first;
+
+        Assert.Equal(walking, Assert.Single(checks.Saved).Check.Id);
+    }
+
+    [Fact]
+    public async Task NothingIsWalkingBeforeARunAndNothingIsWalkingAfterOne()
+    {
+        using IntegrityCheckJob job = Job(new HeldLedger(), new HeldSurvey(), new HeldChecks());
+
+        Assert.Null(job.RunningCheck);
+        await job.RunAsync(Cancel);
+        Assert.Null(job.RunningCheck);
+    }
+
+    [Fact]
+    public async Task NothingIsLeftWalkingWhenTheSweepThrows()
+    {
+        var ledger = new HeldLedger(Complete(Primary, "one.m2ts", 100)) { Gate = new TaskCompletionSource() };
+        using IntegrityCheckJob job = Job(ledger, new HeldSurvey(), new HeldChecks());
+
+        ledger.Gate!.SetException(new InvalidOperationException("the ledger could not be read"));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => job.RunAsync(Cancel));
+
+        Assert.Null(job.RunningCheck);
+    }
+
+    [Fact]
+    public async Task NothingIsLeftWalkingWhenTheWalkOverTheFilesThrows()
+    {
+        using IntegrityCheckJob job = Job(new HeldLedger(), new ThrowingSurvey(), new HeldChecks());
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => job.RunAsync(Cancel));
+
+        Assert.Null(job.RunningCheck);
+    }
+
+    [Fact]
+    public async Task ARunWhoseWalkOverTheFilesThrewStillLetsTheNextOneStart()
+    {
+        var checks = new HeldChecks();
+        var survey = new ThrowingSurvey();
+        using IntegrityCheckJob job = Job(new HeldLedger(), survey, checks);
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => job.RunAsync(Cancel));
+
+        survey.Throws = false;
+
+        Assert.False((await job.RunAsync(Cancel)).AlreadyRunning);
+        Assert.Single(checks.Saved);
+    }
+
+    [Fact]
     public async Task ARunIsAllowedAgainOnceTheOneBeforeItHasFinished()
     {
         var ledger = new HeldLedger(Complete(Primary, "one.m2ts", 100));
@@ -205,7 +275,7 @@ public sealed class IntegrityCheckJobTests
 
     private static IntegrityCheckJob Job(
         HeldLedger ledger,
-        HeldSurvey survey,
+        IRecordingFileSurvey survey,
         HeldChecks checks,
         IntegritySettings? settings = null,
         TimeProvider? clock = null)

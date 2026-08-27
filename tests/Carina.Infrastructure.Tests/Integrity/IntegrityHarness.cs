@@ -104,3 +104,16 @@ internal sealed class HeldChecks : IIntegrityCheckRepository
             query.PerPage));
     }
 }
+
+internal sealed class ThrowingSurvey : IRecordingFileSurvey
+{
+    public bool Throws { get; set; } = true;
+
+    public Task<IReadOnlyList<OutputRoot>> RootsAsync(CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<OutputRoot>>([new OutputRoot("primary")]);
+
+    public Task<RootListing> ListAsync(OutputRoot root, CancellationToken cancellationToken)
+        => Throws
+            ? throw new UnauthorizedAccessException("the output root would not be read")
+            : Task.FromResult(RootListing.Of(root, []));
+}

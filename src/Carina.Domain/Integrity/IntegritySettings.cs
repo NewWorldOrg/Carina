@@ -31,6 +31,8 @@ public sealed record IntegritySettings
 
     public TimeSpan BetweenSweeps { get; init; } = TimeSpan.FromHours(6);
 
+    public TimeSpan BetweenManualSweeps { get; init; } = TimeSpan.FromMinutes(5);
+
     public IReadOnlyList<StorageRootPath> OutputRoots { get; init; } = [];
 
     public bool WalksAnything => OutputRoots.Count > 0;

@@ -4,12 +4,15 @@ namespace Carina.Infrastructure.Integrity;
 
 public sealed record IntegrityRun
 {
-    private IntegrityRun(IntegrityReport? swept)
+    private IntegrityRun(IntegrityReport? swept, IntegrityCheckId? running)
     {
         Swept = swept;
+        Running = running;
     }
 
     public IntegrityReport? Swept { get; }
+
+    public IntegrityCheckId? Running { get; }
 
     public bool AlreadyRunning => Swept is null;
 
@@ -17,8 +20,13 @@ public sealed record IntegrityRun
     {
         ArgumentNullException.ThrowIfNull(swept);
 
-        return new IntegrityRun(swept);
+        return new IntegrityRun(swept, null);
     }
 
-    public static IntegrityRun RefusedBecauseOneIsRunning() => new(swept: null);
+    public static IntegrityRun RefusedBecauseOneIsRunning(IntegrityCheckId running)
+    {
+        ArgumentNullException.ThrowIfNull(running);
+
+        return new IntegrityRun(null, running);
+    }
 }
