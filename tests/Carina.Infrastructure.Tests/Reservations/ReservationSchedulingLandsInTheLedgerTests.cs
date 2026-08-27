@@ -46,6 +46,37 @@ public sealed class ReservationSchedulingLandsInTheLedgerTests(RepositoryDatabas
     }
 
     [Fact]
+    public async Task RecalculatingCarriesWhatChangedToTheLedgerThoughNothingIsBeingAdded()
+    {
+        Pair channels = new(2005, 2006, Now.AddHours(15));
+        Reservation weaker = channels.Planned(channels.First, new Priority(10));
+        Reservation stronger = channels.Planned(channels.Second, new Priority(20));
+
+        await using (CarinaDbContext context = database.Open())
+        {
+            await SchedulerOver(context, channels, seats: 2).CreateAsync(weaker, Cancel);
+        }
+
+        await using (CarinaDbContext context = database.Open())
+        {
+            await SchedulerOver(context, channels, seats: 2).CreateAsync(stronger, Cancel);
+        }
+
+        Assert.Equal(ReservationState.Scheduled, await StateOfAsync(weaker.Id));
+        Assert.Equal(ReservationState.Scheduled, await StateOfAsync(stronger.Id));
+
+        await using (CarinaDbContext context = database.Open())
+        {
+            SchedulingRun run = await SchedulerOver(context, channels).RecalculateAsync(Cancel);
+
+            Assert.Equal(AllocationVerdict.Contended, run.Plan.For(weaker.Id).Verdict);
+        }
+
+        Assert.Equal(ReservationState.Conflict, await StateOfAsync(weaker.Id));
+        Assert.Equal(ReservationState.Scheduled, await StateOfAsync(stronger.Id));
+    }
+
+    [Fact]
     public async Task AReservationThatCannotBeInsertedTakesTheStateChangesDownWithIt()
     {
         Pair channels = new(2003, 2004, Now.AddHours(9));
