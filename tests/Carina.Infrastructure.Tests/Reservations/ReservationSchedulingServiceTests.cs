@@ -384,6 +384,50 @@ public sealed class ReservationSchedulingServiceTests
         Assert.Equal(0, seats.ReadWhileWriting);
     }
 
+    [Theory]
+    [InlineData(ReservationMove.Keep)]
+    [InlineData(ReservationMove.Cancel)]
+    [InlineData(ReservationMove.Restore)]
+    public async Task RevisingAsksTheDriverNothingWhileTheLedgerIsHeldOpen(ReservationMove move)
+    {
+        WatchedWrite write = new();
+        HeldReservations ledger = new(write);
+        TuningByService directory = new(write);
+        directory.Answer(1024, Terrestrial27);
+        directory.Answer(1032, Terrestrial29);
+        HeldSeating seats = new(Seats(TunerKind.Terrestrial, TunerKind.Terrestrial), write);
+
+        Reservation beside = ReservationFixtures.Planned(
+            programme: ReservationFixtures.Programme(ReservationFixtures.NextEventId(), serviceId: 1032));
+        Reservation revised = move is ReservationMove.Restore
+            ? ReservationFixtures.Rehydrated(ReservationState.Cancelled)
+            : ReservationFixtures.Planned();
+        ledger.Standing(beside, revised);
+
+        ReservationSchedulingService scheduler = new(
+            ledger,
+            seats,
+            directory,
+            write,
+            RollingHorizon.Default,
+            new FixedClock(Now));
+
+        SchedulingRun run = await scheduler.ReviseAsync(
+            revised,
+            new ReservationRevision { Priority = new Priority(40), Move = move },
+            Cancel);
+
+        Assert.True(run.Settled);
+        Assert.Equal(1, write.Opened);
+        Assert.Equal(1, write.Committed);
+        Assert.NotEmpty(directory.Asked);
+        Assert.True(seats.Reads > 0);
+        Assert.Equal(0, directory.AskedWhileWriting);
+        Assert.Equal(0, seats.ReadWhileWriting);
+        Assert.Contains($"save {revised.Id.Value}", ledger.Wrote);
+        Assert.Empty(ledger.WroteOutsideAWrite);
+    }
+
     [Fact]
     public async Task APreviewAsksNothingWhileTheLedgerIsHeldOpenEither()
     {
