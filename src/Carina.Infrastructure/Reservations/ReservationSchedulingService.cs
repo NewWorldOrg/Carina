@@ -98,12 +98,7 @@ public sealed class ReservationSchedulingService(
 
                 Apply(run.Plan, considered, at);
 
-                await reservations.SaveAllAsync(standing, token);
-
-                if (revised is not null)
-                {
-                    await reservations.SaveAsync(revised, token);
-                }
+                await reservations.SaveAllAsync(Touched(standing, revised), token);
 
                 foreach (Reservation joined in joining)
                 {
@@ -145,6 +140,11 @@ public sealed class ReservationSchedulingService(
                 return true;
         }
     }
+
+    private static Reservation[] Touched(IReadOnlyList<Reservation> standing, Reservation? revised)
+        => revised is null || standing.Any(held => held.Id.Equals(revised.Id))
+            ? [.. standing]
+            : [.. standing, revised];
 
     private static Reservation[] Foreseen(
         IReadOnlyList<Reservation> standing,
