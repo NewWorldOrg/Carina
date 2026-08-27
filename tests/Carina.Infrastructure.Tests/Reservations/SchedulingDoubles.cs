@@ -1,5 +1,6 @@
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
+using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
 
@@ -119,6 +120,11 @@ internal sealed class HeldReservations(IAtomicWrite? write = null) : IReservatio
     public List<Reservation> ArrivesAfterTheFirstList { get; } = [];
 
     public int Lists { get; private set; }
+
+    public Task<PaginatedList<Reservation>> ListAsync(
+        ReservationQuery query,
+        CancellationToken cancellationToken)
+        => Task.FromResult(new PaginatedList<Reservation>([.. held], held.Count, query.Page, query.PerPage));
 
     public Task<Reservation?> FindAsync(ReservationId id, CancellationToken cancellationToken)
         => Task.FromResult(held.FirstOrDefault(reservation => reservation.Id.Equals(id)));

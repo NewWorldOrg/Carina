@@ -318,6 +318,52 @@ public sealed class ReservationTests
     }
 
     [Fact]
+    public void AClaimedReservationIsNotCancelledOutFromUnderTheRecording()
+    {
+        Reservation reservation = ReservationFactory.Claimed();
+
+        InvalidOperationException refusal = Assert.Throws<InvalidOperationException>(reservation.Cancel);
+
+        Assert.Contains("holding a tuner", refusal.Message, StringComparison.Ordinal);
+        Assert.Equal(ReservationState.Scheduled, reservation.State);
+    }
+
+    [Fact]
+    public void AReservationNobodyHasClaimedIsCancelled()
+    {
+        Reservation reservation = ReservationFactory.Planned();
+
+        reservation.Cancel();
+
+        Assert.Equal(ReservationState.Cancelled, reservation.State);
+    }
+
+    [Fact]
+    public void BothMarginsMoveTheEffectiveWindowWhenTheyAreChanged()
+    {
+        Reservation reservation = ReservationFactory.Planned(
+            marginBefore: Margin.OfSeconds(10),
+            marginAfter: Margin.OfSeconds(10));
+
+        reservation.Remargin(Margin.OfSeconds(60), Margin.OfSeconds(180));
+
+        Assert.Equal(60, reservation.MarginBefore.Seconds);
+        Assert.Equal(180, reservation.MarginAfter.Seconds);
+        Assert.Equal(reservation.StartAt.AddSeconds(-60), reservation.EffectiveStartAt);
+        Assert.Equal(reservation.EndAt.AddSeconds(180), reservation.EffectiveEndAt);
+    }
+
+    [Fact]
+    public void ANewPriorityIsWhatTheReservationCarriesAfterwards()
+    {
+        Reservation reservation = ReservationFactory.Planned(priority: new Priority(10));
+
+        reservation.Reprioritise(new Priority(40));
+
+        Assert.Equal(40, reservation.Priority.Value);
+    }
+
+    [Fact]
     public void TheFourStatesAreTheOnlyOnesThisDomainOwns()
     {
         Assert.Equal(

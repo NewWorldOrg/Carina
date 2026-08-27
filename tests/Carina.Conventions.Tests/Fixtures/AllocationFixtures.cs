@@ -14,6 +14,13 @@ public static class AllocationFixtures
         reservation.Secure();
     }
 
+    public static void TakesAReservationOutOfTheRunningWithoutAskingTheScheduler(Reservation reservation)
+    {
+        ArgumentNullException.ThrowIfNull(reservation);
+
+        reservation.Cancel();
+    }
+
     public static AllocationPlan PlansOnItsOwn(
         IReadOnlyList<AllocationCandidate> candidates,
         TunerCapacity capacity,

@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Rules;
 
 namespace Carina.Domain.Reservations;
@@ -6,6 +7,8 @@ public sealed record ReservationWindow(DateTime From, DateTime To);
 
 public interface IReservationRepository
 {
+    Task<PaginatedList<Reservation>> ListAsync(ReservationQuery query, CancellationToken cancellationToken);
+
     Task<Reservation?> FindAsync(ReservationId id, CancellationToken cancellationToken);
 
     Task<Reservation?> FindByProgrammeAsync(ProgrammeRef programme, CancellationToken cancellationToken);

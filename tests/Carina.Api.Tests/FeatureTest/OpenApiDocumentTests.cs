@@ -101,9 +101,11 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
             [
                 "addCandidateChannel",
                 "applyScan",
+                "cancelReservation",
                 "cancelScan",
                 "changePassword",
                 "collectNow",
+                "createReservation",
                 "deleteCandidateChannel",
                 "deleteSession",
                 "forgetArchivedService",
@@ -117,6 +119,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "getProgrammeGuide",
                 "getRecording",
                 "getRecordingIntegrity",
+                "getReservation",
                 "getScan",
                 "getService",
                 "getSessions",
@@ -125,6 +128,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "getTunerHealth",
                 "getTuners",
                 "listRecordings",
+                "listReservations",
                 "listScanRuns",
                 "listServices",
                 "logIn",
@@ -137,6 +141,8 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "rebuildEpg",
                 "remakeThumbnail",
                 "restartDriver",
+                "restoreReservation",
+                "reviseReservation",
                 "runRecordingIntegrityCheck",
                 "searchProgrammes",
                 "startScan",
@@ -163,7 +169,18 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
             .ToArray();
 
         Assert.Equal(
-            ["tuners", "storage", "services", "recordings", "health", "epg", "programs", "driver", "auth"],
+            [
+                "tuners",
+                "storage",
+                "services",
+                "reservations",
+                "recordings",
+                "health",
+                "epg",
+                "programs",
+                "driver",
+                "auth",
+            ],
             tags);
         Assert.Equal(tags, declared);
         Assert.DoesNotContain(tags, tag => tag.EndsWith("Action", StringComparison.Ordinal));

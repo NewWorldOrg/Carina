@@ -21,6 +21,15 @@ public sealed class AllocationEntryPointRuleSelfCheckTests
     }
 
     [Fact]
+    public void DetectsASecondPlaceTakingAReservationOutOfTheRunning()
+    {
+        Assert.Contains(
+            $"{Fixture}.{nameof(AllocationFixtures.TakesAReservationOutOfTheRunningWithoutAskingTheScheduler)}",
+            CallSiteCensus.CallersOf(Fixtures, typeof(Reservation), nameof(Reservation.Cancel)),
+            StringComparer.Ordinal);
+    }
+
+    [Fact]
     public void DetectsASecondPlaceWorkingOutWhatFitsOnTheTuners()
     {
         Assert.Contains(

@@ -1,5 +1,11 @@
+using System.Linq.Expressions;
+
+using Carina.Domain.Base;
+using Carina.Domain.Channels;
+using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
+using Carina.Infrastructure.Persistence.Configurations;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -7,6 +13,66 @@ namespace Carina.Infrastructure.Persistence.Repositories;
 
 public sealed class ReservationRepository(CarinaDbContext context) : IReservationRepository
 {
+    public async Task<PaginatedList<Reservation>> ListAsync(
+        ReservationQuery query,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        IQueryable<Reservation> found = context.Set<Reservation>().AsNoTracking();
+
+        if (query.Standings.Count > 0)
+        {
+            found = StandingAnyOf(found, query.Standings);
+        }
+
+        if (query.Origin is { } origin)
+        {
+            found = origin is ReservationOrigin.ByRule
+                ? found.Where(reservation => reservation.RuleId != null)
+                : found.Where(reservation => reservation.RuleId == null);
+        }
+
+        if (query.Channels.Count > 0)
+        {
+            found = OnAnyOf(found, query.Channels);
+        }
+
+        if (query.Keyword is { } keyword)
+        {
+            found = found.Where(reservation =>
+                EF.Functions.ILike(reservation.SnapshotName, "%" + keyword + "%")
+                || EF.Functions.ILike(reservation.SnapshotSummary, "%" + keyword + "%"));
+        }
+
+        if (query.From is { } from)
+        {
+            found = found.Where(reservation => reservation.StartAt >= from);
+        }
+
+        if (query.To is { } to)
+        {
+            found = found.Where(reservation => reservation.StartAt < to);
+        }
+
+        int total = await found.CountAsync(cancellationToken);
+        IOrderedQueryable<Reservation> ordered = (query.Sort, query.Descending) switch
+        {
+            (ReservationSort.Priority, false) => found.OrderBy(reservation => reservation.Priority),
+            (ReservationSort.Priority, true) => found.OrderByDescending(reservation => reservation.Priority),
+            (_, true) => found.OrderByDescending(reservation => reservation.StartAt),
+            _ => found.OrderBy(reservation => reservation.StartAt),
+        };
+
+        List<Reservation> page = await ordered
+            .ThenBy(reservation => reservation.Id)
+            .Skip((query.Page - 1) * query.PerPage)
+            .Take(query.PerPage)
+            .ToListAsync(cancellationToken);
+
+        return new PaginatedList<Reservation>(page, total, query.Page, query.PerPage);
+    }
+
     public async Task<Reservation?> FindAsync(ReservationId id, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(id);
@@ -106,5 +172,57 @@ public sealed class ReservationRepository(CarinaDbContext context) : IReservatio
         context.RemoveRange(reservations);
 
         await context.SaveChangesAsync(cancellationToken);
+    }
+
+    private static IQueryable<Reservation> StandingAnyOf(
+        IQueryable<Reservation> found,
+        IReadOnlyList<ReservationStanding> standings)
+    {
+        Expression<Func<Reservation, bool>> nowhere = reservation => false;
+
+        return found.Where(standings.Aggregate(nowhere, (carried, standing) => Either(carried, Standing(standing))));
+    }
+
+    private static IQueryable<Reservation> OnAnyOf(
+        IQueryable<Reservation> found,
+        IReadOnlyList<ProgrammeService> services)
+    {
+        Expression<Func<Reservation, bool>> nowhere = reservation => false;
+
+        return found.Where(services.Aggregate(nowhere, (carried, service) => Either(carried, On(service))));
+    }
+
+    private static Expression<Func<Reservation, bool>> Standing(ReservationStanding standing)
+    {
+        string named = standing.ToString();
+
+        return reservation =>
+            EF.Property<string>(reservation, ReservationConfiguration.CompositeState) == named;
+    }
+
+    private static Expression<Func<Reservation, bool>> On(ProgrammeService service)
+    {
+        var network = new NetworkId(service.NetworkId);
+        var carried = new ServiceId(service.ServiceId);
+
+        return reservation => reservation.NetworkId == network && reservation.ServiceId == carried;
+    }
+
+    private static Expression<Func<Reservation, bool>> Either(
+        Expression<Func<Reservation, bool>> left,
+        Expression<Func<Reservation, bool>> right)
+    {
+        ParameterExpression reservation = left.Parameters[0];
+        Expression rejoined = new Rebound(right.Parameters[0], reservation).Visit(right.Body);
+
+        return Expression.Lambda<Func<Reservation, bool>>(
+            Expression.OrElse(left.Body, rejoined),
+            reservation);
+    }
+
+    private sealed class Rebound(ParameterExpression from, ParameterExpression to) : ExpressionVisitor
+    {
+        protected override Expression VisitParameter(ParameterExpression node)
+            => node == from ? to : base.VisitParameter(node);
     }
 }

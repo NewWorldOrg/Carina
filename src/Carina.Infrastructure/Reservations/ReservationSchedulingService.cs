@@ -16,11 +16,22 @@ public sealed class ReservationSchedulingService(
     {
         ArgumentNullException.ThrowIfNull(reservation);
 
-        return SettleAsync([reservation], cancellationToken);
+        return SettleAsync([reservation], null, null, cancellationToken);
+    }
+
+    public Task<SchedulingRun> ReviseAsync(
+        Reservation reservation,
+        ReservationRevision revision,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(reservation);
+        ArgumentNullException.ThrowIfNull(revision);
+
+        return SettleAsync([], reservation, revision, cancellationToken);
     }
 
     public Task<SchedulingRun> RecalculateAsync(CancellationToken cancellationToken)
-        => SettleAsync([], cancellationToken);
+        => SettleAsync([], null, null, cancellationToken);
 
     public async Task<SchedulingRun> PreviewAsync(
         IReadOnlyList<Reservation> proposed,
@@ -45,6 +56,8 @@ public sealed class ReservationSchedulingService(
 
     private async Task<SchedulingRun> SettleAsync(
         IReadOnlyList<Reservation> joining,
+        Reservation? revised,
+        ReservationRevision? revision,
         CancellationToken cancellationToken)
     {
         DateTime at = Moment();
@@ -56,7 +69,7 @@ public sealed class ReservationSchedulingService(
 
         IReadOnlyList<Reservation> looked = await reservations.ListPendingAsync(Reaching(at), cancellationToken);
 
-        if (await ResolveAsync([.. looked, .. joining], cancellationToken) is not { } selections)
+        if (await ResolveAsync(Foreseen(looked, joining, revised), cancellationToken) is not { } selections)
         {
             return SchedulingRun.Refused(SchedulingRefusal.CapacityUnknown);
         }
@@ -65,12 +78,16 @@ public sealed class ReservationSchedulingService(
             async token =>
             {
                 IReadOnlyList<Reservation> standing = await reservations.ListPendingAsync(Reaching(at), token);
-                Reservation[] considered = [.. standing, .. joining];
 
-                if (considered.Any(reservation => !selections.ContainsKey(Naming(reservation))))
+                if (Foreseen(standing, joining, revised).Any(
+                        reservation => !selections.ContainsKey(Naming(reservation))))
                 {
                     return SchedulingRun.Refused(SchedulingRefusal.SomethingArrivedWhileReading);
                 }
+
+                Reservation[] considered = revised is null
+                    ? [.. standing, .. joining]
+                    : Alongside(standing, joining, revised, Applied(revised, revision!));
 
                 SchedulingRun run = Weigh(considered, selections, capacity, at);
 
@@ -81,7 +98,7 @@ public sealed class ReservationSchedulingService(
 
                 Apply(run.Plan, considered, at);
 
-                await reservations.SaveAllAsync(standing, token);
+                await reservations.SaveAllAsync(Touched(standing, revised), token);
 
                 foreach (Reservation joined in joining)
                 {
@@ -91,6 +108,59 @@ public sealed class ReservationSchedulingService(
                 return run;
             },
             cancellationToken);
+    }
+
+    private static bool Applied(Reservation reservation, ReservationRevision revision)
+    {
+        if (revision.Priority is { } priority)
+        {
+            reservation.Reprioritise(priority);
+        }
+
+        if (revision.MarginBefore is not null || revision.MarginAfter is not null)
+        {
+            reservation.Remargin(
+                revision.MarginBefore ?? reservation.MarginBefore,
+                revision.MarginAfter ?? reservation.MarginAfter);
+        }
+
+        switch (revision.Move)
+        {
+            case ReservationMove.Cancel:
+                reservation.Cancel();
+
+                return false;
+
+            case ReservationMove.Restore:
+                reservation.Restore();
+
+                return true;
+
+            default:
+                return true;
+        }
+    }
+
+    private static Reservation[] Touched(IReadOnlyList<Reservation> standing, Reservation? revised)
+        => revised is null || standing.Any(held => held.Id.Equals(revised.Id))
+            ? [.. standing]
+            : [.. standing, revised];
+
+    private static Reservation[] Foreseen(
+        IReadOnlyList<Reservation> standing,
+        IReadOnlyList<Reservation> joining,
+        Reservation? revised)
+        => revised is null ? [.. standing, .. joining] : [.. standing, .. joining, revised];
+
+    private static Reservation[] Alongside(
+        IReadOnlyList<Reservation> standing,
+        IReadOnlyList<Reservation> joining,
+        Reservation revised,
+        bool stillRunning)
+    {
+        Reservation[] others = [.. standing.Where(held => !held.Id.Equals(revised.Id))];
+
+        return stillRunning ? [.. others, revised, .. joining] : [.. others, .. joining];
     }
 
     private static void Apply(AllocationPlan plan, IReadOnlyList<Reservation> considered, DateTime at)

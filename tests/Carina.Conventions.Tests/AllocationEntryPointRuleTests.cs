@@ -15,6 +15,9 @@ public sealed class AllocationEntryPointRuleTests
     private const string WhereItIsApplied =
         "Carina.Infrastructure.Reservations.ReservationSchedulingService.Apply";
 
+    private const string WhereItIsRevised =
+        "Carina.Infrastructure.Reservations.ReservationSchedulingService.Applied";
+
     private static readonly IReadOnlyList<Assembly> Production =
     [
         typeof(Program).Assembly,
@@ -29,6 +32,21 @@ public sealed class AllocationEntryPointRuleTests
         nameof(Reservation.LoseReception),
         nameof(Reservation.RegainReception),
     ];
+
+    public static TheoryData<string> WhatTakesAReservationOutOfTheRunningOrPutsItBack =>
+    [
+        nameof(Reservation.Cancel),
+        nameof(Reservation.Restore),
+        nameof(Reservation.Reprioritise),
+        nameof(Reservation.Remargin),
+    ];
+
+    [Theory]
+    [MemberData(nameof(WhatTakesAReservationOutOfTheRunningOrPutsItBack))]
+    public void OnlyOnePlaceInTheApplicationRevisesAReservation(string move)
+    {
+        Assert.Equal([WhereItIsRevised], CallSiteCensus.CallersOf(Production, typeof(Reservation), move));
+    }
 
     [Fact]
     public void OnlyOnePlaceInTheApplicationWorksOutWhatFitsOnTheTuners()
@@ -70,9 +88,14 @@ public sealed class AllocationEntryPointRuleTests
             CallSiteCensus.CallersOf(Production, typeof(ReservationSchedulingService), "Apply"));
 
         Assert.Equal(
+            ["Carina.Infrastructure.Reservations.ReservationSchedulingService.SettleAsync"],
+            CallSiteCensus.CallersOf(Production, typeof(ReservationSchedulingService), "Applied"));
+
+        Assert.Equal(
             [
                 "Carina.Infrastructure.Reservations.ReservationSchedulingService.CreateAsync",
                 "Carina.Infrastructure.Reservations.ReservationSchedulingService.RecalculateAsync",
+                "Carina.Infrastructure.Reservations.ReservationSchedulingService.ReviseAsync",
             ],
             CallSiteCensus.CallersOf(Production, typeof(ReservationSchedulingService), "SettleAsync"));
     }

@@ -63,6 +63,42 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
     }
 
     [Fact]
+    public void TheReservationSurfacesAreTheSixAReservationIsMadeAndChangedThrough()
+    {
+        Assert.Equal(
+            [
+                "GET /api/reservations",
+                "GET /api/reservations/{id:guid}",
+                "PATCH /api/reservations/{id:guid}",
+                "POST /api/reservations",
+                "POST /api/reservations/{id:guid}/cancel",
+                "POST /api/reservations/{id:guid}/restore",
+            ],
+            Inventory()
+                .Where(surface => surface.Pattern.StartsWith("/api/reservations", StringComparison.Ordinal))
+                .Select(surface => surface.ToString())
+                .Order(StringComparer.Ordinal)
+                .ToArray());
+    }
+
+    [Fact]
+    public void TheReservationSurfaceOffersNoWayToDeleteAnything()
+    {
+        Assert.Empty(EndpointRules.SurfacesThatDeleteUnder(Inventory(), "/api/reservations"));
+        Assert.NotEmpty(EndpointRules.SurfacesThatDelete(Inventory()));
+    }
+
+    [Fact]
+    public void CancellingAReservationDiscardsNothing()
+    {
+        Assert.Equal(
+            EndpointEffect.Changing,
+            Inventory()
+                .Single(surface => surface.ToString() == "POST /api/reservations/{id:guid}/cancel")
+                .Effect);
+    }
+
+    [Fact]
     public void TheSurfacesThatCheckTheLedgerAgainstTheFilesAreTheThreeThatWereAskedFor()
     {
         Assert.Equal(
