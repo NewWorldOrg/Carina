@@ -10,8 +10,6 @@ public static class ProgrammeSearchMatching
 
     private const int OneCharacter = '_';
 
-    private const int Escape = '\\';
-
     public static IReadOnlyList<ProgrammeMatch> Layered(
         IEnumerable<Programme> held,
         IEnumerable<ArchivedProgramme> archived)
@@ -164,23 +162,7 @@ public static class ProgrammeSearchMatching
         => part.Literal ? part.Value == point : part.Value == OneCharacter;
 
     private static (int Value, bool Literal)[] Read(int[] spelt)
-    {
-        var carried = new List<(int, bool)>(spelt.Length);
-
-        for (int index = 0; index < spelt.Length; index++)
-        {
-            if (spelt[index] == Escape && index + 1 < spelt.Length)
-            {
-                carried.Add((spelt[index + 1], true));
-                index++;
-                continue;
-            }
-
-            carried.Add((spelt[index], spelt[index] is not Anything and not OneCharacter));
-        }
-
-        return [.. carried];
-    }
+        => [.. spelt.Select(point => (point, point is not Anything and not OneCharacter))];
 
     private static int[] CodePoints(string text)
     {

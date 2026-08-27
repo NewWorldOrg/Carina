@@ -31,30 +31,20 @@ public static class ProgrammeSearchText
                 WhatTheStoreLowersItTo);
     }
 
-    public static bool Foldable(string text)
-    {
-        ArgumentNullException.ThrowIfNull(text);
-
-        for (int index = 0; index < text.Length; index++)
-        {
-            if (!Rune.TryGetRuneAt(text, index, out Rune rune) || Refused(rune))
-            {
-                return false;
-            }
-
-            index += rune.Utf16SequenceLength - 1;
-        }
-
-        return true;
-    }
-
     private static string Normalised(string text)
     {
-        if (Foldable(text))
+        try
         {
             return text.Normalize(NormalizationForm.FormKC);
         }
+        catch (ArgumentException)
+        {
+            return AroundWhatTheRuntimeWillNotNormalise(text);
+        }
+    }
 
+    private static string AroundWhatTheRuntimeWillNotNormalise(string text)
+    {
         var carried = new StringBuilder(text.Length);
         int taken = 0;
         int index = 0;
@@ -63,24 +53,36 @@ public static class ProgrammeSearchText
         {
             bool read = Rune.TryGetRuneAt(text, index, out Rune rune);
             int width = read ? rune.Utf16SequenceLength : 1;
+            string one = text.Substring(index, width);
 
-            if (read && !Refused(rune))
+            if (read && Normalises(one))
             {
                 index += width;
                 continue;
             }
 
-            carried.Append(text[taken..index].Normalize(NormalizationForm.FormKC));
-            carried.Append(text.AsSpan(index, width));
+            carried.Append(Normalised(text[taken..index]));
+            carried.Append(one);
             index += width;
             taken = index;
         }
 
-        carried.Append(text[taken..].Normalize(NormalizationForm.FormKC));
+        carried.Append(Normalised(text[taken..]));
 
         return carried.ToString();
     }
 
-    private static bool Refused(Rune rune)
-        => rune.Value is >= 0xFDD0 and <= 0xFDEF || (rune.Value & 0xFFFE) == 0xFFFE;
+    private static bool Normalises(string one)
+    {
+        try
+        {
+            one.Normalize(NormalizationForm.FormKC);
+
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
 }

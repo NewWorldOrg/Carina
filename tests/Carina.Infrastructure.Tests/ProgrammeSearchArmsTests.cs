@@ -81,6 +81,19 @@ public sealed class ProgrammeSearchArmsTests(RepositoryDatabase database)
         ["a backslash before a per cent"] = network => Ask(network, "夏\\%"),
         ["a backslash at the end"] = network => Ask(network, "夏\\"),
         ["a mark that unfolds into a space"] = network => Ask(network, "終¨"),
+        ["a word left out of the summary alone"] = network => Ask(
+            network,
+            "作り方",
+            new ProgrammeConditions { Exclude = "ギョウザ", Fields = [ProgrammeField.Description] }),
+        ["a word left out of the title alone"] = network => Ask(
+            network,
+            "作り方",
+            new ProgrammeConditions { Exclude = "ギョウザ", Fields = [ProgrammeField.Title] }),
+        ["a search that names no span at all"] = network => ProgrammeSearch.For(
+            $"n{network}",
+            null,
+            null,
+            conditions: new ProgrammeConditions { Channels = Everywhere(network) })!,
         ["a span that stops short of the archive"] = network => Ask(
             network,
             string.Empty,
@@ -222,6 +235,12 @@ public sealed class ProgrammeSearchArmsTests(RepositoryDatabase database)
             Held(network, Listed, 10, "𠮟る", $"n{network}", []),
             Held(network, Listed, 11, "", $"n{network}", []),
             Held(network, Withheld, 12, "別の局", $"n{network} ニュース", []),
+            Held(network, Listed, 13, "夏%割引", $"n{network}", []),
+            Held(network, Listed, 14, "夏\\の記号", $"n{network}", []),
+            Held(network, Listed, 15, "パスタ", $"パスタの作り方 n{network}", []),
+            Held(network, Listed, 16, "ギョウザ入門", $"n{network} 作り方はこちら", []),
+            Ran(network, Listed, 17, "ちょうど終わる", $"n{network}", At.AddMinutes(-30), At),
+            Ran(network, Listed, 18, "まだ続く", $"n{network}", At.AddMinutes(-30), At.AddMinutes(30)),
         ];
         ArchivedProgramme[] kept =
         [
@@ -261,6 +280,25 @@ public sealed class ProgrammeSearchArmsTests(RepositoryDatabase database)
             {
                 Genres = genres,
             },
+            At);
+
+    private static Programme Ran(
+        int network,
+        int service,
+        int carried,
+        string name,
+        string summary,
+        DateTime began,
+        DateTime ended)
+        => Programme.Discover(
+            new ProgrammeBroadcast(
+                new ProgrammeId(new NetworkId(network), new ServiceId(service), new EventId(carried)),
+                new TransportStreamId(32_736),
+                began,
+                ended,
+                name,
+                summary,
+                false),
             At);
 
     private static Programme Shadow(int network, int service, int carried, string name, string summary)

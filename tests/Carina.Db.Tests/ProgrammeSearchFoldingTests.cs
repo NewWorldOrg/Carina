@@ -16,7 +16,7 @@ public sealed class ProgrammeSearchFoldingTests
 {
     private const string ScratchDatabase = "carina_programme_folding_test";
 
-    public const int EveryCharacterTheStoreCanHold = 0x110000 - 2048 - 66 - 1;
+    public const int EveryCharacterTheStoreCanHold = 0x110000 - 2048 - 1;
 
     private const string At = "timestamptz '2026-08-21 12:00:00+00'";
 
@@ -220,15 +220,40 @@ public sealed class ProgrammeSearchFoldingTests
     }
 
     [Fact]
-    public void TheCodeFoldsEveryCharacterTheStoreCannotHoldWithoutThrowing()
+    public void TheCodeFoldsWhatTheRuntimeWillNotNormaliseInsteadOfThrowingOverIt()
     {
-        foreach (int point in Unstorable())
+        int refused = 0;
+
+        foreach (int point in NotEveryRuntimeNormalises())
         {
-            Assert.Equal(char.ConvertFromUtf32(point), ProgrammeSearchText.Folded(char.ConvertFromUtf32(point)));
+            string one = char.ConvertFromUtf32(point);
+
+            if (!Normalises(one))
+            {
+                refused++;
+            }
+
+            Assert.Equal(one, ProgrammeSearchText.Folded(one));
+            Assert.Equal($"ア{one}ア", ProgrammeSearchText.Folded($"ｱ{one}ｱ"));
         }
 
+        Assert.True(refused > 0, "no character in this list is one the runtime refuses to normalise");
         Assert.Equal("\uD800", ProgrammeSearchText.Folded("\uD800"));
         Assert.Equal("ア\uDC00ア", ProgrammeSearchText.Folded("ｱ\uDC00ｱ"));
+    }
+
+    private static bool Normalises(string one)
+    {
+        try
+        {
+            one.Normalize(System.Text.NormalizationForm.FormKC);
+
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
     }
 
     private static readonly (string Name, int Lowest, int Highest)[] Combining =
@@ -244,10 +269,7 @@ public sealed class ProgrammeSearchFoldingTests
     {
         for (int point = lowest; point <= highest; point++)
         {
-            if (point is 0
-                || point is >= 0xD800 and <= 0xDFFF
-                || point is >= 0xFDD0 and <= 0xFDEF
-                || (point & 0xFFFE) == 0xFFFE)
+            if (point is 0 || point is >= 0xD800 and <= 0xDFFF)
             {
                 continue;
             }
@@ -256,7 +278,7 @@ public sealed class ProgrammeSearchFoldingTests
         }
     }
 
-    private static IEnumerable<int> Unstorable()
+    private static IEnumerable<int> NotEveryRuntimeNormalises()
     {
         for (int point = 0xFDD0; point <= 0xFDEF; point++)
         {
