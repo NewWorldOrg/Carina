@@ -63,6 +63,17 @@ public sealed class InstructionWalkSelfCheckTests
     }
 
     [Fact]
+    public void AJumpTableWhoseCountIsItselfCutOffRefusesToAnswer()
+    {
+        byte[] cutOff = [LoadArgumentZero, Switch, 0x01, 0x00];
+
+        InvalidOperationException refused = Assert.Throws<InvalidOperationException>(
+            () => CallSiteCensus.TokensIn(cutOff, "a jump table whose count is cut off"));
+
+        Assert.Contains("runs past the end", refused.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void AJumpTableThatCountsBackwardsRefusesToAnswer()
     {
         byte[] backwards = [LoadArgumentZero, Switch, .. BitConverter.GetBytes(-1), Return];
