@@ -4,6 +4,7 @@ using Carina.Api.Responder;
 using Carina.Api.Responder.Reservations;
 using Carina.Api.Services;
 using Carina.Domain.Base;
+using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
 
 using Microsoft.AspNetCore.Mvc;

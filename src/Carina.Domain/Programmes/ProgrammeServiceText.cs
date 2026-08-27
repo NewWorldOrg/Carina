@@ -1,9 +1,8 @@
 using System.Globalization;
 
 using Carina.Domain.Channels;
-using Carina.Domain.Programmes;
 
-namespace Carina.Api.Common;
+namespace Carina.Domain.Programmes;
 
 public static class ProgrammeServiceText
 {

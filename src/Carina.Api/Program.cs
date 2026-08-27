@@ -34,6 +34,7 @@ builder.Services.AddOpenApi(options =>
     options.AddOperationTransformer<DefaultDenyResponseTransformer>();
     options.AddOperationTransformer<UnhandledFailureResponseTransformer>();
     options.AddOperationTransformer<OperationNamingTransformer>();
+    options.AddOperationTransformer<SearchVocabularyTransformer>();
 });
 
 WebApplication app = builder.Build();

@@ -18,6 +18,7 @@ using Carina.Infrastructure.Events;
 using Carina.Infrastructure.Integrity;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
+using Carina.Infrastructure.Programmes;
 using Carina.Infrastructure.Recordings;
 using Carina.Infrastructure.Reservations;
 using Carina.Infrastructure.Scanning;
@@ -83,6 +84,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IBroadcastServiceRepository, BroadcastServiceRepository>();
         services.AddScoped<IProgrammeRepository, ProgrammeRepository>();
         services.AddScoped<IProgrammeSearchRepository, ProgrammeSearchRepository>();
+        services.AddScoped<ProgrammeSearchScope>();
         services.AddScoped<IStreamVisitRepository, StreamVisitRepository>();
         services.AddScoped<ICollectionEpochRepository, CollectionEpochRepository>();
         services.AddScoped<IArchivedProgrammeRepository, ArchivedProgrammeRepository>();

@@ -3,9 +3,9 @@ using Carina.Api.Common;
 using Carina.Api.Responder;
 using Carina.Api.Responder.Epg;
 using Carina.Api.Services;
-using Carina.Contracts;
 using Carina.Domain.Base;
 using Carina.Domain.Programmes;
+using Carina.Infrastructure.Programmes;
 
 using Microsoft.AspNetCore.Mvc;
 
@@ -19,41 +19,9 @@ public sealed class SearchProgrammesAction(ProgrammeGuideService guide) : Contro
     [HttpGet]
     [ProducesResponseType<BaseResponder<ProgrammeSearchResponder>>(StatusCodes.Status200OK)]
     [ProducesResponseType<BaseResponder<ProgrammeSearchResponder>>(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> Invoke(
-        [FromQuery] string? keyword,
-        [FromQuery] string? exclude,
-        [FromQuery] ProgrammeField[]? fields,
-        [FromQuery] int[]? genre,
-        [FromQuery] TuneSystem? type,
-        [FromQuery] string[]? channel,
-        [FromQuery] DateTimeOffset? from,
-        [FromQuery] DateTimeOffset? to,
-        [FromQuery] ProgrammeSort sort,
-        [FromQuery] bool descending,
-        [FromQuery] int? page,
-        [FromQuery] int? perPage,
-        CancellationToken cancellationToken)
+    public async Task<IActionResult> Invoke(CancellationToken cancellationToken)
     {
-        ProgrammeSearch? asked = ProgrammeServiceText.Every(channel) is { } channels
-            ? ProgrammeSearch.For(
-                keyword,
-                from?.UtcDateTime,
-                to?.UtcDateTime,
-                sort,
-                descending,
-                page,
-                perPage,
-                new ProgrammeConditions
-                {
-                    Exclude = exclude,
-                    Fields = fields,
-                    Genres = genre,
-                    System = type,
-                    Channels = channels,
-                })
-            : null;
-
-        if (asked is null)
+        if (ProgrammeSearchQuery.Read(Request.QueryString.Value) is not { } asked)
         {
             return BadRequest(BaseResponder<ProgrammeSearchResponder>.Error(Refusal));
         }
