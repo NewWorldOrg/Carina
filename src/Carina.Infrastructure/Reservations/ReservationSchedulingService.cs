@@ -126,7 +126,7 @@ public sealed class ReservationSchedulingService(
                 resolved.Add(key, resolution);
             }
 
-            if (resolution.Refusal is TuningRefusal.CapacityUnknown)
+            if (resolution.Refusal is TuningRefusal.LedgerUnreadable)
             {
                 return SchedulingRun.Refused(SchedulingRefusal.CapacityUnknown);
             }
@@ -134,7 +134,9 @@ public sealed class ReservationSchedulingService(
             candidates.Add(AllocationCandidate.Of(reservation, resolution.Tuning));
         }
 
-        return SchedulingRun.Of(TunerAllocationPlanner.Plan(candidates, capacity, horizon, at));
+        return SchedulingRun.Of(
+            TunerAllocationPlanner.Plan(candidates, capacity, horizon, at),
+            capacity.Undetermined.Count);
     }
 
     private static ReservationWindow Reaching(DateTime at)

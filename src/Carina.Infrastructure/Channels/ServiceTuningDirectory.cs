@@ -26,7 +26,7 @@ public sealed class ServiceTuningDirectory(
 
         if (await capacity.ReadAsync(cancellationToken) is not { } reachable)
         {
-            return TuningResolution.Refused(TuningRefusal.CapacityUnknown);
+            return TuningResolution.Refused(TuningRefusal.LedgerUnreadable);
         }
 
         TuneSystem system = selected.Tuning.System;

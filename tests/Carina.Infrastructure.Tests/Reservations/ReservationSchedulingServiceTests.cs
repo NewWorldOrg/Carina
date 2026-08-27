@@ -87,7 +87,7 @@ public sealed class ReservationSchedulingServiceTests
         WatchedWrite write = new();
         HeldReservations ledger = new(write);
         TuningByService directory = new();
-        directory.Answer(1024, TuningResolution.Refused(TuningRefusal.CapacityUnknown));
+        directory.Answer(1024, TuningResolution.Refused(TuningRefusal.LedgerUnreadable));
 
         Reservation planned = ReservationFixtures.Planned();
         SchedulingRun run = await Scheduler(ledger, directory, write, Seats(TunerKind.Terrestrial))
@@ -99,6 +99,47 @@ public sealed class ReservationSchedulingServiceTests
         Assert.Empty(ledger.Held);
         Assert.Equal(ReservationState.Scheduled, planned.State);
         Assert.False(planned.ReceptionUnavailable);
+    }
+
+    [Fact]
+    public async Task ASeatThatCannotBePlacedIsLeftOutRatherThanStoppingTheRun()
+    {
+        WatchedWrite write = new();
+        HeldReservations ledger = new(write);
+        TuningByService directory = new();
+        directory.Answer(1024, Terrestrial27);
+        directory.Answer(1032, TuningResolution.Refused(TuningRefusal.CapacityUnknown));
+
+        Reservation reachable = ReservationFixtures.Planned(
+            programme: ReservationFixtures.Programme(ReservationFixtures.NextEventId()));
+        Reservation beyond = ReservationFixtures.Planned(
+            programme: ReservationFixtures.Programme(ReservationFixtures.NextEventId(), serviceId: 1032));
+        ledger.Standing(beyond);
+
+        SchedulingRun run = await Scheduler(ledger, directory, write, Unplaceable("adapter9"))
+            .CreateAsync(reachable, Cancel);
+
+        Assert.True(run.Settled);
+        Assert.Equal(1, run.SeatsLeftOut);
+        Assert.Equal(AllocationVerdict.Secured, run.Plan.For(reachable.Id).Verdict);
+        Assert.Equal(AllocationVerdict.Unreachable, run.Plan.For(beyond.Id).Verdict);
+        Assert.True(beyond.ReceptionUnavailable);
+        Assert.Equal(ReservationState.Scheduled, reachable.State);
+        Assert.Contains($"add {reachable.Id.Value}", ledger.Wrote);
+    }
+
+    [Fact]
+    public async Task ARunThatPlacedEverySeatSaysItLeftNoneOut()
+    {
+        WatchedWrite write = new();
+        HeldReservations ledger = new(write);
+        TuningByService directory = new();
+        directory.Answer(1024, Terrestrial27);
+
+        SchedulingRun run = await Scheduler(ledger, directory, write, Seats(TunerKind.Terrestrial))
+            .CreateAsync(ReservationFixtures.Planned(), Cancel);
+
+        Assert.Equal(0, run.SeatsLeftOut);
     }
 
     [Fact]
@@ -374,6 +415,11 @@ public sealed class ReservationSchedulingServiceTests
         Assert.Equal(ReservationState.Scheduled, running.State);
         Assert.Equal(ReservationState.Conflict, wanting.State);
     }
+
+    private static TunerCapacity Unplaceable(params string[] deviceIds)
+        => new(
+            [new TunerSeat("seat0", BroadcastReception.Of(TunerKind.Terrestrial), Faulted: false)],
+            deviceIds);
 
     private static TunerCapacity Seats(params TunerKind[] kinds)
         => new(

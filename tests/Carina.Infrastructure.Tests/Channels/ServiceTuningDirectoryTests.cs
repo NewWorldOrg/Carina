@@ -36,6 +36,7 @@ public sealed class ServiceTuningDirectoryTests
     [InlineData(TuningRefusal.NoSelectedChannel)]
     [InlineData(TuningRefusal.NoTunerForSystem)]
     [InlineData(TuningRefusal.CapacityUnknown)]
+    [InlineData(TuningRefusal.LedgerUnreadable)]
     public async Task WhetherAServiceCanBeTunedIsTheSameAnswerAsResolvingItForEveryReason(
         TuningRefusal expected)
     {
@@ -57,6 +58,20 @@ public sealed class ServiceTuningDirectoryTests
         TuningResolution resolved = await fixture.Directory.ResolveTuningAsync(Network, Service, Cancel);
 
         Assert.Equal(TuningRefusal.CapacityUnknown, resolved.Refusal);
+    }
+
+    [Fact]
+    public async Task ALedgerThatCouldNotBeReadAtAllIsADifferentAnswerFromASeatItCouldNotPlace()
+    {
+        Fixture unreadable = Ready(capacityKnown: false);
+        Fixture unplaceable = Ready(kind: TunerKind.Satellite, undetermined: ["adapter9"]);
+
+        Assert.Equal(
+            TuningRefusal.LedgerUnreadable,
+            (await unreadable.Directory.ResolveTuningAsync(Network, Service, Cancel)).Refusal);
+        Assert.Equal(
+            TuningRefusal.CapacityUnknown,
+            (await unplaceable.Directory.ResolveTuningAsync(Network, Service, Cancel)).Refusal);
     }
 
     [Fact]
@@ -134,6 +149,7 @@ public sealed class ServiceTuningDirectoryTests
         TuningRefusal.NoSuchService => (Ready(), Unknown),
         TuningRefusal.NoSelectedChannel => (Ready(selected: false), Service),
         TuningRefusal.NoTunerForSystem => (Ready(kind: TunerKind.Satellite), Service),
+        TuningRefusal.CapacityUnknown => (Ready(kind: TunerKind.Satellite, undetermined: ["adapter9"]), Service),
         _ => (Ready(capacityKnown: false), Service),
     };
 

@@ -50,9 +50,19 @@ public sealed class TuningResolutionTests
     }
 
     [Fact]
-    public void ThereAreFourWaysToRefuseAndTheyAreAllReasons()
+    public void TheReasonsToRefuseAreNamedRatherThanCounted()
     {
-        Assert.Equal(4, EveryReasonToRefuse.Count);
+        Assert.Equal(
+            [
+                nameof(TuningRefusal.NoSuchService),
+                nameof(TuningRefusal.NoSelectedChannel),
+                nameof(TuningRefusal.NoTunerForSystem),
+                nameof(TuningRefusal.CapacityUnknown),
+                nameof(TuningRefusal.LedgerUnreadable),
+            ],
+            Enum.GetValues<TuningRefusal>()
+                .Where(refusal => refusal is not TuningRefusal.None)
+                .Select(refusal => refusal.ToString()));
     }
 
     [Fact]
