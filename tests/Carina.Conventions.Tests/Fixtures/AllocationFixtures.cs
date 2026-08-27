@@ -27,19 +27,70 @@ public static class AllocationFixtures
 
         switch (choice)
         {
-            case 0: carried = "zero"; break;
-            case 1: carried = "one"; break;
-            case 2: carried = "two"; break;
-            case 3: carried = "three"; break;
-            case 4: carried = "four"; break;
-            case 5: carried = "five"; break;
-            case 6: carried = "six"; break;
-            case 7: carried = "seven"; break;
-            case 8: carried = "eight"; break;
-            case 9: carried = "nine"; break;
-            case 10: carried = "ten"; break;
-            case 11: carried = Far.ToString(CultureInfo.InvariantCulture); break;
-            default: carried = BeyondTheWideOperands(); break;
+            case 0:
+                carried = "zero";
+
+                break;
+
+            case 1:
+                carried = "one";
+
+                break;
+
+            case 2:
+                carried = "two";
+
+                break;
+
+            case 3:
+                carried = "three";
+
+                break;
+
+            case 4:
+                carried = "four";
+
+                break;
+
+            case 5:
+                carried = "five";
+
+                break;
+
+            case 6:
+                carried = "six";
+
+                break;
+
+            case 7:
+                carried = "seven";
+
+                break;
+
+            case 8:
+                carried = "eight";
+
+                break;
+
+            case 9:
+                carried = "nine";
+
+                break;
+
+            case 10:
+                carried = "ten";
+
+                break;
+
+            case 11:
+                carried = Far.ToString(CultureInfo.InvariantCulture);
+
+                break;
+
+            default:
+                carried = BeyondTheWideOperands();
+
+                break;
         }
 
         return carried;
