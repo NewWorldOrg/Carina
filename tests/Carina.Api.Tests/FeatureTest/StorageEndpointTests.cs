@@ -59,13 +59,18 @@ public sealed class StorageEndpointTests
         feature.Running.InFlight.Add(IntegrityFeature.Writing(
             IntegrityFeature.Primary,
             IntegrityFeature.Noon,
-            IntegrityFeature.Noon.AddHours(1)));
+            IntegrityFeature.Noon.AddHours(2)));
+        feature.Running.InFlight.Add(IntegrityFeature.Writing(
+            IntegrityFeature.Primary,
+            IntegrityFeature.Noon,
+            IntegrityFeature.Noon.AddHours(1),
+            eventId: 4002));
 
         (_, JsonElement body) = await feature.GetAsync("/api/storage");
         JsonElement[] roots = [.. body.GetProperty("data").GetProperty("roots").EnumerateArray()];
 
-        Assert.Equal(7_425_000_000, roots[0].GetProperty("committedBytes").GetInt64());
-        Assert.Equal(1, roots[0].GetProperty("recordingsInFlight").GetInt32());
+        Assert.Equal(22_275_000_000, roots[0].GetProperty("committedBytes").GetInt64());
+        Assert.Equal(2, roots[0].GetProperty("recordingsInFlight").GetInt32());
         Assert.Equal(0, roots[1].GetProperty("committedBytes").GetInt64());
         Assert.Equal(0, roots[1].GetProperty("recordingsInFlight").GetInt32());
     }
@@ -84,6 +89,22 @@ public sealed class StorageEndpointTests
         JsonElement root = Assert.Single(body.GetProperty("data").GetProperty("roots").EnumerateArray());
 
         Assert.Equal(3_712_500_000, root.GetProperty("committedBytes").GetInt64());
+    }
+
+    [Fact]
+    public async Task AWindowOfThreeHoursIsSpokenForByThreeTimesWhatAnHourIs()
+    {
+        await using var feature = new IntegrityFeature();
+        feature.Driver.Roots.Add(Root("primary", free: long.MaxValue, total: long.MaxValue, writable: true));
+        feature.Running.InFlight.Add(IntegrityFeature.Writing(
+            IntegrityFeature.Primary,
+            IntegrityFeature.Noon,
+            IntegrityFeature.Noon.AddHours(3)));
+
+        (_, JsonElement body) = await feature.GetAsync("/api/storage");
+        JsonElement root = Assert.Single(body.GetProperty("data").GetProperty("roots").EnumerateArray());
+
+        Assert.Equal(22_275_000_000, root.GetProperty("committedBytes").GetInt64());
     }
 
     [Fact]

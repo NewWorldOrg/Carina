@@ -5,6 +5,7 @@ using System.Text.Json;
 
 using Carina.Domain.Integrity;
 using Carina.Domain.Recordings;
+using Carina.Infrastructure.Integrity;
 using Carina.TestSupport;
 
 namespace Carina.Api.Tests.FeatureTest;
@@ -336,6 +337,63 @@ public sealed class IntegrityEndpointTests
         Assert.Equal(
             feature.Checks.Saved[0].Check.Id.Value,
             body.GetProperty("data").GetProperty("runningCheckId").GetGuid());
+    }
+
+    [Fact]
+    public async Task ASweepWalkingIsNamedRatherThanTheHoldBackWhenBothWouldRefuse()
+    {
+        await using var feature = new IntegrityFeature();
+        IntegrityCheckId earlier = IntegrityCheckId.New();
+        Save(
+            feature,
+            earlier,
+            IntegrityFinding.NoLedgerRow(
+                earlier,
+                IntegrityFeature.Primary,
+                "written-earlier.m2ts",
+                1,
+                IntegrityFeature.Noon));
+        feature.Ledger.Gate = new TaskCompletionSource();
+
+        Task<IntegrityRun> timetabled = feature.Sweeps.RunAsync(CancellationToken.None);
+        await Eventually.Happens(() => feature.Ledger.Reads is 1, "the timetabled sweep never read the ledger");
+
+        (HttpStatusCode status, JsonElement body) = await feature
+            .PostAsync("/api/recordings/integrity/run")
+            .WaitAsync(Eventually.Patience);
+
+        Assert.Equal(HttpStatusCode.Conflict, status);
+        Assert.Equal("oneIsAlreadyRunning", body.GetProperty("data").GetProperty("refusal").GetString());
+        Assert.Equal(
+            JsonValueKind.Null,
+            body.GetProperty("data").GetProperty("notBefore").ValueKind);
+        Assert.Equal(
+            feature.Sweeps.RunningCheck!.Value,
+            body.GetProperty("data").GetProperty("runningCheckId").GetGuid());
+
+        feature.Ledger.Gate.SetResult();
+        await timetabled;
+    }
+
+    [Fact]
+    public async Task TheHoldBackAloneWouldHaveRefusedThatSameRequest()
+    {
+        await using var feature = new IntegrityFeature();
+        IntegrityCheckId earlier = IntegrityCheckId.New();
+        Save(
+            feature,
+            earlier,
+            IntegrityFinding.NoLedgerRow(
+                earlier,
+                IntegrityFeature.Primary,
+                "written-earlier.m2ts",
+                1,
+                IntegrityFeature.Noon));
+
+        (HttpStatusCode status, JsonElement body) = await feature.PostAsync("/api/recordings/integrity/run");
+
+        Assert.Equal(HttpStatusCode.Conflict, status);
+        Assert.Equal("tooSoonAfterTheLastOne", body.GetProperty("data").GetProperty("refusal").GetString());
     }
 
     [Fact]

@@ -253,6 +253,8 @@ internal sealed class IntegrityFeature : IAsyncDisposable
 
     private readonly TestingWebApplicationFactory factory = new();
 
+    private readonly WebApplicationFactory<Program> configured;
+
     public IntegrityFeature(IntegritySettings? settings = null, string? walking = null)
     {
         Settings = settings ?? new IntegritySettings
@@ -260,7 +262,7 @@ internal sealed class IntegrityFeature : IAsyncDisposable
             OutputRoots = walking is null ? [] : [new StorageRootPath(Primary, walking)],
         };
 
-        WebApplicationFactory<Program> configured = factory
+        WebApplicationFactory<Program> built = factory
             .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll<IHostedService>();
@@ -274,13 +276,16 @@ internal sealed class IntegrityFeature : IAsyncDisposable
                 services.AddScoped<IIntegrityCheckRepository>(_ => Checks);
             }));
 
-        Client = configured.WithTestScheme().CreateClient();
+        configured = built.WithTestScheme();
+        Client = configured.CreateClient();
         Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
             TestAuthenticationHandler.SchemeName,
             "anything");
     }
 
     public HttpClient Client { get; }
+
+    public IntegrityCheckJob Sweeps => configured.Services.GetRequiredService<IntegrityCheckJob>();
 
     public MovingClock Clock { get; } = new(Noon);
 
