@@ -29,6 +29,7 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
         Assert.Equal(
             [
                 "DELETE /api/auth/sessions/{id}",
+                "DELETE /api/recordings/{id}",
                 "DELETE /api/services/{networkId:int}-{serviceId:int}/candidate-channels/{candidateChannelId:guid}",
                 "POST /api/auth/password",
                 "POST /api/epg/archive/forget-service",
@@ -50,16 +51,35 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
         Assert.Equal(
             [
                 "DELETE /api/auth/sessions/{id}",
+                "DELETE /api/recordings/{id}",
                 "DELETE /api/services/{networkId:int}-{serviceId:int}/candidate-channels/{candidateChannelId:guid}",
             ],
             EndpointRules.SurfacesThatDelete(Inventory()));
     }
 
     [Fact]
-    public void TheRecordingSurfaceOffersNoWayToDeleteAnything()
+    public void TheOnlyWayToDeleteUnderTheRecordingSurfaceIsTheOneAPersonAsksForByHand()
     {
-        Assert.Empty(EndpointRules.SurfacesThatDeleteUnder(Inventory(), "/api/recordings"));
-        Assert.NotEmpty(EndpointRules.SurfacesThatDelete(Inventory()));
+        Assert.Equal(
+            ["DELETE /api/recordings/{id}"],
+            EndpointRules.SurfacesThatDeleteUnder(Inventory(), "/api/recordings"));
+    }
+
+    [Fact]
+    public void TheOneWayToDeleteARecordingSaysItDestroys()
+    {
+        Assert.Equal(
+            EndpointEffect.Destructive,
+            Inventory()
+                .Single(surface => surface.ToString() == "DELETE /api/recordings/{id}")
+                .Effect);
+    }
+
+    [Fact]
+    public void NothingUnderTheIntegritySurfaceDeletesAnything()
+    {
+        Assert.Empty(EndpointRules.SurfacesThatDeleteUnder(Inventory(), "/api/recordings/integrity"));
+        Assert.NotEmpty(EndpointRules.SurfacesThatDeleteUnder(Inventory(), "/api/recordings"));
     }
 
     [Fact]

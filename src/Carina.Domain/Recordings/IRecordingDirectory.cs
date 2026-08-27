@@ -11,6 +11,15 @@ public enum RecordingHalt
     AlreadyEnded = 3,
 }
 
+public enum RecordingDiscard
+{
+    Discarded = 1,
+
+    NoSuchRecording = 2,
+
+    StillRecording = 3,
+}
+
 public interface IRecordingDirectory
 {
     Task<PaginatedList<Recording>> ListAsync(RecordingQuery query, CancellationToken cancellationToken);
@@ -22,4 +31,6 @@ public interface IRecordingDirectory
         RecordingStopReason reason,
         DateTime at,
         CancellationToken cancellationToken);
+
+    Task<RecordingDiscard> DiscardAsync(RecordingId id, CancellationToken cancellationToken);
 }

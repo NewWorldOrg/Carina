@@ -156,6 +156,27 @@ internal sealed class ScriptedRemaker(HeldRecordings recordings) : IThumbnailRem
     }
 }
 
+internal sealed class ScriptedEraser : IRecordingFileEraser
+{
+    public RecordingErasure Answer { get; set; } = RecordingErasure.Erased(1);
+
+    public Action? WhenErasing { get; set; }
+
+    public List<RecordingId> Asked { get; } = [];
+
+    public Task<RecordingErasure> EraseAsync(
+        RecordingId id,
+        OutputRoot root,
+        RecordingFileName fileName,
+        CancellationToken cancellationToken)
+    {
+        Asked.Add(id);
+        WhenErasing?.Invoke();
+
+        return Task.FromResult(Answer);
+    }
+}
+
 internal sealed class RecordingFeature : IAsyncDisposable
 {
     public static readonly DateTime Noon = new(2026, 8, 24, 12, 0, 0, DateTimeKind.Utc);
@@ -163,8 +184,14 @@ internal sealed class RecordingFeature : IAsyncDisposable
     private readonly TestingWebApplicationFactory factory = new();
 
     public RecordingFeature()
+        : this(null)
+    {
+    }
+
+    public RecordingFeature(IRecordingFileEraser? erasing)
     {
         Remaker = new ScriptedRemaker(Recordings);
+        IRecordingFileEraser erasingWith = erasing ?? Eraser;
 
         WebApplicationFactory<Program> configured = factory
             .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
@@ -173,6 +200,7 @@ internal sealed class RecordingFeature : IAsyncDisposable
                 services.AddSingleton<IRecordingDirectory>(Recordings);
                 services.AddSingleton<IDriverClient>(Driver);
                 services.AddSingleton<IThumbnailRemaker>(Remaker);
+                services.AddSingleton(erasingWith);
                 services.AddSingleton<TimeProvider>(new FixedTimeProvider(Noon.AddMinutes(30)));
             }));
 
@@ -189,6 +217,8 @@ internal sealed class RecordingFeature : IAsyncDisposable
     public WritingDriver Driver { get; } = new();
 
     public ScriptedRemaker Remaker { get; }
+
+    public ScriptedEraser Eraser { get; } = new();
 
     public static Recording Begin(
         RecordingId id,
@@ -265,6 +295,14 @@ internal sealed class RecordingFeature : IAsyncDisposable
         using HttpResponseMessage response = await Client.PostAsJsonAsync(
             new Uri(path, UriKind.Relative),
             body ?? new { });
+
+        return await ReadAsync(response);
+    }
+
+    public async Task<(HttpStatusCode Status, JsonElement Body)> DeleteAsync(string path)
+    {
+        using var asking = new HttpRequestMessage(HttpMethod.Delete, new Uri(path, UriKind.Relative));
+        using HttpResponseMessage response = await Client.SendAsync(asking);
 
         return await ReadAsync(response);
     }
