@@ -196,7 +196,13 @@ internal sealed class RecordingFeature : IAsyncDisposable
         int serviceId = 1024,
         int eventId = 4001,
         DateTime? startedAt = null,
-        TimeSpan? window = null)
+        TimeSpan? window = null,
+        string name = "A programme",
+        string summary = "What it is about",
+        string extended = "",
+        IReadOnlyList<ProgrammeGenre>? genres = null,
+        string? groupKey = null,
+        BroadcastGroupRole groupRole = BroadcastGroupRole.Standalone)
     {
         DateTime started = startedAt ?? Noon;
 
@@ -208,9 +214,9 @@ internal sealed class RecordingFeature : IAsyncDisposable
             RecordingFileName.For(id, ".m2ts"),
             started,
             started + (window ?? TimeSpan.FromHours(1)),
-            new ProgrammeSnapshot("A programme", "What it is about", string.Empty, [], started),
-            null,
-            BroadcastGroupRole.Standalone,
+            new ProgrammeSnapshot(name, summary, extended, genres ?? [], started),
+            groupKey is null ? null : new BroadcastGroupKey(groupKey),
+            groupRole,
             started,
             new TunerDeviceId("pt3-0"));
     }
@@ -220,9 +226,27 @@ internal sealed class RecordingFeature : IAsyncDisposable
         int serviceId = 1024,
         int eventId = 4001,
         DateTime? startedAt = null,
-        TimeSpan? window = null)
+        TimeSpan? window = null,
+        string name = "A programme",
+        string summary = "What it is about",
+        string extended = "",
+        IReadOnlyList<ProgrammeGenre>? genres = null,
+        string? groupKey = null,
+        BroadcastGroupRole groupRole = BroadcastGroupRole.Standalone)
     {
-        Recording recording = Begin(RecordingId.New(), networkId, serviceId, eventId, startedAt, window);
+        Recording recording = Begin(
+            RecordingId.New(),
+            networkId,
+            serviceId,
+            eventId,
+            startedAt,
+            window,
+            name,
+            summary,
+            extended,
+            genres,
+            groupKey,
+            groupRole);
 
         Recordings.Recordings.Add(recording);
 
