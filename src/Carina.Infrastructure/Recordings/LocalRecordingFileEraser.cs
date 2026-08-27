@@ -21,8 +21,7 @@ public sealed class LocalRecordingFileEraser(
         string held = Path.TrimEndingDirectorySeparator(Path.GetFullPath(room));
         string full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
 
-        return !string.Equals(held, full, StringComparison.Ordinal)
-            && string.Equals(Path.GetDirectoryName(full), held, StringComparison.Ordinal);
+        return string.Equals(Path.GetDirectoryName(full), held, StringComparison.Ordinal);
     }
 
     public async Task<RecordingErasure> EraseAsync(
