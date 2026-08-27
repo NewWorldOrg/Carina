@@ -1,6 +1,8 @@
+using Carina.Api.Responder.Epg;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Recordings;
+using Carina.Domain.Reservations;
 
 namespace Carina.Api.Responder.Recordings;
 
@@ -11,7 +13,11 @@ public sealed record RecordingProgrammeResponder(
     DateTime StartsAt,
     string Name,
     string Summary,
+    string Extended,
+    IReadOnlyList<ProgrammeGenreResponder> Genres,
     DateTime CapturedAt);
+
+public sealed record RecordingBroadcastGroupResponder(string? Key, BroadcastGroupRole Role);
 
 public sealed record RecordingWindowResponder(DateTime Start, DateTime End, long DurationMs);
 
@@ -57,7 +63,8 @@ public sealed record RecordingResponder(
     string FileName,
     string? TunerDeviceId,
     RecordingDropsResponder Drops,
-    RecordingThumbnailResponder Thumbnail)
+    RecordingThumbnailResponder Thumbnail,
+    RecordingBroadcastGroupResponder BroadcastGroup)
 {
     public static RecordingResponder Of(Recording recording)
     {
@@ -73,6 +80,8 @@ public sealed record RecordingResponder(
                 recording.ProgrammeStartsAt,
                 recording.SnapshotName,
                 recording.SnapshotSummary,
+                recording.SnapshotExtended,
+                [.. recording.SnapshotGenres.Select(ProgrammeGenreResponder.Of)],
                 recording.CapturedAt),
             recording.IsInFlight ? RecordingStanding.InFlight : RecordingStanding.Ended,
             recording.Outcome,
@@ -101,7 +110,10 @@ public sealed record RecordingResponder(
             new RecordingThumbnailResponder(
                 recording.ThumbnailState,
                 recording.ThumbnailFault,
-                recording.ThumbnailShowsAnUnfinishedRecording));
+                recording.ThumbnailShowsAnUnfinishedRecording),
+            new RecordingBroadcastGroupResponder(
+                recording.BroadcastGroupKey?.Value,
+                recording.BroadcastGroupRole));
     }
 
     internal static RecordingWindowResponder Window(Recording recording)
