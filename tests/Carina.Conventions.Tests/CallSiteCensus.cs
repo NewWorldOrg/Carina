@@ -117,8 +117,10 @@ public static class CallSiteCensus
         }
     }
 
-    private static IReadOnlyList<int> TokensIn(byte[] il, string named)
+    public static IReadOnlyList<int> TokensIn(byte[] il, string named)
     {
+        ArgumentNullException.ThrowIfNull(il);
+
         List<int> tokens = [];
         int at = 0;
 
@@ -136,34 +138,56 @@ public static class CallSiteCensus
                     + "instruction boundaries and would be reporting calls it cannot vouch for.");
             }
 
+            int width = Width(operand, il, at, named);
+            Room(il, at, width, named);
+
             if (operand is OperandType.InlineMethod or OperandType.InlineTok)
             {
                 tokens.Add(BitConverter.ToInt32(il, at));
             }
 
-            at += Width(operand, il, at);
-        }
-
-        if (at != il.Length)
-        {
-            throw new InvalidOperationException(
-                $"Walking {named} ran {at - il.Length} byte(s) past the end of a {il.Length} byte body, so the "
-                + "census read an operand at the wrong width and cannot vouch for what it saw.");
+            at += width;
         }
 
         return tokens;
     }
 
-    private static int Width(OperandType operand, byte[] il, int at)
+    private static int Width(OperandType operand, byte[] il, int at, string named)
         => operand switch
         {
             OperandType.InlineNone => 0,
             OperandType.ShortInlineBrTarget or OperandType.ShortInlineI or OperandType.ShortInlineVar => 1,
             OperandType.InlineVar => 2,
             OperandType.InlineI8 or OperandType.InlineR => 8,
-            OperandType.InlineSwitch => 4 + (4 * BitConverter.ToInt32(il, at)),
+            OperandType.InlineSwitch => JumpTable(il, at, named),
             _ => 4,
         };
+
+    private static int JumpTable(byte[] il, int at, string named)
+    {
+        Room(il, at, 4, named);
+
+        int entries = BitConverter.ToInt32(il, at);
+
+        if (entries < 0)
+        {
+            throw new InvalidOperationException(
+                $"Walking {named} met a jump table of {entries} entries, which is not a count, so the census has "
+                + "lost the instruction boundaries.");
+        }
+
+        return 4 + (4 * entries);
+    }
+
+    private static void Room(byte[] il, int at, int width, string named)
+    {
+        if (at + width > il.Length)
+        {
+            throw new InvalidOperationException(
+                $"Walking {named} needed {width} operand byte(s) at {at} of a {il.Length} byte body, which runs "
+                + "past the end, so the census read an operand at the wrong width and cannot vouch for what it saw.");
+        }
+    }
 
     private static string Describe(MethodBase method)
     {
