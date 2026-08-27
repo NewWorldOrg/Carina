@@ -13,10 +13,6 @@ namespace Carina.Infrastructure.Tests.Reservations;
 [Trait("Category", "DbIntegration")]
 public sealed class ReservationSchedulingLandsInTheLedgerTests(RepositoryDatabase database)
 {
-    private const int Kept = 2001;
-
-    private const int Lost = 2002;
-
     private static readonly DateTime Now = ReservationFixtures.Now;
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
@@ -24,82 +20,79 @@ public sealed class ReservationSchedulingLandsInTheLedgerTests(RepositoryDatabas
     [Fact]
     public async Task WhatTheSchedulerDecidedIsWhatTheLedgerHolds()
     {
-        Reservation kept = OnAChannelOfItsOwn(Kept, new Priority(20));
-        Reservation lost = OnAChannelOfItsOwn(Lost, new Priority(10));
+        Pair channels = new(2001, 2002, Now.AddHours(3));
+        Reservation lost = channels.Planned(channels.First, new Priority(10));
+        Reservation kept = channels.Planned(channels.Second, new Priority(20));
 
         await using (CarinaDbContext context = database.Open())
         {
-            await SchedulerOver(context).CreateAsync(kept, Cancel);
+            SchedulingRun first = await SchedulerOver(context, channels).CreateAsync(lost, Cancel);
+
+            Assert.Equal(AllocationVerdict.Secured, first.Plan.For(lost.Id).Verdict);
         }
+
+        Assert.Equal(ReservationState.Scheduled, await StateOfAsync(lost.Id));
 
         await using (CarinaDbContext context = database.Open())
         {
-            SchedulingRun run = await SchedulerOver(context).CreateAsync(lost, Cancel);
+            SchedulingRun second = await SchedulerOver(context, channels).CreateAsync(kept, Cancel);
 
-            Assert.Equal(AllocationVerdict.Contended, run.Plan.For(lost.Id).Verdict);
+            Assert.Equal(AllocationVerdict.Contended, second.Plan.For(lost.Id).Verdict);
+            Assert.Equal(AllocationVerdict.Secured, second.Plan.For(kept.Id).Verdict);
         }
 
-        await using CarinaDbContext reading = database.Open();
-        var ledger = new ReservationRepository(reading);
-
-        Assert.Equal(ReservationState.Scheduled, (await ledger.FindAsync(kept.Id, Cancel))!.State);
-        Assert.Equal(ReservationState.Conflict, (await ledger.FindAsync(lost.Id, Cancel))!.State);
+        Assert.Equal(ReservationState.Scheduled, await StateOfAsync(kept.Id));
+        Assert.Equal(ReservationState.Conflict, await StateOfAsync(lost.Id));
     }
 
     [Fact]
     public async Task AReservationThatCannotBeInsertedTakesTheStateChangesDownWithIt()
     {
-        Reservation first = OnAChannelOfItsOwn(Kept, new Priority(20));
-        Reservation second = OnAChannelOfItsOwn(Lost, new Priority(10));
+        Pair channels = new(2003, 2004, Now.AddHours(9));
+        Reservation standing = channels.Planned(channels.First, new Priority(10));
+        Reservation stronger = channels.Planned(channels.Second, new Priority(20));
 
         await using (CarinaDbContext context = database.Open())
         {
-            await SchedulerOver(context).CreateAsync(first, Cancel);
+            await SchedulerOver(context, channels).CreateAsync(standing, Cancel);
         }
 
         await using (CarinaDbContext context = database.Open())
         {
-            await SchedulerOver(context).CreateAsync(second, Cancel);
+            await SchedulerOver(context, channels).CreateAsync(stronger, Cancel);
         }
 
-        Assert.Equal(ReservationState.Conflict, await StateOfAsync(second.Id));
+        Assert.Equal(ReservationState.Conflict, await StateOfAsync(standing.Id));
 
-        Reservation duplicate = ReservationFixtures.Planned(programme: first.Programme);
+        Reservation duplicate = ReservationFixtures.Planned(programme: stronger.Programme);
 
         await using (CarinaDbContext context = database.Open())
         {
             await Assert.ThrowsAsync<DbUpdateException>(
-                () => SchedulerOver(context, secondSeat: true).CreateAsync(duplicate, Cancel));
+                () => SchedulerOver(context, channels, seats: 2).CreateAsync(duplicate, Cancel));
         }
 
-        Assert.Equal(ReservationState.Conflict, await StateOfAsync(second.Id));
+        Assert.Equal(ReservationState.Conflict, await StateOfAsync(standing.Id));
         Assert.Null(await FindAsync(duplicate.Id));
     }
 
-    private static Reservation OnAChannelOfItsOwn(int serviceId, Priority priority)
-        => ReservationFixtures.Planned(
-            programme: ReservationFixtures.Programme(ReservationFixtures.NextEventId(), serviceId),
-            priority: priority,
-            startAt: Now.AddHours(3),
-            endAt: Now.AddHours(4));
-
-    private static ReservationSchedulingService SchedulerOver(CarinaDbContext context, bool secondSeat = false)
+    private static ReservationSchedulingService SchedulerOver(
+        CarinaDbContext context,
+        Pair channels,
+        int seats = 1)
     {
         TuningByService directory = new();
-        directory.Answer(Kept, TuningParameters.Terrestrial(27));
-        directory.Answer(Lost, TuningParameters.Terrestrial(29));
-
-        TunerSeat[] seats = secondSeat
-            ?
-            [
-                new TunerSeat("seat0", BroadcastReception.Of(TunerKind.Terrestrial), Faulted: false),
-                new TunerSeat("seat1", BroadcastReception.Of(TunerKind.Terrestrial), Faulted: false),
-            ]
-            : [new TunerSeat("seat0", BroadcastReception.Of(TunerKind.Terrestrial), Faulted: false)];
+        directory.Answer(channels.First, TuningParameters.Terrestrial(channels.FirstChannel));
+        directory.Answer(channels.Second, TuningParameters.Terrestrial(channels.SecondChannel));
 
         return new ReservationSchedulingService(
             new ReservationRepository(context),
-            new HeldSeating(new TunerCapacity(seats, [])),
+            new HeldSeating(new TunerCapacity(
+                [
+                    .. Enumerable.Range(0, seats).Select(index =>
+                        new TunerSeat($"seat{index}", BroadcastReception.Of(TunerKind.Terrestrial), Faulted: false)),
+                ],
+                [])),
             directory,
             new DatabaseAtomicWrite(context),
             RollingHorizon.Default,
@@ -115,4 +108,18 @@ public sealed class ReservationSchedulingLandsInTheLedgerTests(RepositoryDatabas
 
     private async Task<ReservationState> StateOfAsync(ReservationId id)
         => (await FindAsync(id))!.State;
+
+    private sealed record Pair(int First, int Second, DateTime StartsAt)
+    {
+        public int FirstChannel => 27;
+
+        public int SecondChannel => 29;
+
+        public Reservation Planned(int serviceId, Priority priority)
+            => ReservationFixtures.Planned(
+                programme: ReservationFixtures.Programme(ReservationFixtures.NextEventId(), serviceId),
+                priority: priority,
+                startAt: StartsAt,
+                endAt: StartsAt.AddHours(1));
+    }
 }

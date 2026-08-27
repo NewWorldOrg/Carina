@@ -116,6 +116,7 @@ public sealed class ReservationSchedulingServiceTests
         Assert.Equal(AllocationVerdict.Unreachable, run.Plan.For(planned.Id).Verdict);
         Assert.True(planned.ReceptionUnavailable);
         Assert.Equal(Now, planned.ReceptionUnavailableSince);
+        Assert.Equal(ReservationState.Scheduled, planned.State);
     }
 
     [Fact]
