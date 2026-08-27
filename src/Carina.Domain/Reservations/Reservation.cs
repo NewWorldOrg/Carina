@@ -110,15 +110,23 @@ public sealed class Reservation
         BroadcastGroupKey? broadcastGroupKey,
         BroadcastGroupRole broadcastGroupRole,
         DateTime at)
-        => Rehydrate(
+    {
+        ArgumentNullException.ThrowIfNull(marginBefore);
+
+        DateTime opens = UtcTimes.Required(startAt, nameof(startAt));
+        DateTime closes = UtcTimes.Required(endAt, nameof(endAt));
+        DateTime asked = UtcTimes.Required(at, nameof(at));
+        bool underWay = opens < asked && asked < closes;
+
+        return Rehydrate(
             id,
             programme,
             ruleId,
             priority,
-            startAt,
-            endAt,
+            underWay ? asked : opens,
+            closes,
             endAtConfirmed,
-            marginBefore,
+            underWay ? Margin.None : marginBefore,
             marginAfter,
             snapshot,
             broadcastGroupKey,
@@ -132,7 +140,8 @@ public sealed class Reservation
             null,
             false,
             null,
-            at);
+            asked);
+    }
 
     public static Reservation Rehydrate(
         ReservationId id,

@@ -779,6 +779,85 @@ public sealed class ReservationEndpointTests
         Assert.NotEqual(HttpStatusCode.InternalServerError, response.StatusCode);
     }
 
+    [Fact]
+    public async Task ABroadcastReservedWhileItIsOnAirIsPromisedFromTheMomentItWasReserved()
+    {
+        await using var feature = new ReservationFeature();
+        feature.Announced(4001, startsAt: Noon.AddMinutes(-50), endsAt: Noon.AddMinutes(150));
+
+        (HttpStatusCode status, JsonElement body) = await feature.PostAsync(
+            "/api/reservations",
+            new
+            {
+                programme = $"{ReservationFeature.Network}-1024-4001",
+                programmeStartsAt = Noon.AddMinutes(-50),
+                marginBeforeSeconds = 120,
+                marginAfterSeconds = 180,
+            });
+        JsonElement reservation = body.GetProperty("data").GetProperty("reservation");
+        JsonElement window = reservation.GetProperty("window");
+
+        Assert.Equal(HttpStatusCode.Created, status);
+        Assert.Equal(Noon, window.GetProperty("startAt").GetDateTime());
+        Assert.Equal(0, window.GetProperty("marginBeforeSeconds").GetInt32());
+        Assert.Equal(Noon, window.GetProperty("effectiveStartAt").GetDateTime());
+        Assert.Equal(Noon.AddMinutes(150), window.GetProperty("endAt").GetDateTime());
+        Assert.Equal(180, window.GetProperty("marginAfterSeconds").GetInt32());
+        Assert.Equal(Noon.AddMinutes(153), window.GetProperty("effectiveEndAt").GetDateTime());
+        Assert.Equal(
+            Noon.AddMinutes(-50),
+            reservation.GetProperty("programme").GetProperty("startsAt").GetDateTime());
+    }
+
+    [Fact]
+    public async Task ABroadcastReservedBeforeItStartsIsPromisedTheMarginItAskedFor()
+    {
+        await using var feature = new ReservationFeature();
+        feature.Announced(4001, startsAt: Noon.AddMinutes(50), endsAt: Noon.AddMinutes(250));
+
+        (_, JsonElement body) = await feature.PostAsync(
+            "/api/reservations",
+            new
+            {
+                programme = $"{ReservationFeature.Network}-1024-4001",
+                programmeStartsAt = Noon.AddMinutes(50),
+                marginBeforeSeconds = 120,
+                marginAfterSeconds = 180,
+            });
+        JsonElement window = body.GetProperty("data").GetProperty("reservation").GetProperty("window");
+
+        Assert.Equal(Noon.AddMinutes(50), window.GetProperty("startAt").GetDateTime());
+        Assert.Equal(120, window.GetProperty("marginBeforeSeconds").GetInt32());
+        Assert.Equal(Noon.AddMinutes(48), window.GetProperty("effectiveStartAt").GetDateTime());
+    }
+
+    [Fact]
+    public async Task ChangingTheMarginsOfAReservationDoesNotMoveThePromiseItWasMadeWith()
+    {
+        await using var feature = new ReservationFeature();
+        feature.Announced(4001, startsAt: Noon.AddMinutes(-50), endsAt: Noon.AddMinutes(150));
+
+        (_, JsonElement made) = await feature.PostAsync(
+            "/api/reservations",
+            new
+            {
+                programme = $"{ReservationFeature.Network}-1024-4001",
+                programmeStartsAt = Noon.AddMinutes(-50),
+                marginBeforeSeconds = 120,
+                marginAfterSeconds = 180,
+            });
+
+        (HttpStatusCode status, JsonElement revised) = await feature.PatchAsync(
+            $"/api/reservations/{Identifier(made)}",
+            new { marginAfterSeconds = 300 });
+        JsonElement window = revised.GetProperty("data").GetProperty("reservation").GetProperty("window");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(Noon, window.GetProperty("startAt").GetDateTime());
+        Assert.Equal(Noon, window.GetProperty("effectiveStartAt").GetDateTime());
+        Assert.Equal(300, window.GetProperty("marginAfterSeconds").GetInt32());
+    }
+
     private static object Asking(int eventId, int serviceId = 1024, int? priority = null)
         => new
         {
