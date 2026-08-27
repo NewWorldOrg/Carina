@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Reflection;
 using System.Reflection.Emit;
 
@@ -8,6 +9,8 @@ public static class CallSiteCensus
     private const byte TwoByteOpCode = 0xFE;
 
     private static readonly IReadOnlyDictionary<short, OperandType> OperandsByOpCode = ReadOpCodeTable();
+
+    private static readonly ConcurrentDictionary<string, Census> Taken = new(StringComparer.Ordinal);
 
     public static IReadOnlyList<string> CallersOf(
         IEnumerable<Assembly> assemblies,
@@ -20,10 +23,10 @@ public static class CallSiteCensus
 
         return
         [
-            .. assemblies
-                .SelectMany(EveryMethodIn)
-                .Where(caller => CallsIt(caller, declaringType, methodName))
-                .Select(Describe)
+            .. Of(assemblies).Calls
+                .Where(call => call.Declaring == declaringType
+                               && string.Equals(call.Called, methodName, StringComparison.Ordinal))
+                .Select(call => call.Caller)
                 .Distinct(StringComparer.Ordinal)
                 .Order(StringComparer.Ordinal),
         ];
@@ -33,7 +36,47 @@ public static class CallSiteCensus
     {
         ArgumentNullException.ThrowIfNull(assemblies);
 
-        return assemblies.SelectMany(EveryMethodIn).Count(method => Body(method) is not null);
+        return Of(assemblies).Bodies;
+    }
+
+    private static Census Of(IEnumerable<Assembly> assemblies)
+    {
+        Assembly[] read = [.. assemblies];
+        string key = string.Join("|", read.Select(assembly => assembly.FullName));
+
+        return Taken.GetOrAdd(key, _ => Take(read));
+    }
+
+    private static Census Take(IReadOnlyList<Assembly> assemblies)
+    {
+        List<Call> calls = [];
+        int bodies = 0;
+
+        foreach (MethodBase caller in assemblies.SelectMany(EveryMethodIn))
+        {
+            if (Body(caller) is not { } il)
+            {
+                continue;
+            }
+
+            bodies++;
+
+            Type[] typeArguments = caller.DeclaringType?.IsGenericTypeDefinition is true
+                ? caller.DeclaringType.GetGenericArguments()
+                : [];
+            Type[] methodArguments = caller.IsGenericMethodDefinition ? caller.GetGenericArguments() : [];
+            string named = Describe(caller);
+
+            foreach (int token in TokensIn(il, named))
+            {
+                if (Resolve(caller.Module, token, typeArguments, methodArguments) is { } called)
+                {
+                    calls.Add(new Call(named, called.DeclaringType, called.Name));
+                }
+            }
+        }
+
+        return new Census(calls, bodies);
     }
 
     private static IEnumerable<MethodBase> EveryMethodIn(Assembly assembly)
@@ -48,34 +91,6 @@ public static class CallSiteCensus
                                         | BindingFlags.DeclaredOnly;
 
         return type.GetMethods(Everything).Cast<MethodBase>().Concat(type.GetConstructors(Everything));
-    }
-
-    private static bool CallsIt(MethodBase caller, Type declaringType, string methodName)
-        => Called(caller).Any(called =>
-            called.DeclaringType == declaringType
-            && string.Equals(called.Name, methodName, StringComparison.Ordinal));
-
-    private static IEnumerable<MethodBase> Called(MethodBase caller)
-    {
-        if (Body(caller) is not { } il)
-        {
-            yield break;
-        }
-
-        Type[] typeArguments = caller.DeclaringType?.IsGenericTypeDefinition is true
-            ? caller.DeclaringType.GetGenericArguments()
-            : [];
-        Type[] methodArguments = caller.IsGenericMethodDefinition ? caller.GetGenericArguments() : [];
-
-        foreach (int token in TokensIn(il))
-        {
-            MethodBase? called = Resolve(caller.Module, token, typeArguments, methodArguments);
-
-            if (called is not null)
-            {
-                yield return called;
-            }
-        }
     }
 
     private static byte[]? Body(MethodBase method)
@@ -102,8 +117,9 @@ public static class CallSiteCensus
         }
     }
 
-    private static IEnumerable<int> TokensIn(byte[] il)
+    private static IReadOnlyList<int> TokensIn(byte[] il, string named)
     {
+        List<int> tokens = [];
         int at = 0;
 
         while (at < il.Length)
@@ -116,17 +132,26 @@ public static class CallSiteCensus
             if (!OperandsByOpCode.TryGetValue(code, out OperandType operand))
             {
                 throw new InvalidOperationException(
-                    $"The census walked into 0x{code:X4}, which is not an opcode it knows, so it has lost the "
-                    + "instruction boundaries and cannot be trusted for the rest of this method.");
+                    $"Walking {named} reached 0x{code:X4}, which is not an opcode, so the census has lost the "
+                    + "instruction boundaries and would be reporting calls it cannot vouch for.");
             }
 
             if (operand is OperandType.InlineMethod or OperandType.InlineTok)
             {
-                yield return BitConverter.ToInt32(il, at);
+                tokens.Add(BitConverter.ToInt32(il, at));
             }
 
             at += Width(operand, il, at);
         }
+
+        if (at != il.Length)
+        {
+            throw new InvalidOperationException(
+                $"Walking {named} ran {at - il.Length} byte(s) past the end of a {il.Length} byte body, so the "
+                + "census read an operand at the wrong width and cannot vouch for what it saw.");
+        }
+
+        return tokens;
     }
 
     private static int Width(OperandType operand, byte[] il, int at)
@@ -179,4 +204,8 @@ public static class CallSiteCensus
             .Where(field => field.FieldType == typeof(OpCode))
             .Select(field => (OpCode)field.GetValue(null)!)
             .ToDictionary(code => code.Value, code => code.OperandType);
+
+    private sealed record Call(string Caller, Type? Declaring, string Called);
+
+    private sealed record Census(IReadOnlyList<Call> Calls, int Bodies);
 }
