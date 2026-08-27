@@ -152,7 +152,7 @@ public static class SessionStreamHandler
 
         try
         {
-            await context.Response.Body.FlushAsync(CancellationToken.None);
+            await context.Response.Body.FlushAsync(leash.Token);
         }
         catch (Exception)
         {
