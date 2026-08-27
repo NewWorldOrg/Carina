@@ -17,6 +17,7 @@ public static class RecordingServices
         services.AddScoped<RecordingRound>();
         services.TryAddSingleton(RecordingWatchSettings.Default);
         services.TryAddSingleton<IRecordingFileWeigher, LocalRecordingFileWeigher>();
+        services.TryAddSingleton<IRecordingFileEraser, LocalRecordingFileEraser>();
         services.AddSingleton<RecordingStreamSupervisor>();
         services.AddHostedService<RecordingTickJob>();
         services.AddHostedService<RecordingStreamJob>();

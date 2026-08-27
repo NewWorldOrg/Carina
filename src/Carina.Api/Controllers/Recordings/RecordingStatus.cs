@@ -11,6 +11,7 @@ public static class RecordingStatus
         RecordingFailure.DriverUnreachable => StatusCodes.Status503ServiceUnavailable,
         RecordingFailure.NowhereToPutPictures => StatusCodes.Status503ServiceUnavailable,
         RecordingFailure.FileOutOfReach => StatusCodes.Status503ServiceUnavailable,
+        RecordingFailure.FilesLeftBehind => StatusCodes.Status503ServiceUnavailable,
         _ => StatusCodes.Status409Conflict,
     };
 }

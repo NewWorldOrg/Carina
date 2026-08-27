@@ -107,6 +107,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "collectNow",
                 "createReservation",
                 "deleteCandidateChannel",
+                "deleteRecording",
                 "deleteSession",
                 "forgetArchivedService",
                 "getCollectionStatus",

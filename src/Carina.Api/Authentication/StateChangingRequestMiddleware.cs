@@ -25,12 +25,12 @@ public sealed class StateChangingRequestMiddleware(RequestDelegate next)
                 "A request that changes state is answered only when it names this origin.");
         }
 
-        if (!CarriesJson(context.Request))
+        if (AsksForJson(context.Request) && !CarriesJson(context.Request))
         {
             return RefuseAsync(
                 context,
                 StatusCodes.Status415UnsupportedMediaType,
-                $"A request that changes state carries {RequiredContentType}.");
+                $"A request that changes state and carries a body carries {RequiredContentType}.");
         }
 
         return next(context);
@@ -57,6 +57,12 @@ public sealed class StateChangingRequestMiddleware(RequestDelegate next)
             $"{request.Scheme}://{request.Host.Value}",
             StringComparison.OrdinalIgnoreCase);
     }
+
+    private static bool AsksForJson(HttpRequest request)
+        => !HttpMethods.IsDelete(request.Method) || CarriesABody(request);
+
+    private static bool CarriesABody(HttpRequest request)
+        => request.ContentLength > 0 || request.Headers.ContainsKey(HeaderNames.ContentType);
 
     private static bool CarriesJson(HttpRequest request)
         => MediaTypeHeaderValue.TryParse(request.ContentType, out MediaTypeHeaderValue? media)
