@@ -249,6 +249,129 @@ public sealed class RecordingStreamFreshnessTests
         Assert.Empty(driver.Started);
     }
 
+    [Fact]
+    public async Task ARecordingStoppedBetweenTheReadingAndTheWritingIsNotCountedIntoAnyFurther()
+    {
+        Recording recording = InFlight();
+        var ledger = new StreamLedger();
+        ledger.Hold(recording);
+        ledger.AfterListing = () =>
+        {
+            ledger.AfterListing = null;
+            recording.Abort(Airs.AddMinutes(9));
+        };
+        var driver = new WatchedDriver();
+        SessionId named = RecordingSessions.Named(recording.Id);
+        driver.Holding[named] = Live(
+            recording,
+            Airs,
+            new SessionCounters(Packets: 1000, Drops: 3, CcMeasured: true));
+
+        RecordingWatch watch = await Supervisor(ledger, driver, new WatchClock(Airs.AddMinutes(10)))
+            .WatchAsync(Cancel);
+
+        Recording read = ledger.Read(recording.Id);
+
+        Assert.Equal(1, watch.StoodDown);
+        Assert.Equal(0, watch.Kept);
+        Assert.Equal(named, Assert.Single(driver.Stopped));
+        Assert.Empty(ledger.Saved);
+        Assert.Equal(TimeSpan.Zero, read.Written);
+        Assert.False(read.CcMeasured);
+    }
+
+    [Fact]
+    public async Task ARecordingStoppedBetweenTheReadingAndTheWritingHasNothingCountedOntoIt()
+    {
+        Recording recording = InFlight();
+        var ledger = new StreamLedger();
+        ledger.Hold(recording);
+        ledger.AfterFinding = () => recording.Abort(Airs.AddMinutes(9));
+        var driver = new WatchedDriver();
+        driver.Holding[RecordingSessions.Named(recording.Id)] = Live(
+            recording,
+            Airs,
+            new SessionCounters(Packets: 1000, Drops: 3, CcMeasured: true));
+
+        RecordingWatch watch = await Supervisor(ledger, driver, new WatchClock(Airs.AddMinutes(10)))
+            .WatchAsync(Cancel);
+
+        Recording read = ledger.Read(recording.Id);
+
+        Assert.Equal(0, watch.Kept);
+        Assert.Equal(TimeSpan.Zero, read.Written);
+        Assert.False(read.CcMeasured);
+    }
+
+    [Fact]
+    public async Task AWindowThatGrewBetweenTheReadingAndTheWritingIsNotGivenAnOutcome()
+    {
+        Recording recording = InFlight();
+        recording.Wrote(TimeSpan.FromMinutes(30));
+        var ledger = new StreamLedger();
+        ledger.Hold(recording);
+        ledger.AfterFinding = () => recording.Extend(Airs.AddHours(1));
+        var driver = new WatchedDriver();
+
+        RecordingWatch watch = await Supervisor(
+                ledger,
+                driver,
+                new WatchClock(Airs.AddMinutes(31)),
+                new WeighedFiles { Weighs = 3_400_000_000 })
+            .WatchAsync(Cancel);
+
+        Assert.Equal(0, watch.Settled);
+        Assert.Null(ledger.Read(recording.Id).Outcome);
+        Assert.Empty(ledger.Saved);
+    }
+
+    [Fact]
+    public async Task ARecordingStoppedBetweenTheReadingAndTheWritingIsNotBrokenOffAndOpenedAgain()
+    {
+        Recording recording = InFlight();
+        var ledger = new StreamLedger();
+        ledger.Hold(recording);
+        ledger.AfterFinding = () => recording.Abort(Airs.AddMinutes(9));
+        var driver = new WatchedDriver();
+
+        RecordingWatch watch = await Supervisor(ledger, driver, new WatchClock(Airs.AddMinutes(10)))
+            .WatchAsync(Cancel);
+
+        Assert.Equal(0, watch.Broken);
+        Assert.Empty(driver.Started);
+        Assert.Empty(ledger.Read(recording.Id).Interruptions);
+        Assert.Empty(ledger.Saved);
+    }
+
+    [Fact]
+    public async Task AnInstantThatHasAlreadyBeenCountedIsNotCountedAgain()
+    {
+        Recording recording = InFlight(until: Airs.AddHours(1));
+        var ledger = new StreamLedger();
+        ledger.Hold(recording);
+        var driver = new WatchedDriver();
+        SessionId named = RecordingSessions.Named(recording.Id);
+        driver.Holding[named] = Live(recording, Airs, new SessionCounters(Packets: 1000, Drops: 3, CcMeasured: true));
+        var clock = new WatchClock(Airs.AddMinutes(10));
+        RecordingStreamSupervisor supervisor = Supervisor(ledger, driver, clock);
+
+        await supervisor.WatchAsync(Cancel);
+
+        Assert.Equal(3, ledger.Read(recording.Id).CcDroppedPackets);
+
+        driver.Holding[named] = Live(recording, Airs, new SessionCounters(Packets: 1000, Drops: 9, CcMeasured: true));
+        await supervisor.WatchAsync(Cancel);
+
+        Assert.Equal(3, ledger.Read(recording.Id).CcDroppedPackets);
+        Assert.Single(ledger.Saved);
+
+        clock.Now = Airs.AddMinutes(10).AddTicks(1);
+        await supervisor.WatchAsync(Cancel);
+
+        Assert.Equal(9, ledger.Read(recording.Id).CcDroppedPackets);
+        Assert.Equal(2, ledger.Saved.Count);
+    }
+
     private static async Task<RecordingWatch> Asked(string title)
     {
         Recording recording = InFlight();

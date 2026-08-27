@@ -33,6 +33,8 @@ internal sealed class StreamLedger : IRecordingRepository
 
     public Action? AfterListing { get; set; }
 
+    public Action? AfterFinding { get; set; }
+
     public void Hold(params Recording[] recordings)
     {
         foreach (Recording recording in recordings)
@@ -44,7 +46,18 @@ internal sealed class StreamLedger : IRecordingRepository
     public Recording Read(RecordingId id) => LedgerCopy.Of(rows[id.Value]);
 
     public Task<Recording?> FindAsync(RecordingId id, CancellationToken cancellationToken)
-        => Task.FromResult(rows.TryGetValue(id.Value, out Recording? row) ? LedgerCopy.Of(row) : null);
+    {
+        Recording? found = rows.TryGetValue(id.Value, out Recording? row) ? LedgerCopy.Of(row) : null;
+        Action? moved = AfterFinding;
+
+        if (moved is not null)
+        {
+            AfterFinding = null;
+            moved();
+        }
+
+        return Task.FromResult(found);
+    }
 
     public Task<IReadOnlyList<Recording>> ListInFlightAsync(CancellationToken cancellationToken)
     {
