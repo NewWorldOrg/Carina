@@ -22,5 +22,7 @@ public interface IReservationRepository
 
     Task SaveAsync(Reservation reservation, CancellationToken cancellationToken);
 
+    Task SaveAllAsync(IReadOnlyList<Reservation> reservations, CancellationToken cancellationToken);
+
     Task WithdrawAsync(IReadOnlyList<Reservation> reservations, CancellationToken cancellationToken);
 }
