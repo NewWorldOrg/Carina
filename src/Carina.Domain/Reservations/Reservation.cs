@@ -86,6 +86,14 @@ public sealed class Reservation
 
     public bool IsRuleBorn => RuleId is not null;
 
+    public ReservationStanding Standing => RecordingOutcome switch
+    {
+        Recordings.RecordingOutcome.Complete => ReservationStanding.Complete,
+        Recordings.RecordingOutcome.Truncated => ReservationStanding.Truncated,
+        Recordings.RecordingOutcome.Failed => ReservationStanding.Failed,
+        _ => IsPinned ? ReservationStanding.Recording : StandingOf(State),
+    };
+
     public static Reservation Plan(
         ReservationId id,
         ProgrammeRef programme,
@@ -271,6 +279,13 @@ public sealed class Reservation
     {
         RefuseUnless(State is ReservationState.Scheduled or ReservationState.Conflict);
 
+        if (IsPinned)
+        {
+            throw new InvalidOperationException(
+                "A reservation that has been claimed is still holding a tuner, and dropping it out of what is "
+                + "counted would hand that tuner to something else while the recording is running.");
+        }
+
         State = ReservationState.Cancelled;
     }
 
@@ -298,6 +313,15 @@ public sealed class Reservation
         ArgumentNullException.ThrowIfNull(priority);
 
         Priority = priority;
+    }
+
+    public void Remargin(Margin before, Margin after)
+    {
+        ArgumentNullException.ThrowIfNull(before);
+        ArgumentNullException.ThrowIfNull(after);
+
+        MarginBefore = before;
+        MarginAfter = after;
     }
 
     public void Reframe(DateTime startAt, DateTime endAt, bool endAtConfirmed)
@@ -371,6 +395,15 @@ public sealed class Reservation
         BroadcastGroupKey = key;
         BroadcastGroupRole = role;
     }
+
+    private static ReservationStanding StandingOf(ReservationState state) => state switch
+    {
+        ReservationState.Scheduled => ReservationStanding.Scheduled,
+        ReservationState.Conflict => ReservationStanding.Conflict,
+        ReservationState.Cancelled => ReservationStanding.Cancelled,
+        ReservationState.Missed => ReservationStanding.Missed,
+        _ => throw new InvalidOperationException($"A reservation in {state} has no standing to show."),
+    };
 
     private void RefuseUnless(bool allowed)
     {
