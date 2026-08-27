@@ -195,7 +195,8 @@ internal sealed class RecordingFeature : IAsyncDisposable
         int networkId = 32736,
         int serviceId = 1024,
         int eventId = 4001,
-        DateTime? startedAt = null)
+        DateTime? startedAt = null,
+        TimeSpan? window = null)
     {
         DateTime started = startedAt ?? Noon;
 
@@ -206,7 +207,7 @@ internal sealed class RecordingFeature : IAsyncDisposable
             new OutputRoot("bulk"),
             RecordingFileName.For(id, ".m2ts"),
             started,
-            started.AddHours(1),
+            started + (window ?? TimeSpan.FromHours(1)),
             new ProgrammeSnapshot("A programme", "What it is about", string.Empty, [], started),
             null,
             BroadcastGroupRole.Standalone,
@@ -218,9 +219,10 @@ internal sealed class RecordingFeature : IAsyncDisposable
         int networkId = 32736,
         int serviceId = 1024,
         int eventId = 4001,
-        DateTime? startedAt = null)
+        DateTime? startedAt = null,
+        TimeSpan? window = null)
     {
-        Recording recording = Begin(RecordingId.New(), networkId, serviceId, eventId, startedAt);
+        Recording recording = Begin(RecordingId.New(), networkId, serviceId, eventId, startedAt, window);
 
         Recordings.Recordings.Add(recording);
 

@@ -320,6 +320,9 @@ public sealed class RecordingEndpointTests
     [Theory]
     [InlineData("nonsense")]
     [InlineData("00000000-0000-0000-0000-000000000000")]
+    [InlineData("00000000000000000000000000000000")]
+    [InlineData("0123456789abcdef0123456789abcde")]
+    [InlineData("0123456789abcdef0123456789abcdefg")]
     public async Task ANameThatIsNotOneTheLedgerCouldHoldIsRefused(string id)
     {
         await using var feature = new RecordingFeature();
@@ -373,7 +376,7 @@ public sealed class RecordingEndpointTests
             $"/api/recordings/{recording.Id.Wire}/stop",
             new { reason = "  the wrong programme  " });
 
-        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(HttpStatusCode.Accepted, status);
         Assert.Equal((Session, "the wrong programme"), Assert.Single(feature.Driver.Stopped));
 
         OutcomeDetail kept = Assert.Single(recording.OutcomeDetail);
@@ -383,8 +386,8 @@ public sealed class RecordingEndpointTests
         Assert.Equal(RecordingFeature.Noon.AddMinutes(30), recording.AbortedAt);
 
         JsonElement answered = Assert.Single(
-            body.GetProperty("data").GetProperty("recording").GetProperty("outcomeDetail").EnumerateArray()
-                .ToArray());
+            body.GetProperty("data").GetProperty("recording").GetProperty("recording")
+                .GetProperty("outcomeDetail").EnumerateArray().ToArray());
 
         Assert.Equal("stoppedByHand", answered.GetProperty("fault").GetString());
         Assert.Equal("the wrong programme", answered.GetProperty("note").GetString());
@@ -681,9 +684,239 @@ public sealed class RecordingEndpointTests
         Assert.Null(other.AbortedAt);
     }
 
-    private static Recording Ended(RecordingFeature feature)
+    [Fact]
+    public async Task AStopIsAcknowledgedAsSomethingAskedForRatherThanSomethingFinished()
     {
+        await using var feature = new RecordingFeature();
         Recording recording = feature.Held();
+        feature.Driver.Writing(Session, recording.Id.Wire);
+
+        (HttpStatusCode status, JsonElement body) = await feature.PostAsync(
+            $"/api/recordings/{recording.Id.Wire}/stop",
+            new { reason = "the wrong programme" });
+        JsonElement data = body.GetProperty("data");
+
+        Assert.Equal(HttpStatusCode.Accepted, status);
+        Assert.True(data.GetProperty("stopWasAsked").GetBoolean());
+        Assert.True(data.GetProperty("stillWriting").GetBoolean());
+        Assert.Equal("the wrong programme", data.GetProperty("reason").GetString());
+        Assert.Equal(
+            RecordingFeature.Noon.AddMinutes(30),
+            data.GetProperty("askedAt").GetDateTime());
+        Assert.Equal(
+            "inFlight",
+            data.GetProperty("recording").GetProperty("recording").GetProperty("standing").GetString());
+        Assert.Equal(
+            JsonValueKind.Null,
+            data.GetProperty("recording").GetProperty("recording").GetProperty("outcome").ValueKind);
+    }
+
+    [Fact]
+    public async Task ARecordingThatWasAskedToStopIsStillBeingWrittenUntilTheLedgerSaysOtherwise()
+    {
+        await using var feature = new RecordingFeature();
+        Recording recording = feature.Held();
+        feature.Driver.Writing(Session, recording.Id.Wire);
+
+        await feature.PostAsync(
+            $"/api/recordings/{recording.Id.Wire}/stop",
+            new { reason = "the wrong programme" });
+
+        (_, JsonElement detail) = await feature.GetAsync($"/api/recordings/{recording.Id.Wire}");
+        (_, JsonElement listed) = await feature.GetAsync("/api/recordings?standing=inFlight");
+
+        Assert.Equal(
+            "inFlight",
+            detail.GetProperty("data").GetProperty("recording").GetProperty("standing").GetString());
+        Assert.Equal(
+            JsonValueKind.Null,
+            detail.GetProperty("data").GetProperty("recording").GetProperty("outcome").ValueKind);
+        Assert.Equal(recording.Id.Wire, Only(listed).GetProperty("id").GetString());
+    }
+
+    [Fact]
+    public async Task ARecordingStillBeingWrittenIsNotSaidToHaveStoppedWithoutBeingAsked()
+    {
+        await using var feature = new RecordingFeature();
+        Recording recording = feature.Held();
+
+        (_, JsonElement body) = await feature.GetAsync($"/api/recordings/{recording.Id.Wire}");
+
+        Assert.False(
+            body.GetProperty("data").GetProperty("reconciliation").GetProperty("stoppedUnasked").GetBoolean());
+    }
+
+    [Fact]
+    public async Task ARecordingThatEndedWithoutAnybodyAskingItToSaysSo()
+    {
+        await using var feature = new RecordingFeature();
+        Recording recording = feature.Held();
+        recording.Wrote(TimeSpan.FromMinutes(30));
+        recording.Note(new OutcomeDetail(
+            RecordingFault.DriverLost,
+            null,
+            string.Empty,
+            RecordingFeature.Noon.AddMinutes(10)));
+        recording.Settle(RecordingOutcome.Truncated, 1_000, RecordingFeature.Noon.AddMinutes(30));
+
+        (_, JsonElement body) = await feature.GetAsync($"/api/recordings/{recording.Id.Wire}");
+
+        Assert.True(
+            body.GetProperty("data").GetProperty("reconciliation").GetProperty("stoppedUnasked").GetBoolean());
+    }
+
+    [Fact]
+    public async Task ARecordingThisSideAskedToStopIsNotSaidToHaveStoppedUnasked()
+    {
+        await using var feature = new RecordingFeature();
+        Recording recording = Ended(feature);
+
+        (_, JsonElement body) = await feature.GetAsync($"/api/recordings/{recording.Id.Wire}");
+
+        Assert.False(
+            body.GetProperty("data").GetProperty("reconciliation").GetProperty("stoppedUnasked").GetBoolean());
+    }
+
+    [Fact]
+    public async Task AWindowTooShortToMeasureInMillisecondsStillAnswersACoverage()
+    {
+        await using var feature = new RecordingFeature();
+        Recording recording = feature.Held(window: TimeSpan.FromTicks(5_000));
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync(
+            $"/api/recordings/{recording.Id.Wire}");
+        JsonElement weighed = body.GetProperty("data").GetProperty("reconciliation");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(0, weighed.GetProperty("expectedWindow").GetProperty("durationMs").GetInt64());
+        Assert.Equal(0, weighed.GetProperty("coverage").GetDouble());
+    }
+
+    [Fact]
+    public async Task AWindowTooShortToMeasureInMillisecondsWeighsWhatWasWrittenAgainstIt()
+    {
+        await using var feature = new RecordingFeature();
+        Recording recording = feature.Held(window: TimeSpan.FromTicks(5_000));
+        recording.Wrote(TimeSpan.FromMilliseconds(1));
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync(
+            $"/api/recordings/{recording.Id.Wire}");
+        JsonElement weighed = body.GetProperty("data").GetProperty("reconciliation");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(0, weighed.GetProperty("expectedWindow").GetProperty("durationMs").GetInt64());
+        Assert.Equal(1, weighed.GetProperty("writtenDurationMs").GetInt64());
+        Assert.Equal(2, weighed.GetProperty("coverage").GetDouble(), 6);
+    }
+
+    [Fact]
+    public async Task AWindowOfAWholeNumberOfMillisecondsIsWeighedTheSameWayAsAnyOther()
+    {
+        await using var feature = new RecordingFeature();
+        Recording recording = feature.Held(window: TimeSpan.FromMinutes(60));
+        recording.Wrote(TimeSpan.FromMinutes(45));
+
+        (_, JsonElement body) = await feature.GetAsync($"/api/recordings/{recording.Id.Wire}");
+
+        Assert.Equal(
+            0.75,
+            body.GetProperty("data").GetProperty("reconciliation").GetProperty("coverage").GetDouble(),
+            6);
+    }
+
+    [Fact]
+    public async Task ARecordingNothingHasPlacedInTheStreamSaysThereIsNowhereToPutIt()
+    {
+        await using var feature = new RecordingFeature();
+        Recording recording = feature.Held();
+
+        (_, JsonElement body) = await feature.GetAsync($"/api/recordings/{recording.Id.Wire}");
+        JsonElement positions = body.GetProperty("data").GetProperty("positions");
+
+        Assert.False(positions.GetProperty("located").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, positions.GetProperty("anchorPcr").ValueKind);
+        Assert.Empty(positions.GetProperty("buckets").EnumerateArray());
+        Assert.Empty(positions.GetProperty("reanchors").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task ARecordingSomethingPlacedInTheStreamSaysWhereItWas()
+    {
+        await using var feature = new RecordingFeature();
+        Recording recording = feature.Held();
+        recording.Measure(
+            DropCounters.Counted(3, 1000),
+            DropTimeline.Rehydrate(900_000, [new DropBucket(12, 3, 0)], [new PcrReanchor(20, 5, 6)]),
+            null,
+            0,
+            RecordingFeature.Noon);
+
+        (_, JsonElement body) = await feature.GetAsync($"/api/recordings/{recording.Id.Wire}");
+        JsonElement positions = body.GetProperty("data").GetProperty("positions");
+
+        Assert.True(positions.GetProperty("located").GetBoolean());
+        Assert.Equal(900_000, positions.GetProperty("anchorPcr").GetInt64());
+        Assert.Equal(12, positions.GetProperty("buckets")[0].GetProperty("second").GetInt32());
+        Assert.Equal(20, positions.GetProperty("reanchors")[0].GetProperty("second").GetInt32());
+    }
+
+    [Fact]
+    public async Task EveryRecordingIsHandedOverExactlyOnceAcrossThePagesThatHoldThem()
+    {
+        await using var feature = new RecordingFeature();
+
+        foreach (int eventId in Enumerable.Range(1, 7))
+        {
+            feature.Held(eventId: eventId, startedAt: RecordingFeature.Noon);
+        }
+
+        var seen = new List<string>();
+
+        foreach (int page in Enumerable.Range(1, 4))
+        {
+            (_, JsonElement body) = await feature.GetAsync($"/api/recordings?perPage=2&page={page}");
+
+            seen.AddRange(body.GetProperty("data").GetProperty("items").EnumerateArray()
+                .Select(row => row.GetProperty("id").GetString()!));
+        }
+
+        Assert.Equal(7, seen.Count);
+        Assert.Equal(7, seen.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(
+            feature.Recordings.Recordings.Select(recording => recording.Id.Wire).Order(StringComparer.Ordinal),
+            seen.Order(StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public async Task TheTwoWaysAStopCanBeRefusedAreToldApart()
+    {
+        await using var feature = new RecordingFeature();
+        Recording ended = Ended(feature, eventId: 1);
+        Recording writing = feature.Held(eventId: 2);
+        feature.Driver.Writing(Session, ended.Id.Wire);
+
+        (HttpStatusCode over, JsonElement overBody) = await feature.PostAsync(
+            $"/api/recordings/{ended.Id.Wire}/stop",
+            new { reason = "too late" });
+        (HttpStatusCode nobody, JsonElement nobodyBody) = await feature.PostAsync(
+            $"/api/recordings/{writing.Id.Wire}/stop",
+            new { reason = "nobody is writing this" });
+
+        string overMessage = overBody.GetProperty("message").GetString()!;
+        string nobodyMessage = nobodyBody.GetProperty("message").GetString()!;
+
+        Assert.Equal(HttpStatusCode.Conflict, over);
+        Assert.Equal(HttpStatusCode.Conflict, nobody);
+        Assert.NotEqual(overMessage, nobodyMessage);
+        Assert.Contains("Complete", overMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain("recover", overMessage, StringComparison.Ordinal);
+        Assert.Contains("recover", nobodyMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain("Complete", nobodyMessage, StringComparison.Ordinal);
+    }
+
+    private static Recording Ended(RecordingFeature feature, int eventId = 4001)
+    {
+        Recording recording = feature.Held(eventId: eventId);
 
         recording.Wrote(TimeSpan.FromHours(1));
         recording.Abort(RecordingFeature.Noon.AddHours(1));

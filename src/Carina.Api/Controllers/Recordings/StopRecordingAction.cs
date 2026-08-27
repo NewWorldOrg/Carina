@@ -16,12 +16,12 @@ namespace Carina.Api.Controllers.Recordings;
 public sealed class StopRecordingAction(RecordingService recordings) : ControllerBase
 {
     [HttpPost]
-    [ProducesResponseType<BaseResponder<RecordingDetailResponder>>(StatusCodes.Status200OK)]
-    [ProducesResponseType<BaseResponder<RecordingDetailResponder>>(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType<BaseResponder<RecordingDetailResponder>>(StatusCodes.Status404NotFound)]
-    [ProducesResponseType<BaseResponder<RecordingDetailResponder>>(StatusCodes.Status409Conflict)]
-    [ProducesResponseType<BaseResponder<RecordingDetailResponder>>(StatusCodes.Status502BadGateway)]
-    [ProducesResponseType<BaseResponder<RecordingDetailResponder>>(StatusCodes.Status503ServiceUnavailable)]
+    [ProducesResponseType<BaseResponder<RecordingStopResponder>>(StatusCodes.Status202Accepted)]
+    [ProducesResponseType<BaseResponder<RecordingStopResponder>>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<BaseResponder<RecordingStopResponder>>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<BaseResponder<RecordingStopResponder>>(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<BaseResponder<RecordingStopResponder>>(StatusCodes.Status502BadGateway)]
+    [ProducesResponseType<BaseResponder<RecordingStopResponder>>(StatusCodes.Status503ServiceUnavailable)]
     public async Task<IActionResult> Invoke(
         string id,
         [FromBody] StopRecordingRequest? request,
@@ -29,23 +29,24 @@ public sealed class StopRecordingAction(RecordingService recordings) : Controlle
     {
         if (RecordingIdText.Read(id) is not { } recordingId)
         {
-            return BadRequest(BaseResponder<RecordingDetailResponder>.Error(RecordingIdText.Description));
+            return BadRequest(BaseResponder<RecordingStopResponder>.Error(RecordingIdText.Description));
         }
 
         if (RecordingStopReason.Read(request?.Reason) is not { } reason)
         {
-            return BadRequest(BaseResponder<RecordingDetailResponder>.Error(
+            return BadRequest(BaseResponder<RecordingStopResponder>.Error(
                 "reason: a recording is never stopped by nobody for nothing, so a stop carries a reason of at "
                 + $"least one letter and at most {RecordingStopReason.MaxLength}, which is kept on the recording."));
         }
 
-        ServiceResult<Recording, RecordingFailure> stopped =
+        ServiceResult<RecordingStopAsked, RecordingFailure> stopped =
             await recordings.StopAsync(recordingId, reason, cancellationToken);
 
         return stopped.IsSuccess
-            ? Ok(BaseResponder<RecordingDetailResponder>.Success(RecordingDetailResponder.Of(stopped.Data!)))
+            ? Accepted(BaseResponder<RecordingStopResponder>.Success(
+                RecordingStopResponder.Of(stopped.Data!)))
             : StatusCode(
                 RecordingStatus.Of(stopped.ErrorType),
-                BaseResponder<RecordingDetailResponder>.Error(stopped.ErrorMessage!));
+                BaseResponder<RecordingStopResponder>.Error(stopped.ErrorMessage!));
     }
 }

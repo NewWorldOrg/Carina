@@ -239,6 +239,39 @@ public sealed class RecordingDirectoryTests(MigratedScratchDatabase database)
         Assert.Equal(3, found.PerPage);
     }
 
+    [Fact]
+    public async Task EveryRowIsHandedOverExactlyOnceAcrossThePagesThatHoldThem()
+    {
+        int network = await StockedAsync(0);
+        await LevelAsync(network, 9);
+
+        var seen = new List<Guid>();
+
+        foreach (int page in Enumerable.Range(1, 5))
+        {
+            PaginatedList<Recording> held = await ListAsync(Query(network, perPage: 2, page: page));
+
+            seen.AddRange(held.Items.Select(recording => recording.Id.Value));
+        }
+
+        Assert.Equal(9, seen.Count);
+        Assert.Equal(9, seen.Distinct().Count());
+    }
+
+    [Fact]
+    public async Task RowsThatStartedAtTheSameMomentAreReadInAnOrderThatDoesNotMove()
+    {
+        int network = await StockedAsync(0);
+        await LevelAsync(network, 9);
+
+        PaginatedList<Recording> first = await ListAsync(Query(network, perPage: 9));
+        PaginatedList<Recording> again = await ListAsync(Query(network, perPage: 9));
+
+        Assert.Equal(
+            first.Items.Select(recording => recording.Id.Value).ToArray(),
+            again.Items.Select(recording => recording.Id.Value).ToArray());
+    }
+
     private static RecordingQuery Query(
         int network,
         RecordingStanding? standing = null,
@@ -301,6 +334,32 @@ public sealed class RecordingDirectoryTests(MigratedScratchDatabase database)
                 null,
                 BroadcastGroupRole.Standalone,
                 started,
+                new TunerDeviceId("pt3-0")));
+        }
+
+        await context.SaveChangesAsync();
+    }
+
+    private async Task LevelAsync(int network, int rows)
+    {
+        await using CarinaDbContext context = Context();
+
+        foreach (int eventId in Enumerable.Range(1, rows))
+        {
+            RecordingId id = RecordingId.New();
+
+            context.Add(Recording.Begin(
+                id,
+                null,
+                new ProgrammeRef(new NetworkId(network), new ServiceId(1024), new EventId(eventId), Noon),
+                new OutputRoot("bulk"),
+                RecordingFileName.For(id, ".m2ts"),
+                Noon,
+                Noon.AddHours(1),
+                new ProgrammeSnapshot("A programme", string.Empty, string.Empty, [], Noon),
+                null,
+                BroadcastGroupRole.Standalone,
+                Noon,
                 new TunerDeviceId("pt3-0")));
         }
 

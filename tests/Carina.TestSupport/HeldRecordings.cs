@@ -1,5 +1,6 @@
 using Carina.Domain.Base;
 using Carina.Domain.Recordings;
+using Carina.Domain.Reservations;
 
 namespace Carina.TestSupport;
 
@@ -60,9 +61,10 @@ public sealed class HeldRecordings : IRecordingDirectory
         return Task.FromResult(new PaginatedList<Recording>(
             [
                 .. ordered
-                    .ThenBy(recording => recording.Id.Value)
+                    .ThenBy(recording => recording.Id.Value, ByTheOrderTheDatabaseReadsThem.Comparer)
                     .Skip((query.Page - 1) * query.PerPage)
-                    .Take(query.PerPage),
+                    .Take(query.PerPage)
+                    .Select(Apart),
             ],
             matched.Length,
             query.Page,
@@ -70,7 +72,8 @@ public sealed class HeldRecordings : IRecordingDirectory
     }
 
     public Task<Recording?> FindAsync(RecordingId id, CancellationToken cancellationToken)
-        => Task.FromResult(Recordings.FirstOrDefault(recording => recording.Id.Equals(id)));
+        => Task.FromResult(
+            Recordings.FirstOrDefault(recording => recording.Id.Equals(id)) is { } held ? Apart(held) : null);
 
     public Task<RecordingHalt> HaltAsync(
         RecordingId id,
@@ -97,6 +100,42 @@ public sealed class HeldRecordings : IRecordingDirectory
 
         return Task.FromResult(RecordingHalt.Written);
     }
+
+    private static Recording Apart(Recording held)
+        => Recording.Rehydrate(
+            held.Id,
+            held.ReservationId,
+            held.Programme,
+            held.OutputRoot,
+            held.FileName,
+            held.FileSizeObserved,
+            held.ObservedAt,
+            held.StartedAtActual,
+            held.StoppedAtActual,
+            held.AbortedAt,
+            held.WrittenDurationMs,
+            held.ResumeCount,
+            held.Interruptions,
+            held.ExpectedWindowStart,
+            held.ExpectedWindowEnd,
+            held.Outcome,
+            held.OutcomeDetail,
+            held.Counters,
+            held.Positions,
+            held.ScrambledPackets,
+            held.EovfCount,
+            held.MeasuredUpdatedAt,
+            held.TunerDeviceId,
+            held.ThumbnailState,
+            new ProgrammeSnapshot(
+                held.SnapshotName,
+                held.SnapshotSummary,
+                held.SnapshotExtended,
+                held.SnapshotGenres,
+                held.CapturedAt),
+            held.BroadcastGroupKey,
+            held.BroadcastGroupRole,
+            held.ThumbnailFault);
 
     private static bool Reads(Recording recording, DropReading drops)
         => drops switch

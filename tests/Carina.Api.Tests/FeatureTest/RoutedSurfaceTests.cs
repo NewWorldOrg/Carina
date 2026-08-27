@@ -45,6 +45,24 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
     }
 
     [Fact]
+    public void TheSurfacesThatDeleteAreTheOnesTheLedgerNames()
+    {
+        Assert.Equal(
+            [
+                "DELETE /api/auth/sessions/{id}",
+                "DELETE /api/services/{networkId:int}-{serviceId:int}/candidate-channels/{candidateChannelId:guid}",
+            ],
+            EndpointRules.SurfacesThatDelete(Inventory()));
+    }
+
+    [Fact]
+    public void TheRecordingSurfaceOffersNoWayToDeleteAnything()
+    {
+        Assert.Empty(EndpointRules.SurfacesThatDeleteUnder(Inventory(), "/api/recordings"));
+        Assert.NotEmpty(EndpointRules.SurfacesThatDelete(Inventory()));
+    }
+
+    [Fact]
     public void TheInventoryHoldsTheSurfacesTheDocumentCannotDescribe()
     {
         string[] patterns = [.. Inventory().Select(surface => surface.Pattern)];

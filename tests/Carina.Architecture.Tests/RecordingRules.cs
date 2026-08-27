@@ -8,10 +8,6 @@ public static partial class RecordingRules
 
     private const string FeatureNamespace = "Carina.Domain.Recordings";
 
-    private const string SurfaceRoute = "api/recordings";
-
-    private const string ApiProject = "/Carina.Api/";
-
     public static IReadOnlyList<string> EitReadersInsideTheRecordingFeature(string directory)
         => Scanned(directory)
             .Where(BelongsToTheRecordingFeature)
@@ -28,22 +24,9 @@ public static partial class RecordingRules
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-    public static IReadOnlyList<string> DeleteEndpointsOnTheRecordingSurface(string directory)
-        => Scanned(directory)
-            .Where(file => file.Relative.StartsWith(ApiProject, StringComparison.Ordinal))
-            .Where(SitsOnTheRecordingSurface)
-            .Where(file => Deletes().IsMatch(file.Source))
-            .Select(file => file.Relative)
-            .Order(StringComparer.Ordinal)
-            .ToArray();
-
     private static bool BelongsToTheRecordingFeature(SourceFile file)
         => file.Relative.Contains(FeatureFolder, StringComparison.Ordinal)
            || file.Source.Contains(FeatureNamespace, StringComparison.Ordinal);
-
-    private static bool SitsOnTheRecordingSurface(SourceFile file)
-        => file.Relative.Contains(FeatureFolder, StringComparison.Ordinal)
-           || file.Source.Contains(SurfaceRoute, StringComparison.Ordinal);
 
     private static IEnumerable<SourceFile> Scanned(string directory)
         => Directory
@@ -75,9 +58,6 @@ public static partial class RecordingRules
         + @"|(?i:INSERT\s+INTO\s+programme\b)"
         + @"|(?i:UPDATE\s+programme\b)")]
     private static partial Regex WritesTheGuide();
-
-    [GeneratedRegex(@"\[HttpDelete\b|\bMapDelete\s*\(")]
-    private static partial Regex Deletes();
 
     private readonly record struct SourceFile(string Relative, string Source);
 }

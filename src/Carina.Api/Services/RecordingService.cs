@@ -28,6 +28,8 @@ public enum RecordingFailure
 
 public sealed record ThumbnailRemade(Recording Recording, ThumbnailRemake Remake);
 
+public sealed record RecordingStopAsked(Recording Recording, RecordingStopReason Reason, DateTime AskedAt);
+
 public sealed class RecordingService(
     IRecordingDirectory recordings,
     IDriverClient driver,
@@ -46,7 +48,7 @@ public sealed class RecordingService(
             ? ServiceResult<Recording, RecordingFailure>.Success(recording)
             : Missing<Recording>(id);
 
-    public async Task<ServiceResult<Recording, RecordingFailure>> StopAsync(
+    public async Task<ServiceResult<RecordingStopAsked, RecordingFailure>> StopAsync(
         RecordingId id,
         RecordingStopReason reason,
         CancellationToken cancellationToken)
@@ -56,12 +58,12 @@ public sealed class RecordingService(
 
         if (await recordings.FindAsync(id, cancellationToken) is not { } recording)
         {
-            return Missing<Recording>(id);
+            return Missing<RecordingStopAsked>(id);
         }
 
         if (!recording.IsInFlight)
         {
-            return ServiceResult<Recording, RecordingFailure>.Failure(
+            return ServiceResult<RecordingStopAsked, RecordingFailure>.Failure(
                 $"Recording {id.Wire} already ended {recording.Outcome}, so there is nothing left to stop.",
                 RecordingFailure.AlreadyEnded);
         }
@@ -70,7 +72,7 @@ public sealed class RecordingService(
 
         if (!live.TryGetValue(out IReadOnlyList<SessionSnapshot>? sessions))
         {
-            return Unanswered<Recording, IReadOnlyList<SessionSnapshot>>(live);
+            return Unanswered<RecordingStopAsked, IReadOnlyList<SessionSnapshot>>(live);
         }
 
         SessionSnapshot? writing = sessions.FirstOrDefault(session =>
@@ -78,7 +80,7 @@ public sealed class RecordingService(
 
         if (writing is null)
         {
-            return ServiceResult<Recording, RecordingFailure>.Failure(
+            return ServiceResult<RecordingStopAsked, RecordingFailure>.Failure(
                 $"The ledger says recording {id.Wire} is still being written and the driver is writing no such "
                 + "session, so this is a recording to recover rather than one to stop.",
                 RecordingFailure.NotBeingWritten);
@@ -91,23 +93,24 @@ public sealed class RecordingService(
 
         if (stopped.Outcome is not DriverCallOutcome.Reached)
         {
-            return Unanswered<Recording, SessionSnapshot>(stopped);
+            return Unanswered<RecordingStopAsked, SessionSnapshot>(stopped);
         }
 
-        RecordingHalt halt = await recordings.HaltAsync(
-            id,
-            reason,
-            clock.GetUtcNow().UtcDateTime,
-            cancellationToken);
+        DateTime asked = clock.GetUtcNow().UtcDateTime;
+        RecordingHalt halt = await recordings.HaltAsync(id, reason, asked, cancellationToken);
 
-        return halt switch
+        if (halt is RecordingHalt.AlreadyEnded)
         {
-            RecordingHalt.Written => await FindAsync(id, cancellationToken),
-            RecordingHalt.AlreadyEnded => ServiceResult<Recording, RecordingFailure>.Failure(
-                $"Recording {id.Wire} ended while it was being stopped.",
-                RecordingFailure.AlreadyEnded),
-            _ => Missing<Recording>(id),
-        };
+            return ServiceResult<RecordingStopAsked, RecordingFailure>.Failure(
+                $"Recording {id.Wire} ended while it was being stopped, so the driver was asked to stop and the "
+                + "reason for asking is not on the recording.",
+                RecordingFailure.AlreadyEnded);
+        }
+
+        return await recordings.FindAsync(id, cancellationToken) is { } asking
+            ? ServiceResult<RecordingStopAsked, RecordingFailure>.Success(
+                new RecordingStopAsked(asking, reason, asked))
+            : Missing<RecordingStopAsked>(id);
     }
 
     public async Task<ServiceResult<ThumbnailRemade, RecordingFailure>> RemakeThumbnailAsync(

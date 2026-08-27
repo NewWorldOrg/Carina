@@ -65,6 +65,14 @@ public sealed class RecordingLandingTests(MigratedScratchDatabase database)
         Assert.True(weighed.GetProperty("sizeObserved").GetBoolean());
         Assert.Equal(1_234_567, weighed.GetProperty("fileSizeBytes").GetInt64());
         Assert.Equal(0.5, weighed.GetProperty("coverage").GetDouble(), 6);
+        Assert.True(weighed.GetProperty("stoppedUnasked").GetBoolean());
+
+        JsonElement positions = wire.GetProperty("positions");
+
+        Assert.False(positions.GetProperty("located").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, positions.GetProperty("anchorPcr").ValueKind);
+        Assert.Empty(positions.GetProperty("buckets").EnumerateArray());
+        Assert.Empty(positions.GetProperty("reanchors").EnumerateArray());
     }
 
     [Fact]
