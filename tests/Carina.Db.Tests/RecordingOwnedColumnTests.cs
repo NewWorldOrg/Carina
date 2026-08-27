@@ -40,6 +40,8 @@ public sealed class RecordingOwnedColumnTests(MigratedScratchDatabase database)
             [],
             false,
             null,
+            false,
+            null,
             Now);
 
         await using (CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString))
