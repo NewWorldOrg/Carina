@@ -202,6 +202,31 @@ nothing.
   service the file no longer contains. Deciding how the recorded service's clock
   reaches the session is a precondition for adding that filter, not a follow-up.
 
+- **A search is one vocabulary and one predicate.** The names a search is asked by
+  are declared once, in `ProgrammeSearchQuery`, which reads a query string into a
+  `ProgrammeSearch`; the HTTP action passes it the query string it was called with
+  and declares no argument of its own, and the OpenAPI document lists the same
+  names from the same list, so nothing can rename half of it. What a broadcast
+  type means and which services the guide does not list are worked out below the
+  application service, because a caller that judged a programme without them would
+  disagree with the search that returned it.
+
+  The store and the code fold search text the same way. `ProgrammeSearchText` is
+  `lower(normalize(name || ' ' || summary))` written out in C#, and a database test
+  pushes every code point the store can hold through both sides and compares —
+  1,112,063 of them, every one agreeing, and where a character is one side's
+  Unicode tables know and the other's do not, that side left it alone rather than
+  folding it differently. `ProgrammeSearchMatching` answers a search in memory the
+  way the query answers it, down to the wildcards `LIKE` reads and the order names
+  come back in, and a database test runs the same programmes and the same searches
+  through both arms. The stand-in the feature tests use is that same code, so those
+  tests measure the predicate the application runs rather than a second one.
+
+  **Normalising needs the runtime's own Unicode tables, so globalization is not
+  invariant.** With `InvariantGlobalization` on, `String.Normalize` returns its
+  input unchanged and says nothing about it, and every half width spelling quietly
+  stops matching its full width twin.
+
 - **The search across both layers keeps the "already held in the hot layer"
   exclusion above the union, never inside the archive arm.** A `NOT EXISTS` in the
   arm makes that arm a subquery the planner cannot merge into the append, and the
