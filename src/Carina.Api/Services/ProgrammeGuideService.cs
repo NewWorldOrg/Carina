@@ -7,6 +7,7 @@ using Carina.Contracts;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
+using Carina.Infrastructure.Programmes;
 
 namespace Carina.Api.Services;
 
@@ -17,8 +18,7 @@ public sealed record GuidePage(
     string ETag);
 
 public sealed class ProgrammeGuideService(
-    IBroadcastStreamDirectory directory,
-    IBroadcastServiceRepository catalogue,
+    ProgrammeSearchScope scope,
     IProgrammeRepository programmes,
     IArchivedProgrammeRepository archive,
     IProgrammeSearchRepository searches,
@@ -32,7 +32,7 @@ public sealed class ProgrammeGuideService(
     {
         ArgumentNullException.ThrowIfNull(window);
 
-        BroadcastStream[] carried = [.. await ListedAsync(system, cancellationToken)];
+        BroadcastStream[] carried = [.. await scope.ListedAsync(system, cancellationToken)];
         ProgrammeService[] wanted =
         [
             .. carried.SelectMany(stream =>
@@ -83,54 +83,11 @@ public sealed class ProgrammeGuideService(
     {
         ArgumentNullException.ThrowIfNull(search);
 
-        ProgrammeSearch asked = search.System is { } system
-            ? search.Over(await CarriedOnAsync(system, cancellationToken))
-            : search.Except(WithheldIn(await catalogue.ListAsync(cancellationToken)));
-
-        return ServiceResult<PaginatedList<ProgrammeMatch>>.Success(
-            await searches.SearchAsync(asked, clock.GetUtcNow().UtcDateTime, cancellationToken));
+        return ServiceResult<PaginatedList<ProgrammeMatch>>.Success(await searches.SearchAsync(
+            await scope.BoundAsync(search, cancellationToken),
+            clock.GetUtcNow().UtcDateTime,
+            cancellationToken));
     }
-
-    private static IReadOnlyList<ProgrammeService> WithheldIn(IReadOnlyList<BroadcastService> known)
-        =>
-        [
-            .. known
-                .Where(service => !service.ListedInTheGuide)
-                .Select(service => new ProgrammeService(service.NetworkId.Value, service.ServiceId.Value)),
-        ];
-
-    private async Task<IReadOnlyList<BroadcastStream>> ListedAsync(
-        TuneSystem system,
-        CancellationToken cancellationToken)
-    {
-        var withheld = WithheldIn(await catalogue.ListAsync(cancellationToken))
-            .Select(service => (service.NetworkId, service.ServiceId))
-            .ToHashSet();
-
-        return
-        [
-            .. (await directory.ListAsync(cancellationToken))
-                .Where(stream => stream.Tuning.System == system)
-                .Select(stream => stream with
-                {
-                    Services =
-                    [
-                        .. stream.Services.Where(service =>
-                            !withheld.Contains((stream.NetworkId.Value, service.Value))),
-                    ],
-                }),
-        ];
-    }
-
-    private async Task<IReadOnlyList<ProgrammeService>> CarriedOnAsync(
-        TuneSystem system,
-        CancellationToken cancellationToken)
-        =>
-        [
-            .. (await ListedAsync(system, cancellationToken))
-                .SelectMany(stream => stream.Services.Select(service =>
-                    new ProgrammeService(stream.NetworkId.Value, service.Value))),
-        ];
 
     private static string Columns(IReadOnlyList<BroadcastStream> carried)
     {

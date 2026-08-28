@@ -202,6 +202,47 @@ nothing.
   service the file no longer contains. Deciding how the recorded service's clock
   reaches the session is a precondition for adding that filter, not a follow-up.
 
+- **A search is one vocabulary and one predicate.** The names a search is asked by
+  are declared once, in `ProgrammeSearchQuery`, which reads a query string into a
+  `ProgrammeSearch`; the HTTP action passes it the query string it was called with
+  and declares no argument of its own, and the OpenAPI document lists the same
+  names from the same list, so nothing can rename half of it. What a broadcast
+  type means and which services the guide does not list are worked out below the
+  application service, because a caller that judged a programme without them would
+  disagree with the search that returned it.
+
+  **Searching still happens in the store.** The query matches on a stored generated
+  column, `lower(pg_catalog.normalize(name || ' ' || summary, 'NFKC'))`, and no
+  request folds text in C#. All the running application takes from
+  `ProgrammeSearchText` is two constants the column definition is built from, so the
+  form and the joining space are spelled once; `String.Normalize` is never reached
+  and `ProgrammeSearchMatching` has no production caller. What they are for is
+  everything that has to judge a programme **without** running a query: a rule that
+  books a recording by itself is the next one. That is a second implementation of
+  the same predicate, and a second implementation is exactly how the search came to
+  have two answers before.
+
+  So the two are held equal by measurement rather than by intention.
+  `ProgrammeSearchText` is that column written out in C#, and a database test pushes
+  every code point the store can hold through both sides and compares — 1,112,063 of
+  them, every one agreeing, and where a character is in one side's Unicode tables
+  and not the other's, that side left it alone rather than folding it differently.
+  `ProgrammeSearchMatching` answers a search in memory the way the query answers it,
+  down to the wildcards `LIKE` reads and the order names come back in, and a database
+  test runs the same programmes and the same searches through both arms. The stand-in
+  the feature tests use is that same code, so those tests measure a predicate the
+  store is checked against rather than a third one nobody compares to anything.
+
+  **Folding in C# needs the runtime's own Unicode tables, so globalization is not
+  invariant for the processes that do it.** With `InvariantGlobalization` on,
+  `String.Normalize` returns its input unchanged and says nothing about it. The
+  driver folds nothing, so it and its tests keep the invariant tables and a rule
+  names the pair. Turning them on elsewhere is what makes a language environment
+  variable able to change an answer, so **both application entry points pin the
+  default culture to the invariant one before they do anything else**, and the
+  reading and folding are measured under seven languages — including ones where
+  lowercasing `I` and parsing `-1` genuinely differ — to say that no answer moves.
+
 - **The search across both layers keeps the "already held in the hot layer"
   exclusion above the union, never inside the archive arm.** A `NOT EXISTS` in the
   arm makes that arm a subquery the planner cannot merge into the append, and the

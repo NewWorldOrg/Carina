@@ -1,3 +1,5 @@
+using System.Globalization;
+
 using Carina.Domain.Channels;
 
 using Npgsql;
@@ -60,8 +62,9 @@ public sealed class ServiceReachSchemaTests(MigratedScratchDatabase database)
         await using NpgsqlConnection connection = await database.OpenAsync();
 
         Assert.Equal(
-            $"CHECK (((hours_of_silence >= {ServiceReachSettings.ShortestHoursOfSilence})"
-            + $" AND (hours_of_silence <= {ServiceReachSettings.LongestHoursOfSilence})))",
+            string.Create(
+                CultureInfo.InvariantCulture,
+                $"CHECK (((hours_of_silence >= {ServiceReachSettings.ShortestHoursOfSilence}) AND (hours_of_silence <= {ServiceReachSettings.LongestHoursOfSilence})))"),
             await DefinitionOf(connection, "ck_service_reach_config_hours_of_silence"));
     }
 
@@ -123,8 +126,9 @@ public sealed class ServiceReachSchemaTests(MigratedScratchDatabase database)
     private static async Task InsertAsync(NpgsqlConnection connection, int id, int hours)
     {
         await using var command = new NpgsqlCommand(
-            "INSERT INTO service_reach_config (id, hours_of_silence, updated_at)"
-            + $" VALUES ({id}, {hours}, {Updated})",
+            string.Create(
+                CultureInfo.InvariantCulture,
+                $"INSERT INTO service_reach_config (id, hours_of_silence, updated_at) VALUES ({id}, {hours}, {Updated})"),
             connection);
 
         await command.ExecuteNonQueryAsync();

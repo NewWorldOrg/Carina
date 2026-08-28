@@ -1,3 +1,5 @@
+using System.Globalization;
+
 using Carina.Infrastructure.Persistence;
 
 using Microsoft.EntityFrameworkCore;
@@ -13,6 +15,9 @@ public static class DbEntryPoint
 
     public static async Task<int> RunAsync(string[] args, TextWriter error)
     {
+        CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
+        CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
+
         if (args is not ["--migrate"])
         {
             await error.WriteLineAsync("usage: Carina.Db --migrate");

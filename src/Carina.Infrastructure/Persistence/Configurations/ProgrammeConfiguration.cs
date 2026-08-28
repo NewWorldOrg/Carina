@@ -117,7 +117,7 @@ public sealed class ProgrammeConfiguration : IEntityTypeConfiguration<Programme>
     public const int SearchableStatisticsTarget = 1000;
 
     public const string SearchableSql =
-        $"lower(pg_catalog.normalize(name || ' ' || summary, '{BroadcastText.Compatibility}'))";
+        $"lower(pg_catalog.normalize(name || '{ProgrammeSearchText.BetweenNameAndSummary}' || summary, '{BroadcastText.Compatibility}'))";
 
     public const string GenreKindsSql =
         "string_to_array("
