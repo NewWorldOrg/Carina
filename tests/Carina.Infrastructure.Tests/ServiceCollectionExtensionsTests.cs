@@ -110,6 +110,18 @@ public sealed class ServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public void TheRecalculationPassIsOneOfTheJobsTheHostStartsAndIsTheOneThingTriggersReach()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        Assert.Single(provider.GetServices<IHostedService>().OfType<ReservationRecalculationHostedService>());
+        Assert.Same(
+            provider.GetRequiredService<ReservationRecalculationHostedService>(),
+            provider.GetRequiredService<IRecalculationNotice>());
+        Assert.NotNull(provider.GetRequiredService<RecalculationSettings>());
+    }
+
+    [Fact]
     public void TheRecordingTickIsOneOfTheJobsTheHostStarts()
     {
         using ServiceProvider provider = Build(ValidSettings());

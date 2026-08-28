@@ -5,6 +5,7 @@ using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Events;
 using Carina.Domain.Programmes;
+using Carina.Domain.Reservations;
 
 namespace Carina.Infrastructure.Collection;
 
@@ -14,7 +15,8 @@ public sealed class ProgrammeWriter(
     IProgrammeRepository programmes,
     IAtomicWrite writes,
     TimeProvider clock,
-    IAppEventPublisher events)
+    IAppEventPublisher events,
+    IRecalculationNotice notices)
 {
     public async Task<ProgrammesWritten> WriteAsync(
         IReadOnlyList<EventInformationTable> tables,
@@ -80,6 +82,11 @@ public sealed class ProgrammeWriter(
         if (written.Added > 0 || written.Updated > 0 || written.Discarded > 0)
         {
             events.Signal(AppEventName.Programs);
+        }
+
+        if (written.Added > 0 || written.Updated > 0)
+        {
+            notices.Nudge(RecalculationTrigger.ProgrammesChanged);
         }
 
         return written;

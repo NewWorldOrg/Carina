@@ -5,6 +5,7 @@ using System.Text.Json;
 using Carina.Contracts;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
+using Carina.Domain.Reservations;
 using Carina.TestSupport;
 
 using Microsoft.AspNetCore.Http;
@@ -28,6 +29,67 @@ public sealed class TunerLedgerEndpointTests
         new(2026, 8, 12, 21, 0, 0, TimeSpan.FromHours(9));
 
     private static readonly DateTimeOffset Ends = Started.AddMinutes(30);
+
+    [Fact]
+    public async Task ALedgerThatWasSavedAsksForTheAllocationToBeSettledAgain()
+    {
+        await using DriverFeature feature = await DriverFeature.StartAsync(Capable(), Unconfigured);
+
+        using HttpResponseMessage saving = await feature.Client.PutAsJsonAsync(Tuners, new
+        {
+            tuners = new[] { new { deviceId = "adapter0", disabled = false, lnbPower = false } },
+        });
+
+        (HttpStatusCode status, JsonElement _) = await ReadAsync(saving);
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal([RecalculationTrigger.TunerConfigurationChanged], feature.Notices.Nudged);
+    }
+
+    [Fact]
+    public async Task ALedgerThatWasRefusedAsksForNothing()
+    {
+        await using DriverFeature feature = await DriverFeature.StartAsync(Capable(), Unconfigured);
+
+        using HttpResponseMessage saving = await feature.Client.PutAsJsonAsync(
+            Tuners,
+            new { tuners = Array.Empty<object>() });
+
+        (HttpStatusCode status, JsonElement _) = await ReadAsync(saving);
+
+        Assert.NotEqual(HttpStatusCode.OK, status);
+        Assert.Empty(feature.Notices.Nudged);
+    }
+
+    [Fact]
+    public async Task ATunerTheDriverToggledAsksForTheAllocationToBeSettledAgain()
+    {
+        await using DriverFeature feature = await DriverFeature.StartAsync(Capable(), Stocked);
+
+        using HttpResponseMessage response = await feature.Client.PatchAsJsonAsync(
+            new Uri("/api/tuners/adapter0", UriKind.Relative),
+            new { disabled = true });
+
+        (HttpStatusCode status, JsonElement _) = await ReadAsync(response);
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal([RecalculationTrigger.TunerConfigurationChanged], feature.Notices.Nudged);
+    }
+
+    [Fact]
+    public async Task ATunerTheDriverDoesNotHoldAsksForNothing()
+    {
+        await using DriverFeature feature = await DriverFeature.StartAsync(Capable(), Stocked);
+
+        using HttpResponseMessage response = await feature.Client.PatchAsJsonAsync(
+            new Uri("/api/tuners/adapter9", UriKind.Relative),
+            new { disabled = true });
+
+        (HttpStatusCode status, JsonElement _) = await ReadAsync(response);
+
+        Assert.Equal(HttpStatusCode.NotFound, status);
+        Assert.Empty(feature.Notices.Nudged);
+    }
 
     private static DriverHello Capable(string[]? capabilities = null)
         => FakeDriver.HelloFor("instance-a", capabilities: capabilities ?? Everything);

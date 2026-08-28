@@ -3,6 +3,7 @@ using System.Text.Json;
 
 using Carina.Contracts;
 using Carina.Domain.Channels;
+using Carina.Domain.Reservations;
 
 namespace Carina.Api.Tests.FeatureTest;
 
@@ -77,6 +78,39 @@ public sealed class ServiceCatalogEndpointTests
         Assert.Equal(
             "manual",
             data.GetProperty("candidates")[0].GetProperty("selection").GetProperty("source").GetString());
+    }
+
+    [Fact]
+    public async Task ASelectedChannelThatChangedAsksForTheAllocationToBeSettledAgain()
+    {
+        await using var feature = new CatalogFeature();
+        feature.Seed(
+            101,
+            "Two ways in",
+            TuningParameters.Terrestrial(Terrestrial),
+            TuningParameters.Terrestrial(OtherTerrestrial));
+
+        CandidateChannel second = feature.Candidates.Candidates[1];
+
+        (HttpStatusCode status, JsonElement _) = await feature.PutAsync(
+            $"{OneService}/selected-channel",
+            new { candidateChannelId = second.Id.Value });
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal([RecalculationTrigger.SelectedChannelChanged], feature.Notices.Nudged);
+    }
+
+    [Fact]
+    public async Task ASelectedChannelOnAServiceNobodyEverFoundAsksForNothing()
+    {
+        await using var feature = new CatalogFeature();
+
+        (HttpStatusCode status, JsonElement _) = await feature.PutAsync(
+            "/api/services/1-999/selected-channel",
+            new { candidateChannelId = Guid.NewGuid() });
+
+        Assert.Equal(HttpStatusCode.NotFound, status);
+        Assert.Empty(feature.Notices.Nudged);
     }
 
     [Fact]
