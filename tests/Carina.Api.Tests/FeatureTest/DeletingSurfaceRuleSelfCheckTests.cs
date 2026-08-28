@@ -15,6 +15,10 @@ public sealed class DeletingSurfaceRuleSelfCheckTests
 
     public const string ByHand = "DELETE /api/recordings/{id}";
 
+    public const string ReservationLongWayRound = "DELETE /api/reservations/{id}/fixture-only";
+
+    public const string ReservationByHand = "DELETE /api/reservations/{id:guid}";
+
     [Fact]
     public async Task TheRuleReadsADeleteWrittenTheLongWayRoundOnASubPath()
     {
@@ -35,6 +39,9 @@ public sealed class DeletingSurfaceRuleSelfCheckTests
             [ByHand, LongWayRound],
             EndpointRules.SurfacesThatDeleteUnder(inventory, "/api/recordings"));
         Assert.Contains(LongWayRound, EndpointRules.SurfacesThatDelete(inventory), StringComparer.Ordinal);
+        Assert.Equal(
+            [ReservationByHand, ReservationLongWayRound],
+            EndpointRules.SurfacesThatDeleteUnder(inventory, "/api/reservations"));
     }
 
     [Fact]
@@ -46,6 +53,8 @@ public sealed class DeletingSurfaceRuleSelfCheckTests
 
         Assert.DoesNotContain(LongWayRound, served, StringComparer.Ordinal);
         Assert.Contains(ByHand, served, StringComparer.Ordinal);
+        Assert.DoesNotContain(ReservationLongWayRound, served, StringComparer.Ordinal);
+        Assert.Contains(ReservationByHand, served, StringComparer.Ordinal);
     }
 
     [Fact]

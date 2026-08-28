@@ -189,6 +189,12 @@ internal sealed class HeldReservations(IAtomicWrite? write = null) : IReservatio
         return Task.CompletedTask;
     }
 
+    public Task<ReservationDiscard> DiscardAsync(
+        ReservationId id,
+        DateTime at,
+        CancellationToken cancellationToken)
+        => throw new NotSupportedException("Working out who records what never throws a reservation away.");
+
     public Task SaveAllAsync(IReadOnlyList<Reservation> reservations, CancellationToken cancellationToken)
     {
         foreach (Reservation reservation in reservations)
