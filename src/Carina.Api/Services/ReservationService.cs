@@ -242,18 +242,7 @@ public sealed class ReservationService(
     }
 
     private static ProgrammeSnapshot Snapshot(Programme programme, DateTime at)
-        => new(
-            Clipped(programme.Name, Reservation.NameMaxLength),
-            Clipped(programme.Summary, Reservation.SummaryMaxLength),
-            Clipped(Extended(programme.Items), Reservation.ExtendedMaxLength),
-            programme.Genres,
-            at);
-
-    private static string Extended(IReadOnlyList<ProgrammeItem> items)
-        => string.Join("\n\n", items.Select(item => $"{item.Heading}\n{item.Text}"));
-
-    private static string Clipped(string text, int longest)
-        => text.Length <= longest ? text : text[..longest];
+        => ProgrammeSnapshot.Of(programme.Name, programme.Summary, programme.Items, programme.Genres, at);
 
     private static ServiceResult<T, ReservationFailure> Missing<T>(ReservationId id)
         => ServiceResult<T, ReservationFailure>.Failure(

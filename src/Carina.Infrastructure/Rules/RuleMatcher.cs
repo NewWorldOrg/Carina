@@ -6,7 +6,12 @@ namespace Carina.Infrastructure.Rules;
 
 public sealed record RuleMatch(Rule Rule, ProgrammeMatch Programme);
 
-public sealed record RuleMatchRun(IReadOnlyList<RuleMatch> Matches, IReadOnlyList<Rule> TurnedOff);
+public sealed record RuleFault(Rule Rule, Exception Cause);
+
+public sealed record RuleMatchRun(
+    IReadOnlyList<RuleMatch> Matches,
+    IReadOnlyList<Rule> TurnedOff,
+    IReadOnlyList<RuleFault> Faulted);
 
 public sealed class RuleMatcher(ProgrammeSearchScope scope, TimeProvider clock)
 {
@@ -32,9 +37,11 @@ public sealed class RuleMatcher(ProgrammeSearchScope scope, TimeProvider clock)
         ArgumentNullException.ThrowIfNull(programmes);
 
         DateTime at = clock.GetUtcNow().UtcDateTime;
+        ProgrammeSearchBounds bounds = await scope.ReadAsync(cancellationToken);
         var taken = new HashSet<ProgrammeKey>();
         var found = new List<RuleMatch>();
         var turnedOff = new List<Rule>();
+        var faulted = new List<RuleFault>();
 
         foreach (Rule rule in InPrecedence(rules))
         {
@@ -51,22 +58,50 @@ public sealed class RuleMatcher(ProgrammeSearchScope scope, TimeProvider clock)
                 continue;
             }
 
-            ProgrammeSearch bound = await scope.BoundAsync(asked, cancellationToken);
+            List<RuleMatch> takes;
 
-            foreach (ProgrammeMatch programme in programmes)
+            try
             {
-                if (taken.Contains(Naming(programme))
-                    || !ProgrammeSearchMatching.Matches(programme, bound, at))
-                {
-                    continue;
-                }
+                takes = Takes(rule, bounds.Bound(asked), programmes, taken, at);
+            }
+            catch (Exception cause) when (cause is not OperationCanceledException)
+            {
+                faulted.Add(new RuleFault(rule, cause));
 
-                taken.Add(Naming(programme));
-                found.Add(new RuleMatch(rule, programme));
+                continue;
+            }
+
+            foreach (RuleMatch take in takes)
+            {
+                taken.Add(Naming(take.Programme));
+                found.Add(take);
             }
         }
 
-        return new RuleMatchRun(found, turnedOff);
+        return new RuleMatchRun(found, turnedOff, faulted);
+    }
+
+    private static List<RuleMatch> Takes(
+        Rule rule,
+        ProgrammeSearch bound,
+        IReadOnlyList<ProgrammeMatch> programmes,
+        HashSet<ProgrammeKey> taken,
+        DateTime at)
+    {
+        var takes = new List<RuleMatch>();
+
+        foreach (ProgrammeMatch programme in programmes)
+        {
+            if (taken.Contains(Naming(programme))
+                || !ProgrammeSearchMatching.Matches(programme, bound, at))
+            {
+                continue;
+            }
+
+            takes.Add(new RuleMatch(rule, programme));
+        }
+
+        return takes;
     }
 
     private static ProgrammeKey Naming(ProgrammeMatch programme)
