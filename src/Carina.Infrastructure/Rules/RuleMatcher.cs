@@ -89,15 +89,18 @@ public sealed class RuleMatcher(ProgrammeSearchScope scope, TimeProvider clock)
         DateTime at)
     {
         var takes = new List<RuleMatch>();
+        var claiming = new HashSet<ProgrammeKey>(taken);
 
         foreach (ProgrammeMatch programme in programmes)
         {
-            if (taken.Contains(Naming(programme))
-                || !ProgrammeSearchMatching.Matches(programme, bound, at))
+            ProgrammeKey naming = Naming(programme);
+
+            if (claiming.Contains(naming) || !ProgrammeSearchMatching.Matches(programme, bound, at))
             {
                 continue;
             }
 
+            claiming.Add(naming);
             takes.Add(new RuleMatch(rule, programme));
         }
 

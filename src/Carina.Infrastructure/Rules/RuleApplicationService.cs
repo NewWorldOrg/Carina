@@ -140,12 +140,14 @@ public sealed class RuleApplicationService(
 
         foreach (Reservation reservation in await reservations.ListPendingAsync(Everything(at), cancellationToken))
         {
-            if (reservation.RuleId is not { } ruleId || faulted.Contains(ruleId))
+            RuleId? ruleId = reservation.RuleId;
+
+            if (ruleId is { } faltered && faulted.Contains(faltered))
             {
                 continue;
             }
 
-            bool holds = standing.Contains(ruleId);
+            bool holds = ruleId is { } held && standing.Contains(held);
             ProgrammeKey naming = Naming(reservation);
 
             if (holds && (kept.Contains(naming) || (!sweeping && !seen.Contains(naming))))

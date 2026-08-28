@@ -256,6 +256,46 @@ public sealed class RuleApplicationServiceTests
     }
 
     [Fact]
+    public async Task TheReservationThatGoesIsTheOneOnTheChannelThatStoppedCarryingTheNumber()
+    {
+        World world = World.Of();
+        Rule rule = Written("keyword=hill");
+        world.Rules.Rules.Add(rule);
+        world.Visited(VisitOutcome.Complete);
+        Programme kept = Broadcast(Listed, 7, "hill walking");
+        Programme drifted = Broadcast(Alongside, 7, "river fishing");
+        world.Guide(kept, drifted);
+        world.Reservations.Standing(
+            Standing(kept, ReservationState.Scheduled, rule.Id),
+            Standing(drifted, ReservationState.Scheduled, rule.Id));
+
+        RuleApplicationRun run = await world.Applying.EverythingAsync(Cancel);
+
+        Assert.Equal(["river fishing"], [.. run.Withdrawn.Select(reservation => reservation.SnapshotName)]);
+        Assert.Equal(["hill walking"], Named(world));
+    }
+
+    [Fact]
+    public async Task TheReservationThatGoesIsTheOneAtTheStartThatStoppedCarryingTheNumber()
+    {
+        World world = World.Of();
+        Rule rule = Written("keyword=hill");
+        world.Rules.Rules.Add(rule);
+        world.Visited(VisitOutcome.Complete);
+        Programme kept = Broadcast(Listed, 7, "hill walking", startsAt: Now.AddHours(2));
+        Programme drifted = Broadcast(Listed, 7, "river fishing", startsAt: Now.AddDays(7));
+        world.Guide(kept, drifted);
+        world.Reservations.Standing(
+            Standing(kept, ReservationState.Scheduled, rule.Id),
+            Standing(drifted, ReservationState.Scheduled, rule.Id));
+
+        RuleApplicationRun run = await world.Applying.EverythingAsync(Cancel);
+
+        Assert.Equal(["river fishing"], [.. run.Withdrawn.Select(reservation => reservation.SnapshotName)]);
+        Assert.Equal(["hill walking"], Named(world));
+    }
+
+    [Fact]
     public async Task WithdrawingSendsWhatIsLeftBackThroughTheOnePlaceThatWorksOutTheTuners()
     {
         World withdrawing = Vanished();

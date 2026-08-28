@@ -6,6 +6,7 @@ using Carina.Domain.Events;
 using Carina.Domain.Integrity;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
+using Carina.Domain.Rules;
 using Carina.Domain.Scans;
 using Carina.Domain.Thumbnails;
 using Carina.Infrastructure.Collection;
@@ -18,6 +19,7 @@ using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Recordings;
 using Carina.Infrastructure.Reservations;
+using Carina.Infrastructure.Rules;
 using Carina.Infrastructure.Scanning;
 using Carina.Infrastructure.Thumbnails;
 
@@ -43,6 +45,18 @@ public sealed class ServiceCollectionExtensionsTests
         ["ConnectionStrings:Carina"] = ConnectionString,
         ["CARINA_DRIVER_SOCKET"] = "/run/carina/driver.sock",
     };
+
+    [Fact]
+    public void EverythingARuleApplicationReachesForIsRegistered()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.IsType<RuleRepository>(scope.ServiceProvider.GetRequiredService<IRuleRepository>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<RuleApplicationService>());
+        Assert.NotNull(scope.ServiceProvider.GetRequiredService<RuleMatcher>());
+        Assert.NotNull(provider.GetRequiredService<RuleApplicationSettings>());
+    }
 
     [Fact]
     public void RegistersThePersistenceContext()
