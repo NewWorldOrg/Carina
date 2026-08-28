@@ -255,6 +255,56 @@ public sealed class ReservationRecalculationHostedServiceTests
         Assert.Single(world.Reservations.Held);
     }
 
+    [Fact]
+    public async Task AProgrammeThatVanishedTakesItsReservationWithItWhenTheWholeGuideIsSwept()
+    {
+        using World world = World.Of();
+        Rule rule = Written("keyword=hill");
+        world.Rules.Rules.Add(rule);
+        world.Visited();
+        world.Reservations.Standing(Standing(Broadcast(1, "hill walking"), rule.Id));
+
+        world.Recalculating.Nudge(RecalculationTrigger.AppStarted);
+        RecalculationPass pass = await world.Passing();
+
+        Assert.Equal(RecalculationReach.Everything, pass.Reach);
+        Assert.Single(pass.Applied!.Withdrawn);
+        Assert.Empty(world.Reservations.Held);
+    }
+
+    [Fact]
+    public async Task AProgrammeThatVanishedKeepsItsReservationWhenOnlyWhatArrivedIsRead()
+    {
+        using World world = World.Of();
+        Rule rule = Written("keyword=hill");
+        world.Rules.Rules.Add(rule);
+        world.Visited();
+        world.Reservations.Standing(Standing(Broadcast(1, "hill walking"), rule.Id));
+
+        world.Recalculating.Nudge(RecalculationTrigger.ProgrammesChanged);
+        RecalculationPass pass = await world.Passing();
+
+        Assert.Equal(RecalculationReach.Increment, pass.Reach);
+        Assert.Empty(pass.Applied!.Withdrawn);
+        Assert.Single(world.Reservations.Held);
+    }
+
+    [Fact]
+    public async Task TheLoopAsksForAReconciliationNobodyNudgedItFor()
+    {
+        using World world = World.Of(rushed: true);
+        world.Rules.Rules.Add(Written("keyword=hill"));
+        world.Guide(Broadcast(1, "hill walking"));
+
+        await world.Starting();
+
+        await Eventually.Happens(
+            () => world.Programmes.AskedFrom.Count >= 2,
+            "the loop never read the guide again on a wait of its own");
+
+        await world.Stopping();
+    }
+
     private static Rule Written(string query, int priority = 10, int identifier = 1)
         => Rule.Draft(
             new RuleId(new Guid($"{identifier:x8}-0000-0000-0000-000000000000")),
@@ -278,11 +328,11 @@ public sealed class ReservationRecalculationHostedServiceTests
             Now,
             revision: revision);
 
-    private static Reservation Standing(Programme programme)
+    private static Reservation Standing(Programme programme, RuleId? ruleId = null)
         => Reservation.Rehydrate(
             ReservationId.New(),
             new ProgrammeRef(programme.NetworkId, programme.ServiceId, programme.EventId, programme.StartsAt),
-            null,
+            ruleId,
             Priority.Default,
             programme.StartsAt,
             programme.StartsAt.AddHours(1),
@@ -307,7 +357,7 @@ public sealed class ReservationRecalculationHostedServiceTests
     {
         private readonly ServiceProvider provider;
 
-        private World(bool seatingThrows)
+        private World(bool seatingThrows, bool rushed)
         {
             Write = new WatchedWrite();
             Reservations = new HeldReservations(Write);
@@ -363,7 +413,7 @@ public sealed class ReservationRecalculationHostedServiceTests
                     BeforeFirstPass = TimeSpan.FromMilliseconds(1),
                     BetweenReconciliations = TimeSpan.FromHours(1),
                 },
-                new FixedClock(Now),
+                rushed ? new RushedClock(Now) : new FixedClock(Now),
                 NullLogger<ReservationRecalculationHostedService>.Instance);
         }
 
@@ -387,7 +437,8 @@ public sealed class ReservationRecalculationHostedServiceTests
 
         public ReservationRecalculationHostedService Recalculating { get; }
 
-        public static World Of(bool seatingThrows = false) => new(seatingThrows);
+        public static World Of(bool seatingThrows = false, bool rushed = false)
+            => new(seatingThrows, rushed);
 
         public Task<RecalculationPass> Passing()
             => Recalculating.RunAsync(CancellationToken.None).WaitAsync(Eventually.Patience);
@@ -399,6 +450,14 @@ public sealed class ReservationRecalculationHostedServiceTests
             => Recalculating.StopAsync(CancellationToken.None).WaitAsync(Eventually.Patience);
 
         public void Guide(params Programme[] programmes) => Programmes.Held.AddRange(programmes);
+
+        public void Visited()
+            => Visits.Visits.Add(StreamVisit.Record(
+                new NetworkId(Network),
+                new TransportStreamId(Carried),
+                VisitOutcome.Complete,
+                Now.AddHours(-1),
+                TimeSpan.FromSeconds(30)));
 
         public void Dispose()
         {

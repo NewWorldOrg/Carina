@@ -156,6 +156,24 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
     }
 
     [Fact]
+    public async Task AProgrammeThatMovedAsksForTheRulesToBeReadAgainstItAgain()
+    {
+        int network = NextNetwork();
+        var notices = new CountedNotices();
+        await using CarinaDbContext context = database.Open();
+        ProgrammeWriter writer = Writer(context, notices);
+
+        await writer.WriteAsync([Scheduled(network, 1, minutes: 3)], Cancel);
+        notices.Nudged.Clear();
+
+        ProgrammesWritten written = await writer.WriteAsync([Scheduled(network, 1, minutes: 5)], Cancel);
+
+        Assert.Equal(0, written.Added);
+        Assert.Equal(1, written.Updated);
+        Assert.Equal([RecalculationTrigger.ProgrammesChanged], notices.Nudged);
+    }
+
+    [Fact]
     public async Task AWriteThatStoredNothingAsksForNothingToBeReadAgain()
     {
         int network = NextNetwork();

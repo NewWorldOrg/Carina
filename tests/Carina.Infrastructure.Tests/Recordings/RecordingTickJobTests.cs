@@ -160,6 +160,25 @@ public sealed class RecordingTickJobTests
     }
 
     [Fact]
+    public async Task ATickThatStoppedARecordingAsksForTheAllocationToBeSettledAgain()
+    {
+        var clock = new HurriedTicks();
+        var recordings = new HeldRecordings();
+        recordings.Rows.Add(InFlight(Airs.AddMinutes(-30), Airs));
+        var driver = new RecordingDriver();
+        var notices = new CountedNotices();
+        using RecordingTickJob job = Job(Holding(), recordings, driver, clock, notices: notices);
+        using var stopping = new CancellationTokenSource();
+
+        await job.StartAsync(stopping.Token);
+        await Eventually.Happens(() => notices.Nudged.Count >= 1, "the tick that stopped one asked for nothing");
+        await stopping.CancelAsync();
+        await job.StopAsync(Cancel);
+
+        Assert.Equal([RecalculationTrigger.RecordingEnded], notices.Nudged.Distinct());
+    }
+
+    [Fact]
     public async Task ATickThatStartedAndStoppedNothingAsksForNothing()
     {
         var clock = new HurriedTicks();

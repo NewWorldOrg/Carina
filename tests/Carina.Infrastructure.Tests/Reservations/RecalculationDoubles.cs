@@ -109,3 +109,11 @@ internal sealed class WatchedProgrammes : IProgrammeRepository
     public Task<int> ForgetEverythingAsync(CancellationToken cancellationToken)
         => held.ForgetEverythingAsync(cancellationToken);
 }
+
+internal sealed class RushedClock(DateTime now) : TimeProvider
+{
+    public override DateTimeOffset GetUtcNow() => new(now, TimeSpan.Zero);
+
+    public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        => base.CreateTimer(callback, state, TimeSpan.FromMilliseconds(1), period);
+}
