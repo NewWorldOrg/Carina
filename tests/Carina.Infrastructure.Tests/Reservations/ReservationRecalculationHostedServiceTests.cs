@@ -34,13 +34,13 @@ public sealed class ReservationRecalculationHostedServiceTests
         world.Rules.Rules.Add(Written("keyword=hill"));
         world.Guide(Broadcast(1, "hill walking"));
 
-        await world.Recalculating.StartAsync(Cancel);
+        await world.Starting();
 
         await Eventually.Happens(
             () => world.Reservations.Held.Count is 1,
             "the sweep the app asks for on start made the reservation the rule takes");
 
-        await world.Recalculating.StopAsync(Cancel);
+        await world.Stopping();
     }
 
     [Fact]
@@ -64,7 +64,7 @@ public sealed class ReservationRecalculationHostedServiceTests
             () => world.Reservations.Held.Count is 1,
             "the sweep that starting did not wait for still landed");
 
-        await world.Recalculating.StopAsync(Cancel);
+        await world.Stopping();
     }
 
     [Fact]
@@ -76,7 +76,7 @@ public sealed class ReservationRecalculationHostedServiceTests
         world.Seating.Hold = new TaskCompletionSource();
 
         world.Recalculating.Nudge(RecalculationTrigger.AppStarted);
-        Task<RecalculationPass> first = world.Recalculating.RunAsync(Cancel);
+        Task<RecalculationPass> first = world.Passing();
 
         await world.Seating.Arrived.Task.WaitAsync(Eventually.Patience);
 
@@ -85,12 +85,12 @@ public sealed class ReservationRecalculationHostedServiceTests
         for (int attempt = 0; attempt < 7; attempt++)
         {
             world.Recalculating.Nudge(RecalculationTrigger.TunerConfigurationChanged);
-            refused.Add(await world.Recalculating.RunAsync(Cancel));
+            refused.Add(await world.Passing());
         }
 
         world.Seating.Hold.SetResult();
 
-        RecalculationPass ran = await first;
+        RecalculationPass ran = await first.WaitAsync(Eventually.Patience);
 
         Assert.True(ran.Ran);
         Assert.Equal(1, world.Seating.Most);
@@ -106,20 +106,20 @@ public sealed class ReservationRecalculationHostedServiceTests
         world.Seating.Hold = new TaskCompletionSource();
 
         world.Recalculating.Nudge(RecalculationTrigger.AppStarted);
-        Task<RecalculationPass> first = world.Recalculating.RunAsync(Cancel);
+        Task<RecalculationPass> first = world.Passing();
 
         await world.Seating.Arrived.Task.WaitAsync(Eventually.Patience);
 
         world.Recalculating.Nudge(RecalculationTrigger.TunerConfigurationChanged);
 
-        Assert.Equal(RecalculationRefusal.OneIsAlreadyRunning, (await world.Recalculating.RunAsync(Cancel)).Refusal);
+        Assert.Equal(RecalculationRefusal.OneIsAlreadyRunning, (await world.Passing()).Refusal);
 
         world.Seating.Hold.SetResult();
-        await first;
+        await first.WaitAsync(Eventually.Patience);
 
         world.Seating.Hold = null;
 
-        RecalculationPass after = await world.Recalculating.RunAsync(Cancel);
+        RecalculationPass after = await world.Passing();
 
         Assert.True(after.Ran);
         Assert.Equal([RecalculationTrigger.TunerConfigurationChanged], after.Answering);
@@ -135,7 +135,7 @@ public sealed class ReservationRecalculationHostedServiceTests
         world.Recalculating.Nudge(RecalculationTrigger.TunerFaulted);
         world.Recalculating.Nudge(RecalculationTrigger.ReservationChanged);
 
-        RecalculationPass pass = await world.Recalculating.RunAsync(Cancel);
+        RecalculationPass pass = await world.Passing();
 
         Assert.Equal(RecalculationRefusal.NothingAsked, pass.Refusal);
         Assert.Equal(0, world.Seating.Entered);
@@ -148,7 +148,7 @@ public sealed class ReservationRecalculationHostedServiceTests
 
         world.Recalculating.Nudge(RecalculationTrigger.TunerConfigurationChanged);
 
-        RecalculationPass pass = await world.Recalculating.RunAsync(Cancel);
+        RecalculationPass pass = await world.Passing();
 
         Assert.True(pass.Ran);
         Assert.Equal(RecalculationReach.Settle, pass.Reach);
@@ -165,20 +165,20 @@ public sealed class ReservationRecalculationHostedServiceTests
         world.Guide(Broadcast(1, "hill walking", revision: 7));
 
         world.Recalculating.Nudge(RecalculationTrigger.AppStarted);
-        await world.Recalculating.RunAsync(Cancel);
+        await world.Passing();
 
         Assert.Equal([0], world.Programmes.AskedFrom);
 
         world.Guide(Broadcast(2, "hill running", revision: 9));
 
         world.Recalculating.Nudge(RecalculationTrigger.ProgrammesChanged);
-        RecalculationPass second = await world.Recalculating.RunAsync(Cancel);
+        RecalculationPass second = await world.Passing();
 
         Assert.Equal(RecalculationReach.Increment, second.Reach);
         Assert.Equal([0, 7], world.Programmes.AskedFrom);
 
         world.Recalculating.Nudge(RecalculationTrigger.ProgrammesChanged);
-        await world.Recalculating.RunAsync(Cancel);
+        await world.Passing();
 
         Assert.Equal([0, 7, 9], world.Programmes.AskedFrom);
     }
@@ -191,15 +191,15 @@ public sealed class ReservationRecalculationHostedServiceTests
         world.Guide(Broadcast(1, "hill walking", revision: 7));
 
         world.Recalculating.Nudge(RecalculationTrigger.AppStarted);
-        await world.Recalculating.RunAsync(Cancel);
+        await world.Passing();
 
         world.Programmes.Throws = new InvalidOperationException("the guide would not answer");
         world.Recalculating.Nudge(RecalculationTrigger.ProgrammesChanged);
-        await world.Recalculating.RunAsync(Cancel);
+        await world.Passing();
 
         world.Programmes.Throws = null;
         world.Recalculating.Nudge(RecalculationTrigger.ProgrammesChanged);
-        await world.Recalculating.RunAsync(Cancel);
+        await world.Passing();
 
         Assert.Equal([0, 7, 7], world.Programmes.AskedFrom);
     }
@@ -212,7 +212,7 @@ public sealed class ReservationRecalculationHostedServiceTests
         world.Programmes.Throws = new InvalidOperationException("the guide would not answer");
 
         world.Recalculating.Nudge(RecalculationTrigger.AppStarted);
-        RecalculationPass pass = await world.Recalculating.RunAsync(Cancel);
+        RecalculationPass pass = await world.Passing();
 
         Assert.Equal([RecalculationStage.Rules], [.. pass.Faults.Select(fault => fault.Stage)]);
         Assert.Null(pass.Applied);
@@ -227,7 +227,7 @@ public sealed class ReservationRecalculationHostedServiceTests
         using World world = World.Of(seatingThrows: true);
 
         world.Recalculating.Nudge(RecalculationTrigger.AppStarted);
-        RecalculationPass pass = await world.Recalculating.RunAsync(Cancel);
+        RecalculationPass pass = await world.Passing();
 
         Assert.Equal([RecalculationStage.Scheduling], [.. pass.Faults.Select(fault => fault.Stage)]);
         Assert.NotNull(pass.Applied);
@@ -244,12 +244,12 @@ public sealed class ReservationRecalculationHostedServiceTests
 
         world.Recalculating.Nudge(RecalculationTrigger.AppStarted);
 
-        Assert.NotEmpty((await world.Recalculating.RunAsync(Cancel)).Faults);
+        Assert.NotEmpty((await world.Passing()).Faults);
 
         world.Programmes.Throws = null;
         world.Recalculating.Nudge(RecalculationTrigger.AppStarted);
 
-        RecalculationPass after = await world.Recalculating.RunAsync(Cancel);
+        RecalculationPass after = await world.Passing();
 
         Assert.Empty(after.Faults);
         Assert.Single(world.Reservations.Held);
@@ -388,6 +388,15 @@ public sealed class ReservationRecalculationHostedServiceTests
         public ReservationRecalculationHostedService Recalculating { get; }
 
         public static World Of(bool seatingThrows = false) => new(seatingThrows);
+
+        public Task<RecalculationPass> Passing()
+            => Recalculating.RunAsync(CancellationToken.None).WaitAsync(Eventually.Patience);
+
+        public Task Starting()
+            => Recalculating.StartAsync(CancellationToken.None).WaitAsync(Eventually.Patience);
+
+        public Task Stopping()
+            => Recalculating.StopAsync(CancellationToken.None).WaitAsync(Eventually.Patience);
 
         public void Guide(params Programme[] programmes) => Programmes.Held.AddRange(programmes);
 
