@@ -7,6 +7,7 @@ using Carina.Domain.Events;
 using Carina.Domain.Integrity;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
+using Carina.Domain.Rules;
 using Carina.Domain.Scans;
 using Carina.Domain.Thumbnails;
 using Carina.Infrastructure.Auth;
@@ -21,6 +22,7 @@ using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Programmes;
 using Carina.Infrastructure.Recordings;
 using Carina.Infrastructure.Reservations;
+using Carina.Infrastructure.Rules;
 using Carina.Infrastructure.Scanning;
 using Carina.Infrastructure.Thumbnails;
 
@@ -104,6 +106,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IServiceReachSettingsRepository, ServiceReachSettingsRepository>();
         services.AddScoped<ITuneFailureReporter, CandidateTuneFailureReporter>();
         services.AddScoped<ReservationSchedulingService>();
+        services.AddScoped<RuleMatcher>();
+        services.AddScoped<IRuleRepository, RuleRepository>();
+        services.AddScoped<RuleApplicationService>();
         services.AddScoped<ProgrammeWriter>();
         services.AddScoped<StreamVisitor>();
         services.AddScoped<CollectionRound>();
@@ -111,6 +116,7 @@ public static class ServiceCollectionExtensions
 
         services.AddSingleton(TimeProvider.System);
         services.AddHttpClient<IOidcGateway, OidcGateway>();
+        services.TryAddSingleton(new RuleApplicationSettings());
         services.TryAddSingleton(SessionPolicy.Default);
         services.TryAddSingleton(PasswordHashPolicy.Default);
         services.TryAddSingleton(LoginRatePolicy.Default);

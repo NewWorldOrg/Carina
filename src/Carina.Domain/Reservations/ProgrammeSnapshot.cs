@@ -34,6 +34,30 @@ public sealed class ProgrammeSnapshot
 
     public DateTime CapturedAt { get; }
 
+    public static ProgrammeSnapshot Of(
+        string name,
+        string summary,
+        IReadOnlyList<ProgrammeItem> items,
+        IReadOnlyList<ProgrammeGenre> genres,
+        DateTime at)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(summary);
+        ArgumentNullException.ThrowIfNull(items);
+
+        return new ProgrammeSnapshot(
+            Clipped(name, Reservation.NameMaxLength),
+            Clipped(summary, Reservation.SummaryMaxLength),
+            Clipped(
+                string.Join("\n\n", items.Select(item => $"{item.Heading}\n{item.Text}")),
+                Reservation.ExtendedMaxLength),
+            genres,
+            at);
+    }
+
+    private static string Clipped(string text, int longest)
+        => text.Length <= longest ? text : text[..longest];
+
     private static string Within(string value, int longest, string parameterName)
     {
         if (value.Length > longest)
