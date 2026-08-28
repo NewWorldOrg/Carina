@@ -164,7 +164,10 @@ internal sealed class HeldReservationLedger : IReservationRepository
         return Task.CompletedTask;
     }
 
-    public Task<ReservationDiscard> DiscardAsync(ReservationId id, CancellationToken cancellationToken)
+    public Task<ReservationDiscard> DiscardAsync(
+        ReservationId id,
+        DateTime at,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(id);
 
@@ -181,6 +184,13 @@ internal sealed class HeldReservationLedger : IReservationRepository
         if (standing.IsPinned && standing.RecordingOutcome is null)
         {
             return Task.FromResult(ReservationDiscard.TurningIntoARecording);
+        }
+
+        if (standing.State is ReservationState.Scheduled or ReservationState.Conflict
+            && standing.RecordingOutcome is null
+            && standing.EffectiveEndAt > at)
+        {
+            return Task.FromResult(ReservationDiscard.StillToBeRecorded);
         }
 
         Wrote.Add($"discard {id.Value}");

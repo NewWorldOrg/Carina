@@ -39,11 +39,10 @@ public sealed class DeleteReservationEndpointTests
     }
 
     [Theory]
-    [InlineData(ReservationState.Scheduled)]
-    [InlineData(ReservationState.Conflict)]
     [InlineData(ReservationState.Cancelled)]
     [InlineData(ReservationState.Missed)]
-    public async Task AReservationNoRecordingCameOfIsThrownAwayWhateverItStandsAs(ReservationState state)
+    public async Task AReservationNothingIsWaitingOnIsThrownAwayWhileItsBroadcastIsStillAhead(
+        ReservationState state)
     {
         await using var feature = new ReservationFeature();
         Reservation standing = feature.Booked(4001, state: state);
@@ -51,6 +50,62 @@ public sealed class DeleteReservationEndpointTests
         (HttpStatusCode status, _) = await feature.DeleteAsync($"/api/reservations/{standing.Id.Value}");
 
         Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Empty(feature.Reservations.Held);
+    }
+
+    [Theory]
+    [InlineData(ReservationState.Scheduled)]
+    [InlineData(ReservationState.Conflict)]
+    public async Task AReservationStillToBeRecordedIsRefusedAndKept(ReservationState state)
+    {
+        await using var feature = new ReservationFeature();
+        Reservation standing = feature.Booked(4001, state: state);
+
+        (HttpStatusCode status, JsonElement body) =
+            await feature.DeleteAsync($"/api/reservations/{standing.Id.Value}");
+
+        Assert.Equal(HttpStatusCode.Conflict, status);
+        Assert.Equal("stillToBeRecorded", body.GetProperty("data").GetProperty("refusal").GetString());
+        Assert.Single(feature.Reservations.Held);
+
+        (HttpStatusCode after, _) = await feature.GetAsync($"/api/reservations/{standing.Id.Value}");
+
+        Assert.Equal(HttpStatusCode.OK, after);
+    }
+
+    [Theory]
+    [InlineData(ReservationState.Scheduled)]
+    [InlineData(ReservationState.Conflict)]
+    public async Task AReservationNothingWillEverRecordNowIsThrownAwayThoughItStillStands(ReservationState state)
+    {
+        await using var feature = new ReservationFeature();
+        Reservation over = feature.Booked(4001, startsAt: ReservationFeature.Noon.AddHours(-3), state: state);
+
+        (HttpStatusCode status, _) = await feature.DeleteAsync($"/api/reservations/{over.Id.Value}");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Empty(feature.Reservations.Held);
+    }
+
+    [Fact]
+    public async Task CancellingItFirstIsWhatTurnsAStandingReservationIntoOneToThrowAway()
+    {
+        await using var feature = new ReservationFeature();
+        feature.Announced(4001);
+        Reservation standing = feature.Booked(4001);
+
+        (HttpStatusCode refused, _) = await feature.DeleteAsync($"/api/reservations/{standing.Id.Value}");
+
+        Assert.Equal(HttpStatusCode.Conflict, refused);
+
+        (HttpStatusCode cancelled, _) =
+            await feature.PostAsync($"/api/reservations/{standing.Id.Value}/cancel");
+
+        Assert.Equal(HttpStatusCode.OK, cancelled);
+
+        (HttpStatusCode thrown, _) = await feature.DeleteAsync($"/api/reservations/{standing.Id.Value}");
+
+        Assert.Equal(HttpStatusCode.OK, thrown);
         Assert.Empty(feature.Reservations.Held);
     }
 
@@ -219,5 +274,6 @@ public sealed class DeleteReservationEndpointTests
 
         Assert.Contains("recordingCameOfIt", refusals, StringComparer.Ordinal);
         Assert.Contains("turningIntoARecording", refusals, StringComparer.Ordinal);
+        Assert.Contains("stillToBeRecorded", refusals, StringComparer.Ordinal);
     }
 }

@@ -29,17 +29,148 @@ public sealed class ReservationDiscardTests(RepositoryDatabase database)
     }
 
     [Theory]
-    [InlineData(ReservationState.Scheduled)]
-    [InlineData(ReservationState.Conflict)]
     [InlineData(ReservationState.Cancelled)]
     [InlineData(ReservationState.Missed)]
-    public async Task AReservationNoRecordingCameOfGoesWhateverItStandsAs(ReservationState state)
+    public async Task AReservationNothingIsWaitingOnGoesWhileItsBroadcastIsStillAhead(ReservationState state)
     {
         Reservation standing = ReservationFixtures.Rehydrated(state);
         await AddAsync(standing);
 
+        Assert.True(standing.EffectiveEndAt > Now);
         Assert.Equal(ReservationDiscard.Discarded, await DiscardAsync(standing.Id));
         Assert.Equal(0, await ReservationRows(standing.Id));
+    }
+
+    [Theory]
+    [InlineData(ReservationState.Scheduled)]
+    [InlineData(ReservationState.Conflict)]
+    public async Task AReservationStillToBeRecordedIsRefusedRatherThanThrownAway(ReservationState state)
+    {
+        Reservation standing = ReservationFixtures.Rehydrated(state);
+        await AddAsync(standing);
+
+        Assert.True(standing.EffectiveEndAt > Now);
+        Assert.Equal(ReservationDiscard.StillToBeRecorded, await DiscardAsync(standing.Id));
+        Assert.Equal(1, await ReservationRows(standing.Id));
+    }
+
+    [Theory]
+    [InlineData(ReservationState.Scheduled)]
+    [InlineData(ReservationState.Conflict)]
+    public async Task AReservationNothingWillEverRecordNowGoesEvenThoughItStillStands(ReservationState state)
+    {
+        Reservation over = Closed(state);
+        await AddAsync(over);
+
+        Assert.True(over.EffectiveEndAt <= Now);
+        Assert.Equal(ReservationDiscard.Discarded, await DiscardAsync(over.Id));
+        Assert.Equal(0, await ReservationRows(over.Id));
+    }
+
+    [Fact]
+    public async Task AReservationIsStillToBeRecordedRightUpToTheMomentItsWindowCloses()
+    {
+        Reservation standing = ReservationFixtures.Rehydrated(
+            ReservationState.Scheduled,
+            startAt: Now.AddHours(-2),
+            endAt: Now.AddHours(-1),
+            marginAfter: Margin.OfSeconds(600));
+        await AddAsync(standing);
+
+        Assert.Equal(
+            ReservationDiscard.StillToBeRecorded,
+            await DiscardAsync(standing.Id, standing.EffectiveEndAt.AddSeconds(-1)));
+        Assert.Equal(1, await ReservationRows(standing.Id));
+    }
+
+    [Fact]
+    public async Task AReservationGoesFromTheMomentItsWindowCloses()
+    {
+        Reservation standing = ReservationFixtures.Rehydrated(
+            ReservationState.Scheduled,
+            startAt: Now.AddHours(-2),
+            endAt: Now.AddHours(-1),
+            marginAfter: Margin.OfSeconds(600));
+        await AddAsync(standing);
+
+        Assert.Equal(
+            ReservationDiscard.Discarded,
+            await DiscardAsync(standing.Id, standing.EffectiveEndAt));
+        Assert.Equal(0, await ReservationRows(standing.Id));
+    }
+
+    [Fact]
+    public async Task AReservationGoesAfterItsWindowHasClosed()
+    {
+        Reservation standing = ReservationFixtures.Rehydrated(
+            ReservationState.Scheduled,
+            startAt: Now.AddHours(-2),
+            endAt: Now.AddHours(-1),
+            marginAfter: Margin.OfSeconds(600));
+        await AddAsync(standing);
+
+        Assert.Equal(
+            ReservationDiscard.Discarded,
+            await DiscardAsync(standing.Id, standing.EffectiveEndAt.AddSeconds(1)));
+        Assert.Equal(0, await ReservationRows(standing.Id));
+    }
+
+    [Fact]
+    public async Task TheMarginAfterTheBroadcastIsPartOfTheWindowThatIsRead()
+    {
+        DateTime ends = Now.AddHours(-1);
+        Reservation without = ReservationFixtures.Rehydrated(
+            ReservationState.Scheduled,
+            startAt: Now.AddHours(-2),
+            endAt: ends);
+        Reservation waiting = ReservationFixtures.Rehydrated(
+            ReservationState.Scheduled,
+            startAt: Now.AddHours(-2),
+            endAt: ends,
+            marginAfter: Margin.OfSeconds(600));
+        await AddAsync(without, waiting);
+
+        DateTime between = ends.AddSeconds(300);
+
+        Assert.Equal(ReservationDiscard.Discarded, await DiscardAsync(without.Id, between));
+        Assert.Equal(ReservationDiscard.StillToBeRecorded, await DiscardAsync(waiting.Id, between));
+    }
+
+    [Fact]
+    public async Task AReservationStoppedEarlyGoesOnceItsRecordingIsGoneThoughItsWindowIsOpen()
+    {
+        Reservation recorded = ReservationFixtures.Rehydrated(ReservationState.Scheduled);
+        await AddAsync(recorded);
+        await ClaimAsync(recorded.Id);
+        Recording written = await RecordedAsync(recorded, settled: true);
+
+        await using (CarinaDbContext throwing = database.Open())
+        {
+            Assert.Equal(
+                RecordingDiscard.Discarded,
+                await new RecordingDirectory(throwing).DiscardAsync(written.Id, Cancel));
+        }
+
+        Assert.True(recorded.EffectiveEndAt > Now);
+        Assert.Equal(RecordingOutcome.Complete, await OutcomeAsync(recorded.Id));
+        Assert.Equal(ReservationDiscard.Discarded, await DiscardAsync(recorded.Id));
+    }
+
+    [Fact]
+    public async Task AMomentThatIsNotInUtcIsRefusedRatherThanComparedAgainstTheWindow()
+    {
+        Reservation standing = ReservationFixtures.Rehydrated(ReservationState.Cancelled);
+        await AddAsync(standing);
+
+        await using CarinaDbContext discarding = database.Open();
+        ArgumentException refused = await Assert.ThrowsAsync<ArgumentException>(
+            () => new ReservationRepository(discarding).DiscardAsync(
+                standing.Id,
+                DateTime.SpecifyKind(Now, DateTimeKind.Local),
+                Cancel));
+
+        Assert.Equal("at", refused.ParamName);
+        Assert.Equal(1, await ReservationRows(standing.Id));
     }
 
     [Fact]
@@ -121,6 +252,9 @@ public sealed class ReservationDiscardTests(RepositoryDatabase database)
         Assert.Equal(1, await ReservationRows(recorded.Id));
     }
 
+    private static Reservation Closed(ReservationState state)
+        => ReservationFixtures.Rehydrated(state, startAt: Now.AddHours(-3), endAt: Now.AddHours(-2));
+
     private async Task ClaimAsync(ReservationId id)
     {
         await using CarinaDbContext claiming = database.Open();
@@ -128,11 +262,11 @@ public sealed class ReservationDiscardTests(RepositoryDatabase database)
         Assert.True(await new ReservationRecordingContract(claiming).ClaimAsync(id, Now, Cancel));
     }
 
-    private async Task<ReservationDiscard> DiscardAsync(ReservationId id)
+    private async Task<ReservationDiscard> DiscardAsync(ReservationId id, DateTime? at = null)
     {
         await using CarinaDbContext discarding = database.Open();
 
-        return await new ReservationRepository(discarding).DiscardAsync(id, Cancel);
+        return await new ReservationRepository(discarding).DiscardAsync(id, at ?? Now, Cancel);
     }
 
     private async Task<int> ReservationRows(ReservationId id)

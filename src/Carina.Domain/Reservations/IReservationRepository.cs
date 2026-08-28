@@ -14,6 +14,8 @@ public enum ReservationDiscard
     TurningIntoARecording = 3,
 
     RecordingCameOfIt = 4,
+
+    StillToBeRecorded = 5,
 }
 
 public interface IReservationRepository
@@ -40,5 +42,8 @@ public interface IReservationRepository
 
     Task WithdrawAsync(IReadOnlyList<Reservation> reservations, CancellationToken cancellationToken);
 
-    Task<ReservationDiscard> DiscardAsync(ReservationId id, CancellationToken cancellationToken);
+    Task<ReservationDiscard> DiscardAsync(
+        ReservationId id,
+        DateTime at,
+        CancellationToken cancellationToken);
 }

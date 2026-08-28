@@ -14,6 +14,8 @@ namespace Carina.Infrastructure.Persistence.Repositories;
 
 public sealed class ReservationRepository(CarinaDbContext context) : IReservationRepository
 {
+    private const string MarginAfterProperty = nameof(Reservation.MarginAfter);
+
     public async Task<PaginatedList<Reservation>> ListAsync(
         ReservationQuery query,
         CancellationToken cancellationToken)
@@ -175,14 +177,24 @@ public sealed class ReservationRepository(CarinaDbContext context) : IReservatio
         await context.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task<ReservationDiscard> DiscardAsync(ReservationId id, CancellationToken cancellationToken)
+    public async Task<ReservationDiscard> DiscardAsync(
+        ReservationId id,
+        DateTime at,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(id);
+
+        DateTime moment = InUtc(at);
 
         int discarded = await context.Set<Reservation>()
             .Where(reservation => reservation.Id == id)
             .Where(reservation => reservation.StartedAt == null || reservation.RecordingOutcome != null)
             .Where(reservation => !context.Set<Recording>().Any(recording => recording.ReservationId == id))
+            .Where(reservation => (reservation.State != ReservationState.Scheduled
+                                   && reservation.State != ReservationState.Conflict)
+                                  || reservation.RecordingOutcome != null
+                                  || reservation.EndAt.AddSeconds(
+                                      EF.Property<int>(reservation, MarginAfterProperty)) <= moment)
             .ExecuteDeleteAsync(cancellationToken);
 
         if (discarded > 0)
@@ -195,11 +207,27 @@ public sealed class ReservationRepository(CarinaDbContext context) : IReservatio
             return ReservationDiscard.NoSuchReservation;
         }
 
-        return await context.Set<Recording>()
-            .AnyAsync(recording => recording.ReservationId == id, cancellationToken)
-            ? ReservationDiscard.RecordingCameOfIt
-            : ReservationDiscard.TurningIntoARecording;
+        if (await context.Set<Recording>()
+            .AnyAsync(recording => recording.ReservationId == id, cancellationToken))
+        {
+            return ReservationDiscard.RecordingCameOfIt;
+        }
+
+        return await context.Set<Reservation>().AnyAsync(
+            reservation => reservation.Id == id
+                           && reservation.StartedAt != null
+                           && reservation.RecordingOutcome == null,
+            cancellationToken)
+            ? ReservationDiscard.TurningIntoARecording
+            : ReservationDiscard.StillToBeRecorded;
     }
+
+    private static DateTime InUtc(DateTime at)
+        => at.Kind is DateTimeKind.Utc
+            ? at
+            : throw new ArgumentException(
+                $"A moment is a UTC instant, but this one has Kind={at.Kind}.",
+                nameof(at));
 
     private static IQueryable<Reservation> StandingAnyOf(
         IQueryable<Reservation> found,

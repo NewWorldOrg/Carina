@@ -33,6 +33,8 @@ public enum ReservationFailure
     TurningIntoARecording = 11,
 
     RecordingCameOfIt = 12,
+
+    StillToBeRecorded = 13,
 }
 
 public sealed record ReservationSettlement(
@@ -167,7 +169,7 @@ public sealed class ReservationService(
     {
         ArgumentNullException.ThrowIfNull(id);
 
-        return await reservations.DiscardAsync(id, cancellationToken) switch
+        return await reservations.DiscardAsync(id, clock.GetUtcNow().UtcDateTime, cancellationToken) switch
         {
             ReservationDiscard.Discarded => ServiceResult<ReservationDiscarded, ReservationFailure>.Success(
                 new ReservationDiscarded(id)),
@@ -182,6 +184,11 @@ public sealed class ReservationService(
                     + "written down yet, so there is nothing to throw away before it. Asking again once that "
                     + "recording is there says which recording to throw away first.",
                     ReservationFailure.TurningIntoARecording),
+            ReservationDiscard.StillToBeRecorded =>
+                ServiceResult<ReservationDiscarded, ReservationFailure>.Failure(
+                    $"Reservation {id.Value} is still to be recorded. A reservation that is still standing is "
+                    + "cancelled, which keeps the record of it, and a cancelled one is what is thrown away.",
+                    ReservationFailure.StillToBeRecorded),
             _ => Missing<ReservationDiscarded>(id),
         };
     }
