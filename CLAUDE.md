@@ -215,12 +215,15 @@ nothing.
   column, `lower(pg_catalog.normalize(name || ' ' || summary, 'NFKC'))`, and no
   request folds text in C#. All the running application takes from
   `ProgrammeSearchText` is two constants the column definition is built from, so the
-  form and the joining space are spelled once; `String.Normalize` is never reached
-  and `ProgrammeSearchMatching` has no production caller. What they are for is
-  everything that has to judge a programme **without** running a query: a rule that
-  books a recording by itself is the next one. That is a second implementation of
-  the same predicate, and a second implementation is exactly how the search came to
-  have two answers before.
+  form and the joining space are spelled once, and answering a request never reaches
+  `String.Normalize`. What `ProgrammeSearchMatching` is for is everything that has to
+  judge a programme **without** running a query, and the rule matcher is the first
+  caller it has: a rule keeps its conditions as the same query string a search is
+  asked by, is read by `ProgrammeSearchQuery`, has its broadcast type and the guide's
+  unlisted services worked out by the same scope, and is then answered programme by
+  programme by that predicate. That is a second implementation of the same
+  predicate, and a second implementation is exactly how the search came to have two
+  answers before.
 
   So the two are held equal by measurement rather than by intention.
   `ProgrammeSearchText` is that column written out in C#, and a database test pushes
@@ -242,6 +245,15 @@ nothing.
   default culture to the invariant one before they do anything else**, and the
   reading and folding are measured under seven languages — including ones where
   lowercasing `I` and parsing `-1` genuinely differ — to say that no answer moves.
+
+- **Which rule takes a programme is decided by weight, never by age or identifier
+  alone.** Rules are read in falling priority, then oldest first, then by identifier
+  as the last resort, and the first one to take a programme keeps it. A rule whose
+  query cannot be read is turned off and reported rather than passed over in
+  silence, and the run carries on: one unreadable rule does not silence the rest.
+  What a page would have held — the sort, the page and how many fit on it — is read
+  and then left out of the decision, because honouring the page size would drop
+  programmes the rule was written to take.
 
 - **The search across both layers keeps the "already held in the hot layer"
   exclusion above the union, never inside the archive arm.** A `NOT EXISTS` in the

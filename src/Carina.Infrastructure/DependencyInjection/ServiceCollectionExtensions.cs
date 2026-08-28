@@ -21,6 +21,7 @@ using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Programmes;
 using Carina.Infrastructure.Recordings;
 using Carina.Infrastructure.Reservations;
+using Carina.Infrastructure.Rules;
 using Carina.Infrastructure.Scanning;
 using Carina.Infrastructure.Thumbnails;
 
@@ -104,6 +105,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IServiceReachSettingsRepository, ServiceReachSettingsRepository>();
         services.AddScoped<ITuneFailureReporter, CandidateTuneFailureReporter>();
         services.AddScoped<ReservationSchedulingService>();
+        services.AddScoped<RuleMatcher>();
         services.AddScoped<ProgrammeWriter>();
         services.AddScoped<StreamVisitor>();
         services.AddScoped<CollectionRound>();
