@@ -1,3 +1,5 @@
+using System.Globalization;
+
 using Carina.Api.Authentication;
 using Carina.Api.Common;
 using Carina.Api.Events;
@@ -10,6 +12,9 @@ using Carina.Infrastructure.Events;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+
+CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
+CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
