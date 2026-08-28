@@ -266,6 +266,36 @@ public sealed class RuleMatcherTests
     }
 
     [Fact]
+    public async Task TwoChannelsCarryingTheSameEventNumberAreTwoProgrammes()
+    {
+        var streams = new HeldStreams([Terrestrial(Listed, Beside)]);
+        RuleMatcher matcher = Matcher(streams);
+
+        RuleMatchRun run = await matcher.AgainstAsync(
+            [Written("keyword=hill", 10, 1)],
+            Guide(Programme(Listed, 7, "hill walking"), Programme(Beside, 7, "hillside")),
+            Cancel);
+
+        Assert.Equal(["hill walking", "hillside"], Named(run));
+    }
+
+    [Fact]
+    public async Task AnEventNumberUsedAgainLaterIsAnotherProgramme()
+    {
+        var streams = new HeldStreams([Terrestrial(Listed)]);
+        RuleMatcher matcher = Matcher(streams);
+
+        RuleMatchRun run = await matcher.AgainstAsync(
+            [Written("keyword=hill", 10, 1)],
+            Guide(
+                Broadcast(Listed, 7, "hill walking", [], false, At.AddHours(1)),
+                Broadcast(Listed, 7, "hillside", [], false, At.AddDays(7))),
+            Cancel);
+
+        Assert.Equal(["hill walking", "hillside"], Named(run));
+    }
+
+    [Fact]
     public async Task AnEventThatOnlyShadowsAnotherIsNotTaken()
     {
         var streams = new HeldStreams([Terrestrial(Listed)]);
@@ -319,13 +349,14 @@ public sealed class RuleMatcherTests
         int carried,
         string name,
         IReadOnlyList<ProgrammeGenre> genres,
-        bool shadow)
+        bool shadow,
+        DateTime? began = null)
         => Domain.Programmes.Programme.Discover(
             new ProgrammeBroadcast(
                 new ProgrammeId(new NetworkId(Network), new ServiceId(service), new EventId(carried)),
                 new TransportStreamId(32_736),
-                At.AddHours(1),
-                At.AddHours(2),
+                began ?? At.AddHours(1),
+                (began ?? At.AddHours(1)).AddHours(1),
                 name,
                 "a summary",
                 shadow)
