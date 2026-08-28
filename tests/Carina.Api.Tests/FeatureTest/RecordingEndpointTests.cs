@@ -538,13 +538,59 @@ public sealed class RecordingEndpointTests
         => Assert.Equal(6, Enum.GetValues<ThumbnailRemake>().Length);
 
     [Theory]
-    [InlineData("DELETE", "/api/recordings/{0}")]
     [InlineData("DELETE", "/api/recordings")]
-    public async Task ThisDomainHasNoWayToDeleteARecording(string method, string path)
+    [InlineData("DELETE", "/api/recordings/{0}/stop")]
+    [InlineData("DELETE", "/api/recordings/{0}/thumbnail")]
+    [InlineData("DELETE", "/api/recordings/integrity/run")]
+    public async Task TheOnlyPlaceThisDomainDeletesFromIsTheOneRecordingAPersonNamed(string method, string path)
     {
         await using var feature = new RecordingFeature();
         Recording recording = feature.Held();
 
+        using HttpResponseMessage response = await SendingAsync(feature, method, path, recording);
+
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task TheLedgerCheckIsNotSomethingTheOneDeletingRouteCanBeTalkedIntoThrowingAway()
+    {
+        await using var feature = new RecordingFeature();
+        Recording recording = feature.Held();
+
+        using HttpResponseMessage response = await SendingAsync(
+            feature,
+            "DELETE",
+            "/api/recordings/integrity",
+            recording);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Single(feature.Recordings.Recordings);
+        Assert.Empty(feature.Eraser.Asked);
+    }
+
+    [Fact]
+    public async Task TheOneRecordingAPersonNamedIsReachedByDeleteRatherThanRefusedAsAMethod()
+    {
+        await using var feature = new RecordingFeature();
+        Recording recording = feature.Held();
+
+        using HttpResponseMessage response = await SendingAsync(
+            feature,
+            "DELETE",
+            "/api/recordings/{0}",
+            recording);
+
+        Assert.NotEqual(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    private static async Task<HttpResponseMessage> SendingAsync(
+        RecordingFeature feature,
+        string method,
+        string path,
+        Recording recording)
+    {
         using var asking = new HttpRequestMessage(
             new HttpMethod(method),
             new Uri(
@@ -554,9 +600,7 @@ public sealed class RecordingEndpointTests
 
         asking.Content = empty;
 
-        using HttpResponseMessage response = await feature.Client.SendAsync(asking);
-
-        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+        return await feature.Client.SendAsync(asking);
     }
 
     [Theory]

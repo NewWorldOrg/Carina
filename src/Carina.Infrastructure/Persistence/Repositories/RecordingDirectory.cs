@@ -116,6 +116,24 @@ public sealed class RecordingDirectory(CarinaDbContext context) : IRecordingDire
         return RecordingHalt.Written;
     }
 
+    public async Task<RecordingDiscard> DiscardAsync(RecordingId id, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(id);
+
+        int discarded = await context.Set<Recording>()
+            .Where(recording => recording.Id == id && recording.Outcome != null)
+            .ExecuteDeleteAsync(cancellationToken);
+
+        if (discarded > 0)
+        {
+            return RecordingDiscard.Discarded;
+        }
+
+        return await context.Set<Recording>().AnyAsync(recording => recording.Id == id, cancellationToken)
+            ? RecordingDiscard.StillRecording
+            : RecordingDiscard.NoSuchRecording;
+    }
+
     private static IQueryable<Recording> EndedAnyOf(
         IQueryable<Recording> found,
         IReadOnlyList<RecordingOutcome> outcomes)

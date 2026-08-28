@@ -24,16 +24,26 @@ public enum RecordingFailure
     NowhereToPutPictures = 7,
 
     FileOutOfReach = 8,
+
+    RootOutOfReach = 9,
+
+    FilesLeftBehind = 10,
+
+    OneIsAlreadyBeingDiscarded = 11,
 }
 
 public sealed record ThumbnailRemade(Recording Recording, ThumbnailRemake Remake);
 
 public sealed record RecordingStopAsked(Recording Recording, RecordingStopReason Reason, DateTime AskedAt);
 
+public sealed record RecordingDiscarded(RecordingId Id, int FilesRemoved);
+
 public sealed class RecordingService(
     IRecordingDirectory recordings,
     IDriverClient driver,
     IThumbnailRemaker thumbnails,
+    IRecordingFileEraser eraser,
+    RecordingDeletions deletions,
     TimeProvider clock)
 {
     public async Task<ServiceResult<PaginatedList<Recording>>> ListAsync(
@@ -156,6 +166,66 @@ public sealed class RecordingService(
         return await recordings.FindAsync(id, cancellationToken) is { } drawn
             ? ServiceResult<ThumbnailRemade, RecordingFailure>.Success(new ThumbnailRemade(drawn, remake))
             : Missing<ThumbnailRemade>(id);
+    }
+
+    public async Task<ServiceResult<RecordingDiscarded, RecordingFailure>> DiscardAsync(
+        RecordingId id,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(id);
+
+        if (await recordings.FindAsync(id, cancellationToken) is not { } recording)
+        {
+            return Missing<RecordingDiscarded>(id);
+        }
+
+        if (recording.IsInFlight)
+        {
+            return ServiceResult<RecordingDiscarded, RecordingFailure>.Failure(
+                $"Recording {id.Wire} is still being written, so it is stopped before it is thrown away.",
+                RecordingFailure.StillRecording);
+        }
+
+        using IDisposable? turn = deletions.Begin(id);
+
+        if (turn is null)
+        {
+            return ServiceResult<RecordingDiscarded, RecordingFailure>.Failure(
+                $"Recording {deletions.Underway?.Wire} is being thrown away; only one is at a time, so this "
+                + "one waits rather than running beside it.",
+                RecordingFailure.OneIsAlreadyBeingDiscarded);
+        }
+
+        RecordingErasure erasure = await eraser.EraseAsync(
+            id,
+            recording.OutputRoot,
+            recording.FileName,
+            cancellationToken);
+
+        if (erasure.Fault is ErasureFault.RootOutOfReach)
+        {
+            return ServiceResult<RecordingDiscarded, RecordingFailure>.Failure(
+                $"{erasure.Note} Recording {id.Wire} is left as it was.",
+                RecordingFailure.RootOutOfReach);
+        }
+
+        if (erasure.Fault is ErasureFault.FileLeftBehind)
+        {
+            return ServiceResult<RecordingDiscarded, RecordingFailure>.Failure(
+                $"{erasure.Note} Recording {id.Wire} is still in the ledger, which is what says the throwing "
+                + "away is unfinished, and asking again carries on from here.",
+                RecordingFailure.FilesLeftBehind);
+        }
+
+        return await recordings.DiscardAsync(id, cancellationToken) switch
+        {
+            RecordingDiscard.Discarded => ServiceResult<RecordingDiscarded, RecordingFailure>.Success(
+                new RecordingDiscarded(id, erasure.FilesRemoved)),
+            RecordingDiscard.StillRecording => ServiceResult<RecordingDiscarded, RecordingFailure>.Failure(
+                $"Recording {id.Wire} is still being written, so it is stopped before it is thrown away.",
+                RecordingFailure.StillRecording),
+            _ => Missing<RecordingDiscarded>(id),
+        };
     }
 
     private static ServiceResult<T, RecordingFailure> Missing<T>(RecordingId id)

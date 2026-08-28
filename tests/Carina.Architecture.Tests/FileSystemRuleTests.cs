@@ -29,6 +29,7 @@ public sealed class FileSystemRuleTests
         "/Carina.Infrastructure/Collection/StreamHarvest.cs .CopyTo(",
         "/Carina.Infrastructure/Integrity/LocalRecordingFileSurvey.cs .Replace(",
         "/Carina.Infrastructure/Programmes/ProgrammeSearchQuery.cs .Replace(",
+        "/Carina.Infrastructure/Recordings/LocalRecordingFileEraser.cs File.Delete",
         "/Carina.Infrastructure/Thumbnails/FfmpegThumbnailRenderer.cs Directory.CreateDirectory",
         "/Carina.Infrastructure/Thumbnails/FfmpegThumbnailRenderer.cs Process.Start",
         "/Carina.Infrastructure/Thumbnails/FfmpegThumbnailRenderer.cs ProcessStartInfo",

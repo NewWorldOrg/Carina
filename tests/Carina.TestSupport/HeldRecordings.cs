@@ -10,6 +10,8 @@ public sealed class HeldRecordings : IRecordingDirectory
 
     public Action? WhenHalting { get; set; }
 
+    public Action? WhenDiscarding { get; set; }
+
     public Task<PaginatedList<Recording>> ListAsync(RecordingQuery query, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
@@ -99,6 +101,27 @@ public sealed class HeldRecordings : IRecordingDirectory
         held.Abort(at);
 
         return Task.FromResult(RecordingHalt.Written);
+    }
+
+    public Task<RecordingDiscard> DiscardAsync(RecordingId id, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(id);
+
+        WhenDiscarding?.Invoke();
+
+        if (Recordings.FirstOrDefault(recording => recording.Id.Equals(id)) is not { } held)
+        {
+            return Task.FromResult(RecordingDiscard.NoSuchRecording);
+        }
+
+        if (held.IsInFlight)
+        {
+            return Task.FromResult(RecordingDiscard.StillRecording);
+        }
+
+        Recordings.Remove(held);
+
+        return Task.FromResult(RecordingDiscard.Discarded);
     }
 
     private static Recording Apart(Recording held)

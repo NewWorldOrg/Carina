@@ -18,6 +18,7 @@ public sealed class ThumbnailRuleTests
                 "/Carina.Infrastructure/DependencyInjection/ServiceCollectionExtensions.cs",
                 "/Carina.Api/Services/RecordingService.cs",
                 "/Carina.Api/Responder/Recordings/RecordingDetailResponder.cs",
+                "/Carina.Infrastructure/Recordings/LocalRecordingFileEraser.cs",
             ],
             ThumbnailRules.AllowedToNameTheMachinery);
         Assert.Empty(ThumbnailRules.FilesOutsideTheFeatureThatReachIntoIt(RepositoryLayout.SourceDirectory));
