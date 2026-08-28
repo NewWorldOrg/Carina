@@ -4,6 +4,7 @@ using Carina.BroadcastTestSupport;
 using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
+using Carina.Domain.Reservations;
 using Carina.Infrastructure.Collection;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
@@ -142,8 +143,62 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
         Assert.Equal(new ProgrammesWritten(0, 0, 1), written);
     }
 
-    private static ProgrammeWriter Writer(CarinaDbContext context)
-        => new(new ProgrammeRepository(context), new UnguardedWrites(), new StillClock(), new SilentEvents());
+    [Fact]
+    public async Task AWriteThatStoredAProgrammeAsksForTheRulesToBeReadAgainstItAgain()
+    {
+        int network = NextNetwork();
+        var notices = new CountedNotices();
+        await using CarinaDbContext context = database.Open();
+
+        await Writer(context, notices).WriteAsync([Table(network, 1)], Cancel);
+
+        Assert.Equal([RecalculationTrigger.ProgrammesChanged], notices.Nudged);
+    }
+
+    [Fact]
+    public async Task AWriteThatStoredNothingAsksForNothingToBeReadAgain()
+    {
+        int network = NextNetwork();
+        var notices = new CountedNotices();
+        await using CarinaDbContext context = database.Open();
+        ProgrammeWriter writer = Writer(context, notices);
+
+        await writer.WriteAsync([Table(network, 1)], Cancel);
+        notices.Nudged.Clear();
+
+        await writer.WriteAsync([Table(network, 1)], Cancel);
+
+        Assert.Empty(notices.Nudged);
+    }
+
+    [Fact]
+    public async Task AWriteThatOnlyThrewAwayWhatItCouldNotReadTellsTheScreensAndAsksForNoRulesToBeRead()
+    {
+        int network = NextNetwork();
+        var notices = new CountedNotices();
+        var events = new SilentEvents();
+        await using CarinaDbContext context = database.Open();
+
+        ProgrammesWritten written = await Writer(context, notices, events)
+            .WriteAsync([Table(network, 1, unreadableStart: true)], Cancel);
+
+        Assert.Equal(0, written.Added);
+        Assert.Equal(0, written.Updated);
+        Assert.True(written.Discarded > 0);
+        Assert.Equal([AppEventName.Programs], events.Signalled);
+        Assert.Empty(notices.Nudged);
+    }
+
+    private static ProgrammeWriter Writer(
+        CarinaDbContext context,
+        IRecalculationNotice? notices = null,
+        SilentEvents? events = null)
+        => new(
+            new ProgrammeRepository(context),
+            new UnguardedWrites(),
+            new StillClock(),
+            events ?? new SilentEvents(),
+            notices ?? new CountedNotices());
 
     private static int NextNetwork() => BroadcastIds.NextNetwork();
 
@@ -219,11 +274,7 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
         int network = NextNetwork();
         var events = new SilentEvents();
         await using CarinaDbContext context = database.Open();
-        var writer = new ProgrammeWriter(
-            new ProgrammeRepository(context),
-            new UnguardedWrites(),
-            new StillClock(),
-            events);
+        ProgrammeWriter writer = Writer(context, events: events);
 
         await writer.WriteAsync([Table(network, 1)], Cancel);
 
@@ -236,11 +287,7 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
         int network = NextNetwork();
         var events = new SilentEvents();
         await using CarinaDbContext context = database.Open();
-        var writer = new ProgrammeWriter(
-            new ProgrammeRepository(context),
-            new UnguardedWrites(),
-            new StillClock(),
-            events);
+        ProgrammeWriter writer = Writer(context, events: events);
 
         await writer.WriteAsync([Table(network, 1)], Cancel);
         events.Signalled.Clear();

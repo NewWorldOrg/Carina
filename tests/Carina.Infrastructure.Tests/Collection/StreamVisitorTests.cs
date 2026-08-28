@@ -173,7 +173,12 @@ public sealed class StreamVisitorTests(RepositoryDatabase database)
     private static StreamVisitor Visitor(ScriptedDriverClient driver, CarinaDbContext context)
         => new(
             driver,
-            new ProgrammeWriter(new ProgrammeRepository(context), new UnguardedWrites(), new StillClock(), new SilentEvents()),
+            new ProgrammeWriter(
+                new ProgrammeRepository(context),
+                new UnguardedWrites(),
+                new StillClock(),
+                new SilentEvents(),
+                new CountedNotices()),
             new CollectionSettings(),
             TimeProvider.System);
 

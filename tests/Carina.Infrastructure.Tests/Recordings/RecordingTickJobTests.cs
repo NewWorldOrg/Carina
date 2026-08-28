@@ -136,6 +136,46 @@ public sealed class RecordingTickJobTests
         await job.StopAsync(Cancel);
     }
 
+    [Fact]
+    public async Task ATickThatStartedARecordingAsksForTheAllocationToBeSettledAgain()
+    {
+        var clock = new HurriedTicks();
+        var driver = new RecordingDriver();
+        var notices = new CountedNotices();
+        using RecordingTickJob job = Job(
+            Once(Due(1)),
+            new HeldRecordings(),
+            driver,
+            clock,
+            notices: notices);
+        using var stopping = new CancellationTokenSource();
+
+        await job.StartAsync(stopping.Token);
+        await Eventually.Happens(() => driver.Started.Count >= 1, "the loop never started a recording");
+        await Eventually.Happens(() => notices.Nudged.Count >= 1, "the tick that started one asked for nothing");
+        await stopping.CancelAsync();
+        await job.StopAsync(Cancel);
+
+        Assert.Equal([RecalculationTrigger.RecordingStarted], notices.Nudged.Distinct());
+    }
+
+    [Fact]
+    public async Task ATickThatStartedAndStoppedNothingAsksForNothing()
+    {
+        var clock = new HurriedTicks();
+        var recordings = new HeldRecordings();
+        var notices = new CountedNotices();
+        using RecordingTickJob job = Job(Holding(), recordings, new RecordingDriver(), clock, notices: notices);
+        using var stopping = new CancellationTokenSource();
+
+        await job.StartAsync(stopping.Token);
+        await Eventually.Happens(() => recordings.Listings >= 2, "the loop never ticked twice");
+        await stopping.CancelAsync();
+        await job.StopAsync(Cancel);
+
+        Assert.Empty(notices.Nudged);
+    }
+
     private static PlannedReservations Holding(params RecordingTick[] ticks)
         => new PlannedReservations().Holding(ticks);
 
@@ -153,7 +193,8 @@ public sealed class RecordingTickJobTests
         RecordingDriver driver,
         TimeProvider clock,
         RecordingSettings? settings = null,
-        WhatWasSaid? said = null)
+        WhatWasSaid? said = null,
+        CountedNotices? notices = null)
     {
         RecordingSettings held = settings ?? RecordingSettings.Default;
         var services = new ServiceCollection();
@@ -170,6 +211,7 @@ public sealed class RecordingTickJobTests
         return new RecordingTickJob(
             services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),
             held,
+            notices ?? new CountedNotices(),
             clock,
             said is null ? NullLogger<RecordingTickJob>.Instance : said.Logger());
     }

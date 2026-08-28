@@ -117,6 +117,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton(TimeProvider.System);
         services.AddHttpClient<IOidcGateway, OidcGateway>();
         services.TryAddSingleton(new RuleApplicationSettings());
+        services.TryAddSingleton(new RecalculationSettings());
+        services.AddSingleton<ReservationRecalculationHostedService>();
+        services.TryAddSingleton<IRecalculationNotice>(provider =>
+            provider.GetRequiredService<ReservationRecalculationHostedService>());
         services.TryAddSingleton(SessionPolicy.Default);
         services.TryAddSingleton(PasswordHashPolicy.Default);
         services.TryAddSingleton(LoginRatePolicy.Default);
@@ -168,6 +172,8 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<RideAlongHarvester>();
         services.AddHostedService(provider => provider.GetRequiredService<IntegrityCheckJob>());
         services.AddHostedService(provider => provider.GetRequiredService<ThumbnailJob>());
+        services.AddHostedService(provider =>
+            provider.GetRequiredService<ReservationRecalculationHostedService>());
 
         services.AddCarinaRecording();
 

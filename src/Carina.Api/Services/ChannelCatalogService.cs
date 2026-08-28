@@ -3,6 +3,7 @@ using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.Events;
+using Carina.Domain.Reservations;
 
 namespace Carina.Api.Services;
 
@@ -30,6 +31,7 @@ public sealed class ChannelCatalogService(
     ICandidateChannelRepository candidates,
     IDriverClient driver,
     IAppEventPublisher events,
+    IRecalculationNotice notices,
     TimeProvider clock)
 {
     public async Task<ServiceResult<IReadOnlyList<ServiceWithChannels>>> ListAsync(
@@ -79,6 +81,7 @@ public sealed class ChannelCatalogService(
         {
             await candidates.ClearSelectionAsync(networkId, serviceId, cancellationToken);
             events.Signal(AppEventName.Tuners);
+            notices.Nudge(RecalculationTrigger.SelectedChannelChanged);
 
             return ServiceResult<ServiceWithChannels, CatalogFailure>.Success(
                 await GatherAsync(service, cancellationToken));
@@ -105,6 +108,7 @@ public sealed class ChannelCatalogService(
             clock.GetUtcNow().UtcDateTime,
             cancellationToken);
         events.Signal(AppEventName.Tuners);
+        notices.Nudge(RecalculationTrigger.SelectedChannelChanged);
 
         return ServiceResult<ServiceWithChannels, CatalogFailure>.Success(
             await GatherAsync(service, cancellationToken));

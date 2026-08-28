@@ -5,6 +5,7 @@ using System.Text.Json;
 using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
+using Carina.Domain.Reservations;
 using Carina.TestSupport;
 
 using Microsoft.AspNetCore.TestHost;
@@ -103,6 +104,7 @@ internal sealed class CatalogFeature : IAsyncDisposable
                 services.AddSingleton<IBroadcastServiceRepository>(Services);
                 services.AddSingleton<ICandidateChannelRepository>(Candidates);
                 services.AddSingleton<IDriverClient>(Driver);
+                services.AddSingleton<IRecalculationNotice>(Notices);
             }))
             .CreateAuthenticatedClient();
 
@@ -113,6 +115,8 @@ internal sealed class CatalogFeature : IAsyncDisposable
     public HeldCandidates Candidates { get; } = new();
 
     public TunerHoldingDriverClient Driver { get; } = new();
+
+    public CountedNotices Notices { get; } = new();
 
     public CandidateChannel Seed(int serviceId, string name, params TuningParameters[] tunings)
     {

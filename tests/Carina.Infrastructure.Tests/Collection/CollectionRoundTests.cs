@@ -353,7 +353,12 @@ public sealed class CollectionRoundTests(RepositoryDatabase database)
             programmes,
             new StreamVisitor(
                 driver,
-                new ProgrammeWriter(programmes, new UnguardedWrites(), new StillClock(), new SilentEvents()),
+                new ProgrammeWriter(
+                    programmes,
+                    new UnguardedWrites(),
+                    new StillClock(),
+                    new SilentEvents(),
+                    new CountedNotices()),
                 carried,
                 clock ?? TimeProvider.System),
             board ?? new RescanNoticeBoard(new SilentEvents(), TimeProvider.System),

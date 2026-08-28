@@ -2,12 +2,14 @@ using Carina.Api.Common;
 using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
+using Carina.Domain.Reservations;
 
 namespace Carina.Api.Services;
 
 public sealed class TunerLedgerService(
     IDriverClient driver,
     ICandidateChannelRepository candidates,
+    IRecalculationNotice notices,
     TimeProvider clock)
 {
     public const string CapabilityMissingTitle = "capabilityMissing";
@@ -88,6 +90,8 @@ public sealed class TunerLedgerService(
         // than a configuration change, and does not come through here.
         await candidates.RequireRevalidationAsync(cancellationToken);
 
+        notices.Nudge(RecalculationTrigger.TunerConfigurationChanged);
+
         DriverCall<IReadOnlyList<TunerSnapshot>> tuners = await driver.GetTunersAsync(cancellationToken);
 
         return ServiceResult<TunerLedgerView, TunerLedgerFailure>.Success(Merge(document, tuners));
@@ -100,9 +104,14 @@ public sealed class TunerLedgerService(
     {
         DriverCall<TunerSnapshot> toggled = await driver.ToggleTunerAsync(deviceId, disabled, cancellationToken);
 
-        return toggled.TryGetValue(out TunerSnapshot? snapshot)
-            ? ServiceResult<TunerSnapshot, TunerLedgerFailure>.Success(snapshot)
-            : Failed<TunerSnapshot, TunerSnapshot>(toggled);
+        if (!toggled.TryGetValue(out TunerSnapshot? snapshot))
+        {
+            return Failed<TunerSnapshot, TunerSnapshot>(toggled);
+        }
+
+        notices.Nudge(RecalculationTrigger.TunerConfigurationChanged);
+
+        return ServiceResult<TunerSnapshot, TunerLedgerFailure>.Success(snapshot);
     }
 
     private TunerLedgerView Merge(TunerLedgerDto document, DriverCall<IReadOnlyList<TunerSnapshot>> tuners)

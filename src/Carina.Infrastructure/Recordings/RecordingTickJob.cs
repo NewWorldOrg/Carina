@@ -1,3 +1,5 @@
+using Carina.Domain.Reservations;
+
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -7,6 +9,7 @@ namespace Carina.Infrastructure.Recordings;
 public sealed class RecordingTickJob(
     IServiceScopeFactory scopes,
     RecordingSettings settings,
+    IRecalculationNotice notices,
     TimeProvider clock,
     ILogger<RecordingTickJob> logger) : BackgroundService
 {
@@ -29,7 +32,7 @@ public sealed class RecordingTickJob(
 
             try
             {
-                Report(await TickAsync(stoppingToken));
+                Report(Asked(await TickAsync(stoppingToken)));
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -47,6 +50,21 @@ public sealed class RecordingTickJob(
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
 
         return await scope.ServiceProvider.GetRequiredService<RecordingRound>().RunAsync(cancellationToken);
+    }
+
+    private RecordingRun Asked(RecordingRun run)
+    {
+        if (run.Started.Count > 0)
+        {
+            notices.Nudge(RecalculationTrigger.RecordingStarted);
+        }
+
+        if (run.Stopped.Count > 0)
+        {
+            notices.Nudge(RecalculationTrigger.RecordingEnded);
+        }
+
+        return run;
     }
 
     private void Report(RecordingRun run)
