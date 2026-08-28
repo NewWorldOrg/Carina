@@ -3,6 +3,7 @@ using System.Linq.Expressions;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
+using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
 using Carina.Infrastructure.Persistence.Configurations;
@@ -172,6 +173,32 @@ public sealed class ReservationRepository(CarinaDbContext context) : IReservatio
         context.RemoveRange(reservations);
 
         await context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<ReservationDiscard> DiscardAsync(ReservationId id, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(id);
+
+        int discarded = await context.Set<Reservation>()
+            .Where(reservation => reservation.Id == id)
+            .Where(reservation => reservation.StartedAt == null || reservation.RecordingOutcome != null)
+            .Where(reservation => !context.Set<Recording>().Any(recording => recording.ReservationId == id))
+            .ExecuteDeleteAsync(cancellationToken);
+
+        if (discarded > 0)
+        {
+            return ReservationDiscard.Discarded;
+        }
+
+        if (!await context.Set<Reservation>().AnyAsync(reservation => reservation.Id == id, cancellationToken))
+        {
+            return ReservationDiscard.NoSuchReservation;
+        }
+
+        return await context.Set<Recording>()
+            .AnyAsync(recording => recording.ReservationId == id, cancellationToken)
+            ? ReservationDiscard.RecordingCameOfIt
+            : ReservationDiscard.TurningIntoARecording;
     }
 
     private static IQueryable<Reservation> StandingAnyOf(

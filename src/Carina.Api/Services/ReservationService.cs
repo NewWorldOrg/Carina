@@ -29,6 +29,10 @@ public enum ReservationFailure
     TunersCannotBeCounted = 9,
 
     SomethingArrivedWhileReading = 10,
+
+    TurningIntoARecording = 11,
+
+    RecordingCameOfIt = 12,
 }
 
 public sealed record ReservationSettlement(
@@ -36,6 +40,8 @@ public sealed record ReservationSettlement(
     AllocationVerdict? Verdict,
     IReadOnlyList<Reservation> Instead,
     int SeatsLeftOut);
+
+public sealed record ReservationDiscarded(ReservationId Id);
 
 public sealed record ReservationDraft(
     ProgrammeId Programme,
@@ -153,6 +159,31 @@ public sealed class ReservationService(
         SchedulingRun run = await scheduler.ReviseAsync(reservation, revision, cancellationToken);
 
         return await SettledAsync(run, reservation, cancellationToken);
+    }
+
+    public async Task<ServiceResult<ReservationDiscarded, ReservationFailure>> DiscardAsync(
+        ReservationId id,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(id);
+
+        return await reservations.DiscardAsync(id, cancellationToken) switch
+        {
+            ReservationDiscard.Discarded => ServiceResult<ReservationDiscarded, ReservationFailure>.Success(
+                new ReservationDiscarded(id)),
+            ReservationDiscard.RecordingCameOfIt =>
+                ServiceResult<ReservationDiscarded, ReservationFailure>.Failure(
+                    $"A recording came of reservation {id.Value}, and the recording is what is kept. Throw that "
+                    + "recording away first, and this reservation goes after it.",
+                    ReservationFailure.RecordingCameOfIt),
+            ReservationDiscard.TurningIntoARecording =>
+                ServiceResult<ReservationDiscarded, ReservationFailure>.Failure(
+                    $"Reservation {id.Value} has been taken up and the recording it is turning into is not "
+                    + "written down yet, so there is nothing to throw away before it. Asking again once that "
+                    + "recording is there says which recording to throw away first.",
+                    ReservationFailure.TurningIntoARecording),
+            _ => Missing<ReservationDiscarded>(id),
+        };
     }
 
     private ServiceResult<ReservationSettlement, ReservationFailure>? Refuses(

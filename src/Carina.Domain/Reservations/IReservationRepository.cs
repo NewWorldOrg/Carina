@@ -5,6 +5,17 @@ namespace Carina.Domain.Reservations;
 
 public sealed record ReservationWindow(DateTime From, DateTime To);
 
+public enum ReservationDiscard
+{
+    Discarded = 1,
+
+    NoSuchReservation = 2,
+
+    TurningIntoARecording = 3,
+
+    RecordingCameOfIt = 4,
+}
+
 public interface IReservationRepository
 {
     Task<PaginatedList<Reservation>> ListAsync(ReservationQuery query, CancellationToken cancellationToken);
@@ -28,4 +39,6 @@ public interface IReservationRepository
     Task SaveAllAsync(IReadOnlyList<Reservation> reservations, CancellationToken cancellationToken);
 
     Task WithdrawAsync(IReadOnlyList<Reservation> reservations, CancellationToken cancellationToken);
+
+    Task<ReservationDiscard> DiscardAsync(ReservationId id, CancellationToken cancellationToken);
 }

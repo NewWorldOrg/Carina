@@ -25,6 +25,8 @@ internal sealed class HeldReservationLedger : IReservationRepository
 {
     private readonly List<Reservation> held = [];
 
+    private readonly HashSet<Guid> recorded = [];
+
     public IReadOnlyList<Reservation> Held => held;
 
     public List<string> Wrote { get; } = [];
@@ -160,6 +162,45 @@ internal sealed class HeldReservationLedger : IReservationRepository
         }
 
         return Task.CompletedTask;
+    }
+
+    public Task<ReservationDiscard> DiscardAsync(ReservationId id, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(id);
+
+        if (held.FirstOrDefault(reservation => reservation.Id.Equals(id)) is not { } standing)
+        {
+            return Task.FromResult(ReservationDiscard.NoSuchReservation);
+        }
+
+        if (recorded.Contains(id.Value))
+        {
+            return Task.FromResult(ReservationDiscard.RecordingCameOfIt);
+        }
+
+        if (standing.IsPinned && standing.RecordingOutcome is null)
+        {
+            return Task.FromResult(ReservationDiscard.TurningIntoARecording);
+        }
+
+        Wrote.Add($"discard {id.Value}");
+        held.Remove(standing);
+
+        return Task.FromResult(ReservationDiscard.Discarded);
+    }
+
+    public void RecordingCameOf(Reservation reservation)
+    {
+        ArgumentNullException.ThrowIfNull(reservation);
+
+        recorded.Add(reservation.Id.Value);
+    }
+
+    public void RecordingThrownAwayFrom(Reservation reservation)
+    {
+        ArgumentNullException.ThrowIfNull(reservation);
+
+        recorded.Remove(reservation.Id.Value);
     }
 
     public Task WithdrawAsync(IReadOnlyList<Reservation> reservations, CancellationToken cancellationToken)
@@ -338,6 +379,9 @@ internal sealed class ReservationFeature : IAsyncDisposable
 
     public Task<(HttpStatusCode Status, JsonElement Body)> GetAsync(string path)
         => SendAsync(new HttpRequestMessage(HttpMethod.Get, new Uri(path, UriKind.Relative)));
+
+    public Task<(HttpStatusCode Status, JsonElement Body)> DeleteAsync(string path)
+        => SendAsync(new HttpRequestMessage(HttpMethod.Delete, new Uri(path, UriKind.Relative)));
 
     public async Task<(HttpStatusCode Status, JsonElement Body)> PostAsync(string path, object? body = null)
     {

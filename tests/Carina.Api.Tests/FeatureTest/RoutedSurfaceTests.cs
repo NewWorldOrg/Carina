@@ -30,6 +30,7 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
             [
                 "DELETE /api/auth/sessions/{id}",
                 "DELETE /api/recordings/{id}",
+                "DELETE /api/reservations/{id:guid}",
                 "DELETE /api/services/{networkId:int}-{serviceId:int}/candidate-channels/{candidateChannelId:guid}",
                 "POST /api/auth/password",
                 "POST /api/epg/archive/forget-service",
@@ -52,6 +53,7 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
             [
                 "DELETE /api/auth/sessions/{id}",
                 "DELETE /api/recordings/{id}",
+                "DELETE /api/reservations/{id:guid}",
                 "DELETE /api/services/{networkId:int}-{serviceId:int}/candidate-channels/{candidateChannelId:guid}",
             ],
             EndpointRules.SurfacesThatDelete(Inventory()));
@@ -83,10 +85,11 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
     }
 
     [Fact]
-    public void TheReservationSurfacesAreTheSixAReservationIsMadeAndChangedThrough()
+    public void TheReservationSurfacesAreTheSevenAReservationIsMadeAndChangedAndThrownAwayThrough()
     {
         Assert.Equal(
             [
+                "DELETE /api/reservations/{id:guid}",
                 "GET /api/reservations",
                 "GET /api/reservations/{id:guid}",
                 "PATCH /api/reservations/{id:guid}",
@@ -102,10 +105,21 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
     }
 
     [Fact]
-    public void TheReservationSurfaceOffersNoWayToDeleteAnything()
+    public void TheOnlyWayToDeleteUnderTheReservationSurfaceIsTheOneAPersonAsksForByHand()
     {
-        Assert.Empty(EndpointRules.SurfacesThatDeleteUnder(Inventory(), "/api/reservations"));
-        Assert.NotEmpty(EndpointRules.SurfacesThatDelete(Inventory()));
+        Assert.Equal(
+            ["DELETE /api/reservations/{id:guid}"],
+            EndpointRules.SurfacesThatDeleteUnder(Inventory(), "/api/reservations"));
+    }
+
+    [Fact]
+    public void TheOneWayToDeleteAReservationSaysItDestroys()
+    {
+        Assert.Equal(
+            EndpointEffect.Destructive,
+            Inventory()
+                .Single(surface => surface.ToString() == "DELETE /api/reservations/{id:guid}")
+                .Effect);
     }
 
     [Fact]
