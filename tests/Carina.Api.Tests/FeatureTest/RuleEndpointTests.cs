@@ -1,6 +1,8 @@
 using System.Net;
 using System.Text.Json;
 
+using Carina.Contracts;
+
 using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
 using Carina.Infrastructure.Reservations;
@@ -28,6 +30,7 @@ public sealed class RuleEndpointTests
         Assert.True(body.GetProperty("data").GetProperty("enabled").GetBoolean());
         Assert.Single(feature.Rules.Rules);
         Assert.Equal([RecalculationTrigger.RulesChanged], feature.Notices.Nudged);
+        Assert.Equal([AppEventName.Rules], feature.Events.Signalled);
     }
 
     [Fact]
@@ -44,6 +47,7 @@ public sealed class RuleEndpointTests
         Assert.Contains("narrow", body.GetProperty("message").GetString()!, StringComparison.OrdinalIgnoreCase);
         Assert.Empty(feature.Rules.Rules);
         Assert.Empty(feature.Notices.Nudged);
+        Assert.Empty(feature.Events.Signalled);
     }
 
     [Theory]
@@ -119,6 +123,7 @@ public sealed class RuleEndpointTests
         Assert.Equal(HttpStatusCode.Created, status);
         Assert.False(body.GetProperty("data").GetProperty("enabled").GetBoolean());
         Assert.Empty(feature.Notices.Nudged);
+        Assert.Equal([AppEventName.Rules], feature.Events.Signalled);
     }
 
     [Fact]
@@ -257,6 +262,7 @@ public sealed class RuleEndpointTests
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal(1, body.GetProperty("data").GetProperty("withdrawn").GetInt32());
         Assert.Equal(0, body.GetProperty("data").GetProperty("swept").GetInt32());
+        Assert.Equal([AppEventName.Rules], feature.Events.Signalled);
         Assert.Empty(feature.Rules.Rules);
         Assert.Equal([byHand.Id], [.. feature.Reservations.Held.Select(held => held.Id)]);
     }
@@ -367,6 +373,48 @@ public sealed class RuleEndpointTests
     }
 
     [Fact]
+    public async Task APreviewIsRefusedRatherThanGuessedWhenTheTunersCannotBeCounted()
+    {
+        await using var feature = new RuleFeature();
+        feature.Announced(1, "hill walking");
+        feature.Seating.Capacity = null;
+
+        (HttpStatusCode status, JsonElement body) = await feature.PostAsync(
+            "/api/rules/preview",
+            new { query = "keyword=hill" });
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, status);
+        Assert.False(body.GetProperty("status").GetBoolean());
+    }
+
+    [Fact]
+    public async Task TheImpactIsRefusedRatherThanGuessedWhenTheTunersCannotBeCounted()
+    {
+        await using var feature = new RuleFeature();
+        feature.Announced(1, "hill walking");
+        feature.Seating.Capacity = null;
+
+        (HttpStatusCode status, _) = await feature.PostAsync(
+            "/api/rules/impact",
+            new { query = "keyword=hill" });
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, status);
+    }
+
+    [Fact]
+    public async Task APreviewIsAnsweredWhenTheTunersCanBeCounted()
+    {
+        await using var feature = new RuleFeature();
+        feature.Announced(1, "hill walking");
+
+        (HttpStatusCode status, _) = await feature.PostAsync(
+            "/api/rules/preview",
+            new { query = "keyword=hill" });
+
+        Assert.Equal(HttpStatusCode.OK, status);
+    }
+
+    [Fact]
     public async Task APreviewOfADraftThatNarrowsNothingIsRefused()
     {
         await using var feature = new RuleFeature();
@@ -396,6 +444,7 @@ public sealed class RuleEndpointTests
         Assert.Equal(1, data.GetProperty("making").GetInt32());
         Assert.Equal(1, data.GetProperty("withdrawing").GetInt32());
         Assert.Equal(1, data.GetProperty("changingHands").GetInt32());
+        Assert.Empty(feature.Events.Signalled);
     }
 
     [Fact]

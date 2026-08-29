@@ -144,7 +144,7 @@ public sealed class RuleApplicationService(
                 continue;
             }
 
-            if (!draft.Id.Equals(already.RuleId))
+            if (already.IsRuleBorn && !draft.Id.Equals(already.RuleId))
             {
                 changingHands.Add(already);
             }

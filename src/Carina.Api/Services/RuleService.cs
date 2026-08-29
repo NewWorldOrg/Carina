@@ -1,4 +1,6 @@
 using Carina.Api.Common;
+using Carina.Contracts;
+using Carina.Domain.Events;
 using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
 using Carina.Infrastructure.Rules;
@@ -31,6 +33,7 @@ public sealed class RuleService(
     RuleApplicationService applying,
     RuleApplyNow applyNow,
     IRecalculationNotice notice,
+    IAppEventPublisher events,
     TimeProvider clock)
 {
     public async Task<ServiceResult<IReadOnlyList<Rule>>> ListAsync(CancellationToken cancellationToken)
@@ -59,6 +62,8 @@ public sealed class RuleService(
 
         await rules.AddAsync(written, cancellationToken);
 
+        events.Signal(AppEventName.Rules);
+
         if (written.Enabled)
         {
             notice.Nudge(RecalculationTrigger.RulesChanged);
@@ -83,6 +88,7 @@ public sealed class RuleService(
 
         await rules.SaveAsync(rule, cancellationToken);
 
+        events.Signal(AppEventName.Rules);
         notice.Nudge(RecalculationTrigger.RulesChanged);
 
         return ServiceResult<Rule, RuleFailure>.Success(rule);
@@ -113,6 +119,7 @@ public sealed class RuleService(
             ? []
             : await applying.DroppedAsync(id, cancellationToken);
 
+        events.Signal(AppEventName.Rules);
         notice.Nudge(RecalculationTrigger.RulesChanged);
 
         return ServiceResult<RuleSwitched, RuleFailure>.Success(new RuleSwitched(rule, withdrawn));
@@ -127,6 +134,7 @@ public sealed class RuleService(
             return Missing<RuleRetirement>(id);
         }
 
+        events.Signal(AppEventName.Rules);
         notice.Nudge(RecalculationTrigger.RulesChanged);
 
         return ServiceResult<RuleRetirement, RuleFailure>.Success(retired);

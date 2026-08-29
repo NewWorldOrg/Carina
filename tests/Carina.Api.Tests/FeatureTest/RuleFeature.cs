@@ -7,6 +7,7 @@ using Carina.Api.Tests.Unit;
 using Carina.Contracts;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
+using Carina.Domain.Events;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
@@ -143,6 +144,7 @@ internal sealed class RuleFeature : IAsyncDisposable
                 services.AddSingleton<IServiceTuningDirectory>(Tuning);
                 services.AddSingleton<IAtomicWrite>(new UnguardedWrites());
                 services.AddSingleton<IRecalculationNotice>(Notices);
+                services.AddSingleton<IAppEventPublisher>(Events);
                 services.AddSingleton<IRecalculationPass>(Passes);
                 services.AddSingleton<TimeProvider>(new FixedTimeProvider(Noon));
             }));
@@ -175,6 +177,8 @@ internal sealed class RuleFeature : IAsyncDisposable
     public TuningByServiceId Tuning { get; } = new();
 
     public CountedNotices Notices { get; } = new();
+
+    public SilentEvents Events { get; } = new();
 
     public AnsweredPasses Passes { get; } = new();
 

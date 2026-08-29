@@ -130,6 +130,22 @@ public sealed class RuleRehearsalTests
     }
 
     [Fact]
+    public async Task WhatSomebodyBookedByHandIsNotCountedAsChangingHands()
+    {
+        World world = World.Of();
+        Programme already = Broadcast(1, "hill walking");
+        world.Guide(already);
+        world.Reservations.Standing(Standing(already));
+
+        RuleRehearsal? rehearsed = await world.Applying.RehearsedAsync(Draft("keyword=hill"), Cancel);
+
+        Assert.NotNull(rehearsed);
+        Assert.Single(rehearsed.Taking);
+        Assert.Empty(rehearsed.Making);
+        Assert.Empty(rehearsed.ChangingHands);
+    }
+
+    [Fact]
     public async Task WhatTheDraftItselfAlreadyReservedIsNotCountedAsChangingHands()
     {
         World world = World.Of();
