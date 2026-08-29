@@ -51,12 +51,18 @@ public static class ProgrammeSearchMatching
     public static bool Matches(ProgrammeMatch match, ProgrammeSearch search, DateTime now)
     {
         ArgumentNullException.ThrowIfNull(match);
+
+        return !match.IsShadow && MatchesBesideBeingAShadow(match, search, now);
+    }
+
+    public static bool MatchesBesideBeingAShadow(ProgrammeMatch match, ProgrammeSearch search, DateTime now)
+    {
+        ArgumentNullException.ThrowIfNull(match);
         ArgumentNullException.ThrowIfNull(search);
 
         ProgrammeReach reach = search.ReachAt(now);
 
-        return !match.IsShadow
-            && (reach.History || !match.IsArchived)
+        return (reach.History || !match.IsArchived)
             && (reach.NotOverBy is not { } instant || match.EndsAt is null || match.EndsAt > instant)
             && search.Words.All(word => Carries(match, word, search.Fields))
             && !search.ExcludedWords.Any(word => Leaves(match, word, search.Fields))

@@ -13,7 +13,7 @@ public sealed class ReservationRecalculationHostedService(
     IServiceScopeFactory scopes,
     RecalculationSettings settings,
     TimeProvider clock,
-    ILogger<ReservationRecalculationHostedService> logger) : BackgroundService, IRecalculationNotice
+    ILogger<ReservationRecalculationHostedService> logger) : BackgroundService, IRecalculationNotice, IRecalculationPass
 {
     private readonly Channel<byte> doorbell = Channel.CreateBounded<byte>(
         new BoundedChannelOptions(1) { FullMode = BoundedChannelFullMode.DropWrite });

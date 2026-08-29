@@ -31,6 +31,7 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
                 "DELETE /api/auth/sessions/{id}",
                 "DELETE /api/recordings/{id}",
                 "DELETE /api/reservations/{id:guid}",
+                "DELETE /api/rules/{id:guid}",
                 "DELETE /api/services/{networkId:int}-{serviceId:int}/candidate-channels/{candidateChannelId:guid}",
                 "POST /api/auth/password",
                 "POST /api/epg/archive/forget-service",
@@ -54,6 +55,7 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
                 "DELETE /api/auth/sessions/{id}",
                 "DELETE /api/recordings/{id}",
                 "DELETE /api/reservations/{id:guid}",
+                "DELETE /api/rules/{id:guid}",
                 "DELETE /api/services/{networkId:int}-{serviceId:int}/candidate-channels/{candidateChannelId:guid}",
             ],
             EndpointRules.SurfacesThatDelete(Inventory()));
@@ -130,6 +132,58 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
             Inventory()
                 .Single(surface => surface.ToString() == "POST /api/reservations/{id:guid}/cancel")
                 .Effect);
+    }
+
+    [Fact]
+    public void TheRuleSurfacesAreTheNineARuleIsWrittenChangedAppliedAndThrownAwayThrough()
+    {
+        Assert.Equal(
+            [
+                "DELETE /api/rules/{id:guid}",
+                "GET /api/rules",
+                "GET /api/rules/{id:guid}",
+                "PATCH /api/rules/{id:guid}/enabled",
+                "POST /api/rules",
+                "POST /api/rules/impact",
+                "POST /api/rules/preview",
+                "POST /api/rules/{id:guid}/apply-now",
+                "PUT /api/rules/{id:guid}",
+            ],
+            Inventory()
+                .Where(surface => surface.Pattern.StartsWith("/api/rules", StringComparison.Ordinal))
+                .Select(surface => surface.ToString())
+                .Order(StringComparer.Ordinal)
+                .ToArray());
+    }
+
+    [Fact]
+    public void TheOnlyWayToDeleteUnderTheRuleSurfaceIsTheOneAPersonAsksForByHand()
+    {
+        Assert.Equal(
+            ["DELETE /api/rules/{id:guid}"],
+            EndpointRules.SurfacesThatDeleteUnder(Inventory(), "/api/rules"));
+    }
+
+    [Fact]
+    public void TheOneWayToDeleteARuleSaysItDestroys()
+    {
+        Assert.Equal(
+            EndpointEffect.Destructive,
+            Inventory()
+                .Single(surface => surface.ToString() == "DELETE /api/rules/{id:guid}")
+                .Effect);
+    }
+
+    [Fact]
+    public void RehearsingARuleChangesNothing()
+    {
+        Assert.Equal(
+            [EndpointEffect.Reading, EndpointEffect.Reading],
+            Inventory()
+                .Where(surface => surface.Pattern is "/api/rules/preview" or "/api/rules/impact")
+                .OrderBy(surface => surface.Pattern, StringComparer.Ordinal)
+                .Select(surface => surface.Effect)
+                .ToArray());
     }
 
     [Fact]

@@ -3,6 +3,7 @@ using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
+using Carina.Infrastructure.Programmes;
 using Carina.Infrastructure.Reservations;
 
 namespace Carina.Infrastructure.Rules;
@@ -15,6 +16,14 @@ public sealed record RuleApplicationRun(
     IReadOnlyList<Reservation> Withdrawn,
     IReadOnlyList<Rule> TurnedOff,
     IReadOnlyList<RuleFault> Faulted);
+
+public sealed record RuleRehearsal(
+    IReadOnlyList<RuleMatch> Taking,
+    int Shadowed,
+    IReadOnlyList<Reservation> Making,
+    IReadOnlyList<Reservation> Withdrawing,
+    IReadOnlyList<Reservation> ChangingHands,
+    SchedulingRun Settled);
 
 public sealed record RuleRetirement(
     Rule Rule,
@@ -91,6 +100,71 @@ public sealed class RuleApplicationService(
         }
 
         return new RuleRetirement(rule, withdrawn, swept);
+    }
+
+    public async Task<RuleRehearsal?> RehearsedAsync(Rule draft, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(draft);
+
+        if (ProgrammeSearchQuery.Read(draft.Query.Value) is null)
+        {
+            return null;
+        }
+
+        DateTime at = Moment();
+        (IReadOnlyList<Programme> read, _) = await ReadAsync(0, cancellationToken);
+        IReadOnlyList<ProgrammeMatch> guide = ProgrammeSearchMatching.Layered(
+            [.. read.Where(programme => StillToCome(programme, at))],
+            []);
+
+        IReadOnlyList<Rule> enabled = await rules.ListEnabledByPrecedenceAsync(cancellationToken);
+        Rule[] alongside = [.. enabled.Where(rule => !rule.Id.Equals(draft.Id)), draft];
+
+        RuleMatchRun run = await matcher.AgainstAsync(alongside, guide, cancellationToken);
+        RuleMatch[] taking = [.. run.Matches.Where(match => match.Rule.Id.Equals(draft.Id))];
+
+        var making = new List<Reservation>();
+        var changingHands = new List<Reservation>();
+        var kept = new HashSet<ProgrammeKey>();
+
+        foreach (RuleMatch match in taking)
+        {
+            kept.Add(Naming(match.Programme));
+
+            var reference = new ProgrammeRef(
+                match.Programme.NetworkId,
+                match.Programme.ServiceId,
+                match.Programme.EventId,
+                match.Programme.StartsAt);
+
+            if (await reservations.FindByProgrammeAsync(reference, cancellationToken) is not { } already)
+            {
+                making.Add(Planned(match, reference, at));
+
+                continue;
+            }
+
+            if (!draft.Id.Equals(already.RuleId))
+            {
+                changingHands.Add(already);
+            }
+        }
+
+        WithdrawalGuard guard = await GuardAsync(cancellationToken);
+        Reservation[] withdrawing =
+        [
+            .. (await reservations.ListForRuleAsync(draft.Id, cancellationToken))
+                .Where(reservation => !kept.Contains(Naming(reservation)))
+                .Where(reservation => guard.Lets(reservation, standing: true, at)),
+        ];
+
+        return new RuleRehearsal(
+            taking,
+            await matcher.ShadowedByAsync(draft, guide, cancellationToken),
+            making,
+            withdrawing,
+            changingHands,
+            await scheduling.PreviewAsync(making, cancellationToken));
     }
 
     private static bool Orphaning(Reservation reservation)

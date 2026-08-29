@@ -34,6 +34,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ProgrammeFeedService>();
         services.AddScoped<ArchiveService>();
         services.AddScoped<ReservationService>();
+        services.AddScoped<RuleService>();
         services.AddSingleton<RecordingDeletions>();
         services.AddScoped<RecordingService>();
         services.AddScoped<IntegrityService>();
