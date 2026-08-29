@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
@@ -15,6 +16,11 @@ public sealed record RuleApplicationRun(
     IReadOnlyList<Rule> TurnedOff,
     IReadOnlyList<RuleFault> Faulted);
 
+public sealed record RuleRetirement(
+    Rule Rule,
+    IReadOnlyList<Reservation> Withdrawn,
+    IReadOnlyList<Reservation> Swept);
+
 public sealed class RuleApplicationService(
     IRuleRepository rules,
     IProgrammeRepository programmes,
@@ -24,6 +30,7 @@ public sealed class RuleApplicationService(
     ReservationSchedulingService scheduling,
     RuleMatcher matcher,
     RuleApplicationSettings settings,
+    IAtomicWrite write,
     TimeProvider clock)
 {
     public Task<RuleApplicationRun> SinceAsync(long revision, CancellationToken cancellationToken)
@@ -51,6 +58,45 @@ public sealed class RuleApplicationService(
 
         return leaving;
     }
+
+    public async Task<RuleRetirement?> RetiredAsync(RuleId ruleId, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(ruleId);
+
+        if (await rules.FindAsync(ruleId, cancellationToken) is not { } rule)
+        {
+            return null;
+        }
+
+        IReadOnlyList<Reservation> withdrawn = await DroppedAsync(ruleId, cancellationToken);
+
+        IReadOnlyList<Reservation> swept = await write.AllOrNothingAsync(
+            async token =>
+            {
+                Reservation[] left =
+                [
+                    .. (await reservations.ListForRuleAsync(ruleId, token)).Where(Orphaning),
+                ];
+
+                await reservations.WithdrawAsync(left, token);
+                await rules.RemoveAsync(rule, token);
+
+                return left;
+            },
+            cancellationToken);
+
+        if (swept.Count > 0)
+        {
+            await scheduling.RecalculateAsync(cancellationToken);
+        }
+
+        return new RuleRetirement(rule, withdrawn, swept);
+    }
+
+    private static bool Orphaning(Reservation reservation)
+        => reservation.IsRuleBorn
+            && reservation.State is ReservationState.Scheduled or ReservationState.Conflict
+            && !reservation.IsPinned;
 
     private async Task<RuleApplicationRun> ApplyAsync(
         long from,

@@ -66,6 +66,7 @@ public sealed class RuleApplicationScaleTests
                 new FixedClock(Now)),
             new RuleMatcher(new ProgrammeSearchScope(streams, catalogue), new FixedClock(Now)),
             new RuleApplicationSettings { Rows = 5_000 },
+            write,
             new FixedClock(Now));
 
         Stopwatch watch = Stopwatch.StartNew();

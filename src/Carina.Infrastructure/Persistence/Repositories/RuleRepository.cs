@@ -1,7 +1,9 @@
+using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
 using Carina.Infrastructure.Rules;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace Carina.Infrastructure.Persistence.Repositories;
 
