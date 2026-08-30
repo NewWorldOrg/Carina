@@ -14,7 +14,7 @@ using Carina.TestSupport;
 namespace Carina.Infrastructure.Tests.Rules;
 
 [Trait("Category", "Scale")]
-public sealed class RuleApplicationScaleTests
+public sealed class RuleRehearsalScaleTests
 {
     private static readonly DateTime Now = new(2026, 8, 24, 12, 0, 0, DateTimeKind.Utc);
 
@@ -31,19 +31,18 @@ public sealed class RuleApplicationScaleTests
     private const int Services = 20;
 
     [Fact]
-    public async Task ASweepAtTheSizeTheGuideActuallyReachesReadsTheChannelsAWholeRunAtATime()
+    public async Task ARehearsalAtTheSizeTheGuideActuallyReachesReadsTheChannelsAWholeRunAtATime()
     {
         var streams = new CountedStreams([Terrestrial()]);
         var catalogue = new CountedServices();
         var rules = new HeldRules();
         var programmes = new HeldProgrammes();
-        var visits = new HeldStreamVisits();
         var write = new WatchedWrite();
         var reservations = new HeldReservations(write);
 
         for (int identifier = 1; identifier <= Rules; identifier++)
         {
-            rules.Rules.Add(Written(identifier));
+            rules.Rules.Add(Written(identifier, $"keyword=river&genre={identifier % 16}"));
         }
 
         for (int carried = 1; carried <= Programmes; carried++)
@@ -51,11 +50,11 @@ public sealed class RuleApplicationScaleTests
             programmes.Programmes.Add(Broadcast(carried));
         }
 
-        var applying = new RuleApplicationService(
+        var rehearsing = new RuleApplicationService(
             rules,
             programmes,
             reservations,
-            visits,
+            new HeldStreamVisits(),
             streams,
             new ReservationSchedulingService(
                 reservations,
@@ -70,23 +69,27 @@ public sealed class RuleApplicationScaleTests
             new FixedClock(Now));
 
         Stopwatch watch = Stopwatch.StartNew();
-        RuleApplicationRun run = await applying.EverythingAsync(Cancel);
+        RuleRehearsal? rehearsed = await rehearsing.RehearsedAsync(Written(0xffff, "keyword=hill"), Cancel);
         watch.Stop();
 
-        Console.WriteLine(
-            $"MEASURED rules={Rules} programmes={Programmes} read={run.Read} made={run.Made.Count} "
-            + $"streamReads={streams.Reads} catalogueReads={catalogue.Reads} ms={watch.ElapsedMilliseconds}");
+        Assert.NotNull(rehearsed);
 
-        Assert.Equal(Programmes, run.Read);
-        Assert.Equal(1, catalogue.Reads);
-        Assert.Equal(2, streams.Reads);
+        Console.WriteLine(
+            $"MEASURED rules={Rules} programmes={Programmes} taking={rehearsed.Taking.Count} "
+            + $"streamReads={streams.Reads} catalogueReads={catalogue.Reads} "
+            + $"committed={write.Committed} ms={watch.ElapsedMilliseconds}");
+
+        Assert.Equal(3, streams.Reads);
+        Assert.Equal(2, catalogue.Reads);
+        Assert.Equal(0, write.Committed);
+        Assert.NotEmpty(rehearsed.Taking);
     }
 
-    private static Rule Written(int identifier)
+    private static Rule Written(int identifier, string query)
         => Rule.Draft(
             new RuleId(new Guid($"{identifier:x8}-0000-0000-0000-000000000000")),
             $"rule {identifier}",
-            new RuleQuery(identifier % 2 is 0 ? "keyword=hill" : "keyword=hill&type=IsdbT"),
+            new RuleQuery(query),
             new Priority(identifier % 90 + 1),
             true,
             Margin.None,
@@ -108,19 +111,24 @@ public sealed class RuleApplicationScaleTests
             Now,
             revision: carried);
 
-    private static TunerCapacity Seats()
-        => new([new TunerSeat("first", BroadcastReception.Of(TunerKind.Terrestrial), Faulted: false)], []);
-
     private static TuningResolution Tunable()
         => TuningResolution.Tunable(
             new CandidateChannelId(Guid.NewGuid()),
             TuningParameters.Terrestrial(27),
             impaired: false);
 
+    private static TunerCapacity Seats()
+        => new(
+            [
+                .. Enumerable.Range(0, 8).Select(index =>
+                    new TunerSeat($"seat{index}", BroadcastReception.Of(TunerKind.Terrestrial), Faulted: false)),
+            ],
+            []);
+
     private static BroadcastStream Terrestrial()
         => new(
             new NetworkId(Network),
             new TransportStreamId(Carried),
             TuningParameters.Terrestrial(27),
-            [.. Enumerable.Range(0, Services).Select(service => new ServiceId(1024 + service))]);
+            [.. Enumerable.Range(0, Services).Select(index => new ServiceId(1024 + index))]);
 }

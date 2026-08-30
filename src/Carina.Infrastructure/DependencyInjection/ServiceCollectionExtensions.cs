@@ -121,6 +121,10 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ReservationRecalculationHostedService>();
         services.TryAddSingleton<IRecalculationNotice>(provider =>
             provider.GetRequiredService<ReservationRecalculationHostedService>());
+        services.TryAddSingleton<IRecalculationPass>(provider =>
+            provider.GetRequiredService<ReservationRecalculationHostedService>());
+        services.TryAddSingleton(new RuleApplySettings());
+        services.TryAddSingleton<RuleApplyNow>();
         services.TryAddSingleton(SessionPolicy.Default);
         services.TryAddSingleton(PasswordHashPolicy.Default);
         services.TryAddSingleton(LoginRatePolicy.Default);

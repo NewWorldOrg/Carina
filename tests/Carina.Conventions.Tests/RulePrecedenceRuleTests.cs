@@ -31,7 +31,10 @@ public sealed class RulePrecedenceRuleTests
     public void EveryWayIntoTheRulesGoesThroughTheOrderingRatherThanAroundIt()
     {
         Assert.Equal(
-            ["Carina.Infrastructure.Rules.RuleApplicationService.ApplyAsync"],
+            [
+                "Carina.Infrastructure.Rules.RuleApplicationService.ApplyAsync",
+                "Carina.Infrastructure.Rules.RuleApplicationService.RehearsedAsync",
+            ],
             CallSiteCensus.CallersOf(
                 Production,
                 typeof(Carina.Domain.Rules.IRuleRepository),

@@ -56,6 +56,11 @@ public sealed class ServiceCollectionExtensionsTests
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<RuleApplicationService>());
         Assert.NotNull(scope.ServiceProvider.GetRequiredService<RuleMatcher>());
         Assert.NotNull(provider.GetRequiredService<RuleApplicationSettings>());
+        Assert.NotNull(provider.GetRequiredService<RuleApplyNow>());
+        Assert.NotNull(provider.GetRequiredService<RuleApplySettings>());
+        Assert.Same(
+            provider.GetRequiredService<ReservationRecalculationHostedService>(),
+            provider.GetRequiredService<IRecalculationPass>());
     }
 
     [Fact]

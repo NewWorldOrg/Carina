@@ -145,6 +145,7 @@ public sealed class RuleApplicationLandsInTheLedgerTests(RepositoryDatabase data
                 new FixedClock(Now)),
             new RuleMatcher(new ProgrammeSearchScope(streams, new HeldServices()), new FixedClock(Now)),
             new RuleApplicationSettings(),
+            new DatabaseAtomicWrite(context),
             new FixedClock(Now));
     }
 

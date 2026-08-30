@@ -81,6 +81,27 @@ public sealed class RuleMatcher(ProgrammeSearchScope scope, TimeProvider clock)
         return new RuleMatchRun(found, turnedOff, faulted);
     }
 
+    public async Task<int> ShadowedByAsync(
+        Rule rule,
+        IReadOnlyList<ProgrammeMatch> programmes,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(rule);
+        ArgumentNullException.ThrowIfNull(programmes);
+
+        if (ProgrammeSearchQuery.Read(rule.Query.Value) is not { } asked)
+        {
+            return 0;
+        }
+
+        DateTime at = clock.GetUtcNow().UtcDateTime;
+        ProgrammeSearchBounds bounds = await scope.ReadAsync(cancellationToken);
+        ProgrammeSearch bound = bounds.Bound(asked);
+
+        return programmes.Count(programme =>
+            programme.IsShadow && ProgrammeSearchMatching.MatchesBesideBeingAShadow(programme, bound, at));
+    }
+
     private static List<RuleMatch> Takes(
         Rule rule,
         ProgrammeSearch bound,

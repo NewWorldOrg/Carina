@@ -711,6 +711,7 @@ public sealed class RuleApplicationServiceTests
                     new FixedClock(Now)),
                 new RuleMatcher(new ProgrammeSearchScope(Streams, Services), new FixedClock(Now)),
                 settings,
+                Write,
                 new FixedClock(Now));
         }
 
