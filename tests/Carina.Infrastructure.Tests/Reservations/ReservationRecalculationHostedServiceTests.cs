@@ -290,6 +290,28 @@ public sealed class ReservationRecalculationHostedServiceTests
     }
 
     [Fact]
+    public async Task TheLoopAnswersANudgeLongBeforeTheWaitBetweenReconciliationsIsUp()
+    {
+        using World world = World.Of();
+
+        await world.Starting();
+
+        await Eventually.Happens(
+            () => world.Seating.Entered is 1,
+            "the sweep the app asks for on start settled the allocation once");
+
+        world.Recalculating.Nudge(RecalculationTrigger.TunerConfigurationChanged);
+
+        await Eventually.Happens(
+            () => world.Seating.Entered is 2,
+            "the loop was woken by the nudge, an hour before the wait it was sitting on would have come due");
+
+        Assert.Equal([0], world.Programmes.AskedFrom);
+
+        await world.Stopping();
+    }
+
+    [Fact]
     public async Task TheLoopAsksForAReconciliationNobodyNudgedItFor()
     {
         using World world = World.Of(rushed: true);

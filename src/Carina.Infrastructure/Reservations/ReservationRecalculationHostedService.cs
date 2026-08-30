@@ -63,7 +63,6 @@ public sealed class ReservationRecalculationHostedService(
         finally
         {
             Interlocked.Exchange(ref running, 0);
-            RingAgainIfAnythingIsStillWaiting();
         }
     }
 
@@ -157,21 +156,6 @@ public sealed class ReservationRecalculationHostedService(
         }
 
         return RecalculationPass.Of(answering, reach, cursor, applied, settled, faults);
-    }
-
-    private void RingAgainIfAnythingIsStillWaiting()
-    {
-        bool waiting;
-
-        lock (gate)
-        {
-            waiting = asked.Count > 0;
-        }
-
-        if (waiting)
-        {
-            doorbell.Writer.TryWrite(0);
-        }
     }
 
     private async Task<bool> WaitAsync(TimeSpan waiting, CancellationToken stoppingToken)
