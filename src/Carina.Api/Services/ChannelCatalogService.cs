@@ -184,6 +184,7 @@ public sealed class ChannelCatalogService(
 
         await candidates.RemoveAsync(candidateChannelId, cancellationToken);
         events.Signal(AppEventName.Tuners);
+        notices.Nudge(RecalculationTrigger.SelectedChannelChanged);
 
         return ServiceResult<ServiceWithChannels, CatalogFailure>.Success(
             await GatherAsync(service, cancellationToken));

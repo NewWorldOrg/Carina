@@ -113,18 +113,35 @@ public sealed class ReservationSchemaTests(MigratedScratchDatabase database)
     }
 
     [Fact]
-    public async Task DeletingARuleLeavesTheReservationsItMadeBehind()
+    public async Task DeletingARuleAReservationStillPointsAtIsRefusedByTheDatabaseItself()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
         Guid rule = await Rule(connection);
         await Reserve(connection, 70008, 4001, Airs, ruleId: rule);
 
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Execute(connection, $"DELETE FROM rule WHERE id = '{rule}'"));
+
+        Assert.Equal(PostgresErrorCodes.RestrictViolation, refusal.SqlState);
+        Assert.Equal("fk_reservation_rule_rule_id", refusal.ConstraintName);
+        Assert.Equal(1, await Count(connection, $"rule WHERE id = '{rule}'"));
+        Assert.Equal(
+            rule,
+            await Scalar(connection, "SELECT rule_id FROM reservation WHERE network_id = 70008 AND event_id = 4001"));
+    }
+
+    [Fact]
+    public async Task ARuleGoesOnceWhatItMadeHasBeenLetGoOfIt()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        Guid rule = await Rule(connection);
+        await Reserve(connection, 70015, 4001, Airs, ruleId: rule);
+
+        await Execute(connection, $"UPDATE reservation SET rule_id = NULL WHERE rule_id = '{rule}'");
         await Execute(connection, $"DELETE FROM rule WHERE id = '{rule}'");
 
-        Assert.Equal(1, await Count(connection, "reservation WHERE network_id = 70008"));
-        Assert.Null(await Scalar(
-            connection,
-            "SELECT rule_id FROM reservation WHERE network_id = 70008 AND event_id = 4001"));
+        Assert.Equal(0, await Count(connection, $"rule WHERE id = '{rule}'"));
+        Assert.Equal(1, await Count(connection, "reservation WHERE network_id = 70015"));
     }
 
     [Fact]

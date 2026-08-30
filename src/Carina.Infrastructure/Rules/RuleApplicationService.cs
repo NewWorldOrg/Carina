@@ -82,12 +82,18 @@ public sealed class RuleApplicationService(
         IReadOnlyList<Reservation> swept = await write.AllOrNothingAsync(
             async token =>
             {
-                Reservation[] left =
-                [
-                    .. (await reservations.ListForRuleAsync(ruleId, token)).Where(Orphaning),
-                ];
+                IReadOnlyList<Reservation> standing = await reservations.ListForRuleAsync(ruleId, token);
+                Reservation[] left = [.. standing.Where(Orphaning)];
+                Reservation[] kept = [.. standing.Where(reservation => !Orphaning(reservation))];
 
                 await reservations.WithdrawAsync(left, token);
+
+                foreach (Reservation reservation in kept)
+                {
+                    reservation.LoseRule();
+                }
+
+                await reservations.SaveAllAsync(kept, token);
                 await rules.RemoveAsync(rule, token);
 
                 return left;

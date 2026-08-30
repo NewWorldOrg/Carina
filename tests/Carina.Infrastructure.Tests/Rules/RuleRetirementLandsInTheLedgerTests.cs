@@ -13,6 +13,8 @@ using Carina.TestSupport;
 
 using Microsoft.EntityFrameworkCore;
 
+using Npgsql;
+
 namespace Carina.Infrastructure.Tests.Rules;
 
 [Collection(RepositoryDatabaseCollection.Name)]
@@ -59,11 +61,12 @@ public sealed class RuleRetirementLandsInTheLedgerTests(RepositoryDatabase datab
     }
 
     [Fact]
-    public async Task WhatIsKeptWhenTheRuleGoesIsLeftWithNoRuleBecauseThatIsWhatTheSchemaDoes()
+    public async Task WhatIsKeptWhenTheRuleGoesIsLetGoOfItBeforeTheRuleIsTakenAway()
     {
         Rule going = Written(0x73);
         await AddAsync(going);
         Reservation recording = await ClaimedAsync(await StandingAsync(9211, going.Id));
+        Reservation cancelled = await StandingAsync(9212, going.Id, ReservationState.Cancelled);
 
         await using (CarinaDbContext context = database.Open())
         {
@@ -71,10 +74,35 @@ public sealed class RuleRetirementLandsInTheLedgerTests(RepositoryDatabase datab
         }
 
         Reservation? kept = await FindAsync(recording.Id);
+        Reservation? held = await FindAsync(cancelled.Id);
 
         Assert.NotNull(kept);
         Assert.Null(kept.RuleId);
         Assert.True(kept.IsPinned);
+        Assert.NotNull(held);
+        Assert.Null(held.RuleId);
+        Assert.Equal(ReservationState.Cancelled, held.State);
+        Assert.Null(await ReadRuleAsync(going.Id));
+    }
+
+    [Fact]
+    public async Task ARuleTakenOutFromUnderAReservationIsRefusedByTheDatabaseItself()
+    {
+        Rule staying = Written(0x75);
+        await AddAsync(staying);
+        await ClaimedAsync(await StandingAsync(9231, staying.Id));
+
+        await using CarinaDbContext context = database.Open();
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => context.Database.ExecuteSqlRawAsync(
+                "DELETE FROM rule WHERE id = {0}",
+                [staying.Id.Value],
+                Cancel));
+
+        Assert.Equal(PostgresErrorCodes.RestrictViolation, refusal.SqlState);
+        Assert.Equal("fk_reservation_rule_rule_id", refusal.ConstraintName);
+        Assert.NotNull(await ReadRuleAsync(staying.Id));
     }
 
     [Fact]

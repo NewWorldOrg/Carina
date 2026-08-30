@@ -160,6 +160,7 @@ public sealed class RuleRepositoryTests(RepositoryDatabase database)
     private async Task ClearAsync()
     {
         await using CarinaDbContext context = database.Open();
+        await context.Set<Reservation>().ExecuteDeleteAsync(Cancel);
         await context.Set<Rule>().ExecuteDeleteAsync(Cancel);
     }
 
