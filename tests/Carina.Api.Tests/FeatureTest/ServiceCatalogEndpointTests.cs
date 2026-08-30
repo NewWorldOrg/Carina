@@ -391,6 +391,31 @@ public sealed class ServiceCatalogEndpointTests
     }
 
     [Fact]
+    public async Task DeletingTheSelectedCandidateAsksForTheAllocationToBeSettledAgain()
+    {
+        await using var feature = new CatalogFeature();
+        feature.Seed(
+            101,
+            "Two ways in",
+            TuningParameters.Terrestrial(Terrestrial),
+            TuningParameters.Terrestrial(OtherTerrestrial));
+
+        CandidateChannel chosen = feature.Candidates.Candidates[0];
+        await feature.Candidates.SelectAsync(
+            chosen.Id,
+            SelectionSource.Manual,
+            null,
+            TunerHoldingDriverClient.At,
+            CancellationToken.None);
+
+        (HttpStatusCode status, JsonElement _) = await feature.DeleteAsync(
+            $"{OneService}/candidate-channels/{chosen.Id.Value}");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal([RecalculationTrigger.SelectedChannelChanged], feature.Notices.Nudged);
+    }
+
+    [Fact]
     public async Task DeletingACandidateOfAnotherServiceIsRefused()
     {
         await using var feature = new CatalogFeature();
@@ -402,6 +427,7 @@ public sealed class ServiceCatalogEndpointTests
 
         Assert.Equal(HttpStatusCode.Conflict, status);
         Assert.Equal(2, feature.Candidates.Candidates.Count);
+        Assert.Empty(feature.Notices.Nudged);
     }
 
     [Fact]
