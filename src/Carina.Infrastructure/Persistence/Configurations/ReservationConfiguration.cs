@@ -201,7 +201,7 @@ public sealed class ReservationConfiguration : IEntityTypeConfiguration<Reservat
         builder.HasOne<Rule>()
             .WithMany()
             .HasForeignKey(reservation => reservation.RuleId)
-            .OnDelete(DeleteBehavior.SetNull);
+            .OnDelete(DeleteBehavior.Restrict);
 
         builder.HasIndex(reservation => new
         {

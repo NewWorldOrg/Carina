@@ -388,6 +388,11 @@ public sealed class Reservation
         AcknowledgedAt = UtcTimes.Required(at, nameof(at));
     }
 
+    public void LoseRule()
+    {
+        RuleId = null;
+    }
+
     public void Regroup(BroadcastGroupKey? key, BroadcastGroupRole role)
     {
         if (!Enum.IsDefined(role))
