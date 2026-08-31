@@ -11,6 +11,8 @@ namespace Carina.Api.Tests.FeatureTest;
 public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
     : IClassFixture<TestingWebApplicationFactory>
 {
+    private const int TheSurfacesThisRepositoryHadWhenTheSweepWasWritten = 50;
+
     [Fact]
     public void EveryRoutedSurfaceSaysWhetherItDestroys()
     {
@@ -233,6 +235,7 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
         WebApplicationFactory<Program> guarded = factory.WithTestScheme();
         using HttpClient client = guarded.CreateClient();
         var admitted = new List<string>();
+        int asked = 0;
 
         foreach (RoutedSurface surface in RouteInventory.Of(guarded))
         {
@@ -250,13 +253,25 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
                 asking,
                 HttpCompletionOption.ResponseHeadersRead);
 
+            asked++;
+
             if (response.StatusCode != HttpStatusCode.Unauthorized)
             {
                 admitted.Add($"{surface.Method} {path} answered {(int)response.StatusCode}");
+
+                continue;
+            }
+
+            if ((await response.Content.ReadAsByteArrayAsync()).Length > 0)
+            {
+                admitted.Add($"{surface.Method} {path} refused carrying a body");
             }
         }
 
         Assert.Empty(admitted);
+        Assert.True(
+            asked >= TheSurfacesThisRepositoryHadWhenTheSweepWasWritten,
+            $"the sweep asked {asked} surfaces, which is fewer than it was written against");
     }
 
     [Fact]
