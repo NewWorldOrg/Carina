@@ -30,6 +30,15 @@ public sealed class AllocationEntryPointRuleSelfCheckTests
     }
 
     [Fact]
+    public void DetectsASecondPlaceWritingAReservationOff()
+    {
+        Assert.Contains(
+            $"{Fixture}.{nameof(AllocationFixtures.WritesAReservationOffWithoutTheLedger)}",
+            CallSiteCensus.CallersOf(Fixtures, typeof(Reservation), nameof(Reservation.Miss)),
+            StringComparer.Ordinal);
+    }
+
+    [Fact]
     public void DetectsASecondPlaceWorkingOutWhatFitsOnTheTuners()
     {
         Assert.Contains(

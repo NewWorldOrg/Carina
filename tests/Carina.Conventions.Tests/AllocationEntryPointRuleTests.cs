@@ -18,6 +18,9 @@ public sealed class AllocationEntryPointRuleTests
     private const string WhereItIsRevised =
         "Carina.Infrastructure.Reservations.ReservationSchedulingService.Applied";
 
+    private const string WhereItIsWrittenOff =
+        "Carina.Infrastructure.Reservations.ReservationOutcomeService.RecordAsync";
+
     private static readonly IReadOnlyList<Assembly> Production =
     [
         typeof(Program).Assembly,
@@ -47,6 +50,12 @@ public sealed class AllocationEntryPointRuleTests
     {
         Assert.Equal([WhereItIsRevised], CallSiteCensus.CallersOf(Production, typeof(Reservation), move));
     }
+
+    [Fact]
+    public void OnlyOnePlaceInTheApplicationWritesAReservationOffAsNotRecorded()
+        => Assert.Equal(
+            [WhereItIsWrittenOff],
+            CallSiteCensus.CallersOf(Production, typeof(Reservation), nameof(Reservation.Miss)));
 
     [Fact]
     public void OnlyOnePlaceInTheApplicationWorksOutWhatFitsOnTheTuners()
