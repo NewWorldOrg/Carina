@@ -114,9 +114,10 @@ public sealed class RecordingErasureApiTests
 
         using HttpResponseMessage response = await Erase(client, recordingId);
 
-        Assert.True(
-            response.StatusCode is HttpStatusCode.BadRequest or HttpStatusCode.NotFound,
-            $"The driver answered {(int)response.StatusCode} to '{recordingId}'."
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(
+            SessionRefusalTitles.Rejected,
+            (await DriverUnderTest.Read(response, DriverJson.Context.DriverProblem))?.Title
         );
         Assert.True(File.Exists(away), $"'{recordingId}' reached a file outside the output root.");
         Assert.True(File.Exists(held));
@@ -250,11 +251,14 @@ public sealed class RecordingErasureApiTests
 
         using HttpResponseMessage response = await Erase(client, "stuck-1");
 
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
-        Assert.Equal(
-            SessionRefusalTitles.FileLeftBehind,
-            (await DriverUnderTest.Read(response, DriverJson.Context.DriverProblem))?.Title
+        DriverProblem? problem = await DriverUnderTest.Read(
+            response,
+            DriverJson.Context.DriverProblem
         );
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Equal(SessionRefusalTitles.FileLeftBehind, problem?.Title);
+        Assert.DoesNotContain(room, string.Join(" ", problem!.Problems), StringComparison.Ordinal);
         Assert.True(Directory.Exists(stuck));
     }
 

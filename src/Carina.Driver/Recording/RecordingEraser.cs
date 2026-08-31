@@ -144,7 +144,8 @@ public sealed class RecordingEraser(
 
             return FileErasure.Refused(
                 ErasureRefusal.FileLeftBehind,
-                $"The file of recording '{recordingId}' could not be removed: {failure.Message}"
+                $"The file of recording '{recordingId}' under output root '{outputRoot}' could not be "
+                    + "removed; the driver log says why."
             );
         }
 

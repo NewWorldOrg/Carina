@@ -100,7 +100,7 @@ public sealed class DriverRecordingFileEraser(
 
             return RecordingErasure.Refused(
                 ErasureFault.FileLeftBehind,
-                $"The picture drawn of this recording could not be removed: {failure.Message}");
+                "The picture drawn of this recording could not be removed; the log says why.");
         }
     }
 }

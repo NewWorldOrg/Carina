@@ -4,7 +4,6 @@ using System.Text.Json;
 
 using Carina.Contracts;
 using Carina.Domain.Driver;
-using Carina.Domain.Integrity;
 using Carina.Domain.Recordings;
 using Carina.Domain.Thumbnails;
 using Carina.Infrastructure.Recordings;
