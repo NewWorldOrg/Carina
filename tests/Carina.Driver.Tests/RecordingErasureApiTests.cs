@@ -411,6 +411,23 @@ public sealed class RecordingErasureApiTests
         Assert.Throws<ArgumentException>(() => RecordingFile.Of("../a"));
     }
 
+    [Theory]
+    [InlineData("k-90210")]
+    [InlineData("a")]
+    [InlineData("a.b.c")]
+    [InlineData("a-_.1")]
+    [InlineData("0123456789012345678901234567890123456789012345678901234567890")]
+    public void TheContainmentCheckCannotRefuseANameTheShapeRuleAlreadyAdmitted(string recordingId)
+    {
+        string room = Path.Combine(Path.GetTempPath(), "carina-room");
+
+        Assert.True(RecordingEraser.NamesARecordingFile(recordingId));
+        Assert.True(
+            RecordingEraser.LiesDirectlyUnder(room, Path.Combine(room, RecordingFile.Of(recordingId))),
+            $"'{recordingId}' left the room the shape rule was supposed to keep it in."
+        );
+    }
+
     private static RecordingEraser EraserOver(string room)
     {
         var configuration = new DriverConfiguration(
