@@ -39,10 +39,23 @@ public sealed class ReservationRecalculationHostedService(
         doorbell.Writer.TryWrite(0);
     }
 
-    public async Task<RecalculationPass> RunAsync(CancellationToken cancellationToken)
+    public Task<RecalculationPass> RunAsync(CancellationToken cancellationToken)
+        => PassAsync(null, cancellationToken);
+
+    public Task<RecalculationPass> RunAsync(RecalculationTrigger asking, CancellationToken cancellationToken)
+        => PassAsync(asking, cancellationToken);
+
+    private async Task<RecalculationPass> PassAsync(
+        RecalculationTrigger? asking,
+        CancellationToken cancellationToken)
     {
         if (Interlocked.CompareExchange(ref running, 1, 0) is not 0)
         {
+            if (asking is { } turnedAway)
+            {
+                Nudge(turnedAway);
+            }
+
             return RecalculationPass.Refused(RecalculationRefusal.OneIsAlreadyRunning);
         }
 
@@ -52,13 +65,18 @@ public sealed class ReservationRecalculationHostedService(
 
             lock (gate)
             {
+                if (asking is { } wanted)
+                {
+                    asked.Add(wanted);
+                }
+
                 answering = [.. asked.Order()];
                 asked.Clear();
             }
 
             return answering.Length is 0
                 ? RecalculationPass.Refused(RecalculationRefusal.NothingAsked)
-                : await PassAsync(answering, RecalculationReaches.Widest(answering), cancellationToken);
+                : await WalkedAsync(answering, RecalculationReaches.Widest(answering), cancellationToken);
         }
         finally
         {
@@ -97,7 +115,7 @@ public sealed class ReservationRecalculationHostedService(
         }
     }
 
-    private async Task<RecalculationPass> PassAsync(
+    private async Task<RecalculationPass> WalkedAsync(
         IReadOnlyList<RecalculationTrigger> answering,
         RecalculationReach reach,
         CancellationToken cancellationToken)

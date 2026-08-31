@@ -72,6 +72,8 @@ internal sealed class AnsweredPasses : IRecalculationPass
 {
     private readonly TaskCompletionSource entered = new();
 
+    private readonly List<RecalculationTrigger> asked = [];
+
     public int Ran { get; private set; }
 
     public TaskCompletionSource? Held { get; set; }
@@ -80,11 +82,31 @@ internal sealed class AnsweredPasses : IRecalculationPass
 
     public RecalculationPass? Answers { get; set; }
 
-    public async Task<RecalculationPass> RunAsync(CancellationToken cancellationToken)
+    public RuleApplicationRun? Applied { get; set; } = new(11, 0, [], [], [], [], []);
+
+    public IReadOnlyList<RecalculationTrigger> Asked
+    {
+        get
+        {
+            lock (asked)
+            {
+                return [.. asked];
+            }
+        }
+    }
+
+    public async Task<RecalculationPass> RunAsync(
+        RecalculationTrigger asking,
+        CancellationToken cancellationToken)
     {
         lock (this)
         {
             Ran++;
+        }
+
+        lock (asked)
+        {
+            asked.Add(asking);
         }
 
         entered.TrySetResult();
@@ -95,10 +117,10 @@ internal sealed class AnsweredPasses : IRecalculationPass
         }
 
         return Answers ?? RecalculationPass.Of(
-            [RecalculationTrigger.RulesChanged],
-            RecalculationReach.Everything,
+            [asking],
+            RecalculationReaches.Of(asking),
             11,
-            null,
+            Applied,
             null,
             []);
     }

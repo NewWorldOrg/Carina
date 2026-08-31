@@ -17,15 +17,15 @@ public sealed class RuleApplyNowTests
     public async Task AskingForTheRulesToBeAppliedRunsAPassAndAnswersWithWhatItDid()
     {
         var passes = new CountedPasses();
-        var notices = new WrittenNotices();
-        RuleApplyNow applying = Applying(passes, notices);
+        RuleApplyNow applying = Applying(passes);
 
         RuleApplyOutcome outcome = await Within(applying.StartAsync(Cancel));
 
         Assert.Null(outcome.Refusal);
         Assert.NotNull(outcome.Run);
         Assert.Equal(1, passes.Ran);
-        Assert.Equal([RecalculationTrigger.RulesChanged], notices.Rung);
+        Assert.Equal([RecalculationTrigger.RulesChanged], passes.Asked);
+        Assert.Same(passes.Answered, outcome.Run.Pass);
     }
 
     [Fact]
@@ -141,15 +141,8 @@ public sealed class RuleApplyNowTests
         Assert.Null((await Within(applying.StartAsync(Cancel))).Refusal);
     }
 
-    private static RuleApplyNow Applying(
-        CountedPasses passes,
-        WrittenNotices? notices = null,
-        MovingClock? clock = null)
-        => new(
-            notices ?? new WrittenNotices(),
-            passes,
-            new RuleApplySettings(),
-            clock ?? new MovingClock(Now));
+    private static RuleApplyNow Applying(CountedPasses passes, MovingClock? clock = null)
+        => new(passes, new RuleApplySettings(), clock ?? new MovingClock(Now));
 
     private static Task<T> Within<T>(Task<T> asked) => asked.WaitAsync(LongEnoughToTellAStallFromAWait);
 
@@ -164,35 +157,26 @@ public sealed class RuleApplyNowTests
         public void Move(TimeSpan by) => now += by;
     }
 
-    private sealed class WrittenNotices : IRecalculationNotice
-    {
-        private readonly List<RecalculationTrigger> rung = [];
-
-        public IReadOnlyList<RecalculationTrigger> Rung
-        {
-            get
-            {
-                lock (rung)
-                {
-                    return [.. rung];
-                }
-            }
-        }
-
-        public void Nudge(RecalculationTrigger trigger)
-        {
-            lock (rung)
-            {
-                rung.Add(trigger);
-            }
-        }
-    }
-
     private sealed class CountedPasses : IRecalculationPass
     {
+        private readonly List<RecalculationTrigger> asked = [];
+
         private int inside;
 
         public int Ran { get; private set; }
+
+        public RecalculationPass? Answered { get; private set; }
+
+        public IReadOnlyList<RecalculationTrigger> Asked
+        {
+            get
+            {
+                lock (asked)
+                {
+                    return [.. asked];
+                }
+            }
+        }
 
         public int Deepest { get; private set; }
 
@@ -204,7 +188,9 @@ public sealed class RuleApplyNowTests
 
         public Exception? Throws { get; set; }
 
-        public async Task<RecalculationPass> RunAsync(CancellationToken cancellationToken)
+        public async Task<RecalculationPass> RunAsync(
+            RecalculationTrigger asking,
+            CancellationToken cancellationToken)
         {
             int depth = Interlocked.Increment(ref inside);
 
@@ -212,6 +198,11 @@ public sealed class RuleApplyNowTests
             {
                 Ran++;
                 Deepest = Math.Max(Deepest, depth);
+            }
+
+            lock (asked)
+            {
+                asked.Add(asking);
             }
 
             Entered.TrySetResult();
@@ -223,15 +214,22 @@ public sealed class RuleApplyNowTests
                     await gate.Task.WaitAsync(LongEnoughToTellAStallFromAWait, cancellationToken);
                 }
 
-                return Throws is { } failure
-                    ? throw failure
-                    : Answers ?? RecalculationPass.Of(
-                        [RecalculationTrigger.RulesChanged],
-                        RecalculationReach.Everything,
-                        7,
-                        null,
-                        null,
-                        []);
+                if (Throws is { } failure)
+                {
+                    throw failure;
+                }
+
+                RecalculationPass answering = Answers ?? RecalculationPass.Of(
+                    [asking],
+                    RecalculationReaches.Of(asking),
+                    7,
+                    new RuleApplicationRun(7, 0, [], [], [], [], []),
+                    null,
+                    []);
+
+                Answered = answering;
+
+                return answering;
             }
             finally
             {

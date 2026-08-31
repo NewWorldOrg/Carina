@@ -3,6 +3,7 @@ using System.Text.Json;
 
 using Carina.Contracts;
 
+using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
 using Carina.Infrastructure.Reservations;
@@ -490,7 +491,7 @@ public sealed class RuleEndpointTests
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal(11, body.GetProperty("data").GetProperty("revision").GetInt64());
         Assert.Equal(1, feature.Passes.Ran);
-        Assert.Contains(RecalculationTrigger.RulesChanged, feature.Notices.Nudged);
+        Assert.Equal([RecalculationTrigger.RulesChanged], feature.Passes.Asked);
     }
 
     [Fact]
@@ -556,6 +557,49 @@ public sealed class RuleEndpointTests
         Assert.Equal(
             "aRecalculationIsAlreadyRunning",
             body.GetProperty("data").GetProperty("refusal").GetString());
+    }
+
+    [Fact]
+    public async Task APassThatCouldNotReadTheRulesIsSaidToBeUnknownRatherThanCountedAsNone()
+    {
+        await using var feature = new RuleFeature();
+        Rule written = feature.Written();
+        feature.Passes.Applied = null;
+
+        (HttpStatusCode status, JsonElement body) = await feature
+            .PostAsync($"/api/rules/{written.Id.Value}/apply-now")
+            .WaitAsync(LongEnoughToTellAStallFromAWait);
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, status);
+        Assert.False(body.GetProperty("status").GetBoolean());
+    }
+
+    [Fact]
+    public async Task WhatIsAnsweredAsMadeAndWithdrawnIsWhatThePassSaysItMadeAndWithdrew()
+    {
+        await using var feature = new RuleFeature();
+        Rule written = feature.Written();
+        Programme taken = feature.Announced(1, "hill walking");
+        Programme gone = feature.Announced(2, "hill climbing");
+        feature.Passes.Applied = new RuleApplicationRun(
+            13,
+            2,
+            [feature.Booked(taken, written.Id)],
+            [],
+            [feature.Booked(gone, written.Id)],
+            [],
+            []);
+
+        (HttpStatusCode status, JsonElement body) = await feature
+            .PostAsync($"/api/rules/{written.Id.Value}/apply-now")
+            .WaitAsync(LongEnoughToTellAStallFromAWait);
+
+        JsonElement data = body.GetProperty("data");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(1, data.GetProperty("made").GetInt32());
+        Assert.Equal(1, data.GetProperty("withdrawn").GetInt32());
+        Assert.Equal(2, data.GetProperty("read").GetInt32());
     }
 
     [Fact]
