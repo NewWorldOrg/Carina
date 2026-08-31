@@ -448,7 +448,7 @@ public sealed class RuleEndpointTests
     }
 
     [Fact]
-    public async Task TheImpactOfADraftThatChangesNothingIsAllZeroes()
+    public async Task TheImpactOfADraftThatChangesNothingChangesNothingBySaving()
     {
         await using var feature = new RuleFeature();
         feature.Collected();
@@ -463,6 +463,7 @@ public sealed class RuleEndpointTests
         Assert.Equal(0, data.GetProperty("making").GetInt32());
         Assert.Equal(0, data.GetProperty("withdrawing").GetInt32());
         Assert.Equal(0, data.GetProperty("changingHands").GetInt32());
+        Assert.Equal(1, data.GetProperty("sweeping").GetInt32());
     }
 
     [Fact]

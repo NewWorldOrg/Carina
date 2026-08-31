@@ -209,12 +209,13 @@ internal sealed class RuleFeature : IAsyncDisposable
         string name = "hill walking",
         int serviceId = Listed,
         DateTime? startsAt = null,
-        bool shadow = false)
+        bool shadow = false,
+        int transportStreamId = Carried)
     {
         DateTime opens = startsAt ?? Noon.AddHours(2 + eventId);
         Programme programme = Programme.Rehydrate(
             new ProgrammeId(new NetworkId(Network), new ServiceId(serviceId), new EventId(eventId)),
-            new TransportStreamId(Carried),
+            new TransportStreamId(transportStreamId),
             opens,
             opens.AddHours(1),
             name,
@@ -266,11 +267,11 @@ internal sealed class RuleFeature : IAsyncDisposable
         return reservation;
     }
 
-    public void Collected()
+    public void Collected(int transportStreamId = Carried, VisitOutcome outcome = VisitOutcome.Complete)
         => Visits.Visits.Add(StreamVisit.Record(
             new NetworkId(Network),
-            new TransportStreamId(Carried),
-            VisitOutcome.Complete,
+            new TransportStreamId(transportStreamId),
+            outcome,
             Noon.AddHours(-1),
             TimeSpan.FromSeconds(30)));
 

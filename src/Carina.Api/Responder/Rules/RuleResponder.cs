@@ -136,7 +136,12 @@ public sealed record RulePreviewResponder(
         => settled.Settled && settled.Plan.Answers(proposed.Id) ? settled.Plan.For(proposed.Id).Verdict : null;
 }
 
-public sealed record RuleImpactResponder(int Making, int Withdrawing, int ChangingHands, int ExcludedAsShadows)
+public sealed record RuleImpactResponder(
+    int Making,
+    int Withdrawing,
+    int Sweeping,
+    int ChangingHands,
+    int ExcludedAsShadows)
 {
     public static RuleImpactResponder Of(RuleRehearsal rehearsal)
     {
@@ -145,6 +150,7 @@ public sealed record RuleImpactResponder(int Making, int Withdrawing, int Changi
         return new RuleImpactResponder(
             rehearsal.Making.Count,
             rehearsal.Withdrawing.Count,
+            rehearsal.Sweeping.Count,
             rehearsal.ChangingHands.Count,
             rehearsal.Shadowed);
     }
