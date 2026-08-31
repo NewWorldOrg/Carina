@@ -174,7 +174,33 @@ public sealed class RecordingErasureApiTests
         );
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(
+            SessionRefusalTitles.UnknownOutputRoot,
+            (await DriverUnderTest.Read(response, DriverJson.Context.DriverProblem))?.Title
+        );
         Assert.True(File.Exists(held));
+    }
+
+    [Fact]
+    public void ARootThatCannotBeReadIsRefusedRatherThanReadAsAlreadyGone()
+    {
+        string root = DriverUnderTest.NewRoot();
+        string notADirectory = Path.Combine(root, "archive");
+
+        File.WriteAllBytes(notADirectory, [0x47]);
+
+        try
+        {
+            FileErasure refused = EraserOver(notADirectory).Erase("kept-1", "primary");
+
+            Assert.Equal(ErasureRefusal.RootOutOfReach, refused.Refusal);
+            Assert.False(refused.FileRemoved);
+            Assert.True(File.Exists(notADirectory));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
     }
 
     [Fact]

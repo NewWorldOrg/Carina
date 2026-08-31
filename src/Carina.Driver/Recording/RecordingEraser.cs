@@ -162,15 +162,6 @@ public sealed class RecordingEraser(
     {
         try
         {
-            if (!Directory.Exists(room))
-            {
-                return FileErasure.Refused(
-                    ErasureRefusal.RootOutOfReach,
-                    $"Output root '{outputRoot}' is configured at a path with no directory on it, so a file "
-                        + "reported missing under it says nothing about whether it was ever there."
-                );
-            }
-
             using IEnumerator<string> walking = Directory
                 .EnumerateFiles(room, "*", SearchOption.AllDirectories)
                 .GetEnumerator();
@@ -196,7 +187,8 @@ public sealed class RecordingEraser(
 
             return FileErasure.Refused(
                 ErasureRefusal.RootOutOfReach,
-                $"Output root '{outputRoot}' could not be read, so nothing under it is removed."
+                $"Output root '{outputRoot}' could not be read, so a file reported missing under it says "
+                    + "nothing about whether it was ever there, and nothing under it is removed."
             );
         }
     }

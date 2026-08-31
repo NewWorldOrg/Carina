@@ -167,6 +167,8 @@ public sealed class DriverRecordingFileEraserTests : IDisposable
     {
         RecordingId id = RecordingId.New();
 
+        Assert.Equal(".ts", RecordingFile.Extension);
+        Assert.Equal($"{id.Wire}.ts", RecordingFile.Of(id.Wire));
         Assert.Equal(
             RecordingFile.Of(id.Wire),
             RecordingFileName.For(id, RecordingSettings.FileExtension).Value);

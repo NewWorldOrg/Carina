@@ -22,8 +22,6 @@ public sealed class DeleteRecordingEndpointTests
     private const string RecordingIdTextDescription =
         "A recording is named by the thirty-two hexadecimal digits the ledger holds, without separators.";
 
-    private static readonly OutputRoot Bulk = new("bulk");
-
     [Fact]
     public async Task ARecordingThatHasEndedIsThrownAwayAndIsGoneFromTheLedger()
     {
@@ -287,6 +285,44 @@ public sealed class DeleteRecordingEndpointTests
 
         Assert.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
         Assert.Empty(feature.Eraser.Asked);
+    }
+
+    [Fact]
+    public async Task ADriverThatDidNotAnswerIsNotADriverThatRefused()
+    {
+        using var disk = new ErasableDisk();
+        await using var feature = new RecordingFeature(disk.Eraser);
+        Recording held = Ended(feature);
+        disk.Holding(held);
+        disk.Driver.StandingInForTheDriver = null;
+        disk.Driver.Answer = DriverCall<RecordingErasedDto>.Unreachable("the socket was not there");
+
+        (HttpStatusCode status, JsonElement body) = await feature.DeleteAsync($"/api/recordings/{held.Id.Wire}");
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, status);
+        Assert.Equal("driverUnreachable", body.GetProperty("data").GetProperty("refusal").GetString());
+        Assert.True(File.Exists(disk.RecordingAt(held.Id)));
+        Assert.True(File.Exists(disk.PictureAt(held.Id)));
+        Assert.Single(feature.Recordings.Recordings);
+    }
+
+    [Fact]
+    public async Task ADriverThatRefusedIsNotADriverThatDidNotAnswer()
+    {
+        using var disk = new ErasableDisk();
+        await using var feature = new RecordingFeature(disk.Eraser);
+        Recording held = Ended(feature);
+        disk.Holding(held);
+        disk.Driver.StandingInForTheDriver = null;
+        disk.Driver.Answer = DriverCall<RecordingErasedDto>.Refused(
+            new DriverProblem(SessionRefusalTitles.CapabilityMissing, ["it declares no such thing"]));
+
+        (HttpStatusCode status, JsonElement body) = await feature.DeleteAsync($"/api/recordings/{held.Id.Wire}");
+
+        Assert.Equal(HttpStatusCode.BadGateway, status);
+        Assert.Equal("driverRefused", body.GetProperty("data").GetProperty("refusal").GetString());
+        Assert.True(File.Exists(disk.RecordingAt(held.Id)));
+        Assert.Single(feature.Recordings.Recordings);
     }
 
     private static Recording Ended(RecordingFeature feature)

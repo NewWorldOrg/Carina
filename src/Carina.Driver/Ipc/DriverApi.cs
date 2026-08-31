@@ -633,19 +633,6 @@ public static class DriverApi
         string recordingId = context.Request.RouteValues["id"] as string ?? string.Empty;
         string outputRoot = context.Request.Query[DriverEndpoints.OutputRootQuery].ToString();
 
-        if (string.IsNullOrWhiteSpace(outputRoot))
-        {
-            await Problem(
-                context,
-                StatusCodes.Status400BadRequest,
-                SessionRefusalTitles.Rejected,
-                "Say which output root holds it: DELETE "
-                    + $"{DriverEndpoints.Recordings}/{{id}}?{DriverEndpoints.OutputRootQuery}=..."
-            );
-
-            return;
-        }
-
         FileErasure erasure = eraser.Erase(recordingId, outputRoot);
 
         if (erasure.Refusal is not ErasureRefusal.None)
