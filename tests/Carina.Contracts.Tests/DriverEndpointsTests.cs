@@ -14,6 +14,7 @@ public sealed class DriverEndpointsTests
         Assert.Equal("/tuners/ledger", DriverEndpoints.TunerLedger);
         Assert.Equal("/restart", DriverEndpoints.Restart);
         Assert.Equal("/storage", DriverEndpoints.Storage);
+        Assert.Equal("/recordings", DriverEndpoints.Recordings);
     }
 
     [Fact]
@@ -41,5 +42,21 @@ public sealed class DriverEndpointsTests
     public void ADeviceIdOutsideTheShapeHasNoPath(string deviceId)
     {
         Assert.Throws<ArgumentException>(() => DriverEndpoints.Tuner(deviceId));
+    }
+
+    [Fact]
+    public void ARecordingHasAPathUnderTheRecordingsItBelongsTo()
+    {
+        Assert.Equal("/recordings/k-90210", DriverEndpoints.Recording("k-90210"));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("../secrets")]
+    [InlineData("down/away")]
+    [InlineData("/srv/recordings/away")]
+    public void ARecordingIdOutsideTheShapeHasNoPath(string recordingId)
+    {
+        Assert.Throws<ArgumentException>(() => DriverEndpoints.Recording(recordingId));
     }
 }

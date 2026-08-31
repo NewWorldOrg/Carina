@@ -2,11 +2,13 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 
-using Carina.Domain.Integrity;
+using Carina.Contracts;
+using Carina.Domain.Driver;
 using Carina.Domain.Recordings;
 using Carina.Domain.Thumbnails;
 using Carina.Infrastructure.Recordings;
 using Carina.Infrastructure.Thumbnails;
+using Carina.TestSupport;
 
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Net.Http.Headers;
@@ -18,8 +20,6 @@ public sealed class DeleteRecordingEndpointTests
 {
     private const string RecordingIdTextDescription =
         "A recording is named by the thirty-two hexadecimal digits the ledger holds, without separators.";
-
-    private static readonly OutputRoot Bulk = new("bulk");
 
     [Fact]
     public async Task ARecordingThatHasEndedIsThrownAwayAndIsGoneFromTheLedger()
@@ -286,6 +286,44 @@ public sealed class DeleteRecordingEndpointTests
         Assert.Empty(feature.Eraser.Asked);
     }
 
+    [Fact]
+    public async Task ADriverThatDidNotAnswerIsNotADriverThatRefused()
+    {
+        using var disk = new ErasableDisk();
+        await using var feature = new RecordingFeature(disk.Eraser);
+        Recording held = Ended(feature);
+        disk.Holding(held);
+        disk.Driver.StandingInForTheDriver = null;
+        disk.Driver.Answer = DriverCall<RecordingErasedDto>.Unreachable("the socket was not there");
+
+        (HttpStatusCode status, JsonElement body) = await feature.DeleteAsync($"/api/recordings/{held.Id.Wire}");
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, status);
+        Assert.Equal("driverUnreachable", body.GetProperty("data").GetProperty("refusal").GetString());
+        Assert.True(File.Exists(disk.RecordingAt(held.Id)));
+        Assert.True(File.Exists(disk.PictureAt(held.Id)));
+        Assert.Single(feature.Recordings.Recordings);
+    }
+
+    [Fact]
+    public async Task ADriverThatRefusedIsNotADriverThatDidNotAnswer()
+    {
+        using var disk = new ErasableDisk();
+        await using var feature = new RecordingFeature(disk.Eraser);
+        Recording held = Ended(feature);
+        disk.Holding(held);
+        disk.Driver.StandingInForTheDriver = null;
+        disk.Driver.Answer = DriverCall<RecordingErasedDto>.Refused(
+            new DriverProblem(SessionRefusalTitles.CapabilityMissing, ["it declares no such thing"]));
+
+        (HttpStatusCode status, JsonElement body) = await feature.DeleteAsync($"/api/recordings/{held.Id.Wire}");
+
+        Assert.Equal(HttpStatusCode.BadGateway, status);
+        Assert.Equal("driverRefused", body.GetProperty("data").GetProperty("refusal").GetString());
+        Assert.True(File.Exists(disk.RecordingAt(held.Id)));
+        Assert.Single(feature.Recordings.Recordings);
+    }
+
     private static Recording Ended(RecordingFeature feature)
     {
         Recording held = feature.Held();
@@ -303,14 +341,38 @@ public sealed class DeleteRecordingEndpointTests
         private readonly string gallery = Directory.CreateTempSubdirectory("carina-delete-pictures-").FullName;
 
         public ErasableDisk()
-            => Eraser = new LocalRecordingFileEraser(
-                new IntegritySettings { OutputRoots = [new StorageRootPath(Bulk, root)] },
+        {
+            Driver = new ErasingDriverClient { StandingInForTheDriver = TakeItOffTheDisk };
+            Eraser = new DriverRecordingFileEraser(
+                Driver,
                 new ThumbnailSettings { WrittenTo = gallery },
-                NullLogger<LocalRecordingFileEraser>.Instance);
+                NullLogger<DriverRecordingFileEraser>.Instance);
+        }
+
+        public ErasingDriverClient Driver { get; }
 
         public IRecordingFileEraser Eraser { get; }
 
-        public string RecordingAt(RecordingId id) => Path.Combine(root, RecordingFileName.For(id, ".m2ts").Value);
+        public string RecordingAt(RecordingId id) => Path.Combine(root, RecordingFile.Of(id.Wire));
+
+        private DriverCall<RecordingErasedDto> TakeItOffTheDisk(string recordingId, string outputRoot)
+        {
+            if (Directory.GetFiles(root).Length is 0)
+            {
+                return DriverCall<RecordingErasedDto>.Refused(
+                    new DriverProblem(
+                        SessionRefusalTitles.OutputUnavailable,
+                        ["the root holds no file at all, which is what a lost mount looks like"]));
+            }
+
+            string held = Path.Combine(root, RecordingFile.Of(recordingId));
+            bool wasThere = File.Exists(held);
+
+            File.Delete(held);
+
+            return DriverCall<RecordingErasedDto>.Reached(
+                new RecordingErasedDto { RecordingId = recordingId, FileRemoved = wasThere });
+        }
 
         public string PictureAt(RecordingId id) => Path.Combine(gallery, id.Wire + ThumbnailJob.Extension);
 

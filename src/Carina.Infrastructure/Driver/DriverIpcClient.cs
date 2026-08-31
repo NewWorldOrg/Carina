@@ -279,6 +279,39 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
         }
     }
 
+    public async Task<DriverCall<RecordingErasedDto>> EraseRecordingAsync(
+        string recordingId,
+        string outputRoot,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(recordingId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(outputRoot);
+
+        if (await UndeclaredAsync(DriverCapabilities.RecordingErasure, cancellationToken) is { } undeclared)
+        {
+            return DriverCall<RecordingErasedDto>.Refused(undeclared);
+        }
+
+        try
+        {
+            using CancellationTokenSource patience = Patience(cancellationToken);
+            using HttpResponseMessage response = await http.DeleteAsync(
+                $"{DriverEndpoints.Recording(recordingId)}"
+                + $"?{DriverEndpoints.OutputRootQuery}={Uri.EscapeDataString(outputRoot)}",
+                patience.Token);
+
+            return await ReadAsync(
+                response,
+                DriverJson.Context.RecordingErasedDto,
+                bodyRequired: true,
+                patience.Token);
+        }
+        catch (Exception error) when (IsTransport(error, cancellationToken))
+        {
+            return DriverCall<RecordingErasedDto>.Unreachable(WhyUnreachable(error));
+        }
+    }
+
     public Task<DriverCall<Stream>> OpenSessionStreamAsync(
         SessionId sessionId,
         string? subscriber,

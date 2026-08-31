@@ -1,10 +1,11 @@
+using Carina.Contracts;
 using Carina.Domain.Recordings;
 
 namespace Carina.Infrastructure.Recordings;
 
 public sealed record RecordingSettings
 {
-    public const string FileExtension = ".ts";
+    public const string FileExtension = RecordingFile.Extension;
 
     public static readonly TimeSpan NoticingItIsDue = TimeSpan.FromSeconds(5);
 

@@ -199,22 +199,13 @@ public sealed class RecordingService(
         RecordingErasure erasure = await eraser.EraseAsync(
             id,
             recording.OutputRoot,
-            recording.FileName,
             cancellationToken);
 
-        if (erasure.Fault is ErasureFault.RootOutOfReach)
+        if (erasure.Fault is { } fault)
         {
             return ServiceResult<RecordingDiscarded, RecordingFailure>.Failure(
-                $"{erasure.Note} Recording {id.Wire} is left as it was.",
-                RecordingFailure.RootOutOfReach);
-        }
-
-        if (erasure.Fault is ErasureFault.FileLeftBehind)
-        {
-            return ServiceResult<RecordingDiscarded, RecordingFailure>.Failure(
-                $"{erasure.Note} Recording {id.Wire} is still in the ledger, which is what says the throwing "
-                + "away is unfinished, and asking again carries on from here.",
-                RecordingFailure.FilesLeftBehind);
+                $"{erasure.Note} {Aftermath(fault, id)}",
+                Failed(fault));
         }
 
         return await recordings.DiscardAsync(id, cancellationToken) switch
@@ -227,6 +218,30 @@ public sealed class RecordingService(
             _ => Missing<RecordingDiscarded>(id),
         };
     }
+
+    private static string Aftermath(ErasureFault fault, RecordingId id) => fault switch
+    {
+        ErasureFault.FileLeftBehind => $"Recording {id.Wire} is still in the ledger, which is what says the "
+            + "throwing away is unfinished, and asking again carries on from here.",
+        ErasureFault.RootOutOfReach or ErasureFault.DriverUnreachable or ErasureFault.DriverRefused =>
+            $"Recording {id.Wire} is left as it was.",
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(fault),
+            fault,
+            "An erasure that failed says which way it failed."),
+    };
+
+    private static RecordingFailure Failed(ErasureFault fault) => fault switch
+    {
+        ErasureFault.RootOutOfReach => RecordingFailure.RootOutOfReach,
+        ErasureFault.FileLeftBehind => RecordingFailure.FilesLeftBehind,
+        ErasureFault.DriverUnreachable => RecordingFailure.DriverUnreachable,
+        ErasureFault.DriverRefused => RecordingFailure.DriverRefused,
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(fault),
+            fault,
+            "An erasure that failed says which way it failed."),
+    };
 
     private static ServiceResult<T, RecordingFailure> Missing<T>(RecordingId id)
         => ServiceResult<T, RecordingFailure>.Failure(

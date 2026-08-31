@@ -35,6 +35,11 @@ public interface IDriverClient
 
     Task<DriverCall<IReadOnlyList<StorageRootDto>>> GetStorageAsync(CancellationToken cancellationToken);
 
+    Task<DriverCall<RecordingErasedDto>> EraseRecordingAsync(
+        string recordingId,
+        string outputRoot,
+        CancellationToken cancellationToken);
+
     Task<DriverCall<Stream>> OpenSessionStreamAsync(
         SessionId sessionId,
         string? subscriber,
