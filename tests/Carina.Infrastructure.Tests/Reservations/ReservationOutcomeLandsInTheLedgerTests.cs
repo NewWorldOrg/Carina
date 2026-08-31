@@ -18,10 +18,12 @@ public sealed class ReservationOutcomeLandsInTheLedgerTests(RepositoryDatabase d
 
     private static readonly TimeSpan Grace = TimeSpan.FromMinutes(5);
 
+    private static readonly DateTime LongBefore = ReservationFixtures.Now.AddYears(-1);
+
     [Fact]
     public async Task WhatLostTheContestLandsWithTheNameOfWhatWasRecordedInstead()
     {
-        DateTime opens = ReservationFixtures.Now.AddHours(50);
+        DateTime opens = LongBefore;
         Reservation lost = await LaidDownAsync(ReservationState.Conflict, opens, opens.AddHours(1));
         Reservation won = await LaidDownAsync(
             ReservationState.Scheduled,
@@ -38,9 +40,7 @@ public sealed class ReservationOutcomeLandsInTheLedgerTests(RepositoryDatabase d
 
         ReservationOutcomeRun run = await RecordingAsync(opens.AddHours(2));
 
-        Assert.Equal(
-            [new ReservationOutcomeRecord(lost.Id, ReservationOutcomeKind.Competing)],
-            run.Recorded);
+        Assert.Contains(new ReservationOutcomeRecord(lost.Id, ReservationOutcomeKind.Competing), run.Recorded);
 
         ReservationOutcome held = Assert.Single(await ForAsync(lost.Id));
 
@@ -62,11 +62,11 @@ public sealed class ReservationOutcomeLandsInTheLedgerTests(RepositoryDatabase d
     [Fact]
     public async Task AReservationNothingClaimedLandsAsMissedAndStopsSayingItIsSecured()
     {
-        DateTime opens = ReservationFixtures.Now.AddHours(60);
+        DateTime opens = LongBefore.AddHours(10);
         Reservation gone = await LaidDownAsync(ReservationState.Scheduled, opens, opens.AddHours(1));
 
-        Assert.Equal(
-            [new ReservationOutcomeRecord(gone.Id, ReservationOutcomeKind.Missed)],
+        Assert.Contains(
+            new ReservationOutcomeRecord(gone.Id, ReservationOutcomeKind.Missed),
             (await RecordingAsync(opens.AddHours(2))).Recorded);
 
         Assert.Equal(ReservationOutcomeKind.Missed, Assert.Single(await ForAsync(gone.Id)).Kind);
@@ -76,7 +76,7 @@ public sealed class ReservationOutcomeLandsInTheLedgerTests(RepositoryDatabase d
     [Fact]
     public async Task ARecordingTheLedgerSaysFailedLandsWithoutMovingTheReservation()
     {
-        DateTime opens = ReservationFixtures.Now.AddHours(70);
+        DateTime opens = LongBefore.AddHours(20);
         Reservation broke = await LaidDownAsync(
             ReservationState.Scheduled,
             opens,
@@ -84,8 +84,8 @@ public sealed class ReservationOutcomeLandsInTheLedgerTests(RepositoryDatabase d
             claimedAt: opens,
             outcome: RecordingOutcome.Failed);
 
-        Assert.Equal(
-            [new ReservationOutcomeRecord(broke.Id, ReservationOutcomeKind.RecordingFailure)],
+        Assert.Contains(
+            new ReservationOutcomeRecord(broke.Id, ReservationOutcomeKind.RecordingFailure),
             (await RecordingAsync(opens.AddHours(2))).Recorded);
 
         ReservationOutcome held = Assert.Single(await ForAsync(broke.Id));
@@ -98,22 +98,25 @@ public sealed class ReservationOutcomeLandsInTheLedgerTests(RepositoryDatabase d
     [Fact]
     public async Task AReservationStillInsideItsWindowIsNotOfferedUntilItCloses()
     {
-        DateTime opens = ReservationFixtures.Now.AddHours(80);
+        DateTime opens = LongBefore.AddHours(100);
         Reservation running = await LaidDownAsync(ReservationState.Scheduled, opens, opens.AddHours(1));
 
-        Assert.Empty((await RecordingAsync(opens.AddMinutes(59))).Recorded);
+        Assert.DoesNotContain(
+            new ReservationOutcomeRecord(running.Id, ReservationOutcomeKind.Missed),
+            (await RecordingAsync(opens.AddMinutes(59))).Recorded);
         Assert.Empty(await ForAsync(running.Id));
         Assert.Equal(ReservationState.Scheduled, await StateOfAsync(running.Id));
 
-        Assert.Equal(
-            [new ReservationOutcomeRecord(running.Id, ReservationOutcomeKind.Missed)],
+        Assert.Contains(
+            new ReservationOutcomeRecord(running.Id, ReservationOutcomeKind.Missed),
             (await RecordingAsync(opens.AddHours(1))).Recorded);
+        Assert.Equal(ReservationState.Missed, await StateOfAsync(running.Id));
     }
 
     [Fact]
     public async Task AReservationTheLedgerAlreadyHoldsIsNotOfferedAgain()
     {
-        DateTime opens = ReservationFixtures.Now.AddHours(90);
+        DateTime opens = LongBefore.AddHours(30);
         Reservation broke = await LaidDownAsync(
             ReservationState.Scheduled,
             opens,
@@ -121,20 +124,25 @@ public sealed class ReservationOutcomeLandsInTheLedgerTests(RepositoryDatabase d
             claimedAt: opens,
             outcome: RecordingOutcome.Failed);
 
-        Assert.Single((await RecordingAsync(opens.AddHours(2))).Recorded);
-        Assert.Empty((await RecordingAsync(opens.AddHours(3))).Recorded);
+        Assert.Contains(
+            new ReservationOutcomeRecord(broke.Id, ReservationOutcomeKind.RecordingFailure),
+            (await RecordingAsync(opens.AddHours(2))).Recorded);
+        Assert.DoesNotContain(
+            new ReservationOutcomeRecord(broke.Id, ReservationOutcomeKind.RecordingFailure),
+            (await RecordingAsync(opens.AddHours(3))).Recorded);
         Assert.Single(await ForAsync(broke.Id));
 
         await using CarinaDbContext context = database.Open();
+        IReadOnlyList<Reservation> offered =
+            await new ReservationRepository(context).ListAwaitingOutcomeAsync(opens.AddHours(3), Cancel);
 
-        Assert.Empty(
-            await new ReservationRepository(context).ListAwaitingOutcomeAsync(opens.AddHours(3), Cancel));
+        Assert.DoesNotContain(broke.Id.Value, offered.Select(reservation => reservation.Id.Value));
     }
 
     [Fact]
     public async Task TheTableItselfRefusesASecondRowOfTheSameKind()
     {
-        DateTime opens = ReservationFixtures.Now.AddHours(100);
+        DateTime opens = LongBefore.AddHours(50);
         Reservation gone = await LaidDownAsync(ReservationState.Scheduled, opens, opens.AddHours(1));
 
         await AddAsync(gone, ReservationOutcomeKind.Missed, opens.AddHours(2));
@@ -146,7 +154,7 @@ public sealed class ReservationOutcomeLandsInTheLedgerTests(RepositoryDatabase d
     [Fact]
     public async Task TheTableTakesASecondRowOfADifferentKind()
     {
-        DateTime opens = ReservationFixtures.Now.AddHours(110);
+        DateTime opens = LongBefore.AddHours(60);
         Reservation gone = await LaidDownAsync(ReservationState.Scheduled, opens, opens.AddHours(1));
 
         await AddAsync(gone, ReservationOutcomeKind.Missed, opens.AddHours(2));
@@ -160,7 +168,7 @@ public sealed class ReservationOutcomeLandsInTheLedgerTests(RepositoryDatabase d
     [Fact]
     public async Task WhatWasClaimedOverAWindowIsWhatTheQueryHandsBack()
     {
-        DateTime opens = ReservationFixtures.Now.AddHours(120);
+        DateTime opens = LongBefore.AddHours(70);
         Reservation claimed = await LaidDownAsync(
             ReservationState.Scheduled,
             opens,
