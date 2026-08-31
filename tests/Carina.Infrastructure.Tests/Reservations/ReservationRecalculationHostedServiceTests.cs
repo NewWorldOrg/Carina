@@ -327,6 +327,73 @@ public sealed class ReservationRecalculationHostedServiceTests
         await world.Stopping();
     }
 
+    [Fact]
+    public async Task APassAskedForWithATriggerAnswersForThatTriggerAndNotForNothing()
+    {
+        using World world = World.Of();
+
+        RecalculationPass pass = await world.Passing(RecalculationTrigger.RulesChanged);
+
+        Assert.True(pass.Ran);
+        Assert.Equal([RecalculationTrigger.RulesChanged], pass.Answering);
+        Assert.Equal(RecalculationReach.Everything, pass.Reach);
+        Assert.NotNull(pass.Applied);
+    }
+
+    [Fact]
+    public async Task APassAskedForWithATriggerAnswersForItEvenWhenSomebodyElseJustEmptiedTheAsking()
+    {
+        using World world = World.Of();
+
+        world.Recalculating.Nudge(RecalculationTrigger.SelectedChannelChanged);
+
+        Assert.Equal(RecalculationReach.Settle, (await world.Passing()).Reach);
+
+        RecalculationPass pass = await world.Passing(RecalculationTrigger.RulesChanged);
+
+        Assert.True(pass.Ran);
+        Assert.Equal([RecalculationTrigger.RulesChanged], pass.Answering);
+        Assert.NotNull(pass.Applied);
+    }
+
+    [Fact]
+    public async Task APassAskedForWithATriggerCarriesWhatWasAlreadyOnTheBooksAsWell()
+    {
+        using World world = World.Of();
+
+        world.Recalculating.Nudge(RecalculationTrigger.SelectedChannelChanged);
+
+        RecalculationPass pass = await world.Passing(RecalculationTrigger.RulesChanged);
+
+        Assert.Equal(
+            [RecalculationTrigger.RulesChanged, RecalculationTrigger.SelectedChannelChanged],
+            [.. pass.Answering.Order()]);
+    }
+
+    [Fact]
+    public async Task ATriggerTurnedAwayBecauseAPassIsWalkingIsAnsweredByTheNextPass()
+    {
+        using World world = World.Of();
+        world.Seating.Hold = new TaskCompletionSource();
+
+        world.Recalculating.Nudge(RecalculationTrigger.SelectedChannelChanged);
+        Task<RecalculationPass> walking = world.Passing();
+
+        await world.Seating.Arrived.Task.WaitAsync(Eventually.Patience);
+
+        RecalculationPass refused = await world.Passing(RecalculationTrigger.RulesChanged);
+
+        world.Seating.Hold.SetResult();
+        await walking;
+        world.Seating.Hold = null;
+
+        RecalculationPass after = await world.Passing();
+
+        Assert.Equal(RecalculationRefusal.OneIsAlreadyRunning, refused.Refusal);
+        Assert.Equal([RecalculationTrigger.RulesChanged], after.Answering);
+        Assert.NotNull(after.Applied);
+    }
+
     private static Rule Written(string query, int priority = 10, int identifier = 1)
         => Rule.Draft(
             new RuleId(new Guid($"{identifier:x8}-0000-0000-0000-000000000000")),
@@ -464,6 +531,9 @@ public sealed class ReservationRecalculationHostedServiceTests
 
         public Task<RecalculationPass> Passing()
             => Recalculating.RunAsync(CancellationToken.None).WaitAsync(Eventually.Patience);
+
+        public Task<RecalculationPass> Passing(RecalculationTrigger asking)
+            => Recalculating.RunAsync(asking, CancellationToken.None).WaitAsync(Eventually.Patience);
 
         public Task Starting()
             => Recalculating.StartAsync(CancellationToken.None).WaitAsync(Eventually.Patience);

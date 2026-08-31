@@ -17,11 +17,10 @@ public sealed record RuleApplyOutcome(RuleApplyRun? Run, RuleApplyVerdict? Refus
 
 public interface IRecalculationPass
 {
-    Task<RecalculationPass> RunAsync(CancellationToken cancellationToken);
+    Task<RecalculationPass> RunAsync(RecalculationTrigger asking, CancellationToken cancellationToken);
 }
 
 public sealed class RuleApplyNow(
-    IRecalculationNotice notice,
     IRecalculationPass passes,
     RuleApplySettings settings,
     TimeProvider clock)
@@ -58,9 +57,7 @@ public sealed class RuleApplyNow(
 
         try
         {
-            notice.Nudge(RecalculationTrigger.RulesChanged);
-
-            RecalculationPass ran = await passes.RunAsync(cancellationToken);
+            RecalculationPass ran = await passes.RunAsync(RecalculationTrigger.RulesChanged, cancellationToken);
 
             return ran.Refusal is RecalculationRefusal.OneIsAlreadyRunning
                 ? new RuleApplyOutcome(

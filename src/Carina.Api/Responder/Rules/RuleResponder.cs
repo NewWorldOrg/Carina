@@ -136,7 +136,12 @@ public sealed record RulePreviewResponder(
         => settled.Settled && settled.Plan.Answers(proposed.Id) ? settled.Plan.For(proposed.Id).Verdict : null;
 }
 
-public sealed record RuleImpactResponder(int Making, int Withdrawing, int ChangingHands, int ExcludedAsShadows)
+public sealed record RuleImpactResponder(
+    int Making,
+    int Withdrawing,
+    int Sweeping,
+    int ChangingHands,
+    int ExcludedAsShadows)
 {
     public static RuleImpactResponder Of(RuleRehearsal rehearsal)
     {
@@ -145,6 +150,7 @@ public sealed record RuleImpactResponder(int Making, int Withdrawing, int Changi
         return new RuleImpactResponder(
             rehearsal.Making.Count,
             rehearsal.Withdrawing.Count,
+            rehearsal.Sweeping.Count,
             rehearsal.ChangingHands.Count,
             rehearsal.Shadowed);
     }
@@ -160,21 +166,20 @@ public sealed record RuleApplicationResponder(
     int TurnedOff,
     int Faulted)
 {
-    public static RuleApplicationResponder Of(RuleApplyRun run)
+    public static RuleApplicationResponder Of(RuleApplyRun run, RuleApplicationRun applied)
     {
         ArgumentNullException.ThrowIfNull(run);
-
-        RuleApplicationRun? applied = run.Pass.Applied;
+        ArgumentNullException.ThrowIfNull(applied);
 
         return new RuleApplicationResponder(
             run.ApplyId,
             run.Pass.Revision,
-            applied?.Read ?? 0,
-            applied?.Made.Count ?? 0,
-            applied?.Refused.Count ?? 0,
-            applied?.Withdrawn.Count ?? 0,
-            applied?.TurnedOff.Count ?? 0,
-            applied?.Faulted.Count ?? 0);
+            applied.Read,
+            applied.Made.Count,
+            applied.Refused.Count,
+            applied.Withdrawn.Count,
+            applied.TurnedOff.Count,
+            applied.Faulted.Count);
     }
 }
 

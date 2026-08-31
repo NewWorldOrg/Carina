@@ -20,6 +20,7 @@ public sealed class ApplyRuleNowAction(RuleService rules) : ControllerBase
     [ProducesResponseType<BaseResponder<RuleApplicationResponder>>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<BaseResponder<RuleApplicationResponder>>(StatusCodes.Status404NotFound)]
     [ProducesResponseType<BaseResponder<RuleApplicationRefusedResponder>>(StatusCodes.Status409Conflict)]
+    [ProducesResponseType<BaseResponder<RuleApplicationResponder>>(StatusCodes.Status503ServiceUnavailable)]
     public async Task<IActionResult> Invoke(Guid id, CancellationToken cancellationToken)
     {
         if (RuleIdText.Read(id) is not { } ruleId)
@@ -32,13 +33,15 @@ public sealed class ApplyRuleNowAction(RuleService rules) : ControllerBase
 
         if (!asked.IsSuccess)
         {
-            return NotFound(BaseResponder<RuleApplicationResponder>.Error(asked.ErrorMessage!));
+            return StatusCode(
+                RuleStatus.Of(asked.ErrorType),
+                BaseResponder<RuleApplicationResponder>.Error(asked.ErrorMessage!));
         }
 
         RuleApplyOutcome outcome = asked.Data!;
 
-        return outcome.Run is { } ran
-            ? Ok(BaseResponder<RuleApplicationResponder>.Success(RuleApplicationResponder.Of(ran)))
+        return outcome.Run is { Pass.Applied: { } applied } ran
+            ? Ok(BaseResponder<RuleApplicationResponder>.Success(RuleApplicationResponder.Of(ran, applied)))
             : Conflict(new BaseResponder<RuleApplicationRefusedResponder>(
                 false,
                 RuleService.Because(outcome.Refusal!),

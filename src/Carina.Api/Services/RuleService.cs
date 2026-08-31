@@ -16,6 +16,8 @@ public enum RuleFailure
     TunersCannotBeCounted = 3,
 
     OneIsAlreadyRunning = 4,
+
+    TheRulesCouldNotBeRead = 5,
 }
 
 public sealed record RuleDraft(
@@ -186,8 +188,15 @@ public sealed class RuleService(
             return Missing<RuleApplyOutcome>(id);
         }
 
-        return ServiceResult<RuleApplyOutcome, RuleFailure>.Success(
-            await applyNow.StartAsync(cancellationToken));
+        RuleApplyOutcome outcome = await applyNow.StartAsync(cancellationToken);
+
+        return outcome.Run is { Pass.Applied: null }
+            ? ServiceResult<RuleApplyOutcome, RuleFailure>.Failure(
+                "The pass walked, but reading the rules against the guide failed part way through it, so what it "
+                + "made and what it took away is not known. A count of none would be read as none having changed, "
+                + "which is a different thing from not knowing.",
+                RuleFailure.TheRulesCouldNotBeRead)
+            : ServiceResult<RuleApplyOutcome, RuleFailure>.Success(outcome);
     }
 
     public static string Because(RuleApplyVerdict verdict)

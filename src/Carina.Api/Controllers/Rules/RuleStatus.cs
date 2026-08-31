@@ -9,6 +9,7 @@ public static class RuleStatus
         RuleFailure.NoSuchRule => StatusCodes.Status404NotFound,
         RuleFailure.NotWrittenAsARule => StatusCodes.Status400BadRequest,
         RuleFailure.TunersCannotBeCounted => StatusCodes.Status503ServiceUnavailable,
+        RuleFailure.TheRulesCouldNotBeRead => StatusCodes.Status503ServiceUnavailable,
         _ => StatusCodes.Status409Conflict,
     };
 }

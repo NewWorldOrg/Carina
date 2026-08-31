@@ -8,6 +8,15 @@ using Carina.Infrastructure.Reservations;
 
 namespace Carina.Infrastructure.Rules;
 
+public enum RuleWithdrawal
+{
+    WhileTheRuleStands = 1,
+
+    WhenTheRuleIsSwitchedOff = 2,
+
+    WhenTheRuleIsDeleted = 3,
+}
+
 public sealed record RuleApplicationRun(
     long Revision,
     int Read,
@@ -22,6 +31,7 @@ public sealed record RuleRehearsal(
     int Shadowed,
     IReadOnlyList<Reservation> Making,
     IReadOnlyList<Reservation> Withdrawing,
+    IReadOnlyList<Reservation> Sweeping,
     IReadOnlyList<Reservation> ChangingHands,
     SchedulingRun Settled);
 
@@ -54,18 +64,7 @@ public sealed class RuleApplicationService(
     {
         ArgumentNullException.ThrowIfNull(ruleId);
 
-        DateTime at = Moment();
-        WithdrawalGuard guard = await GuardAsync(cancellationToken);
-
-        Reservation[] leaving =
-        [
-            .. (await reservations.ListForRuleAsync(ruleId, cancellationToken))
-                .Where(reservation => guard.Lets(reservation, standing: false, at)),
-        ];
-
-        await WithdrawAsync(leaving, cancellationToken);
-
-        return leaving;
+        return await DroppedAsync(ruleId, Moment(), await GuardAsync(cancellationToken), cancellationToken);
     }
 
     public async Task<RuleRetirement?> RetiredAsync(RuleId ruleId, CancellationToken cancellationToken)
@@ -77,14 +76,24 @@ public sealed class RuleApplicationService(
             return null;
         }
 
-        IReadOnlyList<Reservation> withdrawn = await DroppedAsync(ruleId, cancellationToken);
+        DateTime at = Moment();
+        WithdrawalGuard guard = await GuardAsync(cancellationToken);
+        IReadOnlyList<Reservation> withdrawn = await DroppedAsync(ruleId, at, guard, cancellationToken);
 
         IReadOnlyList<Reservation> swept = await write.AllOrNothingAsync(
             async token =>
             {
                 IReadOnlyList<Reservation> standing = await reservations.ListForRuleAsync(ruleId, token);
-                Reservation[] left = [.. standing.Where(Orphaning)];
-                Reservation[] kept = [.. standing.Where(reservation => !Orphaning(reservation))];
+                Reservation[] left =
+                [
+                    .. standing.Where(reservation =>
+                        guard.Lets(reservation, RuleWithdrawal.WhenTheRuleIsDeleted, at)),
+                ];
+                Reservation[] kept =
+                [
+                    .. standing.Where(reservation =>
+                        !guard.Lets(reservation, RuleWithdrawal.WhenTheRuleIsDeleted, at)),
+                ];
 
                 await reservations.WithdrawAsync(left, token);
 
@@ -131,12 +140,10 @@ public sealed class RuleApplicationService(
 
         var making = new List<Reservation>();
         var changingHands = new List<Reservation>();
-        var kept = new HashSet<ProgrammeKey>();
+        HashSet<ProgrammeKey> taken = [.. run.Matches.Select(match => Naming(match.Programme))];
 
         foreach (RuleMatch match in taking)
         {
-            kept.Add(Naming(match.Programme));
-
             var reference = new ProgrammeRef(
                 match.Programme.NetworkId,
                 match.Programme.ServiceId,
@@ -157,11 +164,16 @@ public sealed class RuleApplicationService(
         }
 
         WithdrawalGuard guard = await GuardAsync(cancellationToken);
+        IReadOnlyList<Reservation> held = await reservations.ListForRuleAsync(draft.Id, cancellationToken);
         Reservation[] withdrawing =
         [
-            .. (await reservations.ListForRuleAsync(draft.Id, cancellationToken))
-                .Where(reservation => !kept.Contains(Naming(reservation)))
-                .Where(reservation => guard.Lets(reservation, standing: true, at)),
+            .. held
+                .Where(reservation => !taken.Contains(Naming(reservation)))
+                .Where(reservation => guard.Lets(reservation, RuleWithdrawal.WhileTheRuleStands, at)),
+        ];
+        Reservation[] sweeping =
+        [
+            .. held.Where(reservation => guard.Lets(reservation, RuleWithdrawal.WhenTheRuleIsDeleted, at)),
         ];
 
         return new RuleRehearsal(
@@ -169,14 +181,27 @@ public sealed class RuleApplicationService(
             await matcher.ShadowedByAsync(draft, guide, cancellationToken),
             making,
             withdrawing,
+            sweeping,
             changingHands,
             await scheduling.PreviewAsync(making, cancellationToken));
     }
 
-    private static bool Orphaning(Reservation reservation)
-        => reservation.IsRuleBorn
-            && reservation.State is ReservationState.Scheduled or ReservationState.Conflict
-            && !reservation.IsPinned;
+    private async Task<IReadOnlyList<Reservation>> DroppedAsync(
+        RuleId ruleId,
+        DateTime at,
+        WithdrawalGuard guard,
+        CancellationToken cancellationToken)
+    {
+        Reservation[] leaving =
+        [
+            .. (await reservations.ListForRuleAsync(ruleId, cancellationToken))
+                .Where(reservation => guard.Lets(reservation, RuleWithdrawal.WhenTheRuleIsSwitchedOff, at)),
+        ];
+
+        await WithdrawAsync(leaving, cancellationToken);
+
+        return leaving;
+    }
 
     private async Task<RuleApplicationRun> ApplyAsync(
         long from,
@@ -281,7 +306,10 @@ public sealed class RuleApplicationService(
                 continue;
             }
 
-            if (!guard.Lets(reservation, holds, at))
+            if (!guard.Lets(
+                reservation,
+                holds ? RuleWithdrawal.WhileTheRuleStands : RuleWithdrawal.WhenTheRuleIsSwitchedOff,
+                at))
             {
                 continue;
             }
@@ -417,12 +445,13 @@ public sealed class RuleApplicationService(
         IReadOnlyDictionary<ServiceKey, VisitOutcome> Settled,
         TimeSpan Grace)
     {
-        public bool Lets(Reservation reservation, bool standing, DateTime at)
+        public bool Lets(Reservation reservation, RuleWithdrawal occasion, DateTime at)
             => reservation.IsRuleBorn
                 && reservation.State is ReservationState.Scheduled or ReservationState.Conflict
                 && !reservation.IsPinned
-                && Collected(reservation)
-                && (!standing || reservation.EffectiveStartAt - at > Grace);
+                && (occasion is RuleWithdrawal.WhenTheRuleIsDeleted || Collected(reservation))
+                && (occasion is not RuleWithdrawal.WhileTheRuleStands
+                    || reservation.EffectiveStartAt - at > Grace);
 
         private bool Collected(Reservation reservation)
             => Carriers.TryGetValue(
