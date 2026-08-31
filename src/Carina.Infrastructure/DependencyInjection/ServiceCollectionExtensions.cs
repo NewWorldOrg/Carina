@@ -94,6 +94,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISatelliteTransportStreamRepository, SatelliteTransportStreamRepository>();
         services.AddScoped<IScanRunRepository, ScanRunRepository>();
         services.AddScoped<IReservationRepository, ReservationRepository>();
+        services.AddScoped<IReservationOutcomeRepository, ReservationOutcomeRepository>();
         services.AddScoped<IReservationRecordingContract, ReservationRecordingContract>();
         services.AddScoped<IRecordingLedger, RecordingLedger>();
         services.AddScoped<IIntegrityCheckRepository, IntegrityCheckRepository>();
@@ -106,6 +107,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IServiceReachSettingsRepository, ServiceReachSettingsRepository>();
         services.AddScoped<ITuneFailureReporter, CandidateTuneFailureReporter>();
         services.AddScoped<ReservationSchedulingService>();
+        services.AddScoped<ReservationOutcomeService>();
         services.AddScoped<RuleMatcher>();
         services.AddScoped<IRuleRepository, RuleRepository>();
         services.AddScoped<RuleApplicationService>();
@@ -118,6 +120,7 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient<IOidcGateway, OidcGateway>();
         services.TryAddSingleton(new RuleApplicationSettings());
         services.TryAddSingleton(new RecalculationSettings());
+        services.TryAddSingleton(new ReservationOutcomeSettings());
         services.AddSingleton<ReservationRecalculationHostedService>();
         services.TryAddSingleton<IRecalculationNotice>(provider =>
             provider.GetRequiredService<ReservationRecalculationHostedService>());

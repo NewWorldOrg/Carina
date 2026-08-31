@@ -116,6 +116,43 @@ public sealed class ReservationRepository(CarinaDbContext context) : IReservatio
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<Reservation>> ListAwaitingOutcomeAsync(
+        DateTime through,
+        CancellationToken cancellationToken)
+    {
+        DateTime moment = through.Kind is DateTimeKind.Utc
+            ? through
+            : throw new ArgumentException(
+                $"A reservation ledger run is a UTC instant, but this one has Kind={through.Kind}.",
+                nameof(through));
+
+        return await context.Set<Reservation>()
+            .Where(reservation => !context.Set<ReservationOutcome>()
+                .Any(outcome => outcome.ReservationId == reservation.Id))
+            .Where(reservation => reservation.RecordingOutcome == RecordingOutcome.Failed
+                                  || (reservation.StartedAt == null
+                                      && (reservation.State == ReservationState.Scheduled
+                                          || reservation.State == ReservationState.Conflict)
+                                      && reservation.EndAt <= moment))
+            .OrderBy(reservation => reservation.StartAt)
+            .ThenBy(reservation => reservation.Id)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<Reservation>> ListClaimedOverAsync(
+        ReservationWindow window,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+
+        return await context.Set<Reservation>()
+            .Where(reservation => reservation.StartedAt != null)
+            .Where(reservation => reservation.EndAt >= window.From && reservation.StartAt <= window.To)
+            .OrderBy(reservation => reservation.StartAt)
+            .ThenBy(reservation => reservation.Id)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<Reservation>> ListForRuleAsync(
         RuleId ruleId,
         CancellationToken cancellationToken)

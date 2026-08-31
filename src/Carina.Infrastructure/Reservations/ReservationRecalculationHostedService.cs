@@ -154,6 +154,28 @@ public sealed class ReservationRecalculationHostedService(
             }
         }
 
+        ReservationOutcomeRun? recorded = null;
+
+        try
+        {
+            recorded = await scope.ServiceProvider
+                .GetRequiredService<ReservationOutcomeService>()
+                .RecordAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception failure)
+        {
+            faults.Add(new RecalculationFault(RecalculationStage.Outcomes, failure.GetType().Name));
+
+            logger.LogError(
+                failure,
+                "Writing down what became of the reservations whose windows have closed failed; what is settled "
+                + "below is unaffected and the next pass reads them again.");
+        }
+
         SchedulingRun? settled = null;
 
         try
@@ -173,7 +195,7 @@ public sealed class ReservationRecalculationHostedService(
             logger.LogError(failure, "Settling the allocation failed; the next pass is unaffected.");
         }
 
-        return RecalculationPass.Of(answering, reach, cursor, applied, settled, faults);
+        return RecalculationPass.Of(answering, reach, cursor, applied, recorded, settled, faults);
     }
 
     private async Task<bool> WaitAsync(TimeSpan waiting, CancellationToken stoppingToken)
@@ -231,12 +253,14 @@ public sealed class ReservationRecalculationHostedService(
 
         logger.LogInformation(
             "A recalculation pass answering {Triggers} reached {Reach} and left the guide read to {Revision}: "
-            + "{Made} reservation(s) made, {Withdrawn} withdrawn, {Faults} stage(s) faulted.",
+            + "{Made} reservation(s) made, {Withdrawn} withdrawn, {Recorded} written down as not recorded, "
+            + "{Faults} stage(s) faulted.",
             string.Join(", ", pass.Answering),
             pass.Reach,
             pass.Revision,
             pass.Applied?.Made.Count ?? 0,
             pass.Applied?.Withdrawn.Count ?? 0,
+            pass.Recorded?.Recorded.Count ?? 0,
             pass.Faults.Count);
 
         foreach (RecalculationFault fault in pass.Faults)
