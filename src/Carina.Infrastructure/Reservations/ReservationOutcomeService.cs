@@ -96,7 +96,6 @@ public sealed class ReservationOutcomeService(
         =>
         [
             .. claimed
-                .Where(won => !won.Id.Equals(lost.Id))
                 .Where(won => won.EffectiveStartAt < lost.EffectiveEndAt
                               && lost.EffectiveStartAt < won.EffectiveEndAt)
                 .OrderBy(won => won.EffectiveStartAt)

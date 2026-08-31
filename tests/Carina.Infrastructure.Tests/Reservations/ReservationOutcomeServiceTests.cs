@@ -64,6 +64,69 @@ public sealed class ReservationOutcomeServiceTests
     }
 
     [Fact]
+    public async Task WhatWasRecordedInsteadIsNamedOldestFirst()
+    {
+        Reservation lost = ReservationFixtures.Rehydrated(ReservationState.Conflict, startAt: Opens);
+        Reservation earlier = ReservationFixtures.Rehydrated(
+            ReservationState.Scheduled,
+            startedAt: Opens.AddMinutes(-10),
+            outcome: RecordingOutcome.Complete,
+            startAt: Opens.AddMinutes(-10));
+        Reservation later = ReservationFixtures.Rehydrated(
+            ReservationState.Scheduled,
+            startedAt: Opens.AddMinutes(40),
+            outcome: RecordingOutcome.Complete,
+            startAt: Opens.AddMinutes(40));
+        Held held = Standing(AfterItAll, lost, later, earlier);
+
+        await Run(held);
+
+        Assert.Equal(
+            [earlier.Id.Value, later.Id.Value],
+            Assert.Single(held.Outcomes.Held).RecordedInstead);
+    }
+
+    [Fact]
+    public async Task WhatWasRecordedInsteadIsNamedByWhenItTookItsTunerNotByWhenItsProgrammeBegan()
+    {
+        Reservation lost = ReservationFixtures.Rehydrated(ReservationState.Conflict, startAt: Opens);
+        Reservation begins = ReservationFixtures.Rehydrated(
+            ReservationState.Scheduled,
+            startedAt: Opens.AddMinutes(10),
+            outcome: RecordingOutcome.Complete,
+            startAt: Opens.AddMinutes(10));
+        Reservation tunes = ReservationFixtures.Rehydrated(
+            ReservationState.Scheduled,
+            startedAt: Opens.AddMinutes(-10),
+            outcome: RecordingOutcome.Complete,
+            startAt: Opens.AddMinutes(20),
+            marginBefore: Margin.OfSeconds(1800));
+        Held held = Standing(AfterItAll, lost, begins, tunes);
+
+        Assert.True(begins.StartAt < tunes.StartAt);
+        Assert.True(tunes.EffectiveStartAt < begins.EffectiveStartAt);
+
+        await Run(held);
+
+        Assert.Equal(
+            [tunes.Id.Value, begins.Id.Value],
+            Assert.Single(held.Outcomes.Held).RecordedInstead);
+    }
+
+    [Fact]
+    public async Task AReservationThatLostAContestIsNeverOneThatWasRecording()
+    {
+        Reservation claimed = ReservationFixtures.Rehydrated(
+            ReservationState.Conflict,
+            startedAt: Opens,
+            startAt: Opens);
+        Held held = Standing(AfterItAll, claimed);
+
+        Assert.Empty((await Run(held)).Recorded);
+        Assert.Equal(ReservationState.Conflict, claimed.State);
+    }
+
+    [Fact]
     public async Task ARecordingThatFailedIsRecordedWithoutMovingTheReservation()
     {
         Reservation failed = ReservationFixtures.Rehydrated(
