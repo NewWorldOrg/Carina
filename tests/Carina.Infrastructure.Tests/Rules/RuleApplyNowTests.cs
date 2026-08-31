@@ -225,6 +225,7 @@ public sealed class RuleApplyNowTests
                     7,
                     new RuleApplicationRun(7, 0, [], [], [], [], []),
                     null,
+                    null,
                     []);
 
                 Answered = answering;

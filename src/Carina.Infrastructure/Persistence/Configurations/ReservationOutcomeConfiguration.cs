@@ -16,7 +16,7 @@ public sealed class ReservationOutcomeConfiguration : IEntityTypeConfiguration<R
 {
     public const string OccurrenceIndexName = "ix_reservation_outcome_occurred_at";
 
-    public const string ReservationIndexName = "ix_reservation_outcome_reservation";
+    public const string ReservationIndexName = "ux_reservation_outcome_reservation_kind";
 
     public void Configure(EntityTypeBuilder<ReservationOutcome> builder)
     {
@@ -113,7 +113,9 @@ public sealed class ReservationOutcomeConfiguration : IEntityTypeConfiguration<R
         builder.Property(outcome => outcome.OccurredAt).IsRequired();
 
         builder.HasIndex(outcome => outcome.OccurredAt).HasDatabaseName(OccurrenceIndexName);
-        builder.HasIndex(outcome => outcome.ReservationId).HasDatabaseName(ReservationIndexName);
+        builder.HasIndex(outcome => new { outcome.ReservationId, outcome.Kind })
+            .HasDatabaseName(ReservationIndexName)
+            .IsUnique();
     }
 
     private static IReadOnlyList<Guid> Read(string stored)

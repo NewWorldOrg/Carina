@@ -120,6 +120,16 @@ internal sealed class HeldReservationLedger : IReservationRepository
         ]);
     }
 
+    public Task<IReadOnlyList<Reservation>> ListAwaitingOutcomeAsync(
+        DateTime through,
+        CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<Reservation>>([]);
+
+    public Task<IReadOnlyList<Reservation>> ListClaimedOverAsync(
+        ReservationWindow window,
+        CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<Reservation>>([]);
+
     public Task<IReadOnlyList<Reservation>> ListForRuleAsync(RuleId ruleId, CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<Reservation>>(
             [.. held.Where(reservation => ruleId.Equals(reservation.RuleId))]);

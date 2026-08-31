@@ -121,6 +121,13 @@ public static class AllocationFixtures
             .Invoke(reservation, null);
     }
 
+    public static void WritesAReservationOffWithoutTheLedger(Reservation reservation)
+    {
+        ArgumentNullException.ThrowIfNull(reservation);
+
+        reservation.Miss();
+    }
+
     public static void NothingCallsThis()
     {
     }

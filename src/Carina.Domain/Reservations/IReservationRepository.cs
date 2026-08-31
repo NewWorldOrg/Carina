@@ -28,6 +28,14 @@ public interface IReservationRepository
 
     Task<IReadOnlyList<Reservation>> ListPendingAsync(ReservationWindow window, CancellationToken cancellationToken);
 
+    Task<IReadOnlyList<Reservation>> ListAwaitingOutcomeAsync(
+        DateTime through,
+        CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<Reservation>> ListClaimedOverAsync(
+        ReservationWindow window,
+        CancellationToken cancellationToken);
+
     Task<IReadOnlyList<Reservation>> ListForRuleAsync(RuleId ruleId, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<Reservation>> ListForBroadcastGroupAsync(

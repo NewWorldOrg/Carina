@@ -1,6 +1,7 @@
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
+using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
 
@@ -105,7 +106,8 @@ internal sealed class WatchedWrite : IAtomicWrite
     }
 }
 
-internal sealed class HeldReservations(IAtomicWrite? write = null) : IReservationRepository
+internal sealed class HeldReservations(IAtomicWrite? write = null, HeldOutcomes? outcomes = null)
+    : IReservationRepository
 {
     private readonly List<Reservation> held = [];
 
@@ -157,6 +159,40 @@ internal sealed class HeldReservations(IAtomicWrite? write = null) : IReservatio
         }
 
         return Task.FromResult(pending);
+    }
+
+    public Task<IReadOnlyList<Reservation>> ListAwaitingOutcomeAsync(
+        DateTime through,
+        CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<Reservation>>(
+        [
+            .. held
+                .Where(reservation => outcomes is null
+                                      || !outcomes.Held.Any(outcome =>
+                                          outcome.ReservationId.Equals(reservation.Id)))
+                .Where(reservation => reservation.RecordingOutcome is RecordingOutcome.Failed
+                                      || (!reservation.IsPinned
+                                          && reservation.State
+                                              is ReservationState.Scheduled or ReservationState.Conflict
+                                          && reservation.EndAt <= through))
+                .OrderBy(reservation => reservation.StartAt)
+                .ThenBy(reservation => reservation.Id.Value),
+        ]);
+
+    public Task<IReadOnlyList<Reservation>> ListClaimedOverAsync(
+        ReservationWindow window,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+
+        return Task.FromResult<IReadOnlyList<Reservation>>(
+        [
+            .. held
+                .Where(reservation => reservation.IsPinned)
+                .Where(reservation => reservation.EndAt >= window.From && reservation.StartAt <= window.To)
+                .OrderBy(reservation => reservation.StartAt)
+                .ThenBy(reservation => reservation.Id.Value),
+        ]);
     }
 
     public Task<IReadOnlyList<Reservation>> ListForRuleAsync(RuleId ruleId, CancellationToken cancellationToken)

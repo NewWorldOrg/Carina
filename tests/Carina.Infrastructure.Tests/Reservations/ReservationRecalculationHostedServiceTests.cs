@@ -215,6 +215,7 @@ public sealed class ReservationRecalculationHostedServiceTests
         RecalculationPass pass = await world.Passing();
 
         Assert.Equal([RecalculationStage.Rules], [.. pass.Faults.Select(fault => fault.Stage)]);
+        Assert.NotNull(pass.Recorded);
         Assert.Null(pass.Applied);
         Assert.NotNull(pass.Settled);
         Assert.True(pass.Settled.Settled);
@@ -230,6 +231,7 @@ public sealed class ReservationRecalculationHostedServiceTests
         RecalculationPass pass = await world.Passing();
 
         Assert.Equal([RecalculationStage.Scheduling], [.. pass.Faults.Select(fault => fault.Stage)]);
+        Assert.NotNull(pass.Recorded);
         Assert.NotNull(pass.Applied);
         Assert.Null(pass.Settled);
     }
@@ -405,6 +407,94 @@ public sealed class ReservationRecalculationHostedServiceTests
             Margin.None,
             Now.AddDays(-30));
 
+    [Fact]
+    public async Task AReservationNothingRecordedIsWrittenDownOnceItsWindowHasClosed()
+    {
+        using World world = World.Of();
+        Reservation gone = Passed(Now.AddHours(-2), Now.AddMinutes(-30));
+        Reservation running = Passed(Now.AddHours(-1), Now.AddHours(1));
+        world.Reservations.Standing(gone, running);
+
+        world.Recalculating.Nudge(RecalculationTrigger.AppStarted);
+        RecalculationPass pass = await world.Passing();
+
+        Assert.Empty(pass.Faults);
+        Assert.NotNull(pass.Recorded);
+        Assert.Equal(
+            [new ReservationOutcomeRecord(gone.Id, ReservationOutcomeKind.Missed)],
+            pass.Recorded.Recorded);
+        Assert.Equal(ReservationState.Missed, gone.State);
+        Assert.Equal(ReservationState.Scheduled, running.State);
+        Assert.Equal(ReservationOutcomeKind.Missed, Assert.Single(world.Outcomes.Held).Kind);
+    }
+
+    [Fact]
+    public async Task TheSeatAReservationNobodyRecordedWasHoldingIsFreedInTheSamePass()
+    {
+        using World world = World.Of();
+        Reservation first = Passed(Now.AddHours(-2), Now.AddMinutes(-30), 2001, 21);
+        Reservation second = Passed(Now.AddHours(-2), Now.AddMinutes(-30), 2002, 22);
+        Reservation running = Passed(Now.AddHours(-1), Now.AddHours(1), 2003, 23);
+        world.Tuning.Answer(2001, TuningParameters.Terrestrial(21));
+        world.Tuning.Answer(2002, TuningParameters.Terrestrial(22));
+        world.Tuning.Answer(2003, TuningParameters.Terrestrial(23));
+        world.Reservations.Standing(first, second, running);
+
+        world.Recalculating.Nudge(RecalculationTrigger.AppStarted);
+        RecalculationPass pass = await world.Passing();
+
+        Assert.NotNull(pass.Settled);
+        Assert.True(pass.Settled.Settled);
+        Assert.Equal(ReservationState.Missed, first.State);
+        Assert.Equal(ReservationState.Missed, second.State);
+        Assert.Equal(ReservationState.Scheduled, running.State);
+    }
+
+    [Fact]
+    public async Task TheAllocationIsStillSettledWhenWritingDownWhatBecameOfAReservationThrows()
+    {
+        using World world = World.Of();
+        world.Reservations.Standing(Passed(Now.AddHours(-2), Now.AddMinutes(-30)));
+        world.Outcomes.Throws = new InvalidOperationException("the ledger would not take the row");
+
+        world.Recalculating.Nudge(RecalculationTrigger.AppStarted);
+        RecalculationPass pass = await world.Passing();
+
+        Assert.Equal([RecalculationStage.Outcomes], [.. pass.Faults.Select(fault => fault.Stage)]);
+        Assert.Null(pass.Recorded);
+        Assert.NotNull(pass.Settled);
+        Assert.True(pass.Settled.Settled);
+    }
+
+    private static Reservation Passed(DateTime opens, DateTime closes, int service = Listed, int channel = 0)
+        => Reservation.Rehydrate(
+            ReservationId.New(),
+            new ProgrammeRef(
+                new NetworkId(Network),
+                new ServiceId(service),
+                new EventId(channel is 0 ? Guid.NewGuid().GetHashCode() & 0xFFFF : channel),
+                opens),
+            null,
+            Priority.Default,
+            opens,
+            closes,
+            true,
+            Margin.None,
+            Margin.None,
+            new ProgrammeSnapshot("A programme", "a summary", string.Empty, [], Now),
+            null,
+            BroadcastGroupRole.Standalone,
+            ReservationState.Scheduled,
+            null,
+            null,
+            false,
+            [],
+            false,
+            null,
+            false,
+            null,
+            Now);
+
     private static Programme Broadcast(int carried, string name, long revision = 1)
         => Programme.Rehydrate(
             new ProgrammeId(new NetworkId(Network), new ServiceId(Listed), new EventId(carried)),
@@ -449,7 +539,8 @@ public sealed class ReservationRecalculationHostedServiceTests
         private World(bool seatingThrows, bool rushed)
         {
             Write = new WatchedWrite();
-            Reservations = new HeldReservations(Write);
+            Outcomes = new HeldOutcomes(Write);
+            Reservations = new HeldReservations(Write, Outcomes);
             Programmes = new WatchedProgrammes();
             Streams = new CountedStreams(
                 [
@@ -480,6 +571,7 @@ public sealed class ReservationRecalculationHostedServiceTests
             services.AddSingleton<IRuleRepository>(Rules);
             services.AddSingleton<IProgrammeRepository>(Programmes);
             services.AddSingleton<IReservationRepository>(Reservations);
+            services.AddSingleton<IReservationOutcomeRepository>(Outcomes);
             services.AddSingleton<IStreamVisitRepository>(Visits);
             services.AddSingleton<IBroadcastStreamDirectory>(Streams);
             services.AddSingleton<IBroadcastServiceRepository>(Services);
@@ -488,9 +580,11 @@ public sealed class ReservationRecalculationHostedServiceTests
             services.AddSingleton<IAtomicWrite>(Write);
             services.AddSingleton(RollingHorizon.Default);
             services.AddSingleton(new RuleApplicationSettings());
+            services.AddSingleton(new ReservationOutcomeSettings());
             services.AddScoped<ProgrammeSearchScope>();
             services.AddScoped<RuleMatcher>();
             services.AddScoped<ReservationSchedulingService>();
+            services.AddScoped<ReservationOutcomeService>();
             services.AddScoped<RuleApplicationService>();
 
             provider = services.BuildServiceProvider();
@@ -511,6 +605,8 @@ public sealed class ReservationRecalculationHostedServiceTests
         public WatchedProgrammes Programmes { get; }
 
         public HeldReservations Reservations { get; }
+
+        public HeldOutcomes Outcomes { get; }
 
         public HeldStreamVisits Visits { get; } = new();
 
