@@ -1,5 +1,25 @@
 namespace Carina.Contracts;
 
+public static class RecordingFile
+{
+    public const string Extension = ".ts";
+
+    public static string Of(string? recordingId) =>
+        WireName.IsUsable(recordingId)
+            ? recordingId + Extension
+            : throw new ArgumentException(
+                $"A recording names its own file, so a recording id is {WireName.Description}; got '{recordingId}'.",
+                nameof(recordingId)
+            );
+}
+
+public sealed record RecordingErasedDto
+{
+    public string RecordingId { get; init; } = string.Empty;
+
+    public bool FileRemoved { get; init; }
+}
+
 public sealed record ExtendSessionRequest
 {
     public required DateTimeOffset EndsAt { get; init; }

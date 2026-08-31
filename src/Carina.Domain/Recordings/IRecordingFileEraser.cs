@@ -5,6 +5,10 @@ public enum ErasureFault
     RootOutOfReach = 1,
 
     FileLeftBehind = 2,
+
+    DriverUnreachable = 3,
+
+    DriverRefused = 4,
 }
 
 public sealed record RecordingErasure
@@ -13,7 +17,7 @@ public sealed record RecordingErasure
     {
         if (fault is { } named && !Enum.IsDefined(named))
         {
-            throw new ArgumentOutOfRangeException(nameof(fault), fault, "An erasure fails in one of two ways.");
+            throw new ArgumentOutOfRangeException(nameof(fault), fault, "An erasure fails in one of four ways.");
         }
 
         if (fault is null != note is null)
@@ -59,6 +63,5 @@ public interface IRecordingFileEraser
     Task<RecordingErasure> EraseAsync(
         RecordingId id,
         OutputRoot root,
-        RecordingFileName fileName,
         CancellationToken cancellationToken);
 }

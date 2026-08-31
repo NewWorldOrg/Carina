@@ -14,19 +14,6 @@ public interface IRecordingWriter : IDisposable
     void Write(ReadOnlySpan<byte> bytes);
 }
 
-public static class RecordingFileName
-{
-    public const string Extension = ".ts";
-
-    public static string Of(string? recordingId) =>
-        WireName.IsUsable(recordingId)
-            ? recordingId + Extension
-            : throw new ArgumentException(
-                $"A recording names its own file, so a recording id is {WireName.Description}; got '{recordingId}'.",
-                nameof(recordingId)
-            );
-}
-
 public sealed class RecordingWriter : IRecordingWriter
 {
     public const long FlushInterval = 64L * 1024 * 1024;
@@ -46,7 +33,7 @@ public sealed class RecordingWriter : IRecordingWriter
     )
     {
         this.flushEvery = flushEvery;
-        Path = System.IO.Path.Combine(recordingsDirectory, RecordingFileName.Of(recordingId));
+        Path = System.IO.Path.Combine(recordingsDirectory, RecordingFile.Of(recordingId));
         stream = new FileStream(
             Path,
             new FileStreamOptions

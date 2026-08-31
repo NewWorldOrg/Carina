@@ -71,7 +71,7 @@ public sealed class RecordingSinkTests : IDisposable
     [InlineData(null)]
     public void ARecordingIdThatCouldNameSomethingOutsideTheOutputRootIsNoFileName(string? recordingId)
     {
-        Assert.Throws<ArgumentException>(() => RecordingFileName.Of(recordingId));
+        Assert.Throws<ArgumentException>(() => RecordingFile.Of(recordingId));
         Assert.Empty(Names());
     }
 
@@ -264,7 +264,7 @@ public sealed class RecordingSinkTests : IDisposable
 
             accepted.Add(candidate);
 
-            string name = RecordingFileName.Of(candidate);
+            string name = RecordingFile.Of(candidate);
 
             Assert.Equal(name, Path.GetFileName(name));
         }

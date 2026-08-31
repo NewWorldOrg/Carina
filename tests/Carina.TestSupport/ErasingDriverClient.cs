@@ -1,32 +1,38 @@
 using Carina.Contracts;
 using Carina.Domain.Driver;
 
-namespace Carina.Infrastructure.Tests.Channels;
+namespace Carina.TestSupport;
 
-internal sealed class LedgerOnlyDriverClient : IDriverClient
+public sealed class ErasingDriverClient : IDriverClient
 {
-    public DriverCall<TunerLedgerDto> Ledger { get; set; } =
-        DriverCall<TunerLedgerDto>.Reached(new TunerLedgerDto());
+    public DriverCall<RecordingErasedDto> Answer { get; set; } =
+        DriverCall<RecordingErasedDto>.Reached(new RecordingErasedDto { FileRemoved = true });
 
-    public DriverCall<IReadOnlyList<TunerSnapshot>> Tuners { get; set; } =
-        DriverCall<IReadOnlyList<TunerSnapshot>>.Reached([]);
+    public Func<string, string, DriverCall<RecordingErasedDto>>? StandingInForTheDriver { get; set; }
 
-    public int LedgerReads { get; private set; }
+    public List<(string RecordingId, string OutputRoot)> Asked { get; } = [];
 
-    public Task<DriverCall<TunerLedgerDto>> GetTunerLedgerAsync(CancellationToken cancellationToken)
+    public Task<DriverCall<RecordingErasedDto>> EraseRecordingAsync(
+        string recordingId,
+        string outputRoot,
+        CancellationToken cancellationToken)
     {
-        LedgerReads++;
+        Asked.Add((recordingId, outputRoot));
 
-        return Task.FromResult(Ledger);
+        return Task.FromResult(StandingInForTheDriver?.Invoke(recordingId, outputRoot) ?? Answer);
     }
-
-    public Task<DriverCall<IReadOnlyList<TunerSnapshot>>> GetTunersAsync(CancellationToken cancellationToken)
-        => Task.FromResult(Tuners);
 
     public Task<DriverCall<DriverHello>> GetHealthAsync(CancellationToken cancellationToken)
         => throw new NotSupportedException();
 
-    public Task<DriverCall<IReadOnlyList<DetectedDeviceDto>>> GetDetectedDevicesAsync(CancellationToken cancellationToken)
+    public Task<DriverCall<IReadOnlyList<TunerSnapshot>>> GetTunersAsync(CancellationToken cancellationToken)
+        => throw new NotSupportedException();
+
+    public Task<DriverCall<IReadOnlyList<DetectedDeviceDto>>> GetDetectedDevicesAsync(
+        CancellationToken cancellationToken)
+        => throw new NotSupportedException();
+
+    public Task<DriverCall<TunerLedgerDto>> GetTunerLedgerAsync(CancellationToken cancellationToken)
         => throw new NotSupportedException();
 
     public Task<DriverCall<TunerLedgerDto>> ReplaceTunerLedgerAsync(
@@ -43,10 +49,13 @@ internal sealed class LedgerOnlyDriverClient : IDriverClient
         CancellationToken cancellationToken)
         => throw new NotSupportedException();
 
-    public Task<DriverCall<IReadOnlyList<SessionSnapshot>>> GetActiveSessionsAsync(CancellationToken cancellationToken)
+    public Task<DriverCall<IReadOnlyList<SessionSnapshot>>> GetActiveSessionsAsync(
+        CancellationToken cancellationToken)
         => throw new NotSupportedException();
 
-    public Task<DriverCall<SessionSnapshot>> GetSessionAsync(SessionId sessionId, CancellationToken cancellationToken)
+    public Task<DriverCall<SessionSnapshot>> GetSessionAsync(
+        SessionId sessionId,
+        CancellationToken cancellationToken)
         => throw new NotSupportedException();
 
     public Task<DriverCall<SessionSnapshot>> StartSessionAsync(
@@ -60,7 +69,8 @@ internal sealed class LedgerOnlyDriverClient : IDriverClient
         CancellationToken cancellationToken)
         => throw new NotSupportedException();
 
-    public Task<DriverCall<IReadOnlyList<DiagnosticSnapshot>>> GetDiagnosticsAsync(CancellationToken cancellationToken)
+    public Task<DriverCall<IReadOnlyList<DiagnosticSnapshot>>> GetDiagnosticsAsync(
+        CancellationToken cancellationToken)
         => throw new NotSupportedException();
 
     public Task<DriverCall<IReadOnlyList<StorageRootDto>>> GetStorageAsync(CancellationToken cancellationToken)
@@ -69,12 +79,6 @@ internal sealed class LedgerOnlyDriverClient : IDriverClient
     public Task<DriverCall<Stream>> OpenSessionStreamAsync(
         SessionId sessionId,
         string? subscriber,
-        CancellationToken cancellationToken)
-        => throw new NotSupportedException();
-
-    public Task<DriverCall<RecordingErasedDto>> EraseRecordingAsync(
-        string recordingId,
-        string outputRoot,
         CancellationToken cancellationToken)
         => throw new NotSupportedException();
 
