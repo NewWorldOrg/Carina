@@ -117,6 +117,17 @@ nothing.
   an entity whose namespace is not in the map fails the rule instead of passing
   as unrelated. A domain that adds tables declares which side of the boundary
   they are on rather than escaping it by naming.
+- **The process that writes a recording file is the only one that removes it.**
+  The app's mount of the output roots is read-only, and throwing a recording away
+  is a call over the socket naming one recording and one output root. The driver
+  derives the file name from the recording id rather than being handed a path, so
+  a caller cannot name a file of its own choosing, and it refuses a name that is
+  not one of its own, a root it does not declare, a root that holds no file at all
+  (which is what a lost mount looks like) and a recording a session is still
+  writing. The app removes only the picture drawn of the recording, which lives on
+  a directory of its own. One call throws away one recording; there is no call that
+  throws away more than one.
+
 - **The driver asks nobody who they are.** The gate is the socket's permissions
   and owning group, and adding authentication would mean putting a secret in the
   privileged process. Only the app process holds secrets; the driver holds none,

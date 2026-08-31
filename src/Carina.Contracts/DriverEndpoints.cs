@@ -20,7 +20,11 @@ public static class DriverEndpoints
 
     public const string Storage = "/storage";
 
+    public const string Recordings = "/recordings";
+
     public const string SubscriberQuery = "as";
+
+    public const string OutputRootQuery = "root";
 
     public const string ViewerSubscriber = "viewer";
 
@@ -42,6 +46,14 @@ public static class DriverEndpoints
                 nameof(deviceId)
             );
 
+    public static string Recording(string recordingId) =>
+        WireName.IsUsable(recordingId)
+            ? $"{Recordings}/{recordingId}"
+            : throw new ArgumentException(
+                $"A recording id is {WireName.Description}; there is no path for '{recordingId}'.",
+                nameof(recordingId)
+            );
+
     private static string Segment(SessionId sessionId) =>
         sessionId.Value
         ?? throw new ArgumentException(
@@ -60,5 +72,6 @@ public static class DriverEndpoints
         TunerLedger,
         Restart,
         Storage,
+        Recordings,
     ];
 }

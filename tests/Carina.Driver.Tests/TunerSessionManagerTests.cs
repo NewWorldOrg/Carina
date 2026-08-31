@@ -1270,6 +1270,7 @@ public sealed class TunerSessionManagerTests : IDisposable
                 DriverCapabilities.ScrambleMeasurement,
                 DriverCapabilities.DropPositions,
                 DriverCapabilities.Storage,
+                DriverCapabilities.RecordingErasure,
                 "signalQuality.cnr",
                 "signalQuality.postViterbiBitError",
                 "sessionPurpose.surveyNow",

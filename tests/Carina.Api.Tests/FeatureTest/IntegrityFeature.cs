@@ -193,6 +193,12 @@ internal sealed class StorageDriver : IDriverClient
         CancellationToken cancellationToken)
         => throw new NotSupportedException();
 
+    public Task<DriverCall<RecordingErasedDto>> EraseRecordingAsync(
+        string recordingId,
+        string outputRoot,
+        CancellationToken cancellationToken)
+        => throw new NotSupportedException();
+
     public Task<DriverCall<Stream>> OpenEventsAsync(CancellationToken cancellationToken)
         => throw new NotSupportedException();
 }

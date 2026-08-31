@@ -125,6 +125,12 @@ internal sealed class WritingDriver : IDriverClient
         CancellationToken cancellationToken)
         => throw new NotSupportedException();
 
+    public Task<DriverCall<RecordingErasedDto>> EraseRecordingAsync(
+        string recordingId,
+        string outputRoot,
+        CancellationToken cancellationToken)
+        => throw new NotSupportedException();
+
     public Task<DriverCall<Stream>> OpenEventsAsync(CancellationToken cancellationToken)
         => throw new NotSupportedException();
 }
@@ -167,7 +173,6 @@ internal sealed class ScriptedEraser : IRecordingFileEraser
     public Task<RecordingErasure> EraseAsync(
         RecordingId id,
         OutputRoot root,
-        RecordingFileName fileName,
         CancellationToken cancellationToken)
     {
         Asked.Add(id);

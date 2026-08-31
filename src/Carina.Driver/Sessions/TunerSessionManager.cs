@@ -814,7 +814,7 @@ public sealed class TunerSessionManager(
 
                 return SessionStart.Refused(
                     SessionRefusal.RecordingAlreadyExists,
-                    $"The session '{HolderOf(recordingId)}' is already writing the recording '{recordingId}'; a second one would split it across two files and leave one of them an orphan."
+                    WhyTheRecordingIsSpokenFor(recordingId)
                 );
             }
 
@@ -950,8 +950,32 @@ public sealed class TunerSessionManager(
         session.Dispose();
     }
 
+    public IDisposable? ClaimForErasure(string recordingId)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(recordingId);
+
+        return writing.TryAdd(recordingId, default) ? new ErasureClaim(this, recordingId) : null;
+    }
+
+    private string WhyTheRecordingIsSpokenFor(string recordingId)
+    {
+        SessionId holder = HolderOf(recordingId);
+
+        return holder.IsUnset
+            ? $"The recording '{recordingId}' is being thrown away, so nothing may start writing to it."
+            : $"The session '{holder}' is already writing the recording '{recordingId}'; a second one would split it across two files and leave one of them an orphan.";
+    }
+
     private SessionId HolderOf(string recordingId) =>
         writing.TryGetValue(recordingId, out SessionId holder) ? holder : default;
+
+    private void LetGoOfTheErasure(string recordingId) =>
+        writing.TryRemove(new KeyValuePair<string, SessionId>(recordingId, default));
+
+    private sealed class ErasureClaim(TunerSessionManager manager, string recordingId) : IDisposable
+    {
+        public void Dispose() => manager.LetGoOfTheErasure(recordingId);
+    }
 
     private void LetGoOfTheRecording(string? recordingId, SessionId sessionId)
     {

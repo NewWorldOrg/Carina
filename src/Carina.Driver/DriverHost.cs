@@ -132,6 +132,8 @@ public static class DriverHost
             recordingWriters: provider.GetRequiredService<IRecordingWriterFactory>()
         ));
 
+        builder.Services.AddSingleton<RecordingEraser>();
+
         builder.Services.AddSingleton<DriverLifecycle>();
         builder.Services.AddHostedService(provider =>
             provider.GetRequiredService<DriverLifecycle>()

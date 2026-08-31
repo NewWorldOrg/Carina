@@ -5,6 +5,7 @@ using Carina.Contracts;
 using Carina.Driver.Configuration;
 using Carina.Driver.Diagnostics;
 using Carina.Driver.Events;
+using Carina.Driver.Recording;
 using Carina.Driver.Sessions;
 using Carina.Driver.Tuning;
 
@@ -98,6 +99,10 @@ public static class DriverApi
         RequestDelegate restart = context =>
             Restart(context, manager, hello, lifetime, clock, stopRequest);
 
+        RecordingEraser recordingEraser = app.Services.GetRequiredService<RecordingEraser>();
+
+        RequestDelegate eraseRecording = context => EraseRecording(context, recordingEraser);
+
         RequestDelegate events = context => DriverEventStream.Invoke(context, hub);
 
         RequestDelegate storage = context =>
@@ -131,6 +136,7 @@ public static class DriverApi
         app.MapGet($"{DriverEndpoints.Sessions}/{{id}}/stream", stream);
         app.MapGet(DriverEndpoints.Storage, storage);
         app.MapGet(DriverEndpoints.Events, events);
+        app.MapDelete($"{DriverEndpoints.Recordings}/{{id}}", eraseRecording);
         app.MapPost(DriverEndpoints.Restart, restart);
     }
 
@@ -378,7 +384,7 @@ public static class DriverApi
             await Problem(
                 context,
                 StatusCodes.Status409Conflict,
-                "recordingInProgress",
+                SessionRefusalTitles.RecordingInProgress,
                 Holding(recordings)
             );
 
@@ -621,6 +627,77 @@ public static class DriverApi
             DriverJson.Context.SessionSnapshot
         );
     }
+
+    private static async Task EraseRecording(HttpContext context, RecordingEraser eraser)
+    {
+        string recordingId = context.Request.RouteValues["id"] as string ?? string.Empty;
+        string outputRoot = context.Request.Query[DriverEndpoints.OutputRootQuery].ToString();
+
+        if (string.IsNullOrWhiteSpace(outputRoot))
+        {
+            await Problem(
+                context,
+                StatusCodes.Status400BadRequest,
+                SessionRefusalTitles.Rejected,
+                "Say which output root holds it: DELETE "
+                    + $"{DriverEndpoints.Recordings}/{{id}}?{DriverEndpoints.OutputRootQuery}=..."
+            );
+
+            return;
+        }
+
+        FileErasure erasure = eraser.Erase(recordingId, outputRoot);
+
+        if (erasure.Refusal is not ErasureRefusal.None)
+        {
+            (int status, string title) = Outcome(erasure.Refusal);
+
+            await Problem(context, status, title, erasure.Detail);
+
+            return;
+        }
+
+        await Write(
+            context,
+            StatusCodes.Status200OK,
+            new RecordingErasedDto
+            {
+                RecordingId = recordingId,
+                FileRemoved = erasure.FileRemoved,
+            },
+            DriverJson.Context.RecordingErasedDto
+        );
+    }
+
+    private static (int Status, string Title) Outcome(ErasureRefusal refusal) =>
+        refusal switch
+        {
+            ErasureRefusal.NotARecording => (
+                StatusCodes.Status400BadRequest,
+                SessionRefusalTitles.Rejected
+            ),
+            ErasureRefusal.UnknownOutputRoot => (
+                StatusCodes.Status400BadRequest,
+                SessionRefusalTitles.UnknownOutputRoot
+            ),
+            ErasureRefusal.BeingWritten => (
+                StatusCodes.Status409Conflict,
+                SessionRefusalTitles.RecordingInProgress
+            ),
+            ErasureRefusal.RootOutOfReach => (
+                StatusCodes.Status503ServiceUnavailable,
+                SessionRefusalTitles.OutputUnavailable
+            ),
+            ErasureRefusal.FileLeftBehind => (
+                StatusCodes.Status503ServiceUnavailable,
+                SessionRefusalTitles.FileLeftBehind
+            ),
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(refusal),
+                refusal,
+                "An erasure that refused names which refusal it was."
+            ),
+        };
 
     private static (int Status, string Title) Outcome(LedgerRefusal refusal) =>
         refusal switch

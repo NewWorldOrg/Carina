@@ -571,8 +571,23 @@ public sealed class WireStabilityTests
     [Fact]
     public void AskingWhatRoomIsLeftTakesItsPlaceAfterEverythingThatCameBefore()
     {
-        Assert.Equal("/storage", DriverEndpoints.All[^1]);
-        Assert.Equal(EndpointsTheFrontendReaches.Length + 4, DriverEndpoints.All.Count);
+        Assert.Equal("/storage", DriverEndpoints.All[EndpointsTheFrontendReaches.Length + 3]);
+    }
+
+    [Fact]
+    public void AskingForARecordingToGoTakesItsPlaceAfterEverythingThatCameBefore()
+    {
+        Assert.Equal("/recordings", DriverEndpoints.All[^1]);
+        Assert.Equal(EndpointsTheFrontendReaches.Length + 5, DriverEndpoints.All.Count);
+    }
+
+    [Fact]
+    public void AnErasureKeepsExactlyTheFieldsItWasGiven()
+    {
+        Assert.Equal(
+            ["recordingId", "fileRemoved"],
+            FieldsOf(DriverJson.Serialize(new RecordingErasedDto()))
+        );
     }
 
     private static StartSessionRequest LegacyRequest =>

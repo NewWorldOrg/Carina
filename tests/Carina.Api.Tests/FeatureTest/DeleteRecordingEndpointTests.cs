@@ -2,11 +2,14 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 
+using Carina.Contracts;
+using Carina.Domain.Driver;
 using Carina.Domain.Integrity;
 using Carina.Domain.Recordings;
 using Carina.Domain.Thumbnails;
 using Carina.Infrastructure.Recordings;
 using Carina.Infrastructure.Thumbnails;
+using Carina.TestSupport;
 
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Net.Http.Headers;
@@ -303,14 +306,38 @@ public sealed class DeleteRecordingEndpointTests
         private readonly string gallery = Directory.CreateTempSubdirectory("carina-delete-pictures-").FullName;
 
         public ErasableDisk()
-            => Eraser = new LocalRecordingFileEraser(
-                new IntegritySettings { OutputRoots = [new StorageRootPath(Bulk, root)] },
+        {
+            Driver = new ErasingDriverClient { StandingInForTheDriver = TakeItOffTheDisk };
+            Eraser = new DriverRecordingFileEraser(
+                Driver,
                 new ThumbnailSettings { WrittenTo = gallery },
-                NullLogger<LocalRecordingFileEraser>.Instance);
+                NullLogger<DriverRecordingFileEraser>.Instance);
+        }
+
+        public ErasingDriverClient Driver { get; }
 
         public IRecordingFileEraser Eraser { get; }
 
-        public string RecordingAt(RecordingId id) => Path.Combine(root, RecordingFileName.For(id, ".m2ts").Value);
+        public string RecordingAt(RecordingId id) => Path.Combine(root, RecordingFile.Of(id.Wire));
+
+        private DriverCall<RecordingErasedDto> TakeItOffTheDisk(string recordingId, string outputRoot)
+        {
+            if (Directory.GetFiles(root).Length is 0)
+            {
+                return DriverCall<RecordingErasedDto>.Refused(
+                    new DriverProblem(
+                        SessionRefusalTitles.OutputUnavailable,
+                        ["the root holds no file at all, which is what a lost mount looks like"]));
+            }
+
+            string held = Path.Combine(root, RecordingFile.Of(recordingId));
+            bool wasThere = File.Exists(held);
+
+            File.Delete(held);
+
+            return DriverCall<RecordingErasedDto>.Reached(
+                new RecordingErasedDto { RecordingId = recordingId, FileRemoved = wasThere });
+        }
 
         public string PictureAt(RecordingId id) => Path.Combine(gallery, id.Wire + ThumbnailJob.Extension);
 

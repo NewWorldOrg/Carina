@@ -47,6 +47,7 @@ public static class DriverJson
 [JsonSerializable(typeof(ExtendSessionRequest))]
 [JsonSerializable(typeof(RecordingProgressDto))]
 [JsonSerializable(typeof(RecordingSessionDto))]
+[JsonSerializable(typeof(RecordingErasedDto))]
 [JsonSerializable(typeof(StorageRootDto))]
 [JsonSerializable(typeof(IReadOnlyList<StorageRootDto>))]
 [JsonSerializable(typeof(IReadOnlyList<RecordingSessionDto>))]
