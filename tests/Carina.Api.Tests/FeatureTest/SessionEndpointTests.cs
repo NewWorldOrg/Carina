@@ -196,8 +196,11 @@ public sealed class SessionEndpointTests
         using HttpResponseMessage response = await probe.Client.PostAsJsonAsync(
             Password,
             new { currentPassword = "not the password", newPassword = "a replacement password" });
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
 
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.False(body.RootElement.GetProperty("status").GetBoolean());
+        Assert.NotEmpty(body.RootElement.GetProperty("message").GetString()!);
         Assert.Equal(SessionStatus.Active, there.StatusAt(DateTime.UtcNow, SessionPolicy.Default));
     }
 

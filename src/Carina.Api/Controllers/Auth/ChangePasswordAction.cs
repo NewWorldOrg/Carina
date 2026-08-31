@@ -19,7 +19,6 @@ public sealed class ChangePasswordAction(LocalAccountService accounts) : Control
     [Consumes("application/json")]
     [ProducesResponseType<BaseResponder<PasswordChangedResponder>>(StatusCodes.Status200OK)]
     [ProducesResponseType<BaseResponder<PasswordChangedResponder>>(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType<BaseResponder<PasswordChangedResponder>>(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Invoke(
         [FromBody] ChangePasswordRequest? request,
         CancellationToken cancellationToken)
@@ -47,8 +46,6 @@ public sealed class ChangePasswordAction(LocalAccountService accounts) : Control
                 new PasswordChangedResponder(asked.Data)));
         }
 
-        return asked.ErrorType is PasswordRefusal.WrongPassword
-            ? Unauthorized(BaseResponder<PasswordChangedResponder>.Error(asked.ErrorMessage!))
-            : BadRequest(BaseResponder<PasswordChangedResponder>.Error(asked.ErrorMessage!));
+        return BadRequest(BaseResponder<PasswordChangedResponder>.Error(asked.ErrorMessage!));
     }
 }
