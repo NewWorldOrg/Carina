@@ -33,6 +33,12 @@ public sealed class FileSystemRuleTests
         "/Carina.Infrastructure/Recordings/DriverRecordingFileEraser.cs File.Delete",
         "/Carina.Infrastructure/Streaming/FfprobeStreamAttributeReader.cs Process.Start",
         "/Carina.Infrastructure/Streaming/FfprobeStreamAttributeReader.cs ProcessStartInfo",
+        "/Carina.Infrastructure/Streaming/LiveEncoderSelection.cs File.Open",
+        "/Carina.Infrastructure/Streaming/LiveEncoderSelection.cs FileMode.",
+        "/Carina.Infrastructure/Streaming/LiveEncoderSelection.cs Process.Start",
+        "/Carina.Infrastructure/Streaming/LiveEncoderSelection.cs ProcessStartInfo",
+        "/Carina.Infrastructure/Streaming/LiveTranscoderFactory.cs Process.Start",
+        "/Carina.Infrastructure/Streaming/LiveTranscoderFactory.cs ProcessStartInfo",
         "/Carina.Infrastructure/Thumbnails/FfmpegThumbnailRenderer.cs Directory.CreateDirectory",
         "/Carina.Infrastructure/Thumbnails/FfmpegThumbnailRenderer.cs Process.Start",
         "/Carina.Infrastructure/Thumbnails/FfmpegThumbnailRenderer.cs ProcessStartInfo",
@@ -81,12 +87,16 @@ public sealed class FileSystemRuleTests
     }
 
     [Fact]
-    public void TheOnlyPlacesThatStartAProgrammeOfTheirOwnAreTheTwoThatAskFfmpegSomething()
+    public void TheOnlyPlacesThatStartAProgrammeOfTheirOwnAreTheOnesThatAskFfmpegSomething()
     {
         Assert.Equal(
             [
                 "/Carina.Infrastructure/Streaming/FfprobeStreamAttributeReader.cs Process.Start",
                 "/Carina.Infrastructure/Streaming/FfprobeStreamAttributeReader.cs ProcessStartInfo",
+                "/Carina.Infrastructure/Streaming/LiveEncoderSelection.cs Process.Start",
+                "/Carina.Infrastructure/Streaming/LiveEncoderSelection.cs ProcessStartInfo",
+                "/Carina.Infrastructure/Streaming/LiveTranscoderFactory.cs Process.Start",
+                "/Carina.Infrastructure/Streaming/LiveTranscoderFactory.cs ProcessStartInfo",
                 "/Carina.Infrastructure/Thumbnails/FfmpegThumbnailRenderer.cs Process.Start",
                 "/Carina.Infrastructure/Thumbnails/FfmpegThumbnailRenderer.cs ProcessStartInfo",
             ],
@@ -101,7 +111,34 @@ public sealed class FileSystemRuleTests
                 "/Carina.Infrastructure/Streaming/FfprobeStreamAttributeReader.cs Process.Start",
                 "/Carina.Infrastructure/Streaming/FfprobeStreamAttributeReader.cs ProcessStartInfo",
             ],
-            Inventory.Where(entry => entry.Contains("/Streaming/", StringComparison.Ordinal)).ToArray());
+            Inventory
+                .Where(entry => entry.Contains("FfprobeStreamAttributeReader", StringComparison.Ordinal))
+                .ToArray());
+    }
+
+    [Fact]
+    public void TheOnlyFileTheLivePathOpensIsTheOneItAsksTheCardAbout()
+    {
+        Assert.Equal(
+            [
+                "/Carina.Infrastructure/Streaming/LiveEncoderSelection.cs File.Open",
+                "/Carina.Infrastructure/Streaming/LiveEncoderSelection.cs FileMode.",
+            ],
+            Inventory
+                .Where(entry => entry.Contains("/Streaming/", StringComparison.Ordinal))
+                .Where(entry => !entry.Contains("Process", StringComparison.Ordinal))
+                .ToArray());
+
+        string source = File.ReadAllText(Path.Combine(
+            RepositoryLayout.SourceDirectory,
+            "Carina.Infrastructure",
+            "Streaming",
+            "LiveEncoderSelection.cs"));
+
+        Assert.Contains(
+            "File.Open(renderNode, FileMode.Open, FileAccess.ReadWrite)",
+            source,
+            StringComparison.Ordinal);
     }
 
     [Fact]

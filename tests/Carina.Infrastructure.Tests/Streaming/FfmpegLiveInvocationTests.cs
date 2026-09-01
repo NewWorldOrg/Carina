@@ -310,6 +310,38 @@ public sealed class FfmpegLiveInvocationTests
     }
 
     [Fact]
+    public void TheOnePlaceThatSaysWhereTheAnswerGoesSaysExactlyThis()
+    {
+        Assert.Equal(
+            [
+                "-f",
+                "mp4",
+                "-movflags",
+                "empty_moov+default_base_moof",
+                "pipe:1",
+            ],
+            FfmpegLiveInvocation.Delivery());
+    }
+
+    [Fact]
+    public void TheAnswerIsAContainerThatCanBeWrittenToSomethingThatCannotBeWoundBack()
+    {
+        string[] delivery = [.. FfmpegLiveInvocation.Delivery()];
+
+        Assert.Equal("mp4", delivery[delivery.IndexOf("-f") + 1]);
+        Assert.Contains("empty_moov", delivery[delivery.IndexOf("-movflags") + 1], StringComparison.Ordinal);
+        Assert.Contains("default_base_moof", delivery[delivery.IndexOf("-movflags") + 1], StringComparison.Ordinal);
+        Assert.Equal(FfmpegLiveInvocation.Output, delivery[^1]);
+    }
+
+    [Fact]
+    public void HowFinelyTheAnswerIsCutIsNotSettledHere()
+    {
+        Assert.DoesNotContain("-frag_duration", FfmpegLiveInvocation.Delivery());
+        Assert.DoesNotContain("-frag_every_frame", FfmpegLiveInvocation.Delivery());
+    }
+
+    [Fact]
     public void AnEncoderThatIsNotOneOfTheTwoIsRefused()
     {
         Assert.Throws<ArgumentOutOfRangeException>(
