@@ -170,7 +170,8 @@ API はコンテナ内のポート 8080 で待ち受け、ホストのポート 
 ## イメージの役割
 
 `Dockerfile` が生成するイメージは1つで、`docker/entrypoint.sh` が役割を選択します。
-イメージには `ffmpeg` が入ります。サムネイルは app 側で作るため、配置先でも同じ手当てが要ります。
+イメージには `ffmpeg` と `intel-media-va-driver` が入ります。サムネイルは app 側で作るため、配置先でも同じ手当てが要ります。
+`ffmpeg` だけではデバイスを開けても VAAPI は始まりません。libva は `iHD` を探しに行き、見つからなければ `unknown libva error` で止まります。
 開発用の compose は同じ `Dockerfile` の `develop` ステージを使うので、`task up` の初回はビルドが走ります。
 
 | 役割 | 起動するもの |
