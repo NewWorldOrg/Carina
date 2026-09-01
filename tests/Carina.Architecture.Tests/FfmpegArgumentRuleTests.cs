@@ -6,6 +6,7 @@ public sealed class FfmpegArgumentRuleTests
     [
         "/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs",
         "/Carina.Infrastructure/Streaming/FfprobeInvocation.cs",
+        "/Carina.Infrastructure/Streaming/VaapiProbeInvocation.cs",
         "/Carina.Infrastructure/Thumbnails/FfmpegInvocation.cs",
     ];
 
