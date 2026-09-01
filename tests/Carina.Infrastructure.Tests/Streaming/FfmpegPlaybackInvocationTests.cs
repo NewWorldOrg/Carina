@@ -105,7 +105,9 @@ public sealed class FfmpegPlaybackInvocationTests
     [Fact]
     public void WhatIsHandedBackIsTheSameFragmentedContainerALiveViewerIsHandedBack()
     {
-        Assert.Equal(["-f", "mp4", "-movflags", "empty_moov+default_base_moof", "pipe:1"], FfmpegLiveInvocation.Delivery());
+        Assert.Equal(
+            ["-f", "mp4", "-movflags", "empty_moov+default_base_moof", "-frag_duration", "200000", "pipe:1"],
+            FfmpegLiveInvocation.Delivery());
     }
 
     [Fact]

@@ -318,6 +318,8 @@ public sealed class FfmpegLiveInvocationTests
                 "mp4",
                 "-movflags",
                 "empty_moov+default_base_moof",
+                "-frag_duration",
+                "200000",
                 "pipe:1",
             ],
             FfmpegLiveInvocation.Delivery());
@@ -335,10 +337,20 @@ public sealed class FfmpegLiveInvocationTests
     }
 
     [Fact]
-    public void HowFinelyTheAnswerIsCutIsNotSettledHere()
+    public void TheAnswerIsCutEveryFifthOfASecond()
     {
-        Assert.DoesNotContain("-frag_duration", FfmpegLiveInvocation.Delivery());
-        Assert.DoesNotContain("-frag_every_frame", FfmpegLiveInvocation.Delivery());
+        string[] delivery = [.. FfmpegLiveInvocation.Delivery()];
+
+        Assert.Equal("200000", delivery[delivery.IndexOf("-frag_duration") + 1]);
+    }
+
+    [Fact]
+    public void TheAnswerIsNotCutAtEveryFrame()
+    {
+        string[] delivery = [.. FfmpegLiveInvocation.Delivery()];
+
+        Assert.DoesNotContain("-frag_every_frame", delivery);
+        Assert.DoesNotContain("frag_every_frame", delivery[delivery.IndexOf("-movflags") + 1], StringComparison.Ordinal);
     }
 
     [Fact]
