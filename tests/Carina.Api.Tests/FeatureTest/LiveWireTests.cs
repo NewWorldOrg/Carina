@@ -126,6 +126,26 @@ public sealed class LiveWireTests
     }
 
     [Fact]
+    public async Task AWireThatIsAlreadyOpenKeepsCarryingFramesAfterItsSessionIsEnded()
+    {
+        var held = new HeldLiveSource();
+        await using AuthProbe probe = Wiring(held);
+        string cookie = await probe.SignedInCookieAsync();
+
+        using WebSocket socket = await Carrying(probe, cookie)
+            .ConnectAsync(Handshake, Patiently());
+
+        probe.Sessions.Sessions[^1].Revoke(DateTime.UtcNow);
+
+        held.Send(new LiveFrame(LiveChannel.Picture, LivePts.Of(90_000UL), Picture));
+
+        LiveFrame carried = await Take(socket);
+
+        Assert.Equal(LiveChannel.Picture, carried.Channel);
+        Assert.Equal(Picture, carried.Payload.ToArray());
+    }
+
+    [Fact]
     public async Task APingArrivesOnAWireThatIsCarryingNothing()
     {
         var held = new HeldLiveSource();
