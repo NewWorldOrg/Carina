@@ -174,6 +174,8 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton(new StreamAttributeSettings());
         services.TryAddSingleton(new LiveTranscodeSettings());
         services.TryAddSingleton(new OnTheFlySettings());
+        services.TryAddSingleton(new LiveWireSettings());
+        services.TryAddSingleton<ILiveWireSource, NoLiveSource>();
         services.TryAddSingleton<IStreamAttributeReader, FfprobeStreamAttributeReader>();
         services.TryAddSingleton<ILiveEncoderSelector>(provider => new LiveEncoderSelection(
             provider.GetRequiredService<LiveTranscodeSettings>(),

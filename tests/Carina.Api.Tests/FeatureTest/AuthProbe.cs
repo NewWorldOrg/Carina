@@ -18,7 +18,7 @@ internal sealed class AuthProbe : IAsyncDisposable
 
     private readonly TestingWebApplicationFactory factory = new();
 
-    private AuthProbe(bool secure)
+    private AuthProbe(bool secure, Action<IServiceCollection>? alsoWired)
     {
         Wired = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {
@@ -27,6 +27,7 @@ internal sealed class AuthProbe : IAsyncDisposable
             services.AddSingleton<IPasswordHasher>(Hasher);
             services.AddSingleton<IProgrammeRepository>(Programmes);
             services.AddSingleton<ICollectionEpochRepository>(Epochs);
+            alsoWired?.Invoke(services);
         }));
 
         Client = Wired.CreateClient(new WebApplicationFactoryClientOptions
@@ -57,9 +58,10 @@ internal sealed class AuthProbe : IAsyncDisposable
 
     public HeldEpochs Epochs { get; } = new();
 
-    public static AuthProbe OverHttp() => new(secure: false);
+    public static AuthProbe OverHttp(Action<IServiceCollection>? alsoWired = null)
+        => new(secure: false, alsoWired);
 
-    public static AuthProbe OverHttps() => new(secure: true);
+    public static AuthProbe OverHttps() => new(secure: true, alsoWired: null);
 
     public AuthProbe WithAnAccount()
     {
@@ -103,7 +105,9 @@ internal sealed class AuthProbe : IAsyncDisposable
         return client;
     }
 
-    public async Task<HttpClient> RelayingAsync()
+    public async Task<HttpClient> RelayingAsync() => Relaying(await SignedInCookieAsync());
+
+    public async Task<string> SignedInCookieAsync()
     {
         WithAnAccount();
 
@@ -113,7 +117,7 @@ internal sealed class AuthProbe : IAsyncDisposable
 
         string handed = response.Headers.GetValues(HeaderNames.SetCookie).Single();
 
-        return Relaying(handed[..handed.IndexOf(';', StringComparison.Ordinal)]);
+        return handed[..handed.IndexOf(';', StringComparison.Ordinal)];
     }
 
     public async Task<AuthSession> SignedInAsync()

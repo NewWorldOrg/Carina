@@ -12,6 +12,7 @@ public sealed class NonRestContractTests(TestingWebApplicationFactory factory)
         "/api/events",
         "/api/programs/bulk",
         "/api/videos/{id}",
+        "/api/live/ws",
     ];
 
     [Fact]

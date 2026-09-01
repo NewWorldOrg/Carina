@@ -4,6 +4,7 @@ using Carina.Api.Authentication;
 using Carina.Api.Common;
 using Carina.Api.Events;
 using Carina.Api.Extensions;
+using Carina.Api.Live;
 using Carina.Api.OpenApi;
 using Carina.Api.Playback;
 using Carina.Api.Responder;
@@ -51,6 +52,7 @@ builder.Services.AddOpenApi(options =>
 WebApplication app = builder.Build();
 
 
+app.UseWebSockets();
 app.UseMiddleware<UnhandledFailureMiddleware>();
 app.UseForwardedHeaders();
 app.UseMiddleware<ForwardedHeadersDiagnosticMiddleware>();
@@ -70,6 +72,13 @@ app.MapGet(AppEventStream.Path, (HttpContext context, AppEventHub hub) =>
 
 app.MapGet(ProgrammeFeedStream.Path, (HttpContext context, ProgrammeFeedService feed) =>
     ProgrammeFeedStream.Invoke(context, feed)).ExcludeFromDescription().WithEffect(EndpointEffect.Reading);
+
+app.MapGet(
+        LiveWire.Path,
+        (HttpContext context, ILiveWireSource source, LiveWireSettings settings, IHostApplicationLifetime running) =>
+            LiveWire.Invoke(context, source, settings, running))
+    .ExcludeFromDescription()
+    .WithEffect(EndpointEffect.Reading);
 
 app.MapMethods(VideoDelivery.Path, VideoDelivery.Methods, (HttpContext context, string id, PlaybackService playback) =>
     VideoDelivery.Invoke(context, id, playback)).ExcludeFromDescription().WithEffect(EndpointEffect.Reading).Ticketed();

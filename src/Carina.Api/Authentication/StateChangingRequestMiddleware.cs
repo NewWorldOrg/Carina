@@ -17,7 +17,7 @@ public sealed class StateChangingRequestMiddleware(RequestDelegate next)
             return next(context);
         }
 
-        if (!CameFromThisOrigin(context.Request))
+        if (!RequestOrigin.NamesThisOne(context.Request))
         {
             return RefuseAsync(
                 context,
@@ -44,19 +44,6 @@ public sealed class StateChangingRequestMiddleware(RequestDelegate next)
            || HttpMethods.IsHead(method)
            || HttpMethods.IsOptions(method)
            || HttpMethods.IsTrace(method);
-
-    private static bool CameFromThisOrigin(HttpRequest request)
-    {
-        if (request.Headers.Origin is not [string named])
-        {
-            return false;
-        }
-
-        return string.Equals(
-            named,
-            $"{request.Scheme}://{request.Host.Value}",
-            StringComparison.OrdinalIgnoreCase);
-    }
 
     private static bool AsksForJson(HttpRequest request)
         => !HttpMethods.IsDelete(request.Method) || CarriesABody(request);
