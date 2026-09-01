@@ -5,10 +5,16 @@ readonly dri=/dev/dri
 readonly card="${dri}/card0"
 readonly render="${dri}/renderD128"
 
-[ -d "${dri}" ] || exit 0
+if [ ! -c "${card}" ] && [ ! -c "${render}" ]; then
+    exit 0
+fi
 
 echo "CARINA_DRI=${dri}"
-[ -c "${card}" ] && echo "CARINA_DRI_VIDEO_GID=$(stat -c %g "${card}")"
-[ -c "${render}" ] && echo "CARINA_DRI_RENDER_GID=$(stat -c %g "${render}")"
 
-exit 0
+if [ -c "${card}" ]; then
+    echo "CARINA_DRI_VIDEO_GID=$(stat -c %g "${card}")"
+fi
+
+if [ -c "${render}" ]; then
+    echo "CARINA_DRI_RENDER_GID=$(stat -c %g "${render}")"
+fi
