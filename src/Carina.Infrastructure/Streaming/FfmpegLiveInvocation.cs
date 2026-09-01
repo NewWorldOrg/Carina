@@ -16,6 +16,8 @@ public static class FfmpegLiveInvocation
 
     private const int BufferedSeconds = 2;
 
+    private const string FragmentMicroseconds = "200000";
+
     public static IReadOnlyList<string> Arguments(
         LiveProfile profile,
         StreamAttributes attributes,
@@ -63,6 +65,8 @@ public static class FfmpegLiveInvocation
             "mp4",
             "-movflags",
             "empty_moov+default_base_moof",
+            "-frag_duration",
+            FragmentMicroseconds,
             Output,
         ];
 
