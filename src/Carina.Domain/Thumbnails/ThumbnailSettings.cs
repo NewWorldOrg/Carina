@@ -32,6 +32,11 @@ public sealed record ThumbnailSettings
                 "A recording is not shorter than nothing.");
         }
 
+        if (written == TimeSpan.Zero)
+        {
+            return NoLaterThan;
+        }
+
         var share = new TimeSpan(written.Ticks / OneOverAShareOf);
 
         return share < NoLaterThan ? share : NoLaterThan;

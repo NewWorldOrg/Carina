@@ -14,7 +14,6 @@ public sealed class ThumbnailSettingsTests
     }
 
     [Theory]
-    [InlineData(0, 0)]
     [InlineData(3, 1)]
     [InlineData(357, 119)]
     [InlineData(360, 120)]
@@ -24,6 +23,38 @@ public sealed class ThumbnailSettingsTests
         => Assert.Equal(
             TimeSpan.FromSeconds(expected),
             Unset.PositionIn(TimeSpan.FromSeconds(written)));
+
+    [Theory]
+    [InlineData(180, 60)]
+    [InlineData(7200, 120)]
+    public void TheTwoLengthsTheRuleIsWrittenForLandWhereTheRuleSays(int written, int expected)
+        => Assert.Equal(
+            TimeSpan.FromSeconds(expected),
+            Unset.PositionIn(TimeSpan.FromSeconds(written)));
+
+    [Fact]
+    public void ALengthNobodyWroteDownIsNotALengthOfNothingAndTakesTheCap()
+    {
+        Assert.Equal(TimeSpan.FromSeconds(120), Unset.PositionIn(TimeSpan.Zero));
+        Assert.Equal(
+            TimeSpan.FromSeconds(20),
+            (Unset with { NoLaterThan = TimeSpan.FromSeconds(20) }).PositionIn(TimeSpan.Zero));
+    }
+
+    [Fact]
+    public void TheHeadOfTheFileIsTheOnePlaceTheRuleNeverLands()
+    {
+        TimeSpan[] everyLength =
+        [
+            TimeSpan.Zero,
+            TimeSpan.FromMilliseconds(1),
+            TimeSpan.FromSeconds(3),
+            TimeSpan.FromMinutes(3),
+            TimeSpan.FromHours(2),
+        ];
+
+        Assert.All(everyLength, written => Assert.NotEqual(TimeSpan.Zero, Unset.PositionIn(written)));
+    }
 
     [Fact]
     public void TheCapIsWhatDecidesOnceAThirdOfTheWayIsFurtherIn()
