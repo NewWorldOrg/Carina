@@ -43,6 +43,19 @@ public static class AuthenticationBypasses
         "secret!.Value",
     ];
 
+    public static IReadOnlyList<string> ReadingTheAuthorizationHeader { get; } =
+    [
+        "Headers.Authorization",
+        "Headers[HeaderNames.Authorization]",
+        "Headers[\"Authorization\"]",
+    ];
+
+    public static IReadOnlyList<string> PlaybackTicketHandling { get; } =
+    [
+        "PlaybackTicket",
+        "InTheClear",
+    ];
+
     public static IReadOnlyList<string> Logging { get; } =
     [
         "ILogger",
@@ -52,7 +65,14 @@ public static class AuthenticationBypasses
         "LogWarning",
         "LogError",
         "LogCritical",
+        "LoggerMessage",
         "Console.Write",
+        "Console.Out.Write",
+        "Console.Error.Write",
+        "Debug.Write",
+        "Trace.Write",
+        "AddHttpLogging",
+        "UseHttpLogging",
     ];
 
     public static IReadOnlyList<string> OutboundCallers { get; } =

@@ -91,6 +91,50 @@ public sealed class AnonymousSurfaceTests
     }
 
     [Fact]
+    public void TheDevelopmentListIsThatSameWholeAndTheServedDocument()
+    {
+        Assert.Equal(
+            [
+                "GET /_next/static/",
+                "GET /api/auth/oidc/callback",
+                "GET /api/auth/oidc/start",
+                "GET /api/auth/sign-in-options",
+                "GET /api/health",
+                "GET /favicon.ico",
+                "GET /logged-out",
+                "GET /login",
+                "GET /manifest.webmanifest",
+                "GET /openapi/v1.json",
+                "POST /api/auth/login",
+            ],
+            AnonymousSurfaces.WhileDeveloping
+                .Select(surface => $"{surface.Method} {surface.Path}")
+                .Order(StringComparer.Ordinal)
+                .ToArray());
+    }
+
+    [Fact]
+    public void NoPlaybackSurfaceIsReachedWithoutCredentials()
+    {
+        string[] playback =
+        [
+            "/api/videos/1",
+            "/api/videos/1/play",
+            "/api/videos/1/thumbnail",
+            "/api/videos/1/scrub",
+            "/api/live/ticket",
+            "/api/live/ws",
+        ];
+
+        Assert.All(playback, path =>
+        {
+            Assert.False(AnonymousSurfaces.Everywhere.Admit("GET", path));
+            Assert.False(AnonymousSurfaces.WhileDeveloping.Admit("GET", path));
+            Assert.False(AnonymousSurfaces.Everywhere.Admit("POST", path));
+        });
+    }
+
+    [Fact]
     public void TheBuiltFrontEndIsTheOnlyWholeDirectoryHandedOverWithoutCredentials()
     {
         Assert.Equal(

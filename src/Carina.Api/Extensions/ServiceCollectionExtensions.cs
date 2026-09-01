@@ -40,6 +40,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IntegrityService>();
         services.AddScoped<PlaybackService>();
         services.AddScoped<StorageService>();
+        services.AddSingleton<PlaybackTicketGate>();
 
         return services;
     }
