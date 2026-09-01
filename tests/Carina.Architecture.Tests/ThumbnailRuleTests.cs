@@ -20,6 +20,7 @@ public sealed class ThumbnailRuleTests
                 "/Carina.Api/Responder/Recordings/RecordingDetailResponder.cs",
                 "/Carina.Infrastructure/Recordings/DriverRecordingFileEraser.cs",
                 "/Carina.Api/Playback/ScrubDelivery.cs",
+                "/Carina.Api/Playback/ThumbnailDelivery.cs",
                 "/Carina.Api/Program.cs",
             ],
             ThumbnailRules.AllowedToNameTheMachinery);
@@ -79,13 +80,15 @@ public sealed class ThumbnailRuleTests
     {
         IReadOnlyList<string> declared = ThumbnailRules.TypesTheFeatureDeclares(RepositoryLayout.SourceDirectory);
 
-        Assert.Equal(22, declared.Count);
+        Assert.Equal(27, declared.Count);
         Assert.Contains("ThumbnailIntent", declared, StringComparer.Ordinal);
         Assert.Contains("ThumbnailRequest", declared, StringComparer.Ordinal);
         Assert.Contains("ThumbnailValidation", declared, StringComparer.Ordinal);
         Assert.Contains("IThumbnailRemaker", declared, StringComparer.Ordinal);
         Assert.Contains("IScrubFrames", declared, StringComparer.Ordinal);
         Assert.Contains("Scrubber", declared, StringComparer.Ordinal);
+        Assert.Contains("IDrawnThumbnails", declared, StringComparer.Ordinal);
+        Assert.Contains("ThumbnailDelivery", declared, StringComparer.Ordinal);
         Assert.Empty(declared.Except(ThumbnailRules.Machinery, StringComparer.Ordinal));
         Assert.Empty(ThumbnailRules.Machinery.Except(declared, StringComparer.Ordinal));
     }

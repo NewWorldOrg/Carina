@@ -6,7 +6,10 @@ using Carina.Api.Events;
 using Carina.Api.Extensions;
 using Carina.Api.OpenApi;
 using Carina.Api.Playback;
+using Carina.Api.Responder;
+using Carina.Api.Responder.Playback;
 using Carina.Api.Services;
+using Carina.Domain.Streaming;
 using Carina.Domain.Thumbnails;
 using Carina.Infrastructure.DependencyInjection;
 using Carina.Infrastructure.Events;
@@ -68,10 +71,38 @@ app.MapGet(ProgrammeFeedStream.Path, (HttpContext context, ProgrammeFeedService 
     ProgrammeFeedStream.Invoke(context, feed)).ExcludeFromDescription().WithEffect(EndpointEffect.Reading);
 
 app.MapMethods(VideoDelivery.Path, VideoDelivery.Methods, (HttpContext context, string id, PlaybackService playback) =>
-    VideoDelivery.Invoke(context, id, playback)).ExcludeFromDescription().WithEffect(EndpointEffect.Reading);
+    VideoDelivery.Invoke(context, id, playback)).ExcludeFromDescription().WithEffect(EndpointEffect.Reading).Ticketed();
 
-app.MapGet(ScrubDelivery.Path, (HttpContext context, string id, IScrubFrames frames) =>
-    ScrubDelivery.Invoke(context, id, frames)).ExcludeFromDescription().WithEffect(EndpointEffect.Reading);
+app.MapGet(
+        PlayDelivery.Path,
+        (HttpContext context, string id, PlaybackService playback, IOnTheFlyPlayer player) =>
+            PlayDelivery.Invoke(context, id, playback, player))
+    .WithName(PlaybackSurfaces.PlayingIsCalled)
+    .WithTags(PlaybackSurfaces.Tag)
+    .WithSummary(PlaybackSurfaces.HowARecordingIsPlayedInABrowser)
+    .Produces<BaseResponder<PlaybackPlanResponder>>(StatusCodes.Status200OK, PlayDelivery.Json)
+    .Produces(StatusCodes.Status200OK, contentType: PlaybackMediaType.Mp4)
+    .WithEffect(EndpointEffect.Reading);
+
+app.MapGet(
+        ThumbnailDelivery.Path,
+        (HttpContext context, string id, IDrawnThumbnails drawn) =>
+            ThumbnailDelivery.Invoke(context, id, drawn))
+    .WithName(PlaybackSurfaces.ThePictureIsCalled)
+    .WithTags(PlaybackSurfaces.Tag)
+    .WithSummary(PlaybackSurfaces.ThePictureDrawnOfARecording)
+    .Produces(StatusCodes.Status200OK, contentType: ThumbnailDelivery.MediaType)
+    .WithEffect(EndpointEffect.Reading);
+
+app.MapGet(
+        ScrubDelivery.Path,
+        (HttpContext context, string id, IScrubFrames frames) =>
+            ScrubDelivery.Invoke(context, id, frames))
+    .WithName(PlaybackSurfaces.TheFrameIsCalled)
+    .WithTags(PlaybackSurfaces.Tag)
+    .WithSummary(PlaybackSurfaces.AFrameFromWhereTheSliderIs)
+    .Produces(StatusCodes.Status200OK, contentType: ScrubDelivery.MediaType)
+    .WithEffect(EndpointEffect.Reading);
 
 try
 {

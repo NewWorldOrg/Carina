@@ -10,6 +10,7 @@ using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
 using Carina.Domain.Scans;
+using Carina.Domain.Streaming;
 using Carina.Domain.Thumbnails;
 using Carina.Infrastructure.Auth;
 using Carina.Infrastructure.Channels;
@@ -26,6 +27,7 @@ using Carina.Infrastructure.Recordings;
 using Carina.Infrastructure.Reservations;
 using Carina.Infrastructure.Rules;
 using Carina.Infrastructure.Scanning;
+using Carina.Infrastructure.Streaming;
 using Carina.Infrastructure.Thumbnails;
 
 using Microsoft.Extensions.Configuration;
@@ -139,6 +141,8 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IPendingOidcLoginStore, PendingOidcLoginStore>();
         services.TryAddSingleton(PlaybackTicketPolicy.Default);
         services.TryAddSingleton<IPlaybackTicketStore, PlaybackTicketStore>();
+        services.TryAddSingleton(PlaybackGrantPolicy.Default);
+        services.TryAddSingleton<IPlaybackGrantStore, PlaybackGrantStore>();
         services.TryAddSingleton<IPasswordHasher, Argon2idPasswordHasher>();
         services.TryAddSingleton<ILoginThrottle, LoginThrottle>();
         services.AddSingleton<IDriverStatusReader, MonitoredDriverStatusReader>();
@@ -166,6 +170,15 @@ public static class ServiceCollectionExtensions
             provider.GetRequiredService<IOptions<ThumbnailOptions>>().Value.Read());
         services.TryAddSingleton<IThumbnailRenderer, FfmpegThumbnailRenderer>();
         services.AddScoped<IScrubFrames, Scrubber>();
+        services.AddScoped<IDrawnThumbnails, DrawnThumbnails>();
+        services.TryAddSingleton(new StreamAttributeSettings());
+        services.TryAddSingleton(new LiveTranscodeSettings());
+        services.TryAddSingleton(new OnTheFlySettings());
+        services.TryAddSingleton<IStreamAttributeReader, FfprobeStreamAttributeReader>();
+        services.TryAddSingleton<ILiveEncoderSelector>(provider => new LiveEncoderSelection(
+            provider.GetRequiredService<LiveTranscodeSettings>(),
+            provider.GetRequiredService<TimeProvider>()));
+        services.TryAddSingleton<IOnTheFlyPlayer, OnTheFlyPlayer>();
         services.AddSingleton<ThumbnailJob>();
         services.TryAddSingleton<IThumbnailRemaker>(provider =>
             provider.GetRequiredService<ThumbnailJob>());

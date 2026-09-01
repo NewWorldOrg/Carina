@@ -40,6 +40,12 @@ public static class PlaybackRules
     public static IReadOnlyList<string> FilesNamingTheDelivery(string directory)
         => Reported(directory, file => file.Source.Contains(DeliveryEndpoint, StringComparison.Ordinal));
 
+    public static IReadOnlyList<string> WhatTranscodesIn(string directory, string relative)
+        => Reported(
+            directory,
+            file => string.Equals(file.Relative, relative, StringComparison.Ordinal)
+                    && Transcodes.IsMatch(file.Source));
+
     public static IReadOnlyList<string> WhatTheDeliveryTranscodes(string directory)
         => Reported(
             directory,
