@@ -2,6 +2,7 @@ using Carina.Api.Common;
 using Carina.Api.Services;
 using Carina.BroadcastTestSupport;
 using Carina.Domain.Auth;
+using Carina.Infrastructure.Auth;
 using Carina.TestSupport;
 
 namespace Carina.Api.Tests.Unit;
@@ -17,6 +18,10 @@ public sealed class AuthSessionServiceTests
     private readonly HeldClock clock = new(new DateTimeOffset(2026, 8, 19, 9, 0, 0, TimeSpan.Zero));
 
     private readonly HeldAuthSessions sessions = new();
+
+    private readonly PlaybackGrantStore grants = new(
+        new HeldClock(new DateTimeOffset(2026, 8, 19, 9, 0, 0, TimeSpan.Zero)),
+        PlaybackGrantPolicy.Default);
 
     [Fact]
     public async Task TheListNamesTheDeviceThatIsAskingAsTheCurrentOne()
@@ -98,7 +103,7 @@ public sealed class AuthSessionServiceTests
     {
         AuthSession here = Started(Owner, "this device");
 
-        ServiceResult ended = await Service().LogOutAsync(here.Id, Cancel);
+        ServiceResult ended = await Service().LogOutAsync(Owner, here.Id, Cancel);
 
         Assert.True(ended.IsSuccess);
         Assert.Equal(1, sessions.Deletions);
@@ -111,13 +116,13 @@ public sealed class AuthSessionServiceTests
         AuthSession here = Started(Owner, "this device");
         AuthSession there = Started(Owner, "another device");
 
-        await Service().LogOutAsync(here.Id, Cancel);
+        await Service().LogOutAsync(Owner, here.Id, Cancel);
 
         Assert.Equal([there.Id.Value], sessions.Sessions.Select(session => session.Id.Value));
         Assert.Equal(SessionStatus.Active, there.StatusAt(Now(), SessionPolicy.Default));
     }
 
-    private AuthSessionService Service() => new(sessions, SessionPolicy.Default, clock);
+    private AuthSessionService Service() => new(sessions, grants, SessionPolicy.Default, clock);
 
     private DateTime Now() => clock.GetUtcNow().UtcDateTime;
 
