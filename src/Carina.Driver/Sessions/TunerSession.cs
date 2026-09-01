@@ -525,6 +525,29 @@ public sealed class TunerSession : IDisposable
         return current;
     }
 
+    private void WriteOutWhatTheDeviceHeldBack()
+    {
+        ITunerDevice current;
+
+        lock (gate)
+        {
+            current = device;
+        }
+
+        byte[] tail = current.WhatIsHeldBack();
+        if (tail.Length is 0)
+        {
+            return;
+        }
+
+        WriteOut(tail);
+
+        foreach (TsPacket packet in packetReader.Read(tail))
+        {
+            Counters.Observe(packet);
+        }
+    }
+
     private void DisposeDevice()
     {
         ITunerDevice current;
@@ -694,7 +717,11 @@ public sealed class TunerSession : IDisposable
             causes.Add(cause);
         }
 
-        Exception? writerFault = Close(() => recordingWriter?.Dispose());
+        Exception? writerFault = Close(() =>
+        {
+            WriteOutWhatTheDeviceHeldBack();
+            recordingWriter?.Dispose();
+        });
         if (writerFault is not null)
         {
             causes.Add(writerFault);

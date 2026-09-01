@@ -26,6 +26,13 @@ public static class DriverGreeting
         .. SessionPurposes.Capabilities,
     ];
 
-    public static DriverHello ForThisProcess() =>
-        new(DriverProtocol.Version, Guid.NewGuid().ToString("N"), Capabilities);
+    public static IReadOnlyList<string> Unscrambling(bool descrambling) =>
+        descrambling ? [.. Capabilities, DriverCapabilities.Descrambling] : Capabilities;
+
+    public static DriverHello ForThisProcess(bool descrambling) =>
+        new(
+            DriverProtocol.Version,
+            Guid.NewGuid().ToString("N"),
+            Unscrambling(descrambling)
+        );
 }
