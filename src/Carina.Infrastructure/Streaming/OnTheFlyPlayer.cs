@@ -56,7 +56,7 @@ public sealed class OnTheFlyPlayer(
 
         try
         {
-            OnTheFlyStart start = await StartedAsync(source, file, from, profile, place, cancellationToken);
+            OnTheFlyStart start = await StartedAsync(source, from, profile, place, cancellationToken);
 
             handedOver = start.Running;
 
@@ -73,7 +73,6 @@ public sealed class OnTheFlyPlayer(
 
     private async Task<OnTheFlyStart> StartedAsync(
         StreamSource source,
-        PlaybackFile file,
         TimeSpan from,
         LiveProfile profile,
         int place,
