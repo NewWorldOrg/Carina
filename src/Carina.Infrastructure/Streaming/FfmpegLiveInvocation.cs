@@ -66,10 +66,10 @@ public static class FfmpegLiveInvocation
             Output,
         ];
 
-    private static IReadOnlyList<string> Device(LiveEncoder encoder)
+    internal static IReadOnlyList<string> Device(LiveEncoder encoder)
         => encoder is LiveEncoder.Vaapi ? ["-vaapi_device", RenderNode] : [];
 
-    private static string Filter(LiveProfile profile, StreamAttributes attributes, LiveEncoder encoder)
+    internal static string Filter(LiveProfile profile, StreamAttributes attributes, LiveEncoder encoder)
     {
         List<string> steps = [];
 
@@ -90,7 +90,7 @@ public static class FfmpegLiveInvocation
         return string.Join(',', steps);
     }
 
-    private static IReadOnlyList<string> Encoding(LiveProfile profile, LiveEncoder encoder)
+    internal static IReadOnlyList<string> Encoding(LiveProfile profile, LiveEncoder encoder)
         => encoder is LiveEncoder.Vaapi
             ?
             [
