@@ -58,20 +58,39 @@ public sealed class LiveRateControlTests
     }
 
     [Fact]
-    public void NothingNamedForVaapiCanHoldABitrate()
+    public void NothingInTheDomainNamedForVaapiHoldsABitrate()
     {
-        string[] pairings =
+        Assert.Empty(MembersPairingVaapiWithABitrate(typeof(BitrateCap).Assembly));
+    }
+
+    [Fact]
+    public void TheRuleCatchesAMemberNamedForVaapiTypedAsABitrate()
+    {
+        Assert.Contains(
+            $"{typeof(VaapiRateControlFixtures).FullName}.{nameof(VaapiRateControlFixtures.VaapiRateControl)}",
+            MembersPairingVaapiWithABitrate(typeof(VaapiRateControlFixtures).Assembly),
+            StringComparer.Ordinal);
+    }
+
+    [Fact]
+    public void TheRuleDoesNotSeeARateWrittenOutAsAPlainNumber()
+    {
+        Assert.DoesNotContain(
+            $"{typeof(VaapiRateControlFixtures).FullName}.{nameof(VaapiRateControlFixtures.VaapiKilobitsPerSecond)}",
+            MembersPairingVaapiWithABitrate(typeof(VaapiRateControlFixtures).Assembly),
+            StringComparer.Ordinal);
+    }
+
+    private static IReadOnlyList<string> MembersPairingVaapiWithABitrate(Assembly assembly)
+        =>
         [
-            .. from type in typeof(BitrateCap).Assembly.GetTypes()
+            .. from type in assembly.GetTypes()
                where type.IsPublic
                from member in Named(type)
                where member.Name.Contains("vaapi", StringComparison.OrdinalIgnoreCase)
                      && member.Type == typeof(BitrateCap)
                select $"{type.FullName}.{member.Name}",
         ];
-
-        Assert.Empty(pairings);
-    }
 
     private static IEnumerable<(string Name, Type Type)> Named(Type type)
     {
@@ -96,4 +115,11 @@ public sealed class LiveRateControlTests
             }
         }
     }
+}
+
+public sealed class VaapiRateControlFixtures
+{
+    public BitrateCap VaapiRateControl => new(3000);
+
+    public int VaapiKilobitsPerSecond => 3000;
 }
