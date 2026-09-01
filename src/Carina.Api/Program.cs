@@ -81,7 +81,6 @@ app.MapGet(
     .WithTags(PlaybackSurfaces.Tag)
     .WithSummary(PlaybackSurfaces.HowARecordingIsPlayedInABrowser)
     .Produces<BaseResponder<PlaybackPlanResponder>>(StatusCodes.Status200OK, PlayDelivery.Json)
-    .Produces(StatusCodes.Status200OK, contentType: PlaybackMediaType.Mp4)
     .WithEffect(EndpointEffect.Reading);
 
 app.MapGet(
