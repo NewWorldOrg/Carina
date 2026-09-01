@@ -3,6 +3,8 @@ using Carina.Driver.Configuration;
 using Carina.Driver.Descrambling;
 using Carina.Driver.Tuning.Dvb;
 
+using Microsoft.Extensions.Logging;
+
 namespace Carina.Driver.Tuning;
 
 public interface ITunerDevice : IDisposable
@@ -12,8 +14,6 @@ public interface ITunerDevice : IDisposable
     ISignalQualitySource? Quality => null;
 
     byte[] Read(int count, CancellationToken cancellationToken);
-
-    byte[] WhatIsHeldBack() => [];
 }
 
 public interface ITunerDeviceFactory
@@ -27,18 +27,21 @@ public sealed class TunerDeviceFactory : ITunerDeviceFactory
     private readonly TimeProvider time;
     private readonly Lazy<IDvbSystemCalls> systemCalls;
     private readonly IDescramblerFactory descramblers;
+    private readonly ILogger? logger;
     private readonly DvbTunerSettings settings;
 
     public TunerDeviceFactory(
         DriverConfiguration configuration,
         TimeProvider time,
-        IDescramblerFactory descramblers
+        IDescramblerFactory descramblers,
+        ILogger<TunerDeviceFactory>? logger = null
     )
         : this(
             configuration,
             time,
             new Lazy<IDvbSystemCalls>(() => new LinuxDvbSystemCalls()),
-            descramblers
+            descramblers,
+            logger
         )
     { }
 
@@ -49,9 +52,11 @@ public sealed class TunerDeviceFactory : ITunerDeviceFactory
         DriverConfiguration configuration,
         TimeProvider time,
         Lazy<IDvbSystemCalls> systemCalls,
-        IDescramblerFactory descramblers
+        IDescramblerFactory descramblers,
+        ILogger? logger = null
     )
     {
+        this.logger = logger;
         backend = configuration.Tuner?.Backend ?? TunerBackend.Unspecified;
         this.time = time;
         this.systemCalls = systemCalls;
@@ -119,7 +124,7 @@ public sealed class TunerDeviceFactory : ITunerDeviceFactory
 
         try
         {
-            return new DescramblingTunerDevice(opened, descrambler);
+            return new DescramblingTunerDevice(opened, descrambler, logger);
         }
         catch
         {

@@ -116,7 +116,7 @@ internal sealed unsafe class CardDescrambler : IDescrambler
         }
     }
 
-    public byte[] WhatIsStillHeld()
+    public byte[] WhatItCouldNotRead()
     {
         lock (gate)
         {
@@ -126,16 +126,11 @@ internal sealed unsafe class CardDescrambler : IDescrambler
             }
 
             AribStdB25* open = standard;
+            AribBuffer giving = default;
 
-            int flushed = open->Flush(open);
-            if (flushed < 0)
-            {
-                throw new DescramblingException(
-                    $"The descrambler would not let go of what it still held ({Answer(flushed)})."
-                );
-            }
-
-            return Collect(open);
+            return open->Withdraw(open, &giving) < 0 || giving.Data is null || giving.Size is 0
+                ? []
+                : new ReadOnlySpan<byte>(giving.Data, (int)giving.Size).ToArray();
         }
     }
 

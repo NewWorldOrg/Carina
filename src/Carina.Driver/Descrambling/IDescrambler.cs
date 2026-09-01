@@ -6,7 +6,7 @@ public interface IDescrambler : IDisposable
 {
     byte[] Descramble(ReadOnlySpan<byte> stream);
 
-    byte[] WhatIsStillHeld();
+    byte[] WhatItCouldNotRead();
 }
 
 public interface IDescramblerFactory

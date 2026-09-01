@@ -127,7 +127,8 @@ public static class DriverHost
         builder.Services.AddSingleton<ITunerDeviceFactory>(provider => new TunerDeviceFactory(
             provider.GetRequiredService<DriverConfiguration>(),
             provider.GetRequiredService<TimeProvider>(),
-            provider.GetRequiredService<IDescramblerFactory>()
+            provider.GetRequiredService<IDescramblerFactory>(),
+            provider.GetRequiredService<ILogger<TunerDeviceFactory>>()
         ));
         builder.Services.AddSingleton(_ => TunerDetectors.For(configuration));
         builder.Services.AddSingleton(_ => new TunerLedgerStore(configuration, configurationPath));

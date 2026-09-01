@@ -10,8 +10,6 @@ public sealed class Descramblers : IDescramblerFactory
 
     private readonly ILogger? logger;
 
-    private int reportedOne;
-
     private Descramblers(AribB25Library library, ILogger? logger)
     {
         this.library = library;
@@ -68,23 +66,13 @@ public sealed class Descramblers : IDescramblerFactory
         }
         catch (DescramblingException error)
         {
-            ReportOnce(error.Message);
+            logger?.LogError(
+                "The card answered when this driver started but does not now, so what this session records stays scrambled and its scrambled-packet count will say so: {Why}",
+                error.Message
+            );
 
             return null;
         }
-    }
-
-    private void ReportOnce(string why)
-    {
-        if (Interlocked.Exchange(ref reportedOne, 1) is 1)
-        {
-            return;
-        }
-
-        logger?.LogError(
-            "The card answered when this driver started but does not now, so what this session records stays scrambled and its scrambled-packet count will say so: {Why}",
-            why
-        );
     }
 
     private static void Absent(ILogger? logger, string why) =>

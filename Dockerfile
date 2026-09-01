@@ -1,18 +1,17 @@
 ARG DOTNET_VERSION=10.0
 
 FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS card-build
-ARG ARIBB25_VERSION=0.2.9
-ARG ARIBB25_SHA256=2c4e44d59a4162d7dc37f86b8c59b4e6f304e13b3f694e06cff89e2ee81e9e0d
+ARG ARIBB25_TAG=v0.2.9
+ARG ARIBB25_COMMIT=a2225c6f3b92092f2e8a62b21f2990e44b561658
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        ca-certificates cmake curl g++ gcc make pkg-config libpcsclite-dev \
+        ca-certificates cmake g++ gcc git make pkg-config libpcsclite-dev \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /src
-RUN curl -fsSL -o libaribb25.tar.gz \
-        "https://github.com/tsukumijima/libaribb25/archive/refs/tags/v${ARIBB25_VERSION}.tar.gz" \
-    && echo "${ARIBB25_SHA256}  libaribb25.tar.gz" | sha256sum -c - \
-    && tar xf libaribb25.tar.gz \
-    && cmake -S "libaribb25-${ARIBB25_VERSION}" -B build -DCMAKE_BUILD_TYPE=Release \
+RUN git clone --depth 1 --branch "${ARIBB25_TAG}" \
+        https://github.com/tsukumijima/libaribb25.git libaribb25 \
+    && test "$(git -C libaribb25 rev-parse HEAD)" = "${ARIBB25_COMMIT}" \
+    && cmake -S libaribb25 -B build -DCMAKE_BUILD_TYPE=Release \
     && cmake --build build -j"$(nproc)" \
     && mkdir -p /out/card \
     && cp -P build/libaribb25.so* /out/card/
@@ -56,7 +55,7 @@ FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS driver-develop
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libpcsclite1 \
     && rm -rf /var/lib/apt/lists/*
-COPY --from=card-build /out/card/ /usr/lib/x86_64-linux-gnu/
+COPY --from=card-build /out/card/ /usr/local/lib/
 RUN ldconfig
 
 FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS runtime
@@ -65,7 +64,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg intel-media-va-driver libpcsclite1 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=card-build /out/card/ /usr/lib/x86_64-linux-gnu/
+COPY --from=card-build /out/card/ /usr/local/lib/
 RUN ldconfig
 
 ARG CARINA_UID=10001

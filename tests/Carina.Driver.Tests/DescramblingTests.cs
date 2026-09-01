@@ -2,8 +2,6 @@ using Carina.Contracts;
 using Carina.Driver.Configuration;
 using Carina.Driver.Descrambling;
 using Carina.Driver.Ipc;
-using Carina.Driver.Recording;
-using Carina.Driver.Sessions;
 using Carina.Driver.Tuning;
 using Carina.Driver.Tuning.Dvb;
 
@@ -47,56 +45,6 @@ public sealed class DescramblingTests
     }
 
     [Fact]
-    public void ASessionThatWouldWriteAnEmptyFileRatherThanAScrambledOneFailsInstead()
-    {
-        var source = new ChunkByChunkTunerDevice(
-            Enumerable.Repeat(new byte[1024 * 1024], 16).ToArray());
-        var card = new ScriptedDescrambler(_ => []);
-
-        using var device = new DescramblingTunerDevice(source, card);
-
-        DescramblingException refused = Assert.Throws<DescramblingException>(
-            () => device.Read(1024 * 1024, CancellationToken.None));
-
-        Assert.Contains("handed none of it back", refused.Message, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public void ADescramblerThatHasAnsweredOnceIsNeverJudgedOnWhatItHoldsAfterwards()
-    {
-        int reads = 0;
-        var source = new ChunkByChunkTunerDevice(
-            Enumerable.Repeat(new byte[1024 * 1024], 32).ToArray());
-        var card = new ScriptedDescrambler(_ => ++reads is 1 ? [7] : []);
-
-        using var device = new DescramblingTunerDevice(source, card);
-
-        Assert.Equal([7], device.Read(1024 * 1024, CancellationToken.None));
-
-        Assert.Throws<EndOfTheScriptException>(
-            () => device.Read(1024 * 1024, CancellationToken.None));
-    }
-
-    [Fact]
-    public void WhatTheDescramblerStillHeldAtTheEndIsHandedOverWithTheTunersOwnTail()
-    {
-        var source = new ChunkByChunkTunerDevice([]) { Tail = [1] };
-        var card = new ScriptedDescrambler(scrambled => [.. scrambled.ToArray()]) { Held = [9] };
-
-        using var device = new DescramblingTunerDevice(source, card);
-
-        Assert.Equal([1, 9], device.WhatIsHeldBack());
-    }
-
-    [Fact]
-    public void ATunerThatWasNeverWrappedHoldsNothingBack()
-    {
-        var source = new ChunkByChunkTunerDevice([]);
-
-        Assert.Empty(((ITunerDevice)source).WhatIsHeldBack());
-    }
-
-    [Fact]
     public void ClosingTheSessionLetsGoOfBothTheCardAndTheTuner()
     {
         var source = new ChunkByChunkTunerDevice([]);
@@ -117,6 +65,50 @@ public sealed class DescramblingTests
         using var device = new DescramblingTunerDevice(source, card);
 
         Assert.Equal(42, device.Overflows);
+    }
+
+    [Fact]
+    public void ACardThatDiesPartWayThroughLeavesTheRecordingRunningOnScrambledBytes()
+    {
+        int reads = 0;
+        var source = new ChunkByChunkTunerDevice([[1], [2], [3]]);
+        var card = new ScriptedDescrambler(scrambled =>
+            ++reads is 1
+                ? [.. scrambled.ToArray()]
+                : throw new DescramblingException("the card went away"));
+
+        using var device = new DescramblingTunerDevice(source, card);
+
+        Assert.Equal([1], device.Read(1, CancellationToken.None));
+        Assert.Equal([2], device.Read(1, CancellationToken.None));
+        Assert.Equal([3], device.Read(1, CancellationToken.None));
+        Assert.True(card.Disposed);
+    }
+
+    [Fact]
+    public void WhatTheCardHadTakenButNeverReadIsHandedOnRatherThanDroppedWithIt()
+    {
+        var source = new ChunkByChunkTunerDevice([[3]]);
+        var card = new ScriptedDescrambler(
+            _ => throw new DescramblingException("the card went away"))
+        {
+            Unread = [1, 2],
+        };
+
+        using var device = new DescramblingTunerDevice(source, card);
+
+        Assert.Equal([1, 2, 3], device.Read(1, CancellationToken.None));
+    }
+
+    [Fact]
+    public void ACardThatCannotEvenSayWhatItHeldStillLetsTheStreamThrough()
+    {
+        var source = new ChunkByChunkTunerDevice([[3]]);
+        var card = new ThrowingDescrambler();
+
+        using var device = new DescramblingTunerDevice(source, card);
+
+        Assert.Equal([3], device.Read(1, CancellationToken.None));
     }
 
     [Fact]
@@ -186,8 +178,6 @@ public sealed class ChunkByChunkTunerDevice(IReadOnlyList<byte[]> chunks) : ITun
 
     public long Overflows { get; set; }
 
-    public byte[] Tail { get; set; } = [];
-
     public int Reads => next;
 
     public bool Disposed { get; private set; }
@@ -195,22 +185,31 @@ public sealed class ChunkByChunkTunerDevice(IReadOnlyList<byte[]> chunks) : ITun
     public byte[] Read(int count, CancellationToken cancellationToken) =>
         next < chunks.Count ? chunks[next++] : throw new EndOfTheScriptException();
 
-    public byte[] WhatIsHeldBack() => Tail;
-
     public void Dispose() => Disposed = true;
 }
 
 public delegate byte[] Unlocking(ReadOnlySpan<byte> stream);
 
+public sealed class ThrowingDescrambler : IDescrambler
+{
+    public byte[] Descramble(ReadOnlySpan<byte> stream) =>
+        throw new DescramblingException("the card went away");
+
+    public byte[] WhatItCouldNotRead() =>
+        throw new DescramblingException("and cannot say what it had taken");
+
+    public void Dispose() { }
+}
+
 public sealed class ScriptedDescrambler(Unlocking unlock) : IDescrambler
 {
-    public byte[] Held { get; set; } = [];
+    public byte[] Unread { get; set; } = [];
 
     public bool Disposed { get; private set; }
 
     public byte[] Descramble(ReadOnlySpan<byte> stream) => unlock(stream);
 
-    public byte[] WhatIsStillHeld() => Held;
+    public byte[] WhatItCouldNotRead() => Unread;
 
     public void Dispose() => Disposed = true;
 }
@@ -280,77 +279,6 @@ public sealed class DescramblingWiringTests
 
         public IDescrambler? Open() =>
             Answers ? new ScriptedDescrambler(_ => [1]) : null;
-    }
-}
-
-public sealed class DescrambledTailTests
-{
-    private static readonly DateTimeOffset Start = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
-
-    [Fact]
-    public async Task WhatTheDescramblerWasStillHoldingWhenTheStreamEndedIsInTheFile()
-    {
-        string directory = Directory.CreateTempSubdirectory("carina-tail").FullName;
-
-        try
-        {
-            var device = new ChunkByChunkTunerDevice([[1, 2, 3]]) { Tail = [4, 5] };
-            var writer = new RecordingWriter(directory, "0123456789abcdef0123456789abcdef");
-
-            using (
-                var session = new TunerSession(
-                    SessionId.Parse("tail"),
-                    SessionPurpose.Recording,
-                    "adapter0",
-                    device,
-                    Start,
-                    Start.AddHours(1),
-                    new ManualTimeProvider(Start),
-                    writer))
-            {
-                session.Start();
-                await session.Completion.WaitAsync(TimeSpan.FromSeconds(10));
-
-                Assert.Equal([1, 2, 3, 4, 5], File.ReadAllBytes(writer.Path));
-            }
-        }
-        finally
-        {
-            Directory.Delete(directory, recursive: true);
-        }
-    }
-
-    [Fact]
-    public async Task ATunerThatHeldNothingBackAddsNothingToTheFile()
-    {
-        string directory = Directory.CreateTempSubdirectory("carina-tail").FullName;
-
-        try
-        {
-            var device = new ChunkByChunkTunerDevice([[1, 2, 3]]);
-            var writer = new RecordingWriter(directory, "0123456789abcdef0123456789abcdef");
-
-            using (
-                var session = new TunerSession(
-                    SessionId.Parse("tail"),
-                    SessionPurpose.Recording,
-                    "adapter0",
-                    device,
-                    Start,
-                    Start.AddHours(1),
-                    new ManualTimeProvider(Start),
-                    writer))
-            {
-                session.Start();
-                await session.Completion.WaitAsync(TimeSpan.FromSeconds(10));
-
-                Assert.Equal([1, 2, 3], File.ReadAllBytes(writer.Path));
-            }
-        }
-        finally
-        {
-            Directory.Delete(directory, recursive: true);
-        }
     }
 }
 
