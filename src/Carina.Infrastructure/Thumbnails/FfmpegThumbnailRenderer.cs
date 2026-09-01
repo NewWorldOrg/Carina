@@ -14,9 +14,7 @@ public sealed class FfmpegThumbnailRenderer(ThumbnailSettings settings, TimeProv
 
         if (!File.Exists(request.Source))
         {
-            return ThumbnailRender.Failed(
-                ThumbnailFault.SourceOutOfReach,
-                "the recording is not where the ledger says it is");
+            return Missing();
         }
 
         if (Path.GetDirectoryName(request.Destination) is { Length: > 0 } room)
@@ -24,6 +22,69 @@ public sealed class FfmpegThumbnailRenderer(ThumbnailSettings settings, TimeProv
             Directory.CreateDirectory(room);
         }
 
+        ThumbnailRender ran = await RunAsync(
+            FfmpegInvocation.Arguments(request, settings.Width),
+            keepingWhatItWrote: false,
+            cancellationToken);
+
+        if (!ran.Drew)
+        {
+            return ran;
+        }
+
+        return Weighed(request.Destination)
+            ? ThumbnailRender.Drawn()
+            : ThumbnailRender.Failed(
+                ThumbnailFault.NothingWasWritten,
+                "the programme reported success and left no picture behind");
+    }
+
+    public async Task<ThumbnailRender> FrameAsync(
+        ThumbnailFrameRequest request,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (!File.Exists(request.Source))
+        {
+            return Missing();
+        }
+
+        return await RunAsync(
+            FfmpegInvocation.FrameArguments(request, settings.Width),
+            keepingWhatItWrote: true,
+            cancellationToken);
+    }
+
+    private static ThumbnailRender Missing()
+        => ThumbnailRender.Failed(
+            ThumbnailFault.SourceOutOfReach,
+            "the recording is not where the ledger says it is");
+
+    private static void GiveUpOn(Process running)
+    {
+        try
+        {
+            running.Kill(entireProcessTree: true);
+        }
+        catch (Exception gone) when (gone is InvalidOperationException or NotSupportedException)
+        {
+            return;
+        }
+    }
+
+    private static bool Weighed(string destination)
+    {
+        var drawn = new FileInfo(destination);
+
+        return drawn.Exists && drawn.Length > 0;
+    }
+
+    private async Task<ThumbnailRender> RunAsync(
+        IReadOnlyList<string> arguments,
+        bool keepingWhatItWrote,
+        CancellationToken cancellationToken)
+    {
         var start = new ProcessStartInfo(settings.Programme)
         {
             RedirectStandardOutput = true,
@@ -31,7 +92,7 @@ public sealed class FfmpegThumbnailRenderer(ThumbnailSettings settings, TimeProv
             UseShellExecute = false,
         };
 
-        foreach (string argument in FfmpegInvocation.Arguments(request, settings.Width))
+        foreach (string argument in arguments)
         {
             start.ArgumentList.Add(argument);
         }
@@ -57,8 +118,9 @@ public sealed class FfmpegThumbnailRenderer(ThumbnailSettings settings, TimeProv
         }
 
         using Process running = started;
+        using var written = new MemoryStream();
 
-        _ = running.StandardOutput.ReadToEndAsync(CancellationToken.None);
+        Task read = running.StandardOutput.BaseStream.CopyToAsync(written, CancellationToken.None);
         Task<string> complaint = running.StandardError.ReadToEndAsync(CancellationToken.None);
 
         using var deadline = new CancellationTokenSource(settings.LongestRender, clock);
@@ -84,34 +146,22 @@ public sealed class FfmpegThumbnailRenderer(ThumbnailSettings settings, TimeProv
             throw;
         }
 
+        await read;
+
         if (running.ExitCode is not 0)
         {
             return ThumbnailRender.Refused(running.ExitCode, await complaint);
         }
 
-        return Weighed(request.Destination)
-            ? ThumbnailRender.Drawn()
+        if (!keepingWhatItWrote)
+        {
+            return ThumbnailRender.Drawn();
+        }
+
+        return written.Length > 0
+            ? ThumbnailRender.Drawn(written.ToArray())
             : ThumbnailRender.Failed(
                 ThumbnailFault.NothingWasWritten,
-                "the programme reported success and left no picture behind");
-    }
-
-    private static void GiveUpOn(Process running)
-    {
-        try
-        {
-            running.Kill(entireProcessTree: true);
-        }
-        catch (Exception gone) when (gone is InvalidOperationException or NotSupportedException)
-        {
-            return;
-        }
-    }
-
-    private static bool Weighed(string destination)
-    {
-        var drawn = new FileInfo(destination);
-
-        return drawn.Exists && drawn.Length > 0;
+                "the programme reported success and handed over no picture");
     }
 }

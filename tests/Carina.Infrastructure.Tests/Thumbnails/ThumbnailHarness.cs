@@ -73,11 +73,18 @@ internal sealed class HeldWorklist : IThumbnailWorklist
     }
 }
 
-internal sealed class HeldRenderer(Func<ThumbnailRequest, ThumbnailRender>? answer = null) : IThumbnailRenderer
+internal sealed class HeldRenderer(
+    Func<ThumbnailRequest, ThumbnailRender>? answer = null,
+    Func<ThumbnailFrameRequest, ThumbnailRender>? framed = null) : IThumbnailRenderer
 {
     private readonly Func<ThumbnailRequest, ThumbnailRender> answer = answer ?? (_ => ThumbnailRender.Drawn());
 
+    private readonly Func<ThumbnailFrameRequest, ThumbnailRender> framed =
+        framed ?? (_ => ThumbnailRender.Drawn([0xff, 0xd8]));
+
     public ConcurrentQueue<ThumbnailRequest> Asked { get; } = new();
+
+    public ConcurrentQueue<ThumbnailFrameRequest> AskedForAFrame { get; } = new();
 
     public Task<ThumbnailRender> RenderAsync(ThumbnailRequest request, CancellationToken cancellationToken)
     {
@@ -85,11 +92,21 @@ internal sealed class HeldRenderer(Func<ThumbnailRequest, ThumbnailRender>? answ
 
         return Task.FromResult(answer(request));
     }
+
+    public Task<ThumbnailRender> FrameAsync(ThumbnailFrameRequest request, CancellationToken cancellationToken)
+    {
+        AskedForAFrame.Enqueue(request);
+
+        return Task.FromResult(framed(request));
+    }
 }
 
 internal sealed class ThrowingRenderer : IThumbnailRenderer
 {
     public Task<ThumbnailRender> RenderAsync(ThumbnailRequest request, CancellationToken cancellationToken)
+        => throw new InvalidOperationException("the renderer fell over");
+
+    public Task<ThumbnailRender> FrameAsync(ThumbnailFrameRequest request, CancellationToken cancellationToken)
         => throw new InvalidOperationException("the renderer fell over");
 }
 

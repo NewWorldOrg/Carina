@@ -31,15 +31,40 @@ public sealed record ThumbnailRequest
     public TimeSpan At { get; }
 }
 
+public sealed record ThumbnailFrameRequest
+{
+    public ThumbnailFrameRequest(string source, ServiceId service, TimeSpan at)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(source);
+        ArgumentNullException.ThrowIfNull(service);
+
+        if (at < TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(at), at, "A picture is taken out of a recording, not before it.");
+        }
+
+        Source = source;
+        Service = service;
+        At = at;
+    }
+
+    public string Source { get; }
+
+    public ServiceId Service { get; }
+
+    public TimeSpan At { get; }
+}
+
 public sealed record ThumbnailRender
 {
     public const int LongestNote = 500;
 
-    private ThumbnailRender(ThumbnailFault? fault, int? exitCode, string note)
+    private ThumbnailRender(ThumbnailFault? fault, int? exitCode, string note, byte[]? picture)
     {
         Fault = fault;
         ExitCode = exitCode;
         Note = note;
+        Picture = picture;
     }
 
     public ThumbnailFault? Fault { get; }
@@ -48,9 +73,20 @@ public sealed record ThumbnailRender
 
     public string Note { get; }
 
+    public byte[]? Picture { get; }
+
     public bool Drew => Fault is null;
 
-    public static ThumbnailRender Drawn() => new(null, null, string.Empty);
+    public static ThumbnailRender Drawn() => new(null, null, string.Empty, null);
+
+    public static ThumbnailRender Drawn(byte[] picture)
+    {
+        ArgumentNullException.ThrowIfNull(picture);
+
+        return picture.Length > 0
+            ? new ThumbnailRender(null, null, string.Empty, picture)
+            : throw new ArgumentException("A picture that weighs nothing was not drawn.", nameof(picture));
+    }
 
     public static ThumbnailRender Refused(int exitCode, string note)
     {
@@ -62,7 +98,7 @@ public sealed record ThumbnailRender
                 "A programme that exited 0 was not refused by it.");
         }
 
-        return new ThumbnailRender(ThumbnailFault.Refused, exitCode, Shortened(note));
+        return new ThumbnailRender(ThumbnailFault.Refused, exitCode, Shortened(note), null);
     }
 
     public static ThumbnailRender Failed(ThumbnailFault fault, string note)
@@ -80,7 +116,7 @@ public sealed record ThumbnailRender
                 $"A programme that refused says with what code, so {nameof(Refused)} takes one.");
         }
 
-        return new ThumbnailRender(fault, null, Shortened(note));
+        return new ThumbnailRender(fault, null, Shortened(note), null);
     }
 
     private static string Shortened(string note)

@@ -165,6 +165,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<ThumbnailSettings>(provider =>
             provider.GetRequiredService<IOptions<ThumbnailOptions>>().Value.Read());
         services.TryAddSingleton<IThumbnailRenderer, FfmpegThumbnailRenderer>();
+        services.AddScoped<IScrubFrames, Scrubber>();
         services.AddSingleton<ThumbnailJob>();
         services.TryAddSingleton<IThumbnailRemaker>(provider =>
             provider.GetRequiredService<ThumbnailJob>());

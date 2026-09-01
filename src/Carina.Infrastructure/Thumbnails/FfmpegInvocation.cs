@@ -14,6 +14,21 @@ public static class FfmpegInvocation
         return [.. Reading(request.Source, request.Service, request.At, width), request.Destination];
     }
 
+    public static IReadOnlyList<string> FrameArguments(ThumbnailFrameRequest request, int width)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        return
+        [
+            .. Reading(request.Source, request.Service, request.At, width),
+            "-f",
+            "image2pipe",
+            "-c:v",
+            "mjpeg",
+            "-",
+        ];
+    }
+
     private static IReadOnlyList<string> Reading(string source, ServiceId service, TimeSpan at, int width)
     {
         if (width < 2 || width % 2 is not 0)
@@ -36,7 +51,7 @@ public static class FfmpegInvocation
             "-i",
             source,
             "-map",
-            Programme(service),
+            Selecting(service),
             "-frames:v",
             "1",
             "-vf",
@@ -44,8 +59,12 @@ public static class FfmpegInvocation
         ];
     }
 
-    private static string Programme(ServiceId service)
-        => string.Create(CultureInfo.InvariantCulture, $"p:{service.Value}:v:0");
+    private static string Selecting(ServiceId service)
+    {
+        int programNumber = service.Value;
+
+        return string.Create(CultureInfo.InvariantCulture, $"p:{programNumber}:v:0");
+    }
 
     private static string Filter(int width)
         => string.Create(

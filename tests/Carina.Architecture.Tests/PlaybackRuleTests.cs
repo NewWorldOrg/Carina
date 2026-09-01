@@ -4,6 +4,8 @@ public sealed class PlaybackRuleTests
 {
     private const string Delivery = "/Carina.Api/Playback/VideoDelivery.cs";
 
+    private const string Scrub = "/Carina.Api/Playback/ScrubDelivery.cs";
+
     private const string WhereItIsMapped = "/Carina.Api/Program.cs";
 
     private const string WhereTheDocumentSaysItExists = "/Carina.Api/OpenApi/ApiDocumentTransformer.cs";
@@ -12,8 +14,19 @@ public sealed class PlaybackRuleTests
     public void TheOnlyPlacesThatSpellTheDeliveryPathAreWhereItIsDeclaredAndWhereTheDocumentDisownsIt()
     {
         Assert.Equal(
-            [WhereTheDocumentSaysItExists, Delivery],
+            [WhereTheDocumentSaysItExists, Scrub, Delivery],
             PlaybackRules.FilesSpellingTheDeliveryPath(RepositoryLayout.SourceDirectory));
+    }
+
+    [Fact]
+    public void TheOtherSurfaceUnderTheSamePrefixIsAPictureAndNotASecondWayToTheBytes()
+    {
+        string scrub = File.ReadAllText(Path.Combine(RepositoryLayout.SourceDirectory, Scrub.TrimStart('/')));
+
+        Assert.Contains("\"/api/videos/{id}/scrub\"", scrub, StringComparison.Ordinal);
+        Assert.Contains("image/jpeg", scrub, StringComparison.Ordinal);
+        Assert.DoesNotContain(PlaybackRules.DeliveryEndpoint, scrub, StringComparison.Ordinal);
+        Assert.DoesNotContain("Accept-Ranges", scrub, StringComparison.Ordinal);
     }
 
     [Fact]

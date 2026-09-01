@@ -9,6 +9,9 @@ public sealed class FfmpegInvocationTests
     private static readonly ThumbnailRequest Request =
         new("/srv/recordings/a.m2ts", "/srv/thumbnails/a.jpg", new ServiceId(1032), TimeSpan.FromSeconds(120));
 
+    private static readonly ThumbnailFrameRequest Frame =
+        new("/srv/recordings/a.m2ts", new ServiceId(1032), TimeSpan.FromSeconds(42));
+
     [Fact]
     public void TheSeekComesBeforeTheInputBecauseAfterItTheWholeFileIsDecoded()
     {
@@ -108,6 +111,45 @@ public sealed class FfmpegInvocationTests
         => Assert.Equal(
             "request",
             Assert.Throws<ArgumentNullException>(() => FfmpegInvocation.Arguments(null!, 960)).ParamName);
+
+    [Fact]
+    public void AFrameAskedForOnDemandIsHandedBackThroughThePipeAndLeavesNoFileBehind()
+    {
+        IReadOnlyList<string> arguments = FfmpegInvocation.FrameArguments(Frame, 960);
+
+        Assert.Equal("-", arguments[^1]);
+        Assert.Equal("image2pipe", arguments[Index(arguments, "-f") + 1]);
+        Assert.Equal("mjpeg", arguments[Index(arguments, "-c:v") + 1]);
+        Assert.DoesNotContain(arguments, argument => argument.EndsWith(".jpg", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void AFrameIsReadTheSameWayAStoredPictureIs()
+    {
+        IReadOnlyList<string> frame = FfmpegInvocation.FrameArguments(Frame, 960);
+
+        Assert.True(Index(frame, "-ss") < Index(frame, "-i"));
+        Assert.Equal("42", frame[Index(frame, "-ss") + 1]);
+        Assert.Equal("p:1032:v:0", frame[Index(frame, "-map") + 1]);
+        Assert.Equal("scale=960:trunc(960/dar/2)*2:flags=bicubic,setsar=1", frame[Index(frame, "-vf") + 1]);
+        Assert.Equal("1", frame[Index(frame, "-frames:v") + 1]);
+    }
+
+    [Fact]
+    public void NoFrameRequestMeansNoArguments()
+        => Assert.Equal(
+            "request",
+            Assert.Throws<ArgumentNullException>(
+                () => FfmpegInvocation.FrameArguments(null!, 960)).ParamName);
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(961)]
+    public void AFrameOfAWidthNoPictureCouldHaveIsRefused(int width)
+        => Assert.Equal(
+            "width",
+            Assert.Throws<ArgumentOutOfRangeException>(
+                () => FfmpegInvocation.FrameArguments(Frame, width)).ParamName);
 
     private static string Filter(int width)
     {
