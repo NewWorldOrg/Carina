@@ -15,6 +15,7 @@ public sealed class FileSystemRuleTests
         "/Carina.Driver/Configuration/AtomicFile.cs newFileStream",
         "/Carina.Driver/Configuration/DriverConfigurationReader.cs File.Create",
         "/Carina.Driver/Configuration/DriverConfigurationReader.cs File.Delete",
+        "/Carina.Driver/Descrambling/AribB25Library.cs NativeLibrary",
         "/Carina.Driver/Ipc/DriverSocket.cs File.Delete",
         "/Carina.Driver/Ipc/DriverSocket.cs File.SetUnixFileMode",
         "/Carina.Driver/Ipc/StorageViews.cs File.Delete",

@@ -1,6 +1,9 @@
 using Carina.Contracts;
 using Carina.Driver.Configuration;
+using Carina.Driver.Descrambling;
 using Carina.Driver.Tuning.Dvb;
+
+using Microsoft.Extensions.Logging;
 
 namespace Carina.Driver.Tuning;
 
@@ -23,20 +26,41 @@ public sealed class TunerDeviceFactory : ITunerDeviceFactory
     private readonly TunerBackend backend;
     private readonly TimeProvider time;
     private readonly Lazy<IDvbSystemCalls> systemCalls;
+    private readonly IDescramblerFactory descramblers;
+    private readonly ILogger? logger;
     private readonly DvbTunerSettings settings;
 
+    public TunerDeviceFactory(
+        DriverConfiguration configuration,
+        TimeProvider time,
+        IDescramblerFactory descramblers,
+        ILogger<TunerDeviceFactory>? logger = null
+    )
+        : this(
+            configuration,
+            time,
+            new Lazy<IDvbSystemCalls>(() => new LinuxDvbSystemCalls()),
+            descramblers,
+            logger
+        )
+    { }
+
     public TunerDeviceFactory(DriverConfiguration configuration, TimeProvider time)
-        : this(configuration, time, new Lazy<IDvbSystemCalls>(() => new LinuxDvbSystemCalls())) { }
+        : this(configuration, time, NoDescrambling.Instance) { }
 
     private TunerDeviceFactory(
         DriverConfiguration configuration,
         TimeProvider time,
-        Lazy<IDvbSystemCalls> systemCalls
+        Lazy<IDvbSystemCalls> systemCalls,
+        IDescramblerFactory descramblers,
+        ILogger? logger = null
     )
     {
+        this.logger = logger;
         backend = configuration.Tuner?.Backend ?? TunerBackend.Unspecified;
         this.time = time;
         this.systemCalls = systemCalls;
+        this.descramblers = descramblers;
         settings = DvbTunerSettings.Default with
         {
             DemuxBufferBytes =
@@ -47,8 +71,15 @@ public sealed class TunerDeviceFactory : ITunerDeviceFactory
     public static TunerDeviceFactory Using(
         DriverConfiguration configuration,
         TimeProvider time,
-        IDvbSystemCalls systemCalls
-    ) => new(configuration, time, new Lazy<IDvbSystemCalls>(() => systemCalls));
+        IDvbSystemCalls systemCalls,
+        IDescramblerFactory? descramblers = null
+    ) =>
+        new(
+            configuration,
+            time,
+            new Lazy<IDvbSystemCalls>(() => systemCalls),
+            descramblers ?? NoDescrambling.Instance
+        );
 
     public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune) =>
         backend switch
@@ -70,7 +101,7 @@ public sealed class TunerDeviceFactory : ITunerDeviceFactory
             throw DvbFailure.Refused($"devices['{device.Id}']: {problem}");
         }
 
-        return DvbTunerDevice.Open(
+        ITunerDevice opened = DvbTunerDevice.Open(
             systemCalls.Value,
             time,
             paths,
@@ -79,5 +110,27 @@ public sealed class TunerDeviceFactory : ITunerDeviceFactory
             settings,
             CancellationToken.None
         );
+
+        return Unscrambling(opened);
+    }
+
+    private ITunerDevice Unscrambling(ITunerDevice opened)
+    {
+        IDescrambler? descrambler = descramblers.Open();
+        if (descrambler is null)
+        {
+            return opened;
+        }
+
+        try
+        {
+            return new DescramblingTunerDevice(opened, descrambler, logger);
+        }
+        catch
+        {
+            descrambler.Dispose();
+
+            throw;
+        }
     }
 }

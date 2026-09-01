@@ -1282,7 +1282,7 @@ public sealed class TunerSessionManagerTests : IDisposable
     [Fact]
     public void TheGreetingNamesTheMetricsItCanReadRatherThanQualityAsOneThing()
     {
-        DriverHello hello = Carina.Driver.Ipc.DriverGreeting.ForThisProcess();
+        DriverHello hello = Carina.Driver.Ipc.DriverGreeting.ForThisProcess(descrambling: false);
 
         Assert.Equal(SignalQualityMetrics.All, hello.DeclaredSignalQualityMetrics());
         Assert.True(hello.SupportsSignalQualityMetric(SignalQualityMetrics.Cnr));
@@ -1295,7 +1295,7 @@ public sealed class TunerSessionManagerTests : IDisposable
     public void TheGreetingDoesNotClaimAMetricNoTunerHereReports()
     {
         Assert.False(
-            Carina.Driver.Ipc.DriverGreeting.ForThisProcess()
+            Carina.Driver.Ipc.DriverGreeting.ForThisProcess(descrambling: false)
                 .SupportsSignalQualityMetric("signalStrength")
         );
     }

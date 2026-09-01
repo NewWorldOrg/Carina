@@ -2,6 +2,7 @@ using System.Diagnostics.CodeAnalysis;
 
 using Carina.Contracts;
 using Carina.Driver.Configuration;
+using Carina.Driver.Descrambling;
 using Carina.Driver.Diagnostics;
 using Carina.Driver.Events;
 using Carina.Driver.Ipc;
@@ -112,8 +113,23 @@ public static class DriverHost
         builder.Services.AddSingleton(configuration);
         builder.Services.AddSingleton(stopRequest ?? new DriverStopRequest());
         builder.Services.AddSingleton(TimeProvider.System);
-        builder.Services.AddSingleton(DriverGreeting.ForThisProcess());
-        builder.Services.AddSingleton<ITunerDeviceFactory, TunerDeviceFactory>();
+        builder.Services.AddSingleton(provider =>
+            Descramblers.For(
+                provider.GetRequiredService<DriverConfiguration>(),
+                provider.GetRequiredService<ILogger<Descramblers>>()
+            )
+        );
+        builder.Services.AddSingleton(provider =>
+            DriverGreeting.ForThisProcess(
+                provider.GetRequiredService<IDescramblerFactory>().CardAnswered
+            )
+        );
+        builder.Services.AddSingleton<ITunerDeviceFactory>(provider => new TunerDeviceFactory(
+            provider.GetRequiredService<DriverConfiguration>(),
+            provider.GetRequiredService<TimeProvider>(),
+            provider.GetRequiredService<IDescramblerFactory>(),
+            provider.GetRequiredService<ILogger<TunerDeviceFactory>>()
+        ));
         builder.Services.AddSingleton(_ => TunerDetectors.For(configuration));
         builder.Services.AddSingleton(_ => new TunerLedgerStore(configuration, configurationPath));
         builder.Services.AddSingleton<IRecordingWriterFactory, RecordingWriterFactory>();
