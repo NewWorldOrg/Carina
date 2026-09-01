@@ -12,6 +12,8 @@ public static class FfmpegLiveInvocation
 
     private const int KeyframeSeconds = 2;
 
+    private const int BufferedSeconds = 2;
+
     public static IReadOnlyList<string> Arguments(
         LiveProfile profile,
         StreamAttributes attributes,
@@ -104,7 +106,7 @@ public static class FfmpegLiveInvocation
                 "-maxrate",
                 Kilobits(profile.SoftwareRateControl.KilobitsPerSecond),
                 "-bufsize",
-                Kilobits(profile.SoftwareRateControl.KilobitsPerSecond * KeyframeSeconds),
+                Kilobits(profile.SoftwareRateControl.KilobitsPerSecond * BufferedSeconds),
             ];
 
     private static bool WantsEveryField(LiveProfile profile)
