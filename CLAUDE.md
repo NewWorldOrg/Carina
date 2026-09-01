@@ -437,6 +437,16 @@ without the node sets nothing and the device entry falls back to `/dev/null`,
 because a `devices:` entry naming a path that is not there stops the container
 from being created at all.
 
+Handing the node in is not the whole of it, because the image demotes `app` to
+an unprivileged user before starting it and demoting with `--init-groups` reads
+the supplementary groups back out of `/etc/group`, dropping whatever the
+container was given from outside. So the `app` role reads the owning group off
+the `card` and `render` nodes actually present in the container and hands the
+demoted process those and nothing else. The number comes from the node rather
+than from a name or a variable, so it cannot disagree with the device; a
+container without the nodes gets exactly the set `--init-groups` gave it before;
+and group 0 is never handed over, whichever side it came from.
+
 The `driver` service runs the driver as its own main process, so it receives
 SIGTERM directly and `stop_grace_period` covers the recording linger. It builds
 into a container-local artifacts path, so building from the `app` container never

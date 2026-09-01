@@ -32,13 +32,13 @@ RUN dotnet publish src/Carina.Api/Carina.Api.csproj -c Release --no-restore -o /
 
 FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS develop
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg \
+    && apt-get install -y --no-install-recommends ffmpeg intel-media-va-driver \
     && rm -rf /var/lib/apt/lists/*
 
 FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS runtime
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg \
+    && apt-get install -y --no-install-recommends ffmpeg intel-media-va-driver \
     && rm -rf /var/lib/apt/lists/*
 
 ARG CARINA_UID=10001

@@ -4,6 +4,7 @@ set -euo pipefail
 readonly driver_entry=/opt/carina/driver/Carina.Driver
 readonly app_entry=/opt/carina/app/Carina.Api.dll
 readonly migrate_entry=/opt/carina/db/Carina.Db.dll
+readonly render_nodes=/dev/dri
 
 drop_web_server_variables() {
     local name
@@ -38,11 +39,49 @@ run_as_carina() {
     exec "$@"
 }
 
+render_node_groups() {
+    local node
+    local gid
+    for node in "${render_nodes}"/card* "${render_nodes}"/renderD*; do
+        [ -c "${node}" ] || continue
+        if ! gid="$(stat -c %g "${node}")"; then
+            echo "${node} could not be read; role=app is not given its group." >&2
+            continue
+        fi
+        echo "${gid}"
+    done
+}
+
+app_groups() {
+    local list=''
+    local gid
+    for gid in $(id -G carina) $(render_node_groups); do
+        if [ "${gid}" = 0 ]; then
+            echo "role=app is not given group 0." >&2
+            continue
+        fi
+        case ",${list}," in
+            *",${gid},"*) continue ;;
+        esac
+        list="${list:+${list},}${gid}"
+    done
+    printf '%s' "${list}"
+}
+
+run_app_as_carina() {
+    if [ "$(id -u)" != 0 ]; then
+        exec "$@"
+    fi
+    local groups
+    groups="$(app_groups)"
+    exec setpriv --reuid carina --regid carina --groups "${groups}" --no-new-privs "$@"
+}
+
 run_all() {
     ( drop_web_server_variables; drop_database_variables; exec "${driver_entry}" ) &
     local driver_pid=$!
 
-    ( run_as_carina dotnet "${app_entry}" ) &
+    ( run_app_as_carina dotnet "${app_entry}" ) &
     local app_pid=$!
 
     trap 'kill -TERM "${driver_pid}" "${app_pid}" 2>/dev/null || true' TERM INT
@@ -67,7 +106,7 @@ main() {
             drop_database_variables
             exec "${driver_entry}"
             ;;
-        app) run_as_carina dotnet "${app_entry}" ;;
+        app) run_app_as_carina dotnet "${app_entry}" ;;
         migrate)
             adopt_shared_connection_string
             run_as_carina dotnet "${migrate_entry}" --migrate
