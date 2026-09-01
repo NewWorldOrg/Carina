@@ -26,6 +26,8 @@ public sealed record PlaybackPlan
 
     public bool Transcodes => Route is PlaybackRoute.OnTheFly;
 
+    public PlaybackSeeking? Seeking => PlaybackSeekings.Of(Route);
+
     public bool ShowsAsAWholeRecording => Standing is PlaybackStanding.Whole;
 
     public static PlaybackPlan For(PlaybackSubject subject)
