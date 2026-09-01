@@ -42,11 +42,10 @@ run_as_carina() {
 render_node_groups() {
     local node
     local gid
-    for node in "${render_nodes}"/*; do
+    for node in "${render_nodes}"/card* "${render_nodes}"/renderD*; do
         [ -c "${node}" ] || continue
-        gid="$(stat -c %g "${node}")"
-        if [ "${gid}" = 0 ]; then
-            echo "${node} is owned by group 0; role=app is not given it." >&2
+        if ! gid="$(stat -c %g "${node}")"; then
+            echo "${node} could not be read; role=app is not given its group." >&2
             continue
         fi
         echo "${gid}"
@@ -57,6 +56,10 @@ app_groups() {
     local list=''
     local gid
     for gid in $(id -G carina) $(render_node_groups); do
+        if [ "${gid}" = 0 ]; then
+            echo "role=app is not given group 0." >&2
+            continue
+        fi
         case ",${list}," in
             *",${gid},"*) continue ;;
         esac
