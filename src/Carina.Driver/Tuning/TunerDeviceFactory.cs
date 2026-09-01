@@ -39,7 +39,8 @@ public sealed class TunerDeviceFactory : ITunerDeviceFactory
             time,
             new Lazy<IDvbSystemCalls>(() => new LinuxDvbSystemCalls()),
             descramblers
-        ) { }
+        )
+    { }
 
     public TunerDeviceFactory(DriverConfiguration configuration, TimeProvider time)
         : this(configuration, time, NoDescrambling.Instance) { }
