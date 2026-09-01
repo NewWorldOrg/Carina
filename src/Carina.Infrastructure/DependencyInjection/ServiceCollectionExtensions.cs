@@ -5,6 +5,7 @@ using Carina.Domain.Driver;
 using Carina.Domain.DriverStatus;
 using Carina.Domain.Events;
 using Carina.Domain.Integrity;
+using Carina.Domain.Playback;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
@@ -19,6 +20,7 @@ using Carina.Infrastructure.Events;
 using Carina.Infrastructure.Integrity;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
+using Carina.Infrastructure.Playback;
 using Carina.Infrastructure.Programmes;
 using Carina.Infrastructure.Recordings;
 using Carina.Infrastructure.Reservations;
@@ -156,6 +158,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IntegritySettings>(provider =>
             provider.GetRequiredService<IOptions<IntegrityOptions>>().Value.Read());
         services.TryAddSingleton<IRecordingFileSurvey, LocalRecordingFileSurvey>();
+        services.TryAddSingleton<IPlaybackFileStore, LocalPlaybackFileStore>();
         services.AddSingleton<IntegrityCheckJob>();
         services.TryAddSingleton<ThumbnailSettings>(provider =>
             provider.GetRequiredService<IOptions<ThumbnailOptions>>().Value.Read());

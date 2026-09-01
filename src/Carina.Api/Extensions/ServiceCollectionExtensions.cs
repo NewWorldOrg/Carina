@@ -38,6 +38,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<RecordingDeletions>();
         services.AddScoped<RecordingService>();
         services.AddScoped<IntegrityService>();
+        services.AddScoped<PlaybackService>();
         services.AddScoped<StorageService>();
 
         return services;
