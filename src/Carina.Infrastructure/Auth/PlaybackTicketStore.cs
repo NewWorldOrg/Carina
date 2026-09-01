@@ -12,24 +12,29 @@ public sealed class PlaybackTicketStore(TimeProvider clock, PlaybackTicketPolicy
 
     private readonly ConcurrentDictionary<string, PlaybackTicket> held = new(StringComparer.Ordinal);
 
+    private readonly Lock issuing = new();
+
     public int Count => held.Count;
 
     public IssuedPlaybackTicket? Issue(Subject subject, PlaybackTarget target)
     {
         ArgumentNullException.ThrowIfNull(subject);
 
-        Sweep();
-
-        if (held.Count >= MostHeldAtOnce || HeldFor(subject) >= MostHeldPerSubject)
+        lock (issuing)
         {
-            return null;
+            Sweep();
+
+            if (held.Count >= MostHeldAtOnce || HeldFor(subject) >= MostHeldPerSubject)
+            {
+                return null;
+            }
+
+            PlaybackTicket issued = PlaybackTicket.Issue(subject, target, Now(), out string inTheClear);
+
+            held[issued.Digest] = issued;
+
+            return new IssuedPlaybackTicket(inTheClear, issued.LapsesAt(policy));
         }
-
-        PlaybackTicket issued = PlaybackTicket.Issue(subject, target, Now(), out string inTheClear);
-
-        held[issued.Digest] = issued;
-
-        return new IssuedPlaybackTicket(inTheClear, issued.LapsesAt(policy));
     }
 
     public Subject? Spend(string? offered, PlaybackTarget target)

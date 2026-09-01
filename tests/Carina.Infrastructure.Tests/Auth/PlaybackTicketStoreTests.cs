@@ -191,6 +191,49 @@ public sealed class PlaybackTicketStoreTests
     }
 
     [Fact]
+    public void ManyCallersAskingAtOnceCannotTalkTheStorePastAnAccountsShare()
+    {
+        const int Askers = 32;
+        const int Rounds = 20;
+
+        for (int round = 0; round < Rounds; round++)
+        {
+            PlaybackTicketStore store = Store(out _);
+            int issued = 0;
+
+            using var gun = new Barrier(Askers);
+            Thread[] askers =
+            [
+                .. Enumerable.Range(0, Askers).Select(_ => new Thread(() =>
+                {
+                    gun.SignalAndWait();
+
+                    if (store.Issue(Watcher, Seven) is not null)
+                    {
+                        Interlocked.Increment(ref issued);
+                    }
+                })),
+            ];
+
+            foreach (Thread asker in askers)
+            {
+                asker.Start();
+            }
+
+            foreach (Thread asker in askers)
+            {
+                Assert.True(asker.Join(TimeSpan.FromMinutes(1)));
+            }
+
+            Assert.True(
+                issued <= PlaybackTicketStore.MostHeldPerSubject,
+                $"{Askers} callers at once were handed {issued} live tickets for one account, "
+                + $"where {PlaybackTicketStore.MostHeldPerSubject} is the share.");
+            Assert.Equal(issued, store.Count);
+        }
+    }
+
+    [Fact]
     public void ATicketNobodyCollectedIsLetGoRatherThanKeptForever()
     {
         PlaybackTicketStore store = Store(out WoundClock clock);
