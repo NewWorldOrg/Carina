@@ -19,6 +19,14 @@ public static class PlaybackRules
         "LiveTranscoderStart",
         "LiveTranscodeSettings",
         "FfmpegLiveInvocation",
+        "FfmpegPlaybackInvocation",
+        "IOnTheFlyPlayer",
+        "IOnTheFlyViewing",
+        "OnTheFlyPlayer",
+        "OnTheFlyStart",
+        "OnTheFlyViewing",
+        "OnTheFlySettings",
+        "TranscoderProcess",
     ];
 
     private static readonly Regex Transcodes = new(
