@@ -2,7 +2,9 @@ version: '3'
 
 tasks:
   up:
-    cmd: docker compose up -d
+    cmd: env $(bash docker/dri-env.sh) docker compose up -d
+  dri:
+    cmd: bash docker/dri-env.sh
   down:
     cmd: docker compose down
   stop:

@@ -10,6 +10,11 @@ services:
       - driver-run:/run/carina
       - recordings:/srv/recordings:ro
       - thumbnails:/srv/thumbnails
+    devices:
+      - ${CARINA_DRI:-/dev/null}:${CARINA_DRI:-/dev/null}
+    group_add:
+      - '${CARINA_DRI_VIDEO_GID:-0}'
+      - '${CARINA_DRI_RENDER_GID:-65534}'
     tty: true
     ports:
       - ${API_PORT:-8081}:8080
