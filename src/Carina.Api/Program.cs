@@ -45,6 +45,7 @@ builder.Services.AddOpenApi(options =>
     options.AddOperationTransformer<UnhandledFailureResponseTransformer>();
     options.AddOperationTransformer<OperationNamingTransformer>();
     options.AddOperationTransformer<SearchVocabularyTransformer>();
+    options.AddOperationTransformer<QueryInputTransformer>();
 });
 
 WebApplication app = builder.Build();
@@ -81,6 +82,7 @@ app.MapGet(
     .WithTags(PlaybackSurfaces.Tag)
     .WithSummary(PlaybackSurfaces.HowARecordingIsPlayedInABrowser)
     .Produces<BaseResponder<PlaybackPlanResponder>>(StatusCodes.Status200OK, PlayDelivery.Json)
+    .Reads(PlaybackSurfaces.WhereThePlayingStarts, PlaybackSurfaces.WhichProfileThePictureIsEncodedIn)
     .WithEffect(EndpointEffect.Reading);
 
 app.MapGet(
@@ -101,6 +103,7 @@ app.MapGet(
     .WithTags(PlaybackSurfaces.Tag)
     .WithSummary(PlaybackSurfaces.AFrameFromWhereTheSliderIs)
     .Produces(StatusCodes.Status200OK, contentType: ScrubDelivery.MediaType)
+    .Reads(PlaybackSurfaces.WhereTheFrameIsTakenFrom)
     .WithEffect(EndpointEffect.Reading);
 
 try
