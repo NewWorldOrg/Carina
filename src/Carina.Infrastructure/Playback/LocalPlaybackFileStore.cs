@@ -1,6 +1,7 @@
 using Carina.Domain.Integrity;
 using Carina.Domain.Playback;
 using Carina.Domain.Recordings;
+using Carina.Domain.Streaming;
 
 using Microsoft.Extensions.Logging;
 
@@ -61,6 +62,13 @@ public sealed class LocalPlaybackFileStore(
 
             return null;
         }
+    }
+
+    public StreamSource? SourceOf(PlaybackFile file)
+    {
+        ArgumentNullException.ThrowIfNull(file);
+
+        return Where(file.Root, file.Name) is { } path ? new StreamSource(path) : null;
     }
 
     private string? Where(OutputRoot root, RecordingFileName fileName)
