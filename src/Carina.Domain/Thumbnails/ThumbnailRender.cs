@@ -1,13 +1,15 @@
+using Carina.Domain.Channels;
 using Carina.Domain.Recordings;
 
 namespace Carina.Domain.Thumbnails;
 
 public sealed record ThumbnailRequest
 {
-    public ThumbnailRequest(string source, string destination, TimeSpan at)
+    public ThumbnailRequest(string source, string destination, ServiceId service, TimeSpan at)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(source);
         ArgumentException.ThrowIfNullOrWhiteSpace(destination);
+        ArgumentNullException.ThrowIfNull(service);
 
         if (at < TimeSpan.Zero)
         {
@@ -16,12 +18,15 @@ public sealed record ThumbnailRequest
 
         Source = source;
         Destination = destination;
+        Service = service;
         At = at;
     }
 
     public string Source { get; }
 
     public string Destination { get; }
+
+    public ServiceId Service { get; }
 
     public TimeSpan At { get; }
 }

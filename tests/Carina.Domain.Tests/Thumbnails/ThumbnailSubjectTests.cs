@@ -1,3 +1,4 @@
+using Carina.Domain.Channels;
 using Carina.Domain.Recordings;
 using Carina.Domain.Thumbnails;
 
@@ -11,10 +12,12 @@ public sealed class ThumbnailSubjectTests
 
     private static readonly RecordingFileName FileName = RecordingFileName.For(Id, ".m2ts");
 
+    private static readonly ServiceId Service = new(1032);
+
     [Fact]
     public void ASubjectCarriesWhatTheLedgerSaysAboutTheRecording()
     {
-        var subject = new ThumbnailSubject(Id, Root, FileName, RecordingOutcome.Truncated, TimeSpan.FromMinutes(113));
+        var subject = new ThumbnailSubject(Id, Root, FileName, Service, RecordingOutcome.Truncated, TimeSpan.FromMinutes(113));
 
         Assert.Equal(Id, subject.Id);
         Assert.Equal(Root, subject.Root);
@@ -29,15 +32,15 @@ public sealed class ThumbnailSubjectTests
         Assert.Equal(
             "id",
             Assert.Throws<ArgumentNullException>(
-                () => new ThumbnailSubject(null!, Root, FileName, RecordingOutcome.Complete, TimeSpan.Zero)).ParamName);
+                () => new ThumbnailSubject(null!, Root, FileName, Service, RecordingOutcome.Complete, TimeSpan.Zero)).ParamName);
         Assert.Equal(
             "root",
             Assert.Throws<ArgumentNullException>(
-                () => new ThumbnailSubject(Id, null!, FileName, RecordingOutcome.Complete, TimeSpan.Zero)).ParamName);
+                () => new ThumbnailSubject(Id, null!, FileName, Service, RecordingOutcome.Complete, TimeSpan.Zero)).ParamName);
         Assert.Equal(
             "fileName",
             Assert.Throws<ArgumentNullException>(
-                () => new ThumbnailSubject(Id, Root, null!, RecordingOutcome.Complete, TimeSpan.Zero)).ParamName);
+                () => new ThumbnailSubject(Id, Root, null!, Service, RecordingOutcome.Complete, TimeSpan.Zero)).ParamName);
     }
 
     [Fact]
@@ -45,7 +48,7 @@ public sealed class ThumbnailSubjectTests
         => Assert.Equal(
             "outcome",
             Assert.Throws<ArgumentOutOfRangeException>(
-                () => new ThumbnailSubject(Id, Root, FileName, (RecordingOutcome)9, TimeSpan.Zero)).ParamName);
+                () => new ThumbnailSubject(Id, Root, FileName, Service, (RecordingOutcome)9, TimeSpan.Zero)).ParamName);
 
     [Fact]
     public void ARecordingShorterThanNothingIsRefused()
@@ -56,6 +59,20 @@ public sealed class ThumbnailSubjectTests
                     Id,
                     Root,
                     FileName,
+                    Service,
                     RecordingOutcome.Complete,
                     TimeSpan.FromMilliseconds(-1))).ParamName);
+
+    [Fact]
+    public void ASubjectNamesTheServiceThePictureHasToComeFrom()
+        => Assert.Equal(
+            "service",
+            Assert.Throws<ArgumentNullException>(
+                () => new ThumbnailSubject(
+                    Id,
+                    Root,
+                    FileName,
+                    null!,
+                    RecordingOutcome.Complete,
+                    TimeSpan.Zero)).ParamName);
 }

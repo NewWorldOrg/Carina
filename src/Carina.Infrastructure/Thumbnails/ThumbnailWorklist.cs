@@ -1,3 +1,4 @@
+using Carina.Domain.Channels;
 using Carina.Domain.Recordings;
 using Carina.Domain.Thumbnails;
 using Carina.Infrastructure.Persistence;
@@ -31,6 +32,7 @@ public sealed class ThumbnailWorklist(CarinaDbContext context) : IThumbnailWorkl
                 recording.Id,
                 recording.OutputRoot,
                 recording.FileName,
+                recording.ServiceId,
                 recording.Outcome,
                 recording.WrittenDurationMs))
             .ToListAsync(cancellationToken);
@@ -89,6 +91,7 @@ public sealed class ThumbnailWorklist(CarinaDbContext context) : IThumbnailWorkl
             recording.Id,
             recording.OutputRoot,
             recording.FileName,
+            recording.ServiceId,
             outcome,
             recording.Written);
     }
@@ -110,6 +113,7 @@ public sealed class ThumbnailWorklist(CarinaDbContext context) : IThumbnailWorkl
             row.Id,
             row.OutputRoot,
             row.FileName,
+            row.Service,
             outcome,
             TimeSpan.FromMilliseconds(row.WrittenDurationMs));
     }
@@ -118,6 +122,7 @@ public sealed class ThumbnailWorklist(CarinaDbContext context) : IThumbnailWorkl
         RecordingId Id,
         OutputRoot OutputRoot,
         RecordingFileName FileName,
+        ServiceId Service,
         RecordingOutcome? Outcome,
         long WrittenDurationMs);
 }

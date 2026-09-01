@@ -1,3 +1,4 @@
+using Carina.Domain.Channels;
 using Carina.Domain.Recordings;
 using Carina.Domain.Thumbnails;
 
@@ -67,6 +68,7 @@ public sealed class ThumbnailPlanTests
             id,
             new OutputRoot("bulk"),
             RecordingFileName.For(id, ".m2ts"),
+            new ServiceId(1032),
             outcome,
             written ?? TimeSpan.FromHours(2));
     }

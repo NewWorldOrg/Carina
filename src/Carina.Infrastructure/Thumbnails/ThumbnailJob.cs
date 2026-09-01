@@ -204,6 +204,7 @@ public sealed class ThumbnailJob(
                 new ThumbnailRequest(
                     Path.Combine(source, subject.FileName.Value),
                     Path.Combine(settings.WrittenTo!, subject.Id.Wire + Extension),
+                    subject.Service,
                     plan.At),
                 cancellationToken);
 
