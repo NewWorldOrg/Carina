@@ -22,6 +22,7 @@ public sealed record RecordingBroadcastGroupResponder(string? Key, BroadcastGrou
 public sealed record RecordingWindowResponder(DateTime Start, DateTime End, long DurationMs);
 
 public sealed record RecordingDropsResponder(
+    QualityLevel Quality,
     bool CcMeasured,
     long? CcDroppedPackets,
     long? CcTotalPackets,
@@ -101,6 +102,7 @@ public sealed record RecordingResponder(
             recording.FileName.Value,
             recording.TunerDeviceId?.Value,
             new RecordingDropsResponder(
+                RecordingQuality.Of(recording.Counters, recording.ScrambledPackets),
                 recording.Counters.Measured,
                 recording.Counters.Dropped,
                 recording.Counters.Total,

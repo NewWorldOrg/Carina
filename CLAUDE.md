@@ -317,6 +317,24 @@ nothing.
   plainly. What they catch is the ordinary way somebody would write it, not every
   way there is.
 
+- **What a caller has to send is in the document.** A handler that reads a query
+  input the framework never saw — indexed off `Request.Query` rather than declared
+  as an argument — declares it beside its mapping, and the generated client can
+  send it. What holds that is a feature test: the source of the HTTP surface is
+  read for every query name a handler asks for, and each one is looked for in the
+  served document under the path that file declares. A name read on a path the
+  document disowns is listed rather than passed over, so a new one is a deliberate
+  act.
+
+  **It is a trip wire, not a proof.** It reads source text, so it sees the two
+  ordinary spellings — the indexer and `TryGetValue` — and reports rather than
+  skips a name it cannot follow: one built out of pieces, one held in a variable,
+  one moved into a helper of its own. What walks straight past is a handler that
+  never names what it reads — the whole query string, or the collection iterated.
+  The programme search does exactly that, and its vocabulary is held in the
+  document by a rule of its own. Headers, cookies and bodies are outside it, and a
+  test says so.
+
 - **A stop the driver was asked for exits 0; anything else exits 70.** Coming
   back is the supervisor's half of the deal, which is why `on-failure` is the one
   restart policy the driver must never be given.
