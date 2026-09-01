@@ -29,4 +29,24 @@ public sealed class PlaybackTicketRuleTests
             AuthenticationBypasses.PlaybackTicketHandling,
             AuthenticationBypasses.Logging));
     }
+
+    [Fact]
+    public void TheTicketTravelsOnTheAuthorizationHeaderAndOnlyOneFileReadsIt()
+    {
+        Assert.Equal(
+            ["Carina.Api/Authentication/PlaybackTicketCarrier.cs"],
+            SourceScan.FilesMentioning(
+                RepositoryLayout.SourceDirectory,
+                [.. AuthenticationBypasses.ReadingTheAuthorizationHeader]));
+    }
+
+    [Fact]
+    public void NothingAnywhereTurnsOnTheLoggingThatWouldWriteDownWholeRequestHeaders()
+    {
+        Assert.Empty(SourceScan.FilesMentioning(
+            RepositoryLayout.SourceDirectory,
+            "AddHttpLogging",
+            "UseHttpLogging",
+            "UseDeveloperExceptionPage"));
+    }
 }

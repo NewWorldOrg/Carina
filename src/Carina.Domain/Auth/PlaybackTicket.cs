@@ -6,7 +6,7 @@ using Carina.Domain.Base;
 
 namespace Carina.Domain.Auth;
 
-public sealed record IssuedPlaybackTicket(string InTheClear, PlaybackTicket Held)
+public sealed record IssuedPlaybackTicket(string InTheClear, DateTime LapsesAt)
 {
     public override string ToString() => "an issued playback ticket";
 }
@@ -29,16 +29,22 @@ public sealed class PlaybackTicket
 
     public DateTime IssuedAt { get; }
 
-    public static IssuedPlaybackTicket Issue(Subject subject, PlaybackTarget target, DateTime at)
+    public static PlaybackTicket Issue(
+        Subject subject,
+        PlaybackTarget target,
+        DateTime at,
+        out string inTheClear)
     {
         ArgumentNullException.ThrowIfNull(subject);
         ArgumentNullException.ThrowIfNull(target);
 
-        string inTheClear = Unguessable.Issue();
+        inTheClear = Unguessable.Issue();
 
-        return new IssuedPlaybackTicket(
-            inTheClear,
-            new PlaybackTicket(DigestOf(inTheClear), subject, target, UtcTimes.Required(at, nameof(at))));
+        return new PlaybackTicket(
+            DigestOf(inTheClear),
+            subject,
+            target,
+            UtcTimes.Required(at, nameof(at)));
     }
 
     public static string DigestOf(string offered)
@@ -53,7 +59,14 @@ public sealed class PlaybackTicket
         ArgumentNullException.ThrowIfNull(policy);
         UtcTimes.Required(now, nameof(now));
 
-        return now >= IssuedAt + policy.Lifetime;
+        return now >= LapsesAt(policy);
+    }
+
+    public DateTime LapsesAt(PlaybackTicketPolicy policy)
+    {
+        ArgumentNullException.ThrowIfNull(policy);
+
+        return IssuedAt + policy.Lifetime;
     }
 
     public bool Opens(PlaybackTarget target) => Target.Equals(target);

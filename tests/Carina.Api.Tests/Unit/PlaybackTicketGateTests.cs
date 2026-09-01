@@ -26,12 +26,12 @@ public sealed class PlaybackTicketGateTests
     public async Task ATicketForThisRecordingReachesItAndSaysWhoIsWatching()
     {
         PlaybackTicketStore tickets = Store(out _);
-        IssuedPlaybackTicket issued = tickets.Issue(Watcher, Seven);
+        IssuedPlaybackTicket issued = Issued(tickets, Watcher, Seven);
         Served served = await ServeAsync(tickets, Offering(issued.InTheClear), Seven);
 
         Assert.Equal(StatusCodes.Status200OK, served.Status);
         Assert.Equal(Watcher, served.Watcher);
-        Assert.Equal(TheContent, served.Body);
+        Assert.Equal($"{TheContent} for {Seven.Value}", served.Body);
     }
 
     [Fact]
@@ -52,17 +52,17 @@ public sealed class PlaybackTicketGateTests
         Assert.Equal(StatusCodes.Status403Forbidden, refused.StatusAtTheFirstByte);
 
         PlaybackTicketStore tickets = Store(out _);
-        IssuedPlaybackTicket issued = tickets.Issue(Watcher, Seven);
+        IssuedPlaybackTicket issued = Issued(tickets, Watcher, Seven);
         Served served = await ServeAsync(tickets, Offering(issued.InTheClear), Seven);
 
         Assert.Equal(StatusCodes.Status200OK, served.StatusAtTheFirstByte);
     }
 
     [Fact]
-    public async Task ASpentTicketIsRefusedTheSecondTime()
+    public async Task ATicketAdmitsOneRequestSoAPlayerThatComesBackForARangeIsRefused()
     {
         PlaybackTicketStore tickets = Store(out _);
-        IssuedPlaybackTicket issued = tickets.Issue(Watcher, Seven);
+        IssuedPlaybackTicket issued = Issued(tickets, Watcher, Seven);
 
         Assert.Equal(StatusCodes.Status200OK, (await ServeAsync(tickets, Offering(issued.InTheClear), Seven)).Status);
 
@@ -76,7 +76,7 @@ public sealed class PlaybackTicketGateTests
     public async Task ATicketForAnotherRecordingDoesNotOpenThisOne()
     {
         PlaybackTicketStore tickets = Store(out _);
-        IssuedPlaybackTicket issued = tickets.Issue(Watcher, Eight);
+        IssuedPlaybackTicket issued = Issued(tickets, Watcher, Eight);
         Served served = await ServeAsync(tickets, Offering(issued.InTheClear), Seven);
 
         Assert.Equal(StatusCodes.Status403Forbidden, served.Status);
@@ -87,7 +87,7 @@ public sealed class PlaybackTicketGateTests
     public async Task ALapsedTicketIsRefused()
     {
         PlaybackTicketStore tickets = Store(out WoundClock clock);
-        IssuedPlaybackTicket issued = tickets.Issue(Watcher, Seven);
+        IssuedPlaybackTicket issued = Issued(tickets, Watcher, Seven);
 
         clock.Wind(PlaybackTicketPolicy.Default.Lifetime);
 
@@ -97,24 +97,29 @@ public sealed class PlaybackTicketGateTests
     }
 
     [Fact]
-    public async Task ABrowserThatCarriesItsSessionCookieIsNotServedThroughATicket()
+    public async Task NeitherAnswerMayBeCachedByAnythingInFront()
     {
         PlaybackTicketStore tickets = Store(out _);
-        IssuedPlaybackTicket issued = tickets.Issue(Watcher, Seven);
-        HttpContext context = Offering(issued.InTheClear);
-        context.Request.Headers.Cookie = $"{SessionCookie.Name}=anything";
+        IssuedPlaybackTicket issued = Issued(tickets, Watcher, Seven);
 
-        Served served = await ServeAsync(tickets, context, Seven);
+        Served[] answers =
+        [
+            await ServeAsync(tickets, Offering(issued.InTheClear), Seven),
+            await ServeAsync(tickets, new DefaultHttpContext(), Seven),
+        ];
 
-        Assert.Equal(StatusCodes.Status403Forbidden, served.Status);
-        Assert.DoesNotContain(TheContent, served.Body, StringComparison.Ordinal);
+        Assert.All(answers, answer =>
+        {
+            Assert.Equal(PlaybackTicketGate.NeverCached, answer.Headers.CacheControl);
+            Assert.Equal(HeaderNames.Authorization, answer.Headers.Vary);
+        });
     }
 
     [Fact]
     public async Task TheRefusalNeverRepeatsTheTicketItWasOffered()
     {
         PlaybackTicketStore tickets = Store(out _);
-        IssuedPlaybackTicket issued = tickets.Issue(Watcher, Eight);
+        IssuedPlaybackTicket issued = Issued(tickets, Watcher, Eight);
         HttpContext context = Offering(issued.InTheClear);
         Served served = await ServeAsync(tickets, context, Seven);
 
@@ -129,10 +134,10 @@ public sealed class PlaybackTicketGateTests
     public async Task EveryRefusalReadsTheSameSoNobodyLearnsWhichThingWasWrong()
     {
         PlaybackTicketStore tickets = Store(out WoundClock clock);
-        IssuedPlaybackTicket spent = tickets.Issue(Watcher, Seven);
+        IssuedPlaybackTicket spent = Issued(tickets, Watcher, Seven);
         await ServeAsync(tickets, Offering(spent.InTheClear), Seven);
-        IssuedPlaybackTicket forAnother = tickets.Issue(Watcher, Eight);
-        IssuedPlaybackTicket lapsing = tickets.Issue(Watcher, Seven);
+        IssuedPlaybackTicket forAnother = Issued(tickets, Watcher, Eight);
+        IssuedPlaybackTicket lapsing = Issued(tickets, Watcher, Seven);
 
         List<Served> refusals =
         [
@@ -166,6 +171,18 @@ public sealed class PlaybackTicketGateTests
         return context;
     }
 
+    private static IssuedPlaybackTicket Issued(
+        PlaybackTicketStore store,
+        Subject subject,
+        PlaybackTarget target)
+    {
+        IssuedPlaybackTicket? issued = store.Issue(subject, target);
+
+        Assert.NotNull(issued);
+
+        return issued;
+    }
+
     private static PlaybackTicketStore Store(out WoundClock clock)
     {
         clock = new WoundClock(At);
@@ -182,14 +199,14 @@ public sealed class PlaybackTicketGateTests
         context.Response.Body = body;
         Subject? watcher = null;
 
-        await new PlaybackTicketGate(tickets).ServeAsync(
+        await new PlaybackTicketGate(tickets).AdmitOnceAsync(
             context,
             target,
-            async admitted =>
+            async (admitted, opened) =>
             {
                 watcher = admitted;
 
-                await context.Response.WriteAsync(TheContent);
+                await context.Response.WriteAsync($"{TheContent} for {opened.Value}");
             });
 
         return new Served(

@@ -13,10 +13,10 @@ public sealed class PlaybackTicketTests
     [Fact]
     public void AnIssuedTicketIsAsUnguessableAsASessionId()
     {
-        IssuedPlaybackTicket issued = Issue();
+        Issue(out string inTheClear);
 
-        Assert.True(Unguessable.IsOne(issued.InTheClear));
-        Assert.Equal(Unguessable.Length, issued.InTheClear.Length);
+        Assert.True(Unguessable.IsOne(inTheClear));
+        Assert.Equal(Unguessable.Length, inTheClear.Length);
     }
 
     [Fact]
@@ -26,36 +26,38 @@ public sealed class PlaybackTicketTests
 
         for (int drawn = 0; drawn < 1000; drawn++)
         {
-            Assert.True(seen.Add(Issue().InTheClear));
+            Issue(out string inTheClear);
+
+            Assert.True(seen.Add(inTheClear));
         }
     }
 
     [Fact]
     public void WhatIsHeldIsADigestAndNotTheTicketItself()
     {
-        IssuedPlaybackTicket issued = Issue();
+        PlaybackTicket held = Issue(out string inTheClear);
 
-        Assert.NotEqual(issued.InTheClear, issued.Held.Digest);
-        Assert.Equal(PlaybackTicket.DigestOf(issued.InTheClear), issued.Held.Digest);
+        Assert.NotEqual(inTheClear, held.Digest);
+        Assert.Equal(PlaybackTicket.DigestOf(inTheClear), held.Digest);
     }
 
     [Fact]
     public void NothingAHeldTicketCanBeAskedForGivesTheTicketBack()
     {
-        IssuedPlaybackTicket issued = Issue();
+        PlaybackTicket held = Issue(out string inTheClear);
 
         IEnumerable<string> answers = typeof(PlaybackTicket)
             .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-            .Select(property => property.GetValue(issued.Held)?.ToString() ?? string.Empty)
-            .Append(issued.Held.ToString() ?? string.Empty);
+            .Select(property => property.GetValue(held)?.ToString() ?? string.Empty)
+            .Append(held.ToString() ?? string.Empty);
 
-        Assert.DoesNotContain(answers, answer => answer.Contains(issued.InTheClear, StringComparison.Ordinal));
+        Assert.DoesNotContain(answers, answer => answer.Contains(inTheClear, StringComparison.Ordinal));
     }
 
     [Fact]
     public void AnIssuedTicketSaysNothingWhenItIsPrinted()
     {
-        IssuedPlaybackTicket issued = Issue();
+        IssuedPlaybackTicket issued = new(Unguessable.Issue(), Noon);
 
         Assert.DoesNotContain(issued.InTheClear, issued.ToString(), StringComparison.Ordinal);
     }
@@ -71,29 +73,37 @@ public sealed class PlaybackTicketTests
     public void ATicketCarriesWhoAskedForItAndWhatItOpens()
     {
         PlaybackTarget target = PlaybackTarget.LiveChannel("31");
-        IssuedPlaybackTicket issued = PlaybackTicket.Issue(Watcher, target, Noon);
+        PlaybackTicket held = PlaybackTicket.Issue(Watcher, target, Noon, out _);
 
-        Assert.Equal(Watcher, issued.Held.Subject);
-        Assert.Equal(target, issued.Held.Target);
-        Assert.Equal(Noon, issued.Held.IssuedAt);
+        Assert.Equal(Watcher, held.Subject);
+        Assert.Equal(target, held.Target);
+        Assert.Equal(Noon, held.IssuedAt);
     }
 
     [Fact]
     public void ATicketOpensTheOneThingItWasIssuedFor()
     {
-        IssuedPlaybackTicket issued = PlaybackTicket.Issue(Watcher, PlaybackTarget.Recording("7"), Noon);
+        PlaybackTicket held = PlaybackTicket.Issue(Watcher, PlaybackTarget.Recording("7"), Noon, out _);
 
-        Assert.True(issued.Held.Opens(PlaybackTarget.Recording("7")));
-        Assert.False(issued.Held.Opens(PlaybackTarget.Recording("8")));
-        Assert.False(issued.Held.Opens(PlaybackTarget.LiveChannel("7")));
+        Assert.True(held.Opens(PlaybackTarget.Recording("7")));
+        Assert.False(held.Opens(PlaybackTarget.Recording("8")));
+        Assert.False(held.Opens(PlaybackTarget.LiveChannel("7")));
+    }
+
+    [Fact]
+    public void ATicketDiesALifetimeAfterItWasIssued()
+    {
+        PlaybackTicket held = Issue(out _);
+
+        Assert.Equal(Noon + PlaybackTicketPolicy.Default.Lifetime, held.LapsesAt(PlaybackTicketPolicy.Default));
     }
 
     [Fact]
     public void ATicketHasNotLapsedASecondBeforeItsLifetimeIsUp()
     {
-        IssuedPlaybackTicket issued = Issue();
+        PlaybackTicket held = Issue(out _);
 
-        Assert.False(issued.Held.HasLapsed(
+        Assert.False(held.HasLapsed(
             Noon + PlaybackTicketPolicy.Default.Lifetime - TimeSpan.FromSeconds(1),
             PlaybackTicketPolicy.Default));
     }
@@ -101,9 +111,9 @@ public sealed class PlaybackTicketTests
     [Fact]
     public void ATicketHasLapsedTheMomentItsLifetimeIsUp()
     {
-        IssuedPlaybackTicket issued = Issue();
+        PlaybackTicket held = Issue(out _);
 
-        Assert.True(issued.Held.HasLapsed(
+        Assert.True(held.HasLapsed(
             Noon + PlaybackTicketPolicy.Default.Lifetime,
             PlaybackTicketPolicy.Default));
     }
@@ -111,9 +121,9 @@ public sealed class PlaybackTicketTests
     [Fact]
     public void ATicketHasLapsedASecondAfterItsLifetimeIsUp()
     {
-        IssuedPlaybackTicket issued = Issue();
+        PlaybackTicket held = Issue(out _);
 
-        Assert.True(issued.Held.HasLapsed(
+        Assert.True(held.HasLapsed(
             Noon + PlaybackTicketPolicy.Default.Lifetime + TimeSpan.FromSeconds(1),
             PlaybackTicketPolicy.Default));
     }
@@ -141,24 +151,28 @@ public sealed class PlaybackTicketTests
     [Fact]
     public void ATicketIsIssuedAgainstAClockKeptInUtc()
     {
-        Assert.Throws<ArgumentException>(
-            () => PlaybackTicket.Issue(Watcher, PlaybackTarget.Recording("7"), DateTime.SpecifyKind(Noon, DateTimeKind.Local)));
+        Assert.Throws<ArgumentException>(() => PlaybackTicket.Issue(
+            Watcher,
+            PlaybackTarget.Recording("7"),
+            DateTime.SpecifyKind(Noon, DateTimeKind.Local),
+            out _));
 
-        IssuedPlaybackTicket issued = Issue();
+        PlaybackTicket held = Issue(out _);
 
-        Assert.Throws<ArgumentException>(
-            () => issued.Held.HasLapsed(DateTime.SpecifyKind(Noon, DateTimeKind.Unspecified), PlaybackTicketPolicy.Default));
+        Assert.Throws<ArgumentException>(() => held.HasLapsed(
+            DateTime.SpecifyKind(Noon, DateTimeKind.Unspecified),
+            PlaybackTicketPolicy.Default));
     }
 
     [Fact]
     public void ATicketIsIssuedToSomeoneForSomething()
     {
         Assert.Throws<ArgumentNullException>(
-            () => PlaybackTicket.Issue(null!, PlaybackTarget.Recording("7"), Noon));
+            () => PlaybackTicket.Issue(null!, PlaybackTarget.Recording("7"), Noon, out _));
         Assert.Throws<ArgumentNullException>(
-            () => PlaybackTicket.Issue(Watcher, null!, Noon));
+            () => PlaybackTicket.Issue(Watcher, null!, Noon, out _));
     }
 
-    private static IssuedPlaybackTicket Issue()
-        => PlaybackTicket.Issue(Watcher, PlaybackTarget.Recording("7"), Noon);
+    private static PlaybackTicket Issue(out string inTheClear)
+        => PlaybackTicket.Issue(Watcher, PlaybackTarget.Recording("7"), Noon, out inTheClear);
 }

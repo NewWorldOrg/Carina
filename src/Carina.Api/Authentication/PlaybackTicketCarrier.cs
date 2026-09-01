@@ -8,8 +8,6 @@ namespace Carina.Api.Authentication;
 
 public static class PlaybackTicketCarrier
 {
-    public const string TheUser = "ticket";
-
     private const string Bearer = "Bearer ";
 
     private const string Basic = "Basic ";
@@ -19,11 +17,6 @@ public static class PlaybackTicketCarrier
     public static string? OfferedBy(HttpRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-
-        if (request.Cookies.ContainsKey(SessionCookie.Name))
-        {
-            return null;
-        }
 
         if (request.Headers[HeaderNames.Authorization] is not [string offered])
         {

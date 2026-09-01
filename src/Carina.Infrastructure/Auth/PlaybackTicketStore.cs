@@ -8,19 +8,28 @@ public sealed class PlaybackTicketStore(TimeProvider clock, PlaybackTicketPolicy
 {
     public const int MostHeldAtOnce = 256;
 
+    public const int MostHeldPerSubject = 8;
+
     private readonly ConcurrentDictionary<string, PlaybackTicket> held = new(StringComparer.Ordinal);
 
     public int Count => held.Count;
 
-    public IssuedPlaybackTicket Issue(Subject subject, PlaybackTarget target)
+    public IssuedPlaybackTicket? Issue(Subject subject, PlaybackTarget target)
     {
+        ArgumentNullException.ThrowIfNull(subject);
+
         Sweep();
 
-        IssuedPlaybackTicket issued = PlaybackTicket.Issue(subject, target, Now());
+        if (held.Count >= MostHeldAtOnce || HeldFor(subject) >= MostHeldPerSubject)
+        {
+            return null;
+        }
 
-        held[issued.Held.Digest] = issued.Held;
+        PlaybackTicket issued = PlaybackTicket.Issue(subject, target, Now(), out string inTheClear);
 
-        return issued;
+        held[issued.Digest] = issued;
+
+        return new IssuedPlaybackTicket(inTheClear, issued.LapsesAt(policy));
     }
 
     public Subject? Spend(string? offered, PlaybackTarget target)
@@ -39,6 +48,8 @@ public sealed class PlaybackTicketStore(TimeProvider clock, PlaybackTicketPolicy
 
     private DateTime Now() => clock.GetUtcNow().UtcDateTime;
 
+    private int HeldFor(Subject subject) => held.Count(entry => entry.Value.Subject.Equals(subject));
+
     private void Sweep()
     {
         DateTime now = Now();
@@ -49,15 +60,6 @@ public sealed class PlaybackTicketStore(TimeProvider clock, PlaybackTicketPolicy
             {
                 held.TryRemove(entry);
             }
-        }
-
-        while (held.Count >= MostHeldAtOnce)
-        {
-            KeyValuePair<string, PlaybackTicket> oldest = held
-                .OrderBy(entry => entry.Value.IssuedAt)
-                .First();
-
-            held.TryRemove(oldest);
         }
     }
 }

@@ -23,7 +23,7 @@ public sealed class PlaybackTicketCarrierTests
     {
         string ticket = Unguessable.Issue();
 
-        Assert.Equal(ticket, PlaybackTicketCarrier.OfferedBy(Asking(Basic(PlaybackTicketCarrier.TheUser, ticket))));
+        Assert.Equal(ticket, PlaybackTicketCarrier.OfferedBy(Asking(Basic("ticket", ticket))));
     }
 
     [Fact]
@@ -55,21 +55,11 @@ public sealed class PlaybackTicketCarrierTests
     }
 
     [Fact]
-    public void ARequestCarryingTheSessionCookieOffersNoTicketBecauseThatRouteHasOne()
+    public void TheTicketIsReadOffTheHeaderAloneSoAStaleCookieCannotTakeItAway()
     {
         string ticket = Unguessable.Issue();
         HttpRequest request = Asking($"Bearer {ticket}");
-        request.Headers.Cookie = $"{SessionCookie.Name}=anything";
-
-        Assert.Null(PlaybackTicketCarrier.OfferedBy(request));
-    }
-
-    [Fact]
-    public void ARequestCarryingSomeOtherCookieStillOffersItsTicket()
-    {
-        string ticket = Unguessable.Issue();
-        HttpRequest request = Asking($"Bearer {ticket}");
-        request.Headers.Cookie = "theme=dark";
+        request.Headers.Cookie = $"{SessionCookie.Name}=stale";
 
         Assert.Equal(ticket, PlaybackTicketCarrier.OfferedBy(request));
     }
@@ -114,7 +104,7 @@ public sealed class PlaybackTicketCarrierTests
     [Fact]
     public void BasicCredentialsWithNoPasswordOfferNothing()
     {
-        Assert.Null(PlaybackTicketCarrier.OfferedBy(Asking(Basic(PlaybackTicketCarrier.TheUser, string.Empty))));
+        Assert.Null(PlaybackTicketCarrier.OfferedBy(Asking(Basic("ticket", string.Empty))));
     }
 
     [Fact]
