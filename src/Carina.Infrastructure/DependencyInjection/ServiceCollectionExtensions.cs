@@ -135,6 +135,8 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<OidcDirectoryCache>();
         services.TryAddSingleton<IOidcReachability, OidcReachability>();
         services.TryAddSingleton<IPendingOidcLoginStore, PendingOidcLoginStore>();
+        services.TryAddSingleton(PlaybackTicketPolicy.Default);
+        services.TryAddSingleton<IPlaybackTicketStore, PlaybackTicketStore>();
         services.TryAddSingleton<IPasswordHasher, Argon2idPasswordHasher>();
         services.TryAddSingleton<ILoginThrottle, LoginThrottle>();
         services.AddSingleton<IDriverStatusReader, MonitoredDriverStatusReader>();

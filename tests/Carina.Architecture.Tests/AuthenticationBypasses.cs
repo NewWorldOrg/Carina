@@ -43,6 +43,12 @@ public static class AuthenticationBypasses
         "secret!.Value",
     ];
 
+    public static IReadOnlyList<string> PlaybackTicketHandling { get; } =
+    [
+        "PlaybackTicket",
+        "InTheClear",
+    ];
+
     public static IReadOnlyList<string> Logging { get; } =
     [
         "ILogger",
