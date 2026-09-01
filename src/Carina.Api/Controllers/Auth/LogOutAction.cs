@@ -18,12 +18,13 @@ public sealed class LogOutAction(AuthSessionService sessions) : ControllerBase
     [ProducesResponseType<BaseResponder<string>>(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Invoke(CancellationToken cancellationToken)
     {
-        if (SessionClaims.SessionOf(User) is not { } current)
+        if (SessionClaims.SubjectOf(User) is not { } subject
+            || SessionClaims.SessionOf(User) is not { } current)
         {
             return Unauthorized(BaseResponder<string>.Error("This request carries no session."));
         }
 
-        await sessions.LogOutAsync(current, cancellationToken);
+        await sessions.LogOutAsync(subject, current, cancellationToken);
 
         Response.Cookies.Delete(
             SessionCookie.Name,

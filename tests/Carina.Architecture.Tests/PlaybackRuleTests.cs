@@ -6,6 +6,10 @@ public sealed class PlaybackRuleTests
 
     private const string Scrub = "/Carina.Api/Playback/ScrubDelivery.cs";
 
+    private const string Play = "/Carina.Api/Playback/PlayDelivery.cs";
+
+    private const string Picture = "/Carina.Api/Playback/ThumbnailDelivery.cs";
+
     private const string WhereItIsMapped = "/Carina.Api/Program.cs";
 
     private const string WhereTheDocumentSaysItExists = "/Carina.Api/OpenApi/ApiDocumentTransformer.cs";
@@ -14,7 +18,7 @@ public sealed class PlaybackRuleTests
     public void TheOnlyPlacesThatSpellTheDeliveryPathAreWhereItIsDeclaredAndWhereTheDocumentDisownsIt()
     {
         Assert.Equal(
-            [WhereTheDocumentSaysItExists, Scrub, Delivery],
+            [WhereTheDocumentSaysItExists, Play, Scrub, Picture, Delivery],
             PlaybackRules.FilesSpellingTheDeliveryPath(RepositoryLayout.SourceDirectory));
     }
 
@@ -57,9 +61,24 @@ public sealed class PlaybackRuleTests
     }
 
     [Fact]
-    public void NothingOnTheDeliveryPathTranscodesWhileItPlays()
+    public void TheOnlySurfaceUnderThisPrefixThatTranscodesWhileItPlaysIsTheOneABrowserPlaysThrough()
     {
-        Assert.Empty(PlaybackRules.WhatTheDeliveryTranscodes(RepositoryLayout.SourceDirectory));
+        Assert.Equal(
+            [Play],
+            PlaybackRules.WhatTheDeliveryTranscodes(RepositoryLayout.SourceDirectory));
+
+        Assert.Empty(PlaybackRules.WhatTranscodesIn(RepositoryLayout.SourceDirectory, Delivery));
+    }
+
+    [Fact]
+    public void TheBrowserSurfaceSaysHowTheRecordingEndedAndWhatSeekingCosts()
+    {
+        string play = File.ReadAllText(Path.Combine(RepositoryLayout.SourceDirectory, Play.TrimStart('/')));
+
+        Assert.Contains("PlaybackHeaders.Say(context.Response, plan)", play, StringComparison.Ordinal);
+        Assert.Contains("PlaybackHeaders.Say(context.Response, viewing.Standing)", play, StringComparison.Ordinal);
+        Assert.Contains("AcceptRanges = NoSeeking", play, StringComparison.Ordinal);
+        Assert.DoesNotContain(PlaybackRules.DeliveryEndpoint, play, StringComparison.Ordinal);
     }
 
     private static string Mapping()

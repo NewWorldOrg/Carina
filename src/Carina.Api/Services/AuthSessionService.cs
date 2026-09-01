@@ -5,6 +5,7 @@ namespace Carina.Api.Services;
 
 public sealed class AuthSessionService(
     IAuthSessionRepository sessions,
+    IPlaybackGrantStore grants,
     SessionPolicy policy,
     TimeProvider clock)
 {
@@ -49,14 +50,22 @@ public sealed class AuthSessionService(
             await sessions.SaveAsync(held, cancellationToken);
         }
 
+        grants.RevokeEverythingOf(subject);
+
         return ServiceResult.Success();
     }
 
-    public async Task<ServiceResult> LogOutAsync(SessionId current, CancellationToken cancellationToken)
+    public async Task<ServiceResult> LogOutAsync(
+        Subject subject,
+        SessionId current,
+        CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(subject);
         ArgumentNullException.ThrowIfNull(current);
 
         await sessions.DeleteAsync(current, cancellationToken);
+
+        grants.RevokeEverythingOf(subject);
 
         return ServiceResult.Success();
     }

@@ -54,6 +54,11 @@ public sealed class DefaultDenyAuthenticationMiddleware
             return true;
         }
 
+        if (context.GetEndpoint().IsTicketed() && PlaybackTicketCarrier.OfferedBy(context.Request) is not null)
+        {
+            return true;
+        }
+
         IEnumerable<AuthenticationScheme> registered = await schemes.GetAllSchemesAsync();
 
         return !registered.Any();

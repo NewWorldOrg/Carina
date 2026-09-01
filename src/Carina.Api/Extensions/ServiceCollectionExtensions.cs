@@ -39,6 +39,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<RecordingService>();
         services.AddScoped<IntegrityService>();
         services.AddScoped<PlaybackService>();
+        services.AddScoped<PlaybackTicketService>();
         services.AddScoped<StorageService>();
         services.AddSingleton<PlaybackTicketGate>();
 

@@ -183,6 +183,9 @@ public sealed class PlaybackTicketGateTests
         return issued;
     }
 
+    private static PlaybackGrantStore Grants()
+        => new(new WoundClock(At), PlaybackGrantPolicy.Default);
+
     private static PlaybackTicketStore Store(out WoundClock clock)
     {
         clock = new WoundClock(At);
@@ -199,7 +202,7 @@ public sealed class PlaybackTicketGateTests
         context.Response.Body = body;
         Subject? watcher = null;
 
-        await new PlaybackTicketGate(tickets).AdmitOnceAsync(
+        await new PlaybackTicketGate(tickets, Grants()).AdmitOnceAsync(
             context,
             target,
             async (admitted, opened) =>

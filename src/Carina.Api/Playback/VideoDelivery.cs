@@ -1,6 +1,4 @@
-using System.Buffers;
-using System.Globalization;
-
+using Carina.Api.Authentication;
 using Carina.Api.Common;
 using Carina.Api.Services;
 using Carina.Domain.Playback;
@@ -12,11 +10,9 @@ public static class VideoDelivery
 {
     public const string Path = "/api/videos/{id}";
 
-    public const int ChunkSize = 64 * 1024;
-
     public static readonly string[] Methods = [HttpMethods.Get, HttpMethods.Head];
 
-    public static async Task Invoke(HttpContext context, string id, PlaybackService playback)
+    public static Task Invoke(HttpContext context, string id, PlaybackService playback)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(playback);
@@ -27,9 +23,24 @@ public static class VideoDelivery
         {
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
 
-            return;
+            return Task.CompletedTask;
         }
 
+        if (context.User.Identity?.IsAuthenticated is true)
+        {
+            return ServeAsync(context, recordingId, playback);
+        }
+
+        return context.RequestServices
+            .GetRequiredService<PlaybackTicketGate>()
+            .AdmitForAsLongAsTheGrantLastsAsync(
+            context,
+            PlaybackTicketService.TargetOf(recordingId),
+            (_, _) => ServeAsync(context, recordingId, playback));
+    }
+
+    private static async Task ServeAsync(HttpContext context, RecordingId recordingId, PlaybackService playback)
+    {
         ServiceResult<PlaybackOffer, PlaybackFailure> offered =
             await playback.OfferAsync(recordingId, context.RequestAborted);
 
@@ -45,8 +56,7 @@ public static class VideoDelivery
 
         if (asked.Answer is RangeAnswer.OutOfReach)
         {
-            context.Response.StatusCode = StatusCodes.Status416RangeNotSatisfiable;
-            context.Response.Headers.ContentRange = Beyond(file.Bytes);
+            RangedFile.Refuse(context, file.Bytes);
 
             return;
         }
@@ -72,56 +82,9 @@ public static class VideoDelivery
         Describe(context, file, asked);
         reading.Seek(asked.From, SeekOrigin.Begin);
 
-        await HandOverAsync(reading, context.Response.Body, asked.Count, context.RequestAborted);
+        await RangedFile.HandOverAsync(reading, context.Response.Body, asked.Count, context.RequestAborted);
     }
 
     private static void Describe(HttpContext context, PlaybackFile file, ByteRange asked)
-    {
-        context.Response.ContentType = PlaybackMediaType.Of(file.Name);
-        context.Response.ContentLength = asked.Count;
-
-        if (asked.Answer is not RangeAnswer.Part)
-        {
-            context.Response.StatusCode = StatusCodes.Status200OK;
-
-            return;
-        }
-
-        context.Response.StatusCode = StatusCodes.Status206PartialContent;
-        context.Response.Headers.ContentRange = Part(asked, file.Bytes);
-    }
-
-    private static string Beyond(long size)
-        => string.Create(CultureInfo.InvariantCulture, $"{ByteRange.Unit} */{size}");
-
-    private static string Part(ByteRange asked, long size)
-        => string.Create(CultureInfo.InvariantCulture, $"{ByteRange.Unit} {asked.From}-{asked.Last}/{size}");
-
-    private static async Task HandOverAsync(Stream reading, Stream writing, long count, CancellationToken stopping)
-    {
-        byte[] buffer = ArrayPool<byte>.Shared.Rent(ChunkSize);
-
-        try
-        {
-            long left = count;
-
-            while (left > 0)
-            {
-                int wanted = (int)Math.Min(left, buffer.Length);
-                int read = await reading.ReadAsync(buffer.AsMemory(0, wanted), stopping);
-
-                if (read is 0)
-                {
-                    return;
-                }
-
-                await writing.WriteAsync(buffer.AsMemory(0, read), stopping);
-                left -= read;
-            }
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(buffer);
-        }
-    }
+        => RangedFile.Describe(context, PlaybackMediaType.Of(file.Name), asked, file.Bytes);
 }

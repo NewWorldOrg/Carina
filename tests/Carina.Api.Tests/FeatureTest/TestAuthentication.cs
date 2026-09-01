@@ -19,14 +19,22 @@ internal sealed class TestAuthenticationHandler(
 {
     public const string SchemeName = "Test";
 
+    public const string Tester = "tester";
+
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
-        if (!Request.Headers.ContainsKey("Authorization"))
+        if (Request.Headers.Authorization is not [string offered]
+            || !offered.StartsWith($"{SchemeName} ", StringComparison.Ordinal))
         {
             return Task.FromResult(AuthenticateResult.NoResult());
         }
 
-        var identity = new ClaimsIdentity([new Claim(ClaimTypes.Name, "tester")], SchemeName);
+        var identity = new ClaimsIdentity(
+            [
+                new Claim(ClaimTypes.Name, Tester),
+                new Claim(ClaimTypes.NameIdentifier, Tester),
+            ],
+            SchemeName);
         var ticket = new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName);
 
         return Task.FromResult(AuthenticateResult.Success(ticket));

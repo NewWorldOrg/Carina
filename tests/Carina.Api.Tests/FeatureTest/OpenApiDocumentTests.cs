@@ -133,7 +133,10 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "getStorage",
                 "getTunerHealth",
                 "getTuners",
+                "getVideoScrubFrame",
+                "getVideoThumbnail",
                 "impactOfRules",
+                "issueVideoTicket",
                 "listRecordings",
                 "listReservations",
                 "listRules",
@@ -142,6 +145,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "logIn",
                 "logOut",
                 "patchTuner",
+                "playVideo",
                 "previewRules",
                 "putOidcConfig",
                 "putSelectedChannel",
@@ -181,6 +185,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
 
         Assert.Equal(
             [
+                "videos",
                 "tuners",
                 "storage",
                 "services",

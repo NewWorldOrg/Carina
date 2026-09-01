@@ -34,6 +34,11 @@ public static class ThumbnailRules
         "IThumbnailRemaker",
         "ThumbnailFrameRequest",
         "IScrubFrames",
+        "IDrawnThumbnails",
+        "DrawnThumbnail",
+        "DrawnThumbnailRefusal",
+        "DrawnThumbnails",
+        "ThumbnailDelivery",
         "ScrubFrame",
         "ScrubRefusal",
         "Scrubber",
@@ -51,6 +56,7 @@ public static class ThumbnailRules
         "/Carina.Api/Responder/Recordings/RecordingDetailResponder.cs",
         "/Carina.Infrastructure/Recordings/DriverRecordingFileEraser.cs",
         "/Carina.Api/Playback/ScrubDelivery.cs",
+        "/Carina.Api/Playback/ThumbnailDelivery.cs",
         "/Carina.Api/Program.cs",
     ];
 

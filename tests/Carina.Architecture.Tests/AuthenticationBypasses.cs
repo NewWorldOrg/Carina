@@ -53,6 +53,7 @@ public static class AuthenticationBypasses
     public static IReadOnlyList<string> PlaybackTicketHandling { get; } =
     [
         "PlaybackTicket",
+        "PlaybackGrant",
         "InTheClear",
     ];
 
