@@ -1,0 +1,109 @@
+namespace Carina.Architecture.Tests;
+
+public sealed class FfmpegArgumentRuleTests
+{
+    private static readonly string[] Builders =
+    [
+        "/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs",
+        "/Carina.Infrastructure/Streaming/FfprobeInvocation.cs",
+        "/Carina.Infrastructure/Thumbnails/FfmpegInvocation.cs",
+    ];
+
+    private static readonly string[] Inventory =
+    [
+        "/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs string.Join(",
+        "/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs {kilobitsPerSecond}",
+        "/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs {size.Height}",
+        "/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs {size.Width}",
+        "/Carina.Infrastructure/Thumbnails/FfmpegInvocation.cs {width}",
+    ];
+
+    private static readonly string[] WordsForTextSomebodyElseWrote =
+    [
+        "Programme",
+        "programme",
+        "Channel",
+        "channel",
+        "Service",
+        "service",
+        "Title",
+        "title",
+        "Name",
+        "name",
+        "Summary",
+        "summary",
+        "Description",
+        "description",
+        "User",
+        "user",
+        "Query",
+        "query",
+        "Request",
+        "request",
+    ];
+
+    private static IEnumerable<string> Fillers
+        => Inventory.Select(entry => entry[(entry.IndexOf(' ', StringComparison.Ordinal) + 1)..]);
+
+    [Fact]
+    public void EveryPlaceThisRepositoryBuildsACommandLineForAnotherProgrammeIsOneOfThese()
+    {
+        Assert.Equal(Builders, FfmpegArgumentRules.BuildersOfACommandLine(RepositoryLayout.SourceDirectory));
+    }
+
+    [Fact]
+    public void EveryValueThatReachesACommandLineIsWrittenDownHere()
+    {
+        Assert.Equal(Inventory, FfmpegArgumentRules.WhatFillsACommandLine(RepositoryLayout.SourceDirectory));
+    }
+
+    [Fact]
+    public void NothingFillingACommandLineIsNamedForTextSomebodyElseWrote()
+    {
+        Assert.All(
+            Fillers,
+            filler => Assert.DoesNotContain(
+                WordsForTextSomebodyElseWrote,
+                word => filler.Contains(word, StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public void NoCommandLineIsBuiltByAddingOnePieceOfTextToAnother()
+    {
+        Assert.DoesNotContain("+", Fillers);
+    }
+
+    [Fact]
+    public void TheOnlyThingPutTogetherIsTheFilterChainAndItIsPutTogetherOutOfSteps()
+    {
+        Assert.Equal(
+            ["/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs string.Join("],
+            Inventory.Where(entry => entry.EndsWith("string.Join(", StringComparison.Ordinal)).ToArray());
+
+        string source = File.ReadAllText(Path.Combine(
+            RepositoryLayout.SourceDirectory,
+            "Carina.Infrastructure",
+            "Streaming",
+            "FfmpegLiveInvocation.cs"));
+
+        Assert.Contains("return string.Join(',', steps);", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheOnePlaceThatAsksAStreamAboutItselfFillsNothingIn()
+    {
+        Assert.DoesNotContain(Inventory, entry => entry.Contains("Ffprobe", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void NothingNamesASubtitleCanvasWhileThereIsNoMeasurementToPutOnOne()
+    {
+        Assert.Empty(FfmpegArgumentRules.WhatSetsASubtitleCanvas(RepositoryLayout.SourceDirectory));
+    }
+
+    [Fact]
+    public void NoCommandIsHandedOverAsOnePieceOfTextForSomethingElseToReadAgain()
+    {
+        Assert.Empty(FfmpegArgumentRules.WhatCouldMakeACommandBeReadAgainAsText(RepositoryLayout.SourceDirectory));
+    }
+}
