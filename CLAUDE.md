@@ -426,6 +426,17 @@ mapped: development runs against the synthetic tuner backend named in
 compose override, which is also where the configuration for a real machine
 belongs.
 
+The render node is the exception, because a machine that has one is the normal
+case and the transcoder is meant to find it without being configured. `task up`
+reads the host through `docker/dri-env.sh` and hands `/dev/dri` to `app` when it
+is there, along with the owning groups of `card0` and `renderD128` as numbers
+measured on that host — the render node's group is numbered differently from one
+distribution to the next and is often absent from the container's own
+`/etc/group`, so a name would resolve to something other than the device. A host
+without the node sets nothing and the device entry falls back to `/dev/null`,
+because a `devices:` entry naming a path that is not there stops the container
+from being created at all.
+
 The `driver` service runs the driver as its own main process, so it receives
 SIGTERM directly and `stop_grace_period` covers the recording linger. It builds
 into a container-local artifacts path, so building from the `app` container never
