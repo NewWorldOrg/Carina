@@ -1,6 +1,7 @@
 using Carina.Domain.Integrity;
 using Carina.Domain.Playback;
 using Carina.Domain.Recordings;
+using Carina.Domain.Streaming;
 using Carina.Infrastructure.Playback;
 
 using Microsoft.Extensions.Logging.Abstractions;
@@ -80,11 +81,33 @@ public sealed class LocalPlaybackFileStoreTests : IDisposable
     }
 
     [Fact]
+    public void AFileIsNamedForAProgrammeThatOpensItItselfRatherThanBeingHandedTheBytes()
+    {
+        Write(16);
+        PlaybackFile found = Store().Find(Root, Named)!;
+
+        StreamSource? source = Store().SourceOf(found);
+
+        Assert.NotNull(source);
+        Assert.Equal(Path.Combine(mounted.FullName, Named.Value), source.Value);
+    }
+
+    [Fact]
+    public void ARootNothingSaysWhereToFindIsNamedToNoProgramme()
+    {
+        Write(16);
+        PlaybackFile found = Store().Find(Root, Named)!;
+
+        Assert.Null(Store(new IntegritySettings()).SourceOf(found));
+    }
+
+    [Fact]
     public void TheStoreIsAskedForSomethingRatherThanNothing()
     {
         Assert.Throws<ArgumentNullException>(() => Store().Find(null!, Named));
         Assert.Throws<ArgumentNullException>(() => Store().Find(Root, null!));
         Assert.Throws<ArgumentNullException>(() => Store().OpenRead(null!));
+        Assert.Throws<ArgumentNullException>(() => Store().SourceOf(null!));
     }
 
     public void Dispose() => mounted.Delete(recursive: true);
