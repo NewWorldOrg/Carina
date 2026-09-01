@@ -1,0 +1,2 @@
+[mp3 @ 0x55bf5d90fbc0] Failed to read frame size: Could not seek to 5023.
+junk.ts: Invalid argument
