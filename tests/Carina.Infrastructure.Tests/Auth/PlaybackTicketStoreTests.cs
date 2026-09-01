@@ -225,10 +225,7 @@ public sealed class PlaybackTicketStoreTests
                 Assert.True(asker.Join(TimeSpan.FromMinutes(1)));
             }
 
-            Assert.True(
-                issued <= PlaybackTicketStore.MostHeldPerSubject,
-                $"{Askers} callers at once were handed {issued} live tickets for one account, "
-                + $"where {PlaybackTicketStore.MostHeldPerSubject} is the share.");
+            Assert.Equal(PlaybackTicketStore.MostHeldPerSubject, issued);
             Assert.Equal(issued, store.Count);
         }
     }

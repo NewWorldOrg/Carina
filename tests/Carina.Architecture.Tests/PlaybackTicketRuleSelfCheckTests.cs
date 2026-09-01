@@ -123,6 +123,18 @@ public sealed class PlaybackTicketRuleSelfCheckTests
                 }
                 """);
             File.WriteAllText(
+                Path.Combine(directory.FullName, "Ordinary.cs"),
+                """
+                namespace Sample;
+                public static class Peek
+                {
+                    public static string? Offered(HttpRequest request)
+                        => request.Headers.TryGetValue("Authorization", out StringValues offered)
+                            ? offered.ToString()
+                            : null;
+                }
+                """);
+            File.WriteAllText(
                 Path.Combine(directory.FullName, "Renamed.cs"),
                 """
                 namespace Sample;
