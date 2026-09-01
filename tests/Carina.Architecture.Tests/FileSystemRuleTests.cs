@@ -31,6 +31,8 @@ public sealed class FileSystemRuleTests
         "/Carina.Infrastructure/Integrity/LocalRecordingFileSurvey.cs .Replace(",
         "/Carina.Infrastructure/Programmes/ProgrammeSearchQuery.cs .Replace(",
         "/Carina.Infrastructure/Recordings/DriverRecordingFileEraser.cs File.Delete",
+        "/Carina.Infrastructure/Streaming/FfprobeStreamAttributeReader.cs Process.Start",
+        "/Carina.Infrastructure/Streaming/FfprobeStreamAttributeReader.cs ProcessStartInfo",
         "/Carina.Infrastructure/Thumbnails/FfmpegThumbnailRenderer.cs Directory.CreateDirectory",
         "/Carina.Infrastructure/Thumbnails/FfmpegThumbnailRenderer.cs Process.Start",
         "/Carina.Infrastructure/Thumbnails/FfmpegThumbnailRenderer.cs ProcessStartInfo",
@@ -79,14 +81,27 @@ public sealed class FileSystemRuleTests
     }
 
     [Fact]
-    public void TheOnlyPlaceThatStartsAProgrammeOfItsOwnIsTheOneThatDrawsThumbnails()
+    public void TheOnlyPlacesThatStartAProgrammeOfTheirOwnAreTheTwoThatAskFfmpegSomething()
     {
         Assert.Equal(
             [
+                "/Carina.Infrastructure/Streaming/FfprobeStreamAttributeReader.cs Process.Start",
+                "/Carina.Infrastructure/Streaming/FfprobeStreamAttributeReader.cs ProcessStartInfo",
                 "/Carina.Infrastructure/Thumbnails/FfmpegThumbnailRenderer.cs Process.Start",
                 "/Carina.Infrastructure/Thumbnails/FfmpegThumbnailRenderer.cs ProcessStartInfo",
             ],
             Inventory.Where(entry => entry.Contains("Process", StringComparison.Ordinal)).ToArray());
+    }
+
+    [Fact]
+    public void WhatReadsAStreamsAttributesReadsAndWritesNoFileOfItsOwn()
+    {
+        Assert.Equal(
+            [
+                "/Carina.Infrastructure/Streaming/FfprobeStreamAttributeReader.cs Process.Start",
+                "/Carina.Infrastructure/Streaming/FfprobeStreamAttributeReader.cs ProcessStartInfo",
+            ],
+            Inventory.Where(entry => entry.Contains("/Streaming/", StringComparison.Ordinal)).ToArray());
     }
 
     [Fact]

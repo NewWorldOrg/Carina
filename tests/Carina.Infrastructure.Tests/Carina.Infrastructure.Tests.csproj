@@ -10,4 +10,8 @@
     <ProjectReference Include="../Carina.BroadcastTestSupport/Carina.BroadcastTestSupport.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="Streaming/Probes/*.txt" />
+  </ItemGroup>
+
 </Project>
