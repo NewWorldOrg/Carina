@@ -6,12 +6,14 @@ namespace Carina.Api.OpenApi;
 public sealed class ApiDocumentTransformer : IOpenApiDocumentTransformer
 {
     private const string Description =
-        "The HTTP surface of the app process. Four contract surfaces do not fit a "
+        "The HTTP surface of the app process. Five contract surfaces do not fit a "
         + "request/response schema and are absent from this document: the transport stream "
         + "(`/sessions/{id}/stream` on the driver socket), the event hub (`GET /api/events`), "
-        + "the bulk programme guide (`GET /api/programs/bulk`) and the recording file served "
+        + "the bulk programme guide (`GET /api/programs/bulk`), the recording file served "
         + "by the byte range (`GET /api/videos/{id}`), which is there for an external player "
-        + "and is not the path a browser plays a recording through.";
+        + "and is not the path a browser plays a recording through, and the live wire "
+        + "(`GET /api/live/ws`), a WebSocket carrying framed picture and sound one way and "
+        + "numbered control messages both ways.";
 
     public Task TransformAsync(
         OpenApiDocument document,

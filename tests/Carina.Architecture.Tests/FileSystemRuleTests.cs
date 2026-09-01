@@ -9,6 +9,7 @@ public sealed class FileSystemRuleTests
         "/Carina.Broadcast/Descriptors/ExtendedEventDescription.cs .CopyTo(",
         "/Carina.Broadcast/Sections/SectionAssembler.cs .CopyTo(",
         "/Carina.Domain/Programmes/ProgrammeSearchText.cs .Replace(",
+        "/Carina.Domain/Streaming/LiveFrame.cs .CopyTo(",
         "/Carina.Driver/Configuration/AtomicFile.cs File.Delete",
         "/Carina.Driver/Configuration/AtomicFile.cs File.Move",
         "/Carina.Driver/Configuration/AtomicFile.cs FileMode.",
@@ -117,6 +118,10 @@ public sealed class FileSystemRuleTests
                 .ToArray());
     }
 
+    private static bool OpensSomething(string entry)
+        => !entry.Contains("Process", StringComparison.Ordinal)
+           && !entry.Contains(".CopyTo(", StringComparison.Ordinal);
+
     [Fact]
     public void TheOnlyFileTheLivePathOpensIsTheOneItAsksTheCardAbout()
     {
@@ -127,7 +132,7 @@ public sealed class FileSystemRuleTests
             ],
             Inventory
                 .Where(entry => entry.Contains("/Streaming/", StringComparison.Ordinal))
-                .Where(entry => !entry.Contains("Process", StringComparison.Ordinal))
+                .Where(OpensSomething)
                 .ToArray());
 
         string source = File.ReadAllText(Path.Combine(
