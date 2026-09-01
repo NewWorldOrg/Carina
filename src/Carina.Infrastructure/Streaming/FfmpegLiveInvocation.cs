@@ -8,6 +8,8 @@ public static class FfmpegLiveInvocation
 {
     public const string Input = "pipe:0";
 
+    public const string Output = "pipe:1";
+
     public const string RenderNode = "/dev/dri/renderD128";
 
     private const int KeyframeSeconds = 2;
@@ -53,6 +55,16 @@ public static class FfmpegLiveInvocation
             "aac_adtstoasc",
         ];
     }
+
+    public static IReadOnlyList<string> Delivery()
+        =>
+        [
+            "-f",
+            "mp4",
+            "-movflags",
+            "empty_moov+default_base_moof",
+            Output,
+        ];
 
     private static IReadOnlyList<string> Device(LiveEncoder encoder)
         => encoder is LiveEncoder.Vaapi ? ["-vaapi_device", RenderNode] : [];
