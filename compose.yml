@@ -35,7 +35,9 @@ services:
         condition: service_healthy
 
   driver:
-    image: mcr.microsoft.com/dotnet/sdk:10.0
+    build:
+      context: .
+      target: driver-develop
     working_dir: /code
     command: ['bash', 'docker/driver.dev.sh']
     restart: unless-stopped
@@ -45,6 +47,7 @@ services:
       - driver-run:/run/carina
       - recordings:/srv/recordings
       - driver-build:/driver
+      - /run/pcscd:/run/pcscd
     stop_grace_period: 7h
     environment:
       CARINA_DRIVER_CONFIG: /code/docker/driver.development.json
