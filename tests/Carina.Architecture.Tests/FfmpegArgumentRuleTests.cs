@@ -102,8 +102,8 @@ public sealed class FfmpegArgumentRuleTests
     }
 
     [Fact]
-    public void NoCommandIsHandedToAShellToBeReadAgain()
+    public void NoCommandIsHandedOverAsOnePieceOfTextForSomethingElseToReadAgain()
     {
-        Assert.Empty(FfmpegArgumentRules.WhatAsksAShellToRunACommand(RepositoryLayout.SourceDirectory));
+        Assert.Empty(FfmpegArgumentRules.WhatCouldMakeACommandBeReadAgainAsText(RepositoryLayout.SourceDirectory));
     }
 }

@@ -107,14 +107,15 @@ public sealed class FfmpegArgumentRuleSelfCheckTests
     [InlineData("""UseShellExecute = true,""", "UseShellExecute=true")]
     [InlineData("""new ProcessStartInfo("/bin/sh")""", "/bin/sh")]
     [InlineData("""new ProcessStartInfo("/bin/bash")""", "/bin/bash")]
-    public void DetectsACommandBeingHandedToAShell(string source, string reported)
+    [InlineData("""start.Arguments = Joined(arguments);""", "Arguments=")]
+    public void DetectsACommandBeingHandedOverAsOnePieceOfText(string source, string reported)
     {
         using var tree = new SourceTree();
         tree.Write("Carina.Infrastructure/Streaming/Transcoder.cs", source);
 
         Assert.Equal(
             [$"/Carina.Infrastructure/Streaming/Transcoder.cs {reported}"],
-            FfmpegArgumentRules.WhatAsksAShellToRunACommand(tree.Root));
+            FfmpegArgumentRules.WhatCouldMakeACommandBeReadAgainAsText(tree.Root));
     }
 
     [Fact]
@@ -125,7 +126,7 @@ public sealed class FfmpegArgumentRuleSelfCheckTests
             "Carina.Infrastructure/Streaming/Transcoder.cs",
             """var start = new ProcessStartInfo(settings.Programme) { UseShellExecute = asked, };""");
 
-        Assert.Empty(FfmpegArgumentRules.WhatAsksAShellToRunACommand(tree.Root));
+        Assert.Empty(FfmpegArgumentRules.WhatCouldMakeACommandBeReadAgainAsText(tree.Root));
     }
 
     [Fact]
@@ -136,7 +137,7 @@ public sealed class FfmpegArgumentRuleSelfCheckTests
         Assert.Empty(FfmpegArgumentRules.BuildersOfACommandLine(tree.Root));
         Assert.Empty(FfmpegArgumentRules.WhatFillsACommandLine(tree.Root));
         Assert.Empty(FfmpegArgumentRules.WhatSetsASubtitleCanvas(tree.Root));
-        Assert.Empty(FfmpegArgumentRules.WhatAsksAShellToRunACommand(tree.Root));
+        Assert.Empty(FfmpegArgumentRules.WhatCouldMakeACommandBeReadAgainAsText(tree.Root));
     }
 
     private sealed class SourceTree : IDisposable

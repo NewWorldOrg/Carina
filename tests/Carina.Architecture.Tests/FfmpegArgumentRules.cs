@@ -22,8 +22,8 @@ public static class FfmpegArgumentRules
 
     private static readonly Regex Canvas = new(@"-canvas_size", RegexOptions.None, TimeSpan.FromSeconds(5));
 
-    private static readonly Regex Shell = new(
-        @"\bUseShellExecute\s*=\s*true\b|/bin/sh\b|/bin/bash\b|\bcmd\.exe\b",
+    private static readonly Regex ReadAgain = new(
+        @"\bUseShellExecute\s*=\s*true\b|/bin/sh\b|/bin/bash\b|\bcmd\.exe\b|\bArguments\s*=(?!=)",
         RegexOptions.None,
         TimeSpan.FromSeconds(5));
 
@@ -64,8 +64,8 @@ public static class FfmpegArgumentRules
     public static IReadOnlyList<string> WhatSetsASubtitleCanvas(string directory)
         => Reported(directory, Canvas);
 
-    public static IReadOnlyList<string> WhatAsksAShellToRunACommand(string directory)
-        => Reported(directory, Shell);
+    public static IReadOnlyList<string> WhatCouldMakeACommandBeReadAgainAsText(string directory)
+        => Reported(directory, ReadAgain);
 
     private static IReadOnlyList<string> Reported(string directory, Regex looking)
         => Scanned(directory)
