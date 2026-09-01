@@ -32,6 +32,11 @@ public static class ThumbnailRules
         "ThumbnailRequest",
         "ThumbnailRemake",
         "IThumbnailRemaker",
+        "ThumbnailFrameRequest",
+        "IScrubFrames",
+        "ScrubFrame",
+        "ScrubRefusal",
+        "Scrubber",
         "ThumbnailOptions",
         "ThumbnailValidation",
         "FfmpegInvocation",
@@ -45,6 +50,8 @@ public static class ThumbnailRules
         "/Carina.Api/Services/RecordingService.cs",
         "/Carina.Api/Responder/Recordings/RecordingDetailResponder.cs",
         "/Carina.Infrastructure/Recordings/DriverRecordingFileEraser.cs",
+        "/Carina.Api/Playback/ScrubDelivery.cs",
+        "/Carina.Api/Program.cs",
     ];
 
     private static readonly Regex ReachesForTheResult = new(

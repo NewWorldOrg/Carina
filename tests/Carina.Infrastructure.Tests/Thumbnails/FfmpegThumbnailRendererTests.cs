@@ -1,3 +1,4 @@
+using Carina.Domain.Channels;
 using Carina.Domain.Recordings;
 using Carina.Domain.Thumbnails;
 using Carina.Infrastructure.Tests.Integrity;
@@ -42,7 +43,7 @@ public sealed class FfmpegThumbnailRendererTests : IDisposable
         string marker = tree.Under("it-ran");
         ThumbnailRender render = await Renderer(Standing($"printf ran > \"{marker}\""))
             .RenderAsync(
-                new ThumbnailRequest(tree.Under("gone.m2ts"), Destination(), TimeSpan.FromSeconds(1)),
+                new ThumbnailRequest(tree.Under("gone.m2ts"), Destination(), new ServiceId(1032), TimeSpan.FromSeconds(1)),
                 Cancel);
 
         Assert.Equal(ThumbnailFault.SourceOutOfReach, render.Fault);
@@ -111,7 +112,7 @@ public sealed class FfmpegThumbnailRendererTests : IDisposable
             for argument in "$@"; do destination=$argument; done
             printf 'a picture' > "$destination"
             """)).RenderAsync(
-                new ThumbnailRequest(Source(), destination, TimeSpan.FromSeconds(1)),
+                new ThumbnailRequest(Source(), destination, new ServiceId(1032), TimeSpan.FromSeconds(1)),
                 Cancel);
 
         Assert.True(render.Drew);
@@ -137,7 +138,7 @@ public sealed class FfmpegThumbnailRendererTests : IDisposable
         string arguments = tree.Under("arguments");
 
         await Renderer(Dumping(arguments)).RenderAsync(
-            new ThumbnailRequest(Source(), Destination(), TimeSpan.FromSeconds(90.5)),
+            new ThumbnailRequest(Source(), Destination(), new ServiceId(1032), TimeSpan.FromSeconds(90.5)),
             Cancel);
 
         string[] asked = await File.ReadAllLinesAsync(arguments, Cancel);
@@ -146,6 +147,96 @@ public sealed class FfmpegThumbnailRendererTests : IDisposable
         Assert.Equal(Source(), asked[Array.IndexOf(asked, "-i") + 1]);
         Assert.True(Array.IndexOf(asked, "-ss") < Array.IndexOf(asked, "-i"));
     }
+
+    [Fact]
+    public async Task TheProgrammeIsAskedForTheRecordedServicesVideoAndNotForWhateverItWouldPick()
+    {
+        string arguments = tree.Under("arguments");
+
+        await Renderer(Dumping(arguments)).RenderAsync(
+            new ThumbnailRequest(Source(), Destination(), new ServiceId(23610), TimeSpan.Zero),
+            Cancel);
+
+        string[] asked = await File.ReadAllLinesAsync(arguments, Cancel);
+
+        Assert.Equal("p:23610:v:0", asked[Array.IndexOf(asked, "-map") + 1]);
+    }
+
+    [Fact]
+    public async Task AFrameComesBackAsBytesRatherThanAsAFileOnDisk()
+    {
+        ThumbnailRender render = await Renderer(Standing("printf '\\377\\330jpeg'"))
+            .FrameAsync(Frame(), Cancel);
+
+        Assert.True(render.Drew);
+        Assert.Equal([0xff, 0xd8, (byte)'j', (byte)'p', (byte)'e', (byte)'g'], render.Picture);
+        Assert.False(Directory.Exists(tree.Under("pictures")));
+    }
+
+    [Fact]
+    public async Task AProgrammeThatSaysItWorkedAndHandsOverNothingDrewNoFrame()
+    {
+        ThumbnailRender render = await Renderer(Standing("exit 0")).FrameAsync(Frame(), Cancel);
+
+        Assert.Equal(ThumbnailFault.NothingWasWritten, render.Fault);
+        Assert.Null(render.Picture);
+    }
+
+    [Fact]
+    public async Task AProgrammeThatRefusesAFrameCarriesItsCode()
+    {
+        ThumbnailRender render = await Renderer(Standing("exit 234")).FrameAsync(Frame(), Cancel);
+
+        Assert.Equal(ThumbnailFault.Refused, render.Fault);
+        Assert.Equal(234, render.ExitCode);
+        Assert.Null(render.Picture);
+    }
+
+    [Fact]
+    public async Task AFrameOutOfARecordingThatIsNotThereIsToldApartFromTheProgrammeFailing()
+    {
+        ThumbnailRender render = await Renderer(Standing("exit 0"))
+            .FrameAsync(
+                new ThumbnailFrameRequest(tree.Under("gone.m2ts"), new ServiceId(1032), TimeSpan.Zero),
+                Cancel);
+
+        Assert.Equal(ThumbnailFault.SourceOutOfReach, render.Fault);
+    }
+
+    [Fact]
+    public async Task AProgrammeThatIsNotOnThisMachineDrawsNoFrameEither()
+    {
+        ThumbnailRender render = await Renderer(tree.Under("no-such-programme")).FrameAsync(Frame(), Cancel);
+
+        Assert.Equal(ThumbnailFault.ProgrammeMissing, render.Fault);
+    }
+
+    [Fact]
+    public async Task AProgrammeThatHangsOverAFrameIsGivenUpOn()
+    {
+        ThumbnailRender render = await Renderer(Standing("sleep 60"), new HurriedClock())
+            .FrameAsync(Frame(), Cancel);
+
+        Assert.Equal(ThumbnailFault.TimedOut, render.Fault);
+        Assert.Null(render.Picture);
+    }
+
+    [Fact]
+    public async Task BeingAskedToStopMidFrameIsNotTheSameAsRunningOutOfTime()
+    {
+        using var stopping = new CancellationTokenSource();
+        await stopping.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => Renderer(Standing("sleep 60")).FrameAsync(Frame(), stopping.Token));
+    }
+
+    [Fact]
+    public async Task NoFrameRequestMeansNothingIsRun()
+        => Assert.Equal(
+            "request",
+            (await Assert.ThrowsAsync<ArgumentNullException>(
+                () => Renderer(Standing("exit 0")).FrameAsync(null!, Cancel))).ParamName);
 
     [Fact]
     public async Task NoRequestMeansNothingIsRun()
@@ -176,7 +267,10 @@ public sealed class FfmpegThumbnailRendererTests : IDisposable
             + "for argument in \"$@\"; do destination=$argument; done\n"
             + "printf 'a picture' > \"$destination\"");
 
-    private ThumbnailRequest Request() => new(Source(), Destination(), TimeSpan.FromSeconds(1));
+    private ThumbnailFrameRequest Frame()
+        => new(Source(), new ServiceId(1032), TimeSpan.FromSeconds(1));
+
+    private ThumbnailRequest Request() => new(Source(), Destination(), new ServiceId(1032), TimeSpan.FromSeconds(1));
 
     private string Source()
     {

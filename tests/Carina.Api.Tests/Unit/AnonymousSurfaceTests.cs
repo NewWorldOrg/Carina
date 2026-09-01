@@ -165,6 +165,26 @@ public sealed class AnonymousSurfaceTests
             AnonymousSurfaces.For(new StubEnvironment(Environments.Production)));
     }
 
+    [Theory]
+    [InlineData("/api/videos/0198f0e1c9a97c2e9a1b6f4d3e5a7b8c")]
+    [InlineData("/api/videos/0198f0e1c9a97c2e9a1b6f4d3e5a7b8c/scrub")]
+    [InlineData("/api/videos/0198f0e1c9a97c2e9a1b6f4d3e5a7b8c/thumbnail")]
+    [InlineData("/api/recordings/0198f0e1c9a97c2e9a1b6f4d3e5a7b8c/thumbnail")]
+    public void APictureOrAFileOutOfARecordingIsContentAndIsNeverReachedWithoutCredentials(string path)
+    {
+        Assert.False(AnonymousSurfaces.Everywhere.Admit("GET", path));
+        Assert.False(AnonymousSurfaces.WhileDeveloping.Admit("GET", path));
+    }
+
+    [Fact]
+    public void NothingIsLetPastTheDenialByStandingUnderAPrefixTheRecordingsShare()
+    {
+        Assert.DoesNotContain(
+            AnonymousSurfaces.WhileDeveloping,
+            surface => surface.Path.StartsWith("/api/videos", StringComparison.Ordinal)
+                       || surface.Path.StartsWith("/api/recordings", StringComparison.Ordinal));
+    }
+
     [Fact]
     public void ASurfaceBelowADirectoryNamesTheDirectory()
     {

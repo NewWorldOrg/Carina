@@ -1,3 +1,4 @@
+using Carina.Domain.Channels;
 using Carina.Domain.Recordings;
 
 namespace Carina.Domain.Thumbnails;
@@ -8,12 +9,14 @@ public sealed record ThumbnailSubject
         RecordingId id,
         OutputRoot root,
         RecordingFileName fileName,
+        ServiceId service,
         RecordingOutcome outcome,
         TimeSpan written)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(root);
         ArgumentNullException.ThrowIfNull(fileName);
+        ArgumentNullException.ThrowIfNull(service);
 
         if (!Enum.IsDefined(outcome))
         {
@@ -34,6 +37,7 @@ public sealed record ThumbnailSubject
         Id = id;
         Root = root;
         FileName = fileName;
+        Service = service;
         Outcome = outcome;
         Written = written;
     }
@@ -43,6 +47,8 @@ public sealed record ThumbnailSubject
     public OutputRoot Root { get; }
 
     public RecordingFileName FileName { get; }
+
+    public ServiceId Service { get; }
 
     public RecordingOutcome Outcome { get; }
 

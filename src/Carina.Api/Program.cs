@@ -7,6 +7,7 @@ using Carina.Api.Extensions;
 using Carina.Api.OpenApi;
 using Carina.Api.Playback;
 using Carina.Api.Services;
+using Carina.Domain.Thumbnails;
 using Carina.Infrastructure.DependencyInjection;
 using Carina.Infrastructure.Events;
 
@@ -68,6 +69,9 @@ app.MapGet(ProgrammeFeedStream.Path, (HttpContext context, ProgrammeFeedService 
 
 app.MapMethods(VideoDelivery.Path, VideoDelivery.Methods, (HttpContext context, string id, PlaybackService playback) =>
     VideoDelivery.Invoke(context, id, playback)).ExcludeFromDescription().WithEffect(EndpointEffect.Reading);
+
+app.MapGet(ScrubDelivery.Path, (HttpContext context, string id, IScrubFrames frames) =>
+    ScrubDelivery.Invoke(context, id, frames)).ExcludeFromDescription().WithEffect(EndpointEffect.Reading);
 
 try
 {

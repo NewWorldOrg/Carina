@@ -43,6 +43,31 @@ public sealed class ThumbnailWorklistTests(RepositoryDatabase database)
         Assert.Equal(recording.FileName.Value, subject.FileName.Value);
         Assert.Equal("bulk", subject.Root.Value);
         Assert.Equal(TimeSpan.FromMinutes(30), subject.Written);
+        Assert.Equal(1024, subject.Service.Value);
+    }
+
+    [Fact]
+    public async Task TheSubjectCarriesTheServiceThatWasRecordedAndNotAnotherOnTheSameMultiplex()
+    {
+        Recording recording = await AddAsync(7110, service: new ServiceId(23610));
+        await SettleAsync(recording.Id, RecordingOutcome.Complete, 1_200_000);
+
+        ThumbnailSubject subject = Assert.Single(
+            await AwaitingAsync(),
+            waiting => waiting.Id.Equals(recording.Id));
+
+        Assert.Equal(23610, subject.Service.Value);
+    }
+
+    [Fact]
+    public async Task AskingAgainCarriesTheServiceTheFirstPassWouldHaveUsed()
+    {
+        Recording recording = await AddAsync(7111, service: new ServiceId(1416));
+        await SettleAsync(recording.Id, RecordingOutcome.Complete, 1_200_000);
+
+        ThumbnailSubject? subject = await AskAgainAsync(recording.Id);
+
+        Assert.Equal(1416, subject!.Service.Value);
     }
 
     [Fact]
@@ -221,14 +246,14 @@ public sealed class ThumbnailWorklistTests(RepositoryDatabase database)
             ?? throw new InvalidOperationException("The recording that was just written is not there.");
     }
 
-    private async Task<Recording> AddAsync(int eventId, OutputRoot? root = null)
+    private async Task<Recording> AddAsync(int eventId, OutputRoot? root = null, ServiceId? service = null)
     {
         OutputRoot under = root ?? Bulk;
         RecordingId id = RecordingId.New();
         Recording recording = Recording.Begin(
             id,
             null,
-            new ProgrammeRef(new NetworkId(32736), new ServiceId(1024), new EventId(eventId), Now),
+            new ProgrammeRef(new NetworkId(32736), service ?? new ServiceId(1024), new EventId(eventId), Now),
             under,
             RecordingFileName.For(id, ".m2ts"),
             Now,

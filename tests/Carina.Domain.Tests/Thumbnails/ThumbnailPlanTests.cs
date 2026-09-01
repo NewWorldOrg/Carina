@@ -1,3 +1,4 @@
+using Carina.Domain.Channels;
 using Carina.Domain.Recordings;
 using Carina.Domain.Thumbnails;
 
@@ -47,6 +48,36 @@ public sealed class ThumbnailPlanTests
         Assert.Equal(TimeSpan.FromSeconds(30), plan.At);
     }
 
+    [Theory]
+    [InlineData(180, 60)]
+    [InlineData(7200, 120)]
+    public void APictureIsPlannedAThirdOfTheWayInUntilTheCapTakesOver(int written, int expected)
+        => Assert.Equal(
+            TimeSpan.FromSeconds(expected),
+            ThumbnailPlan.For(
+                Subject(RecordingOutcome.Complete, TimeSpan.FromSeconds(written)),
+                Settings).At);
+
+    [Fact]
+    public void ARecordingThatSucceededWithNoLengthWrittenDownIsStillNotDrawnFromItsHead()
+    {
+        ThumbnailPlan plan = ThumbnailPlan.For(
+            Subject(RecordingOutcome.Complete, TimeSpan.Zero),
+            Settings);
+
+        Assert.Equal(ThumbnailIntent.Draw, plan.Intent);
+        Assert.Equal(TimeSpan.FromSeconds(120), plan.At);
+    }
+
+    [Fact]
+    public void ARecordingThatWroteNothingAtAllFailedAndIsSkippedBeforeAPositionIsAskedFor()
+    {
+        ThumbnailPlan plan = ThumbnailPlan.For(Subject(RecordingOutcome.Failed, TimeSpan.Zero), Settings);
+
+        Assert.Equal(ThumbnailIntent.Skip, plan.Intent);
+        Assert.Equal(TimeSpan.Zero, plan.At);
+    }
+
     [Fact]
     public void APlanWithoutASubjectOrSettingsIsRefused()
     {
@@ -67,6 +98,7 @@ public sealed class ThumbnailPlanTests
             id,
             new OutputRoot("bulk"),
             RecordingFileName.For(id, ".m2ts"),
+            new ServiceId(1032),
             outcome,
             written ?? TimeSpan.FromHours(2));
     }
