@@ -13,6 +13,10 @@ public sealed class LiveWireSocket(
 {
     private static readonly TimeSpan GoodbyePatience = TimeSpan.FromSeconds(2);
 
+    private static readonly Task Never = new TaskCompletionSource().Task;
+
+    private LiveStartup? said;
+
     public async Task<LiveDeparture> CarryAsync(
         ChannelReader<LiveFrame> frames,
         CancellationToken stopping,
@@ -153,22 +157,32 @@ public sealed class LiveWireSocket(
     {
         try
         {
+            Task advanced = startup?.Advanced ?? Never;
+
             await SayWhereWeAre(cancellationToken);
 
             Task<bool> waiting = frames.WaitToReadAsync(cancellationToken).AsTask();
 
             while (true)
             {
-                if (!await ReadableWithin(waiting, settings.BetweenPings, cancellationToken))
+                switch (await FirstOf(waiting, advanced, settings.BetweenPings, cancellationToken))
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
+                    case Woken.ByProgress:
+                        advanced = startup!.Advanced;
+                        await SayWhatMoved(cancellationToken);
 
-                    if (!await SayWhereWeAre(cancellationToken))
-                    {
-                        await SendAsync(LiveControls.Frame(LiveControl.Ping), cancellationToken);
-                    }
+                        continue;
+                    case Woken.ByQuiet:
+                        cancellationToken.ThrowIfCancellationRequested();
 
-                    continue;
+                        if (!await SayWhereWeAre(cancellationToken))
+                        {
+                            await SendAsync(LiveControls.Frame(LiveControl.Ping), cancellationToken);
+                        }
+
+                        continue;
+                    default:
+                        break;
                 }
 
                 if (!await waiting)
@@ -239,26 +253,49 @@ public sealed class LiveWireSocket(
             return false;
         }
 
-        await SendAsync(
-            new LiveFrame(LiveChannel.Control, LivePts.Start, where.ToProgressPayload()),
-            cancellationToken);
+        await Tell(where, cancellationToken);
 
         return true;
     }
 
-    private static async Task<bool> ReadableWithin(
+    private async Task SayWhatMoved(CancellationToken cancellationToken)
+    {
+        if (startup?.Current is not { } where || ReferenceEquals(where, said))
+        {
+            return;
+        }
+
+        await Tell(where, cancellationToken);
+    }
+
+    private async Task Tell(LiveStartup where, CancellationToken cancellationToken)
+    {
+        said = where;
+
+        await SendAsync(
+            new LiveFrame(LiveChannel.Control, LivePts.Start, where.ToProgressPayload()),
+            cancellationToken);
+    }
+
+    private static async Task<Woken> FirstOf(
         Task<bool> waiting,
+        Task advanced,
         TimeSpan quiet,
         CancellationToken cancellationToken)
     {
-        using var tick = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using CancellationTokenSource tick = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
         Task quiets = Task.Delay(quiet, tick.Token);
-        bool readable = await Task.WhenAny(waiting, quiets) != quiets;
+        Task first = await Task.WhenAny(waiting, advanced, quiets);
 
         await tick.CancelAsync();
 
-        return readable;
+        if (first == waiting)
+        {
+            return Woken.ByFrames;
+        }
+
+        return first == advanced ? Woken.ByProgress : Woken.ByQuiet;
     }
 
     private async Task SendAsync(LiveFrame frame, CancellationToken cancellationToken)
@@ -319,6 +356,15 @@ public sealed class LiveWireSocket(
         {
             socket.Abort();
         }
+    }
+
+    private enum Woken
+    {
+        ByFrames,
+
+        ByProgress,
+
+        ByQuiet,
     }
 
     private sealed class ViewerTooSlow : Exception;

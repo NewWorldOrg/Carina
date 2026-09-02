@@ -10,6 +10,8 @@ public sealed class LiveStartupRecord(TimeProvider clock) : ILiveStartup
 
     private LiveStartup current = LiveStartup.NotStarted;
 
+    private TaskCompletionSource advanced = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
     public LiveStartup? Current
     {
         get
@@ -21,8 +23,21 @@ public sealed class LiveStartupRecord(TimeProvider clock) : ILiveStartup
         }
     }
 
+    public Task Advanced
+    {
+        get
+        {
+            lock (gate)
+            {
+                return advanced.Task;
+            }
+        }
+    }
+
     public void Reach(LiveStartupSegment segment)
     {
+        TaskCompletionSource waited;
+
         lock (gate)
         {
             if (current.Reached(segment))
@@ -31,6 +46,10 @@ public sealed class LiveStartupRecord(TimeProvider clock) : ILiveStartup
             }
 
             current = current.Reaching(segment, clock.GetElapsedTime(began));
+            waited = advanced;
+            advanced = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         }
+
+        waited.SetResult();
     }
 }
