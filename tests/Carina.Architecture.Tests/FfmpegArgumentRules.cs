@@ -22,6 +22,8 @@ public static class FfmpegArgumentRules
 
     private static readonly Regex Canvas = new(@"-canvas_size", RegexOptions.None, TimeSpan.FromSeconds(5));
 
+    private static readonly Regex Font = new(@"(?<![\w-])-font\b", RegexOptions.None, TimeSpan.FromSeconds(5));
+
     private static readonly Regex ReadAgain = new(
         @"\bUseShellExecute\s*=\s*true\b|/bin/sh\b|/bin/bash\b|\bcmd\.exe\b|\bArguments\s*=(?!=)",
         RegexOptions.None,
@@ -63,6 +65,9 @@ public static class FfmpegArgumentRules
 
     public static IReadOnlyList<string> WhatSetsASubtitleCanvas(string directory)
         => Reported(directory, Canvas);
+
+    public static IReadOnlyList<string> WhatNamesAFont(string directory)
+        => Reported(directory, Font);
 
     public static IReadOnlyList<string> WhatCouldMakeACommandBeReadAgainAsText(string directory)
         => Reported(directory, ReadAgain);

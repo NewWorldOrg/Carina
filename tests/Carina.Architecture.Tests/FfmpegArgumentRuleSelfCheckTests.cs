@@ -103,6 +103,29 @@ public sealed class FfmpegArgumentRuleSelfCheckTests
             FfmpegArgumentRules.WhatSetsASubtitleCanvas(tree.Root));
     }
 
+    [Fact]
+    public void DetectsAFontBeingNamedWhereverItIsWritten()
+    {
+        using var tree = new SourceTree();
+        tree.Write("Carina.Api/Live/Subtitles.cs", """arguments.Add("-font");""");
+
+        Assert.Equal(
+            ["/Carina.Api/Live/Subtitles.cs -font"],
+            FfmpegArgumentRules.WhatNamesAFont(tree.Root));
+    }
+
+    [Theory]
+    [InlineData("""arguments.Add("-fontfile");""")]
+    [InlineData("""arguments.Add("-fontsdir");""")]
+    [InlineData("""// a non-font matter""")]
+    public void DoesNotMistakeAnotherWordForAFontBeingNamed(string source)
+    {
+        using var tree = new SourceTree();
+        tree.Write("Carina.Api/Live/Subtitles.cs", source);
+
+        Assert.Empty(FfmpegArgumentRules.WhatNamesAFont(tree.Root));
+    }
+
     [Theory]
     [InlineData("""UseShellExecute = true,""", "UseShellExecute=true")]
     [InlineData("""new ProcessStartInfo("/bin/sh")""", "/bin/sh")]
@@ -137,6 +160,7 @@ public sealed class FfmpegArgumentRuleSelfCheckTests
         Assert.Empty(FfmpegArgumentRules.BuildersOfACommandLine(tree.Root));
         Assert.Empty(FfmpegArgumentRules.WhatFillsACommandLine(tree.Root));
         Assert.Empty(FfmpegArgumentRules.WhatSetsASubtitleCanvas(tree.Root));
+        Assert.Empty(FfmpegArgumentRules.WhatNamesAFont(tree.Root));
         Assert.Empty(FfmpegArgumentRules.WhatCouldMakeACommandBeReadAgainAsText(tree.Root));
     }
 

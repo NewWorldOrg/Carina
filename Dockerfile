@@ -83,6 +83,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends fontconfig fonts-noto-cjk intel-media-va-driver libdrm2 libfreetype6 libva-drm2 libva2 libx264-164 \
     && rm -rf /var/lib/apt/lists/* \
     && fc-cache -f
+COPY docker/fonts.conf /etc/fonts/local.conf
 COPY --from=ffmpeg-build /out/ffmpeg/bin/ /usr/local/bin/
 COPY --from=ffmpeg-build /out/ffmpeg/lib/ /usr/local/lib/
 RUN ldconfig
@@ -100,6 +101,7 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends fontconfig fonts-noto-cjk intel-media-va-driver libdrm2 libfreetype6 libva-drm2 libva2 libx264-164 libpcsclite1 \
     && rm -rf /var/lib/apt/lists/* \
     && fc-cache -f
+COPY docker/fonts.conf /etc/fonts/local.conf
 
 COPY --from=card-build /out/card/ /usr/local/lib/
 COPY --from=ffmpeg-build /out/ffmpeg/bin/ /usr/local/bin/
