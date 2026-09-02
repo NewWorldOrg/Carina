@@ -25,6 +25,8 @@ public sealed class DriverTransportStream : ILiveTransportStream
 
     private int letGo;
 
+    private int concluded;
+
     public DriverTransportStream(SessionId session, Stream inner, IDriverClient driver, IDriverStatusReader status)
     {
         this.session = session;
@@ -47,16 +49,18 @@ public sealed class DriverTransportStream : ILiveTransportStream
             return;
         }
 
-        bool stillHeld = Interlocked.CompareExchange(
-            ref ending,
-            LiveSupplyEnding.Of(LiveSupplyEnd.LetGo, LetGoBecause),
-            null) is null;
+        Interlocked.CompareExchange(ref ending, LiveSupplyEnding.Of(LiveSupplyEnd.LetGo, LetGoBecause), null);
 
-        await inner.DisposeAsync();
-
-        if (stillHeld)
+        try
         {
-            await driver.StopSessionAsync(session, LetGoBecause, CancellationToken.None);
+            await inner.DisposeAsync();
+        }
+        finally
+        {
+            if (Volatile.Read(ref concluded) is 0)
+            {
+                await driver.StopSessionAsync(session, LetGoBecause, CancellationToken.None);
+            }
         }
     }
 
@@ -104,9 +108,16 @@ public sealed class DriverTransportStream : ILiveTransportStream
 
         if (!asked.TryGetValue(out SessionSnapshot? snapshot))
         {
+            Volatile.Write(ref concluded, 1);
+
             return LiveSupplyEnding.Of(
                 LiveSupplyEnd.DriverLost,
                 $"the driver no longer speaks of this session ({asked.Problem?.Title}).");
+        }
+
+        if (snapshot.Concluded)
+        {
+            Volatile.Write(ref concluded, 1);
         }
 
         switch (snapshot.StopReason)

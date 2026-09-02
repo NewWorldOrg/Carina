@@ -43,8 +43,8 @@ public sealed class LiveSessionWireTests
         await transcoders.Raised[0].WriteAsync(Fmp4.Header);
         await transcoders.Raised[0].WriteAsync(Fmp4.Fragment(1_000));
 
-        LiveFrame[] toOne = [await Take(one), await TakePastProgress(one), await TakePastProgress(one)];
-        LiveFrame[] toAnother = [await Take(another), await TakePastProgress(another), await TakePastProgress(another)];
+        LiveFrame[] toOne = [await Take(one), await TakePictureHeader(one), await TakePastProgress(one)];
+        LiveFrame[] toAnother = [await Take(another), await TakePictureHeader(another), await TakePastProgress(another)];
 
         Assert.Equal([LiveChannel.Control, LiveChannel.PictureHeader, LiveChannel.Picture], toOne.Select(frame => frame.Channel));
         Assert.Equal(toOne.Select(frame => frame.Channel), toAnother.Select(frame => frame.Channel));
@@ -91,7 +91,7 @@ public sealed class LiveSessionWireTests
         await transcoders.Raised[0].WriteAsync(Fmp4.Header);
         await transcoders.Raised[0].WriteAsync(Fmp4.Fragment(1_000));
 
-        Assert.Equal(LiveChannel.PictureHeader, (await TakePastProgress(socket)).Channel);
+        Assert.Equal(LiveChannel.PictureHeader, (await TakePictureHeader(socket)).Channel);
         Assert.Equal(LiveChannel.Picture, (await TakePastProgress(socket)).Channel);
     }
 
@@ -182,7 +182,7 @@ public sealed class LiveSessionWireTests
         await transcoders.Raised[0].WriteAsync(Fmp4.Header);
         transcoders.Raised[0].NoMore();
 
-        Assert.Equal(LiveChannel.PictureHeader, (await TakePastProgress(socket)).Channel);
+        Assert.Equal(LiveChannel.PictureHeader, (await TakePictureHeader(socket)).Channel);
 
         LiveFrame said = await TakePastProgress(socket);
 
@@ -342,6 +342,22 @@ public sealed class LiveSessionWireTests
                 return frame;
             }
         }
+    }
+
+    private static async Task<LiveFrame> TakePictureHeader(WebSocket socket)
+    {
+        LiveFrame first = await TakePastProgress(socket);
+
+        if (first.Channel is not LiveChannel.CaptionHeader)
+        {
+            return first;
+        }
+
+        LiveFrame afterTheCanvas = await TakePastProgress(socket);
+
+        Assert.Equal(LiveChannel.PictureHeader, afterTheCanvas.Channel);
+
+        return afterTheCanvas;
     }
 
     private static async Task<LiveStartup> NextProgress(WebSocket socket)

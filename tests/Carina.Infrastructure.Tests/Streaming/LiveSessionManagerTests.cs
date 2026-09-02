@@ -303,6 +303,86 @@ public sealed class LiveSessionManagerTests
     }
 
     [Fact]
+    public async Task TheSupplyIsLetGoEvenWhenTheStoppedTranscoderNoLongerHandsOutItsOutput()
+    {
+        ILiveViewing viewing = await Joined(EveryFrame);
+
+        transcoders.Raised[0].NoMore();
+
+        await Eventually.Happens(() => supply.Opened[0].Disposed, "the stream is let go after the transcoder ended on its own");
+
+        Assert.Throws<ObjectDisposedException>(() => transcoders.Raised[0].Output);
+        Assert.Empty(manager.Keys);
+
+        await viewing.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task TheSupplyIsLetGoEvenWhenTheTranscoderWillNotStopCleanly()
+    {
+        ILiveViewing viewing = await Joined(EveryFrame);
+
+        transcoders.Raised[0].FailingToStop = new InvalidOperationException("the transcoder would not stop.");
+
+        await viewing.DisposeAsync();
+
+        clock.Turn(Linger);
+
+        await Eventually.Happens(() => supply.Opened[0].Disposed, "the stream is let go although the transcoder failed to stop");
+
+        Assert.Equal(0, budget.Running);
+        Assert.Empty(manager.Keys);
+    }
+
+    [Fact]
+    public async Task TheSupplyAndTheTranscoderAreLetGoEvenWhenTheCaptionerWillNotStopCleanly()
+    {
+        ILiveViewing viewing = await Joined(EveryFrame);
+
+        captioners.Raised[0].FailingToStop = new InvalidOperationException("the captioner would not stop.");
+
+        await viewing.DisposeAsync();
+
+        clock.Turn(Linger);
+
+        await Eventually.Happens(
+            () => supply.Opened[0].Disposed && transcoders.Raised[0].Disposed,
+            "the stream and the transcoder are let go although the captioner failed to stop");
+
+        Assert.Equal(0, budget.Running);
+        Assert.Empty(manager.Keys);
+    }
+
+    [Fact]
+    public async Task AViewerBackWithinTheLingerWhoLeavesAgainLetsTheSupplyGoOnceAfterTheSecondLinger()
+    {
+        ILiveViewing gone = await Joined(EveryFrame);
+
+        await gone.DisposeAsync();
+
+        clock.Turn(Linger / 2);
+
+        ILiveViewing back = await Joined(EveryFrame);
+
+        clock.Turn(Linger);
+
+        Assert.False(supply.Opened[0].Disposed);
+
+        await back.DisposeAsync();
+
+        clock.Turn(Linger);
+
+        await Eventually.Happens(() => supply.Opened[0].Disposed, "the stream is let go once the second linger is over");
+
+        clock.Turn(Linger * 2);
+
+        Assert.Equal(1, supply.Asked);
+        Assert.Equal(1, supply.Opened[0].TimesLetGo);
+        Assert.Equal(0, clock.Pending);
+        Assert.Empty(manager.Keys);
+    }
+
+    [Fact]
     public async Task ASessionMarksItsOwnStartupAsTheTranscoderTheHeaderAndTheFirstPictureArrive()
     {
         await using ILiveViewing viewing = await Joined(EveryFrame);

@@ -13,6 +13,8 @@ public static class FfmpegCaptionInvocation
 
     public const string Drawn = "[c]";
 
+    public const string Font = "Noto Sans CJK JP";
+
     public static IReadOnlyList<string> Arguments(ServiceId service, VideoSize canvas)
     {
         ArgumentNullException.ThrowIfNull(service);
@@ -30,6 +32,8 @@ public static class FfmpegCaptionInvocation
             "bitmap",
             "-canvas_size",
             Canvas(canvas),
+            "-font",
+            Font,
             "-i",
             Input,
             "-filter_complex",

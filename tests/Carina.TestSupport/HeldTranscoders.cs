@@ -79,7 +79,9 @@ public sealed class HeldTranscoders(ITranscodeBudget budget) : ILiveTranscoderFa
 
 public sealed class HeldTranscoder : ILiveTranscoder
 {
-    private readonly Pipe output = new();
+    private readonly Pipe pipe = new();
+
+    private readonly Stream output;
 
     private readonly TaskCompletionSource<TranscoderExit> exit = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -93,7 +95,7 @@ public sealed class HeldTranscoder : ILiveTranscoder
         Profile = profile;
         Attributes = attributes;
         this.seat = seat;
-        Output = output.Reader.AsStream();
+        output = pipe.Reader.AsStream();
     }
 
     public ServiceId Service { get; }
@@ -104,11 +106,13 @@ public sealed class HeldTranscoder : ILiveTranscoder
 
     public LiveEncoderChoice Encoder { get; } = LiveEncoderChoice.Asked(LiveEncoder.Software);
 
-    public Stream Input { get; } = Stream.Null;
+    public Stream Input => Disposed ? throw new ObjectDisposedException(nameof(HeldTranscoder)) : Stream.Null;
 
-    public Stream Output { get; }
+    public Stream Output => Disposed ? throw new ObjectDisposedException(nameof(HeldTranscoder)) : output;
 
     public Task<TranscoderExit> Completion => exit.Task;
+
+    public Exception? FailingToStop { get; set; }
 
     public bool Disposed { get; private set; }
 
@@ -116,7 +120,7 @@ public sealed class HeldTranscoder : ILiveTranscoder
     {
         ArgumentNullException.ThrowIfNull(bytes);
 
-        await output.Writer.WriteAsync(bytes);
+        await pipe.Writer.WriteAsync(bytes);
     }
 
     public void NoMore()
@@ -137,7 +141,7 @@ public sealed class HeldTranscoder : ILiveTranscoder
         exit.TrySetResult(TranscoderExit.CalledOff(string.Empty));
         seat.Dispose();
 
-        return ValueTask.CompletedTask;
+        return FailingToStop is { } failure ? ValueTask.FromException(failure) : ValueTask.CompletedTask;
     }
 
     private void Complete()
@@ -148,6 +152,6 @@ public sealed class HeldTranscoder : ILiveTranscoder
         }
 
         completed = true;
-        output.Writer.Complete();
+        pipe.Writer.Complete();
     }
 }

@@ -55,6 +55,17 @@ public sealed class ScriptedDriverClient : IDriverClient
 
     public List<SessionId> Stopped { get; } = [];
 
+    public IReadOnlyList<SessionId> Live
+    {
+        get
+        {
+            lock (gate)
+            {
+                return [.. live.Keys];
+            }
+        }
+    }
+
     public ScriptedDriverClient Hold(SessionId sessionId, TuningParameters tuning)
     {
         lock (gate)
@@ -235,7 +246,18 @@ public sealed class ScriptedDriverClient : IDriverClient
     public Task<DriverCall<SessionSnapshot>> GetSessionAsync(
         SessionId sessionId,
         CancellationToken cancellationToken)
-        => throw new NotSupportedException();
+    {
+        lock (gate)
+        {
+            return Task.FromResult(live.ContainsKey(sessionId)
+                ? DriverCall<SessionSnapshot>.Reached(
+                    new SessionSnapshot(sessionId, SessionPurpose.Live, DeviceId, SessionState.Active, DateTimeOffset.UnixEpoch)
+                    {
+                        InstanceId = InstanceId,
+                    })
+                : DriverCall<SessionSnapshot>.Refused(DriverProblem.ForStatus(404)));
+        }
+    }
 
     public Task<DriverCall<IReadOnlyList<DiagnosticSnapshot>>> GetDiagnosticsAsync(
         CancellationToken cancellationToken)

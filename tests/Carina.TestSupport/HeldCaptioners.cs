@@ -85,6 +85,8 @@ public sealed class HeldCaptioner : ILiveCaptioner
 
     public Task<TranscoderExit> Completion => exit.Task;
 
+    public Exception? FailingToStop { get; set; }
+
     public bool Disposed { get; private set; }
 
     public void Draw(LiveFrame frame)
@@ -112,6 +114,6 @@ public sealed class HeldCaptioner : ILiveCaptioner
         input.Writer.Complete();
         exit.TrySetResult(TranscoderExit.CalledOff(string.Empty));
 
-        return ValueTask.CompletedTask;
+        return FailingToStop is { } failure ? ValueTask.FromException(failure) : ValueTask.CompletedTask;
     }
 }

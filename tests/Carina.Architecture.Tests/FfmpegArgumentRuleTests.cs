@@ -123,6 +123,23 @@ public sealed class FfmpegArgumentRuleTests
     }
 
     [Fact]
+    public void TheOnlyPlaceThatNamesAFontIsTheCaptionBuilderAndItNamesTheOneFaceTheImageInstallsAsAConstant()
+    {
+        Assert.Equal(
+            ["/Carina.Infrastructure/Streaming/FfmpegCaptionInvocation.cs -font"],
+            FfmpegArgumentRules.WhatNamesAFont(RepositoryLayout.SourceDirectory));
+
+        string source = File.ReadAllText(Path.Combine(
+            RepositoryLayout.SourceDirectory,
+            "Carina.Infrastructure",
+            "Streaming",
+            "FfmpegCaptionInvocation.cs"));
+
+        Assert.Contains("public const string Font = \"Noto Sans CJK JP\";", source, StringComparison.Ordinal);
+        Assert.Contains("\"-font\",\n            Font,", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void NoCommandIsHandedOverAsOnePieceOfTextForSomethingElseToReadAgain()
     {
         Assert.Empty(FfmpegArgumentRules.WhatCouldMakeACommandBeReadAgainAsText(RepositoryLayout.SourceDirectory));

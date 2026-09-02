@@ -33,6 +33,8 @@ public sealed class FfmpegCaptionInvocationTests
                 "bitmap",
                 "-canvas_size",
                 "1440x1080",
+                "-font",
+                "Noto Sans CJK JP",
                 "-i",
                 "pipe:0",
                 "-filter_complex",
@@ -43,6 +45,17 @@ public sealed class FfmpegCaptionInvocationTests
                 "passthrough",
             ],
             FfmpegCaptionInvocation.Arguments(Service, Terrestrial));
+    }
+
+    [Fact]
+    public void TheDecoderIsToldWhichFontToDrawWithBeforeTheInputIsNamedAndItIsTheJapaneseFaceTheImageInstalls()
+    {
+        IReadOnlyList<string> arguments = FfmpegCaptionInvocation.Arguments(Service, Terrestrial);
+
+        Assert.Equal(1, arguments.Count(argument => argument == "-font"));
+        Assert.Equal(FfmpegCaptionInvocation.Font, arguments[At(arguments, "-font") + 1]);
+        Assert.Equal("Noto Sans CJK JP", FfmpegCaptionInvocation.Font);
+        Assert.True(At(arguments, "-font") < At(arguments, "-i"));
     }
 
     [Fact]

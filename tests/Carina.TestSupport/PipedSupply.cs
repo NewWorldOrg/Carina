@@ -76,7 +76,9 @@ public sealed class PipedTransportStream : ILiveTransportStream
 
     public LiveSupplyEnding? Ending { get; set; }
 
-    public bool Disposed { get; private set; }
+    public bool Disposed => TimesLetGo > 0;
+
+    public int TimesLetGo { get; private set; }
 
     public async Task WriteAsync(byte[] bytes)
     {
@@ -89,7 +91,7 @@ public sealed class PipedTransportStream : ILiveTransportStream
 
     public ValueTask DisposeAsync()
     {
-        Disposed = true;
+        TimesLetGo++;
         Complete();
 
         return ValueTask.CompletedTask;
