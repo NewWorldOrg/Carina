@@ -1,3 +1,4 @@
+using Carina.Domain.Channels;
 using Carina.Domain.Streaming;
 
 namespace Carina.Infrastructure.Streaming;
@@ -9,10 +10,12 @@ public sealed class LiveTranscoderFactory(
     TimeProvider clock) : ILiveTranscoderFactory
 {
     public async Task<LiveTranscoderStart> StartAsync(
+        ServiceId service,
         LiveProfile profile,
         StreamAttributes attributes,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(attributes);
 
@@ -27,7 +30,7 @@ public sealed class LiveTranscoderFactory(
 
         try
         {
-            LiveTranscoderStart started = await StartedAsync(profile, attributes, seat, cancellationToken);
+            LiveTranscoderStart started = await StartedAsync(service, profile, attributes, seat, cancellationToken);
 
             handedOver = started.Running;
 
@@ -43,6 +46,7 @@ public sealed class LiveTranscoderFactory(
     }
 
     private async Task<LiveTranscoderStart> StartedAsync(
+        ServiceId service,
         LiveProfile profile,
         StreamAttributes attributes,
         ITranscodeSeat seat,
@@ -53,7 +57,7 @@ public sealed class LiveTranscoderFactory(
         LiveTranscoderStart started = TranscoderProcess.Start(
             settings,
             [
-                .. FfmpegLiveInvocation.Arguments(profile, attributes, chosen.Encoder),
+                .. FfmpegLiveInvocation.Arguments(service, profile, attributes, chosen.Encoder),
                 .. FfmpegLiveInvocation.Delivery(),
             ],
             chosen,

@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Runtime.Versioning;
 
+using Carina.Domain.Channels;
 using Carina.Domain.Streaming;
 using Carina.Infrastructure.Streaming;
 
@@ -14,6 +15,8 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
         ScanType.Interlaced,
         FrameRate.BroadcastFrames,
         AudioMode.Stereo);
+
+    private static readonly ServiceId Service = new(1040);
 
     private readonly StandIns standIns = new();
 
@@ -36,8 +39,26 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
         string[] handed = File.ReadAllLines(said);
 
         Assert.Equal(
-            [.. FfmpegLiveInvocation.Arguments(LiveProfile.Hd30, Interlaced, LiveEncoder.Software), .. FfmpegLiveInvocation.Delivery()],
+            [.. FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software), .. FfmpegLiveInvocation.Delivery()],
             handed);
+    }
+
+    [Fact]
+    public async Task TheCommandNamesTheServiceWhosePictureAndSoundsItIsToTake()
+    {
+        string said = standIns.Named("arguments");
+
+        await using ILiveTranscoder running = await Started(
+            standIns.Script($"printf '%s\\n' \"$@\" > {said}; cat > /dev/null"),
+            LiveEncoder.Software);
+
+        await running.Input.DisposeAsync();
+        await running.Completion;
+
+        string[] handed = File.ReadAllLines(said);
+
+        Assert.Contains("p:1040:v:0", handed);
+        Assert.Contains("p:1040:a", handed);
     }
 
     [Fact]
@@ -302,7 +323,7 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
 
         var factory = new LiveTranscoderFactory(settings, budget, new AlreadyChosen(encoder), TimeProvider.System);
 
-        return factory.StartAsync(LiveProfile.Hd30, Interlaced, cancellationToken);
+        return factory.StartAsync(Service, LiveProfile.Hd30, Interlaced, cancellationToken);
     }
 
     private sealed class AlreadyChosen(LiveEncoder encoder) : ILiveEncoderSelector

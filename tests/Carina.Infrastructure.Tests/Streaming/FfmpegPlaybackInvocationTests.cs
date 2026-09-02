@@ -1,3 +1,4 @@
+using Carina.Domain.Channels;
 using Carina.Domain.Streaming;
 using Carina.Infrastructure.Streaming;
 
@@ -12,6 +13,8 @@ public sealed class FfmpegPlaybackInvocationTests
         AudioMode.Stereo);
 
     private static readonly StreamSource Recorded = new("/srv/recordings/a1b2c3.ts");
+
+    private static readonly ServiceId Service = new(1040);
 
     [Fact]
     public void TheStartingPositionIsGivenBeforeTheInputSoTheSeekHappensBeforeAnythingIsRead()
@@ -37,7 +40,7 @@ public sealed class FfmpegPlaybackInvocationTests
     [Fact]
     public void NothingAskedForBecauseTheLiveInputCannotBeRewoundIsAskedForOfAFileThatCan()
     {
-        IReadOnlyList<string> live = FfmpegLiveInvocation.Arguments(LiveProfile.Hd30, Interlaced, LiveEncoder.Software);
+        IReadOnlyList<string> live = FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software);
         IReadOnlyList<string> playing = Arguments(TimeSpan.FromMinutes(1));
 
         Assert.Contains("nobuffer", live);
@@ -59,18 +62,29 @@ public sealed class FfmpegPlaybackInvocationTests
     }
 
     [Fact]
-    public void WhatIsPlayedIsThePictureAndTheSoundAndNothingElseTheMultiplexHappenedToCarry()
+    public void WhatIsPlayedIsTheRecordedServicesPictureAndEveryOneOfItsSoundsAndNothingElseTheMultiplexCarried()
     {
         IReadOnlyList<string> arguments = Arguments(TimeSpan.Zero);
 
-        Assert.Contains("-sn", arguments);
-        Assert.Contains("-dn", arguments);
+        Assert.Equal(["p:1040:v:0", "p:1040:a"], Mapped(arguments));
+        Assert.True(Where(arguments, "-map") > Where(arguments, "-i"));
+    }
+
+    [Fact]
+    public void TheSoundsAreTakenTheSameWayTheyAreTakenForALiveViewer()
+    {
+        IReadOnlyList<string> live = FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software);
+        IReadOnlyList<string> playing = Arguments(TimeSpan.FromMinutes(1));
+
+        Assert.Equal(Mapped(live), Mapped(playing));
+        Assert.Equal(After(live, "-c:a"), After(playing, "-c:a"));
+        Assert.Equal(After(live, "-bsf:a"), After(playing, "-bsf:a"));
     }
 
     [Fact]
     public void ThePictureIsBuiltTheSameWayItIsBuiltForALiveViewer()
     {
-        IReadOnlyList<string> live = FfmpegLiveInvocation.Arguments(LiveProfile.Hd30, Interlaced, LiveEncoder.Software);
+        IReadOnlyList<string> live = FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software);
         IReadOnlyList<string> playing = Arguments(TimeSpan.FromMinutes(1));
 
         Assert.Equal(After(live, "-vf"), After(playing, "-vf"));
@@ -85,12 +99,19 @@ public sealed class FfmpegPlaybackInvocationTests
 
         Assert.Equal("copy", After(arguments, "-c:a"));
         Assert.Equal("aac_adtstoasc", After(arguments, "-bsf:a"));
+        Assert.DoesNotContain("-b:a", arguments);
+        Assert.DoesNotContain("-ac", arguments);
+        Assert.DoesNotContain("-ar", arguments);
+        Assert.DoesNotContain("-af", arguments);
+        Assert.DoesNotContain("-filter:a", arguments);
+        Assert.DoesNotContain("-channel_layout", arguments);
     }
 
     [Fact]
     public void ACardIsNamedBeforeTheInputWhenTheCardIsWhatEncodes()
     {
         IReadOnlyList<string> arguments = FfmpegPlaybackInvocation.Arguments(
+            Service,
             LiveProfile.Hd30,
             Interlaced,
             LiveEncoder.Vaapi,
@@ -106,7 +127,7 @@ public sealed class FfmpegPlaybackInvocationTests
     public void WhatIsHandedBackIsTheSameFragmentedContainerALiveViewerIsHandedBack()
     {
         Assert.Equal(
-            ["-f", "mp4", "-movflags", "empty_moov+default_base_moof", "-frag_duration", "200000", "pipe:1"],
+            ["-f", "mp4", "-movflags", "empty_moov+default_base_moof+delay_moov", "-frag_duration", "200000", "pipe:1"],
             FfmpegLiveInvocation.Delivery());
     }
 
@@ -116,17 +137,27 @@ public sealed class FfmpegPlaybackInvocationTests
         Assert.Throws<ArgumentOutOfRangeException>(() => Arguments(TimeSpan.FromSeconds(-1)));
         Assert.Throws<ArgumentNullException>(() => FfmpegPlaybackInvocation.Arguments(
             null!,
+            LiveProfile.Hd30,
             Interlaced,
             LiveEncoder.Software,
             Recorded,
             TimeSpan.Zero));
         Assert.Throws<ArgumentNullException>(() => FfmpegPlaybackInvocation.Arguments(
+            Service,
+            null!,
+            Interlaced,
+            LiveEncoder.Software,
+            Recorded,
+            TimeSpan.Zero));
+        Assert.Throws<ArgumentNullException>(() => FfmpegPlaybackInvocation.Arguments(
+            Service,
             LiveProfile.Hd30,
             Interlaced,
             LiveEncoder.Software,
             null!,
             TimeSpan.Zero));
         Assert.Throws<ArgumentOutOfRangeException>(() => FfmpegPlaybackInvocation.Arguments(
+            Service,
             LiveProfile.Hd30,
             Interlaced,
             (LiveEncoder)99,
@@ -157,5 +188,14 @@ public sealed class FfmpegPlaybackInvocationTests
     }
 
     private static IReadOnlyList<string> Arguments(TimeSpan from)
-        => FfmpegPlaybackInvocation.Arguments(LiveProfile.Hd30, Interlaced, LiveEncoder.Software, Recorded, from);
+        => FfmpegPlaybackInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, Recorded, from);
+
+    private static string[] Mapped(IReadOnlyList<string> arguments)
+        =>
+        [
+            .. arguments
+                .Select((argument, at) => (argument, at))
+                .Where(pair => string.Equals(pair.argument, "-map", StringComparison.Ordinal))
+                .Select(pair => arguments[pair.at + 1]),
+        ];
 }
