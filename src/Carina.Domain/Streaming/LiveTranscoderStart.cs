@@ -2,16 +2,23 @@ namespace Carina.Domain.Streaming;
 
 public sealed class LiveTranscoderStart
 {
-    private LiveTranscoderStart(ILiveTranscoder? transcoder, TranscoderFault? fault, string note)
+    private LiveTranscoderStart(
+        ILiveTranscoder? transcoder,
+        TranscoderFault? fault,
+        TranscodeCeiling? ceiling,
+        string note)
     {
         Transcoder = transcoder;
         Fault = fault;
+        Ceiling = ceiling;
         Note = note;
     }
 
     public ILiveTranscoder? Transcoder { get; }
 
     public TranscoderFault? Fault { get; }
+
+    public TranscodeCeiling? Ceiling { get; }
 
     public string Note { get; }
 
@@ -21,7 +28,7 @@ public sealed class LiveTranscoderStart
     {
         ArgumentNullException.ThrowIfNull(transcoder);
 
-        return new LiveTranscoderStart(transcoder, null, string.Empty);
+        return new LiveTranscoderStart(transcoder, null, null, string.Empty);
     }
 
     public static LiveTranscoderStart Failed(TranscoderFault fault, string note)
@@ -34,6 +41,13 @@ public sealed class LiveTranscoderStart
                 "A transcoder fails in one of the ways named here.");
         }
 
-        return new LiveTranscoderStart(null, fault, TranscoderNote.Of(note));
+        return new LiveTranscoderStart(null, fault, null, TranscoderNote.Of(note));
+    }
+
+    public static LiveTranscoderStart Refused(TranscodeCeiling ceiling)
+    {
+        ArgumentNullException.ThrowIfNull(ceiling);
+
+        return new LiveTranscoderStart(null, TranscoderFault.TooManyAlready, ceiling, ceiling.Said);
     }
 }

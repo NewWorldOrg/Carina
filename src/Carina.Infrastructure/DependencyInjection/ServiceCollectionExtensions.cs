@@ -79,6 +79,11 @@ public static class ServiceCollectionExtensions
             .Configure(options => options.ReadFrom(configuration))
             .ValidateOnStart();
 
+        services.AddSingleton<IValidateOptions<TranscodingOptions>, TranscodingValidation>();
+        services.AddOptions<TranscodingOptions>()
+            .Configure(options => options.ReadFrom(configuration))
+            .ValidateOnStart();
+
         services.AddDbContext<CarinaDbContext>((provider, options) =>
             options.UseCarinaDatabase(provider.GetRequiredService<IOptions<DatabaseOptions>>().Value.ConnectionString));
 
@@ -174,6 +179,9 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton(new StreamAttributeSettings());
         services.TryAddSingleton(new LiveTranscodeSettings());
         services.TryAddSingleton(new OnTheFlySettings());
+        services.TryAddSingleton<TranscodeBudgetSettings>(provider =>
+            provider.GetRequiredService<IOptions<TranscodingOptions>>().Value.Read());
+        services.TryAddSingleton<ITranscodeBudget, TranscodeBudget>();
         services.TryAddSingleton(new LiveWireSettings());
         services.TryAddSingleton<ILiveWireSource, NoLiveSource>();
         services.TryAddSingleton<IStreamAttributeReader, FfprobeStreamAttributeReader>();

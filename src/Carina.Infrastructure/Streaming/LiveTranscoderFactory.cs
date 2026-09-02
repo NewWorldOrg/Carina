@@ -4,6 +4,7 @@ namespace Carina.Infrastructure.Streaming;
 
 public sealed class LiveTranscoderFactory(
     LiveTranscodeSettings settings,
+    ITranscodeBudget budget,
     ILiveEncoderSelector selector,
     TimeProvider clock) : ILiveTranscoderFactory
 {
@@ -15,9 +16,41 @@ public sealed class LiveTranscoderFactory(
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(attributes);
 
+        TranscodeClaim claim = budget.Claim(TranscodePurpose.Live);
+
+        if (claim.Seat is not { } seat)
+        {
+            return LiveTranscoderStart.Refused(claim.Refusal!);
+        }
+
+        bool handedOver = false;
+
+        try
+        {
+            LiveTranscoderStart started = await StartedAsync(profile, attributes, seat, cancellationToken);
+
+            handedOver = started.Running;
+
+            return started;
+        }
+        finally
+        {
+            if (!handedOver)
+            {
+                seat.Dispose();
+            }
+        }
+    }
+
+    private async Task<LiveTranscoderStart> StartedAsync(
+        LiveProfile profile,
+        StreamAttributes attributes,
+        ITranscodeSeat seat,
+        CancellationToken cancellationToken)
+    {
         LiveEncoderChoice chosen = await selector.ChooseAsync(cancellationToken);
 
-        return TranscoderProcess.Start(
+        LiveTranscoderStart started = TranscoderProcess.Start(
             settings,
             [
                 .. FfmpegLiveInvocation.Arguments(profile, attributes, chosen.Encoder),
@@ -26,5 +59,9 @@ public sealed class LiveTranscoderFactory(
             chosen,
             clock,
             cancellationToken);
+
+        return started.Transcoder is { } transcoder
+            ? LiveTranscoderStart.Started(new SeatedTranscoder(transcoder, seat))
+            : started;
     }
 }

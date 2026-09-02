@@ -7,6 +7,8 @@ public enum TranscoderFault
     Refused = 2,
 
     CalledOff = 3,
+
+    TooManyAlready = 4,
 }
 
 public sealed record TranscoderExit

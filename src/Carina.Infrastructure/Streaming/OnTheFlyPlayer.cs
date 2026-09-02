@@ -6,27 +6,13 @@ namespace Carina.Infrastructure.Streaming;
 public sealed class OnTheFlyPlayer(
     OnTheFlySettings settings,
     LiveTranscodeSettings transcoding,
+    ITranscodeBudget budget,
     IPlaybackFileStore files,
     IStreamAttributeReader attributes,
     ILiveEncoderSelector selector,
     TimeProvider clock) : IOnTheFlyPlayer
 {
     public const int FirstChunk = 64 * 1024;
-
-    private readonly Lock counting = new();
-
-    private int running;
-
-    public int Running
-    {
-        get
-        {
-            lock (counting)
-            {
-                return running;
-            }
-        }
-    }
 
     public async Task<OnTheFlyStart> StartAsync(
         PlaybackFile file,
@@ -45,18 +31,18 @@ public sealed class OnTheFlyPlayer(
                 "the recording holds no bytes to transcode.");
         }
 
-        if (Claimed() is not { } place)
+        TranscodeClaim claim = budget.Claim(TranscodePurpose.Playback);
+
+        if (claim.Seat is not { } seat)
         {
-            return OnTheFlyStart.Refused(
-                OnTheFlyRefusal.TooManyAlready,
-                $"{settings.AtOnce} recording(s) are already being transcoded, which is as many at once as this machine is asked to.");
+            return OnTheFlyStart.Refused(OnTheFlyRefusal.TooManyAlready, claim.Refusal!.Said);
         }
 
         bool handedOver = false;
 
         try
         {
-            OnTheFlyStart start = await StartedAsync(source, from, profile, place, cancellationToken);
+            OnTheFlyStart start = await StartedAsync(source, from, profile, seat, cancellationToken);
 
             handedOver = start.Running;
 
@@ -66,7 +52,7 @@ public sealed class OnTheFlyPlayer(
         {
             if (!handedOver)
             {
-                LetGo();
+                seat.Dispose();
             }
         }
     }
@@ -75,7 +61,7 @@ public sealed class OnTheFlyPlayer(
         StreamSource source,
         TimeSpan from,
         LiveProfile profile,
-        int place,
+        ITranscodeSeat seat,
         CancellationToken cancellationToken)
     {
         StreamAttributeReading read = await attributes.ReadAsync(source, cancellationToken);
@@ -100,7 +86,7 @@ public sealed class OnTheFlyPlayer(
 
         return await WhatCameOutAsync(
             transcoder,
-            new OnTheFlyBearing(began, from, profile, read.Measured, place),
+            new OnTheFlyBearing(began, from, profile, read.Measured, seat),
             cancellationToken);
     }
 
@@ -147,11 +133,11 @@ public sealed class OnTheFlyPlayer(
             bearing.Profile,
             transcoder.Encoder,
             bearing.Measured,
-            bearing.Place,
-            settings.AtOnce);
+            bearing.Seat.Place,
+            bearing.Seat.AtOnce);
 
         return OnTheFlyStart.Started(
-            new OnTheFlyViewing(transcoder, standing, buffer.AsMemory(0, read), LetGo));
+            new OnTheFlyViewing(transcoder, standing, buffer.AsMemory(0, read), bearing.Seat.Dispose));
     }
 
     private static string WhatItSaid(TranscoderExit ended)
@@ -176,33 +162,10 @@ public sealed class OnTheFlyPlayer(
     private StreamSource? WhatIsStillThere(PlaybackFile file)
         => files.Find(file.Root, file.Name) is { HoldsAnything: true } still ? files.SourceOf(still) : null;
 
-    private int? Claimed()
-    {
-        lock (counting)
-        {
-            if (running >= settings.AtOnce)
-            {
-                return null;
-            }
-
-            running++;
-
-            return running;
-        }
-    }
-
-    private void LetGo()
-    {
-        lock (counting)
-        {
-            running--;
-        }
-    }
-
     private readonly record struct OnTheFlyBearing(
         long Began,
         TimeSpan From,
         LiveProfile Profile,
         bool Measured,
-        int Place);
+        ITranscodeSeat Seat);
 }
