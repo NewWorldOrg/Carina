@@ -139,13 +139,13 @@ public sealed class LiveSessionWireTests
         InvalidOperationException refused = await Assert.ThrowsAsync<InvalidOperationException>(
             () => Carrying(probe, cookie).ConnectAsync(Handshake("32736", "1024", "hls"), Patiently()));
 
-        Assert.Contains("503", refused.Message, StringComparison.Ordinal);
+        Assert.Contains("400", refused.Message, StringComparison.Ordinal);
         Assert.Equal(0, supply.Asked);
         Assert.Equal(0, transcoders.Started);
     }
 
     [Fact]
-    public async Task AWireIsRefusedWhileTheDriverCannotBeReached()
+    public async Task AWireIsToldOnTheControlChannelThatTheDriverCannotBeReachedAndIsClosed()
     {
         TuningByServiceId tuning = new();
 
@@ -155,10 +155,70 @@ public sealed class LiveSessionWireTests
             services.AddSingleton<IServiceTuningDirectory>(tuning));
         string cookie = await probe.SignedInCookieAsync();
 
-        InvalidOperationException refused = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => Carrying(probe, cookie).ConnectAsync(Handshake("32736", "1024", "720p30"), Patiently()));
+        using WebSocket socket = await Carrying(probe, cookie).ConnectAsync(Handshake("32736", "1024", "720p30"), Patiently());
 
-        Assert.Contains("503", refused.Message, StringComparison.Ordinal);
+        LiveRefusalReport report = await Refused(socket);
+
+        Assert.Equal(LiveRefusal.DriverUnavailable, report.Refusal);
+        Assert.Null(report.Ceiling);
+
+        WebSocketReceiveResult ending = await Heard(socket);
+
+        Assert.Equal(WebSocketMessageType.Close, ending.MessageType);
+        Assert.Equal(WebSocketCloseStatus.InternalServerError, ending.CloseStatus);
+        Assert.Equal(LiveRefusalClosures.Because(LiveRefusal.DriverUnavailable), ending.CloseStatusDescription);
+    }
+
+    [Theory]
+    [InlineData(LiveRefusal.NoSuchChannel, WebSocketCloseStatus.InvalidPayloadData)]
+    [InlineData(LiveRefusal.NoTunerFree, WebSocketCloseStatus.PolicyViolation)]
+    [InlineData(LiveRefusal.WouldNotTune, WebSocketCloseStatus.InternalServerError)]
+    public async Task WhatTheSupplyRefusesForReachesTheViewerAsThatReason(LiveRefusal why, WebSocketCloseStatus closed)
+    {
+        supply.Refusing = why;
+        await using AuthProbe probe = Wiring();
+        string cookie = await probe.SignedInCookieAsync();
+
+        using WebSocket socket = await Carrying(probe, cookie).ConnectAsync(Handshake("32736", "1024", "720p30"), Patiently());
+
+        LiveRefusalReport report = await Refused(socket);
+
+        Assert.Equal(why, report.Refusal);
+        Assert.Null(report.Ceiling);
+
+        WebSocketReceiveResult ending = await Heard(socket);
+
+        Assert.Equal(closed, ending.CloseStatus);
+        Assert.Equal(LiveRefusalClosures.Because(why), ending.CloseStatusDescription);
+        Assert.Equal(0, transcoders.Started);
+    }
+
+    [Fact]
+    public async Task AFullBudgetReachesTheViewerWithHowFullItIs()
+    {
+        TranscodeBudget one = new(new TranscodeBudgetSettings { AtOnce = 1 });
+        HeldTranscoders few = new(one);
+        await using AuthProbe probe = AuthProbe.OverHttp(services =>
+        {
+            services.AddSingleton<ILiveSupply>(supply);
+            services.AddSingleton<ITranscodeBudget>(one);
+            services.AddSingleton<ILiveTranscoderFactory>(few);
+        });
+        string cookie = await probe.SignedInCookieAsync();
+
+        using WebSocket seated = await Carrying(probe, cookie).ConnectAsync(Handshake("32736", "1024", "720p30"), Patiently());
+        using WebSocket refused = await Carrying(probe, cookie).ConnectAsync(Handshake("32736", "1024", "720p60"), Patiently());
+
+        LiveRefusalReport report = await Refused(refused);
+
+        Assert.Equal(LiveRefusal.TooManyAlready, report.Refusal);
+        Assert.Equal(new TranscodeCeiling(1, 1), report.Ceiling);
+
+        WebSocketReceiveResult ending = await Heard(refused);
+
+        Assert.Equal(WebSocketCloseStatus.PolicyViolation, ending.CloseStatus);
+        Assert.Equal(1, few.Started);
+        Assert.Equal(1, Sessions(probe).Viewers(EveryFrame));
     }
 
     private static Uri Handshake(string network, string service, string profile)
@@ -176,6 +236,26 @@ public sealed class LiveSessionWireTests
         client.ConfigureRequest += request => request.Headers[HeaderNames.Cookie] = cookie;
 
         return client;
+    }
+
+    private static async Task<LiveRefusalReport> Refused(WebSocket socket)
+    {
+        LiveFrame said = await Take(socket);
+
+        Assert.Equal(LiveChannel.Control, said.Channel);
+
+        LiveRefusalReading read = LiveRefusalReport.Read(said.Payload.Span);
+
+        Assert.Null(read.Fault);
+
+        return read.Report!;
+    }
+
+    private static async Task<WebSocketReceiveResult> Heard(WebSocket socket)
+    {
+        byte[] heard = new byte[64 * 1024];
+
+        return await socket.ReceiveAsync(new ArraySegment<byte>(heard), Patiently());
     }
 
     private static async Task<LiveFrame> Take(WebSocket socket)

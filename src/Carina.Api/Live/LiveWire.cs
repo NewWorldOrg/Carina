@@ -12,12 +12,12 @@ public static class LiveWire
 
     public static async Task Invoke(
         HttpContext context,
-        ILiveWireSource source,
+        ILiveSessionManager sessions,
         LiveWireSettings settings,
         IHostApplicationLifetime running)
     {
         ArgumentNullException.ThrowIfNull(context);
-        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(sessions);
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(running);
 
@@ -41,14 +41,20 @@ public static class LiveWire
             return;
         }
 
-        ILiveViewing? viewing = await source.JoinAsync(context.RequestAborted);
-
-        if (viewing is null)
+        if (LiveWireRequest.KeyOf(context.Request.Query) is not { } key)
         {
-            await RefuseAsync(
-                context,
-                StatusCodes.Status503ServiceUnavailable,
-                "Nothing is being sent live from this app.");
+            await RefuseAsync(context, StatusCodes.Status400BadRequest, LiveWireRequest.TheKeyThereIs);
+
+            return;
+        }
+
+        LiveJoin join = await sessions.JoinAsync(key, context.RequestAborted);
+
+        if (join.Viewing is not { } viewing)
+        {
+            using WebSocket refusing = await context.WebSockets.AcceptWebSocketAsync();
+
+            await new LiveWireSocket(refusing, settings).RefuseAsync(join, context.RequestAborted);
 
             return;
         }

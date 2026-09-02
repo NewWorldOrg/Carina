@@ -1,9 +1,7 @@
 using System.Net;
 
 using Carina.Api.Authentication;
-using Carina.Api.Live;
 using Carina.Api.Services;
-using Carina.Domain.Streaming;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Options;
@@ -44,8 +42,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<PlaybackTicketService>();
         services.AddScoped<StorageService>();
         services.AddSingleton<PlaybackTicketGate>();
-        services.AddHttpContextAccessor();
-        services.AddSingleton<ILiveWireSource, LiveSessionWireSource>();
 
         return services;
     }

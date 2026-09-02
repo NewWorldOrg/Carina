@@ -44,6 +44,42 @@ public sealed class LiveWireSocket(WebSocket socket, LiveWireSettings settings, 
         return departure;
     }
 
+    public async Task RefuseAsync(LiveJoin refused, CancellationToken cancellationToken)
+    {
+        LiveRefusalReport report = LiveRefusalReport.Of(refused);
+
+        using CancellationTokenSource patience = new(GoodbyePatience);
+        using CancellationTokenSource leash =
+            CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, patience.Token);
+
+        try
+        {
+            await socket.SendAsync(
+                new LiveFrame(LiveChannel.Control, LivePts.Start, report.ToPayload()).ToArray(),
+                WebSocketMessageType.Binary,
+                true,
+                leash.Token);
+
+            await socket.CloseOutputAsync(
+                LiveRefusalClosures.Status(report.Refusal),
+                LiveRefusalClosures.Because(report.Refusal),
+                leash.Token);
+
+            byte[] heard = new byte[LiveFrame.HeaderLength + settings.LargestFrameFromAViewer + 1];
+
+            while ((await socket.ReceiveAsync(new ArraySegment<byte>(heard), leash.Token)).MessageType
+                   is not WebSocketMessageType.Close)
+            {
+            }
+        }
+        catch (Exception gone)
+            when (gone is OperationCanceledException or WebSocketException or IOException
+                      or ObjectDisposedException or InvalidOperationException)
+        {
+            socket.Abort();
+        }
+    }
+
     private static async Task Swallow(Task running)
     {
         try

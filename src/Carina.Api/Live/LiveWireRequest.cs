@@ -7,7 +7,7 @@ using Microsoft.Extensions.Primitives;
 
 namespace Carina.Api.Live;
 
-public sealed class LiveSessionWireSource(IHttpContextAccessor requests, ILiveSessionManager sessions) : ILiveWireSource
+public static class LiveWireRequest
 {
     public const string Network = "network";
 
@@ -15,17 +15,9 @@ public sealed class LiveSessionWireSource(IHttpContextAccessor requests, ILiveSe
 
     public const string Profile = "profile";
 
-    public async ValueTask<ILiveViewing?> JoinAsync(CancellationToken cancellationToken)
-    {
-        if (requests.HttpContext is not { } context || KeyOf(context.Request.Query) is not { } key)
-        {
-            return null;
-        }
-
-        LiveJoin join = await sessions.JoinAsync(key, cancellationToken);
-
-        return join.Viewing;
-    }
+    public static readonly string TheKeyThereIs =
+        $"A wire is asked for by `{Network}` and `{Service}` as whole numbers and `{Profile}` as one of "
+        + $"{string.Join(", ", LiveProfile.All.Select(profile => profile.Name))}, each said once.";
 
     public static LiveSessionKey? KeyOf(IQueryCollection query)
     {
