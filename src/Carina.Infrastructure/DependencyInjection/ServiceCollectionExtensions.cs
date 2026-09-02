@@ -177,7 +177,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IScrubFrames, Scrubber>();
         services.AddScoped<IDrawnThumbnails, DrawnThumbnails>();
         services.TryAddSingleton(new StreamAttributeSettings());
-        services.TryAddSingleton(new LiveTranscodeSettings());
+        services.TryAddSingleton<LiveTranscodeSettings>(provider =>
+            provider.GetRequiredService<IOptions<TranscodingOptions>>().Value.ReadLive());
         services.TryAddSingleton(new OnTheFlySettings());
         services.TryAddSingleton<TranscodeBudgetSettings>(provider =>
             provider.GetRequiredService<IOptions<TranscodingOptions>>().Value.Read());

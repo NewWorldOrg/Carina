@@ -13,6 +13,8 @@ public sealed class TranscodingOptions
 
     public string? AtOnce { get; set; }
 
+    public string? Prefer { get; set; }
+
     public void ReadFrom(IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
@@ -20,6 +22,7 @@ public sealed class TranscodingOptions
         IConfigurationSection named = configuration.GetSection(Section);
 
         AtOnce = named[nameof(AtOnce)];
+        Prefer = named[nameof(Prefer)];
     }
 
     public TranscodeBudgetSettings Read()
@@ -30,6 +33,38 @@ public sealed class TranscodingOptions
         {
             AtOnce = Counted(AtOnce, nameof(AtOnce), unset.AtOnce, TranscodeBudgetSettings.Fewest),
         };
+    }
+
+    public LiveTranscodeSettings ReadLive()
+    {
+        LiveTranscodeSettings unset = new();
+
+        return new LiveTranscodeSettings
+        {
+            Prefer = Named(Prefer, nameof(Prefer), unset.Prefer),
+        };
+    }
+
+    private static LiveEncoder Named(string? setting, string name, LiveEncoder unset)
+    {
+        if (string.IsNullOrWhiteSpace(setting))
+        {
+            return unset;
+        }
+
+        LiveEncoder[] known = Enum.GetValues<LiveEncoder>();
+
+        foreach (LiveEncoder encoder in known)
+        {
+            if (string.Equals(encoder.ToString(), setting, StringComparison.Ordinal))
+            {
+                return encoder;
+            }
+        }
+
+        throw new ArgumentException(
+            $"{Section}:{name} is one of {string.Join(", ", known)}, and '{setting}' is not.",
+            name);
     }
 
     private static int Counted(string? setting, string name, int unset, int lowest)
@@ -58,6 +93,7 @@ public sealed class TranscodingValidation : IValidateOptions<TranscodingOptions>
         try
         {
             options.Read();
+            options.ReadLive();
         }
         catch (ArgumentException refusal)
         {

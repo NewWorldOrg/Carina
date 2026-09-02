@@ -2,6 +2,7 @@ using Carina.Domain.Streaming;
 using Carina.Infrastructure.Configuration;
 
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 
 namespace Carina.Infrastructure.Tests.Configuration;
 
@@ -36,6 +37,59 @@ public sealed class TranscodingOptionsTests
     }
 
     [Fact]
+    public void NothingConfiguredMeansTheSoftwareEncoder()
+    {
+        Assert.Equal(LiveEncoder.Software, ReadLive().Prefer);
+        Assert.Equal(new LiveTranscodeSettings().Prefer, ReadLive().Prefer);
+    }
+
+    [Theory]
+    [InlineData("Software", LiveEncoder.Software)]
+    [InlineData("Vaapi", LiveEncoder.Vaapi)]
+    public void TheEncoderAskedForReachesTheSettingsTheTranscoderReads(string named, LiveEncoder read)
+    {
+        Assert.Equal(read, ReadLive(("Transcoding:Prefer", named)).Prefer);
+    }
+
+    [Theory]
+    [InlineData("vaapi")]
+    [InlineData("VAAPI")]
+    [InlineData("2")]
+    [InlineData("hardware")]
+    [InlineData("Software ")]
+    public void AnEncoderOffTheListIsRefusedByNameAndNamesTheOnesThereAre(string named)
+    {
+        ArgumentException refusal = Assert.Throws<ArgumentException>(() => ReadLive(("Transcoding:Prefer", named)));
+
+        Assert.Equal("Prefer", refusal.ParamName);
+        Assert.Contains("Transcoding:Prefer", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("Software, Vaapi", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AnEncoderOffTheListIsWhatStopsTheProcessStartingToo()
+    {
+        TranscodingOptions options = new();
+        options.ReadFrom(Configuration(("Transcoding:Prefer", "hardware")));
+
+        ValidateOptionsResult validated = new TranscodingValidation().Validate(null, options);
+
+        Assert.True(validated.Failed);
+        Assert.Contains("Transcoding:Prefer", validated.FailureMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WhatTheEncoderSettingLeavesAloneStaysAsItWas()
+    {
+        LiveTranscodeSettings read = ReadLive(("Transcoding:Prefer", "Vaapi"));
+        LiveTranscodeSettings unset = new();
+
+        Assert.Equal(unset.Programme, read.Programme);
+        Assert.Equal(unset.LongestProbe, read.LongestProbe);
+        Assert.Equal(unset.StopGrace, read.StopGrace);
+    }
+
+    [Fact]
     public void TheSameRefusalIsWhatStopsTheProcessStarting()
     {
         TranscodingOptions options = new();
@@ -58,6 +112,14 @@ public sealed class TranscodingOptionsTests
         options.ReadFrom(Configuration(settings));
 
         return options.Read();
+    }
+
+    private static LiveTranscodeSettings ReadLive(params (string Key, string Value)[] settings)
+    {
+        TranscodingOptions options = new();
+        options.ReadFrom(Configuration(settings));
+
+        return options.ReadLive();
     }
 
     private static IConfiguration Configuration(params (string Key, string Value)[] settings)
