@@ -25,4 +25,18 @@ public static class LiveStartupSegments
     ];
 
     public static LiveStartupSegment Last => LiveStartupSegment.FirstPicture;
+
+    public static IReadOnlyList<LiveStartupSegment> Behind(LiveStartupSegment segment)
+        => segment switch
+        {
+            LiveStartupSegment.TunerSecured => [],
+            LiveStartupSegment.ChannelLocked => [LiveStartupSegment.TunerSecured],
+            LiveStartupSegment.TranscoderStarted => [LiveStartupSegment.TunerSecured],
+            LiveStartupSegment.InitReached => [LiveStartupSegment.ChannelLocked, LiveStartupSegment.TranscoderStarted],
+            LiveStartupSegment.FirstPicture => [LiveStartupSegment.InitReached],
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(segment),
+                segment,
+                "The startup runs through one of the segments named here."),
+        };
 }

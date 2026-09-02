@@ -43,8 +43,8 @@ public sealed class LiveSessionWireTests
         await transcoders.Raised[0].WriteAsync(Fmp4.Header);
         await transcoders.Raised[0].WriteAsync(Fmp4.Fragment(1_000));
 
-        LiveFrame[] toOne = [await Take(one), await Take(one), await Take(one)];
-        LiveFrame[] toAnother = [await Take(another), await Take(another), await Take(another)];
+        LiveFrame[] toOne = [await Take(one), await TakePastProgress(one), await TakePastProgress(one)];
+        LiveFrame[] toAnother = [await Take(another), await TakePastProgress(another), await TakePastProgress(another)];
 
         Assert.Equal([LiveChannel.Control, LiveChannel.PictureHeader, LiveChannel.Picture], toOne.Select(frame => frame.Channel));
         Assert.Equal(toOne.Select(frame => frame.Channel), toAnother.Select(frame => frame.Channel));
@@ -91,8 +91,44 @@ public sealed class LiveSessionWireTests
         await transcoders.Raised[0].WriteAsync(Fmp4.Header);
         await transcoders.Raised[0].WriteAsync(Fmp4.Fragment(1_000));
 
-        Assert.Equal(LiveChannel.PictureHeader, (await Take(socket)).Channel);
-        Assert.Equal(LiveChannel.Picture, (await Take(socket)).Channel);
+        Assert.Equal(LiveChannel.PictureHeader, (await TakePastProgress(socket)).Channel);
+        Assert.Equal(LiveChannel.Picture, (await TakePastProgress(socket)).Channel);
+    }
+
+    [Fact]
+    public async Task AWireIsToldEachStepOfTheStartupAsItIsReached()
+    {
+        await using AuthProbe probe = Wiring();
+        string cookie = await probe.SignedInCookieAsync();
+
+        using WebSocket socket = await Carrying(probe, cookie).ConnectAsync(Handshake("32736", "1024", "720p30"), Patiently());
+
+        LiveStartup atTheHandshake = await NextProgress(socket);
+
+        Assert.True(atTheHandshake.Reached(LiveStartupSegment.TranscoderStarted));
+        Assert.False(atTheHandshake.Reached(LiveStartupSegment.ChannelLocked));
+
+        await supply.Opened[0].WriteAsync(new byte[1_000]);
+
+        LiveStartup locked = await NextProgress(socket);
+
+        Assert.True(locked.Reached(LiveStartupSegment.ChannelLocked));
+        Assert.False(locked.Reached(LiveStartupSegment.InitReached));
+
+        await transcoders.Raised[0].WriteAsync(Fmp4.Header);
+
+        LiveStartup init = await NextProgress(socket);
+
+        Assert.True(init.Reached(LiveStartupSegment.InitReached));
+        Assert.False(init.Reached(LiveStartupSegment.FirstPicture));
+
+        await transcoders.Raised[0].WriteAsync(Fmp4.Fragment(1_000));
+
+        LiveStartup done = await NextProgress(socket);
+
+        Assert.True(done.Reached(LiveStartupSegment.FirstPicture));
+        Assert.False(done.InProgress);
+        Assert.All(done.Timeline, mark => Assert.True(mark.Took >= TimeSpan.Zero));
     }
 
     [Fact]
@@ -146,9 +182,9 @@ public sealed class LiveSessionWireTests
         await transcoders.Raised[0].WriteAsync(Fmp4.Header);
         transcoders.Raised[0].NoMore();
 
-        Assert.Equal(LiveChannel.PictureHeader, (await Take(socket)).Channel);
+        Assert.Equal(LiveChannel.PictureHeader, (await TakePastProgress(socket)).Channel);
 
-        LiveFrame said = await Take(socket);
+        LiveFrame said = await TakePastProgress(socket);
 
         Assert.Equal(LiveChannel.Control, said.Channel);
 
@@ -290,6 +326,39 @@ public sealed class LiveSessionWireTests
         byte[] heard = new byte[64 * 1024];
 
         return await socket.ReceiveAsync(new ArraySegment<byte>(heard), Patiently());
+    }
+
+    private static bool IsProgress(LiveFrame frame)
+        => frame.Channel is LiveChannel.Control && frame.Payload.Length == LiveStartup.PayloadLength;
+
+    private static async Task<LiveFrame> TakePastProgress(WebSocket socket)
+    {
+        while (true)
+        {
+            LiveFrame frame = await Take(socket);
+
+            if (!IsProgress(frame))
+            {
+                return frame;
+            }
+        }
+    }
+
+    private static async Task<LiveStartup> NextProgress(WebSocket socket)
+    {
+        while (true)
+        {
+            LiveFrame frame = await Take(socket);
+
+            if (IsProgress(frame))
+            {
+                LiveStartupReading read = LiveStartup.ReadProgress(frame.Payload.Span);
+
+                Assert.Null(read.Fault);
+
+                return read.Startup!;
+            }
+        }
     }
 
     private static async Task<LiveFrame> Take(WebSocket socket)

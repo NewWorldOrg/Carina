@@ -557,5 +557,7 @@ public sealed class LiveFanoutTests
     private sealed class StartupHeld : ILiveStartup
     {
         public LiveStartup? Current => LiveStartup.NotStarted;
+
+        public Task Advanced { get; } = new TaskCompletionSource().Task;
     }
 }

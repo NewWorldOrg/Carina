@@ -62,6 +62,39 @@ public sealed class LiveStartupRecordTests
     }
 
     [Fact]
+    public async Task ReachingASegmentWakesWhoeverWaitedForTheNextAdvanceAndHandsOutAFreshWait()
+    {
+        LiveStartupRecord record = new(TimeProvider.System);
+        Task before = record.Advanced;
+
+        Assert.False(before.IsCompleted);
+
+        record.Reach(LiveStartupSegment.TunerSecured);
+
+        await before.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Task after = record.Advanced;
+
+        Assert.NotSame(before, after);
+        Assert.False(after.IsCompleted);
+        Assert.True(record.Current!.Reached(LiveStartupSegment.TunerSecured));
+    }
+
+    [Fact]
+    public void ASegmentReachedAgainWakesNobody()
+    {
+        LiveStartupRecord record = new(TimeProvider.System);
+
+        record.Reach(LiveStartupSegment.TunerSecured);
+
+        Task waiting = record.Advanced;
+
+        record.Reach(LiveStartupSegment.TunerSecured);
+
+        Assert.False(waiting.IsCompleted);
+    }
+
+    [Fact]
     public void WhatWasReadEarlierDoesNotChangeUnderTheReader()
     {
         LiveStartupRecord record = new(TimeProvider.System);

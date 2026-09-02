@@ -2,7 +2,11 @@ using System.Buffers.Binary;
 
 namespace Carina.Domain.Streaming;
 
-public sealed record LiveStartupMark(LiveStartupSegment Segment, TimeSpan? ReachedAt, TimeSpan? Took)
+public sealed record LiveStartupMark(
+    LiveStartupSegment Segment,
+    TimeSpan? ReachedAt,
+    TimeSpan? Took,
+    LiveStartupSegment? TookFrom)
 {
     public bool Reached => ReachedAt is not null;
 }
@@ -69,29 +73,7 @@ public sealed class LiveStartup
         => reached.TryGetValue(segment, out TimeSpan elapsed) ? elapsed : null;
 
     public TimeSpan? Took(LiveStartupSegment segment)
-    {
-        if (At(segment) is not { } arrived)
-        {
-            return null;
-        }
-
-        TimeSpan since = TimeSpan.Zero;
-
-        foreach (LiveStartupSegment earlier in LiveStartupSegments.InOrder)
-        {
-            if (earlier == segment)
-            {
-                break;
-            }
-
-            if (At(earlier) is { } was)
-            {
-                since = was;
-            }
-        }
-
-        return arrived - since;
-    }
+        => At(segment) is { } arrived ? arrived - LatestBehind(segment).At : null;
 
     public LiveStartupMark Mark(LiveStartupSegment segment)
     {
@@ -103,7 +85,11 @@ public sealed class LiveStartup
                 "The startup runs through one of the segments named here.");
         }
 
-        return new LiveStartupMark(segment, At(segment), Took(segment));
+        return new LiveStartupMark(
+            segment,
+            At(segment),
+            Took(segment),
+            Reached(segment) ? LatestBehind(segment).Segment : null);
     }
 
     public LiveStartup Reaching(LiveStartupSegment segment, TimeSpan elapsed)
@@ -174,6 +160,23 @@ public sealed class LiveStartup
         }
 
         return LiveStartupReading.Read(new LiveStartup(reached));
+    }
+
+    private (LiveStartupSegment? Segment, TimeSpan At) LatestBehind(LiveStartupSegment segment)
+    {
+        (LiveStartupSegment? Segment, TimeSpan At) latest = (null, TimeSpan.Zero);
+
+        foreach (LiveStartupSegment behind in LiveStartupSegments.Behind(segment))
+        {
+            (LiveStartupSegment? Segment, TimeSpan At) waited = At(behind) is { } was ? (behind, was) : LatestBehind(behind);
+
+            if (waited.Segment is not null && (latest.Segment is null || waited.At > latest.At))
+            {
+                latest = waited;
+            }
+        }
+
+        return latest;
     }
 
     private static uint Milliseconds(TimeSpan elapsed)

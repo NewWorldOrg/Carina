@@ -2,7 +2,11 @@ using Carina.Domain.Streaming;
 
 namespace Carina.Api.Responder.Live;
 
-public sealed record LiveStartupMarkResponder(LiveStartupSegment Segment, long? ReachedAtMs, long? TookMs)
+public sealed record LiveStartupMarkResponder(
+    LiveStartupSegment Segment,
+    long? ReachedAtMs,
+    long? TookMs,
+    LiveStartupSegment? TookFrom)
 {
     public static LiveStartupMarkResponder Of(LiveStartupMark mark)
     {
@@ -11,7 +15,8 @@ public sealed record LiveStartupMarkResponder(LiveStartupSegment Segment, long? 
         return new LiveStartupMarkResponder(
             mark.Segment,
             mark.ReachedAt is { } reached ? (long)reached.TotalMilliseconds : null,
-            mark.Took is { } took ? (long)took.TotalMilliseconds : null);
+            mark.Took is { } took ? (long)took.TotalMilliseconds : null,
+            mark.TookFrom);
     }
 }
 

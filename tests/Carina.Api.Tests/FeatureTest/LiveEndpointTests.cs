@@ -85,10 +85,18 @@ internal sealed class LiveFeature : IAsyncDisposable
     }
 
     public void Watching(int serviceId, LiveProfile profile, int viewers, long dropped = 0L)
+        => Watching(
+            serviceId,
+            profile,
+            viewers,
+            LiveStartup.NotStarted.Reaching(LiveStartupSegment.TranscoderStarted, TimeSpan.FromMilliseconds(9)),
+            dropped);
+
+    public void Watching(int serviceId, LiveProfile profile, int viewers, LiveStartup startup, long dropped = 0L)
         => Ledger.Sessions.Add(new LiveSessionView(
             new LiveSessionKey(new NetworkId(32736), new ServiceId(serviceId), profile),
             viewers,
-            LiveStartup.NotStarted.Reaching(LiveStartupSegment.TranscoderStarted, TimeSpan.FromMilliseconds(9)),
+            startup,
             dropped));
 
     public async Task<(HttpStatusCode Status, JsonDocument Body)> GetAsync(string path)
@@ -353,6 +361,39 @@ public sealed class LiveEndpointTests
             marks.Select(mark => mark.GetProperty("segment").GetString()));
         Assert.Equal(9L, marks[2].GetProperty("reachedAtMs").GetInt64());
         Assert.Equal(JsonValueKind.Null, marks[4].GetProperty("reachedAtMs").ValueKind);
+    }
+
+    [Fact]
+    public async Task AStartupWhoseChannelLockedAfterTheTranscoderStartedReportsNoNegativeIntervalAndSaysWhatEachWaitedFor()
+    {
+        await using LiveFeature feature = new();
+
+        feature.Watching(
+            1024,
+            LiveProfile.Hd30,
+            1,
+            LiveStartup.NotStarted
+                .Reaching(LiveStartupSegment.TunerSecured, TimeSpan.FromMilliseconds(485))
+                .Reaching(LiveStartupSegment.TranscoderStarted, TimeSpan.FromMilliseconds(495))
+                .Reaching(LiveStartupSegment.ChannelLocked, TimeSpan.FromMilliseconds(733))
+                .Reaching(LiveStartupSegment.InitReached, TimeSpan.FromMilliseconds(4366))
+                .Reaching(LiveStartupSegment.FirstPicture, TimeSpan.FromMilliseconds(4368)));
+
+        (HttpStatusCode status, JsonDocument body) = await feature.GetAsync("/api/live/sessions");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+
+        JsonElement startup = body.RootElement.GetProperty("data")[0].GetProperty("startup");
+        JsonElement[] marks = [.. startup.GetProperty("marks").EnumerateArray()];
+
+        Assert.False(startup.GetProperty("inProgress").GetBoolean());
+        Assert.Equal([485L, 248L, 10L, 3633L, 2L], marks.Select(mark => mark.GetProperty("tookMs").GetInt64()));
+        Assert.All(marks, mark => Assert.True(mark.GetProperty("tookMs").GetInt64() >= 0));
+        Assert.Equal(JsonValueKind.Null, marks[0].GetProperty("tookFrom").ValueKind);
+        Assert.Equal("tunerSecured", marks[1].GetProperty("tookFrom").GetString());
+        Assert.Equal("tunerSecured", marks[2].GetProperty("tookFrom").GetString());
+        Assert.Equal("channelLocked", marks[3].GetProperty("tookFrom").GetString());
+        Assert.Equal("initReached", marks[4].GetProperty("tookFrom").GetString());
     }
 
     [Fact]

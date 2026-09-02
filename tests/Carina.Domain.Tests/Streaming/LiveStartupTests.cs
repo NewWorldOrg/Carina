@@ -32,7 +32,71 @@ public sealed class LiveStartupTests
     }
 
     [Fact]
-    public void AnIntervalIsMeasuredFromThePreviousSegmentThatWasReachedNotFromTheStart()
+    public void EachSegmentNamesWhatItWaitsForAndTheTwoInTheMiddleWaitForTheSameThing()
+    {
+        Assert.Empty(LiveStartupSegments.Behind(LiveStartupSegment.TunerSecured));
+        Assert.Equal([LiveStartupSegment.TunerSecured], LiveStartupSegments.Behind(LiveStartupSegment.ChannelLocked));
+        Assert.Equal([LiveStartupSegment.TunerSecured], LiveStartupSegments.Behind(LiveStartupSegment.TranscoderStarted));
+        Assert.Equal(
+            [LiveStartupSegment.ChannelLocked, LiveStartupSegment.TranscoderStarted],
+            LiveStartupSegments.Behind(LiveStartupSegment.InitReached));
+        Assert.Equal([LiveStartupSegment.InitReached], LiveStartupSegments.Behind(LiveStartupSegment.FirstPicture));
+    }
+
+    [Fact]
+    public void WhatASegmentWaitsForComesEarlierInTheOrderTheWireReports()
+    {
+        List<LiveStartupSegment> order = [.. LiveStartupSegments.InOrder];
+
+        Assert.All(
+            LiveStartupSegments.InOrder,
+            segment => Assert.All(
+                LiveStartupSegments.Behind(segment),
+                behind => Assert.True(order.IndexOf(behind) < order.IndexOf(segment))));
+    }
+
+    [Fact]
+    public void ASegmentIsMeasuredFromWhatItWaitedForSoTheTwoThatRanSideBySideBothReadFromTheTuner()
+    {
+        LiveStartup startup = LiveStartup.NotStarted
+            .Reaching(LiveStartupSegment.TunerSecured, TimeSpan.FromMilliseconds(485))
+            .Reaching(LiveStartupSegment.TranscoderStarted, TimeSpan.FromMilliseconds(495))
+            .Reaching(LiveStartupSegment.ChannelLocked, TimeSpan.FromMilliseconds(733))
+            .Reaching(LiveStartupSegment.InitReached, TimeSpan.FromMilliseconds(4366))
+            .Reaching(LiveStartupSegment.FirstPicture, TimeSpan.FromMilliseconds(4368));
+
+        Assert.Equal(
+            [485, 248, 10, 3633, 2],
+            startup.Timeline.Select(mark => (int)mark.Took!.Value.TotalMilliseconds));
+        Assert.Equal(
+            [
+                null,
+                LiveStartupSegment.TunerSecured,
+                LiveStartupSegment.TunerSecured,
+                LiveStartupSegment.ChannelLocked,
+                LiveStartupSegment.InitReached,
+            ],
+            startup.Timeline.Select(mark => mark.TookFrom));
+        Assert.All(startup.Timeline, mark => Assert.True(mark.Took >= TimeSpan.Zero));
+    }
+
+    [Fact]
+    public void TheInitIsMeasuredFromWhicheverOfTheTwoBeforeItFinishedLast()
+    {
+        LiveStartup startup = LiveStartup.NotStarted
+            .Reaching(LiveStartupSegment.TunerSecured, TimeSpan.FromMilliseconds(485))
+            .Reaching(LiveStartupSegment.ChannelLocked, TimeSpan.FromMilliseconds(500))
+            .Reaching(LiveStartupSegment.TranscoderStarted, TimeSpan.FromMilliseconds(2000))
+            .Reaching(LiveStartupSegment.InitReached, TimeSpan.FromMilliseconds(2100));
+
+        LiveStartupMark init = startup.Mark(LiveStartupSegment.InitReached);
+
+        Assert.Equal(TimeSpan.FromMilliseconds(100), init.Took);
+        Assert.Equal(LiveStartupSegment.TranscoderStarted, init.TookFrom);
+    }
+
+    [Fact]
+    public void ASegmentWhoseWaitWasNeverMarkedIsMeasuredFromTheNearestMarkBehindThat()
     {
         LiveStartup startup = LiveStartup.NotStarted
             .Reaching(LiveStartupSegment.TranscoderStarted, TimeSpan.FromSeconds(8))
@@ -42,6 +106,8 @@ public sealed class LiveStartupTests
         Assert.Equal(TimeSpan.FromSeconds(8), startup.Took(LiveStartupSegment.TranscoderStarted));
         Assert.Equal(TimeSpan.FromMilliseconds(100), startup.Took(LiveStartupSegment.InitReached));
         Assert.Equal(TimeSpan.FromMilliseconds(2000), startup.Took(LiveStartupSegment.FirstPicture));
+        Assert.Null(startup.Mark(LiveStartupSegment.TranscoderStarted).TookFrom);
+        Assert.Equal(LiveStartupSegment.TranscoderStarted, startup.Mark(LiveStartupSegment.InitReached).TookFrom);
     }
 
     [Fact]
@@ -60,6 +126,8 @@ public sealed class LiveStartupTests
 
         Assert.False(tuner.Reached);
         Assert.Null(tuner.ReachedAt);
+        Assert.Null(tuner.Took);
+        Assert.Null(tuner.TookFrom);
     }
 
     [Fact]
