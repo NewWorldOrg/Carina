@@ -3,7 +3,7 @@ namespace Carina.Architecture.Tests;
 public sealed class EventStreamRuleSelfCheckTests
 {
     [Fact]
-    public void DetectsAnEventStreamThatWritesAPayloadFieldAndLeavesSignalsAlone()
+    public void DetectsAnEventStreamThatWritesAPayloadFieldAndCountsEveryStreamThereIs()
     {
         DirectoryInfo directory = Directory.CreateTempSubdirectory("carina-event-stream-");
 
@@ -45,6 +45,9 @@ public sealed class EventStreamRuleSelfCheckTests
                     directory.FullName,
                     EventStreamContracts.ContentType,
                     EventStreamContracts.PayloadField));
+            Assert.Equal(
+                ["Leaky.cs", "Signals.cs"],
+                SourceScan.FilesMentioning(directory.FullName, EventStreamContracts.ContentType));
         }
         finally
         {

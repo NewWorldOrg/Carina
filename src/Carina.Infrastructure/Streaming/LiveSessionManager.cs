@@ -1,3 +1,5 @@
+using Carina.Contracts;
+using Carina.Domain.Events;
 using Carina.Domain.Streaming;
 
 namespace Carina.Infrastructure.Streaming;
@@ -8,7 +10,8 @@ public sealed class LiveSessionManager(
     ILiveSupply supply,
     ILiveTranscoderFactory transcoders,
     ILiveCaptionerFactory captioners,
-    TimeProvider clock) : ILiveSessionManager, ILiveSessionLedger, IAsyncDisposable
+    TimeProvider clock,
+    IAppEventPublisher events) : ILiveSessionManager, ILiveSessionLedger, IAsyncDisposable
 {
     public const int Attempts = 2;
 
@@ -101,6 +104,8 @@ public sealed class LiveSessionManager(
 
     private LiveSession Expected(LiveSessionKey key)
     {
+        LiveSession raised;
+
         lock (gate)
         {
             if (sessions.TryGetValue(key, out LiveSession? running) && running.Expect())
@@ -108,24 +113,32 @@ public sealed class LiveSessionManager(
                 return running;
             }
 
-            LiveSession raised = new(key, fanouts, settings, supply, transcoders, captioners, clock, Forget);
+            raised = new LiveSession(key, fanouts, settings, supply, transcoders, captioners, clock, Forget);
 
             sessions[key] = raised;
             raised.Expect();
             raised.Start();
-
-            return raised;
         }
+
+        events.Signal(AppEventName.Live);
+
+        return raised;
     }
 
     private void Forget(LiveSession session)
     {
+        bool forgotten;
+
         lock (gate)
         {
-            if (sessions.TryGetValue(session.Key, out LiveSession? held) && ReferenceEquals(held, session))
-            {
-                sessions.Remove(session.Key);
-            }
+            forgotten = sessions.TryGetValue(session.Key, out LiveSession? held)
+                        && ReferenceEquals(held, session)
+                        && sessions.Remove(session.Key);
+        }
+
+        if (forgotten)
+        {
+            events.Signal(AppEventName.Live);
         }
     }
 }
