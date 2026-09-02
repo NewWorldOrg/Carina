@@ -5,20 +5,9 @@ namespace Carina.Domain.Tests.Streaming;
 public sealed class OnTheFlyTypeTests
 {
     [Fact]
-    public void TheMachineTranscodesTwoRecordingsAtOnceUnlessItIsToldOtherwise()
+    public void ATranscoderIsGivenHalfAMinuteForItsFirstByteUnlessItIsToldOtherwise()
     {
-        var settings = new OnTheFlySettings();
-
-        Assert.Equal(2, settings.AtOnce);
-        Assert.Equal(TimeSpan.FromSeconds(30), settings.LongestWaitForTheFirstByte);
-    }
-
-    [Fact]
-    public void ACeilingOfNoneIsRefusedBecauseItIsARouteThatNeverPlaysRatherThanABoundedOne()
-    {
-        Assert.Throws<ArgumentOutOfRangeException>(() => new OnTheFlySettings { AtOnce = 0 });
-        Assert.Throws<ArgumentOutOfRangeException>(() => new OnTheFlySettings { AtOnce = -1 });
-        Assert.Equal(1, new OnTheFlySettings { AtOnce = 1 }.AtOnce);
+        Assert.Equal(TimeSpan.FromSeconds(30), new OnTheFlySettings().LongestWaitForTheFirstByte);
     }
 
     [Fact]

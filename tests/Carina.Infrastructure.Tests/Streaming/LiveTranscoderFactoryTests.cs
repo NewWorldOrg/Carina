@@ -17,6 +17,8 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
 
     private readonly StandIns standIns = new();
 
+    private readonly TranscodeBudget budget = new(new TranscodeBudgetSettings { AtOnce = 2 });
+
     public void Dispose() => standIns.Dispose();
 
     [Fact]
@@ -169,6 +171,60 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
 
         await running.DisposeAsync();
         await running.DisposeAsync();
+
+        Assert.Equal(0, budget.Running);
+    }
+
+    [Fact]
+    public async Task ATranscoderTakesAPlaceInTheBudgetForAsLongAsItRuns()
+    {
+        await using ILiveTranscoder first = await Started(standIns.Script("cat > /dev/null"), LiveEncoder.Software);
+        ILiveTranscoder second = await Started(standIns.Script("cat > /dev/null"), LiveEncoder.Software);
+
+        Assert.Equal(2, budget.Running);
+
+        LiveTranscoderStart third = await Starting(standIns.Script("cat > /dev/null"), LiveEncoder.Software);
+
+        Assert.False(third.Running);
+        Assert.Equal(TranscoderFault.TooManyAlready, third.Fault);
+        Assert.Equal(2, third.Ceiling!.Running);
+        Assert.Equal(2, third.Ceiling.AtOnce);
+        Assert.Contains("2 transcoder", third.Note, StringComparison.Ordinal);
+
+        await second.Input.DisposeAsync();
+        await second.Completion;
+
+        Assert.Equal(2, budget.Running);
+
+        await second.DisposeAsync();
+
+        Assert.Equal(1, budget.Running);
+
+        await using ILiveTranscoder next = await Started(standIns.Script("cat > /dev/null"), LiveEncoder.Software);
+
+        Assert.Equal(2, budget.Running);
+    }
+
+    [Fact]
+    public async Task ARecordingBeingPlayedTakesThePlaceALivePictureWould()
+    {
+        using ITranscodeSeat playing = budget.Claim(TranscodePurpose.Playback).Seat!;
+        await using ILiveTranscoder live = await Started(standIns.Script("cat > /dev/null"), LiveEncoder.Software);
+
+        LiveTranscoderStart refused = await Starting(standIns.Script("cat > /dev/null"), LiveEncoder.Software);
+
+        Assert.Equal(TranscoderFault.TooManyAlready, refused.Fault);
+        Assert.Equal(2, budget.Running);
+    }
+
+    [Fact]
+    public async Task AProgrammeThatWouldNotStartHandsItsPlaceStraightBack()
+    {
+        LiveTranscoderStart start = await Starting(standIns.Named("no-such-programme"), LiveEncoder.Software);
+
+        Assert.False(start.Running);
+        Assert.Null(start.Ceiling);
+        Assert.Equal(0, budget.Running);
     }
 
     private static async Task WaitFor(string pids, int howMany)
@@ -244,7 +300,7 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
             StopGrace = grace ?? TimeSpan.FromSeconds(2),
         };
 
-        var factory = new LiveTranscoderFactory(settings, new AlreadyChosen(encoder), TimeProvider.System);
+        var factory = new LiveTranscoderFactory(settings, budget, new AlreadyChosen(encoder), TimeProvider.System);
 
         return factory.StartAsync(LiveProfile.Hd30, Interlaced, cancellationToken);
     }

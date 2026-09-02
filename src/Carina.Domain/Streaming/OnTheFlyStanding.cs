@@ -15,7 +15,7 @@ public sealed record OnTheFlyStanding
         ArgumentNullException.ThrowIfNull(encoder);
         ArgumentOutOfRangeException.ThrowIfLessThan(startsAt, TimeSpan.Zero);
         ArgumentOutOfRangeException.ThrowIfLessThan(waited, TimeSpan.Zero);
-        ArgumentOutOfRangeException.ThrowIfLessThan(atOnce, OnTheFlySettings.Fewest);
+        ArgumentOutOfRangeException.ThrowIfLessThan(atOnce, TranscodeBudgetSettings.Fewest);
         ArgumentOutOfRangeException.ThrowIfLessThan(running, 1);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(running, atOnce);
 

@@ -32,6 +32,8 @@ public sealed class OnTheFlyPlayerTests : IDisposable
 
     private readonly StandIns standIns = new();
 
+    private TranscodeBudget budget = new(new TranscodeBudgetSettings { AtOnce = 2 });
+
     public void Dispose() => standIns.Dispose();
 
     [Fact]
@@ -111,7 +113,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
         await viewing.DisposeAsync();
 
         Assert.True(await standIns.NothingIsLeftOf(Read(pids)));
-        Assert.Equal(0, player.Running);
+        Assert.Equal(0, budget.Running);
     }
 
     [Fact]
@@ -129,8 +131,29 @@ public sealed class OnTheFlyPlayerTests : IDisposable
 
         Assert.False(second.Running);
         Assert.Equal(OnTheFlyRefusal.TooManyAlready, second.Refusal);
-        Assert.Contains("1 recording", second.Note, StringComparison.Ordinal);
-        Assert.Equal(1, player.Running);
+        Assert.Contains("1 transcoder", second.Note, StringComparison.Ordinal);
+        Assert.Contains("(1)", second.Note, StringComparison.Ordinal);
+        Assert.Equal(1, budget.Running);
+    }
+
+    [Fact]
+    public async Task ALivePictureBeingSentTakesTheSamePlaceARecordingWould()
+    {
+        Recorded(40_000);
+        OnTheFlyPlayer player = Player("echo ready; sleep 60", atOnce: 2);
+
+        using ITranscodeSeat live = budget.Claim(TranscodePurpose.Live).Seat!;
+        await using IOnTheFlyViewing first = await Running(player, TimeSpan.Zero);
+        OnTheFlyStart third = await player.StartAsync(
+            Found(),
+            TimeSpan.Zero,
+            LiveProfile.Hd30,
+            CancellationToken.None);
+
+        Assert.Equal(2, first.Standing.Running);
+        Assert.Equal(OnTheFlyRefusal.TooManyAlready, third.Refusal);
+        Assert.Contains("2 transcoder", third.Note, StringComparison.Ordinal);
+        Assert.Equal(2, budget.Running);
     }
 
     [Fact]
@@ -144,7 +167,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
 
         await using IOnTheFlyViewing second = await Running(player, TimeSpan.Zero);
 
-        Assert.Equal(1, player.Running);
+        Assert.Equal(1, budget.Running);
     }
 
     [Fact]
@@ -156,7 +179,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
         await using IOnTheFlyViewing first = await Running(player, TimeSpan.Zero);
         await using IOnTheFlyViewing second = await Running(player, TimeSpan.Zero);
 
-        Assert.Equal(2, player.Running);
+        Assert.Equal(2, budget.Running);
         Assert.Equal(1, first.Standing.Running);
         Assert.Equal(2, second.Standing.Running);
         Assert.NotSame(first.Output, second.Output);
@@ -175,7 +198,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
 
         Assert.False(start.Running);
         Assert.Equal(OnTheFlyRefusal.NothingToPlay, start.Refusal);
-        Assert.Equal(0, player.Running);
+        Assert.Equal(0, budget.Running);
     }
 
     [Fact]
@@ -274,7 +297,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
 
         Assert.False(start.Running);
         Assert.Equal(OnTheFlyRefusal.TookTooLong, start.Refusal);
-        Assert.Equal(0, player.Running);
+        Assert.Equal(0, budget.Running);
         Assert.True(await standIns.NothingIsLeftOf(Read(pids)));
     }
 
@@ -367,17 +390,18 @@ public sealed class OnTheFlyPlayerTests : IDisposable
         => PlayerRunning(standIns.Script(body), atOnce, waiting);
 
     private OnTheFlyPlayer PlayerRunning(string programme, int atOnce = 2, TimeSpan? waiting = null)
-        => new(
-            new OnTheFlySettings
-            {
-                AtOnce = atOnce,
-                LongestWaitForTheFirstByte = waiting ?? TimeSpan.FromSeconds(10),
-            },
+    {
+        budget = new TranscodeBudget(new TranscodeBudgetSettings { AtOnce = atOnce });
+
+        return new OnTheFlyPlayer(
+            new OnTheFlySettings { LongestWaitForTheFirstByte = waiting ?? TimeSpan.FromSeconds(10) },
             new LiveTranscodeSettings { Programme = programme, StopGrace = TimeSpan.FromMilliseconds(250) },
+            budget,
             Store(),
             new Measured(),
             new AlreadyChosen(LiveEncoder.Software),
             TimeProvider.System);
+    }
 
     private sealed class Measured : IStreamAttributeReader
     {
