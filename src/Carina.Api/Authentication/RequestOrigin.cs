@@ -19,5 +19,15 @@ public static class RequestOrigin
         return request.Headers[HeaderNames.Origin].Count > 0 && !NamesThisOne(request);
     }
 
-    private static string Here(HttpRequest request) => $"{request.Scheme}://{request.Host.Value}";
+    private static string Here(HttpRequest request) => $"{AsThePageSaysIt(request.Scheme)}://{request.Host.Value}";
+
+    private static string AsThePageSaysIt(string scheme)
+    {
+        if (string.Equals(scheme, Uri.UriSchemeWss, StringComparison.OrdinalIgnoreCase))
+        {
+            return Uri.UriSchemeHttps;
+        }
+
+        return string.Equals(scheme, Uri.UriSchemeWs, StringComparison.OrdinalIgnoreCase) ? Uri.UriSchemeHttp : scheme;
+    }
 }
