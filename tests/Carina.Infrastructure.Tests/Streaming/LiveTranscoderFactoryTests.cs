@@ -197,6 +197,17 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
     }
 
     [Fact]
+    public async Task ATranscoderThatHasBeenLetGoNoLongerHandsOutItsStreams()
+    {
+        ILiveTranscoder running = await Started(standIns.Script("cat > /dev/null"), LiveEncoder.Software);
+
+        await running.DisposeAsync();
+
+        Assert.Throws<ObjectDisposedException>(() => running.Output);
+        Assert.Throws<ObjectDisposedException>(() => running.Input);
+    }
+
+    [Fact]
     public async Task ATranscoderTakesAPlaceInTheBudgetForAsLongAsItRuns()
     {
         await using ILiveTranscoder first = await Started(standIns.Script("cat > /dev/null"), LiveEncoder.Software);

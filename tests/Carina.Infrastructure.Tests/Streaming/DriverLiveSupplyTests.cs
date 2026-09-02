@@ -259,6 +259,68 @@ public sealed class DriverLiveSupplyTests
     }
 
     [Fact]
+    public async Task AStreamTheDriverCutWhileStillHoldingTheSessionStopsThatSessionWhenLetGo()
+    {
+        LiveSupplyStart opened = await Supply().OpenAsync(Network, Service, CancellationToken.None);
+
+        Assert.Equal(LiveSupplyEnd.DriverLost, (await EndedAsync(opened)).Why);
+
+        await opened.Stream!.DisposeAsync();
+
+        Assert.Equal([(driver.Held!.Value, DriverTransportStream.LetGoBecause)], driver.Stopped);
+    }
+
+    [Fact]
+    public async Task AStreamThatEndsWithTheDriverGoneStillAsksItToStopTheSessionWhenLetGo()
+    {
+        LiveSupplyStart opened = await Supply().OpenAsync(Network, Service, CancellationToken.None);
+
+        driver.Unreachable = true;
+
+        await EndedAsync(opened);
+        await opened.Stream!.DisposeAsync();
+
+        Assert.Equal([(driver.Held!.Value, DriverTransportStream.LetGoBecause)], driver.Stopped);
+    }
+
+    [Fact]
+    public async Task AStreamTheDriverNoLongerSpeaksOfIsNotAskedToStopWhenLetGo()
+    {
+        driver.Recalled = _ => DriverCall<SessionSnapshot>.Refused(DriverProblem.ForStatus(404));
+
+        LiveSupplyStart opened = await Supply().OpenAsync(Network, Service, CancellationToken.None);
+
+        Assert.Equal(LiveSupplyEnd.DriverLost, (await EndedAsync(opened)).Why);
+
+        await opened.Stream!.DisposeAsync();
+
+        Assert.Empty(driver.Stopped);
+    }
+
+    [Fact]
+    public async Task LettingTheStreamGoStopsTheSessionEvenWhenTheStreamWillNotClose()
+    {
+        driver.StreamRefusesToClose = true;
+
+        LiveSupplyStart opened = await Supply().OpenAsync(Network, Service, CancellationToken.None);
+
+        await Assert.ThrowsAsync<IOException>(async () => await opened.Stream!.DisposeAsync());
+
+        Assert.Equal([(driver.Held!.Value, DriverTransportStream.LetGoBecause)], driver.Stopped);
+    }
+
+    [Fact]
+    public async Task LettingTheStreamGoTwiceStopsTheSessionOnce()
+    {
+        LiveSupplyStart opened = await Supply().OpenAsync(Network, Service, CancellationToken.None);
+
+        await opened.Stream!.DisposeAsync();
+        await opened.Stream.DisposeAsync();
+
+        Assert.Single(driver.Stopped);
+    }
+
+    [Fact]
     public async Task ManyViewersOfOneKeyOpenOneSessionAndOneStreamOnTheDriver()
     {
         TranscodeBudget budget = new(new TranscodeBudgetSettings { AtOnce = 4 });

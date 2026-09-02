@@ -394,6 +394,25 @@ internal sealed class LiveSession
             stream = null;
         }
 
+        try
+        {
+            await StopDrawingAsync(drawingFrom, drawing, captioned);
+        }
+        finally
+        {
+            try
+            {
+                await StopTranscodingAsync(running, carried);
+            }
+            finally
+            {
+                await LetTheSupplyGoAsync(bytes, fed);
+            }
+        }
+    }
+
+    private static async Task StopDrawingAsync(CaptionSupply? drawingFrom, ILiveCaptioner? drawing, Task? captioned)
+    {
         if (drawingFrom is not null)
         {
             await drawingFrom.CompleteAsync();
@@ -408,31 +427,45 @@ internal sealed class LiveSession
         {
             await Quietly(captioned);
         }
+    }
 
-        if (running is not null)
+    private static async Task StopTranscodingAsync(ILiveTranscoder? running, Task<LiveFragmentFault?>? carried)
+    {
+        if (running is null)
         {
-            Task disposing = running.DisposeAsync().AsTask();
+            return;
+        }
 
-            if (carried is not null)
+        Stream output = running.Output;
+        Task disposing = running.DisposeAsync().AsTask();
+
+        if (carried is not null)
+        {
+            await Quietly(carried);
+        }
+
+        await DrainAsync(output);
+        await disposing;
+    }
+
+    private async Task LetTheSupplyGoAsync(ILiveTransportStream? bytes, Task? fed)
+    {
+        try
+        {
+            if (bytes is not null)
             {
-                await Quietly(carried);
+                await bytes.DisposeAsync();
+            }
+        }
+        finally
+        {
+            if (fed is not null)
+            {
+                await Quietly(fed);
             }
 
-            await DrainAsync(running.Output);
-            await disposing;
+            fanout.End();
         }
-
-        if (bytes is not null)
-        {
-            await bytes.DisposeAsync();
-        }
-
-        if (fed is not null)
-        {
-            await Quietly(fed);
-        }
-
-        fanout.End();
     }
 
     private static async Task DrainAsync(Stream from)
