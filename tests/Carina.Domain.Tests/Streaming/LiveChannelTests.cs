@@ -35,8 +35,6 @@ public sealed class LiveChannelTests
     }
 
     [Theory]
-    [InlineData(LiveChannel.CaptionHeader)]
-    [InlineData(LiveChannel.Caption)]
     [InlineData(LiveChannel.ServiceInformation)]
     public void AChannelSetAsideForLaterCarriesNothingYet(LiveChannel channel)
     {
@@ -49,6 +47,8 @@ public sealed class LiveChannelTests
     [InlineData(LiveChannel.Picture)]
     [InlineData(LiveChannel.SoundHeader)]
     [InlineData(LiveChannel.Sound)]
+    [InlineData(LiveChannel.CaptionHeader)]
+    [InlineData(LiveChannel.Caption)]
     [InlineData(LiveChannel.Control)]
     public void AChannelInUseIsNotOneThatWasSetAside(LiveChannel channel)
     {
@@ -88,6 +88,7 @@ public sealed class LiveChannelTests
     [Theory]
     [InlineData(LiveChannel.PictureHeader)]
     [InlineData(LiveChannel.SoundHeader)]
+    [InlineData(LiveChannel.CaptionHeader)]
     public void AHeaderIsKeptForWhoeverArrivesLateAndIsNeverThrownAway(LiveChannel channel)
     {
         Assert.Contains(channel, LiveChannels.Headers);
@@ -96,7 +97,6 @@ public sealed class LiveChannelTests
 
     [Theory]
     [InlineData(LiveChannel.Control)]
-    [InlineData(LiveChannel.CaptionHeader)]
     [InlineData(LiveChannel.Caption)]
     [InlineData(LiveChannel.ServiceInformation)]
     public void WhatIsNeitherAHeaderNorMediaIsNeverThrownAwayEither(LiveChannel channel)
@@ -112,8 +112,26 @@ public sealed class LiveChannelTests
     }
 
     [Fact]
-    public void TheHeadersAreExactlyTheTwoThatOpenAMediaChannel()
+    public void WhatIsKeptForWhoeverArrivesLateIsEveryHeaderAndTheCaptionThatIsShowing()
     {
-        Assert.Equal([0x00, 0x10], LiveChannels.Headers.Select(channel => (byte)channel).Order().ToArray());
+        Assert.Equal(
+            [LiveChannel.PictureHeader, LiveChannel.SoundHeader, LiveChannel.CaptionHeader, LiveChannel.Caption],
+            LiveChannels.Kept);
+        Assert.All(LiveChannels.Headers, header => Assert.Contains(header, LiveChannels.Kept));
+        Assert.DoesNotContain(LiveChannel.Picture, LiveChannels.Kept);
+        Assert.DoesNotContain(LiveChannel.Sound, LiveChannels.Kept);
+        Assert.DoesNotContain(LiveChannel.Control, LiveChannels.Kept);
+    }
+
+    [Fact]
+    public void NothingKeptIsEverThrownAway()
+    {
+        Assert.All(LiveChannels.Kept, kept => Assert.DoesNotContain(kept, LiveChannels.Expendable));
+    }
+
+    [Fact]
+    public void TheHeadersAreExactlyTheThreeThatOpenAChannel()
+    {
+        Assert.Equal([0x00, 0x10, 0x20], LiveChannels.Headers.Select(channel => (byte)channel).Order().ToArray());
     }
 }

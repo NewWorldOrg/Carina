@@ -4,6 +4,7 @@ public sealed class FfmpegArgumentRuleTests
 {
     private static readonly string[] Builders =
     [
+        "/Carina.Infrastructure/Streaming/FfmpegCaptionInvocation.cs",
         "/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs",
         "/Carina.Infrastructure/Streaming/FfmpegPlaybackInvocation.cs",
         "/Carina.Infrastructure/Streaming/FfprobeInvocation.cs",
@@ -13,6 +14,9 @@ public sealed class FfmpegArgumentRuleTests
 
     private static readonly string[] Inventory =
     [
+        "/Carina.Infrastructure/Streaming/FfmpegCaptionInvocation.cs {programNumber}",
+        "/Carina.Infrastructure/Streaming/FfmpegCaptionInvocation.cs {size.Height}",
+        "/Carina.Infrastructure/Streaming/FfmpegCaptionInvocation.cs {size.Width}",
         "/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs string.Join(",
         "/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs {kilobitsPerSecond}",
         "/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs {programNumber}",
@@ -100,9 +104,22 @@ public sealed class FfmpegArgumentRuleTests
     }
 
     [Fact]
-    public void NothingNamesASubtitleCanvasWhileThereIsNoMeasurementToPutOnOne()
+    public void TheOnlyPlaceThatNamesASubtitleCanvasIsTheCaptionBuilderAndItFillsItFromAMeasuredSizeAlone()
     {
-        Assert.Empty(FfmpegArgumentRules.WhatSetsASubtitleCanvas(RepositoryLayout.SourceDirectory));
+        Assert.Equal(
+            ["/Carina.Infrastructure/Streaming/FfmpegCaptionInvocation.cs -canvas_size"],
+            FfmpegArgumentRules.WhatSetsASubtitleCanvas(RepositoryLayout.SourceDirectory));
+
+        string source = File.ReadAllText(Path.Combine(
+            RepositoryLayout.SourceDirectory,
+            "Carina.Infrastructure",
+            "Streaming",
+            "FfmpegCaptionInvocation.cs"));
+
+        Assert.Contains("internal static string Canvas(VideoSize size)", source, StringComparison.Ordinal);
+        Assert.Equal(
+            ["{programNumber}", "{size.Height}", "{size.Width}"],
+            FfmpegArgumentRules.WhatFillsACommandLineIn(source));
     }
 
     [Fact]

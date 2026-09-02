@@ -13,6 +13,84 @@ public sealed class LiveFanoutTests
 
     private static readonly LiveFrame SoundHeader = new(LiveChannel.SoundHeader, LivePts.Start, new byte[] { 0x10, 0x01 });
 
+    private static readonly LiveFrame CaptionHeader = LiveCaptions.Canvas(new VideoSize(1440, 1080));
+
+    private static readonly byte[] Png = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00];
+
+    [Fact]
+    public async Task AViewerThatJoinsIsHandedTheCaptionThatIsShowingRightAfterTheCaptionHeader()
+    {
+        LiveFanout fanout = new(Room(10));
+
+        fanout.Publish(PictureHeader);
+        fanout.Publish(CaptionHeader);
+        fanout.Publish(Caption(1));
+        fanout.Publish(Caption(2));
+        fanout.Publish(Picture(3));
+
+        await using ILiveViewing viewing = await Joined(fanout);
+
+        List<LiveFrame> handed = Taken(viewing);
+
+        Assert.Equal(
+            [LiveChannel.PictureHeader, LiveChannel.CaptionHeader, LiveChannel.Caption],
+            handed.Select(frame => frame.Channel).ToArray());
+        Assert.Equal(2UL, handed[2].Pts.Value);
+    }
+
+    [Fact]
+    public async Task ACaptionThatWasClearedIsNotHandedToAViewerThatJoinsAfterwards()
+    {
+        LiveFanout fanout = new(Room(10));
+
+        fanout.Publish(CaptionHeader);
+        fanout.Publish(Caption(1));
+        fanout.Publish(LiveCaptions.Cleared(LivePts.Of(2UL)));
+
+        await using ILiveViewing viewing = await Joined(fanout);
+
+        Assert.Equal([LiveChannel.CaptionHeader], Taken(viewing).Select(frame => frame.Channel).ToArray());
+        Assert.Equal([CaptionHeader], fanout.Kept);
+    }
+
+    [Fact]
+    public async Task AClearReachesAViewerThatIsAlreadyWatching()
+    {
+        LiveFanout fanout = new(Room(10));
+        await using ILiveViewing viewing = await Joined(fanout);
+
+        fanout.Publish(Caption(1));
+        fanout.Publish(LiveCaptions.Cleared(LivePts.Of(2UL)));
+
+        List<LiveFrame> handed = Taken(viewing);
+
+        Assert.Equal(2, handed.Count);
+        Assert.True(LiveCaptions.Clears(handed[1]));
+    }
+
+    [Fact]
+    public async Task CaptionsAreNeverThrownAwayWhenTheBacklogIsFull()
+    {
+        LiveFanout fanout = new(Room(2));
+        await using ILiveViewing viewing = await Joined(fanout);
+
+        for (ulong pts = 0; pts < 5; pts++)
+        {
+            fanout.Publish(Picture(pts));
+        }
+
+        fanout.Publish(Caption(6));
+        fanout.Publish(LiveCaptions.Cleared(LivePts.Of(7UL)));
+
+        Assert.Equal(
+            [LiveChannel.Picture, LiveChannel.Picture, LiveChannel.Caption, LiveChannel.Caption],
+            Taken(viewing).Select(frame => frame.Channel).ToArray());
+        Assert.Equal(3L, viewing.Backlog.Dropped);
+    }
+
+    private static LiveFrame Caption(ulong pts)
+        => LiveCaptions.Shown(LivePts.Of(pts), new CaptionPicture(10, 20, 30, 40, Png));
+
     [Fact]
     public async Task AViewerThatJoinsIsHandedTheHeldHeaderAndThenTheNextPictureRatherThanAnyEarlierOne()
     {
@@ -57,7 +135,7 @@ public sealed class LiveFanoutTests
         LiveFrame handed = Assert.Single(Taken(viewing));
 
         Assert.Equal(later.Payload.ToArray(), handed.Payload.ToArray());
-        Assert.Equal([later], fanout.Headers);
+        Assert.Equal([later], fanout.Kept);
     }
 
     [Fact]
@@ -435,7 +513,7 @@ public sealed class LiveFanoutTests
         fanout.Publish(PictureHeader);
         fanout.Publish(Picture(0));
 
-        Assert.Empty(fanout.Headers);
+        Assert.Empty(fanout.Kept);
         Assert.Equal(0, fanout.Viewers);
     }
 
@@ -452,7 +530,7 @@ public sealed class LiveFanoutTests
         }
 
         Assert.Equal(0, fanout.Viewers);
-        Assert.Equal([PictureHeader], fanout.Headers);
+        Assert.Equal([PictureHeader], fanout.Kept);
     }
 
     [Fact]

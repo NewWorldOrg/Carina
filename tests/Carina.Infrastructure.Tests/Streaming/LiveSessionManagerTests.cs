@@ -25,6 +25,8 @@ public sealed class LiveSessionManagerTests
 
     private readonly HeldTranscoders transcoders;
 
+    private readonly HeldCaptioners captioners = new();
+
     private readonly LiveSessionManager manager;
 
     private ILiveSessionLedger Ledger => manager;
@@ -49,10 +51,12 @@ public sealed class LiveSessionManagerTests
         await transcoders.Raised[0].WriteAsync(Fmp4.Header);
         await transcoders.Raised[0].WriteAsync(Fmp4.Fragment(1_000));
 
-        LiveFrame[] toTheFirst = [await Next(first), await Next(first)];
-        LiveFrame[] toTheSecond = [await Next(second), await Next(second)];
+        LiveFrame[] toTheFirst = [await Next(first), await Next(first), await Next(first)];
+        LiveFrame[] toTheSecond = [await Next(second), await Next(second), await Next(second)];
 
-        Assert.Equal([LiveChannel.PictureHeader, LiveChannel.Picture], toTheFirst.Select(frame => frame.Channel));
+        Assert.Equal(
+            [LiveChannel.CaptionHeader, LiveChannel.PictureHeader, LiveChannel.Picture],
+            toTheFirst.Select(frame => frame.Channel));
         Assert.Equal(
             toTheFirst.Select(frame => frame.Payload.ToArray()),
             toTheSecond.Select(frame => frame.Payload.ToArray()));
@@ -257,6 +261,7 @@ public sealed class LiveSessionManagerTests
         await transcoders.Raised[0].WriteAsync(Fmp4.Header);
         transcoders.Raised[0].NoMore();
 
+        Assert.Equal(LiveChannel.CaptionHeader, (await Next(viewing)).Channel);
         Assert.Equal(LiveChannel.PictureHeader, (await Next(viewing)).Channel);
         await viewing.Frames.Completion.WaitAsync(Eventually.Patience);
         await Eventually.Happens(
@@ -306,6 +311,7 @@ public sealed class LiveSessionManagerTests
         Assert.True(raised.InProgress);
 
         await transcoders.Raised[0].WriteAsync(Fmp4.Header);
+        await Next(viewing);
         await Next(viewing);
         await Eventually.Happens(
             () => viewing.Startup.Current!.Reached(LiveStartupSegment.InitReached),
@@ -370,7 +376,9 @@ public sealed class LiveSessionManagerTests
         await transcoders.Raised[0].WriteAsync(Fmp4.Header);
         transcoders.Raised[0].NoMore();
 
+        Assert.Equal(LiveChannel.CaptionHeader, (await Next(first)).Channel);
         Assert.Equal(LiveChannel.PictureHeader, (await Next(first)).Channel);
+        Assert.Equal(LiveChannel.CaptionHeader, (await Next(second)).Channel);
         Assert.Equal(LiveChannel.PictureHeader, (await Next(second)).Channel);
         await first.Frames.Completion.WaitAsync(Eventually.Patience);
         await second.Frames.Completion.WaitAsync(Eventually.Patience);
@@ -461,6 +469,7 @@ public sealed class LiveSessionManagerTests
             new LiveFanoutSettings { LongestBacklog = 1 },
             supply,
             transcoders,
+            captioners,
             clock);
 
         await using ILiveViewing slow = Seated(await crowded.JoinAsync(EveryFrame, CancellationToken.None));
@@ -477,6 +486,146 @@ public sealed class LiveSessionManagerTests
         Assert.Equal(slow.Backlog.Dropped, ((ILiveSessionLedger)crowded).Running.Single().Dropped);
 
         await crowded.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task ASessionRaisesOneCaptionerBesideItsTranscoderForTheSameServiceAndPicture()
+    {
+        await using ILiveViewing first = await Joined(EveryFrame);
+        await using ILiveViewing second = await Joined(EveryFrame);
+        await using ILiveViewing other = await Joined(AnotherChannel);
+
+        Assert.Equal(2, captioners.Started);
+        Assert.Equal([EveryFrame.Service, AnotherChannel.Service], captioners.Raised.Select(raised => raised.Service));
+        Assert.Equal(transcoders.Raised[0].Attributes, captioners.Raised[0].Attributes);
+        Assert.Equal(2, transcoders.Started);
+        Assert.Equal(2, budget.Running);
+    }
+
+    [Fact]
+    public async Task TheCaptionCanvasIsHandedToEveryViewerWithTheHeaders()
+    {
+        await using ILiveViewing viewing = await Joined(EveryFrame);
+
+        await transcoders.Raised[0].WriteAsync(Fmp4.Header);
+
+        LiveFrame[] handed = [await Next(viewing), await Next(viewing)];
+
+        Assert.Equal([LiveChannel.PictureHeader, LiveChannel.CaptionHeader], handed.Select(frame => frame.Channel).Order());
+        Assert.Equal(
+            transcoders.Raised[0].Attributes.Size,
+            LiveCaptions.CanvasOf(handed.Single(frame => frame.Channel is LiveChannel.CaptionHeader)));
+    }
+
+    [Fact]
+    public async Task WhatTheCaptionerDrawsReachesEveryViewerAndALateOneIsHandedWhatIsShowing()
+    {
+        await using ILiveViewing early = await Joined(EveryFrame);
+
+        Assert.Equal(LiveChannel.CaptionHeader, (await Next(early)).Channel);
+
+        LiveFrame shown = LiveCaptions.Shown(LivePts.Of(90_000UL), new CaptionPicture(1, 2, 3, 4, new byte[] { 0x89, 0x50 }));
+
+        captioners.Raised[0].Draw(shown);
+
+        LiveFrame toEarly = await Next(early);
+
+        Assert.Equal(LiveChannel.Caption, toEarly.Channel);
+        Assert.Equal(shown.Payload.ToArray(), toEarly.Payload.ToArray());
+
+        await using ILiveViewing late = await Joined(EveryFrame);
+
+        LiveFrame[] toLate = [await Next(late), await Next(late)];
+
+        Assert.Equal([LiveChannel.CaptionHeader, LiveChannel.Caption], toLate.Select(frame => frame.Channel));
+        Assert.Equal(90_000UL, toLate[1].Pts.Value);
+
+        captioners.Raised[0].Draw(LiveCaptions.Cleared(LivePts.Of(180_000UL)));
+
+        Assert.True(LiveCaptions.Clears(await Next(early)));
+        Assert.True(LiveCaptions.Clears(await Next(late)));
+
+        await using ILiveViewing later = await Joined(EveryFrame);
+
+        Assert.Equal(LiveChannel.CaptionHeader, (await Next(later)).Channel);
+        Assert.False(later.Frames.TryRead(out _));
+    }
+
+    [Fact]
+    public async Task TheBytesFedToTheTranscoderAreFedToTheCaptionerToo()
+    {
+        await using ILiveViewing viewing = await Joined(EveryFrame);
+
+        await supply.Opened[0].WriteAsync([1, 2, 3, 4, 5]);
+
+        byte[] heard = new byte[5];
+        int read = 0;
+
+        while (read < heard.Length)
+        {
+            using CancellationTokenSource patience = new(Eventually.Patience);
+
+            read += await captioners.Raised[0].Fed.ReadAsync(heard.AsMemory(read), patience.Token);
+        }
+
+        Assert.Equal([1, 2, 3, 4, 5], heard);
+    }
+
+    [Fact]
+    public async Task ACaptionerThatWillNotStartCostsTheViewerNothingButCaptions()
+    {
+        captioners.Failing = TranscoderFault.ProgrammeMissing;
+
+        await using ILiveViewing viewing = await Joined(EveryFrame);
+
+        await transcoders.Raised[0].WriteAsync(Fmp4.Header);
+        await transcoders.Raised[0].WriteAsync(Fmp4.Fragment(1_000));
+
+        Assert.Equal([LiveChannel.PictureHeader, LiveChannel.Picture], new[] { await Next(viewing), await Next(viewing) }.Select(frame => frame.Channel));
+        Assert.Equal(0, captioners.Started);
+        Assert.Equal(1, manager.Viewers(EveryFrame));
+    }
+
+    [Fact]
+    public async Task ACaptionerThatEndsOnItsOwnEndsNothingElse()
+    {
+        await using ILiveViewing viewing = await Joined(EveryFrame);
+
+        captioners.Raised[0].NoMore();
+
+        await transcoders.Raised[0].WriteAsync(Fmp4.Header);
+        await transcoders.Raised[0].WriteAsync(Fmp4.Fragment(1_000));
+
+        LiveFrame[] handed = [await Next(viewing), await Next(viewing), await Next(viewing)];
+
+        Assert.Contains(LiveChannel.Picture, handed.Select(frame => frame.Channel));
+        Assert.Equal(1, manager.Viewers(EveryFrame));
+        Assert.False(viewing.Frames.Completion.IsCompleted);
+    }
+
+    [Fact]
+    public async Task TheCaptionerIsTornDownWithTheSession()
+    {
+        ILiveViewing viewing = await Joined(EveryFrame);
+
+        await viewing.DisposeAsync();
+
+        clock.Turn(Linger);
+
+        await Eventually.Happens(() => captioners.Raised[0].Disposed, "the captioner is let go with the transcoder");
+
+        Assert.True(transcoders.Raised[0].Disposed);
+    }
+
+    [Fact]
+    public async Task DisposingTheManagerTearsEveryCaptionerDownToo()
+    {
+        await using ILiveViewing one = await Joined(EveryFrame);
+        await using ILiveViewing another = await Joined(EveryField);
+
+        await manager.DisposeAsync();
+
+        Assert.All(captioners.Raised, raised => Assert.True(raised.Disposed));
     }
 
     [Fact]
@@ -524,6 +673,7 @@ public sealed class LiveSessionManagerTests
             new LiveFanoutSettings(),
             supply,
             raising ?? new HeldTranscoders(counting),
+            captioners,
             clock);
 
     private async Task<ILiveViewing> Joined(LiveSessionKey key)

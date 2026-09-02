@@ -188,6 +188,9 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton(new LiveSessionSettings());
         services.TryAddSingleton<ILiveSupply, DriverLiveSupply>();
         services.TryAddSingleton<ILiveTranscoderFactory, LiveTranscoderFactory>();
+        services.TryAddSingleton<LiveCaptionSettings>(provider =>
+            provider.GetRequiredService<IOptions<TranscodingOptions>>().Value.ReadCaptions());
+        services.TryAddSingleton<ILiveCaptionerFactory, LiveCaptionerFactory>();
         services.TryAddSingleton<LiveSessionManager>();
         services.TryAddSingleton<ILiveSessionManager>(provider => provider.GetRequiredService<LiveSessionManager>());
         services.TryAddSingleton<ILiveSessionLedger>(provider => provider.GetRequiredService<LiveSessionManager>());

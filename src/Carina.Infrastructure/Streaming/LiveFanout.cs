@@ -18,7 +18,7 @@ public sealed class LiveFanout(
 
     private readonly List<Viewing> viewers = [];
 
-    private readonly SortedDictionary<LiveChannel, LiveFrame> headers = [];
+    private readonly SortedDictionary<LiveChannel, LiveFrame> kept = [];
 
     private bool ended;
 
@@ -48,13 +48,13 @@ public sealed class LiveFanout(
         }
     }
 
-    public IReadOnlyList<LiveFrame> Headers
+    public IReadOnlyList<LiveFrame> Kept
     {
         get
         {
             lock (gate)
             {
-                return [.. headers.Values];
+                return [.. kept.Values];
             }
         }
     }
@@ -94,9 +94,9 @@ public sealed class LiveFanout(
 
             Viewing viewing = new(this, settings.LongestBacklog);
 
-            foreach (LiveFrame header in headers.Values)
+            foreach (LiveFrame held in kept.Values)
             {
-                viewing.Offer(header);
+                viewing.Offer(held);
             }
 
             viewers.Add(viewing);
@@ -116,10 +116,7 @@ public sealed class LiveFanout(
                 return;
             }
 
-            if (LiveChannels.Headers.Contains(frame.Channel))
-            {
-                headers[frame.Channel] = frame;
-            }
+            Keep(frame);
 
             foreach (Viewing viewing in viewers)
             {
@@ -145,6 +142,23 @@ public sealed class LiveFanout(
 
     private static bool Expendable(LiveFrame frame) => LiveChannels.Expendable.Contains(frame.Channel);
 
+    private void Keep(LiveFrame frame)
+    {
+        if (!LiveChannels.Kept.Contains(frame.Channel))
+        {
+            return;
+        }
+
+        if (frame.Payload.IsEmpty)
+        {
+            kept.Remove(frame.Channel);
+
+            return;
+        }
+
+        kept[frame.Channel] = frame;
+    }
+
     private void Close(LiveFragmentFault? why)
     {
         lock (gate)
@@ -156,7 +170,7 @@ public sealed class LiveFanout(
 
             ended = true;
             fault = why;
-            headers.Clear();
+            kept.Clear();
 
             foreach (Viewing viewing in viewers)
             {
