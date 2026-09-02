@@ -307,6 +307,39 @@ public sealed class LiveFanoutTests
     }
 
     [Fact]
+    public async Task WhatEveryViewerLostIsAddedUpForTheFanoutIncludingThoseWhoHaveLeft()
+    {
+        LiveFanout fanout = new(Room(1));
+        ILiveViewing leaving = await Joined(fanout);
+        await using ILiveViewing staying = await Joined(fanout);
+
+        fanout.Publish(Picture(0));
+        fanout.Publish(Picture(1));
+        fanout.Publish(Picture(2));
+
+        Assert.Equal(4L, fanout.Dropped);
+
+        await leaving.DisposeAsync();
+
+        Assert.Equal(4L, fanout.Dropped);
+
+        fanout.Publish(Picture(3));
+
+        Assert.Equal(5L, fanout.Dropped);
+    }
+
+    [Fact]
+    public async Task AFanoutNobodyHasLostAnythingOnHasThrownNothingAway()
+    {
+        LiveFanout fanout = new(Room(10));
+        await using ILiveViewing viewing = await Joined(fanout);
+
+        fanout.Publish(Picture(0));
+
+        Assert.Equal(0L, fanout.Dropped);
+    }
+
+    [Fact]
     public async Task LeavingTwiceIsLeavingOnce()
     {
         LiveFanout fanout = new(Room(10));
