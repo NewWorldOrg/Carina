@@ -27,6 +27,8 @@ public sealed class LiveSessionManagerTests
 
     private readonly LiveSessionManager manager;
 
+    private ILiveSessionLedger Ledger => manager;
+
     public LiveSessionManagerTests()
     {
         transcoders = new HeldTranscoders(budget);
@@ -427,6 +429,60 @@ public sealed class LiveSessionManagerTests
         Assert.All(transcoders.Raised, raised => Assert.True(raised.Disposed));
         Assert.All(supply.Opened, opened => Assert.True(opened.Disposed));
         Assert.Empty(manager.Keys);
+    }
+
+    [Fact]
+    public async Task TheLedgerNamesEveryRunningSessionWithItsViewersItsStartupAndWhatItThrewAway()
+    {
+        await using ILiveViewing first = await Joined(EveryFrame);
+        await using ILiveViewing second = await Joined(EveryFrame);
+        await using ILiveViewing other = await Joined(AnotherChannel);
+
+        await transcoders.Raised[0].WriteAsync(Fmp4.Header);
+        await transcoders.Raised[0].WriteAsync(Fmp4.Fragment(1_000));
+        await Eventually.Happens(
+            () => manager.Startup(EveryFrame)?.Current is { InProgress: false },
+            "the first picture ends the startup");
+
+        LiveSessionView[] running = [.. Ledger.Running.OrderBy(view => view.Key.ToString(), StringComparer.Ordinal)];
+
+        Assert.Equal([EveryFrame, AnotherChannel], running.Select(view => view.Key));
+        Assert.Equal([2, 1], running.Select(view => view.Viewers));
+        Assert.False(running[0].Startup.InProgress);
+        Assert.True(running[1].Startup.InProgress);
+        Assert.Equal([0L, 0L], running.Select(view => view.Dropped));
+    }
+
+    [Fact]
+    public async Task TheLedgerCountsWhatASlowViewerLost()
+    {
+        LiveSessionManager crowded = new(
+            new LiveSessionSettings { Linger = Linger },
+            new LiveFanoutSettings { LongestBacklog = 1 },
+            supply,
+            transcoders,
+            clock);
+
+        await using ILiveViewing slow = Seated(await crowded.JoinAsync(EveryFrame, CancellationToken.None));
+
+        await transcoders.Raised[0].WriteAsync(Fmp4.Header);
+
+        for (int fragment = 1; fragment <= 4; fragment++)
+        {
+            await transcoders.Raised[0].WriteAsync(Fmp4.Fragment(fragment * 1_000));
+        }
+
+        await Eventually.Happens(() => slow.Backlog.Dropped >= 2L, "pictures beyond the backlog are thrown away");
+
+        Assert.Equal(slow.Backlog.Dropped, ((ILiveSessionLedger)crowded).Running.Single().Dropped);
+
+        await crowded.DisposeAsync();
+    }
+
+    [Fact]
+    public void TheLedgerIsEmptyWhileNothingIsBeingSentLive()
+    {
+        Assert.Empty(Ledger.Running);
     }
 
     [Fact]

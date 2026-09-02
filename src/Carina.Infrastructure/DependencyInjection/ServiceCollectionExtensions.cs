@@ -177,7 +177,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IScrubFrames, Scrubber>();
         services.AddScoped<IDrawnThumbnails, DrawnThumbnails>();
         services.TryAddSingleton(new StreamAttributeSettings());
-        services.TryAddSingleton(new LiveTranscodeSettings());
+        services.TryAddSingleton<LiveTranscodeSettings>(provider =>
+            provider.GetRequiredService<IOptions<TranscodingOptions>>().Value.ReadLive());
         services.TryAddSingleton(new OnTheFlySettings());
         services.TryAddSingleton<TranscodeBudgetSettings>(provider =>
             provider.GetRequiredService<IOptions<TranscodingOptions>>().Value.Read());
@@ -187,7 +188,9 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton(new LiveSessionSettings());
         services.TryAddSingleton<ILiveSupply, DriverLiveSupply>();
         services.TryAddSingleton<ILiveTranscoderFactory, LiveTranscoderFactory>();
-        services.TryAddSingleton<ILiveSessionManager, LiveSessionManager>();
+        services.TryAddSingleton<LiveSessionManager>();
+        services.TryAddSingleton<ILiveSessionManager>(provider => provider.GetRequiredService<LiveSessionManager>());
+        services.TryAddSingleton<ILiveSessionLedger>(provider => provider.GetRequiredService<LiveSessionManager>());
         services.TryAddSingleton<IStreamAttributeReader, FfprobeStreamAttributeReader>();
         services.TryAddSingleton<ILiveEncoderSelector>(provider => new LiveEncoderSelection(
             provider.GetRequiredService<LiveTranscodeSettings>(),

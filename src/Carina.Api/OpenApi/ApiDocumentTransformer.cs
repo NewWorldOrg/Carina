@@ -13,7 +13,9 @@ public sealed class ApiDocumentTransformer : IOpenApiDocumentTransformer
         + "by the byte range (`GET /api/videos/{id}`), which is there for an external player "
         + "and is not the path a browser plays a recording through, and the live wire "
         + "(`GET /api/live/ws`), a WebSocket carrying framed picture and sound one way and "
-        + "numbered control messages both ways.";
+        + "numbered control messages both ways. The wire is asked for by `network`, `service` "
+        + "and `profile` in the query, the profile being one of those `GET /api/live/profiles` lists; "
+        + "a viewer that is refused is told why on the control channel before the wire is closed.";
 
     public Task TransformAsync(
         OpenApiDocument document,

@@ -68,6 +68,8 @@ internal sealed class LiveSession
 
     public int Viewers => fanout.Viewers;
 
+    public long Dropped => fanout.Dropped;
+
     public ILiveStartup Startup => startup;
 
     public ILiveEnding Ending => ending;

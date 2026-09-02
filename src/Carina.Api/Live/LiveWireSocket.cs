@@ -5,7 +5,11 @@ using Carina.Domain.Streaming;
 
 namespace Carina.Api.Live;
 
-public sealed class LiveWireSocket(WebSocket socket, LiveWireSettings settings, ILiveStartup? startup = null)
+public sealed class LiveWireSocket(
+    WebSocket socket,
+    LiveWireSettings settings,
+    ILiveStartup? startup = null,
+    ILiveEnding? ending = null)
 {
     private static readonly TimeSpan GoodbyePatience = TimeSpan.FromSeconds(2);
 
@@ -44,13 +48,49 @@ public sealed class LiveWireSocket(WebSocket socket, LiveWireSettings settings, 
         return departure;
     }
 
+    public async Task RefuseAsync(LiveJoin refused, CancellationToken cancellationToken)
+    {
+        LiveRefusalReport report = LiveRefusalReport.Of(refused);
+
+        using CancellationTokenSource patience = new(GoodbyePatience);
+        using CancellationTokenSource leash =
+            CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, patience.Token);
+
+        try
+        {
+            await socket.SendAsync(
+                new LiveFrame(LiveChannel.Control, LivePts.Start, report.ToPayload()).ToArray(),
+                WebSocketMessageType.Binary,
+                true,
+                leash.Token);
+
+            await socket.CloseOutputAsync(
+                LiveRefusalClosures.Status(report.Refusal),
+                LiveRefusalClosures.Because(report.Refusal),
+                leash.Token);
+
+            byte[] heard = new byte[LiveFrame.HeaderLength + settings.LargestFrameFromAViewer + 1];
+
+            while ((await socket.ReceiveAsync(new ArraySegment<byte>(heard), leash.Token)).MessageType
+                   is not WebSocketMessageType.Close)
+            {
+            }
+        }
+        catch (Exception gone)
+            when (gone is OperationCanceledException or WebSocketException or IOException
+                      or ObjectDisposedException or InvalidOperationException)
+        {
+            socket.Abort();
+        }
+    }
+
     private static async Task Swallow(Task running)
     {
         try
         {
             await running;
         }
-        catch (Exception ending) when (ending is OperationCanceledException or WebSocketException or IOException)
+        catch (Exception gone) when (gone is OperationCanceledException or WebSocketException or IOException)
         {
         }
     }
@@ -71,7 +111,7 @@ public sealed class LiveWireSocket(WebSocket socket, LiveWireSettings settings, 
                 }
             }
         }
-        catch (Exception ending) when (ending is OperationCanceledException or WebSocketException or IOException)
+        catch (Exception gone) when (gone is OperationCanceledException or WebSocketException or IOException)
         {
             return LiveDeparture.ViewerLeft;
         }
@@ -133,6 +173,8 @@ public sealed class LiveWireSocket(WebSocket socket, LiveWireSettings settings, 
 
                 if (!await waiting)
                 {
+                    await SayWhyItEnded(cancellationToken);
+
                     return LiveDeparture.SourceEnded;
                 }
 
@@ -154,14 +196,40 @@ public sealed class LiveWireSocket(WebSocket socket, LiveWireSettings settings, 
                 ? LiveDeparture.ViewerLeft
                 : LiveDeparture.ViewerStoppedReading;
         }
-        catch (Exception ending) when (ending is WebSocketException or IOException)
+        catch (Exception gone) when (gone is WebSocketException or IOException)
         {
             return LiveDeparture.ViewerStoppedReading;
         }
         catch (Exception)
         {
+            await SayWhyItEndedIfItCan(cancellationToken);
+
             return LiveDeparture.SourceBroke;
         }
+    }
+
+    private async Task SayWhyItEndedIfItCan(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await SayWhyItEnded(cancellationToken);
+        }
+        catch (Exception gone)
+            when (gone is OperationCanceledException or WebSocketException or IOException or ViewerTooSlow)
+        {
+        }
+    }
+
+    private async Task SayWhyItEnded(CancellationToken cancellationToken)
+    {
+        if (ending?.Current is not { } why)
+        {
+            return;
+        }
+
+        await SendAsync(
+            new LiveFrame(LiveChannel.Control, LivePts.Start, LiveEndingReport.Of(why).ToPayload()),
+            cancellationToken);
     }
 
     private async Task<bool> SayWhereWeAre(CancellationToken cancellationToken)

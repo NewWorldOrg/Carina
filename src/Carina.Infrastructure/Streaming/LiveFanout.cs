@@ -24,6 +24,8 @@ public sealed class LiveFanout(
 
     private LiveFragmentFault? fault;
 
+    private long droppedByThoseWhoLeft;
+
     public int Viewers
     {
         get
@@ -31,6 +33,17 @@ public sealed class LiveFanout(
             lock (gate)
             {
                 return viewers.Count;
+            }
+        }
+    }
+
+    public long Dropped
+    {
+        get
+        {
+            lock (gate)
+            {
+                return droppedByThoseWhoLeft + viewers.Sum(viewing => viewing.Backlog.Dropped);
             }
         }
     }
@@ -156,7 +169,10 @@ public sealed class LiveFanout(
     {
         lock (gate)
         {
-            viewers.Remove(viewing);
+            if (viewers.Remove(viewing))
+            {
+                droppedByThoseWhoLeft += viewing.Backlog.Dropped;
+            }
         }
     }
 

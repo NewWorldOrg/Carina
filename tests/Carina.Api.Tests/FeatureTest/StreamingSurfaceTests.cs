@@ -13,7 +13,11 @@ public sealed class StreamingSurfaceTests(TestingWebApplicationFactory factory)
 
     private static readonly string[] SurfacesTheFeatureHadWhenTheseRulesWereWritten =
     [
+        "GET /api/live/channels",
+        "GET /api/live/profiles",
+        "GET /api/live/sessions",
         "GET /api/live/ws",
+        "POST /api/live/ticket",
         "GET /api/videos/{id}",
         "HEAD /api/videos/{id}",
         "GET /api/videos/{id}/play",

@@ -7,7 +7,7 @@ public sealed class LiveSessionManager(
     LiveFanoutSettings fanouts,
     ILiveSupply supply,
     ILiveTranscoderFactory transcoders,
-    TimeProvider clock) : ILiveSessionManager, IAsyncDisposable
+    TimeProvider clock) : ILiveSessionManager, ILiveSessionLedger, IAsyncDisposable
 {
     public const int Attempts = 2;
 
@@ -22,6 +22,24 @@ public sealed class LiveSessionManager(
             lock (gate)
             {
                 return [.. sessions.Keys];
+            }
+        }
+    }
+
+    public IReadOnlyList<LiveSessionView> Running
+    {
+        get
+        {
+            lock (gate)
+            {
+                return
+                [
+                    .. sessions.Values.Select(session => new LiveSessionView(
+                        session.Key,
+                        session.Viewers,
+                        session.Startup.Current ?? LiveStartup.NotStarted,
+                        session.Dropped)),
+                ];
             }
         }
     }

@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.WebSockets;
 
 using Carina.Api.Live;
+using Carina.Domain.Channels;
 using Carina.Domain.Streaming;
 using Carina.Infrastructure.Streaming;
 
@@ -16,7 +17,7 @@ public sealed class LiveWireTests
 {
     private static readonly Uri Wire = new(LiveWire.Path, UriKind.Relative);
 
-    private static readonly Uri Handshake = new("ws://localhost" + LiveWire.Path);
+    private static readonly Uri Handshake = new("ws://localhost" + LiveWire.Path + "?network=32736&service=1024&profile=720p30");
 
     private static readonly byte[] Picture = [0x0a, 0x0b, 0x0c];
 
@@ -88,16 +89,23 @@ public sealed class LiveWireTests
         Assert.Contains("403", refused.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public async Task AHandshakeIsRefusedWhileNothingIsBeingSentLive()
+    [Theory]
+    [InlineData("")]
+    [InlineData("?network=32736&service=1024")]
+    [InlineData("?network=32736&service=1024&profile=hls")]
+    [InlineData("?network=32736&service=1024&profile=720P30")]
+    [InlineData("?network=thirty&service=1024&profile=720p30")]
+    public async Task AHandshakeNamingNoKeyOrAProfileOffTheListIsRefusedBeforeItBecomesAWebSocket(string query)
     {
-        await using AuthProbe probe = AuthProbe.OverHttp();
+        HeldLiveSource held = new();
+        await using AuthProbe probe = Wiring(held);
         string cookie = await probe.SignedInCookieAsync();
 
         InvalidOperationException refused = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => Carrying(probe, cookie).ConnectAsync(Handshake, Patiently()));
+            () => Carrying(probe, cookie).ConnectAsync(new Uri("ws://localhost" + LiveWire.Path + query), Patiently()));
 
-        Assert.Contains("503", refused.Message, StringComparison.Ordinal);
+        Assert.Contains("400", refused.Message, StringComparison.Ordinal);
+        Assert.Empty(Seating(probe).Asked);
     }
 
     [Fact]
@@ -278,7 +286,7 @@ public sealed class LiveWireTests
     }
 
     [Fact]
-    public async Task AWireOnAFanoutThatHasEndedIsRefusedAsNothingBeingSentLive()
+    public async Task AWireOnAFanoutThatHasEndedIsToldSoOnTheControlChannelAndClosed()
     {
         LiveFanout fanout = new(new LiveFanoutSettings());
         await using AuthProbe probe = Wiring(fanout);
@@ -286,10 +294,36 @@ public sealed class LiveWireTests
 
         fanout.End();
 
-        InvalidOperationException refused = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => Carrying(probe, cookie).ConnectAsync(Handshake, Patiently()));
+        using WebSocket socket = await Carrying(probe, cookie).ConnectAsync(Handshake, Patiently());
 
-        Assert.Contains("503", refused.Message, StringComparison.Ordinal);
+        LiveFrame said = await Take(socket);
+
+        Assert.Equal(LiveChannel.Control, said.Channel);
+
+        LiveRefusalReading read = LiveRefusalReport.Read(said.Payload.Span);
+
+        Assert.Null(read.Fault);
+        Assert.Equal(LiveRefusal.TranscoderWouldNotStart, read.Report!.Refusal);
+
+        WebSocketReceiveResult ending = await Heard(socket);
+
+        Assert.Equal(WebSocketMessageType.Close, ending.MessageType);
+        Assert.Equal(WebSocketCloseStatus.InternalServerError, ending.CloseStatus);
+        Assert.Equal(LiveRefusalClosures.Because(LiveRefusal.TranscoderWouldNotStart), ending.CloseStatusDescription);
+    }
+
+    [Fact]
+    public async Task TheKeyInTheHandshakeIsTheKeyThatIsJoined()
+    {
+        HeldLiveSource held = new();
+        await using AuthProbe probe = Wiring(held);
+        string cookie = await probe.SignedInCookieAsync();
+
+        using WebSocket socket = await Carrying(probe, cookie).ConnectAsync(Handshake, Patiently());
+
+        Assert.Equal(
+            [new LiveSessionKey(new NetworkId(32736), new ServiceId(1024), LiveProfile.Hd30)],
+            Seating(probe).Asked);
     }
 
     private static CancellationToken Patiently() => new CancellationTokenSource(TimeSpan.FromSeconds(20)).Token;
@@ -297,13 +331,16 @@ public sealed class LiveWireTests
     private static AuthProbe Wiring(ILiveWireSource source, LiveWireSettings? settings = null)
         => AuthProbe.OverHttp(services =>
         {
-            services.AddSingleton(source);
+            services.AddSingleton<ILiveSessionManager>(new SeatingAt(source));
 
             if (settings is not null)
             {
                 services.AddSingleton(settings);
             }
         });
+
+    private static SeatingAt Seating(AuthProbe probe)
+        => Assert.IsType<SeatingAt>(probe.Wired.Services.GetRequiredService<ILiveSessionManager>());
 
     private static WebSocketClient Carrying(AuthProbe probe, string cookie)
     {
@@ -356,5 +393,35 @@ public sealed class LiveWireTests
         byte[] heard = new byte[64 * 1024];
 
         return await socket.ReceiveAsync(new ArraySegment<byte>(heard), Patiently());
+    }
+
+    private sealed class SeatingAt(ILiveWireSource source) : ILiveSessionManager
+    {
+        private readonly Lock gate = new();
+
+        private readonly List<LiveSessionKey> asked = [];
+
+        public IReadOnlyList<LiveSessionKey> Asked
+        {
+            get
+            {
+                lock (gate)
+                {
+                    return [.. asked];
+                }
+            }
+        }
+
+        public async Task<LiveJoin> JoinAsync(LiveSessionKey key, CancellationToken cancellationToken)
+        {
+            lock (gate)
+            {
+                asked.Add(key);
+            }
+
+            return await source.JoinAsync(cancellationToken) is { } viewing
+                ? LiveJoin.Joined(viewing)
+                : LiveJoin.Refused(LiveRefusal.TranscoderWouldNotStart, "what was being sent ended before a viewer could be seated.");
+        }
     }
 }
