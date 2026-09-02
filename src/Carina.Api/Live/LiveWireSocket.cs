@@ -5,7 +5,7 @@ using Carina.Domain.Streaming;
 
 namespace Carina.Api.Live;
 
-public sealed class LiveWireSocket(WebSocket socket, LiveWireSettings settings)
+public sealed class LiveWireSocket(WebSocket socket, LiveWireSettings settings, ILiveStartup? startup = null)
 {
     private static readonly TimeSpan GoodbyePatience = TimeSpan.FromSeconds(2);
 
@@ -22,33 +22,33 @@ public sealed class LiveWireSocket(WebSocket socket, LiveWireSettings settings)
         Task<LiveDeparture> listening = ListenAsync(leash.Token);
         Task<LiveDeparture> carrying = CarryOnAsync(frames, leash.Token);
 
-        Task<LiveDeparture> first = await Task.WhenAny(listening, carrying);
+        Task<LiveDeparture> firstDone = await Task.WhenAny(listening, carrying);
 
-        await leash.CancelAsync();
+        LiveDeparture departure = stopping.IsCancellationRequested
+            ? LiveDeparture.ServerStopping
+            : await firstDone;
 
-        LiveDeparture departure = Told(stopping, cancellationToken) ?? await first;
-
-        await Settled(listening, carrying);
-        await GoodbyeAsync(departure);
+        if (firstDone == carrying)
+        {
+            await GoodbyeAsync(departure, listening);
+            await leash.CancelAsync();
+            await Swallow(listening);
+        }
+        else
+        {
+            await leash.CancelAsync();
+            await Swallow(carrying);
+            await GoodbyeAsync(departure, null);
+        }
 
         return departure;
     }
 
-    private static LiveDeparture? Told(CancellationToken stopping, CancellationToken cancellationToken)
-    {
-        if (stopping.IsCancellationRequested)
-        {
-            return LiveDeparture.ServerStopping;
-        }
-
-        return cancellationToken.IsCancellationRequested ? LiveDeparture.ViewerLeft : null;
-    }
-
-    private static async Task Settled(params Task[] running)
+    private static async Task Swallow(Task running)
     {
         try
         {
-            await Task.WhenAll(running);
+            await running;
         }
         catch (Exception ending) when (ending is OperationCanceledException or WebSocketException or IOException)
         {
@@ -113,6 +113,8 @@ public sealed class LiveWireSocket(WebSocket socket, LiveWireSettings settings)
     {
         try
         {
+            await SayWhereWeAre(cancellationToken);
+
             Task<bool> waiting = frames.WaitToReadAsync(cancellationToken).AsTask();
 
             while (true)
@@ -121,7 +123,10 @@ public sealed class LiveWireSocket(WebSocket socket, LiveWireSettings settings)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
 
-                    await SendAsync(LiveControls.Frame(LiveControl.Ping), cancellationToken);
+                    if (!await SayWhereWeAre(cancellationToken))
+                    {
+                        await SendAsync(LiveControls.Frame(LiveControl.Ping), cancellationToken);
+                    }
 
                     continue;
                 }
@@ -139,6 +144,10 @@ public sealed class LiveWireSocket(WebSocket socket, LiveWireSettings settings)
                 waiting = frames.WaitToReadAsync(cancellationToken).AsTask();
             }
         }
+        catch (ViewerTooSlow)
+        {
+            return LiveDeparture.ViewerStoppedReading;
+        }
         catch (OperationCanceledException)
         {
             return cancellationToken.IsCancellationRequested
@@ -153,6 +162,20 @@ public sealed class LiveWireSocket(WebSocket socket, LiveWireSettings settings)
         {
             return LiveDeparture.SourceBroke;
         }
+    }
+
+    private async Task<bool> SayWhereWeAre(CancellationToken cancellationToken)
+    {
+        if (startup?.Current is not { InProgress: true } where)
+        {
+            return false;
+        }
+
+        await SendAsync(
+            new LiveFrame(LiveChannel.Control, LivePts.Start, where.ToProgressPayload()),
+            cancellationToken);
+
+        return true;
     }
 
     private static async Task<bool> ReadableWithin(
@@ -172,17 +195,34 @@ public sealed class LiveWireSocket(WebSocket socket, LiveWireSettings settings)
 
     private async Task SendAsync(LiveFrame frame, CancellationToken cancellationToken)
     {
-        using CancellationTokenSource patience =
-            CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-
-        patience.CancelAfter(settings.WritePatience);
-
         cancellationToken.ThrowIfCancellationRequested();
 
-        await socket.SendAsync(frame.ToArray(), WebSocketMessageType.Binary, true, patience.Token);
+        Task sending = socket.SendAsync(frame.ToArray(), WebSocketMessageType.Binary, true, cancellationToken);
+
+        using CancellationTokenSource ticking = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        Task waited = Task.Delay(settings.WritePatience, ticking.Token);
+
+        if (await Task.WhenAny(sending, waited) == waited)
+        {
+            Forget(sending);
+
+            cancellationToken.ThrowIfCancellationRequested();
+
+            throw new ViewerTooSlow();
+        }
+
+        await ticking.CancelAsync();
+        await sending;
     }
 
-    private async Task GoodbyeAsync(LiveDeparture departure)
+    private static void Forget(Task sending)
+        => _ = sending.ContinueWith(
+            static settled => settled.Exception,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
+
+    private async Task GoodbyeAsync(LiveDeparture departure, Task<LiveDeparture>? drain)
     {
         if (departure is LiveDeparture.ViewerStoppedReading)
         {
@@ -199,6 +239,11 @@ public sealed class LiveWireSocket(WebSocket socket, LiveWireSettings settings)
                 LiveDepartures.Status(departure),
                 LiveDepartures.Because(departure),
                 patience.Token);
+
+            if (drain is not null)
+            {
+                await drain.WaitAsync(patience.Token);
+            }
         }
         catch (Exception gone)
             when (gone is OperationCanceledException or WebSocketException or IOException
@@ -207,4 +252,6 @@ public sealed class LiveWireSocket(WebSocket socket, LiveWireSettings settings)
             socket.Abort();
         }
     }
+
+    private sealed class ViewerTooSlow : Exception;
 }

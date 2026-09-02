@@ -6,6 +6,8 @@ public sealed record LiveWireSettings
 
     private readonly TimeSpan writePatience = TimeSpan.FromSeconds(5);
 
+    private readonly TimeSpan silenceCeiling = TimeSpan.FromSeconds(100);
+
     private readonly int largestFrameFromAViewer = 64;
 
     public TimeSpan BetweenPings
@@ -31,6 +33,20 @@ public sealed record LiveWireSettings
                 value,
                 "A viewer is given some time to take a frame, not none.");
     }
+
+    public TimeSpan SilenceCeiling
+    {
+        get => silenceCeiling;
+
+        init => silenceCeiling = value > TimeSpan.Zero
+            ? value
+            : throw new ArgumentOutOfRangeException(
+                nameof(value),
+                value,
+                "A gateway in front cuts a wire it has heard nothing from, so the ceiling is a span, not none.");
+    }
+
+    public bool SaysSomethingBeforeTheCeiling => betweenPings < silenceCeiling;
 
     public int LargestFrameFromAViewer
     {

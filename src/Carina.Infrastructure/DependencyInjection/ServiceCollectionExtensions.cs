@@ -188,6 +188,8 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<ILiveSupply, NoLiveSupply>();
         services.TryAddSingleton<ILiveTranscoderFactory, LiveTranscoderFactory>();
         services.TryAddSingleton<ILiveSessionManager, LiveSessionManager>();
+        services.TryAddSingleton<ILiveWireSource, NoLiveSource>();
+        services.TryAddSingleton<ILiveStartup, NoLiveStartup>();
         services.TryAddSingleton<IStreamAttributeReader, FfprobeStreamAttributeReader>();
         services.TryAddSingleton<ILiveEncoderSelector>(provider => new LiveEncoderSelection(
             provider.GetRequiredService<LiveTranscodeSettings>(),
