@@ -74,6 +74,8 @@ public sealed class PipedTransportStream : ILiveTransportStream
 
     public Stream Bytes { get; }
 
+    public LiveSupplyEnding? Ending { get; set; }
+
     public bool Disposed { get; private set; }
 
     public async Task WriteAsync(byte[] bytes)

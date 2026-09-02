@@ -49,6 +49,8 @@ public sealed class LiveSupplyStartTests
     {
         public Stream Bytes => Stream.Null;
 
+        public LiveSupplyEnding? Ending => null;
+
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 }

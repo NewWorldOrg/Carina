@@ -10,4 +10,6 @@ public interface ILiveSupply
 public interface ILiveTransportStream : IAsyncDisposable
 {
     Stream Bytes { get; }
+
+    LiveSupplyEnding? Ending { get; }
 }

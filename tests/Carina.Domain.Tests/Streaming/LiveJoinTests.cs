@@ -69,6 +69,8 @@ public sealed class LiveJoinTests
 
         public ILiveStartup? Startup => null;
 
+        public ILiveEnding? Ending => null;
+
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 }
