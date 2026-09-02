@@ -8,13 +8,13 @@ public static class LiveChannels
         LiveChannel.Picture,
         LiveChannel.SoundHeader,
         LiveChannel.Sound,
+        LiveChannel.CaptionHeader,
+        LiveChannel.Caption,
         LiveChannel.Control,
     ];
 
     public static IReadOnlyList<LiveChannel> SetAsideForLater { get; } =
     [
-        LiveChannel.CaptionHeader,
-        LiveChannel.Caption,
         LiveChannel.ServiceInformation,
     ];
 
@@ -22,6 +22,13 @@ public static class LiveChannels
     [
         LiveChannel.PictureHeader,
         LiveChannel.SoundHeader,
+        LiveChannel.CaptionHeader,
+    ];
+
+    public static IReadOnlyList<LiveChannel> Kept { get; } =
+    [
+        .. Headers,
+        LiveChannel.Caption,
     ];
 
     public static IReadOnlyList<LiveChannel> Expendable { get; } =

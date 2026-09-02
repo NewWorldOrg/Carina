@@ -77,7 +77,7 @@ public sealed class OnTheFlyPlayer(
             transcoding,
             [
                 .. FfmpegPlaybackInvocation.Arguments(service, profile, read.Attributes, chosen.Encoder, source, from),
-                .. FfmpegLiveInvocation.Delivery(),
+                .. FfmpegLiveInvocation.DeliveryFromTheStart(),
             ],
             chosen,
             clock,

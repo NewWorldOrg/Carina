@@ -382,12 +382,32 @@ public sealed class FfmpegLiveInvocationTests
                 "-f",
                 "mp4",
                 "-movflags",
-                "empty_moov+default_base_moof+delay_moov",
+                "empty_moov+default_base_moof+delay_moov+frag_discont",
                 "-frag_duration",
                 "200000",
                 "pipe:1",
             ],
             FfmpegLiveInvocation.Delivery());
+    }
+
+    [Fact]
+    public void TheFragmentsSitOnTheBroadcastsOwnClockSoTheCaptionsDrawnByAnotherProcessMeetThem()
+    {
+        string[] delivery = [.. FfmpegLiveInvocation.Delivery()];
+
+        Assert.Contains("-copyts", FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software));
+        Assert.Contains("frag_discont", delivery[delivery.IndexOf("-movflags") + 1], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ARecordingPlayedFromSomewhereInItStartsItsClockThereInstead()
+    {
+        string[] delivery = [.. FfmpegLiveInvocation.DeliveryFromTheStart()];
+
+        Assert.DoesNotContain("frag_discont", delivery[delivery.IndexOf("-movflags") + 1], StringComparison.Ordinal);
+        Assert.Equal(
+            FfmpegLiveInvocation.Delivery().Where(argument => !argument.Contains("moov", StringComparison.Ordinal)),
+            delivery.Where(argument => !argument.Contains("moov", StringComparison.Ordinal)));
     }
 
     [Fact]

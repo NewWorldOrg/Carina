@@ -5,6 +5,8 @@ using Carina.Domain.Streaming;
 
 namespace Carina.Infrastructure.Streaming;
 
+internal sealed record ProcessLaunch(Process? Started, string Note);
+
 internal static class TranscoderProcess
 {
     internal static LiveTranscoderStart Start(
@@ -14,7 +16,16 @@ internal static class TranscoderProcess
         TimeProvider clock,
         CancellationToken cancellationToken)
     {
-        var start = new ProcessStartInfo(settings.Programme)
+        ProcessLaunch launched = Launch(settings.Programme, arguments);
+
+        return launched.Started is { } started
+            ? LiveTranscoderStart.Started(new LiveTranscoder(started, chosen, settings.StopGrace, clock, cancellationToken))
+            : LiveTranscoderStart.Failed(TranscoderFault.ProgrammeMissing, launched.Note);
+    }
+
+    internal static ProcessLaunch Launch(string programme, IReadOnlyList<string> arguments)
+    {
+        var start = new ProcessStartInfo(programme)
         {
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
@@ -35,19 +46,11 @@ internal static class TranscoderProcess
         }
         catch (Win32Exception failure)
         {
-            return LiveTranscoderStart.Failed(
-                TranscoderFault.ProgrammeMissing,
-                $"'{settings.Programme}' could not be started on this machine: {failure.Message}");
+            return new ProcessLaunch(null, $"'{programme}' could not be started on this machine: {failure.Message}");
         }
 
-        if (started is null)
-        {
-            return LiveTranscoderStart.Failed(
-                TranscoderFault.ProgrammeMissing,
-                $"'{settings.Programme}' started no process of its own.");
-        }
-
-        return LiveTranscoderStart.Started(
-            new LiveTranscoder(started, chosen, settings.StopGrace, clock, cancellationToken));
+        return started is null
+            ? new ProcessLaunch(null, $"'{programme}' started no process of its own.")
+            : new ProcessLaunch(started, string.Empty);
     }
 }

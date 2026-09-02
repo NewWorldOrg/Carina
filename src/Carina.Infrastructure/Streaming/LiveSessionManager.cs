@@ -7,6 +7,7 @@ public sealed class LiveSessionManager(
     LiveFanoutSettings fanouts,
     ILiveSupply supply,
     ILiveTranscoderFactory transcoders,
+    ILiveCaptionerFactory captioners,
     TimeProvider clock) : ILiveSessionManager, ILiveSessionLedger, IAsyncDisposable
 {
     public const int Attempts = 2;
@@ -107,7 +108,7 @@ public sealed class LiveSessionManager(
                 return running;
             }
 
-            LiveSession raised = new(key, fanouts, settings, supply, transcoders, clock, Forget);
+            LiveSession raised = new(key, fanouts, settings, supply, transcoders, captioners, clock, Forget);
 
             sessions[key] = raised;
             raised.Expect();

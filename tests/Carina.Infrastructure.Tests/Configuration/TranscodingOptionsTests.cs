@@ -67,6 +67,56 @@ public sealed class TranscodingOptionsTests
     }
 
     [Fact]
+    public void NothingConfiguredMeansCaptionsAreNotMovedAgainstThePicture()
+    {
+        Assert.Equal(TimeSpan.Zero, ReadCaptions().EncoderDelay);
+    }
+
+    [Theory]
+    [InlineData("00:00:00.300", 300)]
+    [InlineData("-00:00:00.300", -300)]
+    [InlineData("00:00:02", 2_000)]
+    public void TheCaptionDelayAskedForReachesTheSettingsTheCaptionerReads(string named, int milliseconds)
+    {
+        Assert.Equal(TimeSpan.FromMilliseconds(milliseconds), ReadCaptions(("Transcoding:CaptionDelay", named)).EncoderDelay);
+    }
+
+    [Theory]
+    [InlineData("300")]
+    [InlineData("300ms")]
+    [InlineData("soon")]
+    public void ACaptionDelayThatIsNotASpanOfTimeIsRefusedByName(string named)
+    {
+        ArgumentException refusal = Assert.Throws<ArgumentException>(() => ReadCaptions(("Transcoding:CaptionDelay", named)));
+
+        Assert.Equal("CaptionDelay", refusal.ParamName);
+        Assert.Contains("Transcoding:CaptionDelay", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("00:00:11")]
+    [InlineData("-00:00:11")]
+    public void ACaptionDelayFurtherThanTenSecondsIsRefusedByName(string named)
+    {
+        ArgumentException refusal = Assert.Throws<ArgumentException>(() => ReadCaptions(("Transcoding:CaptionDelay", named)));
+
+        Assert.Equal("CaptionDelay", refusal.ParamName);
+        Assert.Contains("Transcoding:CaptionDelay", refusal.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ACaptionDelayOffTheClockIsWhatStopsTheProcessStartingToo()
+    {
+        TranscodingOptions options = new();
+        options.ReadFrom(Configuration(("Transcoding:CaptionDelay", "soon")));
+
+        ValidateOptionsResult validated = new TranscodingValidation().Validate(null, options);
+
+        Assert.True(validated.Failed);
+        Assert.Contains("Transcoding:CaptionDelay", validated.FailureMessage, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void AnEncoderOffTheListIsWhatStopsTheProcessStartingToo()
     {
         TranscodingOptions options = new();
@@ -120,6 +170,14 @@ public sealed class TranscodingOptionsTests
         options.ReadFrom(Configuration(settings));
 
         return options.ReadLive();
+    }
+
+    private static LiveCaptionSettings ReadCaptions(params (string Key, string Value)[] settings)
+    {
+        TranscodingOptions options = new();
+        options.ReadFrom(Configuration(settings));
+
+        return options.ReadCaptions();
     }
 
     private static IConfiguration Configuration(params (string Key, string Value)[] settings)

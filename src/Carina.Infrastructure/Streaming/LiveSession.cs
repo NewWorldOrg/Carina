@@ -17,6 +17,8 @@ internal sealed class LiveSession
 
     private readonly ILiveTranscoderFactory transcoders;
 
+    private readonly ILiveCaptionerFactory captioners;
+
     private readonly TimeProvider clock;
 
     private readonly Action<LiveSession> forget;
@@ -33,7 +35,13 @@ internal sealed class LiveSession
 
     private ILiveTranscoder? transcoder;
 
+    private ILiveCaptioner? captioner;
+
+    private CaptionSupply? captionSupply;
+
     private Task<LiveFragmentFault?>? carrying;
+
+    private Task? captioning;
 
     private Task? feeding;
 
@@ -49,6 +57,7 @@ internal sealed class LiveSession
         LiveSessionSettings settings,
         ILiveSupply supply,
         ILiveTranscoderFactory transcoders,
+        ILiveCaptionerFactory captioners,
         TimeProvider clock,
         Action<LiveSession> forget)
     {
@@ -58,6 +67,7 @@ internal sealed class LiveSession
         this.settings = settings;
         this.supply = supply;
         this.transcoders = transcoders;
+        this.captioners = captioners;
         this.clock = clock;
         this.forget = forget;
     }
@@ -148,6 +158,7 @@ internal sealed class LiveSession
 
                 await into.WriteAsync(mouthful.AsMemory(0, read), cancellationToken);
                 await into.FlushAsync(cancellationToken);
+                captionSupply?.Offer(mouthful.AsSpan(0, read));
             }
 
             if (!cancellationToken.IsCancellationRequested)
@@ -272,10 +283,12 @@ internal sealed class LiveSession
 
         startup.Reach(LiveStartupSegment.TunerSecured);
 
+        StreamAttributes attributes = StreamAttributes.SafeSide;
+
         LiveTranscoderStart started = await transcoders.StartAsync(
             Key.Service,
             Key.Profile,
-            StreamAttributes.SafeSide,
+            attributes,
             cancellationToken);
 
         if (started.Transcoder is not { } running)
@@ -292,26 +305,60 @@ internal sealed class LiveSession
 
         startup.Reach(LiveStartupSegment.TranscoderStarted);
 
+        LiveCaptionerStart drawn = await captioners.StartAsync(Key.Service, attributes, cancellationToken);
+
+        if (drawn.Captioner is { } drawing)
+        {
+            lock (gate)
+            {
+                captioner = drawing;
+                captionSupply = new CaptionSupply(drawing.Input);
+            }
+
+            fanout.Publish(LiveCaptions.Canvas(attributes.Size));
+        }
+
         return null;
+    }
+
+    private static async Task CaptionAsync(ILiveCaptioner drawing, LiveFanout into, CancellationToken cancellationToken)
+    {
+        try
+        {
+            while (await drawing.Frames.WaitToReadAsync(cancellationToken))
+            {
+                while (drawing.Frames.TryRead(out LiveFrame? frame))
+                {
+                    into.Publish(frame);
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
     }
 
     private async Task CarryAsync(CancellationToken cancellationToken)
     {
         ILiveTransportStream bytes;
         ILiveTranscoder running;
+        ILiveCaptioner? drawing;
 
         lock (gate)
         {
             bytes = stream!;
             running = transcoder!;
+            drawing = captioner;
         }
 
         Task<LiveFragmentFault?> carried = LiveFeed.CarryAsync(running.Output, fanout, cancellationToken, Published);
+        Task? captioned = drawing is null ? null : CaptionAsync(drawing, fanout, cancellationToken);
         Task fed = FeedAsync(bytes, running.Input, cancellationToken);
 
         lock (gate)
         {
             carrying = carried;
+            captioning = captioned;
             feeding = fed;
         }
 
@@ -325,18 +372,41 @@ internal sealed class LiveSession
     private async Task TearDownAsync()
     {
         ILiveTranscoder? running;
+        ILiveCaptioner? drawing;
+        CaptionSupply? drawingFrom;
         ILiveTransportStream? bytes;
         Task<LiveFragmentFault?>? carried;
+        Task? captioned;
         Task? fed;
 
         lock (gate)
         {
             running = transcoder;
+            drawing = captioner;
+            drawingFrom = captionSupply;
             bytes = stream;
             carried = carrying;
+            captioned = captioning;
             fed = feeding;
             transcoder = null;
+            captioner = null;
+            captionSupply = null;
             stream = null;
+        }
+
+        if (drawingFrom is not null)
+        {
+            await drawingFrom.CompleteAsync();
+        }
+
+        if (drawing is not null)
+        {
+            await drawing.DisposeAsync();
+        }
+
+        if (captioned is not null)
+        {
+            await Quietly(captioned);
         }
 
         if (running is not null)

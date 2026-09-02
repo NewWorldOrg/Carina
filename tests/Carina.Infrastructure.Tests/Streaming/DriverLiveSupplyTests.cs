@@ -267,6 +267,7 @@ public sealed class DriverLiveSupplyTests
             new LiveFanoutSettings(),
             Supply(),
             new HeldTranscoders(budget),
+            new HeldCaptioners(),
             new HandTurnedClock());
         LiveSessionKey key = new(Network, Service, LiveProfile.Hd30);
 

@@ -124,11 +124,11 @@ public sealed class FfmpegPlaybackInvocationTests
     }
 
     [Fact]
-    public void WhatIsHandedBackIsTheSameFragmentedContainerALiveViewerIsHandedBack()
+    public void WhatIsHandedBackIsTheSameFragmentedContainerALiveViewerIsHandedBackWithItsClockStartedAfresh()
     {
         Assert.Equal(
             ["-f", "mp4", "-movflags", "empty_moov+default_base_moof+delay_moov", "-frag_duration", "200000", "pipe:1"],
-            FfmpegLiveInvocation.Delivery());
+            FfmpegLiveInvocation.DeliveryFromTheStart());
     }
 
     [Fact]

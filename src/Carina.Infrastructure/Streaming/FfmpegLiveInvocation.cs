@@ -68,6 +68,18 @@ public static class FfmpegLiveInvocation
             "-f",
             "mp4",
             "-movflags",
+            "empty_moov+default_base_moof+delay_moov+frag_discont",
+            "-frag_duration",
+            FragmentMicroseconds,
+            Output,
+        ];
+
+    public static IReadOnlyList<string> DeliveryFromTheStart()
+        =>
+        [
+            "-f",
+            "mp4",
+            "-movflags",
             "empty_moov+default_base_moof+delay_moov",
             "-frag_duration",
             FragmentMicroseconds,
