@@ -1,5 +1,6 @@
 using System.Reflection;
 
+using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Streaming;
 using Carina.Infrastructure.Streaming;
@@ -26,6 +27,8 @@ public sealed class LiveSessionManagerTests
     private readonly HeldTranscoders transcoders;
 
     private readonly HeldCaptioners captioners = new();
+
+    private readonly SilentEvents events = new();
 
     private readonly LiveSessionManager manager;
 
@@ -470,7 +473,8 @@ public sealed class LiveSessionManagerTests
             supply,
             transcoders,
             captioners,
-            clock);
+            clock,
+            events);
 
         await using ILiveViewing slow = Seated(await crowded.JoinAsync(EveryFrame, CancellationToken.None));
 
@@ -629,6 +633,68 @@ public sealed class LiveSessionManagerTests
     }
 
     [Fact]
+    public async Task RaisingASessionSignalsLiveOnceHoweverManyViewersRideIt()
+    {
+        await using ILiveViewing first = await Joined(EveryFrame);
+        await using ILiveViewing second = await Joined(EveryFrame);
+
+        Assert.Equal([AppEventName.Live], events.Signalled);
+    }
+
+    [Fact]
+    public async Task EverySessionRaisedIsSignalledAndNothingButLiveIsEverSignalled()
+    {
+        await using ILiveViewing one = await Joined(EveryFrame);
+        await using ILiveViewing another = await Joined(AnotherChannel);
+
+        Assert.Equal(2, events.Signalled.Count);
+        Assert.All(events.Signalled, name => Assert.Same(AppEventName.Live, name));
+    }
+
+    [Fact]
+    public async Task TheSessionGoingAwayAfterItsLingerSignalsLiveAgain()
+    {
+        ILiveViewing viewing = await Joined(EveryFrame);
+
+        await viewing.DisposeAsync();
+
+        Assert.Equal([AppEventName.Live], events.Signalled);
+
+        clock.Turn(Linger);
+
+        await Eventually.Happens(() => events.Signalled.Count is 2, "the session being torn down is signalled");
+
+        Assert.Empty(manager.Keys);
+        Assert.All(events.Signalled, name => Assert.Same(AppEventName.Live, name));
+    }
+
+    [Fact]
+    public async Task AViewerBackWithinTheLingerSignalsNothingBecauseTheSessionNeverWentAway()
+    {
+        ILiveViewing gone = await Joined(EveryFrame);
+
+        await gone.DisposeAsync();
+
+        clock.Turn(Linger / 2);
+
+        await using ILiveViewing back = await Joined(EveryFrame);
+
+        Assert.Equal([AppEventName.Live], events.Signalled);
+    }
+
+    [Fact]
+    public async Task ASessionTheSupplyRefusesIsSignalledComingAndGoingSoAReaderSeesTheLedgerAsItWas()
+    {
+        supply.Refusing = LiveRefusal.NoTunerFree;
+
+        await manager.JoinAsync(EveryFrame, CancellationToken.None);
+
+        await Eventually.Happens(() => events.Signalled.Count is 2, "the refused session is signalled in and out");
+
+        Assert.Empty(manager.Keys);
+    }
+
+    [Fact]
     public void TheLedgerIsEmptyWhileNothingIsBeingSentLive()
     {
         Assert.Empty(Ledger.Running);
@@ -674,7 +740,8 @@ public sealed class LiveSessionManagerTests
             supply,
             raising ?? new HeldTranscoders(counting),
             captioners,
-            clock);
+            clock,
+            events);
 
     private async Task<ILiveViewing> Joined(LiveSessionKey key)
         => Seated(await manager.JoinAsync(key, CancellationToken.None));

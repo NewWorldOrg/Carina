@@ -24,6 +24,27 @@ public sealed class EventStreamRuleTests
     }
 
     [Fact]
+    public void TheHubIsTheOnlyEventStreamTheAppServes()
+    {
+        Assert.Equal(
+            ["Carina.Api/Events/AppEventStream.cs"],
+            AppSideProjects
+                .SelectMany(project => SourceScan
+                    .FilesMentioning(Path.Combine(RepositoryLayout.SourceDirectory, project), EventStreamContracts.ContentType)
+                    .Select(file => $"{project}/{file}"))
+                .Order(StringComparer.Ordinal)
+                .ToArray());
+    }
+
+    [Fact]
+    public void TheDriverHasAnEventStreamOfItsOwnWhichIsWhyTheRuleAboveStopsAtTheApp()
+    {
+        Assert.NotEmpty(SourceScan.FilesMentioning(
+            Path.Combine(RepositoryLayout.SourceDirectory, DriverProject),
+            EventStreamContracts.ContentType));
+    }
+
+    [Fact]
     public void EveryProjectButTheDriverIsScanned()
     {
         Assert.Contains("Carina.Api", AppSideProjects);

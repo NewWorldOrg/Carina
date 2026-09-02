@@ -44,6 +44,25 @@ public sealed class ScreenRequestTests(TestingWebApplicationFactory factory)
         Assert.Null(response.Headers.Location);
     }
 
+    [Theory]
+    [InlineData("/api/videos/1")]
+    [InlineData("/api/videos/1/play")]
+    [InlineData("/api/videos/1/thumbnail")]
+    [InlineData("/api/videos/1/scrub")]
+    [InlineData("/api/live/ws")]
+    [InlineData("/api/live/channels")]
+    [InlineData("/api/events")]
+    public async Task WhatIsWatchedIsRefusedRatherThanSentToTheLoginScreenEvenWhenAskedForAsAPage(string path)
+    {
+        using HttpClient client = Browser();
+
+        using HttpResponseMessage response = await client.GetAsync(new Uri(path, UriKind.Relative));
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Null(response.Headers.Location);
+        Assert.Empty(await response.Content.ReadAsByteArrayAsync());
+    }
+
     [Fact]
     public async Task APlayerIsRefusedRatherThanHandedALoginScreenItCannotRead()
     {
