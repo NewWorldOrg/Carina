@@ -167,6 +167,26 @@ nothing.
   that plainly so nobody reads the rules as a guarantee. What the rules do catch
   is the ordinary way somebody would write one.
 
+- **Streaming reads, counts nothing, and writes nothing that is not its own.** The
+  live and playback paths take the bytes the driver already hands out and give them
+  to one transcoder. A second pipeline over the same stream — a packet loop in the
+  app, or a second seat on the driver's session stream — is the back pressure the
+  rule above exists to keep off the recording, and the app's drop figure is the
+  fan-out's, never a continuity count. What holds that is a set of source rules
+  over the feature, which is its folders plus any file naming its namespaces, the
+  composition root excepted: no file shows even one mark of a transport-stream
+  parser where the global rule asks for two; at most one file opens the driver's
+  stream, once, asking for the viewer's seat, and none spells the path or another
+  seat; and no file calls a repository write verb, reaches the store or the change
+  tracker, writes SQL, changes a file on disk, or names the writers of the ledger,
+  the tuners or the guide. Reading any of them is allowed and a test says so. Over
+  the HTTP surface, nothing under `/api/live` or `/api/videos` deletes or declares
+  itself destructive, and the only thing there that changes state issues a ticket.
+  **Trip wires, not proof:** a stride written `4 + 180 + 4`, a seat asked for as a
+  literal, a write behind a verb the rule does not know or a delegate handed in
+  from the composition root, and a count done inside ffmpeg all walk past, and the
+  self-checks say so plainly.
+
 - **"Nothing counted this" and "this was counted and was clean" are different
   answers,** and so are "nowhere" and "somewhere, with nothing in it". A driver
   that cannot count says so in its greeting rather than answering zero, and a
