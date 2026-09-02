@@ -64,7 +64,8 @@ internal sealed class ScriptedWebSocket : WebSocket
     {
         Closed = closeStatus;
         ClosedBecause = statusDescription;
-        state = WebSocketState.CloseSent;
+        state = WebSocketState.Closed;
+        incoming.Writer.TryWrite(new WebSocketSaying(WebSocketMessageType.Close, []));
 
         return Task.CompletedTask;
     }
@@ -75,7 +76,16 @@ internal sealed class ScriptedWebSocket : WebSocket
         ArraySegment<byte> buffer,
         CancellationToken cancellationToken)
     {
-        WebSocketSaying saying = await incoming.Reader.ReadAsync(cancellationToken);
+        WebSocketSaying saying;
+
+        try
+        {
+            saying = await incoming.Reader.ReadAsync(cancellationToken);
+        }
+        catch (ChannelClosedException)
+        {
+            throw new WebSocketException(WebSocketError.ConnectionClosedPrematurely);
+        }
 
         if (saying.Type is WebSocketMessageType.Close)
         {

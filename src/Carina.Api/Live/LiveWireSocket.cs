@@ -28,10 +28,18 @@ public sealed class LiveWireSocket(WebSocket socket, LiveWireSettings settings, 
             ? LiveDeparture.ServerStopping
             : await firstDone;
 
-        await leash.CancelAsync();
-        await Swallow(listening);
-        await Swallow(carrying);
-        await GoodbyeAsync(departure);
+        if (firstDone == carrying)
+        {
+            await GoodbyeAsync(departure, listening);
+            await leash.CancelAsync();
+            await Swallow(listening);
+        }
+        else
+        {
+            await leash.CancelAsync();
+            await Swallow(carrying);
+            await GoodbyeAsync(departure, null);
+        }
 
         return departure;
     }
@@ -214,7 +222,7 @@ public sealed class LiveWireSocket(WebSocket socket, LiveWireSettings settings, 
             TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
             TaskScheduler.Default);
 
-    private async Task GoodbyeAsync(LiveDeparture departure)
+    private async Task GoodbyeAsync(LiveDeparture departure, Task<LiveDeparture>? drain)
     {
         if (departure is LiveDeparture.ViewerStoppedReading)
         {
@@ -231,6 +239,11 @@ public sealed class LiveWireSocket(WebSocket socket, LiveWireSettings settings, 
                 LiveDepartures.Status(departure),
                 LiveDepartures.Because(departure),
                 patience.Token);
+
+            if (drain is not null)
+            {
+                await drain.WaitAsync(patience.Token);
+            }
         }
         catch (Exception gone)
             when (gone is OperationCanceledException or WebSocketException or IOException
