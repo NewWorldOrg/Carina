@@ -63,7 +63,7 @@ public static class LiveWire
         {
             using WebSocket socket = await context.WebSockets.AcceptWebSocketAsync();
 
-            await new LiveWireSocket(socket, settings, viewing.Startup).CarryAsync(
+            await new LiveWireSocket(socket, settings, viewing.Startup, viewing.Ending).CarryAsync(
                 viewing.Frames,
                 running.ApplicationStopping,
                 context.RequestAborted);

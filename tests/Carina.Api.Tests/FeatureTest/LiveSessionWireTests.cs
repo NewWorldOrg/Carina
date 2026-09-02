@@ -131,6 +131,40 @@ public sealed class LiveSessionWireTests
     }
 
     [Fact]
+    public async Task WhyTheSupplyEndedReachesTheWireOnTheControlChannelBeforeItIsClosed()
+    {
+        await using AuthProbe probe = Wiring();
+        string cookie = await probe.SignedInCookieAsync();
+
+        using WebSocket socket = await Carrying(probe, cookie).ConnectAsync(Handshake("32736", "1024", "720p30"), Patiently());
+
+        Assert.Equal(LiveChannel.Control, (await Take(socket)).Channel);
+
+        supply.Opened[0].Ending = LiveSupplyEnding.Of(LiveSupplyEnd.TakenForARecording, "a recording outranked it.");
+        supply.Opened[0].NoMore();
+
+        await transcoders.Raised[0].WriteAsync(Fmp4.Header);
+        transcoders.Raised[0].NoMore();
+
+        Assert.Equal(LiveChannel.PictureHeader, (await Take(socket)).Channel);
+
+        LiveFrame said = await Take(socket);
+
+        Assert.Equal(LiveChannel.Control, said.Channel);
+
+        LiveEndingReading read = LiveEndingReport.Read(said.Payload.Span);
+
+        Assert.Null(read.Fault);
+        Assert.Equal(LiveSupplyEnd.TakenForARecording, read.Report!.Why);
+
+        WebSocketReceiveResult ending = await Heard(socket);
+
+        Assert.Equal(WebSocketMessageType.Close, ending.MessageType);
+        Assert.Equal(WebSocketCloseStatus.NormalClosure, ending.CloseStatus);
+        Assert.Equal(LiveDepartures.Because(LiveDeparture.SourceEnded), ending.CloseStatusDescription);
+    }
+
+    [Fact]
     public async Task AWireNamingAProfileOffTheListIsRefusedBeforeAnythingIsRaised()
     {
         await using AuthProbe probe = Wiring();

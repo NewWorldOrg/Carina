@@ -95,6 +95,8 @@ public sealed class LiveWireSocketRefusalTests
 
         public ILiveStartup? Startup => null;
 
+        public ILiveEnding? Ending => null;
+
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 
