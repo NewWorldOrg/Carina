@@ -14,4 +14,6 @@ public interface ILiveViewing : IAsyncDisposable
     LiveBacklog Backlog { get; }
 
     ILiveStartup? Startup { get; }
+
+    ILiveEnding? Ending { get; }
 }

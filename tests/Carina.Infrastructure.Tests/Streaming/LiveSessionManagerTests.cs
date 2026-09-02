@@ -310,8 +310,87 @@ public sealed class LiveSessionManagerTests
 
         Assert.True(done.At(LiveStartupSegment.TranscoderStarted) <= done.At(LiveStartupSegment.InitReached));
         Assert.True(done.At(LiveStartupSegment.InitReached) <= done.At(LiveStartupSegment.FirstPicture));
-        Assert.False(done.Reached(LiveStartupSegment.TunerSecured));
+        Assert.True(done.Reached(LiveStartupSegment.TunerSecured));
         Assert.False(done.Reached(LiveStartupSegment.ChannelLocked));
+    }
+
+    [Fact]
+    public async Task ASessionMarksTheTunerSecuredWhenTheSupplyOpensAndTheChannelLockedWhenItsFirstBytesArrive()
+    {
+        await using ILiveViewing viewing = await Joined(EveryFrame);
+
+        LiveStartup raised = viewing.Startup!.Current!;
+
+        Assert.True(raised.Reached(LiveStartupSegment.TunerSecured));
+        Assert.True(raised.At(LiveStartupSegment.TunerSecured) <= raised.At(LiveStartupSegment.TranscoderStarted));
+        Assert.False(raised.Reached(LiveStartupSegment.ChannelLocked));
+
+        await supply.Opened[0].WriteAsync(new byte[1_000]);
+        await Eventually.Happens(
+            () => viewing.Startup.Current!.Reached(LiveStartupSegment.ChannelLocked),
+            "the first bytes from the supply mark the channel as locked");
+
+        Assert.Null(viewing.Ending!.Current);
+    }
+
+    [Fact]
+    public async Task ASupplyThatIsRefusedMarksNoSegmentAtAll()
+    {
+        supply.Refusing = LiveRefusal.WouldNotTune;
+
+        await manager.JoinAsync(EveryFrame, CancellationToken.None);
+
+        Assert.Null(manager.Startup(EveryFrame));
+    }
+
+    [Fact]
+    public async Task WhyTheSupplyEndedReachesEveryViewerBeforeTheirFramesEnd()
+    {
+        await using ILiveViewing first = await Joined(EveryFrame);
+        await using ILiveViewing second = await Joined(EveryFrame);
+
+        supply.Opened[0].Ending = LiveSupplyEnding.Of(LiveSupplyEnd.TakenForARecording, "a recording outranked it.");
+        supply.Opened[0].NoMore();
+
+        await Eventually.Happens(() => first.Ending!.Current is not null, "the ending is noted when the supply ends");
+
+        await transcoders.Raised[0].WriteAsync(Fmp4.Header);
+        transcoders.Raised[0].NoMore();
+
+        Assert.Equal(LiveChannel.PictureHeader, (await Next(first)).Channel);
+        Assert.Equal(LiveChannel.PictureHeader, (await Next(second)).Channel);
+        await first.Frames.Completion.WaitAsync(Eventually.Patience);
+        await second.Frames.Completion.WaitAsync(Eventually.Patience);
+
+        Assert.Same(first.Ending, second.Ending);
+        Assert.Equal(LiveSupplyEnd.TakenForARecording, first.Ending!.Current!.Why);
+        Assert.Equal("a recording outranked it.", first.Ending.Current.Note);
+    }
+
+    [Fact]
+    public async Task ASupplyThatEndsWithoutAWordIsSaidToHaveBeenLost()
+    {
+        await using ILiveViewing viewing = await Joined(EveryFrame);
+
+        supply.Opened[0].NoMore();
+
+        await Eventually.Happens(() => viewing.Ending!.Current is not null, "the ending is noted when the supply ends");
+
+        Assert.Equal(LiveSupplyEnd.DriverLost, viewing.Ending!.Current!.Why);
+    }
+
+    [Fact]
+    public async Task ASessionTornDownByItsOwnLingerNotesNoEnding()
+    {
+        ILiveViewing viewing = await Joined(EveryFrame);
+
+        await viewing.DisposeAsync();
+
+        clock.Turn(Linger);
+
+        await Eventually.Happens(() => supply.Opened[0].Disposed, "the stream is let go once the linger is over");
+
+        Assert.Null(viewing.Ending!.Current);
     }
 
     [Fact]

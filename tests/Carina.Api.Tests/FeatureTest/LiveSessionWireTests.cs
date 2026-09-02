@@ -85,7 +85,8 @@ public sealed class LiveSessionWireTests
         Assert.Null(read.Fault);
         Assert.True(read.Startup!.Reached(LiveStartupSegment.TranscoderStarted));
         Assert.False(read.Startup.Reached(LiveStartupSegment.InitReached));
-        Assert.False(read.Startup.Reached(LiveStartupSegment.TunerSecured));
+        Assert.True(read.Startup.Reached(LiveStartupSegment.TunerSecured));
+        Assert.False(read.Startup.Reached(LiveStartupSegment.ChannelLocked));
 
         await transcoders.Raised[0].WriteAsync(Fmp4.Header);
         await transcoders.Raised[0].WriteAsync(Fmp4.Fragment(1_000));
@@ -144,9 +145,14 @@ public sealed class LiveSessionWireTests
     }
 
     [Fact]
-    public async Task AWireIsRefusedWhileNothingSuppliesAStreamToThisApp()
+    public async Task AWireIsRefusedWhileTheDriverCannotBeReached()
     {
-        await using AuthProbe probe = AuthProbe.OverHttp();
+        TuningByServiceId tuning = new();
+
+        tuning.Answer(1024, TuningParameters.Terrestrial(27));
+
+        await using AuthProbe probe = AuthProbe.OverHttp(services =>
+            services.AddSingleton<IServiceTuningDirectory>(tuning));
         string cookie = await probe.SignedInCookieAsync();
 
         InvalidOperationException refused = await Assert.ThrowsAsync<InvalidOperationException>(

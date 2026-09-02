@@ -27,6 +27,8 @@ internal sealed class LiveSession
 
     private readonly LiveStartupRecord startup;
 
+    private readonly LiveEndingRecord ending = new();
+
     private ILiveTransportStream? stream;
 
     private ILiveTranscoder? transcoder;
@@ -52,7 +54,7 @@ internal sealed class LiveSession
     {
         Key = key;
         startup = new LiveStartupRecord(clock);
-        fanout = new LiveFanout(fanouts, startup);
+        fanout = new LiveFanout(fanouts, startup, ending);
         this.settings = settings;
         this.supply = supply;
         this.transcoders = transcoders;
@@ -67,6 +69,8 @@ internal sealed class LiveSession
     public int Viewers => fanout.Viewers;
 
     public ILiveStartup Startup => startup;
+
+    public ILiveEnding Ending => ending;
 
     internal void Start() => Life = LiveAsync();
 
@@ -128,7 +132,7 @@ internal sealed class LiveSession
         stopping.Cancel();
     }
 
-    private static async Task FeedAsync(Stream from, Stream into, CancellationToken cancellationToken)
+    private async Task FeedAsync(ILiveTransportStream from, Stream into, CancellationToken cancellationToken)
     {
         byte[] mouthful = ArrayPool<byte>.Shared.Rent(LiveFeed.Mouthful);
 
@@ -136,10 +140,19 @@ internal sealed class LiveSession
         {
             int read;
 
-            while ((read = await from.ReadAsync(mouthful, cancellationToken)) > 0)
+            while ((read = await from.Bytes.ReadAsync(mouthful, cancellationToken)) > 0)
             {
+                startup.Reach(LiveStartupSegment.ChannelLocked);
+
                 await into.WriteAsync(mouthful.AsMemory(0, read), cancellationToken);
                 await into.FlushAsync(cancellationToken);
+            }
+
+            if (!cancellationToken.IsCancellationRequested)
+            {
+                ending.Note(from.Ending ?? LiveSupplyEnding.Of(
+                    LiveSupplyEnd.DriverLost,
+                    "the transport stream ended and the supply did not say why."));
             }
 
             into.Close();
@@ -255,6 +268,8 @@ internal sealed class LiveSession
             stream = bytes;
         }
 
+        startup.Reach(LiveStartupSegment.TunerSecured);
+
         LiveTranscoderStart started = await transcoders.StartAsync(
             Key.Profile,
             StreamAttributes.SafeSide,
@@ -289,7 +304,7 @@ internal sealed class LiveSession
         }
 
         Task<LiveFragmentFault?> carried = LiveFeed.CarryAsync(running.Output, fanout, cancellationToken, Published);
-        Task fed = FeedAsync(bytes.Bytes, running.Input, cancellationToken);
+        Task fed = FeedAsync(bytes, running.Input, cancellationToken);
 
         lock (gate)
         {
@@ -376,6 +391,8 @@ internal sealed class LiveSession
         public LiveBacklog Backlog => viewing.Backlog;
 
         public ILiveStartup? Startup => viewing.Startup;
+
+        public ILiveEnding? Ending => viewing.Ending;
 
         public async ValueTask DisposeAsync()
         {

@@ -137,6 +137,8 @@ public sealed class LiveSessionWireSourceTests
 
         public ILiveStartup? Startup => null;
 
+        public ILiveEnding? Ending => null;
+
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 }
