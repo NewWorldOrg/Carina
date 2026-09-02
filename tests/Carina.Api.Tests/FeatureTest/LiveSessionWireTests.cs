@@ -128,6 +128,7 @@ public sealed class LiveSessionWireTests
 
         Assert.True(done.Reached(LiveStartupSegment.FirstPicture));
         Assert.False(done.InProgress);
+        Assert.All(done.Timeline, mark => Assert.True(mark.Took >= TimeSpan.Zero));
     }
 
     [Fact]
