@@ -5,7 +5,7 @@ using Carina.Domain.Streaming;
 
 namespace Carina.Api.Live;
 
-public sealed class LiveWireSocket(WebSocket socket, LiveWireSettings settings)
+public sealed class LiveWireSocket(WebSocket socket, LiveWireSettings settings, ILiveStartup? startup = null)
 {
     private static readonly TimeSpan GoodbyePatience = TimeSpan.FromSeconds(2);
 
@@ -113,6 +113,8 @@ public sealed class LiveWireSocket(WebSocket socket, LiveWireSettings settings)
     {
         try
         {
+            await SayWhereWeAre(cancellationToken);
+
             Task<bool> waiting = frames.WaitToReadAsync(cancellationToken).AsTask();
 
             while (true)
@@ -121,7 +123,10 @@ public sealed class LiveWireSocket(WebSocket socket, LiveWireSettings settings)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
 
-                    await SendAsync(LiveControls.Frame(LiveControl.Ping), cancellationToken);
+                    if (!await SayWhereWeAre(cancellationToken))
+                    {
+                        await SendAsync(LiveControls.Frame(LiveControl.Ping), cancellationToken);
+                    }
 
                     continue;
                 }
@@ -153,6 +158,20 @@ public sealed class LiveWireSocket(WebSocket socket, LiveWireSettings settings)
         {
             return LiveDeparture.SourceBroke;
         }
+    }
+
+    private async Task<bool> SayWhereWeAre(CancellationToken cancellationToken)
+    {
+        if (startup?.Current is not { InProgress: true } where)
+        {
+            return false;
+        }
+
+        await SendAsync(
+            new LiveFrame(LiveChannel.Control, LivePts.Start, where.ToProgressPayload()),
+            cancellationToken);
+
+        return true;
     }
 
     private static async Task<bool> ReadableWithin(

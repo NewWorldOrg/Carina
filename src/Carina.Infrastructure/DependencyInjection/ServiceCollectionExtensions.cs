@@ -185,6 +185,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton(new LiveWireSettings());
         services.TryAddSingleton(new LiveFanoutSettings());
         services.TryAddSingleton<ILiveWireSource, NoLiveSource>();
+        services.TryAddSingleton<ILiveStartup, NoLiveStartup>();
         services.TryAddSingleton<IStreamAttributeReader, FfprobeStreamAttributeReader>();
         services.TryAddSingleton<ILiveEncoderSelector>(provider => new LiveEncoderSelection(
             provider.GetRequiredService<LiveTranscodeSettings>(),
