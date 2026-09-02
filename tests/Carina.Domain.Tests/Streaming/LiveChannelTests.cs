@@ -75,4 +75,45 @@ public sealed class LiveChannelTests
     {
         Assert.False(Enum.IsDefined((LiveChannel)number));
     }
+
+    [Theory]
+    [InlineData(LiveChannel.Picture)]
+    [InlineData(LiveChannel.Sound)]
+    public void AMediaChannelIsTheOnlyKindABacklogMayThrowAway(LiveChannel channel)
+    {
+        Assert.Contains(channel, LiveChannels.Expendable);
+        Assert.DoesNotContain(channel, LiveChannels.Headers);
+    }
+
+    [Theory]
+    [InlineData(LiveChannel.PictureHeader)]
+    [InlineData(LiveChannel.SoundHeader)]
+    public void AHeaderIsKeptForWhoeverArrivesLateAndIsNeverThrownAway(LiveChannel channel)
+    {
+        Assert.Contains(channel, LiveChannels.Headers);
+        Assert.DoesNotContain(channel, LiveChannels.Expendable);
+    }
+
+    [Theory]
+    [InlineData(LiveChannel.Control)]
+    [InlineData(LiveChannel.CaptionHeader)]
+    [InlineData(LiveChannel.Caption)]
+    [InlineData(LiveChannel.ServiceInformation)]
+    public void WhatIsNeitherAHeaderNorMediaIsNeverThrownAwayEither(LiveChannel channel)
+    {
+        Assert.DoesNotContain(channel, LiveChannels.Expendable);
+        Assert.DoesNotContain(channel, LiveChannels.Headers);
+    }
+
+    [Fact]
+    public void TheExpendableChannelsAreExactlyTheTwoMediaChannels()
+    {
+        Assert.Equal([0x01, 0x11], LiveChannels.Expendable.Select(channel => (byte)channel).Order().ToArray());
+    }
+
+    [Fact]
+    public void TheHeadersAreExactlyTheTwoThatOpenAMediaChannel()
+    {
+        Assert.Equal([0x00, 0x10], LiveChannels.Headers.Select(channel => (byte)channel).Order().ToArray());
+    }
 }

@@ -10,6 +10,8 @@ internal sealed class HeldLiveSource : ILiveWireSource, ILiveViewing
 
     public ChannelReader<LiveFrame> Frames => frames.Reader;
 
+    public LiveBacklog Backlog => LiveBacklog.Empty;
+
     public bool LetGo { get; private set; }
 
     public void Send(LiveFrame frame) => frames.Writer.TryWrite(frame);

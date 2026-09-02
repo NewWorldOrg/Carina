@@ -183,6 +183,7 @@ public static class ServiceCollectionExtensions
             provider.GetRequiredService<IOptions<TranscodingOptions>>().Value.Read());
         services.TryAddSingleton<ITranscodeBudget, TranscodeBudget>();
         services.TryAddSingleton(new LiveWireSettings());
+        services.TryAddSingleton(new LiveFanoutSettings());
         services.TryAddSingleton<ILiveWireSource, NoLiveSource>();
         services.TryAddSingleton<IStreamAttributeReader, FfprobeStreamAttributeReader>();
         services.TryAddSingleton<ILiveEncoderSelector>(provider => new LiveEncoderSelection(
