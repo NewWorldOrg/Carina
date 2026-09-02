@@ -75,8 +75,8 @@ app.MapGet(ProgrammeFeedStream.Path, (HttpContext context, ProgrammeFeedService 
 
 app.MapGet(
         LiveWire.Path,
-        (HttpContext context, ILiveWireSource source, LiveWireSettings settings, IHostApplicationLifetime running) =>
-            LiveWire.Invoke(context, source, settings, running))
+        (HttpContext context, ILiveWireSource source, LiveWireSettings settings, ILiveStartup startup, IHostApplicationLifetime running) =>
+            LiveWire.Invoke(context, source, settings, startup, running))
     .ExcludeFromDescription()
     .WithEffect(EndpointEffect.Reading);
 
