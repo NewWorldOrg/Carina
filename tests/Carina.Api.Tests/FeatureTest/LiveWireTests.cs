@@ -3,6 +3,7 @@ using System.Net.WebSockets;
 
 using Carina.Api.Live;
 using Carina.Domain.Streaming;
+using Carina.Infrastructure.Streaming;
 
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
@@ -226,12 +227,77 @@ public sealed class LiveWireTests
         Assert.Equal(LiveDepartures.Because(LiveDeparture.SourceEnded), ending.CloseStatusDescription);
     }
 
+    [Fact]
+    public async Task AViewerJoiningAFanoutLateIsHandedTheHeaderBeforeTheNextPicture()
+    {
+        LiveFanout fanout = new(new LiveFanoutSettings());
+        await using AuthProbe probe = Wiring(fanout);
+        string cookie = await probe.SignedInCookieAsync();
+
+        fanout.Publish(new LiveFrame(LiveChannel.PictureHeader, LivePts.Start, Picture));
+        fanout.Publish(new LiveFrame(LiveChannel.Picture, LivePts.Of(90_000UL), Picture));
+
+        using WebSocket socket = await Carrying(probe, cookie)
+            .ConnectAsync(Handshake, Patiently());
+
+        fanout.Publish(new LiveFrame(LiveChannel.Picture, LivePts.Of(180_000UL), Picture));
+
+        LiveFrame first = await Take(socket);
+        LiveFrame second = await Take(socket);
+
+        Assert.Equal(LiveChannel.PictureHeader, first.Channel);
+        Assert.Equal(LiveChannel.Picture, second.Channel);
+        Assert.Equal(LivePts.Of(180_000UL), second.Pts);
+        Assert.Equal(1, fanout.Viewers);
+    }
+
+    [Fact]
+    public async Task TwoWiresOnOneFanoutAreBothCarriedAndBothClosedWhenItEnds()
+    {
+        LiveFanout fanout = new(new LiveFanoutSettings());
+        await using AuthProbe probe = Wiring(fanout);
+        string cookie = await probe.SignedInCookieAsync();
+
+        using WebSocket one = await Carrying(probe, cookie).ConnectAsync(Handshake, Patiently());
+        using WebSocket another = await Carrying(probe, cookie).ConnectAsync(Handshake, Patiently());
+
+        fanout.Publish(new LiveFrame(LiveChannel.Picture, LivePts.Of(90_000UL), Picture));
+
+        Assert.Equal(LivePts.Of(90_000UL), (await Take(one)).Pts);
+        Assert.Equal(LivePts.Of(90_000UL), (await Take(another)).Pts);
+
+        fanout.End();
+
+        WebSocketReceiveResult oneEnding = await Heard(one);
+        WebSocketReceiveResult anotherEnding = await Heard(another);
+
+        Assert.Equal(WebSocketCloseStatus.NormalClosure, oneEnding.CloseStatus);
+        Assert.Equal(WebSocketCloseStatus.NormalClosure, anotherEnding.CloseStatus);
+        Assert.Equal(LiveDepartures.Because(LiveDeparture.SourceEnded), oneEnding.CloseStatusDescription);
+        await Until(() => fanout.Viewers is 0);
+    }
+
+    [Fact]
+    public async Task AWireOnAFanoutThatHasEndedIsRefusedAsNothingBeingSentLive()
+    {
+        LiveFanout fanout = new(new LiveFanoutSettings());
+        await using AuthProbe probe = Wiring(fanout);
+        string cookie = await probe.SignedInCookieAsync();
+
+        fanout.End();
+
+        InvalidOperationException refused = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => Carrying(probe, cookie).ConnectAsync(Handshake, Patiently()));
+
+        Assert.Contains("503", refused.Message, StringComparison.Ordinal);
+    }
+
     private static CancellationToken Patiently() => new CancellationTokenSource(TimeSpan.FromSeconds(20)).Token;
 
-    private static AuthProbe Wiring(HeldLiveSource held, LiveWireSettings? settings = null)
+    private static AuthProbe Wiring(ILiveWireSource source, LiveWireSettings? settings = null)
         => AuthProbe.OverHttp(services =>
         {
-            services.AddSingleton<ILiveWireSource>(held);
+            services.AddSingleton(source);
 
             if (settings is not null)
             {

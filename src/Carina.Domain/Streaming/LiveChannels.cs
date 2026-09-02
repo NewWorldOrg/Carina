@@ -17,4 +17,16 @@ public static class LiveChannels
         LiveChannel.Caption,
         LiveChannel.ServiceInformation,
     ];
+
+    public static IReadOnlyList<LiveChannel> Headers { get; } =
+    [
+        LiveChannel.PictureHeader,
+        LiveChannel.SoundHeader,
+    ];
+
+    public static IReadOnlyList<LiveChannel> Expendable { get; } =
+    [
+        LiveChannel.Picture,
+        LiveChannel.Sound,
+    ];
 }

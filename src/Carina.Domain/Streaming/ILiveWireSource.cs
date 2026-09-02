@@ -10,4 +10,6 @@ public interface ILiveWireSource
 public interface ILiveViewing : IAsyncDisposable
 {
     ChannelReader<LiveFrame> Frames { get; }
+
+    LiveBacklog Backlog { get; }
 }
