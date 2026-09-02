@@ -12,6 +12,8 @@ internal sealed class HeldLiveSource : ILiveWireSource, ILiveViewing
 
     public LiveBacklog Backlog => LiveBacklog.Empty;
 
+    public ILiveStartup? Startup => null;
+
     public bool LetGo { get; private set; }
 
     public void Send(LiveFrame frame) => frames.Writer.TryWrite(frame);

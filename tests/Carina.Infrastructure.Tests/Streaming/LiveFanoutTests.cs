@@ -486,6 +486,20 @@ public sealed class LiveFanoutTests
 
     private static LiveFrame Sound(ulong pts) => new(LiveChannel.Sound, LivePts.Of(pts), Payload);
 
+    [Fact]
+    public async Task AFanoutHandsWhoeverJoinsTheStartupItWasGivenAndNothingWhenItHadNone()
+    {
+        LiveFanout plain = new(Room(10));
+        StartupHeld held = new();
+        LiveFanout told = new(Room(10), held);
+
+        await using ILiveViewing unaware = await Joined(plain);
+        await using ILiveViewing aware = await Joined(told);
+
+        Assert.Null(unaware.Startup);
+        Assert.Same(held, aware.Startup);
+    }
+
     private static async Task<ILiveViewing> Joined(LiveFanout fanout)
     {
         ILiveViewing? viewing = await fanout.JoinAsync(CancellationToken.None);
@@ -505,5 +519,10 @@ public sealed class LiveFanoutTests
         }
 
         return taken;
+    }
+
+    private sealed class StartupHeld : ILiveStartup
+    {
+        public LiveStartup? Current => LiveStartup.NotStarted;
     }
 }

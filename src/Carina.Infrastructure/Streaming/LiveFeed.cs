@@ -11,7 +11,8 @@ public static class LiveFeed
     public static async Task<LiveFragmentFault?> CarryAsync(
         Stream from,
         LiveFanout into,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action<LiveFrame>? published = null)
     {
         ArgumentNullException.ThrowIfNull(from);
         ArgumentNullException.ThrowIfNull(into);
@@ -30,7 +31,10 @@ public static class LiveFeed
 
                 foreach (LiveFragment fragment in made.Fragments)
                 {
-                    into.Publish(frames.Of(fragment));
+                    LiveFrame frame = frames.Of(fragment);
+
+                    into.Publish(frame);
+                    published?.Invoke(frame);
                 }
 
                 if (made.Fault is { } broke)

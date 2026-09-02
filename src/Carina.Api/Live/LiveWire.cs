@@ -14,13 +14,11 @@ public static class LiveWire
         HttpContext context,
         ILiveWireSource source,
         LiveWireSettings settings,
-        ILiveStartup startup,
         IHostApplicationLifetime running)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(settings);
-        ArgumentNullException.ThrowIfNull(startup);
         ArgumentNullException.ThrowIfNull(running);
 
         if (!context.WebSockets.IsWebSocketRequest)
@@ -59,7 +57,7 @@ public static class LiveWire
         {
             using WebSocket socket = await context.WebSockets.AcceptWebSocketAsync();
 
-            await new LiveWireSocket(socket, settings, startup).CarryAsync(
+            await new LiveWireSocket(socket, settings, viewing.Startup).CarryAsync(
                 viewing.Frames,
                 running.ApplicationStopping,
                 context.RequestAborted);
