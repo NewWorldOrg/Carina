@@ -271,6 +271,7 @@ internal sealed class LiveSession
         startup.Reach(LiveStartupSegment.TunerSecured);
 
         LiveTranscoderStart started = await transcoders.StartAsync(
+            Key.Service,
             Key.Profile,
             StreamAttributes.SafeSide,
             cancellationToken);

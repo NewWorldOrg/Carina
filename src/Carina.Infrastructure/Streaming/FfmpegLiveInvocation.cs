@@ -1,5 +1,6 @@
 using System.Globalization;
 
+using Carina.Domain.Channels;
 using Carina.Domain.Streaming;
 
 namespace Carina.Infrastructure.Streaming;
@@ -19,10 +20,12 @@ public static class FfmpegLiveInvocation
     private const string FragmentMicroseconds = "200000";
 
     public static IReadOnlyList<string> Arguments(
+        ServiceId service,
         LiveProfile profile,
         StreamAttributes attributes,
         LiveEncoder encoder)
     {
+        ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(attributes);
 
@@ -48,6 +51,7 @@ public static class FfmpegLiveInvocation
             .. Device(encoder),
             "-i",
             Input,
+            .. Mapping(service),
             "-vf",
             Filter(profile, attributes, encoder),
             .. Encoding(profile, encoder),
@@ -64,7 +68,7 @@ public static class FfmpegLiveInvocation
             "-f",
             "mp4",
             "-movflags",
-            "empty_moov+default_base_moof",
+            "empty_moov+default_base_moof+delay_moov",
             "-frag_duration",
             FragmentMicroseconds,
             Output,
@@ -72,6 +76,19 @@ public static class FfmpegLiveInvocation
 
     internal static IReadOnlyList<string> Device(LiveEncoder encoder)
         => encoder is LiveEncoder.Vaapi ? ["-vaapi_device", RenderNode] : [];
+
+    internal static IReadOnlyList<string> Mapping(ServiceId service)
+    {
+        int programNumber = service.Value;
+
+        return
+        [
+            "-map",
+            string.Create(CultureInfo.InvariantCulture, $"p:{programNumber}:v:0"),
+            "-map",
+            string.Create(CultureInfo.InvariantCulture, $"p:{programNumber}:a"),
+        ];
+    }
 
     internal static string Filter(LiveProfile profile, StreamAttributes attributes, LiveEncoder encoder)
     {

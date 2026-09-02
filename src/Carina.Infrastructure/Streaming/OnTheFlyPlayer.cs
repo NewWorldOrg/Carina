@@ -1,3 +1,4 @@
+using Carina.Domain.Channels;
 using Carina.Domain.Playback;
 using Carina.Domain.Streaming;
 
@@ -16,11 +17,13 @@ public sealed class OnTheFlyPlayer(
 
     public async Task<OnTheFlyStart> StartAsync(
         PlaybackFile file,
+        ServiceId service,
         TimeSpan from,
         LiveProfile profile,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(file);
+        ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentOutOfRangeException.ThrowIfLessThan(from, TimeSpan.Zero);
 
@@ -42,7 +45,7 @@ public sealed class OnTheFlyPlayer(
 
         try
         {
-            OnTheFlyStart start = await StartedAsync(source, from, profile, seat, cancellationToken);
+            OnTheFlyStart start = await StartedAsync(source, service, from, profile, seat, cancellationToken);
 
             handedOver = start.Running;
 
@@ -59,6 +62,7 @@ public sealed class OnTheFlyPlayer(
 
     private async Task<OnTheFlyStart> StartedAsync(
         StreamSource source,
+        ServiceId service,
         TimeSpan from,
         LiveProfile profile,
         ITranscodeSeat seat,
@@ -72,7 +76,7 @@ public sealed class OnTheFlyPlayer(
         LiveTranscoderStart started = TranscoderProcess.Start(
             transcoding,
             [
-                .. FfmpegPlaybackInvocation.Arguments(profile, read.Attributes, chosen.Encoder, source, from),
+                .. FfmpegPlaybackInvocation.Arguments(service, profile, read.Attributes, chosen.Encoder, source, from),
                 .. FfmpegLiveInvocation.Delivery(),
             ],
             chosen,

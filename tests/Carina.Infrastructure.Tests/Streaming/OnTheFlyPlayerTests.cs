@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Runtime.Versioning;
 
+using Carina.Domain.Channels;
 using Carina.Domain.Integrity;
 using Carina.Domain.Playback;
 using Carina.Domain.Recordings;
@@ -30,6 +31,8 @@ public sealed class OnTheFlyPlayerTests : IDisposable
 
     private static readonly RecordingFileName Named = new("a1b2c3.ts");
 
+    private static readonly ServiceId Service = new(1040);
+
     private readonly StandIns standIns = new();
 
     private TranscodeBudget budget = new(new TranscodeBudgetSettings { AtOnce = 2 });
@@ -48,6 +51,23 @@ public sealed class OnTheFlyPlayerTests : IDisposable
         Assert.NotEmpty(fromTheStart);
         Assert.NotEmpty(fromLater);
         Assert.NotEqual(fromTheStart, fromLater);
+    }
+
+    [Fact]
+    public async Task TheCommandNamesTheRecordedServiceForItsPictureAndEveryOneOfItsSounds()
+    {
+        Recorded(40_000);
+        string said = standIns.Named("arguments");
+
+        await using IOnTheFlyViewing viewing = await Running(
+            Player($"printf '%s\\n' \"$@\" > {said}; echo ready"),
+            TimeSpan.Zero);
+
+        string[] handed = File.ReadAllLines(said);
+
+        Assert.Contains("p:1040:v:0", handed);
+        Assert.Contains("p:1040:a", handed);
+        Assert.Equal("copy", handed[Array.IndexOf(handed, "-c:a") + 1]);
     }
 
     [Fact]
@@ -125,6 +145,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
         await using IOnTheFlyViewing first = await Running(player, TimeSpan.Zero);
         OnTheFlyStart second = await player.StartAsync(
             Found(),
+            Service,
             TimeSpan.Zero,
             LiveProfile.Hd30,
             CancellationToken.None);
@@ -146,6 +167,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
         await using IOnTheFlyViewing first = await Running(player, TimeSpan.Zero);
         OnTheFlyStart third = await player.StartAsync(
             Found(),
+            Service,
             TimeSpan.Zero,
             LiveProfile.Hd30,
             CancellationToken.None);
@@ -192,6 +214,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
 
         OnTheFlyStart start = await player.StartAsync(
             new PlaybackFile(Root, Named, 40_000),
+            Service,
             TimeSpan.Zero,
             LiveProfile.Hd30,
             CancellationToken.None);
@@ -208,6 +231,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
 
         OnTheFlyStart start = await Player(TakesTheFileApart).StartAsync(
             new PlaybackFile(Root, Named, 0),
+            Service,
             TimeSpan.Zero,
             LiveProfile.Hd30,
             CancellationToken.None);
@@ -225,6 +249,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
 
         OnTheFlyStart start = await Player(TakesTheFileApart).StartAsync(
             planned,
+            Service,
             TimeSpan.Zero,
             LiveProfile.Hd30,
             CancellationToken.None);
@@ -241,6 +266,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
         OnTheFlyStart start = await Player(
             "printf '%s\\n' 'Invalid data found when processing input' >&2; exit 183").StartAsync(
             Found(),
+            Service,
             TimeSpan.Zero,
             LiveProfile.Hd30,
             CancellationToken.None);
@@ -257,6 +283,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
 
         OnTheFlyStart start = await Player("exit 0").StartAsync(
             Found(),
+            Service,
             TimeSpan.Zero,
             LiveProfile.Hd30,
             CancellationToken.None);
@@ -272,6 +299,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
 
         OnTheFlyStart start = await PlayerRunning(standIns.Named("no-such-programme")).StartAsync(
             Found(),
+            Service,
             TimeSpan.Zero,
             LiveProfile.Hd30,
             CancellationToken.None);
@@ -291,6 +319,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
 
         OnTheFlyStart start = await player.StartAsync(
             Found(),
+            Service,
             TimeSpan.Zero,
             LiveProfile.Hd30,
             CancellationToken.None);
@@ -310,13 +339,16 @@ public sealed class OnTheFlyPlayerTests : IDisposable
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
             () => player.StartAsync(
                 Found(),
+                Service,
                 TimeSpan.FromSeconds(-1),
                 LiveProfile.Hd30,
                 CancellationToken.None));
         await Assert.ThrowsAsync<ArgumentNullException>(
-            () => player.StartAsync(null!, TimeSpan.Zero, LiveProfile.Hd30, CancellationToken.None));
+            () => player.StartAsync(null!, Service, TimeSpan.Zero, LiveProfile.Hd30, CancellationToken.None));
         await Assert.ThrowsAsync<ArgumentNullException>(
-            () => player.StartAsync(Found(), TimeSpan.Zero, null!, CancellationToken.None));
+            () => player.StartAsync(Found(), null!, TimeSpan.Zero, LiveProfile.Hd30, CancellationToken.None));
+        await Assert.ThrowsAsync<ArgumentNullException>(
+            () => player.StartAsync(Found(), Service, TimeSpan.Zero, null!, CancellationToken.None));
     }
 
     private static async Task WaitFor(string pids, int howMany)
@@ -365,6 +397,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
     {
         OnTheFlyStart start = await player.StartAsync(
             new PlaybackFile(Root, Named, 40_000),
+            Service,
             from,
             LiveProfile.Hd30,
             CancellationToken.None);

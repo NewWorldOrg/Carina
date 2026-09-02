@@ -1,5 +1,6 @@
 using System.Globalization;
 
+using Carina.Domain.Channels;
 using Carina.Domain.Streaming;
 
 namespace Carina.Infrastructure.Streaming;
@@ -9,12 +10,14 @@ public static class FfmpegPlaybackInvocation
     public const string Seconds = "0.###";
 
     public static IReadOnlyList<string> Arguments(
+        ServiceId service,
         LiveProfile profile,
         StreamAttributes attributes,
         LiveEncoder encoder,
         StreamSource source,
         TimeSpan from)
     {
+        ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(attributes);
         ArgumentNullException.ThrowIfNull(source);
@@ -39,8 +42,7 @@ public static class FfmpegPlaybackInvocation
             from.TotalSeconds.ToString(Seconds, CultureInfo.InvariantCulture),
             "-i",
             source.Value,
-            "-sn",
-            "-dn",
+            .. FfmpegLiveInvocation.Mapping(service),
             "-vf",
             FfmpegLiveInvocation.Filter(profile, attributes, encoder),
             .. FfmpegLiveInvocation.Encoding(profile, encoder),

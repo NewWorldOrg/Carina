@@ -70,6 +70,17 @@ public sealed class LiveSessionManagerTests
     }
 
     [Fact]
+    public async Task EachTranscoderIsToldWhichServicesPictureAndSoundsToTake()
+    {
+        await using ILiveViewing one = await Joined(EveryFrame);
+        await using ILiveViewing another = await Joined(AnotherChannel);
+
+        Assert.Equal(
+            [EveryFrame.Service, AnotherChannel.Service],
+            transcoders.Raised.Select(raised => raised.Service));
+    }
+
+    [Fact]
     public async Task AnotherChannelInTheSameProfileIsAnotherSession()
     {
         await using ILiveViewing one = await Joined(EveryFrame);

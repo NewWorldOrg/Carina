@@ -15,6 +15,7 @@ public sealed class FfmpegArgumentRuleTests
     [
         "/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs string.Join(",
         "/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs {kilobitsPerSecond}",
+        "/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs {programNumber}",
         "/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs {size.Height}",
         "/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs {size.Width}",
         "/Carina.Infrastructure/Thumbnails/FfmpegInvocation.cs {programNumber}",

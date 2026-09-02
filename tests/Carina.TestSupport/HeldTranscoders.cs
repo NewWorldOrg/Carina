@@ -1,5 +1,6 @@
 using System.IO.Pipelines;
 
+using Carina.Domain.Channels;
 using Carina.Domain.Streaming;
 
 namespace Carina.TestSupport;
@@ -37,10 +38,12 @@ public sealed class HeldTranscoders(ITranscodeBudget budget) : ILiveTranscoderFa
     public TranscoderFault? Failing { get; set; }
 
     public async Task<LiveTranscoderStart> StartAsync(
+        ServiceId service,
         LiveProfile profile,
         StreamAttributes attributes,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(attributes);
 
@@ -63,7 +66,7 @@ public sealed class HeldTranscoders(ITranscodeBudget budget) : ILiveTranscoderFa
             return LiveTranscoderStart.Failed(fault, "held back for the test.");
         }
 
-        HeldTranscoder transcoder = new(profile, attributes, seat);
+        HeldTranscoder transcoder = new(service, profile, attributes, seat);
 
         lock (gate)
         {
@@ -84,13 +87,16 @@ public sealed class HeldTranscoder : ILiveTranscoder
 
     private bool completed;
 
-    public HeldTranscoder(LiveProfile profile, StreamAttributes attributes, ITranscodeSeat seat)
+    public HeldTranscoder(ServiceId service, LiveProfile profile, StreamAttributes attributes, ITranscodeSeat seat)
     {
+        Service = service;
         Profile = profile;
         Attributes = attributes;
         this.seat = seat;
         Output = output.Reader.AsStream();
     }
+
+    public ServiceId Service { get; }
 
     public LiveProfile Profile { get; }
 

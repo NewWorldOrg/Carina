@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 
 using Carina.Api.Playback;
+using Carina.Domain.Channels;
 using Carina.Domain.Integrity;
 using Carina.Domain.Playback;
 using Carina.Domain.Recordings;
@@ -52,16 +53,20 @@ internal sealed class HeldOnTheFlyPlayer : IOnTheFlyPlayer
 
     public List<string> AskedFor { get; } = [];
 
+    public List<ServiceId> AskedOf { get; } = [];
+
     public HeldViewing? Handed { get; private set; }
 
     public Task<OnTheFlyStart> StartAsync(
         PlaybackFile file,
+        ServiceId service,
         TimeSpan from,
         LiveProfile profile,
         CancellationToken cancellationToken)
     {
         AskedFrom.Add(from);
         AskedFor.Add(profile.Name);
+        AskedOf.Add(service);
 
         if (Refuses is { } refusal)
         {
@@ -267,6 +272,7 @@ public sealed class PlayDeliveryTests
         Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
         Assert.Equal("300", Header(answer, PlaybackHeaders.StartsAt));
         Assert.Equal(TimeSpan.FromSeconds(300), Assert.Single(feature.Player.AskedFrom));
+        Assert.Equal(recording.ServiceId, Assert.Single(feature.Player.AskedOf));
     }
 
     [Fact]

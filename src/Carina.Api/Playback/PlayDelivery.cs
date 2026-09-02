@@ -4,6 +4,7 @@ using Carina.Api.Common;
 using Carina.Api.Responder;
 using Carina.Api.Responder.Playback;
 using Carina.Api.Services;
+using Carina.Domain.Channels;
 using Carina.Domain.Playback;
 using Carina.Domain.Streaming;
 
@@ -91,7 +92,7 @@ public static class PlayDelivery
 
         if (plan.Transcodes)
         {
-            await TranscodedAsync(context, handover, from, profile, player);
+            await TranscodedAsync(context, handover, offered.Data!.Service, from, profile, player);
 
             return;
         }
@@ -146,13 +147,14 @@ public static class PlayDelivery
     private static async Task TranscodedAsync(
         HttpContext context,
         PlaybackFile handover,
+        ServiceId service,
         TimeSpan from,
         LiveProfile profile,
         IOnTheFlyPlayer player)
     {
         context.Response.Headers.AcceptRanges = NoSeeking;
 
-        OnTheFlyStart start = await player.StartAsync(handover, from, profile, context.RequestAborted);
+        OnTheFlyStart start = await player.StartAsync(handover, service, from, profile, context.RequestAborted);
 
         if (start.Viewing is not { } viewing)
         {

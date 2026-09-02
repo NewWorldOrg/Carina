@@ -1,4 +1,5 @@
 using Carina.Api.Common;
+using Carina.Domain.Channels;
 using Carina.Domain.Playback;
 using Carina.Domain.Recordings;
 
@@ -15,7 +16,7 @@ public enum PlaybackFailure
     FileOutOfReach = 4,
 }
 
-public sealed record PlaybackOffer(PlaybackPlan Plan, PlaybackFile Handover);
+public sealed record PlaybackOffer(PlaybackPlan Plan, PlaybackFile Handover, ServiceId Service);
 
 public sealed class PlaybackService(IRecordingDirectory recordings, IPlaybackFileStore files)
 {
@@ -37,7 +38,7 @@ public sealed class PlaybackService(IRecordingDirectory recordings, IPlaybackFil
             PlaybackSubject.NothingHasBeenEncodedYet(recording.Outcome, onDisk));
 
         return plan.Handover is { } handover
-            ? ServiceResult<PlaybackOffer, PlaybackFailure>.Success(new PlaybackOffer(plan, handover))
+            ? ServiceResult<PlaybackOffer, PlaybackFailure>.Success(new PlaybackOffer(plan, handover, recording.ServiceId))
             : Nothing(id, plan.Refusal!.Value);
     }
 
