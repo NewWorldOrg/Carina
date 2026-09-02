@@ -25,11 +25,15 @@ internal sealed class LiveSession
 
     private readonly TaskCompletionSource<LiveJoin?> raised = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+    private readonly LiveStartupRecord startup;
+
     private ILiveTransportStream? stream;
 
     private ILiveTranscoder? transcoder;
 
-    private Task? pumping;
+    private Task<LiveFragmentFault?>? carrying;
+
+    private Task? feeding;
 
     private ITimer? linger;
 
@@ -47,7 +51,8 @@ internal sealed class LiveSession
         Action<LiveSession> forget)
     {
         Key = key;
-        fanout = new LiveFanout(fanouts);
+        startup = new LiveStartupRecord(clock);
+        fanout = new LiveFanout(fanouts, startup);
         this.settings = settings;
         this.supply = supply;
         this.transcoders = transcoders;
@@ -60,6 +65,8 @@ internal sealed class LiveSession
     public Task Life { get; private set; } = Task.CompletedTask;
 
     public int Viewers => fanout.Viewers;
+
+    public ILiveStartup Startup => startup;
 
     internal void Start() => Life = LiveAsync();
 
@@ -144,6 +151,21 @@ internal sealed class LiveSession
         finally
         {
             ArrayPool<byte>.Shared.Return(mouthful);
+        }
+    }
+
+    private void Published(LiveFrame frame)
+    {
+        switch (frame.Channel)
+        {
+            case LiveChannel.PictureHeader:
+                startup.Reach(LiveStartupSegment.InitReached);
+                break;
+            case LiveChannel.Picture:
+                startup.Reach(LiveStartupSegment.FirstPicture);
+                break;
+            default:
+                break;
         }
     }
 
@@ -250,6 +272,8 @@ internal sealed class LiveSession
             transcoder = running;
         }
 
+        startup.Reach(LiveStartupSegment.TranscoderStarted);
+
         return null;
     }
 
@@ -264,42 +288,50 @@ internal sealed class LiveSession
             running = transcoder!;
         }
 
-        Task<LiveFragmentFault?> carrying = LiveFeed.CarryAsync(running.Output, fanout, cancellationToken);
-        Task feeding = FeedAsync(bytes.Bytes, running.Input, cancellationToken);
+        Task<LiveFragmentFault?> carried = LiveFeed.CarryAsync(running.Output, fanout, cancellationToken, Published);
+        Task fed = FeedAsync(bytes.Bytes, running.Input, cancellationToken);
 
         lock (gate)
         {
-            pumping = Task.WhenAll(Quietly(carrying), Quietly(feeding));
+            carrying = carried;
+            feeding = fed;
         }
 
         TaskCompletionSource stopped = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         using CancellationTokenRegistration whenStopped = cancellationToken.UnsafeRegister(_ => stopped.TrySetResult(), null);
 
-        await Task.WhenAny(carrying, stopped.Task);
+        await Task.WhenAny(carried, stopped.Task);
     }
 
     private async Task TearDownAsync()
     {
         ILiveTranscoder? running;
         ILiveTransportStream? bytes;
-        Task? pumped;
+        Task<LiveFragmentFault?>? carried;
+        Task? fed;
 
         lock (gate)
         {
             running = transcoder;
             bytes = stream;
-            pumped = pumping;
+            carried = carrying;
+            fed = feeding;
             transcoder = null;
             stream = null;
         }
 
         if (running is not null)
         {
-            Task drained = DrainAsync(running.Output);
+            Task disposing = running.DisposeAsync().AsTask();
 
-            await running.DisposeAsync();
-            await drained;
+            if (carried is not null)
+            {
+                await Quietly(carried);
+            }
+
+            await DrainAsync(running.Output);
+            await disposing;
         }
 
         if (bytes is not null)
@@ -307,9 +339,9 @@ internal sealed class LiveSession
             await bytes.DisposeAsync();
         }
 
-        if (pumped is not null)
+        if (fed is not null)
         {
-            await pumped;
+            await Quietly(fed);
         }
 
         fanout.End();
@@ -325,7 +357,7 @@ internal sealed class LiveSession
             {
             }
         }
-        catch (Exception gone) when (gone is IOException or ObjectDisposedException)
+        catch (Exception gone) when (gone is IOException or ObjectDisposedException or OperationCanceledException)
         {
             return;
         }
@@ -342,6 +374,8 @@ internal sealed class LiveSession
         public ChannelReader<LiveFrame> Frames => viewing.Frames;
 
         public LiveBacklog Backlog => viewing.Backlog;
+
+        public ILiveStartup? Startup => viewing.Startup;
 
         public async ValueTask DisposeAsync()
         {

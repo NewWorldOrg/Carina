@@ -43,11 +43,14 @@ public sealed class LiveSessionWireTests
         await transcoders.Raised[0].WriteAsync(Fmp4.Header);
         await transcoders.Raised[0].WriteAsync(Fmp4.Fragment(1_000));
 
-        LiveFrame[] toOne = [await Take(one), await Take(one)];
-        LiveFrame[] toAnother = [await Take(another), await Take(another)];
+        LiveFrame[] toOne = [await Take(one), await Take(one), await Take(one)];
+        LiveFrame[] toAnother = [await Take(another), await Take(another), await Take(another)];
 
-        Assert.Equal([LiveChannel.PictureHeader, LiveChannel.Picture], toOne.Select(frame => frame.Channel));
-        Assert.Equal(toOne.Select(frame => frame.Payload.ToArray()), toAnother.Select(frame => frame.Payload.ToArray()));
+        Assert.Equal([LiveChannel.Control, LiveChannel.PictureHeader, LiveChannel.Picture], toOne.Select(frame => frame.Channel));
+        Assert.Equal(toOne.Select(frame => frame.Channel), toAnother.Select(frame => frame.Channel));
+        Assert.Equal(
+            toOne.Skip(1).Select(frame => frame.Payload.ToArray()),
+            toAnother.Skip(1).Select(frame => frame.Payload.ToArray()));
         Assert.Equal(2, Sessions(probe).Viewers(EveryFrame));
     }
 
@@ -63,6 +66,51 @@ public sealed class LiveSessionWireTests
         Assert.Equal(2, transcoders.Started);
         Assert.Equal(2, budget.Running);
         Assert.Equal([LiveProfile.Hd30, LiveProfile.Hd60], transcoders.Raised.Select(raised => raised.Profile));
+    }
+
+    [Fact]
+    public async Task AWireOnASessionStillStartingIsFirstToldHowFarItHasGot()
+    {
+        await using AuthProbe probe = Wiring();
+        string cookie = await probe.SignedInCookieAsync();
+
+        using WebSocket socket = await Carrying(probe, cookie).ConnectAsync(Handshake("32736", "1024", "720p30"), Patiently());
+
+        LiveFrame progress = await Take(socket);
+
+        Assert.Equal(LiveChannel.Control, progress.Channel);
+
+        LiveStartupReading read = LiveStartup.ReadProgress(progress.Payload.Span);
+
+        Assert.Null(read.Fault);
+        Assert.True(read.Startup!.Reached(LiveStartupSegment.TranscoderStarted));
+        Assert.False(read.Startup.Reached(LiveStartupSegment.InitReached));
+        Assert.False(read.Startup.Reached(LiveStartupSegment.TunerSecured));
+
+        await transcoders.Raised[0].WriteAsync(Fmp4.Header);
+        await transcoders.Raised[0].WriteAsync(Fmp4.Fragment(1_000));
+
+        Assert.Equal(LiveChannel.PictureHeader, (await Take(socket)).Channel);
+        Assert.Equal(LiveChannel.Picture, (await Take(socket)).Channel);
+    }
+
+    [Fact]
+    public async Task AWireJoiningASessionPastItsStartupIsHandedTheHeaderFirst()
+    {
+        await using AuthProbe probe = Wiring();
+        string cookie = await probe.SignedInCookieAsync();
+
+        using WebSocket early = await Carrying(probe, cookie).ConnectAsync(Handshake("32736", "1024", "720p30"), Patiently());
+
+        await transcoders.Raised[0].WriteAsync(Fmp4.Header);
+        await transcoders.Raised[0].WriteAsync(Fmp4.Fragment(1_000));
+        await Eventually.Happens(
+            () => Sessions(probe).Startup(EveryFrame)?.Current is { InProgress: false },
+            "the first picture ends the startup");
+
+        using WebSocket late = await Carrying(probe, cookie).ConnectAsync(Handshake("32736", "1024", "720p30"), Patiently());
+
+        Assert.Equal(LiveChannel.PictureHeader, (await Take(late)).Channel);
     }
 
     [Fact]

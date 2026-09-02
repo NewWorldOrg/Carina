@@ -96,10 +96,11 @@ public sealed class LiveSessionManagerTests
 
         clock.Turn(TimeSpan.FromMilliseconds(1));
 
-        await Eventually.Happens(() => budget.Running is 0, "the seat comes back once the linger is over");
+        await Eventually.Happens(
+            () => budget.Running is 0 && supply.Opened[0].Disposed,
+            "the seat comes back and the stream is let go once the linger is over");
 
         Assert.True(transcoders.Raised[0].Disposed);
-        Assert.True(supply.Opened[0].Disposed);
         Assert.Empty(manager.Keys);
     }
 
@@ -245,10 +246,11 @@ public sealed class LiveSessionManagerTests
 
         Assert.Equal(LiveChannel.PictureHeader, (await Next(viewing)).Channel);
         await viewing.Frames.Completion.WaitAsync(Eventually.Patience);
-        await Eventually.Happens(() => budget.Running is 0, "the seat comes back when the transcoder ends");
+        await Eventually.Happens(
+            () => budget.Running is 0 && supply.Opened[0].Disposed,
+            "the seat comes back and the stream is let go when the transcoder ends");
 
         Assert.Empty(manager.Keys);
-        Assert.True(supply.Opened[0].Disposed);
 
         await using ILiveViewing afresh = await Joined(EveryFrame);
 
@@ -280,6 +282,50 @@ public sealed class LiveSessionManagerTests
     }
 
     [Fact]
+    public async Task ASessionMarksItsOwnStartupAsTheTranscoderTheHeaderAndTheFirstPictureArrive()
+    {
+        await using ILiveViewing viewing = await Joined(EveryFrame);
+
+        LiveStartup raised = viewing.Startup!.Current!;
+
+        Assert.True(raised.Reached(LiveStartupSegment.TranscoderStarted));
+        Assert.False(raised.Reached(LiveStartupSegment.InitReached));
+        Assert.True(raised.InProgress);
+
+        await transcoders.Raised[0].WriteAsync(Fmp4.Header);
+        await Next(viewing);
+        await Eventually.Happens(
+            () => viewing.Startup.Current!.Reached(LiveStartupSegment.InitReached),
+            "the header reaching the fanout is marked");
+
+        Assert.False(viewing.Startup.Current!.Reached(LiveStartupSegment.FirstPicture));
+
+        await transcoders.Raised[0].WriteAsync(Fmp4.Fragment(1_000));
+        await Next(viewing);
+        await Eventually.Happens(
+            () => !viewing.Startup.Current!.InProgress,
+            "the first picture reaching the fanout ends the startup");
+
+        LiveStartup done = viewing.Startup.Current!;
+
+        Assert.True(done.At(LiveStartupSegment.TranscoderStarted) <= done.At(LiveStartupSegment.InitReached));
+        Assert.True(done.At(LiveStartupSegment.InitReached) <= done.At(LiveStartupSegment.FirstPicture));
+        Assert.False(done.Reached(LiveStartupSegment.TunerSecured));
+        Assert.False(done.Reached(LiveStartupSegment.ChannelLocked));
+    }
+
+    [Fact]
+    public async Task EveryViewerOfOneSessionReadsTheSameStartup()
+    {
+        await using ILiveViewing first = await Joined(EveryFrame);
+        await using ILiveViewing second = await Joined(EveryFrame);
+        await using ILiveViewing elsewhere = await Joined(EveryField);
+
+        Assert.Same(first.Startup, second.Startup);
+        Assert.NotSame(first.Startup, elsewhere.Startup);
+    }
+
+    [Fact]
     public async Task DisposingTheManagerTearsEverySessionDown()
     {
         await using ILiveViewing one = await Joined(EveryFrame);
@@ -303,7 +349,7 @@ public sealed class LiveSessionManagerTests
                 .Where(method => !method.IsSpecialName),
         ];
 
-        Assert.Equal(["DisposeAsync", "JoinAsync", "Viewers"], asked.Select(method => method.Name).Order());
+        Assert.Equal(["DisposeAsync", "JoinAsync", "Startup", "Viewers"], asked.Select(method => method.Name).Order());
         Assert.All(
             asked.SelectMany(method => method.GetParameters()),
             parameter => Assert.DoesNotContain(

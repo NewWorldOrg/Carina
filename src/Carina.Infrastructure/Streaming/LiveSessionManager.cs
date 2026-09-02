@@ -36,6 +36,16 @@ public sealed class LiveSessionManager(
         }
     }
 
+    public ILiveStartup? Startup(LiveSessionKey key)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+
+        lock (gate)
+        {
+            return sessions.TryGetValue(key, out LiveSession? session) ? session.Startup : null;
+        }
+    }
+
     public async Task<LiveJoin> JoinAsync(LiveSessionKey key, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(key);

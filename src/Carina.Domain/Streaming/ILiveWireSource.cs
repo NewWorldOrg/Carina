@@ -12,4 +12,6 @@ public interface ILiveViewing : IAsyncDisposable
     ChannelReader<LiveFrame> Frames { get; }
 
     LiveBacklog Backlog { get; }
+
+    ILiveStartup? Startup { get; }
 }

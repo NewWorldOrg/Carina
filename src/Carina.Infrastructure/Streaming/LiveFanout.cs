@@ -5,9 +5,11 @@ using Carina.Domain.Streaming;
 
 namespace Carina.Infrastructure.Streaming;
 
-public sealed class LiveFanout(LiveFanoutSettings settings) : ILiveWireSource
+public sealed class LiveFanout(LiveFanoutSettings settings, ILiveStartup? startup = null) : ILiveWireSource
 {
     private readonly Lock gate = new();
+
+    private readonly ILiveStartup? startup = startup;
 
     private readonly List<Viewing> viewers = [];
 
@@ -188,6 +190,8 @@ public sealed class LiveFanout(LiveFanoutSettings settings) : ILiveWireSource
                 }
             }
         }
+
+        public ILiveStartup? Startup => fanout.startup;
 
         public ValueTask DisposeAsync()
         {
