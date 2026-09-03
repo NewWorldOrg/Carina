@@ -10,6 +10,7 @@ public sealed record ReservationOutcomeRun(IReadOnlyList<ReservationOutcomeRecor
 public sealed class ReservationOutcomeService(
     IReservationRepository reservations,
     IReservationOutcomeRepository outcomes,
+    IReservationRecordingContract claims,
     IAtomicWrite write,
     ReservationOutcomeSettings settings,
     TimeProvider clock)
@@ -51,7 +52,19 @@ public sealed class ReservationOutcomeService(
 
                     if (kind is ReservationOutcomeKind.Missed or ReservationOutcomeKind.Competing)
                     {
-                        reservation.Miss();
+                        if (reservation.StartedAt is { } claimedAt)
+                        {
+                            // The claim is written in columns the recording ledger owns, so letting go of
+                            // it goes through the same statement a refused start uses. Its own condition
+                            // holds it back if a recording landed between the reading and this write.
+                            await claims.ReleaseAsync(reservation.Id, claimedAt, token);
+                            reservation.Abandon();
+                        }
+                        else
+                        {
+                            reservation.Miss();
+                        }
+
                         moved.Add(reservation);
                     }
 
@@ -68,13 +81,13 @@ public sealed class ReservationOutcomeService(
             cancellationToken);
     }
 
-    private IReadOnlyList<Judged> Judging(IReadOnlyList<Reservation> awaiting, DateTime at)
+    private IReadOnlyList<Judged> Judging(IReadOnlyList<ReservationAwaitingOutcome> awaiting, DateTime at)
         =>
         [
             .. awaiting
-                .Select(reservation => (
-                    Reservation: reservation,
-                    Kind: ReservationOutcomeJudgement.Of(reservation, settings.Grace, at)))
+                .Select(one => (
+                    one.Reservation,
+                    Kind: ReservationOutcomeJudgement.Of(one.Reservation, one.Recorded, settings.Grace, at)))
                 .Where(pair => pair.Kind is not null)
                 .Select(pair => new Judged(pair.Reservation, pair.Kind!.Value))
                 .OrderBy(judged => judged.Reservation.EffectiveStartAt)

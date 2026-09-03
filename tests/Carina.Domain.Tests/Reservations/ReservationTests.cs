@@ -102,6 +102,46 @@ public sealed class ReservationTests
     }
 
     [Fact]
+    public void AClaimThatCameToNothingIsLetGoOfAndTheReservationSettles()
+    {
+        Reservation reservation = ReservationFactory.Claimed();
+
+        Assert.True(reservation.IsPinned);
+        Assert.Throws<InvalidOperationException>(reservation.Miss);
+
+        reservation.Abandon();
+
+        Assert.False(reservation.IsPinned);
+        Assert.Null(reservation.StartedAt);
+        Assert.Equal(ReservationState.Missed, reservation.State);
+        Assert.Equal(ReservationStanding.Missed, reservation.Standing);
+    }
+
+    [Fact]
+    public void AClaimARecordingCameOfIsNotAbandoned()
+    {
+        Reservation reservation = ReservationFactory.Rehydrated(
+            ReservationState.Scheduled,
+            ReservationFactory.Now,
+            RecordingOutcome.Complete);
+
+        Assert.Throws<InvalidOperationException>(reservation.Abandon);
+        Assert.True(reservation.IsPinned);
+        Assert.Equal(ReservationStanding.Complete, reservation.Standing);
+    }
+
+    [Fact]
+    public void AnAbandonedReservationIsTheEndOfTheLineToo()
+    {
+        Reservation reservation = ReservationFactory.Claimed();
+        reservation.Abandon();
+
+        Assert.Throws<InvalidOperationException>(reservation.Abandon);
+        Assert.Throws<InvalidOperationException>(reservation.Secure);
+        Assert.Throws<InvalidOperationException>(reservation.Restore);
+    }
+
+    [Fact]
     public void AReservationOffersNoWayToWriteWhatRecordingOwns()
     {
         foreach (string name in new[] { nameof(Reservation.StartedAt), nameof(Reservation.RecordingOutcome) })
