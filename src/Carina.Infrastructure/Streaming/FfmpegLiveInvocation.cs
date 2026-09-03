@@ -45,8 +45,6 @@ public static class FfmpegLiveInvocation
             "error",
             "-fflags",
             "nobuffer",
-            "-flags",
-            "low_delay",
             "-copyts",
             .. Device(encoder),
             "-i",

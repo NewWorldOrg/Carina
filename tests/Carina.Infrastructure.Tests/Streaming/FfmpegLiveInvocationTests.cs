@@ -52,8 +52,6 @@ public sealed class FfmpegLiveInvocationTests
                 "error",
                 "-fflags",
                 "nobuffer",
-                "-flags",
-                "low_delay",
                 "-copyts",
                 "-i",
                 "pipe:0",
@@ -96,8 +94,6 @@ public sealed class FfmpegLiveInvocationTests
                 "error",
                 "-fflags",
                 "nobuffer",
-                "-flags",
-                "low_delay",
                 "-copyts",
                 "-vaapi_device",
                 "/dev/dri/renderD128",
@@ -305,6 +301,17 @@ public sealed class FfmpegLiveInvocationTests
         Assert.DoesNotContain("-hwaccel_output_format", arguments);
         Assert.DoesNotContain("-c:v:0", arguments);
         Assert.DoesNotContain("mpeg2_vaapi", arguments);
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void TheDecoderIsNotHurriedPastTheOrderTheBroadcastCodedItsPicturesIn(
+        LiveProfile profile,
+        LiveEncoder encoder)
+    {
+        string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder)];
+
+        Assert.DoesNotContain("low_delay", arguments);
     }
 
     [Theory]
