@@ -78,6 +78,21 @@ public sealed class DriverSocketPathTests
     }
 
     [Fact]
+    public async Task ASweepThatRanOutOfTimeSaysSoRatherThanReadingAsASurfaceNamingTheSocket()
+    {
+        await using var factory = new TestingWebApplicationFactory();
+        WebApplicationFactory<Program> guarded = factory.WithTestScheme();
+        using HttpClient client = Authenticated(guarded);
+        client.Timeout = TimeSpan.FromTicks(1);
+
+        SweepDidNotFinish gaveUp = await Assert.ThrowsAsync<SweepDidNotFinish>(
+            () => EverySurfaceAsync(guarded, client));
+
+        Assert.Contains("did not answer within", gaveUp.Message, StringComparison.Ordinal);
+        Assert.Contains("not a surface naming the socket", gaveUp.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task TheSurfacesTheSweepSkipsAreTheOnesWhoseAnswerNeverEnds()
     {
         await using var factory = new TestingWebApplicationFactory();
@@ -132,14 +147,35 @@ public sealed class DriverSocketPathTests
                 asking.Content = new StringContent("{}", Encoding.UTF8, "application/json");
             }
 
-            using HttpResponseMessage response = await client.SendAsync(asking);
-
-            answered.Add(new AnsweredSurface(
-                surface.ToString(),
-                (int)response.StatusCode,
-                await response.Content.ReadAsStringAsync()));
+            answered.Add(await AnsweredAsync(client, surface, asking));
         }
 
         return answered;
     }
+
+    private static async Task<AnsweredSurface> AnsweredAsync(
+        HttpClient client,
+        RoutedSurface surface,
+        HttpRequestMessage asking)
+    {
+        try
+        {
+            using HttpResponseMessage response = await client.SendAsync(asking);
+
+            return new AnsweredSurface(
+                surface.ToString(),
+                (int)response.StatusCode,
+                await response.Content.ReadAsStringAsync());
+        }
+        catch (Exception cut) when (cut is OperationCanceledException or HttpRequestException)
+        {
+            throw new SweepDidNotFinish(
+                $"{surface} did not answer within {client.Timeout}, so the sweep never reached the rule. "
+                + "This is the sweep giving up, not a surface naming the socket: read it as a machine too "
+                + "slow to answer every surface in time, and look at what else on the run was slow.",
+                cut);
+        }
+    }
 }
+
+public sealed class SweepDidNotFinish(string said, Exception cut) : Exception(said, cut);
