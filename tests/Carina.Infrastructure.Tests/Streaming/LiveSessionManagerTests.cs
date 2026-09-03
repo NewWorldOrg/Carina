@@ -12,6 +12,8 @@ public sealed class LiveSessionManagerTests
 {
     private static readonly TimeSpan Linger = TimeSpan.FromSeconds(5);
 
+    private static readonly TimeSpan LongestRaise = TimeSpan.FromSeconds(30);
+
     private static readonly LiveSessionKey EveryFrame = new(new NetworkId(32736), new ServiceId(1024), LiveProfile.Hd30);
 
     private static readonly LiveSessionKey EveryField = new(new NetworkId(32736), new ServiceId(1024), LiveProfile.Hd60);
@@ -254,6 +256,56 @@ public sealed class LiveSessionManagerTests
 
         Assert.Equal([AnotherChannel], Ledger.Running.Select(view => view.Key));
         Assert.All(events.Signalled, name => Assert.Same(AppEventName.Live, name));
+    }
+
+    [Fact]
+    public async Task BrPs001AViewerWaitingLongerThanTheLongestRaiseIsRefusedRatherThanLeftWaiting()
+    {
+        supply.HeldUntil = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        Task<LiveJoin> joining = manager.JoinAsync(EveryFrame, CancellationToken.None);
+
+        await Eventually.Happens(() => supply.Asked is 1, "the viewer reaches the supply");
+
+        clock.Turn(LongestRaise);
+
+        LiveJoin refused = await joining;
+
+        Assert.Equal(LiveRefusal.DriverUnavailable, refused.Refusal);
+        Assert.Contains("no transport stream was opened", refused.Note, StringComparison.Ordinal);
+        await Eventually.Happens(() => manager.Keys.Count is 0, "the session nothing came of is forgotten");
+
+        supply.HeldUntil.SetResult();
+    }
+
+    [Fact]
+    public async Task BrPs001AViewerWaitingOnATranscoderThatNeverStartsIsToldTheTunerWasSecured()
+    {
+        transcoders.HeldUntil = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        Task<LiveJoin> joining = manager.JoinAsync(EveryFrame, CancellationToken.None);
+
+        await Eventually.Happens(() => supply.Opened.Count is 1, "the viewer secures the tuner");
+
+        clock.Turn(LongestRaise);
+
+        LiveJoin refused = await joining;
+
+        Assert.Equal(LiveRefusal.TranscoderWouldNotStart, refused.Refusal);
+        Assert.Contains("the tuner was secured", refused.Note, StringComparison.Ordinal);
+        await Eventually.Happens(() => supply.Opened[0].Disposed, "the stream is let go with the session nothing came of");
+
+        Assert.Empty(manager.Keys);
+
+        transcoders.HeldUntil.SetResult();
+    }
+
+    [Fact]
+    public async Task BrPs001AViewerSeatedWellWithinTheLongestRaiseLeavesNoDeadlineBehind()
+    {
+        await using ILiveViewing viewing = await Joined(EveryFrame);
+
+        Assert.Equal(0, clock.Pending);
     }
 
     [Fact]
@@ -613,7 +665,7 @@ public sealed class LiveSessionManagerTests
     public async Task TheLedgerCountsWhatASlowViewerLost()
     {
         LiveSessionManager crowded = new(
-            new LiveSessionSettings { Linger = Linger },
+            new LiveSessionSettings { Linger = Linger, LongestRaise = LongestRaise },
             new LiveFanoutSettings { LongestBacklog = 1 },
             supply,
             transcoders,
@@ -880,7 +932,7 @@ public sealed class LiveSessionManagerTests
 
     private LiveSessionManager Managing(TranscodeBudget counting, HeldTranscoders? raising = null)
         => new(
-            new LiveSessionSettings { Linger = Linger },
+            new LiveSessionSettings { Linger = Linger, LongestRaise = LongestRaise },
             new LiveFanoutSettings(),
             supply,
             raising ?? new HeldTranscoders(counting),
