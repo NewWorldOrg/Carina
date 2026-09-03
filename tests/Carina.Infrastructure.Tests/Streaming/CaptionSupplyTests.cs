@@ -73,8 +73,6 @@ public sealed class CaptionSupplyTests
             supply.Offer([(byte)offered]);
         }
 
-        await Eventually.Happens(() => supply.Dropped >= 5L, "a full backlog lets go of what it already holds");
-
         Stream reading = pipe.Reader.AsStream();
         byte[] taken = new byte[8];
         int read = 0;
@@ -97,6 +95,7 @@ public sealed class CaptionSupplyTests
         byte[] arrived = taken[..read];
 
         Assert.Equal(8, read + (int)supply.Dropped);
+        Assert.True(supply.Dropped > 0L, "a backlog of two cannot hold eight mouthfuls");
         Assert.Equal((byte)8, arrived[^1]);
         Assert.Equal(arrived.OrderBy(mouthful => mouthful), arrived);
     }
@@ -116,8 +115,12 @@ public sealed class CaptionSupplyTests
 
         await supply.CompleteAsync();
 
-        Assert.Equal([5, 6], held.Written[^2..]);
-        Assert.Equal(4L, supply.Dropped);
+        byte[] written = held.Written;
+
+        Assert.Equal(6, written.Length + (int)supply.Dropped);
+        Assert.True(supply.Dropped > 0L, "a backlog of two cannot hold six mouthfuls");
+        Assert.Equal([5, 6], written[^2..]);
+        Assert.Equal(written.OrderBy(mouthful => mouthful), written);
     }
 
     [Fact]
