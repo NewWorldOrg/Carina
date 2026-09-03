@@ -72,17 +72,11 @@ public sealed class LiveSessionManager(
     {
         ArgumentNullException.ThrowIfNull(key);
 
-        for (int attempt = 0; attempt < Attempts; attempt++)
-        {
-            if (await Expected(key).JoinAsync(cancellationToken) is { } join)
-            {
-                return join;
-            }
-        }
+        LiveJoin join = await SeatedAsync(key, cancellationToken);
 
-        return LiveJoin.Refused(
-            LiveRefusal.TranscoderWouldNotStart,
-            "what the transcoder wrote ended before a viewer could be seated.");
+        return join.Refusal is LiveRefusal.NoTunerFree && await LetGoOfWhatNobodyIsWatchingAsync(key)
+            ? await SeatedAsync(key, cancellationToken)
+            : join;
     }
 
     public async ValueTask DisposeAsync()
@@ -100,6 +94,43 @@ public sealed class LiveSessionManager(
         }
 
         await Task.WhenAll(closing.Select(session => session.Life));
+    }
+
+    private async Task<LiveJoin> SeatedAsync(LiveSessionKey key, CancellationToken cancellationToken)
+    {
+        for (int attempt = 0; attempt < Attempts; attempt++)
+        {
+            if (await Expected(key).JoinAsync(cancellationToken) is { } join)
+            {
+                return join;
+            }
+        }
+
+        return LiveJoin.Refused(
+            LiveRefusal.TranscoderWouldNotStart,
+            "what the transcoder wrote ended before a viewer could be seated.");
+    }
+
+    private async Task<bool> LetGoOfWhatNobodyIsWatchingAsync(LiveSessionKey asked)
+    {
+        List<LiveSession> given;
+
+        lock (gate)
+        {
+            given =
+            [
+                .. sessions.Values.Where(session => !session.Key.Equals(asked) && session.NobodyIsWatching),
+            ];
+        }
+
+        foreach (LiveSession session in given)
+        {
+            session.Close();
+        }
+
+        await Task.WhenAll(given.Select(session => session.Life));
+
+        return given.Count > 0;
     }
 
     private LiveSession Expected(LiveSessionKey key)

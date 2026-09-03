@@ -121,6 +121,27 @@ public static partial class StreamingRules
             .Order(StringComparer.Ordinal)
             .ToArray();
 
+    public static IReadOnlyList<string> WhatWaitsWithoutADeadlineInsideTheFeature(string directory)
+        => Feature(directory)
+            .SelectMany(file => WhatWaitsWithoutADeadlineIn(file.Source).Select(way => $"{file.Relative} {way}"))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+    public static IReadOnlyList<string> WhatWaitsWithoutADeadlineIn(string source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        return
+        [
+            .. WaitsOnAPromiseForever().Matches(source)
+                .Concat(WaitsOnAPromiseWithNothingButAToken().Matches(source))
+                .Select(match => Squeezed(match.Value))
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal),
+        ];
+    }
+
     public static IReadOnlyList<string> WhatWritesWhatIsNotItsOwnIn(string source)
     {
         ArgumentNullException.ThrowIfNull(source);
@@ -193,6 +214,12 @@ public static partial class StreamingRules
         + @"|\bnew\s+(FileStream|StreamWriter|BinaryWriter)\b"
         + @"|\bunlink\b|\bftruncate\b")]
     private static partial Regex ChangesWhatIsOnDisk();
+
+    [GeneratedRegex(@"await\s+[A-Za-z_][\w.]*\.Task\b(?!\s*\.\s*WaitAsync\s*\()")]
+    private static partial Regex WaitsOnAPromiseForever();
+
+    [GeneratedRegex(@"\.Task\s*\.\s*WaitAsync\s*\(\s*[^(),]*\s*\)")]
+    private static partial Regex WaitsOnAPromiseWithNothingButAToken();
 
     [GeneratedRegex(@"\s+")]
     private static partial Regex Spaces();

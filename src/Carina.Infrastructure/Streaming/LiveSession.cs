@@ -84,6 +84,17 @@ internal sealed class LiveSession
 
     public ILiveEnding Ending => ending;
 
+    internal bool NobodyIsWatching
+    {
+        get
+        {
+            lock (gate)
+            {
+                return expected is 0;
+            }
+        }
+    }
+
     internal void Start() => Life = LiveAsync();
 
     internal bool Expect()
@@ -107,7 +118,7 @@ internal sealed class LiveSession
     {
         try
         {
-            if (await raised.Task.WaitAsync(cancellationToken) is { } refused)
+            if (await RaisedAsync(cancellationToken) is { } refused)
             {
                 Left();
 
@@ -130,6 +141,29 @@ internal sealed class LiveSession
             throw;
         }
     }
+
+    private async Task<LiveJoin?> RaisedAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await raised.Task.WaitAsync(settings.LongestRaise, clock, cancellationToken);
+        }
+        catch (TimeoutException)
+        {
+            Close();
+
+            return GaveUp($"nothing was ready to watch within {settings.LongestRaise}.");
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return GaveUp("this session was closed before it was ever raised.");
+        }
+    }
+
+    private LiveJoin GaveUp(string note)
+        => startup.Current is { } where && where.Reached(LiveStartupSegment.TunerSecured)
+            ? LiveJoin.Refused(LiveRefusal.TranscoderWouldNotStart, $"the tuner was secured and {note}")
+            : LiveJoin.Refused(LiveRefusal.DriverUnavailable, $"no transport stream was opened and {note}");
 
     internal void Close()
     {

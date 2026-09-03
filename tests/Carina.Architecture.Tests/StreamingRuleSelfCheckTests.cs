@@ -326,4 +326,26 @@ public sealed class StreamingRuleSelfCheckTests
 
         public void Dispose() => directory.Delete(recursive: true);
     }
+
+    [Fact]
+    public void DetectsAPromiseWaitedOnWithNoDeadlineAndLetsOneCarryingADeadlinePass()
+    {
+        Assert.Equal(
+            ["awaitraised.Task"],
+            StreamingRules.WhatWaitsWithoutADeadlineIn("LiveJoin? answer = await raised.Task;"));
+        Assert.Equal(
+            [".Task.WaitAsync(cancellationToken)"],
+            StreamingRules.WhatWaitsWithoutADeadlineIn("LiveJoin? answer = await raised.Task.WaitAsync(cancellationToken);"));
+        Assert.Empty(StreamingRules.WhatWaitsWithoutADeadlineIn(
+            "LiveJoin? answer = await raised.Task.WaitAsync(settings.LongestRaise, clock, cancellationToken);"));
+        Assert.Empty(StreamingRules.WhatWaitsWithoutADeadlineIn("await Task.WhenAny(carried, stopped.Task);"));
+    }
+
+    [Fact]
+    public void ThisRuleReadsSourceTextAndAWaitSpelledAnotherWayWalksStraightPast()
+    {
+        Assert.Empty(StreamingRules.WhatWaitsWithoutADeadlineIn("Task<LiveJoin?> answering = raised.Task; await answering;"));
+        Assert.Empty(StreamingRules.WhatWaitsWithoutADeadlineIn("LiveJoin? answer = raised.Task.GetAwaiter().GetResult();"));
+        Assert.Empty(StreamingRules.WhatWaitsWithoutADeadlineIn("raised.Task.Wait();"));
+    }
 }
