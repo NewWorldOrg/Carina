@@ -188,7 +188,72 @@ public sealed class LiveSessionManagerTests
         Assert.Equal(LiveRefusal.NoTunerFree, refused.Refusal);
         Assert.Equal("held back for the test.", refused.Note);
         Assert.Equal(0, transcoders.Started);
+        Assert.Equal(1, supply.Asked);
         Assert.Empty(manager.Keys);
+    }
+
+    [Fact]
+    public async Task BrPs001AChannelChangeIsNotRefusedWhileTheOneLeftBehindIsStillLingering()
+    {
+        supply.AsIfThereWereOneTuner = true;
+
+        ILiveViewing watching = await Joined(EveryFrame);
+
+        await watching.DisposeAsync();
+
+        await using ILiveViewing next = await Joined(AnotherChannel);
+
+        Assert.True(supply.Opened[0].Disposed);
+        Assert.Equal([AnotherChannel], manager.Keys);
+        Assert.Equal(3, supply.Asked);
+        Assert.Equal(0, clock.Pending);
+    }
+
+    [Fact]
+    public async Task BrPs001AChannelSomebodyIsStillWatchingIsNotGivenUpAndTheOneAskingIsRefusedAtOnce()
+    {
+        supply.AsIfThereWereOneTuner = true;
+
+        await using ILiveViewing watching = await Joined(EveryFrame);
+
+        LiveJoin refused = await manager.JoinAsync(AnotherChannel, CancellationToken.None);
+
+        Assert.Equal(LiveRefusal.NoTunerFree, refused.Refusal);
+        Assert.False(supply.Opened[0].Disposed);
+        Assert.Equal([EveryFrame], manager.Keys);
+        Assert.Equal(2, supply.Asked);
+    }
+
+    [Fact]
+    public async Task BrPs001ATunerHeldBySomethingThatIsNotLiveIsRefusedAtOnceWithNothingGivenUp()
+    {
+        supply.AsIfThereWereOneTuner = true;
+
+        await using ILiveViewing watching = await Joined(EveryFrame);
+
+        supply.Refusing = LiveRefusal.NoTunerFree;
+
+        LiveJoin refused = await manager.JoinAsync(AnotherChannel, CancellationToken.None);
+
+        Assert.Equal(LiveRefusal.NoTunerFree, refused.Refusal);
+        Assert.Equal("held back for the test.", refused.Note);
+        Assert.False(supply.Opened[0].Disposed);
+        Assert.Equal(2, supply.Asked);
+    }
+
+    [Fact]
+    public async Task BrPs001TheLedgerShowsOnlyTheChannelLeftAfterTheOtherIsGivenUp()
+    {
+        supply.AsIfThereWereOneTuner = true;
+
+        ILiveViewing watching = await Joined(EveryFrame);
+
+        await watching.DisposeAsync();
+
+        await using ILiveViewing next = await Joined(AnotherChannel);
+
+        Assert.Equal([AnotherChannel], Ledger.Running.Select(view => view.Key));
+        Assert.All(events.Signalled, name => Assert.Same(AppEventName.Live, name));
     }
 
     [Fact]

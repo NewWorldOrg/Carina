@@ -84,6 +84,17 @@ internal sealed class LiveSession
 
     public ILiveEnding Ending => ending;
 
+    internal bool NobodyIsWatching
+    {
+        get
+        {
+            lock (gate)
+            {
+                return expected is 0;
+            }
+        }
+    }
+
     internal void Start() => Life = LiveAsync();
 
     internal bool Expect()
