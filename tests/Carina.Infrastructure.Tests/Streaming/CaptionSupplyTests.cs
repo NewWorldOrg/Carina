@@ -63,6 +63,67 @@ public sealed class CaptionSupplyTests
     }
 
     [Fact]
+    public async Task BRPD007_AFullBacklogLetsGoOfTheStalestMouthfulSoTheCaptionDecoderReadsTheFreshestBroadcast()
+    {
+        Pipe pipe = new(new PipeOptions(pauseWriterThreshold: 1, resumeWriterThreshold: 1));
+        CaptionSupply supply = new(pipe.Writer.AsStream(), longestBacklog: 2);
+
+        for (int offered = 1; offered <= 8; offered++)
+        {
+            supply.Offer([(byte)offered]);
+        }
+
+        Stream reading = pipe.Reader.AsStream();
+        byte[] taken = new byte[8];
+        int read = 0;
+        Task completing = supply.CompleteAsync();
+
+        while (read < taken.Length)
+        {
+            int got = await reading.ReadAsync(taken.AsMemory(read));
+
+            if (got is 0)
+            {
+                break;
+            }
+
+            read += got;
+        }
+
+        await completing;
+
+        byte[] arrived = taken[..read];
+
+        Assert.Equal(8, read + (int)supply.Dropped);
+        Assert.True(supply.Dropped > 0L, "a backlog of two cannot hold eight mouthfuls");
+        Assert.Equal((byte)8, arrived[^1]);
+        Assert.Equal(arrived.OrderBy(mouthful => mouthful), arrived);
+    }
+
+    [Fact]
+    public async Task BRPD007_TheMouthfulsThatSurviveAFullBacklogAreTheLatestOnesOffered()
+    {
+        Held held = new();
+        CaptionSupply supply = new(held, longestBacklog: 2);
+
+        for (int offered = 1; offered <= 6; offered++)
+        {
+            supply.Offer([(byte)offered]);
+        }
+
+        held.LetGo();
+
+        await supply.CompleteAsync();
+
+        byte[] written = held.Written;
+
+        Assert.Equal(6, written.Length + (int)supply.Dropped);
+        Assert.True(supply.Dropped > 0L, "a backlog of two cannot hold six mouthfuls");
+        Assert.Equal([5, 6], written[^2..]);
+        Assert.Equal(written.OrderBy(mouthful => mouthful), written);
+    }
+
+    [Fact]
     public async Task AnOtherEndThatHasGoneAwayBreaksTheSupplyWithoutAWordToTheOfferer()
     {
         GoneAway gone = new();
@@ -102,6 +163,65 @@ public sealed class CaptionSupplyTests
     {
         Assert.Throws<ArgumentNullException>(() => new CaptionSupply(null!));
         Assert.Throws<ArgumentOutOfRangeException>(() => new CaptionSupply(Stream.Null, 0));
+    }
+
+    private sealed class Held : Stream
+    {
+        private readonly TaskCompletionSource released = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        private readonly List<byte> written = [];
+
+        public byte[] Written
+        {
+            get
+            {
+                lock (written)
+                {
+                    return [.. written];
+                }
+            }
+        }
+
+        public override bool CanRead => false;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => true;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public void LetGo() => released.TrySetResult();
+
+        public override async ValueTask WriteAsync(
+            ReadOnlyMemory<byte> buffer,
+            CancellationToken cancellationToken = default)
+        {
+            await released.Task;
+
+            lock (written)
+            {
+                written.AddRange(buffer.Span);
+            }
+        }
+
+        public override void Flush()
+        {
+        }
+
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count)
+            => WriteAsync(buffer.AsMemory(offset, count)).AsTask().GetAwaiter().GetResult();
     }
 
     private sealed class GoneAway : Stream

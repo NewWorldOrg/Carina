@@ -21,12 +21,14 @@ public sealed class CaptionSupply
         ArgumentOutOfRangeException.ThrowIfLessThan(longestBacklog, 1);
 
         this.into = into;
-        mouthfuls = Channel.CreateBounded<Mouthful>(new BoundedChannelOptions(longestBacklog)
-        {
-            SingleReader = true,
-            SingleWriter = true,
-            FullMode = BoundedChannelFullMode.Wait,
-        });
+        mouthfuls = Channel.CreateBounded<Mouthful>(
+            new BoundedChannelOptions(longestBacklog)
+            {
+                SingleReader = true,
+                SingleWriter = true,
+                FullMode = BoundedChannelFullMode.DropOldest,
+            },
+            LetGo);
         carrying = CarryAsync();
     }
 
@@ -49,9 +51,14 @@ public sealed class CaptionSupply
 
         if (!mouthfuls.Writer.TryWrite(new Mouthful(held, bytes.Length)))
         {
-            ArrayPool<byte>.Shared.Return(held);
-            Interlocked.Increment(ref dropped);
+            LetGo(new Mouthful(held, bytes.Length));
         }
+    }
+
+    private void LetGo(Mouthful stale)
+    {
+        ArrayPool<byte>.Shared.Return(stale.Bytes);
+        Interlocked.Increment(ref dropped);
     }
 
     public async Task CompleteAsync()
