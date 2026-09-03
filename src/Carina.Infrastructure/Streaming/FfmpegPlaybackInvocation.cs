@@ -42,7 +42,7 @@ public static class FfmpegPlaybackInvocation
             from.TotalSeconds.ToString(Seconds, CultureInfo.InvariantCulture),
             "-i",
             source.Value,
-            .. FfmpegLiveInvocation.Mapping(service),
+            .. Mapping(service),
             "-vf",
             FfmpegLiveInvocation.Filter(profile, attributes, encoder),
             .. FfmpegLiveInvocation.Encoding(profile, encoder),
@@ -50,6 +50,19 @@ public static class FfmpegPlaybackInvocation
             "copy",
             "-bsf:a",
             "aac_adtstoasc",
+        ];
+    }
+
+    internal static IReadOnlyList<string> Mapping(ServiceId service)
+    {
+        int programNumber = service.Value;
+
+        return
+        [
+            "-map",
+            string.Create(CultureInfo.InvariantCulture, $"p:{programNumber}:v:0"),
+            "-map",
+            string.Create(CultureInfo.InvariantCulture, $"p:{programNumber}:a"),
         ];
     }
 }

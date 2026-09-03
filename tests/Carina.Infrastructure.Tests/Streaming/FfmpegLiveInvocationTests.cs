@@ -58,7 +58,7 @@ public sealed class FfmpegLiveInvocationTests
                 "-map",
                 "p:1040:v:0",
                 "-map",
-                "p:1040:a",
+                "p:1040:a:0",
                 "-vf",
                 "bwdif=mode=send_frame,scale=1280:720:flags=bicubic,setsar=1",
                 "-c:v",
@@ -102,7 +102,7 @@ public sealed class FfmpegLiveInvocationTests
                 "-map",
                 "p:1040:v:0",
                 "-map",
-                "p:1040:a",
+                "p:1040:a:0",
                 "-vf",
                 "bwdif=mode=send_field,scale=1920:1080:flags=bicubic,setsar=1,format=nv12,hwupload",
                 "-c:v",
@@ -178,22 +178,24 @@ public sealed class FfmpegLiveInvocationTests
 
     [Theory]
     [MemberData(nameof(EveryProfileOnEveryEncoder))]
-    public void TheServicesOwnPictureAndEveryOneOfItsSoundsAreTaken(LiveProfile profile, LiveEncoder encoder)
+    public void TheServicesOwnPictureAndItsMainSoundAreTaken(LiveProfile profile, LiveEncoder encoder)
     {
         string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder)];
 
-        Assert.Equal(["p:1040:v:0", "p:1040:a"], Mapped(arguments));
+        Assert.Equal(["p:1040:v:0", "p:1040:a:0"], Mapped(arguments));
         Assert.True(arguments.IndexOf("-map") > arguments.IndexOf("-i"));
         Assert.True(arguments.LastIndexOf("-map") < arguments.IndexOf("-vf"));
     }
 
-    [Fact]
-    public void ASecondSoundIsNotLeftBehindBecauseTheFirstWasNamed()
+    [Theory]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void OneSoundIsNamedBecauseAMediaSourceWillNotTakeASecond(LiveProfile profile, LiveEncoder encoder)
     {
-        string[] mapped = Mapped([.. FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software)]);
+        string[] mapped = Mapped([.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder)]);
+        string[] sounds = [.. mapped.Where(map => map.StartsWith("p:1040:a", StringComparison.Ordinal))];
 
-        Assert.DoesNotContain(mapped, map => map.StartsWith("p:1040:a:", StringComparison.Ordinal));
-        Assert.Contains("p:1040:a", mapped);
+        Assert.Equal(["p:1040:a:0"], sounds);
+        Assert.DoesNotContain("p:1040:a", mapped);
     }
 
     [Fact]
@@ -209,7 +211,7 @@ public sealed class FfmpegLiveInvocationTests
     public void AnotherServiceIsAnotherProgrammeInTheMultiplex()
     {
         Assert.Equal(
-            ["p:1048:v:0", "p:1048:a"],
+            ["p:1048:v:0", "p:1048:a:0"],
             Mapped([.. FfmpegLiveInvocation.Arguments(AnotherService, LiveProfile.Hd30, Interlaced, LiveEncoder.Software)]));
     }
 

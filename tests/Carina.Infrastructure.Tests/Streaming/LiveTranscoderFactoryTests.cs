@@ -58,7 +58,7 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
         string[] handed = File.ReadAllLines(said);
 
         Assert.Contains("p:1040:v:0", handed);
-        Assert.Contains("p:1040:a", handed);
+        Assert.Contains("p:1040:a:0", handed);
     }
 
     [Fact]
