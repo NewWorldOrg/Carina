@@ -39,6 +39,19 @@ public sealed class ReservationOutcomeService(
 
                 foreach ((Reservation reservation, ReservationOutcomeKind kind) in judged)
                 {
+                    bool settling = kind is ReservationOutcomeKind.Missed or ReservationOutcomeKind.Competing;
+
+                    // A claim is written in columns the recording ledger owns, so letting go of one
+                    // goes through the same statement a refused start uses. Its own condition holds
+                    // it back if a recording landed under the claim between the reading and here,
+                    // and that recording is then what settles this reservation after all.
+                    if (settling
+                        && reservation.StartedAt is { } claimedAt
+                        && !await claims.ReleaseAsync(reservation.Id, claimedAt, token))
+                    {
+                        continue;
+                    }
+
                     await outcomes.AddAsync(
                         ReservationOutcome.Record(
                             ReservationOutcomeId.New(),
@@ -50,14 +63,10 @@ public sealed class ReservationOutcomeService(
                             at),
                         token);
 
-                    if (kind is ReservationOutcomeKind.Missed or ReservationOutcomeKind.Competing)
+                    if (settling)
                     {
-                        if (reservation.StartedAt is { } claimedAt)
+                        if (reservation.IsPinned)
                         {
-                            // The claim is written in columns the recording ledger owns, so letting go of
-                            // it goes through the same statement a refused start uses. Its own condition
-                            // holds it back if a recording landed between the reading and this write.
-                            await claims.ReleaseAsync(reservation.Id, claimedAt, token);
                             reservation.Abandon();
                         }
                         else

@@ -146,6 +146,22 @@ public sealed class ReservationOutcomeServiceTests
     }
 
     [Fact]
+    public async Task AClaimThatCannotBeLetGoOfIsLeftForTheRecordingThatTookIt()
+    {
+        Reservation landed = ReservationFixtures.Rehydrated(
+            ReservationState.Scheduled,
+            startedAt: Opens,
+            startAt: Opens);
+        Held held = Standing(AfterItAll, landed);
+        held.Claims.Kept.Add(landed.Id);
+
+        Assert.Empty((await Run(held)).Recorded);
+        Assert.Empty(held.Outcomes.Held);
+        Assert.True(landed.IsPinned);
+        Assert.Equal(ReservationState.Scheduled, landed.State);
+    }
+
+    [Fact]
     public async Task AReservationThatNeverHeldAClaimHasNothingToLetGoOf()
     {
         Reservation gone = ReservationFixtures.Rehydrated(ReservationState.Scheduled, startAt: Opens);

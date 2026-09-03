@@ -15,6 +15,9 @@ internal sealed class HeldClaims : IReservationRecordingContract
 {
     public List<ReservationId> Released { get; } = [];
 
+    /// <summary>Reservations whose claim a recording has since landed under.</summary>
+    public HashSet<ReservationId> Kept { get; } = [];
+
     public Task<IReadOnlyList<RecordingTick>> DueAtAsync(DateTime at, CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<RecordingTick>>([]);
 
@@ -23,6 +26,11 @@ internal sealed class HeldClaims : IReservationRecordingContract
 
     public Task<bool> ReleaseAsync(ReservationId id, DateTime claimedAt, CancellationToken cancellationToken)
     {
+        if (Kept.Contains(id))
+        {
+            return Task.FromResult(false);
+        }
+
         Released.Add(id);
 
         return Task.FromResult(true);
