@@ -68,13 +68,13 @@ public sealed class FfmpegPlaybackInvocationTests
     }
 
     [Fact]
-    public void TheSoundIsCarriedTheSameWayItIsCarriedForALiveViewer()
+    public void ALiveViewerIsStillGivenTheSoundAsItWasBroadcastRatherThanEncodedAgain()
     {
         IReadOnlyList<string> live = FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software);
-        IReadOnlyList<string> playing = Arguments(TimeSpan.FromMinutes(1));
 
-        Assert.Equal(After(live, "-c:a"), After(playing, "-c:a"));
-        Assert.Equal(After(live, "-bsf:a"), After(playing, "-bsf:a"));
+        Assert.Equal("copy", After(live, "-c:a"));
+        Assert.Equal("aac_adtstoasc", After(live, "-bsf:a"));
+        Assert.DoesNotContain("-b:a", live);
     }
 
     [Fact]
@@ -99,13 +99,30 @@ public sealed class FfmpegPlaybackInvocationTests
     }
 
     [Fact]
-    public void TheSoundIsCarriedOverRatherThanEncodedAgain()
+    public void TheSoundIsEncodedAgainSoThatADamagedFrameInTheRecordingNeverReachesTheBrowser()
     {
         IReadOnlyList<string> arguments = Arguments(TimeSpan.Zero);
 
-        Assert.Equal("copy", After(arguments, "-c:a"));
-        Assert.Equal("aac_adtstoasc", After(arguments, "-bsf:a"));
-        Assert.DoesNotContain("-b:a", arguments);
+        Assert.Equal("aac", After(arguments, "-c:a"));
+        Assert.Equal("192k", After(arguments, "-b:a"));
+        Assert.DoesNotContain("copy", arguments);
+    }
+
+    [Fact]
+    public void TheSoundIsGivenBackAtTheRateItWasBroadcastAtRatherThanAtWhateverTextWasHandedIn()
+    {
+        Assert.Equal(192, FfmpegPlaybackInvocation.SoundKilobitsPerSecond);
+        Assert.Equal(
+            FormattableString.Invariant($"{FfmpegPlaybackInvocation.SoundKilobitsPerSecond}k"),
+            After(Arguments(TimeSpan.Zero), "-b:a"));
+    }
+
+    [Fact]
+    public void NothingReshapesTheSoundOnTheWayThroughSoASurroundRecordingKeepsItsChannels()
+    {
+        IReadOnlyList<string> arguments = Arguments(TimeSpan.Zero);
+
+        Assert.DoesNotContain("-bsf:a", arguments);
         Assert.DoesNotContain("-ac", arguments);
         Assert.DoesNotContain("-ar", arguments);
         Assert.DoesNotContain("-af", arguments);

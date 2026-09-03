@@ -68,7 +68,8 @@ public sealed class OnTheFlyPlayerTests : IDisposable
         Assert.Contains("p:1040:v:0", handed);
         Assert.Contains("p:1040:a:0", handed);
         Assert.DoesNotContain("p:1040:a", handed);
-        Assert.Equal("copy", handed[Array.IndexOf(handed, "-c:a") + 1]);
+        Assert.Equal("aac", handed[Array.IndexOf(handed, "-c:a") + 1]);
+        Assert.Equal("192k", handed[Array.IndexOf(handed, "-b:a") + 1]);
     }
 
     [Fact]
