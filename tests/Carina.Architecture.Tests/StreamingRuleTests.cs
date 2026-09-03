@@ -100,6 +100,31 @@ public sealed class StreamingRuleTests
     }
 
     [Fact]
+    public void NothingInTheStreamingFeatureWaitsOnAPromiseWithoutADeadline()
+    {
+        Assert.Empty(StreamingRules.WhatWaitsWithoutADeadlineInsideTheFeature(RepositoryLayout.SourceDirectory));
+    }
+
+    [Fact]
+    public void TheOnePromiseAViewerWaitsOnIsHandedTheLongestRaiseAndNothingShorterIsSpelledHere()
+    {
+        string session = File.ReadAllText(Path.Combine(
+            RepositoryLayout.SourceDirectory,
+            "Carina.Infrastructure",
+            "Streaming",
+            "LiveSession.cs"));
+
+        Assert.Contains(
+            "raised.Task.WaitAsync(settings.LongestRaise, clock, cancellationToken)",
+            session,
+            StringComparison.Ordinal);
+        Assert.Empty(StreamingRules.WhatWaitsWithoutADeadlineIn(session));
+        Assert.Equal(
+            [".Task.WaitAsync(cancellationToken)"],
+            StreamingRules.WhatWaitsWithoutADeadlineIn("await raised.Task.WaitAsync(cancellationToken);"));
+    }
+
+    [Fact]
     public void TheStreamingFeatureIsOnDiskForTheseRulesToRead()
     {
         IReadOnlyList<string> feature = StreamingRules.FilesInTheFeature(RepositoryLayout.SourceDirectory);
