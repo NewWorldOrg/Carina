@@ -7,6 +7,36 @@ using Carina.Domain.Rules;
 
 namespace Carina.Infrastructure.Tests.Reservations;
 
+/// <summary>
+/// The claim columns the recording ledger owns. Only the release is exercised here: what settles a
+/// reservation whose claim came to nothing has to let go of that claim as well as move the state.
+/// </summary>
+internal sealed class HeldClaims : IReservationRecordingContract
+{
+    public List<ReservationId> Released { get; } = [];
+
+    /// <summary>Reservations whose claim a recording has since landed under.</summary>
+    public HashSet<ReservationId> Kept { get; } = [];
+
+    public Task<IReadOnlyList<RecordingTick>> DueAtAsync(DateTime at, CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<RecordingTick>>([]);
+
+    public Task<bool> ClaimAsync(ReservationId id, DateTime at, CancellationToken cancellationToken)
+        => Task.FromResult(false);
+
+    public Task<bool> ReleaseAsync(ReservationId id, DateTime claimedAt, CancellationToken cancellationToken)
+    {
+        if (Kept.Contains(id))
+        {
+            return Task.FromResult(false);
+        }
+
+        Released.Add(id);
+
+        return Task.FromResult(true);
+    }
+}
+
 internal sealed class FixedClock(DateTime now) : TimeProvider
 {
     public override DateTimeOffset GetUtcNow() => new(now, TimeSpan.Zero);
@@ -161,23 +191,29 @@ internal sealed class HeldReservations(IAtomicWrite? write = null, HeldOutcomes?
         return Task.FromResult(pending);
     }
 
-    public Task<IReadOnlyList<Reservation>> ListAwaitingOutcomeAsync(
+    public Task<IReadOnlyList<ReservationAwaitingOutcome>> ListAwaitingOutcomeAsync(
         DateTime through,
         CancellationToken cancellationToken)
-        => Task.FromResult<IReadOnlyList<Reservation>>(
+        => Task.FromResult<IReadOnlyList<ReservationAwaitingOutcome>>(
         [
             .. held
                 .Where(reservation => outcomes is null
                                       || !outcomes.Held.Any(outcome =>
                                           outcome.ReservationId.Equals(reservation.Id)))
                 .Where(reservation => reservation.RecordingOutcome is RecordingOutcome.Failed
-                                      || (!reservation.IsPinned
+                                      || (reservation.RecordingOutcome is null
                                           && reservation.State
                                               is ReservationState.Scheduled or ReservationState.Conflict
                                           && reservation.EndAt <= through))
                 .OrderBy(reservation => reservation.StartAt)
-                .ThenBy(reservation => reservation.Id.Value),
+                .ThenBy(reservation => reservation.Id.Value)
+                .Select(reservation => new ReservationAwaitingOutcome(
+                    reservation,
+                    RecordedAgainst.Contains(reservation.Id))),
         ]);
+
+    /// <summary>Which reservations a recording is written down against.</summary>
+    public HashSet<ReservationId> RecordedAgainst { get; } = [];
 
     public Task<IReadOnlyList<Reservation>> ListClaimedOverAsync(
         ReservationWindow window,

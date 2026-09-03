@@ -578,6 +578,7 @@ public sealed class ReservationRecalculationHostedServiceTests
             services.AddSingleton<ITunerCapacityDirectory>(Seating);
             services.AddSingleton<IServiceTuningDirectory>(Tuning);
             services.AddSingleton<IAtomicWrite>(Write);
+            services.AddSingleton<IReservationRecordingContract>(new HeldClaims());
             services.AddSingleton(RollingHorizon.Default);
             services.AddSingleton(new RuleApplicationSettings());
             services.AddSingleton(new ReservationOutcomeSettings());

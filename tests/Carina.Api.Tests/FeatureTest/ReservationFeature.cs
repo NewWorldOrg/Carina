@@ -120,10 +120,10 @@ internal sealed class HeldReservationLedger : IReservationRepository
         ]);
     }
 
-    public Task<IReadOnlyList<Reservation>> ListAwaitingOutcomeAsync(
+    public Task<IReadOnlyList<ReservationAwaitingOutcome>> ListAwaitingOutcomeAsync(
         DateTime through,
         CancellationToken cancellationToken)
-        => Task.FromResult<IReadOnlyList<Reservation>>([]);
+        => Task.FromResult<IReadOnlyList<ReservationAwaitingOutcome>>([]);
 
     public Task<IReadOnlyList<Reservation>> ListClaimedOverAsync(
         ReservationWindow window,

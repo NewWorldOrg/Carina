@@ -116,7 +116,7 @@ public sealed class ReservationRepository(CarinaDbContext context) : IReservatio
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<IReadOnlyList<Reservation>> ListAwaitingOutcomeAsync(
+    public async Task<IReadOnlyList<ReservationAwaitingOutcome>> ListAwaitingOutcomeAsync(
         DateTime through,
         CancellationToken cancellationToken)
     {
@@ -130,12 +130,15 @@ public sealed class ReservationRepository(CarinaDbContext context) : IReservatio
             .Where(reservation => !context.Set<ReservationOutcome>()
                 .Any(outcome => outcome.ReservationId == reservation.Id))
             .Where(reservation => reservation.RecordingOutcome == RecordingOutcome.Failed
-                                  || (reservation.StartedAt == null
+                                  || (reservation.RecordingOutcome == null
                                       && (reservation.State == ReservationState.Scheduled
                                           || reservation.State == ReservationState.Conflict)
                                       && reservation.EndAt <= moment))
             .OrderBy(reservation => reservation.StartAt)
             .ThenBy(reservation => reservation.Id)
+            .Select(reservation => new ReservationAwaitingOutcome(
+                reservation,
+                context.Set<Recording>().Any(recording => recording.ReservationId == reservation.Id)))
             .ToListAsync(cancellationToken);
     }
 

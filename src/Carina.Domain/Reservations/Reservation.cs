@@ -318,6 +318,25 @@ public sealed class Reservation
         State = ReservationState.Missed;
     }
 
+    /// <summary>
+    /// Lets go of a claim that came to nothing: the window has closed, no recording was ever written
+    /// down under it, and so nothing else will ever say what became of this reservation. The claim
+    /// itself lives in the recording ledger's columns, so the caller releases it there as well.
+    /// </summary>
+    public void Abandon()
+    {
+        RefuseUnless(State is ReservationState.Scheduled or ReservationState.Conflict);
+
+        if (RecordingOutcome is not null)
+        {
+            throw new InvalidOperationException(
+                "A reservation a recording came of is settled by that recording rather than abandoned.");
+        }
+
+        StartedAt = null;
+        State = ReservationState.Missed;
+    }
+
     public void Reprioritise(Priority priority)
     {
         ArgumentNullException.ThrowIfNull(priority);

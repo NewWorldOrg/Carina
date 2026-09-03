@@ -1,3 +1,5 @@
+using Carina.Domain.Channels;
+using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Persistence;
@@ -74,6 +76,44 @@ public sealed class ReservationOutcomeLandsInTheLedgerTests(RepositoryDatabase d
     }
 
     [Fact]
+    public async Task AClaimNoRecordingCameOfIsLetGoOfSoTheReservationStopsSayingItIsRecording()
+    {
+        DateTime opens = LongBefore.AddHours(80);
+        Reservation stranded = await LaidDownAsync(
+            ReservationState.Scheduled,
+            opens,
+            opens.AddHours(1),
+            claimedAt: opens);
+
+        Assert.Equal(ReservationStanding.Recording, await StandingOfAsync(stranded.Id));
+
+        Assert.Contains(
+            new ReservationOutcomeRecord(stranded.Id, ReservationOutcomeKind.Missed),
+            (await RecordingAsync(opens.AddHours(2))).Recorded);
+
+        Assert.Equal(ReservationOutcomeKind.Missed, Assert.Single(await ForAsync(stranded.Id)).Kind);
+        Assert.Equal(ReservationState.Missed, await StateOfAsync(stranded.Id));
+        Assert.Equal(ReservationStanding.Missed, await StandingOfAsync(stranded.Id));
+    }
+
+    [Fact]
+    public async Task AClaimARecordingIsBeingWrittenUnderIsNotTakenAwayFromIt()
+    {
+        DateTime opens = LongBefore.AddHours(90);
+        Reservation running = await LaidDownAsync(
+            ReservationState.Scheduled,
+            opens,
+            opens.AddHours(1),
+            claimedAt: opens);
+
+        await WritingAsync(running, opens);
+
+        Assert.Empty((await RecordingAsync(opens.AddHours(2))).Recorded);
+        Assert.Empty(await ForAsync(running.Id));
+        Assert.Equal(ReservationStanding.Recording, await StandingOfAsync(running.Id));
+    }
+
+    [Fact]
     public async Task ARecordingTheLedgerSaysFailedLandsWithoutMovingTheReservation()
     {
         DateTime opens = LongBefore.AddHours(20);
@@ -133,10 +173,10 @@ public sealed class ReservationOutcomeLandsInTheLedgerTests(RepositoryDatabase d
         Assert.Single(await ForAsync(broke.Id));
 
         await using CarinaDbContext context = database.Open();
-        IReadOnlyList<Reservation> offered =
+        IReadOnlyList<ReservationAwaitingOutcome> offered =
             await new ReservationRepository(context).ListAwaitingOutcomeAsync(opens.AddHours(3), Cancel);
 
-        Assert.DoesNotContain(broke.Id.Value, offered.Select(reservation => reservation.Id.Value));
+        Assert.DoesNotContain(broke.Id.Value, offered.Select(one => one.Reservation.Id.Value));
     }
 
     [Fact]
@@ -199,6 +239,7 @@ public sealed class ReservationOutcomeLandsInTheLedgerTests(RepositoryDatabase d
         return await new ReservationOutcomeService(
                 new ReservationRepository(context),
                 new ReservationOutcomeRepository(context),
+                new ReservationRecordingContract(context),
                 new DatabaseAtomicWrite(context),
                 new ReservationOutcomeSettings { Grace = Grace },
                 new FixedClock(at))
@@ -227,6 +268,36 @@ public sealed class ReservationOutcomeLandsInTheLedgerTests(RepositoryDatabase d
         await using CarinaDbContext context = database.Open();
 
         return (await new ReservationRepository(context).FindAsync(id, Cancel))!.State;
+    }
+
+    private async Task<ReservationStanding> StandingOfAsync(ReservationId id)
+    {
+        await using CarinaDbContext context = database.Open();
+
+        return (await new ReservationRepository(context).FindAsync(id, Cancel))!.Standing;
+    }
+
+    private async Task WritingAsync(Reservation reservation, DateTime from)
+    {
+        var id = RecordingId.New();
+
+        await using CarinaDbContext context = database.Open();
+
+        await new RecordingRepository(context).AddAsync(
+            Recording.Begin(
+                id,
+                reservation.Id,
+                reservation.Programme,
+                new OutputRoot("primary"),
+                RecordingFileName.For(id, ".ts"),
+                from,
+                reservation.EffectiveEndAt,
+                new ProgrammeSnapshot(reservation.SnapshotName, string.Empty, string.Empty, [], from),
+                null,
+                BroadcastGroupRole.Standalone,
+                from,
+                new TunerDeviceId("adapter0")),
+            Cancel);
     }
 
     private async Task<Reservation> LaidDownAsync(

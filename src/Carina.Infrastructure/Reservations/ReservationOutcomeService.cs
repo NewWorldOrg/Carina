@@ -10,6 +10,7 @@ public sealed record ReservationOutcomeRun(IReadOnlyList<ReservationOutcomeRecor
 public sealed class ReservationOutcomeService(
     IReservationRepository reservations,
     IReservationOutcomeRepository outcomes,
+    IReservationRecordingContract claims,
     IAtomicWrite write,
     ReservationOutcomeSettings settings,
     TimeProvider clock)
@@ -38,6 +39,19 @@ public sealed class ReservationOutcomeService(
 
                 foreach ((Reservation reservation, ReservationOutcomeKind kind) in judged)
                 {
+                    bool settling = kind is ReservationOutcomeKind.Missed or ReservationOutcomeKind.Competing;
+
+                    // A claim is written in columns the recording ledger owns, so letting go of one
+                    // goes through the same statement a refused start uses. Its own condition holds
+                    // it back if a recording landed under the claim between the reading and here,
+                    // and that recording is then what settles this reservation after all.
+                    if (settling
+                        && reservation.StartedAt is { } claimedAt
+                        && !await claims.ReleaseAsync(reservation.Id, claimedAt, token))
+                    {
+                        continue;
+                    }
+
                     await outcomes.AddAsync(
                         ReservationOutcome.Record(
                             ReservationOutcomeId.New(),
@@ -49,9 +63,17 @@ public sealed class ReservationOutcomeService(
                             at),
                         token);
 
-                    if (kind is ReservationOutcomeKind.Missed or ReservationOutcomeKind.Competing)
+                    if (settling)
                     {
-                        reservation.Miss();
+                        if (reservation.IsPinned)
+                        {
+                            reservation.Abandon();
+                        }
+                        else
+                        {
+                            reservation.Miss();
+                        }
+
                         moved.Add(reservation);
                     }
 
@@ -68,13 +90,13 @@ public sealed class ReservationOutcomeService(
             cancellationToken);
     }
 
-    private IReadOnlyList<Judged> Judging(IReadOnlyList<Reservation> awaiting, DateTime at)
+    private IReadOnlyList<Judged> Judging(IReadOnlyList<ReservationAwaitingOutcome> awaiting, DateTime at)
         =>
         [
             .. awaiting
-                .Select(reservation => (
-                    Reservation: reservation,
-                    Kind: ReservationOutcomeJudgement.Of(reservation, settings.Grace, at)))
+                .Select(one => (
+                    one.Reservation,
+                    Kind: ReservationOutcomeJudgement.Of(one.Reservation, one.Recorded, settings.Grace, at)))
                 .Where(pair => pair.Kind is not null)
                 .Select(pair => new Judged(pair.Reservation, pair.Kind!.Value))
                 .OrderBy(judged => judged.Reservation.EffectiveStartAt)

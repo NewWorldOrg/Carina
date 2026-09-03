@@ -121,9 +121,55 @@ public sealed class ReservationOutcomeServiceTests
             startedAt: Opens,
             startAt: Opens);
         Held held = Standing(AfterItAll, claimed);
+        held.Reservations.RecordedAgainst.Add(claimed.Id);
 
         Assert.Empty((await Run(held)).Recorded);
         Assert.Equal(ReservationState.Conflict, claimed.State);
+        Assert.Empty(held.Claims.Released);
+    }
+
+    [Fact]
+    public async Task AClaimNoRecordingCameOfIsLetGoOfAsTheOutcomeIsWrittenDown()
+    {
+        Reservation stranded = ReservationFixtures.Rehydrated(
+            ReservationState.Scheduled,
+            startedAt: Opens,
+            startAt: Opens);
+        Held held = Standing(AfterItAll, stranded);
+
+        Assert.Equal(
+            [new ReservationOutcomeRecord(stranded.Id, ReservationOutcomeKind.Missed)],
+            (await Run(held)).Recorded);
+        Assert.Equal([stranded.Id], held.Claims.Released);
+        Assert.False(stranded.IsPinned);
+        Assert.Equal(ReservationState.Missed, stranded.State);
+    }
+
+    [Fact]
+    public async Task AClaimThatCannotBeLetGoOfIsLeftForTheRecordingThatTookIt()
+    {
+        Reservation landed = ReservationFixtures.Rehydrated(
+            ReservationState.Scheduled,
+            startedAt: Opens,
+            startAt: Opens);
+        Held held = Standing(AfterItAll, landed);
+        held.Claims.Kept.Add(landed.Id);
+
+        Assert.Empty((await Run(held)).Recorded);
+        Assert.Empty(held.Outcomes.Held);
+        Assert.True(landed.IsPinned);
+        Assert.Equal(ReservationState.Scheduled, landed.State);
+    }
+
+    [Fact]
+    public async Task AReservationThatNeverHeldAClaimHasNothingToLetGoOf()
+    {
+        Reservation gone = ReservationFixtures.Rehydrated(ReservationState.Scheduled, startAt: Opens);
+        Held held = Standing(AfterItAll, gone);
+
+        Assert.Single((await Run(held)).Recorded);
+        Assert.Empty(held.Claims.Released);
+        Assert.Equal(ReservationState.Missed, gone.State);
     }
 
     [Fact]
@@ -249,17 +295,20 @@ public sealed class ReservationOutcomeServiceTests
         var write = new WatchedWrite();
         var outcomes = new HeldOutcomes(write);
         var ledger = new HeldReservations(write, outcomes);
+        var claims = new HeldClaims();
         ledger.Standing(reservations);
 
         return new Held(
             new ReservationOutcomeService(
                 ledger,
                 outcomes,
+                claims,
                 write,
                 new ReservationOutcomeSettings { Grace = Grace },
                 new FixedClock(at)),
             ledger,
             outcomes,
+            claims,
             write);
     }
 
@@ -267,5 +316,6 @@ public sealed class ReservationOutcomeServiceTests
         ReservationOutcomeService Service,
         HeldReservations Reservations,
         HeldOutcomes Outcomes,
+        HeldClaims Claims,
         WatchedWrite Write);
 }

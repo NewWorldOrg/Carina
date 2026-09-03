@@ -19,18 +19,29 @@ public sealed class ReservationOutcomeJudgementTests
 
     private static readonly DateTime LongWindowCloses = Opens + TimeSpan.FromHours(1) + After.Value;
 
-    public static TheoryData<ReservationState, bool, RecordingOutcome?, ReservationOutcomeKind?> WhatEachStandingIs =>
+    public static TheoryData<ReservationState, bool, bool, RecordingOutcome?, ReservationOutcomeKind?>
+        WhatEachStandingIs =>
         new()
         {
-            { ReservationState.Scheduled, false, null, ReservationOutcomeKind.Missed },
-            { ReservationState.Conflict, false, null, ReservationOutcomeKind.Competing },
-            { ReservationState.Cancelled, false, null, null },
-            { ReservationState.Missed, false, null, null },
-            { ReservationState.Scheduled, true, null, null },
-            { ReservationState.Scheduled, true, RecordingOutcome.Complete, null },
-            { ReservationState.Scheduled, true, RecordingOutcome.Truncated, null },
-            { ReservationState.Scheduled, true, RecordingOutcome.Failed, ReservationOutcomeKind.RecordingFailure },
-            { ReservationState.Conflict, true, RecordingOutcome.Failed, ReservationOutcomeKind.RecordingFailure },
+            { ReservationState.Scheduled, false, false, null, ReservationOutcomeKind.Missed },
+            { ReservationState.Conflict, false, false, null, ReservationOutcomeKind.Competing },
+            { ReservationState.Cancelled, false, false, null, null },
+            { ReservationState.Missed, false, false, null, null },
+            { ReservationState.Scheduled, true, true, null, null },
+            { ReservationState.Scheduled, true, false, null, ReservationOutcomeKind.Missed },
+            { ReservationState.Conflict, true, false, null, ReservationOutcomeKind.Competing },
+            { ReservationState.Scheduled, true, true, RecordingOutcome.Complete, null },
+            { ReservationState.Scheduled, true, false, RecordingOutcome.Complete, null },
+            { ReservationState.Scheduled, true, true, RecordingOutcome.Truncated, null },
+            { ReservationState.Scheduled, true, false, RecordingOutcome.Truncated, null },
+            {
+                ReservationState.Scheduled, true, true, RecordingOutcome.Failed,
+                ReservationOutcomeKind.RecordingFailure
+            },
+            {
+                ReservationState.Conflict, true, true, RecordingOutcome.Failed,
+                ReservationOutcomeKind.RecordingFailure
+            },
         };
 
     public static TheoryData<int, ReservationOutcomeKind?> AroundTheGraceOfAProgrammeShorterThanIt =>
@@ -54,12 +65,14 @@ public sealed class ReservationOutcomeJudgementTests
     public void EveryStandingAReservationCanBeInIsAnswered(
         ReservationState state,
         bool claimed,
+        bool recorded,
         RecordingOutcome? outcome,
         ReservationOutcomeKind? expected)
         => Assert.Equal(
             expected,
             ReservationOutcomeJudgement.Of(
                 Held(state, claimed ? Opens : null, outcome),
+                recorded,
                 Grace,
                 LongWindowCloses));
 
@@ -72,7 +85,7 @@ public sealed class ReservationOutcomeJudgementTests
         Assert.True(reservation.EffectiveEndAt < GraceRunsOut);
         Assert.Equal(
             expected,
-            ReservationOutcomeJudgement.Of(reservation, Grace, GraceRunsOut.AddSeconds(seconds)));
+            ReservationOutcomeJudgement.Of(reservation, false, Grace, GraceRunsOut.AddSeconds(seconds)));
     }
 
     [Theory]
@@ -86,7 +99,7 @@ public sealed class ReservationOutcomeJudgementTests
         Assert.True(GraceRunsOut < reservation.EffectiveEndAt);
         Assert.Equal(
             expected,
-            ReservationOutcomeJudgement.Of(reservation, Grace, LongWindowCloses.AddSeconds(seconds)));
+            ReservationOutcomeJudgement.Of(reservation, false, Grace, LongWindowCloses.AddSeconds(seconds)));
     }
 
     [Fact]
@@ -94,11 +107,11 @@ public sealed class ReservationOutcomeJudgementTests
     {
         Reservation reservation = Held(ReservationState.Scheduled, null, null);
 
-        Assert.Null(ReservationOutcomeJudgement.Of(reservation, Grace, GraceRunsOut));
-        Assert.Null(ReservationOutcomeJudgement.Of(reservation, Grace, LongWindowCloses.AddSeconds(-1)));
+        Assert.Null(ReservationOutcomeJudgement.Of(reservation, false, Grace, GraceRunsOut));
+        Assert.Null(ReservationOutcomeJudgement.Of(reservation, false, Grace, LongWindowCloses.AddSeconds(-1)));
         Assert.Equal(
             ReservationOutcomeKind.Missed,
-            ReservationOutcomeJudgement.Of(reservation, Grace, LongWindowCloses));
+            ReservationOutcomeJudgement.Of(reservation, false, Grace, LongWindowCloses));
     }
 
     [Fact]
@@ -106,10 +119,10 @@ public sealed class ReservationOutcomeJudgementTests
     {
         Reservation reservation = Held(ReservationState.Conflict, null, null);
 
-        Assert.Null(ReservationOutcomeJudgement.Of(reservation, Grace, LongWindowCloses.AddSeconds(-1)));
+        Assert.Null(ReservationOutcomeJudgement.Of(reservation, false, Grace, LongWindowCloses.AddSeconds(-1)));
         Assert.Equal(
             ReservationOutcomeKind.Competing,
-            ReservationOutcomeJudgement.Of(reservation, Grace, LongWindowCloses));
+            ReservationOutcomeJudgement.Of(reservation, false, Grace, LongWindowCloses));
     }
 
     [Fact]
@@ -118,10 +131,31 @@ public sealed class ReservationOutcomeJudgementTests
         Reservation reservation = Held(ReservationState.Scheduled, null, null);
         TimeSpan longer = LongWindowCloses - reservation.EffectiveStartAt + TimeSpan.FromMinutes(1);
 
-        Assert.Null(ReservationOutcomeJudgement.Of(reservation, longer, LongWindowCloses));
+        Assert.Null(ReservationOutcomeJudgement.Of(reservation, false, longer, LongWindowCloses));
         Assert.Equal(
             ReservationOutcomeKind.Missed,
-            ReservationOutcomeJudgement.Of(reservation, longer, reservation.EffectiveStartAt + longer));
+            ReservationOutcomeJudgement.Of(reservation, false, longer, reservation.EffectiveStartAt + longer));
+    }
+
+    [Fact]
+    public void AClaimWithNoRecordingBehindItIsSettledOnceTheWindowCloses()
+    {
+        Reservation reservation = Held(ReservationState.Scheduled, Opens, null);
+
+        Assert.Null(ReservationOutcomeJudgement.Of(reservation, false, Grace, LongWindowCloses.AddSeconds(-1)));
+        Assert.Equal(
+            ReservationOutcomeKind.Missed,
+            ReservationOutcomeJudgement.Of(reservation, false, Grace, LongWindowCloses));
+    }
+
+    [Fact]
+    public void AClaimWithARecordingBehindItIsLeftToThatRecordingHoweverLongItTakes()
+    {
+        Reservation reservation = Held(ReservationState.Scheduled, Opens, null);
+
+        Assert.Null(ReservationOutcomeJudgement.Of(reservation, true, Grace, LongWindowCloses));
+        Assert.Null(
+            ReservationOutcomeJudgement.Of(reservation, true, Grace, LongWindowCloses + TimeSpan.FromDays(30)));
     }
 
     [Fact]
@@ -130,7 +164,7 @@ public sealed class ReservationOutcomeJudgementTests
         List<ReservationOutcomeKind> reached =
         [
             .. WhatEachStandingIs
-                .Select(row => (ReservationOutcomeKind?)row[3])
+                .Select(row => (ReservationOutcomeKind?)row[4])
                 .Where(kind => kind is not null)
                 .Select(kind => kind!.Value)
                 .Distinct()
@@ -149,7 +183,7 @@ public sealed class ReservationOutcomeJudgementTests
     [Fact]
     public void TheJudgementIsHandedAReservation()
         => Assert.Throws<ArgumentNullException>(
-            () => ReservationOutcomeJudgement.Of(null!, Grace, LongWindowCloses));
+            () => ReservationOutcomeJudgement.Of(null!, false, Grace, LongWindowCloses));
 
     private static Reservation Held(
         ReservationState state,
