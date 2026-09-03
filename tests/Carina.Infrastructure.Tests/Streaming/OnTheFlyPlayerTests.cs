@@ -54,7 +54,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
     }
 
     [Fact]
-    public async Task TheCommandNamesTheRecordedServiceForItsPictureAndEveryOneOfItsSounds()
+    public async Task TheCommandNamesTheRecordedServiceForItsPictureAndItsMainSound()
     {
         Recorded(40_000);
         string said = standIns.Named("arguments");
@@ -66,7 +66,8 @@ public sealed class OnTheFlyPlayerTests : IDisposable
         string[] handed = File.ReadAllLines(said);
 
         Assert.Contains("p:1040:v:0", handed);
-        Assert.Contains("p:1040:a", handed);
+        Assert.Contains("p:1040:a:0", handed);
+        Assert.DoesNotContain("p:1040:a", handed);
         Assert.Equal("copy", handed[Array.IndexOf(handed, "-c:a") + 1]);
     }
 
