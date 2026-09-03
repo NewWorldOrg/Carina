@@ -169,4 +169,40 @@ public sealed class LiveProfileTests
 
     private static int ByName(LiveProfile? left, LiveProfile? right)
         => string.CompareOrdinal(left?.Name, right?.Name);
+
+    [Fact]
+    public void AMachineWithoutACardIsOfferedTheProfileItsProcessorCanKeepUpWith()
+    {
+        Assert.Same(LiveProfile.Hd30, LiveProfile.Unasked(LiveEncoder.Software));
+    }
+
+    [Fact]
+    public void AMachineWithACardIsOfferedEveryLineAndEveryField()
+    {
+        Assert.Same(LiveProfile.FullHd60, LiveProfile.Unasked(LiveEncoder.Vaapi));
+    }
+
+    [Fact]
+    public void TheProfileOfferedUnaskedIsOneOfTheProfilesThereAre()
+    {
+        foreach (LiveEncoder encoder in Enum.GetValues<LiveEncoder>())
+        {
+            Assert.Contains(LiveProfile.Unasked(encoder), LiveProfile.All);
+        }
+    }
+
+    [Fact]
+    public void AnEncoderNobodyNamedHasNoProfileToOffer()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => LiveProfile.Unasked((LiveEncoder)99));
+    }
+
+    [Fact]
+    public void SoftwareIsNotOfferedEveryFieldAtEveryLineBecauseItCannotHoldRealTime()
+    {
+        LiveProfile offered = LiveProfile.Unasked(LiveEncoder.Software);
+
+        Assert.NotSame(LiveProfile.FullHd60, offered);
+        Assert.True(offered.Rate.PerSecond <= FrameRate.BroadcastFrames.PerSecond);
+    }
 }

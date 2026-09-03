@@ -22,13 +22,19 @@ internal sealed class HeldLiveLedger : ILiveSessionLedger
     public IReadOnlyList<LiveSessionView> Running => [.. Sessions];
 }
 
+internal sealed class AlreadyChosen(LiveEncoder encoder) : ILiveEncoderSelector
+{
+    public Task<LiveEncoderChoice> ChooseAsync(CancellationToken cancellationToken)
+        => Task.FromResult(LiveEncoderChoice.Asked(encoder));
+}
+
 internal sealed class LiveFeature : IAsyncDisposable
 {
     public static readonly DateTime At = new(2026, 9, 3, 0, 0, 0, DateTimeKind.Utc);
 
     private readonly TestingWebApplicationFactory factory = new();
 
-    public LiveFeature()
+    public LiveFeature(LiveEncoder encoder = LiveEncoder.Software)
     {
         WebApplicationFactory<Program> configured = factory
             .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
@@ -37,6 +43,7 @@ internal sealed class LiveFeature : IAsyncDisposable
                 services.AddSingleton<ICandidateChannelRepository>(Candidates);
                 services.AddSingleton<ILiveSessionLedger>(Ledger);
                 services.AddSingleton<IPlaybackTicketStore>(Tickets);
+                services.AddSingleton<ILiveEncoderSelector>(new AlreadyChosen(encoder));
             }));
 
         Client = configured.CreateAuthenticatedClient();
@@ -304,6 +311,34 @@ public sealed class LiveEndpointTests
         Assert.Equal(["Channel 3", "Channel 4"], Names(data));
         Assert.Equal(5, data.GetProperty("total").GetInt32());
         Assert.Equal(3, data.GetProperty("lastPage").GetInt32());
+    }
+
+    [Fact]
+    public async Task AMachineWithoutACardOffersTheProfileItsProcessorCanHoldRealTimeOn()
+    {
+        await using LiveFeature feature = new(LiveEncoder.Software);
+
+        (_, JsonDocument body) = await feature.GetAsync("/api/live/profiles");
+
+        JsonElement[] profiles = [.. body.RootElement.GetProperty("data").EnumerateArray()];
+
+        Assert.Equal(
+            "720p30",
+            profiles.Single(profile => profile.GetProperty("unasked").GetBoolean()).GetProperty("name").GetString());
+    }
+
+    [Fact]
+    public async Task AMachineWithACardOffersEveryLineAndEveryField()
+    {
+        await using LiveFeature feature = new(LiveEncoder.Vaapi);
+
+        (_, JsonDocument body) = await feature.GetAsync("/api/live/profiles");
+
+        JsonElement[] profiles = [.. body.RootElement.GetProperty("data").EnumerateArray()];
+
+        Assert.Equal(
+            "1080p60",
+            profiles.Single(profile => profile.GetProperty("unasked").GetBoolean()).GetProperty("name").GetString());
     }
 
     [Fact]

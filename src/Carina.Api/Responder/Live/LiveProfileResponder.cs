@@ -11,11 +11,13 @@ public sealed record LiveProfileResponder(
     int Height,
     LiveFrameRateResponder FrameRate,
     int SoftwareKilobitsPerSecond,
-    int VaapiQuantiser)
+    int VaapiQuantiser,
+    bool Unasked)
 {
-    public static LiveProfileResponder Of(LiveProfile profile)
+    public static LiveProfileResponder Of(LiveProfile profile, LiveProfile unasked)
     {
         ArgumentNullException.ThrowIfNull(profile);
+        ArgumentNullException.ThrowIfNull(unasked);
 
         return new LiveProfileResponder(
             profile.Name,
@@ -24,6 +26,7 @@ public sealed record LiveProfileResponder(
             profile.Size.Height,
             new LiveFrameRateResponder(profile.Rate.Numerator, profile.Rate.Denominator),
             profile.SoftwareRateControl.KilobitsPerSecond,
-            profile.VaapiRateControl.Quantiser);
+            profile.VaapiRateControl.Quantiser,
+            ReferenceEquals(profile, unasked));
     }
 }

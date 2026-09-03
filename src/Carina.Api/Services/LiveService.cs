@@ -25,7 +25,8 @@ public sealed class LiveService(
     IBroadcastServiceRepository services,
     ICandidateChannelRepository candidates,
     ILiveSessionLedger sessions,
-    IPlaybackTicketStore tickets)
+    IPlaybackTicketStore tickets,
+    ILiveEncoderSelector encoders)
 {
     public static PlaybackTarget TargetOf(NetworkId network, ServiceId service)
     {
@@ -53,6 +54,13 @@ public sealed class LiveService(
 
     public ServiceResult<IReadOnlyList<LiveProfile>> ListProfiles()
         => ServiceResult<IReadOnlyList<LiveProfile>>.Success(LiveProfile.All);
+
+    public async Task<ServiceResult<LiveProfile>> ProfileUnaskedAsync(CancellationToken cancellationToken)
+    {
+        LiveEncoderChoice chosen = await encoders.ChooseAsync(cancellationToken);
+
+        return ServiceResult<LiveProfile>.Success(LiveProfile.Unasked(chosen.Encoder));
+    }
 
     public ServiceResult<IReadOnlyList<LiveSessionView>> ListSessions()
         => ServiceResult<IReadOnlyList<LiveSessionView>>.Success(
