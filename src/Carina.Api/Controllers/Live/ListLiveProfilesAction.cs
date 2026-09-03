@@ -16,11 +16,12 @@ public sealed class ListLiveProfilesAction(LiveService live) : ControllerBase
 {
     [HttpGet]
     [ProducesResponseType<BaseResponder<IReadOnlyList<LiveProfileResponder>>>(StatusCodes.Status200OK)]
-    public IActionResult Invoke()
+    public async Task<IActionResult> Invoke(CancellationToken cancellationToken)
     {
         ServiceResult<IReadOnlyList<LiveProfile>> listed = live.ListProfiles();
+        ServiceResult<LiveProfile> unasked = await live.ProfileUnaskedAsync(cancellationToken);
 
         return Ok(BaseResponder<IReadOnlyList<LiveProfileResponder>>.Success(
-            [.. listed.Data!.Select(LiveProfileResponder.Of)]));
+            [.. listed.Data!.Select(profile => LiveProfileResponder.Of(profile, unasked.Data!))]));
     }
 }

@@ -47,6 +47,19 @@ public sealed class LiveProfile
 
     public ConstantQuantiser VaapiRateControl { get; }
 
+    public static LiveProfile Unasked(LiveEncoder encoder)
+    {
+        if (!Enum.IsDefined(encoder))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(encoder),
+                encoder,
+                "A picture is encoded by one of the two the benchmark compared.");
+        }
+
+        return encoder is LiveEncoder.Vaapi ? FullHd60 : Hd30;
+    }
+
     public static LiveProfile? Find(string? name)
         => All.FirstOrDefault(profile => string.Equals(profile.Name, name, StringComparison.Ordinal));
 
