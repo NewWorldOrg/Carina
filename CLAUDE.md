@@ -402,19 +402,31 @@ and `Carina.Conventions.Tests` for the rules above. `Carina.TestSupport` and
 may reference another test project, and the shared support reaches no further than
 the domain.
 
-Three filters divide the suite, and CI runs one job per filter:
+Four filters divide the suite, and CI runs one job per filter:
 
 | Filter | What it selects |
 | --- | --- |
-| under a `Unit` folder, or nothing more specific | everything that needs neither a database nor the HTTP surface |
+| under a `Unit` folder, or nothing more specific | everything that needs neither a database, the HTTP surface nor ffmpeg |
 | `FullyQualifiedName~FeatureTest` | the tests that drive the application through its HTTP surface |
 | `Category=DbIntegration` or a `DbIntegration` name | the tests that need a real PostgreSQL |
+| `Category=Material` | the tests that write a synthetic broadcast with ffmpeg and read it back |
 
 Each job counts the tests it ran and fails on zero, because `dotnet test` exits 0
 when a filter matches nothing and a mistyped name would otherwise be green having
 verified nothing.
 
-A fourth filter, `Category=Scale`, is the one no job runs. It builds a year of the
+The material job is the one that does not run on the bare runner: the runner image
+carries no ffmpeg, and the one the application runs is built from source with
+libaribcaption in the `ffmpeg-build` stage, so the job builds the `develop` target
+from the build cache and runs the filter inside it. `SyntheticBroadcast` in
+`Carina.BroadcastTestSupport` is where a broadcast is synthesised — the picture and
+sound come from ffmpeg's own generators, the caption and superimposition streams are
+written byte by byte and handed to the same ffmpeg run, and the dual-mono sound is a
+hand-written AAC frame because no encoder in the build produces two single-channel
+elements. Nothing generated is checked in: a three-second broadcast is written
+bit-exact in under a second, and the same arguments give the same bytes.
+
+A fifth filter, `Category=Scale`, is the one no job runs. It builds a year of the
 programme archive — 410,000 archived rows beside 10,000 held ones, about half a
 gigabyte — and times the search across both layers against a one-second budget.
 That is not something to pay for on every push, so the unit job excludes the
