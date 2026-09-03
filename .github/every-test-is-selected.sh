@@ -5,6 +5,7 @@ set -eu
 : "${FEATURE_FILTER:?}"
 : "${DB_INTEGRATION_FILTER:?}"
 : "${SCALE_FILTER:?}"
+: "${MATERIAL_FILTER:?}"
 
 held="$(mktemp -d)"
 trap 'rm -rf "${held}"' EXIT
@@ -59,6 +60,7 @@ for project in ${projects}; do
   listed "${project}" --filter "${FEATURE_FILTER}" >> "${held}/selected-by-a-job"
   listed "${project}" --filter "${DB_INTEGRATION_FILTER}" >> "${held}/selected-by-a-job"
   listed "${project}" --filter "${SCALE_FILTER}" >> "${held}/selected-by-a-job"
+  listed "${project}" --filter "${MATERIAL_FILTER}" >> "${held}/selected-by-a-job"
 done
 
 LC_ALL=C sort -u -o "${held}/every-test" "${held}/every-test"

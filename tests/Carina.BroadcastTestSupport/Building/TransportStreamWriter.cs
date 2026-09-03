@@ -27,7 +27,8 @@ public sealed class TransportStreamWriter
         int adaptationFieldLength = -1,
         int? continuityCounter = null,
         bool transportError = false,
-        int scramblingControl = 0)
+        int scramblingControl = 0,
+        bool unitStart = false)
     {
         int adaptation = adaptationFieldLength >= 0 ? adaptationFieldLength + 1 : 0;
         int pointer = pointerField is null ? 0 : 1;
@@ -48,7 +49,7 @@ public sealed class TransportStreamWriter
         Array.Fill(packet, StuffingByte);
 
         packet[0] = SyncByte;
-        packet[1] = (byte)(((transportError ? 1 : 0) << 7) | ((pointerField is null ? 0 : 1) << 6) | (pid >> 8));
+        packet[1] = (byte)(((transportError ? 1 : 0) << 7) | ((pointerField is null && !unitStart ? 0 : 1) << 6) | (pid >> 8));
         packet[2] = (byte)(pid & 0xFF);
         packet[3] = (byte)((scramblingControl << 6) | ((adaptation > 0 ? 0b11 : 0b01) << 4) | counter);
 
