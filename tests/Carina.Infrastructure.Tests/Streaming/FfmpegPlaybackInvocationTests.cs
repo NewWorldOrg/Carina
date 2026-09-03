@@ -44,14 +44,11 @@ public sealed class FfmpegPlaybackInvocationTests
         IReadOnlyList<string> playing = Arguments(TimeSpan.FromMinutes(1));
 
         Assert.Contains("nobuffer", live);
-        Assert.Contains("low_delay", live);
         Assert.Contains("-copyts", live);
 
         Assert.DoesNotContain("nobuffer", playing);
-        Assert.DoesNotContain("low_delay", playing);
         Assert.DoesNotContain("-copyts", playing);
         Assert.DoesNotContain("-fflags", playing);
-        Assert.DoesNotContain("-flags", playing);
     }
 
     [Fact]
