@@ -96,7 +96,7 @@ public static class FfmpegLiveInvocation
             "-map",
             string.Create(CultureInfo.InvariantCulture, $"p:{programNumber}:v:0"),
             "-map",
-            string.Create(CultureInfo.InvariantCulture, $"p:{programNumber}:a"),
+            string.Create(CultureInfo.InvariantCulture, $"p:{programNumber}:a:0"),
         ];
     }
 

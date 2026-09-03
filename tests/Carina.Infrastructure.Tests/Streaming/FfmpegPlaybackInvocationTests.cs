@@ -68,14 +68,24 @@ public sealed class FfmpegPlaybackInvocationTests
     }
 
     [Fact]
-    public void TheSoundsAreTakenTheSameWayTheyAreTakenForALiveViewer()
+    public void TheSoundIsCarriedTheSameWayItIsCarriedForALiveViewer()
     {
         IReadOnlyList<string> live = FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software);
         IReadOnlyList<string> playing = Arguments(TimeSpan.FromMinutes(1));
 
-        Assert.Equal(Mapped(live), Mapped(playing));
         Assert.Equal(After(live, "-c:a"), After(playing, "-c:a"));
         Assert.Equal(After(live, "-bsf:a"), After(playing, "-bsf:a"));
+    }
+
+    [Fact]
+    public void APlayedRecordingKeepsTheSecondSoundALiveViewerCannotBeGiven()
+    {
+        IReadOnlyList<string> live = FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software);
+        IReadOnlyList<string> playing = Arguments(TimeSpan.FromMinutes(1));
+
+        Assert.Equal(["p:1040:v:0", "p:1040:a"], Mapped(playing));
+        Assert.Equal(["p:1040:v:0", "p:1040:a:0"], Mapped(live));
+        Assert.Equal(After(live, "-map"), After(playing, "-map"));
     }
 
     [Fact]
