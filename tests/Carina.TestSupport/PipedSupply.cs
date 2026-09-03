@@ -30,6 +30,8 @@ public sealed class PipedSupply : ILiveSupply
 
     public LiveRefusal? Refusing { get; set; }
 
+    public bool AsIfThereWereOneTuner { get; set; }
+
     public async Task<LiveSupplyStart> OpenAsync(NetworkId network, ServiceId service, CancellationToken cancellationToken)
     {
         Interlocked.Increment(ref asked);
@@ -42,6 +44,13 @@ public sealed class PipedSupply : ILiveSupply
         if (Refusing is { } why)
         {
             return LiveSupplyStart.Refused(why, "held back for the test.");
+        }
+
+        if (AsIfThereWereOneTuner && Opened.Any(stream => !stream.Disposed))
+        {
+            return LiveSupplyStart.Refused(
+                LiveRefusal.NoTunerFree,
+                "the one tuner of the test is held by a stream that has not been let go.");
         }
 
         PipedTransportStream stream = new(network, service);
