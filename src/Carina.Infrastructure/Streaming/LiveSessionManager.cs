@@ -42,7 +42,8 @@ public sealed class LiveSessionManager(
                         session.Key,
                         session.Viewers,
                         session.Startup.Current ?? LiveStartup.NotStarted,
-                        session.Dropped)),
+                        session.Dropped,
+                        session.Queued)),
                 ];
             }
         }

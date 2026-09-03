@@ -48,6 +48,17 @@ public sealed class LiveFanout(
         }
     }
 
+    public int Queued
+    {
+        get
+        {
+            lock (gate)
+            {
+                return viewers.Count is 0 ? 0 : viewers.Max(viewing => viewing.Backlog.Queued);
+            }
+        }
+    }
+
     public IReadOnlyList<LiveFrame> Kept
     {
         get
