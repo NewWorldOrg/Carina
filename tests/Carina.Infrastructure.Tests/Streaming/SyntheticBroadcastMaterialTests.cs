@@ -273,10 +273,9 @@ public sealed class SyntheticBroadcastMaterialTests : IDisposable
     }
 
     [Fact]
-    public async Task ARecordingCarryingTwoSoundsIsPlayedBackWithBothOfThem()
+    public async Task ARecordingCarryingTwoSoundsIsPlayedBackWithItsMainOneAlone()
     {
-        string written = await SyntheticBroadcast
-            .Sounding(SyntheticSound.TwoLanguages)
+        string written = await (SyntheticBroadcast.Sounding(SyntheticSound.TwoLanguages) with { Length = PastTheProbe })
             .WriteAsync(Path.Combine(room, "played-bilingual.m2ts"));
 
         string delivered = Path.Combine(room, "played-bilingual.mp4");
@@ -295,7 +294,42 @@ public sealed class SyntheticBroadcastMaterialTests : IDisposable
             fed: null,
             delivered);
 
-        Assert.Equal(["video", "audio", "audio"], Types(await ProbedAsync(delivered)));
+        IReadOnlyList<FfprobeRecord> tracks = await ProbedAsync(delivered);
+
+        Assert.Equal(["video", "audio"], Types(tracks));
+        Assert.Equal("LC", Sound(tracks).Value("profile"));
+        Assert.Equal("2", Sound(tracks).Value("channels"));
+        await BothTracksCarrySomethingAsync("played-bilingual.mp4");
+    }
+
+    [Fact]
+    public async Task ASurroundRecordingIsPlayedBackWithEveryOneOfItsChannels()
+    {
+        string written = await (SyntheticBroadcast.Sounding(SyntheticSound.Surround) with { Length = PastTheProbe })
+            .WriteAsync(Path.Combine(room, "played-surround.m2ts"));
+
+        string delivered = Path.Combine(room, "played-surround.mp4");
+
+        await TranscodedAsync(
+            [
+                .. FfmpegPlaybackInvocation.Arguments(
+                    Service,
+                    LiveProfile.Hd30,
+                    Interlaced,
+                    LiveEncoder.Software,
+                    new StreamSource(written),
+                    TimeSpan.Zero),
+                .. FfmpegLiveInvocation.DeliveryFromTheStart(),
+            ],
+            fed: null,
+            delivered);
+
+        IReadOnlyList<FfprobeRecord> tracks = await ProbedAsync(delivered);
+
+        Assert.Equal(["video", "audio"], Types(tracks));
+        Assert.Equal("6", Sound(tracks).Value("channels"));
+        Assert.Equal("5.1", Sound(tracks).Value("channel_layout"));
+        await BothTracksCarrySomethingAsync("played-surround.mp4");
     }
 
     private async Task BothTracksCarrySomethingAsync(string name)

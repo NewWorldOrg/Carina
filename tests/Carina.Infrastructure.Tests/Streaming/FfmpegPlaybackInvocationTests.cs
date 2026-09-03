@@ -59,11 +59,11 @@ public sealed class FfmpegPlaybackInvocationTests
     }
 
     [Fact]
-    public void WhatIsPlayedIsTheRecordedServicesPictureAndEveryOneOfItsSoundsAndNothingElseTheMultiplexCarried()
+    public void WhatIsPlayedIsTheRecordedServicesPictureAndItsMainSoundAndNothingElseTheMultiplexCarried()
     {
         IReadOnlyList<string> arguments = Arguments(TimeSpan.Zero);
 
-        Assert.Equal(["p:1040:v:0", "p:1040:a"], Mapped(arguments));
+        Assert.Equal(["p:1040:v:0", "p:1040:a:0"], Mapped(arguments));
         Assert.True(Where(arguments, "-map") > Where(arguments, "-i"));
     }
 
@@ -78,14 +78,13 @@ public sealed class FfmpegPlaybackInvocationTests
     }
 
     [Fact]
-    public void APlayedRecordingKeepsTheSecondSoundALiveViewerCannotBeGiven()
+    public void APlayedRecordingCarriesTheSameOneSoundALiveViewerIsGiven()
     {
         IReadOnlyList<string> live = FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software);
         IReadOnlyList<string> playing = Arguments(TimeSpan.FromMinutes(1));
 
-        Assert.Equal(["p:1040:v:0", "p:1040:a"], Mapped(playing));
-        Assert.Equal(["p:1040:v:0", "p:1040:a:0"], Mapped(live));
-        Assert.Equal(After(live, "-map"), After(playing, "-map"));
+        Assert.Equal(Mapped(live), Mapped(playing));
+        Assert.DoesNotContain("p:1040:a", Mapped(playing));
     }
 
     [Fact]
