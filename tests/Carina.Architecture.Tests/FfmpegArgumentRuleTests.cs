@@ -4,6 +4,7 @@ public sealed class FfmpegArgumentRuleTests
 {
     private static readonly string[] Builders =
     [
+        "/Carina.Infrastructure/Encodings/FfmpegEncodeInvocation.cs",
         "/Carina.Infrastructure/Streaming/FfmpegCaptionInvocation.cs",
         "/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs",
         "/Carina.Infrastructure/Streaming/FfmpegPlaybackInvocation.cs",
@@ -14,6 +15,8 @@ public sealed class FfmpegArgumentRuleTests
 
     private static readonly string[] Inventory =
     [
+        "/Carina.Infrastructure/Encodings/FfmpegEncodeInvocation.cs string.Join(",
+        "/Carina.Infrastructure/Encodings/FfmpegEncodeInvocation.cs {programNumber}",
         "/Carina.Infrastructure/Streaming/FfmpegCaptionInvocation.cs {programNumber}",
         "/Carina.Infrastructure/Streaming/FfmpegCaptionInvocation.cs {size.Height}",
         "/Carina.Infrastructure/Streaming/FfmpegCaptionInvocation.cs {size.Width}",
@@ -89,16 +92,20 @@ public sealed class FfmpegArgumentRuleTests
     public void TheOnlyThingPutTogetherIsTheFilterChainAndItIsPutTogetherOutOfSteps()
     {
         Assert.Equal(
-            ["/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs string.Join("],
+            [
+                "/Carina.Infrastructure/Encodings/FfmpegEncodeInvocation.cs string.Join(",
+                "/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs string.Join(",
+            ],
             Inventory.Where(entry => entry.EndsWith("string.Join(", StringComparison.Ordinal)).ToArray());
 
-        string source = File.ReadAllText(Path.Combine(
-            RepositoryLayout.SourceDirectory,
-            "Carina.Infrastructure",
-            "Streaming",
-            "FfmpegLiveInvocation.cs"));
-
-        Assert.Contains("return string.Join(',', steps);", source, StringComparison.Ordinal);
+        foreach (string builder in new[]
+        {
+            Path.Combine(RepositoryLayout.SourceDirectory, "Carina.Infrastructure", "Encodings", "FfmpegEncodeInvocation.cs"),
+            Path.Combine(RepositoryLayout.SourceDirectory, "Carina.Infrastructure", "Streaming", "FfmpegLiveInvocation.cs"),
+        })
+        {
+            Assert.Contains("return string.Join(',', steps);", File.ReadAllText(builder), StringComparison.Ordinal);
+        }
     }
 
     [Fact]
