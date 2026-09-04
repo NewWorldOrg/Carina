@@ -41,6 +41,16 @@ internal sealed class LiveDriverStandIn : IDriverClient
 
     public Func<SessionId, DriverCall<SessionSnapshot>>? Recalled { get; set; }
 
+    public Exception? ThrowOnStart { get; set; }
+
+    public Action<StartSessionRequest>? WhenStarting { get; set; }
+
+    public List<SessionSnapshot> Active { get; } = [];
+
+    public int ActiveAsked { get; private set; }
+
+    public bool RefusingEveryStop { get; set; }
+
     public IReadOnlyList<TunerSnapshot>? Tuners { get; set; }
 
     public int TunersAsked { get; private set; }
@@ -80,6 +90,13 @@ internal sealed class LiveDriverStandIn : IDriverClient
 
     public Task<DriverCall<SessionSnapshot>> StartSessionAsync(StartSessionRequest request, CancellationToken cancellationToken)
     {
+        WhenStarting?.Invoke(request);
+
+        if (ThrowOnStart is { } thrown)
+        {
+            throw thrown;
+        }
+
         if (Unreachable)
         {
             return Task.FromResult(DriverCall<SessionSnapshot>.Unreachable("The driver's socket could not be reached."));
@@ -131,7 +148,9 @@ internal sealed class LiveDriverStandIn : IDriverClient
             Stopped.Add((sessionId, reason));
         }
 
-        return Task.FromResult(DriverCall<SessionSnapshot>.Reached(null));
+        return Task.FromResult(RefusingEveryStop
+            ? DriverCall<SessionSnapshot>.Unreachable("The driver's socket could not be reached.")
+            : DriverCall<SessionSnapshot>.Reached(null));
     }
 
     public Task<DriverCall<SessionSnapshot>> GetSessionAsync(SessionId sessionId, CancellationToken cancellationToken)
@@ -179,7 +198,16 @@ internal sealed class LiveDriverStandIn : IDriverClient
         => throw new NotSupportedException();
 
     public Task<DriverCall<IReadOnlyList<SessionSnapshot>>> GetActiveSessionsAsync(CancellationToken cancellationToken)
-        => throw new NotSupportedException();
+    {
+        lock (gate)
+        {
+            ActiveAsked++;
+
+            return Task.FromResult(Unreachable
+                ? DriverCall<IReadOnlyList<SessionSnapshot>>.Unreachable("The driver's socket could not be reached.")
+                : DriverCall<IReadOnlyList<SessionSnapshot>>.Reached([.. Active]));
+        }
+    }
 
     public Task<DriverCall<IReadOnlyList<DiagnosticSnapshot>>> GetDiagnosticsAsync(CancellationToken cancellationToken)
         => throw new NotSupportedException();

@@ -11,11 +11,14 @@ namespace Carina.Infrastructure.Streaming;
 public sealed class DriverLiveSupply(
     IDriverClient driver,
     IDriverStatusReader status,
+    ILiveLeases leases,
     IServiceScopeFactory scopes) : ILiveSupply
 {
     public const string NoStreamBecause = "no viewer stream could be opened on the session";
 
     public const string GivenUpBecause = "the viewer gave up before the stream was open";
+
+    public const string NeverAnsweredBecause = "the driver never said whether this session was started";
 
     public async Task<LiveSupplyStart> OpenAsync(NetworkId network, ServiceId service, CancellationToken cancellationToken)
     {
@@ -34,23 +37,50 @@ public sealed class DriverLiveSupply(
         TuneParams tune = tuning.Typed();
         SessionId sessionId = LiveSessions.Fresh();
 
-        DriverCall<SessionSnapshot> started = await driver.StartSessionAsync(
-            new StartSessionRequest
-            {
-                SessionId = sessionId,
-                Purpose = SessionPurpose.Live,
-                Tuning = tune.ToLegacyRequest(),
-                Tune = tune,
-            },
-            cancellationToken);
+        // Taken before the driver is told the id, so a session it holds is never a stray merely
+        // because this call has not come back yet.
+        leases.Take(sessionId);
+
+        DriverCall<SessionSnapshot> started;
+
+        try
+        {
+            started = await driver.StartSessionAsync(
+                new StartSessionRequest
+                {
+                    SessionId = sessionId,
+                    Purpose = SessionPurpose.Live,
+                    Tuning = tune.ToLegacyRequest(),
+                    Tune = tune,
+                },
+                cancellationToken);
+        }
+        catch (Exception)
+        {
+            await LetGoAsync(sessionId, NeverAnsweredBecause);
+
+            throw;
+        }
 
         if (!started.TryGetValue(out SessionSnapshot? session))
         {
+            // A refusal the driver spelled out started nothing; a call that never arrived may have.
+            if (started.Outcome is DriverCallOutcome.Unreachable)
+            {
+                await LetGoAsync(sessionId, NeverAnsweredBecause);
+            }
+            else
+            {
+                leases.LetGo(sessionId);
+            }
+
             return await RefusedAsync(started, tune, cancellationToken);
         }
 
         if (session.State is SessionState.Failed)
         {
+            leases.LetGo(sessionId);
+
             return LiveSupplyStart.Refused(
                 LiveRefusal.WouldNotTune,
                 session.FailureCause ?? session.FirstFault ?? "the driver could not tune this channel.");
@@ -64,19 +94,19 @@ public sealed class DriverLiveSupply(
         }
         catch (OperationCanceledException)
         {
-            await driver.StopSessionAsync(sessionId, GivenUpBecause, CancellationToken.None);
+            await LetGoAsync(sessionId, GivenUpBecause);
 
             throw;
         }
 
         if (!opened.TryGetValue(out Stream? bytes))
         {
-            await driver.StopSessionAsync(sessionId, NoStreamBecause, CancellationToken.None);
+            await LetGoAsync(sessionId, NoStreamBecause);
 
             return await RefusedAsync(opened, tune, cancellationToken);
         }
 
-        return LiveSupplyStart.Opened(new DriverTransportStream(sessionId, bytes, driver, status));
+        return LiveSupplyStart.Opened(new DriverTransportStream(sessionId, bytes, driver, status, leases));
     }
 
     public static LiveRefusal Refusal(TuningRefusal refusal)
@@ -133,6 +163,13 @@ public sealed class DriverLiveSupply(
         return purposes.Contains(SessionPurpose.Live)
             ? LiveRefusalDetail.Of(LiveTunerHolder.AnotherViewer)
             : LiveRefusalDetail.Unsaid;
+    }
+
+    private async Task LetGoAsync(SessionId session, string because)
+    {
+        await driver.StopSessionAsync(session, because, CancellationToken.None);
+
+        leases.LetGo(session);
     }
 
     private async Task<LiveSupplyStart> RefusedAsync<T>(
