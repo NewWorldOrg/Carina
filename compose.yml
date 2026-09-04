@@ -30,6 +30,7 @@ services:
       CARINA_ANONYMOUS_NETWORKS: ${CARINA_ANONYMOUS_NETWORKS:-}
       Integrity__OutputRoots: primary=/srv/recordings
       Thumbnails__WrittenTo: /srv/thumbnails
+      Transcoding__Prefer: ${CARINA_TRANSCODING_PREFER:-Software}
     depends_on:
       db:
         condition: service_healthy
