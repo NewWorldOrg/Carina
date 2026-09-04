@@ -7,8 +7,6 @@ public enum LiveTunerHolder
     ARecording = 1,
 
     AnotherViewer = 2,
-
-    TheGuideOrAScan = 3,
 }
 
 public sealed class LiveRefusalDetail

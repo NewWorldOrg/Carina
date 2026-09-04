@@ -130,13 +130,8 @@ public sealed class DriverLiveSupply(
             return LiveRefusalDetail.Of(LiveTunerHolder.ARecording);
         }
 
-        if (purposes.Contains(SessionPurpose.Live))
-        {
-            return LiveRefusalDetail.Of(LiveTunerHolder.AnotherViewer);
-        }
-
-        return purposes.Any(purpose => purpose is SessionPurpose.Scan or SessionPurpose.Survey or SessionPurpose.SurveyNow)
-            ? LiveRefusalDetail.Of(LiveTunerHolder.TheGuideOrAScan)
+        return purposes.Contains(SessionPurpose.Live)
+            ? LiveRefusalDetail.Of(LiveTunerHolder.AnotherViewer)
             : LiveRefusalDetail.Unsaid;
     }
 

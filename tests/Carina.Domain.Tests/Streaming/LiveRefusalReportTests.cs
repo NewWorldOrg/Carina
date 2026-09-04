@@ -146,7 +146,6 @@ public sealed class LiveRefusalReportTests
     [Theory]
     [InlineData(LiveTunerHolder.ARecording)]
     [InlineData(LiveTunerHolder.AnotherViewer)]
-    [InlineData(LiveTunerHolder.TheGuideOrAScan)]
     public void Fr012WhatHoldsTheTunerRidesTheSameSecondByteAndIsReadBackAsItself(LiveTunerHolder holder)
     {
         LiveRefusalReport written = LiveRefusalReport.Of(
@@ -185,7 +184,7 @@ public sealed class LiveRefusalReportTests
             LiveRefusalReport.Read([(byte)LiveRefusal.WouldNotTune, 5, 0, 0, 0]).Fault);
         Assert.Equal(
             LiveRefusalFault.ADetailThisReasonDoesNotTake,
-            LiveRefusalReport.Read([(byte)LiveRefusal.NoTunerFree, 4, 0, 0, 0]).Fault);
+            LiveRefusalReport.Read([(byte)LiveRefusal.NoTunerFree, 3, 0, 0, 0]).Fault);
     }
 
     [Fact]

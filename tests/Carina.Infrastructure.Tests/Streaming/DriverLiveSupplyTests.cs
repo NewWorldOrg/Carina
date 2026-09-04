@@ -151,9 +151,6 @@ public sealed class DriverLiveSupplyTests
     [Theory]
     [InlineData(SessionPurpose.Recording, LiveTunerHolder.ARecording)]
     [InlineData(SessionPurpose.Live, LiveTunerHolder.AnotherViewer)]
-    [InlineData(SessionPurpose.Scan, LiveTunerHolder.TheGuideOrAScan)]
-    [InlineData(SessionPurpose.Survey, LiveTunerHolder.TheGuideOrAScan)]
-    [InlineData(SessionPurpose.SurveyNow, LiveTunerHolder.TheGuideOrAScan)]
     public async Task Fr012ATunerThatIsBusySaysWhatItIsBusyWithRatherThanOnlyThatNoneIsFree(
         SessionPurpose purpose,
         LiveTunerHolder expected)
@@ -166,6 +163,22 @@ public sealed class DriverLiveSupplyTests
         Assert.Equal(LiveRefusal.NoTunerFree, refused.Refusal);
         Assert.Equal(expected, refused.Detail.Holder);
         Assert.Equal(1, driver.TunersAsked);
+    }
+
+    [Theory]
+    [InlineData(SessionPurpose.Scan)]
+    [InlineData(SessionPurpose.Survey)]
+    [InlineData(SessionPurpose.SurveyNow)]
+    public async Task Fr012ATunerTheGuideOrAScanHoldsIsNoHolderBecauseAViewerTakesItFromThemRatherThanBeingRefused(
+        SessionPurpose purpose)
+    {
+        driver.RefusingToStart = new DriverProblem(SessionRefusalTitles.NoDeviceFree, ["every tuner is taken."]);
+        driver.Tuners = [Busy(TunerKind.Terrestrial, purpose)];
+
+        LiveSupplyStart refused = await Supply().OpenAsync(Network, Service, CancellationToken.None);
+
+        Assert.Equal(LiveRefusal.NoTunerFree, refused.Refusal);
+        Assert.Null(refused.Detail.Holder);
     }
 
     [Fact]

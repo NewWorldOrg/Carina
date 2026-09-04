@@ -32,7 +32,6 @@ public sealed class LiveRefusalDetailTests
     [Theory]
     [InlineData(LiveTunerHolder.ARecording)]
     [InlineData(LiveTunerHolder.AnotherViewer)]
-    [InlineData(LiveTunerHolder.TheGuideOrAScan)]
     public void Fr012EachHolderOfATunerIsADetailOfItsOwn(LiveTunerHolder holder)
     {
         LiveRefusalDetail detail = LiveRefusalDetail.Of(holder);
@@ -44,8 +43,9 @@ public sealed class LiveRefusalDetailTests
     }
 
     [Fact]
-    public void Fr012AHolderNobodyNamedIsNotOne()
+    public void Fr012TheTwoHoldersAreTheOnlyTwoBecauseALiveViewerOutranksTheGuideAndAScanRatherThanBeingRefusedByThem()
     {
+        Assert.Equal([LiveTunerHolder.ARecording, LiveTunerHolder.AnotherViewer], Enum.GetValues<LiveTunerHolder>());
         Assert.Throws<ArgumentOutOfRangeException>(() => LiveRefusalDetail.Of((LiveTunerHolder)99));
     }
 
@@ -97,7 +97,7 @@ public sealed class LiveRefusalDetailTests
     [Fact]
     public void Fr012AByteNoHolderWearsIsNotReadAsOne()
     {
-        Assert.Null(LiveRefusalDetail.Read(LiveRefusal.NoTunerFree, 4));
+        Assert.Null(LiveRefusalDetail.Read(LiveRefusal.NoTunerFree, 3));
         Assert.Equal(LiveTunerHolder.ARecording, LiveRefusalDetail.Read(LiveRefusal.NoTunerFree, 1)!.Holder);
     }
 
