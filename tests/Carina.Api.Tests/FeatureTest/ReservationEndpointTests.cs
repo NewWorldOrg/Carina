@@ -883,6 +883,26 @@ public sealed class ReservationEndpointTests
         Assert.Equal(300, window.GetProperty("marginAfterSeconds").GetInt32());
     }
 
+    [Fact]
+    public async Task AReservationThatHasBeenRecordedIsSaidToBeCompleteAndNothingBesideItSaysScheduled()
+    {
+        await using var feature = new ReservationFeature();
+        feature.Booked(
+            4001,
+            startsAt: Noon.AddHours(-3),
+            startedAt: Noon.AddHours(-3),
+            outcome: RecordingOutcome.Complete);
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync("/api/reservations");
+        JsonElement only = body.GetProperty("data").GetProperty("items")[0];
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal("complete", Standing(only));
+        Assert.False(
+            only.TryGetProperty("state", out JsonElement raw),
+            $"A reservation answers with one state, and this one also said state={raw}.");
+    }
+
     private static object Asking(int eventId, int serviceId = 1024, int? priority = null)
         => new
         {
