@@ -38,7 +38,7 @@ public sealed class FfmpegInvocationTests
     [Fact]
     public void TheHeightIsWorkedOutFromTheDisplayAspectRatioAndNotFromTheStoredPixels()
     {
-        string filter = Filter(960);
+        string filter = ScrubFilter(960);
 
         Assert.Equal("scale=960:trunc(960/dar/2)*2:flags=bicubic,setsar=1", filter);
         Assert.DoesNotContain("scale=960:-2", filter, StringComparison.Ordinal);
@@ -46,7 +46,46 @@ public sealed class FfmpegInvocationTests
 
     [Fact]
     public void TheWidthItIsGivenIsTheWidthItAsksFor()
-        => Assert.Equal("scale=640:trunc(640/dar/2)*2:flags=bicubic,setsar=1", Filter(640));
+        => Assert.Equal("scale=640:trunc(640/dar/2)*2:flags=bicubic,setsar=1", ScrubFilter(640));
+
+    [Fact]
+    public void BrKd012ThePictureKeptForTheListIsTheMostTypicalOfTheFramesFromThePositionOnwards()
+    {
+        Assert.Equal(
+            "thumbnail=100,scale=960:trunc(960/dar/2)*2:flags=bicubic,setsar=1",
+            PosterFilter(960));
+    }
+
+    [Fact]
+    public void BrKd012TheFramesItLooksAtSpanLongerThanATransitionAndShorterThanAShot()
+    {
+        Assert.Equal(100, FfmpegInvocation.FramesLookedAt);
+    }
+
+    [Fact]
+    public void BrKd012ItLooksForATypicalFrameBeforeItScalesOneBecauseOnlyOneFrameIsWorthScaling()
+    {
+        string filter = PosterFilter(960);
+
+        Assert.StartsWith("thumbnail=", filter, StringComparison.Ordinal);
+        Assert.True(
+            filter.IndexOf("thumbnail=", StringComparison.Ordinal)
+            < filter.IndexOf("scale=", StringComparison.Ordinal),
+            filter);
+    }
+
+    [Fact]
+    public void BrKd012TheFrameAskedForOnDemandIsTheOneAtThePositionAndIsNotSwappedForATypicalOne()
+    {
+        Assert.DoesNotContain("thumbnail=", ScrubFilter(960), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void BrKd012BothPicturesAreScaledTheSameWayAndOnlyTheChoosingDiffers()
+    {
+        Assert.NotEqual(ScrubFilter(960), PosterFilter(960));
+        Assert.EndsWith(ScrubFilter(960), PosterFilter(960), StringComparison.Ordinal);
+    }
 
     [Fact]
     public void OneFrameIsAskedForAndItGoesWhereTheRequestSays()
@@ -74,7 +113,7 @@ public sealed class FfmpegInvocationTests
 
     [Fact]
     public void TheNarrowestPictureThereCanBeIsStillAccepted()
-        => Assert.Equal("scale=2:trunc(2/dar/2)*2:flags=bicubic,setsar=1", Filter(2));
+        => Assert.Equal("scale=2:trunc(2/dar/2)*2:flags=bicubic,setsar=1", ScrubFilter(2));
 
     [Fact]
     public void TheVideoStreamIsTheRecordedServicesOwnAndNotWhicheverFfmpegLikesBest()
@@ -151,9 +190,16 @@ public sealed class FfmpegInvocationTests
             Assert.Throws<ArgumentOutOfRangeException>(
                 () => FfmpegInvocation.FrameArguments(Frame, width)).ParamName);
 
-    private static string Filter(int width)
+    private static string PosterFilter(int width)
     {
         IReadOnlyList<string> arguments = FfmpegInvocation.Arguments(Request, width);
+
+        return arguments[Index(arguments, "-vf") + 1];
+    }
+
+    private static string ScrubFilter(int width)
+    {
+        IReadOnlyList<string> arguments = FfmpegInvocation.FrameArguments(Frame, width);
 
         return arguments[Index(arguments, "-vf") + 1];
     }

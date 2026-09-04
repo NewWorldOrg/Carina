@@ -120,8 +120,8 @@ public sealed class FfmpegThumbnailRendererTests : IDisposable
     }
 
     [Theory]
-    [InlineData(null, "scale=960:trunc(960/dar/2)*2:flags=bicubic,setsar=1")]
-    [InlineData(640, "scale=640:trunc(640/dar/2)*2:flags=bicubic,setsar=1")]
+    [InlineData(null, "thumbnail=100,scale=960:trunc(960/dar/2)*2:flags=bicubic,setsar=1")]
+    [InlineData(640, "thumbnail=100,scale=640:trunc(640/dar/2)*2:flags=bicubic,setsar=1")]
     public async Task TheWidthTheSettingsNameIsTheWidthTheProgrammeIsAskedFor(int? width, string expected)
     {
         string arguments = tree.Under("arguments");
