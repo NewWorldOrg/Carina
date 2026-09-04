@@ -99,12 +99,19 @@ internal sealed class LiveFeature : IAsyncDisposable
             LiveStartup.NotStarted.Reaching(LiveStartupSegment.TranscoderStarted, TimeSpan.FromMilliseconds(9)),
             dropped);
 
-    public void Watching(int serviceId, LiveProfile profile, int viewers, LiveStartup startup, long dropped = 0L)
+    public void Watching(
+        int serviceId,
+        LiveProfile profile,
+        int viewers,
+        LiveStartup startup,
+        long dropped = 0L,
+        int queued = 0)
         => Ledger.Sessions.Add(new LiveSessionView(
             new LiveSessionKey(new NetworkId(32736), new ServiceId(serviceId), profile),
             viewers,
             startup,
-            dropped));
+            dropped,
+            queued));
 
     public async Task<(HttpStatusCode Status, JsonDocument Body)> GetAsync(string path)
     {
@@ -217,6 +224,28 @@ public sealed class LiveEndpointTests
         Assert.Equal(0, items[1].GetProperty("viewers").GetInt32());
         Assert.Equal(JsonValueKind.Null, items[0].GetProperty("sessions").ValueKind);
         Assert.Equal(JsonValueKind.Null, items[0].GetProperty("tuning").ValueKind);
+    }
+
+    [Fact]
+    public async Task ASessionSaysHowFarBehindTheFurthestBehindViewerIsAndNotOnlyWhatItAlreadyThrewAway()
+    {
+        await using LiveFeature feature = new();
+
+        feature.Seed(1024, "Watched", remoteControlKey: 1);
+        feature.Watching(
+            1024,
+            LiveProfile.Hd30,
+            2,
+            LiveStartup.NotStarted.Reaching(LiveStartupSegment.FirstPicture, TimeSpan.FromMilliseconds(9)),
+            dropped: 28L,
+            queued: 11);
+
+        (_, JsonDocument body) = await feature.GetAsync("/api/live/sessions");
+
+        JsonElement session = body.RootElement.GetProperty("data")[0];
+
+        Assert.Equal(28L, session.GetProperty("dropped").GetInt64());
+        Assert.Equal(11, session.GetProperty("queued").GetInt32());
     }
 
     [Fact]

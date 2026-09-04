@@ -7,17 +7,19 @@ public interface ILiveSessionLedger
 
 public sealed record LiveSessionView
 {
-    public LiveSessionView(LiveSessionKey key, int viewers, LiveStartup startup, long dropped)
+    public LiveSessionView(LiveSessionKey key, int viewers, LiveStartup startup, long dropped, int queued)
     {
         ArgumentNullException.ThrowIfNull(key);
         ArgumentNullException.ThrowIfNull(startup);
         ArgumentOutOfRangeException.ThrowIfNegative(viewers);
         ArgumentOutOfRangeException.ThrowIfNegative(dropped);
+        ArgumentOutOfRangeException.ThrowIfNegative(queued);
 
         Key = key;
         Viewers = viewers;
         Startup = startup;
         Dropped = dropped;
+        Queued = queued;
     }
 
     public LiveSessionKey Key { get; }
@@ -27,4 +29,6 @@ public sealed record LiveSessionView
     public LiveStartup Startup { get; }
 
     public long Dropped { get; }
+
+    public int Queued { get; }
 }

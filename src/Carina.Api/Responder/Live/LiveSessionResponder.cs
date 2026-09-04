@@ -36,6 +36,7 @@ public sealed record LiveSessionResponder(
     string Profile,
     int Viewers,
     long Dropped,
+    int Queued,
     LiveStartupResponder Startup)
 {
     public static LiveSessionResponder Of(LiveSessionView session)
@@ -48,6 +49,7 @@ public sealed record LiveSessionResponder(
             session.Key.Profile.Name,
             session.Viewers,
             session.Dropped,
+            session.Queued,
             LiveStartupResponder.Of(session.Startup));
     }
 }

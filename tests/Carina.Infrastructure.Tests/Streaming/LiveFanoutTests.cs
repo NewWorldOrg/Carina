@@ -407,6 +407,46 @@ public sealed class LiveFanoutTests
     }
 
     [Fact]
+    public async Task TheFanoutReportsHowFarBehindTheFurthestBehindViewerIsRightNow()
+    {
+        LiveFanout fanout = new(Room(10));
+
+        Assert.Equal(0, fanout.Queued);
+
+        await using ILiveViewing nearby = await Joined(fanout);
+        await using ILiveViewing behind = await Joined(fanout);
+
+        fanout.Publish(Picture(0));
+        fanout.Publish(Picture(1));
+        fanout.Publish(Picture(2));
+
+        Assert.Equal(3, fanout.Queued);
+
+        await nearby.Frames.ReadAsync();
+        await nearby.Frames.ReadAsync();
+        await nearby.Frames.ReadAsync();
+
+        Assert.Equal(3, fanout.Queued);
+        Assert.Equal(0, nearby.Backlog.Queued);
+        Assert.Equal(3, behind.Backlog.Queued);
+    }
+
+    [Fact]
+    public async Task AFanoutNobodyIsWatchingIsBehindOnNothing()
+    {
+        LiveFanout fanout = new(Room(10));
+        ILiveViewing viewing = await Joined(fanout);
+
+        fanout.Publish(Picture(0));
+
+        Assert.Equal(1, fanout.Queued);
+
+        await viewing.DisposeAsync();
+
+        Assert.Equal(0, fanout.Queued);
+    }
+
+    [Fact]
     public async Task AFanoutNobodyHasLostAnythingOnHasThrownNothingAway()
     {
         LiveFanout fanout = new(Room(10));

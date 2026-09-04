@@ -80,6 +80,8 @@ internal sealed class LiveSession
 
     public long Dropped => fanout.Dropped;
 
+    public int Queued => fanout.Queued;
+
     public ILiveStartup Startup => startup;
 
     public ILiveEnding Ending => ending;
