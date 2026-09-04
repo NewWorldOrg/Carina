@@ -80,6 +80,26 @@ public sealed class StreamingRuleSelfCheckTests
         "frames.Add(frame); viewers.Remove(viewer);",
     ];
 
+    public static TheoryData<string, string> EveryWayOfLayingOutARefusalByHand => new()
+    {
+        { "payload[0] = (byte)LiveRefusal.WouldNotTune;", "(byte)LiveRefusal." },
+        { "byte[] said = [(byte) LiveRefusal.NoTunerFree, 0, 0, 0, 0];", "(byte)LiveRefusal." },
+        { "payload[1] = (byte)TuneFailureKind.NoLock;", "(byte)TuneFailureKind." },
+        { "payload[1] = (byte)LiveTunerHolder.ARecording;", "(byte)LiveTunerHolder." },
+        { "byte[] payload = new byte[LiveRefusalReport.PayloadLength];", "LiveRefusalReport.PayloadLength" },
+        { "if (said.Payload.Length == LiveRefusalReport.PayloadLength) { }", "LiveRefusalReport.PayloadLength" },
+    };
+
+    public static TheoryData<string> EveryWayOfLayingOutARefusalThatWalksStraightPast =>
+    [
+        "await socket.SendAsync(report.ToPayload(), cancellationToken);",
+        "payload[0] = (byte)Refusal; payload[1] = detail.Said;",
+        "byte reason = (byte)refusal; byte said = (byte)kind;",
+        "byte[] payload = new byte[5];",
+        "byte[] payload = new byte[PayloadLength];",
+        "payload[0] = (byte)LiveChannel.Control; payload[1] = (byte)LiveControl.Ping;",
+    ];
+
     public static TheoryData<string> EveryWayOfWritingThatWalksStraightPast =>
     [
         "await recordings.PersistAsync(recording, cancellationToken);",
@@ -299,6 +319,51 @@ public sealed class StreamingRuleSelfCheckTests
         Assert.Empty(SourceScan.FilesMentioning(tree.Root, [.. AuthenticationBypasses.EdgeIdentityHeaders]));
     }
 
+    [Theory]
+    [MemberData(nameof(EveryWayOfLayingOutARefusalByHand))]
+    public void DetectsARefusalLaidOutSomewhereOtherThanTheReportAndItsDetail(string source, string way)
+    {
+        using SourceTree tree = new();
+        tree.Write(Wire, source);
+
+        Assert.Equal([$"/{Wire} {way}"], StreamingRules.WhatLaysOutARefusalOutsideItsOwnFiles(tree.Root));
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryWayOfLayingOutARefusalThatWalksStraightPast))]
+    public void CannotSeeARefusalLaidOutWithoutNamingTheEnumsOrTheLength(string source)
+    {
+        using SourceTree tree = new();
+        tree.Write(Wire, source);
+
+        Assert.Empty(StreamingRules.WhatLaysOutARefusalOutsideItsOwnFiles(tree.Root));
+    }
+
+    [Fact]
+    public void LeavesTheReportAndItsDetailAloneBecauseLayingItOutIsWhatTheyAreFor()
+    {
+        using SourceTree tree = new();
+        tree.Write(
+            "Carina.Domain/Streaming/LiveRefusalReport.cs",
+            "byte[] payload = new byte[LiveRefusalReport.PayloadLength]; payload[0] = (byte)LiveRefusal.NoTunerFree;");
+        tree.Write(
+            "Carina.Domain/Streaming/LiveRefusalDetail.cs",
+            "public byte Said => (byte)TuneFailureKind.NoLock;");
+
+        Assert.Empty(StreamingRules.WhatLaysOutARefusalOutsideItsOwnFiles(tree.Root));
+    }
+
+    [Fact]
+    public void LeavesARefusalLaidOutOutsideTheStreamingFeatureAloneBecauseThisRuleOnlyReadsTheFeature()
+    {
+        using SourceTree tree = new();
+        tree.Write(
+            "Carina.Infrastructure/Recordings/RecordingRound.cs",
+            "byte reason = (byte)LiveRefusal.NoTunerFree;");
+
+        Assert.Empty(StreamingRules.WhatLaysOutARefusalOutsideItsOwnFiles(tree.Root));
+    }
+
     [Fact]
     public void ReadsNothingOutOfAnEmptyTree()
     {
@@ -309,6 +374,7 @@ public sealed class StreamingRuleSelfCheckTests
         Assert.Empty(StreamingRules.FilesOpeningTheDriversStream(tree.Root));
         Assert.Empty(StreamingRules.WhatAsksForAnotherSeatInsideTheFeature(tree.Root));
         Assert.Empty(StreamingRules.WhatWritesWhatIsNotItsOwnInsideTheFeature(tree.Root));
+        Assert.Empty(StreamingRules.WhatLaysOutARefusalOutsideItsOwnFiles(tree.Root));
     }
 
     private sealed class SourceTree : IDisposable

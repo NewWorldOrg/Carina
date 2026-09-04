@@ -309,7 +309,7 @@ internal sealed class LiveSession
 
         if (opened.Stream is not { } bytes)
         {
-            return LiveJoin.Refused(opened.Refusal!.Value, opened.Note);
+            return LiveJoin.Refused(opened.Refusal!.Value, opened.Note, opened.Detail);
         }
 
         lock (gate)

@@ -3,6 +3,7 @@ using System.Net.WebSockets;
 using System.Threading.Channels;
 
 using Carina.Api.Live;
+using Carina.Domain.Channels;
 using Carina.Domain.Streaming;
 
 namespace Carina.Api.Tests.Unit;
@@ -45,6 +46,47 @@ public sealed class LiveWireSocketRefusalTests
 
         Assert.Equal(LiveRefusal.TooManyAlready, read.Report!.Refusal);
         Assert.Equal(new TranscodeCeiling(4, 4), read.Report.Ceiling);
+    }
+
+    [Theory]
+    [InlineData(TuneFailureKind.NoLock)]
+    [InlineData(TuneFailureKind.NoData)]
+    [InlineData(TuneFailureKind.IncompletePsi)]
+    [InlineData(TuneFailureKind.StreamMismatch)]
+    public async Task BrTd004TheReasonATuningFailedLeavesTheWireBesideTheRefusalRatherThanOnlyInTheNote(
+        TuneFailureKind kind)
+    {
+        ScriptedWebSocket socket = new();
+
+        await new LiveWireSocket(socket, new LiveWireSettings()).RefuseAsync(
+            LiveJoin.Refused(LiveRefusal.WouldNotTune, "no lock.", LiveRefusalDetail.Of(kind)),
+            CancellationToken.None);
+
+        LiveRefusalReading read = LiveRefusalReport.Read(LiveFrame.Read(socket.Sent[0]).Frame!.Payload.Span);
+
+        Assert.Null(read.Fault);
+        Assert.Equal(LiveRefusal.WouldNotTune, read.Report!.Refusal);
+        Assert.Equal(kind, read.Report.Detail.TuneFailure);
+    }
+
+    [Fact]
+    public async Task Fr012WhatHoldsTheTunerLeavesTheWireBesideTheRefusalTheSameWay()
+    {
+        ScriptedWebSocket socket = new();
+
+        await new LiveWireSocket(socket, new LiveWireSettings()).RefuseAsync(
+            LiveJoin.Refused(
+                LiveRefusal.NoTunerFree,
+                "a recording holds it.",
+                LiveRefusalDetail.Of(LiveTunerHolder.ARecording)),
+            CancellationToken.None);
+
+        LiveRefusalReading read = LiveRefusalReport.Read(LiveFrame.Read(socket.Sent[0]).Frame!.Payload.Span);
+
+        Assert.Null(read.Fault);
+        Assert.Equal(LiveRefusal.NoTunerFree, read.Report!.Refusal);
+        Assert.Equal(LiveTunerHolder.ARecording, read.Report.Detail.Holder);
+        Assert.Equal(LiveRefusalReport.PayloadLength, LiveFrame.Read(socket.Sent[0]).Frame!.Payload.Length);
     }
 
     [Fact]

@@ -51,6 +51,24 @@ public sealed class StreamingRuleTests
     }
 
     [Fact]
+    public void OnlyTheRefusalReportAndItsDetailLayOutTheFiveBytesAViewerIsRefusedWith()
+    {
+        Assert.Empty(StreamingRules.WhatLaysOutARefusalOutsideItsOwnFiles(RepositoryLayout.SourceDirectory));
+    }
+
+    [Fact]
+    public void TheTwoFilesTheRuleStandsAsideForAreOnDiskAndAreWhereTheFiveBytesAreWrittenAndRead()
+    {
+        string report = Read(StreamingRules.WhereTheRefusalWireIsLaidOut[0]);
+        string detail = Read(StreamingRules.WhereTheRefusalWireIsLaidOut[1]);
+
+        Assert.Contains("new byte[PayloadLength]", report, StringComparison.Ordinal);
+        Assert.Contains("payload[1] = Detail.Said;", report, StringComparison.Ordinal);
+        Assert.Contains("LiveRefusalDetail.Read(refusal, payload[1])", report, StringComparison.Ordinal);
+        Assert.Contains("public byte Said", detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void NothingInTheStreamingFeatureWritesWhatBelongsToRecordingTheTunersOrTheGuide()
     {
         Assert.Empty(StreamingRules.WhatWritesWhatIsNotItsOwnInsideTheFeature(RepositoryLayout.SourceDirectory));
@@ -154,4 +172,7 @@ public sealed class StreamingRuleTests
             SourceScan.FilesMentioning(RepositoryLayout.SourceDirectory, "namespace Carina.Api.Playback;"),
             StringComparer.Ordinal);
     }
+
+    private static string Read(string relative)
+        => File.ReadAllText(Path.Combine(RepositoryLayout.SourceDirectory, relative.TrimStart('/')));
 }

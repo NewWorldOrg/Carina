@@ -11,6 +11,8 @@ public enum LiveRefusalFault
     AFullBudgetWithoutItsCeiling = 3,
 
     ACeilingWithoutAFullBudget = 4,
+
+    ADetailThisReasonDoesNotTake = 5,
 }
 
 public sealed record LiveRefusalReading(LiveRefusalReport? Report, LiveRefusalFault? Fault)
@@ -40,15 +42,18 @@ public sealed class LiveRefusalReport
 {
     public const int PayloadLength = 5;
 
-    private LiveRefusalReport(LiveRefusal refusal, TranscodeCeiling? ceiling)
+    private LiveRefusalReport(LiveRefusal refusal, TranscodeCeiling? ceiling, LiveRefusalDetail detail)
     {
         Refusal = refusal;
         Ceiling = ceiling;
+        Detail = detail;
     }
 
     public LiveRefusal Refusal { get; }
 
     public TranscodeCeiling? Ceiling { get; }
+
+    public LiveRefusalDetail Detail { get; }
 
     public static LiveRefusalReport Of(LiveJoin refused)
     {
@@ -59,7 +64,7 @@ public sealed class LiveRefusalReport
             throw new ArgumentException("A viewer that was seated has no refusal to report.", nameof(refused));
         }
 
-        return new LiveRefusalReport(refusal, refused.Ceiling);
+        return new LiveRefusalReport(refusal, refused.Ceiling, refused.Detail);
     }
 
     public byte[] ToPayload()
@@ -72,7 +77,11 @@ public sealed class LiveRefusalReport
         {
             BinaryPrimitives.WriteUInt16BigEndian(payload.AsSpan(1), Counted(ceiling.Running));
             BinaryPrimitives.WriteUInt16BigEndian(payload.AsSpan(3), Counted(ceiling.AtOnce));
+
+            return payload;
         }
+
+        payload[1] = Detail.Said;
 
         return payload;
     }
@@ -91,18 +100,24 @@ public sealed class LiveRefusalReport
             return LiveRefusalReading.Broken(LiveRefusalFault.AReasonNoViewerIsRefusedFor);
         }
 
+        if (refusal is not LiveRefusal.TooManyAlready)
+        {
+            if (payload[2] is not 0 || payload[3] is not 0 || payload[4] is not 0)
+            {
+                return LiveRefusalReading.Broken(LiveRefusalFault.ACeilingWithoutAFullBudget);
+            }
+
+            return LiveRefusalDetail.Read(refusal, payload[1]) is { } detail
+                ? LiveRefusalReading.Read(new LiveRefusalReport(refusal, null, detail))
+                : LiveRefusalReading.Broken(LiveRefusalFault.ADetailThisReasonDoesNotTake);
+        }
+
         int running = BinaryPrimitives.ReadUInt16BigEndian(payload.Slice(1, 2));
         int atOnce = BinaryPrimitives.ReadUInt16BigEndian(payload.Slice(3, 2));
 
-        if (refusal is not LiveRefusal.TooManyAlready)
-        {
-            return running is 0 && atOnce is 0
-                ? LiveRefusalReading.Read(new LiveRefusalReport(refusal, null))
-                : LiveRefusalReading.Broken(LiveRefusalFault.ACeilingWithoutAFullBudget);
-        }
-
         return atOnce >= TranscodeBudgetSettings.Fewest && running >= atOnce
-            ? LiveRefusalReading.Read(new LiveRefusalReport(refusal, new TranscodeCeiling(running, atOnce)))
+            ? LiveRefusalReading.Read(
+                new LiveRefusalReport(refusal, new TranscodeCeiling(running, atOnce), LiveRefusalDetail.Unsaid))
             : LiveRefusalReading.Broken(LiveRefusalFault.AFullBudgetWithoutItsCeiling);
     }
 
