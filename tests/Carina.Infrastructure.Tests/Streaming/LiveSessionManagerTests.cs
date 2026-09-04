@@ -177,7 +177,77 @@ public sealed class LiveSessionManagerTests
         Assert.Equal(new TranscodeCeiling(1, 1), refused.Ceiling);
         Assert.Equal(1, scarce.Started);
         Assert.Equal([EveryFrame], crowded.Keys);
-        await Eventually.Happens(() => supply.Opened[1].Disposed, "the stream opened for the refused key is let go");
+
+        // The refused key is another profile of a channel already being read, so it opened no
+        // reading of its own and the one the seated viewer is watching through is left alone.
+        Assert.Equal(1, supply.Asked);
+        Assert.False(supply.Opened[0].Disposed);
+    }
+
+    [Fact]
+    public async Task BrPs001TwoProfilesOfOneChannelAreMadeFromOneReadingOfTheTuner()
+    {
+        await using ILiveViewing everyFrame = await Joined(EveryFrame);
+        await using ILiveViewing everyField = await Joined(EveryField);
+
+        Assert.Equal(2, transcoders.Started);
+        Assert.Equal(1, supply.Asked);
+    }
+
+    [Fact]
+    public async Task BrPs001AProfileLeavingDoesNotTakeTheReadingAwayFromTheOneStillBeingWatched()
+    {
+        ILiveViewing leaving = await Joined(EveryFrame);
+        await using ILiveViewing staying = await Joined(EveryField);
+
+        await leaving.DisposeAsync();
+        clock.Turn(Linger);
+
+        await Eventually.Happens(() => manager.Keys.Count is 1, "the profile that was left goes away");
+
+        Assert.Equal([EveryField], manager.Keys);
+        Assert.False(supply.Opened[0].Disposed, "the reading the remaining profile is made from is still open");
+    }
+
+    [Fact]
+    public async Task BrPs001TheOneStillBeingWatchedKeepsGettingPicturesAfterTheOtherProfileIsGone()
+    {
+        ILiveViewing leaving = await Joined(EveryFrame);
+        await using ILiveViewing staying = await Joined(EveryField);
+
+        await leaving.DisposeAsync();
+        clock.Turn(Linger);
+
+        await Eventually.Happens(() => manager.Keys.Count is 1, "the profile that was left goes away");
+
+        await transcoders.Raised[1].WriteAsync(Fmp4.Header);
+        await transcoders.Raised[1].WriteAsync(Fmp4.Fragment(1_000));
+
+        LiveFrame[] carried = [await Next(staying), await Next(staying), await Next(staying)];
+
+        Assert.Equal(
+            [LiveChannel.CaptionHeader, LiveChannel.PictureHeader, LiveChannel.Picture],
+            carried.Select(frame => frame.Channel));
+    }
+
+    [Fact]
+    public async Task BrPs001TheLastProfileLeavingLetsTheReadingGo()
+    {
+        ILiveViewing only = await Joined(EveryFrame);
+
+        await only.DisposeAsync();
+        clock.Turn(Linger);
+
+        await Eventually.Happens(() => supply.Opened[0].Disposed, "the reading is let go when no profile is left");
+    }
+
+    [Fact]
+    public async Task BrPs001AnotherChannelIsAnotherReadingHoweverTheProfilesLineUp()
+    {
+        await using ILiveViewing here = await Joined(EveryFrame);
+        await using ILiveViewing elsewhere = await Joined(AnotherChannel);
+
+        Assert.Equal(2, supply.Asked);
     }
 
     [Fact]
