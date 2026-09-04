@@ -22,6 +22,12 @@ public static partial class StreamingRules
         "Carina.Api.Responder.Playback",
     ];
 
+    public static readonly IReadOnlyList<string> WhereTheRefusalWireIsLaidOut =
+    [
+        "/Carina.Domain/Streaming/LiveRefusalReport.cs",
+        "/Carina.Domain/Streaming/LiveRefusalDetail.cs",
+    ];
+
     public static readonly IReadOnlyList<string> WhereTheWholeApplicationIsWired =
         ["/Program.cs", "ServiceCollectionExtensions.cs"];
 
@@ -104,6 +110,27 @@ public static partial class StreamingRules
         ArgumentNullException.ThrowIfNull(source);
 
         return OpensTheStream().Matches(source).Count;
+    }
+
+    public static IReadOnlyList<string> WhatLaysOutARefusalOutsideItsOwnFiles(string directory)
+        => Feature(directory)
+            .Where(file => !WhereTheRefusalWireIsLaidOut.Contains(file.Relative, StringComparer.Ordinal))
+            .SelectMany(file => WhatLaysOutARefusalIn(file.Source).Select(way => $"{file.Relative} {way}"))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+    public static IReadOnlyList<string> WhatLaysOutARefusalIn(string source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        return
+        [
+            .. LaysOutARefusal().Matches(source)
+                .Select(match => Squeezed(match.Value))
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal),
+        ];
     }
 
     public static IReadOnlyList<string> WhatAsksForAnotherSeatInsideTheFeature(string directory)
@@ -220,6 +247,11 @@ public static partial class StreamingRules
 
     [GeneratedRegex(@"\.Task\s*\.\s*WaitAsync\s*\(\s*[^(),]*\s*\)")]
     private static partial Regex WaitsOnAPromiseWithNothingButAToken();
+
+    [GeneratedRegex(
+        @"\(\s*byte\s*\)\s*(LiveRefusal|TuneFailureKind|LiveTunerHolder)\s*\."
+        + @"|\bLiveRefusalReport\s*\.\s*PayloadLength\b")]
+    private static partial Regex LaysOutARefusal();
 
     [GeneratedRegex(@"\s+")]
     private static partial Regex Spaces();
