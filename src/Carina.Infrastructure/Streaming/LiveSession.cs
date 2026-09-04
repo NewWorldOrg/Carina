@@ -13,7 +13,7 @@ internal sealed class LiveSession
 
     private readonly LiveSessionSettings settings;
 
-    private readonly ILiveSupply supply;
+    private readonly LiveReception reception;
 
     private readonly ILiveTranscoderFactory transcoders;
 
@@ -31,7 +31,7 @@ internal sealed class LiveSession
 
     private readonly LiveEndingRecord ending = new();
 
-    private ILiveTransportStream? stream;
+    private LiveSeat? seat;
 
     private ILiveTranscoder? transcoder;
 
@@ -43,8 +43,6 @@ internal sealed class LiveSession
 
     private Task? captioning;
 
-    private Task? feeding;
-
     private ITimer? linger;
 
     private int expected;
@@ -55,7 +53,7 @@ internal sealed class LiveSession
         LiveSessionKey key,
         LiveFanoutSettings fanouts,
         LiveSessionSettings settings,
-        ILiveSupply supply,
+        LiveReception reception,
         ILiveTranscoderFactory transcoders,
         ILiveCaptionerFactory captioners,
         TimeProvider clock,
@@ -65,7 +63,7 @@ internal sealed class LiveSession
         startup = new LiveStartupRecord(clock);
         fanout = new LiveFanout(fanouts, startup, ending);
         this.settings = settings;
-        this.supply = supply;
+        this.reception = reception;
         this.transcoders = transcoders;
         this.captioners = captioners;
         this.clock = clock;
@@ -73,6 +71,8 @@ internal sealed class LiveSession
     }
 
     public LiveSessionKey Key { get; }
+
+    internal LiveReception Reception => reception;
 
     public Task Life { get; private set; } = Task.CompletedTask;
 
@@ -180,42 +180,6 @@ internal sealed class LiveSession
         stopping.Cancel();
     }
 
-    private async Task FeedAsync(ILiveTransportStream from, Stream into, CancellationToken cancellationToken)
-    {
-        byte[] mouthful = ArrayPool<byte>.Shared.Rent(LiveFeed.Mouthful);
-
-        try
-        {
-            int read;
-
-            while ((read = await from.Bytes.ReadAsync(mouthful, cancellationToken)) > 0)
-            {
-                startup.Reach(LiveStartupSegment.ChannelLocked);
-
-                await into.WriteAsync(mouthful.AsMemory(0, read), cancellationToken);
-                await into.FlushAsync(cancellationToken);
-                captionSupply?.Offer(mouthful.AsSpan(0, read));
-            }
-
-            if (!cancellationToken.IsCancellationRequested)
-            {
-                ending.Note(from.Ending ?? LiveSupplyEnding.Of(
-                    LiveSupplyEnd.DriverLost,
-                    "the transport stream ended and the supply did not say why."));
-            }
-
-            into.Close();
-        }
-        catch (Exception gone) when (gone is IOException or ObjectDisposedException or OperationCanceledException)
-        {
-            return;
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(mouthful);
-        }
-    }
-
     private void Published(LiveFrame frame)
     {
         switch (frame.Channel)
@@ -305,16 +269,11 @@ internal sealed class LiveSession
 
     private async Task<LiveJoin?> RaiseAsync(CancellationToken cancellationToken)
     {
-        LiveSupplyStart opened = await supply.OpenAsync(Key.Network, Key.Service, cancellationToken);
+        LiveSupplyStart opened = await reception.OpenAsync(cancellationToken);
 
-        if (opened.Stream is not { } bytes)
+        if (opened.Stream is null)
         {
             return LiveJoin.Refused(opened.Refusal!.Value, opened.Note, opened.Detail);
-        }
-
-        lock (gate)
-        {
-            stream = bytes;
         }
 
         startup.Reach(LiveStartupSegment.TunerSecured);
@@ -354,6 +313,15 @@ internal sealed class LiveSession
             fanout.Publish(LiveCaptions.Canvas(attributes.Size));
         }
 
+        lock (gate)
+        {
+            seat = reception.Take(
+                running.Input,
+                captionSupply,
+                () => startup.Reach(LiveStartupSegment.ChannelLocked),
+                ending.Note);
+        }
+
         return null;
     }
 
@@ -376,26 +344,22 @@ internal sealed class LiveSession
 
     private async Task CarryAsync(CancellationToken cancellationToken)
     {
-        ILiveTransportStream bytes;
         ILiveTranscoder running;
         ILiveCaptioner? drawing;
 
         lock (gate)
         {
-            bytes = stream!;
             running = transcoder!;
             drawing = captioner;
         }
 
         Task<LiveFragmentFault?> carried = LiveFeed.CarryAsync(running.Output, fanout, cancellationToken, Published);
         Task? captioned = drawing is null ? null : CaptionAsync(drawing, fanout, cancellationToken);
-        Task fed = FeedAsync(bytes, running.Input, cancellationToken);
 
         lock (gate)
         {
             carrying = carried;
             captioning = captioned;
-            feeding = fed;
         }
 
         TaskCompletionSource stopped = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -410,24 +374,28 @@ internal sealed class LiveSession
         ILiveTranscoder? running;
         ILiveCaptioner? drawing;
         CaptionSupply? drawingFrom;
-        ILiveTransportStream? bytes;
+        LiveSeat? given;
         Task<LiveFragmentFault?>? carried;
         Task? captioned;
-        Task? fed;
 
         lock (gate)
         {
             running = transcoder;
             drawing = captioner;
             drawingFrom = captionSupply;
-            bytes = stream;
+            given = seat;
             carried = carrying;
             captioned = captioning;
-            fed = feeding;
             transcoder = null;
             captioner = null;
             captionSupply = null;
-            stream = null;
+            seat = null;
+        }
+
+        // Out of the reading first, so nothing is written into a transcoder being taken down.
+        if (given is not null)
+        {
+            reception.Drop(given);
         }
 
         try
@@ -442,7 +410,8 @@ internal sealed class LiveSession
             }
             finally
             {
-                await LetTheSupplyGoAsync(bytes, fed);
+                fanout.End();
+                reception.Detach();
             }
         }
     }
@@ -482,26 +451,6 @@ internal sealed class LiveSession
 
         await DrainAsync(output);
         await disposing;
-    }
-
-    private async Task LetTheSupplyGoAsync(ILiveTransportStream? bytes, Task? fed)
-    {
-        try
-        {
-            if (bytes is not null)
-            {
-                await bytes.DisposeAsync();
-            }
-        }
-        finally
-        {
-            if (fed is not null)
-            {
-                await Quietly(fed);
-            }
-
-            fanout.End();
-        }
     }
 
     private static async Task DrainAsync(Stream from)

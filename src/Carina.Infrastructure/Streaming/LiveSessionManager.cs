@@ -1,4 +1,5 @@
 using Carina.Contracts;
+using Carina.Domain.Channels;
 using Carina.Domain.Events;
 using Carina.Domain.Streaming;
 
@@ -18,6 +19,8 @@ public sealed class LiveSessionManager(
     private readonly Lock gate = new();
 
     private readonly Dictionary<LiveSessionKey, LiveSession> sessions = [];
+
+    private readonly Dictionary<(NetworkId Network, ServiceId Service), LiveReception> receptions = [];
 
     public IReadOnlyList<LiveSessionKey> Keys
     {
@@ -83,10 +86,12 @@ public sealed class LiveSessionManager(
     public async ValueTask DisposeAsync()
     {
         List<LiveSession> closing;
+        List<LiveReception> reading;
 
         lock (gate)
         {
             closing = [.. sessions.Values];
+            reading = [.. receptions.Values];
         }
 
         foreach (LiveSession session in closing)
@@ -95,6 +100,13 @@ public sealed class LiveSessionManager(
         }
 
         await Task.WhenAll(closing.Select(session => session.Life));
+
+        foreach (LiveReception reception in reading)
+        {
+            reception.Close();
+        }
+
+        await Task.WhenAll(reading.Select(reception => reception.Life));
     }
 
     private async Task<LiveJoin> SeatedAsync(LiveSessionKey key, CancellationToken cancellationToken)
@@ -131,6 +143,10 @@ public sealed class LiveSessionManager(
 
         await Task.WhenAll(given.Select(session => session.Life));
 
+        // The tuner is let go of by the reading, not by the session, so the asking viewer waits
+        // for the reading to finish rather than being refused by a tuner on its way out.
+        await Task.WhenAll(given.Select(session => session.Reception).Distinct().Select(reading => reading.Life));
+
         return given.Count > 0;
     }
 
@@ -145,7 +161,15 @@ public sealed class LiveSessionManager(
                 return running;
             }
 
-            raised = new LiveSession(key, fanouts, settings, supply, transcoders, captioners, clock, Forget);
+            raised = new LiveSession(
+                key,
+                fanouts,
+                settings,
+                Receiving(key.Network, key.Service),
+                transcoders,
+                captioners,
+                clock,
+                Forget);
 
             sessions[key] = raised;
             raised.Expect();
@@ -155,6 +179,39 @@ public sealed class LiveSessionManager(
         events.Signal(AppEventName.Live);
 
         return raised;
+    }
+
+    /// <summary>
+    /// The reading of this channel, raised if this is the first profile being made from it.
+    /// </summary>
+    private LiveReception Receiving(NetworkId network, ServiceId service)
+    {
+        (NetworkId Network, ServiceId Service) channel = (network, service);
+
+        if (receptions.TryGetValue(channel, out LiveReception? reading) && reading.Attach())
+        {
+            return reading;
+        }
+
+        LiveReception raised = new(network, service, supply, settings, Forget);
+
+        receptions[channel] = raised;
+        raised.Attach();
+
+        return raised;
+    }
+
+    private void Forget(LiveReception reception)
+    {
+        lock (gate)
+        {
+            (NetworkId Network, ServiceId Service) channel = (reception.Network, reception.Service);
+
+            if (receptions.TryGetValue(channel, out LiveReception? held) && ReferenceEquals(held, reception))
+            {
+                receptions.Remove(channel);
+            }
+        }
     }
 
     private void Forget(LiveSession session)
