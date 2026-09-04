@@ -1,5 +1,6 @@
 using System.Threading.Channels;
 
+using Carina.Domain.Channels;
 using Carina.Domain.Streaming;
 
 namespace Carina.Domain.Tests.Streaming;
@@ -111,6 +112,90 @@ public sealed class LiveRefusalReportTests
         Assert.Equal(
             LiveRefusalFault.ACeilingWithoutAFullBudget,
             LiveRefusalReport.Read([(byte)LiveRefusal.NoTunerFree, 0, 4, 0, 4]).Fault);
+    }
+
+    [Theory]
+    [InlineData(TuneFailureKind.NoLock)]
+    [InlineData(TuneFailureKind.NoData)]
+    [InlineData(TuneFailureKind.IncompletePsi)]
+    [InlineData(TuneFailureKind.StreamMismatch)]
+    public void BrTd004TheReasonATuningFailedRidesTheSecondByteAndIsReadBackAsItself(TuneFailureKind kind)
+    {
+        LiveRefusalReport written = LiveRefusalReport.Of(
+            LiveJoin.Refused(LiveRefusal.WouldNotTune, "the tuner would not lock.", LiveRefusalDetail.Of(kind)));
+
+        Assert.Equal([(byte)LiveRefusal.WouldNotTune, (byte)kind, 0, 0, 0], written.ToPayload());
+
+        LiveRefusalReading read = LiveRefusalReport.Read(written.ToPayload());
+
+        Assert.Null(read.Fault);
+        Assert.Equal(kind, read.Report!.Detail.TuneFailure);
+        Assert.Null(read.Report.Detail.Holder);
+    }
+
+    [Fact]
+    public void BrTd004ATuningFailureNobodyCouldClassifyRidesAsZeroRatherThanAsAGuess()
+    {
+        LiveRefusalReport written = LiveRefusalReport.Of(
+            LiveJoin.Refused(LiveRefusal.WouldNotTune, "the device could not be opened."));
+
+        Assert.Equal([(byte)LiveRefusal.WouldNotTune, 0, 0, 0, 0], written.ToPayload());
+        Assert.Null(LiveRefusalReport.Read(written.ToPayload()).Report!.Detail.TuneFailure);
+    }
+
+    [Theory]
+    [InlineData(LiveTunerHolder.ARecording)]
+    [InlineData(LiveTunerHolder.AnotherViewer)]
+    [InlineData(LiveTunerHolder.TheGuideOrAScan)]
+    public void Fr012WhatHoldsTheTunerRidesTheSameSecondByteAndIsReadBackAsItself(LiveTunerHolder holder)
+    {
+        LiveRefusalReport written = LiveRefusalReport.Of(
+            LiveJoin.Refused(LiveRefusal.NoTunerFree, "every tuner is busy.", LiveRefusalDetail.Of(holder)));
+
+        Assert.Equal([(byte)LiveRefusal.NoTunerFree, (byte)holder, 0, 0, 0], written.ToPayload());
+
+        LiveRefusalReading read = LiveRefusalReport.Read(written.ToPayload());
+
+        Assert.Null(read.Fault);
+        Assert.Equal(holder, read.Report!.Detail.Holder);
+        Assert.Null(read.Report.Detail.TuneFailure);
+    }
+
+    [Fact]
+    public void Fr012ADetailBelongsToTheReasonItExplainsAndIsRefusedBesideAnother()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => LiveJoin.Refused(
+            LiveRefusal.NoTunerFree,
+            "every tuner is busy.",
+            LiveRefusalDetail.Of(TuneFailureKind.NoLock)));
+        Assert.Throws<ArgumentOutOfRangeException>(() => LiveJoin.Refused(
+            LiveRefusal.WouldNotTune,
+            "the tuner would not lock.",
+            LiveRefusalDetail.Of(LiveTunerHolder.ARecording)));
+    }
+
+    [Fact]
+    public void ADetailBesideAReasonThatTakesNoneIsRefusedAsSuch()
+    {
+        Assert.Equal(
+            LiveRefusalFault.ADetailThisReasonDoesNotTake,
+            LiveRefusalReport.Read([(byte)LiveRefusal.DriverUnavailable, 1, 0, 0, 0]).Fault);
+        Assert.Equal(
+            LiveRefusalFault.ADetailThisReasonDoesNotTake,
+            LiveRefusalReport.Read([(byte)LiveRefusal.WouldNotTune, 5, 0, 0, 0]).Fault);
+        Assert.Equal(
+            LiveRefusalFault.ADetailThisReasonDoesNotTake,
+            LiveRefusalReport.Read([(byte)LiveRefusal.NoTunerFree, 4, 0, 0, 0]).Fault);
+    }
+
+    [Fact]
+    public void AFullBudgetFillsTheSameFourBytesAsBeforeSoTheDetailNeverLandsOnItsCeiling()
+    {
+        LiveRefusalReport report = LiveRefusalReport.Of(LiveJoin.Refused(new TranscodeCeiling(300, 4)));
+
+        Assert.Equal([(byte)LiveRefusal.TooManyAlready, 0x01, 0x2c, 0x00, 0x04], report.ToPayload());
+        Assert.Same(LiveRefusalDetail.Unsaid, report.Detail);
+        Assert.Same(LiveRefusalDetail.Unsaid, LiveRefusalReport.Read(report.ToPayload()).Report!.Detail);
     }
 
     [Fact]

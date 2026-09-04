@@ -41,6 +41,10 @@ internal sealed class LiveDriverStandIn : IDriverClient
 
     public Func<SessionId, DriverCall<SessionSnapshot>>? Recalled { get; set; }
 
+    public IReadOnlyList<TunerSnapshot>? Tuners { get; set; }
+
+    public int TunersAsked { get; private set; }
+
     public PipeWriter Writer => pipe.Writer;
 
     public SessionId? Held
@@ -148,7 +152,16 @@ internal sealed class LiveDriverStandIn : IDriverClient
     }
 
     public Task<DriverCall<IReadOnlyList<TunerSnapshot>>> GetTunersAsync(CancellationToken cancellationToken)
-        => throw new NotSupportedException();
+    {
+        lock (gate)
+        {
+            TunersAsked++;
+        }
+
+        return Task.FromResult(Tuners is { } seen
+            ? DriverCall<IReadOnlyList<TunerSnapshot>>.Reached(seen)
+            : DriverCall<IReadOnlyList<TunerSnapshot>>.Unreachable("The driver's socket could not be reached."));
+    }
 
     public Task<DriverCall<IReadOnlyList<DetectedDeviceDto>>> GetDetectedDevicesAsync(CancellationToken cancellationToken)
         => throw new NotSupportedException();

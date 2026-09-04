@@ -46,7 +46,7 @@ public sealed class DriverLiveSupply(
 
         if (!started.TryGetValue(out SessionSnapshot? session))
         {
-            return Refused(started);
+            return await RefusedAsync(started, tune, cancellationToken);
         }
 
         if (session.State is SessionState.Failed)
@@ -73,7 +73,7 @@ public sealed class DriverLiveSupply(
         {
             await driver.StopSessionAsync(sessionId, NoStreamBecause, CancellationToken.None);
 
-            return Refused(opened);
+            return await RefusedAsync(opened, tune, cancellationToken);
         }
 
         return LiveSupplyStart.Opened(new DriverTransportStream(sessionId, bytes, driver, status));
@@ -105,10 +105,75 @@ public sealed class DriverLiveSupply(
         };
     }
 
-    private static LiveSupplyStart Refused<T>(DriverCall<T> call)
-        => call.Problem is { } problem
-            ? LiveSupplyStart.Refused(Refusal(problem), string.Join(" ", problem.Problems.Prepend(problem.Title)))
-            : LiveSupplyStart.Refused(LiveRefusal.DriverUnavailable, call.Failure ?? "the driver could not be reached.");
+    public static LiveRefusalDetail TuneFailure(DriverProblem problem)
+    {
+        ArgumentNullException.ThrowIfNull(problem);
+
+        return problem.Title is SessionRefusalTitles.NoLock
+            ? LiveRefusalDetail.Of(TuneFailureKind.NoLock)
+            : LiveRefusalDetail.Unsaid;
+    }
+
+    public static LiveRefusalDetail Holding(IEnumerable<TunerSnapshot> tuners, TunerKind kind)
+    {
+        ArgumentNullException.ThrowIfNull(tuners);
+
+        SessionPurpose[] purposes =
+        [
+            .. tuners
+                .Where(tuner => tuner.Kind == kind)
+                .Select(tuner => tuner.CurrentSession?.Purpose ?? SessionPurpose.Unspecified),
+        ];
+
+        if (purposes.Contains(SessionPurpose.Recording))
+        {
+            return LiveRefusalDetail.Of(LiveTunerHolder.ARecording);
+        }
+
+        if (purposes.Contains(SessionPurpose.Live))
+        {
+            return LiveRefusalDetail.Of(LiveTunerHolder.AnotherViewer);
+        }
+
+        return purposes.Any(purpose => purpose is SessionPurpose.Scan or SessionPurpose.Survey or SessionPurpose.SurveyNow)
+            ? LiveRefusalDetail.Of(LiveTunerHolder.TheGuideOrAScan)
+            : LiveRefusalDetail.Unsaid;
+    }
+
+    private async Task<LiveSupplyStart> RefusedAsync<T>(
+        DriverCall<T> call,
+        TuneParams tune,
+        CancellationToken cancellationToken)
+    {
+        if (call.Problem is not { } problem)
+        {
+            return LiveSupplyStart.Refused(
+                LiveRefusal.DriverUnavailable,
+                call.Failure ?? "the driver could not be reached.");
+        }
+
+        LiveRefusal refusal = Refusal(problem);
+        string note = string.Join(" ", problem.Problems.Prepend(problem.Title));
+
+        return refusal switch
+        {
+            LiveRefusal.WouldNotTune => LiveSupplyStart.Refused(refusal, note, TuneFailure(problem)),
+            LiveRefusal.NoTunerFree => LiveSupplyStart.Refused(
+                refusal,
+                note,
+                await HoldingAsync(tune.Kind, cancellationToken)),
+            _ => LiveSupplyStart.Refused(refusal, note),
+        };
+    }
+
+    private async Task<LiveRefusalDetail> HoldingAsync(TunerKind kind, CancellationToken cancellationToken)
+    {
+        DriverCall<IReadOnlyList<TunerSnapshot>> tuners = await driver.GetTunersAsync(cancellationToken);
+
+        return tuners.TryGetValue(out IReadOnlyList<TunerSnapshot>? seen)
+            ? Holding(seen, kind)
+            : LiveRefusalDetail.Unsaid;
+    }
 
     private async Task<TuningResolution> ResolveAsync(NetworkId network, ServiceId service, CancellationToken cancellationToken)
     {

@@ -107,6 +107,145 @@ public sealed class DriverLiveSupplyTests
     }
 
     [Fact]
+    public async Task BrTd004ADriverThatSaysTheFrontendNeverLockedNamesThatOneOfTheFourOnTheRefusal()
+    {
+        driver.RefusingToStart = new DriverProblem(
+            SessionRefusalTitles.NoLock,
+            ["The device 'adapter3' opened but the frontend did not lock: waited 5s."]);
+
+        LiveSupplyStart refused = await Supply().OpenAsync(Network, Service, CancellationToken.None);
+
+        Assert.Equal(LiveRefusal.WouldNotTune, refused.Refusal);
+        Assert.Equal(TuneFailureKind.NoLock, refused.Detail.TuneFailure);
+    }
+
+    [Theory]
+    [InlineData(SessionRefusalTitles.DeviceUnavailable)]
+    [InlineData(SessionRefusalTitles.FaultedDevice)]
+    [InlineData(SessionRefusalTitles.DisabledDevice)]
+    [InlineData(SessionRefusalTitles.NoDeviceOfThatKind)]
+    [InlineData(SessionRefusalTitles.WrongDeviceKind)]
+    [InlineData(SessionRefusalTitles.UnknownDevice)]
+    public async Task BrTd004ADeviceProblemThatIsNoneOfTheFourIsSentUnclassifiedRatherThanGuessedAt(string title)
+    {
+        driver.RefusingToStart = new DriverProblem(title, ["what the driver said."]);
+
+        LiveSupplyStart refused = await Supply().OpenAsync(Network, Service, CancellationToken.None);
+
+        Assert.Equal(LiveRefusal.WouldNotTune, refused.Refusal);
+        Assert.Null(refused.Detail.TuneFailure);
+    }
+
+    [Fact]
+    public async Task BrTd004ASessionHandedBackAlreadyFailedIsUnclassifiedBecauseTheDriverOnlySendsItsWords()
+    {
+        driver.StateOnStart = SessionState.Failed;
+        driver.FailureCauseOnStart = "the frontend did not lock.";
+
+        LiveSupplyStart refused = await Supply().OpenAsync(Network, Service, CancellationToken.None);
+
+        Assert.Equal(LiveRefusal.WouldNotTune, refused.Refusal);
+        Assert.Null(refused.Detail.TuneFailure);
+    }
+
+    [Theory]
+    [InlineData(SessionPurpose.Recording, LiveTunerHolder.ARecording)]
+    [InlineData(SessionPurpose.Live, LiveTunerHolder.AnotherViewer)]
+    [InlineData(SessionPurpose.Scan, LiveTunerHolder.TheGuideOrAScan)]
+    [InlineData(SessionPurpose.Survey, LiveTunerHolder.TheGuideOrAScan)]
+    [InlineData(SessionPurpose.SurveyNow, LiveTunerHolder.TheGuideOrAScan)]
+    public async Task Fr012ATunerThatIsBusySaysWhatItIsBusyWithRatherThanOnlyThatNoneIsFree(
+        SessionPurpose purpose,
+        LiveTunerHolder expected)
+    {
+        driver.RefusingToStart = new DriverProblem(SessionRefusalTitles.NoDeviceFree, ["every tuner is taken."]);
+        driver.Tuners = [Busy(TunerKind.Terrestrial, purpose)];
+
+        LiveSupplyStart refused = await Supply().OpenAsync(Network, Service, CancellationToken.None);
+
+        Assert.Equal(LiveRefusal.NoTunerFree, refused.Refusal);
+        Assert.Equal(expected, refused.Detail.Holder);
+        Assert.Equal(1, driver.TunersAsked);
+    }
+
+    [Fact]
+    public async Task Fr012ARecordingOutranksAViewerWhenBothHoldATunerThisChannelCouldHaveUsed()
+    {
+        driver.RefusingToStart = new DriverProblem(SessionRefusalTitles.DeviceBusy, ["the tuner is taken."]);
+        driver.Tuners =
+        [
+            Busy(TunerKind.Terrestrial, SessionPurpose.Live),
+            Busy(TunerKind.Terrestrial, SessionPurpose.Recording),
+        ];
+
+        LiveSupplyStart refused = await Supply().OpenAsync(Network, Service, CancellationToken.None);
+
+        Assert.Equal(LiveTunerHolder.ARecording, refused.Detail.Holder);
+    }
+
+    [Fact]
+    public async Task Fr012ARecordingOnATunerThisChannelCouldNeverHaveUsedIsNotWhyItIsBusy()
+    {
+        driver.RefusingToStart = new DriverProblem(SessionRefusalTitles.NoDeviceFree, ["every tuner is taken."]);
+        driver.Tuners =
+        [
+            Busy(TunerKind.Satellite, SessionPurpose.Recording),
+            Busy(TunerKind.Terrestrial, SessionPurpose.Live),
+        ];
+
+        LiveSupplyStart refused = await Supply().OpenAsync(Network, Service, CancellationToken.None);
+
+        Assert.Equal(LiveTunerHolder.AnotherViewer, refused.Detail.Holder);
+    }
+
+    [Fact]
+    public async Task Fr012ATunerThatIsIdleOnPaperSaysNothingAboutWhoHoldsIt()
+    {
+        driver.RefusingToStart = new DriverProblem(SessionRefusalTitles.NoDeviceFree, ["every tuner is taken."]);
+        driver.Tuners = [new TunerSnapshot("adapter3", TunerKind.Terrestrial, TunerState.Idle)];
+
+        LiveSupplyStart refused = await Supply().OpenAsync(Network, Service, CancellationToken.None);
+
+        Assert.Equal(LiveRefusal.NoTunerFree, refused.Refusal);
+        Assert.Null(refused.Detail.Holder);
+    }
+
+    [Fact]
+    public async Task Fr012ADriverThatWillNotListItsTunersLeavesTheHolderUnsaidRatherThanInvented()
+    {
+        driver.RefusingToStart = new DriverProblem(SessionRefusalTitles.NoDeviceFree, ["every tuner is taken."]);
+        driver.Tuners = null;
+
+        LiveSupplyStart refused = await Supply().OpenAsync(Network, Service, CancellationToken.None);
+
+        Assert.Equal(LiveRefusal.NoTunerFree, refused.Refusal);
+        Assert.Null(refused.Detail.Holder);
+    }
+
+    [Fact]
+    public async Task Fr012NoTunerOfThisSystemAtAllIsNobodyHoldingOneSoTheDriverIsNotEvenAsked()
+    {
+        LiveSupplyStart refused = await Supply(TuningResolution.Refused(TuningRefusal.NoTunerForSystem))
+            .OpenAsync(Network, Service, CancellationToken.None);
+
+        Assert.Equal(LiveRefusal.NoTunerFree, refused.Refusal);
+        Assert.Null(refused.Detail.Holder);
+        Assert.Equal(0, driver.TunersAsked);
+    }
+
+    [Fact]
+    public async Task Fr012ARefusalThatIsNeitherATuningFailureNorABusyTunerAsksTheDriverNothingExtra()
+    {
+        driver.RefusingToStart = new DriverProblem(SessionRefusalTitles.Draining, ["the driver is draining."]);
+
+        LiveSupplyStart refused = await Supply().OpenAsync(Network, Service, CancellationToken.None);
+
+        Assert.Equal(LiveRefusal.DriverUnavailable, refused.Refusal);
+        Assert.Same(LiveRefusalDetail.Unsaid, refused.Detail);
+        Assert.Equal(0, driver.TunersAsked);
+    }
+
+    [Fact]
     public async Task ADriverThatCannotBeReachedIsUnavailable()
     {
         driver.Unreachable = true;
@@ -342,6 +481,12 @@ public sealed class DriverLiveSupplyTests
         Assert.Single(driver.Opened);
         Assert.Equal(5, sessions.Viewers(key));
     }
+
+    private static TunerSnapshot Busy(TunerKind kind, SessionPurpose purpose)
+        => new($"adapter-{kind}-{purpose}", kind, TunerState.Busy)
+        {
+            CurrentSession = new CurrentSessionDto { SessionId = SessionId.Parse("held"), Purpose = purpose },
+        };
 
     private static int Remaining(int piece, int total)
         => piece switch
