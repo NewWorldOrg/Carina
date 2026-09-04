@@ -20,6 +20,8 @@ public sealed class DriverLiveSupplyTests
 
     private readonly LiveDriverStandIn driver = new();
 
+    private readonly LiveLeases leases = new();
+
     private DriverObservation observed = DriverObservation.NotConnected;
 
     [Fact]
@@ -522,10 +524,110 @@ public sealed class DriverLiveSupplyTests
         return start.Stream.Ending!;
     }
 
+    [Fact]
+    public async Task BrPs001ASessionIsLeasedBeforeTheDriverIsToldOfItSoNoSweepTakesItHalfwayThroughBeingRaised()
+    {
+        bool leasedWhenAsked = false;
+
+        driver.WhenStarting = request => leasedWhenAsked = leases.Held.Contains(request.SessionId);
+
+        await Supply().OpenAsync(Network, Service, CancellationToken.None);
+
+        Assert.True(leasedWhenAsked, "the session was leased before the driver was asked to start it");
+    }
+
+    [Fact]
+    public async Task BrPs001ASessionThatIsBeingWatchedStaysLeasedSoASweepLeavesItAlone()
+    {
+        LiveSupplyStart opened = await Supply().OpenAsync(Network, Service, CancellationToken.None);
+
+        Assert.Equal([driver.Held!.Value], opened.Stream is null ? [] : leases.Held);
+    }
+
+    [Fact]
+    public async Task BrPs001AStartThatThrewLetsGoOfTheSessionRatherThanLeavingItLeasedForever()
+    {
+        driver.ThrowOnStart = new IOException("the socket went away mid-call.");
+
+        await Assert.ThrowsAsync<IOException>(
+            () => Supply().OpenAsync(Network, Service, CancellationToken.None));
+
+        Assert.Empty(leases.Held);
+        Assert.Equal([DriverLiveSupply.NeverAnsweredBecause], driver.Stopped.Select(stop => stop.Reason));
+    }
+
+    [Fact]
+    public async Task BrPs001AStartTheDriverNeverAnsweredIsStoppedBecauseItMayHaveLandedAllTheSame()
+    {
+        driver.Unreachable = true;
+
+        LiveSupplyStart refused = await Supply().OpenAsync(Network, Service, CancellationToken.None);
+
+        Assert.Equal(LiveRefusal.DriverUnavailable, refused.Refusal);
+        Assert.Empty(leases.Held);
+        Assert.Equal([DriverLiveSupply.NeverAnsweredBecause], driver.Stopped.Select(stop => stop.Reason));
+    }
+
+    [Fact]
+    public async Task BrPs001ARefusalTheDriverSpelledOutStartedNothingSoNothingIsLeasedAndNothingIsStopped()
+    {
+        driver.RefusingToStart = new DriverProblem(SessionRefusalTitles.NoDeviceFree, ["every tuner is taken."]);
+
+        LiveSupplyStart refused = await Supply().OpenAsync(Network, Service, CancellationToken.None);
+
+        Assert.Equal(LiveRefusal.NoTunerFree, refused.Refusal);
+        Assert.Empty(leases.Held);
+        Assert.Empty(driver.Stopped);
+    }
+
+    [Fact]
+    public async Task BrPs001ASessionHandedBackAlreadyFailedIsNotLeftLeased()
+    {
+        driver.StateOnStart = SessionState.Failed;
+        driver.FailureCauseOnStart = "the frontend did not lock.";
+
+        await Supply().OpenAsync(Network, Service, CancellationToken.None);
+
+        Assert.Empty(leases.Held);
+    }
+
+    [Fact]
+    public async Task BrPs001AStreamTheDriverWouldNotOpenLeavesNothingLeased()
+    {
+        driver.RefusingToOpen = new DriverProblem("tooManySubscribers", ["every seat is taken."]);
+
+        await Supply().OpenAsync(Network, Service, CancellationToken.None);
+
+        Assert.Empty(leases.Held);
+    }
+
+    [Fact]
+    public async Task BrPs001LettingTheStreamGoLetsGoOfTheLeaseAsWellAsTheSession()
+    {
+        LiveSupplyStart opened = await Supply().OpenAsync(Network, Service, CancellationToken.None);
+
+        await opened.Stream!.DisposeAsync();
+
+        Assert.Empty(leases.Held);
+    }
+
+    [Fact]
+    public async Task BrPs001AStopThatNeverLandedStillLetsGoOfTheLeaseSoTheSweepCanFindTheSession()
+    {
+        LiveSupplyStart opened = await Supply().OpenAsync(Network, Service, CancellationToken.None);
+
+        driver.RefusingEveryStop = true;
+
+        await opened.Stream!.DisposeAsync();
+
+        Assert.Empty(leases.Held);
+    }
+
     private DriverLiveSupply Supply(TuningResolution? resolution = null)
         => new(
             driver,
             new DeferredStatus(() => observed),
+            leases,
             new ServiceCollection()
                 .AddSingleton<IServiceTuningDirectory>(new ResolvedTuning(
                     resolution ?? TuningResolution.Tunable(new CandidateChannelId(Guid.NewGuid()), Channel27, impaired: false)))
