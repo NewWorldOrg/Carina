@@ -186,6 +186,9 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton(new LiveWireSettings());
         services.TryAddSingleton(new LiveFanoutSettings());
         services.TryAddSingleton(new LiveSessionSettings());
+        services.TryAddSingleton(new LiveStraySettings());
+        services.TryAddSingleton<LiveLeases>();
+        services.TryAddSingleton<ILiveLeases>(provider => provider.GetRequiredService<LiveLeases>());
         services.TryAddSingleton<ILiveSupply, DriverLiveSupply>();
         services.TryAddSingleton<ILiveTranscoderFactory, LiveTranscoderFactory>();
         services.TryAddSingleton<LiveCaptionSettings>(provider =>
@@ -216,6 +219,7 @@ public static class ServiceCollectionExtensions
         services.AddHostedService(provider => provider.GetRequiredService<ScanRunner>());
         services.AddHostedService<EpgCollector>();
         services.AddHostedService<RideAlongHarvester>();
+        services.AddHostedService<LiveStraySweep>();
         services.AddHostedService(provider => provider.GetRequiredService<IntegrityCheckJob>());
         services.AddHostedService(provider => provider.GetRequiredService<ThumbnailJob>());
         services.AddHostedService(provider =>

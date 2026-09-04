@@ -21,18 +21,26 @@ public sealed class DriverTransportStream : ILiveTransportStream
 
     private readonly IDriverStatusReader status;
 
+    private readonly ILiveLeases leases;
+
     private LiveSupplyEnding? ending;
 
     private int letGo;
 
     private int concluded;
 
-    public DriverTransportStream(SessionId session, Stream inner, IDriverClient driver, IDriverStatusReader status)
+    public DriverTransportStream(
+        SessionId session,
+        Stream inner,
+        IDriverClient driver,
+        IDriverStatusReader status,
+        ILiveLeases leases)
     {
         this.session = session;
         this.inner = inner;
         this.driver = driver;
         this.status = status;
+        this.leases = leases;
         Bytes = new Reading(this);
     }
 
@@ -57,9 +65,18 @@ public sealed class DriverTransportStream : ILiveTransportStream
         }
         finally
         {
-            if (Volatile.Read(ref concluded) is 0)
+            try
             {
-                await driver.StopSessionAsync(session, LetGoBecause, CancellationToken.None);
+                if (Volatile.Read(ref concluded) is 0)
+                {
+                    await driver.StopSessionAsync(session, LetGoBecause, CancellationToken.None);
+                }
+            }
+            finally
+            {
+                // Let go last and whatever happened above: a stop that did not land leaves the
+                // session for the sweep, and holding the lease would hide it from that sweep.
+                leases.LetGo(session);
             }
         }
     }
