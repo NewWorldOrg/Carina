@@ -158,6 +158,9 @@ internal sealed class HeldReservations(IAtomicWrite? write = null, HeldOutcomes?
         CancellationToken cancellationToken)
         => Task.FromResult(new PaginatedList<Reservation>([.. held], held.Count, query.Page, query.PerPage));
 
+    public Task<ReservationHealth> HealthAsync(DateTime at, CancellationToken cancellationToken)
+        => Task.FromResult(ReservationHealth.Clear(at));
+
     public Task<Reservation?> FindAsync(ReservationId id, CancellationToken cancellationToken)
         => Task.FromResult(held.FirstOrDefault(reservation => reservation.Id.Equals(id)));
 
