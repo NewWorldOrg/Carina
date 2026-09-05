@@ -1,5 +1,7 @@
 using Carina.Domain.Streaming;
 
+using Carina.Infrastructure.Machines;
+
 namespace Carina.Infrastructure.Streaming;
 
 public static class FfprobeAttributes

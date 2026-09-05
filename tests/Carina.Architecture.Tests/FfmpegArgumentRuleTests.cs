@@ -5,11 +5,13 @@ public sealed class FfmpegArgumentRuleTests
     private static readonly string[] Builders =
     [
         "/Carina.Infrastructure/Encodings/FfmpegEncodeInvocation.cs",
+        "/Carina.Infrastructure/Encodings/FfprobeLengthInvocation.cs",
+        "/Carina.Infrastructure/Machines/FacultyInvocation.cs",
+        "/Carina.Infrastructure/Machines/VaapiProbeInvocation.cs",
         "/Carina.Infrastructure/Streaming/FfmpegCaptionInvocation.cs",
         "/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs",
         "/Carina.Infrastructure/Streaming/FfmpegPlaybackInvocation.cs",
         "/Carina.Infrastructure/Streaming/FfprobeInvocation.cs",
-        "/Carina.Infrastructure/Streaming/VaapiProbeInvocation.cs",
         "/Carina.Infrastructure/Thumbnails/FfmpegInvocation.cs",
     ];
 

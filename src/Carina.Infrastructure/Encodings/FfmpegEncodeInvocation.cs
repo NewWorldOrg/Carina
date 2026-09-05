@@ -2,12 +2,13 @@ using System.Globalization;
 
 using Carina.Domain.Channels;
 using Carina.Domain.Encodings;
+using Carina.Domain.Machines;
 
 namespace Carina.Infrastructure.Encodings;
 
 public static class FfmpegEncodeInvocation
 {
-    public const string RenderNode = "/dev/dri/renderD128";
+    public const string RenderNode = MachineSettings.TheRenderNode;
 
     private const string SquarePixels = "setsar=1";
 
@@ -37,6 +38,9 @@ public static class FfmpegEncodeInvocation
             "-hide_banner",
             "-loglevel",
             "error",
+            "-nostats",
+            "-progress",
+            "pipe:1",
             "-y",
             .. Device(encoder),
             "-i",

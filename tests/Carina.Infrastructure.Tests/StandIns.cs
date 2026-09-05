@@ -1,6 +1,7 @@
+using System.Globalization;
 using System.Runtime.Versioning;
 
-namespace Carina.Infrastructure.Tests.Streaming;
+namespace Carina.Infrastructure.Tests;
 
 [SupportedOSPlatform("linux")]
 public sealed class StandIns : IDisposable
@@ -33,6 +34,11 @@ public sealed class StandIns : IDisposable
 
         return path;
     }
+
+    public static IEnumerable<int> Pids(string written)
+        => File.ReadAllLines(written)
+            .Where(line => line.Length > 0)
+            .Select(line => int.Parse(line, CultureInfo.InvariantCulture));
 
     public async Task<bool> NothingIsLeftOf(IEnumerable<int> pids)
     {

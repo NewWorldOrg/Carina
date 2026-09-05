@@ -1,21 +1,10 @@
+using Carina.Domain.Machines;
+
 namespace Carina.Domain.Streaming;
-
-public enum EncoderRefusal
-{
-    NodeMissing = 1,
-
-    NodeUnreadable = 2,
-
-    DriverUnusable = 3,
-
-    ProbeTimedOut = 4,
-
-    ProbeProgrammeMissing = 5,
-}
 
 public sealed record LiveEncoderChoice
 {
-    private LiveEncoderChoice(LiveEncoder encoder, EncoderRefusal? fellBackBecause, string note)
+    private LiveEncoderChoice(LiveEncoder encoder, CardStanding? fellBackBecause, string note)
     {
         Encoder = encoder;
         FellBackBecause = fellBackBecause;
@@ -24,7 +13,7 @@ public sealed record LiveEncoderChoice
 
     public LiveEncoder Encoder { get; }
 
-    public EncoderRefusal? FellBackBecause { get; }
+    public CardStanding? FellBackBecause { get; }
 
     public string Note { get; }
 
@@ -43,14 +32,14 @@ public sealed record LiveEncoderChoice
         return new LiveEncoderChoice(encoder, null, string.Empty);
     }
 
-    public static LiveEncoderChoice FellBackToSoftware(EncoderRefusal because, string note)
+    public static LiveEncoderChoice FellBackToSoftware(CardStanding because, string note)
     {
-        if (!Enum.IsDefined(because))
+        if (CardStandings.IsUsable(because))
         {
             throw new ArgumentOutOfRangeException(
                 nameof(because),
                 because,
-                "A card is turned down for one of the reasons named here.");
+                "A card this machine can encode on is not a reason to fall back to the processor.");
         }
 
         return new LiveEncoderChoice(LiveEncoder.Software, because, TranscoderNote.Of(note));

@@ -30,16 +30,9 @@ public static class EncodeFailures
 
 public static class EncodeNote
 {
-    public const int Longest = 1000;
+    public const int Longest = ProgrammeNote.Longest;
 
-    public static string Of(string said)
-    {
-        ArgumentNullException.ThrowIfNull(said);
-
-        string kept = said.Trim();
-
-        return kept.Length <= Longest ? kept : kept[^Longest..];
-    }
+    public static string Of(string said) => ProgrammeNote.Of(said, Longest);
 }
 
 public sealed record EncodeFailureDetail

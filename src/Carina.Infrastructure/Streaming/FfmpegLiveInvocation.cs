@@ -1,6 +1,7 @@
 using System.Globalization;
 
 using Carina.Domain.Channels;
+using Carina.Domain.Machines;
 using Carina.Domain.Streaming;
 
 namespace Carina.Infrastructure.Streaming;
@@ -11,7 +12,7 @@ public static class FfmpegLiveInvocation
 
     public const string Output = "pipe:1";
 
-    public const string RenderNode = "/dev/dri/renderD128";
+    public const string RenderNode = MachineSettings.TheRenderNode;
 
     private const int KeyframeSeconds = 2;
 
