@@ -7,88 +7,100 @@ namespace Carina.Infrastructure.Streaming;
 
 public enum CaptionFlowFault
 {
-    StoppedPartWayThroughAPicture = 1,
+    NotTheContainerItWasAskedFor = 1,
 
-    NoStampForAPicture = 2,
+    AHeaderThatCannotBeRead = 2,
 
-    AStampForAnotherPicture = 3,
+    AFrameCodeNobodyDefined = 3,
+
+    AFrameTooBigToHold = 4,
+
+    StoppedPartWayThroughAFrame = 5,
+
+    APictureThatIsNotAPng = 6,
 }
 
 public static class CaptionFrames
 {
+    public const int Mouthful = 64 * 1024;
+
     public static async Task<CaptionFlowFault?> CarryAsync(
         Stream pictures,
-        TextReader said,
         CaptionCanvas canvas,
-        LiveCaptionSettings settings,
         ChannelWriter<LiveFrame> into,
-        CancellationToken cancellationToken,
-        Action<string>? complained = null)
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(pictures);
-        ArgumentNullException.ThrowIfNull(said);
         ArgumentNullException.ThrowIfNull(canvas);
-        ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(into);
 
-        Channel<CaptionStamp> stamps = Channel.CreateUnbounded<CaptionStamp>();
-        Task stamping = StampAsync(said, stamps.Writer, complained, cancellationToken);
-        byte[] picture = ArrayPool<byte>.Shared.Rent(canvas.FrameLength);
-        byte[] previous = ArrayPool<byte>.Shared.Rent(canvas.FrameLength);
-        bool anyPrevious = false;
+        NutFrames frames = new();
+        byte[] mouthful = ArrayPool<byte>.Shared.Rent(Mouthful);
+        byte[] pixels = ArrayPool<byte>.Shared.Rent(canvas.FrameLength);
+        CaptionFlowFault? fault = null;
+        ReadOnlyMemory<byte>? previous = null;
+        CaptionPicture? showing = null;
 
         try
         {
-            CaptionPicture? showing = null;
+            int read;
 
-            for (int index = 0; ; index++)
+            while ((read = await pictures.ReadAsync(mouthful, cancellationToken)) > 0)
             {
-                int read = await pictures.ReadAtLeastAsync(picture.AsMemory(0, canvas.FrameLength), canvas.FrameLength, false, cancellationToken);
-
-                if (read is 0)
-                {
-                    return null;
-                }
-
-                if (read < canvas.FrameLength)
-                {
-                    return CaptionFlowFault.StoppedPartWayThroughAPicture;
-                }
-
-                if (await StampOfAsync(stamps.Reader, index, cancellationToken) is not { } stamp)
-                {
-                    return CaptionFlowFault.NoStampForAPicture;
-                }
-
-                if (stamp.Index != index)
-                {
-                    return CaptionFlowFault.AStampForAnotherPicture;
-                }
-
-                Span<byte> current = picture.AsSpan(0, canvas.FrameLength);
-
-                if (stamp.Pts is not { } at || (anyPrevious && current.SequenceEqual(previous.AsSpan(0, canvas.FrameLength))))
+                if (fault is not null)
                 {
                     continue;
                 }
 
-                current.CopyTo(previous);
-                anyPrevious = true;
-                showing = Shown(canvas.Drawn(current), showing, settings.Corrected(at), into);
+                NutReading reading = frames.Read(mouthful.AsSpan(0, read));
+
+                foreach (NutFrame frame in reading.Frames)
+                {
+                    if (frame.Pts.Value >= LivePts.ComesAroundAt
+                        || (previous is { } seen && seen.Span.SequenceEqual(frame.Data.Span)))
+                    {
+                        continue;
+                    }
+
+                    previous = frame.Data;
+
+                    if (!RgbaPng.TryDecode(frame.Data.Span, canvas.Size, pixels.AsSpan(0, canvas.FrameLength)))
+                    {
+                        fault = CaptionFlowFault.APictureThatIsNotAPng;
+
+                        break;
+                    }
+
+                    showing = Shown(canvas.Drawn(pixels.AsSpan(0, canvas.FrameLength)), showing, frame.Pts, into);
+                }
+
+                fault ??= Of(reading.Fault);
             }
+
+            return fault ?? Of(frames.Ended().Fault);
         }
         catch (Exception gone) when (gone is IOException or ObjectDisposedException)
         {
-            return null;
+            return fault;
         }
         finally
         {
-            ArrayPool<byte>.Shared.Return(picture);
-            ArrayPool<byte>.Shared.Return(previous);
+            ArrayPool<byte>.Shared.Return(mouthful);
+            ArrayPool<byte>.Shared.Return(pixels);
             into.TryComplete();
-            await Quietly(stamping);
         }
     }
+
+    private static CaptionFlowFault? Of(NutFault? fault)
+        => fault switch
+        {
+            null => null,
+            NutFault.NotTheContainerItWasAskedFor => CaptionFlowFault.NotTheContainerItWasAskedFor,
+            NutFault.AHeaderThatCannotBeRead => CaptionFlowFault.AHeaderThatCannotBeRead,
+            NutFault.AFrameCodeNobodyDefined => CaptionFlowFault.AFrameCodeNobodyDefined,
+            NutFault.AFrameTooBigToHold => CaptionFlowFault.AFrameTooBigToHold,
+            _ => CaptionFlowFault.StoppedPartWayThroughAFrame,
+        };
 
     private static CaptionPicture? Shown(
         CaptionPicture? drawn,
@@ -122,65 +134,4 @@ public static class CaptionFrames
            && one.Width == other.Width
            && one.Height == other.Height
            && one.Png.Span.SequenceEqual(other.Png.Span);
-
-    private static async ValueTask<CaptionStamp?> StampOfAsync(
-        ChannelReader<CaptionStamp> stamps,
-        int index,
-        CancellationToken cancellationToken)
-    {
-        while (await stamps.WaitToReadAsync(cancellationToken))
-        {
-            while (stamps.TryRead(out CaptionStamp? stamp))
-            {
-                if (stamp.Index >= index)
-                {
-                    return stamp;
-                }
-            }
-        }
-
-        return null;
-    }
-
-    private static async Task StampAsync(
-        TextReader said,
-        ChannelWriter<CaptionStamp> into,
-        Action<string>? complained,
-        CancellationToken cancellationToken)
-    {
-        CaptionStamps reading = new();
-
-        try
-        {
-            while (await said.ReadLineAsync(cancellationToken) is { } line)
-            {
-                if (reading.Read(line) is { } stamp)
-                {
-                    into.TryWrite(stamp);
-                }
-                else if (!line.StartsWith("[Parsed_showinfo_", StringComparison.Ordinal))
-                {
-                    complained?.Invoke(line);
-                }
-            }
-        }
-        catch (Exception gone) when (gone is IOException or ObjectDisposedException or OperationCanceledException)
-        {
-        }
-        finally
-        {
-            into.TryComplete();
-        }
-    }
-
-    private static async Task Quietly(Task task)
-    {
-        try
-        {
-            await task;
-        }
-        catch (Exception gone) when (gone is IOException or ObjectDisposedException or OperationCanceledException)
-        {
-        }
-    }
 }

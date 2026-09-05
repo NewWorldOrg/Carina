@@ -17,8 +17,6 @@ internal sealed class LiveSession
 
     private readonly ILiveTranscoderFactory transcoders;
 
-    private readonly ILiveCaptionerFactory captioners;
-
     private readonly TimeProvider clock;
 
     private readonly Action<LiveSession> forget;
@@ -35,9 +33,7 @@ internal sealed class LiveSession
 
     private ILiveTranscoder? transcoder;
 
-    private ILiveCaptioner? captioner;
-
-    private CaptionSupply? captionSupply;
+    private CaptionOutlet captions;
 
     private Task<LiveFragmentFault?>? carrying;
 
@@ -55,7 +51,6 @@ internal sealed class LiveSession
         LiveSessionSettings settings,
         LiveReception reception,
         ILiveTranscoderFactory transcoders,
-        ILiveCaptionerFactory captioners,
         TimeProvider clock,
         Action<LiveSession> forget)
     {
@@ -65,7 +60,6 @@ internal sealed class LiveSession
         this.settings = settings;
         this.reception = reception;
         this.transcoders = transcoders;
-        this.captioners = captioners;
         this.clock = clock;
         this.forget = forget;
     }
@@ -278,12 +272,18 @@ internal sealed class LiveSession
 
         startup.Reach(LiveStartupSegment.TunerSecured);
 
-        StreamAttributes attributes = StreamAttributes.SafeSide;
+        return await StartTranscodingAsync(
+            reception.CaptionsMissing ? CaptionOutlet.None : CaptionOutlet.Drawn,
+            cancellationToken);
+    }
 
+    private async Task<LiveJoin?> StartTranscodingAsync(CaptionOutlet asked, CancellationToken cancellationToken)
+    {
         LiveTranscoderStart started = await transcoders.StartAsync(
             Key.Service,
             Key.Profile,
-            attributes,
+            StreamAttributes.SafeSide,
+            asked,
             cancellationToken);
 
         if (started.Transcoder is not { } running)
@@ -296,42 +296,108 @@ internal sealed class LiveSession
         lock (gate)
         {
             transcoder = running;
+            captions = asked;
+            seat = reception.Take(running.Input, () => startup.Reach(LiveStartupSegment.ChannelLocked), ending.Note);
         }
 
         startup.Reach(LiveStartupSegment.TranscoderStarted);
 
-        LiveCaptionerStart drawn = await captioners.StartAsync(Key.Service, attributes, cancellationToken);
+        return null;
+    }
 
-        if (drawn.Captioner is { } drawing)
+    /// <summary>
+    /// A service without a caption stream makes ffmpeg refuse the whole command, picture included,
+    /// so a transcoder that ends before writing anything for that reason is started again without
+    /// captions, and the reading remembers so that the next profile of this channel does not try.
+    /// </summary>
+    private async Task<Stream?> OutputOrRestartAsync(CancellationToken cancellationToken)
+    {
+        ILiveTranscoder running;
+        CaptionOutlet asked;
+
+        lock (gate)
         {
-            lock (gate)
-            {
-                captioner = drawing;
-                captionSupply = new CaptionSupply(drawing.Input);
-            }
+            running = transcoder!;
+            asked = captions;
+        }
 
-            fanout.Publish(LiveCaptions.Canvas(attributes.Size));
+        ReadOnlyMemory<byte> first = await FirstBytesAsync(running, cancellationToken);
+
+        if (!first.IsEmpty || asked is CaptionOutlet.None)
+        {
+            return new FirstBytesThenTheRest(first, running.Output);
+        }
+
+        TranscoderExit exit = await running.Completion;
+
+        if (!FfmpegComplaints.RefusedForWantOfACaptionStream(exit.Note))
+        {
+            return new FirstBytesThenTheRest(first, running.Output);
+        }
+
+        reception.MissCaptions();
+        await LetGoOfTranscoderAsync();
+
+        if (await StartTranscodingAsync(CaptionOutlet.None, cancellationToken) is not null)
+        {
+            return null;
         }
 
         lock (gate)
         {
-            seat = reception.Take(
-                running.Input,
-                captionSupply,
-                () => startup.Reach(LiveStartupSegment.ChannelLocked),
-                ending.Note);
+            running = transcoder!;
         }
 
-        return null;
+        return new FirstBytesThenTheRest(await FirstBytesAsync(running, cancellationToken), running.Output);
     }
 
-    private static async Task CaptionAsync(ILiveCaptioner drawing, LiveFanout into, CancellationToken cancellationToken)
+    private static async Task<ReadOnlyMemory<byte>> FirstBytesAsync(ILiveTranscoder running, CancellationToken cancellationToken)
+    {
+        byte[] mouthful = new byte[LiveFeed.Mouthful];
+
+        try
+        {
+            int read = await running.Output.ReadAsync(mouthful, cancellationToken);
+
+            return mouthful.AsMemory(0, read);
+        }
+        catch (Exception gone) when (gone is IOException or ObjectDisposedException)
+        {
+            return ReadOnlyMemory<byte>.Empty;
+        }
+    }
+
+    private async Task LetGoOfTranscoderAsync()
+    {
+        ILiveTranscoder? running;
+        LiveSeat? given;
+
+        lock (gate)
+        {
+            running = transcoder;
+            given = seat;
+            transcoder = null;
+            seat = null;
+        }
+
+        if (given is not null)
+        {
+            reception.Drop(given);
+        }
+
+        if (running is not null)
+        {
+            await running.DisposeAsync();
+        }
+    }
+
+    private static async Task CaptionAsync(ChannelReader<LiveFrame> drawn, LiveFanout into, CancellationToken cancellationToken)
     {
         try
         {
-            while (await drawing.Frames.WaitToReadAsync(cancellationToken))
+            while (await drawn.WaitToReadAsync(cancellationToken))
             {
-                while (drawing.Frames.TryRead(out LiveFrame? frame))
+                while (drawn.TryRead(out LiveFrame? frame))
                 {
                     into.Publish(frame);
                 }
@@ -344,17 +410,27 @@ internal sealed class LiveSession
 
     private async Task CarryAsync(CancellationToken cancellationToken)
     {
+        if (await OutputOrRestartAsync(cancellationToken) is not { } output)
+        {
+            return;
+        }
+
         ILiveTranscoder running;
-        ILiveCaptioner? drawing;
+        CaptionOutlet drawn;
 
         lock (gate)
         {
             running = transcoder!;
-            drawing = captioner;
+            drawn = captions;
         }
 
-        Task<LiveFragmentFault?> carried = LiveFeed.CarryAsync(running.Output, fanout, cancellationToken, Published);
-        Task? captioned = drawing is null ? null : CaptionAsync(drawing, fanout, cancellationToken);
+        if (drawn is CaptionOutlet.Drawn)
+        {
+            fanout.Publish(LiveCaptions.Canvas(StreamAttributes.SafeSide.Size));
+        }
+
+        Task<LiveFragmentFault?> carried = LiveFeed.CarryAsync(output, fanout, cancellationToken, Published);
+        Task captioned = CaptionAsync(running.Captions, fanout, cancellationToken);
 
         lock (gate)
         {
@@ -372,8 +448,6 @@ internal sealed class LiveSession
     private async Task TearDownAsync()
     {
         ILiveTranscoder? running;
-        ILiveCaptioner? drawing;
-        CaptionSupply? drawingFrom;
         LiveSeat? given;
         Task<LiveFragmentFault?>? carried;
         Task? captioned;
@@ -381,14 +455,10 @@ internal sealed class LiveSession
         lock (gate)
         {
             running = transcoder;
-            drawing = captioner;
-            drawingFrom = captionSupply;
             given = seat;
             carried = carrying;
             captioned = captioning;
             transcoder = null;
-            captioner = null;
-            captionSupply = null;
             seat = null;
         }
 
@@ -400,41 +470,16 @@ internal sealed class LiveSession
 
         try
         {
-            await StopDrawingAsync(drawingFrom, drawing, captioned);
+            await StopTranscodingAsync(running, carried, captioned);
         }
         finally
         {
-            try
-            {
-                await StopTranscodingAsync(running, carried);
-            }
-            finally
-            {
-                fanout.End();
-                reception.Detach();
-            }
+            fanout.End();
+            reception.Detach();
         }
     }
 
-    private static async Task StopDrawingAsync(CaptionSupply? drawingFrom, ILiveCaptioner? drawing, Task? captioned)
-    {
-        if (drawingFrom is not null)
-        {
-            await drawingFrom.CompleteAsync();
-        }
-
-        if (drawing is not null)
-        {
-            await drawing.DisposeAsync();
-        }
-
-        if (captioned is not null)
-        {
-            await Quietly(captioned);
-        }
-    }
-
-    private static async Task StopTranscodingAsync(ILiveTranscoder? running, Task<LiveFragmentFault?>? carried)
+    private static async Task StopTranscodingAsync(ILiveTranscoder? running, Task<LiveFragmentFault?>? carried, Task? captioned)
     {
         if (running is null)
         {
@@ -447,6 +492,11 @@ internal sealed class LiveSession
         if (carried is not null)
         {
             await Quietly(carried);
+        }
+
+        if (captioned is not null)
+        {
+            await Quietly(captioned);
         }
 
         await DrainAsync(output);

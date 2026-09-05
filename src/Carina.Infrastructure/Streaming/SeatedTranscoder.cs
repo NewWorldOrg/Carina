@@ -1,3 +1,5 @@
+using System.Threading.Channels;
+
 using Carina.Domain.Streaming;
 
 namespace Carina.Infrastructure.Streaming;
@@ -9,6 +11,8 @@ internal sealed class SeatedTranscoder(ILiveTranscoder transcoder, ITranscodeSea
     public Stream Input => transcoder.Input;
 
     public Stream Output => transcoder.Output;
+
+    public ChannelReader<LiveFrame> Captions => transcoder.Captions;
 
     public Task<TranscoderExit> Completion => transcoder.Completion;
 

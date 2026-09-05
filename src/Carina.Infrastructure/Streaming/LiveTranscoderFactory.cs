@@ -13,6 +13,7 @@ public sealed class LiveTranscoderFactory(
         ServiceId service,
         LiveProfile profile,
         StreamAttributes attributes,
+        CaptionOutlet captions,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(service);
@@ -30,7 +31,7 @@ public sealed class LiveTranscoderFactory(
 
         try
         {
-            LiveTranscoderStart started = await StartedAsync(service, profile, attributes, seat, cancellationToken);
+            LiveTranscoderStart started = await StartedAsync(service, profile, attributes, captions, seat, cancellationToken);
 
             handedOver = started.Running;
 
@@ -49,20 +50,24 @@ public sealed class LiveTranscoderFactory(
         ServiceId service,
         LiveProfile profile,
         StreamAttributes attributes,
+        CaptionOutlet captions,
         ITranscodeSeat seat,
         CancellationToken cancellationToken)
     {
         LiveEncoderChoice chosen = await selector.ChooseAsync(cancellationToken);
+        CaptionPipe? drawn = captions is CaptionOutlet.Drawn ? new CaptionPipe(new CaptionCanvas(attributes.Size)) : null;
 
         LiveTranscoderStart started = TranscoderProcess.Start(
             settings,
             [
-                .. FfmpegLiveInvocation.Arguments(service, profile, attributes, chosen.Encoder),
+                .. FfmpegLiveInvocation.Arguments(service, profile, attributes, chosen.Encoder, captions),
                 .. FfmpegLiveInvocation.Delivery(),
+                .. drawn is null ? [] : FfmpegLiveInvocation.CaptionDelivery(service, drawn.Descriptor),
             ],
             chosen,
             clock,
-            cancellationToken);
+            cancellationToken,
+            drawn);
 
         return started.Transcoder is { } transcoder
             ? LiveTranscoderStart.Started(new SeatedTranscoder(transcoder, seat))

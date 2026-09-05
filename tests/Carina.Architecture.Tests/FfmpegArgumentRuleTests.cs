@@ -8,7 +8,6 @@ public sealed class FfmpegArgumentRuleTests
         "/Carina.Infrastructure/Encodings/FfprobeLengthInvocation.cs",
         "/Carina.Infrastructure/Machines/FacultyInvocation.cs",
         "/Carina.Infrastructure/Machines/VaapiProbeInvocation.cs",
-        "/Carina.Infrastructure/Streaming/FfmpegCaptionInvocation.cs",
         "/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs",
         "/Carina.Infrastructure/Streaming/FfmpegPlaybackInvocation.cs",
         "/Carina.Infrastructure/Streaming/FfprobeInvocation.cs",
@@ -19,10 +18,8 @@ public sealed class FfmpegArgumentRuleTests
     [
         "/Carina.Infrastructure/Encodings/FfmpegEncodeInvocation.cs string.Join(",
         "/Carina.Infrastructure/Encodings/FfmpegEncodeInvocation.cs {programNumber}",
-        "/Carina.Infrastructure/Streaming/FfmpegCaptionInvocation.cs {programNumber}",
-        "/Carina.Infrastructure/Streaming/FfmpegCaptionInvocation.cs {size.Height}",
-        "/Carina.Infrastructure/Streaming/FfmpegCaptionInvocation.cs {size.Width}",
         "/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs string.Join(",
+        "/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs {descriptor}",
         "/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs {kilobitsPerSecond}",
         "/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs {programNumber}",
         "/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs {size.Height}",
@@ -117,39 +114,37 @@ public sealed class FfmpegArgumentRuleTests
     }
 
     [Fact]
-    public void TheOnlyPlaceThatNamesASubtitleCanvasIsTheCaptionBuilderAndItFillsItFromAMeasuredSizeAlone()
+    public void TheOnlyPlaceThatNamesASubtitleCanvasIsTheLiveBuilderAndItFillsItFromAMeasuredSizeAlone()
     {
         Assert.Equal(
-            ["/Carina.Infrastructure/Streaming/FfmpegCaptionInvocation.cs -canvas_size"],
+            ["/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs -canvas_size"],
             FfmpegArgumentRules.WhatSetsASubtitleCanvas(RepositoryLayout.SourceDirectory));
 
         string source = File.ReadAllText(Path.Combine(
             RepositoryLayout.SourceDirectory,
             "Carina.Infrastructure",
             "Streaming",
-            "FfmpegCaptionInvocation.cs"));
+            "FfmpegLiveInvocation.cs"));
 
         Assert.Contains("internal static string Canvas(VideoSize size)", source, StringComparison.Ordinal);
-        Assert.Equal(
-            ["{programNumber}", "{size.Height}", "{size.Width}"],
-            FfmpegArgumentRules.WhatFillsACommandLineIn(source));
+        Assert.Contains("Canvas(attributes.Size)", source, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void TheOnlyPlaceThatNamesAFontIsTheCaptionBuilderAndItNamesTheOneFaceTheImageInstallsAsAConstant()
+    public void TheOnlyPlaceThatNamesAFontIsTheLiveBuilderAndItNamesTheOneFaceTheImageInstallsAsAConstant()
     {
         Assert.Equal(
-            ["/Carina.Infrastructure/Streaming/FfmpegCaptionInvocation.cs -font"],
+            ["/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs -font"],
             FfmpegArgumentRules.WhatNamesAFont(RepositoryLayout.SourceDirectory));
 
         string source = File.ReadAllText(Path.Combine(
             RepositoryLayout.SourceDirectory,
             "Carina.Infrastructure",
             "Streaming",
-            "FfmpegCaptionInvocation.cs"));
+            "FfmpegLiveInvocation.cs"));
 
         Assert.Contains("public const string Font = \"Noto Sans CJK JP\";", source, StringComparison.Ordinal);
-        Assert.Contains("\"-font\",\n            Font,", source, StringComparison.Ordinal);
+        Assert.Contains("\"-font\",\n                Font,", source, StringComparison.Ordinal);
     }
 
     [Fact]

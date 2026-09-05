@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Threading.Channels;
 
 using Carina.Domain.Streaming;
 
@@ -10,26 +11,34 @@ public sealed class LiveTranscoder : ILiveTranscoder
 
     private readonly Process running;
 
+    private readonly CaptionPipe? captions;
+
     private readonly TimeSpan stopGrace;
 
     private readonly TimeProvider clock;
 
     private readonly CancellationTokenSource stopping;
 
+    private readonly Channel<LiveFrame> frames = Channel.CreateUnbounded<LiveFrame>();
+
     private readonly Queue<string> complaint = new();
 
     private readonly Lock saying = new();
+
+    private readonly Task<CaptionFlowFault?> drawing;
 
     private bool letGo;
 
     internal LiveTranscoder(
         Process running,
         LiveEncoderChoice encoder,
+        CaptionPipe? captions,
         TimeSpan stopGrace,
         TimeProvider clock,
         CancellationToken cancellationToken)
     {
         this.running = running;
+        this.captions = captions;
         this.stopGrace = stopGrace;
         this.clock = clock;
         Encoder = encoder;
@@ -37,6 +46,10 @@ public sealed class LiveTranscoder : ILiveTranscoder
 
         running.ErrorDataReceived += Remember;
         running.BeginErrorReadLine();
+
+        drawing = captions is null
+            ? NothingDrawn()
+            : CaptionFrames.CarryAsync(captions.Pictures, captions.Canvas, frames.Writer, stopping.Token);
 
         Completion = WatchAsync();
     }
@@ -47,7 +60,11 @@ public sealed class LiveTranscoder : ILiveTranscoder
 
     public Stream Output => running.StandardOutput.BaseStream;
 
+    public ChannelReader<LiveFrame> Captions => frames.Reader;
+
     public Task<TranscoderExit> Completion { get; }
+
+    public Task<CaptionFlowFault?> Drawing => drawing;
 
     public string Complaint
     {
@@ -73,7 +90,15 @@ public sealed class LiveTranscoder : ILiveTranscoder
         await Completion;
 
         stopping.Dispose();
+        captions?.Dispose();
         running.Dispose();
+    }
+
+    private Task<CaptionFlowFault?> NothingDrawn()
+    {
+        frames.Writer.TryComplete();
+
+        return Task.FromResult<CaptionFlowFault?>(null);
     }
 
     private void Remember(object sender, DataReceivedEventArgs line)
@@ -103,11 +128,25 @@ public sealed class LiveTranscoder : ILiveTranscoder
         catch (OperationCanceledException)
         {
             await GiveUpAsync();
+            await Quietly(drawing);
 
             return TranscoderExit.CalledOff(Complaint);
         }
 
+        await Quietly(drawing);
+
         return running.ExitCode is 0 ? TranscoderExit.Finished() : TranscoderExit.Refused(running.ExitCode, Complaint);
+    }
+
+    private static async Task Quietly(Task task)
+    {
+        try
+        {
+            await task;
+        }
+        catch (Exception gone) when (gone is IOException or ObjectDisposedException or OperationCanceledException)
+        {
+        }
     }
 
     private async Task GiveUpAsync()

@@ -10,7 +10,6 @@ public sealed class LiveSessionManager(
     LiveFanoutSettings fanouts,
     ILiveSupply supply,
     ILiveTranscoderFactory transcoders,
-    ILiveCaptionerFactory captioners,
     TimeProvider clock,
     IAppEventPublisher events) : ILiveSessionManager, ILiveSessionLedger, IAsyncDisposable
 {
@@ -167,7 +166,6 @@ public sealed class LiveSessionManager(
                 settings,
                 Receiving(key.Network, key.Service),
                 transcoders,
-                captioners,
                 clock,
                 Forget);
 

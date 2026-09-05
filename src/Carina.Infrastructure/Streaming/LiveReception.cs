@@ -42,6 +42,8 @@ internal sealed class LiveReception
 
     private bool closed;
 
+    private bool captionsMissing;
+
     internal LiveReception(
         NetworkId network,
         ServiceId service,
@@ -63,6 +65,29 @@ internal sealed class LiveReception
     internal Task Life { get; private set; } = Task.CompletedTask;
 
     internal LiveSupplyEnding? Ending => stream?.Ending;
+
+    /// <summary>
+    /// Whether a transcoder of this channel has found that the service carries no caption stream, in
+    /// which case the ones raised after it are not asked to draw captions.
+    /// </summary>
+    internal bool CaptionsMissing
+    {
+        get
+        {
+            lock (gate)
+            {
+                return captionsMissing;
+            }
+        }
+    }
+
+    internal void MissCaptions()
+    {
+        lock (gate)
+        {
+            captionsMissing = true;
+        }
+    }
 
     internal bool Attach()
     {
@@ -111,11 +136,10 @@ internal sealed class LiveReception
 
     internal LiveSeat Take(
         Stream into,
-        CaptionSupply? captions,
         Action locked,
         Action<LiveSupplyEnding> ended)
     {
-        LiveSeat seat = new(into, captions, locked, ended, settings.LongestWaitToBeFed);
+        LiveSeat seat = new(into, locked, ended, settings.LongestWaitToBeFed);
 
         lock (gate)
         {
@@ -238,7 +262,6 @@ internal sealed class LiveReception
 /// </summary>
 internal sealed class LiveSeat(
     Stream into,
-    CaptionSupply? captions,
     Action locked,
     Action<LiveSupplyEnding> ended,
     TimeSpan patience)
@@ -261,8 +284,6 @@ internal sealed class LiveSeat(
                 fed = true;
                 locked();
             }
-
-            captions?.Offer(mouthful.Span);
 
             return true;
         }

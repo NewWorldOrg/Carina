@@ -1,4 +1,5 @@
 using System.IO.Pipelines;
+using System.Threading.Channels;
 
 using Carina.Domain.Channels;
 using Carina.Domain.Streaming;
@@ -7,6 +8,9 @@ namespace Carina.TestSupport;
 
 public sealed class HeldTranscoders(ITranscodeBudget budget) : ILiveTranscoderFactory
 {
+    public const string NoCaptionStream =
+        "Stream specifier ':p:1024:s:0' in filtergraph description [0:p:1024:s:0]null[c] matches no streams.";
+
     private readonly Lock gate = new();
 
     private readonly List<HeldTranscoder> raised = [];
@@ -37,10 +41,13 @@ public sealed class HeldTranscoders(ITranscodeBudget budget) : ILiveTranscoderFa
 
     public TranscoderFault? Failing { get; set; }
 
+    public bool WithoutACaptionStream { get; set; }
+
     public async Task<LiveTranscoderStart> StartAsync(
         ServiceId service,
         LiveProfile profile,
         StreamAttributes attributes,
+        CaptionOutlet captions,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(service);
@@ -66,7 +73,12 @@ public sealed class HeldTranscoders(ITranscodeBudget budget) : ILiveTranscoderFa
             return LiveTranscoderStart.Failed(fault, "held back for the test.");
         }
 
-        HeldTranscoder transcoder = new(service, profile, attributes, seat);
+        HeldTranscoder transcoder = new(service, profile, attributes, captions, seat);
+
+        if (WithoutACaptionStream && captions is CaptionOutlet.Drawn)
+        {
+            transcoder.RefuseForWantOfACaptionStream();
+        }
 
         lock (gate)
         {
@@ -83,19 +95,27 @@ public sealed class HeldTranscoder : ILiveTranscoder
 
     private readonly Stream output;
 
+    private readonly Channel<LiveFrame> captions = Channel.CreateUnbounded<LiveFrame>();
+
     private readonly TaskCompletionSource<TranscoderExit> exit = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     private readonly ITranscodeSeat seat;
 
     private bool completed;
 
-    public HeldTranscoder(ServiceId service, LiveProfile profile, StreamAttributes attributes, ITranscodeSeat seat)
+    public HeldTranscoder(ServiceId service, LiveProfile profile, StreamAttributes attributes, CaptionOutlet captioned, ITranscodeSeat seat)
     {
         Service = service;
         Profile = profile;
         Attributes = attributes;
+        Captioned = captioned;
         this.seat = seat;
         output = pipe.Reader.AsStream();
+
+        if (captioned is CaptionOutlet.None)
+        {
+            captions.Writer.TryComplete();
+        }
     }
 
     public ServiceId Service { get; }
@@ -104,11 +124,15 @@ public sealed class HeldTranscoder : ILiveTranscoder
 
     public StreamAttributes Attributes { get; }
 
+    public CaptionOutlet Captioned { get; }
+
     public LiveEncoderChoice Encoder { get; } = LiveEncoderChoice.Asked(LiveEncoder.Software);
 
     public Stream Input => Disposed ? throw new ObjectDisposedException(nameof(HeldTranscoder)) : Stream.Null;
 
     public Stream Output => Disposed ? throw new ObjectDisposedException(nameof(HeldTranscoder)) : output;
+
+    public ChannelReader<LiveFrame> Captions => captions.Reader;
 
     public Task<TranscoderExit> Completion => exit.Task;
 
@@ -123,10 +147,27 @@ public sealed class HeldTranscoder : ILiveTranscoder
         await pipe.Writer.WriteAsync(bytes);
     }
 
+    public void Draw(LiveFrame frame)
+    {
+        ArgumentNullException.ThrowIfNull(frame);
+
+        captions.Writer.TryWrite(frame);
+    }
+
+    public void NoMoreCaptions() => captions.Writer.TryComplete();
+
     public void NoMore()
     {
         Complete();
+        captions.Writer.TryComplete();
         exit.TrySetResult(TranscoderExit.Finished());
+    }
+
+    public void RefuseForWantOfACaptionStream()
+    {
+        Complete();
+        captions.Writer.TryComplete();
+        exit.TrySetResult(TranscoderExit.Refused(234, HeldTranscoders.NoCaptionStream));
     }
 
     public ValueTask DisposeAsync()
@@ -138,6 +179,7 @@ public sealed class HeldTranscoder : ILiveTranscoder
 
         Disposed = true;
         Complete();
+        captions.Writer.TryComplete();
         exit.TrySetResult(TranscoderExit.CalledOff(string.Empty));
         seat.Dispose();
 

@@ -4,6 +4,7 @@ using System.Runtime.Versioning;
 using Carina.Domain.Channels;
 using Carina.Domain.Streaming;
 using Carina.Infrastructure.Streaming;
+using Carina.TestSupport;
 
 namespace Carina.Infrastructure.Tests.Streaming;
 
@@ -39,7 +40,7 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
         string[] handed = File.ReadAllLines(said);
 
         Assert.Equal(
-            [.. FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software), .. FfmpegLiveInvocation.Delivery()],
+            [.. FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, CaptionOutlet.None), .. FfmpegLiveInvocation.Delivery()],
             handed);
     }
 
@@ -259,6 +260,92 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
         Assert.Equal(0, budget.Running);
     }
 
+    [Fact]
+    public async Task AskedForCaptionsTheCommandNamesAPipeOfItsOwnForThemAndTheProgrammeInheritsIt()
+    {
+        string said = standIns.Named("arguments");
+        string fds = standIns.Named("fds");
+
+        await using ILiveTranscoder running = await Started(
+            standIns.Script($"printf '%s\\n' \"$@\" > {said}; ls /proc/$$/fd > {fds}; cat > /dev/null"),
+            LiveEncoder.Software,
+            captions: CaptionOutlet.Drawn);
+
+        await running.Input.DisposeAsync();
+        await running.Completion;
+
+        string[] handed = File.ReadAllLines(said);
+        string pipe = handed.Single(argument => argument.StartsWith("pipe:", StringComparison.Ordinal) && argument != "pipe:0" && argument != "pipe:1");
+        string descriptor = pipe["pipe:".Length..];
+
+        Assert.Equal(
+            [
+                .. FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, CaptionOutlet.Drawn),
+                .. FfmpegLiveInvocation.Delivery(),
+                .. FfmpegLiveInvocation.CaptionDelivery(Service, int.Parse(descriptor, CultureInfo.InvariantCulture)),
+            ],
+            handed);
+        Assert.Contains(descriptor, File.ReadAllLines(fds));
+        Assert.True(running.Captions.Completion.IsCompleted);
+    }
+
+    [Fact]
+    public async Task BrPd007WhatTheProgrammeWritesToTheCaptionPipeComesOutAsCaptionsStampedByTheFrame()
+    {
+        string nut = standIns.Named("captions.nut");
+        byte[] rgba = new byte[2 * 2 * 4];
+
+        rgba[3] = 0xff;
+        File.WriteAllBytes(nut, NutFramesTests.Written.Of(90_000, [(180_000L, RgbaPngTests.Encoded(rgba, new VideoSize(2, 2), 0))]));
+
+        await using ILiveTranscoder running = await Started(
+            standIns.Script($"for a in \"$@\"; do case $a in pipe:[2-9]*|pipe:[1-9][0-9]*) fd=${{a#pipe:}};; esac; done; cat {nut} > /proc/self/fd/$fd; cat > /dev/null"),
+            LiveEncoder.Software,
+            captions: CaptionOutlet.Drawn,
+            attributes: new StreamAttributes(new VideoSize(2, 2), ScanType.Interlaced, FrameRate.BroadcastFrames, AudioMode.Stereo));
+
+        using CancellationTokenSource patience = new(Eventually.Patience);
+        LiveFrame drawn = await running.Captions.ReadAsync(patience.Token);
+
+        Assert.Equal(LiveChannel.Caption, drawn.Channel);
+        Assert.Equal(180_000UL, drawn.Pts.Value);
+        Assert.Equal((0, 0, 1, 1), (LiveCaptions.PictureOf(drawn)!.Left, LiveCaptions.PictureOf(drawn)!.Top, LiveCaptions.PictureOf(drawn)!.Width, LiveCaptions.PictureOf(drawn)!.Height));
+
+        await running.Input.DisposeAsync();
+        await running.Completion;
+        await running.Captions.Completion.WaitAsync(Eventually.Patience);
+    }
+
+    [Fact]
+    public async Task ACaptionPipeNobodyWritesToEndsWithTheProgrammeAndTheProgrammeIsNeverRefusedForIt()
+    {
+        await using ILiveTranscoder running = await Started(
+            standIns.Script("cat > /dev/null"),
+            LiveEncoder.Software,
+            captions: CaptionOutlet.Drawn);
+
+        Assert.False(running.Captions.Completion.IsCompleted);
+
+        await running.Input.DisposeAsync();
+
+        Assert.True((await running.Completion).RanToTheEnd);
+        await running.Captions.Completion.WaitAsync(Eventually.Patience);
+    }
+
+    [Fact]
+    public async Task WithoutCaptionsNoPipeIsOpenedAndTheCaptionsAreOverBeforeTheyBegin()
+    {
+        string said = standIns.Named("arguments");
+
+        await using ILiveTranscoder running = await Started(standIns.Script($"printf '%s\\n' \"$@\" > {said}; cat > /dev/null"), LiveEncoder.Software);
+
+        await running.Input.DisposeAsync();
+        await running.Completion;
+
+        Assert.DoesNotContain(File.ReadAllLines(said), argument => argument.StartsWith("pipe:", StringComparison.Ordinal) && argument != "pipe:0" && argument != "pipe:1");
+        Assert.True(running.Captions.Completion.IsCompleted);
+    }
+
     private static async Task WaitFor(string pids, int howMany)
     {
         for (int attempt = 0; attempt < 100; attempt++)
@@ -311,9 +398,11 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
         string programme,
         LiveEncoder encoder,
         CancellationToken cancellationToken = default,
-        TimeSpan? grace = null)
+        TimeSpan? grace = null,
+        CaptionOutlet captions = CaptionOutlet.None,
+        StreamAttributes? attributes = null)
     {
-        LiveTranscoderStart start = await Starting(programme, encoder, cancellationToken, grace);
+        LiveTranscoderStart start = await Starting(programme, encoder, cancellationToken, grace, captions, attributes);
 
         Assert.True(start.Running, start.Note);
 
@@ -324,7 +413,9 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
         string programme,
         LiveEncoder encoder,
         CancellationToken cancellationToken = default,
-        TimeSpan? grace = null)
+        TimeSpan? grace = null,
+        CaptionOutlet captions = CaptionOutlet.None,
+        StreamAttributes? attributes = null)
     {
         var settings = new LiveTranscodeSettings
         {
@@ -334,7 +425,7 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
 
         var factory = new LiveTranscoderFactory(settings, budget, new AlreadyChosen(encoder), TimeProvider.System);
 
-        return factory.StartAsync(Service, LiveProfile.Hd30, Interlaced, cancellationToken);
+        return factory.StartAsync(Service, LiveProfile.Hd30, attributes ?? Interlaced, captions, cancellationToken);
     }
 
     private sealed class AlreadyChosen(LiveEncoder encoder) : ILiveEncoderSelector
