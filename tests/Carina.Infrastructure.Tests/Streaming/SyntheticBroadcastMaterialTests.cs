@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.IO.Pipes;
 using System.Runtime.Versioning;
 
 using Carina.BroadcastTestSupport;
@@ -199,10 +200,51 @@ public sealed class SyntheticBroadcastMaterialTests : IDisposable
     }
 
     [Fact]
-    public async Task TheCaptionsAreDrawnByTheSameInvocationTheLiveCaptionerUses()
+    public async Task BrPd007TheCaptionsLeaveTheLiveTranscoderAsStampedPngFramesOnTheirOwnPipeStampedAsTheBroadcastStampedThem()
     {
-        string written = await SyntheticBroadcast.AsMeasured().WriteAsync(Path.Combine(room, "captioned.m2ts"));
-        VideoSize canvas = new(1440, 1080);
+        string written = await (SyntheticBroadcast.AsMeasured() with { Length = PastTheProbe }).WriteAsync(Path.Combine(room, "captioned.m2ts"));
+
+        DrawnCaptions drawn = await DrawnAsync(written);
+        IReadOnlyList<ulong> statements = await CaptionStatementsAsync(written);
+
+        Assert.InRange(drawn.Painted.Count, 1, drawn.Frames.Count);
+        Assert.NotEmpty(statements);
+        Assert.Contains(drawn.Painted, frame => statements.Contains(frame.Pts.Value));
+    }
+
+    [Fact]
+    public async Task BrPd007AClearScreenStatementTakesTheCaptionOffTheScreen()
+    {
+        string written = await (SyntheticBroadcast.AsMeasured() with { Length = PastTheProbe, Captions = SyntheticCaptions.ShownThenCleared })
+            .WriteAsync(Path.Combine(room, "cleared.m2ts"));
+
+        DrawnCaptions drawn = await DrawnAsync(written);
+        IReadOnlyList<ulong> statements = await CaptionStatementsAsync(written);
+
+        Assert.Equal(2, statements.Count);
+
+        ulong shown = statements[0];
+        ulong cleared = statements[1];
+
+        Assert.NotEmpty(drawn.Painted);
+        Assert.All(drawn.Painted, frame => Assert.InRange(frame.Pts.Value, shown, cleared - 1));
+        Assert.Contains(drawn.Blank, frame => frame.Pts.Value == cleared);
+    }
+
+    private static async Task<IReadOnlyList<ulong>> CaptionStatementsAsync(string written)
+    {
+        IReadOnlyList<FfprobeRecord> packets = await ProbedAsync(written, "packet=pts", "-select_streams", "s:0");
+        ulong[] stamped = [.. packets.Select(packet => ulong.Parse(packet.Value("pts")!, CultureInfo.InvariantCulture))];
+        ulong management = stamped.Min();
+
+        return [.. stamped.Where(pts => (pts - management) % 90_000 is 45_000)];
+    }
+
+    private async Task<DrawnCaptions> DrawnAsync(string written)
+    {
+        VideoSize canvas = Interlaced.Size;
+
+        using AnonymousPipeServerStream captions = new(PipeDirection.In, HandleInheritability.Inheritable);
 
         var start = new ProcessStartInfo(FfmpegProgramme.Default)
         {
@@ -212,13 +254,16 @@ public sealed class SyntheticBroadcastMaterialTests : IDisposable
             UseShellExecute = false,
         };
 
-        foreach (string argument in FfmpegCaptionInvocation.Arguments(new ServiceId(SyntheticBroadcast.SomeProgramNumber), canvas)
-            .Concat(FfmpegCaptionInvocation.Delivery()))
+        foreach (string argument in FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, CaptionOutlet.Drawn)
+            .Concat(FfmpegLiveInvocation.Delivery())
+            .Concat(FfmpegLiveInvocation.CaptionDelivery(Service, int.Parse(captions.GetClientHandleAsString(), CultureInfo.InvariantCulture))))
         {
             start.ArgumentList.Add(argument);
         }
 
         using Process drawing = Process.Start(start)!;
+
+        captions.DisposeLocalCopyOfClientHandle();
 
         Task feeding = Task.Run(async () =>
         {
@@ -227,23 +272,49 @@ public sealed class SyntheticBroadcastMaterialTests : IDisposable
             drawing.StandardInput.Close();
         });
         Task<string> complaint = drawing.StandardError.ReadToEndAsync();
+        Task<long> picture = Task.Run(async () =>
+        {
+            using MemoryStream held = new();
+            await drawing.StandardOutput.BaseStream.CopyToAsync(held);
 
-        using var drawn = new MemoryStream();
-        await drawing.StandardOutput.BaseStream.CopyToAsync(drawn);
+            return held.Length;
+        });
+
+        using MemoryStream held = new();
+        await captions.CopyToAsync(held);
         await feeding;
         await drawing.WaitForExitAsync();
 
-        int frameLength = canvas.Width * canvas.Height * 4;
-        int frames = (int)(drawn.Length / frameLength);
-        byte[] pixels = drawn.ToArray();
-        int painted = Enumerable.Range(0, frames)
-            .Count(frame => pixels.AsSpan(frame * frameLength, frameLength).IndexOfAnyExcept((byte)0) >= 0);
+        NutFrames frames = new();
+        NutReading read = frames.Read(held.ToArray());
+        byte[] pixels = new byte[canvas.Width * canvas.Height * 4];
+        List<NutFrame> painted = [];
+        List<NutFrame> blank = [];
+
+        foreach (NutFrame frame in read.Frames)
+        {
+            Assert.True(RgbaPng.TryDecode(frame.Data.Span, canvas, pixels), "every frame is an RGBA PNG of the canvas");
+
+            if (pixels.AsSpan().IndexOfAnyExcept((byte)0) >= 0)
+            {
+                painted.Add(frame);
+            }
+            else
+            {
+                blank.Add(frame);
+            }
+        }
 
         Assert.Equal(0, drawing.ExitCode);
-        Assert.Equal(0L, drawn.Length % frameLength);
-        Assert.InRange(painted, 1, frames);
+        Assert.True(read.Fault is null, $"the caption stream faulted with {read.Fault} after {read.Frames.Count} frames of {held.Length} bytes");
+        Assert.Null(frames.Ended().Fault);
+        Assert.True(await picture > 0, "the picture leaves on standard output beside the captions");
         Assert.DoesNotContain("overflowing", await complaint, StringComparison.Ordinal);
+
+        return new DrawnCaptions(read.Frames, painted, blank);
     }
+
+    private sealed record DrawnCaptions(IReadOnlyList<NutFrame> Frames, IReadOnlyList<NutFrame> Painted, IReadOnlyList<NutFrame> Blank);
 
     [Fact]
     public async Task ABroadcastCarryingTwoSoundsReachesALiveViewerAsOnePictureAndOneSound()
@@ -356,7 +427,7 @@ public sealed class SyntheticBroadcastMaterialTests : IDisposable
 
         await TranscodedAsync(
             [
-                .. FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software),
+                .. FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, CaptionOutlet.None),
                 .. FfmpegLiveInvocation.Delivery(),
             ],
             fed: written,

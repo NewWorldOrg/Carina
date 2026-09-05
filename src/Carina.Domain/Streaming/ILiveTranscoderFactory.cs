@@ -8,5 +8,6 @@ public interface ILiveTranscoderFactory
         ServiceId service,
         LiveProfile profile,
         StreamAttributes attributes,
+        CaptionOutlet captions,
         CancellationToken cancellationToken);
 }

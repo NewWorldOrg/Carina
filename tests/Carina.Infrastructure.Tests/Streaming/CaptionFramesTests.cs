@@ -8,18 +8,14 @@ namespace Carina.Infrastructure.Tests.Streaming;
 
 public sealed class CaptionFramesTests
 {
-    private const string Clock = "[Parsed_showinfo_1 @ 0x1] config in time_base: 1/90000, frame_rate: 0/1";
+    private static readonly VideoSize FourByTwo = new(4, 2);
 
-    private static readonly CaptionCanvas Small = new(new VideoSize(4, 2));
-
-    private static readonly LiveCaptionSettings Uncorrected = new();
+    private static readonly CaptionCanvas Small = new(FourByTwo);
 
     [Fact]
-    public async Task APictureWithSomethingOnItIsShownAtItsStampAsAPalettePngCutToWhatWasDrawn()
+    public async Task BrPd007APictureWithSomethingOnItIsShownAtTheStampCarriedOnItsFrameAsAPalettePngCutToWhatWasDrawn()
     {
-        List<LiveFrame> carried = await Carried(
-            Frames(Painted(1, 0)),
-            Lines(Clock, Stamp(0, 90_000UL)));
+        List<LiveFrame> carried = await Carried(Nut((90_000L, Painted(1, 0))));
 
         LiveFrame shown = Assert.Single(carried);
 
@@ -36,9 +32,7 @@ public sealed class CaptionFramesTests
     [Fact]
     public async Task APictureWithNothingOnItClearsWhatWasShowingAndClearsNothingTwice()
     {
-        List<LiveFrame> carried = await Carried(
-            Frames(Painted(0, 0), Blank(), Blank()),
-            Lines(Clock, Stamp(0, 100UL), Stamp(1, 200UL), Stamp(2, 300UL)));
+        List<LiveFrame> carried = await Carried(Nut((100L, Painted(0, 0)), (200L, Blank()), (300L, Blank(filter: 1))));
 
         Assert.Equal(2, carried.Count);
         Assert.False(LiveCaptions.Clears(carried[0]));
@@ -49,132 +43,81 @@ public sealed class CaptionFramesTests
     [Fact]
     public async Task ABlankPictureWhileNothingIsShowingSaysNothing()
     {
-        Assert.Empty(await Carried(Frames(Blank(), Blank()), Lines(Clock, Stamp(0, 100UL), Stamp(1, 200UL))));
+        Assert.Empty(await Carried(Nut((100L, Blank()), (200L, Blank()))));
     }
 
     [Fact]
-    public async Task ThePictureShownAgainUnchangedIsNotSentAgain()
+    public async Task ThePictureShownAgainUnchangedIsNotSentAgainWhetherOrNotItsBytesAreTheSame()
     {
-        List<LiveFrame> carried = await Carried(
-            Frames(Painted(1, 1), Painted(1, 1), Painted(2, 1)),
-            Lines(Clock, Stamp(0, 100UL), Stamp(1, 200UL), Stamp(2, 300UL)));
+        List<LiveFrame> carried = await Carried(Nut(
+            (100L, Painted(1, 1)),
+            (200L, Painted(1, 1)),
+            (250L, Painted(1, 1, filter: 2)),
+            (300L, Painted(2, 1))));
 
         Assert.Equal([100UL, 300UL], carried.Select(frame => frame.Pts.Value));
     }
 
     [Fact]
-    public async Task TheCorrectionMovesEveryStamp()
+    public async Task AFrameStampedBeyondTheBroadcastClockIsNotACaptionTheBroadcastSent()
     {
-        LiveCaptionSettings later = new() { EncoderDelay = TimeSpan.FromMilliseconds(300) };
+        List<LiveFrame> carried = await Carried(Nut((100L, Painted(0, 0)), ((long)LivePts.ComesAroundAt, Blank())));
 
-        List<LiveFrame> carried = await Carried(
-            Frames(Painted(0, 0), Blank()),
-            Lines(Clock, Stamp(0, 90_000UL), Stamp(1, 180_000UL)),
-            later);
-
-        Assert.Equal([117_000UL, 207_000UL], carried.Select(frame => frame.Pts.Value));
+        Assert.Equal([100UL], carried.Select(frame => frame.Pts.Value));
     }
 
     [Fact]
-    public async Task ANegativeCorrectionMovesTheStampsEarlierAndNoEarlierThanTheStart()
+    public async Task FramesArriveInWhateverPiecesThePipeHandsOverAndEveryCaptionStillComesOut()
     {
-        LiveCaptionSettings earlier = new() { EncoderDelay = TimeSpan.FromMilliseconds(-300) };
-
-        List<LiveFrame> carried = await Carried(
-            Frames(Painted(0, 0), Blank()),
-            Lines(Clock, Stamp(0, 10_000UL), Stamp(1, 180_000UL)),
-            earlier);
-
-        Assert.Equal([0UL, 153_000UL], carried.Select(frame => frame.Pts.Value));
-    }
-
-    [Fact]
-    public async Task StampsThatArriveWithOtherLinesBetweenThemArePairedByTheirNumber()
-    {
-        List<LiveFrame> carried = await Carried(
-            Frames(Painted(0, 0), Painted(3, 1)),
-            Lines(
-                "Input #0, mpegts, from 'pipe:0':",
-                Clock,
-                "[Parsed_showinfo_1 @ 0x1] config out time_base: 0/0, frame_rate: 0/0",
-                Stamp(0, 100UL),
-                "[Parsed_showinfo_1 @ 0x1] color_range:unknown color_space:unknown",
-                "[mpegts @ 0x1] PES packet size mismatch",
-                Stamp(1, 200UL)));
-
-        Assert.Equal([100UL, 200UL], carried.Select(frame => frame.Pts.Value));
-    }
-
-    [Fact]
-    public async Task WhatThePictureDrawerSaysBesideTheStampsIsHandedOnAsComplaint()
-    {
-        List<string> complained = [];
-
-        await Carried(
-            Frames(Painted(0, 0)),
-            Lines("Input #0, mpegts, from 'pipe:0':", Clock, Stamp(0, 100UL), "sub2video: non-bitmap subtitle"),
-            complained: complained.Add);
-
-        Assert.Equal(["Input #0, mpegts, from 'pipe:0':", "sub2video: non-bitmap subtitle"], complained);
-    }
-
-    [Fact]
-    public async Task APictureWithoutAStampIsAFaultNotAGuess()
-    {
+        byte[] whole = Nut((100L, Painted(0, 0)), (200L, Painted(3, 1)), (300L, Blank()));
         Channel<LiveFrame> into = Channel.CreateUnbounded<LiveFrame>();
 
-        CaptionFlowFault? fault = await CaptionFrames.CarryAsync(
-            new MemoryStream(Frames(Painted(0, 0))),
-            new StringReader(Lines(Clock)),
-            Small,
-            Uncorrected,
-            into.Writer,
-            CancellationToken.None);
+        CaptionFlowFault? fault = await CaptionFrames.CarryAsync(new DribblingStream(whole, 7), Small, into.Writer, CancellationToken.None);
 
-        Assert.Equal(CaptionFlowFault.NoStampForAPicture, fault);
+        Assert.Null(fault);
+        Assert.Equal([100UL, 200UL, 300UL], Gathered(into).Select(frame => frame.Pts.Value));
+    }
+
+    [Fact]
+    public async Task SomethingThatIsNotTheContainerIsAFaultAndTheRestOfTheStreamIsSwallowedSoTheWriterIsNeverRefused()
+    {
+        byte[] garbage = [.. "ftyp"u8, .. new byte[100_000]];
+        MemoryStream from = new(garbage);
+        Channel<LiveFrame> into = Channel.CreateUnbounded<LiveFrame>();
+
+        CaptionFlowFault? fault = await CaptionFrames.CarryAsync(from, Small, into.Writer, CancellationToken.None);
+
+        Assert.Equal(CaptionFlowFault.NotTheContainerItWasAskedFor, fault);
+        Assert.Equal(from.Length, from.Position);
         Assert.True(into.Reader.Completion.IsCompleted);
     }
 
     [Fact]
-    public async Task AStampNumberedForALaterPictureIsAFault()
+    public async Task AFrameThatIsNotAPngIsAFaultAndTheRestOfTheStreamIsSwallowed()
+    {
+        byte[] whole = [.. Nut((100L, Painted(0, 0)), (200L, [1, 2, 3, 4, 5]), (300L, Painted(1, 0))), .. new byte[50_000]];
+        MemoryStream from = new(whole);
+        Channel<LiveFrame> into = Channel.CreateUnbounded<LiveFrame>();
+
+        CaptionFlowFault? fault = await CaptionFrames.CarryAsync(from, Small, into.Writer, CancellationToken.None);
+
+        Assert.Equal(CaptionFlowFault.APictureThatIsNotAPng, fault);
+        Assert.Equal(from.Length, from.Position);
+        Assert.Equal([100UL], Gathered(into).Select(frame => frame.Pts.Value));
+    }
+
+    [Fact]
+    public async Task AStreamThatStopsPartWayThroughAFrameIsAFault()
     {
         Channel<LiveFrame> into = Channel.CreateUnbounded<LiveFrame>();
 
         CaptionFlowFault? fault = await CaptionFrames.CarryAsync(
-            new MemoryStream(Frames(Painted(0, 0))),
-            new StringReader(Lines(Clock, Stamp(1, 100UL))),
+            new MemoryStream(Nut((100L, Painted(0, 0)))[..^3]),
             Small,
-            Uncorrected,
             into.Writer,
             CancellationToken.None);
 
-        Assert.Equal(CaptionFlowFault.AStampForAnotherPicture, fault);
-    }
-
-    [Fact]
-    public async Task PicturesThatEndPartWayThroughAreAFault()
-    {
-        Channel<LiveFrame> into = Channel.CreateUnbounded<LiveFrame>();
-
-        CaptionFlowFault? fault = await CaptionFrames.CarryAsync(
-            new MemoryStream(Painted(0, 0)[..^1]),
-            new StringReader(Lines(Clock, Stamp(0, 100UL))),
-            Small,
-            Uncorrected,
-            into.Writer,
-            CancellationToken.None);
-
-        Assert.Equal(CaptionFlowFault.StoppedPartWayThroughAPicture, fault);
-    }
-
-    [Fact]
-    public async Task AStampWithoutATimeSkipsItsPictureAndKeepsCounting()
-    {
-        List<LiveFrame> carried = await Carried(
-            Frames(Painted(0, 0), Painted(1, 0)),
-            Lines(Clock, "[Parsed_showinfo_1 @ 0x1] n:   0 pts:NOPTS pts_time:NOPTS duration: 0 ", Stamp(1, 200UL)));
-
-        Assert.Equal([200UL], carried.Select(frame => frame.Pts.Value));
+        Assert.Equal(CaptionFlowFault.StoppedPartWayThroughAFrame, fault);
     }
 
     [Fact]
@@ -182,13 +125,7 @@ public sealed class CaptionFramesTests
     {
         Channel<LiveFrame> into = Channel.CreateUnbounded<LiveFrame>();
 
-        CaptionFlowFault? fault = await CaptionFrames.CarryAsync(
-            new MemoryStream([]),
-            new StringReader(string.Empty),
-            Small,
-            Uncorrected,
-            into.Writer,
-            CancellationToken.None);
+        CaptionFlowFault? fault = await CaptionFrames.CarryAsync(new MemoryStream([]), Small, into.Writer, CancellationToken.None);
 
         Assert.Null(fault);
         await into.Reader.Completion.WaitAsync(Eventually.Patience);
@@ -199,15 +136,8 @@ public sealed class CaptionFramesTests
     {
         Channel<LiveFrame> into = Channel.CreateUnbounded<LiveFrame>();
         using CancellationTokenSource callingOff = new();
-        Stream never = new NeverEndingStream();
 
-        Task<CaptionFlowFault?> carrying = CaptionFrames.CarryAsync(
-            never,
-            new StringReader(Lines(Clock)),
-            Small,
-            Uncorrected,
-            into.Writer,
-            callingOff.Token);
+        Task<CaptionFlowFault?> carrying = CaptionFrames.CarryAsync(new NeverEndingStream(), Small, into.Writer, callingOff.Token);
 
         await callingOff.CancelAsync();
 
@@ -215,28 +145,22 @@ public sealed class CaptionFramesTests
         Assert.True(into.Reader.Completion.IsCompleted);
     }
 
-    private static async Task<List<LiveFrame>> Carried(
-        byte[] pictures,
-        string said,
-        LiveCaptionSettings? settings = null,
-        Action<string>? complained = null)
+    private static async Task<List<LiveFrame>> Carried(byte[] nut)
     {
         Channel<LiveFrame> into = Channel.CreateUnbounded<LiveFrame>();
 
-        CaptionFlowFault? fault = await CaptionFrames.CarryAsync(
-            new MemoryStream(pictures),
-            new StringReader(said),
-            Small,
-            settings ?? Uncorrected,
-            into.Writer,
-            CancellationToken.None,
-            complained);
+        CaptionFlowFault? fault = await CaptionFrames.CarryAsync(new MemoryStream(nut), Small, into.Writer, CancellationToken.None);
 
         Assert.Null(fault);
 
+        return Gathered(into);
+    }
+
+    private static List<LiveFrame> Gathered(Channel<LiveFrame> from)
+    {
         List<LiveFrame> carried = [];
 
-        while (into.Reader.TryRead(out LiveFrame? frame))
+        while (from.Reader.TryRead(out LiveFrame? frame))
         {
             carried.Add(frame);
         }
@@ -244,26 +168,60 @@ public sealed class CaptionFramesTests
         return carried;
     }
 
-    private static string Stamp(int index, ulong pts)
-        => $"[Parsed_showinfo_1 @ 0x1] n: {index,3} pts:{pts} pts_time:{pts / 90000.0} duration:      0 duration_time:0       fmt:bgra s:4x2 ";
+    private static byte[] Nut(params (long Pts, byte[] Png)[] frames) => NutFramesTests.Written.Of(90_000, frames);
 
-    private static string Lines(params string[] lines) => string.Join('\n', lines) + "\n";
+    private static byte[] Blank(byte filter = 0) => RgbaPngTests.Encoded(new byte[FourByTwo.Width * FourByTwo.Height * 4], FourByTwo, filter);
 
-    private static byte[] Frames(params byte[][] frames) => [.. frames.SelectMany(frame => frame)];
-
-    private static byte[] Blank() => new byte[Small.FrameLength];
-
-    private static byte[] Painted(int column, int row)
+    private static byte[] Painted(int column, int row, byte filter = 0)
     {
-        byte[] frame = Blank();
-        int at = ((row * 4) + column) * 4;
+        byte[] rgba = new byte[FourByTwo.Width * FourByTwo.Height * 4];
+        int at = ((row * FourByTwo.Width) + column) * 4;
 
-        frame[at] = 0x10;
-        frame[at + 1] = 0x20;
-        frame[at + 2] = 0x30;
-        frame[at + 3] = 0xff;
+        rgba[at] = 0x30;
+        rgba[at + 1] = 0x20;
+        rgba[at + 2] = 0x10;
+        rgba[at + 3] = 0xff;
 
-        return frame;
+        return RgbaPngTests.Encoded(rgba, FourByTwo, filter);
+    }
+
+    private sealed class DribblingStream(byte[] bytes, int each) : Stream
+    {
+        private int at;
+
+        public override bool CanRead => true;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => false;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            int taken = Math.Min(Math.Min(each, count), bytes.Length - at);
+
+            bytes.AsSpan(at, taken).CopyTo(buffer.AsSpan(offset));
+            at += taken;
+
+            return taken;
+        }
+
+        public override void Flush()
+        {
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 
     private sealed class NeverEndingStream : Stream

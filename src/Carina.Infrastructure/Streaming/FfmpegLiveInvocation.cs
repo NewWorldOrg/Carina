@@ -14,7 +14,13 @@ public static class FfmpegLiveInvocation
 
     public const string RenderNode = MachineSettings.TheRenderNode;
 
+    public const string Font = "Noto Sans CJK JP";
+
+    public const string DrawnCaptions = "[c]";
+
     private const int KeyframeSeconds = 2;
+
+    private const string LightestCompression = "1";
 
     private const int BufferedSeconds = 2;
 
@@ -24,7 +30,8 @@ public static class FfmpegLiveInvocation
         ServiceId service,
         LiveProfile profile,
         StreamAttributes attributes,
-        LiveEncoder encoder)
+        LiveEncoder encoder,
+        CaptionOutlet captions)
     {
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(profile);
@@ -38,6 +45,14 @@ public static class FfmpegLiveInvocation
                 "A picture is encoded by one of the two the benchmark compared.");
         }
 
+        if (!Enum.IsDefined(captions))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(captions),
+                captions,
+                "The captions are either drawn beside the picture or left out.");
+        }
+
         return
         [
             "-nostdin",
@@ -48,6 +63,7 @@ public static class FfmpegLiveInvocation
             "nobuffer",
             "-copyts",
             .. Device(encoder),
+            .. Decoding(attributes, captions),
             "-i",
             Input,
             .. Mapping(service),
@@ -73,6 +89,35 @@ public static class FfmpegLiveInvocation
             Output,
         ];
 
+    public static IReadOnlyList<string> CaptionDelivery(ServiceId service, int descriptor)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        ArgumentOutOfRangeException.ThrowIfLessThan(descriptor, 3);
+
+        return
+        [
+            "-filter_complex",
+            Drawing(service),
+            "-map",
+            DrawnCaptions,
+            "-fps_mode",
+            "passthrough",
+            "-c:v",
+            "png",
+            "-pix_fmt",
+            "rgba",
+            "-compression_level",
+            LightestCompression,
+            "-threads",
+            "1",
+            "-flush_packets",
+            "1",
+            "-f",
+            "nut",
+            Pipe(descriptor),
+        ];
+    }
+
     public static IReadOnlyList<string> DeliveryFromTheStart()
         =>
         [
@@ -87,6 +132,32 @@ public static class FfmpegLiveInvocation
 
     internal static IReadOnlyList<string> Device(LiveEncoder encoder)
         => encoder is LiveEncoder.Vaapi ? ["-vaapi_device", RenderNode] : [];
+
+    internal static IReadOnlyList<string> Decoding(StreamAttributes attributes, CaptionOutlet captions)
+        => captions is CaptionOutlet.Drawn
+            ?
+            [
+                "-sub_type",
+                "bitmap",
+                "-canvas_size",
+                Canvas(attributes.Size),
+                "-font",
+                Font,
+            ]
+            : [];
+
+    internal static string Canvas(VideoSize size)
+        => string.Create(CultureInfo.InvariantCulture, $"{size.Width}x{size.Height}");
+
+    internal static string Drawing(ServiceId service)
+    {
+        int programNumber = service.Value;
+
+        return string.Create(CultureInfo.InvariantCulture, $"[0:p:{programNumber}:s:0]null[c]");
+    }
+
+    internal static string Pipe(int descriptor)
+        => string.Create(CultureInfo.InvariantCulture, $"pipe:{descriptor}");
 
     internal static IReadOnlyList<string> Mapping(ServiceId service)
     {

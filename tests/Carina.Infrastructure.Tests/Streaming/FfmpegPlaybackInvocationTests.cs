@@ -40,7 +40,7 @@ public sealed class FfmpegPlaybackInvocationTests
     [Fact]
     public void NothingAskedForBecauseTheLiveInputCannotBeRewoundIsAskedForOfAFileThatCan()
     {
-        IReadOnlyList<string> live = FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software);
+        IReadOnlyList<string> live = FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, CaptionOutlet.None);
         IReadOnlyList<string> playing = Arguments(TimeSpan.FromMinutes(1));
 
         Assert.Contains("nobuffer", live);
@@ -70,7 +70,7 @@ public sealed class FfmpegPlaybackInvocationTests
     [Fact]
     public void ALiveViewerIsStillGivenTheSoundAsItWasBroadcastRatherThanEncodedAgain()
     {
-        IReadOnlyList<string> live = FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software);
+        IReadOnlyList<string> live = FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, CaptionOutlet.None);
 
         Assert.Equal("copy", After(live, "-c:a"));
         Assert.Equal("aac_adtstoasc", After(live, "-bsf:a"));
@@ -80,7 +80,7 @@ public sealed class FfmpegPlaybackInvocationTests
     [Fact]
     public void APlayedRecordingCarriesTheSameOneSoundALiveViewerIsGiven()
     {
-        IReadOnlyList<string> live = FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software);
+        IReadOnlyList<string> live = FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, CaptionOutlet.None);
         IReadOnlyList<string> playing = Arguments(TimeSpan.FromMinutes(1));
 
         Assert.Equal(Mapped(live), Mapped(playing));
@@ -90,7 +90,7 @@ public sealed class FfmpegPlaybackInvocationTests
     [Fact]
     public void ThePictureIsBuiltTheSameWayItIsBuiltForALiveViewer()
     {
-        IReadOnlyList<string> live = FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software);
+        IReadOnlyList<string> live = FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, CaptionOutlet.None);
         IReadOnlyList<string> playing = Arguments(TimeSpan.FromMinutes(1));
 
         Assert.Equal(After(live, "-vf"), After(playing, "-vf"));

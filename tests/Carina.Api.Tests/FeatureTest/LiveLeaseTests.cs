@@ -29,8 +29,6 @@ public sealed class LiveLeaseTests
 
     private readonly HeldTranscoders transcoders;
 
-    private readonly HeldCaptioners captioners = new();
-
     public LiveLeaseTests()
     {
         transcoders = new HeldTranscoders(budget);
@@ -220,6 +218,5 @@ public sealed class LiveLeaseTests
             services.AddSingleton(new LiveSessionSettings { Linger = Linger });
             services.AddSingleton<ITranscodeBudget>(budget);
             services.AddSingleton<ILiveTranscoderFactory>(transcoders);
-            services.AddSingleton<ILiveCaptionerFactory>(captioners);
         });
 }

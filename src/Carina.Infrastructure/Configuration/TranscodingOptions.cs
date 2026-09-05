@@ -15,8 +15,6 @@ public sealed class TranscodingOptions
 
     public string? Prefer { get; set; }
 
-    public string? CaptionDelay { get; set; }
-
     public void ReadFrom(IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
@@ -25,7 +23,6 @@ public sealed class TranscodingOptions
 
         AtOnce = named[nameof(AtOnce)];
         Prefer = named[nameof(Prefer)];
-        CaptionDelay = named[nameof(CaptionDelay)];
     }
 
     public TranscodeBudgetSettings Read()
@@ -46,40 +43,6 @@ public sealed class TranscodingOptions
         {
             Prefer = Named(Prefer, nameof(Prefer), unset.Prefer),
         };
-    }
-
-    public LiveCaptionSettings ReadCaptions()
-    {
-        LiveCaptionSettings unset = new();
-
-        try
-        {
-            return new LiveCaptionSettings
-            {
-                EncoderDelay = Timed(CaptionDelay, nameof(CaptionDelay), unset.EncoderDelay),
-            };
-        }
-        catch (ArgumentOutOfRangeException tooFar)
-        {
-            throw new ArgumentException(
-                $"{Section}:{nameof(CaptionDelay)} is within {LiveCaptionSettings.FurthestCorrection} either way, and '{CaptionDelay}' is not.",
-                nameof(CaptionDelay),
-                tooFar);
-        }
-    }
-
-    private static TimeSpan Timed(string? setting, string name, TimeSpan unset)
-    {
-        if (string.IsNullOrWhiteSpace(setting))
-        {
-            return unset;
-        }
-
-        return TimeSpan.TryParse(setting, CultureInfo.InvariantCulture, out TimeSpan parsed)
-            ? parsed
-            : throw new ArgumentException(
-                $"{Section}:{name} reads a span of time such as 00:00:00.300 or -00:00:00.300, and '{setting}' is not one.",
-                name);
     }
 
     private static LiveEncoder Named(string? setting, string name, LiveEncoder unset)
@@ -131,7 +94,6 @@ public sealed class TranscodingValidation : IValidateOptions<TranscodingOptions>
         {
             options.Read();
             options.ReadLive();
-            options.ReadCaptions();
         }
         catch (ArgumentException refusal)
         {

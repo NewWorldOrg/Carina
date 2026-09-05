@@ -26,6 +26,13 @@ public enum SyntheticSound
     TwoLanguages = 5,
 }
 
+public enum SyntheticCaptions
+{
+    EverySecond = 1,
+
+    ShownThenCleared = 2,
+}
+
 public sealed record SyntheticBroadcast
 {
     public const int SomeProgramNumber = 1040;
@@ -46,6 +53,10 @@ public sealed record SyntheticBroadcast
 
     public const string Encoded = ".mp4";
 
+    public const int CaptionShownAtSecond = 8;
+
+    public const int CaptionClearedAtSecond = 9;
+
     public static readonly TimeSpan DefaultLength = TimeSpan.FromSeconds(3);
 
     private const int TicksPerSecond = 90_000;
@@ -59,6 +70,8 @@ public sealed record SyntheticBroadcast
     public SyntheticSound Sound { get; init; } = SyntheticSound.Stereo;
 
     public bool WithCaptions { get; init; } = true;
+
+    public SyntheticCaptions Captions { get; init; } = SyntheticCaptions.EverySecond;
 
     public bool WithSuperimpose { get; init; } = true;
 
@@ -162,11 +175,15 @@ public sealed record SyntheticBroadcast
                 packets.Add(PesWriter.Packets(
                     CaptionPid,
                     PesWriter.PrivateStream(pts, CaptionWriter.Carried(CaptionWriter.CaptionDataIdentifier, management))));
-                packets.Add(PesWriter.Packets(
-                    CaptionPid,
-                    PesWriter.PrivateStream(
-                        pts + (TicksPerSecond / 2),
-                        CaptionWriter.Carried(CaptionWriter.CaptionDataIdentifier, CaptionWriter.Statement(Caption(second))))));
+
+                if (Caption(second) is { } statement)
+                {
+                    packets.Add(PesWriter.Packets(
+                        CaptionPid,
+                        PesWriter.PrivateStream(
+                            pts + (TicksPerSecond / 2),
+                            CaptionWriter.Carried(CaptionWriter.CaptionDataIdentifier, CaptionWriter.Statement(statement)))));
+                }
             }
 
             if (WithSuperimpose)
@@ -347,13 +364,18 @@ public sealed record SyntheticBroadcast
 
     private static string Invariant(FormattableString text) => FormattableString.Invariant(text);
 
-    private static byte[] Caption(int second)
-        => CaptionWriter.Positioned(
-            CaptionRow,
-            CaptionColumn,
-            second % 2 is 0
-                ? new AribTextWriter().Kanji("合成字幕")
-                : new AribTextWriter().DesignateAlphanumericToG0().Ascii("CARINA"));
+    private byte[]? Caption(int second)
+        => Captions switch
+        {
+            SyntheticCaptions.ShownThenCleared when second == CaptionShownAtSecond => Kanji(),
+            SyntheticCaptions.ShownThenCleared when second == CaptionClearedAtSecond => [CaptionWriter.ClearScreen],
+            SyntheticCaptions.ShownThenCleared => null,
+            _ => second % 2 is 0 ? Kanji() : Positioned(new AribTextWriter().DesignateAlphanumericToG0().Ascii("CARINA")),
+        };
+
+    private static byte[] Kanji() => Positioned(new AribTextWriter().Kanji("合成字幕"));
+
+    private static byte[] Positioned(AribTextWriter text) => CaptionWriter.Positioned(CaptionRow, CaptionColumn, text);
 
     private int Seconds() => Math.Max(1, (int)Math.Ceiling(Length.TotalSeconds));
 
