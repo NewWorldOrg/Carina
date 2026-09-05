@@ -41,7 +41,7 @@ public sealed class ProgrammeWriter(
                     {
                         ProgrammeBroadcast? broadcast = Read(table, carried);
 
-                        if (broadcast is null)
+                        if (broadcast is null || !broadcast.StartsWithinTheHorizonAt(at))
                         {
                             discarded++;
 

@@ -37,7 +37,7 @@ public sealed class SyntheticEpgCollectionTests
 
         driver.Script(Channel, ChannelScript.Carrying((Guide() with { CorruptSections = 2 }).ToBytes()));
 
-        await using var feature = new EpgFeature([OnAir()], driver);
+        await using var feature = new EpgFeature([OnAir()], driver, clock: new WoundClock(Airs));
 
         await CollectAsync(feature);
 
@@ -71,7 +71,7 @@ public sealed class SyntheticEpgCollectionTests
 
         driver.Script(Channel, ChannelScript.Carrying(Guide().ToBytes()));
 
-        await using var feature = new EpgFeature([OnAir()], driver);
+        await using var feature = new EpgFeature([OnAir()], driver, clock: new WoundClock(Airs));
 
         await CollectAsync(feature);
 
@@ -98,7 +98,7 @@ public sealed class SyntheticEpgCollectionTests
 
         driver.Script(Channel, ChannelScript.Carrying(Guide().ToBytes()));
 
-        await using var feature = new EpgFeature([OnAir()], driver);
+        await using var feature = new EpgFeature([OnAir()], driver, clock: new WoundClock(Airs));
 
         await CollectAsync(feature);
 
@@ -125,7 +125,8 @@ public sealed class SyntheticEpgCollectionTests
         await using var feature = new EpgFeature(
             [OnAir()],
             driver,
-            new CollectionSettings { LongestVisit = TimeSpan.FromMilliseconds(300) });
+            new CollectionSettings { LongestVisit = TimeSpan.FromMilliseconds(300) },
+            clock: new WoundClock(Airs));
 
         await CollectAsync(feature);
 
@@ -167,7 +168,8 @@ public sealed class SyntheticEpgCollectionTests
                 },
             ],
             driver,
-            new CollectionSettings { LongestVisit = TimeSpan.FromMilliseconds(300) });
+            new CollectionSettings { LongestVisit = TimeSpan.FromMilliseconds(300) },
+            clock: new WoundClock(Airs));
         DateTime at = DateTime.UtcNow;
 
         feature.Candidates.Candidates.Add(CandidateChannel.Discover(
@@ -212,7 +214,8 @@ public sealed class SyntheticEpgCollectionTests
         await using var feature = new EpgFeature(
             [OnAir()],
             driver,
-            new CollectionSettings { BetweenBoosts = TimeSpan.Zero, BetweenVisits = TimeSpan.Zero });
+            new CollectionSettings { BetweenBoosts = TimeSpan.Zero, BetweenVisits = TimeSpan.Zero },
+            clock: new WoundClock(Airs));
 
         await CollectAsync(feature);
 
@@ -255,7 +258,7 @@ public sealed class SyntheticEpgCollectionTests
 
         driver.Script(Channel, ChannelScript.Carrying(Guide().ToBytes()));
 
-        await using var feature = new EpgFeature([OnAir()], driver);
+        await using var feature = new EpgFeature([OnAir()], driver, clock: new WoundClock(Airs));
 
         using HttpResponseMessage listening = await feature.Client.GetAsync(
             new Uri(AppEventStream.Path, UriKind.Relative),
@@ -289,7 +292,7 @@ public sealed class SyntheticEpgCollectionTests
 
         driver.Script(Channel, ChannelScript.Carrying(GuideCarryingAPortableSimulcast().ToBytes()));
 
-        await using var feature = new EpgFeature([EverythingTheStreamCarries()], driver);
+        await using var feature = new EpgFeature([EverythingTheStreamCarries()], driver, clock: new WoundClock(Airs));
 
         feature.Catalogue.Services.Add(Catalogued(Television, ServiceCategory.Television));
         feature.Catalogue.Services.Add(Catalogued(SecondTelevision, ServiceCategory.Television));
@@ -334,7 +337,7 @@ public sealed class SyntheticEpgCollectionTests
 
         driver.Script(Channel, ChannelScript.Carrying(GuideCarryingAPortableSimulcast().ToBytes()));
 
-        await using var feature = new EpgFeature([EverythingTheStreamCarries()], driver);
+        await using var feature = new EpgFeature([EverythingTheStreamCarries()], driver, clock: new WoundClock(Airs));
 
         await CollectAsync(feature);
 
@@ -353,7 +356,7 @@ public sealed class SyntheticEpgCollectionTests
 
         driver.Script(Channel, ChannelScript.Carrying(GuideCarryingAPortableSimulcast().ToBytes()));
 
-        await using var feature = new EpgFeature([EverythingTheStreamCarries()], driver);
+        await using var feature = new EpgFeature([EverythingTheStreamCarries()], driver, clock: new WoundClock(Airs));
         BroadcastService portable = Catalogued(OneSegSimulcast, ServiceCategory.Television);
 
         feature.Catalogue.Services.Add(Catalogued(Television, ServiceCategory.Television));
@@ -428,7 +431,7 @@ public sealed class SyntheticEpgCollectionTests
 
         driver.Script(Channel, ChannelScript.Carrying(GuideCarryingAPortableSimulcast().ToBytes()));
 
-        await using var feature = new EpgFeature([EverythingTheStreamCarries()], driver);
+        await using var feature = new EpgFeature([EverythingTheStreamCarries()], driver, clock: new WoundClock(Airs));
 
         feature.Catalogue.Services.Add(Catalogued(Television, ServiceCategory.Television));
         feature.Catalogue.Services.Add(Catalogued(SecondTelevision, ServiceCategory.Television));
@@ -472,7 +475,7 @@ public sealed class SyntheticEpgCollectionTests
 
         driver.Script(Channel, ChannelScript.Carrying(GuideCarryingAPortableSimulcast().ToBytes()));
 
-        await using var feature = new EpgFeature([EverythingTheStreamCarries()], driver);
+        await using var feature = new EpgFeature([EverythingTheStreamCarries()], driver, clock: new WoundClock(Airs));
 
         feature.Catalogue.Services.Add(Catalogued(Television, ServiceCategory.Television));
         feature.Catalogue.Services.Add(Catalogued(SecondTelevision, ServiceCategory.Television));
@@ -498,7 +501,7 @@ public sealed class SyntheticEpgCollectionTests
 
         driver.Script(Channel, ChannelScript.Carrying(GuideCarryingAPortableSimulcast().ToBytes()));
 
-        await using var feature = new EpgFeature([EverythingTheStreamCarries()], driver);
+        await using var feature = new EpgFeature([EverythingTheStreamCarries()], driver, clock: new WoundClock(Airs));
 
         feature.Catalogue.Services.Add(Catalogued(Television, ServiceCategory.Television));
         feature.Catalogue.Services.Add(Catalogued(SecondTelevision, ServiceCategory.Television));
@@ -524,7 +527,7 @@ public sealed class SyntheticEpgCollectionTests
 
         driver.Script(Channel, ChannelScript.Carrying(GuideCarryingAPortableSimulcast().ToBytes()));
 
-        await using var feature = new EpgFeature([EverythingTheStreamCarries()], driver);
+        await using var feature = new EpgFeature([EverythingTheStreamCarries()], driver, clock: new WoundClock(Airs));
 
         feature.Catalogue.Services.Add(Catalogued(Television, ServiceCategory.Television));
         feature.Catalogue.Services.Add(Catalogued(SecondTelevision, ServiceCategory.Television));

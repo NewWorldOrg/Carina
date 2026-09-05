@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 
 namespace Carina.Domain.Programmes;
@@ -20,4 +21,15 @@ public sealed record ProgrammeBroadcast(
     public bool HasSubtitles { get; init; }
 
     public ProgrammeSource Source { get; init; } = ProgrammeSource.ScheduleBasic;
+
+    public static readonly TimeSpan FurthestBehind = TimeSpan.FromDays(1);
+
+    public static readonly TimeSpan FurthestAhead = TimeSpan.FromDays(10);
+
+    public bool StartsWithinTheHorizonAt(DateTime now)
+    {
+        UtcTimes.Required(now, nameof(now));
+
+        return StartsAt >= now - FurthestBehind && StartsAt <= now + FurthestAhead;
+    }
 }

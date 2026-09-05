@@ -207,6 +207,91 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
         Assert.Empty(notices.Nudged);
     }
 
+    [Fact]
+    public async Task BrEv001AProgrammeThatStartedMoreThanADayAgoIsThrownAwayAndCounted()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+
+        ProgrammesWritten written = await Writer(context).WriteAsync(
+            [Starting(network, (1, At.AddDays(-1).AddMinutes(-1)))],
+            Cancel);
+
+        Assert.Equal(new ProgrammesWritten(0, 0, 1), written);
+
+        await using CarinaDbContext reading = database.Open();
+
+        Assert.Null(await new ProgrammeRepository(reading).FindAsync(Id(network, 1), Cancel));
+    }
+
+    [Fact]
+    public async Task BrEv001AProgrammeMoreThanTenDaysAheadIsThrownAwayAndCounted()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+
+        ProgrammesWritten written = await Writer(context).WriteAsync(
+            [Starting(network, (1, At.AddDays(10).AddMinutes(1)))],
+            Cancel);
+
+        Assert.Equal(new ProgrammesWritten(0, 0, 1), written);
+
+        await using CarinaDbContext reading = database.Open();
+
+        Assert.Null(await new ProgrammeRepository(reading).FindAsync(Id(network, 1), Cancel));
+    }
+
+    [Fact]
+    public async Task BrEv001AProgrammeOnEitherEdgeOfTheHorizonIsKept()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+
+        ProgrammesWritten written = await Writer(context).WriteAsync(
+            [Starting(network, (1, At.AddDays(-1)), (2, At.AddDays(10)))],
+            Cancel);
+
+        Assert.Equal(new ProgrammesWritten(2, 0, 0), written);
+    }
+
+    [Fact]
+    public async Task BrEv001AStartOutsideTheHorizonCostsThatProgrammeAndNoOther()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+
+        ProgrammesWritten written = await Writer(context).WriteAsync(
+            [Starting(network, (1, At.AddDays(-3)), (2, At.AddHours(1)), (3, At.AddDays(30)))],
+            Cancel);
+
+        Assert.Equal(new ProgrammesWritten(1, 0, 2), written);
+
+        await using CarinaDbContext reading = database.Open();
+        var repository = new ProgrammeRepository(reading);
+
+        Assert.Null(await repository.FindAsync(Id(network, 1), Cancel));
+        Assert.NotNull(await repository.FindAsync(Id(network, 2), Cancel));
+        Assert.Null(await repository.FindAsync(Id(network, 3), Cancel));
+    }
+
+    [Fact]
+    public async Task BrEv001AProgrammeAlreadyHeldIsNotMovedByAStartThatLeftTheHorizon()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        ProgrammeWriter writer = Writer(context);
+
+        await writer.WriteAsync([Starting(network, (1, At.AddHours(1)))], Cancel);
+
+        ProgrammesWritten written = await writer.WriteAsync([Starting(network, (1, At.AddDays(-2)))], Cancel);
+
+        Assert.Equal(new ProgrammesWritten(0, 0, 1), written);
+
+        await using CarinaDbContext reading = database.Open();
+
+        Assert.Equal(At.AddHours(1), (await new ProgrammeRepository(reading).FindAsync(Id(network, 1), Cancel))!.StartsAt);
+    }
+
     private static ProgrammeWriter Writer(
         CarinaDbContext context,
         IRecalculationNotice? notices = null,
@@ -363,6 +448,42 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
 
     private static EventInformationTable Running(int network, int carried, int? minutes)
         => Timed(network, carried, EventInformationTable.PresentFollowingActualTableId, minutes);
+
+    private static EventInformationTable Starting(int network, params (int Carried, DateTime StartsAt)[] events)
+        => Assert.IsType<TableRead<EventInformationTable>.Parsed>(
+            EventInformationTable.Read(CarriedSection.Of(new SectionWriter
+            {
+                TableId = EventInformationTable.PresentFollowingActualTableId,
+                TableIdExtension = 1049,
+                LastSectionNumber = 1,
+                Body =
+                [
+                    0x7F, 0xE3,
+                    (byte)(network >> 8), (byte)(network & 0xFF),
+                    0x00, 0x4E,
+                    .. events.SelectMany(carried => StartingEvent(carried.Carried, carried.StartsAt)),
+                ],
+            }))).Table;
+
+    private static byte[] StartingEvent(int carried, DateTime startsAt)
+    {
+        byte[] written = [.. "あさイチ".SelectMany(letter => Kanji(letter))];
+        byte[] descriptor = [0x4D, (byte)(5 + written.Length), 0x6A, 0x70, 0x6E, (byte)written.Length, .. written, 0x00];
+        DateTime broadcast = startsAt + BroadcastTime.Offset;
+        int modifiedJulianDay = (int)(broadcast.Date - new DateTime(1858, 11, 17, 0, 0, 0, DateTimeKind.Utc)).TotalDays;
+
+        return
+        [
+            (byte)(carried >> 8), (byte)(carried & 0xFF),
+            (byte)(modifiedJulianDay >> 8), (byte)(modifiedJulianDay & 0xFF),
+            Bcd(broadcast.Hour), Bcd(broadcast.Minute), Bcd(broadcast.Second),
+            0x00, 0x30, 0x00,
+            0x00, (byte)descriptor.Length,
+            .. descriptor,
+        ];
+    }
+
+    private static byte Bcd(int value) => (byte)(((value / 10) << 4) | (value % 10));
 
     private static EventInformationTable Timed(int network, int carried, int tableId, int? minutes)
         => Assert.IsType<TableRead<EventInformationTable>.Parsed>(
