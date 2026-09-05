@@ -3,6 +3,7 @@ using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.DriverStatus;
+using Carina.Domain.Encodings;
 using Carina.Domain.Events;
 using Carina.Domain.Integrity;
 using Carina.Domain.Machines;
@@ -18,6 +19,7 @@ using Carina.Infrastructure.Channels;
 using Carina.Infrastructure.Collection;
 using Carina.Infrastructure.Configuration;
 using Carina.Infrastructure.Driver;
+using Carina.Infrastructure.Encodings;
 using Carina.Infrastructure.Events;
 using Carina.Infrastructure.Integrity;
 using Carina.Infrastructure.Machines;
@@ -201,6 +203,9 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<ILiveSessionLedger>(provider => provider.GetRequiredService<LiveSessionManager>());
         services.TryAddSingleton<IStreamAttributeReader, FfprobeStreamAttributeReader>();
         services.TryAddSingleton(new MachineSettings());
+        services.TryAddSingleton<ISourceLengthReader>(provider => new FfprobeSourceLength(
+            provider.GetRequiredService<MachineSettings>(),
+            provider.GetRequiredService<TimeProvider>()));
         services.TryAddSingleton<IMachineCapabilityReader>(provider => new MachineCapabilityReader(
             provider.GetRequiredService<MachineSettings>(),
             provider.GetRequiredService<TimeProvider>()));

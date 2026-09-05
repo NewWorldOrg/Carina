@@ -6,6 +6,7 @@ using Carina.BroadcastTestSupport;
 using Carina.Domain.Channels;
 using Carina.Domain.Recordings;
 using Carina.Domain.Streaming;
+using Carina.Infrastructure.Machines;
 using Carina.Infrastructure.Streaming;
 using Carina.TestSupport;
 

@@ -1,4 +1,4 @@
-namespace Carina.Infrastructure.Streaming;
+namespace Carina.Infrastructure.Machines;
 
 public sealed class FfprobeRecord
 {

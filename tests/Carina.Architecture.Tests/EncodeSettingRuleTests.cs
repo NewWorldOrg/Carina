@@ -38,6 +38,10 @@ public sealed class EncodeSettingRuleTests
         "/Carina.Domain/Encodings/EncodeProfile.cs EncodeProfile.Resolution EncodeResolution",
         "/Carina.Domain/Encodings/EncodeProfile.cs EncodeProfile.SoftwareRateControl ConstantRateFactor",
         "/Carina.Domain/Encodings/EncodeProfile.cs EncodeProfile.VaapiRateControl ConstantQuantiser",
+        "/Carina.Domain/Encodings/EncodeProgress.cs EncodeProgress.Ended bool",
+        "/Carina.Domain/Encodings/EncodeProgress.cs EncodeProgress.Reached TimeSpan",
+        "/Carina.Domain/Encodings/EncodeProgress.cs EncodeProgress.Speed double",
+        "/Carina.Domain/Encodings/EncodeProgress.cs EncodeProgress.Whole TimeSpan?",
         "/Carina.Domain/Encodings/EncodeRateControl.cs ConstantQuantiser.Quantiser int",
         "/Carina.Domain/Encodings/EncodeRateControl.cs ConstantRateFactor.RateFactor int",
         "/Carina.Domain/Encodings/EncodeValidation.cs EncodeDestinationDraft.DefaultProfileId EncodeProfileId?",
@@ -49,6 +53,10 @@ public sealed class EncodeSettingRuleTests
         "/Carina.Domain/Encodings/EncodeValidation.cs EncodeProfileDraft.Quantiser int",
         "/Carina.Domain/Encodings/EncodeValidation.cs EncodeProfileDraft.RateFactor int",
         "/Carina.Domain/Encodings/EncodeValidation.cs EncodeProfileDraft.Resolution EncodeResolution",
+        "/Carina.Domain/Encodings/SourceLengthReading.cs SourceLengthReading.ExitCode int?",
+        "/Carina.Domain/Encodings/SourceLengthReading.cs SourceLengthReading.Fault SourceLengthFault?",
+        "/Carina.Domain/Encodings/SourceLengthReading.cs SourceLengthReading.Length TimeSpan?",
+        "/Carina.Domain/Encodings/SourceLengthReading.cs SourceLengthReading.Note string",
     ];
 
     private static readonly string[] WorkedOut =
@@ -59,6 +67,9 @@ public sealed class EncodeSettingRuleTests
         "/Carina.Domain/Encodings/EncodeJobId.cs EncodeJobId.Wire string",
         "/Carina.Domain/Encodings/EncodePlan.cs EncodePlan.CanRun bool",
         "/Carina.Domain/Encodings/EncodeProfileId.cs EncodeProfileId.Wire string",
+        "/Carina.Domain/Encodings/EncodeProgress.cs EncodeProgress.Left TimeSpan?",
+        "/Carina.Domain/Encodings/EncodeProgress.cs EncodeProgress.Portion double?",
+        "/Carina.Domain/Encodings/SourceLengthReading.cs SourceLengthReading.Measured bool",
     ];
 
     private static readonly string[] TheOnlyFreeTextTakenIn =
@@ -68,6 +79,7 @@ public sealed class EncodeSettingRuleTests
         "/Carina.Domain/Encodings/EncodeValidation.cs EncodeDestinationDraft.Label string?",
         "/Carina.Domain/Encodings/EncodeValidation.cs EncodeDestinationDraft.OutputRoot string?",
         "/Carina.Domain/Encodings/EncodeValidation.cs EncodeProfileDraft.Label string?",
+        "/Carina.Domain/Encodings/SourceLengthReading.cs SourceLengthReading.Note string",
     ];
 
     private static string Settings => Path.Combine(RepositoryLayout.SourceDirectory, "Carina.Domain", "Encodings");

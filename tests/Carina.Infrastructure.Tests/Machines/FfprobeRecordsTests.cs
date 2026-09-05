@@ -1,6 +1,8 @@
+using Carina.Infrastructure.Machines;
 using Carina.Infrastructure.Streaming;
+using Carina.Infrastructure.Tests.Streaming;
 
-namespace Carina.Infrastructure.Tests.Streaming;
+namespace Carina.Infrastructure.Tests.Machines;
 
 public sealed class FfprobeRecordsTests
 {
