@@ -1,187 +1,82 @@
-using System.Globalization;
-using System.Reflection;
-using System.Runtime.Versioning;
-
+using Carina.Domain.Machines;
 using Carina.Domain.Streaming;
 using Carina.Infrastructure.Streaming;
 
 namespace Carina.Infrastructure.Tests.Streaming;
 
-[SupportedOSPlatform("linux")]
-public sealed class LiveEncoderSelectionTests : IDisposable
+public sealed class LiveEncoderSelectionTests
 {
-    private readonly StandIns standIns = new();
-
-    public void Dispose() => standIns.Dispose();
-
     [Fact]
-    public async Task TheCardIsUsedWhenItIsThere()
+    public async Task TheCardIsUsedWhenThisMachineCanEncodeOnIt()
     {
-        LiveEncoderChoice chosen = await Choosing(
-            new LiveTranscodeSettings { Prefer = LiveEncoder.Vaapi, Programme = standIns.Script("exit 0") },
-            standIns.Node());
+        LiveEncoderChoice chosen = await Choosing(LiveEncoder.Vaapi, WithACard);
 
         Assert.Equal(LiveEncoder.Vaapi, chosen.Encoder);
         Assert.False(chosen.FellBack);
     }
 
-    [Fact]
-    public async Task NoNodeMeansSoftware()
+    [Theory]
+    [InlineData(CardStanding.NodeMissing)]
+    [InlineData(CardStanding.NodeUnreadable)]
+    [InlineData(CardStanding.DriverUnusable)]
+    [InlineData(CardStanding.ProbeTimedOut)]
+    [InlineData(CardStanding.ProbeProgrammeMissing)]
+    public async Task ACardThisMachineCannotEncodeOnMeansSoftwareAndSaysWhy(CardStanding standing)
     {
         LiveEncoderChoice chosen = await Choosing(
-            new LiveTranscodeSettings { Prefer = LiveEncoder.Vaapi, Programme = standIns.Script("exit 0") },
-            standIns.Named("no-such-node"));
+            LiveEncoder.Vaapi,
+            MachineCapabilities.Of(standing, [], "the card was turned down"));
 
         Assert.Equal(LiveEncoder.Software, chosen.Encoder);
-        Assert.Equal(EncoderRefusal.NodeMissing, chosen.FellBackBecause);
-        Assert.NotEmpty(chosen.Note);
-    }
-
-    [Fact]
-    public async Task ANodeThatCannotBeOpenedIsNotANodeThatCanBeUsed()
-    {
-        LiveEncoderChoice chosen = await Choosing(
-            new LiveTranscodeSettings { Prefer = LiveEncoder.Vaapi, Programme = standIns.Script("exit 0") },
-            standIns.Room);
-
-        Assert.Equal(LiveEncoder.Software, chosen.Encoder);
-        Assert.Equal(EncoderRefusal.NodeUnreadable, chosen.FellBackBecause);
-    }
-
-    [Fact]
-    public async Task ANodeThatIsThereWithNoDriverBehindItIsNotANodeThatCanBeUsed()
-    {
-        LiveEncoderChoice chosen = await Choosing(
-            new LiveTranscodeSettings
-            {
-                Prefer = LiveEncoder.Vaapi,
-                Programme = standIns.Script("printf '%s\\n' 'Failed to initialise VAAPI connection: -1' >&2; exit 234"),
-            },
-            standIns.Node());
-
-        Assert.Equal(LiveEncoder.Software, chosen.Encoder);
-        Assert.Equal(EncoderRefusal.DriverUnusable, chosen.FellBackBecause);
-        Assert.Contains("Failed to initialise VAAPI connection", chosen.Note, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task WhatTheCardComplainedOfNamesNoPathOnThisMachine()
-    {
-        LiveEncoderChoice chosen = await Choosing(
-            new LiveTranscodeSettings
-            {
-                Prefer = LiveEncoder.Vaapi,
-                Programme = standIns.Script("printf '%s\\n' 'No VA display found for device /dev/dri/renderD128.' >&2; exit 234"),
-            },
-            standIns.Node());
-
-        Assert.Equal(EncoderRefusal.DriverUnusable, chosen.FellBackBecause);
-        Assert.DoesNotContain('/', chosen.Note);
-        Assert.Contains("No VA display found", chosen.Note, StringComparison.Ordinal);
-    }
-
-    [Fact]
-    public async Task AProgrammeThatIsNotOnThisMachineMeansSoftware()
-    {
-        LiveEncoderChoice chosen = await Choosing(
-            new LiveTranscodeSettings { Prefer = LiveEncoder.Vaapi, Programme = standIns.Named("no-such-programme") },
-            standIns.Node());
-
-        Assert.Equal(LiveEncoder.Software, chosen.Encoder);
-        Assert.Equal(EncoderRefusal.ProbeProgrammeMissing, chosen.FellBackBecause);
-        Assert.DoesNotContain('/', chosen.Note);
-    }
-
-    [Fact]
-    public async Task AskingTheCardIsGivenUpOnAndNothingIsLeftRunning()
-    {
-        string pids = standIns.Named("asked-pids");
-
-        LiveEncoderChoice chosen = await Choosing(
-            new LiveTranscodeSettings
-            {
-                Prefer = LiveEncoder.Vaapi,
-                LongestProbe = TimeSpan.FromMilliseconds(250),
-                Programme = standIns.Script($"echo $$ > {pids}; sleep 60 & echo $! >> {pids}; wait"),
-            },
-            standIns.Node());
-
-        Assert.Equal(LiveEncoder.Software, chosen.Encoder);
-        Assert.Equal(EncoderRefusal.ProbeTimedOut, chosen.FellBackBecause);
-        Assert.True(await standIns.NothingIsLeftOf(Read(pids)));
+        Assert.Equal(standing, chosen.FellBackBecause);
+        Assert.Equal("the card was turned down", chosen.Note);
     }
 
     [Fact]
     public async Task SoftwareIsWhatIsAskedForUntilSomebodyAsksForTheCard()
     {
-        string ran = standIns.Named("ran");
+        var machine = new WhatIsAsked(WithACard);
 
-        LiveEncoderChoice chosen = await Choosing(
-            new LiveTranscodeSettings { Programme = standIns.Script($"touch {ran}") },
-            standIns.Node());
+        LiveEncoderChoice chosen = await new LiveEncoderSelection(new LiveTranscodeSettings(), machine)
+            .ChooseAsync(CancellationToken.None);
 
         Assert.Equal(LiveEncoder.Software, chosen.Encoder);
         Assert.False(chosen.FellBack);
-        Assert.False(File.Exists(ran));
+        Assert.Equal(0, machine.Times);
     }
 
     [Fact]
-    public async Task TheCardIsAskedAboutOnceAndTheAnswerIsKept()
+    public async Task LiveAsksTheMachineRatherThanWorkingItOutItself()
     {
-        string counted = standIns.Named("counted");
+        var machine = new WhatIsAsked(WithACard);
 
-        var selection = new LiveEncoderSelection(
-            new LiveTranscodeSettings
-            {
-                Prefer = LiveEncoder.Vaapi,
-                Programme = standIns.Script($"echo . >> {counted}; exit 0"),
-            },
-            TimeProvider.System,
-            standIns.Node());
+        await new LiveEncoderSelection(new LiveTranscodeSettings { Prefer = LiveEncoder.Vaapi }, machine)
+            .ChooseAsync(CancellationToken.None);
 
-        LiveEncoderChoice[] answers = await Task.WhenAll(
-            Enumerable.Range(0, 8).Select(_ => selection.ChooseAsync(CancellationToken.None)));
-
-        Assert.All(answers, answer => Assert.Equal(LiveEncoder.Vaapi, answer.Encoder));
-        Assert.Single(File.ReadAllLines(counted));
+        Assert.Equal(1, machine.Times);
     }
 
     [Fact]
-    public async Task ACallerThatStopsWaitingDoesNotStopTheAsking()
+    public void ACardThisMachineCanEncodeOnIsNotAReasonToFallBack()
+        => Assert.Throws<ArgumentOutOfRangeException>(
+            () => LiveEncoderChoice.FellBackToSoftware(CardStanding.Usable, "no reason at all"));
+
+    private static MachineCapabilities WithACard
+        => MachineCapabilities.Of(CardStanding.Usable, [Faculty.EncodeH264OnTheCard], string.Empty);
+
+    private static Task<LiveEncoderChoice> Choosing(LiveEncoder prefer, MachineCapabilities can)
+        => new LiveEncoderSelection(new LiveTranscodeSettings { Prefer = prefer }, new WhatIsAsked(can))
+            .ChooseAsync(CancellationToken.None);
+
+    private sealed class WhatIsAsked(MachineCapabilities can) : IMachineCapabilityReader
     {
-        var selection = new LiveEncoderSelection(
-            new LiveTranscodeSettings
-            {
-                Prefer = LiveEncoder.Vaapi,
-                Programme = standIns.Script("sleep 0.5; exit 0"),
-            },
-            TimeProvider.System,
-            standIns.Node());
+        public int Times { get; private set; }
 
-        using var calledOff = new CancellationTokenSource(TimeSpan.FromMilliseconds(50));
+        public Task<MachineCapabilities> ReadAsync(CancellationToken cancellationToken)
+        {
+            Times++;
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => selection.ChooseAsync(calledOff.Token));
-
-        Assert.Equal(LiveEncoder.Vaapi, (await selection.ChooseAsync(CancellationToken.None)).Encoder);
+            return Task.FromResult(can);
+        }
     }
-
-    [Fact]
-    public void TheNodeThatIsOpenedIsTheNodeTheCommandNames()
-    {
-        ParameterInfo node = typeof(LiveEncoderSelection)
-            .GetConstructors()
-            .Single()
-            .GetParameters()
-            .Single(parameter => string.Equals(parameter.Name, "renderNode", StringComparison.Ordinal));
-
-        Assert.Equal(FfmpegLiveInvocation.RenderNode, node.DefaultValue);
-        Assert.Contains(FfmpegLiveInvocation.RenderNode, VaapiProbeInvocation.Arguments());
-    }
-
-    private static IEnumerable<int> Read(string pids)
-        => File.ReadAllLines(pids).Where(line => line.Length > 0).Select(line => int.Parse(line, CultureInfo.InvariantCulture));
-
-    private static Task<LiveEncoderChoice> Choosing(LiveTranscodeSettings settings, string renderNode)
-        => new LiveEncoderSelection(settings, TimeProvider.System, renderNode).ChooseAsync(CancellationToken.None);
 }

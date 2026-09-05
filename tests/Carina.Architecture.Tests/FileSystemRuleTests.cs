@@ -32,16 +32,16 @@ public sealed class FileSystemRuleTests
         "/Carina.Infrastructure/Auth/SigningKeys.cs .Create()",
         "/Carina.Infrastructure/Collection/StreamHarvest.cs .CopyTo(",
         "/Carina.Infrastructure/Integrity/LocalRecordingFileSurvey.cs .Replace(",
+        "/Carina.Infrastructure/Machines/AnotherProgramme.cs Process.Start",
+        "/Carina.Infrastructure/Machines/AnotherProgramme.cs ProcessStartInfo",
+        "/Carina.Infrastructure/Machines/MachineCapabilityReader.cs File.Open",
+        "/Carina.Infrastructure/Machines/MachineCapabilityReader.cs FileMode.",
         "/Carina.Infrastructure/Programmes/ProgrammeSearchQuery.cs .Replace(",
         "/Carina.Infrastructure/Recordings/DriverRecordingFileEraser.cs File.Delete",
         "/Carina.Infrastructure/Streaming/CaptionFrames.cs .CopyTo(",
         "/Carina.Infrastructure/Streaming/CaptionSupply.cs .CopyTo(",
         "/Carina.Infrastructure/Streaming/FfprobeStreamAttributeReader.cs Process.Start",
         "/Carina.Infrastructure/Streaming/FfprobeStreamAttributeReader.cs ProcessStartInfo",
-        "/Carina.Infrastructure/Streaming/LiveEncoderSelection.cs File.Open",
-        "/Carina.Infrastructure/Streaming/LiveEncoderSelection.cs FileMode.",
-        "/Carina.Infrastructure/Streaming/LiveEncoderSelection.cs Process.Start",
-        "/Carina.Infrastructure/Streaming/LiveEncoderSelection.cs ProcessStartInfo",
         "/Carina.Infrastructure/Streaming/TranscoderProcess.cs Process.Start",
         "/Carina.Infrastructure/Streaming/TranscoderProcess.cs ProcessStartInfo",
         "/Carina.Infrastructure/Thumbnails/FfmpegThumbnailRenderer.cs Directory.CreateDirectory",
@@ -96,10 +96,10 @@ public sealed class FileSystemRuleTests
     {
         Assert.Equal(
             [
+                "/Carina.Infrastructure/Machines/AnotherProgramme.cs Process.Start",
+                "/Carina.Infrastructure/Machines/AnotherProgramme.cs ProcessStartInfo",
                 "/Carina.Infrastructure/Streaming/FfprobeStreamAttributeReader.cs Process.Start",
                 "/Carina.Infrastructure/Streaming/FfprobeStreamAttributeReader.cs ProcessStartInfo",
-                "/Carina.Infrastructure/Streaming/LiveEncoderSelection.cs Process.Start",
-                "/Carina.Infrastructure/Streaming/LiveEncoderSelection.cs ProcessStartInfo",
                 "/Carina.Infrastructure/Streaming/TranscoderProcess.cs Process.Start",
                 "/Carina.Infrastructure/Streaming/TranscoderProcess.cs ProcessStartInfo",
                 "/Carina.Infrastructure/Thumbnails/FfmpegThumbnailRenderer.cs Process.Start",
@@ -126,26 +126,34 @@ public sealed class FileSystemRuleTests
            && !entry.Contains(".CopyTo(", StringComparison.Ordinal);
 
     [Fact]
-    public void TheOnlyFileTheLivePathOpensIsTheOneItAsksTheCardAbout()
+    public void TheLivePathOpensNoFileOfItsOwn()
+    {
+        Assert.DoesNotContain(
+            Inventory.Where(entry => entry.Contains("/Streaming/", StringComparison.Ordinal)),
+            OpensSomething);
+    }
+
+    [Fact]
+    public void TheOnlyFileOpenedToAskAboutTheCardIsTheRenderNode()
     {
         Assert.Equal(
             [
-                "/Carina.Infrastructure/Streaming/LiveEncoderSelection.cs File.Open",
-                "/Carina.Infrastructure/Streaming/LiveEncoderSelection.cs FileMode.",
+                "/Carina.Infrastructure/Machines/MachineCapabilityReader.cs File.Open",
+                "/Carina.Infrastructure/Machines/MachineCapabilityReader.cs FileMode.",
             ],
             Inventory
-                .Where(entry => entry.Contains("/Streaming/", StringComparison.Ordinal))
+                .Where(entry => entry.Contains("/Machines/", StringComparison.Ordinal))
                 .Where(OpensSomething)
                 .ToArray());
 
         string source = File.ReadAllText(Path.Combine(
             RepositoryLayout.SourceDirectory,
             "Carina.Infrastructure",
-            "Streaming",
-            "LiveEncoderSelection.cs"));
+            "Machines",
+            "MachineCapabilityReader.cs"));
 
         Assert.Contains(
-            "File.Open(renderNode, FileMode.Open, FileAccess.ReadWrite)",
+            "File.Open(settings.RenderNode, FileMode.Open, FileAccess.ReadWrite)",
             source,
             StringComparison.Ordinal);
     }

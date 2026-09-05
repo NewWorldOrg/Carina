@@ -1,6 +1,7 @@
-using Carina.Infrastructure.Streaming;
+using Carina.Domain.Machines;
+using Carina.Infrastructure.Machines;
 
-namespace Carina.Infrastructure.Tests.Streaming;
+namespace Carina.Infrastructure.Tests.Machines;
 
 public sealed class VaapiProbeInvocationTests
 {
@@ -27,13 +28,13 @@ public sealed class VaapiProbeInvocationTests
                 "null",
                 "-",
             ],
-            VaapiProbeInvocation.Arguments());
+            VaapiProbeInvocation.Arguments(MachineSettings.TheRenderNode));
     }
 
     [Fact]
     public void AskingWhetherTheCardWorksMeansEncodingAPictureOnIt()
     {
-        string[] arguments = [.. VaapiProbeInvocation.Arguments()];
+        string[] arguments = [.. VaapiProbeInvocation.Arguments(MachineSettings.TheRenderNode)];
 
         Assert.Equal("h264_vaapi", arguments[arguments.IndexOf("-c:v") + 1]);
         Assert.Contains("hwupload", arguments[arguments.IndexOf("-vf") + 1], StringComparison.Ordinal);
@@ -43,7 +44,7 @@ public sealed class VaapiProbeInvocationTests
     [Fact]
     public void NoPictureIsDecodedOnTheCardEvenToAskWhetherItWorks()
     {
-        string[] arguments = [.. VaapiProbeInvocation.Arguments()];
+        string[] arguments = [.. VaapiProbeInvocation.Arguments(MachineSettings.TheRenderNode)];
 
         Assert.DoesNotContain("-hwaccel", arguments);
         Assert.DoesNotContain("-hwaccel_output_format", arguments);
@@ -54,7 +55,7 @@ public sealed class VaapiProbeInvocationTests
     public void NothingHandedToTheProgrammeIsMoreThanOneArgument()
     {
         Assert.All(
-            VaapiProbeInvocation.Arguments(),
+            VaapiProbeInvocation.Arguments(MachineSettings.TheRenderNode),
             argument =>
             {
                 Assert.NotEqual(string.Empty, argument);
@@ -63,8 +64,17 @@ public sealed class VaapiProbeInvocationTests
     }
 
     [Fact]
-    public void NoWayInTakesAnything()
+    public void TheOnlyThingHandedInIsTheNodeToAskAbout()
     {
-        Assert.Empty(typeof(VaapiProbeInvocation).GetMethod(nameof(VaapiProbeInvocation.Arguments))!.GetParameters());
+        Assert.Equal(
+            ["renderNode"],
+            typeof(VaapiProbeInvocation)
+                .GetMethod(nameof(VaapiProbeInvocation.Arguments))!
+                .GetParameters()
+                .Select(parameter => parameter.Name));
     }
+
+    [Fact]
+    public void ANodeThatIsNotThereToBeNamedIsNotSomethingToAskAbout()
+        => Assert.Throws<ArgumentException>(() => VaapiProbeInvocation.Arguments(string.Empty));
 }

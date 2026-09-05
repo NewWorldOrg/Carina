@@ -5,6 +5,7 @@ using Carina.Domain.Driver;
 using Carina.Domain.DriverStatus;
 using Carina.Domain.Events;
 using Carina.Domain.Integrity;
+using Carina.Domain.Machines;
 using Carina.Domain.Playback;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
@@ -19,6 +20,7 @@ using Carina.Infrastructure.Configuration;
 using Carina.Infrastructure.Driver;
 using Carina.Infrastructure.Events;
 using Carina.Infrastructure.Integrity;
+using Carina.Infrastructure.Machines;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Playback;
@@ -198,9 +200,13 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<ILiveSessionManager>(provider => provider.GetRequiredService<LiveSessionManager>());
         services.TryAddSingleton<ILiveSessionLedger>(provider => provider.GetRequiredService<LiveSessionManager>());
         services.TryAddSingleton<IStreamAttributeReader, FfprobeStreamAttributeReader>();
+        services.TryAddSingleton(new MachineSettings());
+        services.TryAddSingleton<IMachineCapabilityReader>(provider => new MachineCapabilityReader(
+            provider.GetRequiredService<MachineSettings>(),
+            provider.GetRequiredService<TimeProvider>()));
         services.TryAddSingleton<ILiveEncoderSelector>(provider => new LiveEncoderSelection(
             provider.GetRequiredService<LiveTranscodeSettings>(),
-            provider.GetRequiredService<TimeProvider>()));
+            provider.GetRequiredService<IMachineCapabilityReader>()));
         services.TryAddSingleton<IOnTheFlyPlayer, OnTheFlyPlayer>();
         services.AddSingleton<ThumbnailJob>();
         services.TryAddSingleton<IThumbnailRemaker>(provider =>

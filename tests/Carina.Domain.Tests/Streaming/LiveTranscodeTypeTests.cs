@@ -1,3 +1,4 @@
+using Carina.Domain.Machines;
 using Carina.Domain.Streaming;
 
 namespace Carina.Domain.Tests.Streaming;
@@ -24,12 +25,12 @@ public sealed class LiveTranscodeTypeTests
     }
 
     [Theory]
-    [InlineData(EncoderRefusal.NodeMissing)]
-    [InlineData(EncoderRefusal.NodeUnreadable)]
-    [InlineData(EncoderRefusal.DriverUnusable)]
-    [InlineData(EncoderRefusal.ProbeTimedOut)]
-    [InlineData(EncoderRefusal.ProbeProgrammeMissing)]
-    public void FallingBackLandsOnSoftwareAndSaysWhy(EncoderRefusal because)
+    [InlineData(CardStanding.NodeMissing)]
+    [InlineData(CardStanding.NodeUnreadable)]
+    [InlineData(CardStanding.DriverUnusable)]
+    [InlineData(CardStanding.ProbeTimedOut)]
+    [InlineData(CardStanding.ProbeProgrammeMissing)]
+    public void FallingBackLandsOnSoftwareAndSaysWhy(CardStanding because)
     {
         LiveEncoderChoice chosen = LiveEncoderChoice.FellBackToSoftware(because, "the card said no");
 
@@ -40,17 +41,17 @@ public sealed class LiveTranscodeTypeTests
     }
 
     [Fact]
-    public void FallingBackForNoNamedReasonIsRefused()
+    public void FallingBackWhenTheCardIsFineIsRefused()
     {
         Assert.Throws<ArgumentOutOfRangeException>(
-            () => LiveEncoderChoice.FellBackToSoftware((EncoderRefusal)9, "silently"));
+            () => LiveEncoderChoice.FellBackToSoftware(CardStanding.Usable, "silently"));
     }
 
     [Fact]
     public void WhyItFellBackCarriesNoPathFromThisMachine()
     {
         LiveEncoderChoice chosen = LiveEncoderChoice.FellBackToSoftware(
-            EncoderRefusal.DriverUnusable,
+            CardStanding.DriverUnusable,
             "No VA display found for device /dev/dri/renderD128.");
 
         Assert.DoesNotContain('/', chosen.Note);
@@ -61,13 +62,13 @@ public sealed class LiveTranscodeTypeTests
     {
         Assert.Equal(
             [
-                EncoderRefusal.NodeMissing,
-                EncoderRefusal.NodeUnreadable,
-                EncoderRefusal.DriverUnusable,
-                EncoderRefusal.ProbeTimedOut,
-                EncoderRefusal.ProbeProgrammeMissing,
+                CardStanding.NodeMissing,
+                CardStanding.NodeUnreadable,
+                CardStanding.DriverUnusable,
+                CardStanding.ProbeTimedOut,
+                CardStanding.ProbeProgrammeMissing,
             ],
-            Enum.GetValues<EncoderRefusal>());
+            Enum.GetValues<CardStanding>().Where(standing => !CardStandings.IsUsable(standing)));
     }
 
     [Fact]
