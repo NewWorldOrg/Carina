@@ -133,9 +133,28 @@ public sealed class LiveTranscoder : ILiveTranscoder
             return TranscoderExit.CalledOff(Complaint);
         }
 
-        await Quietly(drawing);
+        await DrawnToTheEndAsync();
 
         return running.ExitCode is 0 ? TranscoderExit.Finished() : TranscoderExit.Refused(running.ExitCode, Complaint);
+    }
+
+    /// <summary>
+    /// The pipe's write end is inheritable for the moment between opening it and starting the
+    /// programme, so a process started on another thread in that moment holds a copy and the pipe
+    /// does not end when the programme does. What the programme wrote is readable at once after
+    /// it exits, so the reader is given the stop grace and then called off.
+    /// </summary>
+    private async Task DrawnToTheEndAsync()
+    {
+        try
+        {
+            await drawing.WaitAsync(stopGrace, clock);
+        }
+        catch (Exception gone) when (gone is TimeoutException or IOException or ObjectDisposedException or OperationCanceledException)
+        {
+            await stopping.CancelAsync();
+            await Quietly(drawing);
+        }
     }
 
     private static async Task Quietly(Task task)
