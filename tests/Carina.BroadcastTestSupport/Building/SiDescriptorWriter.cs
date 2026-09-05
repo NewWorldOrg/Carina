@@ -75,6 +75,35 @@ public static class SiDescriptorWriter
         return DescriptorWriter.Of(DescriptorTags.EventGroup, payload.ToArray());
     }
 
+    public static byte[] LogoInTheCommonDataTable(int logoId, int logoVersion, int downloadDataId)
+        => DescriptorWriter.Of(
+            DescriptorTags.LogoTransmission,
+            new ByteWriter()
+                .Byte(0x01)
+                .Byte(0xFE | (logoId >> 8))
+                .Byte(logoId & 0xFF)
+                .Byte(0xF0 | (logoVersion >> 8))
+                .Byte(logoVersion & 0xFF)
+                .Word(downloadDataId)
+                .ToArray());
+
+    public static byte[] LogoNamedOnly(int logoId)
+        => DescriptorWriter.Of(
+            DescriptorTags.LogoTransmission,
+            new ByteWriter()
+                .Byte(0x02)
+                .Byte(0xFE | (logoId >> 8))
+                .Byte(logoId & 0xFF)
+                .ToArray());
+
+    public static byte[] LogoAsACharacterString(byte[] text)
+        => DescriptorWriter.Of(
+            DescriptorTags.LogoTransmission,
+            new ByteWriter().Byte(0x03).Run(text).ToArray());
+
+    public static byte[] LogoOfAnUnknownKind(int transmissionType)
+        => DescriptorWriter.Of(DescriptorTags.LogoTransmission, new ByteWriter().Byte(transmissionType).ToArray());
+
     public static byte[] PartialReception(params int[] serviceIds)
     {
         var payload = new ByteWriter();

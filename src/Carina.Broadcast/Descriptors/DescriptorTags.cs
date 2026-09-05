@@ -20,6 +20,8 @@ public static class DescriptorTags
 
     public const int DataContent = 0xC7;
 
+    public const int LogoTransmission = 0xCF;
+
     public const int EventGroup = 0xD6;
 
     public const int TransportStreamInformation = 0xCD;
