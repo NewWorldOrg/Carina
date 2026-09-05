@@ -95,6 +95,25 @@ internal sealed class HeldReservationLedger : IReservationRepository
             query.PerPage));
     }
 
+    public Task<ReservationHealth> HealthAsync(DateTime at, CancellationToken cancellationToken)
+    {
+        Reservation[] ahead =
+        [
+            .. held
+                .Where(reservation => reservation.RecordingOutcome is null)
+                .Where(reservation => reservation.State
+                    is ReservationState.Scheduled or ReservationState.Conflict)
+                .Where(reservation => reservation.EffectiveEndAt > at),
+        ];
+
+        return Task.FromResult(new ReservationHealth(
+            at,
+            ahead.Count(reservation => reservation.State is ReservationState.Conflict),
+            ahead.Count(reservation => reservation.ReceptionUnavailable),
+            ahead.Count(reservation => reservation.EpgDiverged && reservation.AcknowledgedAt is null),
+            ahead.Count(reservation => reservation.EpgMissing && reservation.AcknowledgedAt is null)));
+    }
+
     public Task<Reservation?> FindAsync(ReservationId id, CancellationToken cancellationToken)
         => Task.FromResult(held.FirstOrDefault(reservation => reservation.Id.Equals(id)));
 
@@ -239,6 +258,81 @@ internal sealed class HeldReservationLedger : IReservationRepository
     public void Standing(params Reservation[] reservations) => held.AddRange(reservations);
 }
 
+internal sealed class HeldOutcomeLedger : IReservationOutcomeRepository
+{
+    private readonly List<ReservationOutcome> held = [];
+
+    public IReadOnlyList<ReservationOutcome> Held => held;
+
+    public Task AddAsync(ReservationOutcome outcome, CancellationToken cancellationToken)
+    {
+        held.Add(outcome);
+
+        return Task.CompletedTask;
+    }
+
+    public Task<IReadOnlyList<ReservationOutcome>> ListAsync(OutcomeSpan span, CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<ReservationOutcome>>(
+            [.. held.Where(outcome => outcome.OccurredAt >= span.From && outcome.OccurredAt <= span.To)]);
+
+    public Task<PaginatedList<ReservationOutcome>> ListAsync(
+        ReservationOutcomeQuery query,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        IEnumerable<ReservationOutcome> found = held;
+
+        if (query.Kinds.Count > 0)
+        {
+            found = found.Where(outcome => query.Kinds.Contains(outcome.Kind));
+        }
+
+        if (query.Channels.Count > 0)
+        {
+            found = found.Where(outcome => query.Channels.Any(channel =>
+                channel.NetworkId == outcome.NetworkId.Value
+                && channel.ServiceId == outcome.ServiceId.Value));
+        }
+
+        if (query.Rule is { } rule)
+        {
+            found = found.Where(outcome => rule.Equals(outcome.RuleId));
+        }
+
+        if (query.From is { } from)
+        {
+            found = found.Where(outcome => outcome.OccurredAt >= from);
+        }
+
+        if (query.To is { } to)
+        {
+            found = found.Where(outcome => outcome.OccurredAt < to);
+        }
+
+        ReservationOutcome[] ordered =
+        [
+            .. found
+                .OrderByDescending(outcome => outcome.OccurredAt)
+                .ThenBy(outcome => outcome.Id.Value),
+        ];
+
+        return Task.FromResult(new PaginatedList<ReservationOutcome>(
+            [.. ordered.Skip((query.Page - 1) * query.PerPage).Take(query.PerPage)],
+            ordered.Length,
+            query.Page,
+            query.PerPage));
+    }
+
+    public Task<IReadOnlyList<ReservationOutcome>> ListForReservationAsync(
+        ReservationId reservationId,
+        CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<ReservationOutcome>>(
+            [.. held.Where(outcome => outcome.ReservationId.Equals(reservationId))]);
+
+    public void Written(params ReservationOutcome[] outcomes) => held.AddRange(outcomes);
+}
+
 internal sealed class SeatsOnHand(TunerCapacity? capacity) : ITunerCapacityDirectory
 {
     public TunerCapacity? Capacity { get; set; } = capacity;
@@ -289,6 +383,7 @@ internal sealed class ReservationFeature : IAsyncDisposable
             {
                 services.RemoveAll<IHostedService>();
                 services.AddSingleton<IReservationRepository>(Reservations);
+                services.AddSingleton<IReservationOutcomeRepository>(Outcomes);
                 services.AddSingleton<IProgrammeRepository>(Programmes);
                 services.AddSingleton<ITunerCapacityDirectory>(Seating);
                 services.AddSingleton<IServiceTuningDirectory>(Tuning);
@@ -309,6 +404,8 @@ internal sealed class ReservationFeature : IAsyncDisposable
     public HttpClient Client { get; }
 
     public HeldReservationLedger Reservations { get; } = new();
+
+    public HeldOutcomeLedger Outcomes { get; } = new();
 
     public HeldProgrammes Programmes { get; } = new();
 
@@ -365,7 +462,11 @@ internal sealed class ReservationFeature : IAsyncDisposable
         int priority = Priority.DefaultValue,
         RuleId? ruleId = null,
         string name = "A programme",
-        string summary = "What it is about")
+        string summary = "What it is about",
+        bool diverged = false,
+        bool missing = false,
+        DateTime? acknowledgedAt = null,
+        bool receptionUnavailable = false)
     {
         DateTime opens = startsAt ?? Noon.AddHours(2);
         Reservation reservation = Reservation.Rehydrate(
@@ -384,17 +485,39 @@ internal sealed class ReservationFeature : IAsyncDisposable
             state,
             startedAt,
             outcome,
-            false,
-            [],
-            false,
-            null,
-            false,
-            null,
+            diverged,
+            diverged ? [new EpgDivergence(DivergedField.StartAt, "12:00", "12:05", Noon)] : [],
+            missing,
+            acknowledgedAt,
+            receptionUnavailable,
+            receptionUnavailable ? Noon : null,
             Noon);
 
         Reservations.Standing(reservation);
 
         return reservation;
+    }
+
+    public ReservationOutcome Recorded(
+        Reservation reservation,
+        ReservationOutcomeKind kind,
+        DateTime? at = null,
+        TuneFailureKind? tuneFailure = null,
+        RecordingOutcome? recordingOutcome = null,
+        IReadOnlyList<Guid>? recordedInstead = null)
+    {
+        ReservationOutcome outcome = ReservationOutcome.Record(
+            ReservationOutcomeId.New(),
+            reservation,
+            kind,
+            tuneFailure,
+            recordingOutcome,
+            recordedInstead ?? [],
+            at ?? Noon);
+
+        Outcomes.Written(outcome);
+
+        return outcome;
     }
 
     public Task<(HttpStatusCode Status, JsonElement Body)> GetAsync(string path)
