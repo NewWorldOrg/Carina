@@ -1,13 +1,15 @@
-using System.Linq.Expressions;
+using System.Data;
+using System.Data.Common;
 
-using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 
-using Carina.Infrastructure.Persistence.Configurations;
-
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
+
+using Npgsql;
+
+using NpgsqlTypes;
 
 namespace Carina.Infrastructure.Persistence.Repositories;
 
@@ -51,12 +53,41 @@ public sealed class ProgrammeRepository(CarinaDbContext context) : IProgrammeRep
         await context.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task SaveAsync(Programme programme, CancellationToken cancellationToken)
+    public async Task<ProgrammesAbsorbed> AbsorbAsync(
+        IReadOnlyList<ProgrammeBroadcast> broadcasts,
+        DateTime at,
+        CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(programme);
+        ArgumentNullException.ThrowIfNull(broadcasts);
 
-        context.Update(programme);
-        await context.SaveChangesAsync(cancellationToken);
+        if (broadcasts.Count == 0)
+        {
+            return new ProgrammesAbsorbed(0, 0);
+        }
+
+        if (broadcasts.Select(broadcast => broadcast.Id).Distinct().Count() != broadcasts.Count)
+        {
+            throw new ArgumentException("One visit names the same programme twice; bundle them first.", nameof(broadcasts));
+        }
+
+        await using DbCommand command = context.Database.GetDbConnection().CreateCommand();
+
+        command.CommandText = ProgrammeAbsorption.Sql;
+        command.Transaction = context.Database.CurrentTransaction?.GetDbTransaction();
+        command.Parameters.Add(new NpgsqlParameter(ProgrammeAbsorption.RowsParameter, NpgsqlDbType.Jsonb)
+        {
+            Value = ProgrammeAbsorption.Rows(broadcasts.Select(broadcast => Programme.Discover(broadcast, at))),
+        });
+
+        if (command.Connection!.State is not ConnectionState.Open)
+        {
+            await command.Connection.OpenAsync(cancellationToken);
+        }
+
+        await using DbDataReader reading = await command.ExecuteReaderAsync(cancellationToken);
+        await reading.ReadAsync(cancellationToken);
+
+        return new ProgrammesAbsorbed((int)reading.GetInt64(0), (int)reading.GetInt64(1));
     }
 
     public async Task<IReadOnlyList<Programme>> ListEndedBeforeAsync(
@@ -121,21 +152,6 @@ public sealed class ProgrammeRepository(CarinaDbContext context) : IProgrammeRep
             .OrderBy(programme => programme.Revision)
             .Take(rows)
             .ToListAsync(cancellationToken);
-
-    public async Task<long> NextRevisionAsync(CancellationToken cancellationToken)
-    {
-        await using System.Data.Common.DbCommand command = context.Database.GetDbConnection().CreateCommand();
-
-        command.CommandText = $"SELECT nextval('{ProgrammeRevisions.Sequence}')";
-        command.Transaction = context.Database.CurrentTransaction?.GetDbTransaction();
-
-        if (command.Connection!.State is not System.Data.ConnectionState.Open)
-        {
-            await command.Connection.OpenAsync(cancellationToken);
-        }
-
-        return (long)(await command.ExecuteScalarAsync(cancellationToken))!;
-    }
 
     public async Task<int> ForgetEverythingAsync(CancellationToken cancellationToken)
         => await context.Set<Programme>().ExecuteDeleteAsync(cancellationToken);

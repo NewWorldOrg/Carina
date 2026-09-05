@@ -28,8 +28,6 @@ public sealed class ProgrammeWriter(
             async token =>
             {
                 DateTime at = clock.GetUtcNow().UtcDateTime;
-                int added = 0;
-                int updated = 0;
                 int discarded = 0;
                 var gathered = new Dictionary<ProgrammeId, ProgrammeBroadcast>();
 
@@ -54,28 +52,9 @@ public sealed class ProgrammeWriter(
                     }
                 }
 
-                foreach (ProgrammeBroadcast broadcast in gathered.Values)
-                {
-                    Programme? held = await programmes.FindAsync(broadcast.Id, token);
+                ProgrammesAbsorbed absorbed = await programmes.AbsorbAsync([.. gathered.Values], at, token);
 
-                    if (held is null)
-                    {
-                        await programmes.AddAsync(Programme.Discover(broadcast, at), token);
-                        added++;
-
-                        continue;
-                    }
-
-                    if (held.Absorb(broadcast, at))
-                    {
-                        held.MarkRevision(await programmes.NextRevisionAsync(token));
-
-                        await programmes.SaveAsync(held, token);
-                        updated++;
-                    }
-                }
-
-                return new ProgrammesWritten(added, updated, discarded);
+                return new ProgrammesWritten(absorbed.Added, absorbed.Updated, discarded);
             },
             cancellationToken);
 
