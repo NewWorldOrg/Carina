@@ -24,6 +24,7 @@ public enum PasswordRefusal
 
 public sealed record SessionView(
     SessionId Id,
+    string DisplayName,
     AuthMethod Method,
     DateTime CreatedAt,
     DateTime LastUsedAt,
@@ -37,6 +38,7 @@ public sealed record SessionView(
 
         return new SessionView(
             session.Id,
+            session.DisplayName,
             session.Method,
             session.CreatedAt,
             session.LastUsedAt,

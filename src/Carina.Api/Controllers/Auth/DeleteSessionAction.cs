@@ -19,11 +19,6 @@ public sealed class DeleteSessionAction(AuthSessionService sessions) : Controlle
     [ProducesResponseType<BaseResponder<string>>(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Invoke(string id, CancellationToken cancellationToken)
     {
-        if (SessionClaims.SubjectOf(User) is not { } subject)
-        {
-            return Unauthorized(BaseResponder<string>.Error("This request carries no session."));
-        }
-
         SessionId target;
 
         try
@@ -35,7 +30,7 @@ public sealed class DeleteSessionAction(AuthSessionService sessions) : Controlle
             return NotFound(BaseResponder<string>.Error(AuthSessionService.NoSuchSession));
         }
 
-        ServiceResult ended = await sessions.RevokeAsync(subject, target, cancellationToken);
+        ServiceResult ended = await sessions.RevokeAsync(target, cancellationToken);
 
         return ended.IsSuccess
             ? NoContent()

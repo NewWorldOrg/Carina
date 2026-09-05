@@ -15,6 +15,7 @@ public sealed record MeResponder(string Subject, AuthMethod Method)
 
 public sealed record SessionResponder(
     string Id,
+    string DisplayName,
     AuthMethod Method,
     DateTime CreatedAt,
     DateTime LastUsedAt,
@@ -27,6 +28,7 @@ public sealed record SessionResponder(
 
         return new SessionResponder(
             view.Id.Value,
+            view.DisplayName,
             view.Method,
             view.CreatedAt,
             view.LastUsedAt,
