@@ -20,13 +20,24 @@ public sealed class EncodeJobTests
         EncodeJobStatus.Cancelled,
     ];
 
+    private static readonly OutputRoot Primary = new("primary");
+
     private static EncodeJob Waiting()
         => EncodeJob.Queue(
             EncodeJobId.New(),
             RecordingId.New(),
             EncodeProfileId.New(),
             EncodeDestinationId.New(),
+            Primary,
             Queued);
+
+    private static EncodeJob Named()
+    {
+        EncodeJob job = Running();
+        job.Name(EncodeFileName.Artefact(job.RecordingId, job.ProfileId));
+
+        return job;
+    }
 
     private static EncodeJob Running()
     {
@@ -90,7 +101,7 @@ public sealed class EncodeJobTests
     [Fact(DisplayName = "BR-ES-001: waiting becomes running, and running becomes finished")]
     public void WaitingBecomesRunningAndRunningBecomesFinished()
     {
-        EncodeJob job = Running();
+        EncodeJob job = Named();
 
         Assert.Equal(EncodeJobStatus.Running, job.Status);
         Assert.Equal(Started, job.StartedAt);
@@ -105,7 +116,7 @@ public sealed class EncodeJobTests
     [Fact(DisplayName = "BR-ES-001: a job that has ended cannot be moved again")]
     public void AJobThatHasEndedCannotBeMovedAgain()
     {
-        EncodeJob job = Running();
+        EncodeJob job = Named();
         job.Complete(Ended);
 
         Assert.Throws<InvalidOperationException>(() => job.Start(Ended));
@@ -113,6 +124,92 @@ public sealed class EncodeJobTests
         Assert.Throws<InvalidOperationException>(() => job.Fail(EncodeFailure.TimedOut, "late", Ended));
         Assert.Throws<InvalidOperationException>(() => job.Cancel(Ended));
         Assert.Throws<InvalidOperationException>(() => job.Requeue(Ended));
+        Assert.Throws<InvalidOperationException>(() => job.Name(EncodeFileName.Artefact(job.RecordingId, job.ProfileId)));
+    }
+
+    [Fact(DisplayName = "BR-ED2-009: a job keeps the output root it was queued into, so the destination may move without it")]
+    public void AJobKeepsTheOutputRootItWasQueuedInto()
+    {
+        EncodeJob job = Waiting();
+
+        Assert.Equal(Primary, job.OutputRoot);
+        Assert.Null(job.ArtefactName);
+    }
+
+    [Fact(DisplayName = "BR-ED2-009: the work file is named for the job and the attempt it is on")]
+    public void TheWorkFileIsNamedForTheJobAndTheAttemptItIsOn()
+    {
+        EncodeJob job = Running();
+
+        Assert.Equal(EncodeFileName.Working(job.RecordingId, job.Id, 1), job.WorkFileName);
+
+        job.Requeue(Ended);
+
+        Assert.Equal(EncodeFileName.Working(job.RecordingId, job.Id, 2), job.WorkFileName);
+    }
+
+    [Fact(DisplayName = "BR-ED2-009: the artefact is named while the job runs, and only then")]
+    public void TheArtefactIsNamedWhileTheJobRunsAndOnlyThen()
+    {
+        EncodeJob waiting = Waiting();
+        EncodeFileName name = EncodeFileName.Artefact(waiting.RecordingId, waiting.ProfileId);
+
+        Assert.Throws<InvalidOperationException>(() => waiting.Name(name));
+
+        EncodeJob running = Running();
+        EncodeFileName its = EncodeFileName.Artefact(running.RecordingId, running.ProfileId);
+        running.Name(its);
+
+        Assert.Equal(its, running.ArtefactName);
+    }
+
+    [Fact(DisplayName = "BR-ED2-009: a job cannot finish without having said what it made")]
+    public void AJobCannotFinishWithoutHavingSaidWhatItMade()
+    {
+        EncodeJob job = Running();
+
+        Assert.Throws<InvalidOperationException>(() => job.Complete(Ended));
+        Assert.Equal(EncodeJobStatus.Running, job.Status);
+    }
+
+    [Fact(DisplayName = "BR-ED2-009: naming the artefact again by the same name is its own success seen again, not a second claim")]
+    public void NamingTheArtefactAgainByTheSameNameIsNotASecondClaim()
+    {
+        EncodeJob job = Named();
+        EncodeFileName same = EncodeFileName.Artefact(job.RecordingId, job.ProfileId);
+
+        job.Name(same);
+
+        Assert.Equal(same, job.ArtefactName);
+    }
+
+    [Fact(DisplayName = "BR-ED2-009: a job that has named its artefact cannot be talked into another name")]
+    public void AJobThatHasNamedItsArtefactCannotBeTalkedIntoAnotherName()
+    {
+        EncodeJob job = Named();
+
+        Assert.Throws<InvalidOperationException>(() => job.Name(EncodeFileName.Artefact(job.RecordingId, EncodeProfileId.New())));
+    }
+
+    [Fact(DisplayName = "BR-ED2-009: the name survives a requeue, so the next attempt can recognise its own success")]
+    public void TheNameSurvivesARequeue()
+    {
+        EncodeJob job = Named();
+        EncodeFileName named = job.ArtefactName!;
+
+        job.Requeue(Ended);
+
+        Assert.Equal(EncodeJobStatus.Queued, job.Status);
+        Assert.Equal(named, job.ArtefactName);
+    }
+
+    [Fact(DisplayName = "BR-ED2-009: the artefact is named for the recording and the profile the job was queued with")]
+    public void TheArtefactIsNamedForTheRecordingAndTheProfileTheJobWasQueuedWith()
+    {
+        EncodeJob job = Running();
+
+        Assert.Throws<InvalidOperationException>(() => job.Name(EncodeFileName.Artefact(RecordingId.New(), job.ProfileId)));
+        Assert.Throws<InvalidOperationException>(() => job.Name(EncodeFileName.Working(job.RecordingId, job.Id, 1)));
     }
 
     [Fact(DisplayName = "BR-ES-001: a job that is still waiting cannot finish without having run")]
@@ -215,9 +312,11 @@ public sealed class EncodeJobTests
             RecordingId.New(),
             EncodeProfileId.New(),
             EncodeDestinationId.New(),
+            Primary,
             EncodeJobStatus.Queued,
             0,
             Queued,
+            null,
             null,
             null,
             null));
