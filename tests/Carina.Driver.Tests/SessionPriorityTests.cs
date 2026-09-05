@@ -66,6 +66,7 @@ public sealed class SessionPriorityTests
     [InlineData(SessionPurpose.Scan, SessionPriority.Scan)]
     [InlineData(SessionPurpose.Survey, SessionPriority.Guide)]
     [InlineData(SessionPurpose.SurveyNow, SessionPriority.GuideNow)]
+    [InlineData(SessionPurpose.Logo, SessionPriority.LogoCapture)]
     public void EveryPurposeThisContractNamesSitsOnItsRung(SessionPurpose purpose, int rung)
     {
         Assert.Equal(rung, SessionPriority.Of(purpose));
@@ -104,6 +105,7 @@ public sealed class SessionPriorityTests
             SessionPurpose.SurveyNow,
             SessionPurpose.Scan,
             SessionPurpose.Survey,
+            SessionPurpose.Logo,
             SessionPurpose.Unspecified,
         ];
 

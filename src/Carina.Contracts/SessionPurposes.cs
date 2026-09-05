@@ -14,7 +14,8 @@ public static class SessionPurposes
         [.. Enum.GetValues<SessionPurpose>().Select(Capability).OfType<string>()];
 
     public static bool ReadsEveryPacket(SessionPurpose purpose) =>
-        purpose is SessionPurpose.Survey or SessionPurpose.SurveyNow or SessionPurpose.Scan;
+        purpose is SessionPurpose.Survey or SessionPurpose.SurveyNow or SessionPurpose.Scan
+            or SessionPurpose.Logo;
 
     public static string? Capability(SessionPurpose purpose) =>
         purpose is SessionPurpose.Unspecified || Baseline.Contains(purpose)

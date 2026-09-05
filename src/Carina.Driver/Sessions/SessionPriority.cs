@@ -26,6 +26,7 @@ public static class SessionPriority
             SessionPurpose.Scan => Scan,
             SessionPurpose.Survey => Guide,
             SessionPurpose.SurveyNow => GuideNow,
+            SessionPurpose.Logo => LogoCapture,
             _ => Unknown,
         };
 }

@@ -256,7 +256,7 @@ public sealed class VersionSkewTests
     {
         Assert.Equal(
             SessionPurpose.Unspecified,
-            DriverJson.Deserialize("\"logo\"", DriverJson.Context.SessionPurpose)
+            DriverJson.Deserialize("\"catchUp\"", DriverJson.Context.SessionPurpose)
         );
         Assert.Equal(
             SessionPurpose.Scan,

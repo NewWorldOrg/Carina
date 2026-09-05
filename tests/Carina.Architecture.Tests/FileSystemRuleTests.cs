@@ -39,6 +39,7 @@ public sealed class FileSystemRuleTests
         "/Carina.Infrastructure/Encodings/RenameProbe.cs Directory.Delete",
         "/Carina.Infrastructure/Encodings/RenameProbe.cs Directory.Move",
         "/Carina.Infrastructure/Integrity/LocalRecordingFileSurvey.cs .Replace(",
+        "/Carina.Infrastructure/Logos/LogoHarvest.cs .CopyTo(",
         "/Carina.Infrastructure/Machines/AnotherProgramme.cs Process.Start",
         "/Carina.Infrastructure/Machines/AnotherProgramme.cs ProcessStartInfo",
         "/Carina.Infrastructure/Machines/MachineCapabilityReader.cs File.Open",

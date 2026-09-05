@@ -38,4 +38,29 @@ public sealed class SessionPurposesTests
             SessionPurposes.ReadsEveryPacket(SessionPurpose.Scan)
         );
     }
+
+    [Fact]
+    public void CollectingALogoWaitsForItsReaderTheWayEveryOtherWalkOfTheAirDoes()
+    {
+        Assert.True(SessionPurposes.ReadsEveryPacket(SessionPurpose.Logo));
+    }
+
+    [Fact]
+    public void ADriverThatHasNeverHeardOfCollectingLogosIsNotTalkedIntoSomethingElseInstead()
+    {
+        var older = new DriverHello(
+            1,
+            "older",
+            [.. SessionPurposes.Capabilities.Where(named => !named.EndsWith("logo", StringComparison.Ordinal))]);
+
+        Assert.Equal(SessionPurpose.Unspecified, SessionPurposes.AgreedWith(older, SessionPurpose.Logo));
+    }
+
+    [Fact]
+    public void ADriverThatSaysItCollectsLogosIsAskedForExactlyThat()
+    {
+        var current = new DriverHello(1, "current", [.. SessionPurposes.Capabilities]);
+
+        Assert.Equal(SessionPurpose.Logo, SessionPurposes.AgreedWith(current, SessionPurpose.Logo));
+    }
 }

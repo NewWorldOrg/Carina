@@ -54,6 +54,7 @@ public sealed class SessionPurposeConverter : TolerantEnumConverter<SessionPurpo
             SessionPurpose.Survey => "survey",
             SessionPurpose.SurveyNow => "surveyNow",
             SessionPurpose.Scan => "scan",
+            SessionPurpose.Logo => "logo",
             _ => "unspecified",
         };
 
@@ -67,6 +68,7 @@ public sealed class SessionPurposeConverter : TolerantEnumConverter<SessionPurpo
             "survey" => SessionPurpose.Survey,
             "surveyNow" => SessionPurpose.SurveyNow,
             "scan" => SessionPurpose.Scan,
+            "logo" => SessionPurpose.Logo,
             "unspecified" => SessionPurpose.Unspecified,
             _ => null,
         };

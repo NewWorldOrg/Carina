@@ -256,6 +256,7 @@ public sealed class ChannelSchemaTests
                 "integrity_check",
                 "integrity_finding",
                 "local_account",
+                "logo_visit",
                 "oidc_config",
                 "programme",
                 "quality_incident",
