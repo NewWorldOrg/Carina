@@ -65,6 +65,20 @@ public static class EndpointRules
         ];
     }
 
+    public static IReadOnlyList<StateChangeGuard> GuardsRequiredBy(string method, bool carriesABody)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(method);
+
+        if (Reads(method))
+        {
+            return [];
+        }
+
+        return HttpMethods.IsDelete(method) && !carriesABody
+            ? [StateChangeGuard.Origin]
+            : [StateChangeGuard.Origin, StateChangeGuard.JsonBody];
+    }
+
     private static bool Under(string pattern, string root)
         => string.Equals(pattern, root, StringComparison.Ordinal)
            || pattern.StartsWith(root + "/", StringComparison.Ordinal);
