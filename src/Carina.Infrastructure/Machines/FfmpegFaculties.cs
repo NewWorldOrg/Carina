@@ -50,10 +50,16 @@ public static partial class FfmpegFaculties
         return named;
     }
 
+    /// <summary>
+    /// The card's two faculties are each answered by a frame actually encoded with that encoder:
+    /// the build listing <c>hevc_vaapi</c> says nothing about the driver behind the node, which on
+    /// one measured machine encodes H.264 and has no entrypoint for H.265 at all.
+    /// </summary>
     public static IReadOnlyList<Faculty> Of(
         IReadOnlyList<string> encoders,
         IReadOnlyList<string> decoders,
-        bool cardIsUsable)
+        bool cardEncodesH264,
+        bool cardEncodesH265)
     {
         ArgumentNullException.ThrowIfNull(encoders);
         ArgumentNullException.ThrowIfNull(decoders);
@@ -62,8 +68,8 @@ public static partial class FfmpegFaculties
 
         Add(can, Faculty.EncodeH264OnTheProcessor, encoders.Contains(H264OnTheProcessor, StringComparer.Ordinal));
         Add(can, Faculty.EncodeH265OnTheProcessor, encoders.Contains(H265OnTheProcessor, StringComparer.Ordinal));
-        Add(can, Faculty.EncodeH264OnTheCard, cardIsUsable && encoders.Contains(H264OnTheCard, StringComparer.Ordinal));
-        Add(can, Faculty.EncodeH265OnTheCard, cardIsUsable && encoders.Contains(H265OnTheCard, StringComparer.Ordinal));
+        Add(can, Faculty.EncodeH264OnTheCard, cardEncodesH264 && encoders.Contains(H264OnTheCard, StringComparer.Ordinal));
+        Add(can, Faculty.EncodeH265OnTheCard, cardEncodesH265 && encoders.Contains(H265OnTheCard, StringComparer.Ordinal));
         Add(can, Faculty.DecodeAribCaptions, decoders.Contains(AribCaptions, StringComparer.Ordinal));
 
         return can;

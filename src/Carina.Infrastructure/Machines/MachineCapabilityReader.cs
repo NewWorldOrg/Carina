@@ -30,14 +30,24 @@ public sealed class MachineCapabilityReader(MachineSettings settings, TimeProvid
         ProgrammeSaid encoders = await SayingAsync(FacultyInvocation.Encoders());
         ProgrammeSaid decoders = await SayingAsync(FacultyInvocation.Decoders());
         CardAnswer card = await AskTheCardAsync();
+        bool cardEncodesH264 = CardStandings.IsUsable(card.Standing);
+        bool cardEncodesH265 = cardEncodesH264 && await EncodesOnTheCardAsync(FfmpegFaculties.H265OnTheCard);
 
         return MachineCapabilities.Of(
             card.Standing,
             FfmpegFaculties.Of(
                 FfmpegFaculties.Listed(encoders.Said),
                 FfmpegFaculties.Listed(decoders.Said),
-                CardStandings.IsUsable(card.Standing)),
+                cardEncodesH264,
+                cardEncodesH265),
             Together(card.Note, encoders.Ran ? string.Empty : encoders.Complained));
+    }
+
+    private async Task<bool> EncodesOnTheCardAsync(string encoder)
+    {
+        ProgrammeSaid probe = await SayingAsync(VaapiProbeInvocation.Arguments(settings.RenderNode, encoder));
+
+        return probe.Ran && probe.ExitCode is 0;
     }
 
     private async Task<CardAnswer> AskTheCardAsync()

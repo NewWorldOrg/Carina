@@ -44,6 +44,7 @@ public sealed class ProgrammeTests : IDisposable
     [Fact(DisplayName = "BR-EV-003: the search path a started programme gets is written down, not inherited")]
     public void TheSearchPathAStartedProgrammeGetsIsWrittenDownNotInherited()
     {
+        string? searched = Environment.GetEnvironmentVariable("PATH");
         Environment.SetEnvironmentVariable("PATH", "/somewhere/else");
 
         try
@@ -52,7 +53,7 @@ public sealed class ProgrammeTests : IDisposable
         }
         finally
         {
-            Environment.SetEnvironmentVariable("PATH", null);
+            Environment.SetEnvironmentVariable("PATH", searched);
         }
     }
 

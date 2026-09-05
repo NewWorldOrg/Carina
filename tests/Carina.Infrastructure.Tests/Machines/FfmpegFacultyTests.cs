@@ -65,29 +65,35 @@ public sealed class FfmpegFacultyTests
                 Faculty.EncodeH265OnTheCard,
                 Faculty.DecodeAribCaptions,
             ],
-            FfmpegFaculties.Of(FfmpegFaculties.Listed(Encoders), FfmpegFaculties.Listed(Decoders), cardIsUsable: true));
+            FfmpegFaculties.Of(FfmpegFaculties.Listed(Encoders), FfmpegFaculties.Listed(Decoders), cardEncodesH264: true, cardEncodesH265: true));
+
+    [Fact(DisplayName = "BR-EV-004: a card that encoded an H.264 frame and refused an H.265 one has H.264 on the card alone, whatever the build lists")]
+    public void ACardThatRefusedAnH265FrameHasH264OnTheCardAlone()
+        => Assert.Equal(
+            [Faculty.EncodeH264OnTheProcessor, Faculty.EncodeH264OnTheCard, Faculty.DecodeAribCaptions],
+            FfmpegFaculties.Of(FfmpegFaculties.Listed(Encoders), FfmpegFaculties.Listed(Decoders), cardEncodesH264: true, cardEncodesH265: false));
 
     [Fact(DisplayName = "BR-EV-004: a build that lists an encoder for the card is not a card that can be reached")]
     public void ABuildThatListsAnEncoderForTheCardIsNotACardThatCanBeReached()
         => Assert.Equal(
             [Faculty.EncodeH264OnTheProcessor, Faculty.DecodeAribCaptions],
-            FfmpegFaculties.Of(FfmpegFaculties.Listed(Encoders), FfmpegFaculties.Listed(Decoders), cardIsUsable: false));
+            FfmpegFaculties.Of(FfmpegFaculties.Listed(Encoders), FfmpegFaculties.Listed(Decoders), cardEncodesH264: false, cardEncodesH265: false));
 
     [Fact]
     public void ABuildWithLibx265HasH265OnTheProcessorToo()
         => Assert.Contains(
             Faculty.EncodeH265OnTheProcessor,
-            FfmpegFaculties.Of([FfmpegFaculties.H265OnTheProcessor], [], cardIsUsable: false));
+            FfmpegFaculties.Of([FfmpegFaculties.H265OnTheProcessor], [], cardEncodesH264: false, cardEncodesH265: false));
 
     [Fact]
     public void ABuildWithoutTheCaptionDecoderCannotDecodeCaptions()
         => Assert.DoesNotContain(
             Faculty.DecodeAribCaptions,
-            FfmpegFaculties.Of(FfmpegFaculties.Listed(Encoders), ["cc_dec"], cardIsUsable: false));
+            FfmpegFaculties.Of(FfmpegFaculties.Listed(Encoders), ["cc_dec"], cardEncodesH264: false, cardEncodesH265: false));
 
     [Fact]
     public void AProgrammeThatSaidNothingLeavesThisMachineAbleToDoNothing()
-        => Assert.Empty(FfmpegFaculties.Of([], [], cardIsUsable: true));
+        => Assert.Empty(FfmpegFaculties.Of([], [], cardEncodesH264: true, cardEncodesH265: true));
 
     [Fact]
     public void TheNamesTheReadingLooksForAreTheOnesTheCommandsUse()

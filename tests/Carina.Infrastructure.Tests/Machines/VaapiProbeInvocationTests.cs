@@ -41,6 +41,17 @@ public sealed class VaapiProbeInvocationTests
         Assert.True(arguments.IndexOf("-vaapi_device") < arguments.IndexOf("-i"));
     }
 
+    [Fact(DisplayName = "BR-EV-004: asking about H.265 on the card is the same picture through hevc_vaapi, and nothing else changes")]
+    public void AskingAboutH265OnTheCardIsTheSamePictureThroughHevcVaapi()
+    {
+        string[] h264 = [.. VaapiProbeInvocation.Arguments(MachineSettings.TheRenderNode)];
+        string[] hevc = [.. VaapiProbeInvocation.Arguments(MachineSettings.TheRenderNode, FfmpegFaculties.H265OnTheCard)];
+
+        Assert.Equal("hevc_vaapi", hevc[hevc.IndexOf("-c:v") + 1]);
+        Assert.Equal(h264.Where(argument => argument is not "h264_vaapi"), hevc.Where(argument => argument is not "hevc_vaapi"));
+        Assert.Throws<ArgumentException>(() => VaapiProbeInvocation.Arguments(MachineSettings.TheRenderNode, string.Empty));
+    }
+
     [Fact]
     public void NoPictureIsDecodedOnTheCardEvenToAskWhetherItWorks()
     {
@@ -64,14 +75,15 @@ public sealed class VaapiProbeInvocationTests
     }
 
     [Fact]
-    public void TheOnlyThingHandedInIsTheNodeToAskAbout()
+    public void TheOnlyThingsHandedInAreTheNodeToAskAboutAndTheEncoderToAskWith()
     {
         Assert.Equal(
-            ["renderNode"],
+            ["renderNode", "renderNode,encoder"],
             typeof(VaapiProbeInvocation)
-                .GetMethod(nameof(VaapiProbeInvocation.Arguments))!
-                .GetParameters()
-                .Select(parameter => parameter.Name));
+                .GetMethods()
+                .Where(method => method.Name == nameof(VaapiProbeInvocation.Arguments))
+                .Select(method => string.Join(',', method.GetParameters().Select(parameter => parameter.Name)))
+                .Order(StringComparer.Ordinal));
     }
 
     [Fact]

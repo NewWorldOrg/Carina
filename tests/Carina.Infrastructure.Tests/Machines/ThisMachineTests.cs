@@ -45,6 +45,20 @@ public sealed class ThisMachineTests
         }
     }
 
+    [Fact(DisplayName = "BR-EV-004: H.265 on the card is claimed exactly when a frame is actually encoded with hevc_vaapi on this machine")]
+    public async Task H265OnTheCardIsClaimedExactlyWhenAFrameIsEncodedWithIt()
+    {
+        MachineCapabilities can = await Reading();
+        ProgrammeSaid tried = await AnotherProgramme.SayAsync(
+            new MachineSettings().Programme,
+            VaapiProbeInvocation.Arguments(MachineSettings.TheRenderNode, FfmpegFaculties.H265OnTheCard),
+            TimeSpan.FromSeconds(30),
+            TimeProvider.System,
+            CancellationToken.None);
+
+        Assert.Equal(tried.Ran && tried.ExitCode is 0, can.Has(Faculty.EncodeH265OnTheCard));
+    }
+
     [Fact]
     public async Task WhatThisMachineSaysNamesNoPathOnIt()
         => Assert.DoesNotContain('/', (await Reading()).Note);
