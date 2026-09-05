@@ -108,6 +108,7 @@ internal sealed class CatalogFeature : IAsyncDisposable
             .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
             {
                 services.AddSingleton<IBroadcastServiceRepository>(Services);
+                services.AddSingleton<IStationLogoRepository>(Logos);
                 services.AddSingleton<ICandidateChannelRepository>(Candidates);
                 services.AddSingleton<IDriverClient>(Driver);
                 services.AddSingleton<IRecalculationNotice>(Notices);
@@ -118,6 +119,8 @@ internal sealed class CatalogFeature : IAsyncDisposable
 
     public HeldServices Services { get; } = new();
 
+    public HeldLogos Logos { get; } = new();
+
     public HeldCandidates Candidates { get; } = new();
 
     public TunerHoldingDriverClient Driver { get; } = new();
@@ -126,12 +129,15 @@ internal sealed class CatalogFeature : IAsyncDisposable
 
     public CandidateChannel Seed(int serviceId, string name, params TuningParameters[] tunings)
     {
-        Services.Services.Add(BroadcastService.Discover(
+        BroadcastService service = BroadcastService.Discover(
             new NetworkId(1),
             new ServiceId(serviceId),
             name,
             ServiceCategory.Television,
-            TunerHoldingDriverClient.At));
+            TunerHoldingDriverClient.At);
+
+        Services.Services.Add(service);
+        Logos.Services.Add(service);
 
         foreach (TuningParameters tuning in tunings)
         {

@@ -44,6 +44,13 @@ public sealed class StationLogoRepository(CarinaDbContext context) : IStationLog
             .ThenBy(logo => logo.LogoId)
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyList<StationLogoStamp>> StampsAsync(CancellationToken cancellationToken)
+        => await context.Set<StationLogo>()
+            .OrderBy(logo => logo.NetworkId)
+            .ThenBy(logo => logo.LogoId)
+            .Select(logo => new StationLogoStamp(logo.NetworkId, logo.LogoId, logo.CollectedAt))
+            .ToListAsync(cancellationToken);
+
     public async Task AbsorbAsync(StationLogo logo, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(logo);

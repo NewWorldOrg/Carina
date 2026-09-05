@@ -7,6 +7,7 @@ public sealed class FileSystemRuleTests
         "/Carina.Api/Controllers/Auth/LogOutAction.cs .Delete(",
         "/Carina.Api/Events/ProgrammeFeedStream.cs newStreamWriter",
         "/Carina.Broadcast/Descriptors/ExtendedEventDescription.cs .CopyTo(",
+        "/Carina.Broadcast/Images/AribLogoImage.cs .CopyTo(",
         "/Carina.Broadcast/Sections/SectionAssembler.cs .CopyTo(",
         "/Carina.Domain/Programmes/ProgrammeSearchText.cs .Replace(",
         "/Carina.Domain/Streaming/LiveCaptions.cs .CopyTo(",

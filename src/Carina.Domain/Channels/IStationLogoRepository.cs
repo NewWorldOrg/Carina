@@ -11,5 +11,7 @@ public interface IStationLogoRepository
 
     Task<IReadOnlyList<StationLogo>> ListAsync(CancellationToken cancellationToken);
 
+    Task<IReadOnlyList<StationLogoStamp>> StampsAsync(CancellationToken cancellationToken);
+
     Task AbsorbAsync(StationLogo logo, CancellationToken cancellationToken);
 }

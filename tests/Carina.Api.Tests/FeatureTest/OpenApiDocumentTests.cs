@@ -132,6 +132,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "getRule",
                 "getScan",
                 "getService",
+                "getServiceLogo",
                 "getSessions",
                 "getSignInOptions",
                 "getStorage",
@@ -199,9 +200,9 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
         Assert.Equal(
             [
                 "videos",
+                "services",
                 "tuners",
                 "storage",
-                "services",
                 "rules",
                 "reservations",
                 "recordings",
