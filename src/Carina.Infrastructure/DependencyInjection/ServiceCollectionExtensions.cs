@@ -22,6 +22,7 @@ using Carina.Infrastructure.Driver;
 using Carina.Infrastructure.Encodings;
 using Carina.Infrastructure.Events;
 using Carina.Infrastructure.Integrity;
+using Carina.Infrastructure.Logos;
 using Carina.Infrastructure.Machines;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
@@ -83,6 +84,11 @@ public static class ServiceCollectionExtensions
             .Configure(options => options.ReadFrom(configuration))
             .ValidateOnStart();
 
+        services.AddSingleton<IValidateOptions<LogoSweepOptions>, LogoSweepValidation>();
+        services.AddOptions<LogoSweepOptions>()
+            .Configure(options => options.ReadFrom(configuration))
+            .ValidateOnStart();
+
         services.AddSingleton<IValidateOptions<TranscodingOptions>, TranscodingValidation>();
         services.AddOptions<TranscodingOptions>()
             .Configure(options => options.ReadFrom(configuration))
@@ -103,6 +109,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IOidcDirectory, OidcDirectory>();
         services.AddScoped<IBroadcastServiceRepository, BroadcastServiceRepository>();
         services.AddScoped<IStationLogoRepository, StationLogoRepository>();
+        services.AddScoped<ILogoVisitRepository, LogoVisitRepository>();
         services.AddScoped<IProgrammeRepository, ProgrammeRepository>();
         services.AddScoped<IProgrammeSearchRepository, ProgrammeSearchRepository>();
         services.AddScoped<ProgrammeSearchScope>();
@@ -142,6 +149,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ProgrammeWriter>();
         services.AddScoped<StreamVisitor>();
         services.AddScoped<CollectionRound>();
+        services.AddScoped<LogoVisitor>();
+        services.AddScoped<LogoWriter>();
         services.AddScoped<ArchiveTransfer>();
 
         services.AddSingleton(TimeProvider.System);
@@ -239,6 +248,8 @@ public static class ServiceCollectionExtensions
             provider.GetRequiredService<ThumbnailJob>());
         services.TryAddSingleton<CollectionSettings>(provider =>
             provider.GetRequiredService<IOptions<CollectionOptions>>().Value.Read());
+        services.TryAddSingleton<LogoSweepSettings>(provider =>
+            provider.GetRequiredService<IOptions<LogoSweepOptions>>().Value.Read());
         services.TryAddSingleton<RescanNoticeBoard>();
         services.TryAddSingleton<CollectionBoost>();
         services.TryAddSingleton(new AppEventHub());
@@ -251,6 +262,7 @@ public static class ServiceCollectionExtensions
         services.AddHostedService(provider => provider.GetRequiredService<ScanRunner>());
         services.AddHostedService<EpgCollector>();
         services.AddHostedService<RideAlongHarvester>();
+        services.AddHostedService<LogoCollector>();
         services.AddHostedService<LiveStraySweep>();
         services.AddHostedService<EncodeMountCheck>();
         services.AddHostedService<EncodeDispatch>();
