@@ -21,6 +21,12 @@ public sealed class EncodeDispatchRuleTests
         "Encodings",
         "EncodeArtefactPlacer.cs");
 
+    private static string Invocation => Path.Combine(
+        RepositoryLayout.SourceDirectory,
+        "Carina.Infrastructure",
+        "Encodings",
+        "FfmpegEncodeInvocation.cs");
+
     [Fact(DisplayName = "BR-ED2-005: the two places a job is moved to running are the entity's own move and the ledger's conditional update, and nothing beside them")]
     public void TheTwoPlacesAJobIsMovedToRunningAreTheEntityAndTheLedgersConditionalUpdate()
     {
@@ -82,15 +88,31 @@ public sealed class EncodeDispatchRuleTests
             EncodeDispatchRules.WhatNamesTheArtefact(RepositoryLayout.SourceDirectory));
     }
 
-    [Fact(DisplayName = "BR-ED2-011: the encode feature starts a programme in two places — the run, which hands the ledger the programme's identity, and the length probe, which is bounded by a deadline and cannot outlive the process by more than that — and nowhere else")]
-    public void TheEncodeFeatureStartsAProgrammeInTwoPlacesAndNowhereElse()
+    [Fact(DisplayName = "BR-ED2-011: the encode feature starts a programme in three places — the run, which hands the ledger the programme's identity, and the two probes of the source's head and length, each bounded by a deadline and unable to outlive the process by more than that — and nowhere else")]
+    public void TheEncodeFeatureStartsAProgrammeInThreePlacesAndNowhereElse()
     {
         Assert.Equal(
             [
                 "/Carina.Infrastructure/Encodings/FfmpegEncodeRun.cs AnotherProgramme.Start(",
+                "/Carina.Infrastructure/Encodings/FfprobeSourceHead.cs AnotherProgramme.SayAsync(",
                 "/Carina.Infrastructure/Encodings/FfprobeSourceLength.cs AnotherProgramme.SayAsync(",
             ],
             EncodeDispatchRules.WhatStartsAProgramme(RepositoryLayout.SourceDirectory));
+    }
+
+    [Fact(DisplayName = "BR-ED2-006: the one place the encode feature moves the clock is the -ss the invocation writes, after the input; nothing in the feature spells -output_ts_offset, -copyts, -start_at_zero, -avoid_negative_ts or -itsoffset")]
+    public void TheOnePlaceTheEncodeFeatureMovesTheClockIsTheInvocationsSs()
+    {
+        Assert.Equal(
+            ["/Carina.Infrastructure/Encodings/FfmpegEncodeInvocation.cs \"-ss\""],
+            EncodeDispatchRules.WhatMovesTheClock(RepositoryLayout.SourceDirectory));
+
+        string source = File.ReadAllText(Invocation);
+        int input = source.IndexOf("\"-i\",", StringComparison.Ordinal);
+        int skip = source.IndexOf("\"-ss\",", StringComparison.Ordinal);
+
+        Assert.True(input >= 0 && skip > input, "the skip is written after the input, as a trim, not before it as a seek");
+        Assert.Equal(1, source.Split("\"-ss\"").Length - 1);
     }
 
     [Fact(DisplayName = "BR-ED2-011: the run hands over who the programme is before it reads a line of progress, stops the programme when that cannot be written down, and starts it yielding")]

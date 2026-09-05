@@ -269,6 +269,7 @@ public sealed class EncodeJobTests
             null,
             null,
             null,
+            null,
             null);
 
         EncodeRecovery recovery = job.Recover(3, Ended);
@@ -315,8 +316,8 @@ public sealed class EncodeJobTests
         Assert.Equal(Ended, job.Failure.NoticedAt);
     }
 
-    [Fact(DisplayName = "BR-ED2-012: the six reasons a job fails for are these and no other")]
-    public void TheSixReasonsAJobFailsForAreTheseAndNoOther()
+    [Fact(DisplayName = "BR-ED2-012: the seven reasons a job fails for are these and no other")]
+    public void TheSevenReasonsAJobFailsForAreTheseAndNoOther()
     {
         Assert.Equal(
             [
@@ -326,8 +327,59 @@ public sealed class EncodeJobTests
                 EncodeFailure.CapabilityUnavailable,
                 EncodeFailure.TimedOut,
                 EncodeFailure.DestinationCollision,
+                EncodeFailure.HeadTooFar,
             ],
             Enum.GetValues<EncodeFailure>());
+    }
+
+    [Fact(DisplayName = "BR-ED2-006: a running job is aligned once before its run and measured once after it, and the two together say where its clock stands")]
+    public void ARunningJobIsAlignedBeforeItsRunAndMeasuredAfterIt()
+    {
+        EncodeJob job = Running();
+        var timeline = new EncodeTimeline(TimeSpan.FromSeconds(30499.474078), TimeSpan.FromSeconds(0.5072), TimeSpan.FromSeconds(2097.502489), null);
+
+        job.Aligned(timeline);
+        job.Measured(TimeSpan.FromSeconds(2096.795));
+
+        Assert.Equal(TimeSpan.FromSeconds(0.5072), job.Timeline!.HeadSkip);
+        Assert.Equal(TimeSpan.FromSeconds(30499.981278), job.Timeline.CaptionShift);
+        Assert.Equal(TimeSpan.FromSeconds(2096.795), job.Timeline.ArtefactLength);
+        Assert.True(job.Timeline.LengthsAgree);
+    }
+
+    [Fact(DisplayName = "BR-ED2-006: only a running job is aligned or measured, a job is measured against the clock it was aligned to, and a job put back in the queue starts over unaligned")]
+    public void OnlyARunningJobIsAlignedOrMeasuredAndARequeuedJobStartsOverUnaligned()
+    {
+        var timeline = new EncodeTimeline(TimeSpan.FromSeconds(30499.474078), TimeSpan.FromSeconds(0.5072), null, null);
+        EncodeJob waiting = Waiting();
+        EncodeJob unaligned = Running();
+        EncodeJob aligned = Running();
+        aligned.Aligned(timeline);
+
+        Assert.Throws<InvalidOperationException>(() => waiting.Aligned(timeline));
+        Assert.Throws<InvalidOperationException>(() => unaligned.Measured(TimeSpan.FromSeconds(10)));
+        Assert.Throws<ArgumentNullException>(() => unaligned.Aligned(null!));
+
+        aligned.Requeue(Ended);
+
+        Assert.Null(aligned.Timeline);
+        Assert.Throws<ArgumentException>(() => EncodeJob.Rehydrate(
+            EncodeJobId.New(),
+            RecordingId.New(),
+            EncodeProfileId.New(),
+            EncodeDestinationId.New(),
+            Primary,
+            EncodeJobStatus.Queued,
+            1,
+            Queued,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            timeline));
     }
 
     [Fact(DisplayName = "BR-ED2-012: a reason nobody named cannot be recorded as one")]
@@ -382,6 +434,7 @@ public sealed class EncodeJobTests
             EncodeJobStatus.Queued,
             0,
             Queued,
+            null,
             null,
             null,
             null,
@@ -582,6 +635,7 @@ public sealed class EncodeJobRunMarkTests
             status is EncodeJobStatus.Completed ? EncodeFileName.Artefact(recording, profile) : null,
             route,
             programme,
+            null,
             null);
     }
 }

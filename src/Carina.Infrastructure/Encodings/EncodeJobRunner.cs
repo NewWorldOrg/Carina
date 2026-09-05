@@ -22,6 +22,15 @@ namespace Carina.Infrastructure.Encodings;
 /// every tenth and at least every <see cref="HeartbeatEvery"/>, so a job that has stopped getting
 /// on can be told from one that is (BR-ED2-014).
 /// </para>
+/// <para>
+/// Before the programme starts, the head of the source is read — where the container begins and
+/// where the first picture that can be decoded lies — and the distance between them is the one head
+/// skip the run is handed and the job keeps (BR-ED2-006). A head further away than a run accepts
+/// fails the job before a byte is written. When the programme has finished, the work file is
+/// measured and its length kept beside the source's, so an artefact that came out longer or
+/// shorter than the source had left is on the record; it is a note beside a completed job, not a
+/// failure, because the picture is whole and only its last seconds are in question.
+/// </para>
 /// </summary>
 public sealed class EncodeJobRunner(
     IEncodeJobRepository jobs,
@@ -33,6 +42,7 @@ public sealed class EncodeJobRunner(
     EncodeScratchCleaner cleaner,
     IMachineCapabilityReader machine,
     ISourceLengthReader lengths,
+    ISourceHeadReader heads,
     MachineSettings programmes,
     EncodeSettings settings,
     TimeProvider clock,
@@ -119,6 +129,25 @@ public sealed class EncodeJobRunner(
                 whole.Note);
         }
 
+        SourceHeadReading head = await heads.ReadAsync(source.FullName, recording.ServiceId, cancellationToken);
+
+        if (head.HeadSkip is not { } headSkip)
+        {
+            return await RefuseAsync(job, WhatAnUnreadHeadIsCalled(head), WhyTheHeadWentUnread(head), cancellationToken);
+        }
+
+        if (!EncodeTimeline.WithinReach(headSkip))
+        {
+            return await RefuseAsync(
+                job,
+                EncodeFailure.HeadTooFar,
+                $"the first picture that can be decoded lies {headSkip.TotalSeconds.ToString(FfmpegEncodeInvocation.Seconds, CultureInfo.InvariantCulture)} s into the source, further than the {EncodeTimeline.MostHeadSkip.TotalSeconds:0} s a run skips",
+                cancellationToken);
+        }
+
+        var timeline = new EncodeTimeline(head.Start!.Value, headSkip, whole.Length, null);
+        job.Aligned(timeline);
+
         if (await scratch.RecordAsync(job, EncodeScratchKind.WorkFile, job.WorkFileName, cancellationToken) is not { } work)
         {
             return await RefuseAsync(
@@ -131,21 +160,23 @@ public sealed class EncodeJobRunner(
         int cores = Math.Min(settings.MostCores, Environment.ProcessorCount);
 
         logger.LogInformation(
-            "Job {Job} starts attempt {Attempt} on the {Encoder} over {Cores} core(s), {Whole} of source to get through.",
+            "Job {Job} starts attempt {Attempt} on the {Encoder} over {Cores} core(s), {Whole} of source to get through after skipping {HeadSkip} s of head; the artefact's zero is {CaptionShift} s on the source's clock.",
             job.Id.Wire,
             job.Attempt,
             encoder,
             cores,
-            whole.Length is { } length ? length.ToString("c", CultureInfo.InvariantCulture) : "an unmeasured length");
+            timeline.Expected is { } expected ? expected.ToString("c", CultureInfo.InvariantCulture) : "an unmeasured length",
+            headSkip.TotalSeconds.ToString(FfmpegEncodeInvocation.Seconds, CultureInfo.InvariantCulture),
+            timeline.CaptionShift.TotalSeconds.ToString(FfmpegEncodeInvocation.Seconds, CultureInfo.InvariantCulture));
 
         var heard = new Heartbeat();
         EncodeRunOutcome ran = await FfmpegEncodeRun.RunAsync(
             programmes.Programme,
             [
-                .. FfmpegEncodeInvocation.Arguments(recording.ServiceId, profile, encoder, source.FullName, cores),
+                .. FfmpegEncodeInvocation.Arguments(recording.ServiceId, profile, encoder, source.FullName, cores, headSkip),
                 .. FfmpegEncodeInvocation.Delivery(work),
             ],
-            whole.Length,
+            timeline.Expected,
             settings.StalledAfter,
             spawned => SpawnedAsync(job, spawned, cancellationToken),
             progress => TellAsync(job, progress, heard, cancellationToken),
@@ -175,11 +206,70 @@ public sealed class EncodeJobRunner(
                 cancellationToken);
         }
 
+        await MeasureAsync(job, work, cancellationToken);
+
         EncodePlacementOutcome placed = await placer.PlaceAsync(job, cancellationToken);
 
         logger.LogInformation("Job {Job} ends {Status}; its artefact was {Placed}.", job.Id.Wire, job.Status, placed);
 
         return await SweptAsync(job, cancellationToken);
+    }
+
+    /// <summary>
+    /// A probe that read the source and found no picture to begin from leaves the head too far; one
+    /// that refused the source is the programme's own refusal, as a run's would be; one that could
+    /// not be asked at all is this machine's want.
+    /// </summary>
+    private static EncodeFailure WhatAnUnreadHeadIsCalled(SourceHeadReading head)
+        => head.Fault switch
+        {
+            SourceHeadFault.SaidNothing => EncodeFailure.HeadTooFar,
+            SourceHeadFault.Refused => EncodeFailure.FfmpegExitedNonZero,
+            _ => EncodeFailure.CapabilityUnavailable,
+        };
+
+    private static string WhyTheHeadWentUnread(SourceHeadReading head)
+        => head.Fault is SourceHeadFault.Refused
+            ? $"the programme exited {head.ExitCode} while reading the head of the source: {head.Note}"
+            : $"the head of the source could not be read ({head.Fault}), so nothing says where the artefact's clock would begin: {head.Note}";
+
+    private async Task MeasureAsync(EncodeJob job, string work, CancellationToken cancellationToken)
+    {
+        SourceLengthReading made = await lengths.ReadAsync(work, cancellationToken);
+
+        if (made.Length is not { } length)
+        {
+            logger.LogWarning(
+                "Job {Job} wrote an artefact whose length could not be measured ({Fault}), so its clock goes unchecked against the source's: {Note}",
+                job.Id.Wire,
+                made.Fault,
+                made.Note);
+
+            return;
+        }
+
+        job.Measured(length);
+        EncodeTimeline timeline = job.Timeline!;
+
+        if (timeline.LengthsAgree is false)
+        {
+            logger.LogWarning(
+                "Job {Job} wrote an artefact of {Made} where the source had {Expected} left after the head skip: {Drift} s apart, more than the {Tolerance} s the two clocks are allowed. The job completes; a caption near the end may land off its picture.",
+                job.Id.Wire,
+                length.ToString("c", CultureInfo.InvariantCulture),
+                timeline.Expected!.Value.ToString("c", CultureInfo.InvariantCulture),
+                timeline.Drift!.Value.TotalSeconds.ToString(FfmpegEncodeInvocation.Seconds, CultureInfo.InvariantCulture),
+                EncodeTimeline.Tolerance.TotalSeconds.ToString(FfmpegEncodeInvocation.Seconds, CultureInfo.InvariantCulture));
+
+            return;
+        }
+
+        logger.LogInformation(
+            "Job {Job} wrote an artefact of {Made}; the source had {Expected} left after the head skip ({Drift} s apart).",
+            job.Id.Wire,
+            length.ToString("c", CultureInfo.InvariantCulture),
+            timeline.Expected is { } expected ? expected.ToString("c", CultureInfo.InvariantCulture) : "an unmeasured length",
+            timeline.Drift is { } drift ? drift.TotalSeconds.ToString(FfmpegEncodeInvocation.Seconds, CultureInfo.InvariantCulture) : "an unknown distance");
     }
 
     private async Task SpawnedAsync(EncodeJob job, RunningProgramme spawned, CancellationToken cancellationToken)

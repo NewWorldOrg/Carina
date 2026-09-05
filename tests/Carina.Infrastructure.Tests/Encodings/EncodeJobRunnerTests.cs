@@ -37,7 +37,135 @@ public sealed class EncodeJobRunnerTests
         Assert.Equal(EncodeHarness.Broadcast, File.ReadAllText(harness.SourcePathOf(recording)));
         Assert.Equal([$"recorded {job.WorkFileName.Value}"], harness.Scratch.Moves.Where(move => move.StartsWith("recorded", StringComparison.Ordinal)));
         Assert.Equal(EncodeScratchFate.BecameTheArtefact, Assert.Single(harness.Scratch.Files).Fate);
-        Assert.Equal([harness.SourcePathOf(recording)], harness.Lengths.Asked);
+        Assert.Equal([harness.SourcePathOf(recording), harness.WorkPathOf(job)], harness.Lengths.Asked);
+        Assert.Equal([(harness.SourcePathOf(recording), recording.ServiceId)], harness.Heads.Asked);
+    }
+
+    [Fact(DisplayName = "BR-ED2-006: the head skip read off the source is the one -ss the programme is handed, after the input, and the job keeps it beside the source's start as the shift a caption takes")]
+    public async Task TheHeadSkipReadOffTheSourceIsTheOneSsTheProgrammeIsHanded()
+    {
+        using var harness = new EncodeHarness();
+        string arguments = harness.Room.Under("arguments");
+        harness.Standing($"printf '%s\\n' \"$@\" > \"{arguments}\"; printf 'the picture' > \"$destination\"");
+        harness.Heads.Reading = SourceHeadReading.Read(TimeSpan.FromSeconds(30499.474078), TimeSpan.FromSeconds(30499.981278));
+        harness.Lengths.Reading = SourceLengthReading.Read(TimeSpan.FromSeconds(2097.502489));
+        EncodeJob job = harness.Running(harness.Recorded().Id, harness.Defined().Id);
+
+        EncodeJobStatus ended = await harness.Runner.RunAsync(job, Cancel);
+
+        string[] handed = File.ReadAllLines(arguments);
+        Assert.Equal(EncodeJobStatus.Completed, ended);
+        Assert.Equal(1, handed.Count(argument => argument == "-ss"));
+        Assert.Equal("0.5072", handed[Array.IndexOf(handed, "-ss") + 1]);
+        Assert.True(Array.IndexOf(handed, "-ss") > Array.IndexOf(handed, "-i"), "the skip is a trim after the input");
+        Assert.Equal(TimeSpan.FromSeconds(0.5072), job.Timeline!.HeadSkip);
+        Assert.Equal(TimeSpan.FromSeconds(30499.474078), job.Timeline.SourceStart);
+        Assert.Equal(TimeSpan.FromSeconds(30499.981278), job.Timeline.CaptionShift);
+        Assert.Equal(TimeSpan.FromSeconds(2097.502489), job.Timeline.SourceLength);
+        Assert.Contains(harness.RunnerLog.Said, line => line.Contains("skipping 0.5072 s of head", StringComparison.Ordinal) && line.Contains("30499.981278 s on the source's clock", StringComparison.Ordinal));
+    }
+
+    [Fact(DisplayName = "BR-ED2-006: the whole the job measures its headway against is what the source has left after the head skip, not the source entire")]
+    public async Task TheWholeIsWhatTheSourceHasLeftAfterTheHeadSkip()
+    {
+        using var harness = new EncodeHarness();
+        harness.Standing(WritesTheWorkFileAndReportsProgress);
+        harness.Heads.Reading = SourceHeadReading.Read(MeasuredHeads.Start, MeasuredHeads.Start + TimeSpan.FromSeconds(2));
+        EncodeJob job = harness.Running(harness.Recorded().Id, harness.Defined().Id);
+
+        await harness.Runner.RunAsync(job, Cancel);
+
+        string[] told = [.. harness.RunnerLog.Said.Where(line => line.Contains("of the way through", StringComparison.Ordinal))];
+        Assert.Contains(" 62% of the way through", told[1], StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "BR-ED2-006: a first picture further than five seconds into the source fails the job as head too far, with the number, and the programme is never started")]
+    public async Task AFirstPictureFurtherThanFiveSecondsInFailsAsHeadTooFar()
+    {
+        using var harness = new EncodeHarness();
+        string marker = harness.Room.Under("it-ran");
+        harness.Standing($"printf ran > \"{marker}\"");
+        harness.Heads.Reading = SourceHeadReading.Read(MeasuredHeads.Start, MeasuredHeads.Start + TimeSpan.FromSeconds(5.5));
+        EncodeJob job = harness.Running(harness.Recorded().Id, harness.Defined().Id);
+
+        EncodeJobStatus ended = await harness.Runner.RunAsync(job, Cancel);
+
+        Assert.Equal(EncodeJobStatus.Failed, ended);
+        Assert.Equal(EncodeFailure.HeadTooFar, job.Failure!.Failure);
+        Assert.Contains("5.5 s into the source", job.Failure.Note, StringComparison.Ordinal);
+        Assert.False(File.Exists(marker));
+        Assert.Empty(harness.Scratch.Files);
+        Assert.Null(job.Timeline);
+    }
+
+    [Fact(DisplayName = "BR-ED2-006: a head with no picture to read is head too far, a head the prober refused is the programme's own refusal, and a head the prober could not be asked about is capability unavailable; none of them runs the programme")]
+    public async Task AHeadThatCannotBeReadFailsBeforeTheProgrammeStarts()
+    {
+        using var harness = new EncodeHarness();
+        string marker = harness.Room.Under("it-ran");
+        harness.Standing($"printf ran > \"{marker}\"");
+        EncodeProfile profile = harness.Defined();
+
+        harness.Heads.Reading = SourceHeadReading.Unanswered(SourceHeadFault.SaidNothing, "decoded no picture in the first 6 s");
+        EncodeJob quiet = harness.Running(harness.Recorded().Id, profile.Id);
+        Assert.Equal(EncodeJobStatus.Failed, await harness.Runner.RunAsync(quiet, Cancel));
+        Assert.Equal(EncodeFailure.HeadTooFar, quiet.Failure!.Failure);
+        Assert.Contains("decoded no picture", quiet.Failure.Note, StringComparison.Ordinal);
+
+        harness.Heads.Reading = SourceHeadReading.Unanswered(SourceHeadFault.ProgrammeMissing, "no such programme");
+        EncodeJob unasked = harness.Running(harness.Recorded().Id, profile.Id);
+        Assert.Equal(EncodeJobStatus.Failed, await harness.Runner.RunAsync(unasked, Cancel));
+        Assert.Equal(EncodeFailure.CapabilityUnavailable, unasked.Failure!.Failure);
+
+        harness.Heads.Reading = SourceHeadReading.Refused(1, "Invalid data found when processing input");
+        EncodeJob refused = harness.Running(harness.Recorded().Id, profile.Id);
+        Assert.Equal(EncodeJobStatus.Failed, await harness.Runner.RunAsync(refused, Cancel));
+        Assert.Equal(EncodeFailure.FfmpegExitedNonZero, refused.Failure!.Failure);
+        Assert.Contains("the programme exited 1 while reading the head", refused.Failure.Note, StringComparison.Ordinal);
+
+        Assert.False(File.Exists(marker));
+    }
+
+    [Fact(DisplayName = "BR-ED2-006: the artefact is measured before it is placed and its length kept beside the source's; one that came out further than a second from what the source had left is a note on a completed job, not a failure")]
+    public async Task TheArtefactIsMeasuredAndADisagreementIsANoteNotAFailure()
+    {
+        using var harness = new EncodeHarness();
+        harness.Standing(WritesTheWorkFileAndReportsProgress);
+        harness.Heads.Reading = SourceHeadReading.Read(MeasuredHeads.Start, MeasuredHeads.Start + TimeSpan.FromSeconds(0.5));
+        Recording recording = harness.Recorded();
+        EncodeJob job = harness.Running(recording.Id, harness.Defined().Id);
+        harness.Lengths.ByPath = path => path == harness.SourcePathOf(recording)
+            ? SourceLengthReading.Read(TimeSpan.FromSeconds(10))
+            : SourceLengthReading.Read(TimeSpan.FromSeconds(12));
+
+        EncodeJobStatus ended = await harness.Runner.RunAsync(job, Cancel);
+
+        Assert.Equal(EncodeJobStatus.Completed, ended);
+        Assert.Equal(TimeSpan.FromSeconds(12), job.Timeline!.ArtefactLength);
+        Assert.Equal(TimeSpan.FromSeconds(2.5), job.Timeline.Drift);
+        Assert.False(job.Timeline.LengthsAgree);
+        Assert.Null(job.Failure);
+        Assert.Contains(harness.RunnerLog.Said, line => line.Contains("2.5 s apart", StringComparison.Ordinal) && line.Contains("The job completes", StringComparison.Ordinal));
+        Assert.True(File.Exists(harness.ArtefactPathOf(job)));
+    }
+
+    [Fact(DisplayName = "BR-ED2-006: an artefact whose length cannot be measured completes with its clock unchecked, and says so")]
+    public async Task AnArtefactThatCannotBeMeasuredCompletesUnchecked()
+    {
+        using var harness = new EncodeHarness();
+        harness.Standing(WritesTheWorkFileAndReportsProgress);
+        Recording recording = harness.Recorded();
+        EncodeJob job = harness.Running(recording.Id, harness.Defined().Id);
+        harness.Lengths.ByPath = path => path == harness.SourcePathOf(recording)
+            ? null
+            : SourceLengthReading.Unanswered(SourceLengthFault.SaidNothing, "duration=N/A");
+
+        EncodeJobStatus ended = await harness.Runner.RunAsync(job, Cancel);
+
+        Assert.Equal(EncodeJobStatus.Completed, ended);
+        Assert.Null(job.Timeline!.ArtefactLength);
+        Assert.Null(job.Timeline.LengthsAgree);
+        Assert.Contains(harness.RunnerLog.Said, line => line.Contains("could not be measured", StringComparison.Ordinal));
     }
 
     [Fact(DisplayName = "BR-ED2-013: how far the job has got is told from 0 to 100 as the programme reports it")]

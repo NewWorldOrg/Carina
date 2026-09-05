@@ -150,6 +150,7 @@ public sealed class EncodeDispatchTests
             null,
             null,
             null,
+            null,
             null);
 
     /// <summary>

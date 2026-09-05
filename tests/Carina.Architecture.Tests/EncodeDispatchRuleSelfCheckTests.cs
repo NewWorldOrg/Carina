@@ -162,6 +162,42 @@ public sealed class EncodeDispatchRuleSelfCheckTests
         Assert.Empty(EncodeDispatchRules.WhatStartsAProgramme(tree.Root));
     }
 
+    public static TheoryData<string, string> EveryOrdinaryWayOfMovingTheClock => new()
+    {
+        { """return ["-ss", from.TotalSeconds.ToString(Seconds, CultureInfo.InvariantCulture), "-i", source];""", "\"-ss\"" },
+        { """arguments.Add("-output_ts_offset");""", "\"-output_ts_offset\"" },
+        { """["-copyts", "-start_at_zero"]""", "\"-copyts\"" },
+        { """["-avoid_negative_ts", "make_zero"]""", "\"-avoid_negative_ts\"" },
+        { """["-itsoffset", "0.5"]""", "\"-itsoffset\"" },
+    };
+
+    public static TheoryData<string> EveryWayOfMovingTheClockThatWalksStraightPast =>
+    [
+        """string skip = "-" + "ss";""",
+        """arguments.Add(Skip);""",
+        """["-ss:v", "0.5"]""",
+    ];
+
+    [Theory]
+    [MemberData(nameof(EveryOrdinaryWayOfMovingTheClock))]
+    public void DetectsThisWayOfMovingTheClock(string source, string reported)
+    {
+        using var tree = new SourceTree();
+        tree.Write(InTheFolder, source);
+
+        Assert.Contains($"/{InTheFolder} {reported}", EncodeDispatchRules.WhatMovesTheClock(tree.Root));
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryWayOfMovingTheClockThatWalksStraightPast))]
+    public void CannotSeeThisWayOfMovingTheClock(string source)
+    {
+        using var tree = new SourceTree();
+        tree.Write(InTheFolder, source);
+
+        Assert.Empty(EncodeDispatchRules.WhatMovesTheClock(tree.Root));
+    }
+
     [Fact]
     public void DetectsTheArtefactBeingNamedAnywhereInTheFeature()
     {

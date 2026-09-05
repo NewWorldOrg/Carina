@@ -44,6 +44,7 @@ internal sealed class EncodeHarness : IDisposable
         Clock = new HandTurnedClock(new DateTimeOffset(2026, 9, 5, 4, 0, 0, TimeSpan.Zero));
         MachineReader = Machine;
         LengthReader = Lengths;
+        HeadReader = Heads;
     }
 
     public TempTree Room { get; }
@@ -72,9 +73,13 @@ internal sealed class EncodeHarness : IDisposable
 
     public MeasuredLengths Lengths { get; } = new();
 
+    public MeasuredHeads Heads { get; } = new();
+
     public IMachineCapabilityReader MachineReader { get; set; }
 
     public ISourceLengthReader LengthReader { get; set; }
+
+    public ISourceHeadReader HeadReader { get; set; }
 
     public MachineSettings Programmes { get; set; } = new();
 
@@ -104,6 +109,7 @@ internal sealed class EncodeHarness : IDisposable
         Cleaner,
         MachineReader,
         LengthReader,
+        HeadReader,
         Programmes,
         Settings,
         Clock,
@@ -201,6 +207,7 @@ internal sealed class EncodeHarness : IDisposable
             null,
             null,
             EncodeFileName.Artefact(recording, profile),
+            null,
             null,
             null,
             null);
@@ -312,11 +319,29 @@ internal sealed class MeasuredLengths : ISourceLengthReader
 {
     public SourceLengthReading Reading { get; set; } = SourceLengthReading.Read(EncodeHarness.Whole);
 
+    public Func<string, SourceLengthReading?>? ByPath { get; set; }
+
     public List<string> Asked { get; } = [];
 
     public Task<SourceLengthReading> ReadAsync(string source, CancellationToken cancellationToken)
     {
         Asked.Add(source);
+
+        return Task.FromResult(ByPath?.Invoke(source) ?? Reading);
+    }
+}
+
+internal sealed class MeasuredHeads : ISourceHeadReader
+{
+    public static readonly TimeSpan Start = TimeSpan.FromSeconds(30499.474078);
+
+    public SourceHeadReading Reading { get; set; } = SourceHeadReading.Read(Start, Start);
+
+    public List<(string Source, ServiceId Service)> Asked { get; } = [];
+
+    public Task<SourceHeadReading> ReadAsync(string source, ServiceId service, CancellationToken cancellationToken)
+    {
+        Asked.Add((source, service));
 
         return Task.FromResult(Reading);
     }
