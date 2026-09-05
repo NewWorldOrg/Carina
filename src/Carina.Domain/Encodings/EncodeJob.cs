@@ -1,4 +1,5 @@
 using Carina.Domain.Base;
+using Carina.Domain.Machines;
 using Carina.Domain.Recordings;
 
 namespace Carina.Domain.Encodings;
@@ -35,6 +36,12 @@ public sealed class EncodeJob
 
     public EncodeFileName? ArtefactName { get; private set; }
 
+    public EncodeRoute? Route { get; private set; }
+
+    public RunningProgramme? Programme { get; private set; }
+
+    public EncodeHeadway? Headway { get; private set; }
+
     public bool HasEnded => EncodeStandings.IsTerminal(Status);
 
     public EncodeStanding Standing => EncodeStandings.Of(Status);
@@ -60,6 +67,9 @@ public sealed class EncodeJob
             null,
             null,
             null,
+            null,
+            null,
+            null,
             null);
 
     public static EncodeJob Rehydrate(
@@ -74,7 +84,10 @@ public sealed class EncodeJob
         DateTime? startedAt,
         DateTime? endedAt,
         EncodeFailureDetail? failure,
-        EncodeFileName? artefactName)
+        EncodeFileName? artefactName,
+        EncodeRoute? route,
+        RunningProgramme? programme,
+        EncodeHeadway? headway)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(recordingId);
@@ -97,6 +110,16 @@ public sealed class EncodeJob
                 nameof(artefactName));
         }
 
+        if (programme is not null && status is not EncodeJobStatus.Running)
+        {
+            throw new ArgumentException("Only a job the ledger holds as running has a programme of its own.", nameof(programme));
+        }
+
+        if ((route is not null || headway is not null) && status is EncodeJobStatus.Queued)
+        {
+            throw new ArgumentException("A job that is waiting has run nowhere and got nowhere.", nameof(route));
+        }
+
         return new EncodeJob
         {
             Id = id,
@@ -111,6 +134,9 @@ public sealed class EncodeJob
             EndedAt = UtcTimes.Optional(endedAt, nameof(endedAt)),
             Failure = failure,
             ArtefactName = artefactName,
+            Route = route,
+            Programme = programme,
+            Headway = headway,
         };
     }
 
@@ -120,6 +146,59 @@ public sealed class EncodeJob
 
         Status = EncodeJobStatus.Running;
         StartedAt = UtcTimes.Required(at, nameof(at));
+    }
+
+    public void Routed(EncodeRoute route)
+    {
+        ArgumentNullException.ThrowIfNull(route);
+        Only(EncodeJobStatus.Running, "say where it runs");
+
+        Route = route;
+    }
+
+    public void Spawned(RunningProgramme programme)
+    {
+        ArgumentNullException.ThrowIfNull(programme);
+        Only(EncodeJobStatus.Running, "have a programme of its own");
+
+        Programme = programme;
+    }
+
+    public void Reached(EncodeProgress progress, DateTime at)
+    {
+        ArgumentNullException.ThrowIfNull(progress);
+        Only(EncodeJobStatus.Running, "report headway");
+
+        Headway = EncodeHeadway.Of(progress, at);
+    }
+
+    /// <summary>
+    /// How long a running job has gone without making headway, measured from its last report or,
+    /// before the first, from when it started. Nothing for a job that is not running.
+    /// </summary>
+    public TimeSpan? QuietFor(DateTime now)
+    {
+        UtcTimes.Required(now, nameof(now));
+
+        if (Status is not EncodeJobStatus.Running || StartedAt is not { } started)
+        {
+            return null;
+        }
+
+        DateTime lastHeard = Headway?.At ?? started;
+
+        return now > lastHeard ? now - lastHeard : TimeSpan.Zero;
+    }
+
+    /// <summary>
+    /// A running job that has made no headway for as long as a run is allowed to go quiet. The
+    /// ledger says running; this is what says it should not be read that way (BR-ED2-014).
+    /// </summary>
+    public bool IsStalled(DateTime now, TimeSpan stalledAfter)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(stalledAfter, TimeSpan.Zero);
+
+        return QuietFor(now) is { } quiet && quiet >= stalledAfter;
     }
 
     public void Name(EncodeFileName artefactName)
@@ -147,6 +226,7 @@ public sealed class EncodeJob
 
         Status = EncodeJobStatus.Completed;
         EndedAt = UtcTimes.Required(at, nameof(at));
+        Programme = null;
     }
 
     public void Fail(EncodeFailure failure, string note, DateTime at)
@@ -156,6 +236,7 @@ public sealed class EncodeJob
         Status = EncodeJobStatus.Failed;
         EndedAt = UtcTimes.Required(at, nameof(at));
         Failure = new EncodeFailureDetail(failure, note, at);
+        Programme = null;
     }
 
     public void Cancel(DateTime at)
@@ -167,6 +248,7 @@ public sealed class EncodeJob
 
         Status = EncodeJobStatus.Cancelled;
         EndedAt = UtcTimes.Required(at, nameof(at));
+        Programme = null;
     }
 
     public void Requeue(DateTime at)
@@ -177,6 +259,9 @@ public sealed class EncodeJob
         Attempt++;
         QueuedAt = UtcTimes.Required(at, nameof(at));
         StartedAt = null;
+        Route = null;
+        Programme = null;
+        Headway = null;
     }
 
     /// <summary>

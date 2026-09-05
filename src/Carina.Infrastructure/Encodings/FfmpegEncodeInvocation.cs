@@ -22,15 +22,25 @@ public static class FfmpegEncodeInvocation
 
     private const string OntoTheCard = "format=nv12";
 
+    /// <summary>
+    /// The arguments for one run. The core cap is written three times because ffmpeg counts
+    /// threads per stage: once before the input for the decoder, once for the filters, and once
+    /// for the encoder (BR-ED2-005). The stages are a pipeline, so the run as a whole is bounded
+    /// by the slowest of them rather than by their sum.
+    /// </summary>
     public static IReadOnlyList<string> Arguments(
         ServiceId service,
         EncodeProfile profile,
         EncodeEncoder encoder,
-        string source)
+        string source,
+        int cores)
     {
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentException.ThrowIfNullOrEmpty(source);
+        ArgumentOutOfRangeException.ThrowIfLessThan(cores, 1);
+
+        string threads = cores.ToString(CultureInfo.InvariantCulture);
 
         return
         [
@@ -42,13 +52,19 @@ public static class FfmpegEncodeInvocation
             "-progress",
             "pipe:1",
             "-y",
+            "-filter_threads",
+            threads,
             .. Device(encoder),
+            "-threads",
+            threads,
             "-i",
             source,
             .. Mapping(service),
             "-vf",
             Filter(profile, encoder),
             .. Encoding(profile, encoder),
+            "-threads",
+            threads,
             "-c:a",
             "copy",
             "-bsf:a",

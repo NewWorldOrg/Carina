@@ -9,6 +9,12 @@ public sealed class EncodeDispatchRuleTests
         "Repositories",
         "EncodeJobRepository.cs");
 
+    private static string Run => Path.Combine(
+        RepositoryLayout.SourceDirectory,
+        "Carina.Infrastructure",
+        "Encodings",
+        "FfmpegEncodeRun.cs");
+
     private static string Placer => Path.Combine(
         RepositoryLayout.SourceDirectory,
         "Carina.Infrastructure",
@@ -74,6 +80,33 @@ public sealed class EncodeDispatchRuleTests
                 "/Carina.Infrastructure/Encodings/EncodeArtefactPlacer.cs EncodeFileName.Artefact(",
             ],
             EncodeDispatchRules.WhatNamesTheArtefact(RepositoryLayout.SourceDirectory));
+    }
+
+    [Fact(DisplayName = "BR-ED2-011: the encode feature starts a programme in two places — the run, which hands the ledger the programme's identity, and the length probe, which is bounded by a deadline and cannot outlive the process by more than that — and nowhere else")]
+    public void TheEncodeFeatureStartsAProgrammeInTwoPlacesAndNowhereElse()
+    {
+        Assert.Equal(
+            [
+                "/Carina.Infrastructure/Encodings/FfmpegEncodeRun.cs AnotherProgramme.Start(",
+                "/Carina.Infrastructure/Encodings/FfprobeSourceLength.cs AnotherProgramme.SayAsync(",
+            ],
+            EncodeDispatchRules.WhatStartsAProgramme(RepositoryLayout.SourceDirectory));
+    }
+
+    [Fact(DisplayName = "BR-ED2-011: the run hands over who the programme is before it reads a line of progress, stops the programme when that cannot be written down, and starts it yielding")]
+    public void TheRunHandsOverWhoTheProgrammeIsBeforeItReadsALineOfProgress()
+    {
+        string source = File.ReadAllText(Run);
+        int started = source.IndexOf("AnotherProgramme.Start(programme, arguments, ProgrammePriority.Yielding)", StringComparison.Ordinal);
+        int handedOver = source.IndexOf("await began(spawned);", StringComparison.Ordinal);
+        int stoppedInstead = source.IndexOf("AnotherProgramme.GiveUpOn(running);\n\n                throw;", StringComparison.Ordinal);
+        int read = source.IndexOf("StandardOutput.ReadLineAsync(", StringComparison.Ordinal);
+
+        Assert.True(started >= 0, "the programme is started yielding");
+        Assert.True(handedOver > started, "the identity is handed over after the start");
+        Assert.True(stoppedInstead > handedOver, "a hand-over that fails stops the programme");
+        Assert.True(read > handedOver, "progress is read only after the identity is handed over");
+        Assert.Equal(1, source.Split("AnotherProgramme.Start(").Length - 1);
     }
 
     [Fact]

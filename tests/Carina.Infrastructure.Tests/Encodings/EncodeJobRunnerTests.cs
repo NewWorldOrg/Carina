@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Carina.Domain.Encodings;
 using Carina.Domain.Machines;
 using Carina.Domain.Recordings;
+using Carina.Infrastructure.Encodings;
 using Carina.TestSupport;
 
 namespace Carina.Infrastructure.Tests.Encodings;
@@ -169,7 +170,7 @@ public sealed class EncodeJobRunnerTests
 
         Assert.Equal(EncodeJobStatus.Failed, ended);
         Assert.Equal(EncodeFailure.TimedOut, job.Failure!.Failure);
-        Assert.Contains("nothing was reported for", job.Failure.Note, StringComparison.Ordinal);
+        Assert.Contains("no headway was made for", job.Failure.Note, StringComparison.Ordinal);
         Assert.True(waited.Elapsed < TimeSpan.FromSeconds(15), $"the programme was stopped rather than waited for: {waited.Elapsed}");
         Assert.False(File.Exists(marker));
     }
@@ -227,7 +228,7 @@ public sealed class EncodeJobRunnerTests
         Assert.DoesNotContain(handed, argument => argument.Contains("A programme", StringComparison.Ordinal));
     }
 
-    [Fact(DisplayName = "BR-ED2-011: a stop asked for while the programme runs stops the programme and leaves the job running in the ledger for the next start to put back")]
+    [Fact(DisplayName = "BR-ED2-011: a stop asked for while the programme runs stops the programme and leaves the job running in the ledger, programme and all, for the next start to put back")]
     public async Task AStopWhileTheProgrammeRunsLeavesTheJobRunningInTheLedger()
     {
         using var harness = new EncodeHarness();
@@ -251,7 +252,10 @@ public sealed class EncodeJobRunnerTests
         Assert.True(waited.Elapsed < TimeSpan.FromSeconds(15), $"the programme was stopped rather than waited for: {waited.Elapsed}");
         Assert.Equal(EncodeJobStatus.Running, job.Status);
         Assert.Null(job.Failure);
-        Assert.DoesNotContain(harness.Jobs.Moves, move => move.StartsWith("saved", StringComparison.Ordinal));
+        Assert.NotNull(job.Programme);
+        Assert.All(
+            harness.Jobs.Moves.Where(move => move.StartsWith("saved", StringComparison.Ordinal)),
+            move => Assert.EndsWith(" Running", move, StringComparison.Ordinal));
         Assert.True(Assert.Single(harness.Scratch.Files).IsOwedARemoval, "the work file is left for the next start, never swept while the ledger says the job runs");
         Assert.False(File.Exists(finished));
     }
@@ -278,6 +282,129 @@ public sealed class EncodeJobRunnerTests
         EncodeJob waiting = EncodeJob.Queue(EncodeJobId.New(), RecordingId.New(), EncodeProfileId.New(), EncodeDestinationId.New(), EncodeHarness.Primary, EncodeHarness.Queued);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => harness.Runner.RunAsync(waiting, Cancel));
+    }
+
+    [Fact(DisplayName = "BR-ED2-011: the programme's id and start are written into the ledger before it has reported anything, and let go of once the job has ended")]
+    public async Task TheProgrammesIdAndStartAreWrittenIntoTheLedgerBeforeItReportsAnything()
+    {
+        using var harness = new EncodeHarness();
+        harness.Standing(WritesTheWorkFileAndReportsProgress);
+        EncodeJob job = harness.Running(harness.Recorded().Id, harness.Defined().Id);
+        List<(RunningProgramme? Programme, EncodeHeadway? Headway, EncodeJobStatus Status)> saved = [];
+        harness.Jobs.WhenSaving = saving => saved.Add((saving.Programme, saving.Headway, saving.Status));
+
+        await harness.Runner.RunAsync(job, Cancel);
+
+        (RunningProgramme? programme, EncodeHeadway? headway, EncodeJobStatus status) = saved[0];
+        Assert.Equal(EncodeJobStatus.Running, status);
+        Assert.NotNull(programme);
+        Assert.Null(headway);
+        Assert.InRange(programme.ProcessId, 2, int.MaxValue);
+        Assert.InRange(programme.StartedAt, DateTime.UtcNow.AddMinutes(-1), DateTime.UtcNow.AddSeconds(2));
+        Assert.Null(job.Programme);
+        Assert.Equal(EncodeJobStatus.Completed, job.Status);
+    }
+
+    [Fact(DisplayName = "BR-EV-004: where the run went is written on the job — asked for the card, ran on the processor — and stays written once it has ended")]
+    public async Task WhereTheRunWentIsWrittenOnTheJob()
+    {
+        using var harness = new EncodeHarness();
+        harness.Settings = harness.Settings with { Prefer = EncodeEncoder.Vaapi };
+        harness.Standing("printf 'the picture' > \"$destination\"");
+        EncodeJob job = harness.Running(harness.Recorded().Id, harness.Defined().Id);
+
+        await harness.Runner.RunAsync(job, Cancel);
+
+        Assert.Equal(EncodeJobStatus.Completed, job.Status);
+        Assert.Equal(new EncodeRoute(EncodeEncoder.Vaapi, EncodeEncoder.Software, EncodeSwerve.TheCardIsOutOfReach), job.Route);
+        Assert.Contains(harness.Jobs.Moves, move => move.StartsWith("saved", StringComparison.Ordinal));
+    }
+
+    [Fact(DisplayName = "BR-EV-004: a run that went where it was sent is written down as such, with no swerve")]
+    public async Task ARunThatWentWhereItWasSentIsWrittenDownAsSuch()
+    {
+        using var harness = new EncodeHarness();
+        harness.Standing("printf 'the picture' > \"$destination\"");
+        EncodeJob job = harness.Running(harness.Recorded().Id, harness.Defined().Id);
+
+        await harness.Runner.RunAsync(job, Cancel);
+
+        Assert.Equal(new EncodeRoute(EncodeEncoder.Software, EncodeEncoder.Software, null), job.Route);
+    }
+
+    [Fact(DisplayName = "BR-ED2-014: headway is written into the ledger as the programme reports it — the portion, what is left and when — and the last of it stays with the job that ended")]
+    public async Task HeadwayIsWrittenIntoTheLedgerAsTheProgrammeReportsIt()
+    {
+        using var harness = new EncodeHarness();
+        harness.Standing(WritesTheWorkFileAndReportsProgress);
+        EncodeJob job = harness.Running(harness.Recorded().Id, harness.Defined().Id);
+        List<EncodeHeadway> saved = [];
+        harness.Jobs.WhenSaving = saving =>
+        {
+            if (saving.Headway is { } headway && saving.Status is EncodeJobStatus.Running)
+            {
+                saved.Add(headway);
+            }
+        };
+
+        await harness.Runner.RunAsync(job, Cancel);
+
+        Assert.Equal([0, 0.5, 1], saved.Select(headway => headway.Portion));
+        Assert.Equal(TimeSpan.FromSeconds(2.5), saved[1].Left);
+        Assert.All(saved, headway => Assert.Equal(harness.Clock.GetUtcNow().UtcDateTime, headway.At));
+        Assert.Equal(1, job.Headway!.Portion);
+        Assert.Equal(TimeSpan.Zero, job.Headway.Left);
+    }
+
+    [Fact(DisplayName = "BR-ED2-014: a programme that reports often is written into the ledger at every tenth and at least every heartbeat, not at every report")]
+    public async Task AProgrammeThatReportsOftenIsWrittenAtEveryTenthAndEveryHeartbeat()
+    {
+        using var harness = new EncodeHarness();
+        var clock = new HandTurnedClock(new DateTimeOffset(2026, 9, 5, 4, 0, 0, TimeSpan.Zero));
+        harness.Clock = clock;
+        harness.Standing("""
+            for step in 1 2 3 4 5 6 7 8 9 10 11 12; do
+                printf 'out_time_us=%d\nspeed=1.0x\nprogress=continue\n' "$((step * 50000))"
+            done
+            printf 'the picture' > "$destination"
+            printf 'out_time_us=10000000\nspeed=1.0x\nprogress=end\n'
+            """);
+        EncodeJob job = harness.Running(harness.Recorded().Id, harness.Defined().Id);
+        int heartbeats = 0;
+        harness.Jobs.WhenSaving = saving =>
+        {
+            if (saving.Status is EncodeJobStatus.Running && saving.Headway is not null)
+            {
+                heartbeats++;
+                clock.Turn(EncodeJobRunner.HeartbeatEvery / 4);
+            }
+        };
+
+        await harness.Runner.RunAsync(job, Cancel);
+
+        Assert.InRange(heartbeats, 2, 5);
+    }
+
+    [Fact(DisplayName = "BR-ED2-005: the programme is handed the core cap, and no more cores than this machine has")]
+    public async Task TheProgrammeIsHandedTheCoreCap()
+    {
+        using var harness = new EncodeHarness();
+        harness.Settings = harness.Settings with { MostCores = 1 };
+        string arguments = harness.Room.Under("arguments");
+        harness.Standing($"printf '%s\\n' \"$@\" > \"{arguments}\"; printf 'the picture' > \"$destination\"");
+        EncodeJob job = harness.Running(harness.Recorded().Id, harness.Defined().Id);
+
+        await harness.Runner.RunAsync(job, Cancel);
+
+        string[] handed = File.ReadAllLines(arguments);
+        Assert.Equal(2, handed.Count(argument => argument == "-threads"));
+        Assert.Equal("1", handed[Array.IndexOf(handed, "-threads") + 1]);
+        Assert.Equal("1", handed[Array.IndexOf(handed, "-filter_threads") + 1]);
+
+        harness.Settings = harness.Settings with { MostCores = Environment.ProcessorCount + 40 };
+        await harness.Runner.RunAsync(harness.Running(harness.Recorded().Id, harness.Defined().Id), Cancel);
+        handed = File.ReadAllLines(arguments);
+        Assert.Equal(Environment.ProcessorCount.ToString(System.Globalization.CultureInfo.InvariantCulture), handed[Array.IndexOf(handed, "-threads") + 1]);
     }
 
     [Fact(DisplayName = "BR-EV-004: a programme that is not on this machine fails the job as capability unavailable rather than blaming the recording")]

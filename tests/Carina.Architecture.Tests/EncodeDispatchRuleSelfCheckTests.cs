@@ -41,6 +41,31 @@ public sealed class EncodeDispatchRuleSelfCheckTests
         { """rename(work, artefact);""", "rename(" },
     };
 
+    public static TheoryData<string, string> EveryOrdinaryWayOfStartingAProgramme => new()
+    {
+        { """ProgrammeStart start = AnotherProgramme.Start(programme, arguments);""", "AnotherProgramme.Start(" },
+        { """ProgrammeSaid said = await AnotherProgramme.SayAsync(programme, arguments, longest, clock, ct);""", "AnotherProgramme.SayAsync(" },
+        { """Process? started = Process.Start(new ProcessStartInfo("ffmpeg"));""", "Process.Start(" },
+        { """using var process = new Process { StartInfo = info };""", "newProcess{" },
+        { """LiveTranscoderStart started = TranscoderProcess.Start(settings, arguments, chosen, clock, ct);""", "TranscoderProcess.Start(" },
+        { """ProcessLaunch launched = TranscoderProcess.Launch(programme, arguments);""", "TranscoderProcess.Launch(" },
+    };
+
+    public static TheoryData<string> EveryWayOfLookingAtAProgrammeThatIsNotAStart =>
+    [
+        """using Process found = Process.GetProcessById(written.ProcessId);""",
+        """AnotherProgramme.GiveUpOn(running);""",
+        """ProcessStartInfo described = AnotherProgramme.Describe(programme, arguments);""",
+        """bool there = AnotherProgramme.IsOnThisMachine(programme);""",
+    ];
+
+    public static TheoryData<string> EveryWayOfStartingAProgrammeThatWalksStraightPast =>
+    [
+        """typeof(Process).GetMethod("Start", [typeof(ProcessStartInfo)])!.Invoke(null, [info]);""",
+        """Func<ProcessStartInfo, Process?> starter = Process.Start; starter(info);""",
+        """posix_spawn(out pid, programme, IntPtr.Zero, IntPtr.Zero, argv, envp);""",
+    ];
+
     public static TheoryData<string> EveryWayOfPuttingAFileThatWalksStraightPast =>
     [
         """AnotherProgramme.Describe("mv", [work, artefact]);""",
@@ -105,6 +130,36 @@ public sealed class EncodeDispatchRuleSelfCheckTests
         tree.Write(InTheFolder, source);
 
         Assert.Empty(EncodeDispatchRules.WhatPutsAFileSomewhere(tree.Root));
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryOrdinaryWayOfStartingAProgramme))]
+    public void DetectsThisWayOfStartingAProgramme(string source, string reported)
+    {
+        using var tree = new SourceTree();
+        tree.Write(InTheFolder, source);
+
+        Assert.Equal([$"/{InTheFolder} {reported}"], EncodeDispatchRules.WhatStartsAProgramme(tree.Root));
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryWayOfLookingAtAProgrammeThatIsNotAStart))]
+    public void DoesNotReportLookingAtAProgrammeAsAStart(string source)
+    {
+        using var tree = new SourceTree();
+        tree.Write(InTheFolder, source);
+
+        Assert.Empty(EncodeDispatchRules.WhatStartsAProgramme(tree.Root));
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryWayOfStartingAProgrammeThatWalksStraightPast))]
+    public void CannotSeeThisWayOfStartingAProgramme(string source)
+    {
+        using var tree = new SourceTree();
+        tree.Write(InTheFolder, source);
+
+        Assert.Empty(EncodeDispatchRules.WhatStartsAProgramme(tree.Root));
     }
 
     [Fact]

@@ -109,6 +109,9 @@ public sealed class EncodeDispatchTests
             EncodeHarness.Started,
             null,
             null,
+            null,
+            null,
+            null,
             null);
 
     /// <summary>
@@ -120,7 +123,7 @@ public sealed class EncodeDispatchTests
         var clock = new HandTurnedClock(new DateTimeOffset(Now));
         var services = new ServiceCollection();
         services.AddScoped<IEncodeJobRepository>(_ => held);
-        services.AddScoped(_ => new EncodeRestart(held, settings, clock, NullLogger<EncodeRestart>.Instance));
+        services.AddScoped(_ => new EncodeRestart(held, new ScriptedStrays(), settings, clock, NullLogger<EncodeRestart>.Instance));
         services.AddScoped<EncodeJobRunner>(_ => throw new InvalidOperationException("this run cannot be built"));
 
         return new EncodeDispatch(

@@ -280,6 +280,90 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
             await IndexDefinition(connection, EncodeScratchFileConfiguration.NameIndexName));
     }
 
+    [Theory(DisplayName = "BR-ED2-011: a programme is an id and a start together, on a running job only, begun no earlier than the job started")]
+    [InlineData("'Running'", Started, "4242, " + Started, null)]
+    [InlineData("'Running'", Started, "NULL, NULL", null)]
+    [InlineData("'Running'", Started, "4242, NULL", "ck_encode_job_programme")]
+    [InlineData("'Running'", Started, "NULL, " + Started, "ck_encode_job_programme")]
+    [InlineData("'Running'", Started, "0, " + Started, "ck_encode_job_programme")]
+    [InlineData("'Running'", Started, "4242, " + Queued, "ck_encode_job_programme")]
+    [InlineData("'Queued'", "NULL", "4242, " + Started, "ck_encode_job_programme")]
+    public async Task AProgrammeIsAnIdAndAStartTogetherOnARunningJobOnly(string status, string started, string programme, string? refusedBy)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        await SeedAsync(connection);
+        await ClearJobsAsync(connection);
+
+        Task writing = MarkedJobAsync(connection, status, started, programme, "NULL, NULL, NULL", "NULL, NULL, NULL");
+
+        if (refusedBy is null)
+        {
+            await writing;
+
+            return;
+        }
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(() => writing);
+        Assert.Equal(refusedBy, refusal.ConstraintName);
+    }
+
+    [Theory(DisplayName = "BR-ED2-014: headway is a portion between none and all, what is left, and when — together or not at all, and never on a job that has not run")]
+    [InlineData("'Running'", Started, "0.5, interval '00:07:00', " + Ended, null)]
+    [InlineData("'Running'", Started, "NULL, NULL, " + Ended, null)]
+    [InlineData("'Completed'", Started, "1, interval '0', " + Ended, null)]
+    [InlineData("'Running'", Started, "0.5, NULL, NULL", "ck_encode_job_headway")]
+    [InlineData("'Running'", Started, "1.5, NULL, " + Ended, "ck_encode_job_headway")]
+    [InlineData("'Running'", Started, "0.5, interval '-00:00:01', " + Ended, "ck_encode_job_headway")]
+    [InlineData("'Running'", Started, "0.5, NULL, " + Queued, "ck_encode_job_headway")]
+    [InlineData("'Queued'", "NULL", "0.5, NULL, " + Ended, "ck_encode_job_headway")]
+    public async Task HeadwayIsAPortionWhatIsLeftAndWhenTogetherOrNotAtAll(string status, string started, string headway, string? refusedBy)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        await SeedAsync(connection);
+        await ClearJobsAsync(connection);
+
+        Task writing = MarkedJobAsync(connection, status, started, "NULL, NULL", headway, "NULL, NULL, NULL");
+
+        if (refusedBy is null)
+        {
+            await writing;
+
+            return;
+        }
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(() => writing);
+        Assert.Equal(refusedBy, refusal.ConstraintName);
+    }
+
+    [Theory(DisplayName = "BR-EV-004: where a run went is the encoder asked and the encoder run, together, with a swerve exactly when they differ, and only on a job that ran")]
+    [InlineData("'Running'", Started, "'Software', 'Software', NULL", null)]
+    [InlineData("'Failed'", Started, "'Vaapi', 'Software', 'TheCardIsOutOfReach'", null)]
+    [InlineData("'Running'", Started, "'Software', 'Vaapi', 'TheProcessorCannotDoThisCodec'", null)]
+    [InlineData("'Running'", Started, "'Software', NULL, NULL", "ck_encode_job_route")]
+    [InlineData("'Running'", Started, "'Software', 'Software', 'TheCardIsOutOfReach'", "ck_encode_job_route")]
+    [InlineData("'Running'", Started, "'Vaapi', 'Software', NULL", "ck_encode_job_route")]
+    [InlineData("'Running'", Started, "'QuickSync', 'Software', 'TheCardIsOutOfReach'", "ck_encode_job_route")]
+    [InlineData("'Running'", Started, "'Vaapi', 'Software', 'Whim'", "ck_encode_job_route")]
+    [InlineData("'Queued'", "NULL", "'Software', 'Software', NULL", "ck_encode_job_route")]
+    public async Task WhereARunWentIsTheEncoderAskedAndRunTogether(string status, string started, string route, string? refusedBy)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        await SeedAsync(connection);
+        await ClearJobsAsync(connection);
+
+        Task writing = MarkedJobAsync(connection, status, started, "NULL, NULL", "NULL, NULL, NULL", route);
+
+        if (refusedBy is null)
+        {
+            await writing;
+
+            return;
+        }
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(() => writing);
+        Assert.Equal(refusedBy, refusal.ConstraintName);
+    }
+
     [Fact]
     public async Task TheDatabaseHoldsExactlyTheseChecksOnTheFourTables()
     {
@@ -302,7 +386,10 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
                 "ck_encode_job_artefact",
                 "ck_encode_job_attempt",
                 "ck_encode_job_failure",
+                "ck_encode_job_headway",
                 "ck_encode_job_output_root",
+                "ck_encode_job_programme",
+                "ck_encode_job_route",
                 "ck_encode_job_status",
                 "ck_encode_job_timeline",
             ],
@@ -401,6 +488,34 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
                 {Queued}, {started}, {ended}, {failure}, {artefact})
             """,
             connection).ExecuteNonQueryAsync();
+
+    private static Task MarkedJobAsync(
+        NpgsqlConnection connection,
+        string status,
+        string started,
+        string programme,
+        string headway,
+        string route)
+    {
+        bool ended = status is "'Completed'" or "'Failed'";
+        var recording = Guid.NewGuid();
+        string failure = status is "'Failed'" ? "'TimedOut', 'late', " + Ended : "NULL, NULL, NULL";
+        string artefact = status is "'Completed'" ? $"'{recording:N}.{ProfileWire}.mp4'" : "NULL";
+
+        return new NpgsqlCommand(
+            $"""
+            INSERT INTO encode_job (
+                id, recording_id, profile_id, destination_id, output_root, status, attempt,
+                queued_at, started_at, ended_at, failure, failure_note, failure_noticed_at, artefact_name,
+                process_id, process_started_at, progress_portion, progress_left, progress_at,
+                encoder_asked, encoder_ran, swerve)
+            VALUES (
+                '{Guid.NewGuid()}', '{recording}', '{Profile}', '{Destination}', 'primary', {status}, 1,
+                {Queued}, {started}, {(ended ? Ended : "NULL")}, {failure}, {artefact},
+                {programme}, {headway}, {route})
+            """,
+            connection).ExecuteNonQueryAsync();
+    }
 
     private static Task ScratchAsync(NpgsqlConnection connection, Guid job, string name, string removedAt, string fate)
         => new NpgsqlCommand(

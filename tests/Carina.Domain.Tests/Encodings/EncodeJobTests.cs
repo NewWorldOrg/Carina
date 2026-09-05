@@ -1,4 +1,5 @@
 using Carina.Domain.Encodings;
+using Carina.Domain.Machines;
 using Carina.Domain.Recordings;
 
 namespace Carina.Domain.Tests.Encodings;
@@ -265,6 +266,9 @@ public sealed class EncodeJobTests
             Started,
             null,
             null,
+            null,
+            null,
+            null,
             null);
 
         EncodeRecovery recovery = job.Recover(3, Ended);
@@ -381,5 +385,203 @@ public sealed class EncodeJobTests
             null,
             null,
             null,
+            null,
+            null,
+            null,
             null));
+}
+
+public sealed class EncodeJobRunMarkTests
+{
+    private static readonly DateTime Queued = new(2026, 9, 5, 3, 0, 0, DateTimeKind.Utc);
+
+    private static readonly DateTime Started = new(2026, 9, 5, 3, 0, 5, DateTimeKind.Utc);
+
+    private static readonly DateTime Later = new(2026, 9, 5, 3, 10, 0, DateTimeKind.Utc);
+
+    private static readonly TimeSpan TenMinutes = TimeSpan.FromMinutes(10);
+
+    private static readonly OutputRoot Primary = new("primary");
+
+    private static readonly RunningProgramme Ffmpeg = new(4242, Started.AddSeconds(1));
+
+    private static readonly EncodeRoute Degraded = new(EncodeEncoder.Vaapi, EncodeEncoder.Software, EncodeSwerve.TheCardIsOutOfReach);
+
+    private static EncodeJob Waiting()
+        => EncodeJob.Queue(EncodeJobId.New(), RecordingId.New(), EncodeProfileId.New(), EncodeDestinationId.New(), Primary, Queued);
+
+    private static EncodeJob Running()
+    {
+        EncodeJob job = Waiting();
+        job.Start(Started);
+
+        return job;
+    }
+
+    private static EncodeJob Marked()
+    {
+        EncodeJob job = Running();
+        job.Routed(Degraded);
+        job.Spawned(Ffmpeg);
+        job.Reached(EncodeProgress.Of(TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(60), 2, false), Later);
+
+        return job;
+    }
+
+    [Fact(DisplayName = "BR-EV-004: where a run went is written on the job, so a degraded run is in the ledger and not only in a log")]
+    public void WhereARunWentIsWrittenOnTheJob()
+    {
+        EncodeJob job = Running();
+
+        job.Routed(Degraded);
+
+        Assert.Equal(EncodeEncoder.Vaapi, job.Route!.Asked);
+        Assert.Equal(EncodeEncoder.Software, job.Route.Ran);
+        Assert.Equal(EncodeSwerve.TheCardIsOutOfReach, job.Route.Swerved);
+        Assert.True(job.Route.WasDegraded);
+    }
+
+    [Fact(DisplayName = "BR-ED2-011: the programme a run started is written on the job as its id and when it began, together")]
+    public void TheProgrammeARunStartedIsWrittenOnTheJob()
+    {
+        EncodeJob job = Running();
+
+        job.Spawned(Ffmpeg);
+
+        Assert.Equal(4242, job.Programme!.ProcessId);
+        Assert.Equal(Started.AddSeconds(1), job.Programme.StartedAt);
+    }
+
+    [Fact(DisplayName = "BR-ED2-014: headway is written on the job as the portion done, what is left and when that was reported")]
+    public void HeadwayIsWrittenOnTheJobWithWhenItWasReported()
+    {
+        EncodeJob job = Running();
+
+        job.Reached(EncodeProgress.Of(TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(60), 2, false), Later);
+
+        Assert.Equal(0.5, job.Headway!.Portion);
+        Assert.Equal(TimeSpan.FromSeconds(15), job.Headway.Left);
+        Assert.Equal(Later, job.Headway.At);
+    }
+
+    [Fact(DisplayName = "BR-ED2-014: a running job is quiet for as long as it has been since its last headway, and before any headway since it started")]
+    public void ARunningJobIsQuietForAsLongAsSinceItsLastHeadway()
+    {
+        EncodeJob fresh = Running();
+        EncodeJob heard = Marked();
+
+        Assert.Equal(Later - Started, fresh.QuietFor(Later));
+        Assert.Equal(TimeSpan.Zero, heard.QuietFor(Later));
+        Assert.Equal(TimeSpan.FromMinutes(5), heard.QuietFor(Later.AddMinutes(5)));
+        Assert.Null(Waiting().QuietFor(Later));
+    }
+
+    [Fact(DisplayName = "BR-ED2-014: a running job that has made no headway for as long as a run may go quiet is stalled, and the ledger's 'running' is not to be read as such")]
+    public void ARunningJobWithNoHeadwayForTooLongIsStalled()
+    {
+        EncodeJob job = Marked();
+
+        Assert.False(job.IsStalled(Later.AddMinutes(9), TenMinutes));
+        Assert.True(job.IsStalled(Later.AddMinutes(10), TenMinutes));
+        Assert.True(job.IsStalled(Later.AddHours(3), TenMinutes));
+    }
+
+    [Fact(DisplayName = "BR-ED2-014: a job that has yet to report anything is stalled from its start, not never")]
+    public void AJobThatHasReportedNothingIsStalledFromItsStart()
+    {
+        EncodeJob job = Running();
+
+        Assert.False(job.IsStalled(Started.AddMinutes(9), TenMinutes));
+        Assert.True(job.IsStalled(Started.AddMinutes(10), TenMinutes));
+    }
+
+    [Fact(DisplayName = "BR-ED2-014: only a running job can be stalled; a job that ended quiet is not, and a job cannot be asked about a quiet of no length")]
+    public void OnlyARunningJobCanBeStalled()
+    {
+        EncodeJob ended = Marked();
+        ended.Fail(EncodeFailure.TimedOut, "quiet", Later.AddHours(1));
+
+        Assert.False(ended.IsStalled(Later.AddHours(3), TenMinutes));
+        Assert.False(Waiting().IsStalled(Later.AddHours(3), TenMinutes));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Running().IsStalled(Later, TimeSpan.Zero));
+    }
+
+    [Fact(DisplayName = "BR-ED2-011: a job put back in the queue carries nothing of the run it was on: no route, no programme, no headway")]
+    public void AJobPutBackCarriesNothingOfTheRunItWasOn()
+    {
+        EncodeJob job = Marked();
+
+        job.Requeue(Later);
+
+        Assert.Null(job.Route);
+        Assert.Null(job.Programme);
+        Assert.Null(job.Headway);
+    }
+
+    [Fact(DisplayName = "BR-ED2-011: a job that ends keeps where it ran and how far it got, and lets go of the programme, which has exited")]
+    public void AJobThatEndsKeepsTheRouteAndTheHeadwayAndLetsGoOfTheProgramme()
+    {
+        EncodeJob failed = Marked();
+        EncodeJob completed = Marked();
+        EncodeJob cancelled = Marked();
+        completed.Name(EncodeFileName.Artefact(completed.RecordingId, completed.ProfileId));
+
+        failed.Fail(EncodeFailure.FfmpegExitedNonZero, "refused", Later);
+        completed.Complete(Later);
+        cancelled.Cancel(Later);
+
+        foreach (EncodeJob job in new[] { failed, completed, cancelled })
+        {
+            Assert.Null(job.Programme);
+            Assert.Same(Degraded, job.Route);
+            Assert.NotNull(job.Headway);
+        }
+    }
+
+    [Fact(DisplayName = "BR-ES-001: only a running job runs somewhere, has a programme, or makes headway")]
+    public void OnlyARunningJobIsMarked()
+    {
+        EncodeJob waiting = Waiting();
+        EncodeProgress progress = EncodeProgress.Of(TimeSpan.Zero, null, 0, false);
+
+        Assert.Throws<InvalidOperationException>(() => waiting.Routed(Degraded));
+        Assert.Throws<InvalidOperationException>(() => waiting.Spawned(Ffmpeg));
+        Assert.Throws<InvalidOperationException>(() => waiting.Reached(progress, Later));
+    }
+
+    [Fact(DisplayName = "BR-ED2-011: a row that says a waiting job has a programme, or ran somewhere, is not one the ledger can hold")]
+    public void ARowThatSaysAWaitingJobHasAProgrammeIsRefused()
+    {
+        Assert.Throws<ArgumentException>(() => Rehydrated(EncodeJobStatus.Queued, null, programme: Ffmpeg));
+        Assert.Throws<ArgumentException>(() => Rehydrated(EncodeJobStatus.Queued, null, route: Degraded));
+        Assert.Throws<ArgumentException>(() => Rehydrated(EncodeJobStatus.Completed, Later, programme: Ffmpeg));
+        Assert.NotNull(Rehydrated(EncodeJobStatus.Running, null, route: Degraded, programme: Ffmpeg).Programme);
+    }
+
+    private static EncodeJob Rehydrated(
+        EncodeJobStatus status,
+        DateTime? ended,
+        EncodeRoute? route = null,
+        RunningProgramme? programme = null)
+    {
+        var recording = RecordingId.New();
+        var profile = EncodeProfileId.New();
+
+        return EncodeJob.Rehydrate(
+            EncodeJobId.New(),
+            recording,
+            profile,
+            EncodeDestinationId.New(),
+            Primary,
+            status,
+            1,
+            Queued,
+            status is EncodeJobStatus.Queued ? null : Started,
+            ended,
+            null,
+            status is EncodeJobStatus.Completed ? EncodeFileName.Artefact(recording, profile) : null,
+            route,
+            programme,
+            null);
+    }
 }

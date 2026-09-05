@@ -190,7 +190,10 @@ internal sealed class EncodeHarness : IDisposable
             Started,
             null,
             null,
-            EncodeFileName.Artefact(recording, profile));
+            EncodeFileName.Artefact(recording, profile),
+            null,
+            null,
+            null);
         Jobs.Jobs.Add(job);
 
         return job;

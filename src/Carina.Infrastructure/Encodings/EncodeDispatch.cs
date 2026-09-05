@@ -129,9 +129,11 @@ public sealed class EncodeDispatch(
         }
 
         logger.LogWarning(
-            "{Found} encode job(s) were left running by the last process: {PutBack} put back in the queue, {GivenUp} given up.",
+            "{Found} encode job(s) were left running by the last process: {PutBack} put back in the queue, {GivenUp} given up; {Stopped} programme(s) still running were stopped, {Spared} under a written id belonged to someone else.",
             report.Found,
             report.PutBack,
-            report.GivenUp);
+            report.GivenUp,
+            report.Stopped,
+            report.Spared);
     }
 }

@@ -224,6 +224,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<ISourceLengthReader>(provider => new FfprobeSourceLength(
             provider.GetRequiredService<MachineSettings>(),
             provider.GetRequiredService<TimeProvider>()));
+        services.TryAddSingleton<IStrayProgrammes, StrayProgrammes>();
         services.TryAddSingleton<IMachineCapabilityReader>(provider => new MachineCapabilityReader(
             provider.GetRequiredService<MachineSettings>(),
             provider.GetRequiredService<TimeProvider>()));

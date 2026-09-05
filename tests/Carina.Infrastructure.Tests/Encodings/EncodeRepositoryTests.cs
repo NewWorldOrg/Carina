@@ -1,4 +1,5 @@
 using Carina.Domain.Encodings;
+using Carina.Domain.Machines;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
@@ -83,6 +84,46 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         Assert.Equal(EncodeJobStatus.Queued, readWaiting.Status);
         Assert.Null(readWaiting.Failure);
         Assert.Null(readWaiting.StartedAt);
+    }
+
+    [Fact(DisplayName = "BR-ED2-011: where a job ran, the programme it started and how far it got go into the ledger and come back with the job, and go when the job's moves let them go")]
+    public async Task WhereAJobRanItsProgrammeAndItsHeadwayComeBackWithTheJob()
+    {
+        await ClearAsync();
+        (EncodeProfile profile, EncodeDestination destination) = await DefinedAsync();
+        EncodeJob running = Job(profile, destination);
+        running.Start(Started);
+        running.Routed(new EncodeRoute(EncodeEncoder.Vaapi, EncodeEncoder.Software, EncodeSwerve.TheCardIsOutOfReach));
+        running.Spawned(new RunningProgramme(4242, Started.AddSeconds(1)));
+        running.Reached(EncodeProgress.Of(TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(120), 2, false), Started.AddSeconds(20));
+
+        await using (CarinaDbContext writing = database.Open())
+        {
+            await new EncodeJobRepository(writing).AddAsync(running, Cancel);
+        }
+
+        await using (CarinaDbContext reading = database.Open())
+        {
+            EncodeJob? read = await new EncodeJobRepository(reading).FindAsync(running.Id, Cancel);
+
+            Assert.NotNull(read);
+            Assert.Equal(running.Route, read.Route);
+            Assert.Equal(running.Programme, read.Programme);
+            Assert.Equal(0.25, read.Headway!.Portion);
+            Assert.Equal(TimeSpan.FromSeconds(45), read.Headway.Left);
+            Assert.Equal(Started.AddSeconds(20), read.Headway.At);
+
+            read.Fail(EncodeFailure.TimedOut, "quiet", Ended);
+            await new EncodeJobRepository(reading).SaveAsync(read, Cancel);
+        }
+
+        await using CarinaDbContext again = database.Open();
+        EncodeJob? ended = await new EncodeJobRepository(again).FindAsync(running.Id, Cancel);
+
+        Assert.NotNull(ended);
+        Assert.Null(ended.Programme);
+        Assert.Equal(running.Route, ended.Route);
+        Assert.NotNull(ended.Headway);
     }
 
     [Fact(DisplayName = "BR-ED2-009: the name goes into the ledger and is read back with the job")]

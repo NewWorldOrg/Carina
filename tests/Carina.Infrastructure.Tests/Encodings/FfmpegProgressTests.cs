@@ -157,7 +157,8 @@ public sealed class FfmpegProgressTests
             new Domain.Channels.ServiceId(1040),
             AProfile(),
             EncodeEncoder.Software,
-            "/srv/recordings/0f8c.ts")];
+            "/srv/recordings/0f8c.ts",
+            2)];
 
         Assert.Contains("-progress", arguments);
         Assert.Equal("pipe:1", arguments[arguments.IndexOf("-progress") + 1]);

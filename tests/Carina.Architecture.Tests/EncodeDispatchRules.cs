@@ -3,12 +3,12 @@ using System.Text.RegularExpressions;
 namespace Carina.Architecture.Tests;
 
 /// <summary>
-/// Reads the encode feature for the two ways a second job could come to run beside the first, or
-/// an artefact come to be where the ledger never put it: a job moved to running anywhere but by
-/// the ledger's conditional update, and a file moved or copied into place anywhere but by the
-/// placer that writes the ledger first. The feature is its folders plus any file named for it,
-/// wherever it sits. Like the other rules here it reads source text, so it sees the ordinary
-/// spellings and no others.
+/// Reads the encode feature for the three ways a job could get away from the ledger: a job moved
+/// to running anywhere but by the ledger's conditional update, a file moved or copied into place
+/// anywhere but by the placer that writes the ledger first, and a programme started anywhere but
+/// by the one run that hands the ledger the programme's identity before reading a line from it.
+/// The feature is its folders plus any file named for it, wherever it sits. Like the other rules
+/// here it reads source text, so it sees the ordinary spellings and no others.
 /// </summary>
 public static partial class EncodeDispatchRules
 {
@@ -27,6 +27,9 @@ public static partial class EncodeDispatchRules
 
     public static IReadOnlyList<string> WhatNamesTheArtefact(string directory)
         => Reported(directory, NamesTheArtefact());
+
+    public static IReadOnlyList<string> WhatStartsAProgramme(string directory)
+        => Reported(directory, StartsAProgramme());
 
     public static IReadOnlyList<string> FilesInTheFeature(string directory)
         => Scanned(directory).Select(file => file.Relative).Order(StringComparer.Ordinal).ToArray();
@@ -70,6 +73,9 @@ public static partial class EncodeDispatchRules
 
     [GeneratedRegex(@"\bEncodeFileName\s*\.\s*Artefact\s*\(")]
     private static partial Regex NamesTheArtefact();
+
+    [GeneratedRegex(@"\bAnotherProgramme\s*\.\s*(Start|SayAsync)\s*\(|\bProcess\s*\.\s*Start\s*\(|\bnew\s+Process\s*[({]|\bTranscoderProcess\s*\.\s*(Start|Launch)\s*\(")]
+    private static partial Regex StartsAProgramme();
 
     [GeneratedRegex(@"\s+")]
     private static partial Regex Spaces();
