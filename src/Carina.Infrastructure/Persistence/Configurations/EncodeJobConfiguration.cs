@@ -1,0 +1,139 @@
+using Carina.Domain.Encodings;
+using Carina.Domain.Recordings;
+
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace Carina.Infrastructure.Persistence.Configurations;
+
+public sealed class EncodeJobConfiguration : IEntityTypeConfiguration<EncodeJob>
+{
+    public const string QueuedIndexName = "ix_encode_job_queued";
+
+    public const string RunningIndexName = "ux_encode_job_running";
+
+    public const string ArtefactIndexName = "ux_encode_job_artefact";
+
+    public const string RecordingIndexName = "ix_encode_job_recording";
+
+    public void Configure(EntityTypeBuilder<EncodeJob> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        builder.ToTable("encode_job", table =>
+        {
+            table.HasCheckConstraint("ck_encode_job_status", $"status IN ({EncodeVocabulary.Of<EncodeJobStatus>()})");
+            table.HasCheckConstraint("ck_encode_job_attempt", $"attempt >= {EncodeJob.FirstAttempt}");
+            table.HasCheckConstraint("ck_encode_job_output_root", EncodeVocabulary.ASingleName("output_root"));
+            table.HasCheckConstraint(
+                "ck_encode_job_timeline",
+                """
+                ((status = 'Queued') = (started_at IS NULL AND ended_at IS NULL))
+                AND ((status = 'Running') = (started_at IS NOT NULL AND ended_at IS NULL))
+                AND ((status IN ('Completed', 'Failed', 'Cancelled')) = (ended_at IS NOT NULL))
+                AND (started_at IS NULL OR started_at >= queued_at)
+                AND (ended_at IS NULL OR ended_at >= queued_at)
+                AND (ended_at IS NULL OR started_at IS NULL OR ended_at >= started_at)
+                """);
+            table.HasCheckConstraint(
+                "ck_encode_job_failure",
+                $"""
+                ((status = 'Failed') = (failure IS NOT NULL))
+                AND ((failure IS NULL) = (failure_note IS NULL))
+                AND ((failure IS NULL) = (failure_noticed_at IS NULL))
+                AND (failure IS NULL OR failure IN ({EncodeVocabulary.Of<EncodeFailure>()}))
+                """);
+            table.HasCheckConstraint(
+                "ck_encode_job_artefact",
+                $"""
+                (status <> 'Completed' OR artefact_name IS NOT NULL)
+                AND (artefact_name IS NULL
+                    OR ({EncodeVocabulary.ASingleName("artefact_name")}
+                        AND strpos(artefact_name, replace(recording_id::text, '-', '')) > 0
+                        AND strpos(artefact_name, replace(profile_id::text, '-', '')) > 0))
+                """);
+        });
+
+        builder.HasKey(job => job.Id);
+
+        builder.Property(job => job.Id)
+            .HasConversion(id => id.Value, value => new EncodeJobId(value))
+            .HasColumnName("id");
+
+        builder.Property(job => job.RecordingId)
+            .HasConversion(id => id.Value, value => new RecordingId(value))
+            .HasColumnName("recording_id")
+            .IsRequired();
+
+        builder.Property(job => job.ProfileId)
+            .HasConversion(id => id.Value, value => new EncodeProfileId(value))
+            .HasColumnName("profile_id")
+            .IsRequired();
+
+        builder.Property(job => job.DestinationId)
+            .HasConversion(id => id.Value, value => new EncodeDestinationId(value))
+            .HasColumnName("destination_id")
+            .IsRequired();
+
+        builder.Property(job => job.OutputRoot)
+            .HasConversion(root => root.Value, value => new OutputRoot(value))
+            .HasMaxLength(Carina.Domain.Recordings.OutputRoot.MaxLength)
+            .IsRequired();
+
+        builder.Property(job => job.Status).HasConversion<string>().HasMaxLength(32).IsRequired();
+        builder.Property(job => job.Attempt).IsRequired();
+        builder.Property(job => job.QueuedAt).IsRequired();
+        builder.Property(job => job.StartedAt);
+        builder.Property(job => job.EndedAt);
+
+        builder.ComplexProperty(job => job.Failure, failure =>
+        {
+            failure.Property(detail => detail.Failure)
+                .HasConversion<string>()
+                .HasColumnName("failure")
+                .HasMaxLength(32);
+
+            failure.Property(detail => detail.Note)
+                .HasColumnName("failure_note")
+                .HasMaxLength(EncodeNote.Longest);
+
+            failure.Property(detail => detail.NoticedAt)
+                .HasColumnName("failure_noticed_at");
+        });
+
+        builder.Property(job => job.ArtefactName)
+            .HasConversion(name => name!.Value, value => new EncodeFileName(value))
+            .HasMaxLength(EncodeFileName.MaxLength);
+
+        builder.Ignore(job => job.HasEnded);
+        builder.Ignore(job => job.Standing);
+        builder.Ignore(job => job.WorkFileName);
+
+        builder.HasOne<EncodeProfile>()
+            .WithMany()
+            .HasForeignKey(job => job.ProfileId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasOne<EncodeDestination>()
+            .WithMany()
+            .HasForeignKey(job => job.DestinationId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(job => job.QueuedAt)
+            .HasFilter("status = 'Queued'")
+            .HasDatabaseName(QueuedIndexName);
+
+        builder.HasIndex(job => job.Status)
+            .IsUnique()
+            .HasFilter("status = 'Running'")
+            .HasDatabaseName(RunningIndexName);
+
+        builder.HasIndex(job => new { job.OutputRoot, job.ArtefactName })
+            .IsUnique()
+            .HasFilter("artefact_name IS NOT NULL")
+            .HasDatabaseName(ArtefactIndexName);
+
+        builder.HasIndex(job => new { job.RecordingId, job.QueuedAt })
+            .HasDatabaseName(RecordingIndexName);
+    }
+}

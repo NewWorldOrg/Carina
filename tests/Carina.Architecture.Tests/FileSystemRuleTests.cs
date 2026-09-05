@@ -31,6 +31,11 @@ public sealed class FileSystemRuleTests
         "/Carina.Driver/Tuning/TunerLedgerStore.cs .Replace(",
         "/Carina.Infrastructure/Auth/SigningKeys.cs .Create()",
         "/Carina.Infrastructure/Collection/StreamHarvest.cs .CopyTo(",
+        "/Carina.Infrastructure/Encodings/EncodeArtefactPlacer.cs File.Move",
+        "/Carina.Infrastructure/Encodings/EncodeScratchCleaner.cs File.Delete",
+        "/Carina.Infrastructure/Encodings/RenameProbe.cs Directory.CreateDirectory",
+        "/Carina.Infrastructure/Encodings/RenameProbe.cs Directory.Delete",
+        "/Carina.Infrastructure/Encodings/RenameProbe.cs Directory.Move",
         "/Carina.Infrastructure/Integrity/LocalRecordingFileSurvey.cs .Replace(",
         "/Carina.Infrastructure/Machines/AnotherProgramme.cs Process.Start",
         "/Carina.Infrastructure/Machines/AnotherProgramme.cs ProcessStartInfo",
@@ -168,6 +173,29 @@ public sealed class FileSystemRuleTests
                 "/Carina.Infrastructure/Thumbnails/FfmpegThumbnailRenderer.cs ProcessStartInfo",
             ],
             Inventory.Where(entry => entry.Contains("/Thumbnails/", StringComparison.Ordinal)).ToArray());
+    }
+
+    [Fact(DisplayName = "BR-ED2-009/010: the encode feature moves a work file once, deletes only by the ledger, and probes a rename with an empty directory")]
+    public void TheEncodeFeatureMovesOnceDeletesByTheLedgerAndProbesARenameWithAnEmptyDirectory()
+    {
+        Assert.Equal(
+            [
+                "/Carina.Infrastructure/Encodings/EncodeArtefactPlacer.cs File.Move",
+                "/Carina.Infrastructure/Encodings/EncodeScratchCleaner.cs File.Delete",
+                "/Carina.Infrastructure/Encodings/RenameProbe.cs Directory.CreateDirectory",
+                "/Carina.Infrastructure/Encodings/RenameProbe.cs Directory.Delete",
+                "/Carina.Infrastructure/Encodings/RenameProbe.cs Directory.Move",
+            ],
+            Inventory.Where(entry => entry.Contains("/Encodings/", StringComparison.Ordinal)).ToArray());
+
+        string placer = File.ReadAllText(Path.Combine(
+            RepositoryLayout.SourceDirectory,
+            "Carina.Infrastructure",
+            "Encodings",
+            "EncodeArtefactPlacer.cs"));
+
+        Assert.Contains("File.Move(work, artefact, overwrite: false)", placer, StringComparison.Ordinal);
+        Assert.DoesNotContain("overwrite: true", placer, StringComparison.Ordinal);
     }
 
     [Fact]

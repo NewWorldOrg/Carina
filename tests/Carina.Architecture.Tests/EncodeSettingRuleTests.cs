@@ -16,11 +16,13 @@ public sealed class EncodeSettingRuleTests
         "/Carina.Domain/Encodings/EncodeFailure.cs EncodeFailureDetail.Failure EncodeFailure",
         "/Carina.Domain/Encodings/EncodeFailure.cs EncodeFailureDetail.Note string",
         "/Carina.Domain/Encodings/EncodeFailure.cs EncodeFailureDetail.NoticedAt DateTime",
+        "/Carina.Domain/Encodings/EncodeJob.cs EncodeJob.ArtefactName EncodeFileName?",
         "/Carina.Domain/Encodings/EncodeJob.cs EncodeJob.Attempt int",
         "/Carina.Domain/Encodings/EncodeJob.cs EncodeJob.DestinationId EncodeDestinationId",
         "/Carina.Domain/Encodings/EncodeJob.cs EncodeJob.EndedAt DateTime?",
         "/Carina.Domain/Encodings/EncodeJob.cs EncodeJob.Failure EncodeFailureDetail?",
         "/Carina.Domain/Encodings/EncodeJob.cs EncodeJob.Id EncodeJobId",
+        "/Carina.Domain/Encodings/EncodeJob.cs EncodeJob.OutputRoot OutputRoot",
         "/Carina.Domain/Encodings/EncodeJob.cs EncodeJob.ProfileId EncodeProfileId",
         "/Carina.Domain/Encodings/EncodeJob.cs EncodeJob.QueuedAt DateTime",
         "/Carina.Domain/Encodings/EncodeJob.cs EncodeJob.RecordingId RecordingId",
@@ -44,6 +46,15 @@ public sealed class EncodeSettingRuleTests
         "/Carina.Domain/Encodings/EncodeProgress.cs EncodeProgress.Whole TimeSpan?",
         "/Carina.Domain/Encodings/EncodeRateControl.cs ConstantQuantiser.Quantiser int",
         "/Carina.Domain/Encodings/EncodeRateControl.cs ConstantRateFactor.RateFactor int",
+        "/Carina.Domain/Encodings/EncodeScratchFile.cs EncodeScratchFile.Fate EncodeScratchFate?",
+        "/Carina.Domain/Encodings/EncodeScratchFile.cs EncodeScratchFile.FileName EncodeFileName",
+        "/Carina.Domain/Encodings/EncodeScratchFile.cs EncodeScratchFile.Id EncodeScratchFileId",
+        "/Carina.Domain/Encodings/EncodeScratchFile.cs EncodeScratchFile.JobId EncodeJobId",
+        "/Carina.Domain/Encodings/EncodeScratchFile.cs EncodeScratchFile.Kind EncodeScratchKind",
+        "/Carina.Domain/Encodings/EncodeScratchFile.cs EncodeScratchFile.OutputRoot OutputRoot",
+        "/Carina.Domain/Encodings/EncodeScratchFile.cs EncodeScratchFile.RemovedAt DateTime?",
+        "/Carina.Domain/Encodings/EncodeScratchFile.cs EncodeScratchFile.WrittenAt DateTime",
+        "/Carina.Domain/Encodings/EncodeSettings.cs EncodeSettings.WorkedIn string?",
         "/Carina.Domain/Encodings/EncodeValidation.cs EncodeDestinationDraft.DefaultProfileId EncodeProfileId?",
         "/Carina.Domain/Encodings/EncodeValidation.cs EncodeDestinationDraft.Label string?",
         "/Carina.Domain/Encodings/EncodeValidation.cs EncodeDestinationDraft.OutputRoot string?",
@@ -64,11 +75,13 @@ public sealed class EncodeSettingRuleTests
         "/Carina.Domain/Encodings/EncodeDestinationId.cs EncodeDestinationId.Wire string",
         "/Carina.Domain/Encodings/EncodeJob.cs EncodeJob.HasEnded bool",
         "/Carina.Domain/Encodings/EncodeJob.cs EncodeJob.Standing EncodeStanding",
+        "/Carina.Domain/Encodings/EncodeJob.cs EncodeJob.WorkFileName EncodeFileName",
         "/Carina.Domain/Encodings/EncodeJobId.cs EncodeJobId.Wire string",
         "/Carina.Domain/Encodings/EncodePlan.cs EncodePlan.CanRun bool",
         "/Carina.Domain/Encodings/EncodeProfileId.cs EncodeProfileId.Wire string",
         "/Carina.Domain/Encodings/EncodeProgress.cs EncodeProgress.Left TimeSpan?",
         "/Carina.Domain/Encodings/EncodeProgress.cs EncodeProgress.Portion double?",
+        "/Carina.Domain/Encodings/EncodeScratchFile.cs EncodeScratchFile.IsOwedARemoval bool",
         "/Carina.Domain/Encodings/SourceLengthReading.cs SourceLengthReading.Measured bool",
     ];
 
@@ -76,6 +89,7 @@ public sealed class EncodeSettingRuleTests
     [
         "/Carina.Domain/Encodings/EncodeFailure.cs EncodeFailureDetail.Note string",
         "/Carina.Domain/Encodings/EncodePlan.cs EncodePlan.Note string",
+        "/Carina.Domain/Encodings/EncodeSettings.cs EncodeSettings.WorkedIn string?",
         "/Carina.Domain/Encodings/EncodeValidation.cs EncodeDestinationDraft.Label string?",
         "/Carina.Domain/Encodings/EncodeValidation.cs EncodeDestinationDraft.OutputRoot string?",
         "/Carina.Domain/Encodings/EncodeValidation.cs EncodeProfileDraft.Label string?",
@@ -158,6 +172,16 @@ public sealed class EncodeSettingRuleTests
 
         Assert.DoesNotContain(".Label", builder, StringComparison.Ordinal);
         Assert.DoesNotContain("Draft", builder, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "BR-EV-001: the one piece of free text a setting keeps is where work files go, and no draft carries it")]
+    public void TheOnePieceOfFreeTextASettingKeepsIsWhereWorkFilesGo()
+    {
+        Assert.Equal(
+            ["/Carina.Domain/Encodings/EncodeSettings.cs EncodeSettings.WorkedIn string?"],
+            Kept.Where(entry => entry.Contains(" EncodeSettings.", StringComparison.Ordinal)).Where(EncodeSettingRules.IsFreeText));
+
+        Assert.DoesNotContain(TheOnlyFreeTextTakenIn, entry => entry.Contains("Draft.WorkedIn", StringComparison.Ordinal));
     }
 
     [Fact(DisplayName = "BR-EV-004: nothing in the encode domain is named for a bitrate, so no card can be handed one")]
