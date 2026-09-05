@@ -9,7 +9,7 @@ public sealed class QualityThresholdRuleTests
 
     [Fact]
     public void ThereIsALibraryFeatureOnDiskForThatRuleToHaveRead()
-        => Assert.NotEmpty(QualityThresholdRules.FilesOfTheLibraryFeature(RepositoryLayout.SourceDirectory));
+        => Assert.NotEmpty(LibraryFeature.Files(RepositoryLayout.SourceDirectory));
 
     [Fact]
     public void TheOnePlaceThoseNumbersDoLiveIsStillFoundByTheSameMarks()

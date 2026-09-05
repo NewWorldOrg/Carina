@@ -69,7 +69,7 @@ public sealed class QualityThresholdRuleSelfCheckTests
                 "Carina.Api/Services/RecordingsService.cs",
                 Source(
                     "Carina.Api.Services",
-                    $"private static object? Read() => {QualityThresholdRules.CriteriaType}.For(null, null, null);",
+                    $"private static object? Read() => {LibraryFeature.CriteriaType}.For(null, null, null);",
                     "private const double Warning = 0.0002;"));
 
             Assert.NotEmpty(QualityThresholdRules.QualityNumbersInsideTheLibraryFeature(directory.FullName));
