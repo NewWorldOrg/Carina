@@ -7,4 +7,6 @@ public enum PlaybackRefusal
     NothingWasWritten = 2,
 
     FileOutOfReach = 3,
+
+    FileGone = 4,
 }

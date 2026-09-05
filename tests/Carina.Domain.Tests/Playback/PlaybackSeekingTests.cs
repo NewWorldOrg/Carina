@@ -9,7 +9,7 @@ public sealed class PlaybackSeekingTests
     public void AnEncodedRecordingIsMovedAboutByAskingForAnotherRangeOfTheSameFile()
     {
         PlaybackPlan plan = PlaybackPlan.For(
-            new PlaybackSubject(RecordingOutcome.Complete, Written("a1b2c3.m2ts", 4_000_000), [Written("a1b2c3.mp4", 900_000)]));
+            new PlaybackSubject(RecordingOutcome.Complete, OnDisk("a1b2c3.m2ts", 4_000_000), [Written("a1b2c3.mp4", 900_000)]));
 
         Assert.Equal(PlaybackRoute.Direct, plan.Route);
         Assert.Equal(PlaybackSeeking.ByRange, plan.Seeking);
@@ -19,7 +19,7 @@ public sealed class PlaybackSeekingTests
     public void ARecordingNothingHasEncodedIsMovedAboutByStartingATranscoderAgain()
     {
         PlaybackPlan plan = PlaybackPlan.For(
-            PlaybackSubject.NothingHasBeenEncodedYet(RecordingOutcome.Complete, Written("a1b2c3.m2ts", 4_000_000)));
+            PlaybackSubject.NothingHasBeenEncodedYet(RecordingOutcome.Complete, OnDisk("a1b2c3.m2ts", 4_000_000)));
 
         Assert.Equal(PlaybackRoute.OnTheFly, plan.Route);
         Assert.Equal(PlaybackSeeking.ByStartingAgain, plan.Seeking);
@@ -29,7 +29,7 @@ public sealed class PlaybackSeekingTests
     public void ARecordingThatPlaysAtAllSaysHowItIsMovedAboutAndOneThatDoesNotSaysNothing()
     {
         PlaybackPlan nothing = PlaybackPlan.For(
-            PlaybackSubject.NothingHasBeenEncodedYet(RecordingOutcome.Complete, Written("a1b2c3.m2ts", 0)));
+            PlaybackSubject.NothingHasBeenEncodedYet(RecordingOutcome.Complete, OnDisk("a1b2c3.m2ts", 0)));
 
         Assert.False(nothing.PlaysAtAll);
         Assert.Null(nothing.Seeking);
@@ -48,6 +48,8 @@ public sealed class PlaybackSeekingTests
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => PlaybackSeekings.Of((PlaybackRoute)99));
     }
+
+    private static PlaybackFileSearch OnDisk(string name, long bytes) => PlaybackFileSearch.Of(Written(name, bytes));
 
     private static PlaybackFile Written(string name, long bytes)
         => new(new OutputRoot("bulk"), new RecordingFileName(name), bytes);

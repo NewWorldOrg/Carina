@@ -180,7 +180,11 @@ internal sealed class PlayFeature : IAsyncDisposable
         Client.Dispose();
         Stranger.Dispose();
         await factory.DisposeAsync();
-        mounted.Delete(recursive: true);
+
+        if (Directory.Exists(mounted.FullName))
+        {
+            mounted.Delete(recursive: true);
+        }
     }
 
     public static async Task<JsonElement> PlanOfAsync(HttpResponseMessage answer)
@@ -354,12 +358,25 @@ public sealed class PlayDeliveryTests
     }
 
     [Fact]
-    public async Task ARecordingWhoseFileIsGoneSaysSoRatherThanStartingATranscoder()
+    public async Task ARecordingWhoseFileIsGoneWhileItsRootIsThereIsNotFoundRatherThanHandedToATranscoder()
     {
         await using var feature = new PlayFeature();
 
         using HttpResponseMessage answer = await feature.PlanAsync(
             feature.Ended(RecordingOutcome.Complete, onDisk: false));
+
+        Assert.Equal(HttpStatusCode.NotFound, answer.StatusCode);
+        Assert.Empty(feature.Player.AskedFrom);
+    }
+
+    [Fact]
+    public async Task ARecordingWhoseRootIsGoneIsOutOfReachRatherThanNotFoundAndNoTranscoderIsStarted()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        Directory.Delete(feature.MountedAt, recursive: true);
+
+        using HttpResponseMessage answer = await feature.PlanAsync(recording);
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, answer.StatusCode);
         Assert.Empty(feature.Player.AskedFrom);

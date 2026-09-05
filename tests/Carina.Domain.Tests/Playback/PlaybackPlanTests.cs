@@ -20,7 +20,7 @@ public sealed class PlaybackPlanTests
         PlaybackStanding standing)
     {
         PlaybackPlan plan = PlaybackPlan.For(
-            PlaybackSubject.NothingHasBeenEncodedYet(outcome, Written(4_000_000)));
+            PlaybackSubject.NothingHasBeenEncodedYet(outcome, OnDisk(4_000_000)));
 
         Assert.Equal(standing, plan.Standing);
     }
@@ -39,7 +39,7 @@ public sealed class PlaybackPlanTests
     public void ARecordingCutShortIsNotShownAsAWholeOne()
     {
         PlaybackPlan cutShort = PlaybackPlan.For(
-            PlaybackSubject.NothingHasBeenEncodedYet(RecordingOutcome.Truncated, Written(4_000_000)));
+            PlaybackSubject.NothingHasBeenEncodedYet(RecordingOutcome.Truncated, OnDisk(4_000_000)));
 
         Assert.True(cutShort.PlaysAtAll);
         Assert.False(cutShort.ShowsAsAWholeRecording);
@@ -50,7 +50,7 @@ public sealed class PlaybackPlanTests
     public void ARecordingThatFailedAndStillHoldsBytesIsOfferedUnderItsOwnName()
     {
         PlaybackPlan failed = PlaybackPlan.For(
-            PlaybackSubject.NothingHasBeenEncodedYet(RecordingOutcome.Failed, Written(512)));
+            PlaybackSubject.NothingHasBeenEncodedYet(RecordingOutcome.Failed, OnDisk(512)));
 
         Assert.Equal(PlaybackRoute.OnTheFly, failed.Route);
         Assert.Equal(PlaybackStanding.Failed, failed.Standing);
@@ -61,7 +61,7 @@ public sealed class PlaybackPlanTests
     public void WithNothingEncodedTheOnlyWayToPlayARecordingIsToTranscodeItWhilePlaying()
     {
         PlaybackPlan plan = PlaybackPlan.For(
-            PlaybackSubject.NothingHasBeenEncodedYet(RecordingOutcome.Complete, Written(4_000_000)));
+            PlaybackSubject.NothingHasBeenEncodedYet(RecordingOutcome.Complete, OnDisk(4_000_000)));
 
         Assert.Equal(PlaybackRoute.OnTheFly, plan.Route);
         Assert.True(plan.Transcodes);
@@ -74,7 +74,7 @@ public sealed class PlaybackPlanTests
     {
         PlaybackSubject subject = PlaybackSubject.NothingHasBeenEncodedYet(
             RecordingOutcome.Complete,
-            Written(4_000_000));
+            OnDisk(4_000_000));
 
         Assert.Empty(subject.BrowserReady);
         Assert.Equal(PlaybackRoute.OnTheFly, PlaybackPlan.For(subject).Route);
@@ -86,7 +86,7 @@ public sealed class PlaybackPlanTests
         var encoded = new PlaybackFile(new OutputRoot("bulk"), new RecordingFileName("encoded.mp4"), 1_000_000);
 
         PlaybackPlan plan = PlaybackPlan.For(
-            new PlaybackSubject(RecordingOutcome.Complete, Written(4_000_000), [encoded]));
+            new PlaybackSubject(RecordingOutcome.Complete, OnDisk(4_000_000), [encoded]));
 
         Assert.Equal(PlaybackRoute.Direct, plan.Route);
         Assert.False(plan.Transcodes);
@@ -99,7 +99,7 @@ public sealed class PlaybackPlanTests
         var empty = new PlaybackFile(new OutputRoot("bulk"), new RecordingFileName("encoded.mp4"), 0);
 
         PlaybackPlan plan = PlaybackPlan.For(
-            new PlaybackSubject(RecordingOutcome.Complete, Written(4_000_000), [empty]));
+            new PlaybackSubject(RecordingOutcome.Complete, OnDisk(4_000_000), [empty]));
 
         Assert.Equal(PlaybackRoute.OnTheFly, plan.Route);
         Assert.Equal(Written(4_000_000), plan.Handover);
@@ -109,7 +109,7 @@ public sealed class PlaybackPlanTests
     public void ARecordingStillBeingWrittenIsNotHandedOver()
     {
         PlaybackPlan plan = PlaybackPlan.For(
-            PlaybackSubject.NothingHasBeenEncodedYet(null, Written(4_000_000)));
+            PlaybackSubject.NothingHasBeenEncodedYet(null, OnDisk(4_000_000)));
 
         Assert.Equal(PlaybackRoute.Nothing, plan.Route);
         Assert.Equal(PlaybackRefusal.StillBeingWritten, plan.Refusal);
@@ -117,10 +117,21 @@ public sealed class PlaybackPlanTests
     }
 
     [Fact]
-    public void ARecordingWhoseFileIsGoneIsRefusedForThatReasonAndNotForItsOutcome()
+    public void ARecordingWhoseFileIsGoneIsRefusedAsGoneAndNotForItsOutcome()
     {
         PlaybackPlan plan = PlaybackPlan.For(
-            PlaybackSubject.NothingHasBeenEncodedYet(RecordingOutcome.Complete, null));
+            PlaybackSubject.NothingHasBeenEncodedYet(RecordingOutcome.Complete, Gone));
+
+        Assert.Equal(PlaybackRoute.Nothing, plan.Route);
+        Assert.Equal(PlaybackRefusal.FileGone, plan.Refusal);
+        Assert.Equal(PlaybackStanding.Whole, plan.Standing);
+    }
+
+    [Fact]
+    public void ARecordingWhoseRootIsOutOfReachIsRefusedAsOutOfReachRatherThanAsGone()
+    {
+        PlaybackPlan plan = PlaybackPlan.For(
+            PlaybackSubject.NothingHasBeenEncodedYet(RecordingOutcome.Complete, OutOfReach));
 
         Assert.Equal(PlaybackRoute.Nothing, plan.Route);
         Assert.Equal(PlaybackRefusal.FileOutOfReach, plan.Refusal);
@@ -128,10 +139,28 @@ public sealed class PlaybackPlanTests
     }
 
     [Fact]
+    public void AFileThatIsGoneAndOneThatIsOutOfReachAreTwoDifferentAnswers()
+    {
+        Assert.NotEqual(
+            PlaybackPlan.For(PlaybackSubject.NothingHasBeenEncodedYet(RecordingOutcome.Complete, Gone)).Refusal,
+            PlaybackPlan.For(PlaybackSubject.NothingHasBeenEncodedYet(RecordingOutcome.Complete, OutOfReach)).Refusal);
+    }
+
+    [Fact]
+    public void ASearchThatFoundNothingSaysWhichWayTheFileIsMissing()
+    {
+        Assert.Equal(PlaybackFileAbsence.Gone, Gone.Absence);
+        Assert.Null(Gone.Found);
+        Assert.Null(OnDisk(16).Absence);
+        Assert.Throws<ArgumentOutOfRangeException>(() => PlaybackFileSearch.Missing((PlaybackFileAbsence)99));
+        Assert.Throws<ArgumentNullException>(() => PlaybackFileSearch.Of(null!));
+    }
+
+    [Fact]
     public void AFileOfNoBytesIsRefusedApartFromOneThatIsNotThere()
     {
         PlaybackPlan plan = PlaybackPlan.For(
-            PlaybackSubject.NothingHasBeenEncodedYet(RecordingOutcome.Failed, Written(0)));
+            PlaybackSubject.NothingHasBeenEncodedYet(RecordingOutcome.Failed, OnDisk(0)));
 
         Assert.Equal(PlaybackRoute.Nothing, plan.Route);
         Assert.Equal(PlaybackRefusal.NothingWasWritten, plan.Refusal);
@@ -144,7 +173,7 @@ public sealed class PlaybackPlanTests
     [InlineData(RecordingOutcome.Failed)]
     public void APlanEitherNamesWhatIsHandedOverOrWhyNothingIs(RecordingOutcome? outcome)
     {
-        foreach (PlaybackFile? file in new PlaybackFile?[] { null, Written(0), Written(4_000_000) })
+        foreach (PlaybackFileSearch file in new[] { Gone, OutOfReach, OnDisk(0), OnDisk(4_000_000) })
         {
             PlaybackPlan plan = PlaybackPlan.For(PlaybackSubject.NothingHasBeenEncodedYet(outcome, file));
 
@@ -163,7 +192,7 @@ public sealed class PlaybackPlanTests
     public void AnOutcomeTheLedgerCannotHoldIsNotReadAsOneItCan()
     {
         Assert.Throws<ArgumentOutOfRangeException>(
-            () => new PlaybackSubject((RecordingOutcome)99, null, []));
+            () => new PlaybackSubject((RecordingOutcome)99, Gone, []));
         Assert.Throws<ArgumentOutOfRangeException>(() => PlaybackStandings.Of((RecordingOutcome)99));
     }
 
@@ -173,6 +202,12 @@ public sealed class PlaybackPlanTests
         Assert.Throws<ArgumentOutOfRangeException>(
             () => new PlaybackFile(new OutputRoot("bulk"), new RecordingFileName("a.m2ts"), -1));
     }
+
+    private static readonly PlaybackFileSearch Gone = PlaybackFileSearch.Missing(PlaybackFileAbsence.Gone);
+
+    private static readonly PlaybackFileSearch OutOfReach = PlaybackFileSearch.Missing(PlaybackFileAbsence.OutOfReach);
+
+    private static PlaybackFileSearch OnDisk(long bytes) => PlaybackFileSearch.Of(Written(bytes));
 
     private static PlaybackFile Written(long bytes)
         => new(new OutputRoot("bulk"), new RecordingFileName("a1b2c3.m2ts"), bytes);

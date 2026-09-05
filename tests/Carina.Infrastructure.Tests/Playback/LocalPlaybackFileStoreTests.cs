@@ -21,12 +21,13 @@ public sealed class LocalPlaybackFileStoreTests : IDisposable
     {
         Write(4_000);
 
-        PlaybackFile? found = Store().Find(Root, Named);
+        PlaybackFileSearch search = Store().Find(Root, Named);
 
-        Assert.NotNull(found);
-        Assert.Equal(4_000, found.Bytes);
-        Assert.Equal(Root, found.Root);
-        Assert.Equal(Named, found.Name);
+        Assert.Null(search.Absence);
+        Assert.NotNull(search.Found);
+        Assert.Equal(4_000, search.Found.Bytes);
+        Assert.Equal(Root, search.Found.Root);
+        Assert.Equal(Named, search.Found.Name);
     }
 
     [Fact]
@@ -34,7 +35,7 @@ public sealed class LocalPlaybackFileStoreTests : IDisposable
     {
         Write(0);
 
-        PlaybackFile? found = Store().Find(Root, Named);
+        PlaybackFile? found = Store().Find(Root, Named).Found;
 
         Assert.NotNull(found);
         Assert.Equal(0, found.Bytes);
@@ -42,49 +43,96 @@ public sealed class LocalPlaybackFileStoreTests : IDisposable
     }
 
     [Fact]
-    public void AFileThatIsNotThereIsNotFound()
+    public void AFileThatIsNotThereWhileItsRootIsIsGone()
     {
-        Assert.Null(Store().Find(Root, Named));
+        PlaybackFileSearch search = Store().Find(Root, Named);
+
+        Assert.Null(search.Found);
+        Assert.Equal(PlaybackFileAbsence.Gone, search.Absence);
     }
 
     [Fact]
-    public void ARootNothingSaysWhereToFindIsNotSearched()
+    public void AFileWhoseRootDirectoryIsNotThereIsOutOfReachRatherThanGone()
+    {
+        PlaybackFileSearch search = Store(new IntegritySettings
+        {
+            OutputRoots = [new StorageRootPath(Root, Path.Combine(mounted.FullName, "unmounted"))],
+        }).Find(Root, Named);
+
+        Assert.Null(search.Found);
+        Assert.Equal(PlaybackFileAbsence.OutOfReach, search.Absence);
+    }
+
+    [Fact]
+    public void ARootNothingSaysWhereToFindIsNotSearchedAndIsOutOfReach()
     {
         Write(4_000);
 
-        Assert.Null(Store(new IntegritySettings()).Find(Root, Named));
+        PlaybackFileSearch search = Store(new IntegritySettings()).Find(Root, Named);
+
+        Assert.Null(search.Found);
+        Assert.Equal(PlaybackFileAbsence.OutOfReach, search.Absence);
     }
 
     [Fact]
     public void WhatIsOpenedReadsBackTheBytesThatWereWritten()
     {
         byte[] written = Write(1_024);
-        PlaybackFile found = Store().Find(Root, Named)!;
+        PlaybackFile found = Found();
 
-        using Stream reading = Store().OpenRead(found)!;
+        PlaybackFileOpening opened = Store().OpenRead(found);
+        using Stream reading = opened.Reading!;
         var read = new MemoryStream();
         reading.CopyTo(read);
 
+        Assert.Null(opened.Absence);
         Assert.Equal(written, read.ToArray());
         Assert.True(reading.CanSeek);
         Assert.False(reading.CanWrite);
     }
 
     [Fact]
-    public void AFileThatWentAwayBeforeItWasOpenedOpensAsNothing()
+    public void AFileTakenOffTheDiskBeforeItWasOpenedIsGone()
     {
         Write(16);
-        PlaybackFile found = Store().Find(Root, Named)!;
+        PlaybackFile found = Found();
         File.Delete(Path.Combine(mounted.FullName, Named.Value));
 
-        Assert.Null(Store().OpenRead(found));
+        PlaybackFileOpening opened = Store().OpenRead(found);
+
+        Assert.Null(opened.Reading);
+        Assert.Equal(PlaybackFileAbsence.Gone, opened.Absence);
+    }
+
+    [Fact]
+    public void ARootThatWentAwayBeforeTheFileWasOpenedIsOutOfReachRatherThanGone()
+    {
+        Write(16);
+        PlaybackFile found = Found();
+        mounted.Delete(recursive: true);
+
+        PlaybackFileOpening opened = Store().OpenRead(found);
+
+        Assert.Null(opened.Reading);
+        Assert.Equal(PlaybackFileAbsence.OutOfReach, opened.Absence);
+    }
+
+    [Fact]
+    public void ARootNothingSaysWhereToFindOpensAsOutOfReach()
+    {
+        Write(16);
+
+        PlaybackFileOpening opened = Store(new IntegritySettings()).OpenRead(Found());
+
+        Assert.Null(opened.Reading);
+        Assert.Equal(PlaybackFileAbsence.OutOfReach, opened.Absence);
     }
 
     [Fact]
     public void AFileIsNamedForAProgrammeThatOpensItItselfRatherThanBeingHandedTheBytes()
     {
         Write(16);
-        PlaybackFile found = Store().Find(Root, Named)!;
+        PlaybackFile found = Found();
 
         StreamSource? source = Store().SourceOf(found);
 
@@ -96,7 +144,7 @@ public sealed class LocalPlaybackFileStoreTests : IDisposable
     public void ARootNothingSaysWhereToFindIsNamedToNoProgramme()
     {
         Write(16);
-        PlaybackFile found = Store().Find(Root, Named)!;
+        PlaybackFile found = Found();
 
         Assert.Null(Store(new IntegritySettings()).SourceOf(found));
     }
@@ -110,7 +158,22 @@ public sealed class LocalPlaybackFileStoreTests : IDisposable
         Assert.Throws<ArgumentNullException>(() => Store().SourceOf(null!));
     }
 
-    public void Dispose() => mounted.Delete(recursive: true);
+    public void Dispose()
+    {
+        if (Directory.Exists(mounted.FullName))
+        {
+            mounted.Delete(recursive: true);
+        }
+    }
+
+    private PlaybackFile Found()
+    {
+        PlaybackFile? found = Store().Find(Root, Named).Found;
+
+        Assert.NotNull(found);
+
+        return found;
+    }
 
     private LocalPlaybackFileStore Store() => Store(new IntegritySettings
     {

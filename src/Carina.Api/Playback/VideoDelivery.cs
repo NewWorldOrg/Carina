@@ -68,11 +68,11 @@ public static class VideoDelivery
             return;
         }
 
-        ServiceResult<Stream> opened = playback.Open(file);
+        ServiceResult<Stream, PlaybackFailure> opened = playback.Open(file);
 
         if (!opened.IsSuccess)
         {
-            context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+            context.Response.StatusCode = PlaybackStatus.Of(opened.ErrorType);
 
             return;
         }

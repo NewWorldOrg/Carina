@@ -409,7 +409,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
         return start.Viewing!;
     }
 
-    private PlaybackFile Found() => Store().Find(Root, Named)!;
+    private PlaybackFile Found() => Store().Find(Root, Named).Found!;
 
     private LocalPlaybackFileStore Store()
         => new(

@@ -124,14 +124,11 @@ public static class PlayDelivery
             return;
         }
 
-        ServiceResult<Stream> opened = playback.Open(file);
+        ServiceResult<Stream, PlaybackFailure> opened = playback.Open(file);
 
         if (!opened.IsSuccess)
         {
-            await RefuseAsync(
-                context,
-                StatusCodes.Status503ServiceUnavailable,
-                "The recording went out of reach while it was being read.");
+            await RefuseAsync(context, PlaybackStatus.Of(opened.ErrorType), opened.ErrorMessage!);
 
             return;
         }
