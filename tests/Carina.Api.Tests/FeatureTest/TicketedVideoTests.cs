@@ -234,6 +234,38 @@ public sealed class TicketedVideoTests
     }
 
     [Fact]
+    public async Task BrLa004ATicketIssuedForOneRecordingOpensNoOtherEvenOnItsFirstUse()
+    {
+        await using var feature = new TicketedFeature();
+        Recording mine = feature.Ended();
+        Recording another = feature.Ended();
+        string ticket = await feature.TicketForAsync(mine.Id);
+
+        using HttpResponseMessage elsewhere = await feature.AsAPlayerAsync(
+            $"/api/videos/{another.Id.Wire}",
+            ticket,
+            "bytes=0-");
+
+        Assert.Equal(HttpStatusCode.Forbidden, elsewhere.StatusCode);
+        Assert.NotEqual(feature.Written, await elsewhere.Content.ReadAsByteArrayAsync());
+    }
+
+    [Fact]
+    public async Task BrLa004ATicketOfferedAtTheWrongRecordingIsSpentAndOpensItsOwnNoLonger()
+    {
+        await using var feature = new TicketedFeature();
+        Recording mine = feature.Ended();
+        Recording another = feature.Ended();
+        string ticket = await feature.TicketForAsync(mine.Id);
+
+        using HttpResponseMessage elsewhere = await feature.AsAPlayerAsync($"/api/videos/{another.Id.Wire}", ticket);
+        using HttpResponseMessage afterwards = await feature.AsAPlayerAsync($"/api/videos/{mine.Id.Wire}", ticket);
+
+        Assert.Equal(HttpStatusCode.Forbidden, elsewhere.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, afterwards.StatusCode);
+    }
+
+    [Fact]
     public async Task APlayerCarryingNothingIsRefusedWithoutBeingSentToASignInScreen()
     {
         await using var feature = new TicketedFeature();

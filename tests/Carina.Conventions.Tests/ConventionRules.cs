@@ -1,6 +1,7 @@
 using System.Reflection;
 
 using Carina.Api.Common;
+using Carina.Domain.Auth;
 using Carina.Domain.Base;
 
 using Microsoft.AspNetCore.Mvc;
@@ -82,6 +83,27 @@ public static class ConventionRules
         return space.StartsWith("Carina.", StringComparison.Ordinal);
     }
 
+    public static IReadOnlyList<string> CarrierHandouts(IEnumerable<Type> types)
+        => types
+            .Where(HandlesACarrier)
+            .SelectMany(type => type
+                .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly)
+                .Where(method => !method.IsSpecialName && HandsOutOrHonoursACarrier(method)))
+            .Select(Signature)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+    public static IReadOnlyList<string> CarrierHandoutsNamingNoTarget(IEnumerable<Type> types)
+        => types
+            .Where(HandlesACarrier)
+            .SelectMany(type => type
+                .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly)
+                .Where(method => !method.IsSpecialName && HandsOutOrHonoursACarrier(method)))
+            .Where(method => method.GetParameters().All(parameter => parameter.ParameterType != typeof(PlaybackTarget)))
+            .Select(Signature)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
     private static MethodInfo[] PublicDeclaredInstanceMethods(Type type)
         => type
             .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly)
@@ -115,4 +137,20 @@ public static class ConventionRules
 
         return false;
     }
+
+    private static bool HandlesACarrier(Type type)
+        => typeof(IPlaybackTicketStore).IsAssignableFrom(type)
+           || typeof(IPlaybackGrantStore).IsAssignableFrom(type)
+           || type == typeof(PlaybackTicket)
+           || type == typeof(PlaybackGrant);
+
+    private static bool HandsOutOrHonoursACarrier(MethodInfo method)
+        => method.ReturnType == typeof(void)
+           || method.ReturnType == typeof(IssuedPlaybackTicket)
+           || method.ReturnType == typeof(PlaybackTicket)
+           || method.ReturnType == typeof(PlaybackGrant)
+           || method.ReturnType == typeof(Subject);
+
+    private static string Signature(MethodInfo method)
+        => $"{method.DeclaringType!.FullName}.{method.Name}({string.Join(", ", method.GetParameters().Select(parameter => parameter.ParameterType.Name))})";
 }
