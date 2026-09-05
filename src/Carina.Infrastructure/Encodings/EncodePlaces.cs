@@ -13,12 +13,14 @@ public sealed class EncodePlaces(IntegritySettings mounts, EncodeSettings settin
 {
     public bool WorksBesideTheArtefact => settings.WorkedIn is null;
 
-    public string? WhereTheArtefactGoes(OutputRoot root)
+    public string? WhereTheRootIs(OutputRoot root)
     {
         ArgumentNullException.ThrowIfNull(root);
 
         return mounts.OutputRoots.FirstOrDefault(mounted => mounted.Root.Equals(root))?.Path;
     }
+
+    public string? WhereTheArtefactGoes(OutputRoot root) => WhereTheRootIs(root);
 
     public string? WhereTheWorkGoes(OutputRoot root) => settings.WorkedIn ?? WhereTheArtefactGoes(root);
 }

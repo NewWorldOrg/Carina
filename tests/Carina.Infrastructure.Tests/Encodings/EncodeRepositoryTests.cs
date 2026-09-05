@@ -190,6 +190,132 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         Assert.Null(job.ArtefactName);
     }
 
+    [Fact(DisplayName = "BR-ES-001: the oldest waiting job is claimed by a conditional update, and comes back running with the time it started")]
+    public async Task TheOldestWaitingJobIsClaimedAndComesBackRunning()
+    {
+        await ClearAsync();
+        (EncodeProfile profile, EncodeDestination destination) = await DefinedAsync();
+        EncodeJob later = Job(profile, destination);
+        EncodeJob earlier = EncodeJob.Queue(EncodeJobId.New(), RecordingId.New(), profile.Id, destination.Id, Primary, Queued.AddMinutes(-5));
+
+        await using (CarinaDbContext writing = database.Open())
+        {
+            var repository = new EncodeJobRepository(writing);
+            await repository.AddAsync(later, Cancel);
+            await repository.AddAsync(earlier, Cancel);
+        }
+
+        await using CarinaDbContext claiming = database.Open();
+        EncodeClaim claim = await new EncodeJobRepository(claiming).ClaimNextAsync(Started, Cancel);
+
+        Assert.Equal(EncodeClaimStanding.Claimed, claim.Standing);
+        Assert.NotNull(claim.Job);
+        Assert.Equal(earlier.Id, claim.Job.Id);
+        Assert.Equal(EncodeJobStatus.Running, claim.Job.Status);
+        Assert.Equal(Started, claim.Job.StartedAt);
+        Assert.Equal(EncodeJob.FirstAttempt, claim.Job.Attempt);
+
+        await using CarinaDbContext reading = database.Open();
+        Assert.Equal(EncodeJobStatus.Running, (await new EncodeJobRepository(reading).FindAsync(earlier.Id, Cancel))!.Status);
+        Assert.Equal(EncodeJobStatus.Queued, (await new EncodeJobRepository(reading).FindAsync(later.Id, Cancel))!.Status);
+        Assert.Equal([earlier.Id], (await new EncodeJobRepository(reading).ListRunningAsync(Cancel)).Select(job => job.Id));
+    }
+
+    [Fact(DisplayName = "BR-ED2-005: while the ledger holds a running job, a claim is refused by the index and answers that another is running")]
+    public async Task WhileTheLedgerHoldsARunningJobAClaimIsRefusedByTheIndex()
+    {
+        await ClearAsync();
+        (EncodeProfile profile, EncodeDestination destination) = await DefinedAsync();
+        EncodeJob running = Job(profile, destination);
+        EncodeJob waiting = Job(profile, destination);
+        running.Start(Started);
+
+        await using (CarinaDbContext writing = database.Open())
+        {
+            var repository = new EncodeJobRepository(writing);
+            await repository.AddAsync(running, Cancel);
+            await repository.AddAsync(waiting, Cancel);
+        }
+
+        await using CarinaDbContext claiming = database.Open();
+        EncodeClaim claim = await new EncodeJobRepository(claiming).ClaimNextAsync(Ended, Cancel);
+
+        Assert.Equal(EncodeClaimStanding.AnotherIsRunning, claim.Standing);
+        Assert.Null(claim.Job);
+
+        await using CarinaDbContext reading = database.Open();
+        Assert.Equal(EncodeJobStatus.Queued, (await new EncodeJobRepository(reading).FindAsync(waiting.Id, Cancel))!.Status);
+    }
+
+    [Fact(DisplayName = "BR-ED2-005: twenty claims at once start exactly one job; the rest are refused by the ledger, not by anything in memory")]
+    public async Task TwentyClaimsAtOnceStartExactlyOneJob()
+    {
+        await ClearAsync();
+        (EncodeProfile profile, EncodeDestination destination) = await DefinedAsync();
+
+        await using (CarinaDbContext writing = database.Open())
+        {
+            var repository = new EncodeJobRepository(writing);
+
+            for (int queued = 0; queued < 5; queued++)
+            {
+                await repository.AddAsync(Job(profile, destination), Cancel);
+            }
+        }
+
+        EncodeClaim[] claims = await Task.WhenAll(Enumerable.Range(0, 20).Select(async _ =>
+        {
+            await using CarinaDbContext claiming = database.Open();
+
+            return await new EncodeJobRepository(claiming).ClaimNextAsync(Started, Cancel);
+        }));
+
+        Assert.Single(claims, claim => claim.Standing is EncodeClaimStanding.Claimed);
+        Assert.All(
+            claims.Where(claim => claim.Standing is not EncodeClaimStanding.Claimed),
+            claim => Assert.Contains(claim.Standing, new[] { EncodeClaimStanding.AnotherIsRunning, EncodeClaimStanding.TakenMeanwhile }));
+
+        await using CarinaDbContext reading = database.Open();
+        Assert.Single(await new EncodeJobRepository(reading).ListRunningAsync(Cancel));
+    }
+
+    [Fact(DisplayName = "BR-ED2-005: an empty queue answers that nothing is waiting")]
+    public async Task AnEmptyQueueAnswersThatNothingIsWaiting()
+    {
+        await ClearAsync();
+
+        await using CarinaDbContext claiming = database.Open();
+        EncodeClaim claim = await new EncodeJobRepository(claiming).ClaimNextAsync(Started, Cancel);
+
+        Assert.Equal(EncodeClaimStanding.NothingWaiting, claim.Standing);
+        Assert.Empty(await new EncodeJobRepository(claiming).ListRunningAsync(Cancel));
+    }
+
+    [Fact(DisplayName = "BR-ED2-011: a running job put back by a restart is claimed again on its next attempt")]
+    public async Task ARunningJobPutBackByARestartIsClaimedAgain()
+    {
+        await ClearAsync();
+        (EncodeProfile profile, EncodeDestination destination) = await DefinedAsync();
+        EncodeJob job = Job(profile, destination);
+
+        await using (CarinaDbContext first = database.Open())
+        {
+            var repository = new EncodeJobRepository(first);
+            await repository.AddAsync(job, Cancel);
+
+            EncodeJob claimed = (await repository.ClaimNextAsync(Started, Cancel)).Job!;
+            Assert.Equal(EncodeRecovery.PutBack, claimed.Recover(3, Ended));
+            await repository.SaveAsync(claimed, Cancel);
+        }
+
+        await using CarinaDbContext second = database.Open();
+        EncodeClaim again = await new EncodeJobRepository(second).ClaimNextAsync(Ended.AddMinutes(1), Cancel);
+
+        Assert.Equal(EncodeClaimStanding.Claimed, again.Standing);
+        Assert.Equal(2, again.Job!.Attempt);
+        Assert.Equal(Ended.AddMinutes(1), again.Job.StartedAt);
+    }
+
     [Fact(DisplayName = "BR-ED2-010: what a job still owes a removal for is exactly what the ledger holds unsettled for that job")]
     public async Task WhatAJobStillOwesARemovalForIsWhatTheLedgerHoldsUnsettledForIt()
     {

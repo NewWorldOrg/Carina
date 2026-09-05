@@ -1,3 +1,5 @@
+using System.Globalization;
+
 using Carina.Domain.Encodings;
 
 using Microsoft.Extensions.Configuration;
@@ -11,18 +13,40 @@ public sealed class EncodingOptions
 
     public string? WorkedIn { get; set; }
 
+    public string? Prefer { get; set; }
+
+    public string? MostAttempts { get; set; }
+
+    public string? BetweenLooks { get; set; }
+
+    public string? StalledAfter { get; set; }
+
     public void ReadFrom(IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
 
-        WorkedIn = configuration.GetSection(Section)[nameof(WorkedIn)];
+        IConfigurationSection named = configuration.GetSection(Section);
+
+        WorkedIn = named[nameof(WorkedIn)];
+        Prefer = named[nameof(Prefer)];
+        MostAttempts = named[nameof(MostAttempts)];
+        BetweenLooks = named[nameof(BetweenLooks)];
+        StalledAfter = named[nameof(StalledAfter)];
     }
 
     public EncodeSettings Read()
-        => new()
+    {
+        EncodeSettings unset = new();
+
+        return new EncodeSettings
         {
             WorkedIn = Absolute(WorkedIn, nameof(WorkedIn)),
+            Prefer = Named(Prefer, nameof(Prefer), unset.Prefer),
+            MostAttempts = Counted(MostAttempts, nameof(MostAttempts), unset.MostAttempts),
+            BetweenLooks = Timed(BetweenLooks, nameof(BetweenLooks), unset.BetweenLooks),
+            StalledAfter = Timed(StalledAfter, nameof(StalledAfter), unset.StalledAfter),
         };
+    }
 
     private static string? Absolute(string? setting, string name)
     {
@@ -36,6 +60,44 @@ public sealed class EncodingOptions
             : throw new ArgumentException(
                 $"{Section}:{name} is written where the process can reach it, and '{setting}' is not absolute.",
                 name);
+    }
+
+    private static EncodeEncoder Named(string? setting, string name, EncodeEncoder unset)
+    {
+        if (string.IsNullOrWhiteSpace(setting))
+        {
+            return unset;
+        }
+
+        return Enum.TryParse(setting, ignoreCase: true, out EncodeEncoder named) && Enum.IsDefined(named)
+            ? named
+            : throw new ArgumentException(
+                $"{Section}:{name} is one of {string.Join(", ", Enum.GetNames<EncodeEncoder>())}.",
+                name);
+    }
+
+    private static int Counted(string? setting, string name, int unset)
+    {
+        if (string.IsNullOrWhiteSpace(setting))
+        {
+            return unset;
+        }
+
+        return int.TryParse(setting, NumberStyles.Integer, CultureInfo.InvariantCulture, out int counted) && counted >= EncodeJob.FirstAttempt
+            ? counted
+            : throw new ArgumentException($"{Section}:{name} is a whole number of attempts, at least {EncodeJob.FirstAttempt}.", name);
+    }
+
+    private static TimeSpan Timed(string? setting, string name, TimeSpan unset)
+    {
+        if (string.IsNullOrWhiteSpace(setting))
+        {
+            return unset;
+        }
+
+        return TimeSpan.TryParse(setting, CultureInfo.InvariantCulture, out TimeSpan timed) && timed > TimeSpan.Zero
+            ? timed
+            : throw new ArgumentException($"{Section}:{name} is a positive length of time such as 00:10:00.", name);
     }
 }
 
