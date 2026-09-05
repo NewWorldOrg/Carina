@@ -119,10 +119,12 @@ public sealed class ProgrammeConfiguration : IEntityTypeConfiguration<Programme>
     public const string SearchableSql =
         $"lower(pg_catalog.normalize(name || '{ProgrammeSearchText.BetweenNameAndSummary}' || summary, '{BroadcastText.Compatibility}'))";
 
-    public const string GenreKindsSql =
-        "string_to_array("
-        + "nullif(translate(jsonb_path_query_array(genres, '$[*].kind')::text, '[] ', ''), '')"
-        + ", ',')::integer[]";
+    public static readonly string GenreKindsSql = GenreKindsSqlOver("genres");
+
+    public static string GenreKindsSqlOver(string column)
+        => "string_to_array("
+            + $"nullif(translate(jsonb_path_query_array({column}, '$[*].kind')::text, '[] ', ''), '')"
+            + ", ',')::integer[]";
 
     private static IReadOnlyList<T> Read<T>(string stored)
         => JsonSerializer.Deserialize<List<T>>(stored, ProgrammeJson.Options) ?? [];
