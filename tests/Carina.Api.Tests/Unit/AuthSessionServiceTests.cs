@@ -45,6 +45,7 @@ public sealed class AuthSessionServiceTests
         AuthSession stale = AuthSession.Rehydrate(
             SessionId.Issue(),
             Owner,
+            Owner.Value,
             AuthMethod.Local,
             Now() - SessionPolicy.Default.IdleTimeout,
             Now() - SessionPolicy.Default.IdleTimeout,
@@ -131,6 +132,7 @@ public sealed class AuthSessionServiceTests
         AuthSession session = AuthSession.Start(
             SessionId.Issue(),
             subject,
+            subject.Value,
             AuthMethod.Local,
             device,
             Now());

@@ -41,6 +41,7 @@ public sealed class DeviceLabelTests
         AuthSession session = AuthSession.Start(
             SessionId.Issue(),
             new Subject("carina"),
+            "carina",
             AuthMethod.Local,
             DeviceLabel.From(new string('a', 400)),
             DateTime.UtcNow);

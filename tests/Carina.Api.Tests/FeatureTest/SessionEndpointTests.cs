@@ -111,6 +111,7 @@ public sealed class SessionEndpointTests
         AuthSession theirs = AuthSession.Start(
             SessionId.Issue(),
             new Subject("somebody-else"),
+            "somebody-else",
             AuthMethod.Local,
             "a stranger's device",
             DateTime.UtcNow);

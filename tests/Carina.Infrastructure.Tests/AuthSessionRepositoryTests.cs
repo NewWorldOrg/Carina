@@ -155,5 +155,5 @@ public sealed class AuthSessionRepositoryTests(RepositoryDatabase database)
     }
 
     private static AuthSession Started(Subject subject, string device)
-        => AuthSession.Start(SessionId.Issue(), subject, AuthMethod.Local, device, At);
+        => AuthSession.Start(SessionId.Issue(), subject, subject.Value, AuthMethod.Local, device, At);
 }

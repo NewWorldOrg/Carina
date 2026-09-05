@@ -19,4 +19,13 @@ public sealed record OidcClaims
     public bool GroupsOverflowed { get; init; }
 
     public string? HostedDomain { get; init; }
+
+    public string? Email { get; init; }
+
+    public string? Name { get; init; }
+
+    public string DisplayName
+        => Email?.Trim() is { Length: > 0 } email ? email
+            : Name?.Trim() is { Length: > 0 } name ? name
+            : Subject;
 }

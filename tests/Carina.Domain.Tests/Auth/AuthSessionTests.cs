@@ -26,12 +26,54 @@ public sealed class AuthSessionTests
         AuthSession session = AuthSession.Start(
             SessionId.Issue(),
             new Subject("alice"),
+            "alice@example.test",
             AuthMethod.Oidc,
             "iPad Safari",
             Started);
 
         Assert.Equal(AuthMethod.Oidc, session.Method);
         Assert.Equal("iPad Safari", session.DeviceLabel);
+    }
+
+    [Fact]
+    public void BrAu018ASessionCarriesTheNameItsHolderIsShownBySoTheListCanSayWhoseItIs()
+    {
+        AuthSession session = AuthSession.Start(
+            SessionId.Issue(),
+            new Subject("108204329581372"),
+            "alice@example.test",
+            AuthMethod.Oidc,
+            "iPad Safari",
+            Started);
+
+        Assert.Equal("alice@example.test", session.DisplayName);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void BrAu018ASessionWithoutADisplayNameWouldLeaveTheListUnableToSayWhoseItIs(string name)
+    {
+        Assert.Throws<ArgumentException>(() => StartAs(name));
+    }
+
+    [Fact]
+    public void BrAu018ADisplayNameIsTrimmedRatherThanStoredWithItsPadding()
+    {
+        Assert.Equal("Alice", StartAs("  Alice  ").DisplayName);
+    }
+
+    [Fact]
+    public void BrAu018ADisplayNameIssuedByAProviderCannotSmuggleControlCharacters()
+    {
+        Assert.Throws<ArgumentException>(() => StartAs("Alice\r\nSet-Cookie: forged"));
+    }
+
+    [Fact]
+    public void BrAu018ADisplayNameLongerThanTheColumnIsRefusedBeforeTheDatabaseSeesIt()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => StartAs(new string('a', AuthSession.LongestDisplayName + 1)));
     }
 
     [Fact]
@@ -196,6 +238,7 @@ public sealed class AuthSessionTests
         AuthSession session = AuthSession.Rehydrate(
             id,
             new Subject("alice"),
+            "Alice",
             AuthMethod.Local,
             Started,
             Started.AddHours(3),
@@ -204,6 +247,7 @@ public sealed class AuthSessionTests
 
         Assert.Equal(id, session.Id);
         Assert.Equal(new Subject("alice"), session.Subject);
+        Assert.Equal("Alice", session.DisplayName);
         Assert.Equal(Started.AddHours(3), session.LastUsedAt);
         Assert.Equal(Started.AddHours(4), session.RevokedAt);
     }
@@ -215,6 +259,7 @@ public sealed class AuthSessionTests
             () => AuthSession.Rehydrate(
                 SessionId.Issue(),
                 new Subject("alice"),
+                "alice",
                 AuthMethod.Local,
                 Started,
                 Started.AddSeconds(-1),
@@ -229,6 +274,7 @@ public sealed class AuthSessionTests
             () => AuthSession.Rehydrate(
                 SessionId.Issue(),
                 new Subject("alice"),
+                "alice",
                 AuthMethod.Local,
                 Started,
                 Started,
@@ -245,6 +291,7 @@ public sealed class AuthSessionTests
             () => AuthSession.Start(
                 SessionId.Issue(),
                 new Subject("alice"),
+                "alice",
                 AuthMethod.Local,
                 "Firefox on Linux",
                 DateTime.SpecifyKind(Started, kind)));
@@ -283,9 +330,9 @@ public sealed class AuthSessionTests
     public void ASessionIsNeverStartedWithoutAnIdOrASubject()
     {
         Assert.Throws<ArgumentNullException>(
-            () => AuthSession.Start(null!, new Subject("alice"), AuthMethod.Local, "Firefox", Started));
+            () => AuthSession.Start(null!, new Subject("alice"), "alice", AuthMethod.Local, "Firefox", Started));
         Assert.Throws<ArgumentNullException>(
-            () => AuthSession.Start(SessionId.Issue(), null!, AuthMethod.Local, "Firefox", Started));
+            () => AuthSession.Start(SessionId.Issue(), null!, "alice", AuthMethod.Local, "Firefox", Started));
     }
 
     [Fact]
@@ -300,5 +347,8 @@ public sealed class AuthSessionTests
     private static AuthSession Start() => StartWith("Firefox on Linux");
 
     private static AuthSession StartWith(string deviceLabel)
-        => AuthSession.Start(SessionId.Issue(), new Subject("alice"), AuthMethod.Local, deviceLabel, Started);
+        => AuthSession.Start(SessionId.Issue(), new Subject("alice"), "alice", AuthMethod.Local, deviceLabel, Started);
+
+    private static AuthSession StartAs(string displayName)
+        => AuthSession.Start(SessionId.Issue(), new Subject("alice"), displayName, AuthMethod.Local, "Firefox", Started);
 }
