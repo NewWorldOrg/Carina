@@ -179,6 +179,31 @@ public sealed class EncodeJob
         StartedAt = null;
     }
 
+    /// <summary>
+    /// What happens to a job the ledger still holds as running when the process comes up: the run
+    /// it was on died with the process, so it goes back to the queue to start over, unless it has
+    /// already had as many attempts as it gets (BR-ED2-011).
+    /// </summary>
+    public EncodeRecovery Recover(int mostAttempts, DateTime at)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(mostAttempts, FirstAttempt);
+        Only(EncodeJobStatus.Running, "be picked up again");
+
+        if (Attempt >= mostAttempts)
+        {
+            Fail(
+                EncodeFailure.TimedOut,
+                $"the job was found running when the process came up, on attempt {Attempt} of the {mostAttempts} it gets, so it is not tried again",
+                at);
+
+            return EncodeRecovery.GivenUp;
+        }
+
+        Requeue(at);
+
+        return EncodeRecovery.PutBack;
+    }
+
     private void Only(EncodeJobStatus expected, string move)
     {
         if (Status != expected)

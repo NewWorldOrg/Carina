@@ -12,6 +12,15 @@ public sealed record ProgrammeSaid(int? ExitCode, ProgrammeFault? Fault, string 
 }
 
 /// <summary>
+/// A programme that was asked to start: the process when it did, and otherwise the reason it
+/// could not be started on this machine, with any path on it already taken out.
+/// </summary>
+public sealed record ProgrammeStart(Process? Process, string Complained)
+{
+    public bool Started => Process is not null;
+}
+
+/// <summary>
 /// How this application starts another programme: the arguments go over as an array, no shell sees
 /// them (BR-EV-002), and the environment is built here rather than inherited, so nothing this
 /// process was handed — a database password among it — reaches the one it starts (BR-EV-003).
@@ -43,6 +52,24 @@ public static class AnotherProgramme
         return start;
     }
 
+    public static ProgrammeStart Start(string programme, IReadOnlyList<string> arguments)
+    {
+        Process? started;
+
+        try
+        {
+            started = Process.Start(Describe(programme, arguments));
+        }
+        catch (Win32Exception failure)
+        {
+            return new ProgrammeStart(null, Missing(programme, failure.Message).Complained);
+        }
+
+        return started is null
+            ? new ProgrammeStart(null, Missing(programme, "it started no process of its own").Complained)
+            : new ProgrammeStart(started, string.Empty);
+    }
+
     public static async Task<ProgrammeSaid> SayAsync(
         string programme,
         IReadOnlyList<string> arguments,
@@ -52,23 +79,14 @@ public static class AnotherProgramme
     {
         ArgumentNullException.ThrowIfNull(clock);
 
-        Process? started;
+        ProgrammeStart start = Start(programme, arguments);
 
-        try
+        if (start.Process is null)
         {
-            started = Process.Start(Describe(programme, arguments));
-        }
-        catch (Win32Exception failure)
-        {
-            return Missing(programme, failure.Message);
+            return new ProgrammeSaid(null, ProgrammeFault.ProgrammeMissing, string.Empty, start.Complained);
         }
 
-        if (started is null)
-        {
-            return Missing(programme, "it started no process of its own");
-        }
-
-        using Process running = started;
+        using Process running = start.Process;
 
         Task<string> answer = running.StandardOutput.ReadToEndAsync(CancellationToken.None);
         Task<string> complaint = running.StandardError.ReadToEndAsync(CancellationToken.None);
@@ -108,7 +126,7 @@ public static class AnotherProgramme
             string.Empty,
             ProgrammeNote.Of($"'{programme}' could not be started on this machine: {why}", ProgrammeNote.Longest));
 
-    private static void GiveUpOn(Process running)
+    public static void GiveUpOn(Process running)
     {
         try
         {

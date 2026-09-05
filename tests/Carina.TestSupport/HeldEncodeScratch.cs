@@ -8,10 +8,13 @@ public sealed class HeldEncodeScratch : IEncodeScratchLedger
 
     public List<string> Moves { get; } = [];
 
+    public Action<EncodeScratchFile>? WhenRecording { get; set; }
+
     public Task RecordAsync(EncodeScratchFile scratch, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(scratch);
 
+        WhenRecording?.Invoke(scratch);
         Files.Add(scratch);
         Moves.Add($"recorded {scratch.FileName.Value}");
 

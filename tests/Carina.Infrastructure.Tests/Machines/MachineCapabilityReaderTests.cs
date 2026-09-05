@@ -37,7 +37,49 @@ public sealed class MachineCapabilityReaderTests : IDisposable
             Enumerable.Range(0, 8).Select(_ => reader.ReadAsync(CancellationToken.None)));
 
         Assert.All(answers, answer => Assert.True(answer.CardIsUsable));
-        Assert.Equal(3, File.ReadAllLines(counted).Length);
+        Assert.Equal(4, File.ReadAllLines(counted).Length);
+    }
+
+    [Fact(DisplayName = "BR-EV-004: a card that encodes an H.264 frame and refuses an H.265 one is a usable card with H.264 on it alone")]
+    public async Task ACardThatRefusesAnH265FrameIsAUsableCardWithH264Alone()
+    {
+        MachineCapabilities can = await Reading(
+            standIns.Script($"""
+                case "$*" in
+                  *-encoders*) {Listing} ;;
+                  *-decoders*) {CaptionListing} ;;
+                  *hevc_vaapi*) printf 'No usable encoding entrypoint found for profile VAProfileHEVCMain (17).\n' >&2; exit 218 ;;
+                  *) exit 0 ;;
+                esac
+                """),
+            standIns.Node());
+
+        Assert.Equal(CardStanding.Usable, can.Card);
+        Assert.Equal(string.Empty, can.Note);
+        Assert.Equal(
+            [Faculty.EncodeH264OnTheProcessor, Faculty.EncodeH264OnTheCard, Faculty.DecodeAribCaptions],
+            can.Faculties);
+    }
+
+    [Fact(DisplayName = "BR-EV-004: a card that refuses H.264 is not asked about H.265 at all")]
+    public async Task ACardThatRefusesH264IsNotAskedAboutH265()
+    {
+        string asked = standIns.Named("asked");
+
+        MachineCapabilities can = await Reading(
+            standIns.Script($"""
+                echo "$*" >> {asked}
+                case "$*" in
+                  *-encoders*) {Listing} ;;
+                  *-decoders*) {CaptionListing} ;;
+                  *) exit 218 ;;
+                esac
+                """),
+            standIns.Node());
+
+        Assert.Equal(CardStanding.DriverUnusable, can.Card);
+        Assert.Equal(3, File.ReadAllLines(asked).Length);
+        Assert.DoesNotContain(File.ReadAllLines(asked), line => line.Contains("hevc_vaapi", StringComparison.Ordinal));
     }
 
     [Fact(DisplayName = "BR-EV-004: a machine with a card that works says it can encode on it")]

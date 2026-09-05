@@ -123,6 +123,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<EncodeScratchFiles>();
         services.AddScoped<EncodeScratchCleaner>();
         services.AddScoped<EncodeArtefactPlacer>();
+        services.AddScoped<EncodeJobRunner>();
+        services.AddScoped<EncodeRestart>();
         services.AddScoped<IThumbnailWorklist, ThumbnailWorklist>();
         services.AddScoped<IChannelScanOrchestrator, ChannelScanOrchestrator>();
         services.AddScoped<ScanApplier>();
@@ -248,6 +250,7 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<RideAlongHarvester>();
         services.AddHostedService<LiveStraySweep>();
         services.AddHostedService<EncodeMountCheck>();
+        services.AddHostedService<EncodeDispatch>();
         services.AddHostedService(provider => provider.GetRequiredService<IntegrityCheckJob>());
         services.AddHostedService(provider => provider.GetRequiredService<ThumbnailJob>());
         services.AddHostedService(provider =>

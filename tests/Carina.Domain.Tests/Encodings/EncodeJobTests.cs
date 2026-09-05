@@ -235,6 +235,68 @@ public sealed class EncodeJobTests
         Assert.Null(job.StartedAt);
     }
 
+    [Fact(DisplayName = "BR-ED2-011: a job found running when the process comes up goes back to the queue with its attempt counted")]
+    public void AJobFoundRunningWhenTheProcessComesUpGoesBackToTheQueue()
+    {
+        EncodeJob job = Running();
+
+        EncodeRecovery recovery = job.Recover(3, Ended);
+
+        Assert.Equal(EncodeRecovery.PutBack, recovery);
+        Assert.Equal(EncodeJobStatus.Queued, job.Status);
+        Assert.Equal(EncodeJob.FirstAttempt + 1, job.Attempt);
+        Assert.Equal(Ended, job.QueuedAt);
+        Assert.Null(job.StartedAt);
+        Assert.Null(job.Failure);
+    }
+
+    [Fact(DisplayName = "BR-ED2-011: a job on its last attempt when the process comes up is given up as timed out, not put back")]
+    public void AJobOnItsLastAttemptWhenTheProcessComesUpIsGivenUp()
+    {
+        EncodeJob job = EncodeJob.Rehydrate(
+            EncodeJobId.New(),
+            RecordingId.New(),
+            EncodeProfileId.New(),
+            EncodeDestinationId.New(),
+            Primary,
+            EncodeJobStatus.Running,
+            3,
+            Queued,
+            Started,
+            null,
+            null,
+            null);
+
+        EncodeRecovery recovery = job.Recover(3, Ended);
+
+        Assert.Equal(EncodeRecovery.GivenUp, recovery);
+        Assert.Equal(EncodeJobStatus.Failed, job.Status);
+        Assert.Equal(3, job.Attempt);
+        Assert.Equal(EncodeFailure.TimedOut, job.Failure!.Failure);
+        Assert.Contains("attempt 3 of the 3", job.Failure.Note, StringComparison.Ordinal);
+        Assert.Equal(Ended, job.EndedAt);
+    }
+
+    [Fact(DisplayName = "BR-ED2-011: only a job the ledger holds as running is picked up again, and it gets at least one attempt")]
+    public void OnlyARunningJobIsPickedUpAgain()
+    {
+        Assert.Throws<InvalidOperationException>(() => Waiting().Recover(3, Ended));
+        Assert.Throws<ArgumentOutOfRangeException>(() => Running().Recover(0, Ended));
+    }
+
+    [Fact(DisplayName = "BR-ED2-005: a claim carries a job only when the ledger holds it as running")]
+    public void AClaimCarriesAJobOnlyWhenTheLedgerHoldsItAsRunning()
+    {
+        EncodeClaim claimed = EncodeClaim.Of(Running());
+
+        Assert.Equal(EncodeClaimStanding.Claimed, claimed.Standing);
+        Assert.NotNull(claimed.Job);
+        Assert.Throws<ArgumentException>(() => EncodeClaim.Of(Waiting()));
+        Assert.Null(EncodeClaim.NothingWaiting().Job);
+        Assert.Equal(EncodeClaimStanding.AnotherIsRunning, EncodeClaim.AnotherIsRunning().Standing);
+        Assert.Equal(EncodeClaimStanding.TakenMeanwhile, EncodeClaim.TakenMeanwhile().Standing);
+    }
+
     [Fact(DisplayName = "BR-ED2-012: a failure is a classification, and the words beside it are not the reason")]
     public void AFailureIsAClassificationAndTheWordsBesideItAreNotTheReason()
     {

@@ -40,6 +40,39 @@ public sealed class ReservationRuleSelfCheckTests
     }
 
     [Fact]
+    public void DetectsAWriterOfTheClaimThatNamesTheReservationFromOutsideItsFolder()
+    {
+        using var tree = new SourceTree();
+        tree.Write(
+            "Carina.Api/Services/Sweeper.cs",
+            "await context.Set<Reservation>().Where(row => row.Id == id).ExecuteUpdateAsync(set => set.SetProperty(row => row.StartedAt, now));");
+
+        Assert.Equal(["/Carina.Api/Services/Sweeper.cs"], ReservationRules.WritersOfWhatRecordingOwns(tree.Root));
+    }
+
+    [Fact]
+    public void LeavesAnotherTablesStartedAtAloneWhenNothingNamesTheReservation()
+    {
+        using var tree = new SourceTree();
+        tree.Write(
+            "Carina.Infrastructure/Persistence/Repositories/EncodeJobRepository.cs",
+            "await context.Set<EncodeJob>().Where(row => row.Id == next).ExecuteUpdateAsync(set => set.SetProperty(row => row.StartedAt, when));");
+
+        Assert.Empty(ReservationRules.WritersOfWhatRecordingOwns(tree.Root));
+    }
+
+    [Fact]
+    public void CannotSeeAClaimWrittenThroughASetTypedSomewhereElse()
+    {
+        using var tree = new SourceTree();
+        tree.Write(
+            "Carina.Api/Services/Sweeper.cs",
+            "await rows.ExecuteUpdateAsync(set => set.SetProperty(row => row.StartedAt, now));");
+
+        Assert.Empty(ReservationRules.WritersOfWhatRecordingOwns(tree.Root));
+    }
+
+    [Fact]
     public void LeavesRecordingAndMigrationAloneBecauseThoseTwoAreTheWriters()
     {
         using var tree = new SourceTree();

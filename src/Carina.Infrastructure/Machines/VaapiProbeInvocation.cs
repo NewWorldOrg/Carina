@@ -5,8 +5,12 @@ public static class VaapiProbeInvocation
     public const string Picture = "color=black:s=64x64:r=1:d=1";
 
     public static IReadOnlyList<string> Arguments(string renderNode)
+        => Arguments(renderNode, FfmpegFaculties.H264OnTheCard);
+
+    public static IReadOnlyList<string> Arguments(string renderNode, string encoder)
     {
         ArgumentException.ThrowIfNullOrEmpty(renderNode);
+        ArgumentException.ThrowIfNullOrEmpty(encoder);
 
         return
         [
@@ -23,7 +27,7 @@ public static class VaapiProbeInvocation
             "-vf",
             "format=nv12,hwupload",
             "-c:v",
-            "h264_vaapi",
+            encoder,
             "-f",
             "null",
             "-",

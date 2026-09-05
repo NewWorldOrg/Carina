@@ -13,6 +13,13 @@ public enum EncodeJobStatus
     Cancelled = 5,
 }
 
+public enum EncodeRecovery
+{
+    PutBack = 1,
+
+    GivenUp = 2,
+}
+
 public enum EncodeStanding
 {
     NotEncoded = 1,
