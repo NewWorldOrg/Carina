@@ -28,6 +28,7 @@ public sealed class AuthSessionRepositoryTests(RepositoryDatabase database)
         Assert.NotNull(read);
         Assert.Equal(started.Id.Value, read.Id.Value);
         Assert.Equal("carina", read.Subject.Value);
+        Assert.Equal("carina", read.DisplayName);
         Assert.Equal(AuthMethod.Local, read.Method);
         Assert.Equal("a device", read.DeviceLabel);
         Assert.Null(read.RevokedAt);
@@ -60,6 +61,37 @@ public sealed class AuthSessionRepositoryTests(RepositoryDatabase database)
 
         Assert.Contains(listed, session => session.Id.Value == mine.Id.Value);
         Assert.DoesNotContain(listed, session => session.Id.Value == theirs.Id.Value);
+    }
+
+    [Fact]
+    public async Task BrAu018TheListOfEveryoneCarriesEveryAccountsSessionsMostRecentlyUsedFirst()
+    {
+        AuthSession mine = Started(new Subject("carina"), "my device");
+        AuthSession theirs = AuthSession.Start(
+            SessionId.Issue(),
+            new Subject("108204329581372"),
+            "somebody@example.test",
+            AuthMethod.Oidc,
+            "their device",
+            At.AddMinutes(1));
+
+        await using (CarinaDbContext writing = database.Open())
+        {
+            var repository = new AuthSessionRepository(writing);
+            await repository.SaveAsync(mine, Cancel);
+            await repository.SaveAsync(theirs, Cancel);
+        }
+
+        await using CarinaDbContext reading = database.Open();
+        IReadOnlyList<AuthSession> listed = await new AuthSessionRepository(reading).ListAllAsync(Cancel);
+
+        int ofTheirs = listed.ToList().FindIndex(session => session.Id.Value == theirs.Id.Value);
+        int ofMine = listed.ToList().FindIndex(session => session.Id.Value == mine.Id.Value);
+
+        Assert.True(ofTheirs >= 0 && ofMine >= 0);
+        Assert.True(ofTheirs < ofMine);
+        Assert.Equal("somebody@example.test", listed[ofTheirs].DisplayName);
+        Assert.Equal(AuthMethod.Oidc, listed[ofTheirs].Method);
     }
 
     [Fact]

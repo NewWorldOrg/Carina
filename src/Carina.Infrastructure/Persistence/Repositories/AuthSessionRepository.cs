@@ -24,6 +24,11 @@ public sealed class AuthSessionRepository(CarinaDbContext context) : IAuthSessio
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlyList<AuthSession>> ListAllAsync(CancellationToken cancellationToken)
+        => await context.Set<AuthSession>()
+            .OrderByDescending(session => session.LastUsedAt)
+            .ToListAsync(cancellationToken);
+
     public async Task SaveAsync(AuthSession session, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(session);

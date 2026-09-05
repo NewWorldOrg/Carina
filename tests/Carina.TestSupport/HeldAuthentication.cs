@@ -48,6 +48,9 @@ public sealed class HeldAuthSessions : IAuthSessionRepository
             [.. Sessions.Where(session => session.Subject.Equals(subject))]);
     }
 
+    public Task<IReadOnlyList<AuthSession>> ListAllAsync(CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<AuthSession>>([.. Sessions.OrderByDescending(session => session.LastUsedAt)]);
+
     public Task SaveAsync(AuthSession session, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(session);
