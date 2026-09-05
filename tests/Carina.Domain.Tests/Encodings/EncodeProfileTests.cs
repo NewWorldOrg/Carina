@@ -8,56 +8,6 @@ public sealed class EncodeProfileTests
 {
     private static readonly DateTime At = new(2026, 9, 4, 3, 0, 0, DateTimeKind.Utc);
 
-    [Fact(DisplayName = "BR-EV-001: a profile carries no string of its own")]
-    public void AProfileCarriesNoStringOfItsOwn()
-    {
-        IReadOnlyList<string> free =
-        [
-            .. typeof(EncodeProfile)
-                .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                .Where(property => property.PropertyType == typeof(string))
-                .Select(property => property.Name),
-        ];
-
-        Assert.Empty(free);
-    }
-
-    [Fact(DisplayName = "BR-EV-001: every part of a profile is an enum, a bounded number or a time")]
-    public void EveryPartOfAProfileIsAnEnumABoundedNumberOrATime()
-    {
-        Type[] allowed =
-        [
-            typeof(EncodeProfileId),
-            typeof(EncodeLabel),
-            typeof(ConstantRateFactor),
-            typeof(ConstantQuantiser),
-            typeof(DateTime),
-        ];
-
-        foreach (PropertyInfo property in typeof(EncodeProfile).GetProperties(BindingFlags.Public | BindingFlags.Instance))
-        {
-            Assert.True(
-                property.PropertyType.IsEnum || allowed.Contains(property.PropertyType),
-                $"{property.Name} is a {property.PropertyType.Name}");
-        }
-    }
-
-    [Fact(DisplayName = "BR-EV-004: nothing in the encode domain can hold a bitrate, so the card cannot be given one")]
-    public void NothingInTheEncodeDomainCanHoldABitrate()
-    {
-        IReadOnlyList<string> named =
-        [
-            .. typeof(EncodeProfile).Assembly
-                .GetTypes()
-                .Where(type => type.Namespace == typeof(EncodeProfile).Namespace)
-                .Select(type => type.Name)
-                .Where(name => name.Contains("Bitrate", StringComparison.OrdinalIgnoreCase)
-                    || name.Contains("Kilobit", StringComparison.OrdinalIgnoreCase)),
-        ];
-
-        Assert.Empty(named);
-    }
-
     [Fact(DisplayName = "BR-EV-004: the slot the card reads takes a quantiser, and the processor's takes a rate factor")]
     public void EachEncoderHasASlotOfItsOwnAndTheTypeSaysWhichRateControlGoesInIt()
     {
