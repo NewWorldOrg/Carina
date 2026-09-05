@@ -7,13 +7,6 @@ using Carina.Infrastructure.Machines;
 
 namespace Carina.Infrastructure.Encodings;
 
-/// <summary>
-/// Reads where a source begins and where its first decodable picture lies by asking ffprobe for two
-/// keys and reading each back by its key (BR-ED2-013). The first picture is the first frame ffprobe
-/// decoded, not the first packet a stream declares: measured on 2026-09-05 the two lie 0.133 s apart
-/// on one recording and the container's start a further 0.374 s before that. What ffprobe complained
-/// about on the way decides nothing here, as it complains about every broadcast recording.
-/// </summary>
 public sealed class FfprobeSourceHead(MachineSettings settings, TimeProvider clock) : ISourceHeadReader
 {
     public const string StartKey = "start_time";

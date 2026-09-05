@@ -22,15 +22,6 @@ namespace Carina.Infrastructure.Encodings;
 /// every tenth and at least every <see cref="HeartbeatEvery"/>, so a job that has stopped getting
 /// on can be told from one that is (BR-ED2-014).
 /// </para>
-/// <para>
-/// Before the programme starts, the head of the source is read — where the container begins and
-/// where the first picture that can be decoded lies — and the distance between them is the one head
-/// skip the run is handed and the job keeps (BR-ED2-006). A head further away than a run accepts
-/// fails the job before a byte is written. When the programme has finished, the work file is
-/// measured and its length kept beside the source's, so an artefact that came out longer or
-/// shorter than the source had left is on the record; it is a note beside a completed job, not a
-/// failure, because the picture is whole and only its last seconds are in question.
-/// </para>
 /// </summary>
 public sealed class EncodeJobRunner(
     IEncodeJobRepository jobs,
@@ -215,11 +206,6 @@ public sealed class EncodeJobRunner(
         return await SweptAsync(job, cancellationToken);
     }
 
-    /// <summary>
-    /// A probe that read the source and found no picture to begin from leaves the head too far; one
-    /// that refused the source is the programme's own refusal, as a run's would be; one that could
-    /// not be asked at all is this machine's want.
-    /// </summary>
     private static EncodeFailure WhatAnUnreadHeadIsCalled(SourceHeadReading head)
         => head.Fault switch
         {

@@ -1,17 +1,5 @@
 namespace Carina.Domain.Encodings;
 
-/// <summary>
-/// Where the artefact's clock stands against the source's, kept with the job so that anything drawn
-/// from the source — a caption is drawn from the source, the picture is served from the artefact —
-/// can be put on the artefact's clock by one subtraction (BR-ED2-006). The source's clock is the
-/// broadcast's own, so <see cref="SourceStart"/> is a reading like 30499.474 s; the head skip is how
-/// far past that the first picture that could be decoded lies, and is what the run throws away;
-/// their sum, <see cref="CaptionShift"/>, is the reading on the source's clock the artefact calls
-/// zero. A head skip longer than <see cref="MostHeadSkip"/> is refused before anything is written,
-/// because a run handed the broadcast clock instead of the skip would throw seventeen hours away
-/// and finish with nothing in it. The lengths are kept so the two clocks can be compared at the
-/// end: an artefact whose length disagrees with what the source had left is noted, not failed.
-/// </summary>
 public sealed record EncodeTimeline
 {
     public static readonly TimeSpan MostHeadSkip = TimeSpan.FromSeconds(5);
@@ -48,13 +36,8 @@ public sealed record EncodeTimeline
 
     public TimeSpan? ArtefactLength { get; }
 
-    /// <summary>
-    /// The reading on the source's clock that the artefact calls zero: take it off a caption's
-    /// presentation time and the caption lands where the artefact shows that moment.
-    /// </summary>
     public TimeSpan CaptionShift => SourceStart + HeadSkip;
 
-    /// <summary>What the source had left once the head was skipped, which is what the artefact should measure.</summary>
     public TimeSpan? Expected
         => SourceLength is { } whole && whole > HeadSkip ? whole - HeadSkip : null;
 

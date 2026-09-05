@@ -10,14 +10,6 @@ public sealed record EncodeHeadwayResponder(double? Portion, int? LeftSeconds, D
 
 public sealed record EncodeFailureResponder(EncodeFailure Failure, string Note, DateTime NoticedAt);
 
-/// <summary>
-/// Where the artefact's clock stands against the source's (BR-ED2-006). <c>captionShiftSeconds</c>
-/// is the reading on the source's own clock that the artefact calls zero — the source's start plus
-/// the head the run skipped — so a caption drawn from the source lands on the artefact at its
-/// presentation time less this. The lengths are there to be read side by side: <c>driftSeconds</c>
-/// is how far the artefact came out from what the source had left after the skip, and
-/// <c>lengthsAgree</c> says whether that is within what the two clocks are allowed.
-/// </summary>
 public sealed record EncodeTimelineResponder(
     double SourceStartSeconds,
     double HeadSkipSeconds,
