@@ -42,6 +42,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<PlaybackTicketService>();
         services.AddScoped<LiveService>();
         services.AddScoped<StorageService>();
+        services.AddScoped<EncodeProfileService>();
+        services.AddScoped<EncodeDestinationService>();
+        services.AddScoped<EncodeJobService>();
         services.AddSingleton<PlaybackTicketGate>();
 
         return services;

@@ -17,6 +17,8 @@ public sealed class EncodeJobConfiguration : IEntityTypeConfiguration<EncodeJob>
 
     public const string RecordingIndexName = "ix_encode_job_recording";
 
+    public const string ConcurrencyToken = "xmin";
+
     public void Configure(EntityTypeBuilder<EncodeJob> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -81,6 +83,12 @@ public sealed class EncodeJobConfiguration : IEntityTypeConfiguration<EncodeJob>
                         AND strpos(artefact_name, replace(profile_id::text, '-', '')) > 0))
                 """);
         });
+
+        builder.Property<uint>(ConcurrencyToken)
+            .HasColumnName(ConcurrencyToken)
+            .HasColumnType("xid")
+            .ValueGeneratedOnAddOrUpdate()
+            .IsConcurrencyToken();
 
         builder.HasKey(job => job.Id);
 

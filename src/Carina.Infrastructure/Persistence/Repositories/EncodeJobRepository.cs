@@ -1,7 +1,10 @@
+using Carina.Domain.Base;
 using Carina.Domain.Encodings;
+using Carina.Domain.Recordings;
 using Carina.Infrastructure.Persistence.Configurations;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 using Npgsql;
 
@@ -25,9 +28,53 @@ public sealed class EncodeJobRepository(CarinaDbContext context) : IEncodeJobRep
 
     public async Task SaveAsync(EncodeJob job, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(job);
+
         context.Update(job);
 
-        await context.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            context.Entry(job).State = EntityState.Detached;
+
+            throw new EncodeJobMovedMeanwhileException(job.Id);
+        }
+    }
+
+    public async Task<PaginatedList<EncodeJob>> ListAsync(EncodeJobQuery query, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        IQueryable<EncodeJob> asked = context.Set<EncodeJob>().AsNoTracking();
+
+        if (query.Statuses.Count > 0)
+        {
+            asked = asked.Where(row => query.Statuses.Contains(row.Status));
+        }
+
+        int total = await asked.CountAsync(cancellationToken);
+        List<EncodeJob> page = await asked
+            .OrderByDescending(row => row.QueuedAt)
+            .ThenByDescending(row => row.Id)
+            .Skip((query.Page - 1) * query.PerPage)
+            .Take(query.PerPage)
+            .ToListAsync(cancellationToken);
+
+        return new PaginatedList<EncodeJob>(page, total, query.Page, query.PerPage);
+    }
+
+    public async Task<IReadOnlyList<EncodeJob>> ListForRecordingAsync(RecordingId recordingId, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(recordingId);
+
+        return await context.Set<EncodeJob>()
+            .Where(row => row.RecordingId == recordingId)
+            .OrderBy(row => row.QueuedAt)
+            .ThenBy(row => row.Id)
+            .ToListAsync(cancellationToken);
     }
 
     /// <summary>
@@ -136,8 +183,34 @@ public sealed class EncodeJobRepository(CarinaDbContext context) : IEncodeJobRep
         }
 
         job.Name(name);
+        await CatchUpWithTheRowAsync(job, cancellationToken);
 
         return ArtefactClaim.Claimed;
+    }
+
+    /// <summary>
+    /// A conditional update moves the row's version on without the tracker seeing it, so a tracked
+    /// job's version is read again afterwards; otherwise the next save would take the job's own
+    /// update for another hand's.
+    /// </summary>
+    private async Task CatchUpWithTheRowAsync(EncodeJob job, CancellationToken cancellationToken)
+    {
+        EntityEntry<EncodeJob> entry = context.Entry(job);
+
+        if (entry.State is EntityState.Detached)
+        {
+            return;
+        }
+
+        uint version = await context.Set<EncodeJob>()
+            .AsNoTracking()
+            .Where(row => row.Id == job.Id)
+            .Select(row => EF.Property<uint>(row, EncodeJobConfiguration.ConcurrencyToken))
+            .SingleAsync(cancellationToken);
+
+        PropertyEntry<EncodeJob, uint> token = entry.Property<uint>(EncodeJobConfiguration.ConcurrencyToken);
+        token.OriginalValue = version;
+        token.CurrentValue = version;
     }
 
     private static bool IsAnotherRunning(DbUpdateException exception)

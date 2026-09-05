@@ -1,4 +1,6 @@
+using Carina.Domain.Base;
 using Carina.Domain.Encodings;
+using Carina.Domain.Recordings;
 
 namespace Carina.TestSupport;
 
@@ -38,6 +40,32 @@ public sealed class HeldEncodeJobs : IEncodeJobRepository
         WhenSaving?.Invoke(job);
 
         return Task.CompletedTask;
+    }
+
+    public Task<PaginatedList<EncodeJob>> ListAsync(EncodeJobQuery query, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+
+        EncodeJob[] matched =
+        [
+            .. Jobs
+                .Where(job => query.Statuses.Count is 0 || query.Statuses.Contains(job.Status))
+                .OrderByDescending(job => job.QueuedAt)
+                .ThenByDescending(job => job.Id.Value),
+        ];
+
+        return Task.FromResult(new PaginatedList<EncodeJob>(
+            [.. matched.Skip((query.Page - 1) * query.PerPage).Take(query.PerPage)],
+            matched.Length,
+            query.Page,
+            query.PerPage));
+    }
+
+    public Task<IReadOnlyList<EncodeJob>> ListForRecordingAsync(RecordingId recordingId, CancellationToken cancellationToken)
+    {
+        IReadOnlyList<EncodeJob> listed = [.. Jobs.Where(job => job.RecordingId.Equals(recordingId)).OrderBy(job => job.QueuedAt)];
+
+        return Task.FromResult(listed);
     }
 
     public Task<EncodeClaim> ClaimNextAsync(DateTime at, CancellationToken cancellationToken)

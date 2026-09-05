@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Encodings;
 using Carina.Domain.Machines;
 using Carina.Domain.Recordings;
@@ -390,6 +391,95 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         Assert.Equal(EncodeScratchKind.WorkFile, owed[0].Kind);
         Assert.Equal(second.FileName, owed[0].FileName);
         Assert.True(owed[0].IsOwedARemoval);
+    }
+
+    [Fact(DisplayName = "BR-ES-002: a page of the ledger comes newest first, narrowed to the standings asked for, and says how many there are")]
+    public async Task APageOfTheLedgerComesNewestFirstNarrowedToTheStandingsAskedFor()
+    {
+        await ClearAsync();
+        (EncodeProfile profile, EncodeDestination destination) = await DefinedAsync();
+        EncodeJob oldest = Job(profile, destination);
+        EncodeJob running = EncodeJob.Queue(EncodeJobId.New(), RecordingId.New(), profile.Id, destination.Id, Primary, Queued.AddMinutes(1));
+        EncodeJob newest = EncodeJob.Queue(EncodeJobId.New(), RecordingId.New(), profile.Id, destination.Id, Primary, Queued.AddMinutes(5));
+        running.Start(Started.AddMinutes(1));
+
+        await using (CarinaDbContext writing = database.Open())
+        {
+            var repository = new EncodeJobRepository(writing);
+            await repository.AddAsync(oldest, Cancel);
+            await repository.AddAsync(running, Cancel);
+            await repository.AddAsync(newest, Cancel);
+        }
+
+        await using CarinaDbContext reading = database.Open();
+        var reader = new EncodeJobRepository(reading);
+        PaginatedList<EncodeJob> everything = await reader.ListAsync(EncodeJobQuery.For(null, 1, 2)!, Cancel);
+        PaginatedList<EncodeJob> waiting = await reader.ListAsync(EncodeJobQuery.For([EncodeJobStatus.Queued], 1, 10)!, Cancel);
+
+        Assert.Equal(3, everything.Total);
+        Assert.Equal(2, everything.LastPage);
+        Assert.Equal([newest.Id, running.Id], everything.Items.Select(job => job.Id));
+        Assert.Equal(2, waiting.Total);
+        Assert.Equal([newest.Id, oldest.Id], waiting.Items.Select(job => job.Id));
+    }
+
+    [Fact]
+    public async Task TheJobsForOneRecordingAreListedAndNobodyElses()
+    {
+        await ClearAsync();
+        (EncodeProfile profile, EncodeDestination destination) = await DefinedAsync();
+        var recording = RecordingId.New();
+        EncodeJob first = Job(profile, destination, recording);
+        EncodeJob second = EncodeJob.Queue(EncodeJobId.New(), recording, profile.Id, destination.Id, Primary, Queued.AddMinutes(1));
+        EncodeJob other = Job(profile, destination);
+
+        await using (CarinaDbContext writing = database.Open())
+        {
+            var repository = new EncodeJobRepository(writing);
+            await repository.AddAsync(first, Cancel);
+            await repository.AddAsync(second, Cancel);
+            await repository.AddAsync(other, Cancel);
+        }
+
+        await using CarinaDbContext reading = database.Open();
+        IReadOnlyList<EncodeJob> listed = await new EncodeJobRepository(reading).ListForRecordingAsync(recording, Cancel);
+
+        Assert.Equal([first.Id, second.Id], listed.Select(job => job.Id));
+    }
+
+    [Fact(DisplayName = "BR-ED2-012: a job called off under the hand that runs it is not written over by that hand; the save says the row moved")]
+    public async Task AJobCalledOffUnderTheHandThatRunsItIsNotWrittenOver()
+    {
+        await ClearAsync();
+        (EncodeProfile profile, EncodeDestination destination) = await DefinedAsync();
+        EncodeJob job = Job(profile, destination);
+        job.Start(Started);
+
+        await using (CarinaDbContext writing = database.Open())
+        {
+            await new EncodeJobRepository(writing).AddAsync(job, Cancel);
+        }
+
+        await using CarinaDbContext running = database.Open();
+        var runner = new EncodeJobRepository(running);
+        EncodeJob held = (await runner.FindAsync(job.Id, Cancel))!;
+
+        await using (CarinaDbContext cancelling = database.Open())
+        {
+            var hand = new EncodeJobRepository(cancelling);
+            EncodeJob calledOff = (await hand.FindAsync(job.Id, Cancel))!;
+            calledOff.Cancel(Ended);
+            await hand.SaveAsync(calledOff, Cancel);
+        }
+
+        held.Fail(EncodeFailure.FfmpegExitedNonZero, "the programme exited 255", Ended.AddSeconds(1));
+        EncodeJobMovedMeanwhileException moved = await Assert.ThrowsAsync<EncodeJobMovedMeanwhileException>(() => runner.SaveAsync(held, Cancel));
+
+        Assert.Equal(job.Id, moved.JobId);
+        await using CarinaDbContext reading = database.Open();
+        EncodeJob? read = await new EncodeJobRepository(reading).FindAsync(job.Id, Cancel);
+        Assert.Equal(EncodeJobStatus.Cancelled, read!.Status);
+        Assert.Null(read.Failure);
     }
 
     private async Task ClearAsync()
