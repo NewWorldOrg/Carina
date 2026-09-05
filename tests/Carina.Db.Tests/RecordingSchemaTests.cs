@@ -329,6 +329,7 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
                 RecordingConfiguration.AwaitingThumbnailIndexName,
                 RecordingConfiguration.DroppedIndexName,
                 RecordingConfiguration.InFlightIndexName,
+                RecordingConfiguration.LibraryIndexName,
                 RecordingConfiguration.SettledIndexName,
                 RecordingConfiguration.FileIndexName,
                 RecordingConfiguration.ReservationIndexName,

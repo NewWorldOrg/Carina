@@ -19,6 +19,14 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
 
     public const string DroppedIndexName = "ix_recording_cc_dropped";
 
+    public const string LibraryIndexName = "ix_recording_library";
+
+    public const string SearchableSql =
+        "lower(pg_catalog.normalize("
+        + $"snapshot_name || '{ProgrammeSearchText.BetweenNameAndSummary}'"
+        + $" || snapshot_summary || '{ProgrammeSearchText.BetweenNameAndSummary}'"
+        + $" || snapshot_extended, '{BroadcastText.Compatibility}'))";
+
     public const string AwaitingThumbnailIndexName = "ix_recording_awaiting_thumbnail";
 
     public const string ConcurrencyToken = "xmin";
@@ -320,6 +328,14 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
             .HasMaxLength(32)
             .IsRequired();
 
+        builder.Property<string>(ProgrammeConfiguration.Searchable)
+            .HasColumnName(ProgrammeConfiguration.Searchable)
+            .HasComputedColumnSql(SearchableSql, stored: true);
+
+        builder.Property<int[]>(ProgrammeConfiguration.GenreKinds)
+            .HasColumnName(ProgrammeConfiguration.GenreKinds)
+            .HasComputedColumnSql(ProgrammeConfiguration.GenreKindsSqlOver("snapshot_genres"), stored: true);
+
         builder.Ignore(recording => recording.Counters);
         builder.Ignore(recording => recording.Programme);
         builder.Ignore(recording => recording.IsInFlight);
@@ -349,6 +365,10 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
         builder.HasIndex(recording => recording.CcDroppedPackets)
             .HasFilter("cc_measured AND cc_dropped_packets > 0")
             .HasDatabaseName(DroppedIndexName);
+
+        builder.HasIndex(recording => new { recording.StartedAtActual, recording.Id })
+            .IsDescending()
+            .HasDatabaseName(LibraryIndexName);
     }
 
     private static IReadOnlyList<T> Read<T>(string stored)
