@@ -48,15 +48,15 @@ public sealed record ReservationConditions
 
 public sealed class ReservationQuery
 {
-    public const int MostPerPage = 200;
+    public const int MostPerPage = ListingGuards.MostPerPage;
 
-    public const int DefaultPerPage = 50;
+    public const int DefaultPerPage = ListingGuards.DefaultPerPage;
 
-    public const int MostChannels = 64;
+    public const int MostChannels = ListingGuards.MostChannels;
 
     public const int ShortestKeyword = 2;
 
-    public static readonly TimeSpan LongestSpan = TimeSpan.FromDays(366);
+    public static readonly TimeSpan LongestSpan = ListingGuards.LongestSpan;
 
     private ReservationQuery(
         IReadOnlyList<ReservationStanding> standings,
@@ -113,7 +113,8 @@ public sealed class ReservationQuery
     {
         ReservationConditions beside = conditions ?? new ReservationConditions();
 
-        if (StandingsIn(beside.Standings) is not { } standings || ChannelsIn(beside.Channels) is not { } channels)
+        if (ListingGuards.NamedIn(beside.Standings) is not { } standings
+            || ListingGuards.ChannelsIn(beside.Channels) is not { } channels)
         {
             return null;
         }
@@ -133,7 +134,7 @@ public sealed class ReservationQuery
             return null;
         }
 
-        if (SpanIsUnusable(from, to) || page is < 1)
+        if (ListingGuards.SpanIsUnusable(from, to) || page is < 1)
         {
             return null;
         }
@@ -148,52 +149,7 @@ public sealed class ReservationQuery
             sort,
             descending,
             page ?? 1,
-            Clamped(perPage));
-    }
-
-    private static int Clamped(int? perPage)
-        => perPage switch
-        {
-            null or < 1 => DefaultPerPage,
-            > MostPerPage => MostPerPage,
-            { } asked => asked,
-        };
-
-    private static bool SpanIsUnusable(DateTime? from, DateTime? to)
-    {
-        if (from is { } start && start.Kind is not DateTimeKind.Utc)
-        {
-            return true;
-        }
-
-        if (to is { } end && end.Kind is not DateTimeKind.Utc)
-        {
-            return true;
-        }
-
-        return from is { } began && to is { } finished && (finished <= began || finished - began > LongestSpan);
-    }
-
-    private static IReadOnlyList<ReservationStanding>? StandingsIn(IReadOnlyList<ReservationStanding>? asked)
-    {
-        if (asked is null || asked.Count == 0)
-        {
-            return [];
-        }
-
-        return asked.Any(standing => !Enum.IsDefined(standing)) ? null : [.. asked.Distinct()];
-    }
-
-    private static IReadOnlyList<ProgrammeService>? ChannelsIn(IReadOnlyList<ProgrammeService>? asked)
-    {
-        if (asked is null || asked.Count == 0)
-        {
-            return [];
-        }
-
-        ProgrammeService[] apart = [.. asked.Distinct()];
-
-        return apart.Length > MostChannels ? null : apart;
+            ListingGuards.Clamped(perPage));
     }
 
     private static string? KeywordIn(string? asked)
