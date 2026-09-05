@@ -144,6 +144,27 @@ public sealed class ProgrammeTests
     }
 
     [Fact]
+    public void BrEd002AnEndThatIsNotAfterTheStartDoesNotEraseTheOneAlreadySettledEither()
+    {
+        var programme = Programme.Discover(Broadcast(), At);
+
+        Assert.False(programme.Absorb(Broadcast(endsAt: At.AddHours(22)), At.AddHours(1)));
+
+        Assert.Equal(At.AddHours(23), programme.EndsAt);
+    }
+
+    [Fact]
+    public void BrEd002AnEndThatIsNotAfterAStartThatMovedLeavesNoEndRatherThanOneBeforeTheStart()
+    {
+        var programme = Programme.Discover(Broadcast(), At);
+
+        Assert.True(programme.Absorb(Broadcast(startsAt: At.AddHours(23), endsAt: At.AddHours(23)), At.AddHours(1)));
+
+        Assert.Equal(At.AddHours(23), programme.StartsAt);
+        Assert.Null(programme.EndsAt);
+    }
+
+    [Fact]
     public void TheSameBroadcastArrivingAgainChangesNothing()
     {
         var programme = Programme.Discover(Broadcast(), At);

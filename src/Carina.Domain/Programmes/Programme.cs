@@ -129,7 +129,8 @@ public sealed class Programme
         DateTime startsAt = UtcTimes.Required(broadcast.StartsAt, nameof(broadcast));
         string name = Kept(Name, Clamped(broadcast.Name, NameMaxLength));
         string summary = Kept(Summary, Clamped(broadcast.Summary, SummaryMaxLength));
-        DateTime? endsAt = Settled(startsAt, UtcTimes.Optional(broadcast.EndsAt, nameof(broadcast)) ?? EndsAt);
+        DateTime? told = Settled(startsAt, UtcTimes.Optional(broadcast.EndsAt, nameof(broadcast)));
+        DateTime? endsAt = Settled(startsAt, told ?? EndsAt);
         IReadOnlyList<ProgrammeGenre> genres = Kept(Genres, broadcast.Genres);
         IReadOnlyList<ProgrammeItem> items = Kept(Items, broadcast.Items);
         IReadOnlyList<RelatedProgramme> related = Kept(Related, broadcast.Related);
