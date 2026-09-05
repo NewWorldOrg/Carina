@@ -79,6 +79,17 @@ public sealed class AuthSchemaTests(MigratedScratchDatabase database)
     }
 
     [Fact]
+    public async Task BrAu018ASessionWithoutADisplayNameWouldLeaveTheListUnableToSayWhoseItIs()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Session(connection, "id-blank-name", "owner-n", "Firefox", displayName: string.Empty));
+
+        Assert.Equal("ck_auth_session_display_name", refusal.ConstraintName);
+    }
+
+    [Fact]
     public async Task ASessionStartsOutNotRevoked()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -156,11 +167,12 @@ public sealed class AuthSchemaTests(MigratedScratchDatabase database)
         string deviceLabel,
         string method = "Local",
         string? lastUsed = null,
-        string? revoked = null)
+        string? revoked = null,
+        string? displayName = null)
         => Execute(
             connection,
-            "INSERT INTO auth_session (id, subject, method, created_at, last_used_at, device_label, revoked_at) "
-            + $"VALUES ('{id}', '{subject}', '{method}', {Created}, {lastUsed ?? Created}, '{deviceLabel}', {revoked ?? "NULL"})");
+            "INSERT INTO auth_session (id, subject, display_name, method, created_at, last_used_at, device_label, revoked_at) "
+            + $"VALUES ('{id}', '{subject}', '{displayName ?? subject}', '{method}', {Created}, {lastUsed ?? Created}, '{deviceLabel}', {revoked ?? "NULL"})");
 
     private static Task Account(
         NpgsqlConnection connection,
