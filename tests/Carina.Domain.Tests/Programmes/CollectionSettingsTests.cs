@@ -13,6 +13,10 @@ public sealed class CollectionSettingsTests
         => Assert.Equal(TimeSpan.FromDays(3), new CollectionSettings().RevisitsBelow);
 
     [Fact]
+    public void TheLongestAVisitMayTakeIsThreeMinutes()
+        => Assert.Equal(TimeSpan.FromMinutes(3), new CollectionSettings().LongestVisit);
+
+    [Fact]
     public void TheThresholdSitsInsideTheGoalRatherThanBeyondIt()
     {
         CollectionSettings settings = new();
