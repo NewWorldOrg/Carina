@@ -4,6 +4,8 @@ public sealed record ProgrammeWindow(int NetworkId, int ServiceId, DateTime From
 
 public sealed record ProgrammeService(int NetworkId, int ServiceId);
 
+public sealed record ProgrammesAbsorbed(int Added, int Updated);
+
 public interface IProgrammeRepository
 {
     Task<Programme?> FindAsync(ProgrammeId id, CancellationToken cancellationToken);
@@ -18,7 +20,10 @@ public interface IProgrammeRepository
 
     Task AddAsync(Programme programme, CancellationToken cancellationToken);
 
-    Task SaveAsync(Programme programme, CancellationToken cancellationToken);
+    Task<ProgrammesAbsorbed> AbsorbAsync(
+        IReadOnlyList<ProgrammeBroadcast> broadcasts,
+        DateTime at,
+        CancellationToken cancellationToken);
 
     Task<IReadOnlyList<Programme>> ListEndedBeforeAsync(
         DateTime at,
@@ -33,8 +38,6 @@ public interface IProgrammeRepository
         long revision,
         int rows,
         CancellationToken cancellationToken);
-
-    Task<long> NextRevisionAsync(CancellationToken cancellationToken);
 
     Task<int> ForgetEverythingAsync(CancellationToken cancellationToken);
 }

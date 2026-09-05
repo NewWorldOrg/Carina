@@ -58,8 +58,40 @@ public sealed class HeldProgrammes : IProgrammeRepository
         return Task.CompletedTask;
     }
 
-    public Task SaveAsync(Programme programme, CancellationToken cancellationToken)
-        => Task.CompletedTask;
+    public Task<ProgrammesAbsorbed> AbsorbAsync(
+        IReadOnlyList<ProgrammeBroadcast> broadcasts,
+        DateTime at,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(broadcasts);
+
+        int added = 0;
+        int updated = 0;
+
+        foreach (ProgrammeBroadcast broadcast in broadcasts)
+        {
+            Programme? held = Programmes.FirstOrDefault(programme => programme.Id.Equals(broadcast.Id));
+
+            if (held is null)
+            {
+                Programme discovered = Programme.Discover(broadcast, at);
+
+                discovered.MarkRevision(++handedOut);
+                Programmes.Add(discovered);
+                added++;
+
+                continue;
+            }
+
+            if (held.Absorb(broadcast, at))
+            {
+                held.MarkRevision(++handedOut);
+                updated++;
+            }
+        }
+
+        return Task.FromResult(new ProgrammesAbsorbed(added, updated));
+    }
 
     public Task<IReadOnlyList<Programme>> ListEndedBeforeAsync(
         DateTime at,
@@ -103,9 +135,6 @@ public sealed class HeldProgrammes : IProgrammeRepository
                 .OrderBy(programme => programme.Revision)
                 .Take(rows),
         ]);
-
-    public Task<long> NextRevisionAsync(CancellationToken cancellationToken)
-        => Task.FromResult(++handedOut);
 
     public Task<int> ForgetEverythingAsync(CancellationToken cancellationToken)
     {

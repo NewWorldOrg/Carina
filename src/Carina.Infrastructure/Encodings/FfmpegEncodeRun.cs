@@ -23,7 +23,8 @@ public sealed record EncodeRunOutcome(int? ExitCode, EncodeRunFault? Fault, stri
 /// One run of the encoder for one job. The programme is started yielding, and who it is — its id
 /// and when it began — is handed to the caller before a line of its progress is read, so the
 /// ledger knows the programme before the programme has done anything; a caller that cannot write
-/// that down stops the programme rather than run it unrecorded (BR-ED2-011). Progress is read as
+/// that down stops the programme rather than run it unrecorded (BR-ED2-011); one already gone by
+/// then is not handed over, there being nothing left of it to stop. Progress is read as
 /// it comes and handed on block by block. A run that makes no headway for longer than it is
 /// allowed is stopped and said to have stalled — reporting the same place again is not headway —
 /// and a run cut short by the caller is stopped and left for the caller to deal with, as is one

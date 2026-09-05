@@ -133,20 +133,22 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
         int network = NextNetwork();
         await using CarinaDbContext context = database.Open();
         var programmes = new ProgrammeRepository(context);
-        var programme = Programme.Discover(Broadcast(network), At);
 
-        await programmes.AddAsync(programme, Cancel);
+        await programmes.AddAsync(Programme.Discover(Broadcast(network), At), Cancel);
 
-        Assert.True(programme.Absorb(
-            Broadcast(network) with
-            {
-                Genres = [new ProgrammeGenre(7, 2)],
-                Items = [new ProgrammeItem("公式ページ", "https://example.invalid/")],
-                HasSubtitles = true,
-            },
-            At.AddHours(1)));
+        ProgrammesAbsorbed absorbed = await programmes.AbsorbAsync(
+            [
+                Broadcast(network) with
+                {
+                    Genres = [new ProgrammeGenre(7, 2)],
+                    Items = [new ProgrammeItem("公式ページ", "https://example.invalid/")],
+                    HasSubtitles = true,
+                },
+            ],
+            At.AddHours(1),
+            Cancel);
 
-        await programmes.SaveAsync(programme, Cancel);
+        Assert.Equal(new ProgrammesAbsorbed(0, 1), absorbed);
 
         await using CarinaDbContext reading = database.Open();
         Programme? stored = await new ProgrammeRepository(reading).FindAsync(Id(network), Cancel);
@@ -155,6 +157,111 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
         Assert.Equal("公式ページ", Assert.Single(stored.Items).Heading);
         Assert.True(stored.HasSubtitles);
         Assert.Equal(At.AddHours(1), stored.UpdatedAt);
+    }
+
+    [Fact]
+    public async Task OneVisitIsWrittenAsOneStatementAndCountsWhatItAddedApartFromWhatItChanged()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        var programmes = new ProgrammeRepository(context);
+
+        await programmes.AddAsync(Programme.Discover(Broadcast(network, 1), At), Cancel);
+        await programmes.AddAsync(Programme.Discover(Broadcast(network, 2), At), Cancel);
+
+        ProgrammesAbsorbed absorbed = await programmes.AbsorbAsync(
+            [
+                Broadcast(network, 1),
+                Broadcast(network, 2) with { Name = "夜のニュース" },
+                Broadcast(network, 3),
+                Broadcast(network, 4),
+            ],
+            At.AddHours(1),
+            Cancel);
+
+        Assert.Equal(new ProgrammesAbsorbed(2, 1), absorbed);
+    }
+
+    [Fact]
+    public async Task BrEd002TheSameVisitArrivingAgainMovesNoRevisionAndNoClock()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        var programmes = new ProgrammeRepository(context);
+
+        await programmes.AbsorbAsync([Broadcast(network)], At, Cancel);
+
+        await using CarinaDbContext first = database.Open();
+        Programme before = (await new ProgrammeRepository(first).FindAsync(Id(network), Cancel))!;
+
+        Assert.Equal(new ProgrammesAbsorbed(0, 0), await programmes.AbsorbAsync([Broadcast(network)], At.AddHours(1), Cancel));
+
+        await using CarinaDbContext second = database.Open();
+        Programme after = (await new ProgrammeRepository(second).FindAsync(Id(network), Cancel))!;
+
+        Assert.Equal(before.Revision, after.Revision);
+        Assert.Equal(At, after.UpdatedAt);
+    }
+
+    [Fact]
+    public async Task BrEd002AProgrammeThatChangedTakesARevisionAfterEveryOneHandedOutSoFar()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        var programmes = new ProgrammeRepository(context);
+
+        await programmes.AbsorbAsync([Broadcast(network, 1), Broadcast(network, 2)], At, Cancel);
+
+        await using CarinaDbContext first = database.Open();
+        long highest = (await new ProgrammeRepository(first).ListAfterAsync(0, 5_000, Cancel)).Max(programme => programme.Revision);
+
+        await programmes.AbsorbAsync([Broadcast(network, 1) with { Summary = "あとから届いた概要" }], At.AddHours(1), Cancel);
+
+        await using CarinaDbContext second = database.Open();
+        Programme changed = (await new ProgrammeRepository(second).FindAsync(Id(network, 1), Cancel))!;
+
+        Assert.True(changed.Revision > highest);
+    }
+
+    [Fact]
+    public async Task AVisitThatCarriesNothingWritesNothing()
+    {
+        await using CarinaDbContext context = database.Open();
+
+        Assert.Equal(new ProgrammesAbsorbed(0, 0), await new ProgrammeRepository(context).AbsorbAsync([], At, Cancel));
+    }
+
+    [Fact]
+    public async Task AVisitThatNamesTheSameProgrammeTwiceIsRefusedBeforeItReachesTheStore()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+
+        await Assert.ThrowsAsync<ArgumentException>(() => new ProgrammeRepository(context).AbsorbAsync(
+            [Broadcast(network), Broadcast(network) with { Name = "別の名前" }],
+            At,
+            Cancel));
+    }
+
+    [Fact]
+    public async Task AbsorbingInsideAnAllOrNothingWriteIsUndoneWithIt()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        var programmes = new ProgrammeRepository(context);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => new DatabaseAtomicWrite(context).AllOrNothingAsync<int>(
+            async token =>
+            {
+                await programmes.AbsorbAsync([Broadcast(network)], At, token);
+
+                throw new InvalidOperationException("the rest of the visit failed");
+            },
+            Cancel));
+
+        await using CarinaDbContext reading = database.Open();
+
+        Assert.Null(await new ProgrammeRepository(reading).FindAsync(Id(network), Cancel));
     }
 
     [Fact]
