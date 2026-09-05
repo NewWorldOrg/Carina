@@ -24,6 +24,7 @@ internal sealed class SeamProbe : IAsyncDisposable
         WebApplicationFactory<Program> wired = factory.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {
             services.AddSingleton<IBroadcastServiceRepository>(Services);
+            services.AddSingleton<IStationLogoRepository>(Logos);
             services.AddSingleton<ICandidateChannelRepository>(Candidates);
             services.AddSingleton<IScanRunRepository>(Runs);
             services.AddSingleton<IRecordingDirectory>(Recordings);
@@ -36,6 +37,8 @@ internal sealed class SeamProbe : IAsyncDisposable
     public HttpClient Client { get; }
 
     public HeldServices Services { get; } = new();
+
+    public HeldLogos Logos { get; } = new();
 
     public HeldCandidates Candidates { get; } = new();
 

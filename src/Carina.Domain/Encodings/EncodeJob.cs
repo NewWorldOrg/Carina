@@ -177,10 +177,6 @@ public sealed class EncodeJob
         Headway = EncodeHeadway.Of(progress, at);
     }
 
-    /// <summary>
-    /// Where the artefact's clock will stand against the source's, decided before the run and kept
-    /// so a caption drawn from the source can be put on the artefact's clock later (BR-ED2-006).
-    /// </summary>
     public void Aligned(EncodeTimeline timeline)
     {
         ArgumentNullException.ThrowIfNull(timeline);
@@ -189,10 +185,6 @@ public sealed class EncodeJob
         Timeline = timeline;
     }
 
-    /// <summary>
-    /// How long the artefact came out, measured once the run has written it and before it is placed,
-    /// so the two clocks can be compared beside the job (BR-ED2-006).
-    /// </summary>
     public void Measured(TimeSpan artefactLength)
     {
         Only(EncodeJobStatus.Running, "measure its artefact");

@@ -13,8 +13,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Carina.Db.Migrations
 {
     [DbContext(typeof(CarinaDbContext))]
-    [Migration("20260905185124_QualityObservabilityLedger")]
-    partial class QualityObservabilityLedger
+    [Migration("20260905170302_StationLogos")]
+    partial class StationLogos
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -201,6 +201,16 @@ namespace Carina.Db.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_seen_at");
 
+                    b.Property<string>("LogoDeclaration")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("logo_declaration");
+
+                    b.Property<int?>("LogoId")
+                        .HasColumnType("integer")
+                        .HasColumnName("logo_id");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(256)
@@ -217,9 +227,14 @@ namespace Carina.Db.Migrations
                     b.HasIndex("LastSeenAt")
                         .HasDatabaseName("ix_broadcast_service_last_seen_at");
 
+                    b.HasIndex("NetworkId", "LogoId")
+                        .HasDatabaseName("ix_broadcast_service_network_id_logo_id");
+
                     b.ToTable("broadcast_service", null, t =>
                         {
                             t.HasCheckConstraint("ck_broadcast_service_category", "category IN ('Television', 'Radio', 'Data', 'OneSeg', 'Temporary', 'Other')");
+
+                            t.HasCheckConstraint("ck_broadcast_service_logo", "logo_declaration IN ('NotYetRead', 'InTheCommonDataTable', 'NoPictureIsBroadcast') AND (logo_id IS NOT NULL) = (logo_declaration = 'InTheCommonDataTable')");
                         });
                 });
 
@@ -481,6 +496,54 @@ namespace Carina.Db.Migrations
                             t.HasCheckConstraint("ck_service_reach_config_hours_of_silence", "hours_of_silence >= 1 AND hours_of_silence <= 720");
 
                             t.HasCheckConstraint("ck_service_reach_config_single_row", "id = 1");
+                        });
+                });
+
+            modelBuilder.Entity("Carina.Domain.Channels.StationLogo", b =>
+                {
+                    b.Property<int>("NetworkId")
+                        .HasColumnType("integer")
+                        .HasColumnName("network_id");
+
+                    b.Property<int>("LogoId")
+                        .HasColumnType("integer")
+                        .HasColumnName("logo_id");
+
+                    b.Property<DateTime>("CollectedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("collected_at");
+
+                    b.Property<int>("Height")
+                        .HasColumnType("integer")
+                        .HasColumnName("height");
+
+                    b.Property<int>("LogoType")
+                        .HasColumnType("integer")
+                        .HasColumnName("logo_type");
+
+                    b.Property<int>("LogoVersion")
+                        .HasColumnType("integer")
+                        .HasColumnName("logo_version");
+
+                    b.Property<byte[]>("Picture")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("picture");
+
+                    b.Property<int>("Width")
+                        .HasColumnType("integer")
+                        .HasColumnName("width");
+
+                    b.HasKey("NetworkId", "LogoId")
+                        .HasName("pk_station_logo");
+
+                    b.ToTable("station_logo", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_station_logo_carries_a_picture", "octet_length(picture) BETWEEN 1 AND 262144");
+
+                            t.HasCheckConstraint("ck_station_logo_id", "logo_id BETWEEN 0 AND 511");
+
+                            t.HasCheckConstraint("ck_station_logo_measures_something", "width BETWEEN 1 AND 4096 AND height BETWEEN 1 AND 4096");
                         });
                 });
 
@@ -1356,416 +1419,6 @@ namespace Carina.Db.Migrations
                         });
                 });
 
-            modelBuilder.Entity("Carina.Domain.Quality.QualityIncident", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<DateTime?>("AcknowledgedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("acknowledged_at");
-
-                    b.Property<string>("AcknowledgedBy")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("acknowledged_by");
-
-                    b.Property<string>("Breached")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)")
-                        .HasColumnName("breached");
-
-                    b.Property<string>("Classification")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("classification");
-
-                    b.Property<DateTime>("DetectedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("detected_at");
-
-                    b.Property<DateTime?>("NotifiedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("notified_at");
-
-                    b.Property<double>("Observed")
-                        .HasColumnType("double precision")
-                        .HasColumnName("observed");
-
-                    b.Property<string>("Owner")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)")
-                        .HasColumnName("owner");
-
-                    b.Property<DateTime?>("ResolvedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("resolved_at");
-
-                    b.Property<string>("State")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)")
-                        .HasColumnName("state");
-
-                    b.ComplexProperty(typeof(Dictionary<string, object>), "Applied", "Carina.Domain.Quality.QualityIncident.Applied#Threshold", b1 =>
-                        {
-                            b1.IsRequired();
-
-                            b1.Property<double>("Current")
-                                .HasColumnType("double precision")
-                                .HasColumnName("applied_current");
-
-                            b1.Property<double>("Default")
-                                .HasColumnType("double precision")
-                                .HasColumnName("applied_default");
-
-                            b1.Property<long>("Observations")
-                                .HasColumnType("bigint")
-                                .HasColumnName("applied_observations");
-
-                            b1.Property<bool>("Provisional")
-                                .HasColumnType("boolean")
-                                .HasColumnName("applied_provisional");
-
-                            b1.Property<DateTime>("UpdatedAt")
-                                .HasColumnType("timestamp with time zone")
-                                .HasColumnName("applied_updated_at");
-                        });
-
-                    b.ComplexProperty(typeof(Dictionary<string, object>), "Subject", "Carina.Domain.Quality.QualityIncident.Subject#QualitySubject", b1 =>
-                        {
-                            b1.IsRequired();
-
-                            b1.Property<string>("Key")
-                                .IsRequired()
-                                .HasMaxLength(64)
-                                .HasColumnType("character varying(64)")
-                                .HasColumnName("subject_key");
-
-                            b1.Property<string>("Kind")
-                                .IsRequired()
-                                .HasMaxLength(32)
-                                .HasColumnType("character varying(32)")
-                                .HasColumnName("subject_kind");
-                        });
-
-                    b.HasKey("Id")
-                        .HasName("pk_quality_incident");
-
-                    b.HasIndex("DetectedAt")
-                        .HasDatabaseName("ix_quality_incident_unsettled")
-                        .HasFilter("resolved_at IS NULL AND acknowledged_at IS NULL");
-
-                    b.ToTable("quality_incident", null, t =>
-                        {
-                            t.HasCheckConstraint("ck_quality_incident_applied", "applied_observations >= 0\nAND (applied_provisional OR applied_observations > 0)");
-
-                            t.HasCheckConstraint("ck_quality_incident_classification", "(owner = 'Quality') = (classification IS NULL)");
-
-                            t.HasCheckConstraint("ck_quality_incident_lifecycle", "((acknowledged_at IS NULL) = (acknowledged_by IS NULL))\nAND (acknowledged_at IS NULL OR notified_at IS NOT NULL)\nAND (notified_at IS NULL OR notified_at >= detected_at)\nAND (acknowledged_at IS NULL OR acknowledged_at >= notified_at)\nAND (resolved_at IS NULL OR resolved_at >= detected_at)\nAND ((state = 'Resolved') = (resolved_at IS NOT NULL))\nAND ((state = 'Acknowledged')\n    = (acknowledged_at IS NOT NULL AND resolved_at IS NULL))\nAND ((state = 'Notified')\n    = (notified_at IS NOT NULL AND acknowledged_at IS NULL AND resolved_at IS NULL))\nAND ((state = 'Detected')\n    = (notified_at IS NULL AND resolved_at IS NULL))");
-
-                            t.HasCheckConstraint("ck_quality_incident_vocabulary", "breached IN ('PacketsLostWarning', 'PacketsLostUnwatchable', 'PacketsLeftScrambled', 'Overflows', 'LockRate', 'CarrierToNoiseFloor', 'BitErrorRateCeiling', 'SupplySilence')\nAND owner IN ('Quality', 'Tuner', 'Guide', 'Reservation', 'Recording')\nAND state IN ('Detected', 'Notified', 'Acknowledged', 'Resolved')\nAND subject_kind IN ('Tuner', 'Channel', 'Recording', 'TransportStream')");
-                        });
-                });
-
-            modelBuilder.Entity("Carina.Domain.Quality.QualitySessionMeasurement", b =>
-                {
-                    b.Property<string>("DriverInstanceId")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("driver_instance_id");
-
-                    b.Property<string>("Session")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("session_id");
-
-                    b.Property<long?>("CcDroppedPackets")
-                        .HasColumnType("bigint")
-                        .HasColumnName("cc_dropped_packets");
-
-                    b.Property<bool>("CcMeasured")
-                        .HasColumnType("boolean")
-                        .HasColumnName("cc_measured");
-
-                    b.Property<long?>("CcTotalPackets")
-                        .HasColumnType("bigint")
-                        .HasColumnName("cc_total_packets");
-
-                    b.Property<DateTime?>("EndedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("ended_at");
-
-                    b.Property<long>("EovfCount")
-                        .HasColumnType("bigint")
-                        .HasColumnName("eovf_count");
-
-                    b.Property<DateTime?>("MeasuredUpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("measured_updated_at");
-
-                    b.Property<int>("Network")
-                        .HasColumnType("integer")
-                        .HasColumnName("network_id");
-
-                    b.Property<string>("Purpose")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)")
-                        .HasColumnName("purpose");
-
-                    b.Property<int>("Service")
-                        .HasColumnType("integer")
-                        .HasColumnName("service_id");
-
-                    b.Property<DateTime>("StartedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("started_at");
-
-                    b.Property<string>("Tuner")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("tuner_device_id");
-
-                    b.HasKey("DriverInstanceId", "Session")
-                        .HasName("pk_quality_session_measurement");
-
-                    b.HasIndex("StartedAt")
-                        .HasDatabaseName("ix_quality_session_measurement_started_at");
-
-                    b.ToTable("quality_session_measurement", null, t =>
-                        {
-                            t.HasCheckConstraint("ck_quality_session_measurement_channel", "network_id BETWEEN 0 AND 65535\nAND service_id BETWEEN 0 AND 65535");
-
-                            t.HasCheckConstraint("ck_quality_session_measurement_counts", "(cc_measured = (cc_dropped_packets IS NOT NULL AND cc_total_packets IS NOT NULL))\nAND (cc_measured = (measured_updated_at IS NOT NULL))\nAND (cc_dropped_packets IS NULL OR cc_dropped_packets >= 0)\nAND (cc_total_packets IS NULL OR cc_total_packets >= 0)\nAND eovf_count >= 0");
-
-                            t.HasCheckConstraint("ck_quality_session_measurement_purpose", "purpose IN ('Unspecified', 'Recording', 'Live', 'Survey', 'Scan', 'SurveyNow')\nAND purpose <> 'Recording'");
-
-                            t.HasCheckConstraint("ck_quality_session_measurement_span", "ended_at IS NULL OR ended_at >= started_at");
-                        });
-                });
-
-            modelBuilder.Entity("Carina.Domain.Quality.QualitySignalRollup", b =>
-                {
-                    b.Property<string>("Granularity")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)")
-                        .HasColumnName("granularity");
-
-                    b.Property<DateTime>("WindowStart")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("window_start");
-
-                    b.Property<string>("Tuner")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("tuner_device_id");
-
-                    b.Property<int>("Network")
-                        .HasColumnType("integer")
-                        .HasColumnName("network_id");
-
-                    b.Property<int>("Service")
-                        .HasColumnType("integer")
-                        .HasColumnName("service_id");
-
-                    b.Property<string>("BitErrors")
-                        .IsRequired()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("bit_errors");
-
-                    b.Property<double?>("CarrierToNoiseAverage")
-                        .HasColumnType("double precision")
-                        .HasColumnName("cnr_average");
-
-                    b.Property<int?>("CarrierToNoiseHighest")
-                        .HasColumnType("integer")
-                        .HasColumnName("cnr_highest");
-
-                    b.Property<int?>("CarrierToNoiseLowest")
-                        .HasColumnType("integer")
-                        .HasColumnName("cnr_lowest");
-
-                    b.Property<long>("Locked")
-                        .HasColumnType("bigint")
-                        .HasColumnName("locked");
-
-                    b.Property<long>("Samples")
-                        .HasColumnType("bigint")
-                        .HasColumnName("samples");
-
-                    b.Property<long>("Unmeasured")
-                        .HasColumnType("bigint")
-                        .HasColumnName("unmeasured");
-
-                    b.Property<long>("Unreachable")
-                        .HasColumnType("bigint")
-                        .HasColumnName("unreachable");
-
-                    b.HasKey("Granularity", "WindowStart", "Tuner", "Network", "Service")
-                        .HasName("pk_quality_signal_rollup");
-
-                    b.HasIndex("Granularity", "WindowStart")
-                        .HasDatabaseName("ix_quality_signal_rollup_window_start");
-
-                    b.ToTable("quality_signal_rollup", null, t =>
-                        {
-                            t.HasCheckConstraint("ck_quality_signal_rollup_bit_errors", "jsonb_typeof(bit_errors) = 'array'");
-
-                            t.HasCheckConstraint("ck_quality_signal_rollup_carrier_to_noise", "((cnr_average IS NULL) = (cnr_lowest IS NULL))\nAND ((cnr_average IS NULL) = (cnr_highest IS NULL))\nAND (cnr_average IS NULL OR cnr_average BETWEEN cnr_lowest AND cnr_highest)");
-
-                            t.HasCheckConstraint("ck_quality_signal_rollup_channel", "network_id BETWEEN 0 AND 65535\nAND service_id BETWEEN 0 AND 65535");
-
-                            t.HasCheckConstraint("ck_quality_signal_rollup_counts", "samples >= 0\nAND locked BETWEEN 0 AND samples\nAND unmeasured >= 0\nAND unreachable >= 0");
-
-                            t.HasCheckConstraint("ck_quality_signal_rollup_granularity", "granularity IN ('Minute', 'Hour')");
-                        });
-                });
-
-            modelBuilder.Entity("Carina.Domain.Quality.QualitySignalSample", b =>
-                {
-                    b.Property<string>("DriverInstanceId")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("driver_instance_id");
-
-                    b.Property<string>("Session")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("session_id");
-
-                    b.Property<DateTime>("TakenAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("taken_at");
-
-                    b.Property<int>("Network")
-                        .HasColumnType("integer")
-                        .HasColumnName("network_id");
-
-                    b.Property<string>("Purpose")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)")
-                        .HasColumnName("purpose");
-
-                    b.Property<int>("Service")
-                        .HasColumnType("integer")
-                        .HasColumnName("service_id");
-
-                    b.Property<string>("Tuner")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("tuner_device_id");
-
-                    b.ComplexProperty(typeof(Dictionary<string, object>), "Signal", "Carina.Domain.Quality.QualitySignalSample.Signal#SignalSample", b1 =>
-                        {
-                            b1.IsRequired();
-
-                            b1.Property<string>("BitErrors")
-                                .IsRequired()
-                                .HasColumnType("jsonb")
-                                .HasColumnName("bit_errors");
-
-                            b1.Property<DateTime?>("BitErrorsReadAt")
-                                .HasColumnType("timestamp with time zone")
-                                .HasColumnName("bit_errors_read_at");
-
-                            b1.Property<int?>("CarrierToNoiseMilliDecibels")
-                                .HasColumnType("integer")
-                                .HasColumnName("cnr_milli_decibels");
-
-                            b1.Property<DateTime?>("CarrierToNoiseReadAt")
-                                .HasColumnType("timestamp with time zone")
-                                .HasColumnName("cnr_read_at");
-
-                            b1.Property<DateTime>("LockReadAt")
-                                .HasColumnType("timestamp with time zone")
-                                .HasColumnName("lock_read_at");
-
-                            b1.Property<bool>("Locked")
-                                .HasColumnType("boolean")
-                                .HasColumnName("locked");
-
-                            b1.Property<string>("MetricsNotRead")
-                                .IsRequired()
-                                .HasColumnType("jsonb")
-                                .HasColumnName("metrics_not_read");
-                        });
-
-                    b.HasKey("DriverInstanceId", "Session", "TakenAt")
-                        .HasName("pk_quality_signal_sample");
-
-                    b.HasIndex("TakenAt")
-                        .HasDatabaseName("ix_quality_signal_sample_taken_at");
-
-                    b.HasIndex("Tuner", "TakenAt")
-                        .HasDatabaseName("ix_quality_signal_sample_tuner_taken_at");
-
-                    b.ToTable("quality_signal_sample", null, t =>
-                        {
-                            t.HasCheckConstraint("ck_quality_signal_sample_channel", "network_id BETWEEN 0 AND 65535\nAND service_id BETWEEN 0 AND 65535");
-
-                            t.HasCheckConstraint("ck_quality_signal_sample_lock_gate", "locked\nOR (cnr_milli_decibels IS NULL AND bit_errors = '[]'::jsonb)");
-
-                            t.HasCheckConstraint("ck_quality_signal_sample_purpose", "purpose IN ('Unspecified', 'Recording', 'Live', 'Survey', 'Scan', 'SurveyNow')");
-
-                            t.HasCheckConstraint("ck_quality_signal_sample_read_at", "((cnr_milli_decibels IS NULL) = (cnr_read_at IS NULL))\nAND ((bit_errors = '[]'::jsonb) = (bit_errors_read_at IS NULL))\nAND jsonb_typeof(bit_errors) = 'array'\nAND jsonb_typeof(metrics_not_read) = 'array'");
-                        });
-                });
-
-            modelBuilder.Entity("Carina.Domain.Quality.QualityThreshold", b =>
-                {
-                    b.Property<string>("Key")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)")
-                        .HasColumnName("threshold_key");
-
-                    b.Property<string>("UpdatedBy")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("updated_by");
-
-                    b.ComplexProperty(typeof(Dictionary<string, object>), "Setting", "Carina.Domain.Quality.QualityThreshold.Setting#Threshold", b1 =>
-                        {
-                            b1.IsRequired();
-
-                            b1.Property<double>("Current")
-                                .HasColumnType("double precision")
-                                .HasColumnName("current_value");
-
-                            b1.Property<double>("Default")
-                                .HasColumnType("double precision")
-                                .HasColumnName("default_value");
-
-                            b1.Property<long>("Observations")
-                                .HasColumnType("bigint")
-                                .HasColumnName("observations");
-
-                            b1.Property<bool>("Provisional")
-                                .HasColumnType("boolean")
-                                .HasColumnName("provisional");
-
-                            b1.Property<DateTime>("UpdatedAt")
-                                .HasColumnType("timestamp with time zone")
-                                .HasColumnName("updated_at");
-                        });
-
-                    b.HasKey("Key")
-                        .HasName("pk_quality_threshold");
-
-                    b.ToTable("quality_threshold", null, t =>
-                        {
-                            t.HasCheckConstraint("ck_quality_threshold_key", "threshold_key IN ('PacketsLostWarning', 'PacketsLostUnwatchable', 'PacketsLeftScrambled', 'Overflows', 'LockRate', 'CarrierToNoiseFloor', 'BitErrorRateCeiling', 'SupplySilence')");
-
-                            t.HasCheckConstraint("ck_quality_threshold_standing", "observations >= 0\nAND (provisional OR observations > 0)");
-                        });
-                });
-
             modelBuilder.Entity("Carina.Domain.Recordings.Recording", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1933,18 +1586,6 @@ namespace Carina.Db.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("written_duration_ms");
 
-                    b.PrimitiveCollection<int[]>("genre_kinds")
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("integer[]")
-                        .HasColumnName("genre_kinds")
-                        .HasComputedColumnSql("string_to_array(nullif(translate(jsonb_path_query_array(snapshot_genres, '$[*].kind')::text, '[] ', ''), ''), ',')::integer[]", true);
-
-                    b.Property<string>("searchable")
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("text")
-                        .HasColumnName("searchable")
-                        .HasComputedColumnSql("lower(pg_catalog.normalize(snapshot_name || ' ' || snapshot_summary || ' ' || snapshot_extended, 'NFKC'))", true);
-
                     b.Property<uint>("xmin")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
@@ -1996,10 +1637,6 @@ namespace Carina.Db.Migrations
                     b.HasIndex("OutputRoot", "FileName")
                         .IsUnique()
                         .HasDatabaseName("ux_recording_file");
-
-                    b.HasIndex("StartedAtActual", "Id")
-                        .IsDescending()
-                        .HasDatabaseName("ix_recording_library");
 
                     b.ToTable("recording", null, t =>
                         {

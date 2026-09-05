@@ -6,8 +6,7 @@ namespace Carina.Architecture.Tests;
 /// Reads the encode feature for the three ways a job could get away from the ledger: a job moved
 /// to running anywhere but by the ledger's conditional update, a file moved or copied into place
 /// anywhere but by the placer that writes the ledger first, and a programme started anywhere but
-/// by the one run that hands the ledger the programme's identity before reading a line from it —
-/// and for a fourth, the clock moved anywhere but by the one <c>-ss</c> the invocation writes.
+/// by the one run that hands the ledger the programme's identity before reading a line from it.
 /// The feature is its folders plus any file named for it, wherever it sits. Like the other rules
 /// here it reads source text, so it sees the ordinary spellings and no others.
 /// </summary>

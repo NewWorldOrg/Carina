@@ -29,17 +29,6 @@ public static class FfmpegEncodeInvocation
     /// threads per stage: once before the input for the decoder, once for the filters, and once
     /// for the encoder (BR-ED2-005). The stages are a pipeline, so the run as a whole is bounded
     /// by the slowest of them rather than by their sum.
-    /// <para>
-    /// The head skip is the one <c>-ss</c> this feature writes, and it stands after the input
-    /// (BR-ED2-006). Before the input it is a seek, and a seek into a transport stream lands after
-    /// the first I frame, so the run then loses a whole group of pictures and fills the head with
-    /// stills of the next one — measured on 2026-09-05 as fifteen frames of one picture. After the
-    /// input it is a trim: ffmpeg decodes from the start, drops what lies before the skip and
-    /// rebases every stream so the first picture kept is the artefact's zero. Nothing here writes
-    /// <c>-output_ts_offset</c> or <c>-copyts</c>; the first was measured to move 0.022 s of the
-    /// 0.363 s it was handed, and the second would carry the broadcast clock into a container that
-    /// cannot hold it.
-    /// </para>
     /// </summary>
     public static IReadOnlyList<string> Arguments(
         ServiceId service,
@@ -113,10 +102,6 @@ public static class FfmpegEncodeInvocation
     internal static IReadOnlyList<string> Device(EncodeEncoder encoder)
         => EncodeShapes.Named(encoder) is EncodeEncoder.Vaapi ? ["-vaapi_device", RenderNode] : [];
 
-    /// <summary>
-    /// The programme's first video stream and every one of its audio streams: the audio is copied,
-    /// so a second track costs nothing to carry and is not chosen away here (BR-ED2-006).
-    /// </summary>
     internal static IReadOnlyList<string> Mapping(ServiceId service)
         =>
         [
@@ -126,7 +111,6 @@ public static class FfmpegEncodeInvocation
             AudioStreams(service),
         ];
 
-    /// <summary>The programme's first video stream, which is also the stream the head probe reads.</summary>
     public static string VideoStream(ServiceId service)
     {
         ArgumentNullException.ThrowIfNull(service);

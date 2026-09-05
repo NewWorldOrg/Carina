@@ -9,4 +9,6 @@ public enum TableDefect
     LoopOverrun = 3,
 
     MalformedDescriptor = 4,
+
+    DataModuleOverrun = 5,
 }

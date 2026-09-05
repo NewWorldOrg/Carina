@@ -13,13 +13,6 @@ public enum SourceHeadFault
     SaidNothing = 4,
 }
 
-/// <summary>
-/// Where a source begins and where its first decodable picture lies, both on the source's own clock.
-/// The head skip is the distance between them (BR-ED2-006): the packet a stream says it starts at
-/// is not it, because the pictures before the first I frame cannot be decoded and the run drops
-/// them. A head that cannot be read is a reading with a fault, not a zero, because a zero would
-/// be believed.
-/// </summary>
 public sealed record SourceHeadReading
 {
     private SourceHeadReading(TimeSpan? start, TimeSpan? firstPicture, SourceHeadFault? fault, int? exitCode, string note)

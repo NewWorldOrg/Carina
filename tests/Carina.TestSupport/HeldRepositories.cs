@@ -80,6 +80,56 @@ public sealed class HeldServices : IBroadcastServiceRepository
                 service.NetworkId.Equals(networkId) && service.ServiceId.Equals(serviceId)) > 0);
 }
 
+public sealed class HeldLogos : IStationLogoRepository
+{
+    public List<StationLogo> Logos { get; } = [];
+
+    public List<BroadcastService> Services { get; } = [];
+
+    public Task<StationLogo?> FindAsync(NetworkId networkId, LogoId logoId, CancellationToken cancellationToken)
+        => Task.FromResult(Logos.FirstOrDefault(logo =>
+            logo.NetworkId.Equals(networkId) && logo.LogoId.Equals(logoId)));
+
+    public Task<StationLogo?> OfServiceAsync(
+        NetworkId networkId,
+        ServiceId serviceId,
+        CancellationToken cancellationToken)
+    {
+        BroadcastService? service = Services.FirstOrDefault(held =>
+            held.NetworkId.Equals(networkId) && held.ServiceId.Equals(serviceId));
+
+        return service?.LogoId is { } named
+            ? FindAsync(networkId, named, cancellationToken)
+            : Task.FromResult<StationLogo?>(null);
+    }
+
+    public Task<IReadOnlyList<StationLogo>> ListAsync(CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<StationLogo>>([.. Logos]);
+
+    public Task<IReadOnlyList<StationLogoStamp>> StampsAsync(CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<StationLogoStamp>>(
+            [.. Logos.Select(logo => new StationLogoStamp(logo.NetworkId, logo.LogoId, logo.CollectedAt))]);
+
+    public Task AbsorbAsync(StationLogo logo, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(logo);
+
+        StationLogo? held = Logos.FirstOrDefault(kept =>
+            kept.NetworkId.Equals(logo.NetworkId) && kept.LogoId.Equals(logo.LogoId));
+
+        if (held is null)
+        {
+            Logos.Add(logo);
+        }
+        else
+        {
+            held.Absorb(logo);
+        }
+
+        return Task.CompletedTask;
+    }
+}
+
 public sealed class UnguardedWrites : IAtomicWrite
 {
     private bool underway;

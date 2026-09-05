@@ -1,3 +1,4 @@
+using Carina.Api.Logos;
 using Carina.Api.Responder.Scans;
 using Carina.Api.Services;
 using Carina.Domain.Channels;
@@ -52,6 +53,18 @@ public sealed record CandidateChannelResponder(
     }
 }
 
+public sealed record StationLogoResponder(string Url, DateTimeOffset CollectedAt)
+{
+    public static StationLogoResponder? Of(BroadcastService service, StationLogoStamp? logo)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+
+        return logo is null
+            ? null
+            : new StationLogoResponder(LogoDelivery.Of(service.NetworkId, service.ServiceId), logo.CollectedAt);
+    }
+}
+
 public sealed record BroadcastServiceResponder(
     int NetworkId,
     int ServiceId,
@@ -64,7 +77,9 @@ public sealed record BroadcastServiceResponder(
     int CandidateCount,
     ScanTargetResponder? SelectedChannel,
     ScanTargetResponder? BetterChannel,
-    IReadOnlyList<CandidateChannelResponder> Candidates)
+    IReadOnlyList<CandidateChannelResponder> Candidates,
+    StationLogoDeclaration LogoDeclaration,
+    StationLogoResponder? Logo)
 {
     public static BroadcastServiceResponder Of(ServiceWithChannels held)
     {
@@ -86,6 +101,8 @@ public sealed record BroadcastServiceResponder(
             held.Candidates.Count,
             selected is null ? null : ScanTargetResponder.Of(selected.Tuning),
             better is null ? null : ScanTargetResponder.Of(better.Tuning),
-            [.. held.Candidates.Select(CandidateChannelResponder.Of)]);
+            [.. held.Candidates.Select(CandidateChannelResponder.Of)],
+            service.LogoDeclaration,
+            StationLogoResponder.Of(service, held.Logo));
     }
 }

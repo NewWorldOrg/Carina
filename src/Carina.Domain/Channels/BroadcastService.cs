@@ -20,6 +20,10 @@ public sealed class BroadcastService
 
     public int? RemoteControlKeyId { get; private set; }
 
+    public LogoId? LogoId { get; private set; }
+
+    public StationLogoDeclaration LogoDeclaration { get; private set; }
+
     public DateTime DiscoveredAt { get; private set; }
 
     public DateTime LastSeenAt { get; private set; }
@@ -45,7 +49,9 @@ public sealed class BroadcastService
         ServiceCategory category,
         DateTime discoveredAt,
         DateTime lastSeenAt,
-        int? remoteControlKeyId = null)
+        int? remoteControlKeyId = null,
+        LogoId? logoId = null,
+        StationLogoDeclaration logoDeclaration = StationLogoDeclaration.NotYetRead)
     {
         ArgumentNullException.ThrowIfNull(networkId);
         ArgumentNullException.ThrowIfNull(serviceId);
@@ -57,6 +63,8 @@ public sealed class BroadcastService
             Name = ValidatedName(name),
             Category = category,
             RemoteControlKeyId = remoteControlKeyId,
+            LogoId = ValidatedLogo(logoId, logoDeclaration),
+            LogoDeclaration = logoDeclaration,
             DiscoveredAt = UtcTimes.Required(discoveredAt, nameof(discoveredAt)),
             LastSeenAt = UtcTimes.Required(lastSeenAt, nameof(lastSeenAt)),
         };
@@ -72,11 +80,52 @@ public sealed class BroadcastService
         RemoteControlKeyId = remoteControlKeyId;
     }
 
+    public bool NamesTheLogo(LogoId logoId)
+    {
+        ArgumentNullException.ThrowIfNull(logoId);
+
+        if (LogoDeclaration is StationLogoDeclaration.InTheCommonDataTable && logoId.Equals(LogoId))
+        {
+            return false;
+        }
+
+        LogoId = logoId;
+        LogoDeclaration = StationLogoDeclaration.InTheCommonDataTable;
+
+        return true;
+    }
+
+    public bool BroadcastsNoLogo()
+    {
+        if (LogoDeclaration is StationLogoDeclaration.NoPictureIsBroadcast)
+        {
+            return false;
+        }
+
+        LogoId = null;
+        LogoDeclaration = StationLogoDeclaration.NoPictureIsBroadcast;
+
+        return true;
+    }
+
     public void Describe(string name, ServiceCategory category, DateTime at)
     {
         Name = ValidatedName(name);
         Category = category;
         LastSeenAt = UtcTimes.Required(at, nameof(at));
+    }
+
+    private static LogoId? ValidatedLogo(LogoId? logoId, StationLogoDeclaration declaration)
+    {
+        if ((logoId is not null) != (declaration is StationLogoDeclaration.InTheCommonDataTable))
+        {
+            throw new ArgumentException(
+                "A service names a logo exactly when its declaration says the logo is in the common data table,"
+                + $" but this one says {declaration} beside {(logoId is null ? "no logo" : logoId.Value)}.",
+                nameof(logoId));
+        }
+
+        return logoId;
     }
 
     private static string ValidatedName(string name)

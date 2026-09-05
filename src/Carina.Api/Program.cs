@@ -5,11 +5,13 @@ using Carina.Api.Common;
 using Carina.Api.Events;
 using Carina.Api.Extensions;
 using Carina.Api.Live;
+using Carina.Api.Logos;
 using Carina.Api.OpenApi;
 using Carina.Api.Playback;
 using Carina.Api.Responder;
 using Carina.Api.Responder.Playback;
 using Carina.Api.Services;
+using Carina.Domain.Channels;
 using Carina.Domain.Streaming;
 using Carina.Domain.Thumbnails;
 using Carina.Infrastructure.DependencyInjection;
@@ -113,6 +115,18 @@ app.MapGet(
     .WithSummary(PlaybackSurfaces.AFrameFromWhereTheSliderIs)
     .Produces(StatusCodes.Status200OK, contentType: ScrubDelivery.MediaType)
     .Reads(PlaybackSurfaces.WhereTheFrameIsTakenFrom)
+    .WithEffect(EndpointEffect.Reading);
+
+app.MapGet(
+        LogoDelivery.Path,
+        (HttpContext context, int networkId, int serviceId, IStationLogoRepository logos) =>
+            LogoDelivery.Invoke(context, networkId, serviceId, logos))
+    .WithName(LogoSurfaces.TheLogoIsCalled)
+    .WithTags(LogoSurfaces.Tag)
+    .WithSummary(LogoSurfaces.TheLogoOfAStation)
+    .Produces(StatusCodes.Status200OK, contentType: LogoDelivery.MediaType)
+    .Produces(StatusCodes.Status304NotModified)
+    .Produces(StatusCodes.Status404NotFound)
     .WithEffect(EndpointEffect.Reading);
 
 try
