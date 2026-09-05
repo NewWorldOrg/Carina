@@ -26,6 +26,10 @@ public sealed class EncodeSettingRuleTests
         "/Carina.Domain/Encodings/EncodeJob.cs EncodeJob.RecordingId RecordingId",
         "/Carina.Domain/Encodings/EncodeJob.cs EncodeJob.StartedAt DateTime?",
         "/Carina.Domain/Encodings/EncodeJob.cs EncodeJob.Status EncodeJobStatus",
+        "/Carina.Domain/Encodings/EncodePlan.cs EncodePlan.Encoder EncodeEncoder?",
+        "/Carina.Domain/Encodings/EncodePlan.cs EncodePlan.Note string",
+        "/Carina.Domain/Encodings/EncodePlan.cs EncodePlan.Refused EncodeFailure?",
+        "/Carina.Domain/Encodings/EncodePlan.cs EncodePlan.Swerved EncodeSwerve?",
         "/Carina.Domain/Encodings/EncodeProfile.cs EncodeProfile.Codec EncodeCodec",
         "/Carina.Domain/Encodings/EncodeProfile.cs EncodeProfile.DefinedAt DateTime",
         "/Carina.Domain/Encodings/EncodeProfile.cs EncodeProfile.Deinterlace Deinterlace",
@@ -53,12 +57,14 @@ public sealed class EncodeSettingRuleTests
         "/Carina.Domain/Encodings/EncodeJob.cs EncodeJob.HasEnded bool",
         "/Carina.Domain/Encodings/EncodeJob.cs EncodeJob.Standing EncodeStanding",
         "/Carina.Domain/Encodings/EncodeJobId.cs EncodeJobId.Wire string",
+        "/Carina.Domain/Encodings/EncodePlan.cs EncodePlan.CanRun bool",
         "/Carina.Domain/Encodings/EncodeProfileId.cs EncodeProfileId.Wire string",
     ];
 
     private static readonly string[] TheOnlyFreeTextTakenIn =
     [
         "/Carina.Domain/Encodings/EncodeFailure.cs EncodeFailureDetail.Note string",
+        "/Carina.Domain/Encodings/EncodePlan.cs EncodePlan.Note string",
         "/Carina.Domain/Encodings/EncodeValidation.cs EncodeDestinationDraft.Label string?",
         "/Carina.Domain/Encodings/EncodeValidation.cs EncodeDestinationDraft.OutputRoot string?",
         "/Carina.Domain/Encodings/EncodeValidation.cs EncodeProfileDraft.Label string?",
