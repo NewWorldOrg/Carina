@@ -119,6 +119,60 @@ public sealed class RecordingFailureTests : IDisposable
     }
 
     [Fact]
+    public async Task BRKD010_TheReasonARecordingRanOutOfRoomNamesNoDirectoryOnTheHost()
+    {
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
+        string output = driver.Configuration.OutputRoots!.Single().Path!;
+
+        File.CreateSymbolicLink(Path.Combine(output, "k-starved.ts"), "/dev/full");
+
+        using (HttpResponseMessage created = await client.PostAsync(
+            DriverEndpoints.Sessions,
+            DriverUnderTest.Body(
+                DriverUnderTest.Recording("starved", DateTimeOffset.UtcNow.AddMinutes(30))
+            ),
+            Soon()
+        ))
+        {
+            Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        }
+
+        IReadOnlyList<SessionSnapshot> settled = await Settled(
+            client,
+            sessions => sessions.Single().State is SessionState.Failed
+        );
+
+        SessionSnapshot starved = settled.Single();
+
+        Assert.Equal(SessionStopReason.RecordingFailed, starved.StopReason);
+        Assert.NotNull(starved.FailureCause);
+        Assert.Contains("No space left on device", starved.FailureCause, StringComparison.Ordinal);
+        Assert.Contains("k-starved.ts", starved.FailureCause, StringComparison.Ordinal);
+        Assert.DoesNotContain(output, starved.FailureCause, StringComparison.Ordinal);
+
+        using HttpResponseMessage diagnosed = await client.GetAsync(
+            DriverEndpoints.Diagnostics,
+            Soon()
+        );
+
+        IReadOnlyList<DiagnosticSnapshot>? entries = await DriverUnderTest.Read(
+            diagnosed,
+            DriverJson.Context.IReadOnlyListDiagnosticSnapshot
+        );
+
+        Assert.NotNull(entries);
+
+        DiagnosticSnapshot entry = Assert.Single(
+            entries,
+            candidate => candidate.Reason is DiagnosticReason.RecordingWriteFailed
+        );
+
+        Assert.NotNull(entry.Detail);
+        Assert.DoesNotContain(output, entry.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task ARecordingThatRanOutOfRoomSaysWhySoAndLeavesTheDriverServing()
     {
         await using DriverUnderTest driver = await DriverUnderTest.Start(

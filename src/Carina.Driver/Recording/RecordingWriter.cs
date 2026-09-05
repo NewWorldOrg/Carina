@@ -59,6 +59,12 @@ public sealed class RecordingWriter : IRecordingWriter
         {
             stream.Write(bytes);
         }
+        catch (IOException error)
+        {
+            Interlocked.Exchange(ref bytesWritten, Landed());
+
+            throw WithoutTheDirectory(error);
+        }
         catch (Exception)
         {
             Interlocked.Exchange(ref bytesWritten, Landed());
@@ -78,13 +84,33 @@ public sealed class RecordingWriter : IRecordingWriter
 
     private void Flush(bool toTheDisk)
     {
-        stream.Flush(toTheDisk);
+        try
+        {
+            stream.Flush(toTheDisk);
+        }
+        catch (IOException error)
+        {
+            throw WithoutTheDirectory(error);
+        }
 
         if (toTheDisk)
         {
             Interlocked.Increment(ref flushes);
         }
     }
+
+    private IOException WithoutTheDirectory(IOException error) =>
+        new(
+            error.Message.Replace(
+                Path,
+                System.IO.Path.GetFileName(Path),
+                StringComparison.Ordinal
+            ),
+            error
+        )
+        {
+            HResult = error.HResult,
+        };
 
     private long Landed()
     {

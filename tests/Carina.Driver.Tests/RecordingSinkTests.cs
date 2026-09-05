@@ -232,6 +232,24 @@ public sealed class RecordingSinkTests : IDisposable
     }
 
     [Fact]
+    public void BRKD010_ADiskThatIsFullIsReportedWithoutTheDirectoryTheRecordingIsWrittenIn()
+    {
+        File.CreateSymbolicLink(Path.Combine(root, "k-1.ts"), "/dev/full");
+
+        using var writer = new RecordingWriter(root, "k-1");
+
+        IOException full = Assert.Throws<IOException>(
+            () => writer.Write(Bytes(TsPacketReader.PacketLength, 4))
+        );
+
+        Assert.DoesNotContain(root, full.Message, StringComparison.Ordinal);
+        Assert.Contains("No space left on device", full.Message, StringComparison.Ordinal);
+        Assert.Contains("k-1.ts", full.Message, StringComparison.Ordinal);
+        Assert.NotNull(full.InnerException);
+        Assert.Contains(root, full.InnerException.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void AShortReadIsWrittenWholeAndTheNextChunkFollowsItByteForByte()
     {
         byte[] ragged = Bytes(TsPacketReader.PacketLength - 38, 1);
