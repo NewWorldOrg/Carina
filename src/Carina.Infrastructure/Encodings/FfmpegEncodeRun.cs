@@ -26,8 +26,9 @@ public sealed record EncodeRunOutcome(int? ExitCode, EncodeRunFault? Fault, stri
 /// that down stops the programme rather than run it unrecorded (BR-ED2-011). Progress is read as
 /// it comes and handed on block by block. A run that makes no headway for longer than it is
 /// allowed is stopped and said to have stalled — reporting the same place again is not headway —
-/// and a run cut short by the caller is stopped and left for the caller to deal with. What was
-/// said on the error stream is kept as a note with the paths taken out.
+/// and a run cut short by the caller is stopped and left for the caller to deal with, as is one
+/// whose progress the caller can no longer write down. What was said on the error stream is kept
+/// as a note with the paths taken out.
 /// </summary>
 public static class FfmpegEncodeRun
 {
@@ -78,21 +79,30 @@ public static class FfmpegEncodeRun
             }
         }
 
-        while (await running.StandardOutput.ReadLineAsync(CancellationToken.None) is { } line)
+        try
         {
-            if (reading.Read(line) is not { } progress)
+            while (await running.StandardOutput.ReadLineAsync(CancellationToken.None) is { } line)
             {
-                continue;
-            }
+                if (reading.Read(line) is not { } progress)
+                {
+                    continue;
+                }
 
-            if (progress.Ended || progress.Reached > farthest)
-            {
-                farthest = progress.Reached;
-                stall.CancelAfter(stalledAfter);
-            }
+                if (progress.Ended || progress.Reached > farthest)
+                {
+                    farthest = progress.Reached;
+                    stall.CancelAfter(stalledAfter);
+                }
 
-            reached = progress;
-            await told(progress);
+                reached = progress;
+                await told(progress);
+            }
+        }
+        catch
+        {
+            AnotherProgramme.GiveUpOn(running);
+
+            throw;
         }
 
         await running.WaitForExitAsync(CancellationToken.None);

@@ -54,6 +54,15 @@ public sealed class EncodeDispatch(
 
             throw;
         }
+        catch (EncodeJobMovedMeanwhileException)
+        {
+            logger.LogInformation(
+                "Job {Job} was moved in the ledger by another hand while it ran on attempt {Attempt}; this run is dropped and the ledger's word stands.",
+                job.Id.Wire,
+                job.Attempt);
+
+            return new EncodeLook(claim.Standing, job.Id, await SweptAsync(job.Id, cancellationToken));
+        }
         catch (Exception failure)
         {
             logger.LogError(failure, "Job {Job} threw on attempt {Attempt}; the attempt is discarded.", job.Id.Wire, job.Attempt);
@@ -68,6 +77,29 @@ public sealed class EncodeDispatch(
 
             return new EncodeLook(claim.Standing, job.Id, recovery is EncodeRecovery.GivenUp ? job.Status : null);
         }
+    }
+
+    /// <summary>
+    /// Reads the job again, as the other hand left it, and sweeps what it still owes a removal for if
+    /// it has ended. The scope that ran it holds a copy that no longer describes the job, so a fresh
+    /// one is opened.
+    /// </summary>
+    private async Task<EncodeJobStatus?> SweptAsync(EncodeJobId id, CancellationToken cancellationToken)
+    {
+        await using AsyncServiceScope scope = scopes.CreateAsyncScope();
+        EncodeJob? found = await scope.ServiceProvider.GetRequiredService<IEncodeJobRepository>().FindAsync(id, cancellationToken);
+
+        if (found is null)
+        {
+            return null;
+        }
+
+        if (found.HasEnded)
+        {
+            await scope.ServiceProvider.GetRequiredService<EncodeScratchCleaner>().ClearAsync(found, cancellationToken);
+        }
+
+        return found.Status;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

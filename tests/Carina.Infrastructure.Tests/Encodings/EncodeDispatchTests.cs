@@ -1,4 +1,5 @@
 using Carina.Domain.Encodings;
+using Carina.Domain.Integrity;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Encodings;
 using Carina.TestSupport;
@@ -93,6 +94,43 @@ public sealed class EncodeDispatchTests
         Assert.Equal(EncodeFailure.TimedOut, waiting.Failure!.Failure);
     }
 
+    [Fact(DisplayName = "BR-ED2-012: a job called off while it ran is left as the ledger says, and what it still owes a removal for is swept")]
+    public async Task AJobCalledOffWhileItRanIsLeftAsTheLedgerSays()
+    {
+        var held = new HeldEncodeJobs();
+        EncodeJob waiting = Waiting();
+        held.Jobs.Add(waiting);
+        var scratch = new HeldEncodeScratch();
+        EncodeScratchFile owed = EncodeScratchFile.Record(
+            EncodeScratchFileId.New(),
+            waiting.Id,
+            EncodeScratchKind.WorkFile,
+            EncodeHarness.Primary,
+            EncodeFileName.Working(waiting.RecordingId, waiting.Id, 1),
+            Now);
+        scratch.Files.Add(owed);
+
+        EncodeLook look = await Dispatch(
+                held,
+                new EncodeSettings { MostAttempts = 3, OutputRoots = [new StorageRootPath(EncodeHarness.Primary, Path.GetTempPath())] },
+                scratch,
+                whenRun: claimed =>
+                {
+                    claimed.Cancel(Now);
+
+                    throw new EncodeJobMovedMeanwhileException(claimed.Id);
+                })
+            .LookAsync(Cancel);
+
+        Assert.Equal(EncodeClaimStanding.Claimed, look.Standing);
+        Assert.Equal(waiting.Id, look.Job);
+        Assert.Equal(EncodeJobStatus.Cancelled, look.Ended);
+        Assert.Equal(EncodeJobStatus.Cancelled, waiting.Status);
+        Assert.Equal(1, waiting.Attempt);
+        Assert.Equal(EncodeScratchFate.AlreadyGone, owed.Fate);
+        Assert.DoesNotContain(held.Moves, move => move.StartsWith("saved", StringComparison.Ordinal));
+    }
+
     private static EncodeJob Waiting()
         => EncodeJob.Queue(EncodeJobId.New(), RecordingId.New(), EncodeProfileId.New(), EncodeDestinationId.New(), EncodeHarness.Primary, EncodeHarness.Queued);
 
@@ -118,13 +156,27 @@ public sealed class EncodeDispatchTests
     /// A dispatch over the held ledger. The runner is built from nothing, so a claimed job's run
     /// throws at once: what these tests look at is what the dispatch does around a run, not the run.
     /// </summary>
-    private static EncodeDispatch Dispatch(HeldEncodeJobs held, EncodeSettings settings)
+    private static EncodeDispatch Dispatch(
+        HeldEncodeJobs held,
+        EncodeSettings settings,
+        HeldEncodeScratch? scratch = null,
+        Action<EncodeJob>? whenRun = null)
     {
         var clock = new HandTurnedClock(new DateTimeOffset(Now));
         var services = new ServiceCollection();
         services.AddScoped<IEncodeJobRepository>(_ => held);
         services.AddScoped(_ => new EncodeRestart(held, new ScriptedStrays(), settings, clock, NullLogger<EncodeRestart>.Instance));
-        services.AddScoped<EncodeJobRunner>(_ => throw new InvalidOperationException("this run cannot be built"));
+        services.AddScoped(_ => new EncodeScratchCleaner(
+            scratch ?? new HeldEncodeScratch(),
+            new EncodePlaces(new IntegritySettings(), settings),
+            clock,
+            NullLogger<EncodeScratchCleaner>.Instance));
+        services.AddScoped<EncodeJobRunner>(_ =>
+        {
+            whenRun?.Invoke(held.Jobs.Single(job => job.Status is EncodeJobStatus.Running));
+
+            throw new InvalidOperationException("this run cannot be built");
+        });
 
         return new EncodeDispatch(
             services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),

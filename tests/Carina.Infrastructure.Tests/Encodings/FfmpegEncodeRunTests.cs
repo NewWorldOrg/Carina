@@ -227,6 +227,31 @@ public sealed class FfmpegEncodeRunTests : IDisposable
         Assert.False(File.Exists(marker));
     }
 
+    [Fact(DisplayName = "BR-ED2-012: a programme whose progress cannot be written down any more is stopped rather than left running unwatched")]
+    public async Task AProgrammeWhoseProgressCannotBeWrittenDownIsStopped()
+    {
+        string marker = tree.Under("woke");
+        Stopwatch waited = Stopwatch.StartNew();
+
+        await Assert.ThrowsAsync<IOException>(() => FfmpegEncodeRun.RunAsync(
+            Standing($"""
+                printf 'out_time_us=1000000\nprogress=continue\n'
+                sleep 30
+                printf woke > "{marker}"
+                """),
+            [],
+            null,
+            Patient,
+            Nobody,
+            _ => throw new IOException("the ledger moved"),
+            TimeProvider.System,
+            Cancel));
+
+        Assert.True(waited.Elapsed < TimeSpan.FromSeconds(15), $"stopped rather than waited for: {waited.Elapsed}");
+        await Task.Delay(200);
+        Assert.False(File.Exists(marker));
+    }
+
     [Fact(DisplayName = "BR-ED2-005: the programme runs yielding, at the lowest priority the scheduler has, from its first instruction")]
     public async Task TheProgrammeRunsYieldingFromItsFirstInstruction()
     {

@@ -91,6 +91,36 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
     }
 
     [Fact]
+    public void TheEncodingSurfacesAreTheSevenAProfileADestinationAndAJobAreDefinedListedQueuedAndCalledOffThrough()
+    {
+        Assert.Equal(
+            [
+                "GET /api/encoding/destinations",
+                "GET /api/encoding/jobs",
+                "GET /api/encoding/profiles",
+                "POST /api/encoding/destinations",
+                "POST /api/encoding/jobs",
+                "POST /api/encoding/jobs/{id:guid}/cancel",
+                "POST /api/encoding/profiles",
+            ],
+            Inventory()
+                .Where(surface => surface.Pattern.StartsWith("/api/encoding", StringComparison.Ordinal))
+                .Select(surface => surface.ToString())
+                .Order(StringComparer.Ordinal)
+                .ToArray());
+    }
+
+    [Fact]
+    public void NothingUnderTheEncodingSurfaceDeletesOrDestroys()
+    {
+        Assert.Empty(EndpointRules.SurfacesThatDeleteUnder(Inventory(), "/api/encoding"));
+        Assert.DoesNotContain(
+            Inventory(),
+            surface => surface.Pattern.StartsWith("/api/encoding", StringComparison.Ordinal)
+                && surface.Effect is EndpointEffect.Destructive);
+    }
+
+    [Fact]
     public void TheReservationSurfacesAreTheSevenAReservationIsMadeAndChangedAndThrownAwayThrough()
     {
         Assert.Equal(

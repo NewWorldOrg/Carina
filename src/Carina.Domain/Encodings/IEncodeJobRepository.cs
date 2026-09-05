@@ -1,3 +1,6 @@
+using Carina.Domain.Base;
+using Carina.Domain.Recordings;
+
 namespace Carina.Domain.Encodings;
 
 public enum ArtefactClaim
@@ -60,7 +63,16 @@ public interface IEncodeJobRepository
 
     Task AddAsync(EncodeJob job, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Writes the job as it stands. A row that moved under this hand since it was read — called off
+    /// while it ran, as a rule — is not written over: the save throws
+    /// <see cref="EncodeJobMovedMeanwhileException"/> and the ledger's word stands.
+    /// </summary>
     Task SaveAsync(EncodeJob job, CancellationToken cancellationToken);
+
+    Task<PaginatedList<EncodeJob>> ListAsync(EncodeJobQuery query, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<EncodeJob>> ListForRecordingAsync(RecordingId recordingId, CancellationToken cancellationToken);
 
     /// <summary>
     /// Moves the oldest waiting job to running by a conditional update, and hands it back only when
