@@ -91,12 +91,14 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
     }
 
     [Fact]
-    public void TheReservationSurfacesAreTheSevenAReservationIsMadeAndChangedAndThrownAwayThrough()
+    public void TheReservationSurfacesAreTheNineAReservationIsMadeChangedThrownAwayAndAccountedForThrough()
     {
         Assert.Equal(
             [
                 "DELETE /api/reservations/{id:guid}",
                 "GET /api/reservations",
+                "GET /api/reservations/health",
+                "GET /api/reservations/outcomes",
                 "GET /api/reservations/{id:guid}",
                 "PATCH /api/reservations/{id:guid}",
                 "POST /api/reservations",

@@ -54,6 +54,7 @@ public sealed record ReservationDraft(
 
 public sealed class ReservationService(
     IReservationRepository reservations,
+    IReservationOutcomeRepository outcomes,
     IProgrammeRepository programmes,
     ReservationSchedulingService scheduler,
     TimeProvider clock)
@@ -63,6 +64,16 @@ public sealed class ReservationService(
         CancellationToken cancellationToken)
         => ServiceResult<PaginatedList<Reservation>>.Success(
             await reservations.ListAsync(query, cancellationToken));
+
+    public async Task<ServiceResult<PaginatedList<ReservationOutcome>>> ListOutcomesAsync(
+        ReservationOutcomeQuery query,
+        CancellationToken cancellationToken)
+        => ServiceResult<PaginatedList<ReservationOutcome>>.Success(
+            await outcomes.ListAsync(query, cancellationToken));
+
+    public async Task<ServiceResult<ReservationHealth>> HealthAsync(CancellationToken cancellationToken)
+        => ServiceResult<ReservationHealth>.Success(
+            await reservations.HealthAsync(clock.GetUtcNow().UtcDateTime, cancellationToken));
 
     public async Task<ServiceResult<Reservation, ReservationFailure>> FindAsync(
         ReservationId id,

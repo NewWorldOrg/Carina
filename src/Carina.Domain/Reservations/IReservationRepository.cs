@@ -29,6 +29,8 @@ public interface IReservationRepository
 {
     Task<PaginatedList<Reservation>> ListAsync(ReservationQuery query, CancellationToken cancellationToken);
 
+    Task<ReservationHealth> HealthAsync(DateTime at, CancellationToken cancellationToken);
+
     Task<Reservation?> FindAsync(ReservationId id, CancellationToken cancellationToken);
 
     Task<Reservation?> FindByProgrammeAsync(ProgrammeRef programme, CancellationToken cancellationToken);

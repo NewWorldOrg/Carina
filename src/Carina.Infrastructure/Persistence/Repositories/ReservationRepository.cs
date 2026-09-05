@@ -26,7 +26,7 @@ public sealed class ReservationRepository(CarinaDbContext context) : IReservatio
 
         if (query.Standings.Count > 0)
         {
-            found = StandingAnyOf(found, query.Standings);
+            found = found.Where(AnyOf.Matching<Reservation, ReservationStanding>(query.Standings, Standing));
         }
 
         if (query.Origin is { } origin)
@@ -38,7 +38,7 @@ public sealed class ReservationRepository(CarinaDbContext context) : IReservatio
 
         if (query.Channels.Count > 0)
         {
-            found = OnAnyOf(found, query.Channels);
+            found = found.Where(AnyOf.Matching<Reservation, ProgrammeService>(query.Channels, On));
         }
 
         if (query.Keyword is { } keyword)
@@ -74,6 +74,36 @@ public sealed class ReservationRepository(CarinaDbContext context) : IReservatio
             .ToListAsync(cancellationToken);
 
         return new PaginatedList<Reservation>(page, total, query.Page, query.PerPage);
+    }
+
+    public async Task<ReservationHealth> HealthAsync(DateTime at, CancellationToken cancellationToken)
+    {
+        DateTime moment = InUtc(at);
+
+        var counted = await context.Set<Reservation>()
+            .Where(reservation => reservation.RecordingOutcome == null)
+            .Where(reservation => reservation.State == ReservationState.Scheduled
+                                  || reservation.State == ReservationState.Conflict)
+            .Where(reservation => reservation.EndAt.AddSeconds(
+                EF.Property<int>(reservation, MarginAfterProperty)) > moment)
+            .GroupBy(reservation => 1)
+            .Select(ahead => new
+            {
+                Contended = ahead.Count(reservation => reservation.State == ReservationState.Conflict),
+                ReceptionUnavailable = ahead.Count(reservation => reservation.ReceptionUnavailable),
+                EpgDiverged = ahead.Count(reservation => reservation.EpgDiverged && reservation.AcknowledgedAt == null),
+                EpgMissing = ahead.Count(reservation => reservation.EpgMissing && reservation.AcknowledgedAt == null),
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return counted is null
+            ? ReservationHealth.Clear(moment)
+            : new ReservationHealth(
+                moment,
+                counted.Contended,
+                counted.ReceptionUnavailable,
+                counted.EpgDiverged,
+                counted.EpgMissing);
     }
 
     public async Task<Reservation?> FindAsync(ReservationId id, CancellationToken cancellationToken)
@@ -269,24 +299,6 @@ public sealed class ReservationRepository(CarinaDbContext context) : IReservatio
                 $"A moment is a UTC instant, but this one has Kind={at.Kind}.",
                 nameof(at));
 
-    private static IQueryable<Reservation> StandingAnyOf(
-        IQueryable<Reservation> found,
-        IReadOnlyList<ReservationStanding> standings)
-    {
-        Expression<Func<Reservation, bool>> nowhere = reservation => false;
-
-        return found.Where(standings.Aggregate(nowhere, (carried, standing) => Either(carried, Standing(standing))));
-    }
-
-    private static IQueryable<Reservation> OnAnyOf(
-        IQueryable<Reservation> found,
-        IReadOnlyList<ProgrammeService> services)
-    {
-        Expression<Func<Reservation, bool>> nowhere = reservation => false;
-
-        return found.Where(services.Aggregate(nowhere, (carried, service) => Either(carried, On(service))));
-    }
-
     private static Expression<Func<Reservation, bool>> Standing(ReservationStanding standing)
     {
         string named = standing.ToString();
@@ -301,23 +313,5 @@ public sealed class ReservationRepository(CarinaDbContext context) : IReservatio
         var carried = new ServiceId(service.ServiceId);
 
         return reservation => reservation.NetworkId == network && reservation.ServiceId == carried;
-    }
-
-    private static Expression<Func<Reservation, bool>> Either(
-        Expression<Func<Reservation, bool>> left,
-        Expression<Func<Reservation, bool>> right)
-    {
-        ParameterExpression reservation = left.Parameters[0];
-        Expression rejoined = new Rebound(right.Parameters[0], reservation).Visit(right.Body);
-
-        return Expression.Lambda<Func<Reservation, bool>>(
-            Expression.OrElse(left.Body, rejoined),
-            reservation);
-    }
-
-    private sealed class Rebound(ParameterExpression from, ParameterExpression to) : ExpressionVisitor
-    {
-        protected override Expression VisitParameter(ParameterExpression node)
-            => node == from ? to : base.VisitParameter(node);
     }
 }
