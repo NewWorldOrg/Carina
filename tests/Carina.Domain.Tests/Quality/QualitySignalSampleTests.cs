@@ -5,7 +5,7 @@ using Carina.Domain.Recordings;
 
 namespace Carina.Domain.Tests.Quality;
 
-public sealed class QualitySignalSampleRowTests
+public sealed class QualitySignalSampleTests
 {
     private static readonly DateTime Taken = new(2026, 8, 8, 3, 0, 0, DateTimeKind.Utc);
 
