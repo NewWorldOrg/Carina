@@ -5,6 +5,7 @@ public sealed class FfmpegArgumentRuleTests
     private static readonly string[] Builders =
     [
         "/Carina.Infrastructure/Encodings/FfmpegEncodeInvocation.cs",
+        "/Carina.Infrastructure/Encodings/FfprobeHeadInvocation.cs",
         "/Carina.Infrastructure/Encodings/FfprobeLengthInvocation.cs",
         "/Carina.Infrastructure/Machines/FacultyInvocation.cs",
         "/Carina.Infrastructure/Machines/VaapiProbeInvocation.cs",

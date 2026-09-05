@@ -47,6 +47,13 @@ public sealed class EncodeRunMaterialTests
         Assert.InRange(made.Length!.Value, source.Length!.Value - Tolerance, source.Length.Value + Tolerance);
         Assert.Contains(harness.RunnerLog.Said, line => line.Contains("100% of the way through", StringComparison.Ordinal));
         Assert.Equal(["h264", "aac"], await CodecsOfAsync(artefact));
+
+        EncodeTimeline timeline = job.Timeline!;
+        Assert.NotNull(timeline);
+        Assert.True(EncodeTimeline.WithinReach(timeline.HeadSkip));
+        Assert.Equal(source.Length.Value, timeline.SourceLength);
+        Assert.Equal(made.Length.Value, timeline.ArtefactLength);
+        Assert.True(timeline.LengthsAgree, $"the artefact came out {timeline.Drift} from what the source had left");
     }
 
     [Fact(DisplayName = "BR-ED2-012: a file that is no broadcast at all fails the job with ffmpeg's exit code and its words, without a path in them, and leaves nothing behind but the recording")]
@@ -98,6 +105,7 @@ public sealed class EncodeRunMaterialTests
         harness.Programmes = new MachineSettings();
         harness.MachineReader = new MachineCapabilityReader(harness.Programmes, TimeProvider.System);
         harness.LengthReader = new FfprobeSourceLength(harness.Programmes, TimeProvider.System);
+        harness.HeadReader = new FfprobeSourceHead(harness.Programmes, TimeProvider.System);
 
         return harness;
     }

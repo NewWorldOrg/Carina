@@ -15,6 +15,8 @@ public enum EncodeFailure
     TimedOut = 5,
 
     DestinationCollision = 6,
+
+    HeadTooFar = 7,
 }
 
 public static class EncodeFailures

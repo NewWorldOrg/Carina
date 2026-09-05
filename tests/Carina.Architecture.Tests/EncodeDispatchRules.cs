@@ -6,7 +6,8 @@ namespace Carina.Architecture.Tests;
 /// Reads the encode feature for the three ways a job could get away from the ledger: a job moved
 /// to running anywhere but by the ledger's conditional update, a file moved or copied into place
 /// anywhere but by the placer that writes the ledger first, and a programme started anywhere but
-/// by the one run that hands the ledger the programme's identity before reading a line from it.
+/// by the one run that hands the ledger the programme's identity before reading a line from it —
+/// and for a fourth, the clock moved anywhere but by the one <c>-ss</c> the invocation writes.
 /// The feature is its folders plus any file named for it, wherever it sits. Like the other rules
 /// here it reads source text, so it sees the ordinary spellings and no others.
 /// </summary>
@@ -30,6 +31,9 @@ public static partial class EncodeDispatchRules
 
     public static IReadOnlyList<string> WhatStartsAProgramme(string directory)
         => Reported(directory, StartsAProgramme());
+
+    public static IReadOnlyList<string> WhatMovesTheClock(string directory)
+        => Reported(directory, MovesTheClock());
 
     public static IReadOnlyList<string> FilesInTheFeature(string directory)
         => Scanned(directory).Select(file => file.Relative).Order(StringComparer.Ordinal).ToArray();
@@ -76,6 +80,9 @@ public static partial class EncodeDispatchRules
 
     [GeneratedRegex(@"\bAnotherProgramme\s*\.\s*(Start|SayAsync)\s*\(|\bProcess\s*\.\s*Start\s*\(|\bnew\s+Process\s*[({]|\bTranscoderProcess\s*\.\s*(Start|Launch)\s*\(")]
     private static partial Regex StartsAProgramme();
+
+    [GeneratedRegex(@"""-(ss|output_ts_offset|copyts|start_at_zero|avoid_negative_ts|itsoffset)""")]
+    private static partial Regex MovesTheClock();
 
     [GeneratedRegex(@"\s+")]
     private static partial Regex Spaces();

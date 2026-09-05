@@ -294,7 +294,7 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
         await SeedAsync(connection);
         await ClearJobsAsync(connection);
 
-        Task writing = MarkedJobAsync(connection, status, started, programme, "NULL, NULL, NULL", "NULL, NULL, NULL");
+        Task writing = MarkedJobAsync(connection, status, started, programme, "NULL, NULL, NULL", "NULL, NULL, NULL", Unaligned);
 
         if (refusedBy is null)
         {
@@ -322,7 +322,7 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
         await SeedAsync(connection);
         await ClearJobsAsync(connection);
 
-        Task writing = MarkedJobAsync(connection, status, started, "NULL, NULL", headway, "NULL, NULL, NULL");
+        Task writing = MarkedJobAsync(connection, status, started, "NULL, NULL", headway, "NULL, NULL, NULL", Unaligned);
 
         if (refusedBy is null)
         {
@@ -351,7 +351,42 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
         await SeedAsync(connection);
         await ClearJobsAsync(connection);
 
-        Task writing = MarkedJobAsync(connection, status, started, "NULL, NULL", "NULL, NULL, NULL", route);
+        Task writing = MarkedJobAsync(connection, status, started, "NULL, NULL", "NULL, NULL, NULL", route, Unaligned);
+
+        if (refusedBy is null)
+        {
+            await writing;
+
+            return;
+        }
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(() => writing);
+        Assert.Equal(refusedBy, refusal.ConstraintName);
+    }
+
+    [Theory(DisplayName = "BR-ED2-006: where the artefact's clock stands is a start and a head skip together, the skip between nothing and five seconds, lengths only beside them, and only on a job that ran")]
+    [InlineData("'Running'", Started, "interval '08:28:19.474078', interval '00:00:00.5072', interval '00:34:57.502489', NULL", null)]
+    [InlineData("'Completed'", Started, "interval '08:28:19.474078', interval '00:00:00.5072', interval '00:34:57.502489', interval '00:34:56.7947'", null)]
+    [InlineData("'Running'", Started, "interval '0', interval '0', NULL, NULL", null)]
+    [InlineData("'Running'", Started, "interval '0', interval '00:00:05', NULL, NULL", null)]
+    [InlineData("'Failed'", Started, "interval '08:28:19.474078', interval '00:00:00.5072', NULL, NULL", null)]
+    [InlineData("'Running'", Started, "interval '08:28:19.474078', NULL, NULL, NULL", "ck_encode_job_alignment")]
+    [InlineData("'Running'", Started, "NULL, interval '00:00:00.5072', NULL, NULL", "ck_encode_job_alignment")]
+    [InlineData("'Running'", Started, "interval '08:28:19.474078', interval '00:00:05.000001', NULL, NULL", "ck_encode_job_alignment")]
+    [InlineData("'Running'", Started, "interval '08:28:19.474078', interval '17:16:10', NULL, NULL", "ck_encode_job_alignment")]
+    [InlineData("'Running'", Started, "interval '08:28:19.474078', interval '-00:00:01', NULL, NULL", "ck_encode_job_alignment")]
+    [InlineData("'Running'", Started, "interval '-00:00:01', interval '0', NULL, NULL", "ck_encode_job_alignment")]
+    [InlineData("'Running'", Started, "NULL, NULL, interval '00:34:57.502489', NULL", "ck_encode_job_alignment")]
+    [InlineData("'Running'", Started, "NULL, NULL, NULL, interval '00:34:56.7947'", "ck_encode_job_alignment")]
+    [InlineData("'Running'", Started, "interval '0', interval '0', interval '0', NULL", "ck_encode_job_alignment")]
+    [InlineData("'Queued'", "NULL", "interval '08:28:19.474078', interval '00:00:00.5072', NULL, NULL", "ck_encode_job_alignment")]
+    public async Task WhereTheArtefactsClockStandsIsAStartAndAHeadSkipTogether(string status, string started, string timeline, string? refusedBy)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        await SeedAsync(connection);
+        await ClearJobsAsync(connection);
+
+        Task writing = MarkedJobAsync(connection, status, started, "NULL, NULL", "NULL, NULL, NULL", "NULL, NULL, NULL", timeline);
 
         if (refusedBy is null)
         {
@@ -383,6 +418,7 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
             await ConstraintsAsync(connection, "encode_destination"));
         Assert.Equal(
             [
+                "ck_encode_job_alignment",
                 "ck_encode_job_artefact",
                 "ck_encode_job_attempt",
                 "ck_encode_job_failure",
@@ -489,13 +525,16 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
             """,
             connection).ExecuteNonQueryAsync();
 
+    private const string Unaligned = "NULL, NULL, NULL, NULL";
+
     private static Task MarkedJobAsync(
         NpgsqlConnection connection,
         string status,
         string started,
         string programme,
         string headway,
-        string route)
+        string route,
+        string timeline)
     {
         bool ended = status is "'Completed'" or "'Failed'";
         var recording = Guid.NewGuid();
@@ -508,11 +547,12 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
                 id, recording_id, profile_id, destination_id, output_root, status, attempt,
                 queued_at, started_at, ended_at, failure, failure_note, failure_noticed_at, artefact_name,
                 process_id, process_started_at, progress_portion, progress_left, progress_at,
-                encoder_asked, encoder_ran, swerve)
+                encoder_asked, encoder_ran, swerve,
+                source_start, head_skip, source_length, artefact_length)
             VALUES (
                 '{Guid.NewGuid()}', '{recording}', '{Profile}', '{Destination}', 'primary', {status}, 1,
                 {Queued}, {started}, {(ended ? Ended : "NULL")}, {failure}, {artefact},
-                {programme}, {headway}, {route})
+                {programme}, {headway}, {route}, {timeline})
             """,
             connection).ExecuteNonQueryAsync();
     }

@@ -26,6 +26,7 @@ public sealed class ProgrammeTests : IDisposable
     [Fact(DisplayName = "BR-EV-003: nothing this process was given is handed on to the one it starts")]
     public void NothingThisProcessWasGivenIsHandedOnToTheOneItStarts()
     {
+        string? held = Environment.GetEnvironmentVariable("CARINA_DB_CONNECTION");
         Environment.SetEnvironmentVariable("CARINA_DB_CONNECTION", "Host=db;Password=hunter2");
 
         try
@@ -37,7 +38,7 @@ public sealed class ProgrammeTests : IDisposable
         }
         finally
         {
-            Environment.SetEnvironmentVariable("CARINA_DB_CONNECTION", null);
+            Environment.SetEnvironmentVariable("CARINA_DB_CONNECTION", held);
         }
     }
 
