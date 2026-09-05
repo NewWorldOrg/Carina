@@ -2,7 +2,7 @@ using Carina.Api.Common;
 using Carina.Contracts;
 using Carina.Domain.Driver;
 using Carina.Domain.Recordings;
-using Carina.Infrastructure.Recordings;
+using Carina.Infrastructure.Encodings;
 
 namespace Carina.Api.Services;
 
@@ -14,7 +14,7 @@ public enum StorageFailure
 }
 
 public sealed class StorageService(
-    StorageMonitor storage,
+    OutputRootDeclarations storage,
     IRecordingRepository recordings,
     TimeProvider clock)
 {

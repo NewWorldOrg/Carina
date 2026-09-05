@@ -16,6 +16,8 @@ public sealed class EncodeValidationTests
         new() { Name = "spare", FreeBytes = 1, TotalBytes = 2, Writable = true },
     ];
 
+    private static readonly IReadOnlyList<OutputRoot> Held = [new("primary"), new("spare")];
+
     private static EncodeProfileDraft Sound()
         => new("Standard", EncodeCodec.H264, EncodeResolution.AsSource, Deinterlace.EveryFrame, 22, 24);
 
@@ -29,6 +31,7 @@ public sealed class EncodeValidationTests
             EncodeValidation.WhatRefusesTheDestination(
                 new EncodeDestinationDraft("Where it goes", "somewhere-else", known),
                 Declared,
+                Held,
                 [known]));
     }
 
@@ -44,6 +47,7 @@ public sealed class EncodeValidationTests
                 EncodeValidation.WhatRefusesTheDestination(
                     new EncodeDestinationDraft("Where it goes", near, known),
                     Declared,
+                    Held,
                     [known]));
         }
     }
@@ -56,7 +60,36 @@ public sealed class EncodeValidationTests
         Assert.Empty(EncodeValidation.WhatRefusesTheDestination(
             new EncodeDestinationDraft("Where it goes", "primary", known),
             Declared,
+            Held,
             [known]));
+    }
+
+    [Fact(DisplayName = "BR-EV-001: a declared root this process only reads from is refused, because an artefact is never placed in it")]
+    public void ADeclaredRootThisProcessOnlyReadsFromIsRefused()
+    {
+        EncodeProfileId known = EncodeProfileId.New();
+
+        Assert.Equal(
+            [EncodeRefusal.OutputRootNotHeld],
+            EncodeValidation.WhatRefusesTheDestination(
+                new EncodeDestinationDraft("Where it goes", "primary", known),
+                Declared,
+                [new OutputRoot("spare")],
+                [known]));
+    }
+
+    [Fact(DisplayName = "BR-EV-001: a root this process holds but nobody declared is refused as undeclared, not as unheld")]
+    public void ARootThisProcessHoldsButNobodyDeclaredIsRefusedAsUndeclared()
+    {
+        EncodeProfileId known = EncodeProfileId.New();
+
+        Assert.Equal(
+            [EncodeRefusal.OutputRootNotDeclared],
+            EncodeValidation.WhatRefusesTheDestination(
+                new EncodeDestinationDraft("Where it goes", "encodes", known),
+                Declared,
+                [new OutputRoot("encodes")],
+                [known]));
     }
 
     [Fact(DisplayName = "BR-EV-001: a destination pointing at a profile nobody defined is refused")]
@@ -67,6 +100,7 @@ public sealed class EncodeValidationTests
             EncodeValidation.WhatRefusesTheDestination(
                 new EncodeDestinationDraft("Where it goes", "primary", EncodeProfileId.New()),
                 Declared,
+                Held,
                 [EncodeProfileId.New()]));
     }
 
@@ -80,6 +114,7 @@ public sealed class EncodeValidationTests
             EncodeValidation.WhatRefusesTheDestination(
                 new EncodeDestinationDraft("Where it goes", "primary", known),
                 [],
+                Held,
                 [known]));
     }
 
@@ -132,6 +167,7 @@ public sealed class EncodeValidationTests
                 EncodeRefusal.LabelTooLong,
                 EncodeRefusal.OutputRootNotDeclared,
                 EncodeRefusal.DefaultProfileUnknown,
+                EncodeRefusal.OutputRootNotHeld,
             ],
             Enum.GetValues<EncodeRefusal>());
 
@@ -164,6 +200,7 @@ public sealed class EncodeValidationTests
                 typeof(EncodeProfileDraft),
                 typeof(IReadOnlyList<StorageRootDto>),
                 typeof(IReadOnlyList<EncodeProfileId>),
+                typeof(IReadOnlyList<OutputRoot>),
             ],
             handedIn.Distinct().OrderBy(type => type.ToString(), StringComparer.Ordinal));
     }
@@ -201,6 +238,7 @@ public sealed class EncodeValidationTests
             EncodeValidation.WhatRefusesTheDestination(
                 new EncodeDestinationDraft(label, "primary", EncodeProfileId.New()),
                 Declared,
+                Held,
                 []));
     }
 

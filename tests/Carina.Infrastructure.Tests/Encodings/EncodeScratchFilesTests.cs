@@ -15,12 +15,12 @@ public sealed class EncodeScratchFilesTests
 
         string? path = await harness.ScratchFiles.RecordAsync(job, EncodeScratchKind.WorkFile, job.WorkFileName, Cancel);
 
-        Assert.Equal(Path.Combine(harness.Room.Root, job.WorkFileName.Value), path);
+        Assert.Equal(Path.Combine(harness.Shelf.Root, job.WorkFileName.Value), path);
         Assert.False(File.Exists(path), "nothing is created here; only the ledger is written");
         EncodeScratchFile recorded = Assert.Single(harness.Scratch.Files);
         Assert.Equal(job.Id, recorded.JobId);
         Assert.Equal(EncodeScratchKind.WorkFile, recorded.Kind);
-        Assert.Equal(EncodeHarness.Primary, recorded.OutputRoot);
+        Assert.Equal(EncodeHarness.Encodes, recorded.OutputRoot);
         Assert.Equal(job.WorkFileName, recorded.FileName);
         Assert.Equal(harness.Clock.GetUtcNow().UtcDateTime, recorded.WrittenAt);
         Assert.True(recorded.IsOwedARemoval);

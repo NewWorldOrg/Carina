@@ -18,7 +18,7 @@ public sealed class EncodeScratchCleanerTests
         EncodeJob running = harness.Running();
         string failedWork = harness.WorkFileOf(failed, "half a picture");
         string runningWork = harness.WorkFileOf(running, "a picture in progress");
-        string lookAlike = harness.Room.Under($"{failed.RecordingId.Wire}.{EncodeJobId.New().Wire}.attempt1.encoding");
+        string lookAlike = harness.Shelf.Under($"{failed.RecordingId.Wire}.{EncodeJobId.New().Wire}.attempt1.encoding");
         File.WriteAllText(lookAlike, "a work file the ledger never heard of");
         failed.Fail(EncodeFailure.FfmpegExitedNonZero, "exit 1", Ended);
 

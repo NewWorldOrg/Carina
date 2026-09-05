@@ -1,4 +1,5 @@
 using Carina.Contracts;
+using Carina.Domain.Recordings;
 
 namespace Carina.Domain.Encodings;
 
@@ -21,6 +22,8 @@ public enum EncodeRefusal
     OutputRootNotDeclared = 8,
 
     DefaultProfileUnknown = 9,
+
+    OutputRootNotHeld = 10,
 }
 
 public sealed record EncodeProfileDraft(
@@ -72,13 +75,21 @@ public static class EncodeValidation
         return refusals;
     }
 
+    /// <summary>
+    /// A destination names a root out of the declared set (BR-EV-001), and out of that set one this
+    /// process holds for writing: the roots the recordings are read from are declared too, but an
+    /// artefact is never placed in one of them, so naming one is refused when it is saved rather
+    /// than failing every job afterwards.
+    /// </summary>
     public static IReadOnlyList<EncodeRefusal> WhatRefusesTheDestination(
         EncodeDestinationDraft draft,
         IReadOnlyList<StorageRootDto> declared,
+        IReadOnlyList<OutputRoot> held,
         IReadOnlyList<EncodeProfileId> profiles)
     {
         ArgumentNullException.ThrowIfNull(draft);
         ArgumentNullException.ThrowIfNull(declared);
+        ArgumentNullException.ThrowIfNull(held);
         ArgumentNullException.ThrowIfNull(profiles);
 
         List<EncodeRefusal> refusals = [.. WhatRefusesTheLabel(draft.Label)];
@@ -86,6 +97,10 @@ public static class EncodeValidation
         if (!StorageRoots.Declares(declared, draft.OutputRoot))
         {
             refusals.Add(EncodeRefusal.OutputRootNotDeclared);
+        }
+        else if (!held.Any(root => string.Equals(root.Value, draft.OutputRoot, StringComparison.Ordinal)))
+        {
+            refusals.Add(EncodeRefusal.OutputRootNotHeld);
         }
 
         if (draft.DefaultProfileId is null || !profiles.Contains(draft.DefaultProfileId))
