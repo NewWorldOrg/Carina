@@ -88,6 +88,11 @@ public static class ServiceCollectionExtensions
             .Configure(options => options.ReadFrom(configuration))
             .ValidateOnStart();
 
+        services.AddSingleton<IValidateOptions<EncodingOptions>, EncodingValidation>();
+        services.AddOptions<EncodingOptions>()
+            .Configure(options => options.ReadFrom(configuration))
+            .ValidateOnStart();
+
         services.AddDbContext<CarinaDbContext>((provider, options) =>
             options.UseCarinaDatabase(provider.GetRequiredService<IOptions<DatabaseOptions>>().Value.ConnectionString));
 
@@ -115,6 +120,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IEncodeDestinationRepository, EncodeDestinationRepository>();
         services.AddScoped<IEncodeJobRepository, EncodeJobRepository>();
         services.AddScoped<IEncodeScratchLedger, EncodeScratchLedger>();
+        services.AddScoped<EncodeScratchFiles>();
+        services.AddScoped<EncodeScratchCleaner>();
+        services.AddScoped<EncodeArtefactPlacer>();
         services.AddScoped<IThumbnailWorklist, ThumbnailWorklist>();
         services.AddScoped<IChannelScanOrchestrator, ChannelScanOrchestrator>();
         services.AddScoped<ScanApplier>();
@@ -207,6 +215,10 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<ILiveSessionLedger>(provider => provider.GetRequiredService<LiveSessionManager>());
         services.TryAddSingleton<IStreamAttributeReader, FfprobeStreamAttributeReader>();
         services.TryAddSingleton(new MachineSettings());
+        services.TryAddSingleton<EncodeSettings>(provider =>
+            provider.GetRequiredService<IOptions<EncodingOptions>>().Value.Read());
+        services.TryAddSingleton<EncodePlaces>();
+        services.TryAddSingleton<IRenameProbe, DirectoryRenameProbe>();
         services.TryAddSingleton<ISourceLengthReader>(provider => new FfprobeSourceLength(
             provider.GetRequiredService<MachineSettings>(),
             provider.GetRequiredService<TimeProvider>()));
@@ -235,6 +247,7 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<EpgCollector>();
         services.AddHostedService<RideAlongHarvester>();
         services.AddHostedService<LiveStraySweep>();
+        services.AddHostedService<EncodeMountCheck>();
         services.AddHostedService(provider => provider.GetRequiredService<IntegrityCheckJob>());
         services.AddHostedService(provider => provider.GetRequiredService<ThumbnailJob>());
         services.AddHostedService(provider =>
