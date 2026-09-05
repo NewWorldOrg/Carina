@@ -111,6 +111,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IReservationRecordingContract, ReservationRecordingContract>();
         services.AddScoped<IRecordingLedger, RecordingLedger>();
         services.AddScoped<IIntegrityCheckRepository, IntegrityCheckRepository>();
+        services.AddScoped<IEncodeProfileRepository, EncodeProfileRepository>();
+        services.AddScoped<IEncodeDestinationRepository, EncodeDestinationRepository>();
+        services.AddScoped<IEncodeJobRepository, EncodeJobRepository>();
+        services.AddScoped<IEncodeScratchLedger, EncodeScratchLedger>();
         services.AddScoped<IThumbnailWorklist, ThumbnailWorklist>();
         services.AddScoped<IChannelScanOrchestrator, ChannelScanOrchestrator>();
         services.AddScoped<ScanApplier>();

@@ -1,6 +1,7 @@
 using Carina.Infrastructure.Persistence;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 
 namespace Carina.Infrastructure.Tests;
 
@@ -69,6 +70,43 @@ public sealed class PersistenceBoundaryRuleTests
             .Select(key => key.PrincipalEntityType.GetTableName() ?? string.Empty)];
 
         Assert.Equal(["integrity_check"], pointing);
+    }
+
+    [Fact(DisplayName = "BR-D-004: the encode ledger is four tables, and its foreign keys never leave it")]
+    public void TheEncodeLedgerIsFourTablesAndItsForeignKeysNeverLeaveIt()
+    {
+        using CarinaDbContext context = Carina();
+
+        Assert.Equal(
+            ["encode_destination", "encode_job", "encode_profile", "encode_scratch_file"],
+            PersistenceBoundaryRules.TablesOf(context.Model, PersistenceFamily.Encodings));
+
+        IReadOnlyList<string> pointing = [.. context.Model
+            .GetEntityTypes()
+            .Where(entityType => entityType.GetTableName() is { } table && table.StartsWith("encode_", StringComparison.Ordinal))
+            .SelectMany(entityType => entityType.GetForeignKeys())
+            .Select(key => $"{key.DeclaringEntityType.GetTableName()} -> {key.PrincipalEntityType.GetTableName()}")
+            .Order(StringComparer.Ordinal)];
+
+        Assert.Equal(
+            [
+                "encode_destination -> encode_profile",
+                "encode_job -> encode_destination",
+                "encode_job -> encode_profile",
+                "encode_scratch_file -> encode_job",
+            ],
+            pointing);
+    }
+
+    [Fact(DisplayName = "BR-D-004: an encode job reaches the recording it encodes by value, not by key")]
+    public void AnEncodeJobReachesTheRecordingItEncodesByValue()
+    {
+        using CarinaDbContext context = Carina();
+
+        IEntityType job = context.Model.GetEntityTypes().Single(entityType => entityType.GetTableName() == "encode_job");
+
+        Assert.Contains("recording_id", job.GetProperties().Select(property => property.GetColumnName()), StringComparer.Ordinal);
+        Assert.DoesNotContain(job.GetForeignKeys(), key => key.PrincipalEntityType.GetTableName() == "recording");
     }
 
     [Fact]

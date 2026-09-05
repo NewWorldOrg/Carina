@@ -1,5 +1,6 @@
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Tests.Fixtures.Channels;
+using Carina.Infrastructure.Tests.Fixtures.Encodings;
 using Carina.Infrastructure.Tests.Fixtures.Library;
 using Carina.Infrastructure.Tests.Fixtures.Programmes;
 using Carina.Infrastructure.Tests.Fixtures.Recordings;
@@ -12,7 +13,7 @@ namespace Carina.Infrastructure.Tests;
 
 public sealed class PersistenceBoundaryRuleSelfCheckTests
 {
-    private static readonly string[] FamilyPrefixes = ["reservation", "channel", "programme", "epg", "recording"];
+    private static readonly string[] FamilyPrefixes = ["reservation", "channel", "programme", "epg", "recording", "encode"];
 
     private sealed class ViolatingDbContext(DbContextOptions<CarinaDbContext> options) : CarinaDbContext(options)
     {
@@ -38,6 +39,8 @@ public sealed class PersistenceBoundaryRuleSelfCheckTests
                 tape.HasOne<Booking>().WithMany().HasForeignKey(entity => entity.BookingId);
             });
             modelBuilder.Entity<ShelfItem>();
+            modelBuilder.Entity<BurnJob>(burn =>
+                burn.HasOne<TapeEntry>().WithMany().HasForeignKey(entity => entity.TapeEntryId));
         }
     }
 
@@ -99,6 +102,16 @@ public sealed class PersistenceBoundaryRuleSelfCheckTests
             PersistenceBoundaryRules.BoundaryBreakingForeignKeys(context.Model));
     }
 
+    [Fact(DisplayName = "BR-D-004: detects an encode job that holds a foreign key to the recording ledger")]
+    public void DetectsAnEncodeJobThatHoldsAForeignKeyToTheRecordingLedger()
+    {
+        using ViolatingDbContext context = Violating();
+
+        Assert.Contains(
+            "burn_job -> tape_entry",
+            PersistenceBoundaryRules.BoundaryBreakingForeignKeys(context.Model));
+    }
+
     [Fact]
     public void LeavesForeignKeysInsideTheReservationAggregateAlone()
     {
@@ -107,6 +120,7 @@ public sealed class PersistenceBoundaryRuleSelfCheckTests
         Assert.Equal(
             [
                 "booking -> channel_lineup",
+                "burn_job -> tape_entry",
                 "guide_entry -> channel_lineup",
                 "recording_job -> guide_entry",
                 "tape_entry -> booking",
@@ -121,11 +135,12 @@ public sealed class PersistenceBoundaryRuleSelfCheckTests
         using ViolatingDbContext context = Violating();
 
         Assert.DoesNotContain(
-            new[] { "booking", "guide_entry", "tape_entry" },
+            new[] { "booking", "burn_job", "guide_entry", "tape_entry" },
             table => FamilyPrefixes.Any(prefix => table.StartsWith(prefix, StringComparison.Ordinal)));
         Assert.Equal(
             [
                 "booking -> channel_lineup",
+                "burn_job -> tape_entry",
                 "guide_entry -> channel_lineup",
                 "recording_job -> guide_entry",
                 "tape_entry -> booking",
