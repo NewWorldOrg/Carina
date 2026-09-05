@@ -13,9 +13,16 @@ public sealed class BroadcastServiceConfiguration : IEntityTypeConfiguration<Bro
 
         builder.ToTable(
             "broadcast_service",
-            table => table.HasCheckConstraint(
-                "ck_broadcast_service_category",
-                "category IN ('Television', 'Radio', 'Data', 'OneSeg', 'Temporary', 'Other')"));
+            table =>
+            {
+                table.HasCheckConstraint(
+                    "ck_broadcast_service_category",
+                    "category IN ('Television', 'Radio', 'Data', 'OneSeg', 'Temporary', 'Other')");
+                table.HasCheckConstraint(
+                    "ck_broadcast_service_logo",
+                    "logo_declaration IN ('NotYetRead', 'InTheCommonDataTable', 'NoPictureIsBroadcast')"
+                    + " AND (logo_id IS NOT NULL) = (logo_declaration = 'InTheCommonDataTable')");
+            });
 
         builder.HasKey(service => new { service.NetworkId, service.ServiceId });
 
@@ -39,9 +46,21 @@ public sealed class BroadcastServiceConfiguration : IEntityTypeConfiguration<Bro
         builder.Property(service => service.RemoteControlKeyId)
             .HasColumnName("remote_control_key_id");
 
+        builder.Property(service => service.LogoId)
+            .HasConversion(id => id!.Value, value => new LogoId(value))
+            .HasColumnName("logo_id");
+
+        builder.Property(service => service.LogoDeclaration)
+            .HasConversion<string>()
+            .HasMaxLength(32)
+            .HasColumnName("logo_declaration")
+            .IsRequired();
+
         builder.Property(service => service.DiscoveredAt).IsRequired();
         builder.Property(service => service.LastSeenAt).IsRequired();
 
         builder.HasIndex(service => service.LastSeenAt);
+
+        builder.HasIndex(service => new { service.NetworkId, service.LogoId });
     }
 }

@@ -85,4 +85,72 @@ public sealed class BroadcastServiceTests
             ServiceCategory.Television,
             new DateTime(2026, 8, 14, 0, 0, 0, DateTimeKind.Unspecified)));
     }
+
+    [Fact]
+    public void AServiceNobodyHasReadTheDescriptionOfHasNeitherALogoNorTheClaimThatItHasNone()
+    {
+        BroadcastService service = Discovered();
+
+        Assert.Null(service.LogoId);
+        Assert.Equal(StationLogoDeclaration.NotYetRead, service.LogoDeclaration);
+    }
+
+    [Fact]
+    public void AServiceThatNamesALogoSaysWhichOneAndWhereItComesFrom()
+    {
+        BroadcastService service = Discovered();
+
+        Assert.True(service.NamesTheLogo(new LogoId(261)));
+        Assert.Equal(new LogoId(261), service.LogoId);
+        Assert.Equal(StationLogoDeclaration.InTheCommonDataTable, service.LogoDeclaration);
+    }
+
+    [Fact]
+    public void AServiceNamingTheLogoItAlreadyNamesIsNoChangeAtAll()
+    {
+        BroadcastService service = Discovered();
+        service.NamesTheLogo(new LogoId(261));
+
+        Assert.False(service.NamesTheLogo(new LogoId(261)));
+    }
+
+    [Fact]
+    public void AStationThatBroadcastsNoPictureIsToldApartFromOneNobodyHasAskedYet()
+    {
+        BroadcastService service = Discovered();
+
+        Assert.True(service.BroadcastsNoLogo());
+        Assert.Null(service.LogoId);
+        Assert.Equal(StationLogoDeclaration.NoPictureIsBroadcast, service.LogoDeclaration);
+        Assert.False(service.BroadcastsNoLogo());
+    }
+
+    [Fact]
+    public void AStationThatStopsBroadcastingAPictureLetsGoOfTheLogoItUsedToName()
+    {
+        BroadcastService service = Discovered();
+        service.NamesTheLogo(new LogoId(261));
+
+        service.BroadcastsNoLogo();
+
+        Assert.Null(service.LogoId);
+    }
+
+    [Fact]
+    public void AServiceCannotBeRehydratedNamingALogoItAlsoSaysItDoesNotHave()
+    {
+        Assert.Throws<ArgumentException>(() => BroadcastService.Rehydrate(
+            new NetworkId(4),
+            new ServiceId(101),
+            "Fixture Service",
+            ServiceCategory.Television,
+            At,
+            At,
+            logoId: new LogoId(261),
+            logoDeclaration: StationLogoDeclaration.NoPictureIsBroadcast));
+    }
+
+    private static BroadcastService Discovered()
+        => BroadcastService.Discover(
+            new NetworkId(4), new ServiceId(101), "Fixture Service", ServiceCategory.Television, At);
 }

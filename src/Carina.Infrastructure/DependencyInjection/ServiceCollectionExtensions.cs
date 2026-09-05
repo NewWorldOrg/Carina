@@ -102,6 +102,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IOidcSettingsRepository, OidcSettingsRepository>();
         services.AddScoped<IOidcDirectory, OidcDirectory>();
         services.AddScoped<IBroadcastServiceRepository, BroadcastServiceRepository>();
+        services.AddScoped<IStationLogoRepository, StationLogoRepository>();
         services.AddScoped<IProgrammeRepository, ProgrammeRepository>();
         services.AddScoped<IProgrammeSearchRepository, ProgrammeSearchRepository>();
         services.AddScoped<ProgrammeSearchScope>();
