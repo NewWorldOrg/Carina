@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 
 using Carina.Domain.Integrity;
+using Carina.Domain.Playback;
 using Carina.Domain.Recordings;
 using Carina.TestSupport;
 
@@ -20,7 +21,7 @@ internal sealed class PlaybackFeature : IAsyncDisposable
 
     private readonly DirectoryInfo mounted = Directory.CreateTempSubdirectory("carina-playback-");
 
-    public PlaybackFeature()
+    public PlaybackFeature(IPlaybackFileStore? files = null)
     {
         WebApplicationFactory<Program> configured = factory
             .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
@@ -31,6 +32,12 @@ internal sealed class PlaybackFeature : IAsyncDisposable
                 {
                     OutputRoots = [new StorageRootPath(Root, mounted.FullName)],
                 });
+
+                if (files is not null)
+                {
+                    services.RemoveAll<IPlaybackFileStore>();
+                    services.AddSingleton(files);
+                }
             }));
 
         Client = configured.WithTestScheme().CreateClient();
@@ -101,7 +108,11 @@ internal sealed class PlaybackFeature : IAsyncDisposable
         Client.Dispose();
         Stranger.Dispose();
         await factory.DisposeAsync();
-        mounted.Delete(recursive: true);
+
+        if (Directory.Exists(mounted.FullName))
+        {
+            mounted.Delete(recursive: true);
+        }
     }
 
     private async Task<HttpResponseMessage> SendAsync(HttpMethod method, Recording recording, string? range)

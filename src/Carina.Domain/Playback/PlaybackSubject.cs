@@ -6,9 +6,10 @@ public sealed record PlaybackSubject
 {
     public PlaybackSubject(
         RecordingOutcome? outcome,
-        PlaybackFile? asRecorded,
+        PlaybackFileSearch asRecorded,
         IEnumerable<PlaybackFile> browserReady)
     {
+        ArgumentNullException.ThrowIfNull(asRecorded);
         ArgumentNullException.ThrowIfNull(browserReady);
 
         if (outcome is not null && !Enum.IsDefined(outcome.Value))
@@ -26,10 +27,10 @@ public sealed record PlaybackSubject
 
     public RecordingOutcome? Outcome { get; }
 
-    public PlaybackFile? AsRecorded { get; }
+    public PlaybackFileSearch AsRecorded { get; }
 
     public IReadOnlyList<PlaybackFile> BrowserReady { get; }
 
-    public static PlaybackSubject NothingHasBeenEncodedYet(RecordingOutcome? outcome, PlaybackFile? asRecorded)
+    public static PlaybackSubject NothingHasBeenEncodedYet(RecordingOutcome? outcome, PlaybackFileSearch asRecorded)
         => new(outcome, asRecorded, []);
 }

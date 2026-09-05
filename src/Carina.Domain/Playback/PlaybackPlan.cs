@@ -46,9 +46,13 @@ public sealed record PlaybackPlan
             return new PlaybackPlan(PlaybackRoute.Direct, standing, encoded, null);
         }
 
-        if (subject.AsRecorded is not { } recorded)
+        if (subject.AsRecorded.Found is not { } recorded)
         {
-            return Refused(standing, PlaybackRefusal.FileOutOfReach);
+            return Refused(
+                standing,
+                subject.AsRecorded.Absence is PlaybackFileAbsence.Gone
+                    ? PlaybackRefusal.FileGone
+                    : PlaybackRefusal.FileOutOfReach);
         }
 
         return recorded.HoldsAnything

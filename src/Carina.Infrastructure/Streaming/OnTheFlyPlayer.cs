@@ -164,7 +164,7 @@ public sealed class OnTheFlyPlayer(
     }
 
     private StreamSource? WhatIsStillThere(PlaybackFile file)
-        => files.Find(file.Root, file.Name) is { HoldsAnything: true } still ? files.SourceOf(still) : null;
+        => files.Find(file.Root, file.Name).Found is { HoldsAnything: true } still ? files.SourceOf(still) : null;
 
     private readonly record struct OnTheFlyBearing(
         long Began,

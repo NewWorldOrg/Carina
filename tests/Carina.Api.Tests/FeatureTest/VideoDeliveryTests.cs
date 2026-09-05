@@ -1,8 +1,20 @@
 using System.Net;
 
+using Carina.Domain.Playback;
 using Carina.Domain.Recordings;
+using Carina.Domain.Streaming;
 
 namespace Carina.Api.Tests.FeatureTest;
+
+internal sealed class VanishingPlaybackFiles(long bytes, PlaybackFileAbsence then = PlaybackFileAbsence.Gone) : IPlaybackFileStore
+{
+    public PlaybackFileSearch Find(OutputRoot root, RecordingFileName fileName)
+        => PlaybackFileSearch.Of(new PlaybackFile(root, fileName, bytes));
+
+    public PlaybackFileOpening OpenRead(PlaybackFile file) => PlaybackFileOpening.Missing(then);
+
+    public StreamSource? SourceOf(PlaybackFile file) => null;
+}
 
 [Collection(FeatureTestCollection.Name)]
 public sealed class VideoDeliveryTests
@@ -179,12 +191,48 @@ public sealed class VideoDeliveryTests
     }
 
     [Fact]
-    public async Task ARecordingWhoseFileIsGoneSaysTheBytesAreOutOfReach()
+    public async Task ARecordingWhoseFileIsGoneWhileItsRootIsThereIsNotFound()
     {
         await using var feature = new PlaybackFeature();
         Recording recording = feature.Ended(RecordingOutcome.Complete, PlaybackFeature.Bytes(Size), onDisk: false);
 
-        using HttpResponseMessage answer = await feature.GetAsync(recording);
+        using HttpResponseMessage answer = await feature.GetAsync(recording, "bytes=0-");
+
+        Assert.Equal(HttpStatusCode.NotFound, answer.StatusCode);
+        Assert.Empty(await answer.Content.ReadAsByteArrayAsync());
+    }
+
+    [Fact]
+    public async Task ARecordingWhoseRootIsGoneSaysTheBytesAreOutOfReachRatherThanNotFound()
+    {
+        await using var feature = new PlaybackFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete, PlaybackFeature.Bytes(Size));
+        Directory.Delete(feature.MountedAt, recursive: true);
+
+        using HttpResponseMessage answer = await feature.GetAsync(recording, "bytes=0-");
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, answer.StatusCode);
+    }
+
+    [Fact]
+    public async Task AFileTakenOffTheDiskBetweenBeingFoundAndBeingOpenedIsNotFoundRatherThanHalfServed()
+    {
+        await using var feature = new PlaybackFeature(new VanishingPlaybackFiles(Size));
+        Recording recording = feature.Ended(RecordingOutcome.Complete, PlaybackFeature.Bytes(Size), onDisk: false);
+
+        using HttpResponseMessage answer = await feature.GetAsync(recording, "bytes=1000-1999");
+
+        Assert.Equal(HttpStatusCode.NotFound, answer.StatusCode);
+        Assert.Empty(await answer.Content.ReadAsByteArrayAsync());
+    }
+
+    [Fact]
+    public async Task ARootThatWentAwayBetweenTheFileBeingFoundAndOpenedIsOutOfReachRatherThanNotFound()
+    {
+        await using var feature = new PlaybackFeature(new VanishingPlaybackFiles(Size, PlaybackFileAbsence.OutOfReach));
+        Recording recording = feature.Ended(RecordingOutcome.Complete, PlaybackFeature.Bytes(Size), onDisk: false);
+
+        using HttpResponseMessage answer = await feature.GetAsync(recording, "bytes=1000-1999");
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, answer.StatusCode);
     }

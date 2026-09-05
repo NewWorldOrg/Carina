@@ -14,6 +14,8 @@ public enum PlaybackFailure
     NothingWasWritten = 3,
 
     FileOutOfReach = 4,
+
+    FileGone = 5,
 }
 
 public sealed record PlaybackOffer(PlaybackPlan Plan, PlaybackFile Handover, ServiceId Service);
@@ -33,7 +35,7 @@ public sealed class PlaybackService(IRecordingDirectory recordings, IPlaybackFil
                 PlaybackFailure.NoSuchRecording);
         }
 
-        PlaybackFile? onDisk = files.Find(recording.OutputRoot, recording.FileName);
+        PlaybackFileSearch onDisk = files.Find(recording.OutputRoot, recording.FileName);
         PlaybackPlan plan = PlaybackPlan.For(
             PlaybackSubject.NothingHasBeenEncodedYet(recording.Outcome, onDisk));
 
@@ -42,13 +44,24 @@ public sealed class PlaybackService(IRecordingDirectory recordings, IPlaybackFil
             : Nothing(id, plan.Refusal!.Value);
     }
 
-    public ServiceResult<Stream> Open(PlaybackFile file)
+    public ServiceResult<Stream, PlaybackFailure> Open(PlaybackFile file)
     {
         ArgumentNullException.ThrowIfNull(file);
 
-        return files.OpenRead(file) is { } reading
-            ? ServiceResult<Stream>.Success(reading)
-            : ServiceResult<Stream>.Failure($"The file {file.Name.Value} went out of reach while it was being read.");
+        PlaybackFileOpening opened = files.OpenRead(file);
+
+        if (opened.Reading is { } reading)
+        {
+            return ServiceResult<Stream, PlaybackFailure>.Success(reading);
+        }
+
+        return opened.Absence is PlaybackFileAbsence.Gone
+            ? ServiceResult<Stream, PlaybackFailure>.Failure(
+                "The file of this recording was taken off the disk before it was opened.",
+                PlaybackFailure.FileGone)
+            : ServiceResult<Stream, PlaybackFailure>.Failure(
+                "The file of this recording went out of reach while it was being read.",
+                PlaybackFailure.FileOutOfReach);
     }
 
     private static ServiceResult<PlaybackOffer, PlaybackFailure> Nothing(RecordingId id, PlaybackRefusal refusal)
@@ -58,6 +71,7 @@ public sealed class PlaybackService(IRecordingDirectory recordings, IPlaybackFil
             {
                 PlaybackRefusal.StillBeingWritten => PlaybackFailure.StillBeingWritten,
                 PlaybackRefusal.NothingWasWritten => PlaybackFailure.NothingWasWritten,
+                PlaybackRefusal.FileGone => PlaybackFailure.FileGone,
                 _ => PlaybackFailure.FileOutOfReach,
             });
 
@@ -65,6 +79,7 @@ public sealed class PlaybackService(IRecordingDirectory recordings, IPlaybackFil
     {
         PlaybackRefusal.StillBeingWritten => $"Recording {id.Wire} is still being written, so there is no whole file to hand over.",
         PlaybackRefusal.NothingWasWritten => $"Recording {id.Wire} holds no bytes, so there is nothing to play.",
+        PlaybackRefusal.FileGone => $"The file of recording {id.Wire} is no longer on the disk.",
         _ => $"The file of recording {id.Wire} is out of reach.",
     };
 }

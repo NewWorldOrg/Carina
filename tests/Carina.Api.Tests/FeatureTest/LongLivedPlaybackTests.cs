@@ -102,9 +102,10 @@ internal sealed class GatedPlaybackFiles(byte[] bytes) : IPlaybackFileStore
 {
     public GatedStream Handed { get; } = new(bytes);
 
-    public PlaybackFile? Find(OutputRoot root, RecordingFileName fileName) => new(root, fileName, bytes.Length);
+    public PlaybackFileSearch Find(OutputRoot root, RecordingFileName fileName)
+        => PlaybackFileSearch.Of(new PlaybackFile(root, fileName, bytes.Length));
 
-    public Stream? OpenRead(PlaybackFile file) => Handed;
+    public PlaybackFileOpening OpenRead(PlaybackFile file) => PlaybackFileOpening.Of(Handed);
 
     public StreamSource? SourceOf(PlaybackFile file) => null;
 }

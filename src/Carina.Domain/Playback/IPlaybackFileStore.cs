@@ -5,9 +5,9 @@ namespace Carina.Domain.Playback;
 
 public interface IPlaybackFileStore
 {
-    PlaybackFile? Find(OutputRoot root, RecordingFileName fileName);
+    PlaybackFileSearch Find(OutputRoot root, RecordingFileName fileName);
 
-    Stream? OpenRead(PlaybackFile file);
+    PlaybackFileOpening OpenRead(PlaybackFile file);
 
     StreamSource? SourceOf(PlaybackFile file);
 }
