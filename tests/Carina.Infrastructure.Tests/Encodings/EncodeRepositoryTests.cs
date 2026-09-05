@@ -97,6 +97,7 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         running.Routed(new EncodeRoute(EncodeEncoder.Vaapi, EncodeEncoder.Software, EncodeSwerve.TheCardIsOutOfReach));
         running.Spawned(new RunningProgramme(4242, Started.AddSeconds(1)));
         running.Reached(EncodeProgress.Of(TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(120), 2, false), Started.AddSeconds(20));
+        running.Aligned(new EncodeTimeline(TimeSpan.FromSeconds(30499.474078), TimeSpan.FromSeconds(0.5072), TimeSpan.FromSeconds(2097.502489), null));
 
         await using (CarinaDbContext writing = database.Open())
         {
@@ -113,7 +114,10 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
             Assert.Equal(0.25, read.Headway!.Portion);
             Assert.Equal(TimeSpan.FromSeconds(45), read.Headway.Left);
             Assert.Equal(Started.AddSeconds(20), read.Headway.At);
+            Assert.Equal(running.Timeline, read.Timeline);
+            Assert.Equal(TimeSpan.FromSeconds(30499.981278), read.Timeline!.CaptionShift);
 
+            read.Measured(TimeSpan.FromSeconds(2096.7947));
             read.Fail(EncodeFailure.TimedOut, "quiet", Ended);
             await new EncodeJobRepository(reading).SaveAsync(read, Cancel);
         }
@@ -125,6 +129,8 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         Assert.Null(ended.Programme);
         Assert.Equal(running.Route, ended.Route);
         Assert.NotNull(ended.Headway);
+        Assert.Equal(TimeSpan.FromSeconds(2096.7947), ended.Timeline!.ArtefactLength);
+        Assert.True(ended.Timeline.LengthsAgree);
     }
 
     [Fact(DisplayName = "BR-ED2-009: the name goes into the ledger and is read back with the job")]

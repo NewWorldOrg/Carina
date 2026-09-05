@@ -74,6 +74,16 @@ public sealed class EncodeJobConfiguration : IEntityTypeConfiguration<EncodeJob>
                 AND (encoder_asked IS NULL OR ((swerve IS NULL) = (encoder_asked = encoder_ran)))
                 """);
             table.HasCheckConstraint(
+                "ck_encode_job_alignment",
+                $"""
+                ((head_skip IS NULL) = (source_start IS NULL))
+                AND (head_skip IS NULL OR status <> 'Queued')
+                AND (head_skip IS NULL OR head_skip BETWEEN interval '0' AND interval '{EncodeTimeline.MostHeadSkip.TotalSeconds:0} seconds')
+                AND (source_start IS NULL OR source_start >= interval '0')
+                AND (source_length IS NULL OR (head_skip IS NOT NULL AND source_length > interval '0'))
+                AND (artefact_length IS NULL OR (head_skip IS NOT NULL AND artefact_length >= interval '0'))
+                """);
+            table.HasCheckConstraint(
                 "ck_encode_job_artefact",
                 $"""
                 (status <> 'Completed' OR artefact_name IS NOT NULL)
@@ -172,6 +182,19 @@ public sealed class EncodeJobConfiguration : IEntityTypeConfiguration<EncodeJob>
             headway.Property(detail => detail.Portion).HasColumnName("progress_portion");
             headway.Property(detail => detail.Left).HasColumnName("progress_left");
             headway.Property(detail => detail.At).HasColumnName("progress_at");
+        });
+
+        builder.ComplexProperty(job => job.Timeline, timeline =>
+        {
+            timeline.Property(detail => detail.SourceStart).HasColumnName("source_start");
+            timeline.Property(detail => detail.HeadSkip).HasColumnName("head_skip");
+            timeline.Property(detail => detail.SourceLength).HasColumnName("source_length");
+            timeline.Property(detail => detail.ArtefactLength).HasColumnName("artefact_length");
+
+            timeline.Ignore(detail => detail.CaptionShift);
+            timeline.Ignore(detail => detail.Expected);
+            timeline.Ignore(detail => detail.Drift);
+            timeline.Ignore(detail => detail.LengthsAgree);
         });
 
         builder.Ignore(job => job.HasEnded);

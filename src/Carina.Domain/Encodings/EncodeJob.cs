@@ -42,6 +42,8 @@ public sealed class EncodeJob
 
     public EncodeHeadway? Headway { get; private set; }
 
+    public EncodeTimeline? Timeline { get; private set; }
+
     public bool HasEnded => EncodeStandings.IsTerminal(Status);
 
     public EncodeStanding Standing => EncodeStandings.Of(Status);
@@ -70,6 +72,7 @@ public sealed class EncodeJob
             null,
             null,
             null,
+            null,
             null);
 
     public static EncodeJob Rehydrate(
@@ -87,7 +90,8 @@ public sealed class EncodeJob
         EncodeFileName? artefactName,
         EncodeRoute? route,
         RunningProgramme? programme,
-        EncodeHeadway? headway)
+        EncodeHeadway? headway,
+        EncodeTimeline? timeline)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(recordingId);
@@ -115,7 +119,7 @@ public sealed class EncodeJob
             throw new ArgumentException("Only a job the ledger holds as running has a programme of its own.", nameof(programme));
         }
 
-        if ((route is not null || headway is not null) && status is EncodeJobStatus.Queued)
+        if ((route is not null || headway is not null || timeline is not null) && status is EncodeJobStatus.Queued)
         {
             throw new ArgumentException("A job that is waiting has run nowhere and got nowhere.", nameof(route));
         }
@@ -137,6 +141,7 @@ public sealed class EncodeJob
             Route = route,
             Programme = programme,
             Headway = headway,
+            Timeline = timeline,
         };
     }
 
@@ -170,6 +175,34 @@ public sealed class EncodeJob
         Only(EncodeJobStatus.Running, "report headway");
 
         Headway = EncodeHeadway.Of(progress, at);
+    }
+
+    /// <summary>
+    /// Where the artefact's clock will stand against the source's, decided before the run and kept
+    /// so a caption drawn from the source can be put on the artefact's clock later (BR-ED2-006).
+    /// </summary>
+    public void Aligned(EncodeTimeline timeline)
+    {
+        ArgumentNullException.ThrowIfNull(timeline);
+        Only(EncodeJobStatus.Running, "say where its clock stands");
+
+        Timeline = timeline;
+    }
+
+    /// <summary>
+    /// How long the artefact came out, measured once the run has written it and before it is placed,
+    /// so the two clocks can be compared beside the job (BR-ED2-006).
+    /// </summary>
+    public void Measured(TimeSpan artefactLength)
+    {
+        Only(EncodeJobStatus.Running, "measure its artefact");
+
+        if (Timeline is null)
+        {
+            throw new InvalidOperationException("A job measures its artefact against the clock it was aligned to, and this one was never aligned.");
+        }
+
+        Timeline = Timeline.Measured(artefactLength);
     }
 
     /// <summary>
@@ -262,6 +295,7 @@ public sealed class EncodeJob
         Route = null;
         Programme = null;
         Headway = null;
+        Timeline = null;
     }
 
     /// <summary>

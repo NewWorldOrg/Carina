@@ -14,6 +14,8 @@ public sealed class FfmpegEncodeInvocationTests
 
     private const int Cores = 2;
 
+    private static readonly TimeSpan HeadSkip = TimeSpan.FromSeconds(0.5072);
+
     private static readonly DateTime At = new(2026, 9, 4, 3, 0, 0, DateTimeKind.Utc);
 
     public static TheoryData<EncodeCodec, EncodeResolution, Deinterlace, EncodeEncoder> EveryShapeOnEveryEncoder
@@ -72,10 +74,12 @@ public sealed class FfmpegEncodeInvocationTests
                 "2",
                 "-i",
                 Source,
+                "-ss",
+                "0.5072",
                 "-map",
                 "p:1040:v:0",
                 "-map",
-                "p:1040:a:0",
+                "p:1040:a",
                 "-vf",
                 "bwdif=mode=send_frame,setsar=1",
                 "-c:v",
@@ -91,7 +95,7 @@ public sealed class FfmpegEncodeInvocationTests
                 "-bsf:a",
                 "aac_adtstoasc",
             ],
-            FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, Source, Cores));
+            FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, Source, Cores, HeadSkip));
 
     [Fact]
     public void TheCardsArgumentsAreExactlyThese()
@@ -113,10 +117,12 @@ public sealed class FfmpegEncodeInvocationTests
                 "2",
                 "-i",
                 Source,
+                "-ss",
+                "0.5072",
                 "-map",
                 "p:1040:v:0",
                 "-map",
-                "p:1040:a:0",
+                "p:1040:a",
                 "-vf",
                 "bwdif=mode=send_frame,setsar=1,format=nv12,hwupload",
                 "-c:v",
@@ -132,15 +138,15 @@ public sealed class FfmpegEncodeInvocationTests
                 "-bsf:a",
                 "aac_adtstoasc",
             ],
-            FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Vaapi, Source, Cores));
+            FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Vaapi, Source, Cores, HeadSkip));
 
     [Fact(DisplayName = "BR-EV-004: the card is only ever given a quantiser, and the processor only a rate factor")]
     public void TheCardIsOnlyEverGivenAQuantiserAndTheProcessorOnlyARateFactor()
     {
         IReadOnlyList<string> onTheCard =
-            FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Vaapi, Source, Cores);
+            FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Vaapi, Source, Cores, HeadSkip);
         IReadOnlyList<string> onTheProcessor =
-            FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, Source, Cores);
+            FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, Source, Cores, HeadSkip);
 
         Assert.Contains("-rc_mode", onTheCard);
         Assert.Contains("CQP", onTheCard);
@@ -180,9 +186,11 @@ public sealed class FfmpegEncodeInvocationTests
             FfmpegEncodeInvocation.RenderNode,
             "-i",
             Source,
+            "-ss",
+            "0.5072",
             "-map",
             "p:1040:v:0",
-            "p:1040:a:0",
+            "p:1040:a",
             "-vf",
             "-c:v",
             "libx264",
@@ -225,7 +233,9 @@ public sealed class FfmpegEncodeInvocationTests
             Service,
             Profile(codec, resolution, deinterlace),
             encoder,
-            Source, Cores);
+            Source,
+            Cores,
+            HeadSkip);
 
         Assert.All(arguments, argument => Assert.Contains(argument, known, StringComparer.Ordinal));
     }
@@ -240,7 +250,7 @@ public sealed class FfmpegEncodeInvocationTests
     {
         IReadOnlyList<string> arguments =
         [
-            .. FfmpegEncodeInvocation.Arguments(Service, Profile(codec, resolution, deinterlace), encoder, Source, Cores),
+            .. FfmpegEncodeInvocation.Arguments(Service, Profile(codec, resolution, deinterlace), encoder, Source, Cores, HeadSkip),
             .. FfmpegEncodeInvocation.Delivery(Destination),
         ];
 
@@ -258,11 +268,11 @@ public sealed class FfmpegEncodeInvocationTests
     {
         Assert.DoesNotContain(
             "-vaapi_device",
-            FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, Source, Cores));
+            FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, Source, Cores, HeadSkip));
 
         Assert.Contains(
             "-vaapi_device",
-            FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Vaapi, Source, Cores));
+            FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Vaapi, Source, Cores, HeadSkip));
     }
 
     [Fact]
@@ -282,15 +292,15 @@ public sealed class FfmpegEncodeInvocationTests
     [Fact]
     public void TheCodecPicksTheEncoderNameOnEitherSide()
     {
-        Assert.Contains("libx265", FfmpegEncodeInvocation.Arguments(Service, Profile(EncodeCodec.H265), EncodeEncoder.Software, Source, Cores));
-        Assert.Contains("libx264", FfmpegEncodeInvocation.Arguments(Service, Profile(EncodeCodec.H264), EncodeEncoder.Software, Source, Cores));
-        Assert.Contains("hevc_vaapi", FfmpegEncodeInvocation.Arguments(Service, Profile(EncodeCodec.H265), EncodeEncoder.Vaapi, Source, Cores));
-        Assert.Contains("h264_vaapi", FfmpegEncodeInvocation.Arguments(Service, Profile(EncodeCodec.H264), EncodeEncoder.Vaapi, Source, Cores));
+        Assert.Contains("libx265", FfmpegEncodeInvocation.Arguments(Service, Profile(EncodeCodec.H265), EncodeEncoder.Software, Source, Cores, HeadSkip));
+        Assert.Contains("libx264", FfmpegEncodeInvocation.Arguments(Service, Profile(EncodeCodec.H264), EncodeEncoder.Software, Source, Cores, HeadSkip));
+        Assert.Contains("hevc_vaapi", FfmpegEncodeInvocation.Arguments(Service, Profile(EncodeCodec.H265), EncodeEncoder.Vaapi, Source, Cores, HeadSkip));
+        Assert.Contains("h264_vaapi", FfmpegEncodeInvocation.Arguments(Service, Profile(EncodeCodec.H264), EncodeEncoder.Vaapi, Source, Cores, HeadSkip));
     }
 
     private static string FilterIn(EncodeProfile profile, EncodeEncoder encoder)
     {
-        IReadOnlyList<string> arguments = FfmpegEncodeInvocation.Arguments(Service, profile, encoder, Source, Cores);
+        IReadOnlyList<string> arguments = FfmpegEncodeInvocation.Arguments(Service, profile, encoder, Source, Cores, HeadSkip);
 
         return arguments[arguments.ToList().IndexOf("-vf") + 1];
     }
@@ -302,12 +312,12 @@ public sealed class FfmpegEncodeInvocationTests
     [Fact]
     public void AnEncoderNobodyOffersIsNotAnEncoder()
         => Assert.Throws<ArgumentOutOfRangeException>(
-            () => FfmpegEncodeInvocation.Arguments(Service, Profile(), (EncodeEncoder)7, Source, Cores));
+            () => FfmpegEncodeInvocation.Arguments(Service, Profile(), (EncodeEncoder)7, Source, Cores, HeadSkip));
 
     [Fact(DisplayName = "BR-ED2-005: the core cap is handed to every stage that counts threads — the decoder, the filters and the encoder — and never as none")]
     public void TheCoreCapIsHandedToEveryStageThatCountsThreads()
     {
-        string[] arguments = [.. FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, Source, 3)];
+        string[] arguments = [.. FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, Source, 3, HeadSkip)];
 
         Assert.Equal(2, arguments.Count(argument => argument == "-threads"));
         Assert.Equal(1, arguments.Count(argument => argument == "-filter_threads"));
@@ -316,11 +326,54 @@ public sealed class FfmpegEncodeInvocationTests
             pair => Assert.Equal("3", arguments[pair.at + 1]));
         Assert.True(Array.IndexOf(arguments, "-threads") < Array.IndexOf(arguments, "-i"), "the decoder is told before the input is named");
         Assert.True(Array.LastIndexOf(arguments, "-threads") > Array.IndexOf(arguments, "-c:v"), "the encoder is told after it is named");
-        Assert.Throws<ArgumentOutOfRangeException>(() => FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, Source, 0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, Source, 0, HeadSkip));
     }
 
     [Fact]
     public void ThereIsNothingToEncodeWithoutSomethingToReadFrom()
         => Assert.Throws<ArgumentException>(
-            () => FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, string.Empty, Cores));
+            () => FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, string.Empty, Cores, HeadSkip));
+
+    [Fact(DisplayName = "BR-ED2-006: the head skip is the one -ss, it stands after the input as a trim and not before it as a seek, it is written to the microsecond, and neither -output_ts_offset nor -copyts is anywhere near it")]
+    public void TheHeadSkipIsTheOneSsAndItStandsAfterTheInput()
+    {
+        string[] arguments = [.. FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, Source, Cores, TimeSpan.FromSeconds(0.507200))];
+        string[] onTheCard = [.. FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Vaapi, Source, Cores, TimeSpan.Zero)];
+
+        int input = Array.IndexOf(arguments, "-i");
+        int skip = Array.IndexOf(arguments, "-ss");
+
+        Assert.Equal(1, arguments.Count(argument => argument == "-ss"));
+        Assert.True(skip > input, "the skip is a trim after the input, not a seek before it");
+        Assert.True(skip < Array.IndexOf(arguments, "-map"), "the skip is written before anything is mapped");
+        Assert.Equal("0.5072", arguments[skip + 1]);
+        Assert.Equal("0", onTheCard[Array.IndexOf(onTheCard, "-ss") + 1]);
+        Assert.DoesNotContain("-output_ts_offset", arguments);
+        Assert.DoesNotContain("-copyts", arguments);
+        Assert.DoesNotContain("-start_at_zero", arguments);
+        Assert.DoesNotContain("-avoid_negative_ts", arguments);
+        Assert.Equal(
+            "1.000001",
+            FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, Source, Cores, TimeSpan.FromSeconds(1.000001))
+                .SkipWhile(argument => argument != "-ss").Skip(1).First());
+    }
+
+    [Fact(DisplayName = "BR-ED2-006: a head skip beyond the five seconds a run accepts, or before nothing, is refused before a run is built — a broadcast clock handed in as a skip is the seventeen hours")]
+    public void AHeadSkipBeyondReachIsRefusedBeforeARunIsBuilt()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, Source, Cores, TimeSpan.FromSeconds(5.5)));
+        Assert.Throws<ArgumentOutOfRangeException>(() => FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, Source, Cores, TimeSpan.FromSeconds(62170)));
+        Assert.Throws<ArgumentOutOfRangeException>(() => FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, Source, Cores, TimeSpan.FromSeconds(-0.1)));
+        _ = FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, Source, Cores, TimeSpan.FromSeconds(5));
+    }
+
+    [Fact(DisplayName = "BR-ED2-006: every audio stream of the programme is mapped and copied, not the first alone")]
+    public void EveryAudioStreamOfTheProgrammeIsMappedAndCopied()
+    {
+        string[] arguments = [.. FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, Source, Cores, HeadSkip)];
+
+        Assert.Contains("p:1040:a", arguments);
+        Assert.DoesNotContain("p:1040:a:0", arguments);
+        Assert.Equal("copy", arguments[Array.IndexOf(arguments, "-c:a") + 1]);
+    }
 }

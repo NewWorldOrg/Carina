@@ -153,6 +153,7 @@ public sealed class EncodingEndpointTests
         Assert.Equal(JsonValueKind.Null, job.GetProperty("quietForSeconds").ValueKind);
         Assert.False(job.GetProperty("stalled").GetBoolean());
         Assert.Equal(JsonValueKind.Null, job.GetProperty("failure").ValueKind);
+        Assert.Equal(JsonValueKind.Null, job.GetProperty("timeline").ValueKind);
         Assert.Equal(EncodeJobStatus.Queued, Assert.Single(feature.Jobs.Jobs).Status);
     }
 
@@ -334,6 +335,8 @@ public sealed class EncodingEndpointTests
         running.Routed(new EncodeRoute(EncodeEncoder.Vaapi, EncodeEncoder.Software, EncodeSwerve.TheCardIsOutOfReach));
         running.Spawned(new RunningProgramme(4242, EncodingFeature.Noon.AddMinutes(-25)));
         running.Reached(EncodeProgress.Of(TimeSpan.FromMinutes(10), TimeSpan.FromMinutes(30), 2.0, false), EncodingFeature.Noon.AddMinutes(-15));
+        running.Aligned(new EncodeTimeline(TimeSpan.FromSeconds(30499.474078), TimeSpan.FromSeconds(0.5072), TimeSpan.FromSeconds(2097.502489), null));
+        running.Measured(TimeSpan.FromSeconds(2096.7947));
         EncodeJob failed = feature.Queued(feature.Recorded(), profile, destination);
         failed.Start(EncodingFeature.Noon.AddMinutes(-40));
         failed.Fail(EncodeFailure.NotEnoughRoom, "No space left on device", EncodingFeature.Noon.AddMinutes(-35));
@@ -358,6 +361,14 @@ public sealed class EncodingEndpointTests
         Assert.True(ran.GetProperty("stalled").GetBoolean());
         Assert.DoesNotContain("4242", ran.GetRawText(), StringComparison.Ordinal);
         Assert.False(ran.TryGetProperty("programme", out _));
+        JsonElement timeline = ran.GetProperty("timeline");
+        Assert.Equal(30499.474078, timeline.GetProperty("sourceStartSeconds").GetDouble(), 6);
+        Assert.Equal(0.5072, timeline.GetProperty("headSkipSeconds").GetDouble(), 6);
+        Assert.Equal(30499.981278, timeline.GetProperty("captionShiftSeconds").GetDouble(), 6);
+        Assert.Equal(2097.502489, timeline.GetProperty("sourceLengthSeconds").GetDouble(), 6);
+        Assert.Equal(2096.7947, timeline.GetProperty("artefactLengthSeconds").GetDouble(), 6);
+        Assert.Equal(-0.200589, timeline.GetProperty("driftSeconds").GetDouble(), 6);
+        Assert.True(timeline.GetProperty("lengthsAgree").GetBoolean());
         JsonElement fell = items.Single(item => item.GetProperty("id").GetGuid() == failed.Id.Value);
         Assert.Equal("failed", fell.GetProperty("status").GetString());
         Assert.Equal("notEnoughRoom", fell.GetProperty("failure").GetProperty("failure").GetString());

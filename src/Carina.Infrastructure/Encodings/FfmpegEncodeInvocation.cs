@@ -22,23 +22,45 @@ public static class FfmpegEncodeInvocation
 
     private const string OntoTheCard = "format=nv12";
 
+    public const string Seconds = "0.######";
+
     /// <summary>
     /// The arguments for one run. The core cap is written three times because ffmpeg counts
     /// threads per stage: once before the input for the decoder, once for the filters, and once
     /// for the encoder (BR-ED2-005). The stages are a pipeline, so the run as a whole is bounded
     /// by the slowest of them rather than by their sum.
+    /// <para>
+    /// The head skip is the one <c>-ss</c> this feature writes, and it stands after the input
+    /// (BR-ED2-006). Before the input it is a seek, and a seek into a transport stream lands after
+    /// the first I frame, so the run then loses a whole group of pictures and fills the head with
+    /// stills of the next one — measured on 2026-09-05 as fifteen frames of one picture. After the
+    /// input it is a trim: ffmpeg decodes from the start, drops what lies before the skip and
+    /// rebases every stream so the first picture kept is the artefact's zero. Nothing here writes
+    /// <c>-output_ts_offset</c> or <c>-copyts</c>; the first was measured to move 0.022 s of the
+    /// 0.363 s it was handed, and the second would carry the broadcast clock into a container that
+    /// cannot hold it.
+    /// </para>
     /// </summary>
     public static IReadOnlyList<string> Arguments(
         ServiceId service,
         EncodeProfile profile,
         EncodeEncoder encoder,
         string source,
-        int cores)
+        int cores,
+        TimeSpan headSkip)
     {
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentException.ThrowIfNullOrEmpty(source);
         ArgumentOutOfRangeException.ThrowIfLessThan(cores, 1);
+
+        if (!EncodeTimeline.WithinReach(headSkip))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(headSkip),
+                headSkip,
+                "A head is skipped by between nothing and the longest skip a timeline holds; anything longer is refused before a run is built.");
+        }
 
         string threads = cores.ToString(CultureInfo.InvariantCulture);
 
@@ -59,6 +81,8 @@ public static class FfmpegEncodeInvocation
             threads,
             "-i",
             source,
+            "-ss",
+            headSkip.TotalSeconds.ToString(Seconds, CultureInfo.InvariantCulture),
             .. Mapping(service),
             "-vf",
             Filter(profile, encoder),
@@ -89,17 +113,34 @@ public static class FfmpegEncodeInvocation
     internal static IReadOnlyList<string> Device(EncodeEncoder encoder)
         => EncodeShapes.Named(encoder) is EncodeEncoder.Vaapi ? ["-vaapi_device", RenderNode] : [];
 
+    /// <summary>
+    /// The programme's first video stream and every one of its audio streams: the audio is copied,
+    /// so a second track costs nothing to carry and is not chosen away here (BR-ED2-006).
+    /// </summary>
     internal static IReadOnlyList<string> Mapping(ServiceId service)
+        =>
+        [
+            "-map",
+            VideoStream(service),
+            "-map",
+            AudioStreams(service),
+        ];
+
+    /// <summary>The programme's first video stream, which is also the stream the head probe reads.</summary>
+    public static string VideoStream(ServiceId service)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+
+        int programNumber = service.Value;
+
+        return string.Create(CultureInfo.InvariantCulture, $"p:{programNumber}:v:0");
+    }
+
+    private static string AudioStreams(ServiceId service)
     {
         int programNumber = service.Value;
 
-        return
-        [
-            "-map",
-            string.Create(CultureInfo.InvariantCulture, $"p:{programNumber}:v:0"),
-            "-map",
-            string.Create(CultureInfo.InvariantCulture, $"p:{programNumber}:a:0"),
-        ];
+        return string.Create(CultureInfo.InvariantCulture, $"p:{programNumber}:a");
     }
 
     internal static string Filter(EncodeProfile profile, EncodeEncoder encoder)
