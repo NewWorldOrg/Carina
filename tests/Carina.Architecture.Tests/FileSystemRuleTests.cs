@@ -24,6 +24,7 @@ public sealed class FileSystemRuleTests
         "/Carina.Driver/Ipc/StorageViews.cs FileMode.",
         "/Carina.Driver/Ipc/UnixFile.cs LibraryImport",
         "/Carina.Driver/Recording/RecordingEraser.cs File.Delete",
+        "/Carina.Driver/Recording/RecordingWriter.cs .Replace(",
         "/Carina.Driver/Recording/RecordingWriter.cs FileMode.",
         "/Carina.Driver/Recording/RecordingWriter.cs newFileStream",
         "/Carina.Driver/Tuning/Dvb/DvbSystemCalls.cs LibraryImport",
@@ -209,5 +210,21 @@ public sealed class FileSystemRuleTests
 
         Assert.Equal([".Replace("], FileSystemRules.WhatCouldChangeWhatIsOnDiskIn(source));
         Assert.Contains("Path.GetRelativePath(root, entry).Replace(", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheReplaceInTheRecordingWriterRewordsAFailureAndMovesNoFile()
+    {
+        string source = File.ReadAllText(Path.Combine(
+            RepositoryLayout.SourceDirectory,
+            "Carina.Driver",
+            "Recording",
+            "RecordingWriter.cs"));
+
+        Assert.Equal(
+            [".Replace(", "FileMode.", "newFileStream"],
+            FileSystemRules.WhatCouldChangeWhatIsOnDiskIn(source));
+        Assert.Contains("error.Message.Replace(", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("File.Replace(", source, StringComparison.Ordinal);
     }
 }
