@@ -277,6 +277,19 @@ nothing.
   reading and folding are measured under seven languages — including ones where
   lowercasing `I` and parsing `-1` genuinely differ — to say that no answer moves.
 
+- **A visit of the guide is written in one statement, and the merge it does has two
+  implementations.** `ProgrammeRepository.AbsorbAsync` hands the whole visit to the
+  store as one `INSERT ... ON CONFLICT DO UPDATE ... WHERE (...) IS DISTINCT FROM (...)`,
+  and the `CASE` expressions in it are `Programme.Absorb` written out in SQL: an
+  empty name or summary keeps the one held, an end that is not after the start is no
+  end and keeps the one held, an empty set keeps the one held, and a row whose
+  answer would be the same takes no new revision. `Programme.Absorb` is what the
+  in-memory stand-in runs, so the two are held equal the way the search's two arms
+  are — `ProgrammeAbsorbArmsTests` pushes the same visits through both and compares
+  every column and whether the revision moved. Measured on a copy of the running
+  guide (8,727 rows), re-ingesting the same visit fell from about 3 s row by row to
+  0.4 s, and a visit that changed every row from 80 s to about 1.2 s.
+
 - **Which rule takes a programme is decided by weight, never by age or identifier
   alone.** Rules are read in falling priority, then oldest first, then by identifier
   as the last resort, and the first one to take a programme keeps it. A rule whose

@@ -151,17 +151,15 @@ public sealed class RuleApplicationLandsInTheLedgerTests(RepositoryDatabase data
 
     private async Task<Programme> SownAsync(int carried, string name)
     {
-        Programme programme = Sown(carried, name);
+        Programme programme = Sown(carried, name, revision: 0);
 
         await using CarinaDbContext context = database.Open();
-        var repository = new ProgrammeRepository(context);
-        programme.MarkRevision(await repository.NextRevisionAsync(Cancel));
-        await repository.AddAsync(programme, Cancel);
+        await new ProgrammeRepository(context).AddAsync(programme, Cancel);
 
         return programme;
     }
 
-    private static Programme Sown(int carried, string name)
+    private static Programme Sown(int carried, string name, long revision = 1)
         => Programme.Rehydrate(
             new ProgrammeId(new NetworkId(Network), new ServiceId(Listed), new EventId(carried)),
             new TransportStreamId(Carried),
@@ -171,7 +169,7 @@ public sealed class RuleApplicationLandsInTheLedgerTests(RepositoryDatabase data
             "what it is about",
             false,
             Now,
-            revision: 1);
+            revision: revision);
 
     private static Reservation Standing(Programme programme, RuleId ruleId)
         => Reservation.Rehydrate(

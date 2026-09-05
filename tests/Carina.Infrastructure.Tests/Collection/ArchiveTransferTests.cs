@@ -298,8 +298,11 @@ internal sealed class StubbornProgrammes(IProgrammeRepository held) : IProgramme
     public Task AddAsync(Programme programme, CancellationToken cancellationToken)
         => held.AddAsync(programme, cancellationToken);
 
-    public Task SaveAsync(Programme programme, CancellationToken cancellationToken)
-        => held.SaveAsync(programme, cancellationToken);
+    public Task<ProgrammesAbsorbed> AbsorbAsync(
+        IReadOnlyList<ProgrammeBroadcast> broadcasts,
+        DateTime at,
+        CancellationToken cancellationToken)
+        => held.AbsorbAsync(broadcasts, at, cancellationToken);
 
     public Task<IReadOnlyList<Programme>> ListEndedBeforeAsync(
         DateTime at,
@@ -318,9 +321,6 @@ internal sealed class StubbornProgrammes(IProgrammeRepository held) : IProgramme
         int rows,
         CancellationToken cancellationToken)
         => held.ListAfterAsync(revision, rows, cancellationToken);
-
-    public Task<long> NextRevisionAsync(CancellationToken cancellationToken)
-        => held.NextRevisionAsync(cancellationToken);
 
     public Task<int> ForgetEverythingAsync(CancellationToken cancellationToken)
         => held.ForgetEverythingAsync(cancellationToken);
