@@ -143,4 +143,43 @@ public sealed class PersistenceBoundaryRuleTests
         Assert.Contains("event_id", columns, StringComparer.Ordinal);
         Assert.Contains("programme_start_at", columns, StringComparer.Ordinal);
     }
+
+    [Fact(DisplayName = "BR-QD-013: the quality tables are five, and none of them holds a key into another domain")]
+    public void TheQualityTablesAreFiveAndNoneOfThemHoldsAKeyIntoAnotherDomain()
+    {
+        using CarinaDbContext context = Carina();
+
+        Assert.Equal(
+            [
+                "quality_incident",
+                "quality_session_measurement",
+                "quality_signal_rollup",
+                "quality_signal_sample",
+                "quality_threshold",
+            ],
+            PersistenceBoundaryRules.TablesOf(context.Model, PersistenceFamily.Quality));
+
+        Assert.Empty(context.Model
+            .GetEntityTypes()
+            .Where(entityType => entityType.GetTableName() is { } table && table.StartsWith("quality_", StringComparison.Ordinal))
+            .SelectMany(entityType => entityType.GetForeignKeys()));
+    }
+
+    [Fact(DisplayName = "BR-QD-013: what quality watches it reaches by value, so dropping its tables drags nothing away")]
+    public void WhatQualityWatchesItReachesByValue()
+    {
+        using CarinaDbContext context = Carina();
+
+        IReadOnlyList<string> columns = [.. context.Model
+            .GetEntityTypes()
+            .Single(entityType => entityType.GetTableName() == "quality_signal_sample")
+            .GetProperties()
+            .Select(property => property.GetColumnName())];
+
+        Assert.Contains("network_id", columns, StringComparer.Ordinal);
+        Assert.Contains("service_id", columns, StringComparer.Ordinal);
+        Assert.Contains("tuner_device_id", columns, StringComparer.Ordinal);
+        Assert.Contains("session_id", columns, StringComparer.Ordinal);
+        Assert.Contains("driver_instance_id", columns, StringComparer.Ordinal);
+    }
 }

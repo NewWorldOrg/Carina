@@ -12,6 +12,7 @@ public enum PersistenceFamily
     Recordings,
     Integrity,
     Encodings,
+    Quality,
 }
 
 public static class PersistenceBoundaryRules
@@ -27,6 +28,7 @@ public static class PersistenceBoundaryRules
             ["Recordings"] = PersistenceFamily.Recordings,
             ["Integrity"] = PersistenceFamily.Integrity,
             ["Encodings"] = PersistenceFamily.Encodings,
+            ["Quality"] = PersistenceFamily.Quality,
             ["Auth"] = PersistenceFamily.Unrelated,
         };
 
@@ -78,6 +80,11 @@ public static class PersistenceBoundaryRules
         if (declaring is PersistenceFamily.Encodings && principal is not PersistenceFamily.Encodings)
         {
             return true;
+        }
+
+        if (declaring is PersistenceFamily.Quality || principal is PersistenceFamily.Quality)
+        {
+            return declaring != principal;
         }
 
         return principal is PersistenceFamily.ProgrammeCache && declaring is not PersistenceFamily.ProgrammeCache;
