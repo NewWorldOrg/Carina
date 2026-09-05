@@ -19,6 +19,8 @@ internal sealed class EncodeHarness : IDisposable
 {
     public static readonly OutputRoot Primary = new("primary");
 
+    public static readonly OutputRoot Encodes = new("encodes");
+
     public static readonly DateTime Queued = new(2026, 9, 5, 3, 0, 0, DateTimeKind.Utc);
 
     public static readonly DateTime Started = new(2026, 9, 5, 3, 0, 5, DateTimeKind.Utc);
@@ -30,8 +32,14 @@ internal sealed class EncodeHarness : IDisposable
     public EncodeHarness(bool workingBeside = true)
     {
         Room = new TempTree();
+        Shelf = new TempTree();
         Workshop = workingBeside ? null : new TempTree();
-        Settings = new EncodeSettings { WorkedIn = Workshop?.Root, StalledAfter = TimeSpan.FromSeconds(20) };
+        Settings = new EncodeSettings
+        {
+            OutputRoots = [new StorageRootPath(Encodes, Shelf.Root)],
+            WorkedIn = Workshop?.Root,
+            StalledAfter = TimeSpan.FromSeconds(20),
+        };
         Mounts = new IntegritySettings { OutputRoots = [new StorageRootPath(Primary, Room.Root)] };
         Clock = new HandTurnedClock(new DateTimeOffset(2026, 9, 5, 4, 0, 0, TimeSpan.Zero));
         MachineReader = Machine;
@@ -39,6 +47,8 @@ internal sealed class EncodeHarness : IDisposable
     }
 
     public TempTree Room { get; }
+
+    public TempTree Shelf { get; }
 
     public TempTree? Workshop { get; }
 
@@ -76,7 +86,7 @@ internal sealed class EncodeHarness : IDisposable
 
     public HeardOf<EncodeJobRunner> RunnerLog { get; } = new();
 
-    public string WorkDirectory => (Workshop ?? Room).Root;
+    public string WorkDirectory => (Workshop ?? Shelf).Root;
 
     public EncodeArtefactPlacer Placer => new(Jobs, Scratch, Places, Probe, Clock, PlacerLog);
 
@@ -168,7 +178,7 @@ internal sealed class EncodeHarness : IDisposable
             recording ?? RecordingId.New(),
             profile ?? EncodeProfileId.New(),
             EncodeDestinationId.New(),
-            Primary,
+            Encodes,
             Queued);
         job.Start(Started);
         Jobs.Jobs.Add(job);
@@ -183,7 +193,7 @@ internal sealed class EncodeHarness : IDisposable
             recording,
             profile,
             EncodeDestinationId.New(),
-            Primary,
+            Encodes,
             EncodeJobStatus.Running,
             2,
             Queued,
@@ -207,7 +217,7 @@ internal sealed class EncodeHarness : IDisposable
             EncodeScratchFileId.New(),
             job.Id,
             EncodeScratchKind.WorkFile,
-            Primary,
+            Encodes,
             job.WorkFileName,
             Queued));
 
@@ -217,7 +227,7 @@ internal sealed class EncodeHarness : IDisposable
     public string WorkPathOf(EncodeJob job) => Path.Combine(WorkDirectory, job.WorkFileName.Value);
 
     public string ArtefactPathOf(EncodeJob job)
-        => Path.Combine(Room.Root, EncodeFileName.Artefact(job.RecordingId, job.ProfileId).Value);
+        => Path.Combine(Shelf.Root, EncodeFileName.Artefact(job.RecordingId, job.ProfileId).Value);
 
     /// <summary>
     /// A programme standing in for ffmpeg: a shell script that is handed ffmpeg's arguments, the
@@ -241,6 +251,7 @@ internal sealed class EncodeHarness : IDisposable
     public void Dispose()
     {
         Room.Dispose();
+        Shelf.Dispose();
         Workshop?.Dispose();
     }
 }

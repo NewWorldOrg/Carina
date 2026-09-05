@@ -217,6 +217,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<EncodeSettings>(provider =>
             provider.GetRequiredService<IOptions<EncodingOptions>>().Value.Read());
         services.TryAddSingleton<EncodePlaces>();
+        services.TryAddSingleton<OutputRootDeclarations>();
         services.TryAddSingleton<IRenameProbe, DirectoryRenameProbe>();
         services.TryAddSingleton<ISourceLengthReader>(provider => new FfprobeSourceLength(
             provider.GetRequiredService<MachineSettings>(),

@@ -8,6 +8,7 @@ using Carina.Contracts;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
+using Carina.Domain.Encodings;
 using Carina.Domain.Integrity;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
@@ -261,12 +262,13 @@ internal sealed class IntegrityFeature : IAsyncDisposable
 
     private readonly WebApplicationFactory<Program> configured;
 
-    public IntegrityFeature(IntegritySettings? settings = null, string? walking = null)
+    public IntegrityFeature(IntegritySettings? settings = null, string? walking = null, EncodeSettings? encoding = null)
     {
         Settings = settings ?? new IntegritySettings
         {
             OutputRoots = walking is null ? [] : [new StorageRootPath(Primary, walking)],
         };
+        Encoding = encoding ?? new EncodeSettings();
 
         WebApplicationFactory<Program> built = factory
             .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
@@ -274,6 +276,7 @@ internal sealed class IntegrityFeature : IAsyncDisposable
                 services.RemoveAll<IHostedService>();
                 services.AddSingleton<TimeProvider>(Clock);
                 services.AddSingleton(Settings);
+                services.AddSingleton(Encoding);
                 services.AddSingleton<IDriverClient>(Driver);
                 services.AddSingleton<IRecordingRepository>(Running);
                 services.AddSingleton<IRecordingFileSurvey>(
@@ -296,6 +299,8 @@ internal sealed class IntegrityFeature : IAsyncDisposable
     public MovingClock Clock { get; } = new(Noon);
 
     public IntegritySettings Settings { get; }
+
+    public EncodeSettings Encoding { get; }
 
     public HeldLedgerFiles Ledger { get; } = new();
 

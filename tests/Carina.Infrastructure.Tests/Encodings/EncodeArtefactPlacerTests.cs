@@ -158,7 +158,7 @@ public sealed class EncodeArtefactPlacerTests
 
         Assert.Equal(EncodePlacementOutcome.Refused, outcome);
         Assert.Equal(EncodeFailure.CapabilityUnavailable, job.Failure!.Failure);
-        Assert.Empty(harness.Room.Snapshot());
+        Assert.Empty(harness.Shelf.Snapshot());
         Assert.DoesNotContain(harness.Jobs.Moves, move => move.StartsWith("claimed", StringComparison.Ordinal));
     }
 

@@ -1,6 +1,7 @@
 using System.Globalization;
 
 using Carina.Domain.Encodings;
+using Carina.Domain.Integrity;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
@@ -10,6 +11,8 @@ namespace Carina.Infrastructure.Configuration;
 public sealed class EncodingOptions
 {
     public const string Section = "Encodings";
+
+    public string? OutputRoots { get; set; }
 
     public string? WorkedIn { get; set; }
 
@@ -29,6 +32,7 @@ public sealed class EncodingOptions
 
         IConfigurationSection named = configuration.GetSection(Section);
 
+        OutputRoots = named[nameof(OutputRoots)];
         WorkedIn = named[nameof(WorkedIn)];
         Prefer = named[nameof(Prefer)];
         MostCores = named[nameof(MostCores)];
@@ -43,6 +47,7 @@ public sealed class EncodingOptions
 
         return new EncodeSettings
         {
+            OutputRoots = Held(),
             WorkedIn = Absolute(WorkedIn, nameof(WorkedIn)),
             Prefer = Named(Prefer, nameof(Prefer), unset.Prefer),
             MostCores = Counted(MostCores, nameof(MostCores), unset.MostCores, "cores"),
@@ -51,6 +56,8 @@ public sealed class EncodingOptions
             StalledAfter = Timed(StalledAfter, nameof(StalledAfter), unset.StalledAfter),
         };
     }
+
+    private IReadOnlyList<StorageRootPath> Held() => MountedRoots.Read(Section, nameof(OutputRoots), OutputRoots);
 
     private static string? Absolute(string? setting, string name)
     {

@@ -66,6 +66,7 @@ public sealed class EncodeRunMaterialTests
         Assert.False(File.Exists(harness.ArtefactPathOf(job)));
         Assert.True(File.Exists(harness.SourcePathOf(recording)));
         Assert.Equal([recording.FileName.Value], Directory.EnumerateFiles(harness.Room.Root).Select(Path.GetFileName));
+        Assert.Empty(harness.Shelf.Snapshot());
     }
 
     [Fact(DisplayName = "BR-EV-004: H.265 runs on the card when this machine has one and is refused as capability unavailable when it has not, without the profile being touched")]

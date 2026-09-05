@@ -15,6 +15,38 @@ public sealed class EncodingOptionsTests
     }
 
     [Fact]
+    public void NothingConfiguredMeansThisProcessHoldsNoRootToEncodeInto()
+    {
+        EncodeSettings settings = Read();
+
+        Assert.Empty(settings.OutputRoots);
+        Assert.False(settings.HoldsAnyRoot);
+    }
+
+    [Fact]
+    public void TheRootsThisProcessHoldsAreReadInTheOrderTheyWereWritten()
+    {
+        EncodeSettings settings = Read(("Encodings:OutputRoots", " encodes=/srv/encodes ; spare=/mnt/spare "));
+
+        Assert.Equal(["encodes", "spare"], settings.OutputRoots.Select(held => held.Root.Value));
+        Assert.Equal(["/srv/encodes", "/mnt/spare"], settings.OutputRoots.Select(held => held.Path));
+        Assert.True(settings.HoldsAnyRoot);
+    }
+
+    [Theory]
+    [InlineData("encodes")]
+    [InlineData("encodes=srv/encodes")]
+    [InlineData("../etc=/srv/encodes")]
+    [InlineData("encodes=/srv/one;encodes=/srv/two")]
+    public void ARootThatCannotBeHeldIsRefusedNamingTheSetting(string written)
+    {
+        ArgumentException refusal = Assert.Throws<ArgumentException>(() => Read(("Encodings:OutputRoots", written)));
+
+        Assert.Contains("Encodings:OutputRoots", refusal.Message, StringComparison.Ordinal);
+        Assert.True(new EncodingValidation().Validate(null, new EncodingOptions { OutputRoots = written }).Failed);
+    }
+
+    [Fact]
     public void AWorkingDirectoryReachesTheThingThatUsesIt()
     {
         Assert.Equal("/srv/encoding", Read(("Encodings:WorkedIn", "/srv/encoding")).WorkedIn);

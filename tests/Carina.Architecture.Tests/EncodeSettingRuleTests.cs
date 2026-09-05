@@ -52,6 +52,8 @@ public sealed class EncodeSettingRuleTests
         "/Carina.Domain/Encodings/EncodeProgress.cs EncodeProgress.Whole TimeSpan?",
         "/Carina.Domain/Encodings/EncodeRateControl.cs ConstantQuantiser.Quantiser int",
         "/Carina.Domain/Encodings/EncodeRateControl.cs ConstantRateFactor.RateFactor int",
+        "/Carina.Domain/Encodings/EncodeRootDeclarations.cs DeclaredOutputRoots.Declared IReadOnlyList<StorageRootDto>",
+        "/Carina.Domain/Encodings/EncodeRootDeclarations.cs DeclaredOutputRoots.Shadowed IReadOnlyList<string>",
         "/Carina.Domain/Encodings/EncodeRoute.cs EncodeRoute.Asked EncodeEncoder",
         "/Carina.Domain/Encodings/EncodeRoute.cs EncodeRoute.Ran EncodeEncoder",
         "/Carina.Domain/Encodings/EncodeRoute.cs EncodeRoute.Swerved EncodeSwerve?",
@@ -67,6 +69,7 @@ public sealed class EncodeSettingRuleTests
         "/Carina.Domain/Encodings/EncodeSettings.cs EncodeSettings.BetweenLooks TimeSpan",
         "/Carina.Domain/Encodings/EncodeSettings.cs EncodeSettings.MostAttempts int",
         "/Carina.Domain/Encodings/EncodeSettings.cs EncodeSettings.MostCores int",
+        "/Carina.Domain/Encodings/EncodeSettings.cs EncodeSettings.OutputRoots IReadOnlyList<StorageRootPath>",
         "/Carina.Domain/Encodings/EncodeSettings.cs EncodeSettings.Prefer EncodeEncoder",
         "/Carina.Domain/Encodings/EncodeSettings.cs EncodeSettings.StalledAfter TimeSpan",
         "/Carina.Domain/Encodings/EncodeSettings.cs EncodeSettings.WorkedIn string?",
@@ -100,6 +103,7 @@ public sealed class EncodeSettingRuleTests
         "/Carina.Domain/Encodings/EncodeProgress.cs EncodeProgress.Portion double?",
         "/Carina.Domain/Encodings/EncodeRoute.cs EncodeRoute.WasDegraded bool",
         "/Carina.Domain/Encodings/EncodeScratchFile.cs EncodeScratchFile.IsOwedARemoval bool",
+        "/Carina.Domain/Encodings/EncodeSettings.cs EncodeSettings.HoldsAnyRoot bool",
         "/Carina.Domain/Encodings/SourceLengthReading.cs SourceLengthReading.Measured bool",
     ];
 

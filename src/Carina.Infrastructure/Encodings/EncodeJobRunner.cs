@@ -59,7 +59,7 @@ public sealed class EncodeJobRunner(
             return await RefuseAsync(job, EncodeFailure.SourceMissing, "the ledger holds no recording for this job", cancellationToken);
         }
 
-        if (places.WhereTheRootIs(recording.OutputRoot) is not { } mounted)
+        if (places.WhereTheRecordingIs(recording.OutputRoot) is not { } mounted)
         {
             return await RefuseAsync(
                 job,

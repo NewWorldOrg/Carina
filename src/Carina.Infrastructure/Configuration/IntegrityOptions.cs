@@ -1,7 +1,6 @@
 using System.Globalization;
 
 using Carina.Domain.Integrity;
-using Carina.Domain.Recordings;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
@@ -11,10 +10,6 @@ namespace Carina.Infrastructure.Configuration;
 public sealed class IntegrityOptions
 {
     public const string Section = "Integrity";
-
-    private const char BetweenRoots = ';';
-
-    private const char BetweenNameAndPath = '=';
 
     public string? BeforeFirstSweep { get; set; }
 
@@ -52,65 +47,7 @@ public sealed class IntegrityOptions
         };
     }
 
-    private IReadOnlyList<StorageRootPath> Mounted()
-    {
-        if (string.IsNullOrWhiteSpace(OutputRoots))
-        {
-            return [];
-        }
-
-        List<StorageRootPath> mounted = [];
-        HashSet<string> named = new(StringComparer.Ordinal);
-
-        foreach (string entry in OutputRoots.Split(BetweenRoots, StringSplitOptions.TrimEntries))
-        {
-            if (entry.Length is 0)
-            {
-                continue;
-            }
-
-            int split = entry.IndexOf(BetweenNameAndPath, StringComparison.Ordinal);
-
-            if (split < 0)
-            {
-                throw new ArgumentException(
-                    $"{Section}:{nameof(OutputRoots)} reads a ';'-separated list of name=/path, "
-                    + $"and '{entry}' names no path.",
-                    nameof(OutputRoots));
-            }
-
-            StorageRootPath read = Mounted(
-                entry[..split].Trim(),
-                entry[(split + 1)..].Trim());
-
-            if (!named.Add(read.Root.Value))
-            {
-                throw new ArgumentException(
-                    $"{Section}:{nameof(OutputRoots)} mounts '{read.Root.Value}' twice, "
-                    + "so which path it means is unanswerable.",
-                    nameof(OutputRoots));
-            }
-
-            mounted.Add(read);
-        }
-
-        return mounted;
-    }
-
-    private static StorageRootPath Mounted(string name, string path)
-    {
-        try
-        {
-            return new StorageRootPath(new OutputRoot(name), path);
-        }
-        catch (ArgumentException refusal)
-        {
-            throw new ArgumentException(
-                $"{Section}:{nameof(OutputRoots)} does not describe a mounted output root: {refusal.Message}",
-                nameof(OutputRoots),
-                refusal);
-        }
-    }
+    private IReadOnlyList<StorageRootPath> Mounted() => MountedRoots.Read(Section, nameof(OutputRoots), OutputRoots);
 
     private static TimeSpan Positive(string? setting, string name, TimeSpan unset)
     {

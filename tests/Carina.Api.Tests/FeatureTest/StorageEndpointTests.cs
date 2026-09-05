@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.Json;
 
 using Carina.Contracts;
+using Carina.Domain.Encodings;
 using Carina.Domain.Integrity;
 using Carina.Domain.Recordings;
 
@@ -27,6 +28,46 @@ public sealed class StorageEndpointTests
         Assert.Equal(0, root.GetProperty("committedBytes").GetInt64());
         Assert.Equal(0, root.GetProperty("recordingsInFlight").GetInt32());
         Assert.Equal(JsonValueKind.Null, root.GetProperty("shortfall").ValueKind);
+    }
+
+    [Fact(DisplayName = "BR-EV-001: a root this process holds for encoding is answered after the driver's, measured here")]
+    public async Task ARootThisProcessHoldsForEncodingIsAnsweredAfterTheDrivers()
+    {
+        using var shelf = new RecordingStore();
+        await using var feature = new IntegrityFeature(encoding: new EncodeSettings
+        {
+            OutputRoots = [new StorageRootPath(new OutputRoot("encodes"), shelf.Root)],
+        });
+        feature.Driver.Roots.Add(Root("primary", free: 900, total: 1_000, writable: true));
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync("/api/storage");
+        JsonElement[] roots = [.. body.GetProperty("data").GetProperty("roots").EnumerateArray()];
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(["primary", "encodes"], roots.Select(root => root.GetProperty("name").GetString()!).ToArray());
+        Assert.True(roots[1].GetProperty("writable").GetBoolean());
+        Assert.True(roots[1].GetProperty("totalBytes").GetInt64() > 0);
+        Assert.Equal(0, roots[1].GetProperty("recordingsInFlight").GetInt32());
+        Assert.Equal(JsonValueKind.Null, roots[1].GetProperty("shortfall").ValueKind);
+        Assert.DoesNotContain(shelf.Root, body.GetRawText(), StringComparison.Ordinal);
+        Assert.Empty(shelf.Fingerprint());
+    }
+
+    [Fact(DisplayName = "BR-EV-001: a held root named like one the driver declares is the driver's in the answer")]
+    public async Task AHeldRootNamedLikeOneTheDriverDeclaresIsTheDriversInTheAnswer()
+    {
+        using var shelf = new RecordingStore();
+        await using var feature = new IntegrityFeature(encoding: new EncodeSettings
+        {
+            OutputRoots = [new StorageRootPath(IntegrityFeature.Primary, shelf.Root)],
+        });
+        feature.Driver.Roots.Add(Root("primary", free: 900, total: 1_000, writable: false));
+
+        (_, JsonElement body) = await feature.GetAsync("/api/storage");
+        JsonElement root = Assert.Single(body.GetProperty("data").GetProperty("roots").EnumerateArray());
+
+        Assert.Equal(900, root.GetProperty("freeBytes").GetInt64());
+        Assert.False(root.GetProperty("writable").GetBoolean());
     }
 
     [Fact]
