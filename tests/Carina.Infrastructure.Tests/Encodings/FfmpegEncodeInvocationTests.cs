@@ -12,6 +12,8 @@ public sealed class FfmpegEncodeInvocationTests
 
     private static readonly ServiceId Service = new(1040);
 
+    private const int Cores = 2;
+
     private static readonly DateTime At = new(2026, 9, 4, 3, 0, 0, DateTimeKind.Utc);
 
     public static TheoryData<EncodeCodec, EncodeResolution, Deinterlace, EncodeEncoder> EveryShapeOnEveryEncoder
@@ -64,6 +66,10 @@ public sealed class FfmpegEncodeInvocationTests
                 "-progress",
                 "pipe:1",
                 "-y",
+                "-filter_threads",
+                "2",
+                "-threads",
+                "2",
                 "-i",
                 Source,
                 "-map",
@@ -78,12 +84,14 @@ public sealed class FfmpegEncodeInvocationTests
                 "medium",
                 "-crf",
                 "22",
+                "-threads",
+                "2",
                 "-c:a",
                 "copy",
                 "-bsf:a",
                 "aac_adtstoasc",
             ],
-            FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, Source));
+            FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, Source, Cores));
 
     [Fact]
     public void TheCardsArgumentsAreExactlyThese()
@@ -97,8 +105,12 @@ public sealed class FfmpegEncodeInvocationTests
                 "-progress",
                 "pipe:1",
                 "-y",
+                "-filter_threads",
+                "2",
                 "-vaapi_device",
                 FfmpegEncodeInvocation.RenderNode,
+                "-threads",
+                "2",
                 "-i",
                 Source,
                 "-map",
@@ -113,20 +125,22 @@ public sealed class FfmpegEncodeInvocationTests
                 "CQP",
                 "-qp",
                 "24",
+                "-threads",
+                "2",
                 "-c:a",
                 "copy",
                 "-bsf:a",
                 "aac_adtstoasc",
             ],
-            FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Vaapi, Source));
+            FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Vaapi, Source, Cores));
 
     [Fact(DisplayName = "BR-EV-004: the card is only ever given a quantiser, and the processor only a rate factor")]
     public void TheCardIsOnlyEverGivenAQuantiserAndTheProcessorOnlyARateFactor()
     {
         IReadOnlyList<string> onTheCard =
-            FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Vaapi, Source);
+            FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Vaapi, Source, Cores);
         IReadOnlyList<string> onTheProcessor =
-            FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, Source);
+            FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, Source, Cores);
 
         Assert.Contains("-rc_mode", onTheCard);
         Assert.Contains("CQP", onTheCard);
@@ -159,6 +173,9 @@ public sealed class FfmpegEncodeInvocationTests
             "-progress",
             "pipe:1",
             "-y",
+            "-filter_threads",
+            "-threads",
+            "2",
             "-vaapi_device",
             FfmpegEncodeInvocation.RenderNode,
             "-i",
@@ -208,7 +225,7 @@ public sealed class FfmpegEncodeInvocationTests
             Service,
             Profile(codec, resolution, deinterlace),
             encoder,
-            Source);
+            Source, Cores);
 
         Assert.All(arguments, argument => Assert.Contains(argument, known, StringComparer.Ordinal));
     }
@@ -223,7 +240,7 @@ public sealed class FfmpegEncodeInvocationTests
     {
         IReadOnlyList<string> arguments =
         [
-            .. FfmpegEncodeInvocation.Arguments(Service, Profile(codec, resolution, deinterlace), encoder, Source),
+            .. FfmpegEncodeInvocation.Arguments(Service, Profile(codec, resolution, deinterlace), encoder, Source, Cores),
             .. FfmpegEncodeInvocation.Delivery(Destination),
         ];
 
@@ -241,11 +258,11 @@ public sealed class FfmpegEncodeInvocationTests
     {
         Assert.DoesNotContain(
             "-vaapi_device",
-            FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, Source));
+            FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, Source, Cores));
 
         Assert.Contains(
             "-vaapi_device",
-            FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Vaapi, Source));
+            FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Vaapi, Source, Cores));
     }
 
     [Fact]
@@ -265,15 +282,15 @@ public sealed class FfmpegEncodeInvocationTests
     [Fact]
     public void TheCodecPicksTheEncoderNameOnEitherSide()
     {
-        Assert.Contains("libx265", FfmpegEncodeInvocation.Arguments(Service, Profile(EncodeCodec.H265), EncodeEncoder.Software, Source));
-        Assert.Contains("libx264", FfmpegEncodeInvocation.Arguments(Service, Profile(EncodeCodec.H264), EncodeEncoder.Software, Source));
-        Assert.Contains("hevc_vaapi", FfmpegEncodeInvocation.Arguments(Service, Profile(EncodeCodec.H265), EncodeEncoder.Vaapi, Source));
-        Assert.Contains("h264_vaapi", FfmpegEncodeInvocation.Arguments(Service, Profile(EncodeCodec.H264), EncodeEncoder.Vaapi, Source));
+        Assert.Contains("libx265", FfmpegEncodeInvocation.Arguments(Service, Profile(EncodeCodec.H265), EncodeEncoder.Software, Source, Cores));
+        Assert.Contains("libx264", FfmpegEncodeInvocation.Arguments(Service, Profile(EncodeCodec.H264), EncodeEncoder.Software, Source, Cores));
+        Assert.Contains("hevc_vaapi", FfmpegEncodeInvocation.Arguments(Service, Profile(EncodeCodec.H265), EncodeEncoder.Vaapi, Source, Cores));
+        Assert.Contains("h264_vaapi", FfmpegEncodeInvocation.Arguments(Service, Profile(EncodeCodec.H264), EncodeEncoder.Vaapi, Source, Cores));
     }
 
     private static string FilterIn(EncodeProfile profile, EncodeEncoder encoder)
     {
-        IReadOnlyList<string> arguments = FfmpegEncodeInvocation.Arguments(Service, profile, encoder, Source);
+        IReadOnlyList<string> arguments = FfmpegEncodeInvocation.Arguments(Service, profile, encoder, Source, Cores);
 
         return arguments[arguments.ToList().IndexOf("-vf") + 1];
     }
@@ -285,10 +302,25 @@ public sealed class FfmpegEncodeInvocationTests
     [Fact]
     public void AnEncoderNobodyOffersIsNotAnEncoder()
         => Assert.Throws<ArgumentOutOfRangeException>(
-            () => FfmpegEncodeInvocation.Arguments(Service, Profile(), (EncodeEncoder)7, Source));
+            () => FfmpegEncodeInvocation.Arguments(Service, Profile(), (EncodeEncoder)7, Source, Cores));
+
+    [Fact(DisplayName = "BR-ED2-005: the core cap is handed to every stage that counts threads — the decoder, the filters and the encoder — and never as none")]
+    public void TheCoreCapIsHandedToEveryStageThatCountsThreads()
+    {
+        string[] arguments = [.. FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, Source, 3)];
+
+        Assert.Equal(2, arguments.Count(argument => argument == "-threads"));
+        Assert.Equal(1, arguments.Count(argument => argument == "-filter_threads"));
+        Assert.All(
+            arguments.Select((argument, at) => (argument, at)).Where(pair => pair.argument is "-threads" or "-filter_threads"),
+            pair => Assert.Equal("3", arguments[pair.at + 1]));
+        Assert.True(Array.IndexOf(arguments, "-threads") < Array.IndexOf(arguments, "-i"), "the decoder is told before the input is named");
+        Assert.True(Array.LastIndexOf(arguments, "-threads") > Array.IndexOf(arguments, "-c:v"), "the encoder is told after it is named");
+        Assert.Throws<ArgumentOutOfRangeException>(() => FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, Source, 0));
+    }
 
     [Fact]
     public void ThereIsNothingToEncodeWithoutSomethingToReadFrom()
         => Assert.Throws<ArgumentException>(
-            () => FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, string.Empty));
+            () => FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, string.Empty, Cores));
 }

@@ -41,6 +41,7 @@ public sealed class EncodingOptionsTests
         EncodeSettings settings = Read();
 
         Assert.Equal(EncodeEncoder.Software, settings.Prefer);
+        Assert.Equal(2, settings.MostCores);
         Assert.Equal(3, settings.MostAttempts);
         Assert.Equal(TimeSpan.FromSeconds(30), settings.BetweenLooks);
         Assert.Equal(TimeSpan.FromMinutes(10), settings.StalledAfter);
@@ -51,11 +52,13 @@ public sealed class EncodingOptionsTests
     {
         EncodeSettings settings = Read(
             ("Encodings:Prefer", "vaapi"),
+            ("Encodings:MostCores", "4"),
             ("Encodings:MostAttempts", "5"),
             ("Encodings:BetweenLooks", "00:01:00"),
             ("Encodings:StalledAfter", "00:20:00"));
 
         Assert.Equal(EncodeEncoder.Vaapi, settings.Prefer);
+        Assert.Equal(4, settings.MostCores);
         Assert.Equal(5, settings.MostAttempts);
         Assert.Equal(TimeSpan.FromMinutes(1), settings.BetweenLooks);
         Assert.Equal(TimeSpan.FromMinutes(20), settings.StalledAfter);
@@ -64,6 +67,8 @@ public sealed class EncodingOptionsTests
     [Theory]
     [InlineData("Encodings:Prefer", "quicksync")]
     [InlineData("Encodings:Prefer", "3")]
+    [InlineData("Encodings:MostCores", "0")]
+    [InlineData("Encodings:MostCores", "two")]
     [InlineData("Encodings:MostAttempts", "0")]
     [InlineData("Encodings:MostAttempts", "three")]
     [InlineData("Encodings:BetweenLooks", "00:00:00")]

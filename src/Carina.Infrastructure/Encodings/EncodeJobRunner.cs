@@ -15,6 +15,13 @@ namespace Carina.Infrastructure.Encodings;
 /// six reasons the ledger holds. Whatever the end, what the job still owes a removal for is swept.
 /// A stop asked for by the caller is the one thing that leaves the job as it was: it stays running
 /// in the ledger for the next start to put back (BR-ED2-011).
+/// <para>
+/// Three things about the run are written on the job as it goes: where it ran, so a degraded run
+/// is in the ledger (BR-EV-004); the programme's id and start, before its first line of progress
+/// is read, so the next process can stop it if this one dies (BR-ED2-011); and its headway, at
+/// every tenth and at least every <see cref="HeartbeatEvery"/>, so a job that has stopped getting
+/// on can be told from one that is (BR-ED2-014).
+/// </para>
 /// </summary>
 public sealed class EncodeJobRunner(
     IEncodeJobRepository jobs,
@@ -32,6 +39,8 @@ public sealed class EncodeJobRunner(
     ILogger<EncodeJobRunner> logger)
 {
     public const int Tenths = 10;
+
+    public static readonly TimeSpan HeartbeatEvery = TimeSpan.FromSeconds(10);
 
     public async Task<EncodeJobStatus> RunAsync(EncodeJob job, CancellationToken cancellationToken)
     {
@@ -86,6 +95,8 @@ public sealed class EncodeJobRunner(
             return await RefuseAsync(job, plan.Refused ?? EncodeFailure.CapabilityUnavailable, plan.Note, cancellationToken);
         }
 
+        job.Routed(EncodeRoute.Of(settings.Prefer, plan));
+
         if (plan.Swerved is { } swerve)
         {
             logger.LogWarning(
@@ -117,20 +128,27 @@ public sealed class EncodeJobRunner(
                 cancellationToken);
         }
 
+        int cores = Math.Min(settings.MostCores, Environment.ProcessorCount);
+
         logger.LogInformation(
-            "Job {Job} starts attempt {Attempt} on the {Encoder}, {Whole} of source to get through.",
+            "Job {Job} starts attempt {Attempt} on the {Encoder} over {Cores} core(s), {Whole} of source to get through.",
             job.Id.Wire,
             job.Attempt,
             encoder,
+            cores,
             whole.Length is { } length ? length.ToString("c", CultureInfo.InvariantCulture) : "an unmeasured length");
 
-        int tenthsTold = -1;
+        var heard = new Heartbeat();
         EncodeRunOutcome ran = await FfmpegEncodeRun.RunAsync(
             programmes.Programme,
-            [.. FfmpegEncodeInvocation.Arguments(recording.ServiceId, profile, encoder, source.FullName), .. FfmpegEncodeInvocation.Delivery(work)],
+            [
+                .. FfmpegEncodeInvocation.Arguments(recording.ServiceId, profile, encoder, source.FullName, cores),
+                .. FfmpegEncodeInvocation.Delivery(work),
+            ],
             whole.Length,
             settings.StalledAfter,
-            progress => Tell(job, progress, ref tenthsTold),
+            spawned => SpawnedAsync(job, spawned, cancellationToken),
+            progress => TellAsync(job, progress, heard, cancellationToken),
             clock,
             cancellationToken);
 
@@ -144,7 +162,7 @@ public sealed class EncodeJobRunner(
             return await RefuseAsync(
                 job,
                 EncodeFailure.TimedOut,
-                $"nothing was reported for {settings.StalledAfter}, so the programme was stopped where it stood: {ran.Complained}",
+                $"no headway was made for {settings.StalledAfter}, so the programme was stopped where it stood: {ran.Complained}",
                 cancellationToken);
         }
 
@@ -164,25 +182,41 @@ public sealed class EncodeJobRunner(
         return await SweptAsync(job, cancellationToken);
     }
 
-    private void Tell(EncodeJob job, EncodeProgress progress, ref int tenthsTold)
+    private async Task SpawnedAsync(EncodeJob job, RunningProgramme spawned, CancellationToken cancellationToken)
     {
-        if (progress.Portion is not { } portion)
+        job.Spawned(spawned);
+        await jobs.SaveAsync(job, cancellationToken);
+
+        logger.LogInformation("Job {Job} runs as process {Process}, begun {Began:O}.", job.Id.Wire, spawned.ProcessId, spawned.StartedAt);
+    }
+
+    private async Task TellAsync(EncodeJob job, EncodeProgress progress, Heartbeat heard, CancellationToken cancellationToken)
+    {
+        DateTime now = clock.GetUtcNow().UtcDateTime;
+        job.Reached(progress, now);
+
+        int tenths = progress.Portion is { } portion ? (int)Math.Floor(portion * Tenths) : -1;
+        bool anotherTenth = tenths != heard.TenthsTold && progress.Portion is not null;
+        bool dueAnyway = heard.SavedAt is not { } saved || now - saved >= HeartbeatEvery;
+
+        if (!anotherTenth && !dueAnyway && !progress.Ended)
         {
             return;
         }
 
-        int tenths = (int)Math.Floor(portion * Tenths);
+        heard.SavedAt = now;
+        await jobs.SaveAsync(job, cancellationToken);
 
-        if (tenths == tenthsTold && !progress.Ended)
+        if (progress.Portion is not { } done || (!anotherTenth && !progress.Ended))
         {
             return;
         }
 
-        tenthsTold = tenths;
+        heard.TenthsTold = tenths;
         logger.LogInformation(
             "Job {Job} is {Percent}% of the way through at {Speed}x, {Left} left.",
             job.Id.Wire,
-            (int)Math.Round(portion * 100),
+            (int)Math.Round(done * 100),
             progress.Speed.ToString("0.00", CultureInfo.InvariantCulture),
             progress.Left is { } left ? left.ToString("c", CultureInfo.InvariantCulture) : "an unknown time");
     }
@@ -209,5 +243,12 @@ public sealed class EncodeJobRunner(
         }
 
         return job.Status;
+    }
+
+    private sealed class Heartbeat
+    {
+        public int TenthsTold { get; set; } = -1;
+
+        public DateTime? SavedAt { get; set; }
     }
 }

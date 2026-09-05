@@ -1,4 +1,5 @@
 using Carina.Domain.Encodings;
+using Carina.Domain.Machines;
 using Carina.Domain.Recordings;
 
 using Microsoft.EntityFrameworkCore;
@@ -42,6 +43,33 @@ public sealed class EncodeJobConfiguration : IEntityTypeConfiguration<EncodeJob>
                 AND ((failure IS NULL) = (failure_note IS NULL))
                 AND ((failure IS NULL) = (failure_noticed_at IS NULL))
                 AND (failure IS NULL OR failure IN ({EncodeVocabulary.Of<EncodeFailure>()}))
+                """);
+            table.HasCheckConstraint(
+                "ck_encode_job_programme",
+                """
+                ((process_id IS NULL) = (process_started_at IS NULL))
+                AND (process_id IS NULL OR status = 'Running')
+                AND (process_id IS NULL OR process_id >= 1)
+                AND (process_started_at IS NULL OR process_started_at >= started_at)
+                """);
+            table.HasCheckConstraint(
+                "ck_encode_job_headway",
+                """
+                (progress_at IS NULL OR status <> 'Queued')
+                AND (progress_at IS NULL OR progress_at >= started_at)
+                AND (progress_at IS NOT NULL OR (progress_portion IS NULL AND progress_left IS NULL))
+                AND (progress_portion IS NULL OR progress_portion BETWEEN 0 AND 1)
+                AND (progress_left IS NULL OR progress_left >= interval '0')
+                """);
+            table.HasCheckConstraint(
+                "ck_encode_job_route",
+                $"""
+                ((encoder_asked IS NULL) = (encoder_ran IS NULL))
+                AND (encoder_asked IS NULL OR status <> 'Queued')
+                AND (encoder_asked IS NULL OR encoder_asked IN ({EncodeVocabulary.Of<EncodeEncoder>()}))
+                AND (encoder_ran IS NULL OR encoder_ran IN ({EncodeVocabulary.Of<EncodeEncoder>()}))
+                AND (swerve IS NULL OR swerve IN ({EncodeVocabulary.Of<EncodeSwerve>()}))
+                AND (encoder_asked IS NULL OR ((swerve IS NULL) = (encoder_asked = encoder_ran)))
                 """);
             table.HasCheckConstraint(
                 "ck_encode_job_artefact",
@@ -104,6 +132,39 @@ public sealed class EncodeJobConfiguration : IEntityTypeConfiguration<EncodeJob>
         builder.Property(job => job.ArtefactName)
             .HasConversion(name => name!.Value, value => new EncodeFileName(value))
             .HasMaxLength(EncodeFileName.MaxLength);
+
+        builder.ComplexProperty(job => job.Route, route =>
+        {
+            route.Property(detail => detail.Asked)
+                .HasConversion<string>()
+                .HasColumnName("encoder_asked")
+                .HasMaxLength(32);
+
+            route.Property(detail => detail.Ran)
+                .HasConversion<string>()
+                .HasColumnName("encoder_ran")
+                .HasMaxLength(32);
+
+            route.Property(detail => detail.Swerved)
+                .HasConversion<string>()
+                .HasColumnName("swerve")
+                .HasMaxLength(32);
+
+            route.Ignore(detail => detail.WasDegraded);
+        });
+
+        builder.ComplexProperty(job => job.Programme, programme =>
+        {
+            programme.Property(detail => detail.ProcessId).HasColumnName("process_id");
+            programme.Property(detail => detail.StartedAt).HasColumnName("process_started_at");
+        });
+
+        builder.ComplexProperty(job => job.Headway, headway =>
+        {
+            headway.Property(detail => detail.Portion).HasColumnName("progress_portion");
+            headway.Property(detail => detail.Left).HasColumnName("progress_left");
+            headway.Property(detail => detail.At).HasColumnName("progress_at");
+        });
 
         builder.Ignore(job => job.HasEnded);
         builder.Ignore(job => job.Standing);

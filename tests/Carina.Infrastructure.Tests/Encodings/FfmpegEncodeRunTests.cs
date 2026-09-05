@@ -1,6 +1,7 @@
 using System.Diagnostics;
 
 using Carina.Domain.Encodings;
+using Carina.Domain.Machines;
 using Carina.Infrastructure.Encodings;
 using Carina.Infrastructure.Tests.Integrity;
 
@@ -11,6 +12,10 @@ public sealed class FfmpegEncodeRunTests : IDisposable
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
     private static readonly TimeSpan Patient = TimeSpan.FromSeconds(20);
+
+    private static readonly Func<RunningProgramme, Task> Nobody = _ => Task.CompletedTask;
+
+    private static readonly Func<EncodeProgress, Task> Nothing = _ => Task.CompletedTask;
 
     private readonly TempTree tree = new();
 
@@ -31,7 +36,13 @@ public sealed class FfmpegEncodeRunTests : IDisposable
             [],
             TimeSpan.FromSeconds(4),
             Patient,
-            told.Add,
+            Nobody,
+            progress =>
+            {
+                told.Add(progress);
+
+                return Task.CompletedTask;
+            },
             TimeProvider.System,
             Cancel);
 
@@ -50,7 +61,8 @@ public sealed class FfmpegEncodeRunTests : IDisposable
             [],
             null,
             Patient,
-            _ => { },
+            Nobody,
+            Nothing,
             TimeProvider.System,
             Cancel);
 
@@ -69,7 +81,8 @@ public sealed class FfmpegEncodeRunTests : IDisposable
             [],
             null,
             Patient,
-            _ => { },
+            Nobody,
+            Nothing,
             TimeProvider.System,
             Cancel);
 
@@ -93,7 +106,8 @@ public sealed class FfmpegEncodeRunTests : IDisposable
             [],
             null,
             TimeSpan.FromMilliseconds(300),
-            _ => { },
+            Nobody,
+            Nothing,
             TimeProvider.System,
             Cancel);
 
@@ -118,7 +132,8 @@ public sealed class FfmpegEncodeRunTests : IDisposable
             [],
             null,
             TimeSpan.FromMilliseconds(600),
-            _ => { },
+            Nobody,
+            Nothing,
             TimeProvider.System,
             Cancel);
 
@@ -141,12 +156,119 @@ public sealed class FfmpegEncodeRunTests : IDisposable
             [],
             null,
             Patient,
-            _ => { },
+            Nobody,
+            Nothing,
             TimeProvider.System,
             stopping.Token));
 
         Assert.True(waited.Elapsed < TimeSpan.FromSeconds(15), $"stopped rather than waited for: {waited.Elapsed}");
         Assert.False(File.Exists(marker));
+    }
+
+    [Fact(DisplayName = "BR-ED2-011: who the programme is — its id and when it began — is handed over before a line of its progress is read, and it is the programme that was started")]
+    public async Task WhoTheProgrammeIsIsHandedOverBeforeItsProgressIsRead()
+    {
+        RunningProgramme? began = null;
+        bool progressCameFirst = false;
+        DateTime before = DateTime.UtcNow.AddSeconds(-2);
+
+        EncodeRunOutcome ran = await FfmpegEncodeRun.RunAsync(
+            Standing("""
+                echo $$ > "$0.pid"
+                printf 'out_time_us=1000000\nprogress=end\n'
+                """),
+            [],
+            null,
+            Patient,
+            spawned =>
+            {
+                began = spawned;
+
+                return Task.CompletedTask;
+            },
+            _ =>
+            {
+                progressCameFirst = began is null;
+
+                return Task.CompletedTask;
+            },
+            TimeProvider.System,
+            Cancel);
+
+        Assert.True(ran.Succeeded);
+        Assert.NotNull(began);
+        Assert.False(progressCameFirst, "the programme was identified before its progress was read");
+        Assert.InRange(began.StartedAt, before, DateTime.UtcNow.AddSeconds(2));
+        string wroteItsOwnId = Directory.EnumerateFiles(tree.Root, "*.pid").Single();
+        Assert.Equal(began.ProcessId, int.Parse(File.ReadAllText(wroteItsOwnId).Trim(), System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    [Fact(DisplayName = "BR-ED2-011: a programme whose identity cannot be written down is stopped rather than run unrecorded")]
+    public async Task AProgrammeWhoseIdentityCannotBeWrittenDownIsStopped()
+    {
+        string marker = tree.Under("woke");
+        Stopwatch waited = Stopwatch.StartNew();
+
+        await Assert.ThrowsAsync<IOException>(() => FfmpegEncodeRun.RunAsync(
+            Standing($"""
+                sleep 30
+                printf woke > "{marker}"
+                """),
+            [],
+            null,
+            Patient,
+            _ => throw new IOException("the ledger is away"),
+            Nothing,
+            TimeProvider.System,
+            Cancel));
+
+        Assert.True(waited.Elapsed < TimeSpan.FromSeconds(15), $"stopped rather than waited for: {waited.Elapsed}");
+        await Task.Delay(200);
+        Assert.False(File.Exists(marker));
+    }
+
+    [Fact(DisplayName = "BR-ED2-005: the programme runs yielding, at the lowest priority the scheduler has, from its first instruction")]
+    public async Task TheProgrammeRunsYieldingFromItsFirstInstruction()
+    {
+        string niceness = tree.Under("niceness");
+
+        EncodeRunOutcome ran = await FfmpegEncodeRun.RunAsync(
+            Standing($"nice > \"{niceness}\""),
+            [],
+            null,
+            Patient,
+            Nobody,
+            Nothing,
+            TimeProvider.System,
+            Cancel);
+
+        Assert.True(ran.Succeeded, ran.Complained);
+        Assert.Equal("19", File.ReadAllText(niceness).Trim());
+    }
+
+    [Fact(DisplayName = "BR-ED2-014: a programme that keeps reporting the same place is making no headway, and is stopped as stalled like one that says nothing")]
+    public async Task AProgrammeThatKeepsReportingTheSamePlaceIsStalled()
+    {
+        Stopwatch waited = Stopwatch.StartNew();
+
+        EncodeRunOutcome ran = await FfmpegEncodeRun.RunAsync(
+            Standing("""
+                for step in 1 2 3 4 5 6 7 8 9 10; do
+                    printf 'out_time_us=1000000\nprogress=continue\n'
+                    sleep 0.2
+                done
+                printf 'progress=end\n'
+                """),
+            [],
+            null,
+            TimeSpan.FromMilliseconds(700),
+            Nobody,
+            Nothing,
+            TimeProvider.System,
+            Cancel);
+
+        Assert.Equal(EncodeRunFault.Stalled, ran.Fault);
+        Assert.True(waited.Elapsed < TimeSpan.FromSeconds(2), $"stopped once the same place had been reported for long enough: {waited.Elapsed}");
     }
 
     private string Standing(string script)
