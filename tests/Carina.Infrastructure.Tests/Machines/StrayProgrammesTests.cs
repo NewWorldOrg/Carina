@@ -41,10 +41,11 @@ public sealed class StrayProgrammesTests
     [Fact(DisplayName = "BR-ED2-011: a programme that has already exited is already gone, whether or not its id has been handed on")]
     public void AProgrammeThatHasAlreadyExitedIsAlreadyGone()
     {
-        ProgrammeStart start = AnotherProgramme.Start("true", []);
+        ProgrammeStart start = AnotherProgramme.Start("sleep", ["30"]);
         using Process ran = start.Process!;
         RunningProgramme written = start.Began!;
-        ran.WaitForExit();
+        AnotherProgramme.GiveUpOn(ran);
+        Assert.True(ran.WaitForExit(5000), "the programme is gone before it is looked for");
 
         StrayFate fate = new StrayProgrammes(Drift, Patience).Stop(written);
 

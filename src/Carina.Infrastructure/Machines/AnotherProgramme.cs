@@ -21,7 +21,9 @@ public sealed record ProgrammeSaid(int? ExitCode, ProgrammeFault? Fault, string 
 /// <summary>
 /// A programme that was asked to start: the process when it did, and how the operating system
 /// knows it, so that whoever started it can write that down; otherwise the reason it could not be
-/// started on this machine, with any path on it already taken out.
+/// started on this machine, with any path on it already taken out. A programme that started and
+/// had already exited by the time it was looked at has a process and no identity: the kernel's
+/// record of it went with it, and nothing of it is left to write down or to stop.
 /// </summary>
 public sealed record ProgrammeStart(Process? Process, RunningProgramme? Began, string Complained)
 {

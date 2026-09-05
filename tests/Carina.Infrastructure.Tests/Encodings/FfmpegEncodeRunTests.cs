@@ -4,6 +4,7 @@ using Carina.Domain.Encodings;
 using Carina.Domain.Machines;
 using Carina.Infrastructure.Encodings;
 using Carina.Infrastructure.Tests.Integrity;
+using Carina.TestSupport;
 
 namespace Carina.Infrastructure.Tests.Encodings;
 
@@ -121,23 +122,32 @@ public sealed class FfmpegEncodeRunTests : IDisposable
     [Fact(DisplayName = "BR-ED2-014: a programme that keeps reporting is never taken for stalled, however long it runs")]
     public async Task AProgrammeThatKeepsReportingIsNeverTakenForStalled()
     {
+        TimeSpan allowed = TimeSpan.FromMilliseconds(600);
+        var clock = new HandTurnedClock();
+        DateTimeOffset started = clock.GetUtcNow();
+
         EncodeRunOutcome ran = await FfmpegEncodeRun.RunAsync(
             Standing("""
                 for step in 1 2 3 4 5 6; do
                     printf 'out_time_us=%d\nprogress=continue\n' "$step"
-                    sleep 0.2
                 done
                 printf 'progress=end\n'
                 """),
             [],
             null,
-            TimeSpan.FromMilliseconds(600),
+            allowed,
             Nobody,
-            Nothing,
-            TimeProvider.System,
+            _ =>
+            {
+                clock.Turn(allowed - TimeSpan.FromMilliseconds(1));
+
+                return Task.CompletedTask;
+            },
+            clock,
             Cancel);
 
         Assert.True(ran.Succeeded, ran.Fault?.ToString());
+        Assert.True(clock.GetUtcNow() - started > allowed * 5, "the run outlived its allowance many times over without going quiet");
     }
 
     [Fact(DisplayName = "BR-ED2-011: a stop asked for by the caller stops the programme and is thrown, so the caller knows nothing ended")]
