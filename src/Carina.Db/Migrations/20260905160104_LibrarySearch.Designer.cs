@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Carina.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Carina.Db.Migrations
 {
     [DbContext(typeof(CarinaDbContext))]
-    partial class CarinaDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260905160104_LibrarySearch")]
+    partial class LibrarySearch
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -643,25 +646,6 @@ namespace Carina.Db.Migrations
                                 .HasColumnName("swerve");
                         });
 
-                    b.ComplexProperty(typeof(Dictionary<string, object>), "Timeline", "Carina.Domain.Encodings.EncodeJob.Timeline#EncodeTimeline", b1 =>
-                        {
-                            b1.Property<TimeSpan?>("ArtefactLength")
-                                .HasColumnType("interval")
-                                .HasColumnName("artefact_length");
-
-                            b1.Property<TimeSpan>("HeadSkip")
-                                .HasColumnType("interval")
-                                .HasColumnName("head_skip");
-
-                            b1.Property<TimeSpan?>("SourceLength")
-                                .HasColumnType("interval")
-                                .HasColumnName("source_length");
-
-                            b1.Property<TimeSpan>("SourceStart")
-                                .HasColumnType("interval")
-                                .HasColumnName("source_start");
-                        });
-
                     b.HasKey("Id")
                         .HasName("pk_encode_job");
 
@@ -690,13 +674,11 @@ namespace Carina.Db.Migrations
 
                     b.ToTable("encode_job", null, t =>
                         {
-                            t.HasCheckConstraint("ck_encode_job_alignment", "((head_skip IS NULL) = (source_start IS NULL))\nAND (head_skip IS NULL OR status <> 'Queued')\nAND (head_skip IS NULL OR head_skip BETWEEN interval '0' AND interval '5 seconds')\nAND (source_start IS NULL OR source_start >= interval '0')\nAND (source_length IS NULL OR (head_skip IS NOT NULL AND source_length > interval '0'))\nAND (artefact_length IS NULL OR (head_skip IS NOT NULL AND artefact_length >= interval '0'))");
-
                             t.HasCheckConstraint("ck_encode_job_artefact", "(status <> 'Completed' OR artefact_name IS NOT NULL)\nAND (artefact_name IS NULL\n    OR (btrim(artefact_name) = artefact_name\nAND length(artefact_name) > 0\nAND artefact_name <> '.'\nAND strpos(artefact_name, '/') = 0\nAND strpos(artefact_name, chr(92)) = 0\nAND strpos(artefact_name, '..') = 0\n        AND strpos(artefact_name, replace(recording_id::text, '-', '')) > 0\n        AND strpos(artefact_name, replace(profile_id::text, '-', '')) > 0))");
 
                             t.HasCheckConstraint("ck_encode_job_attempt", "attempt >= 1");
 
-                            t.HasCheckConstraint("ck_encode_job_failure", "((status = 'Failed') = (failure IS NOT NULL))\nAND ((failure IS NULL) = (failure_note IS NULL))\nAND ((failure IS NULL) = (failure_noticed_at IS NULL))\nAND (failure IS NULL OR failure IN ('FfmpegExitedNonZero', 'NotEnoughRoom', 'SourceMissing', 'CapabilityUnavailable', 'TimedOut', 'DestinationCollision', 'HeadTooFar'))");
+                            t.HasCheckConstraint("ck_encode_job_failure", "((status = 'Failed') = (failure IS NOT NULL))\nAND ((failure IS NULL) = (failure_note IS NULL))\nAND ((failure IS NULL) = (failure_noticed_at IS NULL))\nAND (failure IS NULL OR failure IN ('FfmpegExitedNonZero', 'NotEnoughRoom', 'SourceMissing', 'CapabilityUnavailable', 'TimedOut', 'DestinationCollision'))");
 
                             t.HasCheckConstraint("ck_encode_job_headway", "(progress_at IS NULL OR status <> 'Queued')\nAND (progress_at IS NULL OR progress_at >= started_at)\nAND (progress_at IS NOT NULL OR (progress_portion IS NULL AND progress_left IS NULL))\nAND (progress_portion IS NULL OR progress_portion BETWEEN 0 AND 1)\nAND (progress_left IS NULL OR progress_left >= interval '0')");
 

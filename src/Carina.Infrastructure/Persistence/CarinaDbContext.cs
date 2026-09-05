@@ -10,6 +10,7 @@ public class CarinaDbContext(DbContextOptions<CarinaDbContext> options) : DbCont
 
         modelBuilder.HasSequence<long>(ProgrammeRevisions.Sequence).StartsAt(1).IncrementsBy(1);
         BroadcastText.Declare(modelBuilder);
+        StoredOrder.Declare(modelBuilder);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(CarinaDbContext).Assembly);
     }
 
