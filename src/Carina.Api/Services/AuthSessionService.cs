@@ -9,18 +9,16 @@ public sealed class AuthSessionService(
     SessionPolicy policy,
     TimeProvider clock)
 {
-    public const string NoSuchSession = "There is no such session on this account.";
+    public const string NoSuchSession = "There is no such session.";
 
     public async Task<ServiceResult<IReadOnlyList<SessionView>>> ListAsync(
-        Subject subject,
         SessionId current,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(subject);
         ArgumentNullException.ThrowIfNull(current);
 
         DateTime now = clock.GetUtcNow().UtcDateTime;
-        IReadOnlyList<AuthSession> held = await sessions.ListAsync(subject, cancellationToken);
+        IReadOnlyList<AuthSession> held = await sessions.ListAllAsync(cancellationToken);
 
         return ServiceResult<IReadOnlyList<SessionView>>.Success(
         [
@@ -30,17 +28,13 @@ public sealed class AuthSessionService(
         ]);
     }
 
-    public async Task<ServiceResult> RevokeAsync(
-        Subject subject,
-        SessionId target,
-        CancellationToken cancellationToken)
+    public async Task<ServiceResult> RevokeAsync(SessionId target, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(subject);
         ArgumentNullException.ThrowIfNull(target);
 
         AuthSession? held = await sessions.FindAsync(target, cancellationToken);
 
-        if (held is null || !held.Subject.Equals(subject))
+        if (held is null)
         {
             return ServiceResult.Failure(NoSuchSession);
         }
@@ -50,7 +44,7 @@ public sealed class AuthSessionService(
             await sessions.SaveAsync(held, cancellationToken);
         }
 
-        grants.RevokeEverythingOf(subject);
+        grants.RevokeEverythingOf(held.Subject);
 
         return ServiceResult.Success();
     }

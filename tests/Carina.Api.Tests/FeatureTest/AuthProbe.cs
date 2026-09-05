@@ -78,6 +78,7 @@ internal sealed class AuthProbe : IAsyncDisposable
         AuthSession session = AuthSession.Start(
             SessionId.Issue(),
             new Subject(FirstCredentials.Username),
+            FirstCredentials.Username,
             AuthMethod.Local,
             device,
             DateTime.UtcNow);

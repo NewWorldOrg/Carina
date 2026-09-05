@@ -6,6 +6,8 @@ public interface IAuthSessionRepository
 
     Task<IReadOnlyList<AuthSession>> ListAsync(Subject subject, CancellationToken cancellationToken);
 
+    Task<IReadOnlyList<AuthSession>> ListAllAsync(CancellationToken cancellationToken);
+
     Task SaveAsync(AuthSession session, CancellationToken cancellationToken);
 
     Task SaveAllAsync(IReadOnlyList<AuthSession> sessions, CancellationToken cancellationToken);

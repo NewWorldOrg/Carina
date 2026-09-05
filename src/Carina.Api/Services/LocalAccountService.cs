@@ -52,6 +52,7 @@ public sealed class LocalAccountService(
         AuthSession session = AuthSession.Start(
             SessionId.Issue(),
             new Subject(account!.Username),
+            account.Username,
             AuthMethod.Local,
             attempt.DeviceLabel,
             clock.GetUtcNow().UtcDateTime);

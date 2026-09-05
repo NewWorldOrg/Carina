@@ -10,6 +10,10 @@ public static class OidcClaimsReader
 
     public const string HostedDomainClaim = "hd";
 
+    public const string EmailClaim = "email";
+
+    public const string NameClaim = "name";
+
     public static OidcClaims? Read(byte[] payload)
     {
         ArgumentNullException.ThrowIfNull(payload);
@@ -38,6 +42,8 @@ public static class OidcClaimsReader
                 Groups = Strings(root, OidcClaims.GroupsClaim),
                 GroupsOverflowed = Overflowed(root),
                 HostedDomain = Text(root, HostedDomainClaim),
+                Email = Text(root, EmailClaim),
+                Name = Text(root, NameClaim),
             };
         }
         catch (JsonException)

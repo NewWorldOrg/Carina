@@ -24,6 +24,9 @@ public sealed class AuthSessionConfiguration : IEntityTypeConfiguration<AuthSess
                 table.HasCheckConstraint(
                     "ck_auth_session_device_label",
                     "device_label <> ''");
+                table.HasCheckConstraint(
+                    "ck_auth_session_display_name",
+                    "display_name <> ''");
             });
 
         builder.HasKey(session => session.Id);
@@ -35,6 +38,10 @@ public sealed class AuthSessionConfiguration : IEntityTypeConfiguration<AuthSess
         builder.Property(session => session.Subject)
             .HasConversion(subject => subject.Value, value => new Subject(value))
             .HasMaxLength(Subject.LongestValue)
+            .IsRequired();
+
+        builder.Property(session => session.DisplayName)
+            .HasMaxLength(AuthSession.LongestDisplayName)
             .IsRequired();
 
         builder.Property(session => session.Method)

@@ -85,6 +85,28 @@ public sealed class SessionEndpointTests
         Assert.True(Only(listed, here.Id).GetProperty("current").GetBoolean());
         Assert.False(Only(listed, there.Id).GetProperty("current").GetBoolean());
         Assert.Equal("another device", Only(listed, there.Id).GetProperty("deviceLabel").GetString());
+        Assert.Equal(FirstCredentials.Username, Only(listed, there.Id).GetProperty("displayName").GetString());
+    }
+
+    [Fact]
+    public async Task BrAu018TheSessionListShowsEveryIdentitysSessionsAndSaysWhoseEachOneIs()
+    {
+        await using AuthProbe probe = AuthProbe.OverHttp();
+        AuthSession here = await probe.SignedInAsync();
+        AuthSession theirs = SomebodyElseSitting(probe);
+
+        using HttpResponseMessage response = await probe.Client.GetAsync(Sessions);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        JsonElement listed = body.RootElement.GetProperty("data");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(2, listed.GetArrayLength());
+        Assert.Equal("somebody@example.test", Only(listed, theirs.Id).GetProperty("displayName").GetString());
+        Assert.Equal("oidc", Only(listed, theirs.Id).GetProperty("method").GetString());
+        Assert.False(Only(listed, theirs.Id).GetProperty("current").GetBoolean());
+        Assert.Equal(FirstCredentials.Username, Only(listed, here.Id).GetProperty("displayName").GetString());
+        Assert.Equal("local", Only(listed, here.Id).GetProperty("method").GetString());
+        Assert.True(Only(listed, here.Id).GetProperty("current").GetBoolean());
     }
 
     [Fact]
@@ -103,24 +125,44 @@ public sealed class SessionEndpointTests
     }
 
     [Fact]
-    public async Task ASessionIdThatIsNotOnThisAccountIsNotFound()
+    public async Task BrAu018SomebodyElsesSessionCanBeEndedFromHere()
+    {
+        await using AuthProbe probe = AuthProbe.OverHttp();
+        await probe.SignedInAsync();
+        AuthSession theirs = SomebodyElseSitting(probe);
+
+        using HttpResponseMessage response = await EndingAsync(probe, theirs.Id);
+        using HttpResponseMessage after = await probe.Client.GetAsync(Me);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal(SessionStatus.Revoked, theirs.StatusAt(DateTime.UtcNow, SessionPolicy.Default));
+        Assert.Equal(HttpStatusCode.OK, after.StatusCode);
+    }
+
+    [Fact]
+    public async Task ASessionIdThatWasNeverIssuedIsNotFound()
     {
         await using AuthProbe probe = AuthProbe.OverHttp();
         await probe.SignedInAsync();
 
-        AuthSession theirs = AuthSession.Start(
-            SessionId.Issue(),
-            new Subject("somebody-else"),
-            AuthMethod.Local,
-            "a stranger's device",
-            DateTime.UtcNow);
-
-        probe.Sessions.Sessions.Add(theirs);
-
-        using HttpResponseMessage response = await EndingAsync(probe, theirs.Id);
+        using HttpResponseMessage response = await EndingAsync(probe, SessionId.Issue());
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-        Assert.Equal(SessionStatus.Active, theirs.StatusAt(DateTime.UtcNow, SessionPolicy.Default));
+    }
+
+    [Fact]
+    public async Task EndingTheSessionThatIsAskingIsAnsweredOnceAndTheNextRequestIsRefusedAtTheGate()
+    {
+        await using AuthProbe probe = AuthProbe.OverHttp();
+        AuthSession here = await probe.SignedInAsync();
+
+        using HttpResponseMessage ended = await EndingAsync(probe, here.Id);
+        using HttpResponseMessage after = await probe.Client.GetAsync(Me);
+
+        Assert.Equal(HttpStatusCode.NoContent, ended.StatusCode);
+        Assert.False(ended.Headers.Contains("Set-Cookie"));
+        Assert.Equal(SessionStatus.Revoked, here.StatusAt(DateTime.UtcNow, SessionPolicy.Default));
+        Assert.Equal(HttpStatusCode.Unauthorized, after.StatusCode);
     }
 
     [Fact]
@@ -243,6 +285,21 @@ public sealed class SessionEndpointTests
         };
 
         return await probe.Client.SendAsync(asking);
+    }
+
+    private static AuthSession SomebodyElseSitting(AuthProbe probe)
+    {
+        AuthSession theirs = AuthSession.Start(
+            SessionId.Issue(),
+            new Subject("108204329581372"),
+            "somebody@example.test",
+            AuthMethod.Oidc,
+            "a stranger's device",
+            DateTime.UtcNow);
+
+        probe.Sessions.Sessions.Add(theirs);
+
+        return theirs;
     }
 
     private static JsonElement Only(JsonElement listed, SessionId id)

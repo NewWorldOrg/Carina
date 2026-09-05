@@ -34,6 +34,7 @@ public sealed class LocalAccountServiceTests
 
         Assert.NotNull(outcome.Session);
         Assert.Equal(FirstCredentials.Username, outcome.Session.Subject.Value);
+        Assert.Equal(FirstCredentials.Username, outcome.Session.DisplayName);
         Assert.Equal(AuthMethod.Local, outcome.Session.Method);
         Assert.Single(sessions.Sessions);
     }

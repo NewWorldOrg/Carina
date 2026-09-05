@@ -132,6 +132,7 @@ public sealed class OidcLoginService(
         AuthSession session = AuthSession.Start(
             SessionId.Issue(),
             new Subject(claims.Subject),
+            claims.DisplayName,
             AuthMethod.Oidc,
             attempt.DeviceLabel,
             now);

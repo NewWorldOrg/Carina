@@ -16,6 +16,10 @@ public sealed record MockIdentityUser(string Subject)
     public bool GroupsOverflowed { get; init; }
 
     public string? HostedDomain { get; init; }
+
+    public string? Email { get; init; }
+
+    public string? Name { get; init; }
 }
 
 public sealed class MockIdentityProvider : HttpMessageHandler
@@ -264,6 +268,16 @@ public sealed class MockIdentityProvider : HttpMessageHandler
         if (held.User.HostedDomain is { } hosted)
         {
             claims["hd"] = hosted;
+        }
+
+        if (held.User.Email is { } email)
+        {
+            claims["email"] = email;
+        }
+
+        if (held.User.Name is { } name)
+        {
+            claims["name"] = name;
         }
 
         return Sign(claims);

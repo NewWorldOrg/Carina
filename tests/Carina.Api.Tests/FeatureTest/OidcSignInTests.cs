@@ -64,7 +64,8 @@ public sealed class OidcSignInTests
     {
         await using OidcProbe probe = OidcProbe.OverHttp().Configured();
 
-        using HttpResponseMessage arrived = await probe.SignInAsync(new MockIdentityUser("owner-from-the-provider"));
+        using HttpResponseMessage arrived = await probe.SignInAsync(
+            new MockIdentityUser("owner-from-the-provider") { Email = "owner@example.test", Name = "The Owner" });
 
         Assert.Equal(HttpStatusCode.Found, arrived.StatusCode);
         Assert.Equal(LoginRedirect.Home, arrived.Headers.Location!.ToString());
@@ -73,6 +74,7 @@ public sealed class OidcSignInTests
 
         Assert.Equal(AuthMethod.Oidc, started.Method);
         Assert.Equal("owner-from-the-provider", started.Subject.Value);
+        Assert.Equal("owner@example.test", started.DisplayName);
         Assert.Contains(
             arrived.Headers.GetValues(HeaderNames.SetCookie),
             cookie => cookie.StartsWith($"{SessionCookie.Name}={started.Id.Value}", StringComparison.Ordinal)

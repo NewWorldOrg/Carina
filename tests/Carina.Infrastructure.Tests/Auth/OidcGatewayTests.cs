@@ -56,6 +56,8 @@ public sealed class OidcGatewayTests
             ["nonce"] = "a-nonce",
             ["groups"] = new[] { "operators" },
             ["hd"] = "example.test",
+            ["email"] = "owner@example.test",
+            ["name"] = "The Owner",
         });
 
         OidcClaims claims = (await provider.Gateway.ReadAsync(reached, token, default))!;
@@ -67,7 +69,29 @@ public sealed class OidcGatewayTests
         Assert.Equal("a-nonce", claims.Nonce);
         Assert.Equal(["operators"], claims.Groups);
         Assert.Equal("example.test", claims.HostedDomain);
+        Assert.Equal("owner@example.test", claims.Email);
+        Assert.Equal("The Owner", claims.Name);
         Assert.False(claims.GroupsOverflowed);
+    }
+
+    [Fact]
+    public async Task BrAu018ATokenNamingNeitherAnEmailNorANameLeavesBothUnsetRatherThanGuessed()
+    {
+        await using var provider = new Harness();
+        OidcEndpoints reached = await provider.ReachedAsync();
+        string token = provider.Idp.Forge(new Dictionary<string, object>
+        {
+            ["iss"] = MockIdentityProvider.Issuer,
+            ["aud"] = "carina",
+            ["sub"] = "owner",
+            ["exp"] = new DateTimeOffset(At).ToUnixTimeSeconds(),
+        });
+
+        OidcClaims claims = (await provider.Gateway.ReadAsync(reached, token, default))!;
+
+        Assert.Null(claims.Email);
+        Assert.Null(claims.Name);
+        Assert.Equal("owner", claims.DisplayName);
     }
 
     [Fact]

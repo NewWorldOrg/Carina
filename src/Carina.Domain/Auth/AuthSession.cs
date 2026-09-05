@@ -22,6 +22,8 @@ public sealed class AuthSession
 {
     public const int LongestDeviceLabel = 120;
 
+    public const int LongestDisplayName = 255;
+
     private AuthSession()
     {
     }
@@ -29,6 +31,8 @@ public sealed class AuthSession
     public SessionId Id { get; private set; } = null!;
 
     public Subject Subject { get; private set; } = null!;
+
+    public string DisplayName { get; private set; } = null!;
 
     public AuthMethod Method { get; private set; }
 
@@ -43,14 +47,16 @@ public sealed class AuthSession
     public static AuthSession Start(
         SessionId id,
         Subject subject,
+        string displayName,
         AuthMethod method,
         string deviceLabel,
         DateTime at)
-        => Rehydrate(id, subject, method, at, at, deviceLabel, null);
+        => Rehydrate(id, subject, displayName, method, at, at, deviceLabel, null);
 
     public static AuthSession Rehydrate(
         SessionId id,
         Subject subject,
+        string displayName,
         AuthMethod method,
         DateTime createdAt,
         DateTime lastUsedAt,
@@ -75,6 +81,7 @@ public sealed class AuthSession
         {
             Id = id,
             Subject = subject,
+            DisplayName = ValidatedDisplayName(displayName),
             Method = method,
             CreatedAt = created,
             LastUsedAt = lastUsed,
@@ -129,6 +136,37 @@ public sealed class AuthSession
         RevokedAt = at;
 
         return true;
+    }
+
+    private static string ValidatedDisplayName(string displayName)
+    {
+        ArgumentNullException.ThrowIfNull(displayName);
+
+        string trimmed = displayName.Trim();
+
+        if (trimmed.Length == 0)
+        {
+            throw new ArgumentException(
+                "A session is listed beside everyone else's, so it says whose it is.",
+                nameof(displayName));
+        }
+
+        if (trimmed.Length > LongestDisplayName)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(displayName),
+                trimmed.Length,
+                $"A display name is at most {LongestDisplayName} characters.");
+        }
+
+        if (trimmed.Any(char.IsControl))
+        {
+            throw new ArgumentException(
+                "A display name is issued by an identity provider and reaches screens, so it carries no control characters.",
+                nameof(displayName));
+        }
+
+        return trimmed;
     }
 
     private static string ValidatedDeviceLabel(string deviceLabel)
