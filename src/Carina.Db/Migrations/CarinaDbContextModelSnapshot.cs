@@ -1638,7 +1638,7 @@ namespace Carina.Db.Migrations
 
                             t.HasCheckConstraint("ck_quality_session_measurement_counts", "(cc_measured = (cc_dropped_packets IS NOT NULL AND cc_total_packets IS NOT NULL))\nAND (cc_measured = (measured_updated_at IS NOT NULL))\nAND (cc_dropped_packets IS NULL OR cc_dropped_packets >= 0)\nAND (cc_total_packets IS NULL OR cc_total_packets >= 0)\nAND eovf_count >= 0");
 
-                            t.HasCheckConstraint("ck_quality_session_measurement_purpose", "purpose IN ('Unspecified', 'Recording', 'Live', 'Survey', 'Scan', 'SurveyNow')\nAND purpose <> 'Recording'");
+                            t.HasCheckConstraint("ck_quality_session_measurement_purpose", "purpose IN ('Unspecified', 'Recording', 'Live', 'Survey', 'Scan', 'SurveyNow', 'Logo')\nAND purpose <> 'Recording'");
 
                             t.HasCheckConstraint("ck_quality_session_measurement_span", "ended_at IS NULL OR ended_at >= started_at");
                         });
@@ -1807,7 +1807,7 @@ namespace Carina.Db.Migrations
 
                             t.HasCheckConstraint("ck_quality_signal_sample_lock_gate", "locked\nOR (cnr_milli_decibels IS NULL AND bit_errors = '[]'::jsonb)");
 
-                            t.HasCheckConstraint("ck_quality_signal_sample_purpose", "purpose IN ('Unspecified', 'Recording', 'Live', 'Survey', 'Scan', 'SurveyNow')");
+                            t.HasCheckConstraint("ck_quality_signal_sample_purpose", "purpose IN ('Unspecified', 'Recording', 'Live', 'Survey', 'Scan', 'SurveyNow', 'Logo')");
 
                             t.HasCheckConstraint("ck_quality_signal_sample_read_at", "((cnr_milli_decibels IS NULL) = (cnr_read_at IS NULL))\nAND ((bit_errors = '[]'::jsonb) = (bit_errors_read_at IS NULL))\nAND jsonb_typeof(bit_errors) = 'array'\nAND jsonb_typeof(metrics_not_read) = 'array'");
                         });
