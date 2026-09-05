@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.Versioning;
 
@@ -330,6 +331,38 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
 
         Assert.True((await running.Completion).RanToTheEnd);
         await running.Captions.Completion.WaitAsync(Eventually.Patience);
+    }
+
+    [Fact]
+    public async Task ACaptionPipeSomebodyElseStillHoldsEndsWithTheProgrammeAfterTheGrace()
+    {
+        string pids = standIns.Named("pids");
+
+        ILiveTranscoder running = await Started(
+            standIns.Script($"for a in \"$@\"; do case $a in pipe:[2-9]*|pipe:[1-9][0-9]*) fd=${{a#pipe:}};; esac; done; sleep 60 > /proc/self/fd/$fd 2> /dev/null < /dev/null & echo $! > {pids}; exit 0"),
+            LiveEncoder.Software,
+            grace: TimeSpan.FromMilliseconds(300),
+            captions: CaptionOutlet.Drawn);
+
+        await WaitFor(pids, 1);
+
+        TranscoderExit ended = await running.Completion.WaitAsync(Eventually.Patience);
+
+        Assert.True(ended.RanToTheEnd);
+        await running.Captions.Completion.WaitAsync(Eventually.Patience);
+
+        await running.DisposeAsync();
+
+        foreach (int holder in Read(pids))
+        {
+            try
+            {
+                Process.GetProcessById(holder).Kill();
+            }
+            catch (ArgumentException)
+            {
+            }
+        }
     }
 
     [Fact]
