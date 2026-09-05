@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Carina.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Carina.Db.Migrations
 {
     [DbContext(typeof(CarinaDbContext))]
-    partial class CarinaDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260905170302_StationLogos")]
+    partial class StationLogos
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1583,18 +1586,6 @@ namespace Carina.Db.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("written_duration_ms");
 
-                    b.PrimitiveCollection<int[]>("genre_kinds")
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("integer[]")
-                        .HasColumnName("genre_kinds")
-                        .HasComputedColumnSql("string_to_array(nullif(translate(jsonb_path_query_array(snapshot_genres, '$[*].kind')::text, '[] ', ''), ''), ',')::integer[]", true);
-
-                    b.Property<string>("searchable")
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("text")
-                        .HasColumnName("searchable")
-                        .HasComputedColumnSql("lower(pg_catalog.normalize(snapshot_name || ' ' || snapshot_summary || ' ' || snapshot_extended, 'NFKC'))", true);
-
                     b.Property<uint>("xmin")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
@@ -1646,10 +1637,6 @@ namespace Carina.Db.Migrations
                     b.HasIndex("OutputRoot", "FileName")
                         .IsUnique()
                         .HasDatabaseName("ux_recording_file");
-
-                    b.HasIndex("StartedAtActual", "Id")
-                        .IsDescending()
-                        .HasDatabaseName("ix_recording_library");
 
                     b.ToTable("recording", null, t =>
                         {

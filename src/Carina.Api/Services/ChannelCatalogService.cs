@@ -24,11 +24,13 @@ public enum CatalogFailure
 
 public sealed record ServiceWithChannels(
     BroadcastService Service,
-    IReadOnlyList<CandidateChannel> Candidates);
+    IReadOnlyList<CandidateChannel> Candidates,
+    StationLogoStamp? Logo = null);
 
 public sealed class ChannelCatalogService(
     IBroadcastServiceRepository services,
     ICandidateChannelRepository candidates,
+    IStationLogoRepository logos,
     IDriverClient driver,
     IAppEventPublisher events,
     IRecalculationNotice notices,
@@ -38,6 +40,7 @@ public sealed class ChannelCatalogService(
         CancellationToken cancellationToken)
     {
         var listed = new List<ServiceWithChannels>();
+        IReadOnlyList<StationLogoStamp> collected = await logos.StampsAsync(cancellationToken);
 
         foreach (BroadcastService service in await services.ListAsync(cancellationToken))
         {
@@ -46,7 +49,8 @@ public sealed class ChannelCatalogService(
                 await candidates.ListForServiceAsync(
                     service.NetworkId,
                     service.ServiceId,
-                    cancellationToken)));
+                    cancellationToken),
+                CollectedFor(service, collected)));
         }
 
         return ServiceResult<IReadOnlyList<ServiceWithChannels>>.Success(listed);
@@ -230,13 +234,26 @@ public sealed class ChannelCatalogService(
             CatalogFailure.NoTunerReceivesIt);
     }
 
+    private static StationLogoStamp? CollectedFor(
+        BroadcastService service,
+        IReadOnlyList<StationLogoStamp> collected)
+        => service.LogoId is { } named
+            ? collected.FirstOrDefault(
+                stamp => stamp.NetworkId.Equals(service.NetworkId) && stamp.LogoId.Equals(named))
+            : null;
+
     private async Task<ServiceWithChannels> GatherAsync(
         BroadcastService service,
         CancellationToken cancellationToken)
-        => new(
+    {
+        IReadOnlyList<CandidateChannel> found = await candidates.ListForServiceAsync(
+            service.NetworkId,
+            service.ServiceId,
+            cancellationToken);
+
+        return new ServiceWithChannels(
             service,
-            await candidates.ListForServiceAsync(
-                service.NetworkId,
-                service.ServiceId,
-                cancellationToken));
+            found,
+            CollectedFor(service, await logos.StampsAsync(cancellationToken)));
+    }
 }

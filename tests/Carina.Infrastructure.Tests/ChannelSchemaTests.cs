@@ -266,6 +266,7 @@ public sealed class ChannelSchemaTests
                 "scan_run",
                 "scan_run_attempt",
                 "service_reach_config",
+                "station_logo",
                 "stream_visit",
                 "stream_visit_tally",
             ],

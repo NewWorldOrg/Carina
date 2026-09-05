@@ -612,4 +612,86 @@ public sealed class ServiceCatalogEndpointTests
             HttpStatusCode.Unauthorized,
             (await client.GetAsync(new Uri(OneService, UriKind.Relative))).StatusCode);
     }
+
+    [Fact]
+    public async Task AServiceWhoseLogoHasBeenCollectedSaysSoAndWhereToAskForIt()
+    {
+        await using var feature = new CatalogFeature();
+        feature.Seed(101, "First", TuningParameters.Terrestrial(Terrestrial));
+        feature.Logos.Services[0].NamesTheLogo(new LogoId(261));
+        feature.Logos.Logos.Add(Logo(261));
+
+        (HttpStatusCode _, JsonElement body) = await feature.GetAsync("/api/services");
+        JsonElement listed = body.GetProperty("data")[0];
+
+        Assert.Equal("inTheCommonDataTable", listed.GetProperty("logoDeclaration").GetString());
+        Assert.Equal("/api/services/1-101/logo", listed.GetProperty("logo").GetProperty("url").GetString());
+    }
+
+    [Fact]
+    public async Task TwoServicesOfOneStationBothPointAtTheirOwnAddressForTheLogoTheyShare()
+    {
+        await using var feature = new CatalogFeature();
+        feature.Seed(101, "First", TuningParameters.Terrestrial(Terrestrial));
+        feature.Seed(102, "Second", TuningParameters.Terrestrial(Terrestrial));
+        feature.Logos.Services[0].NamesTheLogo(new LogoId(261));
+        feature.Logos.Services[1].NamesTheLogo(new LogoId(261));
+        feature.Logos.Logos.Add(Logo(261));
+
+        (HttpStatusCode _, JsonElement body) = await feature.GetAsync("/api/services");
+        JsonElement listed = body.GetProperty("data");
+
+        Assert.Equal("/api/services/1-101/logo", listed[0].GetProperty("logo").GetProperty("url").GetString());
+        Assert.Equal("/api/services/1-102/logo", listed[1].GetProperty("logo").GetProperty("url").GetString());
+    }
+
+    [Fact]
+    public async Task AServiceThatBroadcastsNoLogoSaysSoRatherThanOfferingAnAddressThatAnswersNothing()
+    {
+        await using var feature = new CatalogFeature();
+        feature.Seed(101, "First", TuningParameters.Terrestrial(Terrestrial));
+        feature.Logos.Services[0].BroadcastsNoLogo();
+
+        (HttpStatusCode _, JsonElement body) = await feature.GetAsync(OneService);
+        JsonElement found = body.GetProperty("data");
+
+        Assert.Equal("noPictureIsBroadcast", found.GetProperty("logoDeclaration").GetString());
+        Assert.Equal(JsonValueKind.Null, found.GetProperty("logo").ValueKind);
+    }
+
+    [Fact]
+    public async Task AServiceWhoseLogoIsNamedButNotYetCollectedOffersNoAddressForIt()
+    {
+        await using var feature = new CatalogFeature();
+        feature.Seed(101, "First", TuningParameters.Terrestrial(Terrestrial));
+        feature.Logos.Services[0].NamesTheLogo(new LogoId(261));
+
+        (HttpStatusCode _, JsonElement body) = await feature.GetAsync(OneService);
+        JsonElement found = body.GetProperty("data");
+
+        Assert.Equal("inTheCommonDataTable", found.GetProperty("logoDeclaration").GetString());
+        Assert.Equal(JsonValueKind.Null, found.GetProperty("logo").ValueKind);
+    }
+
+    [Fact]
+    public async Task AServiceNobodyHasReadTheDescriptionOfSaysThatRatherThanThatItHasNoLogo()
+    {
+        await using var feature = new CatalogFeature();
+        feature.Seed(101, "First", TuningParameters.Terrestrial(Terrestrial));
+
+        (HttpStatusCode _, JsonElement body) = await feature.GetAsync(OneService);
+
+        Assert.Equal("notYetRead", body.GetProperty("data").GetProperty("logoDeclaration").GetString());
+    }
+
+    private static StationLogo Logo(int logoId)
+        => StationLogo.Collect(
+            new NetworkId(1),
+            new LogoId(logoId),
+            0x05,
+            3,
+            64,
+            36,
+            [0x89, 0x50, 0x4E, 0x47],
+            new DateTime(2026, 9, 5, 0, 0, 0, DateTimeKind.Utc));
 }

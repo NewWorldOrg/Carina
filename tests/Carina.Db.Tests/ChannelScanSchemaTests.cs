@@ -248,8 +248,9 @@ public sealed class ChannelScanSchemaTests(MigratedScratchDatabase database)
         => Execute(
             connection,
             $"""
-             INSERT INTO broadcast_service (network_id, service_id, name, category, discovered_at, last_seen_at)
-             VALUES ({networkId}, {serviceId}, 'Fixture Service', 'Television', {Now}, {Now})
+             INSERT INTO broadcast_service
+                 (network_id, service_id, name, category, logo_declaration, discovered_at, last_seen_at)
+             VALUES ({networkId}, {serviceId}, 'Fixture Service', 'Television', 'NotYetRead', {Now}, {Now})
              """);
 
     private static Task Candidate(
