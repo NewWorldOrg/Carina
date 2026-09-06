@@ -4,7 +4,7 @@ namespace Carina.Domain.Channels;
 
 public static class LogoRotation
 {
-    public static BroadcastStream? NextDue(
+    public static IReadOnlyList<BroadcastStream> DueNow(
         IReadOnlyList<BroadcastStream> streams,
         IReadOnlyList<LogoVisit> visits,
         LogoSweepSettings settings,
@@ -14,15 +14,24 @@ public static class LogoRotation
         ArgumentNullException.ThrowIfNull(visits);
         ArgumentNullException.ThrowIfNull(settings);
 
-        return streams
-            .Where(CarriesACommonDataTable)
-            .Select(stream => new { Stream = stream, Visit = VisitOf(visits, stream) })
-            .Where(walked => walked.Visit is null || walked.Visit.DueAt(settings) <= now)
-            .OrderBy(walked => walked.Visit?.LastAttemptedAt ?? DateTime.MinValue)
-            .ThenBy(walked => walked.Stream.NetworkId.Value)
-            .ThenBy(walked => walked.Stream.TransportStreamId.Value)
-            .Select(walked => walked.Stream)
-            .FirstOrDefault();
+        return
+        [
+            .. streams
+                .Where(CarriesACommonDataTable)
+                .Select(stream => new { Stream = stream, Visit = VisitOf(visits, stream) })
+                .Where(walked => walked.Visit is null || walked.Visit.DueAt(settings) <= now)
+                .OrderBy(walked => walked.Visit?.LastAttemptedAt ?? DateTime.MinValue)
+                .ThenBy(walked => walked.Stream.NetworkId.Value)
+                .ThenBy(walked => walked.Stream.TransportStreamId.Value)
+                .Select(walked => walked.Stream),
+        ];
+    }
+
+    public static bool ThereIsRoomForAnotherVisit(LogoSweepSettings settings, TimeSpan spent, int visited)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        return visited is 0 || spent + settings.LongestVisit <= settings.RoundBudget;
     }
 
     public static bool CarriesACommonDataTable(BroadcastStream stream)

@@ -15,4 +15,16 @@ public sealed class LogoSweepSettingsTests
 
         Assert.True(settings.LongestVisit < settings.BetweenSweeps);
     }
+
+    [Fact]
+    public void AWakeMayWorkForTheGapBetweenSweepsLessTheVisitItHasToLeaveRoomFor()
+        => Assert.Equal(TimeSpan.FromMinutes(50), new LogoSweepSettings().RoundBudget);
+
+    [Fact]
+    public void ARoundThatSpendsEveryMinuteOfItsBudgetStillEndsBeforeTheNextSweepIsDue()
+    {
+        LogoSweepSettings settings = new();
+
+        Assert.True(settings.RoundBudget + settings.LongestVisit <= settings.BetweenSweeps);
+    }
 }
