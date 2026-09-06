@@ -7,6 +7,7 @@ using Carina.Api.Tests.Unit;
 using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
+using Carina.Domain.Encodings;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
@@ -203,6 +204,7 @@ internal sealed class RecordingFeature : IAsyncDisposable
             {
                 services.RemoveAll<IHostedService>();
                 services.AddSingleton<IRecordingDirectory>(Recordings);
+                services.AddSingleton<IEncodeStandingReader>(Jobs);
                 services.AddSingleton<IDriverClient>(Driver);
                 services.AddSingleton<IThumbnailRemaker>(Remaker);
                 services.AddSingleton(erasingWith);
@@ -218,6 +220,8 @@ internal sealed class RecordingFeature : IAsyncDisposable
     public HttpClient Client { get; }
 
     public HeldRecordings Recordings { get; } = new();
+
+    public HeldEncodeJobs Jobs { get; } = new();
 
     public WritingDriver Driver { get; } = new();
 

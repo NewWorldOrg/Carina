@@ -419,8 +419,8 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
 
         await using CarinaDbContext reading = database.Open();
         var reader = new EncodeJobRepository(reading);
-        PaginatedList<EncodeJob> everything = await reader.ListAsync(EncodeJobQuery.For(null, 1, 2)!, Cancel);
-        PaginatedList<EncodeJob> waiting = await reader.ListAsync(EncodeJobQuery.For([EncodeJobStatus.Queued], 1, 10)!, Cancel);
+        PaginatedList<EncodeJob> everything = await reader.ListAsync(EncodeJobQuery.For(null, null, 1, 2)!, Cancel);
+        PaginatedList<EncodeJob> waiting = await reader.ListAsync(EncodeJobQuery.For([EncodeJobStatus.Queued], null, 1, 10)!, Cancel);
 
         Assert.Equal(3, everything.Total);
         Assert.Equal(2, everything.LastPage);

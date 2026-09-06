@@ -62,6 +62,7 @@ internal sealed class EncodingFeature : IAsyncDisposable
                 services.AddSingleton<IDriverClient>(Driver);
                 services.AddSingleton<IRecordingDirectory>(Recordings);
                 services.AddSingleton<IEncodeJobRepository>(Jobs);
+                services.AddSingleton<IEncodeStandingReader>(Jobs);
                 services.AddSingleton<IEncodeProfileRepository>(Profiles);
                 services.AddSingleton<IEncodeDestinationRepository>(Destinations);
                 services.AddSingleton<IEncodeScratchLedger>(Scratch);

@@ -5,6 +5,7 @@ using Carina.Api.Responder.Encoding;
 using Carina.Api.Services;
 using Carina.Domain.Base;
 using Carina.Domain.Encodings;
+using Carina.Domain.Recordings;
 
 using Microsoft.AspNetCore.Mvc;
 
@@ -20,16 +21,30 @@ public sealed class ListEncodeJobsAction(EncodeJobService jobs) : ControllerBase
     [ProducesResponseType<BaseResponder<EncodeJobListResponder>>(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Invoke(
         [FromQuery] EncodeJobStatus[]? status,
+        [FromQuery] string? recordingId,
         [FromQuery] int? page,
         [FromQuery] int? perPage,
         CancellationToken cancellationToken)
     {
-        if (EncodeJobQuery.For(status, page, perPage) is not { } asked)
+        RecordingId? recording = null;
+
+        if (!string.IsNullOrWhiteSpace(recordingId))
+        {
+            recording = RecordingIdText.Read(recordingId);
+
+            if (recording is null)
+            {
+                return BadRequest(BaseResponder<EncodeJobListResponder>.Error(RecordingIdText.Description));
+            }
+        }
+
+        if (EncodeJobQuery.For(status, recording, page, perPage) is not { } asked)
         {
             return BadRequest(BaseResponder<EncodeJobListResponder>.Error(
                 "A page is asked for by a page number of at least 1, a page size above "
                 + $"{EncodeJobQuery.MostPerPage} is cut down to it and answered as the size that was used, and each "
-                + "status is one of the five the ledger holds."));
+                + "status is one of the five the ledger holds. "
+                + RecordingIdText.Description));
         }
 
         ServiceResult<PaginatedList<EncodeJobView>> found = await jobs.ListAsync(asked, cancellationToken);

@@ -1,3 +1,5 @@
+using Carina.Domain.Recordings;
+
 namespace Carina.Domain.Encodings;
 
 /// <summary>
@@ -12,20 +14,27 @@ public sealed class EncodeJobQuery
 
     public const int DefaultPerPage = 20;
 
-    private EncodeJobQuery(IReadOnlyList<EncodeJobStatus> statuses, int page, int perPage)
+    private EncodeJobQuery(IReadOnlyList<EncodeJobStatus> statuses, RecordingId? recording, int page, int perPage)
     {
         Statuses = statuses;
+        Recording = recording;
         Page = page;
         PerPage = perPage;
     }
 
     public IReadOnlyList<EncodeJobStatus> Statuses { get; }
 
+    public RecordingId? Recording { get; }
+
     public int Page { get; }
 
     public int PerPage { get; }
 
-    public static EncodeJobQuery? For(IReadOnlyList<EncodeJobStatus>? statuses, int? page, int? perPage)
+    public static EncodeJobQuery? For(
+        IReadOnlyList<EncodeJobStatus>? statuses,
+        RecordingId? recording,
+        int? page,
+        int? perPage)
     {
         if (page is < 1)
         {
@@ -46,6 +55,6 @@ public sealed class EncodeJobQuery
             _ => perPage.Value,
         };
 
-        return new EncodeJobQuery(asked, page ?? 1, size);
+        return new EncodeJobQuery(asked, recording, page ?? 1, size);
     }
 }

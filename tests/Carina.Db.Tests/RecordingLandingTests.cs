@@ -2,8 +2,10 @@ using System.Text.Json;
 
 using Carina.Api.Common;
 using Carina.Api.Responder.Recordings;
+using Carina.Api.Services;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
+using Carina.Domain.Encodings;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
@@ -28,7 +30,7 @@ public sealed class RecordingLandingTests(MigratedScratchDatabase database)
 
         await using CarinaDbContext context = Context();
         Recording read = await Read(context, written.Id);
-        JsonElement wire = Wire(RecordingDetailResponder.Of(read));
+        JsonElement wire = Wire(RecordingDetailResponder.Of(await SeenAsync(context, read)));
         JsonElement recording = wire.GetProperty("recording");
         JsonElement reasons = recording.GetProperty("outcomeDetail");
 
@@ -85,7 +87,8 @@ public sealed class RecordingLandingTests(MigratedScratchDatabase database)
             OnlyThisOne(written),
             CancellationToken.None);
 
-        JsonElement wire = Wire(RecordingListResponder.Of(found));
+        JsonElement wire = Wire(RecordingListResponder.Of(
+            new RecordingPage(found, await StandingsAsync(context, found.Items))));
         JsonElement items = wire.GetProperty("items");
 
         Assert.Equal(1, wire.GetProperty("total").GetInt32());
@@ -119,7 +122,7 @@ public sealed class RecordingLandingTests(MigratedScratchDatabase database)
         await AddAsync(recording);
 
         await using CarinaDbContext context = Context();
-        JsonElement wire = Wire(RecordingDetailResponder.Of(await Read(context, id)));
+        JsonElement wire = Wire(RecordingDetailResponder.Of(await SeenAsync(context, await Read(context, id))));
         JsonElement drops = wire.GetProperty("recording").GetProperty("drops");
 
         Assert.True(drops.GetProperty("ccMeasured").GetBoolean());
@@ -133,6 +136,61 @@ public sealed class RecordingLandingTests(MigratedScratchDatabase database)
         Assert.Equal(900_000, positions.GetProperty("anchorPcr").GetInt64());
         Assert.Equal(12, positions.GetProperty("buckets")[0].GetProperty("second").GetInt32());
         Assert.Equal(7, positions.GetProperty("buckets")[0].GetProperty("continuity").GetInt64());
+    }
+
+    [Fact(DisplayName = "BR-ES-002: where a recording stands with the encoder reaches the wire beside its outcome")]
+    public async Task WhereARecordingStandsWithTheEncoderReachesTheWireBesideItsOutcome()
+    {
+        Recording encoded = await WrittenAsync(4);
+        Recording untouched = await WrittenAsync(5);
+
+        await EncodedAsync(encoded);
+
+        await using CarinaDbContext context = Context();
+        JsonElement made = Wire(RecordingDetailResponder.Of(await SeenAsync(context, await Read(context, encoded.Id))));
+        JsonElement none = Wire(RecordingDetailResponder.Of(await SeenAsync(context, await Read(context, untouched.Id))));
+
+        Assert.Equal("completed", Standing(made));
+        Assert.Equal("notEncoded", Standing(none));
+    }
+
+    private static string? Standing(JsonElement wire)
+        => wire.GetProperty("recording").GetProperty("encode").GetProperty("standing").GetString();
+
+    private async Task EncodedAsync(Recording recording)
+    {
+        EncodeProfile profile = EncodeProfile.Define(
+            EncodeProfileId.New(),
+            new EncodeLabel("Viewing"),
+            EncodeCodec.H264,
+            EncodeResolution.AsSource,
+            Deinterlace.EveryFrame,
+            new ConstantRateFactor(22),
+            new ConstantQuantiser(24),
+            Noon);
+        EncodeDestination destination = EncodeDestination.Define(
+            EncodeDestinationId.New(),
+            new EncodeLabel("Shelf"),
+            new OutputRoot("encodes"),
+            profile.Id,
+            Noon);
+        EncodeJob job = EncodeJob.Queue(
+            EncodeJobId.New(),
+            recording.Id,
+            profile.Id,
+            destination.Id,
+            destination.OutputRoot,
+            Noon.AddHours(1));
+
+        job.Start(Noon.AddHours(1).AddMinutes(1));
+        job.Name(EncodeFileName.Artefact(recording.Id, profile.Id));
+        job.Complete(Noon.AddHours(2));
+
+        await using CarinaDbContext context = Context();
+        context.Add(profile);
+        context.Add(destination);
+        context.Add(job);
+        await context.SaveChangesAsync();
     }
 
     private static RecordingQuery OnlyThisOne(Recording recording)
@@ -164,6 +222,20 @@ public sealed class RecordingLandingTests(MigratedScratchDatabase database)
             new TunerDeviceId("pt3-0"));
 
     private CarinaDbContext Context() => CarinaDbContextFactory.Create(database.ConnectionString);
+
+    private static async Task<RecordingSeen> SeenAsync(CarinaDbContext context, Recording recording)
+    {
+        EncodeStandingBoard standings = await StandingsAsync(context, [recording]);
+
+        return new RecordingSeen(recording, standings.For(recording.Id));
+    }
+
+    private static async Task<EncodeStandingBoard> StandingsAsync(
+        CarinaDbContext context,
+        IReadOnlyList<Recording> found)
+        => await new EncodeStandingReader(context).ReadAsync(
+            [.. found.Select(recording => recording.Id)],
+            CancellationToken.None);
 
     private static async Task<Recording> Read(CarinaDbContext context, RecordingId id)
         => await new RecordingDirectory(context).FindAsync(id, CancellationToken.None)

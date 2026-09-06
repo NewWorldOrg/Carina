@@ -55,6 +55,11 @@ public sealed class EncodeJobRepository(CarinaDbContext context) : IEncodeJobRep
             asked = asked.Where(row => query.Statuses.Contains(row.Status));
         }
 
+        if (query.Recording is { } recording)
+        {
+            asked = asked.Where(row => row.RecordingId == recording);
+        }
+
         int total = await asked.CountAsync(cancellationToken);
         List<EncodeJob> page = await asked
             .OrderByDescending(row => row.QueuedAt)
