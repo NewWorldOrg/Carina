@@ -23,11 +23,14 @@ public sealed class LogoCollectorTests(RepositoryDatabase database)
     private const int SilentServiceId = 1025;
     private const int SomeLogoId = 261;
     private const int SomeTransportStreamId = 32737;
-    private const int AnotherTransportStreamId = 32738;
+    private const int LargestPictureType = 0x05;
+    private const int SmallerPictureType = 0x03;
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
     private static readonly DateTime At = new(2026, 9, 5, 0, 0, 0, DateTimeKind.Utc);
+
+    private static readonly int[] PhysicalChannels = [27, 28, 29];
 
     [Fact]
     public async Task ALogoOnTheAirEndsUpKeptAndNamedByTheServiceThatUsesIt()
@@ -72,16 +75,99 @@ public sealed class LogoCollectorTests(RepositoryDatabase database)
     }
 
     [Fact]
-    public async Task OneSweepOpensOneTransportSoTheTunerGoesBackBetweenThem()
+    public async Task OneWakeWorksThroughEveryTransportThatIsDueRatherThanStoppingAfterTheFirst()
     {
         int network = BroadcastIds.NextNetwork();
         await SeedAsync(network, SomeServiceId, SilentServiceId);
-        ScriptedDriverClient driver = Airing(network, alsoOnAnotherTransport: true);
+        ScriptedDriverClient driver = Airing(network, transports: 3);
 
-        await using ServiceProvider provider = Provider(network, driver, alsoOnAnotherTransport: true);
-        await RunAsync(provider, async () => (await VisitsAsync(network)).Count > 0);
+        await using ServiceProvider provider = Provider(network, driver, transports: 3);
+        await RunAsync(provider, async () => (await VisitsAsync(network)).Count is 3);
 
-        Assert.Single(driver.Started);
+        Assert.Equal(
+            [Tuned(27), Tuned(28), Tuned(29)],
+            driver.Started);
+    }
+
+    [Fact]
+    public async Task AWakeStopsOnceItsBudgetIsSpentAndLeavesTheRestDueForTheNextOne()
+    {
+        int network = BroadcastIds.NextNetwork();
+        await SeedAsync(network, SomeServiceId, SilentServiceId);
+        byte[] airing = OnTheAir(network);
+        PacedStream held = PacedStream.InChunksOf(airing, airing.Length);
+        HandTurnedClock clock = new(At);
+        ScriptedDriverClient driver = Airing(network, transports: 2);
+
+        driver.Script(Tuned(27), new ChannelScript { Paced = () => held });
+
+        await using ServiceProvider provider = Provider(network, driver, transports: 2, clock: clock);
+        LogoCollector collector = CollectorIn(provider);
+        using var stopping = new CancellationTokenSource();
+
+        await collector.StartAsync(stopping.Token);
+        held.AwaitParkedBefore(1);
+        clock.Turn(TimeSpan.FromMinutes(45));
+        held.Allow(2);
+        await SettledAsync(async () => (await VisitsAsync(network)).Count > 0);
+        await Task.Delay(TimeSpan.FromMilliseconds(400), Cancel);
+        await stopping.CancelAsync();
+        await collector.StopAsync(Cancel);
+
+        Assert.Equal([Tuned(27)], driver.Started);
+        LogoVisit only = Assert.Single(await VisitsAsync(network));
+        Assert.Equal(new TransportStreamId(SomeTransportStreamId), only.TransportStreamId);
+    }
+
+    [Fact]
+    public async Task AWakeThatFindsEveryTransportCollectedRecentlyAsksForNoTunerAtAll()
+    {
+        int network = BroadcastIds.NextNetwork();
+        await SeedAsync(network, SomeServiceId, SilentServiceId);
+        await CollectedAsync(network, SomeTransportStreamId, At);
+        await CollectedAsync(network, SomeTransportStreamId + 1, At);
+        ScriptedDriverClient driver = Airing(network, transports: 2);
+
+        await using ServiceProvider provider = Provider(
+            network,
+            driver,
+            transports: 2,
+            clock: new HandTurnedClock(At));
+        await SettleAsync(provider);
+
+        Assert.Empty(driver.Purposes);
+        Assert.Equal(2, (await VisitsAsync(network)).Count);
+    }
+
+    [Fact]
+    public async Task AVisitTakenOffTheTunerKeepsWhatItGatheredAndStaysDueForTheNextWake()
+    {
+        int network = BroadcastIds.NextNetwork();
+        await SeedAsync(network, SomeServiceId, SilentServiceId);
+        byte[] airing = OnTheAir(network, SmallerPictureType);
+        PacedStream held = PacedStream.InChunksOf(airing, airing.Length);
+        var signals = new DriverSignalRelay(NullLogger<DriverSignalRelay>.Instance);
+        ScriptedDriverClient driver = Airing(network);
+
+        driver.Script(Tuned(27), new ChannelScript { Paced = () => held });
+
+        await using ServiceProvider provider = Provider(network, driver, signals: signals);
+        LogoCollector collector = CollectorIn(provider);
+        using var stopping = new CancellationTokenSource();
+
+        await collector.StartAsync(stopping.Token);
+        held.AwaitParkedBefore(1);
+        held.Allow(1);
+        held.AwaitParkedBefore(2);
+        signals.Publish(DriverClientSignals.InstanceChanged);
+        await SettledAsync(async () => (await VisitsAsync(network)).Count > 0);
+        await stopping.CancelAsync();
+        await collector.StopAsync(Cancel);
+
+        LogoVisit cut = Assert.Single(await VisitsAsync(network));
+        Assert.Equal(LogoVisitOutcome.Interrupted, cut.Outcome);
+        Assert.NotNull(await LogoAsync(network));
+        Assert.Equal(cut.LastAttemptedAt, cut.DueAt(new LogoSweepSettings()));
     }
 
     [Fact]
@@ -89,13 +175,13 @@ public sealed class LogoCollectorTests(RepositoryDatabase database)
     {
         int network = BroadcastIds.NextNetwork();
         await SeedAsync(network, SomeServiceId, SilentServiceId);
-        ScriptedDriverClient driver = Airing(network);
+        ScriptedDriverClient driver = Airing(network, transports: 2);
         driver.BusyRefusalsRemaining = 1000;
 
-        await using ServiceProvider provider = Provider(network, driver);
+        await using ServiceProvider provider = Provider(network, driver, transports: 2);
         await SettleAsync(provider);
 
-        Assert.Equal([SessionPurpose.Logo], driver.Purposes.Distinct());
+        Assert.Equal([SessionPurpose.Logo], driver.Purposes);
         Assert.Empty(driver.Started);
         Assert.Empty(await VisitsAsync(network));
         Assert.Null(await LogoAsync(network));
@@ -131,6 +217,8 @@ public sealed class LogoCollectorTests(RepositoryDatabase database)
         Assert.NotNull(visit.LastCollectedAt);
     }
 
+    private static TuningParameters Tuned(int physicalChannel) => TuningParameters.Terrestrial(physicalChannel);
+
     private static LogoCollector CollectorIn(ServiceProvider provider)
         => provider.GetServices<IHostedService>().OfType<LogoCollector>().Single();
 
@@ -140,16 +228,19 @@ public sealed class LogoCollectorTests(RepositoryDatabase database)
         using var stopping = new CancellationTokenSource();
 
         await collector.StartAsync(stopping.Token);
-
-        for (int attempt = 0; attempt < 200 && !await settled(); attempt++)
-        {
-            await Task.Delay(TimeSpan.FromMilliseconds(25), Cancel);
-        }
-
+        await SettledAsync(settled);
         await stopping.CancelAsync();
         await collector.StopAsync(Cancel);
 
         Assert.True(await settled(), "the logo sweep never wrote down what it collected");
+    }
+
+    private static async Task SettledAsync(Func<Task<bool>> settled)
+    {
+        for (int attempt = 0; attempt < 200 && !await settled(); attempt++)
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(25), Cancel);
+        }
     }
 
     private static async Task SettleAsync(ServiceProvider provider)
@@ -181,6 +272,18 @@ public sealed class LogoCollectorTests(RepositoryDatabase database)
         }
     }
 
+    private async Task CollectedAsync(int network, int transportStreamId, DateTime at)
+    {
+        await using CarinaDbContext context = database.Open();
+
+        await new LogoVisitRepository(context).RecordAsync(
+            new NetworkId(network),
+            new TransportStreamId(transportStreamId),
+            LogoVisitOutcome.Collected,
+            at,
+            Cancel);
+    }
+
     private async Task<StationLogo?> LogoAsync(int network)
     {
         await using CarinaDbContext reading = database.Open();
@@ -208,11 +311,13 @@ public sealed class LogoCollectorTests(RepositoryDatabase database)
     private ServiceProvider Provider(
         int network,
         ScriptedDriverClient driver,
-        bool alsoOnAnotherTransport = false,
-        LogoSweepSettings? settings = null)
+        int transports = 1,
+        LogoSweepSettings? settings = null,
+        TimeProvider? clock = null,
+        IDriverSignals? signals = null)
     {
         var services = new ServiceCollection();
-        var offered = new OfferedTransports(Streams(network, alsoOnAnotherTransport));
+        var offered = new OfferedTransports(Streams(network, transports));
 
         services.AddLogging();
         services.AddScoped(_ => database.Open());
@@ -231,56 +336,36 @@ public sealed class LogoCollectorTests(RepositoryDatabase database)
             scope.GetRequiredService<IStationLogoRepository>(),
             scope.GetRequiredService<IBroadcastServiceRepository>(),
             TimeProvider.System));
+        services.AddScoped<LogoRound>();
         services.AddSingleton<IDriverClient>(driver);
-        services.AddSingleton<IDriverSignals>(new DriverSignalRelay(NullLogger<DriverSignalRelay>.Instance));
-        services.AddSingleton(settings ?? new LogoSweepSettings
-        {
-            BetweenSweeps = TimeSpan.FromMinutes(10),
-        });
-        services.AddSingleton<TimeProvider>(TimeProvider.System);
+        services.AddSingleton(signals ?? new DriverSignalRelay(NullLogger<DriverSignalRelay>.Instance));
+        services.AddSingleton(settings ?? new LogoSweepSettings());
+        services.AddSingleton(clock ?? TimeProvider.System);
         services.AddHostedService<LogoCollector>();
 
         return services.BuildServiceProvider();
     }
 
-    private static IReadOnlyList<BroadcastStream> Streams(int network, bool alsoOnAnotherTransport)
-    {
-        var streams = new List<BroadcastStream>
-        {
-            new(
-                new NetworkId(network),
-                new TransportStreamId(SomeTransportStreamId),
-                TuningParameters.Terrestrial(27),
-                [new ServiceId(SomeServiceId), new ServiceId(SilentServiceId)]),
-        };
+    private static IReadOnlyList<BroadcastStream> Streams(int network, int transports)
+        => [.. Enumerable.Range(0, transports).Select(at => new BroadcastStream(
+            new NetworkId(network),
+            new TransportStreamId(SomeTransportStreamId + at),
+            Tuned(PhysicalChannels[at]),
+            [new ServiceId(SomeServiceId), new ServiceId(SilentServiceId)]))];
 
-        if (alsoOnAnotherTransport)
-        {
-            streams.Add(new BroadcastStream(
-                new NetworkId(network),
-                new TransportStreamId(AnotherTransportStreamId),
-                TuningParameters.Terrestrial(28),
-                [new ServiceId(SomeServiceId)]));
-        }
-
-        return streams;
-    }
-
-    private static ScriptedDriverClient Airing(int network, bool alsoOnAnotherTransport = false)
+    private static ScriptedDriverClient Airing(int network, int transports = 1)
     {
         var driver = new ScriptedDriverClient();
 
-        driver.Script(TuningParameters.Terrestrial(27), new ChannelScript { Bytes = OnTheAir(network) });
-
-        if (alsoOnAnotherTransport)
+        foreach (int physicalChannel in PhysicalChannels.Take(transports))
         {
-            driver.Script(TuningParameters.Terrestrial(28), new ChannelScript { Bytes = OnTheAir(network) });
+            driver.Script(Tuned(physicalChannel), new ChannelScript { Bytes = OnTheAir(network) });
         }
 
         return driver;
     }
 
-    private static byte[] OnTheAir(int network)
+    private static byte[] OnTheAir(int network, int pictureType = LargestPictureType)
     {
         var stream = new List<byte>();
 
@@ -293,7 +378,7 @@ public sealed class LogoCollectorTests(RepositoryDatabase database)
                 {
                     OriginalNetworkId = network,
                     DataModule = CdtWriter.LogoModule(
-                        0x05,
+                        pictureType,
                         SomeLogoId,
                         3,
                         new LogoPngWriter { Width = 64, Height = 36 }.ToBytes()),

@@ -64,67 +64,30 @@ public sealed class LogoCollector(
         IReadOnlyList<BroadcastStream> streams = await provider
             .GetRequiredService<IBroadcastStreamDirectory>()
             .ListAsync(stoppingToken);
+        IReadOnlyList<LogoVisit> walked = await provider
+            .GetRequiredService<ILogoVisitRepository>()
+            .ListAsync(stoppingToken);
+        IReadOnlyList<BroadcastStream> due = LogoRotation.DueNow(
+            streams,
+            walked,
+            settings,
+            clock.GetUtcNow().UtcDateTime);
 
-        ILogoVisitRepository visits = provider.GetRequiredService<ILogoVisitRepository>();
-
-        if (LogoRotation.NextDue(
-                streams,
-                await visits.ListAsync(stoppingToken),
-                settings,
-                clock.GetUtcNow().UtcDateTime) is not { } due)
+        if (due.Count is 0)
         {
             return;
         }
 
-        using CancellationTokenSource walking = CancellationTokenSource.CreateLinkedTokenSource(
-            interruption.Token,
-            stoppingToken);
-
-        LogoVisitResult visit = await Visited(provider, due, walking.Token, stoppingToken);
-
-        if (visit.WorthWaitingOut)
-        {
-            logger.LogInformation("Every tuner stayed busy; the logo sweep waits for the next round.");
-
-            return;
-        }
-
-        LogosWritten written = await provider
-            .GetRequiredService<LogoWriter>()
-            .WriteAsync(visit, stoppingToken);
-
-        await visits.RecordAsync(
-            due.NetworkId,
-            due.TransportStreamId,
-            visit.Outcome,
-            clock.GetUtcNow().UtcDateTime,
-            stoppingToken);
+        LogoRoundResult round = await provider
+            .GetRequiredService<LogoRound>()
+            .WalkAsync(due, interruption.Token, stoppingToken);
 
         logger.LogInformation(
-            "A logo sweep of {NetworkId}-{TransportStreamId} ended as {Outcome} with {Pictures} picture(s)"
-            + " for {Stations} station(s), and {NoPicture} station(s) that broadcast none.",
-            due.NetworkId.Value,
-            due.TransportStreamId.Value,
-            visit.Outcome,
-            written.Pictures,
-            written.Stations,
-            written.NoPicture);
-    }
-
-    private static async Task<LogoVisitResult> Visited(
-        IServiceProvider provider,
-        BroadcastStream due,
-        CancellationToken walking,
-        CancellationToken abort)
-    {
-        try
-        {
-            return await provider.GetRequiredService<LogoVisitor>().VisitAsync(due, walking);
-        }
-        catch (OperationCanceledException) when (!abort.IsCancellationRequested)
-        {
-            return LogoVisitResult.NothingCameOfIt(LogoVisitOutcome.Interrupted);
-        }
+            "A logo sweep opened {Visited} of the {Due} transport(s) that were due;"
+            + " {Left} wait for the next sweep.",
+            round.Visited,
+            due.Count,
+            round.LeftForTheNextSweep);
     }
 
     private static void Stop(CancellationTokenSource interruption)

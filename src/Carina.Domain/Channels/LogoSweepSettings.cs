@@ -11,4 +11,6 @@ public sealed record LogoSweepSettings
     public TimeSpan BeforeRetrying { get; init; } = TimeSpan.FromHours(6);
 
     public bool Collects { get; init; } = true;
+
+    public TimeSpan RoundBudget => BetweenSweeps - LongestVisit;
 }
