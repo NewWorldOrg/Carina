@@ -3,7 +3,6 @@ using Carina.Api.Common;
 using Carina.Api.Responder;
 using Carina.Api.Responder.Recordings;
 using Carina.Api.Services;
-using Carina.Domain.Recordings;
 
 using Microsoft.AspNetCore.Mvc;
 
@@ -25,7 +24,8 @@ public sealed class GetRecordingAction(RecordingService recordings) : Controller
             return BadRequest(BaseResponder<RecordingDetailResponder>.Error(RecordingIdText.Description));
         }
 
-        ServiceResult<Recording, RecordingFailure> found = await recordings.FindAsync(recordingId, cancellationToken);
+        ServiceResult<RecordingSeen, RecordingFailure> found =
+            await recordings.DetailAsync(recordingId, cancellationToken);
 
         return found.IsSuccess
             ? Ok(BaseResponder<RecordingDetailResponder>.Success(RecordingDetailResponder.Of(found.Data!)))

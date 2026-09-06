@@ -45,14 +45,15 @@ public sealed record RecordingDetailResponder(
         return (double)(recording.WrittenDurationMs * TimeSpan.TicksPerMillisecond) / window;
     }
 
-    public static RecordingDetailResponder Of(RecordedProgramme recording)
+    public static RecordingDetailResponder Of(RecordingSeen seen)
     {
-        ArgumentNullException.ThrowIfNull(recording);
+        ArgumentNullException.ThrowIfNull(seen);
 
+        RecordedProgramme recording = seen.Recording;
         RecordingWindowResponder window = RecordingResponder.Window(recording);
 
         return new RecordingDetailResponder(
-            RecordingResponder.Of(recording),
+            RecordingResponder.Of(seen),
             new RecordingReconciliationResponder(
                 recording.FileSizeObserved is not null,
                 recording.FileSizeObserved,
@@ -98,10 +99,10 @@ public sealed record RecordingStopResponder(
 
         return new RecordingStopResponder(
             true,
-            asked.Recording.IsInFlight,
+            asked.Seen.Recording.IsInFlight,
             asked.Reason.Value,
             asked.AskedAt,
-            RecordingDetailResponder.Of(asked.Recording));
+            RecordingDetailResponder.Of(asked.Seen));
     }
 }
 

@@ -2,6 +2,7 @@ using Carina.Api.Common;
 using Carina.Contracts;
 using Carina.Domain.Base;
 using Carina.Domain.Driver;
+using Carina.Domain.Encodings;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Thumbnails;
 
@@ -34,29 +35,41 @@ public enum RecordingFailure
 
 public sealed record ThumbnailRemade(Recording Recording, ThumbnailRemake Remake);
 
-public sealed record RecordingStopAsked(Recording Recording, RecordingStopReason Reason, DateTime AskedAt);
+public sealed record RecordingSeen(Recording Recording, EncodeStanding Encode);
+
+public sealed record RecordingPage(PaginatedList<Recording> Found, EncodeStandingBoard Encoding);
+
+public sealed record RecordingStopAsked(RecordingSeen Seen, RecordingStopReason Reason, DateTime AskedAt);
 
 public sealed record RecordingDiscarded(RecordingId Id, int FilesRemoved);
 
 public sealed class RecordingService(
     IRecordingDirectory recordings,
+    IEncodeStandingReader encoding,
     IDriverClient driver,
     IThumbnailRemaker thumbnails,
     IRecordingFileEraser eraser,
     RecordingDeletions deletions,
     TimeProvider clock)
 {
-    public async Task<ServiceResult<PaginatedList<Recording>>> ListAsync(
+    public async Task<ServiceResult<RecordingPage>> ListAsync(
         RecordingQuery query,
         CancellationToken cancellationToken)
-        => ServiceResult<PaginatedList<Recording>>.Success(await recordings.ListAsync(query, cancellationToken));
+    {
+        PaginatedList<Recording> found = await recordings.ListAsync(query, cancellationToken);
+        EncodeStandingBoard standings = await encoding.ReadAsync(
+            [.. found.Items.Select(recording => recording.Id)],
+            cancellationToken);
 
-    public async Task<ServiceResult<Recording, RecordingFailure>> FindAsync(
+        return ServiceResult<RecordingPage>.Success(new RecordingPage(found, standings));
+    }
+
+    public async Task<ServiceResult<RecordingSeen, RecordingFailure>> DetailAsync(
         RecordingId id,
         CancellationToken cancellationToken)
         => await recordings.FindAsync(id, cancellationToken) is { } recording
-            ? ServiceResult<Recording, RecordingFailure>.Success(recording)
-            : Missing<Recording>(id);
+            ? ServiceResult<RecordingSeen, RecordingFailure>.Success(await SeenAsync(recording, cancellationToken))
+            : Missing<RecordingSeen>(id);
 
     public async Task<ServiceResult<RecordingStopAsked, RecordingFailure>> StopAsync(
         RecordingId id,
@@ -119,7 +132,7 @@ public sealed class RecordingService(
 
         return await recordings.FindAsync(id, cancellationToken) is { } asking
             ? ServiceResult<RecordingStopAsked, RecordingFailure>.Success(
-                new RecordingStopAsked(asking, reason, asked))
+                new RecordingStopAsked(await SeenAsync(asking, cancellationToken), reason, asked))
             : Missing<RecordingStopAsked>(id);
     }
 
@@ -217,6 +230,13 @@ public sealed class RecordingService(
                 RecordingFailure.StillRecording),
             _ => Missing<RecordingDiscarded>(id),
         };
+    }
+
+    private async Task<RecordingSeen> SeenAsync(Recording recording, CancellationToken cancellationToken)
+    {
+        EncodeStandingBoard standings = await encoding.ReadAsync([recording.Id], cancellationToken);
+
+        return new RecordingSeen(recording, standings.For(recording.Id));
     }
 
     private static string Aftermath(ErasureFault fault, RecordingId id) => fault switch

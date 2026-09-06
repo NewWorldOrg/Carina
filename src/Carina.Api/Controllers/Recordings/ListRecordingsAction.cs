@@ -3,7 +3,6 @@ using Carina.Api.Common;
 using Carina.Api.Responder;
 using Carina.Api.Responder.Recordings;
 using Carina.Api.Services;
-using Carina.Domain.Base;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 
@@ -54,7 +53,7 @@ public sealed class ListRecordingsAction(RecordingService recordings) : Controll
             return BadRequest(BaseResponder<RecordingListResponder>.Error(Refusal));
         }
 
-        ServiceResult<PaginatedList<Recording>> found = await recordings.ListAsync(asked, cancellationToken);
+        ServiceResult<RecordingPage> found = await recordings.ListAsync(asked, cancellationToken);
 
         return Ok(BaseResponder<RecordingListResponder>.Success(RecordingListResponder.Of(found.Data!)));
     }

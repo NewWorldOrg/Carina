@@ -1,6 +1,8 @@
 using Carina.Api.Responder.Epg;
+using Carina.Api.Services;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
+using Carina.Domain.Encodings;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 
@@ -29,6 +31,8 @@ public sealed record RecordingDropsResponder(
     long? ScrambledPackets,
     long EovfCount,
     DateTime? MeasuredUpdatedAt);
+
+public sealed record RecordingEncodeResponder(EncodeStanding Standing);
 
 public sealed record RecordingThumbnailResponder(
     ThumbnailState State,
@@ -65,11 +69,14 @@ public sealed record RecordingResponder(
     string? TunerDeviceId,
     RecordingDropsResponder Drops,
     RecordingThumbnailResponder Thumbnail,
-    RecordingBroadcastGroupResponder BroadcastGroup)
+    RecordingBroadcastGroupResponder BroadcastGroup,
+    RecordingEncodeResponder Encode)
 {
-    public static RecordingResponder Of(Recording recording)
+    public static RecordingResponder Of(RecordingSeen seen)
     {
-        ArgumentNullException.ThrowIfNull(recording);
+        ArgumentNullException.ThrowIfNull(seen);
+
+        Recording recording = seen.Recording;
 
         return new RecordingResponder(
             recording.Id.Wire,
@@ -115,7 +122,8 @@ public sealed record RecordingResponder(
                 recording.ThumbnailShowsAnUnfinishedRecording),
             new RecordingBroadcastGroupResponder(
                 recording.BroadcastGroupKey?.Value,
-                recording.BroadcastGroupRole));
+                recording.BroadcastGroupRole),
+            new RecordingEncodeResponder(seen.Encode));
     }
 
     internal static RecordingWindowResponder Window(Recording recording)
@@ -132,12 +140,17 @@ public sealed record RecordingListResponder(
     int LastPage,
     int PerPage)
 {
-    public static RecordingListResponder Of(PaginatedList<Recording> found)
+    public static RecordingListResponder Of(RecordingPage page)
     {
-        ArgumentNullException.ThrowIfNull(found);
+        ArgumentNullException.ThrowIfNull(page);
+
+        PaginatedList<Recording> found = page.Found;
 
         return new RecordingListResponder(
-            [.. found.Items.Select(RecordingResponder.Of)],
+            [
+                .. found.Items.Select(recording => RecordingResponder.Of(
+                    new RecordingSeen(recording, page.Encoding.For(recording.Id)))),
+            ],
             found.Total,
             found.CurrentPage,
             found.LastPage,
