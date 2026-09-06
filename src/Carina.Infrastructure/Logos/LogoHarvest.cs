@@ -18,7 +18,7 @@ public sealed class LogoHarvest
 
     private readonly Dictionary<(int Network, int Service), HarvestedLogoLink> links = [];
 
-    private readonly HashSet<(int Network, int Logo)> offeredAtTheLargestPictureType = [];
+    private readonly HashSet<(int Network, int Logo, int Type)> arrivedAsAPicture = [];
 
     private readonly byte[] carry = new byte[TransportPacket.Size];
 
@@ -62,8 +62,11 @@ public sealed class LogoHarvest
 
         return services.Count > 0
             && Accounted(services) is { } named
-            && named.All(offeredAtTheLargestPictureType.Contains);
+            && named.All(EveryPictureTypeHasArrived);
     }
+
+    private bool EveryPictureTypeHasArrived((int Network, int Logo) logo)
+        => CarriedLogo.EveryPictureType.All(type => arrivedAsAPicture.Contains((logo.Network, logo.Logo, type)));
 
     private IReadOnlyList<(int Network, int Logo)>? Accounted(IReadOnlyList<ServiceId> services)
     {
@@ -135,10 +138,7 @@ public sealed class LogoHarvest
             logos[(found.NetworkId, found.LogoId)] = found;
         }
 
-        if (found.LogoType == CarriedLogo.LargestPictureType)
-        {
-            offeredAtTheLargestPictureType.Add((found.NetworkId, found.LogoId));
-        }
+        arrivedAsAPicture.Add((found.NetworkId, found.LogoId, found.LogoType));
     }
 
     private static bool IsWorthKeepingOver(HarvestedLogo arriving, HarvestedLogo held)
