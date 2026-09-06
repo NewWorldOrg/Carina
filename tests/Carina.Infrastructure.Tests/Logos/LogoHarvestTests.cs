@@ -12,7 +12,10 @@ public sealed class LogoHarvestTests
     private const int SomeServiceId = 1024;
     private const int AnotherServiceId = 1025;
     private const int SomeLogoId = 261;
-    private const int ASmallPictureType = 0x00;
+    private const int AnotherLogoId = 262;
+    private const int ASmallPictureType = 0x01;
+    private const int APictureTypeInTheMiddle = 0x03;
+    private const int TheHighestPictureType = 0x05;
 
     [Fact]
     public void APictureAndTheServicesThatUseItAreBothReadOffTheOneTransport()
@@ -20,7 +23,7 @@ public sealed class LogoHarvestTests
         var harvest = new LogoHarvest();
 
         harvest.Push(Carrying(
-            Cdt(SomeLogoId, 64, 36),
+            [Cdt(SomeLogoId, 64, 36)],
             Sdt(
                 (SomeServiceId, SiDescriptorWriter.LogoNamedOnly(SomeLogoId)),
                 (AnotherServiceId, SiDescriptorWriter.LogoNamedOnly(SomeLogoId)))));
@@ -64,8 +67,8 @@ public sealed class LogoHarvestTests
     {
         var harvest = new LogoHarvest();
 
-        harvest.Push(Carrying(Cdt(SomeLogoId, 48, 24), []));
-        harvest.Push(Carrying(Cdt(SomeLogoId, 64, 36), []));
+        harvest.Push(Carrying([Cdt(SomeLogoId, 48, 24)], []));
+        harvest.Push(Carrying([Cdt(SomeLogoId, 64, 36)], []));
 
         Assert.Equal(64, Assert.Single(harvest.Logos).Image.Width);
     }
@@ -75,10 +78,23 @@ public sealed class LogoHarvestTests
     {
         var harvest = new LogoHarvest();
 
-        harvest.Push(Carrying(Cdt(SomeLogoId, 64, 36), []));
-        harvest.Push(Carrying(Cdt(SomeLogoId, 48, 24), []));
+        harvest.Push(Carrying([Cdt(SomeLogoId, 64, 36)], []));
+        harvest.Push(Carrying([Cdt(SomeLogoId, 48, 24)], []));
 
         Assert.Equal(64, Assert.Single(harvest.Logos).Image.Width);
+    }
+
+    [Fact]
+    public void ThePictureWithTheHighestTypeNumberIsNotTheOneKeptWhenAnotherTypeIsDrawnLarger()
+    {
+        var harvest = new LogoHarvest();
+
+        harvest.Push(Carrying([Cdt(SomeLogoId, 64, 36, logoType: TheHighestPictureType)], []));
+        harvest.Push(Carrying([Cdt(SomeLogoId, 72, 36, logoType: APictureTypeInTheMiddle)], []));
+
+        HarvestedLogo kept = Assert.Single(harvest.Logos);
+        Assert.Equal(72, kept.Image.Width);
+        Assert.Equal(APictureTypeInTheMiddle, kept.LogoType);
     }
 
     [Fact]
@@ -88,7 +104,7 @@ public sealed class LogoHarvestTests
         ServiceId[] onTheTransport = [new ServiceId(SomeServiceId), new ServiceId(AnotherServiceId)];
 
         harvest.Push(Carrying(
-            Cdt(SomeLogoId, 64, 36),
+            PicturesAt(CarriedLogo.EveryPictureType),
             Sdt((SomeServiceId, SiDescriptorWriter.LogoNamedOnly(SomeLogoId)))));
 
         Assert.False(harvest.ThereIsNothingLeftToWaitFor(onTheTransport));
@@ -109,19 +125,46 @@ public sealed class LogoHarvestTests
     }
 
     [Fact]
-    public void ALogoSeenOnlyInASmallPictureKeepsTheReadOpenForTheLargerOneBehindIt()
+    public void ALogoOfferedAtEveryPictureTypeTheStandardDefinesEndsTheRead()
     {
         var harvest = new LogoHarvest();
 
         harvest.Push(Carrying(
-            Cdt(SomeLogoId, 36, 24, logoType: ASmallPictureType),
+            PicturesAt(CarriedLogo.EveryPictureType),
+            Sdt((SomeServiceId, SiDescriptorWriter.LogoNamedOnly(SomeLogoId)))));
+
+        Assert.True(harvest.ThereIsNothingLeftToWaitFor([new ServiceId(SomeServiceId)]));
+    }
+
+    [Fact]
+    public void ALogoOfferedAtEveryTypeButOneKeepsTheReadOpenEvenWithTheHighestTypeAmongThem()
+    {
+        var harvest = new LogoHarvest();
+
+        harvest.Push(Carrying(
+            PicturesAt(CarriedLogo.EveryPictureType.Where(type => type != APictureTypeInTheMiddle)),
             Sdt((SomeServiceId, SiDescriptorWriter.LogoNamedOnly(SomeLogoId)))));
 
         Assert.False(harvest.ThereIsNothingLeftToWaitFor([new ServiceId(SomeServiceId)]));
 
-        harvest.Push(Carrying(Cdt(SomeLogoId, 64, 36), []));
+        harvest.Push(Carrying([Cdt(SomeLogoId, 72, 36, logoType: APictureTypeInTheMiddle)], []));
 
         Assert.True(harvest.ThereIsNothingLeftToWaitFor([new ServiceId(SomeServiceId)]));
+    }
+
+    [Fact]
+    public void OneLogoFinishedDoesNotEndTheReadWhileAnotherOnTheSameTransportIsStillComing()
+    {
+        var harvest = new LogoHarvest();
+        ServiceId[] onTheTransport = [new ServiceId(SomeServiceId), new ServiceId(AnotherServiceId)];
+
+        harvest.Push(Carrying(
+            [.. PicturesAt(CarriedLogo.EveryPictureType), Cdt(AnotherLogoId, 36, 24)],
+            Sdt(
+                (SomeServiceId, SiDescriptorWriter.LogoNamedOnly(SomeLogoId)),
+                (AnotherServiceId, SiDescriptorWriter.LogoNamedOnly(AnotherLogoId)))));
+
+        Assert.False(harvest.ThereIsNothingLeftToWaitFor(onTheTransport));
     }
 
     [Fact]
@@ -140,7 +183,7 @@ public sealed class LogoHarvestTests
     public void ASectionSplitAcrossTwoReadsIsStillReadWhole()
     {
         var harvest = new LogoHarvest();
-        byte[] stream = Carrying(Cdt(SomeLogoId, 64, 36), []);
+        byte[] stream = Carrying([Cdt(SomeLogoId, 64, 36)], []);
 
         harvest.Push(stream.AsSpan(0, 100));
         harvest.Push(stream.AsSpan(100));
@@ -153,17 +196,20 @@ public sealed class LogoHarvestTests
     {
         var harvest = new LogoHarvest();
 
-        harvest.Push(Carrying(Cdt(SomeLogoId, 64, 36, corrupt: true), []));
+        harvest.Push(Carrying([Cdt(SomeLogoId, 64, 36, corrupt: true)], []));
 
         Assert.Empty(harvest.Logos);
     }
+
+    private static byte[][] PicturesAt(IEnumerable<int> types)
+        => [.. types.Select(type => Cdt(SomeLogoId, 36, 24, logoType: type))];
 
     private static byte[] Cdt(
         int logoId,
         int width,
         int height,
         bool corrupt = false,
-        int logoType = CarriedLogo.LargestPictureType)
+        int logoType = ASmallPictureType)
         => new SectionWriter
         {
             TableId = CommonDataTable.TableId,
@@ -195,7 +241,7 @@ public sealed class LogoHarvestTests
             }.ToBody(),
         }.ToBytes();
 
-    private static byte[] Carrying(byte[] commonData, byte[] descriptions)
+    private static byte[] Carrying(byte[][] commonData, byte[] descriptions)
     {
         var stream = new List<byte>();
 

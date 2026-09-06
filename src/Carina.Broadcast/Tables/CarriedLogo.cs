@@ -4,7 +4,8 @@ namespace Carina.Broadcast.Tables;
 
 public sealed class CarriedLogo
 {
-    public const int LargestPictureType = 0x05;
+    public static readonly IReadOnlySet<int> EveryPictureType =
+        new HashSet<int> { 0x00, 0x01, 0x02, 0x03, 0x04, 0x05 };
 
     internal CarriedLogo(int logoType, int logoId, int logoVersion, ReadOnlyMemory<byte> asBroadcast)
     {

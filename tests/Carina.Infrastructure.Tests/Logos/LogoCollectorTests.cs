@@ -23,8 +23,8 @@ public sealed class LogoCollectorTests(RepositoryDatabase database)
     private const int SilentServiceId = 1025;
     private const int SomeLogoId = 261;
     private const int SomeTransportStreamId = 32737;
-    private const int LargestPictureType = 0x05;
-    private const int SmallerPictureType = 0x03;
+    private const int SomePictureType = 0x05;
+    private const int AnotherPictureType = 0x03;
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
@@ -144,7 +144,7 @@ public sealed class LogoCollectorTests(RepositoryDatabase database)
     {
         int network = BroadcastIds.NextNetwork();
         await SeedAsync(network, SomeServiceId, SilentServiceId);
-        byte[] airing = OnTheAir(network, SmallerPictureType);
+        byte[] airing = OnTheAir(network, AnotherPictureType);
         PacedStream held = PacedStream.InChunksOf(airing, airing.Length);
         var signals = new DriverSignalRelay(NullLogger<DriverSignalRelay>.Instance);
         ScriptedDriverClient driver = Airing(network);
@@ -365,7 +365,7 @@ public sealed class LogoCollectorTests(RepositoryDatabase database)
         return driver;
     }
 
-    private static byte[] OnTheAir(int network, int pictureType = LargestPictureType)
+    private static byte[] OnTheAir(int network, int pictureType = SomePictureType)
     {
         var stream = new List<byte>();
 
