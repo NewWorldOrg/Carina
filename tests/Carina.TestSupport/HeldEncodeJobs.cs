@@ -50,6 +50,7 @@ public sealed class HeldEncodeJobs : IEncodeJobRepository, IEncodeStandingReader
         [
             .. Jobs
                 .Where(job => query.Statuses.Count is 0 || query.Statuses.Contains(job.Status))
+                .Where(job => query.Recording is null || job.RecordingId.Equals(query.Recording))
                 .OrderByDescending(job => job.QueuedAt)
                 .ThenByDescending(job => job.Id.Value),
         ];

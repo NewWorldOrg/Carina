@@ -401,6 +401,73 @@ public sealed class EncodingEndpointTests
         Assert.Equal(HttpStatusCode.BadRequest, refused);
     }
 
+    [Fact(DisplayName = "BR-ES-002: the ledger is asked about one recording, and answers with that recording's jobs only")]
+    public async Task TheLedgerIsAskedAboutOneRecordingAndAnswersWithThatRecordingsJobsOnly()
+    {
+        await using var feature = new EncodingFeature();
+        EncodeProfile profile = feature.Defined();
+        EncodeDestination destination = feature.Placed(profile);
+        Recording asked = feature.Recorded();
+        EncodeJob mine = feature.Queued(asked, profile, destination);
+        feature.Queued(feature.Recorded(), profile, destination);
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync(
+            $"/api/encoding/jobs?recordingId={asked.Id.Wire}");
+        JsonElement item = Assert.Single(body.GetProperty("data").GetProperty("items").EnumerateArray());
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(1, body.GetProperty("data").GetProperty("total").GetInt32());
+        Assert.Equal(mine.Id.Value, item.GetProperty("id").GetGuid());
+        Assert.Equal(asked.Id.Wire, item.GetProperty("recordingId").GetString());
+    }
+
+    [Fact(DisplayName = "BR-ES-002: a recording the ledger holds no job for is an empty page, not a refusal")]
+    public async Task ARecordingTheLedgerHoldsNoJobForIsAnEmptyPage()
+    {
+        await using var feature = new EncodingFeature();
+        EncodeProfile profile = feature.Defined();
+        feature.Queued(feature.Recorded(), profile, feature.Placed(profile));
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync(
+            $"/api/encoding/jobs?recordingId={RecordingId.New().Wire}");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(0, body.GetProperty("data").GetProperty("total").GetInt32());
+        Assert.Empty(body.GetProperty("data").GetProperty("items").EnumerateArray());
+    }
+
+    [Theory]
+    [InlineData("not-a-recording")]
+    [InlineData("00000000-0000-0000-0000-000000000000")]
+    public async Task AskingTheLedgerAboutSomethingThatIsNotARecordingIsRefused(string recordingId)
+    {
+        await using var feature = new EncodingFeature();
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync(
+            $"/api/encoding/jobs?recordingId={recordingId}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, status);
+        Assert.Contains("hexadecimal", body.GetProperty("message").GetString(), StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "BR-ES-002: naming a recording and a standing together narrows by both")]
+    public async Task NamingARecordingAndAStandingTogetherNarrowsByBoth()
+    {
+        await using var feature = new EncodingFeature();
+        EncodeProfile profile = feature.Defined();
+        EncodeDestination destination = feature.Placed(profile);
+        Recording asked = feature.Recorded();
+        feature.Queued(asked, profile, destination);
+
+        (_, JsonElement waiting) = await feature.GetAsync(
+            $"/api/encoding/jobs?recordingId={asked.Id.Wire}&status=queued");
+        (_, JsonElement running) = await feature.GetAsync(
+            $"/api/encoding/jobs?recordingId={asked.Id.Wire}&status=running");
+
+        Assert.Equal(1, waiting.GetProperty("data").GetProperty("total").GetInt32());
+        Assert.Equal(0, running.GetProperty("data").GetProperty("total").GetInt32());
+    }
+
     [Fact(DisplayName = "BR-ED2-012: calling a waiting job off is a person's act and is kept apart from a failure")]
     public async Task CallingAWaitingJobOffIsKeptApartFromAFailure()
     {

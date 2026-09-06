@@ -38,6 +38,7 @@ public sealed class EncodeSettingRuleTests
         "/Carina.Domain/Encodings/EncodeJobMovedMeanwhileException.cs EncodeJobMovedMeanwhileException.JobId EncodeJobId",
         "/Carina.Domain/Encodings/EncodeJobQuery.cs EncodeJobQuery.Page int",
         "/Carina.Domain/Encodings/EncodeJobQuery.cs EncodeJobQuery.PerPage int",
+        "/Carina.Domain/Encodings/EncodeJobQuery.cs EncodeJobQuery.Recording RecordingId?",
         "/Carina.Domain/Encodings/EncodeJobQuery.cs EncodeJobQuery.Statuses IReadOnlyList<EncodeJobStatus>",
         "/Carina.Domain/Encodings/EncodePlan.cs EncodePlan.Encoder EncodeEncoder?",
         "/Carina.Domain/Encodings/EncodePlan.cs EncodePlan.Note string",
