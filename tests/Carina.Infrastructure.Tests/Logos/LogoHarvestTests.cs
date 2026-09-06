@@ -12,7 +12,7 @@ public sealed class LogoHarvestTests
     private const int SomeServiceId = 1024;
     private const int AnotherServiceId = 1025;
     private const int SomeLogoId = 261;
-    private const int LargestLogoType = 0x05;
+    private const int ASmallPictureType = 0x00;
 
     [Fact]
     public void APictureAndTheServicesThatUseItAreBothReadOffTheOneTransport()
@@ -91,11 +91,11 @@ public sealed class LogoHarvestTests
             Cdt(SomeLogoId, 64, 36),
             Sdt((SomeServiceId, SiDescriptorWriter.LogoNamedOnly(SomeLogoId)))));
 
-        Assert.False(harvest.EverythingOnTheTransportIsAccountedFor(onTheTransport));
+        Assert.False(harvest.ThereIsNothingLeftToWaitFor(onTheTransport));
 
         harvest.Push(Carrying([], Sdt((AnotherServiceId, SiDescriptorWriter.LogoAsACharacterString([])))));
 
-        Assert.True(harvest.EverythingOnTheTransportIsAccountedFor(onTheTransport));
+        Assert.True(harvest.ThereIsNothingLeftToWaitFor(onTheTransport));
     }
 
     [Fact]
@@ -105,7 +105,35 @@ public sealed class LogoHarvestTests
 
         harvest.Push(Carrying([], Sdt((SomeServiceId, SiDescriptorWriter.LogoNamedOnly(SomeLogoId)))));
 
-        Assert.False(harvest.EverythingOnTheTransportIsAccountedFor([new ServiceId(SomeServiceId)]));
+        Assert.False(harvest.ThereIsNothingLeftToWaitFor([new ServiceId(SomeServiceId)]));
+    }
+
+    [Fact]
+    public void ALogoSeenOnlyInASmallPictureKeepsTheReadOpenForTheLargerOneBehindIt()
+    {
+        var harvest = new LogoHarvest();
+
+        harvest.Push(Carrying(
+            Cdt(SomeLogoId, 36, 24, logoType: ASmallPictureType),
+            Sdt((SomeServiceId, SiDescriptorWriter.LogoNamedOnly(SomeLogoId)))));
+
+        Assert.False(harvest.ThereIsNothingLeftToWaitFor([new ServiceId(SomeServiceId)]));
+
+        harvest.Push(Carrying(Cdt(SomeLogoId, 64, 36), []));
+
+        Assert.True(harvest.ThereIsNothingLeftToWaitFor([new ServiceId(SomeServiceId)]));
+    }
+
+    [Fact]
+    public void ATransportWhereNobodyBroadcastsAPictureIsNotWaitedOutForOne()
+    {
+        var harvest = new LogoHarvest();
+
+        harvest.Push(Carrying(
+            [],
+            Sdt((SomeServiceId, SiDescriptorWriter.LogoAsACharacterString([])))));
+
+        Assert.True(harvest.ThereIsNothingLeftToWaitFor([new ServiceId(SomeServiceId)]));
     }
 
     [Fact]
@@ -130,7 +158,12 @@ public sealed class LogoHarvestTests
         Assert.Empty(harvest.Logos);
     }
 
-    private static byte[] Cdt(int logoId, int width, int height, bool corrupt = false)
+    private static byte[] Cdt(
+        int logoId,
+        int width,
+        int height,
+        bool corrupt = false,
+        int logoType = CarriedLogo.LargestPictureType)
         => new SectionWriter
         {
             TableId = CommonDataTable.TableId,
@@ -139,7 +172,7 @@ public sealed class LogoHarvestTests
             {
                 OriginalNetworkId = SomeNetworkId,
                 DataModule = CdtWriter.LogoModule(
-                    LargestLogoType,
+                    logoType,
                     logoId,
                     3,
                     new LogoPngWriter { Width = width, Height = height }.ToBytes()),

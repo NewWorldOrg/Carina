@@ -4,7 +4,7 @@ public sealed record LogoSweepSettings
 {
     public TimeSpan BetweenSweeps { get; init; } = TimeSpan.FromHours(1);
 
-    public TimeSpan LongestVisit { get; init; } = TimeSpan.FromMinutes(6);
+    public TimeSpan LongestVisit { get; init; } = TimeSpan.FromMinutes(10);
 
     public TimeSpan BetweenVisits { get; init; } = TimeSpan.FromDays(30);
 
