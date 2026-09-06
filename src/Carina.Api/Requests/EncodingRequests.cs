@@ -26,6 +26,30 @@ public sealed record CreateEncodeDestinationRequest
     public Guid? DefaultProfileId { get; init; }
 }
 
+public sealed record ReviseEncodeProfileRequest
+{
+    public string? Label { get; init; }
+
+    public EncodeCodec? Codec { get; init; }
+
+    public EncodeResolution? Resolution { get; init; }
+
+    public Deinterlace? Deinterlace { get; init; }
+
+    public int? RateFactor { get; init; }
+
+    public int? Quantiser { get; init; }
+}
+
+public sealed record ReviseEncodeDestinationRequest
+{
+    public string? Label { get; init; }
+
+    public string? OutputRoot { get; init; }
+
+    public Guid? DefaultProfileId { get; init; }
+}
+
 public sealed record QueueEncodeJobRequest
 {
     public string? RecordingId { get; init; }

@@ -55,5 +55,7 @@ public sealed class EncodeProfileConfiguration : IEntityTypeConfiguration<Encode
             .IsRequired();
 
         builder.Property(profile => profile.DefinedAt).IsRequired();
+
+        builder.Property(profile => profile.RetiredAt);
     }
 }

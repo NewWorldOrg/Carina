@@ -56,11 +56,21 @@ public sealed class EncodeJobService(
             return Failure($"No destination {draft.DestinationId.Wire} is defined.", EncodingFailure.NoSuchDestination);
         }
 
+        if (destination.IsRetired)
+        {
+            return Failure(EncodeSaying.NotOffered(destination), EncodingFailure.AlreadyRetired);
+        }
+
         EncodeProfileId profileId = draft.ProfileId ?? destination.DefaultProfileId;
 
         if (await profiles.FindAsync(profileId, cancellationToken) is not { } profile)
         {
             return Failure($"No profile {profileId.Wire} is defined.", EncodingFailure.NoSuchProfile);
+        }
+
+        if (profile.IsRetired)
+        {
+            return Failure(EncodeSaying.NotOffered(profile), EncodingFailure.AlreadyRetired);
         }
 
         if (await recordings.FindAsync(draft.RecordingId, cancellationToken) is not { } recording)

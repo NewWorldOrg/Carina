@@ -45,6 +45,8 @@ public sealed class RuleRetirementRuleTests
     {
         Assert.Equal(
             [
+                "Carina.Infrastructure.Persistence.Repositories.EncodeDestinationRepository.RemoveAsync",
+                "Carina.Infrastructure.Persistence.Repositories.EncodeProfileRepository.RemoveAsync",
                 "Carina.Infrastructure.Persistence.Repositories.ReservationRepository.WithdrawAsync",
                 "Carina.Infrastructure.Persistence.Repositories.RuleRepository.RemoveAsync",
             ],

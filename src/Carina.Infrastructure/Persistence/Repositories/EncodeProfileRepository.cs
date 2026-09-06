@@ -25,4 +25,18 @@ public sealed class EncodeProfileRepository(CarinaDbContext context) : IEncodePr
 
         await context.SaveChangesAsync(cancellationToken);
     }
+
+    public async Task SaveAsync(EncodeProfile profile, CancellationToken cancellationToken)
+    {
+        context.Update(profile);
+
+        await context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task RemoveAsync(EncodeProfile profile, CancellationToken cancellationToken)
+    {
+        context.Remove(profile);
+
+        await context.SaveChangesAsync(cancellationToken);
+    }
 }

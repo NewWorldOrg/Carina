@@ -168,6 +168,16 @@ internal sealed class EncodingFeature : IAsyncDisposable
         return job;
     }
 
+    public EncodeJob Completed(Recording recording, EncodeProfile profile, EncodeDestination destination)
+    {
+        EncodeJob job = Queued(recording, profile, destination);
+        job.Start(Noon.AddMinutes(-29));
+        job.Name(EncodeFileName.Artefact(recording.Id, profile.Id));
+        job.Complete(Noon.AddMinutes(-1));
+
+        return job;
+    }
+
     public async Task<(HttpStatusCode Status, JsonElement Body)> GetAsync(string path)
     {
         using HttpResponseMessage response = await Client.GetAsync(new Uri(path, UriKind.Relative));
@@ -178,6 +188,21 @@ internal sealed class EncodingFeature : IAsyncDisposable
     public async Task<(HttpStatusCode Status, JsonElement Body)> PostAsync(string path, object? body = null)
     {
         using HttpResponseMessage response = await Client.PostAsJsonAsync(new Uri(path, UriKind.Relative), body ?? new { });
+
+        return await ReadAsync(response);
+    }
+
+    public async Task<(HttpStatusCode Status, JsonElement Body)> PatchAsync(string path, object body)
+    {
+        using HttpResponseMessage response = await Client.PatchAsJsonAsync(new Uri(path, UriKind.Relative), body);
+
+        return await ReadAsync(response);
+    }
+
+    public async Task<(HttpStatusCode Status, JsonElement Body)> DeleteAsync(string path)
+    {
+        using var asking = new HttpRequestMessage(HttpMethod.Delete, new Uri(path, UriKind.Relative));
+        using HttpResponseMessage response = await Client.SendAsync(asking);
 
         return await ReadAsync(response);
     }

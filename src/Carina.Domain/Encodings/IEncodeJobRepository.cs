@@ -57,6 +57,8 @@ public sealed record EncodeClaim
     public static EncodeClaim TakenMeanwhile() => new(null, EncodeClaimStanding.TakenMeanwhile);
 }
 
+public sealed record EncodeHold(bool Any, EncodeJob? Unfinished);
+
 public interface IEncodeJobRepository
 {
     Task<EncodeJob?> FindAsync(EncodeJobId id, CancellationToken cancellationToken);
@@ -89,4 +91,8 @@ public interface IEncodeJobRepository
     /// already holds that name; the job itself is saved as it stands either way (BR-ED2-009).
     /// </summary>
     Task<ArtefactClaim> ClaimArtefactAsync(EncodeJob job, EncodeFileName name, CancellationToken cancellationToken);
+
+    Task<EncodeHold> HoldOnProfileAsync(EncodeProfileId profileId, CancellationToken cancellationToken);
+
+    Task<EncodeHold> HoldOnDestinationAsync(EncodeDestinationId destinationId, CancellationToken cancellationToken);
 }
