@@ -11,7 +11,7 @@ public sealed record QueryInput
         string says,
         JsonSchemaType shape,
         string? format,
-        JsonNode ordinarily,
+        JsonNode? ordinarily,
         IReadOnlyList<string>? oneOf)
     {
         Name = name;
@@ -30,18 +30,24 @@ public sealed record QueryInput
 
     public string? Format { get; }
 
-    public JsonNode Ordinarily { get; }
+    public JsonNode? Ordinarily { get; }
 
     public IReadOnlyList<string>? OneOf { get; }
 
     public static QueryInput Seconds(string name, string says)
         => new(name, says, JsonSchemaType.Number, "double", JsonValue.Create(0d), null);
 
-    public static QueryInput OneOfThese(string name, string says, IReadOnlyList<string> values, string ordinarily)
+    public static QueryInput OneOfThese(string name, string says, IReadOnlyList<string> values, string? ordinarily)
     {
         ArgumentNullException.ThrowIfNull(values);
 
-        return new QueryInput(name, says, JsonSchemaType.String, null, JsonValue.Create(ordinarily), [.. values]);
+        return new QueryInput(
+            name,
+            says,
+            JsonSchemaType.String,
+            null,
+            ordinarily is null ? null : JsonValue.Create(ordinarily),
+            [.. values]);
     }
 
     public OpenApiParameter Parameter() => new()
@@ -54,7 +60,7 @@ public sealed record QueryInput
         {
             Type = Shape,
             Format = Format,
-            Default = Ordinarily.DeepClone(),
+            Default = Ordinarily?.DeepClone(),
             Enum = OneOf is null ? null : [.. OneOf.Select(value => (JsonNode)value)],
         },
     };

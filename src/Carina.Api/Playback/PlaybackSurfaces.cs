@@ -35,7 +35,10 @@ public static class PlaybackSurfaces
 
     public static readonly QueryInput WhichProfileThePictureIsEncodedIn = QueryInput.OneOfThese(
         PlayDelivery.Quality,
-        "The profile the picture is encoded in while it is transcoded as it plays.",
+        "The profile the picture is encoded in while it is transcoded as it plays. Asking for none opens at "
+        + "what this machine encodes at, which depends on the encoder it has and so has no fixed default here; "
+        + "GET /api/live/profiles names it, marked as the unasked one, and the answer is the same for a "
+        + "recording as it is for a live channel.",
         [.. LiveProfile.All.Select(profile => profile.Name)],
-        PlayDelivery.Ordinarily.Name);
+        null);
 }

@@ -32,8 +32,6 @@ public static class PlayDelivery
     public const string ThePositionsThereAre =
         "A recording is played from a whole number of seconds into it, or from its beginning.";
 
-    public static readonly LiveProfile Ordinarily = LiveProfile.Hd30;
-
     public static async Task Invoke(
         HttpContext context,
         string id,
@@ -61,7 +59,9 @@ public static class PlayDelivery
             return;
         }
 
-        if (Wanted(context.Request.Query[Quality]) is not { } profile)
+        AskedProfile profile = AskedProfile.Read(context.Request.Query[Quality]);
+
+        if (profile.Answer is ProfileAnswer.NotOneOfThese)
         {
             await RefuseAsync(context, StatusCodes.Status400BadRequest, TheProfilesThereAre);
 
@@ -92,7 +92,7 @@ public static class PlayDelivery
 
         if (plan.Transcodes)
         {
-            await TranscodedAsync(context, handover, offered.Data!.Service, from, profile, player);
+            await TranscodedAsync(context, handover, offered.Data!.Service, from, profile.Named, player);
 
             return;
         }
@@ -146,7 +146,7 @@ public static class PlayDelivery
         PlaybackFile handover,
         ServiceId service,
         TimeSpan from,
-        LiveProfile profile,
+        LiveProfile? profile,
         IOnTheFlyPlayer player)
     {
         context.Response.Headers.AcceptRanges = NoSeeking;
@@ -189,9 +189,6 @@ public static class PlayDelivery
 
     private static string MediaTypeOf(PlaybackPlan plan, PlaybackFile handover)
         => plan.Transcodes ? PlaybackMediaType.Mp4 : PlaybackMediaType.Of(handover.Name);
-
-    private static LiveProfile? Wanted(string? asked)
-        => string.IsNullOrWhiteSpace(asked) ? Ordinarily : LiveProfile.Find(asked);
 
     private static TimeSpan? Asked(string? position)
     {

@@ -19,12 +19,11 @@ public sealed class OnTheFlyPlayer(
         PlaybackFile file,
         ServiceId service,
         TimeSpan from,
-        LiveProfile profile,
+        LiveProfile? profile,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(file);
         ArgumentNullException.ThrowIfNull(service);
-        ArgumentNullException.ThrowIfNull(profile);
         ArgumentOutOfRangeException.ThrowIfLessThan(from, TimeSpan.Zero);
 
         if (WhatIsStillThere(file) is not { } source)
@@ -64,19 +63,20 @@ public sealed class OnTheFlyPlayer(
         StreamSource source,
         ServiceId service,
         TimeSpan from,
-        LiveProfile profile,
+        LiveProfile? profile,
         ITranscodeSeat seat,
         CancellationToken cancellationToken)
     {
         StreamAttributeReading read = await attributes.ReadAsync(source, cancellationToken);
         LiveEncoderChoice chosen = await selector.ChooseAsync(cancellationToken);
+        LiveProfile opening = profile ?? LiveProfile.Unasked(chosen.Encoder);
 
         long began = clock.GetTimestamp();
 
         LiveTranscoderStart started = TranscoderProcess.Start(
             transcoding,
             [
-                .. FfmpegPlaybackInvocation.Arguments(service, profile, read.Attributes, chosen.Encoder, source, from),
+                .. FfmpegPlaybackInvocation.Arguments(service, opening, read.Attributes, chosen.Encoder, source, from),
                 .. FfmpegLiveInvocation.DeliveryFromTheStart(),
             ],
             chosen,
@@ -90,7 +90,7 @@ public sealed class OnTheFlyPlayer(
 
         return await WhatCameOutAsync(
             transcoder,
-            new OnTheFlyBearing(began, from, profile, read.Measured, seat),
+            new OnTheFlyBearing(began, from, opening, read.Measured, seat),
             cancellationToken);
     }
 

@@ -349,8 +349,61 @@ public sealed class OnTheFlyPlayerTests : IDisposable
             () => player.StartAsync(null!, Service, TimeSpan.Zero, LiveProfile.Hd30, CancellationToken.None));
         await Assert.ThrowsAsync<ArgumentNullException>(
             () => player.StartAsync(Found(), null!, TimeSpan.Zero, LiveProfile.Hd30, CancellationToken.None));
-        await Assert.ThrowsAsync<ArgumentNullException>(
-            () => player.StartAsync(Found(), Service, TimeSpan.Zero, null!, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task AViewerWhoNamesNoProfileOnAMachineWithACardIsGivenEveryLineAndEveryField()
+    {
+        Recorded(40_000);
+
+        await using IOnTheFlyViewing viewing = await Running(
+            Player(TakesTheFileApart, encoder: LiveEncoder.Vaapi),
+            TimeSpan.Zero,
+            null);
+
+        Assert.Same(LiveProfile.FullHd60, viewing.Standing.Profile);
+    }
+
+    [Fact]
+    public async Task AViewerWhoNamesNoProfileOnAMachineWithoutACardIsGivenWhatItsProcessorKeepsUpWith()
+    {
+        Recorded(40_000);
+
+        await using IOnTheFlyViewing viewing = await Running(Player(TakesTheFileApart), TimeSpan.Zero, null);
+
+        Assert.Same(LiveProfile.Hd30, viewing.Standing.Profile);
+    }
+
+    [Fact]
+    public async Task AViewerWhoNamesAProfileIsGivenThatOneAndNotWhatTheMachineWouldHaveOpenedAt()
+    {
+        Recorded(40_000);
+
+        await using IOnTheFlyViewing viewing = await Running(
+            Player(TakesTheFileApart, encoder: LiveEncoder.Vaapi),
+            TimeSpan.Zero,
+            LiveProfile.Hd30);
+
+        Assert.Same(LiveProfile.Hd30, viewing.Standing.Profile);
+    }
+
+    [Fact]
+    public async Task TheProfileTheMachineOpensAtIsWhatTheTranscoderIsAskedToScaleTo()
+    {
+        Recorded(40_000);
+        string said = standIns.Named("arguments");
+
+        await using IOnTheFlyViewing viewing = await Running(
+            Player($"printf '%s\\n' \"$@\" > {said}; echo ready", encoder: LiveEncoder.Vaapi),
+            TimeSpan.Zero,
+            null);
+
+        string[] handed = File.ReadAllLines(said);
+
+        Assert.Contains(
+            "scale=1920:1080:flags=bicubic",
+            handed[Array.IndexOf(handed, "-vf") + 1],
+            StringComparison.Ordinal);
     }
 
     private static async Task WaitFor(string pids, int howMany)
@@ -395,13 +448,16 @@ public sealed class OnTheFlyPlayerTests : IDisposable
         return held.ToArray();
     }
 
-    private static async Task<IOnTheFlyViewing> Running(OnTheFlyPlayer player, TimeSpan from)
+    private static Task<IOnTheFlyViewing> Running(OnTheFlyPlayer player, TimeSpan from)
+        => Running(player, from, LiveProfile.Hd30);
+
+    private static async Task<IOnTheFlyViewing> Running(OnTheFlyPlayer player, TimeSpan from, LiveProfile? profile)
     {
         OnTheFlyStart start = await player.StartAsync(
             new PlaybackFile(Root, Named, 40_000),
             Service,
             from,
-            LiveProfile.Hd30,
+            profile,
             CancellationToken.None);
 
         Assert.True(start.Running, start.Note);
@@ -421,10 +477,18 @@ public sealed class OnTheFlyPlayerTests : IDisposable
             Path.Combine(standIns.Room, Named.Value),
             [.. Enumerable.Range(0, bytes).Select(at => (byte)((at * 7) % 251))]);
 
-    private OnTheFlyPlayer Player(string body, int atOnce = 2, TimeSpan? waiting = null)
-        => PlayerRunning(standIns.Script(body), atOnce, waiting);
+    private OnTheFlyPlayer Player(
+        string body,
+        int atOnce = 2,
+        TimeSpan? waiting = null,
+        LiveEncoder encoder = LiveEncoder.Software)
+        => PlayerRunning(standIns.Script(body), atOnce, waiting, encoder);
 
-    private OnTheFlyPlayer PlayerRunning(string programme, int atOnce = 2, TimeSpan? waiting = null)
+    private OnTheFlyPlayer PlayerRunning(
+        string programme,
+        int atOnce = 2,
+        TimeSpan? waiting = null,
+        LiveEncoder encoder = LiveEncoder.Software)
     {
         budget = new TranscodeBudget(new TranscodeBudgetSettings { AtOnce = atOnce });
 
@@ -434,7 +498,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
             budget,
             Store(),
             new Measured(),
-            new AlreadyChosen(LiveEncoder.Software),
+            new AlreadyChosen(encoder),
             TimeProvider.System);
     }
 
