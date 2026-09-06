@@ -193,6 +193,31 @@ public sealed class EncodeJobRepository(CarinaDbContext context) : IEncodeJobRep
         return ArtefactClaim.Claimed;
     }
 
+    public Task<EncodeHold> HoldOnProfileAsync(EncodeProfileId profileId, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(profileId);
+
+        return HeldByAsync(context.Set<EncodeJob>().Where(job => job.ProfileId == profileId), cancellationToken);
+    }
+
+    public Task<EncodeHold> HoldOnDestinationAsync(EncodeDestinationId destinationId, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(destinationId);
+
+        return HeldByAsync(context.Set<EncodeJob>().Where(job => job.DestinationId == destinationId), cancellationToken);
+    }
+
+    private static async Task<EncodeHold> HeldByAsync(IQueryable<EncodeJob> named, CancellationToken cancellationToken)
+    {
+        EncodeJob? unfinished = await named
+            .Where(job => job.Status == EncodeJobStatus.Running || job.Status == EncodeJobStatus.Queued)
+            .OrderBy(job => job.Status)
+            .ThenBy(job => job.QueuedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return new EncodeHold(unfinished is not null || await named.AnyAsync(cancellationToken), unfinished);
+    }
+
     /// <summary>
     /// A conditional update moves the row's version on without the tracker seeing it, so a tracked
     /// job's version is read again afterwards; otherwise the next save would take the job's own

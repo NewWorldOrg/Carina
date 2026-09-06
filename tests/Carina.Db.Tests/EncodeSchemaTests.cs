@@ -470,6 +470,62 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
         Assert.Equal(refusedBy, refusal.ConstraintName);
     }
 
+    [Fact(DisplayName = "BR-ED2-015: the database refuses to drop a profile a job points at, which is why a used one is retired instead")]
+    public async Task TheDatabaseRefusesToDropAProfileAJobPointsAt()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        await SeedAsync(connection);
+        await ClearJobsAsync(connection);
+        var recording = Guid.NewGuid();
+        await JobAsync(
+            connection,
+            Guid.NewGuid(),
+            recording,
+            "'Completed'",
+            Started,
+            Ended,
+            "NULL, NULL, NULL",
+            $"'{recording:N}.{ProfileWire}.mp4'");
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(() => new NpgsqlCommand(
+            $"DELETE FROM encode_profile WHERE id = '{Profile}'",
+            connection).ExecuteNonQueryAsync());
+
+        await using var retiring = new NpgsqlCommand(
+            $"UPDATE encode_profile SET retired_at = {Ended} WHERE id = '{Profile}'",
+            connection);
+
+        Assert.Equal(PostgresErrorCodes.RestrictViolation, refusal.SqlState);
+        Assert.Equal(1, await retiring.ExecuteNonQueryAsync());
+    }
+
+    [Fact(DisplayName = "BR-ED2-015: a definition nothing points at is dropped, and both tables leave the retirement hour empty until it comes")]
+    public async Task ADefinitionNothingPointsAtIsDropped()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        await SeedAsync(connection);
+        await ClearJobsAsync(connection);
+        var spare = Guid.NewGuid();
+
+        await using var defining = new NpgsqlCommand(
+            $"""
+            INSERT INTO encode_profile (id, label, codec, resolution, deinterlace, rate_factor, quantiser, defined_at)
+            VALUES ('{spare}', 'Nobody asked for this', 'H264', 'AsSource', 'Leave', 23, 24, {Queued})
+            """,
+            connection);
+        await defining.ExecuteNonQueryAsync();
+
+        await using var asking = new NpgsqlCommand(
+            $"SELECT retired_at IS NULL FROM encode_profile WHERE id = '{spare}'",
+            connection);
+        bool unretired = (bool)(await asking.ExecuteScalarAsync())!;
+
+        await using var dropping = new NpgsqlCommand($"DELETE FROM encode_profile WHERE id = '{spare}'", connection);
+
+        Assert.True(unretired);
+        Assert.Equal(1, await dropping.ExecuteNonQueryAsync());
+    }
+
     private static TheoryData<string> Named(IEnumerable<string> names)
     {
         var named = new TheoryData<string>();

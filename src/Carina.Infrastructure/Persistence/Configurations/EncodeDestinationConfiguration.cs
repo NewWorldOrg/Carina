@@ -43,6 +43,8 @@ public sealed class EncodeDestinationConfiguration : IEntityTypeConfiguration<En
 
         builder.Property(destination => destination.DefinedAt).IsRequired();
 
+        builder.Property(destination => destination.RetiredAt);
+
         builder.HasOne<EncodeProfile>()
             .WithMany()
             .HasForeignKey(destination => destination.DefaultProfileId)

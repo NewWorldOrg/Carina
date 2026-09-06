@@ -7,4 +7,8 @@ public interface IEncodeProfileRepository
     Task<IReadOnlyList<EncodeProfile>> ListAsync(CancellationToken cancellationToken);
 
     Task AddAsync(EncodeProfile profile, CancellationToken cancellationToken);
+
+    Task SaveAsync(EncodeProfile profile, CancellationToken cancellationToken);
+
+    Task RemoveAsync(EncodeProfile profile, CancellationToken cancellationToken);
 }

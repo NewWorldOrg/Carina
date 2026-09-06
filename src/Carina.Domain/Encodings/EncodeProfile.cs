@@ -24,6 +24,10 @@ public sealed class EncodeProfile
 
     public DateTime DefinedAt { get; private set; }
 
+    public DateTime? RetiredAt { get; private set; }
+
+    public bool IsRetired => RetiredAt is not null;
+
     public static EncodeProfile Define(
         EncodeProfileId id,
         EncodeLabel label,
@@ -33,7 +37,7 @@ public sealed class EncodeProfile
         ConstantRateFactor softwareRateControl,
         ConstantQuantiser vaapiRateControl,
         DateTime at)
-        => Rehydrate(id, label, codec, resolution, deinterlace, softwareRateControl, vaapiRateControl, at);
+        => Rehydrate(id, label, codec, resolution, deinterlace, softwareRateControl, vaapiRateControl, at, null);
 
     public static EncodeProfile Rehydrate(
         EncodeProfileId id,
@@ -43,7 +47,8 @@ public sealed class EncodeProfile
         Deinterlace deinterlace,
         ConstantRateFactor softwareRateControl,
         ConstantQuantiser vaapiRateControl,
-        DateTime definedAt)
+        DateTime definedAt,
+        DateTime? retiredAt)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(label);
@@ -60,6 +65,47 @@ public sealed class EncodeProfile
             SoftwareRateControl = softwareRateControl,
             VaapiRateControl = vaapiRateControl,
             DefinedAt = UtcTimes.Required(definedAt, nameof(definedAt)),
+            RetiredAt = UtcTimes.Optional(retiredAt, nameof(retiredAt)),
         };
+    }
+
+    public void Revise(
+        EncodeLabel label,
+        EncodeCodec codec,
+        EncodeResolution resolution,
+        Deinterlace deinterlace,
+        ConstantRateFactor softwareRateControl,
+        ConstantQuantiser vaapiRateControl)
+    {
+        ArgumentNullException.ThrowIfNull(label);
+        ArgumentNullException.ThrowIfNull(softwareRateControl);
+        ArgumentNullException.ThrowIfNull(vaapiRateControl);
+        RefuseWhileRetired();
+
+        EncodeCodec named = EncodeShapes.Named(codec);
+        EncodeResolution sized = EncodeShapes.Named(resolution);
+        Deinterlace undone = EncodeShapes.Named(deinterlace);
+
+        Label = label;
+        Codec = named;
+        Resolution = sized;
+        Deinterlace = undone;
+        SoftwareRateControl = softwareRateControl;
+        VaapiRateControl = vaapiRateControl;
+    }
+
+    public void Retire(DateTime at)
+    {
+        RefuseWhileRetired();
+
+        RetiredAt = UtcTimes.Required(at, nameof(at));
+    }
+
+    private void RefuseWhileRetired()
+    {
+        if (IsRetired)
+        {
+            throw new InvalidOperationException($"Profile {Id.Wire} was retired at {RetiredAt:O} and is not moved again.");
+        }
     }
 }

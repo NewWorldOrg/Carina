@@ -22,4 +22,21 @@ public sealed class HeldEncodeProfiles : IEncodeProfileRepository
 
         return Task.CompletedTask;
     }
+
+    public Task SaveAsync(EncodeProfile profile, CancellationToken cancellationToken)
+    {
+        if (!Profiles.Contains(profile))
+        {
+            Profiles.Add(profile);
+        }
+
+        return Task.CompletedTask;
+    }
+
+    public Task RemoveAsync(EncodeProfile profile, CancellationToken cancellationToken)
+    {
+        Profiles.Remove(profile);
+
+        return Task.CompletedTask;
+    }
 }

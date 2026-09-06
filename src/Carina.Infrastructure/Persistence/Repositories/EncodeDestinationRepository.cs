@@ -26,4 +26,18 @@ public sealed class EncodeDestinationRepository(CarinaDbContext context) : IEnco
 
         await context.SaveChangesAsync(cancellationToken);
     }
+
+    public async Task SaveAsync(EncodeDestination destination, CancellationToken cancellationToken)
+    {
+        context.Update(destination);
+
+        await context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task RemoveAsync(EncodeDestination destination, CancellationToken cancellationToken)
+    {
+        context.Remove(destination);
+
+        await context.SaveChangesAsync(cancellationToken);
+    }
 }

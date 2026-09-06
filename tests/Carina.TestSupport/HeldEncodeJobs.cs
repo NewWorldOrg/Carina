@@ -142,4 +142,23 @@ public sealed class HeldEncodeJobs : IEncodeJobRepository, IEncodeStandingReader
 
         return Task.FromResult(ArtefactClaim.Claimed);
     }
+
+    public Task<EncodeHold> HoldOnProfileAsync(EncodeProfileId profileId, CancellationToken cancellationToken)
+        => Task.FromResult(HeldBy(Jobs.Where(job => job.ProfileId.Equals(profileId))));
+
+    public Task<EncodeHold> HoldOnDestinationAsync(EncodeDestinationId destinationId, CancellationToken cancellationToken)
+        => Task.FromResult(HeldBy(Jobs.Where(job => job.DestinationId.Equals(destinationId))));
+
+    private static EncodeHold HeldBy(IEnumerable<EncodeJob> named)
+    {
+        EncodeJob[] found = [.. named];
+
+        return new EncodeHold(
+            found.Length > 0,
+            found
+                .Where(job => job.Status is EncodeJobStatus.Running or EncodeJobStatus.Queued)
+                .OrderBy(job => job.Status)
+                .ThenBy(job => job.QueuedAt)
+                .FirstOrDefault());
+    }
 }
