@@ -89,7 +89,7 @@ public sealed class LogoVisitor(IDriverClient driver, LogoSweepSettings settings
         {
             await using (carrying)
             {
-                while (!harvest.EverythingOnTheTransportIsAccountedFor(stream.Services))
+                while (!harvest.ThereIsNothingLeftToWaitFor(stream.Services))
                 {
                     int got = await carrying.ReadAsync(buffer.AsMemory(0, ReadBufferSize), reading.Token);
 
@@ -123,12 +123,12 @@ public sealed class LogoVisitor(IDriverClient driver, LogoSweepSettings settings
 
     private static LogoVisitOutcome Concluded(LogoHarvest harvest, bool interrupted)
     {
-        if (harvest.Logos.Count > 0)
+        if (interrupted)
         {
-            return LogoVisitOutcome.Collected;
+            return LogoVisitOutcome.Interrupted;
         }
 
-        return interrupted ? LogoVisitOutcome.Interrupted : LogoVisitOutcome.NothingArrived;
+        return harvest.Logos.Count > 0 ? LogoVisitOutcome.Collected : LogoVisitOutcome.NothingArrived;
     }
 
     private static void Stop(CancellationTokenSource reading)

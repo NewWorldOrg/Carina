@@ -18,6 +18,8 @@ public sealed class LogoHarvest
 
     private readonly Dictionary<(int Network, int Service), HarvestedLogoLink> links = [];
 
+    private readonly HashSet<(int Network, int Logo)> offeredAtTheLargestPictureType = [];
+
     private readonly byte[] carry = new byte[TransportPacket.Size];
 
     private int carried;
@@ -54,14 +56,18 @@ public sealed class LogoHarvest
         carried = packets.Length % TransportPacket.Size;
     }
 
-    public bool EverythingOnTheTransportIsAccountedFor(IReadOnlyList<ServiceId> services)
+    public bool ThereIsNothingLeftToWaitFor(IReadOnlyList<ServiceId> services)
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        if (services.Count == 0)
-        {
-            return false;
-        }
+        return services.Count > 0
+            && Accounted(services) is { } named
+            && named.All(offeredAtTheLargestPictureType.Contains);
+    }
+
+    private IReadOnlyList<(int Network, int Logo)>? Accounted(IReadOnlyList<ServiceId> services)
+    {
+        var named = new List<(int Network, int Logo)>();
 
         foreach (ServiceId service in services)
         {
@@ -69,16 +75,23 @@ public sealed class LogoHarvest
 
             if (link is null)
             {
-                return false;
+                return null;
             }
 
-            if (link.LogoId is { } named && !logos.ContainsKey((link.NetworkId, named)))
+            if (link.LogoId is not { } logo)
             {
-                return false;
+                continue;
             }
+
+            if (!logos.ContainsKey((link.NetworkId, logo)))
+            {
+                return null;
+            }
+
+            named.Add((link.NetworkId, logo));
         }
 
-        return true;
+        return named;
     }
 
     private void Read(ReadOnlySpan<byte> packets)
@@ -120,6 +133,11 @@ public sealed class LogoHarvest
             || IsWorthKeepingOver(found, held))
         {
             logos[(found.NetworkId, found.LogoId)] = found;
+        }
+
+        if (found.LogoType == CarriedLogo.LargestPictureType)
+        {
+            offeredAtTheLargestPictureType.Add((found.NetworkId, found.LogoId));
         }
     }
 
