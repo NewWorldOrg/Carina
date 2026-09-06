@@ -8,7 +8,7 @@ namespace Carina.TestSupport;
 /// The encode job ledger held in memory, with the one rule the real one gets from its index: one
 /// owner per artefact name under an output root.
 /// </summary>
-public sealed class HeldEncodeJobs : IEncodeJobRepository
+public sealed class HeldEncodeJobs : IEncodeJobRepository, IEncodeStandingReader
 {
     public List<EncodeJob> Jobs { get; } = [];
 
@@ -59,6 +59,18 @@ public sealed class HeldEncodeJobs : IEncodeJobRepository
             matched.Length,
             query.Page,
             query.PerPage));
+    }
+
+    public Task<EncodeStandingBoard> ReadAsync(
+        IReadOnlyCollection<RecordingId> recordings,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(recordings);
+
+        return Task.FromResult(EncodeStandingBoard.Of(
+            Jobs
+                .Where(job => recordings.Contains(job.RecordingId))
+                .Select(job => (job.RecordingId, job.Status))));
     }
 
     public Task<IReadOnlyList<EncodeJob>> ListForRecordingAsync(RecordingId recordingId, CancellationToken cancellationToken)

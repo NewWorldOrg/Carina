@@ -42,12 +42,37 @@ public static class EncodeStandings
         EncodeJobStatus.Cancelled,
     ];
 
+    private static readonly IReadOnlyList<EncodeJobStatus> WhatSpeaksFirst =
+    [
+        EncodeJobStatus.Completed,
+        EncodeJobStatus.Running,
+        EncodeJobStatus.Queued,
+        EncodeJobStatus.Failed,
+    ];
+
     public static EncodeJobStatus Named(EncodeJobStatus status)
         => Enum.IsDefined(status)
             ? status
             : throw new ArgumentOutOfRangeException(nameof(status), status, "A job stands in one of the five places.");
 
     public static bool IsTerminal(EncodeJobStatus status) => Terminal.Contains(Named(status));
+
+    public static EncodeStanding Over(IEnumerable<EncodeJobStatus> held)
+    {
+        ArgumentNullException.ThrowIfNull(held);
+
+        HashSet<EncodeJobStatus> statuses = [.. held.Select(Named)];
+
+        foreach (EncodeJobStatus status in WhatSpeaksFirst)
+        {
+            if (statuses.Contains(status))
+            {
+                return Of(status);
+            }
+        }
+
+        return EncodeStanding.NotEncoded;
+    }
 
     public static EncodeStanding Of(EncodeJobStatus? latest)
         => latest is null

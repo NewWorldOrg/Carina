@@ -129,6 +129,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IEncodeProfileRepository, EncodeProfileRepository>();
         services.AddScoped<IEncodeDestinationRepository, EncodeDestinationRepository>();
         services.AddScoped<IEncodeJobRepository, EncodeJobRepository>();
+        services.AddScoped<IEncodeStandingReader, EncodeStandingReader>();
         services.AddScoped<IEncodeScratchLedger, EncodeScratchLedger>();
         services.AddScoped<EncodeScratchFiles>();
         services.AddScoped<EncodeScratchCleaner>();

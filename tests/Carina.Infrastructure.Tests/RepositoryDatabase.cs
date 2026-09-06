@@ -2,6 +2,7 @@ using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Configurations;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 using Npgsql;
 
@@ -66,10 +67,17 @@ public sealed class RepositoryDatabase : IAsyncLifetime
 
     public Task DisposeAsync() => Task.CompletedTask;
 
-    public CarinaDbContext Open()
+    public CarinaDbContext Open(params IInterceptor[] interceptors)
     {
+        ArgumentNullException.ThrowIfNull(interceptors);
+
         var builder = new DbContextOptionsBuilder<CarinaDbContext>();
         builder.UseCarinaDatabase(connectionString);
+
+        if (interceptors.Length > 0)
+        {
+            builder.AddInterceptors(interceptors);
+        }
 
         return new CarinaDbContext(builder.Options);
     }
