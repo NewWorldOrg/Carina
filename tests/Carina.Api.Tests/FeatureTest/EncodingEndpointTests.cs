@@ -524,21 +524,22 @@ public sealed class EncodingEndpointTests
         Assert.Equal(HttpStatusCode.NotFound, unknown);
     }
 
-    [Fact(DisplayName = "BR-EA2-003: nothing under the encoding surface deletes, and nothing there takes a list of recordings")]
-    public async Task NothingUnderTheEncodingSurfaceDeletes()
+    [Fact(DisplayName = "BR-EA2-003: no job is deleted, and what the two definition surfaces reach is the definition and nothing the ledger holds")]
+    public async Task NoJobIsDeletedAndTheDefinitionSurfacesReachNothingTheLedgerHolds()
     {
         await using var feature = new EncodingFeature();
         EncodeProfile profile = feature.Defined();
         EncodeDestination destination = feature.Placed(profile);
+        EncodeProfile spare = feature.Defined("Nobody asked for this");
         EncodeJob job = feature.Queued(feature.Recorded(), profile, destination);
 
         using HttpResponseMessage jobs = await feature.Client.DeleteAsync(new Uri($"/api/encoding/jobs/{job.Id.Value}", UriKind.Relative));
-        using HttpResponseMessage profiles = await feature.Client.DeleteAsync(new Uri($"/api/encoding/profiles/{profile.Id.Value}", UriKind.Relative));
-        using HttpResponseMessage destinations = await feature.Client.DeleteAsync(new Uri($"/api/encoding/destinations/{destination.Id.Value}", UriKind.Relative));
+        (HttpStatusCode removed, _) = await feature.DeleteAsync($"/api/encoding/profiles/{spare.Id.Value}");
 
         Assert.Equal(HttpStatusCode.NotFound, jobs.StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, profiles.StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, destinations.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, removed);
         Assert.Single(feature.Jobs.Jobs);
+        Assert.Equal([profile], feature.Profiles.Profiles);
+        Assert.Single(feature.Destinations.Destinations);
     }
 }

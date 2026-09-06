@@ -5,6 +5,8 @@ using Carina.Api.Live;
 using Carina.Api.Playback;
 using Carina.Api.Tests.Unit;
 
+using Microsoft.AspNetCore.Http;
+
 using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Carina.Api.Tests.FeatureTest;
@@ -33,6 +35,8 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
         Assert.Equal(
             [
                 "DELETE /api/auth/sessions/{id}",
+                "DELETE /api/encoding/destinations/{id:guid}",
+                "DELETE /api/encoding/profiles/{id:guid}",
                 "DELETE /api/recordings/{id}",
                 "DELETE /api/reservations/{id:guid}",
                 "DELETE /api/rules/{id:guid}",
@@ -57,6 +61,8 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
         Assert.Equal(
             [
                 "DELETE /api/auth/sessions/{id}",
+                "DELETE /api/encoding/destinations/{id:guid}",
+                "DELETE /api/encoding/profiles/{id:guid}",
                 "DELETE /api/recordings/{id}",
                 "DELETE /api/reservations/{id:guid}",
                 "DELETE /api/rules/{id:guid}",
@@ -91,13 +97,17 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
     }
 
     [Fact]
-    public void TheEncodingSurfacesAreTheSevenAProfileADestinationAndAJobAreDefinedListedQueuedAndCalledOffThrough()
+    public void TheEncodingSurfacesAreTheElevenAProfileADestinationAndAJobAreDefinedChangedRemovedListedQueuedAndCalledOffThrough()
     {
         Assert.Equal(
             [
+                "DELETE /api/encoding/destinations/{id:guid}",
+                "DELETE /api/encoding/profiles/{id:guid}",
                 "GET /api/encoding/destinations",
                 "GET /api/encoding/jobs",
                 "GET /api/encoding/profiles",
+                "PATCH /api/encoding/destinations/{id:guid}",
+                "PATCH /api/encoding/profiles/{id:guid}",
                 "POST /api/encoding/destinations",
                 "POST /api/encoding/jobs",
                 "POST /api/encoding/jobs/{id:guid}/cancel",
@@ -111,13 +121,46 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
     }
 
     [Fact]
-    public void NothingUnderTheEncodingSurfaceDeletesOrDestroys()
+    public void TheOnlyWayToDeleteUnderTheEncodingSurfaceIsTheTwoThatTakeADefinitionOutOfUse()
     {
-        Assert.Empty(EndpointRules.SurfacesThatDeleteUnder(Inventory(), "/api/encoding"));
-        Assert.DoesNotContain(
-            Inventory(),
-            surface => surface.Pattern.StartsWith("/api/encoding", StringComparison.Ordinal)
-                && surface.Effect is EndpointEffect.Destructive);
+        Assert.Equal(
+            [
+                "DELETE /api/encoding/destinations/{id:guid}",
+                "DELETE /api/encoding/profiles/{id:guid}",
+            ],
+            EndpointRules.SurfacesThatDeleteUnder(Inventory(), "/api/encoding"));
+    }
+
+    [Fact]
+    public void NothingUnderTheEncodingSurfaceReachesAnArtefactOrAJobRow()
+    {
+        Assert.Empty(EndpointRules.SurfacesThatDeleteUnder(Inventory(), "/api/encoding/jobs"));
+    }
+
+    [Fact]
+    public void TheTwoWaysToTakeAnEncodeDefinitionOutOfUseSayTheyDestroy()
+    {
+        Assert.Equal(
+            [EndpointEffect.Destructive, EndpointEffect.Destructive],
+            Inventory()
+                .Where(surface => EndpointRules
+                    .SurfacesThatDeleteUnder(Inventory(), "/api/encoding")
+                    .Contains(surface.ToString(), StringComparer.Ordinal))
+                .Select(surface => surface.Effect)
+                .ToArray());
+    }
+
+    [Fact]
+    public void ChangingAnEncodeDefinitionDiscardsNothing()
+    {
+        Assert.Equal(
+            [EndpointEffect.Changing, EndpointEffect.Changing],
+            Inventory()
+                .Where(surface => surface.Method == HttpMethods.Patch
+                    && surface.Pattern.StartsWith("/api/encoding", StringComparison.Ordinal))
+                .OrderBy(surface => surface.Pattern, StringComparer.Ordinal)
+                .Select(surface => surface.Effect)
+                .ToArray());
     }
 
     [Fact]

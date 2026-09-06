@@ -29,6 +29,14 @@ public enum EncodingFailure
     AlreadyOver = 12,
 
     MovedMeanwhile = 13,
+
+    StillInFlight = 14,
+
+    AlreadyRetired = 15,
+
+    StillTheDefault = 16,
+
+    TheLastOne = 17,
 }
 
 public static class EncodeRefusals
@@ -54,7 +62,7 @@ public static class EncodeRefusals
         EncodeRefusal.OutputRootNotDeclared => "outputRoot: the name of a root the storage surface declares.",
         EncodeRefusal.OutputRootNotHeld =>
             "outputRoot: a root this process holds for writing; the roots the recordings are read from take no artefact.",
-        EncodeRefusal.DefaultProfileUnknown => "defaultProfileId: the id of a profile that is defined.",
+        EncodeRefusal.DefaultProfileUnknown => "defaultProfileId: the id of a profile that is defined and still offered.",
         _ => throw new ArgumentOutOfRangeException(nameof(refusal), refusal, "A save is refused for one of the reasons named."),
     };
 }

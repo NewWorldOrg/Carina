@@ -10,7 +10,8 @@ public sealed record EncodeProfileResponder(
     Deinterlace Deinterlace,
     int RateFactor,
     int Quantiser,
-    DateTime DefinedAt)
+    DateTime DefinedAt,
+    DateTime? RetiredAt)
 {
     public static EncodeProfileResponder Of(EncodeProfile profile)
     {
@@ -24,7 +25,8 @@ public sealed record EncodeProfileResponder(
             profile.Deinterlace,
             profile.SoftwareRateControl.RateFactor,
             profile.VaapiRateControl.Quantiser,
-            profile.DefinedAt);
+            profile.DefinedAt,
+            profile.RetiredAt);
     }
 }
 

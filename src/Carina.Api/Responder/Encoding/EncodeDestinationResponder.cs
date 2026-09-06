@@ -7,7 +7,8 @@ public sealed record EncodeDestinationResponder(
     string Label,
     string OutputRoot,
     Guid DefaultProfileId,
-    DateTime DefinedAt)
+    DateTime DefinedAt,
+    DateTime? RetiredAt)
 {
     public static EncodeDestinationResponder Of(EncodeDestination destination)
     {
@@ -18,7 +19,8 @@ public sealed record EncodeDestinationResponder(
             destination.Label.Value,
             destination.OutputRoot.Value,
             destination.DefaultProfileId.Value,
-            destination.DefinedAt);
+            destination.DefinedAt,
+            destination.RetiredAt);
     }
 }
 
