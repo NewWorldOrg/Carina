@@ -9,6 +9,6 @@ public interface IOnTheFlyPlayer
         PlaybackFile file,
         ServiceId service,
         TimeSpan from,
-        LiveProfile profile,
+        LiveProfile? profile,
         CancellationToken cancellationToken);
 }

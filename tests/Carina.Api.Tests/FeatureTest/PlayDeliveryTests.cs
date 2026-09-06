@@ -49,9 +49,11 @@ internal sealed class HeldOnTheFlyPlayer : IOnTheFlyPlayer
 
     public TimeSpan Waited { get; set; } = TimeSpan.FromMilliseconds(138);
 
+    public LiveEncoder Machine { get; set; } = LiveEncoder.Software;
+
     public List<TimeSpan> AskedFrom { get; } = [];
 
-    public List<string> AskedFor { get; } = [];
+    public List<string?> AskedFor { get; } = [];
 
     public List<ServiceId> AskedOf { get; } = [];
 
@@ -61,11 +63,11 @@ internal sealed class HeldOnTheFlyPlayer : IOnTheFlyPlayer
         PlaybackFile file,
         ServiceId service,
         TimeSpan from,
-        LiveProfile profile,
+        LiveProfile? profile,
         CancellationToken cancellationToken)
     {
         AskedFrom.Add(from);
-        AskedFor.Add(profile.Name);
+        AskedFor.Add(profile?.Name);
         AskedOf.Add(service);
 
         if (Refuses is { } refusal)
@@ -77,8 +79,8 @@ internal sealed class HeldOnTheFlyPlayer : IOnTheFlyPlayer
             new OnTheFlyStanding(
                 from,
                 Waited,
-                profile,
-                LiveEncoderChoice.Asked(LiveEncoder.Software),
+                profile ?? LiveProfile.Unasked(Machine),
+                LiveEncoderChoice.Asked(Machine),
                 attributesWereMeasured: true,
                 Running,
                 AtOnce),
@@ -407,7 +409,6 @@ public sealed class PlayDeliveryTests
     [Theory]
     [InlineData("?profile=1080p60", "1080p60")]
     [InlineData("?profile=720p60", "720p60")]
-    [InlineData("", "720p30")]
     public async Task AProfileIsOneOfTheFewThereAre(string query, string chosen)
     {
         await using var feature = new PlayFeature();
@@ -416,6 +417,47 @@ public sealed class PlayDeliveryTests
 
         Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
         Assert.Equal(chosen, Assert.Single(feature.Player.AskedFor));
+    }
+
+    [Fact]
+    public async Task AskingForNoProfileLeavesTheChoiceToWhereTheEncoderIsKnownRatherThanNamingOneHere()
+    {
+        await using var feature = new PlayFeature();
+
+        using HttpResponseMessage answer = await feature.PictureAsync(feature.Ended(RecordingOutcome.Complete));
+
+        Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
+        Assert.Null(Assert.Single(feature.Player.AskedFor));
+    }
+
+    [Theory]
+    [InlineData(LiveEncoder.Vaapi, "1080p60")]
+    [InlineData(LiveEncoder.Software, "720p30")]
+    public async Task ARecordingNobodyChoseAProfileForOpensAtWhatThisMachineOpensAt(
+        LiveEncoder machine,
+        string opened)
+    {
+        await using var feature = new PlayFeature();
+        feature.Player.Machine = machine;
+
+        using HttpResponseMessage answer = await feature.PictureAsync(feature.Ended(RecordingOutcome.Complete));
+
+        Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
+        Assert.Equal(opened, Header(answer, PlaybackHeaders.Profile));
+    }
+
+    [Fact]
+    public async Task AProfileNamedOutrightIsHonouredOnAMachineThatWouldHaveOpenedAtAnother()
+    {
+        await using var feature = new PlayFeature();
+        feature.Player.Machine = LiveEncoder.Vaapi;
+
+        using HttpResponseMessage answer = await feature.PictureAsync(
+            feature.Ended(RecordingOutcome.Complete),
+            "?profile=720p30");
+
+        Assert.Equal("720p30", Assert.Single(feature.Player.AskedFor));
+        Assert.Equal("720p30", Header(answer, PlaybackHeaders.Profile));
     }
 
     [Theory]
@@ -429,6 +471,9 @@ public sealed class PlayDeliveryTests
 
         Assert.Equal(HttpStatusCode.BadRequest, answer.StatusCode);
         Assert.Empty(feature.Player.AskedFor);
+        Assert.Equal(
+            PlayDelivery.TheProfilesThereAre,
+            (await PlayFeature.PlanOfAsync(answer)).GetProperty("message").GetString());
     }
 
     [Theory]

@@ -74,7 +74,11 @@ public sealed class DocumentedInputTests(TestingWebApplicationFactory factory)
         Assert.Equal(
             ["1080p60", "1080p30", "720p60", "720p30"],
             profile["schema"]!["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
-        Assert.Equal(PlayDelivery.Ordinarily.Name, profile["schema"]!["default"]!.GetValue<string>());
+        Assert.Null(profile["schema"]!["default"]);
+        Assert.Contains(
+            "/api/live/profiles",
+            profile["description"]!.GetValue<string>(),
+            StringComparison.Ordinal);
     }
 
     [Fact]
