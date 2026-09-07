@@ -3,6 +3,7 @@ using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.DriverStatus;
 using Carina.Domain.Streaming;
+using Carina.Infrastructure.Collection;
 
 using Microsoft.Extensions.DependencyInjection;
 
@@ -139,8 +140,8 @@ public sealed class DriverLiveSupply(
     {
         ArgumentNullException.ThrowIfNull(problem);
 
-        return problem.Title is SessionRefusalTitles.NoLock
-            ? LiveRefusalDetail.Of(TuneFailureKind.NoLock)
+        return SessionRefusalReading.TuneFailureIn(problem) is { } named
+            ? LiveRefusalDetail.Of(named)
             : LiveRefusalDetail.Unsaid;
     }
 

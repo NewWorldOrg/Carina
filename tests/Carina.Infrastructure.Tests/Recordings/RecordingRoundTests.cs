@@ -744,7 +744,8 @@ public sealed class RecordingRoundTests
         HeldRecordings recordings,
         RecordingDriver driver,
         TuningResolution? resolution = null,
-        DateTime? at = null)
+        DateTime? at = null,
+        RefusalLedger? ledger = null)
     {
         var clock = new HeldMoment(at ?? Airs);
 
@@ -754,6 +755,7 @@ public sealed class RecordingRoundTests
             new ResolvedTuning(resolution ?? Terrestrial),
             new DiskPrecheckService(new StorageMonitor(driver, clock, StorageMonitorSettings.Default)),
             driver,
+            (ledger ?? new RefusalLedger()).Reporter,
             Settings,
             clock);
     }

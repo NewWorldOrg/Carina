@@ -26,7 +26,14 @@ public sealed record RecordingRefusal(
     ReservationId Reservation,
     RecordingRefusalKind Kind,
     TuningRefusal Refusal,
-    string Note);
+    string Note)
+{
+    public RecordingStartFailure? Reported { get; init; }
+
+    public CandidateChannelId? TunedWith { get; init; }
+
+    public IReadOnlyList<Guid> RecordedInstead { get; init; } = [];
+}
 
 public sealed record RecordingRun(
     IReadOnlyList<RecordingId> Started,
@@ -40,6 +47,7 @@ public sealed class RecordingRound(
     IServiceTuningDirectory directory,
     DiskPrecheckService disks,
     IDriverClient driver,
+    RecordingRefusalReporter reporter,
     RecordingSettings settings,
     TimeProvider clock)
 {
@@ -67,6 +75,8 @@ public sealed class RecordingRound(
 
         IReadOnlyList<RecordingId> stopped = await StopAsync(running, now, cancellationToken);
         Starting starting = await StartAsync(running, now, cancellationToken);
+
+        await reporter.ReportAsync(starting.Refused, now, cancellationToken);
 
         return new RecordingRun(starting.Started, stopped, starting.Unconfirmed, starting.Refused);
     }
@@ -147,7 +157,14 @@ public sealed class RecordingRound(
                 continue;
             }
 
-            await ClaimedAsync(due, tuning, running, starting, now, cancellationToken);
+            await ClaimedAsync(
+                due,
+                tuning,
+                resolution.CandidateChannelId,
+                running,
+                starting,
+                now,
+                cancellationToken);
         }
 
         return starting;
@@ -156,6 +173,7 @@ public sealed class RecordingRound(
     private async Task ClaimedAsync(
         RecordingTick due,
         TuningParameters tuning,
+        CandidateChannelId? tunedWith,
         List<Recording> running,
         Starting starting,
         DateTime now,
@@ -195,7 +213,7 @@ public sealed class RecordingRound(
 
                 await reservations.ReleaseAsync(due.Id, now, CancellationToken.None);
 
-                starting.Refused.Add(Refusal(due.Id, answer));
+                starting.Refused.Add(Refusal(due.Id, answer, tunedWith, running));
 
                 return;
             }
@@ -303,7 +321,11 @@ public sealed class RecordingRound(
         }
     }
 
-    private static RecordingRefusal Refusal(ReservationId reservation, DriverCall<SessionSnapshot> answer)
+    private static RecordingRefusal Refusal(
+        ReservationId reservation,
+        DriverCall<SessionSnapshot> answer,
+        CandidateChannelId? tunedWith,
+        IReadOnlyList<Recording> running)
     {
         string title = answer.Problem?.Title ?? NothingSaidWhy;
 
@@ -313,7 +335,17 @@ public sealed class RecordingRound(
                 ? RecordingRefusalKind.TunerContended
                 : RecordingRefusalKind.DriverRefused;
 
-        return new RecordingRefusal(reservation, kind, TuningRefusal.None, title);
+        return new RecordingRefusal(reservation, kind, TuningRefusal.None, title)
+        {
+            Reported = RecordingStartReading.Of(answer.Problem),
+            TunedWith = tunedWith,
+            RecordedInstead =
+            [
+                .. running
+                    .Where(one => one.ReservationId is not null)
+                    .Select(one => one.ReservationId!.Value),
+            ],
+        };
     }
 
     private static RecordingDemand AtTheHeaviestRate(Recording recording)
