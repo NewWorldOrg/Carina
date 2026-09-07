@@ -2,6 +2,7 @@ using System.Runtime.Versioning;
 
 using Carina.Domain.Streaming;
 using Carina.Infrastructure.Streaming;
+using Carina.TestSupport;
 
 namespace Carina.Infrastructure.Tests.Streaming;
 
@@ -118,14 +119,5 @@ public sealed class FfprobeStreamAttributeReaderTests : IDisposable
     private string Prints(string output) => Script($"cat <<'ANSWER'\n{output}\nANSWER");
 
     private string Script(string body)
-    {
-        string path = Path.Combine(room, $"stand-in-{Guid.NewGuid():N}");
-
-        File.WriteAllText(path, $"#!/bin/sh\n{body}\n");
-        File.SetUnixFileMode(
-            path,
-            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-
-        return path;
-    }
+        => StandInProgramme.Written(Path.Combine(room, $"stand-in-{Guid.NewGuid():N}"), body);
 }

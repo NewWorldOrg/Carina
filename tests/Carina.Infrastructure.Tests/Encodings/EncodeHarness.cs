@@ -242,13 +242,9 @@ internal sealed class EncodeHarness : IDisposable
     /// </summary>
     public string Standing(string script)
     {
-        string path = Room.Under($"programme-{Guid.NewGuid():N}.sh");
-        File.WriteAllText(path, "#!/bin/sh\nfor argument in \"$@\"; do destination=$argument; done\n" + script + "\n");
-
-        if (!OperatingSystem.IsWindows())
-        {
-            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        }
+        string path = StandInProgramme.Written(
+            Room.Under($"programme-{Guid.NewGuid():N}.sh"),
+            "for argument in \"$@\"; do destination=$argument; done\n" + script);
 
         Programmes = new MachineSettings { Programme = path };
 

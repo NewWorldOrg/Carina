@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Runtime.Versioning;
 
+using Carina.TestSupport;
+
 namespace Carina.Infrastructure.Tests;
 
 [SupportedOSPlatform("linux")]
@@ -15,16 +17,7 @@ public sealed class StandIns : IDisposable
     public string Named(string name) => Path.Combine(room, name);
 
     public string Script(string body)
-    {
-        string path = Named($"stand-in-{Guid.NewGuid():N}");
-
-        File.WriteAllText(path, $"#!/bin/sh\n{body}\n");
-        File.SetUnixFileMode(
-            path,
-            UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-
-        return path;
-    }
+        => StandInProgramme.Written(Named($"stand-in-{Guid.NewGuid():N}"), body);
 
     public string Node()
     {
@@ -40,6 +33,11 @@ public sealed class StandIns : IDisposable
             .Where(line => line.Length > 0)
             .Select(line => int.Parse(line, CultureInfo.InvariantCulture));
 
+    public static Task WroteDown(string pids, int howMany)
+        => Eventually.Happens(
+            () => Written(pids).Count >= howMany,
+            $"the stand-in wrote down {howMany} process identifiers");
+
     public async Task<bool> NothingIsLeftOf(IEnumerable<int> pids)
     {
         for (int attempt = 0; attempt < 100; attempt++)
@@ -53,6 +51,18 @@ public sealed class StandIns : IDisposable
         }
 
         return false;
+    }
+
+    private static IReadOnlyList<int> Written(string pids)
+    {
+        try
+        {
+            return [.. Pids(pids)];
+        }
+        catch (IOException)
+        {
+            return [];
+        }
     }
 
     private static bool Gone(int pid)
