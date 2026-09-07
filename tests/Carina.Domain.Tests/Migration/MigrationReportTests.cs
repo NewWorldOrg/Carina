@@ -132,6 +132,20 @@ public sealed class MigrationReportTests
     }
 
     [Fact]
+    public void EveryPopulationIsEitherCountedOrNamedAmongTheThingsLeftAlone()
+    {
+        Assert.Equal(
+            MigrationPopulations.All,
+            [.. MigrationPopulations.Counted, .. MigrationPopulations.ToldAsSomethingNotDone]);
+
+        Assert.All(
+            MigrationPopulations.ToldAsSomethingNotDone,
+            population => Assert.Contains(
+                MigrationOmissionSubjects.All,
+                subject => subject.ToString() == population.ToString()));
+    }
+
+    [Fact]
     public void AReportOfARunThatFoundNothingIsStillAReport()
     {
         MigrationReport told = MigrationReport.Of(Ran(), Empty(), [], MigrationOmission.EveryOne(Run));

@@ -36,6 +36,9 @@ public static class MigrationPopulations
         MigrationPopulation.ChannelDefinitions,
     ];
 
+    public static readonly IReadOnlyList<MigrationPopulation> ToldAsSomethingNotDone =
+        [.. All.Except(Counted)];
+
     public static MigrationPopulation Named(MigrationPopulation population)
         => Enum.IsDefined(population)
             ? population
