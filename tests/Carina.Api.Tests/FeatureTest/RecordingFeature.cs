@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 
+using Carina.Api.Services;
 using Carina.Api.Tests.Unit;
 using Carina.Contracts;
 using Carina.Domain.Channels;
@@ -169,6 +170,8 @@ internal sealed class ScriptedEraser : IRecordingFileEraser
 
     public Action? WhenErasing { get; set; }
 
+    public bool NeverFinishes { get; set; }
+
     public List<RecordingId> Asked { get; } = [];
 
     public Task<RecordingErasure> EraseAsync(
@@ -179,7 +182,14 @@ internal sealed class ScriptedEraser : IRecordingFileEraser
         Asked.Add(id);
         WhenErasing?.Invoke();
 
-        return Task.FromResult(Answer);
+        return NeverFinishes ? WaitingAsync(cancellationToken) : Task.FromResult(Answer);
+    }
+
+    private static async Task<RecordingErasure> WaitingAsync(CancellationToken cancellationToken)
+    {
+        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+
+        return RecordingErasure.Erased(0);
     }
 }
 
@@ -195,6 +205,11 @@ internal sealed class RecordingFeature : IAsyncDisposable
     }
 
     public RecordingFeature(IRecordingFileEraser? erasing)
+        : this(erasing, RecordingDeletions.LongestByDefault)
+    {
+    }
+
+    public RecordingFeature(IRecordingFileEraser? erasing, TimeSpan longestDeletion)
     {
         Remaker = new ScriptedRemaker(Recordings);
         IRecordingFileEraser erasingWith = erasing ?? Eraser;
@@ -208,6 +223,7 @@ internal sealed class RecordingFeature : IAsyncDisposable
                 services.AddSingleton<IDriverClient>(Driver);
                 services.AddSingleton<IThumbnailRemaker>(Remaker);
                 services.AddSingleton(erasingWith);
+                services.AddSingleton(new RecordingDeletions(longestDeletion));
                 services.AddSingleton<TimeProvider>(new FixedTimeProvider(Noon.AddMinutes(30)));
             }));
 

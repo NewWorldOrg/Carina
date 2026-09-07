@@ -239,6 +239,38 @@ public sealed class DeleteRecordingEndpointTests
     }
 
     [Fact]
+    public async Task ADeletionStillGoingWhenTheTimeIsUpIsGivenUpOnAndTheRowStaysWhereItIs()
+    {
+        await using var feature = new RecordingFeature(null, TimeSpan.FromMilliseconds(50));
+        Recording held = Ended(feature);
+        feature.Eraser.NeverFinishes = true;
+
+        (HttpStatusCode status, JsonElement body) = await feature.DeleteAsync($"/api/recordings/{held.Id.Wire}");
+
+        Assert.Equal(HttpStatusCode.Conflict, status);
+        Assert.Equal("tookTooLong", body.GetProperty("data").GetProperty("refusal").GetString());
+        Assert.Single(feature.Recordings.Recordings);
+    }
+
+    [Fact]
+    public async Task ADeletionGivenUpOnStillLetsTheNextOneRun()
+    {
+        await using var feature = new RecordingFeature(null, TimeSpan.FromMilliseconds(50));
+        Recording first = Ended(feature);
+        Recording second = Ended(feature);
+        feature.Eraser.NeverFinishes = true;
+
+        Assert.Equal(
+            HttpStatusCode.Conflict,
+            (await feature.DeleteAsync($"/api/recordings/{first.Id.Wire}")).Status);
+
+        feature.Eraser.NeverFinishes = false;
+
+        Assert.Equal(HttpStatusCode.OK, (await feature.DeleteAsync($"/api/recordings/{second.Id.Wire}")).Status);
+        Assert.Single(feature.Recordings.Recordings);
+    }
+
+    [Fact]
     public async Task ADeleteCarryingNoBodyReachesTheEndpointWithoutNamingAContentType()
     {
         await using var feature = new RecordingFeature();

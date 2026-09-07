@@ -31,6 +31,8 @@ public enum RecordingFailure
     FilesLeftBehind = 10,
 
     OneIsAlreadyBeingDiscarded = 11,
+
+    TookTooLong = 12,
 }
 
 public sealed record ThumbnailRemade(Recording Recording, ThumbnailRemake Remake);
@@ -209,10 +211,24 @@ public sealed class RecordingService(
                 RecordingFailure.OneIsAlreadyBeingDiscarded);
         }
 
-        RecordingErasure erasure = await eraser.EraseAsync(
-            id,
-            recording.OutputRoot,
-            cancellationToken);
+        using var limit = new CancellationTokenSource(deletions.Longest, clock);
+        using CancellationTokenSource asking =
+            CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, limit.Token);
+
+        RecordingErasure erasure;
+
+        try
+        {
+            erasure = await eraser.EraseAsync(id, recording.OutputRoot, asking.Token);
+        }
+        catch (OperationCanceledException) when (GaveUp(limit, cancellationToken))
+        {
+            return ServiceResult<RecordingDiscarded, RecordingFailure>.Failure(
+                $"Throwing recording {id.Wire} away was still going after {deletions.Longest}, so it was given "
+                + $"up on. Recording {id.Wire} is still in the ledger, which is what says the throwing away is "
+                + "unfinished, and asking again carries on from here.",
+                RecordingFailure.TookTooLong);
+        }
 
         if (erasure.Fault is { } fault)
         {
@@ -231,6 +247,9 @@ public sealed class RecordingService(
             _ => Missing<RecordingDiscarded>(id),
         };
     }
+
+    private static bool GaveUp(CancellationTokenSource limit, CancellationToken asked)
+        => limit.IsCancellationRequested && !asked.IsCancellationRequested;
 
     private async Task<RecordingSeen> SeenAsync(Recording recording, CancellationToken cancellationToken)
     {
