@@ -5,9 +5,9 @@ namespace Carina.Domain.Tests.Streaming;
 public sealed class LiveFanoutSettingsTests
 {
     [Fact]
-    public void ByDefaultAViewerMayFallFifteenFragmentsBehindBeforeAnythingIsThrownAway()
+    public void ByDefaultAViewerMayFallSixtyFragmentsBehindBeforeAnythingIsThrownAway()
     {
-        Assert.Equal(15, new LiveFanoutSettings().LongestBacklog);
+        Assert.Equal(60, new LiveFanoutSettings().LongestBacklog);
     }
 
     [Fact]
