@@ -1,4 +1,7 @@
+using Carina.Contracts;
+using Carina.Domain.Channels;
 using Carina.Domain.Quality;
+using Carina.Domain.Recordings;
 
 namespace Carina.Domain.Tests.Quality;
 
@@ -33,4 +36,24 @@ internal static class QualityFactory
 
     public static ThresholdBand WarningOnly(double warning = 0.0002)
         => ThresholdBand.Of(ThresholdSense.Ceiling, QualityThresholdKey.PacketsLostWarning, Provisional(warning));
+
+    public static QualityFacet Facet(
+        int network = 32_736,
+        int service = 1_024,
+        string tuner = "adapter0",
+        int hourOfDay = 21,
+        TuneSystem kind = TuneSystem.IsdbT)
+        => QualityFacet.Of(kind, new NetworkId(network), new ServiceId(service), new TunerDeviceId(tuner), hourOfDay);
+
+    public static QualityObservation Measured(double observed, QualityFacet? facet = null, ThresholdBand? band = null)
+        => QualityObservation.Of(facet ?? Facet(), ThresholdEvaluator.Judge(observed, band ?? PacketsLost()));
+
+    public static QualityObservation Unmeasured(QualityFacet? facet = null, ThresholdBand? band = null)
+        => QualityObservation.Of(facet ?? Facet(), ThresholdEvaluator.Judge(null, band ?? PacketsLost()));
+
+    public static QualityObservation Unsupported(QualityFacet? facet = null)
+        => QualityObservation.Unsupported(facet ?? Facet());
+
+    public static QualityObservation Unreachable(QualityFacet? facet = null)
+        => QualityObservation.Unreachable(facet ?? Facet());
 }
