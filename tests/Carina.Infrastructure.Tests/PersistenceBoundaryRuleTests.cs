@@ -144,8 +144,8 @@ public sealed class PersistenceBoundaryRuleTests
         Assert.Contains("programme_start_at", columns, StringComparer.Ordinal);
     }
 
-    [Fact(DisplayName = "BR-QD-013: the quality tables are five, and none of them holds a key into another domain")]
-    public void TheQualityTablesAreFiveAndNoneOfThemHoldsAKeyIntoAnotherDomain()
+    [Fact(DisplayName = "BR-QD-013: the quality tables are six, and none of them holds a key into another domain")]
+    public void TheQualityTablesAreSixAndNoneOfThemHoldsAKeyIntoAnotherDomain()
     {
         using CarinaDbContext context = Carina();
 
@@ -156,6 +156,7 @@ public sealed class PersistenceBoundaryRuleTests
                 "quality_signal_rollup",
                 "quality_signal_sample",
                 "quality_threshold",
+                "quality_threshold_change",
             ],
             PersistenceBoundaryRules.TablesOf(context.Model, PersistenceFamily.Quality));
 

@@ -155,6 +155,57 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         Assert.Equal("ck_quality_threshold_standing", refusal.ConstraintName);
     }
 
+    [Fact(DisplayName = "a threshold that moves leaves a record of what it moved from")]
+    public async Task AThresholdThatMovesLeavesARecordOfWhatItMovedFrom()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        var id = Guid.NewGuid();
+        await ThresholdChangeAsync(connection, id, "PacketsLostWarning");
+
+        await using var reading = new NpgsqlCommand(
+            $"SELECT previous_value, next_value, changed_by FROM quality_threshold_change WHERE id = '{id}'",
+            connection);
+
+        await using NpgsqlDataReader row = await reading.ExecuteReaderAsync();
+        Assert.True(await row.ReadAsync());
+        Assert.Equal(0.0002, row.GetDouble(0));
+        Assert.Equal(0.0005, row.GetDouble(1));
+        Assert.True(await row.IsDBNullAsync(2));
+    }
+
+    [Fact(DisplayName = "a change under a key this domain does not name is refused")]
+    public async Task AChangeUnderAKeyThisDomainDoesNotNameIsRefused()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => ThresholdChangeAsync(connection, Guid.NewGuid(), "SomethingElse"));
+
+        Assert.Equal("ck_quality_threshold_change_key", refusal.ConstraintName);
+    }
+
+    [Fact(DisplayName = "a threshold that moves does not rewrite what an incident was judged against")]
+    public async Task AThresholdThatMovesDoesNotRewriteWhatAnIncidentWasJudgedAgainst()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        string subject = Guid.NewGuid().ToString("N");
+        await IncidentAsync(connection, state: "Detected", subject: subject);
+        await ThresholdAsync(connection, "PacketsLostWarning", provisional: "true", observations: "0");
+        await new NpgsqlCommand(
+            "UPDATE quality_threshold SET current_value = 0.5 WHERE threshold_key = 'PacketsLostWarning'",
+            connection).ExecuteNonQueryAsync();
+
+        await using var reading = new NpgsqlCommand(
+            $"SELECT applied_current FROM quality_incident WHERE subject_key = '{subject}'",
+            connection);
+
+        await using NpgsqlDataReader row = await reading.ExecuteReaderAsync();
+        Assert.True(await row.ReadAsync());
+        Assert.Equal(0.0002, row.GetDouble(0));
+    }
+
     [Fact(DisplayName = "BR-QV-002: the threshold an incident was judged against is kept on the incident")]
     public async Task TheThresholdAnIncidentWasJudgedAgainstIsKeptOnTheIncident()
     {
@@ -266,6 +317,15 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
             INSERT INTO quality_threshold (
                 threshold_key, default_value, current_value, provisional, observations, updated_at, updated_by)
             VALUES ('{key}', 0.0002, 0.0002, {provisional}, {observations}, {Taken}, NULL)
+            """,
+            connection).ExecuteNonQueryAsync();
+
+    private static Task ThresholdChangeAsync(NpgsqlConnection connection, Guid id, string key)
+        => new NpgsqlCommand(
+            $"""
+            INSERT INTO quality_threshold_change (
+                id, threshold_key, previous_value, next_value, changed_at, changed_by)
+            VALUES ('{id}', '{key}', 0.0002, 0.0005, {Taken}, NULL)
             """,
             connection).ExecuteNonQueryAsync();
 

@@ -52,7 +52,7 @@ public sealed class QualityObservationTests
 
         Assert.Equal(32_736, facet.Network.Value);
         Assert.Equal(1_024, facet.Service.Value);
-        Assert.Equal("adapter0", facet.Tuner.Value);
+        Assert.Equal("adapter0", facet.Tuner!.Value);
         Assert.Equal(21, facet.HourOfDay);
         Assert.Equal(TuneSystem.IsdbT, facet.Kind);
     }
