@@ -95,8 +95,9 @@ public sealed class FfmpegEncodeRunTests : IDisposable
     [Fact(DisplayName = "BR-ED2-014: a programme that goes quiet for longer than allowed is stopped, children and all, and said to have stalled")]
     public async Task AProgrammeThatGoesQuietIsStoppedAndSaidToHaveStalled()
     {
+        TimeSpan allowed = TimeSpan.FromMilliseconds(300);
+        var clock = new HandTurnedClock();
         string marker = tree.Under("woke");
-        Stopwatch waited = Stopwatch.StartNew();
 
         EncodeRunOutcome ran = await FfmpegEncodeRun.RunAsync(
             Standing($"""
@@ -106,16 +107,20 @@ public sealed class FfmpegEncodeRunTests : IDisposable
                 """),
             [],
             null,
-            TimeSpan.FromMilliseconds(300),
+            allowed,
             Nobody,
-            Nothing,
-            TimeProvider.System,
+            _ =>
+            {
+                clock.Turn(allowed + TimeSpan.FromMilliseconds(1));
+
+                return Task.CompletedTask;
+            },
+            clock,
             Cancel);
 
         Assert.Equal(EncodeRunFault.Stalled, ran.Fault);
         Assert.Null(ran.ExitCode);
         Assert.NotNull(ran.Reached);
-        Assert.True(waited.Elapsed < TimeSpan.FromSeconds(15), $"stopped rather than waited for: {waited.Elapsed}");
         Assert.False(File.Exists(marker));
     }
 
@@ -181,18 +186,25 @@ public sealed class FfmpegEncodeRunTests : IDisposable
         RunningProgramme? began = null;
         bool progressCameFirst = false;
         DateTime before = DateTime.UtcNow.AddSeconds(-2);
+        string programme = Standing("""
+            echo $$ > "$0.pid"
+            printf 'out_time_us=1000000\nprogress=end\n'
+            held=0
+            while [ ! -f "$0.identified" ] && [ "$held" -lt 600 ]; do
+                held=$((held+1))
+                sleep 0.05
+            done
+            """);
 
         EncodeRunOutcome ran = await FfmpegEncodeRun.RunAsync(
-            Standing("""
-                echo $$ > "$0.pid"
-                printf 'out_time_us=1000000\nprogress=end\n'
-                """),
+            programme,
             [],
             null,
             Patient,
             spawned =>
             {
                 began = spawned;
+                File.WriteAllText(programme + ".identified", string.Empty);
 
                 return Task.CompletedTask;
             },
@@ -284,38 +296,37 @@ public sealed class FfmpegEncodeRunTests : IDisposable
     [Fact(DisplayName = "BR-ED2-014: a programme that keeps reporting the same place is making no headway, and is stopped as stalled like one that says nothing")]
     public async Task AProgrammeThatKeepsReportingTheSamePlaceIsStalled()
     {
-        Stopwatch waited = Stopwatch.StartNew();
+        TimeSpan allowed = TimeSpan.FromMilliseconds(700);
+        var clock = new HandTurnedClock();
+        string marker = tree.Under("woke");
 
         EncodeRunOutcome ran = await FfmpegEncodeRun.RunAsync(
-            Standing("""
+            Standing($"""
                 for step in 1 2 3 4 5 6 7 8 9 10; do
                     printf 'out_time_us=1000000\nprogress=continue\n'
-                    sleep 0.2
                 done
-                printf 'progress=end\n'
+                sleep 30
+                printf woke > "{marker}"
                 """),
             [],
             null,
-            TimeSpan.FromMilliseconds(700),
+            allowed,
             Nobody,
-            Nothing,
-            TimeProvider.System,
+            _ =>
+            {
+                clock.Turn(allowed - TimeSpan.FromMilliseconds(1));
+
+                return Task.CompletedTask;
+            },
+            clock,
             Cancel);
 
         Assert.Equal(EncodeRunFault.Stalled, ran.Fault);
-        Assert.True(waited.Elapsed < TimeSpan.FromSeconds(2), $"stopped once the same place had been reported for long enough: {waited.Elapsed}");
+        Assert.Null(ran.ExitCode);
+        Assert.NotNull(ran.Reached);
+        Assert.False(File.Exists(marker));
     }
 
     private string Standing(string script)
-    {
-        string path = tree.Under($"programme-{Guid.NewGuid():N}.sh");
-        File.WriteAllText(path, "#!/bin/sh\n" + script + "\n");
-
-        if (!OperatingSystem.IsWindows())
-        {
-            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        }
-
-        return path;
-    }
+        => StandInProgramme.Written(tree.Under($"programme-{Guid.NewGuid():N}.sh"), script);
 }

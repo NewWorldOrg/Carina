@@ -3,6 +3,7 @@ using System.Diagnostics;
 using Carina.Domain.Machines;
 using Carina.Infrastructure.Machines;
 using Carina.Infrastructure.Tests.Integrity;
+using Carina.TestSupport;
 
 namespace Carina.Infrastructure.Tests.Machines;
 
@@ -77,15 +78,5 @@ public sealed class AnotherProgrammeTests : IDisposable
     }
 
     private string Standing(string script)
-    {
-        string path = tree.Under($"programme-{Guid.NewGuid():N}.sh");
-        File.WriteAllText(path, "#!/bin/sh\n" + script + "\n");
-
-        if (!OperatingSystem.IsWindows())
-        {
-            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        }
-
-        return path;
-    }
+        => StandInProgramme.Written(tree.Under($"programme-{Guid.NewGuid():N}.sh"), script);
 }

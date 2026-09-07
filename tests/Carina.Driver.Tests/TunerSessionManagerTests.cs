@@ -572,9 +572,10 @@ public sealed class TunerSessionManagerTests : IDisposable
     [Fact]
     public async Task AWedgedLiveSessionDoesNotHoldTheDrainOnceEveryRecordingIsDone()
     {
+        var devices = new HeldOpenForOneDeviceFactory("adapter1");
         var manager = new TunerSessionManager(
             Configuration,
-            new StubbornForOneDeviceFactory("adapter1", TimeSpan.FromSeconds(10)),
+            devices,
             clock,
             NullLogger<TunerSessionManager>.Instance,
             hardStopLimit: TimeSpan.FromSeconds(1)
@@ -584,18 +585,15 @@ public sealed class TunerSessionManagerTests : IDisposable
         TunerSession wedged = Begin(manager, "s-2", "adapter1", SessionPurpose.Live, TunerKind.Satellite);
 
         Task draining = manager.DrainAsync(CancellationToken.None);
-        DateTime started = DateTime.UtcNow;
 
         recording.Stop();
 
-        await draining;
+        await draining.WaitAsync(Deadlock);
 
-        Assert.True(
-            DateTime.UtcNow - started < TimeSpan.FromSeconds(15),
-            $"The drain took {DateTime.UtcNow - started} although the only recording had finished."
-        );
         Assert.Equal(SessionState.Stopped, recording.State);
         Assert.False(wedged.Completion.IsCompleted);
+
+        devices.Held.LetGo();
     }
 
     [Fact]

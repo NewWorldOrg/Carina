@@ -4,6 +4,7 @@ using Carina.Domain.Thumbnails;
 using Carina.Infrastructure.Tests.Integrity;
 using Carina.Infrastructure.Tests.Scanning;
 using Carina.Infrastructure.Thumbnails;
+using Carina.TestSupport;
 
 namespace Carina.Infrastructure.Tests.Thumbnails;
 
@@ -287,17 +288,5 @@ public sealed class FfmpegThumbnailRendererTests : IDisposable
     private string Destination() => tree.Under("pictures", "one.jpg");
 
     private string Standing(string script)
-    {
-        string path = tree.Under($"programme-{Guid.NewGuid():N}.sh");
-        File.WriteAllText(path, "#!/bin/sh\n" + script + "\n");
-
-        if (!OperatingSystem.IsWindows())
-        {
-            File.SetUnixFileMode(
-                path,
-                UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
-        }
-
-        return path;
-    }
+        => StandInProgramme.Written(tree.Under($"programme-{Guid.NewGuid():N}.sh"), script);
 }

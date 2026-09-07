@@ -3,6 +3,7 @@ using System.Runtime.Versioning;
 
 using Carina.Domain.Machines;
 using Carina.Infrastructure.Machines;
+using Carina.TestSupport;
 
 namespace Carina.Infrastructure.Tests.Machines;
 
@@ -93,10 +94,20 @@ public sealed class ProgrammeTests : IDisposable
     public async Task AProgrammeThatWillNotStopIsGivenUpOnAndNothingIsLeftRunning()
     {
         string pids = standIns.Named("pids");
+        TimeSpan longest = TimeSpan.FromMilliseconds(250);
+        var clock = new HandTurnedClock();
 
-        ProgrammeSaid said = await Saying(
+        Task<ProgrammeSaid> saying = AnotherProgramme.SayAsync(
             standIns.Script($"echo $$ > {pids}; sleep 60 & echo $! >> {pids}; wait"),
-            TimeSpan.FromMilliseconds(250));
+            [],
+            longest,
+            clock,
+            CancellationToken.None);
+
+        await StandIns.WroteDown(pids, 2);
+        clock.Turn(longest);
+
+        ProgrammeSaid said = await saying;
 
         Assert.False(said.Ran);
         Assert.Equal(ProgrammeFault.TimedOut, said.Fault);
@@ -108,15 +119,19 @@ public sealed class ProgrammeTests : IDisposable
     {
         string pids = standIns.Named("pids");
 
-        using var calledOff = new CancellationTokenSource(TimeSpan.FromMilliseconds(100));
+        using var calledOff = new CancellationTokenSource();
 
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => AnotherProgramme.SayAsync(
+        Task<ProgrammeSaid> saying = AnotherProgramme.SayAsync(
             standIns.Script($"echo $$ > {pids}; sleep 60 & echo $! >> {pids}; wait"),
             [],
             TimeSpan.FromSeconds(30),
             TimeProvider.System,
-            calledOff.Token));
+            calledOff.Token);
 
+        await StandIns.WroteDown(pids, 2);
+        await calledOff.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => saying);
         Assert.True(await standIns.NothingIsLeftOf(StandIns.Pids(pids)));
     }
 

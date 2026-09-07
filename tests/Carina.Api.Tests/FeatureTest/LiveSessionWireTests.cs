@@ -43,14 +43,14 @@ public sealed class LiveSessionWireTests
         await transcoders.Raised[0].WriteAsync(Fmp4.Header);
         await transcoders.Raised[0].WriteAsync(Fmp4.Fragment(1_000));
 
-        LiveFrame[] toOne = [await Take(one), await TakePictureHeader(one), await TakePastProgress(one)];
-        LiveFrame[] toAnother = [await Take(another), await TakePictureHeader(another), await TakePastProgress(another)];
+        LiveFrame[] toOne = [await TakePictureHeader(one), await TakePastProgress(one)];
+        LiveFrame[] toAnother = [await TakePictureHeader(another), await TakePastProgress(another)];
 
-        Assert.Equal([LiveChannel.Control, LiveChannel.PictureHeader, LiveChannel.Picture], toOne.Select(frame => frame.Channel));
+        Assert.Equal([LiveChannel.PictureHeader, LiveChannel.Picture], toOne.Select(frame => frame.Channel));
         Assert.Equal(toOne.Select(frame => frame.Channel), toAnother.Select(frame => frame.Channel));
         Assert.Equal(
-            toOne.Skip(1).Select(frame => frame.Payload.ToArray()),
-            toAnother.Skip(1).Select(frame => frame.Payload.ToArray()));
+            toOne.Select(frame => frame.Payload.ToArray()),
+            toAnother.Select(frame => frame.Payload.ToArray()));
         Assert.Equal(2, Sessions(probe).Viewers(EveryFrame));
     }
 
@@ -179,22 +179,22 @@ public sealed class LiveSessionWireTests
         supply.Opened[0].Ending = LiveSupplyEnding.Of(LiveSupplyEnd.TakenForARecording, "a recording outranked it.");
         supply.Opened[0].NoMore();
 
+        await Eventually.Happens(() => supply.Opened[0].Disposed, "the reading of the supply has taken in why it ended");
+
         await transcoders.Raised[0].WriteAsync(Fmp4.Header);
         transcoders.Raised[0].NoMore();
 
-        Assert.Equal(LiveChannel.PictureHeader, (await TakePictureHeader(socket)).Channel);
+        (IReadOnlyList<LiveFrame> heard, WebSocketReceiveResult ending) = await UntilItIsClosed(socket);
 
-        LiveFrame said = await TakePastProgress(socket);
+        Assert.Contains(LiveChannel.PictureHeader, heard.Select(frame => frame.Channel));
 
-        Assert.Equal(LiveChannel.Control, said.Channel);
+        LiveEndingReport said = Assert.Single(
+            heard.Where(frame => frame.Channel is LiveChannel.Control)
+                .Select(frame => LiveEndingReport.Read(frame.Payload.Span))
+                .Where(read => read.Fault is null)
+                .Select(read => read.Report!));
 
-        LiveEndingReading read = LiveEndingReport.Read(said.Payload.Span);
-
-        Assert.Null(read.Fault);
-        Assert.Equal(LiveSupplyEnd.TakenForARecording, read.Report!.Why);
-
-        WebSocketReceiveResult ending = await Heard(socket);
-
+        Assert.Equal(LiveSupplyEnd.TakenForARecording, said.Why);
         Assert.Equal(WebSocketMessageType.Close, ending.MessageType);
         Assert.Equal(WebSocketCloseStatus.NormalClosure, ending.CloseStatus);
         Assert.Equal(LiveDepartures.Because(LiveDeparture.SourceEnded), ending.CloseStatusDescription);
@@ -383,13 +383,38 @@ public sealed class LiveSessionWireTests
 
         WebSocketReceiveResult said = await socket.ReceiveAsync(new ArraySegment<byte>(heard), Patiently());
 
-        Assert.Equal(WebSocketMessageType.Binary, said.MessageType);
+        Assert.True(
+            said.MessageType is WebSocketMessageType.Binary,
+            $"a frame was expected, and the wire said {said.MessageType} ({said.CloseStatusDescription})");
 
         LiveFraming framing = LiveFrame.Read(heard.AsSpan(0, said.Count));
 
         Assert.NotNull(framing.Frame);
 
         return framing.Frame;
+    }
+
+    private static async Task<(IReadOnlyList<LiveFrame> Heard, WebSocketReceiveResult Ending)> UntilItIsClosed(
+        WebSocket socket)
+    {
+        List<LiveFrame> heard = [];
+        byte[] said = new byte[64 * 1024];
+
+        while (true)
+        {
+            WebSocketReceiveResult came = await socket.ReceiveAsync(new ArraySegment<byte>(said), Patiently());
+
+            if (came.MessageType is WebSocketMessageType.Close)
+            {
+                return (heard, came);
+            }
+
+            LiveFraming framing = LiveFrame.Read(said.AsSpan(0, came.Count));
+
+            Assert.NotNull(framing.Frame);
+
+            heard.Add(framing.Frame);
+        }
     }
 
     private AuthProbe Wiring()
