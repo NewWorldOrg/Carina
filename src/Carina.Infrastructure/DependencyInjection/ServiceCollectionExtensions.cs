@@ -10,6 +10,7 @@ using Carina.Domain.Library;
 using Carina.Domain.Machines;
 using Carina.Domain.Playback;
 using Carina.Domain.Programmes;
+using Carina.Domain.Quality;
 using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
 using Carina.Domain.Scans;
@@ -131,6 +132,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IEncodeJobRepository, EncodeJobRepository>();
         services.AddScoped<IEncodeStandingReader, EncodeStandingReader>();
         services.AddScoped<IEncodeScratchLedger, EncodeScratchLedger>();
+        services.AddScoped<IQualityLedgerReader, QualityLedgerReader>();
+        services.AddScoped<IQualityThresholdRepository, QualityThresholdRepository>();
+        services.AddScoped<IQualityThresholdChangeRepository, QualityThresholdChangeRepository>();
         services.AddScoped<EncodeScratchFiles>();
         services.AddScoped<EncodeScratchCleaner>();
         services.AddScoped<EncodeArtefactPlacer>();

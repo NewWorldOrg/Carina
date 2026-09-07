@@ -264,6 +264,7 @@ public sealed class ChannelSchemaTests
                 "quality_signal_rollup",
                 "quality_signal_sample",
                 "quality_threshold",
+                "quality_threshold_change",
                 "recording",
                 "reservation",
                 "reservation_outcome",

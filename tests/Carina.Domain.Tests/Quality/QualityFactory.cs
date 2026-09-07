@@ -45,6 +45,44 @@ internal static class QualityFactory
         TuneSystem kind = TuneSystem.IsdbT)
         => QualityFacet.Of(kind, new NetworkId(network), new ServiceId(service), new TunerDeviceId(tuner), hourOfDay);
 
+    public static QualityBands Bands(double warning = 0.0002, double unwatchable = 0.001)
+        => QualityBands.Of(new Dictionary<QualityMetric, ThresholdBand>
+        {
+            [QualityMetric.PacketsLost] = PacketsLost(warning, unwatchable),
+            [QualityMetric.PacketsLeftScrambled] = ThresholdBand.Of(
+                ThresholdSense.Ceiling,
+                QualityThresholdKey.PacketsLeftScrambled,
+                Provisional(0.0005)),
+            [QualityMetric.Overflows] = ThresholdBand.Of(
+                ThresholdSense.Ceiling,
+                QualityThresholdKey.Overflows,
+                Provisional(1)),
+        });
+
+    public static QualityLedgerRow Row(
+        long? dropped = 0,
+        long? total = 1_000_000,
+        long? scrambled = 0,
+        long overflows = 0,
+        int network = 32_736,
+        int service = 1_024,
+        string? tuner = "adapter0",
+        TuneSystem? kind = TuneSystem.IsdbT,
+        DateTime? startedAt = null)
+        => QualityLedgerRow.Of(
+            RecordingId.New(),
+            new NetworkId(network),
+            new ServiceId(service),
+            kind,
+            tuner is null ? null : new TunerDeviceId(tuner),
+            startedAt ?? Settled,
+            dropped is { } lost && total is { } carried
+                ? DropCounters.Counted(lost, carried)
+                : DropCounters.Unmeasured,
+            scrambled,
+            overflows,
+            dropped is null ? null : Settled);
+
     public static QualityObservation Measured(double observed, QualityFacet? facet = null, ThresholdBand? band = null)
         => QualityObservation.Of(facet ?? Facet(), ThresholdEvaluator.Judge(observed, band ?? PacketsLost()));
 

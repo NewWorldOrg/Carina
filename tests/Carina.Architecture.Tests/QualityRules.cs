@@ -21,6 +21,7 @@ public static partial class QualityRules
         "/Carina.Infrastructure/Persistence/Configurations/QualitySessionMeasurementConfiguration.cs",
         "/Carina.Infrastructure/Persistence/Configurations/QualitySignalRollupConfiguration.cs",
         "/Carina.Infrastructure/Persistence/Configurations/QualitySignalSampleConfiguration.cs",
+        "/Carina.Infrastructure/Persistence/Configurations/QualityThresholdChangeConfiguration.cs",
         "/Carina.Infrastructure/Persistence/Configurations/QualityThresholdConfiguration.cs",
     ];
 
