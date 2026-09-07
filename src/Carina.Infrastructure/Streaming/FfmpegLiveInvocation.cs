@@ -24,7 +24,9 @@ public static class FfmpegLiveInvocation
 
     private const int BufferedSeconds = 2;
 
-    private const string FragmentMicroseconds = "200000";
+    private const string LiveFragmentMicroseconds = "50000";
+
+    private const string RecordedFragmentMicroseconds = "200000";
 
     public static IReadOnlyList<string> Arguments(
         ServiceId service,
@@ -85,7 +87,7 @@ public static class FfmpegLiveInvocation
             "-movflags",
             "empty_moov+default_base_moof+delay_moov+frag_discont",
             "-frag_duration",
-            FragmentMicroseconds,
+            LiveFragmentMicroseconds,
             Output,
         ];
 
@@ -126,7 +128,7 @@ public static class FfmpegLiveInvocation
             "-movflags",
             "empty_moov+default_base_moof+delay_moov",
             "-frag_duration",
-            FragmentMicroseconds,
+            RecordedFragmentMicroseconds,
             Output,
         ];
 
