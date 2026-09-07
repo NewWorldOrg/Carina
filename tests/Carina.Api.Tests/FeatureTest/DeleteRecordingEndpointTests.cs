@@ -4,8 +4,10 @@ using System.Text.Json;
 
 using Carina.Contracts;
 using Carina.Domain.Driver;
+using Carina.Domain.Integrity;
 using Carina.Domain.Recordings;
 using Carina.Domain.Thumbnails;
+using Carina.Infrastructure.Integrity;
 using Carina.Infrastructure.Recordings;
 using Carina.Infrastructure.Thumbnails;
 using Carina.TestSupport;
@@ -237,6 +239,38 @@ public sealed class DeleteRecordingEndpointTests
     }
 
     [Fact]
+    public async Task ADeletionStillGoingWhenTheTimeIsUpIsGivenUpOnAndTheRowStaysWhereItIs()
+    {
+        await using var feature = new RecordingFeature(null, TimeSpan.FromMilliseconds(50));
+        Recording held = Ended(feature);
+        feature.Eraser.NeverFinishes = true;
+
+        (HttpStatusCode status, JsonElement body) = await feature.DeleteAsync($"/api/recordings/{held.Id.Wire}");
+
+        Assert.Equal(HttpStatusCode.Conflict, status);
+        Assert.Equal("tookTooLong", body.GetProperty("data").GetProperty("refusal").GetString());
+        Assert.Single(feature.Recordings.Recordings);
+    }
+
+    [Fact]
+    public async Task ADeletionGivenUpOnStillLetsTheNextOneRun()
+    {
+        await using var feature = new RecordingFeature(null, TimeSpan.FromMilliseconds(50));
+        Recording first = Ended(feature);
+        Recording second = Ended(feature);
+        feature.Eraser.NeverFinishes = true;
+
+        Assert.Equal(
+            HttpStatusCode.Conflict,
+            (await feature.DeleteAsync($"/api/recordings/{first.Id.Wire}")).Status);
+
+        feature.Eraser.NeverFinishes = false;
+
+        Assert.Equal(HttpStatusCode.OK, (await feature.DeleteAsync($"/api/recordings/{second.Id.Wire}")).Status);
+        Assert.Single(feature.Recordings.Recordings);
+    }
+
+    [Fact]
     public async Task ADeleteCarryingNoBodyReachesTheEndpointWithoutNamingAContentType()
     {
         await using var feature = new RecordingFeature();
@@ -293,6 +327,7 @@ public sealed class DeleteRecordingEndpointTests
         await using var feature = new RecordingFeature(disk.Eraser);
         Recording held = Ended(feature);
         disk.Holding(held);
+        disk.Holding(RecordingId.New());
         disk.Driver.StandingInForTheDriver = null;
         disk.Driver.Answer = DriverCall<RecordingErasedDto>.Unreachable("the socket was not there");
 
@@ -312,6 +347,7 @@ public sealed class DeleteRecordingEndpointTests
         await using var feature = new RecordingFeature(disk.Eraser);
         Recording held = Ended(feature);
         disk.Holding(held);
+        disk.Holding(RecordingId.New());
         disk.Driver.StandingInForTheDriver = null;
         disk.Driver.Answer = DriverCall<RecordingErasedDto>.Refused(
             new DriverProblem(SessionRefusalTitles.CapabilityMissing, ["it declares no such thing"]));
@@ -345,6 +381,9 @@ public sealed class DeleteRecordingEndpointTests
             Driver = new ErasingDriverClient { StandingInForTheDriver = TakeItOffTheDisk };
             Eraser = new DriverRecordingFileEraser(
                 Driver,
+                new LocalRecordingFileSurvey(
+                    new IntegritySettings { OutputRoots = [new StorageRootPath(new OutputRoot("bulk"), root)] },
+                    NullLogger<LocalRecordingFileSurvey>.Instance),
                 new ThumbnailSettings { WrittenTo = gallery },
                 NullLogger<DriverRecordingFileEraser>.Instance);
         }

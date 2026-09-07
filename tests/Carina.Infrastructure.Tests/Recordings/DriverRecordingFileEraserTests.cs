@@ -3,6 +3,7 @@ using Carina.Domain.Driver;
 using Carina.Domain.Recordings;
 using Carina.Domain.Thumbnails;
 using Carina.Infrastructure.Recordings;
+using Carina.Infrastructure.Tests.Integrity;
 using Carina.Infrastructure.Thumbnails;
 using Carina.TestSupport;
 
@@ -17,6 +18,8 @@ public sealed class DriverRecordingFileEraserTests : IDisposable
     private static readonly OutputRoot Primary = new("primary");
 
     private readonly ErasingDriverClient driver = new();
+
+    private readonly HeldSurvey survey = new HeldSurvey().Declaring(Primary, ("beside.ts", 188L));
 
     private readonly string gallery = Directory.CreateTempSubdirectory("carina-erase-pictures-").FullName;
 
@@ -163,6 +166,84 @@ public sealed class DriverRecordingFileEraserTests : IDisposable
     }
 
     [Fact]
+    public async Task ARootTheOwningProcessNoLongerDeclaresIsRefusedBeforeAnythingIsAsked()
+    {
+        RecordingId id = RecordingId.New();
+        string drawn = Drawn(id);
+        driver.Declaring = DriverCall<IReadOnlyList<StorageRootDto>>.Reached(
+            [new StorageRootDto { Name = "elsewhere", Writable = true }]);
+
+        RecordingErasure refused = await Eraser().EraseAsync(id, Primary, Cancel);
+
+        Assert.Equal(ErasureFault.RootOutOfReach, refused.Fault);
+        Assert.Empty(driver.Asked);
+        Assert.True(File.Exists(drawn));
+    }
+
+    [Fact]
+    public async Task ARootThisProcessCannotReadIsRefusedBeforeAnythingIsAsked()
+    {
+        RecordingId id = RecordingId.New();
+        string drawn = Drawn(id);
+        survey.DeclaringOutOfReach(Primary);
+
+        RecordingErasure refused = await Eraser().EraseAsync(id, Primary, Cancel);
+
+        Assert.Equal(ErasureFault.RootOutOfReach, refused.Fault);
+        Assert.Empty(driver.Asked);
+        Assert.True(File.Exists(drawn));
+    }
+
+    [Fact]
+    public async Task ARootHoldingNothingAtAllIsRefusedBeforeAnythingIsAsked()
+    {
+        RecordingId id = RecordingId.New();
+        string drawn = Drawn(id);
+        survey.Declaring(Primary);
+
+        RecordingErasure refused = await Eraser().EraseAsync(id, Primary, Cancel);
+
+        Assert.Equal(ErasureFault.RootOutOfReach, refused.Fault);
+        Assert.Empty(driver.Asked);
+        Assert.True(File.Exists(drawn));
+    }
+
+    [Fact]
+    public async Task TheLastRecordingLeftInARootIsStillAskedFor()
+    {
+        RecordingId id = RecordingId.New();
+        survey.Declaring(Primary, (RecordingFile.Of(id.Wire), 188L));
+
+        RecordingErasure erased = await Eraser().EraseAsync(id, Primary, Cancel);
+
+        Assert.True(erased.EverythingIsGone);
+        Assert.Equal([(id.Wire, "primary")], driver.Asked);
+    }
+
+    [Fact]
+    public async Task ADeclarationThatCouldNotBeReadIsNotARootThatIsMissing()
+    {
+        RecordingId id = RecordingId.New();
+        driver.Declaring = DriverCall<IReadOnlyList<StorageRootDto>>.Unreachable("the socket was not there");
+
+        RecordingErasure refused = await Eraser().EraseAsync(id, Primary, Cancel);
+
+        Assert.Equal(ErasureFault.DriverUnreachable, refused.Fault);
+        Assert.Empty(driver.Asked);
+    }
+
+    [Fact]
+    public async Task ARootThatReallyHoldsAnotherRecordingIsWalkedBeforeTheOwningProcessIsAsked()
+    {
+        RecordingId id = RecordingId.New();
+
+        RecordingErasure erased = await Eraser().EraseAsync(id, Primary, Cancel);
+
+        Assert.True(erased.EverythingIsGone);
+        Assert.Equal(["primary"], survey.Asked);
+    }
+
+    [Fact]
     public void TheNameTheLedgerHoldsIsTheNameTheOwningProcessDerivesForItself()
     {
         RecordingId id = RecordingId.New();
@@ -189,6 +270,7 @@ public sealed class DriverRecordingFileEraserTests : IDisposable
     private DriverRecordingFileEraser Built(string? pictures)
         => new(
             driver,
+            survey,
             new ThumbnailSettings { WrittenTo = pictures },
             NullLogger<DriverRecordingFileEraser>.Instance);
 }

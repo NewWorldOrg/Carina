@@ -19,6 +19,7 @@ public sealed class RecordingStatusTests
     [InlineData(RecordingFailure.RootOutOfReach, StatusCodes.Status409Conflict)]
     [InlineData(RecordingFailure.FilesLeftBehind, StatusCodes.Status503ServiceUnavailable)]
     [InlineData(RecordingFailure.OneIsAlreadyBeingDiscarded, StatusCodes.Status409Conflict)]
+    [InlineData(RecordingFailure.TookTooLong, StatusCodes.Status409Conflict)]
     public void EveryWayARecordingRequestCanFailIsAnsweredWithTheStatusItWasGiven(
         RecordingFailure failure,
         int status)
@@ -40,6 +41,7 @@ public sealed class RecordingStatusTests
             RecordingFailure.RootOutOfReach,
             RecordingFailure.FilesLeftBehind,
             RecordingFailure.OneIsAlreadyBeingDiscarded,
+            RecordingFailure.TookTooLong,
         ];
 
         Assert.Equal(Enum.GetValues<RecordingFailure>().Order().ToArray(), named.Order().ToArray());
@@ -52,6 +54,15 @@ public sealed class RecordingStatusTests
             RecordingStatus.Of(RecordingFailure.NoSuchRecording),
             RecordingStatus.Of(RecordingFailure.StillRecording));
         Assert.Equal(StatusCodes.Status409Conflict, RecordingStatus.Of(RecordingFailure.StillRecording));
+    }
+
+    [Fact]
+    public void ADeletionGivenUpOnPartWayThroughIsARefusalRatherThanAnAbsence()
+    {
+        Assert.Equal(StatusCodes.Status409Conflict, RecordingStatus.Of(RecordingFailure.TookTooLong));
+        Assert.NotEqual(
+            RecordingStatus.Of(RecordingFailure.NoSuchRecording),
+            RecordingStatus.Of(RecordingFailure.TookTooLong));
     }
 
     [Fact]
