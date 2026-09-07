@@ -12,6 +12,13 @@ public sealed class ErasingDriverClient : IDriverClient
 
     public List<(string RecordingId, string OutputRoot)> Asked { get; } = [];
 
+    public DriverCall<IReadOnlyList<StorageRootDto>> Declaring { get; set; } =
+        DriverCall<IReadOnlyList<StorageRootDto>>.Reached(
+        [
+            new StorageRootDto { Name = "primary", Writable = true },
+            new StorageRootDto { Name = "bulk", Writable = true },
+        ]);
+
     public Task<DriverCall<RecordingErasedDto>> EraseRecordingAsync(
         string recordingId,
         string outputRoot,
@@ -74,7 +81,7 @@ public sealed class ErasingDriverClient : IDriverClient
         => throw new NotSupportedException();
 
     public Task<DriverCall<IReadOnlyList<StorageRootDto>>> GetStorageAsync(CancellationToken cancellationToken)
-        => throw new NotSupportedException();
+        => Task.FromResult(Declaring);
 
     public Task<DriverCall<Stream>> OpenSessionStreamAsync(
         SessionId sessionId,

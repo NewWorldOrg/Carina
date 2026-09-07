@@ -4,8 +4,10 @@ using System.Text.Json;
 
 using Carina.Contracts;
 using Carina.Domain.Driver;
+using Carina.Domain.Integrity;
 using Carina.Domain.Recordings;
 using Carina.Domain.Thumbnails;
+using Carina.Infrastructure.Integrity;
 using Carina.Infrastructure.Recordings;
 using Carina.Infrastructure.Thumbnails;
 using Carina.TestSupport;
@@ -293,6 +295,7 @@ public sealed class DeleteRecordingEndpointTests
         await using var feature = new RecordingFeature(disk.Eraser);
         Recording held = Ended(feature);
         disk.Holding(held);
+        disk.Holding(RecordingId.New());
         disk.Driver.StandingInForTheDriver = null;
         disk.Driver.Answer = DriverCall<RecordingErasedDto>.Unreachable("the socket was not there");
 
@@ -312,6 +315,7 @@ public sealed class DeleteRecordingEndpointTests
         await using var feature = new RecordingFeature(disk.Eraser);
         Recording held = Ended(feature);
         disk.Holding(held);
+        disk.Holding(RecordingId.New());
         disk.Driver.StandingInForTheDriver = null;
         disk.Driver.Answer = DriverCall<RecordingErasedDto>.Refused(
             new DriverProblem(SessionRefusalTitles.CapabilityMissing, ["it declares no such thing"]));
@@ -345,6 +349,9 @@ public sealed class DeleteRecordingEndpointTests
             Driver = new ErasingDriverClient { StandingInForTheDriver = TakeItOffTheDisk };
             Eraser = new DriverRecordingFileEraser(
                 Driver,
+                new LocalRecordingFileSurvey(
+                    new IntegritySettings { OutputRoots = [new StorageRootPath(new OutputRoot("bulk"), root)] },
+                    NullLogger<LocalRecordingFileSurvey>.Instance),
                 new ThumbnailSettings { WrittenTo = gallery },
                 NullLogger<DriverRecordingFileEraser>.Instance);
         }
