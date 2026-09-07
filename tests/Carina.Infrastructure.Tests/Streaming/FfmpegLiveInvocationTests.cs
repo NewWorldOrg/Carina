@@ -393,7 +393,7 @@ public sealed class FfmpegLiveInvocationTests
                 "-movflags",
                 "empty_moov+default_base_moof+delay_moov+frag_discont",
                 "-frag_duration",
-                "200000",
+                "50000",
                 "pipe:1",
             ],
             FfmpegLiveInvocation.Delivery());
@@ -502,12 +502,13 @@ public sealed class FfmpegLiveInvocationTests
     [Fact]
     public void ARecordingPlayedFromSomewhereInItStartsItsClockThereInstead()
     {
+        string[] live = [.. FfmpegLiveInvocation.Delivery()];
         string[] delivery = [.. FfmpegLiveInvocation.DeliveryFromTheStart()];
 
         Assert.DoesNotContain("frag_discont", delivery[delivery.IndexOf("-movflags") + 1], StringComparison.Ordinal);
-        Assert.Equal(
-            FfmpegLiveInvocation.Delivery().Where(argument => !argument.Contains("moov", StringComparison.Ordinal)),
-            delivery.Where(argument => !argument.Contains("moov", StringComparison.Ordinal)));
+        Assert.Equal(Options(live), Options(delivery));
+        Assert.Equal(live[live.IndexOf("-f") + 1], delivery[delivery.IndexOf("-f") + 1]);
+        Assert.Equal(live[^1], delivery[^1]);
     }
 
     [Fact]
@@ -522,11 +523,13 @@ public sealed class FfmpegLiveInvocationTests
     }
 
     [Fact]
-    public void TheAnswerIsCutEveryFifthOfASecond()
+    public void TheLiveAnswerIsCutEveryTwentiethOfASecondAndARecordedOneEveryFifth()
     {
-        string[] delivery = [.. FfmpegLiveInvocation.Delivery()];
+        string[] live = [.. FfmpegLiveInvocation.Delivery()];
+        string[] recorded = [.. FfmpegLiveInvocation.DeliveryFromTheStart()];
 
-        Assert.Equal("200000", delivery[delivery.IndexOf("-frag_duration") + 1]);
+        Assert.Equal("50000", live[live.IndexOf("-frag_duration") + 1]);
+        Assert.Equal("200000", recorded[recorded.IndexOf("-frag_duration") + 1]);
     }
 
     [Fact]
@@ -629,6 +632,9 @@ public sealed class FfmpegLiveInvocationTests
 
         return arguments[arguments.IndexOf("-vf") + 1];
     }
+
+    private static IEnumerable<string> Options(IEnumerable<string> arguments)
+        => arguments.Where(argument => argument.StartsWith('-'));
 
     private static string[] Mapped(string[] arguments)
         =>

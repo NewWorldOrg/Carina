@@ -2,7 +2,7 @@ namespace Carina.Domain.Streaming;
 
 public sealed record LiveFanoutSettings
 {
-    private readonly int longestBacklog = 15;
+    private readonly int longestBacklog = 60;
 
     public int LongestBacklog
     {
