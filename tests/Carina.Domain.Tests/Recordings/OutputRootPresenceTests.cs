@@ -11,14 +11,11 @@ public sealed class OutputRootPresenceTests
     [Fact]
     public void ARootTheOwningProcessDoesNotDeclareIsNotOneToRemoveAnythingUnder()
     {
-        RecordingId mine = RecordingId.New();
-
         RootAbsence? absent = OutputRootPresence.Missing(
             [Declared("elsewhere")],
             Recorded,
             reachable: true,
-            [Beside()],
-            mine);
+            [Beside()]);
 
         Assert.Equal(RootAbsence.Undeclared, absent);
     }
@@ -30,14 +27,13 @@ public sealed class OutputRootPresenceTests
             [Declared("recorded")],
             Recorded,
             reachable: false,
-            [],
-            RecordingId.New());
+            []);
 
         Assert.Equal(RootAbsence.OutOfReach, absent);
     }
 
     [Fact]
-    public void ARootHoldingNothingBesideTheRecordingAskedForIsWhatALostMountLooksLike()
+    public void TheLastRecordingLeftInARootIsStillOneThatCanBeThrownAway()
     {
         RecordingId mine = RecordingId.New();
 
@@ -45,10 +41,9 @@ public sealed class OutputRootPresenceTests
             [Declared("recorded")],
             Recorded,
             reachable: true,
-            [RecordingFile.Of(mine.Wire)],
-            mine);
+            [RecordingFile.Of(mine.Wire)]);
 
-        Assert.Equal(RootAbsence.HoldsNothingBeside, absent);
+        Assert.Null(absent);
     }
 
     [Fact]
@@ -58,10 +53,9 @@ public sealed class OutputRootPresenceTests
             [Declared("recorded")],
             Recorded,
             reachable: true,
-            [],
-            RecordingId.New());
+            []);
 
-        Assert.Equal(RootAbsence.HoldsNothingBeside, absent);
+        Assert.Equal(RootAbsence.HoldsNothing, absent);
     }
 
     [Fact]
@@ -71,38 +65,19 @@ public sealed class OutputRootPresenceTests
             [Declared("recorded")],
             Recorded,
             reachable: true,
-            [Beside()],
-            RecordingId.New());
+            [Beside()]);
 
         Assert.Null(absent);
     }
 
     [Fact]
-    public void AFileOfTheRecordingAskedForCountsForNothingWhateverItIsCalled()
-    {
-        RecordingId mine = RecordingId.New();
-
-        RootAbsence? absent = OutputRootPresence.Missing(
-            [Declared("recorded")],
-            Recorded,
-            reachable: true,
-            [RecordingFile.Of(mine.Wire), mine.Wire + ".m2ts", mine.Wire + ".ts.tmp"],
-            mine);
-
-        Assert.Equal(RootAbsence.HoldsNothingBeside, absent);
-    }
-
-    [Fact]
     public void AFileInAFolderUnderTheRootStillSaysTheMountIsThere()
     {
-        RecordingId mine = RecordingId.New();
-
         RootAbsence? absent = OutputRootPresence.Missing(
             [Declared("recorded")],
             Recorded,
             reachable: true,
-            [$"2026-09/{RecordingFile.Of(RecordingId.New().Wire)}"],
-            mine);
+            [$"2026-09/{RecordingFile.Of(RecordingId.New().Wire)}"]);
 
         Assert.Null(absent);
     }
@@ -114,8 +89,7 @@ public sealed class OutputRootPresenceTests
             null,
             Recorded,
             reachable: true,
-            [Beside()],
-            RecordingId.New());
+            [Beside()]);
 
         Assert.Equal(RootAbsence.Undeclared, absent);
     }

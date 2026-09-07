@@ -8,7 +8,7 @@ public enum RootAbsence
 
     OutOfReach = 2,
 
-    HoldsNothingBeside = 3,
+    HoldsNothing = 3,
 }
 
 public static class OutputRootPresence
@@ -17,12 +17,10 @@ public static class OutputRootPresence
         IReadOnlyList<StorageRootDto>? declared,
         OutputRoot root,
         bool reachable,
-        IReadOnlyList<string> paths,
-        RecordingId mine)
+        IReadOnlyList<string> paths)
     {
         ArgumentNullException.ThrowIfNull(root);
         ArgumentNullException.ThrowIfNull(paths);
-        ArgumentNullException.ThrowIfNull(mine);
 
         if (!StorageRoots.Declares(declared, root.Value))
         {
@@ -34,11 +32,6 @@ public static class OutputRootPresence
             return RootAbsence.OutOfReach;
         }
 
-        return paths.Any(path => !Names(path, mine)) ? null : RootAbsence.HoldsNothingBeside;
+        return paths.Count == 0 ? RootAbsence.HoldsNothing : null;
     }
-
-    private static bool Names(string path, RecordingId mine)
-        => Leaf(path).StartsWith(mine.Wire, StringComparison.Ordinal);
-
-    private static string Leaf(string path) => path[(path.LastIndexOf('/') + 1)..];
 }

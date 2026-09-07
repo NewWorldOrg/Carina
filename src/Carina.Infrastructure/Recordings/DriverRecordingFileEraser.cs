@@ -103,10 +103,10 @@ public sealed class DriverRecordingFileEraser(
             ErasureFault.RootOutOfReach,
             $"Output root '{root.Value}' could not be read here, so a file reported missing under it says "
             + "nothing about whether it was ever there."),
-        RootAbsence.HoldsNothingBeside => RecordingErasure.Refused(
+        RootAbsence.HoldsNothing => RecordingErasure.Refused(
             ErasureFault.RootOutOfReach,
-            $"Output root '{root.Value}' holds no recording beside this one, which is what it looks like when "
-            + "its mount has gone, so nothing under it is removed."),
+            $"Output root '{root.Value}' holds nothing at all, which is what it looks like when its mount has "
+            + "gone, so nothing under it is removed."),
         _ => throw new ArgumentOutOfRangeException(
             nameof(absence),
             absence,
@@ -131,8 +131,7 @@ public sealed class DriverRecordingFileEraser(
                 declared,
                 root,
                 listing.Reachable,
-                [.. listing.Files.Select(file => file.Path)],
-                id) is not { } absence)
+                [.. listing.Files.Select(file => file.Path)]) is not { } absence)
         {
             return null;
         }

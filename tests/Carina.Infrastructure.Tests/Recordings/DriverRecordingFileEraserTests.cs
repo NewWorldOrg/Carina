@@ -195,17 +195,29 @@ public sealed class DriverRecordingFileEraserTests : IDisposable
     }
 
     [Fact]
-    public async Task ARootHoldingNothingBesideThisRecordingIsRefusedBeforeAnythingIsAsked()
+    public async Task ARootHoldingNothingAtAllIsRefusedBeforeAnythingIsAsked()
     {
         RecordingId id = RecordingId.New();
         string drawn = Drawn(id);
-        survey.Declaring(Primary, (RecordingFile.Of(id.Wire), 188L));
+        survey.Declaring(Primary);
 
         RecordingErasure refused = await Eraser().EraseAsync(id, Primary, Cancel);
 
         Assert.Equal(ErasureFault.RootOutOfReach, refused.Fault);
         Assert.Empty(driver.Asked);
         Assert.True(File.Exists(drawn));
+    }
+
+    [Fact]
+    public async Task TheLastRecordingLeftInARootIsStillAskedFor()
+    {
+        RecordingId id = RecordingId.New();
+        survey.Declaring(Primary, (RecordingFile.Of(id.Wire), 188L));
+
+        RecordingErasure erased = await Eraser().EraseAsync(id, Primary, Cancel);
+
+        Assert.True(erased.EverythingIsGone);
+        Assert.Equal([(id.Wire, "primary")], driver.Asked);
     }
 
     [Fact]
