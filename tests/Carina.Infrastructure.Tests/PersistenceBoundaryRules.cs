@@ -13,6 +13,7 @@ public enum PersistenceFamily
     Integrity,
     Encodings,
     Quality,
+    Migration,
 }
 
 public static class PersistenceBoundaryRules
@@ -29,6 +30,7 @@ public static class PersistenceBoundaryRules
             ["Integrity"] = PersistenceFamily.Integrity,
             ["Encodings"] = PersistenceFamily.Encodings,
             ["Quality"] = PersistenceFamily.Quality,
+            ["Migration"] = PersistenceFamily.Migration,
             ["Auth"] = PersistenceFamily.Unrelated,
         };
 
@@ -83,6 +85,11 @@ public static class PersistenceBoundaryRules
         }
 
         if (declaring is PersistenceFamily.Quality || principal is PersistenceFamily.Quality)
+        {
+            return declaring != principal;
+        }
+
+        if (declaring is PersistenceFamily.Migration || principal is PersistenceFamily.Migration)
         {
             return declaring != principal;
         }

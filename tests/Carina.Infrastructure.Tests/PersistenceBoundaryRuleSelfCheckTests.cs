@@ -2,6 +2,7 @@ using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Tests.Fixtures.Channels;
 using Carina.Infrastructure.Tests.Fixtures.Encodings;
 using Carina.Infrastructure.Tests.Fixtures.Library;
+using Carina.Infrastructure.Tests.Fixtures.Migration;
 using Carina.Infrastructure.Tests.Fixtures.Programmes;
 using Carina.Infrastructure.Tests.Fixtures.Quality;
 using Carina.Infrastructure.Tests.Fixtures.Recordings;
@@ -44,6 +45,8 @@ public sealed class PersistenceBoundaryRuleSelfCheckTests
                 burn.HasOne<TapeEntry>().WithMany().HasForeignKey(entity => entity.TapeEntryId));
             modelBuilder.Entity<SignalTrace>(trace =>
                 trace.HasOne<TapeEntry>().WithMany().HasForeignKey(entity => entity.TapeEntryId));
+            modelBuilder.Entity<CarryLog>(log =>
+                log.HasOne<TapeEntry>().WithMany().HasForeignKey(entity => entity.TapeEntryId));
         }
     }
 
@@ -134,6 +137,7 @@ public sealed class PersistenceBoundaryRuleSelfCheckTests
             [
                 "booking -> channel_lineup",
                 "burn_job -> tape_entry",
+                "carry_log -> tape_entry",
                 "guide_entry -> channel_lineup",
                 "recording_job -> guide_entry",
                 "signal_trace -> tape_entry",
@@ -155,6 +159,7 @@ public sealed class PersistenceBoundaryRuleSelfCheckTests
             [
                 "booking -> channel_lineup",
                 "burn_job -> tape_entry",
+                "carry_log -> tape_entry",
                 "guide_entry -> channel_lineup",
                 "recording_job -> guide_entry",
                 "signal_trace -> tape_entry",
@@ -172,5 +177,15 @@ public sealed class PersistenceBoundaryRuleSelfCheckTests
         Assert.Equal(
             [$"{typeof(ShelfItem).FullName} (shelf_item)"],
             PersistenceBoundaryRules.UnclassifiedEntityTypes(context.Model));
+    }
+
+    [Fact]
+    public void DetectsWhatWasNotMigratedBeingCountedInAnotherDomainsTable()
+    {
+        using ViolatingDbContext context = Violating();
+
+        Assert.Contains(
+            "carry_log -> tape_entry",
+            PersistenceBoundaryRules.BoundaryBreakingForeignKeys(context.Model));
     }
 }

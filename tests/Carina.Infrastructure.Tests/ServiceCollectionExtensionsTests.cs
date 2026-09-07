@@ -4,6 +4,7 @@ using Carina.Domain.Driver;
 using Carina.Domain.DriverStatus;
 using Carina.Domain.Events;
 using Carina.Domain.Integrity;
+using Carina.Domain.Migration;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
@@ -15,6 +16,7 @@ using Carina.Infrastructure.DependencyInjection;
 using Carina.Infrastructure.Driver;
 using Carina.Infrastructure.Events;
 using Carina.Infrastructure.Integrity;
+using Carina.Infrastructure.Migration;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Recordings;
@@ -290,6 +292,16 @@ public sealed class ServiceCollectionExtensionsTests
         Assert.IsType<IntegrityCheckRepository>(
             scope.ServiceProvider.GetRequiredService<IIntegrityCheckRepository>());
         Assert.IsType<RecordingLedger>(scope.ServiceProvider.GetRequiredService<IRecordingLedger>());
+    }
+
+    [Fact]
+    public void RegistersWhereWhatAMigrationCarriedAndDidNotIsWrittenDown()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.IsType<MigrationRecordRepository>(
+            scope.ServiceProvider.GetRequiredService<IMigrationRecordRepository>());
     }
 
     [Fact]

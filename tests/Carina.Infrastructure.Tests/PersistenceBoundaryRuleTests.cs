@@ -183,4 +183,41 @@ public sealed class PersistenceBoundaryRuleTests
         Assert.Contains("session_id", columns, StringComparer.Ordinal);
         Assert.Contains("driver_instance_id", columns, StringComparer.Ordinal);
     }
+
+    [Fact]
+    public void WhatTheMigrationRecordsIsFourTablesAndItsForeignKeysNeverLeaveIt()
+    {
+        using CarinaDbContext context = Carina();
+
+        Assert.Equal(
+            ["migration_detail", "migration_omission", "migration_run", "migration_tally"],
+            PersistenceBoundaryRules.TablesOf(context.Model, PersistenceFamily.Migration));
+
+        IReadOnlyList<string> pointing = [.. context.Model
+            .GetEntityTypes()
+            .Where(entityType => entityType.GetTableName() is { } table
+                && table.StartsWith("migration_", StringComparison.Ordinal))
+            .SelectMany(entityType => entityType.GetForeignKeys())
+            .Select(key => $"{key.DeclaringEntityType.GetTableName()} -> {key.PrincipalEntityType.GetTableName()}")
+            .Order(StringComparer.Ordinal)];
+
+        Assert.Equal(
+            [
+                "migration_detail -> migration_run",
+                "migration_omission -> migration_run",
+                "migration_tally -> migration_run",
+            ],
+            pointing);
+    }
+
+    [Fact]
+    public void WhatCouldNotBeMigratedIsNeverCountedByAnotherDomain()
+    {
+        using CarinaDbContext context = Carina();
+
+        Assert.DoesNotContain(
+            context.Model.GetEntityTypes().SelectMany(entityType => entityType.GetForeignKeys()),
+            key => key.DeclaringEntityType.GetTableName()?.StartsWith("migration_", StringComparison.Ordinal)
+                != key.PrincipalEntityType.GetTableName()?.StartsWith("migration_", StringComparison.Ordinal));
+    }
 }
