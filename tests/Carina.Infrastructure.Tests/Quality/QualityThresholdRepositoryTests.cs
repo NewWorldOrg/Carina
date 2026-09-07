@@ -59,6 +59,31 @@ public sealed class QualityThresholdRepositoryTests(RepositoryDatabase database)
         Assert.DoesNotContain(all, change => change.Key == QualityThresholdKey.Overflows);
     }
 
+    [Fact(DisplayName = "a level read and then written in the same breath is written, not refused for being read")]
+    public async Task ALevelReadAndThenWrittenInTheSameBreathIsWritten()
+    {
+        await ClearAsync();
+        await SaveAsync(QualityThresholdKey.PacketsLostWarning, 0.0002);
+
+        await using CarinaDbContext both = database.Open();
+        var repository = new QualityThresholdRepository(both);
+
+        await repository.ListAsync(Cancel);
+
+        await repository.SaveAsync(
+            QualityThreshold.Rehydrate(
+                QualityThresholdKey.PacketsLostWarning,
+                Threshold.Of(0.0002, 0.0007, provisional: true, 0, At),
+                null),
+            Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+
+        QualityThreshold held = Assert.Single(await new QualityThresholdRepository(reading).ListAsync(Cancel));
+
+        Assert.Equal(0.0007, held.Setting.Current);
+    }
+
     private static QualityThresholdChange Change(QualityThresholdKey key, double previous, double next, DateTime at)
         => QualityThresholdChange.Record(QualityThresholdChangeId.New(), key, previous, next, at, null);
 
