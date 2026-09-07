@@ -43,6 +43,12 @@ public sealed class ReservationOutcomeConfiguration : IEntityTypeConfiguration<R
             table.HasCheckConstraint(
                 "ck_reservation_outcome_recorded_instead",
                 "kind = 'Competing' OR jsonb_array_length(recorded_instead) = 0");
+            table.HasCheckConstraint(
+                "ck_reservation_outcome_faults",
+                $"""
+                faults <@ '{Vocabulary<RecordingFault>()}'::jsonb
+                AND (kind <> 'TuneFailure' OR faults @> '["{RecordingFault.TuneFailed}"]'::jsonb)
+                """);
             table.HasCheckConstraint("ck_reservation_outcome_window", "effective_end_at > effective_start_at");
         });
 
@@ -101,6 +107,15 @@ public sealed class ReservationOutcomeConfiguration : IEntityTypeConfiguration<R
             .HasConversion<string>()
             .HasMaxLength(32);
 
+        builder.Property(outcome => outcome.Faults)
+            .HasConversion(
+                faults => JsonSerializer.Serialize(faults, ProgrammeJson.Options),
+                stored => ReadFaults(stored),
+                FaultsCompared())
+            .HasColumnName("faults")
+            .HasColumnType("jsonb")
+            .IsRequired();
+
         builder.Property(outcome => outcome.RecordedInstead)
             .HasConversion(
                 instead => JsonSerializer.Serialize(instead, ProgrammeJson.Options),
@@ -117,6 +132,19 @@ public sealed class ReservationOutcomeConfiguration : IEntityTypeConfiguration<R
             .HasDatabaseName(ReservationIndexName)
             .IsUnique();
     }
+
+    private static string Vocabulary<T>()
+        where T : struct, Enum
+        => "[" + string.Join(", ", Enum.GetNames<T>().Select(name => $"\"{name}\"")) + "]";
+
+    private static IReadOnlyList<RecordingFault> ReadFaults(string stored)
+        => JsonSerializer.Deserialize<List<RecordingFault>>(stored, ProgrammeJson.Options) ?? [];
+
+    private static ValueComparer<IReadOnlyList<RecordingFault>> FaultsCompared()
+        => new(
+            (left, right) => left != null && right != null && left.SequenceEqual(right),
+            list => list.Aggregate(0, (carried, item) => HashCode.Combine(carried, item)),
+            list => list.ToList());
 
     private static IReadOnlyList<Guid> Read(string stored)
         => JsonSerializer.Deserialize<List<Guid>>(stored, ProgrammeJson.Options) ?? [];

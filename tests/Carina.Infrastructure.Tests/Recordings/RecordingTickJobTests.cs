@@ -224,6 +224,7 @@ public sealed class RecordingTickJobTests
             new ResolvedTuning(Terrestrial),
             new DiskPrecheckService(new StorageMonitor(driver, clock, StorageMonitorSettings.Default)),
             driver,
+            new RefusalLedger().Reporter,
             held,
             new HeldMoment(Airs)));
 

@@ -2,6 +2,7 @@ using Carina.Contracts;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
+using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
 using Carina.Infrastructure.Programmes;
@@ -572,6 +573,7 @@ public sealed class ReservationRecalculationHostedServiceTests
             services.AddSingleton<IProgrammeRepository>(Programmes);
             services.AddSingleton<IReservationRepository>(Reservations);
             services.AddSingleton<IReservationOutcomeRepository>(Outcomes);
+            services.AddSingleton<IRecordingRepository>(new Recordings.HeldRecordings());
             services.AddSingleton<IStreamVisitRepository>(Visits);
             services.AddSingleton<IBroadcastStreamDirectory>(Streams);
             services.AddSingleton<IBroadcastServiceRepository>(Services);

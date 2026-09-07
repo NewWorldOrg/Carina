@@ -202,8 +202,10 @@ internal sealed class HeldReservations(IAtomicWrite? write = null, HeldOutcomes?
             .. held
                 .Where(reservation => outcomes is null
                                       || !outcomes.Held.Any(outcome =>
-                                          outcome.ReservationId.Equals(reservation.Id)))
-                .Where(reservation => reservation.RecordingOutcome is RecordingOutcome.Failed
+                                          outcome.ReservationId.Equals(reservation.Id)
+                                          && outcome.Kind is not ReservationOutcomeKind.TuneFailure))
+                .Where(reservation => reservation.RecordingOutcome
+                                          is RecordingOutcome.Failed or RecordingOutcome.Truncated
                                       || (reservation.RecordingOutcome is null
                                           && reservation.State
                                               is ReservationState.Scheduled or ReservationState.Conflict

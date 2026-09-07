@@ -12,7 +12,7 @@ public static class ReservationOutcomeJudgement
     {
         ArgumentNullException.ThrowIfNull(reservation);
 
-        if (reservation.RecordingOutcome is RecordingOutcome.Failed)
+        if (reservation.RecordingOutcome is RecordingOutcome.Failed or RecordingOutcome.Truncated)
         {
             return ReservationOutcomeKind.RecordingFailure;
         }

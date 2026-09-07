@@ -504,6 +504,7 @@ internal sealed class ReservationFeature : IAsyncDisposable
         DateTime? at = null,
         TuneFailureKind? tuneFailure = null,
         RecordingOutcome? recordingOutcome = null,
+        IReadOnlyList<RecordingFault>? faults = null,
         IReadOnlyList<Guid>? recordedInstead = null)
     {
         ReservationOutcome outcome = ReservationOutcome.Record(
@@ -512,6 +513,7 @@ internal sealed class ReservationFeature : IAsyncDisposable
             kind,
             tuneFailure,
             recordingOutcome,
+            faults ?? (kind is ReservationOutcomeKind.TuneFailure ? [RecordingFault.TuneFailed] : []),
             recordedInstead ?? [],
             at ?? Noon);
 

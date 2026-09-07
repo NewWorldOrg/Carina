@@ -51,6 +51,8 @@ public sealed class ReservationOutcome
 
     public RecordingOutcome? RecordingOutcome { get; private set; }
 
+    public IReadOnlyList<RecordingFault> Faults { get; private set; } = [];
+
     public IReadOnlyList<Guid> RecordedInstead { get; private set; } = [];
 
     public DateTime OccurredAt { get; private set; }
@@ -61,6 +63,7 @@ public sealed class ReservationOutcome
         ReservationOutcomeKind kind,
         TuneFailureKind? tuneFailure,
         RecordingOutcome? recordingOutcome,
+        IReadOnlyList<RecordingFault> faults,
         IReadOnlyList<Guid> recordedInstead,
         DateTime at)
     {
@@ -78,6 +81,7 @@ public sealed class ReservationOutcome
             kind,
             tuneFailure,
             recordingOutcome,
+            faults,
             recordedInstead,
             at);
     }
@@ -94,6 +98,7 @@ public sealed class ReservationOutcome
         ReservationOutcomeKind kind,
         TuneFailureKind? tuneFailure,
         RecordingOutcome? recordingOutcome,
+        IReadOnlyList<RecordingFault> faults,
         IReadOnlyList<Guid> recordedInstead,
         DateTime occurredAt)
     {
@@ -102,6 +107,7 @@ public sealed class ReservationOutcome
         ArgumentNullException.ThrowIfNull(programme);
         ArgumentNullException.ThrowIfNull(snapshotName);
         ArgumentNullException.ThrowIfNull(priority);
+        ArgumentNullException.ThrowIfNull(faults);
         ArgumentNullException.ThrowIfNull(recordedInstead);
 
         if (!Enum.IsDefined(kind))
@@ -135,6 +141,21 @@ public sealed class ReservationOutcome
                 nameof(recordingOutcome));
         }
 
+        foreach (RecordingFault fault in faults)
+        {
+            if (!Enum.IsDefined(fault))
+            {
+                throw new ArgumentOutOfRangeException(nameof(faults), fault, "A fault is one the ledger holds.");
+            }
+        }
+
+        if (kind is ReservationOutcomeKind.TuneFailure && !faults.Contains(RecordingFault.TuneFailed))
+        {
+            throw new ArgumentException(
+                "A tune failure names the class the recorder gave it, so the two cannot disagree.",
+                nameof(faults));
+        }
+
         return new ReservationOutcome
         {
             Id = id,
@@ -151,6 +172,7 @@ public sealed class ReservationOutcome
             Kind = kind,
             TuneFailure = tuneFailure,
             RecordingOutcome = recordingOutcome,
+            Faults = [.. faults],
             RecordedInstead = recordedInstead,
             OccurredAt = UtcTimes.Required(occurredAt, nameof(occurredAt)),
         };

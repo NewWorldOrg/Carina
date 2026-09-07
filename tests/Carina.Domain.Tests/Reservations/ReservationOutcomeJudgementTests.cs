@@ -32,8 +32,14 @@ public sealed class ReservationOutcomeJudgementTests
             { ReservationState.Conflict, true, false, null, ReservationOutcomeKind.Competing },
             { ReservationState.Scheduled, true, true, RecordingOutcome.Complete, null },
             { ReservationState.Scheduled, true, false, RecordingOutcome.Complete, null },
-            { ReservationState.Scheduled, true, true, RecordingOutcome.Truncated, null },
-            { ReservationState.Scheduled, true, false, RecordingOutcome.Truncated, null },
+            {
+                ReservationState.Scheduled, true, true, RecordingOutcome.Truncated,
+                ReservationOutcomeKind.RecordingFailure
+            },
+            {
+                ReservationState.Scheduled, true, false, RecordingOutcome.Truncated,
+                ReservationOutcomeKind.RecordingFailure
+            },
             {
                 ReservationState.Scheduled, true, true, RecordingOutcome.Failed,
                 ReservationOutcomeKind.RecordingFailure

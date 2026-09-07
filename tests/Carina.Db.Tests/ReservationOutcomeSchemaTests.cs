@@ -1,3 +1,4 @@
+using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 
 using Npgsql;
@@ -37,6 +38,51 @@ public sealed class ReservationOutcomeSchemaTests(MigratedScratchDatabase databa
         await using NpgsqlConnection connection = await database.OpenAsync();
 
         await Record(connection, Guid.NewGuid(), kind);
+    }
+
+    [Fact]
+    public async Task TheLedgerRefusesAClassTheApplicationCannotName()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(
+                connection,
+                Guid.NewGuid(),
+                nameof(ReservationOutcomeKind.Missed),
+                faults: "'[\"Vanished\"]'::jsonb"));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
+        Assert.Equal("ck_reservation_outcome_faults", refusal.ConstraintName);
+    }
+
+    [Fact]
+    public async Task ATuneFailureThatDoesNotNameItselfAsOneIsRefused()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(
+                connection,
+                Guid.NewGuid(),
+                nameof(ReservationOutcomeKind.TuneFailure),
+                faults: "'[\"TunerContended\"]'::jsonb"));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
+        Assert.Equal("ck_reservation_outcome_faults", refusal.ConstraintName);
+    }
+
+    [Fact]
+    public async Task EveryClassTheRecorderCanNameIsOneTheLedgerTakes()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        string named = string.Join(", ", Enum.GetNames<RecordingFault>().Select(name => $"\"{name}\""));
+
+        await Record(
+            connection,
+            Guid.NewGuid(),
+            nameof(ReservationOutcomeKind.RecordingFailure),
+            faults: $"'[{named}]'::jsonb");
     }
 
     [Fact]
@@ -94,18 +140,22 @@ public sealed class ReservationOutcomeSchemaTests(MigratedScratchDatabase databa
         Assert.False(await reading.ReadAsync(), "the index is named once");
     }
 
-    private static Task Record(NpgsqlConnection connection, Guid reservation, string kind)
+    private static Task Record(
+        NpgsqlConnection connection,
+        Guid reservation,
+        string kind,
+        string? faults = null)
     {
         var command = new NpgsqlCommand(
             $"""
             INSERT INTO reservation_outcome (
                 id, reservation_id, network_id, service_id, event_id, programme_start_at,
                 snapshot_name, effective_start_at, effective_end_at, priority, rule_id,
-                kind, tune_failure, recording_outcome, recorded_instead, occurred_at)
+                kind, tune_failure, recording_outcome, faults, recorded_instead, occurred_at)
             VALUES (
                 '{Guid.NewGuid()}', '{reservation}', 47101, 1024, 4001, {Airs},
                 'A programme', {Airs}, {Ends}, 50, NULL,
-                '{kind}', {TuneFailure(kind)}, {Outcome(kind)}, '[]'::jsonb, {Ends})
+                '{kind}', {TuneFailure(kind)}, {Outcome(kind)}, {faults ?? Faults(kind)}, '[]'::jsonb, {Ends})
             """,
             connection);
 
@@ -117,4 +167,7 @@ public sealed class ReservationOutcomeSchemaTests(MigratedScratchDatabase databa
 
     private static string Outcome(string kind)
         => kind == nameof(ReservationOutcomeKind.RecordingFailure) ? "'Failed'" : "NULL";
+
+    private static string Faults(string kind)
+        => kind == nameof(ReservationOutcomeKind.TuneFailure) ? "'[\"TuneFailed\"]'::jsonb" : "'[]'::jsonb";
 }

@@ -7,6 +7,7 @@ using Carina.Infrastructure.Recordings;
 using Carina.TestSupport;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 
 using Npgsql;
 
@@ -161,6 +162,30 @@ public sealed class RecordingTickTests(MigratedScratchDatabase database)
         Assert.Equal(0L, await Count("SELECT count(*) FROM recording"));
         Assert.Null(await Read(airing, "started_at"));
         Assert.Equal("Scheduled", await Read(airing, "composite_state"));
+        Assert.Equal("Competing", await Outcome(airing, "kind"));
+        Assert.Equal("[\"TunerContended\"]", await Outcome(airing, "faults"));
+    }
+
+    [Fact]
+    public async Task ATunerThatWouldNotLockIsWrittenIntoTheLedgerAsOneOfTheFour()
+    {
+        await Clear();
+        ReservationId airing = await Plan(51501, ReservationState.Scheduled);
+        var driver = new RecordingDriver
+        {
+            RefusesToStart = Carina.Domain.Driver.DriverCall<Carina.Contracts.SessionSnapshot>.Refused(
+                new Carina.Contracts.DriverProblem("noLock", [])),
+        };
+
+        await using CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString);
+
+        await Round(context, driver).RunAsync(CancellationToken.None);
+        await Round(context, driver).RunAsync(CancellationToken.None);
+
+        Assert.Equal(1L, await Count("SELECT count(*) FROM reservation_outcome"));
+        Assert.Equal("TuneFailure", await Outcome(airing, "kind"));
+        Assert.Equal("NoLock", await Outcome(airing, "tune_failure"));
+        Assert.Equal("[\"TuneFailed\"]", await Outcome(airing, "faults"));
     }
 
     private RecordingRound Round(
@@ -179,6 +204,11 @@ public sealed class RecordingTickTests(MigratedScratchDatabase database)
                 impaired: false)),
             new DiskPrecheckService(new StorageMonitor(driver, clock, StorageMonitorSettings.Default)),
             driver,
+            new RecordingRefusalReporter(
+                new ReservationRepository(context),
+                new ReservationOutcomeRepository(context),
+                new RememberedTuneReports(),
+                NullLogger<RecordingRefusalReporter>.Instance),
             Settings,
             clock);
     }
@@ -211,6 +241,7 @@ public sealed class RecordingTickTests(MigratedScratchDatabase database)
     private async Task Clear()
     {
         await Execute("DELETE FROM recording");
+        await Execute("DELETE FROM reservation_outcome");
         await Execute("DELETE FROM reservation");
     }
 
@@ -234,6 +265,17 @@ public sealed class RecordingTickTests(MigratedScratchDatabase database)
         await using NpgsqlConnection connection = await database.OpenAsync();
         await using var command = new NpgsqlCommand(
             $"SELECT {column} FROM reservation WHERE id = '{id.Value}'",
+            connection);
+        object? read = await command.ExecuteScalarAsync();
+
+        return read is DBNull ? null : read;
+    }
+
+    private async Task<object?> Outcome(ReservationId id, string column)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        await using var command = new NpgsqlCommand(
+            $"SELECT {column}::text FROM reservation_outcome WHERE reservation_id = '{id.Value}'",
             connection);
         object? read = await command.ExecuteScalarAsync();
 
