@@ -1,4 +1,5 @@
 using Carina.Domain.Base;
+using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 
 namespace Carina.Infrastructure.Reservations;
@@ -11,6 +12,7 @@ public sealed class ReservationOutcomeService(
     IReservationRepository reservations,
     IReservationOutcomeRepository outcomes,
     IReservationRecordingContract claims,
+    IRecordingRepository recordings,
     IAtomicWrite write,
     ReservationOutcomeSettings settings,
     TimeProvider clock)
@@ -59,6 +61,9 @@ public sealed class ReservationOutcomeService(
                             kind,
                             null,
                             kind is ReservationOutcomeKind.RecordingFailure ? reservation.RecordingOutcome : null,
+                            kind is ReservationOutcomeKind.RecordingFailure
+                                ? await WhyItFailedAsync(reservation.Id, token)
+                                : [],
                             kind is ReservationOutcomeKind.Competing ? Instead(reservation, claimed) : [],
                             at),
                         token);
@@ -88,6 +93,21 @@ public sealed class ReservationOutcomeService(
                 return new ReservationOutcomeRun(recorded);
             },
             cancellationToken);
+    }
+
+    private async Task<IReadOnlyList<RecordingFault>> WhyItFailedAsync(
+        ReservationId reservation,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyList<Recording> written = await recordings.ListForReservationAsync(reservation, cancellationToken);
+
+        return
+        [
+            .. written
+                .SelectMany(recording => recording.OutcomeDetail)
+                .Select(detail => detail.Fault)
+                .Distinct(),
+        ];
     }
 
     private IReadOnlyList<Judged> Judging(IReadOnlyList<ReservationAwaitingOutcome> awaiting, DateTime at)

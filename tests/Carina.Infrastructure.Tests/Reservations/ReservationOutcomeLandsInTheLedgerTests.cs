@@ -240,6 +240,7 @@ public sealed class ReservationOutcomeLandsInTheLedgerTests(RepositoryDatabase d
                 new ReservationRepository(context),
                 new ReservationOutcomeRepository(context),
                 new ReservationRecordingContract(context),
+                new RecordingRepository(context),
                 new DatabaseAtomicWrite(context),
                 new ReservationOutcomeSettings { Grace = Grace },
                 new FixedClock(at))
@@ -252,7 +253,7 @@ public sealed class ReservationOutcomeLandsInTheLedgerTests(RepositoryDatabase d
         await using CarinaDbContext context = database.Open();
 
         await new ReservationOutcomeRepository(context).AddAsync(
-            ReservationOutcome.Record(ReservationOutcomeId.New(), reservation, kind, null, null, [], at),
+            ReservationOutcome.Record(ReservationOutcomeId.New(), reservation, kind, null, null, [], [], at),
             Cancel);
     }
 

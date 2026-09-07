@@ -9,6 +9,8 @@ public sealed class ReservationSchemaTests(MigratedScratchDatabase database)
 {
     private const string Airs = "timestamptz '2026-08-24 20:00:00+00'";
 
+    private const string TuneFailed = "'[\"TuneFailed\"]'::jsonb";
+
     private const string Ends = "timestamptz '2026-08-24 21:00:00+00'";
 
     private const string Now = "timestamptz '2026-08-24 12:00:00+00'";
@@ -163,12 +165,17 @@ public sealed class ReservationSchemaTests(MigratedScratchDatabase database)
         Guid reservation = await Reserve(connection, 70010, 4001, Airs);
 
         PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
-            () => Record(connection, reservation, "TuneFailure"));
+            () => Record(connection, reservation, "TuneFailure", faults: TuneFailed));
 
         Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
         Assert.Equal("ck_reservation_outcome_tune_failure", refusal.ConstraintName);
 
-        await Record(connection, reservation, "TuneFailure", tuneFailure: "'IncompletePsi'");
+        await Record(
+            connection,
+            reservation,
+            "TuneFailure",
+            tuneFailure: "'IncompletePsi'",
+            faults: TuneFailed);
     }
 
     [Fact]
@@ -322,18 +329,19 @@ public sealed class ReservationSchemaTests(MigratedScratchDatabase database)
         Guid reservationId,
         string kind,
         string? tuneFailure = null,
-        string? recordingOutcome = null)
+        string? recordingOutcome = null,
+        string? faults = null)
         => Execute(
             connection,
             $"""
             INSERT INTO reservation_outcome (
                 id, reservation_id, network_id, service_id, event_id, programme_start_at, snapshot_name,
                 effective_start_at, effective_end_at, priority, rule_id, kind, tune_failure,
-                recording_outcome, recorded_instead, occurred_at)
+                recording_outcome, faults, recorded_instead, occurred_at)
             VALUES (
                 '{Guid.NewGuid()}', '{reservationId}', 70001, 1024, 4001, {Airs}, 'A programme',
                 {Airs}, {Ends}, 10, NULL, '{kind}', {tuneFailure ?? "NULL"},
-                {recordingOutcome ?? "NULL"}, '[]'::jsonb, {Now})
+                {recordingOutcome ?? "NULL"}, {faults ?? "'[]'::jsonb"}, '[]'::jsonb, {Now})
             """);
 
     private static Task Programme(NpgsqlConnection connection, int networkId, int eventId)

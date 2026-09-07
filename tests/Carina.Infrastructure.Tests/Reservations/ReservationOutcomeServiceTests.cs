@@ -1,6 +1,7 @@
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Reservations;
+using Carina.Infrastructure.Tests.Recordings;
 
 namespace Carina.Infrastructure.Tests.Reservations;
 
@@ -197,6 +198,46 @@ public sealed class ReservationOutcomeServiceTests
     }
 
     [Fact]
+    public async Task ARecordingCutShortIsWrittenDownTooBecauseSomethingWasPromisedAndNotDelivered()
+    {
+        Reservation cut = ReservationFixtures.Rehydrated(
+            ReservationState.Scheduled,
+            startedAt: Opens,
+            outcome: RecordingOutcome.Truncated,
+            startAt: Opens);
+        Held held = Standing(AfterItAll, cut);
+
+        ReservationOutcomeRun run = await Run(held);
+
+        Assert.Equal(
+            [new ReservationOutcomeRecord(cut.Id, ReservationOutcomeKind.RecordingFailure)],
+            run.Recorded);
+        Assert.Equal(RecordingOutcome.Truncated, Assert.Single(held.Outcomes.Held).RecordingOutcome);
+    }
+
+    [Fact]
+    public async Task AFailureReachesTheLedgerWithEveryClassTheRecordingWroteAndNoneTwice()
+    {
+        Reservation failed = ReservationFixtures.Rehydrated(
+            ReservationState.Scheduled,
+            startedAt: Opens,
+            outcome: RecordingOutcome.Failed,
+            startAt: Opens);
+        Held held = Standing(AfterItAll, failed);
+        held.Recordings.Rows.Add(Settled(
+            failed,
+            RecordingFault.NothingLanded,
+            RecordingFault.ShortOfTheWindow,
+            RecordingFault.NothingLanded));
+
+        await Run(held);
+
+        Assert.Equal(
+            [RecordingFault.NothingLanded, RecordingFault.ShortOfTheWindow],
+            Assert.Single(held.Outcomes.Held).Faults);
+    }
+
+    [Fact]
     public async Task ARecordingThatEndedWellIsNotRecordedAtAll()
     {
         Reservation complete = ReservationFixtures.Rehydrated(
@@ -287,6 +328,23 @@ public sealed class ReservationOutcomeServiceTests
         Assert.Equal(0, held.Write.Opened);
     }
 
+    private static Recording Settled(Reservation reservation, params RecordingFault[] faults)
+    {
+        Recording recording = RecordingTickFixture.InFlight(
+            reservation.EffectiveStartAt,
+            reservation.EffectiveEndAt,
+            reservationId: reservation.Id);
+
+        foreach (RecordingFault fault in faults)
+        {
+            recording.Note(new OutcomeDetail(fault, null, "as it was found", reservation.EffectiveEndAt));
+        }
+
+        recording.Settle(RecordingOutcome.Failed, 0, reservation.EffectiveEndAt);
+
+        return recording;
+    }
+
     private static Task<ReservationOutcomeRun> Run(Held held)
         => held.Service.RecordAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(30));
 
@@ -296,6 +354,7 @@ public sealed class ReservationOutcomeServiceTests
         var outcomes = new HeldOutcomes(write);
         var ledger = new HeldReservations(write, outcomes);
         var claims = new HeldClaims();
+        var recordings = new HeldRecordings();
         ledger.Standing(reservations);
 
         return new Held(
@@ -303,12 +362,14 @@ public sealed class ReservationOutcomeServiceTests
                 ledger,
                 outcomes,
                 claims,
+                recordings,
                 write,
                 new ReservationOutcomeSettings { Grace = Grace },
                 new FixedClock(at)),
             ledger,
             outcomes,
             claims,
+            recordings,
             write);
     }
 
@@ -317,5 +378,6 @@ public sealed class ReservationOutcomeServiceTests
         HeldReservations Reservations,
         HeldOutcomes Outcomes,
         HeldClaims Claims,
+        HeldRecordings Recordings,
         WatchedWrite Write);
 }

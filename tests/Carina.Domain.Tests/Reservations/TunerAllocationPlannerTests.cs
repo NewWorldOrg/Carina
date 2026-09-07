@@ -1177,6 +1177,7 @@ public sealed class TunerAllocationPlannerTests
             ReservationOutcomeKind.Competing,
             null,
             null,
+            [],
             [.. plan.For(lost.Id).Instead.Select(id => id.Value)],
             Now);
 

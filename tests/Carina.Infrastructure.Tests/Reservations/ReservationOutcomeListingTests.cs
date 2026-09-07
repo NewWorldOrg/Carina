@@ -196,6 +196,7 @@ public sealed class ReservationOutcomeListingTests(RepositoryDatabase database)
             kind,
             tuneFailure,
             recordingOutcome,
+            kind is ReservationOutcomeKind.TuneFailure ? [RecordingFault.TuneFailed] : [],
             recordedInstead ?? [],
             occurredAt);
     }

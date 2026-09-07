@@ -194,6 +194,43 @@ public sealed class ReservationOutcomeEndpointTests
     }
 
     [Fact]
+    public async Task AScreenReadsWhyARecordingFailedFromTheClassesTheLedgerHolds_BR_RD_012()
+    {
+        await using var feature = new ReservationFeature();
+        feature.Recorded(
+            feature.Booked(4001),
+            ReservationOutcomeKind.RecordingFailure,
+            recordingOutcome: RecordingOutcome.Truncated,
+            faults: [RecordingFault.DriverLost, RecordingFault.ShortOfTheWindow]);
+        feature.Recorded(
+            feature.Booked(4002),
+            ReservationOutcomeKind.Competing,
+            faults: [RecordingFault.TunerContended]);
+        feature.Recorded(feature.Booked(4003), ReservationOutcomeKind.Missed);
+
+        (_, JsonElement body) = await feature.GetAsync("/api/reservations/outcomes?kind=recordingFailure");
+        JsonElement cut = Assert.Single(body.GetProperty("data").GetProperty("items").EnumerateArray());
+        (_, JsonElement lost) = await feature.GetAsync("/api/reservations/outcomes?kind=competing");
+        (_, JsonElement nothing) = await feature.GetAsync("/api/reservations/outcomes?kind=missed");
+
+        Assert.Equal(
+            ["driverLost", "shortOfTheWindow"],
+            cut.GetProperty("faults").EnumerateArray().Select(one => one.GetString()));
+        Assert.Equal("truncated", cut.GetProperty("recordingOutcome").GetString());
+        Assert.Equal(
+            "tunerContended",
+            Assert.Single(lost.GetProperty("data").GetProperty("items").EnumerateArray())
+                .GetProperty("faults")
+                .EnumerateArray()
+                .Single()
+                .GetString());
+        Assert.Empty(
+            Assert.Single(nothing.GetProperty("data").GetProperty("items").EnumerateArray())
+                .GetProperty("faults")
+                .EnumerateArray());
+    }
+
+    [Fact]
     public async Task TheHealthCountsWhatStandsInTheWayOfWhatIsStillAhead()
     {
         await using var feature = new ReservationFeature();

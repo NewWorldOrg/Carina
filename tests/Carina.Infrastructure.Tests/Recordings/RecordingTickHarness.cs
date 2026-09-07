@@ -4,6 +4,7 @@ using Carina.Domain.Driver;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
+using Carina.Domain.Rules;
 using Carina.Infrastructure.Recordings;
 using Carina.TestSupport;
 
@@ -175,13 +176,33 @@ internal static class RecordingTickFixture
             true,
             startedAt);
 
-    public static Recording InFlight(DateTime from, DateTime until, string deviceId = "adapter1")
+    public static Reservation Planned(RecordingTick due, RuleId? ruleId = null)
+        => Reservation.Plan(
+            due.Id,
+            due.Programme,
+            ruleId,
+            due.Priority,
+            due.EffectiveStartAt,
+            due.EffectiveEndAt,
+            due.EndAtConfirmed,
+            Margin.None,
+            Margin.None,
+            due.Snapshot,
+            due.BroadcastGroupKey,
+            due.BroadcastGroupRole,
+            due.EffectiveStartAt.AddHours(-6));
+
+    public static Recording InFlight(
+        DateTime from,
+        DateTime until,
+        string deviceId = "adapter1",
+        ReservationId? reservationId = null)
     {
         RecordingId id = RecordingId.New();
 
         return Recording.Begin(
             id,
-            ReservationId.New(),
+            reservationId ?? ReservationId.New(),
             new ProgrammeRef(new NetworkId(32736), new ServiceId(1025), new EventId(9), Airs),
             new OutputRoot("primary"),
             RecordingFileName.For(id, ".ts"),
