@@ -64,11 +64,23 @@ public sealed class RecordingQualityTests
     [Theory]
     [InlineData(199, QualityLevel.Good)]
     [InlineData(200, QualityLevel.Warning)]
-    [InlineData(9999, QualityLevel.Warning)]
-    [InlineData(10000, QualityLevel.MayNotBeWatchable)]
+    [InlineData(999, QualityLevel.Warning)]
+    [InlineData(1000, QualityLevel.MayNotBeWatchable)]
     public void WhatWasLostIsReadAgainstSharesOfItsOwn(long dropped, QualityLevel read)
     {
         Assert.Equal(read, RecordingQuality.Of(DropCounters.Counted(dropped, 1000000), 0));
+    }
+
+    [Fact]
+    public void WhatWasLostIsReadAgainstATighterBarThanWhatWasLeftEncrypted()
+    {
+        Assert.Equal(
+            QualityLevel.MayNotBeWatchable,
+            RecordingQuality.Of(DropCounters.Counted(5000, 1000000), 0));
+
+        Assert.Equal(
+            QualityLevel.Warning,
+            RecordingQuality.Of(DropCounters.Counted(0, 1000000), 5000));
     }
 
     [Fact]
@@ -97,6 +109,6 @@ public sealed class RecordingQualityTests
         Assert.Equal(0.0005, QualityShares.PacketsLeftScrambled.Warning);
         Assert.Equal(0.01, QualityShares.PacketsLeftScrambled.Unwatchable);
         Assert.Equal(0.0002, QualityShares.PacketsLost.Warning);
-        Assert.Equal(0.01, QualityShares.PacketsLost.Unwatchable);
+        Assert.Equal(0.001, QualityShares.PacketsLost.Unwatchable);
     }
 }

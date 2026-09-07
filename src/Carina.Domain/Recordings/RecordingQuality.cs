@@ -15,7 +15,7 @@ public sealed record QualityShare(double Warning, double Unwatchable);
 
 public static class QualityShares
 {
-    public static QualityShare PacketsLost { get; } = new(0.0002, 0.01);
+    public static QualityShare PacketsLost { get; } = new(0.0002, 0.001);
 
     public static QualityShare PacketsLeftScrambled { get; } = new(0.0005, 0.01);
 }
