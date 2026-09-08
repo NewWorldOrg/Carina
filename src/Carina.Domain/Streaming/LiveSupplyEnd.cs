@@ -15,6 +15,8 @@ public enum LiveSupplyEnd
     StoppedByAnother = 6,
 
     DriverLost = 7,
+
+    WentQuiet = 8,
 }
 
 public sealed record LiveSupplyEnding

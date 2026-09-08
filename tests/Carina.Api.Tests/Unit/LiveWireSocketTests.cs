@@ -81,6 +81,15 @@ public sealed class LiveWireSocketTests
     }
 
     [Fact]
+    public void OnlyAWireThatTookItsSupplyForGoneConcludesAReasonOfItsOwn()
+    {
+        Assert.Equal(LiveSupplyEnd.WentQuiet, LiveDepartures.Ending(LiveDeparture.SourceWentQuiet));
+        Assert.All(
+            Enum.GetValues<LiveDeparture>().Where(departure => departure is not LiveDeparture.SourceWentQuiet),
+            departure => Assert.Null(LiveDepartures.Ending(departure)));
+    }
+
+    [Fact]
     public async Task APingGoesOutWhileTheSourceHasNothingToSay()
     {
         var socket = new ScriptedWebSocket();
