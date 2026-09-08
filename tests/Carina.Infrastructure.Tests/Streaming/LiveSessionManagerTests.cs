@@ -650,7 +650,7 @@ public sealed class LiveSessionManagerTests
     }
 
     [Fact]
-    public async Task ASessionTornDownByItsOwnLingerNotesNoEnding()
+    public async Task ASessionTornDownByItsOwnLingerSaysItWasLetGoOf()
     {
         ILiveViewing viewing = await Joined(EveryFrame);
 
@@ -660,7 +660,21 @@ public sealed class LiveSessionManagerTests
 
         await Eventually.Happens(() => supply.Opened[0].Disposed, "the stream is let go once the linger is over");
 
-        Assert.Null(viewing.Ending!.Current);
+        Assert.Equal(LiveSupplyEnd.LetGo, viewing.Ending!.Current!.Why);
+    }
+
+    [Fact]
+    public async Task ATranscoderThatEndsWhileTheSupplyIsStillRunningLeavesTheSessionSayingItWasLetGoOf()
+    {
+        await using ILiveViewing viewing = await Joined(EveryFrame);
+
+        await transcoders.Raised[0].WriteAsync(Fmp4.Header);
+        transcoders.Raised[0].NoMore();
+
+        await Drained(viewing);
+
+        Assert.Null(supply.Opened[0].Ending);
+        Assert.Equal(LiveSupplyEnd.LetGo, viewing.Ending!.Current!.Why);
     }
 
     [Fact]
@@ -950,6 +964,16 @@ public sealed class LiveSessionManagerTests
         Assert.True(join.Seated, join.Note);
 
         return join.Viewing!;
+    }
+
+    private static async Task Drained(ILiveViewing viewing)
+    {
+        while (await viewing.Frames.WaitToReadAsync().AsTask().WaitAsync(Eventually.Patience))
+        {
+            while (viewing.Frames.TryRead(out _))
+            {
+            }
+        }
     }
 
     private static async Task<LiveFrame> Next(ILiveViewing viewing)

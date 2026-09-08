@@ -8,13 +8,15 @@ namespace Carina.Infrastructure.Streaming;
 public sealed class LiveFanout(
     LiveFanoutSettings settings,
     ILiveStartup? startup = null,
-    ILiveEnding? ending = null) : ILiveWireSource
+    LiveEndingRecord? ending = null) : ILiveWireSource
 {
+    private const string WasLetGoOf = "this session was let go of.";
+
     private readonly Lock gate = new();
 
     private readonly ILiveStartup? startup = startup;
 
-    private readonly ILiveEnding? ending = ending;
+    private readonly LiveEndingRecord? ending = ending;
 
     private readonly List<Viewing> viewers = [];
 
@@ -177,6 +179,11 @@ public sealed class LiveFanout(
             if (ended)
             {
                 return;
+            }
+
+            if (why is null)
+            {
+                ending?.Note(LiveSupplyEnding.Of(LiveSupplyEnd.LetGo, WasLetGoOf));
             }
 
             ended = true;

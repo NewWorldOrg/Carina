@@ -10,6 +10,18 @@ public sealed class LiveWireSocketEndingTests
 {
     private static readonly byte[] Picture = [0x01, 0x02, 0x03];
 
+    public static TheoryData<LiveSupplyEnd> EveryReasonASupplyEnds()
+    {
+        TheoryData<LiveSupplyEnd> reasons = [];
+
+        foreach (LiveSupplyEnd why in Enum.GetValues<LiveSupplyEnd>())
+        {
+            reasons.Add(why);
+        }
+
+        return reasons;
+    }
+
     [Fact]
     public async Task WhyTheSupplyEndedIsSaidOnTheControlChannelAfterTheLastFrameAndBeforeTheClose()
     {
@@ -57,18 +69,26 @@ public sealed class LiveWireSocketEndingTests
         Assert.Equal(WebSocketCloseStatus.InternalServerError, socket.Closed);
     }
 
-    [Fact]
-    public async Task ASourceThatEndsWithoutTheSupplyHavingSaidWhySaysNothingButTheClose()
+    [Theory]
+    [MemberData(nameof(EveryReasonASupplyEnds))]
+    public async Task AWireIsNeverClosedWithoutTheReasonHavingBeenSaidFirst(LiveSupplyEnd why)
     {
         ScriptedWebSocket socket = new();
         Channel<LiveFrame> frames = Channel.CreateUnbounded<LiveFrame>();
 
         frames.Writer.Complete();
 
-        LiveDeparture departure = await Carry(socket, frames, new HeldEnding(null));
+        LiveDeparture departure = await Carry(
+            socket,
+            frames,
+            new HeldEnding(LiveSupplyEnding.Of(why, "the supply named a reason.")));
 
         Assert.Equal(LiveDeparture.SourceEnded, departure);
-        Assert.Empty(socket.Sent);
+
+        LiveFrame said = LiveFrame.Read(Assert.Single(socket.Sent)).Frame!;
+
+        Assert.Equal(LiveChannel.Control, said.Channel);
+        Assert.Equal(why, LiveEndingReport.Read(said.Payload.Span).Report!.Why);
         Assert.Equal(WebSocketCloseStatus.NormalClosure, socket.Closed);
     }
 
