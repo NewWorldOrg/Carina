@@ -59,6 +59,7 @@ public sealed class MigrationRecordShapeTests
     [InlineData(MigrationOmissionSubject.QualityTimeSeries, MigrationOmissionGround.NothingToCarry, null)]
     [InlineData(MigrationOmissionSubject.RecordingHistory, MigrationOmissionGround.NotMigratedByDesign, null)]
     [InlineData(MigrationOmissionSubject.EnclosedCharacters, MigrationOmissionGround.NotMigratedByDesign, 48)]
+    [InlineData(MigrationOmissionSubject.Thumbnails, MigrationOmissionGround.NotMigratedByDesign, null)]
     public void EachThingLeftAloneIsLeftAloneForTheReasonTheRequirementsGive(
         MigrationOmissionSubject subject,
         MigrationOmissionGround ground,
@@ -76,6 +77,11 @@ public sealed class MigrationRecordShapeTests
     public void ALineOfTheRecordThatCountsNothingDoesNotInventACount()
         => Assert.Throws<ArgumentException>(
             () => MigrationOmission.For(Run, MigrationOmissionSubject.ProgrammeGuide, 3));
+
+    [Fact]
+    public void ThePictureDrawnOfARecordingIsLeftAloneWithoutCountingTheOnesLeftBehind()
+        => Assert.Throws<ArgumentException>(
+            () => MigrationOmission.For(Run, MigrationOmissionSubject.Thumbnails, 7));
 
     [Fact]
     public void EveryLineThatCountsWhatItTouchedSaysHowMany()

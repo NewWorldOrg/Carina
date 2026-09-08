@@ -11,6 +11,8 @@ public enum MigrationOmissionSubject
     RecordingHistory = 4,
 
     EnclosedCharacters = 5,
+
+    Thumbnails = 6,
 }
 
 public static class MigrationOmissionSubjects

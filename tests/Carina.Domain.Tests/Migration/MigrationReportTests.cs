@@ -32,6 +32,7 @@ public sealed class MigrationReportTests
     [InlineData(MigrationOmissionSubject.QualityTimeSeries)]
     [InlineData(MigrationOmissionSubject.RecordingHistory)]
     [InlineData(MigrationOmissionSubject.EnclosedCharacters)]
+    [InlineData(MigrationOmissionSubject.Thumbnails)]
     public void EachThingDeliberatelyLeftAloneHasToBeSaidOutLoud(MigrationOmissionSubject subject)
     {
         IReadOnlyList<MigrationOmission> short_ =
