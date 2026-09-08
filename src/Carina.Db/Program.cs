@@ -1,3 +1,3 @@
 using Carina.Db;
 
-return await DbEntryPoint.RunAsync(args, Console.Error);
+return await DbEntryPoint.RunAsync(args, Console.Error, Console.Out);

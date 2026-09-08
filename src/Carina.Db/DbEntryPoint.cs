@@ -1,6 +1,10 @@
 using System.Globalization;
 
+using Carina.Domain.Channels;
+using Carina.Domain.Migration;
+using Carina.Infrastructure.Migration;
 using Carina.Infrastructure.Persistence;
+using Carina.Infrastructure.Persistence.Repositories;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -13,20 +17,23 @@ public static class DbEntryPoint
     public const int UsageExitCode = 64;
     public const int UnusableConfigurationExitCode = 78;
     public const int SourceUnreadableExitCode = 69;
+    public const int CarryFailedExitCode = 70;
 
     public const string Usage = """
         usage: Carina.Db --migrate
                Carina.Db --carry --from <source directory> --into <new root directory> [--for-real]
         """;
 
-    public static async Task<int> RunAsync(string[] args, TextWriter error)
+    public static Task<int> RunAsync(string[] args, TextWriter error) => RunAsync(args, error, error);
+
+    public static async Task<int> RunAsync(string[] args, TextWriter error, TextWriter output)
     {
         CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
         CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
 
         if (args is [CarryArguments.Verb, ..])
         {
-            return await CarryAsync(args, error);
+            return await CarryAsync(args, error, output);
         }
 
         if (args is not ["--migrate"])
@@ -67,7 +74,7 @@ public static class DbEntryPoint
         }
     }
 
-    private static async Task<int> CarryAsync(string[] args, TextWriter error)
+    private static async Task<int> CarryAsync(string[] args, TextWriter error, TextWriter output)
     {
         if (!CarryArguments.TryRead(args, out CarryArguments? carry, out string problem))
         {
@@ -94,11 +101,104 @@ public static class DbEntryPoint
             return UnusableConfigurationExitCode;
         }
 
-        await error.WriteLineAsync(
-            "Nothing reads the ledger of the system being replaced yet, so there is nothing to read a run from. "
-            + "Nothing was carried and nothing was written down.");
+        if (!MigrationSourceSettings.TryRead(
+                Environment.GetEnvironmentVariable,
+                out MigrationSourceSettings? source,
+                out string unreachable))
+        {
+            await error.WriteLineAsync(unreachable);
 
-        return SourceUnreadableExitCode;
+            return UnusableConfigurationExitCode;
+        }
+
+        CarinaDbContext context;
+
+        try
+        {
+            context = new CarinaDbContextFactory().CreateDbContext(args);
+        }
+        catch (InvalidOperationException unusable)
+        {
+            await error.WriteLineAsync(unusable.Message);
+
+            return UnusableConfigurationExitCode;
+        }
+
+        await using (context)
+        {
+            return await CarriedAsync(carry, source, context, error, output);
+        }
+    }
+
+    private static async Task<int> CarriedAsync(
+        CarryArguments carry,
+        MigrationSourceSettings source,
+        CarinaDbContext context,
+        TextWriter error,
+        TextWriter output)
+    {
+        MigrationRecordRepository records = new(context);
+
+        try
+        {
+            MigrationPassage passage = new(
+                new MigrationSourceLedgerReader(new MySqlMigrationSourceConnection(source)),
+                new LocalMigrationSourceDirectory(carry.From),
+                new MigrationCarriage(
+                    new HardLinkMigrationCarrier(carry.From, carry.Into, carry.Root),
+                    new RecordingRepository(context),
+                    TimeProvider.System),
+                records,
+                new MigrationLease(context),
+                TimeProvider.System);
+
+            MigrationRunId id = await passage.RunAsync(
+                carry.Pass,
+                await InReachAsync(context, CancellationToken.None),
+                CancellationToken.None);
+
+            MigrationReport read = await records.ReadAsync(id, CancellationToken.None)
+                ?? throw new MigrationUnclassifiedException(
+                    "The run finished and nothing was written down about it.");
+
+            await output.WriteAsync(CarrySaid.Of(read));
+
+            return SuccessExitCode;
+        }
+        catch (MigrationSourceUnreadableException unreadable)
+        {
+            await error.WriteLineAsync(
+                $"{unreadable.Message} Nothing was carried and nothing was written down.");
+
+            return SourceUnreadableExitCode;
+        }
+        catch (Exception refused)
+            when (refused is MigrationAlreadyRunningException
+                or MigrationCarryRefusedException
+                or MigrationUnclassifiedException)
+        {
+            await error.WriteLineAsync(refused.Message);
+
+            return CarryFailedExitCode;
+        }
+        catch (Exception failure)
+        {
+            await error.WriteLineAsync($"Carina.Db {CarryArguments.Verb} failed: {Describe(failure)}");
+
+            return CarryFailedExitCode;
+        }
+    }
+
+    private static async Task<IReadOnlySet<ServiceKey>> InReachAsync(
+        CarinaDbContext context,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyList<BroadcastService> rescanned =
+            await new BroadcastServiceRepository(context).ListAsync(cancellationToken);
+
+        return rescanned
+            .Select(service => new ServiceKey(service.NetworkId, service.ServiceId))
+            .ToHashSet();
     }
 
     private static string Describe(Exception exception)
