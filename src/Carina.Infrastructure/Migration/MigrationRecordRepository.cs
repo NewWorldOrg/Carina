@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Migration;
 using Carina.Infrastructure.Persistence;
 
@@ -27,6 +28,70 @@ public sealed class MigrationRecordRepository(CarinaDbContext context) : IMigrat
             .OrderByDescending(run => run.FinishedAt)
             .ThenByDescending(run => run.StartedAt)
             .FirstOrDefaultAsync(cancellationToken);
+
+    public async Task<MigrationRecordSummary?> SummariseAsync(CancellationToken cancellationToken)
+    {
+        MigrationRun? latest = await LatestAsync(cancellationToken);
+
+        if (latest is null)
+        {
+            return null;
+        }
+
+        List<MigrationTally> tallies = await context.Set<MigrationTally>()
+            .AsNoTracking()
+            .Where(tally => tally.RunId == latest.Id)
+            .ToListAsync(cancellationToken);
+
+        List<MigrationOmission> omissions = await context.Set<MigrationOmission>()
+            .AsNoTracking()
+            .Where(omission => omission.RunId == latest.Id)
+            .ToListAsync(cancellationToken);
+
+        Dictionary<MigrationRefusal, int> counted = await context.Set<MigrationDetail>()
+            .AsNoTracking()
+            .Where(detail => detail.RunId == latest.Id)
+            .GroupBy(detail => detail.Refusal)
+            .Select(group => new { Refusal = group.Key, Count = group.Count() })
+            .ToDictionaryAsync(row => row.Refusal, row => row.Count, cancellationToken);
+
+        IQueryable<MigrationRun> rehearsals = context.Set<MigrationRun>()
+            .AsNoTracking()
+            .Where(run => run.Pass == MigrationPass.Rehearsal);
+
+        return new MigrationRecordSummary(
+            latest,
+            [.. tallies.OrderBy(tally => tally.Population)],
+            MigrationRefusalCount.EveryOne(counted),
+            [.. omissions.OrderBy(omission => omission.Subject)],
+            await rehearsals.CountAsync(cancellationToken),
+            await rehearsals.MaxAsync(run => (DateTime?)run.FinishedAt, cancellationToken));
+    }
+
+    public async Task<PaginatedList<MigrationDetail>> ListDetailsAsync(
+        MigrationRunId runId,
+        MigrationDetailQuery query,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(runId);
+        ArgumentNullException.ThrowIfNull(query);
+
+        IQueryable<MigrationDetail> found = context.Set<MigrationDetail>()
+            .AsNoTracking()
+            .Where(detail => detail.RunId == runId);
+
+        int total = await found.CountAsync(cancellationToken);
+
+        List<MigrationDetail> rows = await found
+            .OrderBy(detail => detail.Refusal)
+            .ThenBy(detail => detail.Population)
+            .ThenBy(detail => detail.Subject)
+            .Skip((query.Page - 1) * query.PerPage)
+            .Take(query.PerPage)
+            .ToListAsync(cancellationToken);
+
+        return new PaginatedList<MigrationDetail>(rows, total, query.Page, query.PerPage);
+    }
 
     public async Task<MigrationReport?> ReadAsync(MigrationRunId runId, CancellationToken cancellationToken)
     {
