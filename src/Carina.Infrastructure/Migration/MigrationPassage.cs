@@ -12,10 +12,10 @@ public sealed class MigrationPassage(
 {
     public async Task<MigrationRunId> RunAsync(
         MigrationPass pass,
-        IReadOnlySet<ServiceKey> inReach,
+        IReadOnlyList<RescannedService> rescanned,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(inReach);
+        ArgumentNullException.ThrowIfNull(rescanned);
 
         IAsyncDisposable held = await lease.TakeAsync(cancellationToken)
             ?? throw new MigrationAlreadyRunningException(
@@ -27,21 +27,23 @@ public sealed class MigrationPassage(
 
             SourceLedger ledger = await source.ReadAsync(cancellationToken);
             IReadOnlyList<SourceFile> files = await directory.ListAsync(cancellationToken);
+            MigrationRunId id = MigrationRunId.New();
 
-            MigrationRoll settled = await carriage.CarryAsync(
+            MigrationCarried settled = await carriage.CarryAsync(
+                id,
                 ledger,
-                MigrationClassifier.Over(ledger, files, inReach),
+                rescanned,
+                MigrationClassifier.Over(ledger, files, RescannedService.InReach(rescanned)),
                 pass,
                 cancellationToken);
-
-            MigrationRunId id = MigrationRunId.New();
 
             await records.SaveAsync(
                 MigrationCensus.Taken(
                     id,
                     ledger.Name,
                     pass,
-                    settled,
+                    settled.Roll,
+                    settled.Aftermath,
                     began,
                     clock.GetUtcNow().UtcDateTime),
                 cancellationToken);

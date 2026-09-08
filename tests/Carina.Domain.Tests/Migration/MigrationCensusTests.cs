@@ -148,6 +148,7 @@ public sealed class MigrationCensusTests
             Source,
             MigrationPass.ForReal,
             Roll(Nothing()),
+            MigrationAftermath.Nothing,
             Began,
             Ended);
 

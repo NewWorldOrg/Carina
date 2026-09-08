@@ -18,14 +18,12 @@ public sealed class MigrationSourceLedgerReader(IMigrationSourceConnection conne
     public static readonly IReadOnlyList<string> Populations =
         ["channel", "recorded", "video_file", "rule", "reserve"];
 
-    private const bool NotTurnedOffAtTheSource = true;
-
     private const long ServicesPerNetwork = 100_000;
 
     private const long EventsPerService = 100_000;
 
     private const string ChannelDefinitions =
-        "SELECT id, name, channelType, networkId, serviceId FROM channel ORDER BY id";
+        "SELECT id, name, channelType, networkId, serviceId, channel FROM channel ORDER BY id";
 
     private const string Recordings =
         "SELECT id, name, startAt, endAt, channelId, programId FROM recorded ORDER BY id";
@@ -34,9 +32,10 @@ public sealed class MigrationSourceLedgerReader(IMigrationSourceConnection conne
         "SELECT recordedId, parentDirectoryName, filePath, type, size FROM video_file ORDER BY id";
 
     private const string Rules =
-        "SELECT id, keyword, enable, channelIds, keyCS, ignoreKeyCS, keyRegExp, ignoreKeyRegExp, "
-        + "isTimeSpecification, times, durationMin, durationMax, searchPeriods, parentDirectoryName, "
-        + "directory, mode1, mode2, mode3 FROM rule ORDER BY id";
+        "SELECT id, keyword, ignoreKeyword, enable, channelIds, genres, keyCS, ignoreKeyCS, keyRegExp, "
+        + "ignoreKeyRegExp, name, description, extended, ignoreName, ignoreDescription, ignoreExtended, "
+        + "GR, BS, CS, SKY, isTimeSpecification, times, durationMin, durationMax, searchPeriods, "
+        + "parentDirectoryName, directory, mode1, mode2, mode3 FROM rule ORDER BY id";
 
     private const string Reservations = "SELECT id, name, halfWidthName, ruleId FROM reserve ORDER BY id";
 
@@ -130,7 +129,7 @@ public sealed class MigrationSourceLedgerReader(IMigrationSourceConnection conne
             Text(row, "name"),
             KindOf(Text(row, "channelType")),
             KeyOf(Number(row, "networkId"), Number(row, "serviceId")),
-            NotTurnedOffAtTheSource);
+            Text(row, "channel"));
 
     private static SourceRecording RecordingOf(DbDataReader row, IReadOnlyDictionary<long, ServiceKey> services)
     {
@@ -159,14 +158,100 @@ public sealed class MigrationSourceLedgerReader(IMigrationSourceConnection conne
             Number(row, "id"),
             Text(row, "keyword"),
             Flag(row, "enable"),
-            [.. Identifiers(Text(row, "channelIds")).Select(ServiceOf)],
-            Flag(row, "keyRegExp") || Flag(row, "ignoreKeyRegExp"),
-            Flag(row, "keyCS") || Flag(row, "ignoreKeyCS"),
-            Flag(row, "isTimeSpecification") || NamesAnHourOfTheDay(Text(row, "times")),
-            Whatever(row, "durationMin") > 0 || Whatever(row, "durationMax") > 0,
-            Entries(Text(row, "searchPeriods")) > 0,
-            Text(row, "parentDirectoryName").Length > 0 || Text(row, "directory").Length > 0,
-            Text(row, "mode1").Length > 0 || Text(row, "mode2").Length > 0 || Text(row, "mode3").Length > 0);
+            new SourceRuleTerms(
+                Text(row, "keyword"),
+                Text(row, "ignoreKeyword"),
+                FieldsOf(row, "name", "description", "extended"),
+                FieldsOf(row, "ignoreName", "ignoreDescription", "ignoreExtended"),
+                KindsOf(row),
+                [.. Identifiers(Text(row, "channelIds")).Select(ServiceOf)],
+                GenresOf(Text(row, "genres")),
+                DaysOf(Text(row, "times"))),
+            new SourceRuleReach(
+                Flag(row, "keyRegExp") || Flag(row, "ignoreKeyRegExp"),
+                Flag(row, "keyCS") || Flag(row, "ignoreKeyCS"),
+                Flag(row, "isTimeSpecification") || NamesAnHourOfTheDay(Text(row, "times")),
+                Whatever(row, "durationMin") > 0 || Whatever(row, "durationMax") > 0,
+                Entries(Text(row, "searchPeriods")) > 0,
+                Text(row, "parentDirectoryName").Length > 0 || Text(row, "directory").Length > 0,
+                Text(row, "mode1").Length > 0 || Text(row, "mode2").Length > 0 || Text(row, "mode3").Length > 0));
+
+    private static SourceRuleFields FieldsOf(DbDataReader row, string title, string summary, string extended)
+        => (Flag(row, title) ? SourceRuleFields.Title : SourceRuleFields.Nothing)
+            | (Flag(row, summary) ? SourceRuleFields.Summary : SourceRuleFields.Nothing)
+            | (Flag(row, extended) ? SourceRuleFields.ExtendedBody : SourceRuleFields.Nothing);
+
+    private static IReadOnlyList<SourceBroadcastKind> KindsOf(DbDataReader row)
+    {
+        List<SourceBroadcastKind> found = [];
+
+        if (Flag(row, "GR"))
+        {
+            found.Add(SourceBroadcastKind.Terrestrial);
+        }
+
+        if (Flag(row, "BS"))
+        {
+            found.Add(SourceBroadcastKind.BroadcastSatellite);
+        }
+
+        if (Flag(row, "CS"))
+        {
+            found.Add(SourceBroadcastKind.CommunicationSatellite);
+        }
+
+        if (Flag(row, "SKY"))
+        {
+            found.Add(SourceBroadcastKind.Sky);
+        }
+
+        return found;
+    }
+
+    private static IReadOnlyList<SourceRuleGenre> GenresOf(string json)
+    {
+        if (json.Length is 0)
+        {
+            return [];
+        }
+
+        using JsonDocument held = JsonDocument.Parse(json);
+        List<SourceRuleGenre> found = [];
+
+        foreach (JsonElement entry in held.RootElement.EnumerateArray())
+        {
+            found.Add(new SourceRuleGenre(Read(entry, "genre") ?? 0, Read(entry, "subGenre")));
+        }
+
+        return found;
+    }
+
+    private static int DaysOf(string json)
+    {
+        if (json.Length is 0)
+        {
+            return SourceWeek.EveryDay;
+        }
+
+        using JsonDocument held = JsonDocument.Parse(json);
+        int found = 0;
+        bool said = false;
+
+        foreach (JsonElement entry in held.RootElement.EnumerateArray())
+        {
+            said = true;
+            found |= Read(entry, "week") ?? SourceWeek.EveryDay;
+        }
+
+        return said ? found & SourceWeek.EveryDay : SourceWeek.EveryDay;
+    }
+
+    private static int? Read(JsonElement entry, string name)
+        => entry.ValueKind is JsonValueKind.Object
+            && entry.TryGetProperty(name, out JsonElement found)
+            && found.ValueKind is JsonValueKind.Number
+                ? found.GetInt32()
+                : null;
 
     private static SourceReservation ReservationOf(DbDataReader row)
         => new(Number(row, "id"), NameOf(row), NumberOrNone(row, "ruleId") is not null);

@@ -21,6 +21,12 @@ public sealed class MigrationOmissionConfiguration : IEntityTypeConfiguration<Mi
             table.HasCheckConstraint(
                 "ck_migration_omission_ground",
                 MigrationVocabulary.EachThingLeftAlone("subject", "ground"));
+            table.HasCheckConstraint(
+                "ck_migration_omission_affected",
+                MigrationVocabulary.EachCountKept("subject", "affected"));
+            table.HasCheckConstraint(
+                "ck_migration_omission_affected_counts",
+                "affected IS NULL OR affected >= 0");
         });
 
         builder.HasKey(omission => new { omission.RunId, omission.Subject });
@@ -39,6 +45,8 @@ public sealed class MigrationOmissionConfiguration : IEntityTypeConfiguration<Mi
             .HasMaxLength(MigrationVocabulary.NameLength)
             .HasColumnName("ground")
             .IsRequired();
+
+        builder.Property(omission => omission.Affected).HasColumnName("affected");
 
         builder.HasOne<MigrationRun>()
             .WithMany()

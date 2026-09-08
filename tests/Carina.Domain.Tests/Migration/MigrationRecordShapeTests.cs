@@ -49,19 +49,50 @@ public sealed class MigrationRecordShapeTests
         Assert.Throws<ArgumentException>(() => MigrationOmission.Rehydrate(
             Run,
             MigrationOmissionSubject.ProgrammeGuide,
-            MigrationOmissionGround.NothingToCarry));
+            MigrationOmissionGround.NothingToCarry,
+            null));
     }
 
     [Theory]
-    [InlineData(MigrationOmissionSubject.ProgrammeGuide, MigrationOmissionGround.NotMigratedByDesign)]
-    [InlineData(MigrationOmissionSubject.DuplicateAvoidance, MigrationOmissionGround.NotMigratedByDesign)]
-    [InlineData(MigrationOmissionSubject.QualityTimeSeries, MigrationOmissionGround.NothingToCarry)]
-    [InlineData(MigrationOmissionSubject.RecordingHistory, MigrationOmissionGround.NotMigratedByDesign)]
+    [InlineData(MigrationOmissionSubject.ProgrammeGuide, MigrationOmissionGround.NotMigratedByDesign, null)]
+    [InlineData(MigrationOmissionSubject.DuplicateAvoidance, MigrationOmissionGround.NotMigratedByDesign, 17)]
+    [InlineData(MigrationOmissionSubject.QualityTimeSeries, MigrationOmissionGround.NothingToCarry, null)]
+    [InlineData(MigrationOmissionSubject.RecordingHistory, MigrationOmissionGround.NotMigratedByDesign, null)]
+    [InlineData(MigrationOmissionSubject.EnclosedCharacters, MigrationOmissionGround.NotMigratedByDesign, 48)]
     public void EachThingLeftAloneIsLeftAloneForTheReasonTheRequirementsGive(
         MigrationOmissionSubject subject,
-        MigrationOmissionGround ground)
+        MigrationOmissionGround ground,
+        int? affected)
     {
-        Assert.Equal(ground, MigrationOmission.For(Run, subject).Ground);
+        Assert.Equal(ground, MigrationOmission.For(Run, subject, affected).Ground);
+    }
+
+    [Fact]
+    public void ALineOfTheRecordThatCountsWhatItTouchedCannotStaySilentAboutIt()
+        => Assert.Throws<ArgumentException>(
+            () => MigrationOmission.For(Run, MigrationOmissionSubject.EnclosedCharacters, null));
+
+    [Fact]
+    public void ALineOfTheRecordThatCountsNothingDoesNotInventACount()
+        => Assert.Throws<ArgumentException>(
+            () => MigrationOmission.For(Run, MigrationOmissionSubject.ProgrammeGuide, 3));
+
+    [Fact]
+    public void EveryLineThatCountsWhatItTouchedSaysHowMany()
+    {
+        MigrationAftermath aftermath = new([], [], 17, 48);
+
+        IReadOnlyList<MigrationOmission> told = MigrationOmission.EveryOne(Run, aftermath);
+
+        Assert.Equal(
+            17,
+            told.Single(omission => omission.Subject is MigrationOmissionSubject.DuplicateAvoidance).Affected);
+        Assert.Equal(
+            48,
+            told.Single(omission => omission.Subject is MigrationOmissionSubject.EnclosedCharacters).Affected);
+        Assert.All(
+            told.Where(omission => !MigrationOmissionSubjects.CountsRows(omission.Subject)),
+            omission => Assert.Null(omission.Affected));
     }
 
     [Fact]

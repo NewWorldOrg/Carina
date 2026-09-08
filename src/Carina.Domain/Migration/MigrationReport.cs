@@ -6,12 +6,16 @@ public sealed class MigrationReport
         MigrationRun run,
         IReadOnlyList<MigrationTally> tallies,
         IReadOnlyList<MigrationDetail> details,
-        IReadOnlyList<MigrationOmission> omissions)
+        IReadOnlyList<MigrationOmission> omissions,
+        IReadOnlyList<MigrationChannelProposal> channelProposals,
+        IReadOnlyList<MigrationRuleProposal> ruleProposals)
     {
         ArgumentNullException.ThrowIfNull(run);
         ArgumentNullException.ThrowIfNull(tallies);
         ArgumentNullException.ThrowIfNull(details);
         ArgumentNullException.ThrowIfNull(omissions);
+        ArgumentNullException.ThrowIfNull(channelProposals);
+        ArgumentNullException.ThrowIfNull(ruleProposals);
 
         Dictionary<MigrationPopulation, MigrationTally> counted = Counted(run, tallies);
         Dictionary<MigrationPopulation, int> written = Written(run, details);
@@ -40,11 +44,15 @@ public sealed class MigrationReport
         }
 
         Told(run, omissions);
+        Proposed(run, channelProposals, counted[MigrationPopulation.ChannelDefinitions]);
+        Meant(run, ruleProposals, counted[MigrationPopulation.Rules]);
 
         Run = run;
         Tallies = [.. tallies];
         Details = [.. details];
         Omissions = [.. omissions];
+        ChannelProposals = [.. channelProposals];
+        RuleProposals = [.. ruleProposals];
     }
 
     public MigrationRun Run { get; }
@@ -55,12 +63,18 @@ public sealed class MigrationReport
 
     public IReadOnlyList<MigrationOmission> Omissions { get; }
 
+    public IReadOnlyList<MigrationChannelProposal> ChannelProposals { get; }
+
+    public IReadOnlyList<MigrationRuleProposal> RuleProposals { get; }
+
     public static MigrationReport Of(
         MigrationRun run,
         IReadOnlyList<MigrationTally> tallies,
         IReadOnlyList<MigrationDetail> details,
-        IReadOnlyList<MigrationOmission> omissions)
-        => new(run, tallies, details, omissions);
+        IReadOnlyList<MigrationOmission> omissions,
+        IReadOnlyList<MigrationChannelProposal> channelProposals,
+        IReadOnlyList<MigrationRuleProposal> ruleProposals)
+        => new(run, tallies, details, omissions, channelProposals, ruleProposals);
 
     private static Dictionary<MigrationPopulation, MigrationTally> Counted(
         MigrationRun run,
@@ -135,6 +149,64 @@ public sealed class MigrationReport
                     + "feature that went missing.",
                     nameof(omissions));
             }
+        }
+    }
+
+    private static void Proposed(
+        MigrationRun run,
+        IReadOnlyList<MigrationChannelProposal> proposals,
+        MigrationTally definitions)
+    {
+        HashSet<string> seen = new(StringComparer.Ordinal);
+
+        foreach (MigrationChannelProposal proposal in proposals)
+        {
+            ArgumentNullException.ThrowIfNull(proposal);
+            Belongs(run, proposal.RunId, nameof(proposals));
+
+            if (!seen.Add($"{proposal.NetworkId.Value}/{proposal.ServiceId.Value}"))
+            {
+                throw new ArgumentException(
+                    "A run says once what became of a service the source system defined.",
+                    nameof(proposals));
+            }
+        }
+
+        if (proposals.Count != definitions.Offered)
+        {
+            throw new ArgumentException(
+                $"The source system defined {definitions.Offered} channels and the run says what became of "
+                + $"{proposals.Count} of them.",
+                nameof(proposals));
+        }
+    }
+
+    private static void Meant(
+        MigrationRun run,
+        IReadOnlyList<MigrationRuleProposal> proposals,
+        MigrationTally rules)
+    {
+        HashSet<long> seen = [];
+
+        foreach (MigrationRuleProposal proposal in proposals)
+        {
+            ArgumentNullException.ThrowIfNull(proposal);
+            Belongs(run, proposal.RunId, nameof(proposals));
+
+            if (!seen.Add(proposal.SourceRow))
+            {
+                throw new ArgumentException(
+                    "A run says once what the source system meant by a rule.",
+                    nameof(proposals));
+            }
+        }
+
+        if (proposals.Count != rules.Carried)
+        {
+            throw new ArgumentException(
+                $"The run converted {rules.Carried} rules and says what the source system meant by "
+                + $"{proposals.Count} of them.",
+                nameof(proposals));
         }
     }
 

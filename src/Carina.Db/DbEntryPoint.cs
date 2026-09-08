@@ -147,6 +147,10 @@ public static class DbEntryPoint
                 new MigrationCarriage(
                     new HardLinkMigrationCarrier(carry.From, carry.Into, carry.Root),
                     new RecordingRepository(context),
+                    new RuleRepository(context),
+                    new EncodeJobRepository(context),
+                    new EncodeDestinationRepository(context),
+                    new EncodeProfileRepository(context),
                     TimeProvider.System),
                 records,
                 new MigrationLease(context),
@@ -154,7 +158,7 @@ public static class DbEntryPoint
 
             MigrationRunId id = await passage.RunAsync(
                 carry.Pass,
-                await InReachAsync(context, CancellationToken.None),
+                await RescannedAsync(context, CancellationToken.None),
                 CancellationToken.None);
 
             MigrationReport read = await records.ReadAsync(id, CancellationToken.None)
@@ -189,16 +193,18 @@ public static class DbEntryPoint
         }
     }
 
-    private static async Task<IReadOnlySet<ServiceKey>> InReachAsync(
+    private static async Task<IReadOnlyList<RescannedService>> RescannedAsync(
         CarinaDbContext context,
         CancellationToken cancellationToken)
     {
         IReadOnlyList<BroadcastService> rescanned =
             await new BroadcastServiceRepository(context).ListAsync(cancellationToken);
 
-        return rescanned
-            .Select(service => new ServiceKey(service.NetworkId, service.ServiceId))
-            .ToHashSet();
+        return
+        [
+            .. rescanned.Select(service =>
+                new RescannedService(new ServiceKey(service.NetworkId, service.ServiceId), service.Name)),
+        ];
     }
 
     private static string Describe(Exception exception)

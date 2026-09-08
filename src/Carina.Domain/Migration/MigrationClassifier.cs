@@ -115,28 +115,12 @@ public static class MigrationClassifier
         ArgumentNullException.ThrowIfNull(rule);
         ArgumentNullException.ThrowIfNull(inReach);
 
+        MigrationRuleConversion conversion = MigrationRuleConversion.Of(rule, inReach);
         string subject = Numbered(rule.Id);
 
-        if (rule.Services.Any(service => !inReach.Contains(service)))
-        {
-            return Refused(MigrationPopulation.Rules, subject, MigrationRefusal.Unidentifiable, rule.Name);
-        }
-
-        if (rule.UsesRegularExpression || rule.CaseSensitive)
-        {
-            return Refused(MigrationPopulation.Rules, subject, MigrationRefusal.Inexpressible, rule.Name);
-        }
-
-        if (rule.RecordsAtATimeOfDay
-            || rule.BoundsTheDuration
-            || rule.BoundsThePeriod
-            || rule.NamesItsOwnDestination
-            || rule.NamesItsOwnEncodeSettings)
-        {
-            return Refused(MigrationPopulation.Rules, subject, MigrationRefusal.NoSuchFeature, rule.Name);
-        }
-
-        return Carried(MigrationPopulation.Rules, subject, rule.Name);
+        return conversion.Refusal is { } refusal
+            ? Refused(MigrationPopulation.Rules, subject, refusal, rule.Name)
+            : Carried(MigrationPopulation.Rules, subject, rule.Name);
     }
 
     public static MigrationVerdict OnAReservation(SourceReservation reservation)

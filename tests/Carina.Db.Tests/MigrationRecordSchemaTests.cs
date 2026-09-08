@@ -18,6 +18,9 @@ public sealed class MigrationRecordSchemaTests(MigratedScratchDatabase database)
     public static TheoryData<string> Counted =>
         Named(MigrationPopulations.Counted.Select(population => population.ToString()));
 
+    public static TheoryData<string> Standings =>
+        Named(MigrationChannelStandings.All.Select(standing => standing.ToString()));
+
     public static TheoryData<string> LeftAlone =>
         Named(MigrationOmissionSubjects.All.Select(subject => subject.ToString()));
 
@@ -115,13 +118,42 @@ public sealed class MigrationRecordSchemaTests(MigratedScratchDatabase database)
 
         MigrationOmissionSubject named = Enum.Parse<MigrationOmissionSubject>(subject);
 
-        await OmissionAsync(connection, run, subject, MigrationOmission.GroundOf(named).ToString());
+        await OmissionAsync(
+            connection,
+            run,
+            subject,
+            MigrationOmission.GroundOf(named).ToString(),
+            MigrationOmissionSubjects.CountsRows(named) ? "17" : "NULL");
 
         Assert.Equal(
             1L,
             await CountAsync(
                 connection,
                 $"SELECT count(*) FROM migration_omission WHERE run_id = '{run}' AND subject = '{subject}'"));
+    }
+
+    [Fact]
+    public async Task WhatALineOfTheRecordCountsIsSettledByTheRequirementsAndNotByTheRun()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        Guid run = await RunAsync(connection);
+
+        PostgresException refused = await Assert.ThrowsAsync<PostgresException>(
+            () => OmissionAsync(connection, run, "ProgrammeGuide", "NotMigratedByDesign", "17"));
+
+        Assert.Equal("ck_migration_omission_affected", refused.ConstraintName);
+    }
+
+    [Fact]
+    public async Task ARowThatShouldSayHowManyItTouchedCannotStaySilentAboutIt()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        Guid run = await RunAsync(connection);
+
+        PostgresException refused = await Assert.ThrowsAsync<PostgresException>(
+            () => OmissionAsync(connection, run, "EnclosedCharacters", "NotMigratedByDesign", "NULL"));
+
+        Assert.Equal("ck_migration_omission_affected", refused.ConstraintName);
     }
 
     [Fact]
@@ -171,6 +203,74 @@ public sealed class MigrationRecordSchemaTests(MigratedScratchDatabase database)
         Assert.Equal(
             2L,
             await CountAsync(connection, $"SELECT count(*) FROM migration_detail WHERE run_id = '{run}'"));
+    }
+
+    private static async Task ProposalAsync(
+        NpgsqlConnection connection,
+        Guid run,
+        string standing,
+        string rescannedName,
+        int service = 1024)
+    {
+        await using NpgsqlCommand writing = new(
+            "INSERT INTO migration_channel_proposal "
+            + "(run_id, network_id, service_id, standing, source_name, source_physical_channel, rescanned_name) "
+            + $"VALUES ('{run}', 32736, {service}, '{standing}', 'an old name', '21', {rescannedName})",
+            connection);
+
+        await writing.ExecuteNonQueryAsync();
+    }
+
+    [Theory]
+    [MemberData(nameof(Standings))]
+    public async Task EveryStandingAChannelDefinitionCanEndUpInIsOneTheTableTakes(string standing)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        Guid run = await RunAsync(connection);
+
+        await ProposalAsync(
+            connection,
+            run,
+            standing,
+            standing is "NameProposed" ? "'the rescanned name'" : "NULL");
+
+        Assert.Equal(
+            1L,
+            await CountAsync(
+                connection,
+                $"SELECT count(*) FROM migration_channel_proposal WHERE run_id = '{run}'"));
+    }
+
+    [Fact]
+    public async Task ANameIsProposedOnlyForAServiceTheRescanAnsweredFor()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        Guid run = await RunAsync(connection);
+
+        PostgresException refused = await Assert.ThrowsAsync<PostgresException>(
+            () => ProposalAsync(connection, run, "NothingAnswers", "'the rescanned name'"));
+
+        Assert.Equal("ck_migration_channel_proposal_name", refused.ConstraintName);
+    }
+
+    [Fact]
+    public async Task WhatTheSourceMeantByARuleIsWrittenDownEvenWhenNoRuleWasMade()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        Guid run = await RunAsync(connection);
+
+        await using NpgsqlCommand writing = new(
+            "INSERT INTO migration_rule_proposal (run_id, source_row, rule_id, enabled_at_the_source) "
+            + $"VALUES ('{run}', 3, NULL, true)",
+            connection);
+
+        await writing.ExecuteNonQueryAsync();
+
+        Assert.Equal(
+            1L,
+            await CountAsync(
+                connection,
+                $"SELECT count(*) FROM migration_rule_proposal WHERE run_id = '{run}' AND rule_id IS NULL"));
     }
 
     private static TheoryData<string> Named(IEnumerable<string> names)
@@ -232,10 +332,16 @@ public sealed class MigrationRecordSchemaTests(MigratedScratchDatabase database)
         await writing.ExecuteNonQueryAsync();
     }
 
-    private static async Task OmissionAsync(NpgsqlConnection connection, Guid run, string subject, string ground)
+    private static async Task OmissionAsync(
+        NpgsqlConnection connection,
+        Guid run,
+        string subject,
+        string ground,
+        string affected = "DEFAULT")
     {
         await using NpgsqlCommand writing = new(
-            $"INSERT INTO migration_omission (run_id, subject, ground) VALUES ('{run}', '{subject}', '{ground}')",
+            "INSERT INTO migration_omission (run_id, subject, ground, affected) "
+            + $"VALUES ('{run}', '{subject}', '{ground}', {affected})",
             connection);
 
         await writing.ExecuteNonQueryAsync();

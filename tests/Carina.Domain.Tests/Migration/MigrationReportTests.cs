@@ -1,3 +1,4 @@
+using Carina.Domain.Channels;
 using Carina.Domain.Migration;
 
 using static Carina.Domain.Tests.Migration.MigrationFixtures;
@@ -16,11 +17,11 @@ public sealed class MigrationReportTests
     public void ARunThatSaysNothingAboutWhatItDidNotDoIsRefused()
     {
         IReadOnlyList<MigrationOmission> short_ =
-            [.. MigrationOmission.EveryOne(Run).Where(
+            [.. Told(Run).Where(
                 omission => omission.Subject is not MigrationOmissionSubject.ProgrammeGuide)];
 
         ArgumentException refused = Assert.Throws<ArgumentException>(
-            () => MigrationReport.Of(Ran(), Empty(), [], short_));
+            () => MigrationReport.Of(Ran(), Empty(), [], short_, [], []));
 
         Assert.Contains("ProgrammeGuide", refused.Message, StringComparison.Ordinal);
     }
@@ -30,12 +31,13 @@ public sealed class MigrationReportTests
     [InlineData(MigrationOmissionSubject.DuplicateAvoidance)]
     [InlineData(MigrationOmissionSubject.QualityTimeSeries)]
     [InlineData(MigrationOmissionSubject.RecordingHistory)]
+    [InlineData(MigrationOmissionSubject.EnclosedCharacters)]
     public void EachThingDeliberatelyLeftAloneHasToBeSaidOutLoud(MigrationOmissionSubject subject)
     {
         IReadOnlyList<MigrationOmission> short_ =
-            [.. MigrationOmission.EveryOne(Run).Where(omission => omission.Subject != subject)];
+            [.. Told(Run).Where(omission => omission.Subject != subject)];
 
-        Assert.Throws<ArgumentException>(() => MigrationReport.Of(Ran(), Empty(), [], short_));
+        Assert.Throws<ArgumentException>(() => MigrationReport.Of(Ran(), Empty(), [], short_, [], []));
     }
 
     [Fact]
@@ -45,7 +47,7 @@ public sealed class MigrationReportTests
             [.. Empty().Where(tally => tally.Population is not MigrationPopulation.Rules)];
 
         Assert.Throws<MigrationUnclassifiedException>(
-            () => MigrationReport.Of(Ran(), short_, [], MigrationOmission.EveryOne(Run)));
+            () => MigrationReport.Of(Ran(), short_, [], Told(Run), [], []));
     }
 
     [Fact]
@@ -55,7 +57,7 @@ public sealed class MigrationReportTests
             [.. Empty(), MigrationTally.Rehydrate(Run, MigrationPopulation.Rules, 0, 0, 0, 0)];
 
         Assert.Throws<ArgumentException>(
-            () => MigrationReport.Of(Ran(), twice, [], MigrationOmission.EveryOne(Run)));
+            () => MigrationReport.Of(Ran(), twice, [], Told(Run), [], []));
     }
 
     [Fact]
@@ -66,7 +68,7 @@ public sealed class MigrationReportTests
                 MigrationTally.Rehydrate(Run, MigrationPopulation.Recordings, 1, 0, 0, 1)];
 
         MigrationUnclassifiedException stopped = Assert.Throws<MigrationUnclassifiedException>(
-            () => MigrationReport.Of(Ran(), loose, [], MigrationOmission.EveryOne(Run)));
+            () => MigrationReport.Of(Ran(), loose, [], Told(Run), [], []));
 
         Assert.Contains("nobody could class", stopped.Message, StringComparison.Ordinal);
     }
@@ -83,7 +85,7 @@ public sealed class MigrationReportTests
             Refused(MigrationPopulation.Recordings, "7", MigrationRefusal.ReallyEmpty));
 
         ArgumentException refused = Assert.Throws<ArgumentException>(
-            () => MigrationReport.Of(Ran(), counted, [one], MigrationOmission.EveryOne(Run)));
+            () => MigrationReport.Of(Ran(), counted, [one], Told(Run), [], []));
 
         Assert.Contains("written down", refused.Message, StringComparison.Ordinal);
     }
@@ -96,7 +98,7 @@ public sealed class MigrationReportTests
             Refused(MigrationPopulation.Recordings, "7", MigrationRefusal.ReallyEmpty));
 
         Assert.Throws<ArgumentException>(
-            () => MigrationReport.Of(Ran(), Empty(), [one], MigrationOmission.EveryOne(Run)));
+            () => MigrationReport.Of(Ran(), Empty(), [one], Told(Run), [], []));
     }
 
     [Fact]
@@ -114,7 +116,7 @@ public sealed class MigrationReportTests
             Refused(MigrationPopulation.Recordings, "7", MigrationRefusal.FileMissing));
 
         Assert.Throws<ArgumentException>(
-            () => MigrationReport.Of(Ran(), counted, [one, again], MigrationOmission.EveryOne(Run)));
+            () => MigrationReport.Of(Ran(), counted, [one, again], Told(Run), [], []));
     }
 
     [Fact]
@@ -125,10 +127,10 @@ public sealed class MigrationReportTests
                 population => MigrationTally.Rehydrate(Another, population, 0, 0, 0, 0))];
 
         Assert.Throws<ArgumentException>(
-            () => MigrationReport.Of(Ran(), elsewhere, [], MigrationOmission.EveryOne(Run)));
+            () => MigrationReport.Of(Ran(), elsewhere, [], Told(Run), [], []));
 
         Assert.Throws<ArgumentException>(
-            () => MigrationReport.Of(Ran(), Empty(), [], MigrationOmission.EveryOne(Another)));
+            () => MigrationReport.Of(Ran(), Empty(), [], Told(Another), [], []));
     }
 
     [Fact]
@@ -148,10 +150,61 @@ public sealed class MigrationReportTests
     [Fact]
     public void AReportOfARunThatFoundNothingIsStillAReport()
     {
-        MigrationReport told = MigrationReport.Of(Ran(), Empty(), [], MigrationOmission.EveryOne(Run));
+        MigrationReport told = MigrationReport.Of(Ran(), Empty(), [], Told(Run), [], []);
 
         Assert.Equal(5, told.Tallies.Count);
         Assert.Empty(told.Details);
-        Assert.Equal(4, told.Omissions.Count);
+        Assert.Equal(MigrationOmissionSubjects.All.Count, told.Omissions.Count);
     }
+
+    [Fact]
+    public void ARunSaysWhatBecameOfEveryChannelTheSourceSystemDefined()
+    {
+        IReadOnlyList<MigrationTally> counted =
+        [
+            .. Empty().Where(tally => tally.Population is not MigrationPopulation.ChannelDefinitions),
+            MigrationTally.Rehydrate(Run, MigrationPopulation.ChannelDefinitions, 2, 2, 0, 0),
+        ];
+
+        Assert.Throws<ArgumentException>(
+            () => MigrationReport.Of(Ran(), counted, [], Told(Run), [Proposal(1)], []));
+    }
+
+    [Fact]
+    public void ARunSaysWhatBecameOfAServiceOnce()
+    {
+        IReadOnlyList<MigrationTally> counted =
+        [
+            .. Empty().Where(tally => tally.Population is not MigrationPopulation.ChannelDefinitions),
+            MigrationTally.Rehydrate(Run, MigrationPopulation.ChannelDefinitions, 2, 2, 0, 0),
+        ];
+
+        Assert.Throws<ArgumentException>(
+            () => MigrationReport.Of(Ran(), counted, [], Told(Run), [Proposal(1), Proposal(1)], []));
+    }
+
+    [Fact]
+    public void ARunSaysWhatTheSourceSystemMeantByEveryRuleItConverted()
+    {
+        IReadOnlyList<MigrationTally> counted =
+        [
+            .. Empty().Where(tally => tally.Population is not MigrationPopulation.Rules),
+            MigrationTally.Rehydrate(Run, MigrationPopulation.Rules, 1, 1, 0, 0),
+        ];
+
+        Assert.Throws<ArgumentException>(() => MigrationReport.Of(Ran(), counted, [], Told(Run), [], []));
+    }
+
+    private static MigrationChannelProposal Proposal(int service)
+        => MigrationChannelProposal.Rehydrate(
+            Run,
+            new NetworkId(1),
+            new ServiceId(service),
+            MigrationChannelStanding.NothingAnswers,
+            "a station",
+            "21",
+            null);
+
+    private static IReadOnlyList<MigrationOmission> Told(MigrationRunId run)
+        => MigrationOmission.EveryOne(run, MigrationAftermath.Nothing);
 }

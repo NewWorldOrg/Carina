@@ -15,6 +15,8 @@ public sealed class MigrationRecordRepository(CarinaDbContext context) : IMigrat
         context.AddRange(report.Tallies);
         context.AddRange(report.Details);
         context.AddRange(report.Omissions);
+        context.AddRange(report.ChannelProposals);
+        context.AddRange(report.RuleProposals);
 
         await context.SaveChangesAsync(cancellationToken);
     }
@@ -59,6 +61,19 @@ public sealed class MigrationRecordRepository(CarinaDbContext context) : IMigrat
             .OrderBy(omission => omission.Subject)
             .ToListAsync(cancellationToken);
 
-        return MigrationReport.Of(run, tallies, details, omissions);
+        List<MigrationChannelProposal> channelProposals = await context.Set<MigrationChannelProposal>()
+            .AsNoTracking()
+            .Where(proposal => proposal.RunId == runId)
+            .OrderBy(proposal => proposal.NetworkId)
+            .ThenBy(proposal => proposal.ServiceId)
+            .ToListAsync(cancellationToken);
+
+        List<MigrationRuleProposal> ruleProposals = await context.Set<MigrationRuleProposal>()
+            .AsNoTracking()
+            .Where(proposal => proposal.RunId == runId)
+            .OrderBy(proposal => proposal.SourceRow)
+            .ToListAsync(cancellationToken);
+
+        return MigrationReport.Of(run, tallies, details, omissions, channelProposals, ruleProposals);
     }
 }

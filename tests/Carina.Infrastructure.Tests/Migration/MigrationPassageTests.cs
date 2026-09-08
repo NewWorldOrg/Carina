@@ -10,8 +10,6 @@ public sealed class MigrationPassageTests
 {
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
-    private readonly MigrationJournal journal = new();
-
     private readonly HandTurnedClock clock = new(new DateTimeOffset(2026, 9, 8, 5, 0, 0, TimeSpan.Zero));
 
     private readonly ScriptedCarrier carrier;
@@ -24,8 +22,14 @@ public sealed class MigrationPassageTests
 
     private readonly ReadOnlySource source = new();
 
+    private readonly MigrationBench bench;
+
+    private readonly MigrationJournal journal;
+
     public MigrationPassageTests()
     {
+        bench = new MigrationBench(clock);
+        journal = bench.Journal;
         carrier = new ScriptedCarrier(journal);
         recordings = new HeldMigratedRecordings(journal);
     }
@@ -115,7 +119,7 @@ public sealed class MigrationPassageTests
         => new(
             source,
             source,
-            new MigrationCarriage(carrier, recordings, clock),
+            bench.Carriage(carrier, recordings),
             records,
             lease,
             clock);

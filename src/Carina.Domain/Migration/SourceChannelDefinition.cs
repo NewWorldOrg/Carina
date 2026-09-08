@@ -2,10 +2,18 @@ namespace Carina.Domain.Migration;
 
 public sealed record SourceChannelDefinition
 {
-    public SourceChannelDefinition(long id, string name, SourceBroadcastKind kind, ServiceKey service, bool enabled)
+    public const int PhysicalChannelMaxLength = 64;
+
+    public SourceChannelDefinition(
+        long id,
+        string name,
+        SourceBroadcastKind kind,
+        ServiceKey service,
+        string physicalChannel)
     {
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(service);
+        ArgumentNullException.ThrowIfNull(physicalChannel);
 
         if (!Enum.IsDefined(kind))
         {
@@ -15,11 +23,19 @@ public sealed record SourceChannelDefinition
                 "A channel of the source system is one it can name.");
         }
 
+        if (physicalChannel.Length > PhysicalChannelMaxLength)
+        {
+            throw new ArgumentException(
+                $"A physical channel is at most {PhysicalChannelMaxLength} characters, "
+                + $"but this one has {physicalChannel.Length}.",
+                nameof(physicalChannel));
+        }
+
         Id = SourceRow.Of(id, nameof(id));
         Name = name;
         Kind = kind;
         Service = service;
-        Enabled = enabled;
+        PhysicalChannel = physicalChannel;
     }
 
     public long Id { get; }
@@ -30,5 +46,5 @@ public sealed record SourceChannelDefinition
 
     public ServiceKey Service { get; }
 
-    public bool Enabled { get; }
+    public string PhysicalChannel { get; }
 }

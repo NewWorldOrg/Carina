@@ -1,3 +1,4 @@
+using Carina.Domain.Channels;
 using Carina.Domain.Migration;
 
 namespace Carina.Db.Tests;
@@ -7,6 +8,8 @@ public sealed class CarrySaidTests
     private static readonly DateTime Began = new(2026, 9, 8, 3, 0, 0, DateTimeKind.Utc);
 
     private static readonly DateTime Ended = new(2026, 9, 8, 3, 1, 0, DateTimeKind.Utc);
+
+    private static readonly MigrationRunId Run = new(new Guid("00000001-0000-0000-0000-000000000001"));
 
     [Fact]
     public void EveryPopulationIsCountedWhetherAnythingWasLeftBehindOrNot()
@@ -62,11 +65,46 @@ public sealed class CarrySaidTests
         Assert.DoesNotContain("what somebody asked for", said, StringComparison.Ordinal);
         Assert.DoesNotContain("what somebody receives", said, StringComparison.Ordinal);
         Assert.DoesNotContain("bash.sh", said, StringComparison.Ordinal);
+        Assert.DoesNotContain("what the rescan calls it", said, StringComparison.Ordinal);
+        Assert.DoesNotContain("what somebody receives it on", said, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void WhatBecameOfTheChannelDefinitionsIsSaidAsCountsAndNothingIsSettledByTheRun()
+    {
+        string said = CarrySaid.Of(Report(MigrationPass.Rehearsal));
+
+        Assert.Contains(
+            "Channel definitions, NameProposed: 1. Nothing was settled by this run.",
+            said,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void HowManyRulesCrossedOverAndHowManyOfThemWereOnAtTheSourceIsSaid()
+    {
+        string said = CarrySaid.Of(Report(MigrationPass.Rehearsal));
+
+        Assert.Contains(
+            "Rules converted, every one of them turned off: 1, of which 1 were on at the source.",
+            said,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void HowManyRowsTheSubstitutionTouchedIsSaidWithoutSayingWhatTheySaid()
+    {
+        string said = CarrySaid.Of(Report(MigrationPass.Rehearsal));
+
+        Assert.Contains(
+            "Nothing was done about EnclosedCharacters: NotMigratedByDesign, touching 2 rows.",
+            said,
+            StringComparison.Ordinal);
     }
 
     private static MigrationReport Report(MigrationPass pass)
         => MigrationCensus.Taken(
-            MigrationRunId.New(),
+            Run,
             new MigrationSourceName("the recording system being replaced"),
             pass,
             MigrationRoll.Of(
@@ -119,6 +157,23 @@ public sealed class CarrySaidTests
                         null,
                         null),
                 ]),
+            Aftermath(),
             Began,
             Ended);
+
+    private static MigrationAftermath Aftermath()
+        => new(
+            [
+                MigrationChannelProposal.Rehydrate(
+                    Run,
+                    new NetworkId(32736),
+                    new ServiceId(1024),
+                    MigrationChannelStanding.NameProposed,
+                    "what somebody receives",
+                    "what somebody receives it on",
+                    "what the rescan calls it"),
+            ],
+            [MigrationRuleProposal.Rehydrate(Run, 3, null, true)],
+            1,
+            2);
 }
