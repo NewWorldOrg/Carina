@@ -46,6 +46,7 @@ API はコンテナ内のポート 8080 で待ち受け、ホストのポート 
 | `CARINA_DRIVER_SOCKET` | driver と app をつなぐ Unix ドメインソケットのパス |
 | `ConnectionStrings__Carina` | API が使う PostgreSQL の接続文字列 |
 | `CARINA_DB_CONNECTION` | マイグレーション適用時の接続文字列 |
+| `CARINA_MIGRATION_SOURCE_CONNECTION` | 置き換える録画環境の MySQL への接続文字列。`--carry` のときだけ読む |
 | `CARINA_ROLE` | イメージが起動する役割 |
 | `CARINA_KNOWN_PROXIES` | `X-Forwarded-*` を信頼する前段のアドレス |
 | `CARINA_KNOWN_NETWORKS` | 同じくネットワーク(アドレス/プレフィクス) |
@@ -59,6 +60,11 @@ API はコンテナ内のポート 8080 で待ち受け、ホストのポート 
 設定画面が案内する値と authorize / token へ送る値はどちらもここから組み立てるため、案内どおりに登録すれば認証は成立します。
 未設定でも起動しますが、redirect URI はリクエストの届いたアドレスからの推定になり、設定画面はその値が推定であることを添えて返します。
 画面を描くサーバが内部アドレスで API を呼ぶ構成ではこの推定はブラウザの辿らないアドレスになるため、公開しているアドレスを設定してください。
+
+`CARINA_MIGRATION_SOURCE_CONNECTION` は `Carina.Db --carry` が置き換える録画環境を読むためだけの設定です。
+ホスト・データベース・アカウントのいずれも既定値を持たないので、未設定なら移行は走らずその旨を言って終わります。
+読み取りだけの資格情報を渡してください。読み出しは `START TRANSACTION READ ONLY` の中で行うため、
+渡された資格情報が書ける立場であっても移行元へ書き込むことはありません。
 
 `CARINA_ANONYMOUS_NETWORKS` はセッションを保持できない再生機器のために置いた口で、既定は空です。
 アドレスがセッションの代わりになる箇所はこのプロセスのどこにもないため、ここにネットワークを書いても資格情報を持たないリクエストは他と同じく拒否されます。

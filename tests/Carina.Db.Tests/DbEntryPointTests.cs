@@ -1,3 +1,5 @@
+using Carina.Infrastructure.Migration;
+
 namespace Carina.Db.Tests;
 
 [Collection(ConnectionEnvironmentCollection.Name)]
@@ -63,8 +65,9 @@ public sealed class DbEntryPointTests
     }
 
     [Fact]
-    public async Task SaysPlainlyThatNothingReadsTheSourceSystemYetAndCarriesNothing()
+    public async Task RefusesToCarryWhenNothingSaysHowToReachTheSourceSystem()
     {
+        using var scope = new EnvironmentVariableScope(MigrationSourceSettings.ConnectionVariable, null);
         string from = Directory.CreateTempSubdirectory("carina-carry-from").FullName;
         string into = Directory.CreateTempSubdirectory("carina-carry-into").FullName;
         var error = new StringWriter();
@@ -73,9 +76,36 @@ public sealed class DbEntryPointTests
         {
             int exitCode = await DbEntryPoint.RunAsync(["--carry", "--from", from, "--into", into], error);
 
-            Assert.Equal(DbEntryPoint.SourceUnreadableExitCode, exitCode);
-            Assert.Contains("Nothing was carried", error.ToString(), StringComparison.Ordinal);
+            Assert.Equal(DbEntryPoint.UnusableConfigurationExitCode, exitCode);
+            Assert.Contains(
+                MigrationSourceSettings.ConnectionVariable,
+                error.ToString(),
+                StringComparison.Ordinal);
             Assert.Empty(Directory.GetFiles(into));
+        }
+        finally
+        {
+            Directory.Delete(from, recursive: true);
+            Directory.Delete(into, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task RefusesToCarryWhenWhatSaysHowToReachTheSourceSystemNamesNoDatabase()
+    {
+        using var scope = new EnvironmentVariableScope(
+            MigrationSourceSettings.ConnectionVariable,
+            "Server=somewhere.invalid;Uid=reader;Pwd=notreal");
+        string from = Directory.CreateTempSubdirectory("carina-carry-from").FullName;
+        string into = Directory.CreateTempSubdirectory("carina-carry-into").FullName;
+        var error = new StringWriter();
+
+        try
+        {
+            int exitCode = await DbEntryPoint.RunAsync(["--carry", "--from", from, "--into", into], error);
+
+            Assert.Equal(DbEntryPoint.UnusableConfigurationExitCode, exitCode);
+            Assert.Contains("names no database", error.ToString(), StringComparison.Ordinal);
         }
         finally
         {
