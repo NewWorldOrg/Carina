@@ -97,4 +97,31 @@ public sealed class SignalSampleTests
             LockRead,
             bitErrors: [new LayerBitErrorCounts(0, -1, 8)],
             bitErrorsReadAt: StatisticsRead));
+
+    [Fact(DisplayName = "BR-QV-003: a reading that could not be taken at all is kept as one that could not be taken")]
+    public void AReadingThatCouldNotBeTakenAtAllIsKeptAsOneThatCouldNotBeTaken()
+    {
+        SignalSample sample = SignalSample.NotTaken(LockRead, SignalNotTaken.NothingReported);
+
+        Assert.False(sample.WasTaken);
+        Assert.Equal(SignalNotTaken.NothingReported, sample.NotTakenBecause);
+        Assert.False(sample.Locked);
+        Assert.Null(sample.CarrierToNoiseMilliDecibels);
+        Assert.Empty(sample.BitErrors);
+        Assert.Empty(sample.MetricsNotRead);
+    }
+
+    [Fact(DisplayName = "BR-QD-008: why a reading could not be taken is kept as a class of its own")]
+    public void WhyAReadingCouldNotBeTakenIsKeptAsAClassOfItsOwn()
+        => Assert.Equal(
+            SignalNotTakens.All,
+            [.. SignalNotTakens.All.Select(why => SignalSample.NotTaken(LockRead, why).NotTakenBecause!.Value)]);
+
+    [Fact]
+    public void AReadingThatWasTakenSaysNothingAboutWhyItCouldNotBe()
+        => Assert.True(SignalSample.WithoutLock(LockRead).WasTaken);
+
+    [Fact]
+    public void AReadingCannotFailForAReasonThisDomainDoesNotName()
+        => Assert.Throws<ArgumentOutOfRangeException>(() => SignalSample.NotTaken(LockRead, (SignalNotTaken)99));
 }

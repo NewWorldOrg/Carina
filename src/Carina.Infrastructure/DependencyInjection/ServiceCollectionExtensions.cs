@@ -32,6 +32,7 @@ using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Playback;
 using Carina.Infrastructure.Programmes;
+using Carina.Infrastructure.Quality;
 using Carina.Infrastructure.Recordings;
 using Carina.Infrastructure.Reservations;
 using Carina.Infrastructure.Rules;
@@ -98,6 +99,11 @@ public static class ServiceCollectionExtensions
             .Configure(options => options.ReadFrom(configuration))
             .ValidateOnStart();
 
+        services.AddSingleton<IValidateOptions<QualitySignalOptions>, QualitySignalValidation>();
+        services.AddOptions<QualitySignalOptions>()
+            .Configure(options => options.ReadFrom(configuration))
+            .ValidateOnStart();
+
         services.AddSingleton<IValidateOptions<EncodingOptions>, EncodingValidation>();
         services.AddOptions<EncodingOptions>()
             .Configure(options => options.ReadFrom(configuration))
@@ -138,6 +144,11 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IQualityLedgerReader, QualityLedgerReader>();
         services.AddScoped<IQualityThresholdRepository, QualityThresholdRepository>();
         services.AddScoped<IQualityThresholdChangeRepository, QualityThresholdChangeRepository>();
+        services.AddScoped<IQualitySignalSampleRepository, QualitySignalSampleRepository>();
+        services.AddScoped<IQualitySignalRollupRepository, QualitySignalRollupRepository>();
+        services.AddScoped<IQualitySignalReader, QualitySignalReader>();
+        services.AddScoped<SignalSampleRound>();
+        services.AddScoped<QualitySignalRollupRound>();
         services.AddScoped<EncodeScratchFiles>();
         services.AddScoped<EncodeScratchCleaner>();
         services.AddScoped<EncodeArtefactPlacer>();
@@ -235,6 +246,8 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<ILiveSessionLedger>(provider => provider.GetRequiredService<LiveSessionManager>());
         services.TryAddSingleton<IStreamAttributeReader, FfprobeStreamAttributeReader>();
         services.TryAddSingleton(new MachineSettings());
+        services.TryAddSingleton<QualitySignalSettings>(provider =>
+            provider.GetRequiredService<IOptions<QualitySignalOptions>>().Value.Read());
         services.TryAddSingleton<EncodeSettings>(provider =>
             provider.GetRequiredService<IOptions<EncodingOptions>>().Value.Read());
         services.TryAddSingleton<EncodePlaces>();
@@ -277,6 +290,8 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<LiveStraySweep>();
         services.AddHostedService<EncodeMountCheck>();
         services.AddHostedService<EncodeDispatch>();
+        services.AddHostedService<SignalSampleJob>();
+        services.AddHostedService<QualitySignalRollupJob>();
         services.AddHostedService(provider => provider.GetRequiredService<IntegrityCheckJob>());
         services.AddHostedService(provider => provider.GetRequiredService<ThumbnailJob>());
         services.AddHostedService(provider =>

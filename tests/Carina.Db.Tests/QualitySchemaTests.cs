@@ -270,23 +270,82 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         Assert.Contains("taken_at", (string)(await reading.ExecuteScalarAsync())!, StringComparison.Ordinal);
     }
 
+    [Fact(DisplayName = "BR-QV-003: a reading that could not be taken is kept with the way it could not be")]
+    public async Task AReadingThatCouldNotBeTakenIsKeptWithTheWayItCouldNotBe()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        await NotTakenAsync(connection, "'NothingReported'");
+    }
+
+    [Fact(DisplayName = "BR-QV-003: a reading that could not be taken carries no figure that could be read as one")]
+    public async Task AReadingThatCouldNotBeTakenCarriesNoFigureThatCouldBeReadAsOne()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => NotTakenAsync(connection, "'NothingReported'", locked: "true", cnr: "33304"));
+
+        Assert.Equal("ck_quality_signal_sample_not_taken", refusal.ConstraintName);
+    }
+
+    [Fact(DisplayName = "BR-QD-008: a reading cannot fail for a reason this domain does not name")]
+    public async Task AReadingCannotFailForAReasonThisDomainDoesNotName()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => NotTakenAsync(connection, "'SomethingElse'"));
+
+        Assert.Equal("ck_quality_signal_sample_not_taken", refusal.ConstraintName);
+    }
+
+    [Fact(DisplayName = "BR-QD-009: a statistic the tuner does not keep is not the same as a reading that failed")]
+    public async Task AStatisticTheTunerDoesNotKeepIsNotTheSameAsAReadingThatFailed()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => NotTakenAsync(connection, "'NothingReported'", metricsNotRead: """'["cnr"]'::jsonb"""));
+
+        Assert.Equal("ck_quality_signal_sample_not_taken", refusal.ConstraintName);
+    }
+
     private static Task SampleAsync(
         NpgsqlConnection connection,
         string locked,
         string cnr,
         string cnrReadAt,
         string bitErrors = "'[]'::jsonb",
-        string bitErrorsReadAt = "NULL")
+        string bitErrorsReadAt = "NULL",
+        string notTakenBecause = "NULL",
+        string metricsNotRead = "'[]'::jsonb")
         => new NpgsqlCommand(
             $"""
             INSERT INTO quality_signal_sample (
                 driver_instance_id, session_id, taken_at, purpose, tuner_device_id, network_id, service_id,
-                locked, lock_read_at, cnr_milli_decibels, cnr_read_at, bit_errors, bit_errors_read_at, metrics_not_read)
+                locked, lock_read_at, cnr_milli_decibels, cnr_read_at, bit_errors, bit_errors_read_at,
+                metrics_not_read, not_taken_because)
             VALUES (
                 'driver-7', '{Guid.NewGuid():N}', {Taken}, 'Survey', 'adapter0', 32736, 1024,
-                {locked}, {Taken}, {cnr}, {cnrReadAt}, {bitErrors}, {bitErrorsReadAt}, '[]'::jsonb)
+                {locked}, {Taken}, {cnr}, {cnrReadAt}, {bitErrors}, {bitErrorsReadAt},
+                {metricsNotRead}, {notTakenBecause})
             """,
             connection).ExecuteNonQueryAsync();
+
+    private static Task NotTakenAsync(
+        NpgsqlConnection connection,
+        string because,
+        string locked = "false",
+        string cnr = "NULL",
+        string metricsNotRead = "'[]'::jsonb")
+        => SampleAsync(
+            connection,
+            locked,
+            cnr,
+            cnr is "NULL" ? "NULL" : Taken,
+            notTakenBecause: because,
+            metricsNotRead: metricsNotRead);
 
     private static Task MeasurementAsync(
         NpgsqlConnection connection,

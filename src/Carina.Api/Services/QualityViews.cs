@@ -60,13 +60,10 @@ public enum QualityThresholdFailure
 
 public static class QualitySignal
 {
-    public static readonly IReadOnlyList<QualityThresholdKey> Keys =
-    [
-        QualityThresholdKey.LockRate,
-        QualityThresholdKey.CarrierToNoiseFloor,
-        QualityThresholdKey.BitErrorRateCeiling,
-    ];
+    public static IReadOnlyList<QualitySignalStanding> Over(IReadOnlyList<QualitySignalRead> read)
+    {
+        ArgumentNullException.ThrowIfNull(read);
 
-    public static IReadOnlyList<QualitySignalStanding> NothingHasSampled(int tuners)
-        => [.. Keys.Select(key => new QualitySignalStanding(key, QualityReading.Of(tuners, 0, 0), null))];
+        return [.. read.Select(one => new QualitySignalStanding(one.Key, one.Reading, one.LastTakenAt))];
+    }
 }

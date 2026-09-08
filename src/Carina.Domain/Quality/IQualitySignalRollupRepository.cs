@@ -11,4 +11,6 @@ public interface IQualitySignalRollupRepository
         CancellationToken cancellationToken);
 
     Task<DateTime?> LatestWindowStartAsync(QualityWindow granularity, CancellationToken cancellationToken);
+
+    Task<int> ForgetStartedBeforeAsync(QualityWindow granularity, DateTime cutoff, CancellationToken cancellationToken);
 }

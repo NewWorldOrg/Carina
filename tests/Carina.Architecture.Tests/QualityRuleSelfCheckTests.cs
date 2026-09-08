@@ -96,6 +96,27 @@ public sealed class QualityRuleSelfCheckTests
     }
 
     [Theory]
+    [InlineData("""await driver.StartSessionAsync(request, token);""", ".StartSessionAsync(")]
+    [InlineData("""await driver.OpenSessionStreamAsync(sessionId, null, token);""", ".OpenSessionStreamAsync(")]
+    [InlineData("""await driver.StopSessionAsync(sessionId, "measured", token);""", ".StopSessionAsync(")]
+    public void DetectsThisWayOfTakingATunerOfItsOwn(string source, string reported)
+    {
+        using var tree = new SourceTree();
+        tree.Write(InTheFeature, source);
+
+        Assert.Contains($"/{InTheFeature} {reported}", QualityRules.WhatTakesATunerOfItsOwn(tree.Root));
+    }
+
+    [Fact(DisplayName = "BR-QD-004: reading what the driver already holds takes no tuner")]
+    public void ReadingWhatTheDriverAlreadyHoldsTakesNoTuner()
+    {
+        using var tree = new SourceTree();
+        tree.Write(InTheFeature, """await driver.GetTunersAsync(token);""");
+
+        Assert.Empty(QualityRules.WhatTakesATunerOfItsOwn(tree.Root));
+    }
+
+    [Theory]
     [InlineData("""if (RecordingQuality.Of(counters, scrambled) is QualityLevel.Warning) { }""", "QualityLevel")]
     [InlineData("""incident.Classification = TuneFailureKind.NoLock.ToString();""", "TuneFailureKind")]
     [InlineData("""if (visit.Outcome is VisitOutcome.Incomplete) { }""", "VisitOutcome")]

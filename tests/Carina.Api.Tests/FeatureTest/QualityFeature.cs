@@ -33,6 +33,7 @@ internal sealed class QualityFeature : IAsyncDisposable
                 services.AddSingleton<IQualityLedgerReader>(Ledger);
                 services.AddSingleton<IQualityThresholdRepository>(Thresholds);
                 services.AddSingleton<IQualityThresholdChangeRepository>(Changes);
+                services.AddSingleton<IQualitySignalReader>(Signals);
             }));
 
         Client = configured.WithTestScheme().CreateClient();
@@ -49,6 +50,33 @@ internal sealed class QualityFeature : IAsyncDisposable
     public HeldQualityThresholds Thresholds { get; } = new();
 
     public HeldQualityThresholdChanges Changes { get; } = new();
+
+    public HeldQualitySignals Signals { get; } = new();
+
+    public SignalFigures Sampled(
+        string tuner = "adapter3.frontend0",
+        long samples = 360,
+        long locked = 360,
+        long unreachable = 0,
+        int? carrierToNoise = 34_779,
+        double? bitErrorRate = 0,
+        IReadOnlyList<string>? notRead = null)
+    {
+        SignalFigures figures = new(
+            new TunerDeviceId(tuner),
+            samples,
+            locked,
+            0,
+            unreachable,
+            carrierToNoise,
+            bitErrorRate,
+            notRead ?? [],
+            Noon.AddMinutes(-10));
+
+        Signals.Figures.Add(figures);
+
+        return figures;
+    }
 
     public QualityLedgerRow Recorded(
         long? dropped = 0,
