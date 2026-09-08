@@ -40,12 +40,25 @@ public sealed class LiveEndingReportTests
     [InlineData(LiveSupplyEnd.TunerFailed)]
     [InlineData(LiveSupplyEnd.StoppedByAnother)]
     [InlineData(LiveSupplyEnd.DriverLost)]
+    [InlineData(LiveSupplyEnd.WentQuiet)]
     public void WhatIsWrittenIsReadBack(LiveSupplyEnd why)
     {
         LiveEndingReading read = LiveEndingReport.Read(LiveEndingReport.Of(LiveSupplyEnding.Of(why, "because.")).ToPayload());
 
         Assert.Null(read.Fault);
         Assert.Equal(why, read.Report!.Why);
+    }
+
+    [Fact]
+    public void AReasonNoSupplyToldAnybodyIsReportedTheSameWayAsOneItDid()
+    {
+        LiveEndingReport report = LiveEndingReport.Of(LiveSupplyEnd.WentQuiet);
+
+        Assert.Equal(LiveSupplyEnd.WentQuiet, report.Why);
+        Assert.Equal(
+            LiveEndingReport.Of(LiveSupplyEnding.Of(LiveSupplyEnd.WentQuiet, "nothing arrived.")).ToPayload(),
+            report.ToPayload());
+        Assert.Throws<ArgumentOutOfRangeException>(() => LiveEndingReport.Of((LiveSupplyEnd)99));
     }
 
     [Theory]
@@ -68,7 +81,7 @@ public sealed class LiveEndingReportTests
 
     [Theory]
     [InlineData(0x00)]
-    [InlineData(0x08)]
+    [InlineData(0x09)]
     [InlineData(0xff)]
     public void AReasonNoSupplyEndsForIsRefusedAsSuch(byte why)
     {

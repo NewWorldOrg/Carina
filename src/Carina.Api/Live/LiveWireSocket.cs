@@ -182,7 +182,7 @@ public sealed class LiveWireSocket(
 
                         if (++quiets > settings.QuietsBeforeTheCeiling)
                         {
-                            await SayWhyItEnded(cancellationToken);
+                            await SayWhyItEnded(LiveDeparture.SourceWentQuiet, cancellationToken);
 
                             return LiveDeparture.SourceWentQuiet;
                         }
@@ -200,7 +200,7 @@ public sealed class LiveWireSocket(
 
                 if (!await waiting)
                 {
-                    await SayWhyItEnded(cancellationToken);
+                    await SayWhyItEnded(LiveDeparture.SourceEnded, cancellationToken);
 
                     return LiveDeparture.SourceEnded;
                 }
@@ -229,17 +229,17 @@ public sealed class LiveWireSocket(
         }
         catch (Exception)
         {
-            await SayWhyItEndedIfItCan(cancellationToken);
+            await SayWhyItEndedIfItCan(LiveDeparture.SourceBroke, cancellationToken);
 
             return LiveDeparture.SourceBroke;
         }
     }
 
-    private async Task SayWhyItEndedIfItCan(CancellationToken cancellationToken)
+    private async Task SayWhyItEndedIfItCan(LiveDeparture departure, CancellationToken cancellationToken)
     {
         try
         {
-            await SayWhyItEnded(cancellationToken);
+            await SayWhyItEnded(departure, cancellationToken);
         }
         catch (Exception gone)
             when (gone is OperationCanceledException or WebSocketException or IOException or ViewerTooSlow)
@@ -247,9 +247,9 @@ public sealed class LiveWireSocket(
         }
     }
 
-    private async Task SayWhyItEnded(CancellationToken cancellationToken)
+    private async Task SayWhyItEnded(LiveDeparture departure, CancellationToken cancellationToken)
     {
-        if (ending?.Current is not { } why)
+        if ((ending?.Current?.Why ?? LiveDepartures.Ending(departure)) is not { } why)
         {
             return;
         }

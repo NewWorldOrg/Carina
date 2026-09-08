@@ -52,6 +52,19 @@ public sealed class LiveEndingReport
         return new LiveEndingReport(ending.Why);
     }
 
+    public static LiveEndingReport Of(LiveSupplyEnd why)
+    {
+        if (!Enum.IsDefined(why))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(why),
+                why,
+                "A supply ends for one of the reasons named here.");
+        }
+
+        return new LiveEndingReport(why);
+    }
+
     public byte[] ToPayload() => [Mark, (byte)Why];
 
     public static LiveEndingReading Read(ReadOnlySpan<byte> payload)

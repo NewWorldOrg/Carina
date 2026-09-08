@@ -23,6 +23,23 @@ public static class LiveDepartures
                 "A wire ends in one of the ways named here."),
         };
 
+    public static LiveSupplyEnd? Ending(LiveDeparture departure)
+        => departure switch
+        {
+            LiveDeparture.SourceWentQuiet => LiveSupplyEnd.WentQuiet,
+            LiveDeparture.ViewerLeft => null,
+            LiveDeparture.SourceEnded => null,
+            LiveDeparture.SourceBroke => null,
+            LiveDeparture.ViewerStoppedReading => null,
+            LiveDeparture.SaidSomethingUnknown => null,
+            LiveDeparture.SaidMoreThanTheWireTakes => null,
+            LiveDeparture.ServerStopping => null,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(departure),
+                departure,
+                "A wire ends in one of the ways named here."),
+        };
+
     public static string Because(LiveDeparture departure)
         => departure switch
         {
