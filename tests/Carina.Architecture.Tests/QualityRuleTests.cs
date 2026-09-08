@@ -24,6 +24,14 @@ public sealed class QualityRuleTests
     public void NothingInTheQualityFeatureOffersAWayToDeleteAnything()
         => Assert.Empty(QualityRules.WhatOffersAWayToDeleteSomething(RepositoryLayout.SourceDirectory));
 
+    [Fact(DisplayName = "BR-QD-004: nothing in the quality feature takes a tuner of its own")]
+    public void NothingInTheQualityFeatureTakesATunerOfItsOwn()
+        => Assert.Empty(QualityRules.WhatTakesATunerOfItsOwn(RepositoryLayout.SourceDirectory));
+
+    [Fact]
+    public void TheMarksThatLookForATunerBeingTakenStillFindOneWhereItIs()
+        => Assert.NotEmpty(QualityRules.WhatTakesATunerOfItsOwnIn(Source("Carina.Infrastructure/Streaming/DriverLiveSupply.cs")));
+
     [Fact(DisplayName = "BR-QD-002: nothing in the quality feature decides an anomaly another domain owns")]
     public void NothingInTheQualityFeatureDecidesAnAnomalyAnotherDomainOwns()
         => Assert.Empty(QualityRules.WhatDecidesAnAnomalyItDoesNotOwn(RepositoryLayout.SourceDirectory));

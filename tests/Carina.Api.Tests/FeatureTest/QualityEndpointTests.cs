@@ -286,4 +286,79 @@ public sealed class QualityEndpointTests
         => data.GetProperty(under).EnumerateArray()
             .Single(read => read.GetProperty("metric").GetString() == metric)
             .GetProperty("reading");
+    [Fact(DisplayName = "BR-QD-004: a tuner the samples reached reads measured, with the moment it was")]
+    public async Task ATunerTheSamplesReachedReadsMeasured()
+    {
+        await using var feature = new QualityFeature();
+        feature.Recorded(tuner: "adapter3.frontend0");
+        feature.Sampled();
+
+        JsonElement signal = (await feature.GetAsync("/api/quality/summary")).Body
+            .GetProperty("data")
+            .GetProperty("signal");
+
+        Assert.All(signal.EnumerateArray(), facet =>
+        {
+            Assert.Equal("good", facet.GetProperty("reading").GetProperty("state").GetString());
+            Assert.Equal(1, facet.GetProperty("reading").GetProperty("measured").GetInt32());
+            Assert.NotEqual(JsonValueKind.Null, facet.GetProperty("lastTakenAt").ValueKind);
+        });
+    }
+
+    [Fact(DisplayName = "BR-QD-009: a statistic the tuner does not keep reads unsupported beside the ones it does")]
+    public async Task AStatisticTheTunerDoesNotKeepReadsUnsupported()
+    {
+        await using var feature = new QualityFeature();
+        feature.Recorded(tuner: "adapter3.frontend0");
+        feature.Sampled(carrierToNoise: null, notRead: ["cnr"]);
+
+        JsonElement signal = (await feature.GetAsync("/api/quality/summary")).Body
+            .GetProperty("data")
+            .GetProperty("signal");
+
+        Assert.Equal(
+            ["good", "unsupported", "good"],
+            signal.EnumerateArray().Select(facet => facet.GetProperty("reading").GetProperty("state").GetString()));
+    }
+
+    [Fact(DisplayName = "BR-QD-014: a supply that went silent still says how much of it was measured")]
+    public async Task ASupplyThatWentSilentStillSaysHowMuchOfItWasMeasured()
+    {
+        await using var feature = new QualityFeature();
+        feature.Recorded(tuner: "adapter3.frontend0");
+        feature.Sampled(samples: 361, locked: 360, unreachable: 1);
+
+        JsonElement signal = (await feature.GetAsync("/api/quality/summary")).Body
+            .GetProperty("data")
+            .GetProperty("signal");
+
+        Assert.All(signal.EnumerateArray(), facet =>
+        {
+            Assert.Equal("unreachable", facet.GetProperty("reading").GetProperty("state").GetString());
+            Assert.Equal(1, facet.GetProperty("reading").GetProperty("measured").GetInt32());
+        });
+    }
+
+    [Fact]
+    public async Task ATunerTheLedgerHasNoRecordingForStillShowsWhatItsSamplesSaid()
+    {
+        await using var feature = new QualityFeature();
+        feature.Recorded(tuner: "adapter3.frontend0");
+        feature.Sampled(tuner: "adapter3.frontend1");
+
+        JsonElement items = (await feature.GetAsync("/api/quality/tuners")).Body
+            .GetProperty("data")
+            .GetProperty("items");
+
+        JsonElement onlySampled = items
+            .EnumerateArray()
+            .Single(item => item.GetProperty("deviceId").GetString() == "adapter3.frontend1");
+
+        Assert.All(
+            onlySampled.GetProperty("signal").EnumerateArray(),
+            facet => Assert.Equal("good", facet.GetProperty("reading").GetProperty("state").GetString()));
+        Assert.All(
+            onlySampled.GetProperty("measures").EnumerateArray(),
+            measure => Assert.Equal("nothingToMeasure", measure.GetProperty("reading").GetProperty("state").GetString()));
+    }
 }

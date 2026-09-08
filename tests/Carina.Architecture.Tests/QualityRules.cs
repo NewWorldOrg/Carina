@@ -69,6 +69,13 @@ public static partial class QualityRules
         "CandidateChannel",
     ];
 
+    public static readonly IReadOnlyList<string> WaysToTakeATunerOfItsOwn =
+    [
+        "StartSessionAsync",
+        "StopSessionAsync",
+        "OpenSessionStreamAsync",
+    ];
+
     public static readonly IReadOnlyList<string> AnomaliesOtherDomainsDefine =
     [
         "TuneFailureKind",
@@ -90,6 +97,11 @@ public static partial class QualityRules
     private static readonly Regex NamesAWriter = Words(WritersOfWhatIsNotQualitys);
 
     private static readonly Regex NamesAnAnomalyItDoesNotOwn = Words(AnomaliesOtherDomainsDefine);
+
+    private static readonly Regex TakesATunerOfItsOwn = new(
+        @"\.\s*(" + string.Join('|', WaysToTakeATunerOfItsOwn) + @")\s*\(",
+        RegexOptions.None,
+        TimeSpan.FromSeconds(5));
 
     private static readonly Regex CallsAVerbThatWrites = new(
         @"\.\s*(" + string.Join('|', VerbsThatWriteWhatIsNotQualitys) + @")\s*\(",
@@ -147,6 +159,15 @@ public static partial class QualityRules
             .ToArray();
 
     public static IReadOnlyList<string> WhatOffersAWayToDeleteSomethingIn(string source) => Found(source, OffersADeletion());
+
+    public static IReadOnlyList<string> WhatTakesATunerOfItsOwn(string directory)
+        => Feature(directory)
+            .SelectMany(file => WhatTakesATunerOfItsOwnIn(file.Source).Select(found => $"{file.Relative} {found}"))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+    public static IReadOnlyList<string> WhatTakesATunerOfItsOwnIn(string source) => Found(source, TakesATunerOfItsOwn);
 
     public static IReadOnlyList<string> WhatDecidesAnAnomalyItDoesNotOwn(string directory)
         => Feature(directory)

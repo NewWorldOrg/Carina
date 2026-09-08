@@ -1,12 +1,14 @@
 using Carina.Api.Common;
 using Carina.Domain.Base;
 using Carina.Domain.Quality;
+using Carina.Domain.Recordings;
 
 namespace Carina.Api.Services;
 
 public sealed class QualityService(
     IQualityLedgerReader ledger,
     IQualityThresholdRepository thresholds,
+    IQualitySignalReader signals,
     TimeProvider clock)
 {
     public async Task<ServiceResult<QualitySummaryView>> SummariseAsync(
@@ -20,13 +22,15 @@ public sealed class QualityService(
         }
 
         IReadOnlyList<QualityLedgerRow> rows = await ledger.ReadAsync(period, cancellationToken);
-        QualityBands bands = await BandsAsync(cancellationToken);
+        IReadOnlyList<QualityThresholdStanding> standings = await StandingsAsync(cancellationToken);
+        QualityBands bands = QualityThresholdStanding.Bands(standings);
+        IReadOnlyList<SignalFigures> figures = await signals.FiguresAsync(period, cancellationToken);
 
         return ServiceResult<QualitySummaryView>.Success(new QualitySummaryView(
             period,
             rows.Count,
             QualityBoard.Whole(rows, QualityMetrics.All, bands),
-            QualitySignal.NothingHasSampled(Tuners(rows).Count),
+            QualitySignal.Over(QualitySignalSurvey.Read(figures, Subjects(rows, figures), standings)),
             bands.Provisional));
     }
 
@@ -61,14 +65,23 @@ public sealed class QualityService(
         }
 
         IReadOnlyList<QualityLedgerRow> rows = await ledger.ReadAsync(query.Period, cancellationToken);
-        QualityBands bands = await BandsAsync(cancellationToken);
+        IReadOnlyList<QualityThresholdStanding> standings = await StandingsAsync(cancellationToken);
+        QualityBands bands = QualityThresholdStanding.Bands(standings);
+        IReadOnlyList<SignalFigures> figures = await signals.FiguresAsync(query.Period, cancellationToken);
+
+        IReadOnlyList<QualityGroupReading> grouped = QualityBoard.Grouped(rows, QualityAxis.Tuner, query.Metrics, bands);
 
         IReadOnlyList<QualityTunerReading> readings =
         [
-            .. Grouped(rows, QualityAxis.Tuner, query, bands)
+            .. QualityBoard
+                .Sorted(
+                    [.. grouped, .. OnlySampled(grouped, figures, query.Metrics)],
+                    query.Sort,
+                    query.Primary,
+                    Sense(query.Primary))
                 .Select(group => new QualityTunerReading(
                     group,
-                    QualitySignal.NothingHasSampled(group.Key.Tuner is null ? 0 : 1))),
+                    QualitySignal.Over(QualitySignalSurvey.Read(figures, Named(group), standings)))),
         ];
 
         return ServiceResult<QualityTunerPage>.Success(new QualityTunerPage(
@@ -112,8 +125,52 @@ public sealed class QualityService(
     private static ThresholdSense Sense(QualityMetric metric)
         => QualityThresholdShapes.Of(QualityThresholdShapes.Warning(metric)).Sense;
 
-    private static IReadOnlySet<string> Tuners(IReadOnlyList<QualityLedgerRow> rows)
-        => rows.Where(row => row.Tuner is not null).Select(row => row.Tuner!.Value).ToHashSet(StringComparer.Ordinal);
+    private static IReadOnlyList<TunerDeviceId> Named(QualityGroupReading group)
+        => group.Key.Tuner is { } tuner ? [tuner] : [];
+
+    private static IReadOnlyList<TunerDeviceId> Subjects(
+        IReadOnlyList<QualityLedgerRow> rows,
+        IReadOnlyList<SignalFigures> figures)
+    {
+        SortedSet<string> named = new(StringComparer.Ordinal);
+
+        foreach (QualityLedgerRow row in rows)
+        {
+            if (row.Tuner is { } tuner)
+            {
+                named.Add(tuner.Value);
+            }
+        }
+
+        foreach (SignalFigures figure in figures)
+        {
+            named.Add(figure.Tuner.Value);
+        }
+
+        return [.. named.Select(name => new TunerDeviceId(name))];
+    }
+
+    private static IReadOnlyList<QualityGroupReading> OnlySampled(
+        IReadOnlyList<QualityGroupReading> grouped,
+        IReadOnlyList<SignalFigures> figures,
+        IReadOnlyList<QualityMetric> metrics)
+    {
+        HashSet<string> held =
+        [
+            .. grouped
+                .Select(group => group.Key.Tuner?.Value)
+                .OfType<string>(),
+        ];
+
+        return
+        [
+            .. figures
+                .Where(figure => !held.Contains(figure.Tuner.Value))
+                .Select(figure => new QualityGroupReading(
+                    QualityGroupKey.ForTuner(figure.Tuner),
+                    [.. metrics.Select(metric => new QualityMeasure(metric, QualityAggregator.Tally([])))])),
+        ];
+    }
 
     private static IReadOnlyList<QualityGroupReading> Grouped(
         IReadOnlyList<QualityLedgerRow> rows,
@@ -144,8 +201,11 @@ public sealed class QualityService(
     private QualityPeriod? Asked(DateTime? from, DateTime? until)
         => QualityPeriod.Of(from, until, clock.GetUtcNow().UtcDateTime);
 
-    private async Task<QualityBands> BandsAsync(CancellationToken cancellationToken)
-        => QualityThresholdStanding.Bands(QualityThresholdStanding.Over(
+    private async Task<IReadOnlyList<QualityThresholdStanding>> StandingsAsync(CancellationToken cancellationToken)
+        => QualityThresholdStanding.Over(
             await thresholds.ListAsync(cancellationToken),
-            clock.GetUtcNow().UtcDateTime));
+            clock.GetUtcNow().UtcDateTime);
+
+    private async Task<QualityBands> BandsAsync(CancellationToken cancellationToken)
+        => QualityThresholdStanding.Bands(await StandingsAsync(cancellationToken));
 }

@@ -90,6 +90,13 @@ public sealed record QualityGroupKey
 
     public TuneSystem? Kind { get; }
 
+    public static QualityGroupKey ForTuner(TunerDeviceId tuner)
+    {
+        ArgumentNullException.ThrowIfNull(tuner);
+
+        return new QualityGroupKey(null, null, tuner, null, null);
+    }
+
     internal static QualityGroupKey Reduced(QualityFacet facet, QualityAxis axis)
         => new(
             axis.HasFlag(QualityAxis.Channel) ? facet.Network : null,

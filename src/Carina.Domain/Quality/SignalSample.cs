@@ -12,7 +12,8 @@ public sealed record SignalSample
         DateTime? carrierToNoiseReadAt,
         IReadOnlyList<LayerBitErrorCounts> bitErrors,
         DateTime? bitErrorsReadAt,
-        IReadOnlyList<string> metricsNotRead)
+        IReadOnlyList<string> metricsNotRead,
+        SignalNotTaken? notTakenBecause)
     {
         Locked = locked;
         LockReadAt = lockReadAt;
@@ -21,6 +22,7 @@ public sealed record SignalSample
         BitErrors = bitErrors;
         BitErrorsReadAt = bitErrorsReadAt;
         MetricsNotRead = metricsNotRead;
+        NotTakenBecause = notTakenBecause;
     }
 
     public bool Locked { get; }
@@ -37,6 +39,10 @@ public sealed record SignalSample
 
     public IReadOnlyList<string> MetricsNotRead { get; }
 
+    public SignalNotTaken? NotTakenBecause { get; }
+
+    public bool WasTaken => NotTakenBecause is null;
+
     public bool CarriesAnyValue => CarrierToNoiseMilliDecibels is not null || BitErrors.Count > 0;
 
     public LayerBitErrorCounts? Layer(int layer)
@@ -50,7 +56,21 @@ public sealed record SignalSample
             null,
             [],
             null,
-            Named(metricsNotRead));
+            Named(metricsNotRead),
+            null);
+
+    public static SignalSample NotTaken(DateTime askedAt, SignalNotTaken because)
+    {
+        if (!Enum.IsDefined(because))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(because),
+                because,
+                "A reading that could not be taken says which way it could not be, and one this domain does not name says nothing.");
+        }
+
+        return new SignalSample(false, UtcTimes.Required(askedAt, nameof(askedAt)), null, null, [], null, [], because);
+    }
 
     public static SignalSample WithLock(
         DateTime lockReadAt,
@@ -87,7 +107,8 @@ public sealed record SignalSample
             carrierToNoiseReadAt,
             layers,
             bitErrorsReadAt,
-            Named(metricsNotRead));
+            Named(metricsNotRead),
+            null);
     }
 
     private static IReadOnlyList<LayerBitErrorCounts> Layers(IReadOnlyList<LayerBitErrorCounts>? bitErrors)

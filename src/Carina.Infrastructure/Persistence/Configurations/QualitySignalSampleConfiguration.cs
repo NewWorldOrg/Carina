@@ -41,6 +41,20 @@ public sealed class QualitySignalSampleConfiguration : IEntityTypeConfiguration<
                 OR (cnr_milli_decibels IS NULL AND {QualityVocabulary.AnEmptyList("bit_errors")})
                 """);
             table.HasCheckConstraint(
+                "ck_quality_signal_sample_not_taken",
+                $"""
+                (not_taken_because IS NULL OR not_taken_because IN ({QualityVocabulary.Of<SignalNotTaken>()}))
+                AND (
+                    not_taken_because IS NULL
+                    OR (
+                        NOT locked
+                        AND cnr_milli_decibels IS NULL
+                        AND {QualityVocabulary.AnEmptyList("bit_errors")}
+                        AND {QualityVocabulary.AnEmptyList("metrics_not_read")}
+                    )
+                )
+                """);
+            table.HasCheckConstraint(
                 "ck_quality_signal_sample_read_at",
                 $"""
                 ((cnr_milli_decibels IS NULL) = (cnr_read_at IS NULL))
@@ -111,7 +125,13 @@ public sealed class QualitySignalSampleConfiguration : IEntityTypeConfiguration<
                 .HasColumnType("jsonb")
                 .IsRequired();
 
+            signal.Property(reading => reading.NotTakenBecause)
+                .HasConversion<string>()
+                .HasColumnName("not_taken_because")
+                .HasMaxLength(QualityVocabulary.NameLength);
+
             signal.Ignore(reading => reading.CarriesAnyValue);
+            signal.Ignore(reading => reading.WasTaken);
         });
 
         builder.HasIndex(sample => sample.TakenAt).HasDatabaseName(RetentionIndexName);
