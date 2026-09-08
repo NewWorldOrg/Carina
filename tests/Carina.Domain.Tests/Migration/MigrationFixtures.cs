@@ -1,4 +1,5 @@
 using Carina.Domain.Migration;
+using Carina.Domain.Programmes;
 
 namespace Carina.Domain.Tests.Migration;
 
@@ -16,10 +17,15 @@ internal static class MigrationFixtures
 
     public static readonly ServiceKey Elsewhere = ServiceKey.Of(32737, 2048);
 
+    public static readonly EventId Programme = new(4321);
+
     public static IReadOnlySet<ServiceKey> Rescanned(params ServiceKey[] services) => services.ToHashSet();
 
     public static SourceRecording Recording(long id, ServiceKey? service) =>
-        new(id, "a programme", Began, Ended, service);
+        new(id, "a programme", Began, Ended, service, Programme);
+
+    public static SourceRecording RecordingOfNoProgramme(long id) =>
+        new(id, "a programme", Began, Ended, InReach, null);
 
     public static SourceRecording Recording(long id) => Recording(id, InReach);
 

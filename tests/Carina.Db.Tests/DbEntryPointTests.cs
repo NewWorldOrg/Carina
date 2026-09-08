@@ -7,7 +7,9 @@ public sealed class DbEntryPointTests
     [InlineData]
     [InlineData("--frobnicate")]
     [InlineData("--migrate", "extra")]
-    public async Task PrintsUsageAndExitsNonZeroForAnythingButMigrate(params string[] args)
+    [InlineData("--carry")]
+    [InlineData("--carry", "--from", "/a")]
+    public async Task PrintsUsageAndExitsNonZeroForAnythingItCannotRun(params string[] args)
     {
         var error = new StringWriter();
 
@@ -15,6 +17,71 @@ public sealed class DbEntryPointTests
 
         Assert.Equal(DbEntryPoint.UsageExitCode, exitCode);
         Assert.Contains("usage: Carina.Db --migrate", error.ToString(), StringComparison.Ordinal);
+        Assert.Contains("--carry --from", error.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task RefusesToCarryFromADirectoryThatIsNotThere()
+    {
+        string into = Directory.CreateTempSubdirectory("carina-carry-into").FullName;
+        var error = new StringWriter();
+
+        try
+        {
+            int exitCode = await DbEntryPoint.RunAsync(
+                ["--carry", "--from", "/no/such/place", "--into", into],
+                error);
+
+            Assert.Equal(DbEntryPoint.UnusableConfigurationExitCode, exitCode);
+            Assert.Contains("/no/such/place", error.ToString(), StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(into, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task RefusesToCarryIntoARootThatIsNotThere()
+    {
+        string from = Directory.CreateTempSubdirectory("carina-carry-from").FullName;
+        var error = new StringWriter();
+
+        try
+        {
+            int exitCode = await DbEntryPoint.RunAsync(
+                ["--carry", "--from", from, "--into", "/no/such/root"],
+                error);
+
+            Assert.Equal(DbEntryPoint.UnusableConfigurationExitCode, exitCode);
+            Assert.Contains("/no/such/root", error.ToString(), StringComparison.Ordinal);
+        }
+        finally
+        {
+            Directory.Delete(from, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task SaysPlainlyThatNothingReadsTheSourceSystemYetAndCarriesNothing()
+    {
+        string from = Directory.CreateTempSubdirectory("carina-carry-from").FullName;
+        string into = Directory.CreateTempSubdirectory("carina-carry-into").FullName;
+        var error = new StringWriter();
+
+        try
+        {
+            int exitCode = await DbEntryPoint.RunAsync(["--carry", "--from", from, "--into", into], error);
+
+            Assert.Equal(DbEntryPoint.SourceUnreadableExitCode, exitCode);
+            Assert.Contains("Nothing was carried", error.ToString(), StringComparison.Ordinal);
+            Assert.Empty(Directory.GetFiles(into));
+        }
+        finally
+        {
+            Directory.Delete(from, recursive: true);
+            Directory.Delete(into, recursive: true);
+        }
     }
 
     [Fact]

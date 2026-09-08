@@ -1,10 +1,17 @@
 using Carina.Domain.Base;
+using Carina.Domain.Programmes;
 
 namespace Carina.Domain.Migration;
 
 public sealed record SourceRecording
 {
-    public SourceRecording(long id, string name, DateTime startAt, DateTime endAt, ServiceKey? service)
+    public SourceRecording(
+        long id,
+        string name,
+        DateTime startAt,
+        DateTime endAt,
+        ServiceKey? service,
+        EventId? programme)
     {
         ArgumentNullException.ThrowIfNull(name);
 
@@ -19,6 +26,7 @@ public sealed record SourceRecording
         }
 
         Service = service;
+        Programme = programme;
     }
 
     public long Id { get; }
@@ -30,4 +38,6 @@ public sealed record SourceRecording
     public DateTime EndAt { get; }
 
     public ServiceKey? Service { get; }
+
+    public EventId? Programme { get; }
 }
