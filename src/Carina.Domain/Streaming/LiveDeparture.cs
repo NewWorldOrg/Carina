@@ -15,4 +15,6 @@ public enum LiveDeparture
     SaidMoreThanTheWireTakes = 6,
 
     ServerStopping = 7,
+
+    SourceWentQuiet = 8,
 }

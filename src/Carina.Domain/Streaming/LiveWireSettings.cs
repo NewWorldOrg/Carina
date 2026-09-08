@@ -48,6 +48,8 @@ public sealed record LiveWireSettings
 
     public bool SaysSomethingBeforeTheCeiling => betweenPings < silenceCeiling;
 
+    public int QuietsBeforeTheCeiling => (int)(silenceCeiling / betweenPings);
+
     public int LargestFrameFromAViewer
     {
         get => largestFrameFromAViewer;

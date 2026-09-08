@@ -9,11 +9,14 @@ public sealed class LiveWireSocket(
     WebSocket socket,
     LiveWireSettings settings,
     ILiveStartup? startup = null,
-    ILiveEnding? ending = null)
+    ILiveEnding? ending = null,
+    TimeProvider? time = null)
 {
     private static readonly TimeSpan GoodbyePatience = TimeSpan.FromSeconds(2);
 
     private static readonly Task Never = new TaskCompletionSource().Task;
+
+    private readonly TimeProvider clock = time ?? TimeProvider.System;
 
     private LiveStartup? said;
 
@@ -162,18 +165,27 @@ public sealed class LiveWireSocket(
             await SayWhereWeAre(cancellationToken);
 
             Task<bool> waiting = frames.WaitToReadAsync(cancellationToken).AsTask();
+            int quiets = 0;
 
             while (true)
             {
-                switch (await FirstOf(waiting, advanced, settings.BetweenPings, cancellationToken))
+                switch (await FirstOf(waiting, advanced, settings.BetweenPings, clock, cancellationToken))
                 {
                     case Woken.ByProgress:
+                        quiets = 0;
                         advanced = startup!.Advanced;
                         await SayWhatMoved(cancellationToken);
 
                         continue;
                     case Woken.ByQuiet:
                         cancellationToken.ThrowIfCancellationRequested();
+
+                        if (++quiets > settings.QuietsBeforeTheCeiling)
+                        {
+                            await SayWhyItEnded(cancellationToken);
+
+                            return LiveDeparture.SourceWentQuiet;
+                        }
 
                         if (!await SayWhereWeAre(cancellationToken))
                         {
@@ -182,6 +194,7 @@ public sealed class LiveWireSocket(
 
                         continue;
                     default:
+                        quiets = 0;
                         break;
                 }
 
@@ -281,11 +294,12 @@ public sealed class LiveWireSocket(
         Task<bool> waiting,
         Task advanced,
         TimeSpan quiet,
+        TimeProvider clock,
         CancellationToken cancellationToken)
     {
         using CancellationTokenSource tick = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
-        Task quiets = Task.Delay(quiet, tick.Token);
+        Task quiets = Task.Delay(quiet, clock, tick.Token);
         Task first = await Task.WhenAny(waiting, advanced, quiets);
 
         await tick.CancelAsync();

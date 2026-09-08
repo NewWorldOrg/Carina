@@ -13,6 +13,8 @@ internal sealed class LiveSession
 
     private readonly LiveSessionSettings settings;
 
+    private readonly LiveTranscodeSettings transcoding;
+
     private readonly LiveReception reception;
 
     private readonly ILiveTranscoderFactory transcoders;
@@ -49,6 +51,7 @@ internal sealed class LiveSession
         LiveSessionKey key,
         LiveFanoutSettings fanouts,
         LiveSessionSettings settings,
+        LiveTranscodeSettings transcoding,
         LiveReception reception,
         ILiveTranscoderFactory transcoders,
         TimeProvider clock,
@@ -58,6 +61,7 @@ internal sealed class LiveSession
         startup = new LiveStartupRecord(clock);
         fanout = new LiveFanout(fanouts, startup, ending);
         this.settings = settings;
+        this.transcoding = transcoding;
         this.reception = reception;
         this.transcoders = transcoders;
         this.clock = clock;
@@ -479,7 +483,7 @@ internal sealed class LiveSession
         }
     }
 
-    private static async Task StopTranscodingAsync(ILiveTranscoder? running, Task<LiveFragmentFault?>? carried, Task? captioned)
+    private async Task StopTranscodingAsync(ILiveTranscoder? running, Task<LiveFragmentFault?>? carried, Task? captioned)
     {
         if (running is null)
         {
@@ -499,11 +503,23 @@ internal sealed class LiveSession
             await Quietly(captioned);
         }
 
-        await DrainAsync(output);
+        await DrainAsync(output, transcoding.StopGrace, clock);
         await disposing;
     }
 
-    private static async Task DrainAsync(Stream from)
+    private static async Task DrainAsync(Stream from, TimeSpan grace, TimeProvider clock)
+    {
+        try
+        {
+            await EmptiedAsync(from).WaitAsync(grace, clock);
+        }
+        catch (TimeoutException)
+        {
+            return;
+        }
+    }
+
+    private static async Task EmptiedAsync(Stream from)
     {
         byte[] mouthful = ArrayPool<byte>.Shared.Rent(LiveFeed.Mouthful);
 

@@ -138,6 +138,8 @@ public sealed class HeldTranscoder : ILiveTranscoder
 
     public Exception? FailingToStop { get; set; }
 
+    public bool OutputOutlivesIt { get; set; }
+
     public bool Disposed { get; private set; }
 
     public async Task WriteAsync(byte[] bytes)
@@ -188,7 +190,7 @@ public sealed class HeldTranscoder : ILiveTranscoder
 
     private void Complete()
     {
-        if (completed)
+        if (completed || OutputOutlivesIt)
         {
             return;
         }

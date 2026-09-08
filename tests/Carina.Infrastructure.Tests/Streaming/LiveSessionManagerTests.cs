@@ -14,6 +14,8 @@ public sealed class LiveSessionManagerTests
 
     private static readonly TimeSpan LongestRaise = TimeSpan.FromSeconds(30);
 
+    private static readonly TimeSpan StopGrace = TimeSpan.FromSeconds(2);
+
     private static readonly LiveSessionKey EveryFrame = new(new NetworkId(32736), new ServiceId(1024), LiveProfile.Hd30);
 
     private static readonly LiveSessionKey EveryField = new(new NetworkId(32736), new ServiceId(1024), LiveProfile.Hd60);
@@ -650,7 +652,7 @@ public sealed class LiveSessionManagerTests
     }
 
     [Fact]
-    public async Task ASessionTornDownByItsOwnLingerNotesNoEnding()
+    public async Task ASessionTornDownByItsOwnLingerSaysItWasLetGoOf()
     {
         ILiveViewing viewing = await Joined(EveryFrame);
 
@@ -660,7 +662,47 @@ public sealed class LiveSessionManagerTests
 
         await Eventually.Happens(() => supply.Opened[0].Disposed, "the stream is let go once the linger is over");
 
-        Assert.Null(viewing.Ending!.Current);
+        Assert.Equal(LiveSupplyEnd.LetGo, viewing.Ending!.Current!.Why);
+    }
+
+    [Fact]
+    public async Task ATranscoderThatEndsWhileTheSupplyIsStillRunningLeavesTheSessionSayingItWasLetGoOf()
+    {
+        await using ILiveViewing viewing = await Joined(EveryFrame);
+
+        await transcoders.Raised[0].WriteAsync(Fmp4.Header);
+        transcoders.Raised[0].NoMore();
+
+        await Drained(viewing);
+
+        Assert.Null(supply.Opened[0].Ending);
+        Assert.Equal(LiveSupplyEnd.LetGo, viewing.Ending!.Current!.Why);
+    }
+
+    [Fact]
+    public async Task ATranscoderWhoseOutputOutlivesItDoesNotHoldTheTeardownPastTheStopGrace()
+    {
+        ILiveViewing viewing = await Joined(EveryFrame);
+
+        transcoders.Raised[0].OutputOutlivesIt = true;
+
+        await viewing.DisposeAsync();
+
+        clock.Turn(Linger);
+
+        await Eventually.Happens(
+            () => transcoders.Raised[0].Disposed && clock.Pending is 1,
+            "the teardown is waiting out what the transcoder left behind");
+
+        Assert.False(supply.Opened[0].Disposed);
+
+        clock.Turn(StopGrace);
+
+        await Eventually.Happens(
+            () => supply.Opened[0].Disposed,
+            "the stream is let go although the output the transcoder left never ended");
+
+        Assert.Empty(manager.Keys);
     }
 
     [Fact]
@@ -716,6 +758,7 @@ public sealed class LiveSessionManagerTests
         LiveSessionManager crowded = new(
             new LiveSessionSettings { Linger = Linger, LongestRaise = LongestRaise },
             new LiveFanoutSettings { LongestBacklog = 1 },
+            new LiveTranscodeSettings { StopGrace = StopGrace },
             supply,
             transcoders,
             clock,
@@ -952,6 +995,16 @@ public sealed class LiveSessionManagerTests
         return join.Viewing!;
     }
 
+    private static async Task Drained(ILiveViewing viewing)
+    {
+        while (await viewing.Frames.WaitToReadAsync().AsTask().WaitAsync(Eventually.Patience))
+        {
+            while (viewing.Frames.TryRead(out _))
+            {
+            }
+        }
+    }
+
     private static async Task<LiveFrame> Next(ILiveViewing viewing)
     {
         using CancellationTokenSource patience = new(Eventually.Patience);
@@ -963,6 +1016,7 @@ public sealed class LiveSessionManagerTests
         => new(
             new LiveSessionSettings { Linger = Linger, LongestRaise = LongestRaise },
             new LiveFanoutSettings(),
+            new LiveTranscodeSettings { StopGrace = StopGrace },
             supply,
             raising ?? new HeldTranscoders(counting),
             clock,

@@ -201,6 +201,36 @@ public sealed class LiveSessionWireTests
     }
 
     [Fact]
+    public async Task WhyItEndedReachesTheWireWhenTheTranscoderEndsBeforeTheSupplyEverDoes()
+    {
+        await using AuthProbe probe = Wiring();
+        string cookie = await probe.SignedInCookieAsync();
+
+        using WebSocket socket = await Carrying(probe, cookie).ConnectAsync(Handshake("32736", "1024", "720p30"), Patiently());
+
+        Assert.Equal(LiveChannel.Control, (await Take(socket)).Channel);
+
+        await transcoders.Raised[0].WriteAsync(Fmp4.Header);
+        transcoders.Raised[0].NoMore();
+
+        (IReadOnlyList<LiveFrame> heard, WebSocketReceiveResult ending) = await UntilItIsClosed(socket);
+
+        Assert.Contains(LiveChannel.PictureHeader, heard.Select(frame => frame.Channel));
+
+        LiveEndingReport said = Assert.Single(
+            heard.Where(frame => frame.Channel is LiveChannel.Control)
+                .Select(frame => LiveEndingReport.Read(frame.Payload.Span))
+                .Where(read => read.Fault is null)
+                .Select(read => read.Report!));
+
+        Assert.Null(supply.Opened[0].Ending);
+        Assert.Equal(LiveSupplyEnd.LetGo, said.Why);
+        Assert.Equal(WebSocketMessageType.Close, ending.MessageType);
+        Assert.Equal(WebSocketCloseStatus.NormalClosure, ending.CloseStatus);
+        Assert.Equal(LiveDepartures.Because(LiveDeparture.SourceEnded), ending.CloseStatusDescription);
+    }
+
+    [Fact]
     public async Task AWireNamingAProfileOffTheListIsRefusedBeforeAnythingIsRaised()
     {
         await using AuthProbe probe = Wiring();
