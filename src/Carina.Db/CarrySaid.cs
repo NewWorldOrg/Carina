@@ -34,15 +34,31 @@ public static class CarrySaid
                 $"Not carried, {reason.Key.Population} {reason.Key.Refusal}: {reason.Count()}.");
         }
 
+        foreach (IGrouping<MigrationChannelStanding, MigrationChannelProposal> standing
+            in report.ChannelProposals.GroupBy(proposal => proposal.Standing).OrderBy(standing => standing.Key))
+        {
+            said.AppendLine(
+                CultureInfo.InvariantCulture,
+                $"Channel definitions, {standing.Key}: {standing.Count()}. Nothing was settled by this run.");
+        }
+
+        said.AppendLine(
+            CultureInfo.InvariantCulture,
+            $"Rules converted, every one of them turned off: {report.RuleProposals.Count}, of which "
+            + $"{report.RuleProposals.Count(proposal => proposal.EnabledAtTheSource)} were on at the source.");
+
         foreach (MigrationOmission omission in report.Omissions.OrderBy(omission => omission.Subject))
         {
             said.AppendLine(
                 CultureInfo.InvariantCulture,
-                $"Nothing was done about {omission.Subject}: {omission.Ground}.");
+                $"Nothing was done about {omission.Subject}: {omission.Ground}{Touching(omission)}.");
         }
 
         return said.ToString();
     }
+
+    private static string Touching(MigrationOmission omission)
+        => omission.Affected is { } affected ? $", touching {affected} rows" : string.Empty;
 
     private static string Pass(MigrationPass pass)
         => pass is MigrationPass.Rehearsal ? "A rehearsal" : "A run for real";

@@ -15,8 +15,6 @@ public sealed class CarryingOverRealFilesTests : IDisposable
 
     private readonly string into = Directory.CreateTempSubdirectory("carina-carrying-into").FullName;
 
-    private readonly MigrationJournal journal = new();
-
     private readonly HandTurnedClock clock = new(new DateTimeOffset(2026, 9, 8, 5, 0, 0, TimeSpan.Zero));
 
     private readonly HeldMigrationRecords records = new();
@@ -25,9 +23,12 @@ public sealed class CarryingOverRealFilesTests : IDisposable
 
     private readonly HeldMigratedRecordings recordings;
 
+    private readonly MigrationBench bench;
+
     public CarryingOverRealFilesTests()
     {
-        recordings = new HeldMigratedRecordings(journal);
+        bench = new MigrationBench(clock);
+        recordings = new HeldMigratedRecordings(bench.Journal);
 
         File.WriteAllText(Path.Combine(from, "one.m2ts"), "a recording");
         File.WriteAllText(Path.Combine(from, "bash.sh"), "not a recording at all");
@@ -120,7 +121,7 @@ public sealed class CarryingOverRealFilesTests : IDisposable
         => new(
             new SourceOnDisk(from),
             new SourceOnDisk(from),
-            new MigrationCarriage(new HardLinkMigrationCarrier(from, into, Root), recordings, clock),
+            bench.Carriage(new HardLinkMigrationCarrier(from, into, Root), recordings),
             records,
             lease,
             clock);

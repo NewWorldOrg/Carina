@@ -7,11 +7,13 @@ public static class MigrationCensus
         MigrationSourceName source,
         MigrationPass pass,
         MigrationRoll roll,
+        MigrationAftermath aftermath,
         DateTime startedAt,
         DateTime finishedAt)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(roll);
+        ArgumentNullException.ThrowIfNull(aftermath);
 
         foreach (MigrationPopulation population in roll.Populations)
         {
@@ -72,6 +74,12 @@ public static class MigrationCensus
 
         MigrationRun run = MigrationRun.Rehydrate(id, source, pass, startedAt, finishedAt);
 
-        return MigrationReport.Of(run, tallies, details, MigrationOmission.EveryOne(id));
+        return MigrationReport.Of(
+            run,
+            tallies,
+            details,
+            MigrationOmission.EveryOne(id, aftermath),
+            aftermath.ChannelProposals,
+            aftermath.RuleProposals);
     }
 }

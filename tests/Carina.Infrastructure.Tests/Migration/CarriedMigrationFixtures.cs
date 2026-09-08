@@ -1,7 +1,12 @@
+using Carina.Domain.Encodings;
 using Carina.Domain.Migration;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
+using Carina.Domain.Rules;
+using Carina.Infrastructure.Migration;
+using Carina.Infrastructure.Tests.Rules;
+using Carina.TestSupport;
 
 namespace Carina.Infrastructure.Tests.Migration;
 
@@ -15,9 +20,11 @@ internal static class CarriedMigrationFixtures
 
     public static readonly ServiceKey InReach = ServiceKey.Of(32736, 1024);
 
+    public static readonly ServiceKey Elsewhere = ServiceKey.Of(32737, 2048);
+
     public static readonly OutputRoot Root = new("carried");
 
-    public static IReadOnlySet<ServiceKey> Rescanned() => new HashSet<ServiceKey> { InReach };
+    public static IReadOnlyList<RescannedService> Rescanned() => [new RescannedService(InReach, "a station")];
 
     public static SourceRecording Recording(long id)
         => new(id, "a programme", Began, Ended, InReach, new EventId(4321));
@@ -32,11 +39,63 @@ internal static class CarriedMigrationFixtures
 
     public static SourceLedger Ledger(
         IReadOnlyList<SourceRecording>? recordings = null,
-        IReadOnlyList<SourceRecordingFile>? files = null)
-        => new(Source, recordings ?? [], files ?? [], [], [], []);
+        IReadOnlyList<SourceRecordingFile>? files = null,
+        IReadOnlyList<SourceRule>? rules = null,
+        IReadOnlyList<SourceChannelDefinition>? channels = null)
+        => new(Source, recordings ?? [], files ?? [], rules ?? [], [], channels ?? []);
+
+    public static SourceRule Rule(long id, string keyword = "hill", bool enabled = true)
+        => new(id, keyword, enabled, SourceRuleTerms.Of(keyword), SourceRuleReach.Plain);
+
+    public static SourceChannelDefinition Channel(long id, ServiceKey service, string physicalChannel = "21")
+        => new(id, "an old name", SourceBroadcastKind.Terrestrial, service, physicalChannel);
 
     public static MigrationRoll Rolled(SourceLedger ledger, IReadOnlyList<SourceFile> onDisk)
-        => MigrationClassifier.Over(ledger, onDisk, Rescanned());
+        => MigrationClassifier.Over(ledger, onDisk, RescannedService.InReach(Rescanned()));
+}
+
+internal sealed class MigrationBench
+{
+    public MigrationBench(TimeProvider clock)
+    {
+        Clock = clock;
+        Profile = EncodeProfile.Define(
+            EncodeProfileId.New(),
+            new EncodeLabel("Viewing"),
+            EncodeCodec.H264,
+            EncodeResolution.AsSource,
+            Deinterlace.EveryFrame,
+            new ConstantRateFactor(22),
+            new ConstantQuantiser(24),
+            CarriedMigrationFixtures.Began);
+        Destination = EncodeDestination.Define(
+            EncodeDestinationId.New(),
+            new EncodeLabel("Encodes"),
+            new OutputRoot("encodes"),
+            Profile.Id,
+            CarriedMigrationFixtures.Began);
+        Profiles.Profiles.Add(Profile);
+        Destinations.Destinations.Add(Destination);
+    }
+
+    public MigrationJournal Journal { get; } = new();
+
+    public TimeProvider Clock { get; }
+
+    public EncodeProfile Profile { get; }
+
+    public EncodeDestination Destination { get; }
+
+    public HeldRules Rules { get; } = new();
+
+    public HeldEncodeJobs Jobs { get; } = new();
+
+    public HeldEncodeProfiles Profiles { get; } = new();
+
+    public HeldEncodeDestinations Destinations { get; } = new();
+
+    public MigrationCarriage Carriage(IMigrationCarrier carrier, IRecordingRepository recordings)
+        => new(carrier, recordings, Rules, Jobs, Destinations, Profiles, Clock);
 }
 
 internal sealed class MigrationJournal

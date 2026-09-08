@@ -157,18 +157,10 @@ public sealed class MigrationClassifierTests
         bool usesRegularExpression,
         bool caseSensitive)
     {
-        SourceRule rule = new(
+        SourceRule rule = Rule(
             3,
-            "a rule",
-            true,
-            [],
-            usesRegularExpression,
-            caseSensitive,
-            false,
-            false,
-            false,
-            false,
-            false);
+            Terms(),
+            new SourceRuleReach(usesRegularExpression, caseSensitive, false, false, false, false, false));
 
         Assert.Equal(MigrationRefusal.Inexpressible, MigrationClassifier.OnARule(rule, Rescanned()).Refusal);
     }
@@ -186,18 +178,17 @@ public sealed class MigrationClassifierTests
         bool namesItsOwnDestination,
         bool namesItsOwnEncodeSettings)
     {
-        SourceRule rule = new(
+        SourceRule rule = Rule(
             3,
-            "a rule",
-            true,
-            [],
-            false,
-            false,
-            recordsAtATimeOfDay,
-            boundsTheDuration,
-            boundsThePeriod,
-            namesItsOwnDestination,
-            namesItsOwnEncodeSettings);
+            Terms(),
+            new SourceRuleReach(
+                false,
+                false,
+                recordsAtATimeOfDay,
+                boundsTheDuration,
+                boundsThePeriod,
+                namesItsOwnDestination,
+                namesItsOwnEncodeSettings));
 
         Assert.Equal(MigrationRefusal.NoSuchFeature, MigrationClassifier.OnARule(rule, Rescanned()).Refusal);
     }

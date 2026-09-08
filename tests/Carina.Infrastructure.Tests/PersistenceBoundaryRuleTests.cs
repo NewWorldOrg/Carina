@@ -185,12 +185,19 @@ public sealed class PersistenceBoundaryRuleTests
     }
 
     [Fact]
-    public void WhatTheMigrationRecordsIsFourTablesAndItsForeignKeysNeverLeaveIt()
+    public void WhatTheMigrationRecordsIsSixTablesAndItsForeignKeysNeverLeaveIt()
     {
         using CarinaDbContext context = Carina();
 
         Assert.Equal(
-            ["migration_detail", "migration_omission", "migration_run", "migration_tally"],
+            [
+                "migration_channel_proposal",
+                "migration_detail",
+                "migration_omission",
+                "migration_rule_proposal",
+                "migration_run",
+                "migration_tally",
+            ],
             PersistenceBoundaryRules.TablesOf(context.Model, PersistenceFamily.Migration));
 
         IReadOnlyList<string> pointing = [.. context.Model
@@ -203,8 +210,10 @@ public sealed class PersistenceBoundaryRuleTests
 
         Assert.Equal(
             [
+                "migration_channel_proposal -> migration_run",
                 "migration_detail -> migration_run",
                 "migration_omission -> migration_run",
+                "migration_rule_proposal -> migration_run",
                 "migration_tally -> migration_run",
             ],
             pointing);

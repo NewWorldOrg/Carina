@@ -1,3 +1,6 @@
+using System.Globalization;
+
+using Carina.Domain.Channels;
 using Carina.Domain.Migration;
 using Carina.Domain.Programmes;
 
@@ -37,16 +40,29 @@ internal static class MigrationFixtures
 
     public static SourceFile OnDisk(string path, long sizeBytes) => new(path, sizeBytes);
 
-    public static SourceRule Rule(long id) =>
-        new(id, "a rule", true, [], false, false, false, false, false, false, false);
+    public static SourceRule Rule(long id) => Rule(id, SourceRuleTerms.Of("a rule"), SourceRuleReach.Plain);
+
+    public static SourceRule Rule(long id, SourceRuleTerms terms, SourceRuleReach reach) =>
+        new(id, "a rule", true, terms, reach);
 
     public static SourceRule RuleOver(long id, params ServiceKey[] services) =>
-        new(id, "a rule", true, services, false, false, false, false, false, false, false);
+        Rule(id, SourceRuleTerms.Of("a rule", services), SourceRuleReach.Plain);
+
+    public static SourceRuleTerms Terms(
+        string keyword = "a rule",
+        string excluded = "",
+        SourceRuleFields fields = SourceRuleFields.Title | SourceRuleFields.Summary,
+        SourceRuleFields? excludedFields = null,
+        IReadOnlyList<SourceBroadcastKind>? kinds = null,
+        IReadOnlyList<ServiceKey>? services = null,
+        IReadOnlyList<SourceRuleGenre>? genres = null,
+        int days = SourceWeek.EveryDay) =>
+        new(keyword, excluded, fields, excludedFields ?? fields, kinds ?? [], services ?? [], genres ?? [], days);
 
     public static SourceReservation Reservation(long id, bool fromARule) => new(id, "a programme", fromARule);
 
     public static SourceChannelDefinition Channel(long id, SourceBroadcastKind kind, ServiceKey service) =>
-        new(id, "a station", kind, service, true);
+        new(id, "a station", kind, service, "21");
 
     public static SourceLedger Ledger(
         IReadOnlyList<SourceRecording>? recordings = null,
@@ -73,7 +89,36 @@ internal static class MigrationFixtures
         => MigrationVerdict.Refuse(population, subject, refusal, "a programme", null, null);
 
     public static MigrationReport Report(MigrationRoll roll)
-        => MigrationCensus.Taken(Run, Source, MigrationPass.Rehearsal, roll, Began, Ended);
+        => MigrationCensus.Taken(Run, Source, MigrationPass.Rehearsal, roll, Aftermath(roll), Began, Ended);
+
+    public static MigrationAftermath Aftermath(MigrationRoll roll)
+    {
+        ArgumentNullException.ThrowIfNull(roll);
+
+        return new MigrationAftermath(
+            [
+                .. Enumerable.Range(1, roll.OfferedIn(MigrationPopulation.ChannelDefinitions)).Select(number =>
+                    MigrationChannelProposal.Rehydrate(
+                        Run,
+                        new NetworkId(1),
+                        new ServiceId(number),
+                        MigrationChannelStanding.NothingAnswers,
+                        "a station",
+                        "21",
+                        null)),
+            ],
+            [
+                .. roll.Verdicts
+                    .Where(verdict => verdict.Population is MigrationPopulation.Rules && verdict.Carried)
+                    .Select(verdict => MigrationRuleProposal.Rehydrate(
+                        Run,
+                        long.Parse(verdict.Subject, CultureInfo.InvariantCulture),
+                        null,
+                        true)),
+            ],
+            0,
+            0);
+    }
 
     public static MigrationRun Ran() =>
         MigrationRun.Rehydrate(Run, Source, MigrationPass.Rehearsal, Began, Ended);

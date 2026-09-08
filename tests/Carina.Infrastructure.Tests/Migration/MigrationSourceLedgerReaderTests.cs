@@ -183,14 +183,11 @@ public sealed class MigrationSourceLedgerReaderTests
 
         Assert.Equal(3, rule.Id);
         Assert.False(rule.Enabled);
-        Assert.False(rule.UsesRegularExpression);
-        Assert.False(rule.CaseSensitive);
-        Assert.False(rule.RecordsAtATimeOfDay);
-        Assert.False(rule.BoundsTheDuration);
-        Assert.False(rule.BoundsThePeriod);
-        Assert.False(rule.NamesItsOwnDestination);
-        Assert.False(rule.NamesItsOwnEncodeSettings);
+        Assert.Equal(SourceRuleReach.Plain, rule.Reach);
         Assert.Empty(rule.Services);
+        Assert.Equal("something", rule.Terms.Keyword);
+        Assert.Equal(SourceRuleFields.Title | SourceRuleFields.Summary, rule.Terms.Fields);
+        Assert.Equal(SourceWeek.EveryDay, rule.Terms.Days);
     }
 
     [Fact]
@@ -205,8 +202,8 @@ public sealed class MigrationSourceLedgerReaderTests
 
         IReadOnlyList<SourceRule> rules = (await Reader().ReadAsync(Cancel)).Rules;
 
-        Assert.Equal([true, true, false, false], rules.Select(rule => rule.UsesRegularExpression));
-        Assert.Equal([false, false, true, true], rules.Select(rule => rule.CaseSensitive));
+        Assert.Equal([true, true, false, false], rules.Select(rule => rule.Reach.UsesRegularExpression));
+        Assert.Equal([false, false, true, true], rules.Select(rule => rule.Reach.CaseSensitive));
     }
 
     [Fact]
@@ -214,7 +211,7 @@ public sealed class MigrationSourceLedgerReaderTests
     {
         source.Holds("rule", Rule(3, with: [("times", "[{\"week\":127}]")]));
 
-        Assert.False((await Reader().ReadAsync(Cancel)).Rules.Single().RecordsAtATimeOfDay);
+        Assert.False((await Reader().ReadAsync(Cancel)).Rules.Single().Reach.RecordsAtATimeOfDay);
     }
 
     [Fact]
@@ -222,7 +219,7 @@ public sealed class MigrationSourceLedgerReaderTests
     {
         source.Holds("rule", Rule(3, with: [("times", "[{\"week\":127,\"start\":72000,\"range\":3600}]")]));
 
-        Assert.True((await Reader().ReadAsync(Cancel)).Rules.Single().RecordsAtATimeOfDay);
+        Assert.True((await Reader().ReadAsync(Cancel)).Rules.Single().Reach.RecordsAtATimeOfDay);
     }
 
     [Fact]
@@ -230,7 +227,7 @@ public sealed class MigrationSourceLedgerReaderTests
     {
         source.Holds("rule", Rule(3, with: [("isTimeSpecification", 1L)]));
 
-        Assert.True((await Reader().ReadAsync(Cancel)).Rules.Single().RecordsAtATimeOfDay);
+        Assert.True((await Reader().ReadAsync(Cancel)).Rules.Single().Reach.RecordsAtATimeOfDay);
     }
 
     [Fact]
@@ -244,8 +241,8 @@ public sealed class MigrationSourceLedgerReaderTests
 
         IReadOnlyList<SourceRule> rules = (await Reader().ReadAsync(Cancel)).Rules;
 
-        Assert.Equal([true, true, false], rules.Select(rule => rule.BoundsTheDuration));
-        Assert.Equal([false, false, true], rules.Select(rule => rule.BoundsThePeriod));
+        Assert.Equal([true, true, false], rules.Select(rule => rule.Reach.BoundsTheDuration));
+        Assert.Equal([false, false, true], rules.Select(rule => rule.Reach.BoundsThePeriod));
     }
 
     [Fact]
@@ -259,8 +256,8 @@ public sealed class MigrationSourceLedgerReaderTests
 
         IReadOnlyList<SourceRule> rules = (await Reader().ReadAsync(Cancel)).Rules;
 
-        Assert.Equal([true, true, false], rules.Select(rule => rule.NamesItsOwnDestination));
-        Assert.Equal([false, false, true], rules.Select(rule => rule.NamesItsOwnEncodeSettings));
+        Assert.Equal([true, true, false], rules.Select(rule => rule.Reach.NamesItsOwnDestination));
+        Assert.Equal([false, false, true], rules.Select(rule => rule.Reach.NamesItsOwnEncodeSettings));
     }
 
     [Fact]
@@ -323,13 +320,72 @@ public sealed class MigrationSourceLedgerReaderTests
     }
 
     [Fact]
-    public async Task TheSourceHasNoColumnThatTurnsAChannelOffSoEveryDefinitionItStillHoldsIsReadAsOn()
+    public async Task AChannelDefinitionCarriesTheChannelTheSourceSystemWasReceivingItOn()
     {
-        source.Holds("channel", Channel(1, 32736, 1024, "GR"), Channel(2, 32736, 1025, "GR"));
+        source.Holds("channel", Channel(1, 32736, 1024, "GR", "21"), Channel(2, 32736, 1025, "GR", "27"));
 
-        Assert.All(
-            (await Reader().ReadAsync(Cancel)).ChannelDefinitions,
-            definition => Assert.True(definition.Enabled));
+        Assert.Equal(
+            ["21", "27"],
+            (await Reader().ReadAsync(Cancel)).ChannelDefinitions
+                .Select(definition => definition.PhysicalChannel));
+    }
+
+    [Fact]
+    public async Task ARuleCarriesTheWordsItLooksForAndTheWordsItLeavesOut()
+    {
+        source.Holds("rule", Rule(3, with: [("keyword", "hill"), ("ignoreKeyword", "repeat")]));
+
+        SourceRuleTerms terms = (await Reader().ReadAsync(Cancel)).Rules.Single().Terms;
+
+        Assert.Equal("hill", terms.Keyword);
+        Assert.Equal("repeat", terms.Excluded);
+    }
+
+    [Fact]
+    public async Task ARuleCarriesWhichOfTheThreeFieldsItLooksIn()
+    {
+        source.Holds("rule", Rule(3, with: [("description", 0L), ("extended", 1L)]));
+
+        SourceRuleTerms terms = (await Reader().ReadAsync(Cancel)).Rules.Single().Terms;
+
+        Assert.Equal(SourceRuleFields.Title | SourceRuleFields.ExtendedBody, terms.Fields);
+    }
+
+    [Fact]
+    public async Task ARuleCarriesTheKindsOfBroadcastItAsksFor()
+    {
+        source.Holds("rule", Rule(3, with: [("GR", 1L), ("CS", 1L)]));
+
+        Assert.Equal(
+            [SourceBroadcastKind.Terrestrial, SourceBroadcastKind.CommunicationSatellite],
+            (await Reader().ReadAsync(Cancel)).Rules.Single().Terms.Kinds);
+    }
+
+    [Fact]
+    public async Task ARuleCarriesTheGenreAndTheSubGenreItNarrowsTo()
+    {
+        source.Holds("rule", Rule(3, with: [("genres", "[{\"genre\":9,\"subGenre\":2}]")]));
+
+        SourceRuleGenre genre = Assert.Single((await Reader().ReadAsync(Cancel)).Rules.Single().Terms.Genres);
+
+        Assert.Equal(9, genre.Genre);
+        Assert.Equal(2, genre.SubGenre);
+    }
+
+    [Fact]
+    public async Task ARuleThatNamesOnlySomeDaysOfTheWeekCarriesWhichOnes()
+    {
+        source.Holds("rule", Rule(3, with: [("times", "[{\"week\":64}]")]));
+
+        Assert.Equal(0b100_0000, (await Reader().ReadAsync(Cancel)).Rules.Single().Terms.Days);
+    }
+
+    [Fact]
+    public async Task ARuleThatSaysNothingAboutTheDaysOfTheWeekAsksForEveryDay()
+    {
+        source.Holds("rule", Rule(3));
+
+        Assert.Equal(SourceWeek.EveryDay, (await Reader().ReadAsync(Cancel)).Rules.Single().Terms.Days);
     }
 
     [Fact]
@@ -356,7 +412,12 @@ public sealed class MigrationSourceLedgerReaderTests
             ["programId"] = programme,
         };
 
-    private static Dictionary<string, object?> Channel(long id, long network, long service, string kind)
+    private static Dictionary<string, object?> Channel(
+        long id,
+        long network,
+        long service,
+        string kind,
+        string physicalChannel = "21")
         => new(StringComparer.Ordinal)
         {
             ["id"] = id,
@@ -364,6 +425,7 @@ public sealed class MigrationSourceLedgerReaderTests
             ["channelType"] = kind,
             ["networkId"] = network,
             ["serviceId"] = service,
+            ["channel"] = physicalChannel,
         };
 
     private static Dictionary<string, object?> VideoFile(
@@ -399,8 +461,20 @@ public sealed class MigrationSourceLedgerReaderTests
         {
             ["id"] = id,
             ["keyword"] = "something",
+            ["ignoreKeyword"] = null,
             ["enable"] = enabled ? 1L : 0L,
             ["channelIds"] = null,
+            ["genres"] = null,
+            ["name"] = 1L,
+            ["description"] = 1L,
+            ["extended"] = 0L,
+            ["ignoreName"] = 1L,
+            ["ignoreDescription"] = 1L,
+            ["ignoreExtended"] = 0L,
+            ["GR"] = 0L,
+            ["BS"] = 0L,
+            ["CS"] = 0L,
+            ["SKY"] = 0L,
             ["keyCS"] = 0L,
             ["ignoreKeyCS"] = 0L,
             ["keyRegExp"] = 0L,

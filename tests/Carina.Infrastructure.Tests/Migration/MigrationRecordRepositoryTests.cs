@@ -53,6 +53,7 @@ public sealed class MigrationRecordRepositoryTests(RepositoryDatabase database)
                     "bash.sh",
                     null,
                     539)),
+            MigrationAftermath.Nothing,
             At,
             At.AddMinutes(4));
 
@@ -110,13 +111,14 @@ public sealed class MigrationRecordRepositoryTests(RepositoryDatabase database)
             Source,
             MigrationPass.Rehearsal,
             Rolled(Offered()),
+            MigrationAftermath.Nothing,
             At,
             At));
 
         MigrationReport read = Assert.IsType<MigrationReport>(await ReadAsync(id));
 
         Assert.Empty(read.Details);
-        Assert.Equal(4, read.Omissions.Count);
+        Assert.Equal(MigrationOmissionSubjects.All.Count, read.Omissions.Count);
         Assert.Equal(MigrationPass.Rehearsal, read.Run.Pass);
     }
 
@@ -136,12 +138,20 @@ public sealed class MigrationRecordRepositoryTests(RepositoryDatabase database)
         MigrationRunId older = MigrationRunId.New();
         MigrationRunId newer = MigrationRunId.New();
 
-        await SaveAsync(MigrationCensus.Taken(older, Source, MigrationPass.Rehearsal, Rolled(Offered()), At, At));
+        await SaveAsync(MigrationCensus.Taken(
+            older,
+            Source,
+            MigrationPass.Rehearsal,
+            Rolled(Offered()),
+            MigrationAftermath.Nothing,
+            At,
+            At));
         await SaveAsync(MigrationCensus.Taken(
             newer,
             Source,
             MigrationPass.ForReal,
             Rolled(Offered()),
+            MigrationAftermath.Nothing,
             At.AddHours(6),
             At.AddHours(6)));
 
@@ -172,6 +182,7 @@ public sealed class MigrationRecordRepositoryTests(RepositoryDatabase database)
                     "mine.m2ts",
                     null,
                     1)),
+            MigrationAftermath.Nothing,
             At,
             At));
 
@@ -188,6 +199,7 @@ public sealed class MigrationRecordRepositoryTests(RepositoryDatabase database)
                     "theirs.m2ts",
                     null,
                     1)),
+            MigrationAftermath.Nothing,
             At,
             At));
 
@@ -347,7 +359,14 @@ public sealed class MigrationRecordRepositoryTests(RepositoryDatabase database)
     {
         MigrationRunId id = MigrationRunId.New();
 
-        await SaveAsync(MigrationCensus.Taken(id, Source, MigrationPass.Rehearsal, Rolled(Offered()), At, At));
+        await SaveAsync(MigrationCensus.Taken(
+            id,
+            Source,
+            MigrationPass.Rehearsal,
+            Rolled(Offered()),
+            MigrationAftermath.Nothing,
+            At,
+            At));
 
         return id;
     }
