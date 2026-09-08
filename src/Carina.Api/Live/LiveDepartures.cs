@@ -16,6 +16,7 @@ public static class LiveDepartures
             LiveDeparture.SaidSomethingUnknown => WebSocketCloseStatus.InvalidPayloadData,
             LiveDeparture.SaidMoreThanTheWireTakes => WebSocketCloseStatus.MessageTooBig,
             LiveDeparture.ServerStopping => WebSocketCloseStatus.EndpointUnavailable,
+            LiveDeparture.SourceWentQuiet => WebSocketCloseStatus.InternalServerError,
             _ => throw new ArgumentOutOfRangeException(
                 nameof(departure),
                 departure,
@@ -32,6 +33,7 @@ public static class LiveDepartures
             LiveDeparture.SaidSomethingUnknown => "That is not a control message this wire understands.",
             LiveDeparture.SaidMoreThanTheWireTakes => "A control message is smaller than that.",
             LiveDeparture.ServerStopping => "The app is shutting down.",
+            LiveDeparture.SourceWentQuiet => "Nothing has been sent for long enough to take what was supplying it as gone.",
             _ => throw new ArgumentOutOfRangeException(
                 nameof(departure),
                 departure,

@@ -20,6 +20,16 @@ public sealed class LiveWireSettingsTests
     }
 
     [Fact]
+    public void SixQuietsFitUnderTheDefaultCeilingSoTheSeventhIsPastIt()
+    {
+        LiveWireSettings settings = new();
+
+        Assert.Equal(6, settings.QuietsBeforeTheCeiling);
+        Assert.True(settings.BetweenPings * settings.QuietsBeforeTheCeiling <= settings.SilenceCeiling);
+        Assert.True(settings.BetweenPings * (settings.QuietsBeforeTheCeiling + 1) > settings.SilenceCeiling);
+    }
+
+    [Fact]
     public void ACeilingOfNoTimeAtAllIsRefused()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => new LiveWireSettings { SilenceCeiling = TimeSpan.Zero });

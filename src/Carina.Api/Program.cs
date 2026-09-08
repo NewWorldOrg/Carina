@@ -77,8 +77,12 @@ app.MapGet(ProgrammeFeedStream.Path, (HttpContext context, ProgrammeFeedService 
 
 app.MapGet(
         LiveWire.Path,
-        (HttpContext context, ILiveSessionManager sessions, LiveWireSettings settings, IHostApplicationLifetime running) =>
-            LiveWire.Invoke(context, sessions, settings, running))
+        (HttpContext context,
+            ILiveSessionManager sessions,
+            LiveWireSettings settings,
+            IHostApplicationLifetime running,
+            TimeProvider clock) =>
+            LiveWire.Invoke(context, sessions, settings, running, clock))
     .ExcludeFromDescription()
     .WithEffect(EndpointEffect.Reading);
 
