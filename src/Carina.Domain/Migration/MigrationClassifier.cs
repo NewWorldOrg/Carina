@@ -13,7 +13,7 @@ public static class MigrationClassifier
 
         string subject = Numbered(recording.Id);
 
-        if (recording.Service is null)
+        if (recording.Service is null || recording.Programme is null)
         {
             return MigrationVerdict.Refuse(
                 MigrationPopulation.Recordings,

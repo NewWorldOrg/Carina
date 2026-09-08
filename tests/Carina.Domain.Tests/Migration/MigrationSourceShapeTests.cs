@@ -31,7 +31,7 @@ public sealed class MigrationSourceShapeTests
     [Fact]
     public void ARecordingEndsAfterItStarts()
     {
-        Assert.Throws<ArgumentException>(() => new SourceRecording(7, "a programme", Ended, Began, InReach));
+        Assert.Throws<ArgumentException>(() => new SourceRecording(7, "a programme", Ended, Began, InReach, Programme));
     }
 
     [Fact]
