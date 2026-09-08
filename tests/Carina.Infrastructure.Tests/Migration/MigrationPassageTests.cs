@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Migration;
 using Carina.Infrastructure.Migration;
 using Carina.TestSupport;
@@ -162,6 +163,15 @@ internal sealed class HeldMigrationRecords : IMigrationRecordRepository
 
     public Task<MigrationReport?> ReadAsync(MigrationRunId runId, CancellationToken cancellationToken)
         => Task.FromResult(Saved.FirstOrDefault(report => report.Run.Id.Equals(runId)));
+
+    public Task<MigrationRecordSummary?> SummariseAsync(CancellationToken cancellationToken)
+        => throw new NotSupportedException();
+
+    public Task<PaginatedList<MigrationDetail>> ListDetailsAsync(
+        MigrationRunId runId,
+        MigrationDetailQuery query,
+        CancellationToken cancellationToken)
+        => throw new NotSupportedException();
 }
 
 internal sealed class OneAtATime : IMigrationLease

@@ -47,6 +47,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<EncodeJobService>();
         services.AddScoped<QualityService>();
         services.AddScoped<QualityThresholdService>();
+        services.AddScoped<MigrationRecordService>();
         services.AddSingleton<PlaybackTicketGate>();
 
         return services;

@@ -13,6 +13,9 @@ public static class MigrationTallyReach
 
     public static IReadOnlyList<string> WhereACountMayBeRead { get; } =
     [
+        "Carina.Api/Controllers/Migration/",
+        "Carina.Api/Responder/Migration/",
+        "Carina.Api/Services/MigrationRecordService.cs",
         "Carina.Db/CarrySaid.cs",
         "Carina.Db/Migrations/",
         "Carina.Db/DbEntryPoint.cs",

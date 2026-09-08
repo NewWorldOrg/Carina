@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Migration;
 using Carina.Infrastructure.Migration;
 using Carina.Infrastructure.Persistence;
@@ -339,6 +340,164 @@ public sealed class MigrationRecordRepositoryTests(RepositoryDatabase database)
             () => new MigrationRecordRepository(context).ReadAsync(null!, Cancel));
     }
 
+    [Fact]
+    public async Task TheRecordSaysNothingAtAllUntilARunHasHappened()
+    {
+        await ClearAsync();
+
+        Assert.Null(await SummariseAsync());
+    }
+
+    [Fact]
+    public async Task TheRecordNamesEveryPopulationAndEveryReasonEvenWhereNothingWasLeftBehind()
+    {
+        await ClearAsync();
+
+        MigrationRunId id = MigrationRunId.New();
+
+        await SaveAsync(MigrationCensus.Taken(
+            id,
+            Source,
+            MigrationPass.ForReal,
+            Rolled(
+                Offered(recordings: 1, files: 2),
+                MigrationVerdict.Carry(MigrationPopulation.Recordings, "1", "a programme", 100, 100),
+                MigrationVerdict.Carry(MigrationPopulation.RecordingFiles, "one.m2ts", "one.m2ts", 100, 100),
+                MigrationVerdict.Refuse(
+                    MigrationPopulation.RecordingFiles,
+                    "stray.sh",
+                    MigrationRefusal.Orphan,
+                    "stray.sh",
+                    null,
+                    539)),
+            MigrationAftermath.Nothing,
+            At,
+            At.AddMinutes(4)));
+
+        MigrationRecordSummary summary = Assert.IsType<MigrationRecordSummary>(await SummariseAsync());
+
+        Assert.Equal(id, summary.Run.Id);
+        Assert.Equal(MigrationPass.ForReal, summary.Run.Pass);
+        Assert.Equal(0, summary.Unclassified);
+        Assert.Equal(MigrationPopulations.Counted, summary.Tallies.Select(tally => tally.Population).ToArray());
+        Assert.Equal(MigrationOmissionSubjects.All, summary.Omissions.Select(one => one.Subject).Order().ToArray());
+        Assert.Equal(MigrationRefusals.All, summary.Refusals.Select(one => one.Refusal).ToArray());
+        Assert.Equal(1, summary.Refusals.Single(one => one.Refusal is MigrationRefusal.Orphan).Count);
+        Assert.Equal(0, summary.Refusals.Single(one => one.Refusal is MigrationRefusal.Unidentifiable).Count);
+    }
+
+    [Fact]
+    public async Task TheRehearsalsAreCountedBesideTheRunAndTheLastOfThemIsNamed()
+    {
+        await ClearAsync();
+
+        await SaveAsync(RunAt(MigrationPass.Rehearsal, At));
+        await SaveAsync(RunAt(MigrationPass.Rehearsal, At.AddHours(2)));
+        await SaveAsync(RunAt(MigrationPass.ForReal, At.AddHours(5)));
+
+        MigrationRecordSummary summary = Assert.IsType<MigrationRecordSummary>(await SummariseAsync());
+
+        Assert.Equal(MigrationPass.ForReal, summary.Run.Pass);
+        Assert.Equal(2, summary.Rehearsals);
+        Assert.Equal(At.AddHours(2), summary.LastRehearsalFinishedAt);
+    }
+
+    [Fact]
+    public async Task ARecordWithNoRehearsalBehindItSaysSoRatherThanNamingATime()
+    {
+        await ClearAsync();
+
+        await SaveAsync(RunAt(MigrationPass.ForReal, At));
+
+        MigrationRecordSummary summary = Assert.IsType<MigrationRecordSummary>(await SummariseAsync());
+
+        Assert.Equal(0, summary.Rehearsals);
+        Assert.Null(summary.LastRehearsalFinishedAt);
+    }
+
+    [Fact]
+    public async Task EveryLineOfWhatWasNotCarriedIsReachedByWalkingThePagesAndNoneComesBackTwice()
+    {
+        await ClearAsync();
+
+        MigrationRunId id = MigrationRunId.New();
+        MigrationVerdict[] left =
+        [
+            .. Enumerable.Range(0, 9).Select(number => MigrationVerdict.Refuse(
+                MigrationPopulation.RecordingFiles,
+                $"stray-{number}.m2ts",
+                number % 2 is 0 ? MigrationRefusal.Orphan : MigrationRefusal.ReallyEmpty,
+                $"stray-{number}.m2ts",
+                null,
+                number)),
+        ];
+
+        await SaveAsync(MigrationCensus.Taken(
+            id,
+            Source,
+            MigrationPass.ForReal,
+            Rolled(Offered(files: left.Length), left),
+            MigrationAftermath.Nothing,
+            At,
+            At.AddMinutes(1)));
+
+        List<string> walked = [];
+        int lastPage = 0;
+
+        for (int page = 1; page is 1 || page <= lastPage; page++)
+        {
+            PaginatedList<MigrationDetail> found = await ListDetailsAsync(id, page, 2);
+
+            lastPage = found.LastPage;
+
+            Assert.Equal(left.Length, found.Total);
+            Assert.Equal(2, found.PerPage);
+            Assert.Equal(page, found.CurrentPage);
+
+            walked.AddRange(found.Items.Select(detail => detail.Subject));
+        }
+
+        Assert.Equal(5, lastPage);
+        Assert.Equal(left.Length, walked.Count);
+        Assert.Equal(
+            left.Select(verdict => verdict.Subject).Order(StringComparer.Ordinal).ToArray(),
+            walked.Order(StringComparer.Ordinal).ToArray());
+    }
+
+    [Fact]
+    public async Task APageOfLinesBelongingToNoRunIsRefused()
+    {
+        await using CarinaDbContext context = database.Open();
+
+        await Assert.ThrowsAsync<ArgumentNullException>(
+            () => new MigrationRecordRepository(context).ListDetailsAsync(
+                null!,
+                MigrationDetailQuery.For(1, 1)!,
+                Cancel));
+    }
+
+    [Fact]
+    public async Task APageNobodyAskedForIsRefused()
+    {
+        await using CarinaDbContext context = database.Open();
+
+        await Assert.ThrowsAsync<ArgumentNullException>(
+            () => new MigrationRecordRepository(context).ListDetailsAsync(
+                MigrationRunId.New(),
+                null!,
+                Cancel));
+    }
+
+    private static MigrationReport RunAt(MigrationPass pass, DateTime at)
+        => MigrationCensus.Taken(
+            MigrationRunId.New(),
+            Source,
+            pass,
+            Rolled(Offered()),
+            MigrationAftermath.Nothing,
+            at,
+            at);
+
     private static Dictionary<MigrationPopulation, int> Offered(int recordings = 0, int files = 0)
     {
         Dictionary<MigrationPopulation, int> offered = MigrationPopulations.Counted
@@ -424,5 +583,22 @@ public sealed class MigrationRecordRepositoryTests(RepositoryDatabase database)
         await using CarinaDbContext context = database.Open();
 
         return await new MigrationRecordRepository(context).ReadAsync(id, Cancel);
+    }
+
+    private async Task<MigrationRecordSummary?> SummariseAsync()
+    {
+        await using CarinaDbContext context = database.Open();
+
+        return await new MigrationRecordRepository(context).SummariseAsync(Cancel);
+    }
+
+    private async Task<PaginatedList<MigrationDetail>> ListDetailsAsync(MigrationRunId id, int page, int perPage)
+    {
+        await using CarinaDbContext context = database.Open();
+
+        return await new MigrationRecordRepository(context).ListDetailsAsync(
+            id,
+            MigrationDetailQuery.For(page, perPage)!,
+            Cancel);
     }
 }
