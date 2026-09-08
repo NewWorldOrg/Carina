@@ -14,6 +14,8 @@ public sealed class LiveSessionManagerTests
 
     private static readonly TimeSpan LongestRaise = TimeSpan.FromSeconds(30);
 
+    private static readonly TimeSpan StopGrace = TimeSpan.FromSeconds(2);
+
     private static readonly LiveSessionKey EveryFrame = new(new NetworkId(32736), new ServiceId(1024), LiveProfile.Hd30);
 
     private static readonly LiveSessionKey EveryField = new(new NetworkId(32736), new ServiceId(1024), LiveProfile.Hd60);
@@ -678,6 +680,32 @@ public sealed class LiveSessionManagerTests
     }
 
     [Fact]
+    public async Task ATranscoderWhoseOutputOutlivesItDoesNotHoldTheTeardownPastTheStopGrace()
+    {
+        ILiveViewing viewing = await Joined(EveryFrame);
+
+        transcoders.Raised[0].OutputOutlivesIt = true;
+
+        await viewing.DisposeAsync();
+
+        clock.Turn(Linger);
+
+        await Eventually.Happens(
+            () => transcoders.Raised[0].Disposed && clock.Pending is 1,
+            "the teardown is waiting out what the transcoder left behind");
+
+        Assert.False(supply.Opened[0].Disposed);
+
+        clock.Turn(StopGrace);
+
+        await Eventually.Happens(
+            () => supply.Opened[0].Disposed,
+            "the stream is let go although the output the transcoder left never ended");
+
+        Assert.Empty(manager.Keys);
+    }
+
+    [Fact]
     public async Task EveryViewerOfOneSessionReadsTheSameStartup()
     {
         await using ILiveViewing first = await Joined(EveryFrame);
@@ -730,6 +758,7 @@ public sealed class LiveSessionManagerTests
         LiveSessionManager crowded = new(
             new LiveSessionSettings { Linger = Linger, LongestRaise = LongestRaise },
             new LiveFanoutSettings { LongestBacklog = 1 },
+            new LiveTranscodeSettings { StopGrace = StopGrace },
             supply,
             transcoders,
             clock,
@@ -987,6 +1016,7 @@ public sealed class LiveSessionManagerTests
         => new(
             new LiveSessionSettings { Linger = Linger, LongestRaise = LongestRaise },
             new LiveFanoutSettings(),
+            new LiveTranscodeSettings { StopGrace = StopGrace },
             supply,
             raising ?? new HeldTranscoders(counting),
             clock,

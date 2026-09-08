@@ -481,6 +481,7 @@ public sealed class DriverLiveSupplyTests
         await using LiveSessionManager sessions = new(
             new LiveSessionSettings(),
             new LiveFanoutSettings(),
+            new LiveTranscodeSettings(),
             Supply(),
             new HeldTranscoders(budget),
             new HandTurnedClock(),

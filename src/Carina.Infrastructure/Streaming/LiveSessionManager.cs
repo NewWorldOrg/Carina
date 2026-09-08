@@ -8,6 +8,7 @@ namespace Carina.Infrastructure.Streaming;
 public sealed class LiveSessionManager(
     LiveSessionSettings settings,
     LiveFanoutSettings fanouts,
+    LiveTranscodeSettings transcoding,
     ILiveSupply supply,
     ILiveTranscoderFactory transcoders,
     TimeProvider clock,
@@ -164,6 +165,7 @@ public sealed class LiveSessionManager(
                 key,
                 fanouts,
                 settings,
+                transcoding,
                 Receiving(key.Network, key.Service),
                 transcoders,
                 clock,
