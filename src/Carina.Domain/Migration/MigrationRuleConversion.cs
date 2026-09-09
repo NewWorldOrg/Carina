@@ -16,6 +16,10 @@ public sealed record MigrationRuleConversion
 
     public const string Genre = "genre";
 
+    public const string SubGenre = "subgenre";
+
+    public const string Day = "day";
+
     public const string Type = "type";
 
     public const string Channel = "channel";
@@ -57,9 +61,7 @@ public sealed record MigrationRuleConversion
             || rule.Reach.BoundsThePeriod
             || rule.Reach.NamesItsOwnDestination
             || rule.Reach.NamesItsOwnEncodeSettings
-            || SourceWeek.NarrowsTheWeek(terms.Days)
-            || LooksAtTheExtendedBody(terms)
-            || terms.Genres.Any(genre => genre.SubGenre is not null))
+            || LooksAtTheExtendedBody(terms))
         {
             return Cannot(rule, MigrationRefusal.NoSuchFeature);
         }
@@ -138,7 +140,31 @@ public sealed record MigrationRuleConversion
                 return null;
             }
 
-            said.Add($"{Genre}={genre.Genre.ToString(CultureInfo.InvariantCulture)}");
+            if (genre.SubGenre is not { } sort)
+            {
+                said.Add($"{Genre}={genre.Genre.ToString(CultureInfo.InvariantCulture)}");
+
+                continue;
+            }
+
+            if (sort > ProgrammeSearch.HighestSubGenre)
+            {
+                return null;
+            }
+
+            said.Add(
+                $"{SubGenre}={genre.Genre.ToString(CultureInfo.InvariantCulture)}"
+                + $"-{sort.ToString(CultureInfo.InvariantCulture)}");
+        }
+
+        if (SourceWeek.Named(terms.Days) is not { } days)
+        {
+            return null;
+        }
+
+        foreach (DayOfWeek day in days)
+        {
+            said.Add($"{Day}={day}");
         }
 
         if (system is not TuneSystem.Unspecified)

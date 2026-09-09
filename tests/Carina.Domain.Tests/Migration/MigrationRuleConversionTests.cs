@@ -1,4 +1,7 @@
+using System.Numerics;
+
 using Carina.Domain.Migration;
+using Carina.Domain.Programmes;
 
 using static Carina.Domain.Tests.Migration.MigrationFixtures;
 
@@ -141,38 +144,122 @@ public sealed class MigrationRuleConversionTests
     }
 
     [Fact]
-    public void ARuleThatNarrowsToASubGenreIsNotCarriedBecauseThisSystemHasNoSuchCondition()
+    public void ARuleThatNarrowsToASubGenreCarriesThatSubGenreAndNotTheWholeGenre()
     {
-        MigrationRuleConversion refused = MigrationRuleConversion.Of(
+        MigrationRuleConversion carried = MigrationRuleConversion.Of(
             Rule(3, Terms(keyword: "hill", genres: [new SourceRuleGenre(9, 2)]), SourceRuleReach.Plain),
             Rescanned());
 
-        Assert.Equal(MigrationRefusal.NoSuchFeature, refused.Refusal);
+        Assert.True(carried.Expressible);
+        Assert.Equal("keyword=hill&subgenre=9-2", carried.Query?.Value);
     }
 
     [Fact]
-    public void AWeekThatNamesEveryDayNarrowsNothingAndIsCarried()
+    public void ARuleNamingOneGenreWholeAndOneSubGenreCarriesBothAsTheyWereAsked()
+    {
+        MigrationRuleConversion carried = MigrationRuleConversion.Of(
+            Rule(
+                3,
+                Terms(keyword: "hill", genres: [new SourceRuleGenre(6, null), new SourceRuleGenre(9, 2)]),
+                SourceRuleReach.Plain),
+            Rescanned());
+
+        Assert.Equal("keyword=hill&genre=6&subgenre=9-2", carried.Query?.Value);
+    }
+
+    [Fact]
+    public void ARuleNamingASubGenreThisSystemDoesNotCountThatHighIsNotCarried()
+    {
+        MigrationRuleConversion refused = MigrationRuleConversion.Of(
+            Rule(3, Terms(keyword: "hill", genres: [new SourceRuleGenre(9, 16)]), SourceRuleReach.Plain),
+            Rescanned());
+
+        Assert.Equal(MigrationRefusal.Inexpressible, refused.Refusal);
+        Assert.Null(refused.Query);
+    }
+
+    [Fact]
+    public void AWeekThatNamesEveryDayNarrowsNothingAndSaysNoDayAtAll()
     {
         MigrationRuleConversion carried = MigrationRuleConversion.Of(
             Rule(3, Terms(keyword: "hill", days: SourceWeek.EveryDay), SourceRuleReach.Plain),
             Rescanned());
 
         Assert.True(carried.Expressible);
+        Assert.Equal("keyword=hill", carried.Query?.Value);
     }
 
     [Theory]
-    [InlineData(0b000_0001)]
-    [InlineData(0b100_0000)]
-    [InlineData(0)]
-    public void ARuleThatRecordsOnSomeDaysOfTheWeekIsNotCarriedBecauseThisSystemHasNoSuchCondition(int days)
+    [InlineData(0b000_0001, "keyword=hill&day=Sunday")]
+    [InlineData(0b000_0010, "keyword=hill&day=Monday")]
+    [InlineData(0b000_0100, "keyword=hill&day=Tuesday")]
+    [InlineData(0b000_1000, "keyword=hill&day=Wednesday")]
+    [InlineData(0b001_0000, "keyword=hill&day=Thursday")]
+    [InlineData(0b010_0000, "keyword=hill&day=Friday")]
+    [InlineData(0b100_0000, "keyword=hill&day=Saturday")]
+    [InlineData(0b100_0001, "keyword=hill&day=Sunday&day=Saturday")]
+    public void TheDaysOfTheWeekARuleRecordsOnCrossOver(int days, string expected)
     {
-        MigrationRuleConversion refused = MigrationRuleConversion.Of(
+        MigrationRuleConversion carried = MigrationRuleConversion.Of(
             Rule(3, Terms(keyword: "hill", days: days), SourceRuleReach.Plain),
             Rescanned());
 
-        Assert.Equal(MigrationRefusal.NoSuchFeature, refused.Refusal);
+        Assert.True(carried.Expressible);
+        Assert.Equal(expected, carried.Query?.Value);
+    }
+
+    [Fact]
+    public void AWeekThatNamesNoDayAtAllIsNotCarried()
+    {
+        MigrationRuleConversion refused = MigrationRuleConversion.Of(
+            Rule(3, Terms(keyword: "hill", days: 0), SourceRuleReach.Plain),
+            Rescanned());
+
+        Assert.Equal(MigrationRefusal.Inexpressible, refused.Refusal);
         Assert.Null(refused.Query);
     }
+
+    [Fact]
+    public void NoWeekIsEverCarriedAsMoreDaysThanTheSourceRuleNamed()
+    {
+        for (int days = 1; days <= SourceWeek.EveryDay; days++)
+        {
+            MigrationRuleConversion carried = MigrationRuleConversion.Of(
+                Rule(3, Terms(keyword: "hill", days: days), SourceRuleReach.Plain),
+                Rescanned());
+
+            IReadOnlyList<DayOfWeek> said = DaysSaid(carried);
+            int named = BitOperations.PopCount((uint)days);
+
+            Assert.Equal(named is ProgrammeSearch.DaysInTheWeek ? 0 : named, said.Count);
+
+            foreach (DayOfWeek day in said)
+            {
+                Assert.NotEqual(0, days & (1 << (int)day));
+            }
+        }
+    }
+
+    [Fact]
+    public void AWeekThatNarrowsIsNeverCarriedAsAWeekThatNarrowsNothing()
+    {
+        for (int days = 1; days < SourceWeek.EveryDay; days++)
+        {
+            MigrationRuleConversion carried = MigrationRuleConversion.Of(
+                Rule(3, Terms(keyword: "hill", days: days), SourceRuleReach.Plain),
+                Rescanned());
+
+            Assert.NotEmpty(DaysSaid(carried));
+        }
+    }
+
+    private static IReadOnlyList<DayOfWeek> DaysSaid(MigrationRuleConversion carried)
+        => [
+            .. (carried.Query?.Value ?? string.Empty)
+                .Split('&')
+                .Where(pair => pair.StartsWith("day=", StringComparison.Ordinal))
+                .Select(pair => Enum.Parse<DayOfWeek>(pair["day=".Length..])),
+        ];
 
     [Fact]
     public void ARuleWhoseNameIsLongerThanARuleNameIsNotCarried()
