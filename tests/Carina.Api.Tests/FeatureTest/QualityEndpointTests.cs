@@ -326,7 +326,7 @@ public sealed class QualityEndpointTests
     {
         await using var feature = new QualityFeature();
         feature.Recorded(tuner: "adapter3.frontend0");
-        feature.Sampled(tuner: "adapter3.frontend0", carrierToNoise: 5_789);
+        feature.Sampled(tuner: "adapter3.frontend0", carrierToNoise: 6_000);
         feature.Sampled(
             tuner: "adapter3.frontend1",
             samples: 360,

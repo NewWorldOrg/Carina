@@ -128,7 +128,7 @@ public sealed class QualitySignalSurveyTests
         IReadOnlyList<SignalFigures> figures = QualitySignalSurvey.Figures(
             [],
             [
-                Sample(Noon, SignalSample.WithLock(Noon, 5789, Noon)),
+                Sample(Noon, SignalSample.WithLock(Noon, 6000, Noon)),
                 Sample(Noon.AddSeconds(10), SignalSample.NotTaken(Noon.AddSeconds(10), SignalNotTaken.NothingReported), silent),
             ]);
 
