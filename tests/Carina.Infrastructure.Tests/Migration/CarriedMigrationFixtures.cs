@@ -126,13 +126,15 @@ internal sealed class HeldMigratedRecordings(MigrationJournal journal) : IRecord
 
     public Exception? WhenAdding { get; set; }
 
+    public int WrittenBeforeItRefuses { get; set; }
+
     public Task AddAsync(Recording recording, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(recording);
 
         journal.Steps.Add($"row {recording.FileName.Value}");
 
-        if (WhenAdding is { } refused)
+        if (WhenAdding is { } refused && Written.Count >= WrittenBeforeItRefuses)
         {
             throw refused;
         }
