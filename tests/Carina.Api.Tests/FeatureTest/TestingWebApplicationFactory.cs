@@ -12,6 +12,10 @@ public class TestingWebApplicationFactory : WebApplicationFactory<Program>
 {
     public const string ConnectionStringKey = "ConnectionStrings:Carina";
 
+    public const string DatabaseNoResolverIsAskedAbout =
+        "Host=/carina-feature-tests-have-no-database;Port=5432;"
+        + "Database=carina;Username=carina;Password=placeholder";
+
     public static IReadOnlyList<string> SettingsNamedHere { get; } =
     [
         ConnectionStringKey,
@@ -30,9 +34,7 @@ public class TestingWebApplicationFactory : WebApplicationFactory<Program>
         ArgumentNullException.ThrowIfNull(builder);
 
         builder.UseEnvironment(Environments.Development);
-        builder.UseSetting(
-            ConnectionStringKey,
-            "Host=db;Port=5432;Database=carina;Username=carina;Password=placeholder");
+        builder.UseSetting(ConnectionStringKey, DatabaseNoResolverIsAskedAbout);
         builder.UseSetting(DriverOptions.SocketPathKey, DriverSocketPath);
         builder.UseSetting(PublicOrigin.Key, string.Empty);
         builder.UseSetting(TrustedProxies.ProxiesKey, string.Empty);
