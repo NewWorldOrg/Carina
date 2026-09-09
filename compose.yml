@@ -8,7 +8,7 @@ services:
       - .:/code
       - nuget:/root/.nuget/packages
       - driver-run:/run/carina
-      - recordings:/srv/recordings:ro
+      - ${CARINA_RECORDINGS_DIR:-recordings}:/srv/recordings:ro
       - thumbnails:/srv/thumbnails
       - encodes:/srv/encodes
     devices:
@@ -48,7 +48,7 @@ services:
       - .:/code
       - nuget:/root/.nuget/packages
       - driver-run:/run/carina
-      - recordings:/srv/recordings
+      - ${CARINA_RECORDINGS_DIR:-recordings}:/srv/recordings
       - driver-build:/driver
       - /run/pcscd:/run/pcscd:ro
     stop_grace_period: 7h
