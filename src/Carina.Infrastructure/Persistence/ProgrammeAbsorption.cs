@@ -11,6 +11,10 @@ public static class ProgrammeAbsorption
 {
     public const string RowsParameter = "rows";
 
+    public const string HeardParameter = "heard";
+
+    public const string HeardAtParameter = "heard_at";
+
     private const string End =
         "CASE WHEN COALESCE(excluded.end_at, programme.end_at) > excluded.start_at"
         + " THEN COALESCE(excluded.end_at, programme.end_at) END";
@@ -75,11 +79,48 @@ public static class ProgrammeAbsorption
         SELECT count(*) FILTER (WHERE added), count(*) FILTER (WHERE NOT added) FROM written
         """;
 
+    /// <summary>
+    /// Marks the programmes a reading named, and only for the services whose whole announced
+    /// schedule that reading heard. It is a statement of its own rather than a column on the
+    /// upsert above, because the upsert deliberately stands still when nothing about a programme
+    /// changed, and this mark has to move every time the programme is heard.
+    /// </summary>
+    public static readonly string HeardSql = $"""
+        UPDATE programme SET last_heard_at = @{HeardAtParameter}
+        FROM jsonb_to_recordset(@{HeardParameter}) AS named(
+            network_id integer,
+            service_id integer,
+            event_id integer)
+        WHERE programme.network_id = named.network_id
+          AND programme.service_id = named.service_id
+          AND programme.event_id = named.event_id
+        """;
+
+    public static string Heard(IEnumerable<ProgrammeId> named)
+    {
+        ArgumentNullException.ThrowIfNull(named);
+
+        return JsonSerializer.Serialize(named.Select(Named.Of), ProgrammeJson.Options);
+    }
+
     public static string Rows(IEnumerable<Programme> programmes)
     {
         ArgumentNullException.ThrowIfNull(programmes);
 
         return JsonSerializer.Serialize(programmes.Select(Row.Of), ProgrammeJson.Options);
+    }
+
+    private sealed record Named(
+        [property: JsonPropertyName("network_id")] int NetworkId,
+        [property: JsonPropertyName("service_id")] int ServiceId,
+        [property: JsonPropertyName("event_id")] int EventId)
+    {
+        public static Named Of(ProgrammeId id)
+        {
+            ArgumentNullException.ThrowIfNull(id);
+
+            return new Named(id.NetworkId.Value, id.ServiceId.Value, id.EventId.Value);
+        }
     }
 
     private sealed record Row(

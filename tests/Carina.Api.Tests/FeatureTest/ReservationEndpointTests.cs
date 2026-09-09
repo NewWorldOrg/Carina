@@ -35,6 +35,39 @@ public sealed class ReservationEndpointTests
         Assert.Equal(2, data.GetProperty("items").GetArrayLength());
     }
 
+    [Fact]
+    public async Task AReservationWhoseBroadcastMovedSaysSoOnTheWireWithWhatItWasAndWhatItIs()
+    {
+        await using var feature = new ReservationFeature();
+        Reservation moved = feature.Booked(4001, diverged: true);
+
+        (HttpStatusCode status, JsonElement body) =
+            await feature.GetAsync($"/api/reservations/{moved.Id.Value}");
+        JsonElement epg = body.GetProperty("data").GetProperty("epg");
+        JsonElement said = epg.GetProperty("detail").EnumerateArray().Single();
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.True(epg.GetProperty("diverged").GetBoolean());
+        Assert.False(epg.GetProperty("programmeMissing").GetBoolean());
+        Assert.Equal("startAt", said.GetProperty("field").GetString());
+        Assert.Equal("12:00", said.GetProperty("before").GetString());
+        Assert.Equal("12:05", said.GetProperty("after").GetString());
+    }
+
+    [Fact]
+    public async Task AReservationWhoseBroadcastWentAwaySaysThatOnTheWireToo()
+    {
+        await using var feature = new ReservationFeature();
+        Reservation gone = feature.Booked(4001, state: ReservationState.Cancelled, missing: true);
+
+        (_, JsonElement body) = await feature.GetAsync($"/api/reservations/{gone.Id.Value}");
+        JsonElement epg = body.GetProperty("data").GetProperty("epg");
+
+        Assert.True(epg.GetProperty("programmeMissing").GetBoolean());
+        Assert.False(epg.GetProperty("diverged").GetBoolean());
+        Assert.Empty(epg.GetProperty("detail").EnumerateArray());
+    }
+
     [Theory]
     [InlineData("page=0")]
     [InlineData("from=2026-01-01T00:00:00Z&to=2027-06-01T00:00:00Z")]

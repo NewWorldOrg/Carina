@@ -55,10 +55,12 @@ public sealed class ProgrammeRepository(CarinaDbContext context) : IProgrammeRep
 
     public async Task<ProgrammesAbsorbed> AbsorbAsync(
         IReadOnlyList<ProgrammeBroadcast> broadcasts,
+        IReadOnlyList<ProgrammeService> heardWhole,
         DateTime at,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(broadcasts);
+        ArgumentNullException.ThrowIfNull(heardWhole);
 
         if (broadcasts.Count == 0)
         {
@@ -84,10 +86,71 @@ public sealed class ProgrammeRepository(CarinaDbContext context) : IProgrammeRep
             await command.Connection.OpenAsync(cancellationToken);
         }
 
-        await using DbDataReader reading = await command.ExecuteReaderAsync(cancellationToken);
-        await reading.ReadAsync(cancellationToken);
+        ProgrammesAbsorbed absorbed;
 
-        return new ProgrammesAbsorbed((int)reading.GetInt64(0), (int)reading.GetInt64(1));
+        await using (DbDataReader reading = await command.ExecuteReaderAsync(cancellationToken))
+        {
+            await reading.ReadAsync(cancellationToken);
+
+            absorbed = new ProgrammesAbsorbed((int)reading.GetInt64(0), (int)reading.GetInt64(1));
+        }
+
+        await HeardAsync(broadcasts, heardWhole, at, cancellationToken);
+
+        return absorbed;
+    }
+
+    public async Task<DateTime?> HeardWholeAtAsync(
+        int networkId,
+        int serviceId,
+        CancellationToken cancellationToken)
+    {
+        var network = new NetworkId(networkId);
+        var service = new ServiceId(serviceId);
+
+        return await context.Set<Programme>()
+            .Where(programme => programme.NetworkId == network && programme.ServiceId == service)
+            .MaxAsync(programme => programme.LastHeardAt, cancellationToken);
+    }
+
+    private async Task HeardAsync(
+        IReadOnlyList<ProgrammeBroadcast> broadcasts,
+        IReadOnlyList<ProgrammeService> heardWhole,
+        DateTime at,
+        CancellationToken cancellationToken)
+    {
+        var whole = heardWhole.Select(service => (service.NetworkId, service.ServiceId)).ToHashSet();
+        ProgrammeId[] named =
+        [
+            .. broadcasts
+                .Select(broadcast => broadcast.Id)
+                .Where(id => whole.Contains((id.NetworkId.Value, id.ServiceId.Value))),
+        ];
+
+        if (named.Length == 0)
+        {
+            return;
+        }
+
+        await using DbCommand command = context.Database.GetDbConnection().CreateCommand();
+
+        command.CommandText = ProgrammeAbsorption.HeardSql;
+        command.Transaction = context.Database.CurrentTransaction?.GetDbTransaction();
+        command.Parameters.Add(new NpgsqlParameter(ProgrammeAbsorption.HeardParameter, NpgsqlDbType.Jsonb)
+        {
+            Value = ProgrammeAbsorption.Heard(named),
+        });
+        command.Parameters.Add(new NpgsqlParameter(ProgrammeAbsorption.HeardAtParameter, NpgsqlDbType.TimestampTz)
+        {
+            Value = at,
+        });
+
+        if (command.Connection!.State is not ConnectionState.Open)
+        {
+            await command.Connection.OpenAsync(cancellationToken);
+        }
+
+        await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
     public async Task<IReadOnlyList<Programme>> ListEndedBeforeAsync(

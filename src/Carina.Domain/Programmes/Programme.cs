@@ -45,6 +45,8 @@ public sealed class Programme
 
     public DateTime UpdatedAt { get; private set; }
 
+    public DateTime? LastHeardAt { get; private set; }
+
     public long Revision { get; private set; }
 
     public static Programme Discover(ProgrammeBroadcast broadcast, DateTime at)
@@ -81,7 +83,8 @@ public sealed class Programme
         IReadOnlyList<RelatedProgramme>? related = null,
         bool hasSubtitles = false,
         ProgrammeSource source = ProgrammeSource.ScheduleBasic,
-        long revision = 0)
+        long revision = 0,
+        DateTime? lastHeardAt = null)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(transportStreamId);
@@ -105,8 +108,22 @@ public sealed class Programme
             HasSubtitles = hasSubtitles,
             Source = source,
             UpdatedAt = UtcTimes.Required(updatedAt, nameof(updatedAt)),
+            LastHeardAt = UtcTimes.Optional(lastHeardAt, nameof(lastHeardAt)),
             Revision = revision,
         };
+    }
+
+    /// <summary>
+    /// Writes down that this programme was named again by a reading that heard the whole of its
+    /// service's announced schedule. It is the one mark that separates "still announced" from "no
+    /// longer announced": the row itself never goes away on its own, and <c>UpdatedAt</c> stands
+    /// still while nothing about the programme changes, so neither of them can tell the two apart.
+    /// No mark at all means no whole reading has ever named this programme, which says nothing
+    /// either way.
+    /// </summary>
+    public void Heard(DateTime at)
+    {
+        LastHeardAt = UtcTimes.Required(at, nameof(at));
     }
 
     public void MarkRevision(long revision)

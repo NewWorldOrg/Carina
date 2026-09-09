@@ -15,6 +15,10 @@ public enum ReservationOutcomeKind
     TuneFailure = 3,
 
     RecordingFailure = 4,
+
+    ProgrammeMoved = 5,
+
+    ProgrammeGone = 6,
 }
 
 public sealed class ReservationOutcome

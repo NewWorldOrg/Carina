@@ -365,6 +365,42 @@ public sealed class Reservation
         EndAtConfirmed = endAtConfirmed;
     }
 
+    /// <summary>
+    /// Moves this reservation onto the broadcast the guide now announces, and says what moved. The
+    /// broadcast is the same one throughout — it is named by the guide's own identifier, so a
+    /// renamed programme is still this programme — and only the times and the snapshot follow it.
+    /// A reservation that is already holding a tuner does not move, because the recording under it
+    /// is already writing to the window it was given.
+    /// </summary>
+    public void Follow(
+        DateTime programmeStartsAt,
+        DateTime endAt,
+        bool endAtConfirmed,
+        ProgrammeSnapshot snapshot,
+        IReadOnlyList<EpgDivergence> divergences)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+
+        RefuseUnless(State is ReservationState.Scheduled or ReservationState.Conflict);
+
+        if (IsPinned)
+        {
+            throw new InvalidOperationException(
+                "A reservation that has been claimed is being recorded against the window it was given, "
+                + "and moving that window underneath the recording would not move the recording.");
+        }
+
+        Reframe(UtcTimes.Required(programmeStartsAt, nameof(programmeStartsAt)), endAt, endAtConfirmed);
+        Diverge(divergences);
+
+        ProgrammeStartsAt = StartAt;
+        SnapshotName = snapshot.Name;
+        SnapshotSummary = snapshot.Summary;
+        SnapshotExtended = snapshot.Extended;
+        SnapshotGenres = snapshot.Genres;
+        CapturedAt = snapshot.CapturedAt;
+    }
+
     public void Diverge(IReadOnlyList<EpgDivergence> divergences)
     {
         ArgumentNullException.ThrowIfNull(divergences);

@@ -151,12 +151,12 @@ public sealed class ProgrammeAbsorbArmsTests(RepositoryDatabase database)
             await stored.AddAsync(Programme.Discover(held, At), Cancel);
         }
 
-        await read.AbsorbAsync(visit.Held(network), At, Cancel);
+        await read.AbsorbAsync(visit.Held(network), [], At, Cancel);
         Dictionary<ProgrammeId, long> storedBefore = await RevisionsAsync(network);
         Dictionary<ProgrammeId, long> readBefore = Revisions(read);
 
-        ProgrammesAbsorbed byTheStore = await stored.AbsorbAsync(visit.Arriving(network), Later, Cancel);
-        ProgrammesAbsorbed byTheCode = await read.AbsorbAsync(visit.Arriving(network), Later, Cancel);
+        ProgrammesAbsorbed byTheStore = await stored.AbsorbAsync(visit.Arriving(network), [], Later, Cancel);
+        ProgrammesAbsorbed byTheCode = await read.AbsorbAsync(visit.Arriving(network), [], Later, Cancel);
 
         Assert.Equal(byTheCode, byTheStore);
 

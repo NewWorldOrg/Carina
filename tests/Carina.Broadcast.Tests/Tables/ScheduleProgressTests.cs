@@ -348,6 +348,29 @@ public sealed class ScheduleProgressTests
         Assert.Equal([4, 4], counted.Select(entry => entry.SegmentsDeclared));
     }
 
+    [Fact]
+    public void OnlyTheServicesWhoseWholeScheduleArrivedAreNamedAsHeardWhole()
+    {
+        var progress = new ScheduleProgress(Midnight());
+
+        Gather(progress, FirstBasic, LastBasic, segments: 4, lastSection: 31);
+        Gather(progress, LastBasic, LastBasic, segments: 4, lastSection: 31);
+        Gather(progress, FirstBasic, LastBasic, segments: 3, lastSection: 31, service: AnotherService);
+
+        Assert.Equal([Service], progress.HeardWhole());
+        Assert.Contains(Another, progress.Services);
+    }
+
+    [Fact]
+    public void AReadingThatHeardNothingWholeNamesNobody()
+    {
+        var progress = new ScheduleProgress(Midnight());
+
+        Gather(progress, FirstBasic, LastBasic, segments: 3, lastSection: 31);
+
+        Assert.Empty(progress.HeardWhole());
+    }
+
     private static HeldClock Midnight() => HeldClock.Broadcasting(2026, 8, 19, 0, 0, 0);
 
     private static void Gather(

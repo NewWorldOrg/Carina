@@ -93,6 +93,8 @@ public sealed class ProgrammeConfiguration : IEntityTypeConfiguration<Programme>
 
         builder.Property(programme => programme.UpdatedAt).HasColumnName("updated_at").IsRequired();
 
+        builder.Property(programme => programme.LastHeardAt).HasColumnName("last_heard_at");
+
         builder.Property(programme => programme.Revision)
             .HasColumnName("revision")
             .HasDefaultValueSql($"nextval('{ProgrammeRevisions.Sequence}')")

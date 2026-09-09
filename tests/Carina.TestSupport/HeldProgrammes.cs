@@ -60,11 +60,14 @@ public sealed class HeldProgrammes : IProgrammeRepository
 
     public Task<ProgrammesAbsorbed> AbsorbAsync(
         IReadOnlyList<ProgrammeBroadcast> broadcasts,
+        IReadOnlyList<ProgrammeService> heardWhole,
         DateTime at,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(broadcasts);
+        ArgumentNullException.ThrowIfNull(heardWhole);
 
+        var whole = heardWhole.Select(service => (service.NetworkId, service.ServiceId)).ToHashSet();
         int added = 0;
         int updated = 0;
 
@@ -78,20 +81,32 @@ public sealed class HeldProgrammes : IProgrammeRepository
 
                 discovered.MarkRevision(++handedOut);
                 Programmes.Add(discovered);
+                held = discovered;
                 added++;
-
-                continue;
             }
-
-            if (held.Absorb(broadcast, at))
+            else if (held.Absorb(broadcast, at))
             {
                 held.MarkRevision(++handedOut);
                 updated++;
+            }
+
+            if (whole.Contains((broadcast.Id.NetworkId.Value, broadcast.Id.ServiceId.Value)))
+            {
+                held.Heard(at);
             }
         }
 
         return Task.FromResult(new ProgrammesAbsorbed(added, updated));
     }
+
+    public Task<DateTime?> HeardWholeAtAsync(
+        int networkId,
+        int serviceId,
+        CancellationToken cancellationToken)
+        => Task.FromResult(Programmes
+            .Where(programme => programme.NetworkId.Value == networkId
+                && programme.ServiceId.Value == serviceId)
+            .Max(programme => programme.LastHeardAt));
 
     public Task<IReadOnlyList<Programme>> ListEndedBeforeAsync(
         DateTime at,

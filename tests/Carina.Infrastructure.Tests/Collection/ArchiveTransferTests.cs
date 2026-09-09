@@ -300,9 +300,10 @@ internal sealed class StubbornProgrammes(IProgrammeRepository held) : IProgramme
 
     public Task<ProgrammesAbsorbed> AbsorbAsync(
         IReadOnlyList<ProgrammeBroadcast> broadcasts,
+        IReadOnlyList<ProgrammeService> heardWhole,
         DateTime at,
         CancellationToken cancellationToken)
-        => held.AbsorbAsync(broadcasts, at, cancellationToken);
+        => held.AbsorbAsync(broadcasts, heardWhole, at, cancellationToken);
 
     public Task<IReadOnlyList<Programme>> ListEndedBeforeAsync(
         DateTime at,
@@ -315,6 +316,9 @@ internal sealed class StubbornProgrammes(IProgrammeRepository held) : IProgramme
 
     public Task<DateTime?> CoveredUntilAsync(int networkId, int serviceId, CancellationToken cancellationToken)
         => held.CoveredUntilAsync(networkId, serviceId, cancellationToken);
+
+    public Task<DateTime?> HeardWholeAtAsync(int networkId, int serviceId, CancellationToken cancellationToken)
+        => held.HeardWholeAtAsync(networkId, serviceId, cancellationToken);
 
     public Task<IReadOnlyList<Programme>> ListAfterAsync(
         long revision,

@@ -28,7 +28,7 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
         int network = NextNetwork();
         await using CarinaDbContext context = database.Open();
 
-        ProgrammesWritten written = await Writer(context).WriteAsync([Table(network, 1)], Cancel);
+        ProgrammesWritten written = await Writer(context).WriteAsync([Table(network, 1)], [], Cancel);
 
         Assert.Equal(new ProgrammesWritten(1, 0, 0), written);
 
@@ -48,9 +48,9 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
         await using CarinaDbContext context = database.Open();
         ProgrammeWriter writer = Writer(context);
 
-        await writer.WriteAsync([Table(network, 1)], Cancel);
+        await writer.WriteAsync([Table(network, 1)], [], Cancel);
 
-        Assert.Equal(new ProgrammesWritten(0, 0, 0), await writer.WriteAsync([Table(network, 1)], Cancel));
+        Assert.Equal(new ProgrammesWritten(0, 0, 0), await writer.WriteAsync([Table(network, 1)], [], Cancel));
     }
 
     [Fact]
@@ -60,11 +60,11 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
         await using CarinaDbContext context = database.Open();
         ProgrammeWriter writer = Writer(context);
 
-        await writer.WriteAsync([Table(network, 1)], Cancel);
+        await writer.WriteAsync([Table(network, 1)], [], Cancel);
 
         Assert.Equal(
             new ProgrammesWritten(0, 1, 0),
-            await writer.WriteAsync([Table(network, 1, name: "ひるまえほっと")], Cancel));
+            await writer.WriteAsync([Table(network, 1, name: "ひるまえほっと")], [], Cancel));
 
         await using CarinaDbContext reading = database.Open();
 
@@ -81,7 +81,7 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
 
         ProgrammesWritten written = await Writer(context).WriteAsync(
             [Table(network, 1), DetailTable(network, 1)],
-            Cancel);
+            [], Cancel);
 
         Assert.Equal(new ProgrammesWritten(1, 0, 0), written);
 
@@ -100,9 +100,9 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
         ProgrammeWriter writer = Writer(context);
         EventInformationTable[] visit = [Table(network, 1), DetailTable(network, 1)];
 
-        await writer.WriteAsync(visit, Cancel);
+        await writer.WriteAsync(visit, [], Cancel);
 
-        Assert.Equal(new ProgrammesWritten(0, 0, 0), await writer.WriteAsync(visit, Cancel));
+        Assert.Equal(new ProgrammesWritten(0, 0, 0), await writer.WriteAsync(visit, [], Cancel));
     }
 
     [Fact]
@@ -119,7 +119,7 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
             0x04, 0x18, 0x00, 0x01,
         ];
 
-        await Writer(context).WriteAsync([Table(network, 1, extra: group)], Cancel);
+        await Writer(context).WriteAsync([Table(network, 1, extra: group)], [], Cancel);
 
         await using CarinaDbContext reading = database.Open();
         Programme? stored = await new ProgrammeRepository(reading).FindAsync(Id(network, 1), Cancel);
@@ -138,7 +138,7 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
         int network = NextNetwork();
         await using CarinaDbContext context = database.Open();
 
-        ProgrammesWritten written = await Writer(context).WriteAsync([Table(network, 1, unreadableStart: true)], Cancel);
+        ProgrammesWritten written = await Writer(context).WriteAsync([Table(network, 1, unreadableStart: true)], [], Cancel);
 
         Assert.Equal(new ProgrammesWritten(0, 0, 1), written);
     }
@@ -150,7 +150,7 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
         var notices = new CountedNotices();
         await using CarinaDbContext context = database.Open();
 
-        await Writer(context, notices).WriteAsync([Table(network, 1)], Cancel);
+        await Writer(context, notices).WriteAsync([Table(network, 1)], [], Cancel);
 
         Assert.Equal([RecalculationTrigger.ProgrammesChanged], notices.Nudged);
     }
@@ -163,10 +163,10 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
         await using CarinaDbContext context = database.Open();
         ProgrammeWriter writer = Writer(context, notices);
 
-        await writer.WriteAsync([Scheduled(network, 1, minutes: 3)], Cancel);
+        await writer.WriteAsync([Scheduled(network, 1, minutes: 3)], [], Cancel);
         notices.Nudged.Clear();
 
-        ProgrammesWritten written = await writer.WriteAsync([Scheduled(network, 1, minutes: 5)], Cancel);
+        ProgrammesWritten written = await writer.WriteAsync([Scheduled(network, 1, minutes: 5)], [], Cancel);
 
         Assert.Equal(0, written.Added);
         Assert.Equal(1, written.Updated);
@@ -181,10 +181,10 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
         await using CarinaDbContext context = database.Open();
         ProgrammeWriter writer = Writer(context, notices);
 
-        await writer.WriteAsync([Table(network, 1)], Cancel);
+        await writer.WriteAsync([Table(network, 1)], [], Cancel);
         notices.Nudged.Clear();
 
-        await writer.WriteAsync([Table(network, 1)], Cancel);
+        await writer.WriteAsync([Table(network, 1)], [], Cancel);
 
         Assert.Empty(notices.Nudged);
     }
@@ -198,7 +198,7 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
         await using CarinaDbContext context = database.Open();
 
         ProgrammesWritten written = await Writer(context, notices, events)
-            .WriteAsync([Table(network, 1, unreadableStart: true)], Cancel);
+            .WriteAsync([Table(network, 1, unreadableStart: true)], [], Cancel);
 
         Assert.Equal(0, written.Added);
         Assert.Equal(0, written.Updated);
@@ -215,7 +215,7 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
 
         ProgrammesWritten written = await Writer(context).WriteAsync(
             [Starting(network, (1, At.AddDays(-1).AddMinutes(-1)))],
-            Cancel);
+            [], Cancel);
 
         Assert.Equal(new ProgrammesWritten(0, 0, 1), written);
 
@@ -232,7 +232,7 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
 
         ProgrammesWritten written = await Writer(context).WriteAsync(
             [Starting(network, (1, At.AddDays(10).AddMinutes(1)))],
-            Cancel);
+            [], Cancel);
 
         Assert.Equal(new ProgrammesWritten(0, 0, 1), written);
 
@@ -249,7 +249,7 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
 
         ProgrammesWritten written = await Writer(context).WriteAsync(
             [Starting(network, (1, At.AddDays(-1)), (2, At.AddDays(10)))],
-            Cancel);
+            [], Cancel);
 
         Assert.Equal(new ProgrammesWritten(2, 0, 0), written);
     }
@@ -262,7 +262,7 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
 
         ProgrammesWritten written = await Writer(context).WriteAsync(
             [Starting(network, (1, At.AddDays(-3)), (2, At.AddHours(1)), (3, At.AddDays(30)))],
-            Cancel);
+            [], Cancel);
 
         Assert.Equal(new ProgrammesWritten(1, 0, 2), written);
 
@@ -281,15 +281,44 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
         await using CarinaDbContext context = database.Open();
         ProgrammeWriter writer = Writer(context);
 
-        await writer.WriteAsync([Starting(network, (1, At.AddHours(1)))], Cancel);
+        await writer.WriteAsync([Starting(network, (1, At.AddHours(1)))], [], Cancel);
 
-        ProgrammesWritten written = await writer.WriteAsync([Starting(network, (1, At.AddDays(-2)))], Cancel);
+        ProgrammesWritten written = await writer.WriteAsync([Starting(network, (1, At.AddDays(-2)))], [], Cancel);
 
         Assert.Equal(new ProgrammesWritten(0, 0, 1), written);
 
         await using CarinaDbContext reading = database.Open();
 
         Assert.Equal(At.AddHours(1), (await new ProgrammeRepository(reading).FindAsync(Id(network, 1), Cancel))!.StartsAt);
+    }
+
+    [Fact]
+    public async Task OnlyTheServicesTheReadingHeardWholeHaveTheirProgrammesMarked()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+
+        await Writer(context).WriteAsync(
+            [Table(network, 1)],
+            [new ScheduledService(network, 32739, 1049)],
+            Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+
+        Assert.Equal(At, (await new ProgrammeRepository(reading).FindAsync(Id(network, 1), Cancel))!.LastHeardAt);
+    }
+
+    [Fact]
+    public async Task AReadingThatHeardNothingWholeMarksNothing()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+
+        await Writer(context).WriteAsync([Table(network, 1)], [], Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+
+        Assert.Null((await new ProgrammeRepository(reading).FindAsync(Id(network, 1), Cancel))!.LastHeardAt);
     }
 
     private static ProgrammeWriter Writer(
@@ -342,9 +371,9 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
         await using CarinaDbContext context = database.Open();
         ProgrammeWriter writer = Writer(context);
 
-        await writer.WriteAsync([Scheduled(network, 1, minutes: 3)], Cancel);
+        await writer.WriteAsync([Scheduled(network, 1, minutes: 3)], [], Cancel);
 
-        ProgrammesWritten corrected = await writer.WriteAsync([Running(network, 1, minutes: 9)], Cancel);
+        ProgrammesWritten corrected = await writer.WriteAsync([Running(network, 1, minutes: 9)], [], Cancel);
 
         Assert.Equal(new ProgrammesWritten(0, 1, 0), corrected);
 
@@ -362,8 +391,8 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
         await using CarinaDbContext context = database.Open();
         ProgrammeWriter writer = Writer(context);
 
-        await writer.WriteAsync([Scheduled(network, 1, minutes: 3)], Cancel);
-        await writer.WriteAsync([Running(network, 1, minutes: null)], Cancel);
+        await writer.WriteAsync([Scheduled(network, 1, minutes: 3)], [], Cancel);
+        await writer.WriteAsync([Running(network, 1, minutes: null)], [], Cancel);
 
         await using CarinaDbContext reading = database.Open();
         Programme? stored = await new ProgrammeRepository(reading).FindAsync(Id(network, 1), Cancel);
@@ -379,7 +408,7 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
         await using CarinaDbContext context = database.Open();
         ProgrammeWriter writer = Writer(context, events: events);
 
-        await writer.WriteAsync([Table(network, 1)], Cancel);
+        await writer.WriteAsync([Table(network, 1)], [], Cancel);
 
         Assert.Equal([AppEventName.Programs], events.Signalled);
     }
@@ -392,10 +421,10 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
         await using CarinaDbContext context = database.Open();
         ProgrammeWriter writer = Writer(context, events: events);
 
-        await writer.WriteAsync([Table(network, 1)], Cancel);
+        await writer.WriteAsync([Table(network, 1)], [], Cancel);
         events.Signalled.Clear();
 
-        await writer.WriteAsync([Table(network, 1)], Cancel);
+        await writer.WriteAsync([Table(network, 1)], [], Cancel);
 
         Assert.Empty(events.Signalled);
     }
@@ -407,20 +436,20 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
         await using CarinaDbContext context = database.Open();
         ProgrammeWriter writer = Writer(context);
 
-        await writer.WriteAsync([Table(network, 1)], Cancel);
+        await writer.WriteAsync([Table(network, 1)], [], Cancel);
 
         await using CarinaDbContext first = database.Open();
         long written = (await new ProgrammeRepository(first).FindAsync(Id(network, 1), Cancel))!.Revision;
 
         Assert.True(written > 0);
 
-        await writer.WriteAsync([Table(network, 1)], Cancel);
+        await writer.WriteAsync([Table(network, 1)], [], Cancel);
 
         await using CarinaDbContext again = database.Open();
 
         Assert.Equal(written, (await new ProgrammeRepository(again).FindAsync(Id(network, 1), Cancel))!.Revision);
 
-        await writer.WriteAsync([Table(network, 1, name: "ひるまえほっと")], Cancel);
+        await writer.WriteAsync([Table(network, 1, name: "ひるまえほっと")], [], Cancel);
 
         await using CarinaDbContext changed = database.Open();
 
@@ -433,7 +462,7 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
         int network = NextNetwork();
         await using CarinaDbContext context = database.Open();
 
-        await Writer(context).WriteAsync([Table(network, 1), Table(network, 2)], Cancel);
+        await Writer(context).WriteAsync([Table(network, 1), Table(network, 2)], [], Cancel);
 
         await using CarinaDbContext reading = database.Open();
         var repository = new ProgrammeRepository(reading);

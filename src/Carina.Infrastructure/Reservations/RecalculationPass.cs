@@ -17,6 +17,8 @@ public enum RecalculationStage
     Scheduling = 2,
 
     Outcomes = 3,
+
+    Guide = 4,
 }
 
 public sealed record RecalculationFault(RecalculationStage Stage, string Fault);
@@ -26,6 +28,7 @@ public sealed record RecalculationPass(
     RecalculationReach Reach,
     long Revision,
     RuleApplicationRun? Applied,
+    GuideRun? Reconciled,
     ReservationOutcomeRun? Recorded,
     SchedulingRun? Settled,
     IReadOnlyList<RecalculationFault> Faults,
@@ -34,15 +37,16 @@ public sealed record RecalculationPass(
     public bool Ran => Refusal is null;
 
     public static RecalculationPass Refused(RecalculationRefusal refusal)
-        => new([], RecalculationReach.Nothing, 0, null, null, null, [], refusal);
+        => new([], RecalculationReach.Nothing, 0, null, null, null, null, [], refusal);
 
     public static RecalculationPass Of(
         IReadOnlyList<RecalculationTrigger> answering,
         RecalculationReach reach,
         long revision,
         RuleApplicationRun? applied,
+        GuideRun? reconciled,
         ReservationOutcomeRun? recorded,
         SchedulingRun? settled,
         IReadOnlyList<RecalculationFault> faults)
-        => new(answering, reach, revision, applied, recorded, settled, faults, null);
+        => new(answering, reach, revision, applied, reconciled, recorded, settled, faults, null);
 }
