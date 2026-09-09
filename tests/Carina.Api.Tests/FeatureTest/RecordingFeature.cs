@@ -319,6 +319,13 @@ internal sealed class RecordingFeature : IAsyncDisposable
         return await ReadAsync(response);
     }
 
+    public async Task<string> GetTextAsync(string path)
+    {
+        using HttpResponseMessage response = await Client.GetAsync(new Uri(path, UriKind.Relative));
+
+        return await response.Content.ReadAsStringAsync();
+    }
+
     public async Task<(HttpStatusCode Status, JsonElement Body)> PostAsync(string path, object? body = null)
     {
         using HttpResponseMessage response = await Client.PostAsJsonAsync(

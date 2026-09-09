@@ -27,17 +27,15 @@ public sealed class RecordingSearchCriteria
 
     public const int DefaultPerPage = 50;
 
-    public const int LongestKeyword = 100;
+    public const int LongestKeyword = RecordingKeyword.LongestKeyword;
 
-    public const int MostWords = 8;
+    public const int MostWords = RecordingKeyword.MostWords;
 
     public const int MostChannels = 64;
 
     public const int HighestGenre = 15;
 
     public static readonly TimeSpan LongestSpan = TimeSpan.FromDays(366);
-
-    private static readonly char[] BetweenWords = [' ', '　'];
 
     private RecordingSearchCriteria(
         string keyword,
@@ -96,11 +94,9 @@ public sealed class RecordingSearchCriteria
         int? perPage = null,
         RecordingSearchConditions? conditions = null)
     {
-        string asked = (keyword ?? string.Empty).Trim(BetweenWords);
         RecordingSearchConditions beside = conditions ?? new RecordingSearchConditions();
 
-        if (asked.Length > LongestKeyword
-            || WordsIn(asked) is not { } words
+        if (RecordingKeyword.For(keyword) is not { } asked
             || ChannelsIn(beside.Channels) is not { } channels
             || OutcomesIn(beside.Outcomes) is not { } outcomes)
         {
@@ -128,8 +124,8 @@ public sealed class RecordingSearchCriteria
         }
 
         return new RecordingSearchCriteria(
-            asked,
-            words,
+            asked.Asked,
+            asked.Words,
             channels,
             beside.Genre,
             outcomes,
@@ -139,23 +135,6 @@ public sealed class RecordingSearchCriteria
             sort,
             after,
             Clamped(perPage));
-    }
-
-    private static IReadOnlyList<string>? WordsIn(string asked)
-    {
-        string[] apart = asked.Split(BetweenWords, StringSplitOptions.RemoveEmptyEntries);
-
-        if (apart.Length > MostWords)
-        {
-            return null;
-        }
-
-        return
-        [
-            .. apart
-                .Select(word => ProgrammeSearchText.Folded(word).Trim())
-                .Where(word => word.Length > 0),
-        ];
     }
 
     private static IReadOnlyList<ProgrammeService>? ChannelsIn(IReadOnlyList<ProgrammeService>? asked)

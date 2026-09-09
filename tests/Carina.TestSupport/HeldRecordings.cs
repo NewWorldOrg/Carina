@@ -1,4 +1,5 @@
 using Carina.Domain.Base;
+using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 
@@ -17,6 +18,12 @@ public sealed class HeldRecordings : IRecordingDirectory
         ArgumentNullException.ThrowIfNull(query);
 
         IEnumerable<Recording> found = Recordings;
+
+        if (query.Keyword.Words.Count > 0)
+        {
+            found = found.Where(recording => query.Keyword.Words.All(word =>
+                Folded(recording).Contains(word, StringComparison.Ordinal)));
+        }
 
         if (query.Standing is { } standing)
         {
@@ -159,6 +166,14 @@ public sealed class HeldRecordings : IRecordingDirectory
             held.BroadcastGroupKey,
             held.BroadcastGroupRole,
             held.ThumbnailFault);
+
+    private static string Folded(Recording recording)
+        => ProgrammeSearchText.Folded(
+            recording.SnapshotName
+            + ProgrammeSearchText.BetweenNameAndSummary
+            + recording.SnapshotSummary
+            + ProgrammeSearchText.BetweenNameAndSummary
+            + recording.SnapshotExtended);
 
     private static bool Reads(Recording recording, DropReading drops)
         => drops switch
