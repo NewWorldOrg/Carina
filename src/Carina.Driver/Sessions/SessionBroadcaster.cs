@@ -16,6 +16,8 @@ public enum SubscriberKind
     Recording,
 }
 
+public sealed record ViewerLoss(int Wire, long ChunksDropped, bool StillReading);
+
 public sealed class SessionSubscription
 {
     private long droppedChunks;
@@ -25,6 +27,8 @@ public sealed class SessionSubscription
         Kind = kind;
         Channel = channel;
     }
+
+    public int Wire { get; internal set; }
 
     internal Channel<byte[]> Channel { get; }
 
@@ -42,7 +46,7 @@ public sealed class SessionSubscription
 
     public long DroppedChunks => Interlocked.Read(ref droppedChunks);
 
-    internal void CountDrop() => Interlocked.Increment(ref droppedChunks);
+    internal long CountDrop() => Interlocked.Increment(ref droppedChunks);
 }
 
 public sealed class SessionBroadcaster(
@@ -52,7 +56,8 @@ public sealed class SessionBroadcaster(
     Action<Exception>? report = null,
     int subscriberLimit = SessionBroadcaster.DefaultSubscriberLimit,
     int recordingCapacity = SessionBroadcaster.DefaultRecordingCapacity,
-    TimeSpan? recordingBlockLimit = null
+    TimeSpan? recordingBlockLimit = null,
+    Action<ViewerLoss>? viewerFallingBehind = null
 ) : IDisposable
 {
     public const int DefaultViewerCapacity = 64;
@@ -75,11 +80,13 @@ public sealed class SessionBroadcaster(
     private readonly TimeSpan blockLimit = surveyBlockLimit ?? DefaultSurveyBlockLimit;
     private readonly TimeSpan recordingBlock = recordingBlockLimit ?? TimeSpan.Zero;
     private readonly Lock gate = new();
+    private readonly List<ViewerLoss> viewersGone = [];
 
     private bool closed;
     private Exception? closedBecause;
     private SessionStopReason closedReason;
     private long droppedChunks;
+    private int wires;
 
     public int SubscriberCount => subscriptions.Count;
 
@@ -100,6 +107,28 @@ public sealed class SessionBroadcaster(
     }
 
     public long DroppedChunks => Interlocked.Read(ref droppedChunks);
+
+    public IReadOnlyList<ViewerLoss> ViewerLosses
+    {
+        get
+        {
+            lock (gate)
+            {
+                return
+                [
+                    .. viewersGone
+                        .Concat(subscriptions
+                            .Keys.Where(subscription => !Waits(subscription.Kind))
+                            .Select(subscription => new ViewerLoss(
+                                subscription.Wire,
+                                subscription.DroppedChunks,
+                                StillReading: true
+                            )))
+                        .OrderBy(loss => loss.Wire),
+                ];
+            }
+        }
+    }
 
     private void Tally() => Interlocked.Increment(ref droppedChunks);
 
@@ -138,7 +167,13 @@ public sealed class SessionBroadcaster(
                 },
                 _ =>
                 {
-                    subscription?.CountDrop();
+                    if (subscription?.CountDrop() is { } lost && Announces(lost))
+                    {
+                        viewerFallingBehind?.Invoke(
+                            new ViewerLoss(subscription.Wire, lost, StillReading: true)
+                        );
+                    }
+
                     Tally();
                 }
             );
@@ -166,6 +201,11 @@ public sealed class SessionBroadcaster(
                 return null;
             }
 
+            if (!Waits(kind))
+            {
+                subscription.Wire = ++wires;
+            }
+
             subscriptions[subscription] = 0;
         }
 
@@ -178,10 +218,24 @@ public sealed class SessionBroadcaster(
         SessionStopReason endedWith = SessionStopReason.Unspecified
     )
     {
-        if (subscriptions.TryRemove(subscription, out _))
+        if (!subscriptions.TryRemove(subscription, out _))
         {
-            subscription.EndedWith = endedWith;
-            subscription.Channel.Writer.TryComplete(because);
+            return;
+        }
+
+        subscription.EndedWith = endedWith;
+        subscription.Channel.Writer.TryComplete(because);
+
+        if (Waits(subscription.Kind) || subscription.DroppedChunks is 0)
+        {
+            return;
+        }
+
+        lock (gate)
+        {
+            viewersGone.Add(
+                new ViewerLoss(subscription.Wire, subscription.DroppedChunks, StillReading: false)
+            );
         }
     }
 
@@ -279,6 +333,19 @@ public sealed class SessionBroadcaster(
 
     private static bool Waits(SubscriberKind kind) =>
         kind is SubscriberKind.Survey or SubscriberKind.Recording;
+
+    private static bool Announces(long lost)
+    {
+        for (long step = 1; step <= lost; step *= 10)
+        {
+            if (step == lost)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     private TimeSpan LimitFor(SubscriberKind kind) =>
         kind is SubscriberKind.Recording ? recordingBlock : blockLimit;

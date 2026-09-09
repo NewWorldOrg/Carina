@@ -1,5 +1,6 @@
 using System.Buffers;
 
+using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Streaming;
 
@@ -65,6 +66,17 @@ internal sealed class LiveReception
     internal Task Life { get; private set; } = Task.CompletedTask;
 
     internal LiveSupplyEnding? Ending => stream?.Ending;
+
+    internal SessionId? Supply
+    {
+        get
+        {
+            lock (gate)
+            {
+                return stream?.Supply;
+            }
+        }
+    }
 
     /// <summary>
     /// Whether a transcoder of this channel has found that the service carries no caption stream, in

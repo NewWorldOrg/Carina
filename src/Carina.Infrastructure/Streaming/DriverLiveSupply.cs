@@ -1,3 +1,5 @@
+using System.Collections.ObjectModel;
+
 using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
@@ -108,6 +110,25 @@ public sealed class DriverLiveSupply(
         }
 
         return LiveSupplyStart.Opened(new DriverTransportStream(sessionId, bytes, driver, status, leases));
+    }
+
+    public async Task<IReadOnlyDictionary<SessionId, long>> DroppedOnTheWayInAsync(CancellationToken cancellationToken)
+    {
+        DriverCall<IReadOnlyList<SessionSnapshot>> asked = await driver.GetActiveSessionsAsync(cancellationToken);
+
+        if (!asked.TryGetValue(out IReadOnlyList<SessionSnapshot>? held))
+        {
+            return ReadOnlyDictionary<SessionId, long>.Empty;
+        }
+
+        Dictionary<SessionId, long> counted = [];
+
+        foreach (SessionSnapshot session in held)
+        {
+            counted[session.SessionId] = session.ViewerLosses.Sum(loss => loss.ChunksDroppedSinceItJoined);
+        }
+
+        return counted;
     }
 
     public static LiveRefusal Refusal(TuningRefusal refusal)

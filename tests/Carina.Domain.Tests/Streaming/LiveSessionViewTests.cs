@@ -37,6 +37,39 @@ public sealed class LiveSessionViewTests
         Assert.Throws<ArgumentOutOfRangeException>(() => new LiveSessionView(Key, -1, LiveStartup.NotStarted, 0L, 0));
         Assert.Throws<ArgumentOutOfRangeException>(() => new LiveSessionView(Key, 0, LiveStartup.NotStarted, -1L, 0));
         Assert.Throws<ArgumentOutOfRangeException>(() => new LiveSessionView(Key, 0, LiveStartup.NotStarted, 0L, -1));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new LiveSessionView(
+            Key,
+            0,
+            LiveStartup.NotStarted,
+            0L,
+            0,
+            chunksDroppedSinceTheSupplyOpened: -1L));
+    }
+
+    [Fact]
+    public void AViewThatWasNotToldWhatTheSupplyLostSaysSoRatherThanSayingNothingWasLost()
+    {
+        LiveSessionView unasked = new(Key, 1, LiveStartup.NotStarted, 0L, 0);
+        LiveSessionView asked = new(Key, 1, LiveStartup.NotStarted, 0L, 0, chunksDroppedSinceTheSupplyOpened: 0L);
+
+        Assert.Null(unasked.ChunksDroppedSinceTheSupplyOpened);
+        Assert.Empty(unasked.Watching);
+        Assert.Equal(0L, asked.ChunksDroppedSinceTheSupplyOpened);
+    }
+
+    [Fact]
+    public void AViewCarriesWhatEachViewerOfItLostSeparatelyFromTheTotal()
+    {
+        LiveSessionView view = new(
+            Key,
+            2,
+            LiveStartup.NotStarted,
+            28L,
+            11,
+            [new LiveBacklog(11, 28L), new LiveBacklog(0, 0L)]);
+
+        Assert.Equal(28L, view.Dropped);
+        Assert.Equal([28L, 0L], view.Watching.Select(backlog => backlog.Dropped));
     }
 
     [Fact]

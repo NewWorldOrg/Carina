@@ -19,7 +19,8 @@ internal sealed class HeldLiveLedger : ILiveSessionLedger
 {
     public List<LiveSessionView> Sessions { get; } = [];
 
-    public IReadOnlyList<LiveSessionView> Running => [.. Sessions];
+    public Task<IReadOnlyList<LiveSessionView>> RunningAsync(CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<LiveSessionView>>([.. Sessions]);
 }
 
 internal sealed class AlreadyChosen(LiveEncoder encoder) : ILiveEncoderSelector
@@ -105,13 +106,17 @@ internal sealed class LiveFeature : IAsyncDisposable
         int viewers,
         LiveStartup startup,
         long dropped = 0L,
-        int queued = 0)
+        int queued = 0,
+        IReadOnlyList<LiveBacklog>? watching = null,
+        long? chunksDroppedSinceTheSupplyOpened = null)
         => Ledger.Sessions.Add(new LiveSessionView(
             new LiveSessionKey(new NetworkId(32736), new ServiceId(serviceId), profile),
             viewers,
             startup,
             dropped,
-            queued));
+            queued,
+            watching,
+            chunksDroppedSinceTheSupplyOpened));
 
     public async Task<(HttpStatusCode Status, JsonDocument Body)> GetAsync(string path)
     {
@@ -246,6 +251,68 @@ public sealed class LiveEndpointTests
 
         Assert.Equal(28L, session.GetProperty("dropped").GetInt64());
         Assert.Equal(11, session.GetProperty("queued").GetInt32());
+    }
+
+    [Fact]
+    public async Task ASessionSaysWhatTheDriverThrewAwayBeforeItEverReachedUs()
+    {
+        await using LiveFeature feature = new();
+
+        feature.Seed(1024, "Watched", remoteControlKey: 1);
+        feature.Watching(
+            1024,
+            LiveProfile.Hd30,
+            2,
+            LiveStartup.NotStarted,
+            dropped: 0L,
+            chunksDroppedSinceTheSupplyOpened: 5_318L);
+
+        (_, JsonDocument body) = await feature.GetAsync("/api/live/sessions");
+
+        JsonElement session = body.RootElement.GetProperty("data")[0];
+
+        Assert.Equal(5_318L, session.GetProperty("chunksDroppedSinceTheSupplyOpened").GetInt64());
+        Assert.Equal(0L, session.GetProperty("dropped").GetInt64());
+    }
+
+    [Fact]
+    public async Task ASupplyNobodyCouldBeAskedAboutIsNotAnsweredAsHavingLostNothing()
+    {
+        await using LiveFeature feature = new();
+
+        feature.Seed(1024, "Watched", remoteControlKey: 1);
+        feature.Watching(1024, LiveProfile.Hd30, 1);
+
+        (_, JsonDocument body) = await feature.GetAsync("/api/live/sessions");
+
+        JsonElement session = body.RootElement.GetProperty("data")[0];
+
+        Assert.Equal(JsonValueKind.Null, session.GetProperty("chunksDroppedSinceTheSupplyOpened").ValueKind);
+    }
+
+    [Fact]
+    public async Task EachViewerOfASessionIsAnsweredForApartSoTheOneSufferingIsNotHiddenInATotal()
+    {
+        await using LiveFeature feature = new();
+
+        feature.Seed(1024, "Watched", remoteControlKey: 1);
+        feature.Watching(
+            1024,
+            LiveProfile.Hd30,
+            2,
+            LiveStartup.NotStarted,
+            dropped: 28L,
+            queued: 11,
+            watching: [new LiveBacklog(11, 28L), new LiveBacklog(0, 0L)]);
+
+        (_, JsonDocument body) = await feature.GetAsync("/api/live/sessions");
+
+        JsonElement watching = body.RootElement.GetProperty("data")[0].GetProperty("watching");
+
+        Assert.Equal(2, watching.GetArrayLength());
+        Assert.Equal(28L, watching[0].GetProperty("droppedSinceTheyJoined").GetInt64());
+        Assert.Equal(11, watching[0].GetProperty("queued").GetInt32());
+        Assert.Equal(0L, watching[1].GetProperty("droppedSinceTheyJoined").GetInt64());
     }
 
     [Fact]

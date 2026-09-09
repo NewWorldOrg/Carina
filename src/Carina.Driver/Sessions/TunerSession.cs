@@ -132,7 +132,8 @@ public sealed class TunerSession : IDisposable
             report: RecordFault,
             recordingBlockLimit: purpose is SessionPurpose.Recording
                 ? TimeSpan.Zero
-                : RecordingBackPressure.WithinTheDemuxWindow(demuxBufferBytes)
+                : RecordingBackPressure.WithinTheDemuxWindow(demuxBufferBytes),
+            viewerFallingBehind: NoteViewerLoss
         );
 
         if (watch is not null && device.Quality is { } source)
@@ -221,6 +222,8 @@ public sealed class TunerSession : IDisposable
             }
         }
     }
+
+    public IReadOnlyList<ViewerLoss> ViewerLosses => Broadcaster.ViewerLosses;
 
     public long DiscardedBytes => Interlocked.Read(ref discardedBytes);
 
@@ -644,6 +647,17 @@ public sealed class TunerSession : IDisposable
 
         tell?.Invoke(this, sample);
     }
+
+    private void NoteViewerLoss(ViewerLoss loss) =>
+        logger?.LogWarning(
+            "Session {SessionId} on {DeviceId} has thrown away {ChunksDropped} chunk(s) of the "
+                + "stream for live reader {Wire}, which is not taking them fast enough; what that "
+                + "reader is carrying has holes in it from here on.",
+            SessionId.Value,
+            DeviceId,
+            loss.ChunksDropped,
+            loss.Wire
+        );
 
     private void RecordFault(Exception error)
     {

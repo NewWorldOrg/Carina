@@ -44,7 +44,7 @@ public sealed class DriverTransportStream : ILiveTransportStream
         Bytes = new Reading(this);
     }
 
-    public SessionId Session => session;
+    public SessionId Supply => session;
 
     public Stream Bytes { get; }
 

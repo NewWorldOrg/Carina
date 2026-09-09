@@ -30,6 +30,16 @@ public sealed record LiveStartupResponder(bool InProgress, IReadOnlyList<LiveSta
     }
 }
 
+public sealed record LiveViewerResponder(long DroppedSinceTheyJoined, int Queued)
+{
+    public static LiveViewerResponder Of(LiveBacklog backlog)
+    {
+        ArgumentNullException.ThrowIfNull(backlog);
+
+        return new LiveViewerResponder(backlog.Dropped, backlog.Queued);
+    }
+}
+
 public sealed record LiveSessionResponder(
     int NetworkId,
     int ServiceId,
@@ -37,6 +47,8 @@ public sealed record LiveSessionResponder(
     int Viewers,
     long Dropped,
     int Queued,
+    long? ChunksDroppedSinceTheSupplyOpened,
+    IReadOnlyList<LiveViewerResponder> Watching,
     LiveStartupResponder Startup)
 {
     public static LiveSessionResponder Of(LiveSessionView session)
@@ -50,6 +62,8 @@ public sealed record LiveSessionResponder(
             session.Viewers,
             session.Dropped,
             session.Queued,
+            session.ChunksDroppedSinceTheSupplyOpened,
+            [.. session.Watching.Select(LiveViewerResponder.Of)],
             LiveStartupResponder.Of(session.Startup));
     }
 }

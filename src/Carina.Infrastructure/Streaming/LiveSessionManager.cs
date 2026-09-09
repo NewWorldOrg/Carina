@@ -33,24 +33,33 @@ public sealed class LiveSessionManager(
         }
     }
 
-    public IReadOnlyList<LiveSessionView> Running
+    public async Task<IReadOnlyList<LiveSessionView>> RunningAsync(CancellationToken cancellationToken)
     {
-        get
+        IReadOnlyDictionary<SessionId, long> onTheWayIn = await supply.DroppedOnTheWayInAsync(cancellationToken);
+        List<LiveSession> running;
+
+        lock (gate)
         {
-            lock (gate)
-            {
-                return
-                [
-                    .. sessions.Values.Select(session => new LiveSessionView(
-                        session.Key,
-                        session.Viewers,
-                        session.Startup.Current ?? LiveStartup.NotStarted,
-                        session.Dropped,
-                        session.Queued)),
-                ];
-            }
+            running = [.. sessions.Values];
         }
+
+        return
+        [
+            .. running.Select(session => new LiveSessionView(
+                session.Key,
+                session.Viewers,
+                session.Startup.Current ?? LiveStartup.NotStarted,
+                session.Dropped,
+                session.Queued,
+                session.Watching,
+                Lost(session, onTheWayIn))),
+        ];
     }
+
+    private static long? Lost(LiveSession session, IReadOnlyDictionary<SessionId, long> onTheWayIn)
+        => session.Supply is { } supplied && onTheWayIn.TryGetValue(supplied, out long dropped)
+            ? dropped
+            : null;
 
     public int Viewers(LiveSessionKey key)
     {

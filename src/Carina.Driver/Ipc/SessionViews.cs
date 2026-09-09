@@ -25,6 +25,13 @@ public static class SessionViews
             BytesRecorded = session.BytesRecorded,
             FaultCount = session.FaultCount,
             DroppedChunks = session.DroppedChunks,
+            ViewerLosses =
+            [
+                .. session.ViewerLosses.Select(loss => new ViewerLossDto(
+                    loss.Wire,
+                    loss.ChunksDropped,
+                    loss.StillReading)),
+            ],
             FirstFault = session.FirstFault?.Message,
             FailureCause = session.FailureCause?.Message,
             Counters = session.Counters.Snapshot() with

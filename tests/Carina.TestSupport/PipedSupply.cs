@@ -1,5 +1,6 @@
 using System.IO.Pipelines;
 
+using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Streaming;
 
@@ -32,6 +33,14 @@ public sealed class PipedSupply : ILiveSupply
 
     public bool AsIfThereWereOneTuner { get; set; }
 
+    public Dictionary<SessionId, long> DroppedOnTheWayIn { get; } = [];
+
+    public bool DriverCannotBeAsked { get; set; }
+
+    public Task<IReadOnlyDictionary<SessionId, long>> DroppedOnTheWayInAsync(CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyDictionary<SessionId, long>>(
+            DriverCannotBeAsked ? new Dictionary<SessionId, long>() : new Dictionary<SessionId, long>(DroppedOnTheWayIn));
+
     public async Task<LiveSupplyStart> OpenAsync(NetworkId network, ServiceId service, CancellationToken cancellationToken)
     {
         Interlocked.Increment(ref asked);
@@ -53,7 +62,10 @@ public sealed class PipedSupply : ILiveSupply
                 "the one tuner of the test is held by a stream that has not been let go.");
         }
 
-        PipedTransportStream stream = new(network, service);
+        PipedTransportStream stream = new(network, service)
+        {
+            Supply = SessionId.Parse($"live-{network.Value}-{service.Value}"),
+        };
 
         lock (gate)
         {
@@ -80,6 +92,8 @@ public sealed class PipedTransportStream : ILiveTransportStream
     public NetworkId Network { get; }
 
     public ServiceId Service { get; }
+
+    public SessionId Supply { get; init; }
 
     public Stream Bytes { get; }
 
