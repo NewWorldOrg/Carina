@@ -85,8 +85,26 @@ public sealed class QualitySignalSurveyTests
             QualityStates.Of(Read(QualityThresholdKey.CarrierToNoiseFloor, figures).Reading));
     }
 
-    [Fact(DisplayName = "BR-QD-014: a supply that went silent reads as unreachable while its measured count stands")]
-    public void ASupplyThatWentSilentReadsAsUnreachableWhileItsMeasuredCountStands()
+    [Fact(DisplayName = "BR-QD-007: a supply nothing at all could be taken from is the one that reads as unreachable")]
+    public void ASupplyNothingAtAllCouldBeTakenFromIsTheOneThatReadsAsUnreachable()
+    {
+        IReadOnlyList<SignalFigures> figures = QualitySignalSurvey.Figures(
+            [],
+            [
+                Sample(Noon, SignalSample.NotTaken(Noon, SignalNotTaken.NothingReported)),
+                Sample(Noon.AddSeconds(10), SignalSample.NotTaken(Noon.AddSeconds(10), SignalNotTaken.DriverUnreachable)),
+            ]);
+
+        foreach (QualitySignalRead read in QualitySignalSurvey.Read(figures, [Tuner], Levels))
+        {
+            Assert.Equal(QualityState.Unreachable, QualityStates.Of(read.Reading));
+            Assert.Equal(0, read.Reading.Measured);
+            Assert.Equal(0, read.Reading.BeyondThreshold);
+        }
+    }
+
+    [Fact(DisplayName = "BR-QD-007: a supply that kept answering is not called unreachable for the samples it missed")]
+    public void ASupplyThatKeptAnsweringIsNotCalledUnreachableForTheSamplesItMissed()
     {
         IReadOnlyList<SignalFigures> figures = QualitySignalSurvey.Figures(
             [],
@@ -97,9 +115,31 @@ public sealed class QualitySignalSurveyTests
 
         QualitySignalRead read = Read(QualityThresholdKey.CarrierToNoiseFloor, figures);
 
-        Assert.Equal(QualityState.Unreachable, QualityStates.Of(read.Reading));
+        Assert.Equal(QualityState.Good, QualityStates.Of(read.Reading));
         Assert.Equal(1, read.Reading.Measured);
         Assert.Equal(0, read.Reading.BeyondThreshold);
+    }
+
+    [Fact(DisplayName = "BR-QD-014: a silent supply beside a measured one still says how much was measured and how much went beyond")]
+    public void ASilentSupplyBesideAMeasuredOneStillSaysHowMuchWasMeasuredAndHowMuchWentBeyond()
+    {
+        TunerDeviceId silent = new("adapter3.frontend1");
+
+        IReadOnlyList<SignalFigures> figures = QualitySignalSurvey.Figures(
+            [],
+            [
+                Sample(Noon, SignalSample.WithLock(Noon, 6000, Noon)),
+                Sample(Noon.AddSeconds(10), SignalSample.NotTaken(Noon.AddSeconds(10), SignalNotTaken.NothingReported), silent),
+            ]);
+
+        QualitySignalRead read = QualitySignalSurvey
+            .Read(figures, [Tuner, silent], Levels)
+            .Single(one => one.Key == QualityThresholdKey.CarrierToNoiseFloor);
+
+        Assert.Equal(QualityState.Unreachable, QualityStates.Of(read.Reading));
+        Assert.Equal(2, read.Reading.Subjects);
+        Assert.Equal(1, read.Reading.Measured);
+        Assert.Equal(1, read.Reading.BeyondThreshold);
     }
 
     [Fact(DisplayName = "BR-QD-004: a sample that could not be taken is left out of the lock rate's denominator")]
@@ -177,13 +217,13 @@ public sealed class QualitySignalSurveyTests
     private static QualitySignalRead Read(QualityThresholdKey key, IReadOnlyList<SignalFigures> figures)
         => QualitySignalSurvey.Read(figures, [Tuner], Levels).Single(one => one.Key == key);
 
-    private static QualitySignalSample Sample(DateTime at, SignalSample signal)
+    private static QualitySignalSample Sample(DateTime at, SignalSample signal, TunerDeviceId? tuner = null)
         => QualitySignalSample.Rehydrate(
             "instance-a",
             SessionId.Parse("live-1"),
             at,
             SessionPurpose.Live,
-            Tuner,
+            tuner ?? Tuner,
             new NetworkId(32736),
             new ServiceId(1024),
             signal);

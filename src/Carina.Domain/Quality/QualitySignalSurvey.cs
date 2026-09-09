@@ -16,6 +16,8 @@ public sealed record SignalFigures(
 {
     public long Taken => Samples - Unreachable;
 
+    public bool NothingWasTaken => Samples > 0 && Taken is 0;
+
     public double? LockRate => Taken is 0 ? null : (double)Locked / Taken;
 }
 
@@ -121,9 +123,11 @@ public static class QualitySignalSurvey
                 continue;
             }
 
-            if (figure.Unreachable > 0)
+            if (figure.NothingWasTaken)
             {
                 unreachable++;
+
+                continue;
             }
 
             if (Observed(key, figure) is not { } observed)

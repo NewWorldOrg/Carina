@@ -326,6 +326,33 @@ public sealed class QualityEndpointTests
     {
         await using var feature = new QualityFeature();
         feature.Recorded(tuner: "adapter3.frontend0");
+        feature.Sampled(tuner: "adapter3.frontend0", carrierToNoise: 6_000);
+        feature.Sampled(
+            tuner: "adapter3.frontend1",
+            samples: 360,
+            locked: 0,
+            unreachable: 360,
+            carrierToNoise: null,
+            bitErrorRate: null);
+
+        JsonElement reading = (await feature.GetAsync("/api/quality/summary")).Body
+            .GetProperty("data")
+            .GetProperty("signal")
+            .EnumerateArray()
+            .Single(facet => facet.GetProperty("metric").GetString() == "carrierToNoiseFloor")
+            .GetProperty("reading");
+
+        Assert.Equal("unreachable", reading.GetProperty("state").GetString());
+        Assert.Equal(2, reading.GetProperty("subjects").GetInt32());
+        Assert.Equal(1, reading.GetProperty("measured").GetInt32());
+        Assert.Equal(1, reading.GetProperty("beyondThreshold").GetInt32());
+    }
+
+    [Fact(DisplayName = "BR-QD-007: samples the driver could not answer do not turn a live supply into an unreachable one")]
+    public async Task SamplesTheDriverCouldNotAnswerDoNotTurnALiveSupplyIntoAnUnreachableOne()
+    {
+        await using var feature = new QualityFeature();
+        feature.Recorded(tuner: "adapter3.frontend0");
         feature.Sampled(samples: 361, locked: 360, unreachable: 1);
 
         JsonElement signal = (await feature.GetAsync("/api/quality/summary")).Body
@@ -334,8 +361,9 @@ public sealed class QualityEndpointTests
 
         Assert.All(signal.EnumerateArray(), facet =>
         {
-            Assert.Equal("unreachable", facet.GetProperty("reading").GetProperty("state").GetString());
+            Assert.Equal("good", facet.GetProperty("reading").GetProperty("state").GetString());
             Assert.Equal(1, facet.GetProperty("reading").GetProperty("measured").GetInt32());
+            Assert.Equal(0, facet.GetProperty("reading").GetProperty("beyondThreshold").GetInt32());
         });
     }
 
