@@ -21,7 +21,7 @@ public sealed class MigrationRecordEndpointTests
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal(JsonValueKind.Null, data.GetProperty("run").ValueKind);
         Assert.Empty(data.GetProperty("populations").EnumerateArray());
-        Assert.Empty(data.GetProperty("omissions").EnumerateArray());
+        Assert.Empty(data.GetProperty("losses").EnumerateArray());
         Assert.Empty(data.GetProperty("items").EnumerateArray());
         Assert.Equal(0, data.GetProperty("total").GetInt32());
         Assert.Equal(1, data.GetProperty("lastPage").GetInt32());
@@ -114,25 +114,20 @@ public sealed class MigrationRecordEndpointTests
     }
 
     [Fact]
-    public async Task WhatWasDeliberatelyNotDoneComesBackAsOneLineEachWithTheGroundItStandsOn()
+    public async Task WhatWasCarriedAndArrivedDiminishedComesBackAsOneLineEachWithHowMuchItReaches()
     {
         await using var feature = new MigrationFeature();
         feature.Records.Kept = MigrationFeature.Carried(MigrationPass.ForReal);
 
         (_, JsonElement body) = await feature.GetAsync(Record);
-        JsonElement[] omissions = [.. body.GetProperty("data").GetProperty("omissions").EnumerateArray()];
+        JsonElement[] losses = [.. body.GetProperty("data").GetProperty("losses").EnumerateArray()];
 
-        Assert.Equal(MigrationOmissionSubjects.All.Count, omissions.Length);
         Assert.Equal(
-            "nothingToCarry",
-            omissions.Single(one => one.GetProperty("subject").GetString() == "qualityTimeSeries")
-                .GetProperty("ground")
-                .GetString());
-        Assert.Equal(
-            JsonValueKind.Null,
-            omissions.Single(one => one.GetProperty("subject").GetString() == "programmeGuide")
-                .GetProperty("affected")
-                .ValueKind);
+            ["duplicateAvoidance", "enclosedCharacters"],
+            losses.Select(one => one.GetProperty("subject").GetString()).Order(StringComparer.Ordinal));
+        Assert.All(
+            losses,
+            one => Assert.Equal(JsonValueKind.Number, one.GetProperty("affected").ValueKind));
     }
 
     [Fact]

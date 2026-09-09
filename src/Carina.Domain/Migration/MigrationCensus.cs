@@ -78,7 +78,7 @@ public static class MigrationCensus
             run,
             tallies,
             details,
-            MigrationOmission.EveryOne(id, aftermath),
+            MigrationLoss.EveryOne(id, aftermath),
             aftermath.ChannelProposals,
             aftermath.RuleProposals);
     }

@@ -38,18 +38,16 @@ public sealed class CarrySaidTests
     }
 
     [Fact]
-    public void WhatWasDeliberatelyNotDoneIsSaidTooSoItDoesNotReadAsAFeatureThatWentMissing()
+    public void WhatWasCarriedAndArrivedDiminishedIsSaidTooSoItDoesNotReadAsAFeatureThatWentMissing()
     {
         string said = CarrySaid.Of(Report(MigrationPass.Rehearsal));
 
         Assert.Contains(
-            "Nothing was done about ProgrammeGuide: NotMigratedByDesign.",
+            "Carried and diminished, DuplicateAvoidance: 1 rows.",
             said,
             StringComparison.Ordinal);
-        Assert.Contains(
-            "Nothing was done about QualityTimeSeries: NothingToCarry.",
-            said,
-            StringComparison.Ordinal);
+        Assert.DoesNotContain("ProgrammeGuide", said, StringComparison.Ordinal);
+        Assert.DoesNotContain("QualityTimeSeries", said, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -97,7 +95,7 @@ public sealed class CarrySaidTests
         string said = CarrySaid.Of(Report(MigrationPass.Rehearsal));
 
         Assert.Contains(
-            "Nothing was done about EnclosedCharacters: NotMigratedByDesign, touching 2 rows.",
+            "Carried and diminished, EnclosedCharacters: 2 rows.",
             said,
             StringComparison.Ordinal);
     }

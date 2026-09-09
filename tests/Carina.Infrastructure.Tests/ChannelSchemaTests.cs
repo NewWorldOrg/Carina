@@ -259,7 +259,7 @@ public sealed class ChannelSchemaTests
                 "logo_visit",
                 "migration_channel_proposal",
                 "migration_detail",
-                "migration_omission",
+                "migration_loss",
                 "migration_rule_proposal",
                 "migration_run",
                 "migration_tally",

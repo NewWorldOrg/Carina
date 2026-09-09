@@ -6,7 +6,7 @@ public static class MigrationTallyReach
     [
         "MigrationTally",
         "MigrationDetail",
-        "MigrationOmission",
+        "MigrationLoss",
         "MigrationRoll",
         "MigrationVerdict",
     ];

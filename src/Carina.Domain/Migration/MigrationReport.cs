@@ -6,14 +6,14 @@ public sealed class MigrationReport
         MigrationRun run,
         IReadOnlyList<MigrationTally> tallies,
         IReadOnlyList<MigrationDetail> details,
-        IReadOnlyList<MigrationOmission> omissions,
+        IReadOnlyList<MigrationLoss> losses,
         IReadOnlyList<MigrationChannelProposal> channelProposals,
         IReadOnlyList<MigrationRuleProposal> ruleProposals)
     {
         ArgumentNullException.ThrowIfNull(run);
         ArgumentNullException.ThrowIfNull(tallies);
         ArgumentNullException.ThrowIfNull(details);
-        ArgumentNullException.ThrowIfNull(omissions);
+        ArgumentNullException.ThrowIfNull(losses);
         ArgumentNullException.ThrowIfNull(channelProposals);
         ArgumentNullException.ThrowIfNull(ruleProposals);
 
@@ -43,14 +43,14 @@ public sealed class MigrationReport
             }
         }
 
-        Told(run, omissions);
+        Lost(run, losses);
         Proposed(run, channelProposals, counted[MigrationPopulation.ChannelDefinitions]);
         Meant(run, ruleProposals, counted[MigrationPopulation.Rules]);
 
         Run = run;
         Tallies = [.. tallies];
         Details = [.. details];
-        Omissions = [.. omissions];
+        Losses = [.. losses];
         ChannelProposals = [.. channelProposals];
         RuleProposals = [.. ruleProposals];
     }
@@ -61,7 +61,7 @@ public sealed class MigrationReport
 
     public IReadOnlyList<MigrationDetail> Details { get; }
 
-    public IReadOnlyList<MigrationOmission> Omissions { get; }
+    public IReadOnlyList<MigrationLoss> Losses { get; }
 
     public IReadOnlyList<MigrationChannelProposal> ChannelProposals { get; }
 
@@ -71,10 +71,10 @@ public sealed class MigrationReport
         MigrationRun run,
         IReadOnlyList<MigrationTally> tallies,
         IReadOnlyList<MigrationDetail> details,
-        IReadOnlyList<MigrationOmission> omissions,
+        IReadOnlyList<MigrationLoss> losses,
         IReadOnlyList<MigrationChannelProposal> channelProposals,
         IReadOnlyList<MigrationRuleProposal> ruleProposals)
-        => new(run, tallies, details, omissions, channelProposals, ruleProposals);
+        => new(run, tallies, details, losses, channelProposals, ruleProposals);
 
     private static Dictionary<MigrationPopulation, MigrationTally> Counted(
         MigrationRun run,
@@ -123,31 +123,31 @@ public sealed class MigrationReport
         return found;
     }
 
-    private static void Told(MigrationRun run, IReadOnlyList<MigrationOmission> omissions)
+    private static void Lost(MigrationRun run, IReadOnlyList<MigrationLoss> losses)
     {
-        HashSet<MigrationOmissionSubject> found = [];
+        HashSet<MigrationLossSubject> found = [];
 
-        foreach (MigrationOmission omission in omissions)
+        foreach (MigrationLoss loss in losses)
         {
-            ArgumentNullException.ThrowIfNull(omission);
-            Belongs(run, omission.RunId, nameof(omissions));
+            ArgumentNullException.ThrowIfNull(loss);
+            Belongs(run, loss.RunId, nameof(losses));
 
-            if (!found.Add(omission.Subject))
+            if (!found.Add(loss.Subject))
             {
                 throw new ArgumentException(
-                    $"A run says once that it did nothing about {omission.Subject}.",
-                    nameof(omissions));
+                    $"A run says once how much of {loss.Subject} it carried and left diminished.",
+                    nameof(losses));
             }
         }
 
-        foreach (MigrationOmissionSubject subject in MigrationOmissionSubjects.All)
+        foreach (MigrationLossSubject subject in MigrationLossSubjects.All)
         {
             if (!found.Contains(subject))
             {
                 throw new ArgumentException(
-                    $"Nothing was done about {subject} and the run does not say so, which later reads as a "
-                    + "feature that went missing.",
-                    nameof(omissions));
+                    $"What was carried of {subject} reached the new system diminished and the run does not say "
+                    + "so, which later reads as a feature that went missing.",
+                    nameof(losses));
             }
         }
     }

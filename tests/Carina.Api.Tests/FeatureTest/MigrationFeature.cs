@@ -47,7 +47,7 @@ internal sealed class HeldMigrationRecord : IMigrationRecordRepository
             report.Run,
             report.Tallies,
             MigrationRefusalCount.EveryOne(counted),
-            report.Omissions,
+            report.Losses,
             Rehearsals,
             LastRehearsalFinishedAt));
     }

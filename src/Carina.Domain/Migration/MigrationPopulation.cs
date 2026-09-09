@@ -36,8 +36,7 @@ public static class MigrationPopulations
         MigrationPopulation.ChannelDefinitions,
     ];
 
-    public static readonly IReadOnlyList<MigrationPopulation> ToldAsSomethingNotDone =
-        [.. All.Except(Counted)];
+    public static readonly IReadOnlyList<MigrationPopulation> NotCounted = [.. All.Except(Counted)];
 
     public static MigrationPopulation Named(MigrationPopulation population)
         => Enum.IsDefined(population)
@@ -53,5 +52,5 @@ public static class MigrationPopulations
             : throw new ArgumentOutOfRangeException(
                 nameof(population),
                 population,
-                "The programme guide is recorded as something not done, never as rows of its own.");
+                "The programme guide is never counted as rows of its own.");
 }

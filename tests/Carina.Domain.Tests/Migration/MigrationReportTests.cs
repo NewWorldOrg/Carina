@@ -14,31 +14,35 @@ public sealed class MigrationReportTests
             population => MigrationTally.Rehydrate(Run, population, 0, 0, 0, 0))];
 
     [Fact]
-    public void ARunThatSaysNothingAboutWhatItDidNotDoIsRefused()
+    public void ARunThatSaysNothingAboutWhatArrivedDiminishedIsRefused()
     {
-        IReadOnlyList<MigrationOmission> short_ =
+        IReadOnlyList<MigrationLoss> short_ =
             [.. Told(Run).Where(
-                omission => omission.Subject is not MigrationOmissionSubject.ProgrammeGuide)];
+                loss => loss.Subject is not MigrationLossSubject.DuplicateAvoidance)];
 
         ArgumentException refused = Assert.Throws<ArgumentException>(
             () => MigrationReport.Of(Ran(), Empty(), [], short_, [], []));
 
-        Assert.Contains("ProgrammeGuide", refused.Message, StringComparison.Ordinal);
+        Assert.Contains("DuplicateAvoidance", refused.Message, StringComparison.Ordinal);
     }
 
     [Theory]
-    [InlineData(MigrationOmissionSubject.ProgrammeGuide)]
-    [InlineData(MigrationOmissionSubject.DuplicateAvoidance)]
-    [InlineData(MigrationOmissionSubject.QualityTimeSeries)]
-    [InlineData(MigrationOmissionSubject.RecordingHistory)]
-    [InlineData(MigrationOmissionSubject.EnclosedCharacters)]
-    [InlineData(MigrationOmissionSubject.Thumbnails)]
-    public void EachThingDeliberatelyLeftAloneHasToBeSaidOutLoud(MigrationOmissionSubject subject)
+    [InlineData(MigrationLossSubject.DuplicateAvoidance)]
+    [InlineData(MigrationLossSubject.EnclosedCharacters)]
+    public void EveryLossCarriedIntoTheNewSystemHasToBeSaidOutLoud(MigrationLossSubject subject)
     {
-        IReadOnlyList<MigrationOmission> short_ =
-            [.. Told(Run).Where(omission => omission.Subject != subject)];
+        IReadOnlyList<MigrationLoss> short_ =
+            [.. Told(Run).Where(loss => loss.Subject != subject)];
 
         Assert.Throws<ArgumentException>(() => MigrationReport.Of(Ran(), Empty(), [], short_, [], []));
+    }
+
+    [Fact]
+    public void ARunSaysWhatOneSubjectLostOnce()
+    {
+        IReadOnlyList<MigrationLoss> twice = [.. Told(Run), .. Told(Run)];
+
+        Assert.Throws<ArgumentException>(() => MigrationReport.Of(Ran(), Empty(), [], twice, [], []));
     }
 
     [Fact]
@@ -135,17 +139,16 @@ public sealed class MigrationReportTests
     }
 
     [Fact]
-    public void EveryPopulationIsEitherCountedOrNamedAmongTheThingsLeftAlone()
+    public void EveryPopulationIsEitherCountedOrKnownNotToBe()
     {
         Assert.Equal(
             MigrationPopulations.All,
-            [.. MigrationPopulations.Counted, .. MigrationPopulations.ToldAsSomethingNotDone]);
+            [.. MigrationPopulations.Counted, .. MigrationPopulations.NotCounted]);
 
         Assert.All(
-            MigrationPopulations.ToldAsSomethingNotDone,
-            population => Assert.Contains(
-                MigrationOmissionSubjects.All,
-                subject => subject.ToString() == population.ToString()));
+            MigrationPopulations.NotCounted,
+            population => Assert.Throws<ArgumentOutOfRangeException>(
+                () => MigrationPopulations.Countable(population)));
     }
 
     [Fact]
@@ -155,7 +158,7 @@ public sealed class MigrationReportTests
 
         Assert.Equal(5, told.Tallies.Count);
         Assert.Empty(told.Details);
-        Assert.Equal(MigrationOmissionSubjects.All.Count, told.Omissions.Count);
+        Assert.Equal(MigrationLossSubjects.All.Count, told.Losses.Count);
     }
 
     [Fact]
@@ -206,6 +209,6 @@ public sealed class MigrationReportTests
             "21",
             null);
 
-    private static IReadOnlyList<MigrationOmission> Told(MigrationRunId run)
-        => MigrationOmission.EveryOne(run, MigrationAftermath.Nothing);
+    private static IReadOnlyList<MigrationLoss> Told(MigrationRunId run)
+        => MigrationLoss.EveryOne(run, MigrationAftermath.Nothing);
 }

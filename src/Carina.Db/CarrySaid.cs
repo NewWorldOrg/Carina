@@ -47,18 +47,15 @@ public static class CarrySaid
             $"Rules converted, every one of them turned off: {report.RuleProposals.Count}, of which "
             + $"{report.RuleProposals.Count(proposal => proposal.EnabledAtTheSource)} were on at the source.");
 
-        foreach (MigrationOmission omission in report.Omissions.OrderBy(omission => omission.Subject))
+        foreach (MigrationLoss loss in report.Losses.OrderBy(loss => loss.Subject))
         {
             said.AppendLine(
                 CultureInfo.InvariantCulture,
-                $"Nothing was done about {omission.Subject}: {omission.Ground}{Touching(omission)}.");
+                $"Carried and diminished, {loss.Subject}: {loss.Affected} rows.");
         }
 
         return said.ToString();
     }
-
-    private static string Touching(MigrationOmission omission)
-        => omission.Affected is { } affected ? $", touching {affected} rows" : string.Empty;
 
     private static string Pass(MigrationPass pass)
         => pass is MigrationPass.Rehearsal ? "A rehearsal" : "A run for real";
