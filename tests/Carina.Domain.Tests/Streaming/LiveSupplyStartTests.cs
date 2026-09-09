@@ -1,3 +1,4 @@
+using Carina.Contracts;
 using Carina.Domain.Streaming;
 
 namespace Carina.Domain.Tests.Streaming;
@@ -47,6 +48,8 @@ public sealed class LiveSupplyStartTests
 
     private sealed class Silence : ILiveTransportStream
     {
+        public SessionId Supply => SessionId.Parse("silent");
+
         public Stream Bytes => Stream.Null;
 
         public LiveSupplyEnding? Ending => null;

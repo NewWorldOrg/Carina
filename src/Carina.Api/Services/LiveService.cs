@@ -62,9 +62,12 @@ public sealed class LiveService(
         return ServiceResult<LiveProfile>.Success(LiveProfile.Unasked(chosen.Encoder));
     }
 
-    public ServiceResult<IReadOnlyList<LiveSessionView>> ListSessions()
+    public async Task<ServiceResult<IReadOnlyList<LiveSessionView>>> ListSessionsAsync(CancellationToken cancellationToken)
         => ServiceResult<IReadOnlyList<LiveSessionView>>.Success(
-            [.. sessions.Running.OrderBy(session => session.Key.ToString(), StringComparer.Ordinal)]);
+        [
+            .. (await sessions.RunningAsync(cancellationToken))
+                .OrderBy(session => session.Key.ToString(), StringComparer.Ordinal),
+        ]);
 
     public async Task<ServiceResult<IssuedPlaybackTicket, LiveTicketRefusal>> IssueTicketAsync(
         NetworkId network,
@@ -121,7 +124,7 @@ public sealed class LiveService(
     private async Task<IReadOnlyList<LiveChannelListing>> WatchableAsync(CancellationToken cancellationToken)
     {
         IReadOnlyList<CandidateChannel> selected = await candidates.ListSelectedAsync(cancellationToken);
-        IReadOnlyList<LiveSessionView> running = sessions.Running;
+        IReadOnlyList<LiveSessionView> running = await sessions.RunningAsync(cancellationToken);
         List<LiveChannelListing> listed = [];
 
         foreach (BroadcastService service in await services.ListAsync(cancellationToken))

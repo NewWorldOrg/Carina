@@ -324,7 +324,7 @@ public sealed class LiveSessionManagerTests
 
         await using ILiveViewing next = await Joined(AnotherChannel);
 
-        Assert.Equal([AnotherChannel], Ledger.Running.Select(view => view.Key));
+        Assert.Equal([AnotherChannel], (await Ledger.RunningAsync(CancellationToken.None)).Select(view => view.Key));
         Assert.All(events.Signalled, name => Assert.Same(AppEventName.Live, name));
     }
 
@@ -743,7 +743,11 @@ public sealed class LiveSessionManagerTests
             () => manager.Startup(EveryFrame)?.Current is { InProgress: false },
             "the first picture ends the startup");
 
-        LiveSessionView[] running = [.. Ledger.Running.OrderBy(view => view.Key.ToString(), StringComparer.Ordinal)];
+        LiveSessionView[] running =
+        [
+            .. (await Ledger.RunningAsync(CancellationToken.None))
+                .OrderBy(view => view.Key.ToString(), StringComparer.Ordinal),
+        ];
 
         Assert.Equal([EveryFrame, AnotherChannel], running.Select(view => view.Key));
         Assert.Equal([2, 1], running.Select(view => view.Viewers));
@@ -775,7 +779,9 @@ public sealed class LiveSessionManagerTests
 
         await Eventually.Happens(() => slow.Backlog.Dropped >= 2L, "pictures beyond the backlog are thrown away");
 
-        Assert.Equal(slow.Backlog.Dropped, ((ILiveSessionLedger)crowded).Running.Single().Dropped);
+        Assert.Equal(
+            slow.Backlog.Dropped,
+            (await ((ILiveSessionLedger)crowded).RunningAsync(CancellationToken.None)).Single().Dropped);
 
         await crowded.DisposeAsync();
     }
@@ -964,9 +970,82 @@ public sealed class LiveSessionManagerTests
     }
 
     [Fact]
-    public void TheLedgerIsEmptyWhileNothingIsBeingSentLive()
+    public async Task WhatTheDriverThrewAwayBeforeItReachedThisAppIsOnTheSession()
     {
-        Assert.Empty(Ledger.Running);
+        await using ILiveViewing watching = await Joined(EveryFrame);
+
+        supply.DroppedOnTheWayIn[supply.Opened[0].Supply] = 5_318L;
+
+        LiveSessionView running = (await Ledger.RunningAsync(CancellationToken.None)).Single();
+
+        Assert.Equal(5_318L, running.ChunksDroppedSinceTheSupplyOpened);
+        Assert.Equal(0L, running.Dropped);
+    }
+
+    [Fact]
+    public async Task ASupplyTheDriverWillNotSpeakOfIsNotReportedAsHavingLostNothing()
+    {
+        await using ILiveViewing watching = await Joined(EveryFrame);
+
+        supply.DriverCannotBeAsked = true;
+
+        LiveSessionView running = (await Ledger.RunningAsync(CancellationToken.None)).Single();
+
+        Assert.Null(running.ChunksDroppedSinceTheSupplyOpened);
+    }
+
+    [Fact]
+    public async Task ASupplyThatHasLostNothingSaysSoAndIsNotLeftUnanswered()
+    {
+        await using ILiveViewing watching = await Joined(EveryFrame);
+
+        supply.DroppedOnTheWayIn[supply.Opened[0].Supply] = 0L;
+
+        LiveSessionView running = (await Ledger.RunningAsync(CancellationToken.None)).Single();
+
+        Assert.Equal(0L, running.ChunksDroppedSinceTheSupplyOpened);
+    }
+
+    [Fact]
+    public async Task EachViewerOfOneSessionIsAnsweredForApartAndNotOnlyAsATotal()
+    {
+        LiveSessionManager crowded = new(
+            new LiveSessionSettings { Linger = Linger, LongestRaise = LongestRaise },
+            new LiveFanoutSettings { LongestBacklog = 1 },
+            new LiveTranscodeSettings { StopGrace = StopGrace },
+            supply,
+            transcoders,
+            clock,
+            events);
+
+        await using ILiveViewing slow = Seated(await crowded.JoinAsync(EveryFrame, CancellationToken.None));
+
+        await transcoders.Raised[0].WriteAsync(Fmp4.Header);
+
+        for (int fragment = 1; fragment <= 4; fragment++)
+        {
+            await transcoders.Raised[0].WriteAsync(Fmp4.Fragment(fragment * 1_000));
+        }
+
+        await Eventually.Happens(() => slow.Backlog.Dropped >= 2L, "pictures beyond the backlog are thrown away");
+
+        await using ILiveViewing fresh = Seated(await crowded.JoinAsync(EveryFrame, CancellationToken.None));
+
+        LiveSessionView running = (await ((ILiveSessionLedger)crowded).RunningAsync(CancellationToken.None)).Single();
+
+        Assert.Equal(2, running.Viewers);
+        Assert.Equal(2, running.Watching.Count);
+        Assert.Equal(slow.Backlog.Dropped, running.Watching[0].Dropped);
+        Assert.Equal(0L, running.Watching[1].Dropped);
+        Assert.Equal(running.Dropped, running.Watching.Sum(viewer => viewer.Dropped));
+
+        await crowded.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task TheLedgerIsEmptyWhileNothingIsBeingSentLive()
+    {
+        Assert.Empty(await Ledger.RunningAsync(CancellationToken.None));
     }
 
     [Fact]
@@ -979,7 +1058,9 @@ public sealed class LiveSessionManagerTests
                 .Where(method => !method.IsSpecialName),
         ];
 
-        Assert.Equal(["DisposeAsync", "JoinAsync", "Startup", "Viewers"], asked.Select(method => method.Name).Order());
+        Assert.Equal(
+            ["DisposeAsync", "JoinAsync", "RunningAsync", "Startup", "Viewers"],
+            asked.Select(method => method.Name).Order());
         Assert.All(
             asked.SelectMany(method => method.GetParameters()),
             parameter => Assert.DoesNotContain(

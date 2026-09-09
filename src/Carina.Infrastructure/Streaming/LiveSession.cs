@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Threading.Channels;
 
+using Carina.Contracts;
 using Carina.Domain.Streaming;
 
 namespace Carina.Infrastructure.Streaming;
@@ -79,6 +80,10 @@ internal sealed class LiveSession
     public long Dropped => fanout.Dropped;
 
     public int Queued => fanout.Queued;
+
+    public IReadOnlyList<LiveBacklog> Watching => fanout.Watching;
+
+    public SessionId? Supply => reception.Supply;
 
     public ILiveStartup Startup => startup;
 

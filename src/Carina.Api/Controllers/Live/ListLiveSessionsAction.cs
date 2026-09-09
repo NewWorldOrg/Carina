@@ -16,9 +16,9 @@ public sealed class ListLiveSessionsAction(LiveService live) : ControllerBase
 {
     [HttpGet]
     [ProducesResponseType<BaseResponder<IReadOnlyList<LiveSessionResponder>>>(StatusCodes.Status200OK)]
-    public IActionResult Invoke()
+    public async Task<IActionResult> Invoke(CancellationToken cancellationToken)
     {
-        ServiceResult<IReadOnlyList<LiveSessionView>> running = live.ListSessions();
+        ServiceResult<IReadOnlyList<LiveSessionView>> running = await live.ListSessionsAsync(cancellationToken);
 
         return Ok(BaseResponder<IReadOnlyList<LiveSessionResponder>>.Success(
             [.. running.Data!.Select(LiveSessionResponder.Of)]));

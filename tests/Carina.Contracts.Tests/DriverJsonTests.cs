@@ -43,7 +43,7 @@ public sealed class DriverJsonTests
     }
 
     private const string LiveSessionForm =
-        """{"sessionId":"s-1","purpose":"live","state":"active","startedAt":"2026-08-08T21:04:00+09:00","endsAt":null,"deviceId":"adapter1","stopReason":"unspecified","concluded":false,"instanceId":null,"outputRoot":null,"bytesRecorded":0,"faultCount":0,"droppedChunks":0,"firstFault":null,"failureCause":null,"counters":{"packets":0,"drops":0,"duplicates":0,"discontinuities":0,"transportErrors":0,"scrambledPackets":0,"provisionalPackets":0,"discardedBytes":0,"resyncs":0,"deviceOverflows":0,"lockLosses":0,"ccMeasured":false,"scrambleMeasured":false,"positions":null},"recordingId":null}""";
+        """{"sessionId":"s-1","purpose":"live","state":"active","startedAt":"2026-08-08T21:04:00+09:00","endsAt":null,"deviceId":"adapter1","stopReason":"unspecified","concluded":false,"instanceId":null,"outputRoot":null,"bytesRecorded":0,"faultCount":0,"droppedChunks":0,"viewerLosses":[],"firstFault":null,"failureCause":null,"counters":{"packets":0,"drops":0,"duplicates":0,"discontinuities":0,"transportErrors":0,"scrambledPackets":0,"provisionalPackets":0,"discardedBytes":0,"resyncs":0,"deviceOverflows":0,"lockLosses":0,"ccMeasured":false,"scrambleMeasured":false,"positions":null},"recordingId":null}""";
 
     private static SessionSnapshot LiveSession =>
         new(SessionId.Parse("s-1"), SessionPurpose.Live, "adapter1", SessionState.Active, Moment);
@@ -52,6 +52,28 @@ public sealed class DriverJsonTests
     public void SessionSnapshotSerialisesToItsAgreedForm()
     {
         Assert.Equal(LiveSessionForm, DriverJson.Serialize(LiveSession));
+    }
+
+    [Fact]
+    public void WhatEachLiveReaderLostSurvivesTheWire()
+    {
+        string json = DriverJson.Serialize(LiveSession with
+        {
+            ViewerLosses = [new ViewerLossDto(1, 402, StillReading: false), new ViewerLossDto(2, 0, StillReading: true)],
+        });
+
+        Assert.Contains(
+            """
+            viewerLosses":[{"wire":1,"chunksDroppedSinceItJoined":402,"stillReading":false},{"wire":2,"chunksDroppedSinceItJoined":0,"stillReading":true}]
+            """.Trim(),
+            json,
+            StringComparison.Ordinal);
+
+        SessionSnapshot? read = DriverJson.Deserialize<SessionSnapshot>(json);
+
+        Assert.Equal(402, read!.ViewerLosses[0].ChunksDroppedSinceItJoined);
+        Assert.False(read.ViewerLosses[0].StillReading);
+        Assert.Equal(2, read.ViewerLosses[1].Wire);
     }
 
     [Fact]

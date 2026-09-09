@@ -47,6 +47,7 @@ public sealed class WireStabilityTests
         "bytesRecorded",
         "faultCount",
         "droppedChunks",
+        "viewerLosses",
         "firstFault",
         "failureCause",
         "counters",

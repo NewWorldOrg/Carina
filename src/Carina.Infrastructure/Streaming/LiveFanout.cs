@@ -61,6 +61,17 @@ public sealed class LiveFanout(
         }
     }
 
+    public IReadOnlyList<LiveBacklog> Watching
+    {
+        get
+        {
+            lock (gate)
+            {
+                return [.. viewers.Select(viewing => viewing.Backlog)];
+            }
+        }
+    }
+
     public IReadOnlyList<LiveFrame> Kept
     {
         get

@@ -33,6 +33,8 @@ public static class DriverJson
 [JsonSerializable(typeof(LayerBitErrorCounts))]
 [JsonSerializable(typeof(SessionSnapshot))]
 [JsonSerializable(typeof(SessionCounters))]
+[JsonSerializable(typeof(ViewerLossDto))]
+[JsonSerializable(typeof(IReadOnlyList<ViewerLossDto>))]
 [JsonSerializable(typeof(DropPositionsDto))]
 [JsonSerializable(typeof(DropBucketDto))]
 [JsonSerializable(typeof(PcrReanchorDto))]

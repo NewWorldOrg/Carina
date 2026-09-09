@@ -292,6 +292,8 @@ public sealed record SessionCounters(
     public static readonly SessionCounters Nothing = new();
 }
 
+public sealed record ViewerLossDto(int Wire, long ChunksDroppedSinceItJoined, bool StillReading);
+
 public sealed record SessionSnapshot(
     SessionId SessionId,
     SessionPurpose Purpose,
@@ -302,6 +304,10 @@ public sealed record SessionSnapshot(
 )
 {
     private readonly SessionCounters counters = SessionCounters.Nothing;
+
+    private static readonly IReadOnlyList<ViewerLossDto> NoViewerLosses = [];
+
+    private readonly IReadOnlyList<ViewerLossDto> viewerLosses = NoViewerLosses;
 
     public string DeviceId { get; init; } = DeviceId ?? string.Empty;
 
@@ -318,6 +324,12 @@ public sealed record SessionSnapshot(
     public long FaultCount { get; init; }
 
     public long DroppedChunks { get; init; }
+
+    public IReadOnlyList<ViewerLossDto> ViewerLosses
+    {
+        get => viewerLosses;
+        init => viewerLosses = value is null or { Count: 0 } ? NoViewerLosses : value;
+    }
 
     public string? FirstFault { get; init; }
 
