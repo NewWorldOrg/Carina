@@ -1,5 +1,7 @@
 using Carina.Api.Common;
+using Carina.Contracts;
 using Carina.Domain.Base;
+using Carina.Domain.Events;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Reservations;
@@ -57,6 +59,7 @@ public sealed class ReservationService(
     IReservationOutcomeRepository outcomes,
     IProgrammeRepository programmes,
     ReservationSchedulingService scheduler,
+    IAppEventPublisher events,
     TimeProvider clock)
 {
     public async Task<ServiceResult<PaginatedList<Reservation>>> ListAsync(
@@ -180,7 +183,17 @@ public sealed class ReservationService(
     {
         ArgumentNullException.ThrowIfNull(id);
 
-        return await reservations.DiscardAsync(id, clock.GetUtcNow().UtcDateTime, cancellationToken) switch
+        ReservationDiscard discard = await reservations.DiscardAsync(
+            id,
+            clock.GetUtcNow().UtcDateTime,
+            cancellationToken);
+
+        if (discard is ReservationDiscard.Discarded)
+        {
+            events.Signal(AppEventName.Reservations);
+        }
+
+        return discard switch
         {
             ReservationDiscard.Discarded => ServiceResult<ReservationDiscarded, ReservationFailure>.Success(
                 new ReservationDiscarded(id)),

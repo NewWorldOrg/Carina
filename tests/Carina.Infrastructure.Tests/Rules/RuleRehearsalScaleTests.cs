@@ -62,10 +62,12 @@ public sealed class RuleRehearsalScaleTests
                 new TuningByService { Otherwise = Tunable() },
                 write,
                 RollingHorizon.Default,
+                new SilentEvents(),
                 new FixedClock(Now)),
             new RuleMatcher(new ProgrammeSearchScope(streams, catalogue), new FixedClock(Now)),
             new RuleApplicationSettings { Rows = 5_000 },
             write,
+            new SilentEvents(),
             new FixedClock(Now));
 
         Stopwatch watch = Stopwatch.StartNew();

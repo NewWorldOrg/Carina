@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
+using Carina.Contracts;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 
@@ -276,4 +277,29 @@ public sealed class DeleteReservationEndpointTests
         Assert.Contains("turningIntoARecording", refusals, StringComparer.Ordinal);
         Assert.Contains("stillToBeRecorded", refusals, StringComparer.Ordinal);
     }
+
+    [Fact]
+    public async Task ThrowingAReservationAwayTellsTheScreensTheReservationsMoved()
+    {
+        await using var feature = new ReservationFeature();
+        Reservation cancelled = feature.Booked(4001, state: ReservationState.Cancelled);
+        feature.Events.Signalled.Clear();
+
+        await feature.DeleteAsync($"/api/reservations/{cancelled.Id.Value}");
+
+        Assert.Equal([AppEventName.Reservations], feature.Events.Signalled);
+    }
+
+    [Fact]
+    public async Task AReservationThatWasNotThrownAwayTellsTheScreensNothing()
+    {
+        await using var feature = new ReservationFeature();
+        Reservation standing = feature.Booked(4001, state: ReservationState.Scheduled);
+        feature.Events.Signalled.Clear();
+
+        await feature.DeleteAsync($"/api/reservations/{standing.Id.Value}");
+
+        Assert.Empty(feature.Events.Signalled);
+    }
+
 }

@@ -7,6 +7,7 @@ using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.Encodings;
+using Carina.Domain.Events;
 using Carina.Domain.Integrity;
 using Carina.Domain.Machines;
 using Carina.Domain.Programmes;
@@ -62,6 +63,7 @@ internal sealed class EncodingFeature : IAsyncDisposable
                 services.AddSingleton<IDriverClient>(Driver);
                 services.AddSingleton<IRecordingDirectory>(Recordings);
                 services.AddSingleton<IEncodeJobRepository>(Jobs);
+                services.AddSingleton<IAppEventPublisher>(Events);
                 services.AddSingleton<IEncodeStandingReader>(Jobs);
                 services.AddSingleton<IEncodeProfileRepository>(Profiles);
                 services.AddSingleton<IEncodeDestinationRepository>(Destinations);
@@ -84,6 +86,8 @@ internal sealed class EncodingFeature : IAsyncDisposable
     public HeldRecordings Recordings { get; } = new();
 
     public HeldEncodeJobs Jobs { get; } = new();
+
+    public SilentEvents Events { get; } = new();
 
     public HeldEncodeProfiles Profiles { get; } = new();
 

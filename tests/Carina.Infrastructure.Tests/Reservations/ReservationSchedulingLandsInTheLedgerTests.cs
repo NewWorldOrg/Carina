@@ -4,6 +4,7 @@ using Carina.Domain.Reservations;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
 using Carina.Infrastructure.Reservations;
+using Carina.TestSupport;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -268,6 +269,7 @@ public sealed class ReservationSchedulingLandsInTheLedgerTests(RepositoryDatabas
             directory,
             new DatabaseAtomicWrite(context),
             RollingHorizon.Default,
+            new SilentEvents(),
             new FixedClock(Now));
     }
 
@@ -286,6 +288,7 @@ public sealed class ReservationSchedulingLandsInTheLedgerTests(RepositoryDatabas
             directory,
             new DatabaseAtomicWrite(context),
             RollingHorizon.Default,
+            new SilentEvents(),
             new FixedClock(Now));
     }
 

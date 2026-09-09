@@ -560,6 +560,56 @@ public sealed class RecordingStreamSupervisorTests
         Assert.Equal(RecordingOutcome.Failed, ledger.Read(recording.Id).Outcome);
     }
 
+    [Fact]
+    public async Task AWatchThatOnlyKeptWhatWasAlreadyRunningMovedNothing()
+    {
+        Recording recording = InFlight();
+        var ledger = new StreamLedger();
+        ledger.Hold(recording);
+        var driver = new WatchedDriver();
+        driver.Holding[RecordingSessions.Named(recording.Id)] = Live(recording, Airs);
+
+        RecordingWatch watch = await Supervisor(ledger, driver, new WatchClock(Airs.AddMinutes(10)))
+            .WatchAsync(Cancel);
+
+        Assert.Equal(1, watch.Kept);
+        Assert.False(watch.AnythingMoved);
+    }
+
+    [Fact]
+    public async Task AStreamThatStaysWithoutATunerMovedOnlyOnThePassItBroke()
+    {
+        Recording recording = InFlight();
+        var ledger = new StreamLedger();
+        ledger.Hold(recording);
+        var driver = new WatchedDriver();
+        RecordingStreamSupervisor supervisor = Supervisor(ledger, driver, new WatchClock(Airs.AddMinutes(10)));
+
+        RecordingWatch broke = await supervisor.WatchAsync(Cancel);
+        RecordingWatch still = await supervisor.WatchAsync(Cancel);
+        RecordingWatch again = await supervisor.WatchAsync(Cancel);
+
+        Assert.True(broke.AnythingMoved);
+        Assert.False(still.AnythingMoved);
+        Assert.False(again.AnythingMoved);
+        Assert.True(still.SaysAnything);
+        Assert.True(again.SaysAnything);
+    }
+
+    [Fact]
+    public async Task AWatchThatGaveARecordingItsOutcomeMovedSomething()
+    {
+        Recording recording = InFlight();
+        var ledger = new StreamLedger();
+        ledger.Hold(recording);
+
+        RecordingWatch watch = await Supervisor(ledger, new WatchedDriver(), new WatchClock(Airs.AddMinutes(30)))
+            .WatchAsync(Cancel);
+
+        Assert.Equal(1, watch.Settled);
+        Assert.True(watch.AnythingMoved);
+    }
+
     private static async Task<RecordingFault> BrokeBy(SessionStopReason? reason)
     {
         Recording recording = InFlight();

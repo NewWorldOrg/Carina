@@ -263,7 +263,7 @@ public sealed class RuleEndpointTests
         Assert.Equal(HttpStatusCode.OK, status);
         Assert.Equal(1, body.GetProperty("data").GetProperty("withdrawn").GetInt32());
         Assert.Equal(0, body.GetProperty("data").GetProperty("swept").GetInt32());
-        Assert.Equal([AppEventName.Rules], feature.Events.Signalled);
+        Assert.Equal([AppEventName.Reservations, AppEventName.Rules], feature.Events.Signalled);
         Assert.Empty(feature.Rules.Rules);
         Assert.Equal([byHand.Id], [.. feature.Reservations.Held.Select(held => held.Id)]);
     }

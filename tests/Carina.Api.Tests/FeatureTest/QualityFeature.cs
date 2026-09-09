@@ -5,6 +5,7 @@ using System.Text.Json;
 
 using Carina.Contracts;
 using Carina.Domain.Channels;
+using Carina.Domain.Events;
 using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 using Carina.TestSupport;
@@ -31,6 +32,7 @@ internal sealed class QualityFeature : IAsyncDisposable
                 services.RemoveAll<IHostedService>();
                 services.AddSingleton<TimeProvider>(Clock);
                 services.AddSingleton<IQualityLedgerReader>(Ledger);
+                services.AddSingleton<IAppEventPublisher>(Events);
                 services.AddSingleton<IQualityThresholdRepository>(Thresholds);
                 services.AddSingleton<IQualityThresholdChangeRepository>(Changes);
                 services.AddSingleton<IQualitySignalReader>(Signals);
@@ -46,6 +48,8 @@ internal sealed class QualityFeature : IAsyncDisposable
     public MovingClock Clock { get; } = new(Noon);
 
     public HeldQualityLedger Ledger { get; } = new();
+
+    public SilentEvents Events { get; } = new();
 
     public HeldQualityThresholds Thresholds { get; } = new();
 

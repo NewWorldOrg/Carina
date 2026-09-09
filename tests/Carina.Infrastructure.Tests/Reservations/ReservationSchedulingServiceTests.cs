@@ -2,6 +2,7 @@ using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Reservations;
+using Carina.TestSupport;
 
 namespace Carina.Infrastructure.Tests.Reservations;
 
@@ -14,6 +15,93 @@ public sealed class ReservationSchedulingServiceTests
     private static readonly TuningParameters Terrestrial27 = TuningParameters.Terrestrial(27);
 
     private static readonly TuningParameters Terrestrial29 = TuningParameters.Terrestrial(29);
+
+    [Fact]
+    public async Task MakingAReservationTellsTheScreensTheReservationsMoved()
+    {
+        WatchedWrite write = new();
+        HeldReservations ledger = new(write);
+        TuningByService directory = new();
+        directory.Answer(1024, Terrestrial27);
+        SilentEvents events = new();
+
+        await Scheduler(ledger, directory, write, Seats(TunerKind.Terrestrial), events)
+            .CreateAsync(ReservationFixtures.Planned(), Cancel);
+
+        Assert.Equal([AppEventName.Reservations], events.Signalled);
+    }
+
+    [Theory]
+    [InlineData(ReservationMove.Keep)]
+    [InlineData(ReservationMove.Cancel)]
+    public async Task RevisingAReservationTellsTheScreensTheReservationsMoved(ReservationMove move)
+    {
+        WatchedWrite write = new();
+        HeldReservations ledger = new(write);
+        TuningByService directory = new();
+        directory.Answer(1024, Terrestrial27);
+        SilentEvents events = new();
+
+        Reservation standing = ReservationFixtures.Planned();
+        ledger.Standing(standing);
+
+        await Scheduler(ledger, directory, write, Seats(TunerKind.Terrestrial), events)
+            .ReviseAsync(standing, new ReservationRevision { Priority = new Priority(30), Move = move }, Cancel);
+
+        Assert.Equal([AppEventName.Reservations], events.Signalled);
+    }
+
+    [Fact]
+    public async Task ARecalculationThatLeavesEveryReservationWhereItWasTellsTheScreensNothing()
+    {
+        WatchedWrite write = new();
+        HeldReservations ledger = new(write);
+        TuningByService directory = new();
+        directory.Answer(1024, Terrestrial27);
+        SilentEvents events = new();
+
+        ReservationSchedulingService scheduler =
+            Scheduler(ledger, directory, write, Seats(TunerKind.Terrestrial), events);
+
+        await scheduler.CreateAsync(ReservationFixtures.Planned(), Cancel);
+        events.Signalled.Clear();
+
+        await scheduler.RecalculateAsync(Cancel);
+        await scheduler.RecalculateAsync(Cancel);
+
+        Assert.Empty(events.Signalled);
+    }
+
+    [Fact]
+    public async Task ARecalculationThatMovesAReservationToContendedTellsTheScreens()
+    {
+        WatchedWrite write = new();
+        HeldReservations ledger = new(write);
+        TuningByService directory = new();
+        directory.Answer(1024, Terrestrial27);
+        directory.Answer(1032, Terrestrial29);
+        SilentEvents events = new();
+
+        Reservation kept = ReservationFixtures.Planned(
+            programme: ReservationFixtures.Programme(ReservationFixtures.NextEventId()),
+            priority: new Priority(20));
+        Reservation lost = ReservationFixtures.Planned(
+            programme: ReservationFixtures.Programme(ReservationFixtures.NextEventId(), serviceId: 1032),
+            priority: new Priority(10));
+
+        ledger.Standing(kept, lost);
+
+        await Scheduler(ledger, directory, write, Seats(TunerKind.Terrestrial, TunerKind.Terrestrial), events)
+            .RecalculateAsync(Cancel);
+
+        Assert.Equal(ReservationState.Scheduled, lost.State);
+        events.Signalled.Clear();
+
+        await Scheduler(ledger, directory, write, Seats(TunerKind.Terrestrial), events).RecalculateAsync(Cancel);
+
+        Assert.Equal(ReservationState.Conflict, lost.State);
+        Assert.Equal([AppEventName.Reservations], events.Signalled);
+    }
 
     [Fact]
     public async Task ANewReservationIsSettledAndWrittenInOneTurn()
@@ -372,6 +460,7 @@ public sealed class ReservationSchedulingServiceTests
             directory,
             write,
             RollingHorizon.Default,
+            new SilentEvents(),
             new FixedClock(Now));
 
         SchedulingRun run = await scheduler.CreateAsync(ReservationFixtures.Planned(), Cancel);
@@ -410,6 +499,7 @@ public sealed class ReservationSchedulingServiceTests
             directory,
             write,
             RollingHorizon.Default,
+            new SilentEvents(),
             new FixedClock(Now));
 
         SchedulingRun run = await scheduler.ReviseAsync(
@@ -444,6 +534,7 @@ public sealed class ReservationSchedulingServiceTests
             directory,
             write,
             RollingHorizon.Default,
+            new SilentEvents(),
             new FixedClock(Now));
 
         await scheduler.PreviewAsync([], Cancel);
@@ -575,11 +666,20 @@ public sealed class ReservationSchedulingServiceTests
         TuningByService directory,
         WatchedWrite write,
         TunerCapacity? capacity)
+        => Scheduler(ledger, directory, write, capacity, new SilentEvents());
+
+    private static ReservationSchedulingService Scheduler(
+        HeldReservations ledger,
+        TuningByService directory,
+        WatchedWrite write,
+        TunerCapacity? capacity,
+        SilentEvents events)
         => new(
             ledger,
             new HeldSeating(capacity),
             directory,
             write,
             RollingHorizon.Default,
+            events,
             new FixedClock(Now));
 }

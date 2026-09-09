@@ -242,10 +242,12 @@ public sealed class RuleImpactAgreesWithWhatHappensTests
                     Tuning,
                     Write,
                     RollingHorizon.Default,
+                    new SilentEvents(),
                     new FixedClock(Now)),
                 new RuleMatcher(new ProgrammeSearchScope(Streams, Services), new FixedClock(Now)),
                 Settings,
                 Write,
+                new SilentEvents(),
                 new FixedClock(Now));
         }
 

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 
+using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
@@ -920,4 +921,29 @@ public sealed class ReservationEndpointTests
     private static IEnumerable<int> Priorities(JsonElement body)
         => body.GetProperty("data").GetProperty("items").EnumerateArray()
             .Select(item => item.GetProperty("priority").GetInt32());
+
+    [Fact]
+    public async Task MakingAReservationTellsTheScreensTheReservationsMoved()
+    {
+        await using var feature = new ReservationFeature();
+        feature.Announced(4001);
+        feature.Events.Signalled.Clear();
+
+        await feature.PostAsync("/api/reservations", Asking(4001));
+
+        Assert.Equal([AppEventName.Reservations], feature.Events.Signalled.Distinct());
+    }
+
+    [Fact]
+    public async Task CancellingAReservationTellsTheScreensTheReservationsMoved()
+    {
+        await using var feature = new ReservationFeature();
+        Reservation standing = feature.Booked(4001);
+        feature.Events.Signalled.Clear();
+
+        await feature.PostAsync($"/api/reservations/{standing.Id.Value}/cancel");
+
+        Assert.Equal([AppEventName.Reservations], feature.Events.Signalled.Distinct());
+    }
+
 }

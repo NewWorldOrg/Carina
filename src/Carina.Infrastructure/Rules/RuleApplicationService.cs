@@ -1,5 +1,7 @@
+using Carina.Contracts;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
+using Carina.Domain.Events;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
@@ -50,6 +52,7 @@ public sealed class RuleApplicationService(
     RuleMatcher matcher,
     RuleApplicationSettings settings,
     IAtomicWrite write,
+    IAppEventPublisher events,
     TimeProvider clock)
 {
     public Task<RuleApplicationRun> SinceAsync(long revision, CancellationToken cancellationToken)
@@ -111,6 +114,8 @@ public sealed class RuleApplicationService(
 
         if (swept.Count > 0)
         {
+            events.Signal(AppEventName.Reservations);
+
             await scheduling.RecalculateAsync(cancellationToken);
         }
 
@@ -330,6 +335,9 @@ public sealed class RuleApplicationService(
         }
 
         await reservations.WithdrawAsync(leaving, cancellationToken);
+
+        events.Signal(AppEventName.Reservations);
+
         await scheduling.RecalculateAsync(cancellationToken);
     }
 
