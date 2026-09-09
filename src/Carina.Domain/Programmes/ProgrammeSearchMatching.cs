@@ -66,13 +66,19 @@ public static class ProgrammeSearchMatching
             && (reach.NotOverBy is not { } instant || match.EndsAt is null || match.EndsAt > instant)
             && search.Words.All(word => Carries(match, word, search.Fields))
             && !search.ExcludedWords.Any(word => Leaves(match, word, search.Fields))
-            && (search.Genres.Count == 0 || match.Genres.Any(genre => search.Genres.Contains(genre.Kind)))
+            && InAGenreAsked(match, search)
+            && (search.Days.Count == 0 || search.Days.Contains(BroadcastDay.Of(match.StartsAt)))
             && (search.Channels.Count == 0 || On(match, search.Channels))
             && (search.Services is not { } within || On(match, within))
             && !On(match, search.Withheld)
             && (search.From is not { } from || match.EndsAt is null || match.EndsAt > from)
             && (search.To is not { } to || match.StartsAt < to);
     }
+
+    private static bool InAGenreAsked(ProgrammeMatch match, ProgrammeSearch search)
+        => (search.Genres.Count == 0 && search.SubGenres.Count == 0)
+            || match.Genres.Any(genre => search.Genres.Contains(genre.Kind))
+            || search.SubGenres.Any(named => match.Genres.Contains(named));
 
     private static (int, int, int, DateTime) Key(ProgrammeMatch match)
         => (match.NetworkId.Value, match.ServiceId.Value, match.EventId.Value, match.StartsAt);

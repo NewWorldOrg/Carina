@@ -14,6 +14,8 @@ public sealed class ProgrammeSearchQueryTests
         [ProgrammeSearchQuery.Exclude] = "%E5%86%8D%E6%94%BE%E9%80%81",
         [ProgrammeSearchQuery.Fields] = "title",
         [ProgrammeSearchQuery.Genre] = "8",
+        [ProgrammeSearchQuery.SubGenre] = "8-2",
+        [ProgrammeSearchQuery.Day] = "monday",
         [ProgrammeSearchQuery.Type] = "isdbT",
         [ProgrammeSearchQuery.Channel] = "4-1049",
         [ProgrammeSearchQuery.From] = "2026-08-18T00:00:00Z",
@@ -101,6 +103,8 @@ public sealed class ProgrammeSearchQueryTests
         Assert.Equal(["再放送"], read.ExcludedWords);
         Assert.Equal([ProgrammeField.Title], read.Fields);
         Assert.Equal([8], read.Genres);
+        Assert.Equal([new ProgrammeGenre(8, 2)], read.SubGenres);
+        Assert.Equal([DayOfWeek.Monday], read.Days);
         Assert.Equal(TuneSystem.IsdbT, read.System);
         Assert.Equal([new ProgrammeService(4, 1049)], read.Channels);
         Assert.Equal(new DateTime(2026, 8, 18, 0, 0, 0, DateTimeKind.Utc), read.From);
@@ -115,9 +119,12 @@ public sealed class ProgrammeSearchQueryTests
     public void ANameThatMayBeGivenMoreThanOnceGathersEveryValue()
     {
         ProgrammeSearch read = ProgrammeSearchQuery.Read(
-            "keyword=news&genre=8&genre=6&channel=4-1049&channel=4-1032&fields=title&fields=description")!;
+            "keyword=news&genre=8&genre=6&subgenre=8-2&subgenre=6-1&day=monday&day=friday"
+                + "&channel=4-1049&channel=4-1032&fields=title&fields=description")!;
 
         Assert.Equal([8, 6], read.Genres);
+        Assert.Equal([new ProgrammeGenre(8, 2), new ProgrammeGenre(6, 1)], read.SubGenres);
+        Assert.Equal([DayOfWeek.Monday, DayOfWeek.Friday], read.Days);
         Assert.Equal([new ProgrammeService(4, 1049), new ProgrammeService(4, 1032)], read.Channels);
         Assert.Equal([ProgrammeField.Title, ProgrammeField.Description], read.Fields);
     }
@@ -134,6 +141,13 @@ public sealed class ProgrammeSearchQueryTests
     [InlineData("keyword=news&fields=summary;DROP TABLE programme")]
     [InlineData("keyword=news&genre=kind")]
     [InlineData("keyword=news&genre=99")]
+    [InlineData("keyword=news&subgenre=8")]
+    [InlineData("keyword=news&subgenre=8-2-1")]
+    [InlineData("keyword=news&subgenre=eight-two")]
+    [InlineData("keyword=news&subgenre=99-2")]
+    [InlineData("keyword=news&subgenre=8-99")]
+    [InlineData("keyword=news&day=someday")]
+    [InlineData("keyword=news&day=9")]
     [InlineData("keyword=news&type=vhf")]
     [InlineData("keyword=news&channel=not-a-channel")]
     [InlineData("keyword=news&channel=4-99999")]
@@ -148,6 +162,31 @@ public sealed class ProgrammeSearchQueryTests
         => Assert.Null(ProgrammeSearchQuery.Read(asked));
 
     [Fact]
+    public void ADayAndASubGenreComeBackSpeltTheWayTheyWereWritten()
+    {
+        string asked = "keyword=news&subgenre=8-2&subgenre=6-1&day=monday&day=friday";
+        ProgrammeSearch read = ProgrammeSearchQuery.Read(asked)!;
+        string written = "keyword=news"
+            + string.Concat(read.SubGenres.Select(named => $"&subgenre={named.Kind}-{named.Sort}"))
+            + string.Concat(read.Days.Select(day => $"&day={day.ToString().ToLowerInvariant()}"));
+
+        Assert.Equal(asked, written);
+        Assert.Equal(Spelt(read), Spelt(ProgrammeSearchQuery.Read(written)));
+    }
+
+    [Fact]
+    public void AWeekNarrowedToAllSevenDaysIsTheSameAsAWeekNobodyNarrowed()
+    {
+        string everyDay = string.Concat(
+            Enum.GetValues<DayOfWeek>().Select(day => $"&day={day.ToString().ToLowerInvariant()}"));
+
+        Assert.Equal(
+            Spelt(ProgrammeSearchQuery.Read("keyword=news")),
+            Spelt(ProgrammeSearchQuery.Read($"keyword=news{everyDay}")));
+        Assert.Null(ProgrammeSearchQuery.Read(everyDay[1..]));
+    }
+
+    [Fact]
     public void ABroadcastTypeNobodyNamedLeavesTheSearchWithoutOne()
     {
         Assert.Null(ProgrammeSearchQuery.Read("keyword=news")!.System);
@@ -160,5 +199,5 @@ public sealed class ProgrammeSearchQueryTests
             ? "nothing"
             : string.Create(
                 CultureInfo.InvariantCulture,
-                $"{string.Join(',', search.Words)}|{string.Join(',', search.ExcludedWords)}|{string.Join(',', search.Fields)}|{string.Join(',', search.Genres)}|{search.System}|{string.Join(',', search.Channels)}|{search.From}|{search.To}|{search.Sort}|{search.Descending}|{search.Page}|{search.PerPage}");
+                $"{string.Join(',', search.Words)}|{string.Join(',', search.ExcludedWords)}|{string.Join(',', search.Fields)}|{string.Join(',', search.Genres)}|{string.Join(',', search.SubGenres)}|{string.Join(',', search.Days)}|{search.System}|{string.Join(',', search.Channels)}|{search.From}|{search.To}|{search.Sort}|{search.Descending}|{search.Page}|{search.PerPage}");
 }

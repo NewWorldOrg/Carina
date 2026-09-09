@@ -27,6 +27,10 @@ public sealed record ProgrammeConditions
 
     public IReadOnlyList<int>? Genres { get; init; }
 
+    public IReadOnlyList<ProgrammeGenre>? SubGenres { get; init; }
+
+    public IReadOnlyList<DayOfWeek>? Days { get; init; }
+
     public TuneSystem? System { get; init; }
 
     public IReadOnlyList<ProgrammeService>? Channels { get; init; }
@@ -46,6 +50,10 @@ public sealed class ProgrammeSearch
 
     public const int HighestGenre = 15;
 
+    public const int HighestSubGenre = 15;
+
+    public const int DaysInTheWeek = 7;
+
     public static readonly TimeSpan LongestSpan = TimeSpan.FromDays(31);
 
     private static readonly IReadOnlyList<ProgrammeField> BothFields =
@@ -57,6 +65,8 @@ public sealed class ProgrammeSearch
         IReadOnlyList<string> excludedWords,
         IReadOnlyList<ProgrammeField> fields,
         IReadOnlyList<int> genres,
+        IReadOnlyList<ProgrammeGenre> subGenres,
+        IReadOnlyList<DayOfWeek> days,
         TuneSystem? system,
         IReadOnlyList<ProgrammeService> channels,
         IReadOnlyList<ProgrammeService>? services,
@@ -73,6 +83,8 @@ public sealed class ProgrammeSearch
         ExcludedWords = excludedWords;
         Fields = fields;
         Genres = genres;
+        SubGenres = subGenres;
+        Days = days;
         System = system;
         Channels = channels;
         Services = services;
@@ -94,6 +106,10 @@ public sealed class ProgrammeSearch
     public IReadOnlyList<ProgrammeField> Fields { get; }
 
     public IReadOnlyList<int> Genres { get; }
+
+    public IReadOnlyList<ProgrammeGenre> SubGenres { get; }
+
+    public IReadOnlyList<DayOfWeek> Days { get; }
 
     public TuneSystem? System { get; }
 
@@ -119,6 +135,8 @@ public sealed class ProgrammeSearch
         => Words.Count is 0
             && ExcludedWords.Count is 0
             && Genres.Count is 0
+            && SubGenres.Count is 0
+            && Days.Count is 0
             && Channels.Count is 0
             && System is null
             && From is null
@@ -141,6 +159,8 @@ public sealed class ProgrammeSearch
             || ExcludedIn(beside.Exclude) is not { } excluded
             || FieldsIn(beside.Fields) is not { } fields
             || GenresIn(beside.Genres) is not { } genres
+            || SubGenresIn(beside.SubGenres) is not { } subGenres
+            || DaysIn(beside.Days) is not { } days
             || ChannelsIn(beside.Channels) is not { } channels)
         {
             return null;
@@ -177,6 +197,8 @@ public sealed class ProgrammeSearch
             excluded,
             fields,
             genres,
+            subGenres,
+            days,
             beside.System is TuneSystem.Unspecified ? null : beside.System,
             channels,
             null,
@@ -207,6 +229,8 @@ public sealed class ProgrammeSearch
             ExcludedWords,
             Fields,
             Genres,
+            SubGenres,
+            Days,
             System,
             Channels,
             services,
@@ -228,6 +252,8 @@ public sealed class ProgrammeSearch
             ExcludedWords,
             Fields,
             Genres,
+            SubGenres,
+            Days,
             System,
             Channels,
             Services,
@@ -280,6 +306,35 @@ public sealed class ProgrammeSearch
         }
 
         return asked.Any(genre => genre is < 0 or > HighestGenre) ? null : [.. asked.Distinct()];
+    }
+
+    private static IReadOnlyList<ProgrammeGenre>? SubGenresIn(IReadOnlyList<ProgrammeGenre>? asked)
+    {
+        if (asked is null || asked.Count == 0)
+        {
+            return [];
+        }
+
+        return asked.Any(genre => genre.Kind is < 0 or > HighestGenre || genre.Sort is < 0 or > HighestSubGenre)
+            ? null
+            : [.. asked.Distinct()];
+    }
+
+    private static IReadOnlyList<DayOfWeek>? DaysIn(IReadOnlyList<DayOfWeek>? asked)
+    {
+        if (asked is null || asked.Count == 0)
+        {
+            return [];
+        }
+
+        if (asked.Any(day => !Enum.IsDefined(day)))
+        {
+            return null;
+        }
+
+        DayOfWeek[] apart = [.. asked.Distinct()];
+
+        return apart.Length == DaysInTheWeek ? [] : apart;
     }
 
     private static IReadOnlyList<ProgrammeService>? ChannelsIn(IReadOnlyList<ProgrammeService>? asked)

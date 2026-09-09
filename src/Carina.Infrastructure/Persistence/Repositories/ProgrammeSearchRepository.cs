@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using System.Text.Json;
 
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
@@ -43,12 +44,17 @@ public sealed class ProgrammeSearchRepository(CarinaDbContext context) : IProgra
             found = Without(found, word, search.Fields);
         }
 
-        if (search.Genres.Count > 0)
+        if (search.Genres.Count > 0 || search.SubGenres.Count > 0)
         {
-            int[] asked = [.. search.Genres];
+            found = InAGenreAsked(found, search);
+        }
+
+        if (search.Days.Count > 0)
+        {
+            int[] asked = [.. search.Days.Select(day => (int)day)];
 
             found = found.Where(match =>
-                EF.Property<int[]>(match, ProgrammeConfiguration.GenreKinds).Any(kind => asked.Contains(kind)));
+                asked.Contains(EF.Property<int>(match, ProgrammeConfiguration.BroadcastDayOfWeek)));
         }
 
         if (search.Channels.Count > 0)
@@ -91,6 +97,26 @@ public sealed class ProgrammeSearchRepository(CarinaDbContext context) : IProgra
             .ToListAsync(cancellationToken);
 
         return new PaginatedList<ProgrammeMatch>(page, total, search.Page, search.PerPage);
+    }
+
+    private static IQueryable<ProgrammeMatch> InAGenreAsked(
+        IQueryable<ProgrammeMatch> found,
+        ProgrammeSearch search)
+    {
+        int[] asked = [.. search.Genres];
+        Expression<Func<ProgrammeMatch, bool>> nowhere = match => false;
+        Expression<Func<ProgrammeMatch, bool>> filed =
+            match => EF.Property<int[]>(match, ProgrammeConfiguration.GenreKinds).Any(kind => asked.Contains(kind));
+        Expression<Func<ProgrammeMatch, bool>> kinds = asked.Length > 0 ? filed : nowhere;
+
+        return found.Where(search.SubGenres.Aggregate(kinds, (carried, named) => Either(carried, Under(named))));
+    }
+
+    private static Expression<Func<ProgrammeMatch, bool>> Under(ProgrammeGenre named)
+    {
+        string spelt = JsonSerializer.Serialize<IReadOnlyList<ProgrammeGenre>>([named], ProgrammeJson.Options);
+
+        return match => EF.Functions.JsonContains(match.Genres, spelt);
     }
 
     private static IQueryable<ProgrammeMatch> Carrying(
