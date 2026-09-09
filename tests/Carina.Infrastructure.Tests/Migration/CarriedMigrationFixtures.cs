@@ -44,8 +44,25 @@ internal static class CarriedMigrationFixtures
         IReadOnlyList<SourceChannelDefinition>? channels = null)
         => new(Source, recordings ?? [], files ?? [], rules ?? [], [], channels ?? []);
 
-    public static SourceRule Rule(long id, string keyword = "hill", bool enabled = true)
-        => new(id, keyword, enabled, SourceRuleTerms.Of(keyword), SourceRuleReach.Plain);
+    public static SourceRule Rule(
+        long id,
+        string keyword = "hill",
+        bool enabled = true,
+        int days = SourceWeek.EveryDay)
+        => new(
+            id,
+            keyword,
+            enabled,
+            new SourceRuleTerms(
+                keyword,
+                string.Empty,
+                SourceRuleFields.Title | SourceRuleFields.Summary,
+                SourceRuleFields.Title | SourceRuleFields.Summary,
+                [],
+                [],
+                [],
+                days),
+            SourceRuleReach.Plain);
 
     public static SourceChannelDefinition Channel(long id, ServiceKey service, string physicalChannel = "21")
         => new(id, "an old name", SourceBroadcastKind.Terrestrial, service, physicalChannel);

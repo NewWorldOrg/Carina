@@ -224,12 +224,12 @@ public sealed class MigrationCarriageTests
             new SourceRuleTerms(
                 "hill",
                 string.Empty,
-                SourceRuleFields.Title,
-                SourceRuleFields.Title,
+                SourceRuleFields.Title | SourceRuleFields.ExtendedBody,
+                SourceRuleFields.Title | SourceRuleFields.ExtendedBody,
                 [],
                 [],
                 [],
-                0b000_0001),
+                SourceWeek.EveryDay),
             SourceRuleReach.Plain);
 
         MigrationCarried carried = await CarriedAsync(MigrationPass.ForReal, Ledger(rules: [refused]));
