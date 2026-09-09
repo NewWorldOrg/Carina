@@ -9,6 +9,9 @@ namespace Carina.Domain.Tests.Migration;
 
 public sealed class MigrationRuleConversionTests
 {
+    private static readonly SourceRuleReach Inexpressible =
+        SourceRuleReach.Plain with { UsesRegularExpression = true };
+
     [Fact]
     public void AKeywordAndTheWordsToLeaveOutBothCrossOver()
     {
@@ -251,6 +254,55 @@ public sealed class MigrationRuleConversionTests
 
             Assert.NotEmpty(DaysSaid(carried));
         }
+    }
+
+    [Theory]
+    [InlineData(0b000_0001)]
+    [InlineData(0b100_0001)]
+    [InlineData(0b011_1111)]
+    public void ARuleCarriedWithDaysOfItsOwnKeepsThemAgainstADayThatBeginsElsewhere(int days)
+    {
+        MigrationRuleConversion carried = MigrationRuleConversion.Of(
+            Rule(3, Terms(keyword: "hill", days: days), SourceRuleReach.Plain),
+            Rescanned());
+
+        Assert.True(carried.Expressible);
+        Assert.True(carried.NarrowedByDay);
+    }
+
+    [Fact]
+    public void ARuleThatNamesEveryDayIsNarrowedByNoneOfThem()
+    {
+        MigrationRuleConversion carried = MigrationRuleConversion.Of(
+            Rule(3, Terms(keyword: "hill", days: SourceWeek.EveryDay), SourceRuleReach.Plain),
+            Rescanned());
+
+        Assert.False(carried.NarrowedByDay);
+    }
+
+    [Fact]
+    public void ARuleNobodyCouldCarryIsNarrowedByNoDayBecauseItNeverCrossedOver()
+    {
+        MigrationRuleConversion refused = MigrationRuleConversion.Of(
+            Rule(3, Terms(keyword: "hill", days: 0b000_0001), Inexpressible),
+            Rescanned());
+
+        Assert.False(refused.Expressible);
+        Assert.False(refused.NarrowedByDay);
+    }
+
+    [Fact]
+    public void TheRulesCarriedWithDaysOfTheirOwnAreCountedOverTheWholeLedger()
+    {
+        SourceLedger ledger = Ledger(rules:
+        [
+            Rule(3, Terms(keyword: "hill", days: 0b000_0001), SourceRuleReach.Plain),
+            Rule(4, Terms(keyword: "hill", days: 0b100_0001), SourceRuleReach.Plain),
+            Rule(5, Terms(keyword: "hill", days: SourceWeek.EveryDay), SourceRuleReach.Plain),
+            Rule(6, Terms(keyword: "hill", days: 0b000_0010), Inexpressible),
+        ]);
+
+        Assert.Equal(2, MigrationRuleConversion.RulesNarrowedByDay(ledger, Rescanned()));
     }
 
     private static IReadOnlyList<DayOfWeek> DaysSaid(MigrationRuleConversion carried)

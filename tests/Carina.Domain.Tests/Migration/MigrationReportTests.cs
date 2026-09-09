@@ -29,6 +29,7 @@ public sealed class MigrationReportTests
     [Theory]
     [InlineData(MigrationLossSubject.DuplicateAvoidance)]
     [InlineData(MigrationLossSubject.EnclosedCharacters)]
+    [InlineData(MigrationLossSubject.DayBoundary)]
     public void EveryLossCarriedIntoTheNewSystemHasToBeSaidOutLoud(MigrationLossSubject subject)
     {
         IReadOnlyList<MigrationLoss> short_ =

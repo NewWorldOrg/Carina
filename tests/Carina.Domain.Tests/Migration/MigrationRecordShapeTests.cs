@@ -53,6 +53,7 @@ public sealed class MigrationRecordShapeTests
     [Theory]
     [InlineData(MigrationLossSubject.DuplicateAvoidance)]
     [InlineData(MigrationLossSubject.EnclosedCharacters)]
+    [InlineData(MigrationLossSubject.DayBoundary)]
     public void ALossIsSomethingCarriedThatArrivedDiminished(MigrationLossSubject subject)
     {
         Assert.Equal(subject, MigrationLoss.Rehydrate(Run, subject, 17).Subject);
@@ -70,13 +71,13 @@ public sealed class MigrationRecordShapeTests
     [Fact]
     public void TheRecordIsOnlyEverShortOfWhatTheRunKnowsHowToCount()
     {
-        Assert.Equal(MigrationLossSubjects.All.Count, MigrationLoss.EveryOne(Run, new([], [], 0, 0)).Count);
+        Assert.Equal(MigrationLossSubjects.All.Count, MigrationLoss.EveryOne(Run, new([], [], 0, 0, 0)).Count);
     }
 
     [Fact]
     public void EveryLossSaysHowManyOfWhatWasCarriedItReaches()
     {
-        MigrationAftermath aftermath = new([], [], 17, 48);
+        MigrationAftermath aftermath = new([], [], 17, 48, 5);
 
         IReadOnlyList<MigrationLoss> told = MigrationLoss.EveryOne(Run, aftermath);
 
@@ -86,6 +87,9 @@ public sealed class MigrationRecordShapeTests
         Assert.Equal(
             48,
             told.Single(loss => loss.Subject is MigrationLossSubject.EnclosedCharacters).Affected);
+        Assert.Equal(
+            5,
+            told.Single(loss => loss.Subject is MigrationLossSubject.DayBoundary).Affected);
     }
 
     [Fact]

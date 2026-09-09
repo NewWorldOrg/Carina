@@ -123,7 +123,7 @@ public sealed class MigrationRecordEndpointTests
         JsonElement[] losses = [.. body.GetProperty("data").GetProperty("losses").EnumerateArray()];
 
         Assert.Equal(
-            ["duplicateAvoidance", "enclosedCharacters"],
+            ["dayBoundary", "duplicateAvoidance", "enclosedCharacters"],
             losses.Select(one => one.GetProperty("subject").GetString()).Order(StringComparer.Ordinal));
         Assert.All(
             losses,

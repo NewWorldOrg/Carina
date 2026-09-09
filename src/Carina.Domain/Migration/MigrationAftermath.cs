@@ -6,7 +6,8 @@ public sealed record MigrationAftermath
         IReadOnlyList<MigrationChannelProposal> channelProposals,
         IReadOnlyList<MigrationRuleProposal> ruleProposals,
         int rulesRead,
-        int rowsPastRestoring)
+        int rowsPastRestoring,
+        int rulesNarrowedByDay)
     {
         ArgumentNullException.ThrowIfNull(channelProposals);
         ArgumentNullException.ThrowIfNull(ruleProposals);
@@ -25,6 +26,7 @@ public sealed record MigrationAftermath
         RuleProposals = [.. ruleProposals];
         RulesRead = Counted(rulesRead, nameof(rulesRead));
         RowsPastRestoring = Counted(rowsPastRestoring, nameof(rowsPastRestoring));
+        RulesNarrowedByDay = Counted(rulesNarrowedByDay, nameof(rulesNarrowedByDay));
     }
 
     public IReadOnlyList<MigrationChannelProposal> ChannelProposals { get; }
@@ -35,7 +37,9 @@ public sealed record MigrationAftermath
 
     public int RowsPastRestoring { get; }
 
-    public static MigrationAftermath Nothing { get; } = new([], [], 0, 0);
+    public int RulesNarrowedByDay { get; }
+
+    public static MigrationAftermath Nothing { get; } = new([], [], 0, 0, 0);
 
     private static int Counted(int value, string parameterName)
         => value >= 0
