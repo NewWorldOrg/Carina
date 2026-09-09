@@ -43,11 +43,11 @@ public sealed class MigrationClassifierTests
     {
         MigrationVerdict judged = MigrationClassifier.OnARecording(
             Recording(7),
-            AsBroadcast(7, "one.m2ts", 17_171_113_480),
+            AsBroadcast(7, "one.m2ts", 17_000_000_000),
             null);
 
         Assert.Equal(MigrationRefusal.FileMissing, judged.Refusal);
-        Assert.Equal(17_171_113_480, judged.Claimed);
+        Assert.Equal(17_000_000_000, judged.Claimed);
         Assert.Null(judged.Observed);
     }
 
@@ -56,11 +56,11 @@ public sealed class MigrationClassifierTests
     {
         MigrationVerdict judged = MigrationClassifier.OnARecording(
             Recording(7),
-            AsBroadcast(7, "one.m2ts", 17_171_113_480),
+            AsBroadcast(7, "one.m2ts", 17_000_000_000),
             OnDisk("one.m2ts", 0));
 
         Assert.Equal(MigrationRefusal.ReallyEmpty, judged.Refusal);
-        Assert.Equal(17_171_113_480, judged.Claimed);
+        Assert.Equal(17_000_000_000, judged.Claimed);
         Assert.Equal(0, judged.Observed);
     }
 
@@ -81,19 +81,19 @@ public sealed class MigrationClassifierTests
     [Fact]
     public void AFileNoRowNamesIsAnOrphan()
     {
-        MigrationVerdict judged = MigrationClassifier.OnAFile(OnDisk("bash.sh", 539), null);
+        MigrationVerdict judged = MigrationClassifier.OnAFile(OnDisk("notes.txt", 1_024), null);
 
         Assert.Equal(MigrationRefusal.Orphan, judged.Refusal);
         Assert.Equal(MigrationPopulation.RecordingFiles, judged.Population);
-        Assert.Equal("bash.sh", judged.Subject);
-        Assert.Equal(539, judged.Observed);
+        Assert.Equal("notes.txt", judged.Subject);
+        Assert.Equal(1_024, judged.Observed);
         Assert.Null(judged.Claimed);
     }
 
     [Fact]
     public void AHalfWrittenFileNoRowNamesIsAnOrphanTooWhateverItIsCalled()
     {
-        MigrationVerdict judged = MigrationClassifier.OnAFile(OnDisk("one.m2ts.tmp", 2_514_911_344), null);
+        MigrationVerdict judged = MigrationClassifier.OnAFile(OnDisk("one.m2ts.tmp", 2_500_000_000), null);
 
         Assert.Equal(MigrationRefusal.Orphan, judged.Refusal);
     }
@@ -113,10 +113,10 @@ public sealed class MigrationClassifierTests
     {
         MigrationVerdict judged = MigrationClassifier.OnAFile(
             OnDisk("one.m2ts", 0),
-            AsBroadcast(7, "one.m2ts", 5_208_028_640));
+            AsBroadcast(7, "one.m2ts", 5_000_000_000));
 
         Assert.Equal(MigrationRefusal.ReallyEmpty, judged.Refusal);
-        Assert.Equal(5_208_028_640, judged.Claimed);
+        Assert.Equal(5_000_000_000, judged.Claimed);
         Assert.Equal(0, judged.Observed);
     }
 

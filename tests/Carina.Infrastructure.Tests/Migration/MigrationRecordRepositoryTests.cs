@@ -37,7 +37,7 @@ public sealed class MigrationRecordRepositoryTests(RepositoryDatabase database)
                     "2",
                     MigrationRefusal.ReallyEmpty,
                     "another programme",
-                    17_171_113_480,
+                    17_000_000_000,
                     0),
                 MigrationVerdict.Carry(MigrationPopulation.RecordingFiles, "one.m2ts", "one.m2ts", 100, 100),
                 MigrationVerdict.Refuse(
@@ -45,15 +45,15 @@ public sealed class MigrationRecordRepositoryTests(RepositoryDatabase database)
                     "two.m2ts",
                     MigrationRefusal.ReallyEmpty,
                     "two.m2ts",
-                    17_171_113_480,
+                    17_000_000_000,
                     0),
                 MigrationVerdict.Refuse(
                     MigrationPopulation.RecordingFiles,
-                    "bash.sh",
+                    "notes.txt",
                     MigrationRefusal.Orphan,
-                    "bash.sh",
+                    "notes.txt",
                     null,
-                    539)),
+                    1_024)),
             MigrationAftermath.Nothing,
             At,
             At.AddMinutes(4));
@@ -83,16 +83,16 @@ public sealed class MigrationRecordRepositoryTests(RepositoryDatabase database)
         MigrationDetail orphan = read.Details.Single(
             detail => detail.Refusal is MigrationRefusal.Orphan);
 
-        Assert.Equal("bash.sh", orphan.Subject);
+        Assert.Equal("notes.txt", orphan.Subject);
         Assert.Null(orphan.Claimed);
-        Assert.Equal(539, orphan.Observed);
+        Assert.Equal(1_024, orphan.Observed);
 
         MigrationDetail empty = read.Details.Single(
             detail => detail.Population is MigrationPopulation.Recordings);
 
         Assert.Equal(MigrationRefusal.ReallyEmpty, empty.Refusal);
         Assert.Equal("another programme", empty.Note);
-        Assert.Equal(17_171_113_480, empty.Claimed);
+        Assert.Equal(17_000_000_000, empty.Claimed);
         Assert.Equal(0, empty.Observed);
 
         Assert.Equal(
@@ -369,7 +369,7 @@ public sealed class MigrationRecordRepositoryTests(RepositoryDatabase database)
                     MigrationRefusal.Orphan,
                     "stray.sh",
                     null,
-                    539)),
+                    1_024)),
             MigrationAftermath.Nothing,
             At,
             At.AddMinutes(4)));

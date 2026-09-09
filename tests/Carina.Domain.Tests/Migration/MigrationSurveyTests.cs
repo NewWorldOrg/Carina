@@ -28,13 +28,13 @@ public sealed class MigrationSurveyTests
     {
         MigrationRoll rolled = MigrationClassifier.Over(
             Ledger(recordings: [Recording(7)], files: [AsBroadcast(7, "one.m2ts", 100)]),
-            [OnDisk("one.m2ts", 100), OnDisk("bash.sh", 539), OnDisk("stray.m2ts", 727_013_296)],
+            [OnDisk("one.m2ts", 100), OnDisk("notes.txt", 1_024), OnDisk("stray.m2ts", 700_000_000)],
             Rescanned(InReach));
 
         IReadOnlyList<MigrationVerdict> orphans =
             [.. rolled.Verdicts.Where(verdict => verdict.Refusal is MigrationRefusal.Orphan)];
 
-        Assert.Equal(["bash.sh", "stray.m2ts"], orphans.Select(verdict => verdict.Subject));
+        Assert.Equal(["notes.txt", "stray.m2ts"], orphans.Select(verdict => verdict.Subject));
         Assert.Equal(3, rolled.OfferedIn(MigrationPopulation.RecordingFiles));
     }
 
@@ -43,7 +43,7 @@ public sealed class MigrationSurveyTests
     {
         MigrationRoll rolled = MigrationClassifier.Over(
             Ledger(),
-            [OnDisk("bash.sh", 539)],
+            [OnDisk("notes.txt", 1_024)],
             Rescanned());
 
         Assert.All(rolled.Verdicts, verdict => Assert.False(verdict.Carried));
@@ -119,7 +119,7 @@ public sealed class MigrationSurveyTests
     public void AnEmptyFileNeverReachesTheNewSystemAndIsWrittenDownOnBothSidesOfTheSameFact()
     {
         MigrationRoll rolled = MigrationClassifier.Over(
-            Ledger(recordings: [Recording(7)], files: [AsBroadcast(7, "one.m2ts", 17_171_113_480)]),
+            Ledger(recordings: [Recording(7)], files: [AsBroadcast(7, "one.m2ts", 17_000_000_000)]),
             [OnDisk("one.m2ts", 0)],
             Rescanned(InReach));
 

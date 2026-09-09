@@ -15,12 +15,12 @@ public sealed class LocalMigrationSourceDirectoryTests : IDisposable
     public async Task EveryFileUnderTheOutputDirectoryIsListedWhateverItIs()
     {
         Write("one.m2ts", "a recording");
-        Write("bash.sh", "not a recording at all");
+        Write("notes.txt", "not a recording at all");
         Write("half.tmp", "cut off");
 
         IReadOnlyList<SourceFile> found = await Walking().ListAsync(Cancel);
 
-        Assert.Equal(["bash.sh", "half.tmp", "one.m2ts"], found.Select(file => file.Path));
+        Assert.Equal(["half.tmp", "notes.txt", "one.m2ts"], found.Select(file => file.Path));
     }
 
     [Fact]

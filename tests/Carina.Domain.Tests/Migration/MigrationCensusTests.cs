@@ -168,7 +168,7 @@ public sealed class MigrationCensusTests
                 "7",
                 MigrationRefusal.ReallyEmpty,
                 "a programme",
-                17_171_113_480,
+                17_000_000_000,
                 0)));
 
         MigrationDetail line = Assert.Single(told.Details);
@@ -178,7 +178,7 @@ public sealed class MigrationCensusTests
         Assert.Equal(MigrationRefusal.ReallyEmpty, line.Refusal);
         Assert.Equal("7", line.Subject);
         Assert.Equal("a programme", line.Note);
-        Assert.Equal(17_171_113_480, line.Claimed);
+        Assert.Equal(17_000_000_000, line.Claimed);
         Assert.Equal(0, line.Observed);
     }
 }
