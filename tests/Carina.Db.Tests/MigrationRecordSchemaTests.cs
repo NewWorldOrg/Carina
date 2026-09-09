@@ -21,8 +21,8 @@ public sealed class MigrationRecordSchemaTests(MigratedScratchDatabase database)
     public static TheoryData<string> Standings =>
         Named(MigrationChannelStandings.All.Select(standing => standing.ToString()));
 
-    public static TheoryData<string> LeftAlone =>
-        Named(MigrationOmissionSubjects.All.Select(subject => subject.ToString()));
+    public static TheoryData<string> Losses =>
+        Named(MigrationLossSubjects.All.Select(subject => subject.ToString()));
 
     [Theory]
     [MemberData(nameof(Refusals))]
@@ -110,62 +110,56 @@ public sealed class MigrationRecordSchemaTests(MigratedScratchDatabase database)
     }
 
     [Theory]
-    [MemberData(nameof(LeftAlone))]
-    public async Task EveryThingLeftAloneIsWrittenDownWithTheGroundTheRequirementsGive(string subject)
+    [MemberData(nameof(Losses))]
+    public async Task EveryLossTheApplicationCanNameIsOneTheTableTakes(string subject)
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
         Guid run = await RunAsync(connection);
 
-        MigrationOmissionSubject named = Enum.Parse<MigrationOmissionSubject>(subject);
-
-        await OmissionAsync(
-            connection,
-            run,
-            subject,
-            MigrationOmission.GroundOf(named).ToString(),
-            MigrationOmissionSubjects.CountsRows(named) ? "17" : "NULL");
+        await LossAsync(connection, run, subject, "17");
 
         Assert.Equal(
             1L,
             await CountAsync(
                 connection,
-                $"SELECT count(*) FROM migration_omission WHERE run_id = '{run}' AND subject = '{subject}'"));
+                $"SELECT count(*) FROM migration_loss WHERE run_id = '{run}' AND subject = '{subject}'"));
     }
 
     [Fact]
-    public async Task WhatALineOfTheRecordCountsIsSettledByTheRequirementsAndNotByTheRun()
+    public async Task ASubjectTheApplicationNoLongerCarriesIsRefused()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
         Guid run = await RunAsync(connection);
 
         PostgresException refused = await Assert.ThrowsAsync<PostgresException>(
-            () => OmissionAsync(connection, run, "ProgrammeGuide", "NotMigratedByDesign", "17"));
+            () => LossAsync(connection, run, "ProgrammeGuide", "17"));
 
-        Assert.Equal("ck_migration_omission_affected", refused.ConstraintName);
+        Assert.Equal("ck_migration_loss_subject", refused.ConstraintName);
     }
 
     [Fact]
-    public async Task ARowThatShouldSayHowManyItTouchedCannotStaySilentAboutIt()
+    public async Task ALossCannotStaySilentAboutHowMuchOfWhatWasCarriedItReaches()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
         Guid run = await RunAsync(connection);
 
         PostgresException refused = await Assert.ThrowsAsync<PostgresException>(
-            () => OmissionAsync(connection, run, "EnclosedCharacters", "NotMigratedByDesign", "NULL"));
+            () => LossAsync(connection, run, "EnclosedCharacters", "NULL"));
 
-        Assert.Equal("ck_migration_omission_affected", refused.ConstraintName);
+        Assert.Equal("23502", refused.SqlState);
+        Assert.Equal("affected", refused.ColumnName);
     }
 
     [Fact]
-    public async Task TheGroundForLeavingSomethingAloneIsNotTheRunsToChoose()
+    public async Task ALossCountsNothingNegative()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
         Guid run = await RunAsync(connection);
 
         PostgresException refused = await Assert.ThrowsAsync<PostgresException>(
-            () => OmissionAsync(connection, run, "ProgrammeGuide", "NothingToCarry"));
+            () => LossAsync(connection, run, "EnclosedCharacters", "-1"));
 
-        Assert.Equal("ck_migration_omission_ground", refused.ConstraintName);
+        Assert.Equal("ck_migration_loss_affected", refused.ConstraintName);
     }
 
     [Fact]
@@ -332,16 +326,15 @@ public sealed class MigrationRecordSchemaTests(MigratedScratchDatabase database)
         await writing.ExecuteNonQueryAsync();
     }
 
-    private static async Task OmissionAsync(
+    private static async Task LossAsync(
         NpgsqlConnection connection,
         Guid run,
         string subject,
-        string ground,
-        string affected = "DEFAULT")
+        string affected)
     {
         await using NpgsqlCommand writing = new(
-            "INSERT INTO migration_omission (run_id, subject, ground, affected) "
-            + $"VALUES ('{run}', '{subject}', '{ground}', {affected})",
+            "INSERT INTO migration_loss (run_id, subject, affected) "
+            + $"VALUES ('{run}', '{subject}', {affected})",
             connection);
 
         await writing.ExecuteNonQueryAsync();

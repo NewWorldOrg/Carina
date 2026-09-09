@@ -59,16 +59,13 @@ public sealed record MigrationRefusalResponder(MigrationRefusal Refusal, int Cou
     }
 }
 
-public sealed record MigrationOmissionResponder(
-    MigrationOmissionSubject Subject,
-    MigrationOmissionGround Ground,
-    int? Affected)
+public sealed record MigrationLossResponder(MigrationLossSubject Subject, int Affected)
 {
-    public static MigrationOmissionResponder Of(MigrationOmission omission)
+    public static MigrationLossResponder Of(MigrationLoss loss)
     {
-        ArgumentNullException.ThrowIfNull(omission);
+        ArgumentNullException.ThrowIfNull(loss);
 
-        return new MigrationOmissionResponder(omission.Subject, omission.Ground, omission.Affected);
+        return new MigrationLossResponder(loss.Subject, loss.Affected);
     }
 }
 
@@ -101,7 +98,7 @@ public sealed record MigrationRecordResponder(
     IReadOnlyList<MigrationPopulationResponder> Populations,
     int Unclassified,
     IReadOnlyList<MigrationRefusalResponder> Refusals,
-    IReadOnlyList<MigrationOmissionResponder> Omissions,
+    IReadOnlyList<MigrationLossResponder> Losses,
     IReadOnlyList<MigrationDetailResponder> Items,
     int Total,
     int CurrentPage,
@@ -120,7 +117,7 @@ public sealed record MigrationRecordResponder(
             summary is null ? [] : [.. summary.Tallies.Select(MigrationPopulationResponder.Of)],
             summary?.Unclassified ?? 0,
             summary is null ? [] : [.. summary.Refusals.Select(MigrationRefusalResponder.Of)],
-            summary is null ? [] : [.. summary.Omissions.Select(MigrationOmissionResponder.Of)],
+            summary is null ? [] : [.. summary.Losses.Select(MigrationLossResponder.Of)],
             [.. details.Items.Select(MigrationDetailResponder.Of)],
             details.Total,
             details.CurrentPage,

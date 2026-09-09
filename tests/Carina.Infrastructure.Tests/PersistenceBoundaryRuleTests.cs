@@ -193,7 +193,7 @@ public sealed class PersistenceBoundaryRuleTests
             [
                 "migration_channel_proposal",
                 "migration_detail",
-                "migration_omission",
+                "migration_loss",
                 "migration_rule_proposal",
                 "migration_run",
                 "migration_tally",
@@ -212,7 +212,7 @@ public sealed class PersistenceBoundaryRuleTests
             [
                 "migration_channel_proposal -> migration_run",
                 "migration_detail -> migration_run",
-                "migration_omission -> migration_run",
+                "migration_loss -> migration_run",
                 "migration_rule_proposal -> migration_run",
                 "migration_tally -> migration_run",
             ],

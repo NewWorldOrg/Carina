@@ -96,12 +96,12 @@ public sealed class MigrationRecordRepositoryTests(RepositoryDatabase database)
         Assert.Equal(0, empty.Observed);
 
         Assert.Equal(
-            MigrationOmissionSubjects.All,
-            read.Omissions.Select(omission => omission.Subject).Order());
+            MigrationLossSubjects.All,
+            read.Losses.Select(loss => loss.Subject).Order());
     }
 
     [Fact]
-    public async Task ARehearsalThatFoundNothingIsStillWrittenDownWithWhatItDidNotDo()
+    public async Task ARehearsalThatFoundNothingIsStillWrittenDownWithWhatItCarriedDiminished()
     {
         await ClearAsync();
 
@@ -119,7 +119,7 @@ public sealed class MigrationRecordRepositoryTests(RepositoryDatabase database)
         MigrationReport read = Assert.IsType<MigrationReport>(await ReadAsync(id));
 
         Assert.Empty(read.Details);
-        Assert.Equal(MigrationOmissionSubjects.All.Count, read.Omissions.Count);
+        Assert.Equal(MigrationLossSubjects.All.Count, read.Losses.Count);
         Assert.Equal(MigrationPass.Rehearsal, read.Run.Pass);
     }
 
@@ -225,14 +225,14 @@ public sealed class MigrationRecordRepositoryTests(RepositoryDatabase database)
     }
 
     [Fact]
-    public async Task ThatTheProgrammeGuideWasNotMigratedIsNotSomethingTheRunGetsToRestate()
+    public async Task ALossIsNotSomethingTheRunGetsToLeaveUncounted()
     {
         MigrationRunId id = await AnEmptyRunAsync();
 
         await using NpgsqlConnection connection = await OpenAsync();
         await using NpgsqlCommand writing = new(
-            "UPDATE migration_omission SET ground = 'NothingToCarry' "
-            + $"WHERE run_id = '{id.Value}' AND subject = 'ProgrammeGuide'",
+            "UPDATE migration_loss SET affected = NULL "
+            + $"WHERE run_id = '{id.Value}' AND subject = 'EnclosedCharacters'",
             connection);
 
         await Assert.ThrowsAsync<PostgresException>(() => writing.ExecuteNonQueryAsync());
@@ -306,7 +306,7 @@ public sealed class MigrationRecordRepositoryTests(RepositoryDatabase database)
 
         Assert.Equal(0L, await CountAsync($"SELECT count(*) FROM migration_detail WHERE run_id = '{id.Value}'"));
         Assert.Equal(0L, await CountAsync($"SELECT count(*) FROM migration_tally WHERE run_id = '{id.Value}'"));
-        Assert.Equal(0L, await CountAsync($"SELECT count(*) FROM migration_omission WHERE run_id = '{id.Value}'"));
+        Assert.Equal(0L, await CountAsync($"SELECT count(*) FROM migration_loss WHERE run_id = '{id.Value}'"));
     }
 
     [Fact]
@@ -380,7 +380,7 @@ public sealed class MigrationRecordRepositoryTests(RepositoryDatabase database)
         Assert.Equal(MigrationPass.ForReal, summary.Run.Pass);
         Assert.Equal(0, summary.Unclassified);
         Assert.Equal(MigrationPopulations.Counted, summary.Tallies.Select(tally => tally.Population).ToArray());
-        Assert.Equal(MigrationOmissionSubjects.All, summary.Omissions.Select(one => one.Subject).Order().ToArray());
+        Assert.Equal(MigrationLossSubjects.All, summary.Losses.Select(one => one.Subject).Order().ToArray());
         Assert.Equal(MigrationRefusals.All, summary.Refusals.Select(one => one.Refusal).ToArray());
         Assert.Equal(1, summary.Refusals.Single(one => one.Refusal is MigrationRefusal.Orphan).Count);
         Assert.Equal(0, summary.Refusals.Single(one => one.Refusal is MigrationRefusal.Unidentifiable).Count);

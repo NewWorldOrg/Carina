@@ -44,61 +44,48 @@ public sealed class MigrationRecordShapeTests
     }
 
     [Fact]
-    public void WhyNothingWasDoneAboutSomethingIsSettledByTheRequirementsAndNotByTheRun()
+    public void WhatTheNewSystemIsShortOfIsOneOfTheThingsTheRecordKnowsToName()
     {
-        Assert.Throws<ArgumentException>(() => MigrationOmission.Rehydrate(
-            Run,
-            MigrationOmissionSubject.ProgrammeGuide,
-            MigrationOmissionGround.NothingToCarry,
-            null));
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => MigrationLoss.Rehydrate(Run, (MigrationLossSubject)9, 1));
     }
 
     [Theory]
-    [InlineData(MigrationOmissionSubject.ProgrammeGuide, MigrationOmissionGround.NotMigratedByDesign, null)]
-    [InlineData(MigrationOmissionSubject.DuplicateAvoidance, MigrationOmissionGround.NotMigratedByDesign, 17)]
-    [InlineData(MigrationOmissionSubject.QualityTimeSeries, MigrationOmissionGround.NothingToCarry, null)]
-    [InlineData(MigrationOmissionSubject.RecordingHistory, MigrationOmissionGround.NotMigratedByDesign, null)]
-    [InlineData(MigrationOmissionSubject.EnclosedCharacters, MigrationOmissionGround.NotMigratedByDesign, 48)]
-    [InlineData(MigrationOmissionSubject.Thumbnails, MigrationOmissionGround.NotMigratedByDesign, null)]
-    public void EachThingLeftAloneIsLeftAloneForTheReasonTheRequirementsGive(
-        MigrationOmissionSubject subject,
-        MigrationOmissionGround ground,
-        int? affected)
+    [InlineData(MigrationLossSubject.DuplicateAvoidance)]
+    [InlineData(MigrationLossSubject.EnclosedCharacters)]
+    public void ALossIsSomethingCarriedThatArrivedDiminished(MigrationLossSubject subject)
     {
-        Assert.Equal(ground, MigrationOmission.For(Run, subject, affected).Ground);
+        Assert.Equal(subject, MigrationLoss.Rehydrate(Run, subject, 17).Subject);
     }
 
     [Fact]
-    public void ALineOfTheRecordThatCountsWhatItTouchedCannotStaySilentAboutIt()
-        => Assert.Throws<ArgumentException>(
-            () => MigrationOmission.For(Run, MigrationOmissionSubject.EnclosedCharacters, null));
+    public void ALossCountsNothingNegative()
+        => Assert.Throws<ArgumentOutOfRangeException>(
+            () => MigrationLoss.Rehydrate(Run, MigrationLossSubject.EnclosedCharacters, -1));
 
     [Fact]
-    public void ALineOfTheRecordThatCountsNothingDoesNotInventACount()
-        => Assert.Throws<ArgumentException>(
-            () => MigrationOmission.For(Run, MigrationOmissionSubject.ProgrammeGuide, 3));
+    public void ALossOfNothingAtAllIsStillCountedRatherThanLeftUnsaid()
+        => Assert.Equal(0, MigrationLoss.Rehydrate(Run, MigrationLossSubject.DuplicateAvoidance, 0).Affected);
 
     [Fact]
-    public void ThePictureDrawnOfARecordingIsLeftAloneWithoutCountingTheOnesLeftBehind()
-        => Assert.Throws<ArgumentException>(
-            () => MigrationOmission.For(Run, MigrationOmissionSubject.Thumbnails, 7));
+    public void TheRecordIsOnlyEverShortOfWhatTheRunKnowsHowToCount()
+    {
+        Assert.Equal(MigrationLossSubjects.All.Count, MigrationLoss.EveryOne(Run, new([], [], 0, 0)).Count);
+    }
 
     [Fact]
-    public void EveryLineThatCountsWhatItTouchedSaysHowMany()
+    public void EveryLossSaysHowManyOfWhatWasCarriedItReaches()
     {
         MigrationAftermath aftermath = new([], [], 17, 48);
 
-        IReadOnlyList<MigrationOmission> told = MigrationOmission.EveryOne(Run, aftermath);
+        IReadOnlyList<MigrationLoss> told = MigrationLoss.EveryOne(Run, aftermath);
 
         Assert.Equal(
             17,
-            told.Single(omission => omission.Subject is MigrationOmissionSubject.DuplicateAvoidance).Affected);
+            told.Single(loss => loss.Subject is MigrationLossSubject.DuplicateAvoidance).Affected);
         Assert.Equal(
             48,
-            told.Single(omission => omission.Subject is MigrationOmissionSubject.EnclosedCharacters).Affected);
-        Assert.All(
-            told.Where(omission => !MigrationOmissionSubjects.CountsRows(omission.Subject)),
-            omission => Assert.Null(omission.Affected));
+            told.Single(loss => loss.Subject is MigrationLossSubject.EnclosedCharacters).Affected);
     }
 
     [Fact]

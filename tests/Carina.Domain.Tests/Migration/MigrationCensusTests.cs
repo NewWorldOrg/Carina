@@ -126,18 +126,15 @@ public sealed class MigrationCensusTests
     }
 
     [Fact]
-    public void WhatWasNotDoneIsAlwaysWrittenDownWhateverTheRunFound()
+    public void WhatArrivedDiminishedIsAlwaysWrittenDownWhateverTheRunFound()
     {
         MigrationReport told = Report(Roll(Nothing()));
 
         Assert.Equal(
-            MigrationOmissionSubjects.All,
-            told.Omissions.Select(omission => omission.Subject).Order());
+            MigrationLossSubjects.All,
+            told.Losses.Select(loss => loss.Subject).Order());
 
-        Assert.Equal(
-            MigrationOmissionGround.NothingToCarry,
-            told.Omissions.Single(omission => omission.Subject is MigrationOmissionSubject.QualityTimeSeries)
-                .Ground);
+        Assert.All(told.Losses, loss => Assert.Equal(0, loss.Affected));
     }
 
     [Fact]

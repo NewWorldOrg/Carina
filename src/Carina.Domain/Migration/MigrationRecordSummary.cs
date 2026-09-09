@@ -23,7 +23,7 @@ public sealed record MigrationRecordSummary(
     MigrationRun Run,
     IReadOnlyList<MigrationTally> Tallies,
     IReadOnlyList<MigrationRefusalCount> Refusals,
-    IReadOnlyList<MigrationOmission> Omissions,
+    IReadOnlyList<MigrationLoss> Losses,
     int Rehearsals,
     DateTime? LastRehearsalFinishedAt)
 {

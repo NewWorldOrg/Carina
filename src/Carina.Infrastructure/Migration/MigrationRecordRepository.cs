@@ -15,7 +15,7 @@ public sealed class MigrationRecordRepository(CarinaDbContext context) : IMigrat
         context.Add(report.Run);
         context.AddRange(report.Tallies);
         context.AddRange(report.Details);
-        context.AddRange(report.Omissions);
+        context.AddRange(report.Losses);
         context.AddRange(report.ChannelProposals);
         context.AddRange(report.RuleProposals);
 
@@ -43,9 +43,9 @@ public sealed class MigrationRecordRepository(CarinaDbContext context) : IMigrat
             .Where(tally => tally.RunId == latest.Id)
             .ToListAsync(cancellationToken);
 
-        List<MigrationOmission> omissions = await context.Set<MigrationOmission>()
+        List<MigrationLoss> losses = await context.Set<MigrationLoss>()
             .AsNoTracking()
-            .Where(omission => omission.RunId == latest.Id)
+            .Where(loss => loss.RunId == latest.Id)
             .ToListAsync(cancellationToken);
 
         Dictionary<MigrationRefusal, int> counted = await context.Set<MigrationDetail>()
@@ -63,7 +63,7 @@ public sealed class MigrationRecordRepository(CarinaDbContext context) : IMigrat
             latest,
             [.. tallies.OrderBy(tally => tally.Population)],
             MigrationRefusalCount.EveryOne(counted),
-            [.. omissions.OrderBy(omission => omission.Subject)],
+            [.. losses.OrderBy(loss => loss.Subject)],
             await rehearsals.CountAsync(cancellationToken),
             await rehearsals.MaxAsync(run => (DateTime?)run.FinishedAt, cancellationToken));
     }
@@ -120,10 +120,10 @@ public sealed class MigrationRecordRepository(CarinaDbContext context) : IMigrat
             .ThenBy(detail => detail.Subject)
             .ToListAsync(cancellationToken);
 
-        List<MigrationOmission> omissions = await context.Set<MigrationOmission>()
+        List<MigrationLoss> losses = await context.Set<MigrationLoss>()
             .AsNoTracking()
-            .Where(omission => omission.RunId == runId)
-            .OrderBy(omission => omission.Subject)
+            .Where(loss => loss.RunId == runId)
+            .OrderBy(loss => loss.Subject)
             .ToListAsync(cancellationToken);
 
         List<MigrationChannelProposal> channelProposals = await context.Set<MigrationChannelProposal>()
@@ -139,6 +139,6 @@ public sealed class MigrationRecordRepository(CarinaDbContext context) : IMigrat
             .OrderBy(proposal => proposal.SourceRow)
             .ToListAsync(cancellationToken);
 
-        return MigrationReport.Of(run, tallies, details, omissions, channelProposals, ruleProposals);
+        return MigrationReport.Of(run, tallies, details, losses, channelProposals, ruleProposals);
     }
 }
