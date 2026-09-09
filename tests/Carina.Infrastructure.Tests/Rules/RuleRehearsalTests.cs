@@ -329,6 +329,7 @@ public sealed class RuleRehearsalTests
                 Tuning,
                 Write,
                 RollingHorizon.Default,
+                new SilentEvents(),
                 new FixedClock(Now));
 
             Applying = new RuleApplicationService(
@@ -341,6 +342,7 @@ public sealed class RuleRehearsalTests
                 new RuleMatcher(new ProgrammeSearchScope(Streams, Services), new FixedClock(Now)),
                 new RuleApplicationSettings(),
                 Write,
+                new SilentEvents(),
                 new FixedClock(Now));
         }
 

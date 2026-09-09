@@ -195,6 +195,64 @@ public sealed class RecordingTickJobTests
         Assert.Empty(notices.Nudged);
     }
 
+    [Fact]
+    public async Task ATickThatStartedARecordingTellsTheScreensTheRecordingsMoved()
+    {
+        var clock = new HurriedTicks();
+        var driver = new RecordingDriver();
+        var events = new SilentEvents();
+        using RecordingTickJob job = Job(
+            Once(Due(1)),
+            new HeldRecordings(),
+            driver,
+            clock,
+            events: events);
+        using var stopping = new CancellationTokenSource();
+
+        await job.StartAsync(stopping.Token);
+        await Eventually.Happens(() => driver.Started.Count >= 1, "the loop never started a recording");
+        await Eventually.Happens(() => events.Signalled.Count >= 1, "the tick that started one told the screens nothing");
+        await stopping.CancelAsync();
+        await job.StopAsync(Cancel);
+
+        Assert.Equal([AppEventName.Recordings], events.Signalled.Distinct());
+    }
+
+    [Fact]
+    public async Task ATickThatStoppedARecordingTellsTheScreensTheRecordingsMoved()
+    {
+        var clock = new HurriedTicks();
+        var recordings = new HeldRecordings();
+        recordings.Rows.Add(InFlight(Airs.AddMinutes(-30), Airs));
+        var events = new SilentEvents();
+        using RecordingTickJob job = Job(Holding(), recordings, new RecordingDriver(), clock, events: events);
+        using var stopping = new CancellationTokenSource();
+
+        await job.StartAsync(stopping.Token);
+        await Eventually.Happens(() => events.Signalled.Count >= 1, "the tick that stopped one told the screens nothing");
+        await stopping.CancelAsync();
+        await job.StopAsync(Cancel);
+
+        Assert.Equal([AppEventName.Recordings], events.Signalled.Distinct());
+    }
+
+    [Fact]
+    public async Task ATickThatStartedAndStoppedNothingTellsTheScreensNothing()
+    {
+        var clock = new HurriedTicks();
+        var recordings = new HeldRecordings();
+        var events = new SilentEvents();
+        using RecordingTickJob job = Job(Holding(), recordings, new RecordingDriver(), clock, events: events);
+        using var stopping = new CancellationTokenSource();
+
+        await job.StartAsync(stopping.Token);
+        await Eventually.Happens(() => recordings.Listings >= 2, "the loop never ticked twice");
+        await stopping.CancelAsync();
+        await job.StopAsync(Cancel);
+
+        Assert.Empty(events.Signalled);
+    }
+
     private static PlannedReservations Holding(params RecordingTick[] ticks)
         => new PlannedReservations().Holding(ticks);
 
@@ -213,7 +271,8 @@ public sealed class RecordingTickJobTests
         TimeProvider clock,
         RecordingSettings? settings = null,
         WhatWasSaid? said = null,
-        CountedNotices? notices = null)
+        CountedNotices? notices = null,
+        SilentEvents? events = null)
     {
         RecordingSettings held = settings ?? RecordingSettings.Default;
         var services = new ServiceCollection();
@@ -232,6 +291,7 @@ public sealed class RecordingTickJobTests
             services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),
             held,
             notices ?? new CountedNotices(),
+            events ?? new SilentEvents(),
             clock,
             said is null ? NullLogger<RecordingTickJob>.Instance : said.Logger());
     }

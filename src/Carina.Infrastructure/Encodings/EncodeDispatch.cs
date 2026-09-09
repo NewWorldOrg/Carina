@@ -1,4 +1,6 @@
+using Carina.Contracts;
 using Carina.Domain.Encodings;
+using Carina.Domain.Events;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -18,6 +20,7 @@ public sealed record EncodeLook(EncodeClaimStanding Standing, EncodeJobId? Job, 
 public sealed class EncodeDispatch(
     IServiceScopeFactory scopes,
     EncodeSettings settings,
+    IAppEventPublisher events,
     TimeProvider clock,
     ILogger<EncodeDispatch> logger) : BackgroundService
 {
@@ -25,10 +28,31 @@ public sealed class EncodeDispatch(
     {
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
 
-        return await scope.ServiceProvider.GetRequiredService<EncodeRestart>().RecoverAsync(cancellationToken);
+        EncodeRestartReport report = await scope.ServiceProvider
+            .GetRequiredService<EncodeRestart>()
+            .RecoverAsync(cancellationToken);
+
+        if (report.Found > 0)
+        {
+            events.Signal(AppEventName.EncodeJobs);
+        }
+
+        return report;
     }
 
     public async Task<EncodeLook> LookAsync(CancellationToken cancellationToken)
+    {
+        EncodeLook look = await LookedAsync(cancellationToken);
+
+        if (look.Standing is EncodeClaimStanding.Claimed || look.Ended is not null)
+        {
+            events.Signal(AppEventName.EncodeJobs);
+        }
+
+        return look;
+    }
+
+    private async Task<EncodeLook> LookedAsync(CancellationToken cancellationToken)
     {
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
         IEncodeJobRepository jobs = scope.ServiceProvider.GetRequiredService<IEncodeJobRepository>();

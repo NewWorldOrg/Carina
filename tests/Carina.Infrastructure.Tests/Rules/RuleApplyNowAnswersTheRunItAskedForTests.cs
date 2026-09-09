@@ -1,6 +1,7 @@
 using Carina.Contracts;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
+using Carina.Domain.Events;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
@@ -153,6 +154,7 @@ public sealed class RuleApplyNowAnswersTheRunItAskedForTests
             services.AddSingleton<ITunerCapacityDirectory>(Seating);
             services.AddSingleton<IServiceTuningDirectory>(Tuning);
             services.AddSingleton<IAtomicWrite>(Write);
+            services.AddSingleton<IAppEventPublisher>(new SilentEvents());
             services.AddSingleton(RollingHorizon.Default);
             services.AddSingleton(new RuleApplicationSettings());
             services.AddScoped<ProgrammeSearchScope>();

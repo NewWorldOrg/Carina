@@ -1,7 +1,10 @@
+using Carina.Contracts;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Reservations;
 using Carina.Infrastructure.Tests.Recordings;
+
+using SilentEvents = Carina.TestSupport.SilentEvents;
 
 namespace Carina.Infrastructure.Tests.Reservations;
 
@@ -328,6 +331,28 @@ public sealed class ReservationOutcomeServiceTests
         Assert.Equal(0, held.Write.Opened);
     }
 
+    [Fact]
+    public async Task ARunThatWroteDownWhatBecameOfAReservationTellsTheScreens()
+    {
+        Reservation waiting = ReservationFixtures.Rehydrated(ReservationState.Scheduled, startAt: Opens);
+        Held held = Standing(AfterItAll, waiting);
+
+        await Run(held);
+
+        Assert.Equal([AppEventName.Reservations], held.Events.Signalled);
+    }
+
+    [Fact]
+    public async Task ARunWithNothingToSayTellsTheScreensNothing()
+    {
+        Held held = Standing(AfterItAll);
+
+        await Run(held);
+        await Run(held);
+
+        Assert.Empty(held.Events.Signalled);
+    }
+
     private static Recording Settled(Reservation reservation, params RecordingFault[] faults)
     {
         Recording recording = RecordingTickFixture.InFlight(
@@ -355,6 +380,7 @@ public sealed class ReservationOutcomeServiceTests
         var ledger = new HeldReservations(write, outcomes);
         var claims = new HeldClaims();
         var recordings = new HeldRecordings();
+        var events = new SilentEvents();
         ledger.Standing(reservations);
 
         return new Held(
@@ -365,12 +391,14 @@ public sealed class ReservationOutcomeServiceTests
                 recordings,
                 write,
                 new ReservationOutcomeSettings { Grace = Grace },
+                events,
                 new FixedClock(at)),
             ledger,
             outcomes,
             claims,
             recordings,
-            write);
+            write,
+            events);
     }
 
     private sealed record Held(
@@ -379,5 +407,6 @@ public sealed class ReservationOutcomeServiceTests
         HeldOutcomes Outcomes,
         HeldClaims Claims,
         HeldRecordings Recordings,
-        WatchedWrite Write);
+        WatchedWrite Write,
+        SilentEvents Events);
 }

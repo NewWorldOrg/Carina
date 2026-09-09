@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 
+using Carina.Contracts;
 using Carina.Domain.Encodings;
 using Carina.Domain.Machines;
 using Carina.Domain.Recordings;
@@ -542,4 +543,56 @@ public sealed class EncodingEndpointTests
         Assert.Equal([profile], feature.Profiles.Profiles);
         Assert.Single(feature.Destinations.Destinations);
     }
+
+    [Fact]
+    public async Task QueueingAJobByHandTellsTheScreensTheJobsMoved()
+    {
+        await using var feature = new EncodingFeature();
+        EncodeProfile profile = feature.Defined();
+        EncodeDestination destination = feature.Placed(profile);
+        Recording recording = feature.Recorded();
+        feature.Events.Signalled.Clear();
+
+        await feature.PostAsync("/api/encoding/jobs", new
+        {
+            recordingId = recording.Id.Wire,
+            destinationId = destination.Id.Value,
+        });
+
+        Assert.Equal([AppEventName.EncodeJobs], feature.Events.Signalled);
+    }
+
+    [Fact]
+    public async Task AJobThatWasRefusedTellsTheScreensNothing()
+    {
+        await using var feature = new EncodingFeature();
+        EncodeProfile profile = feature.Defined();
+        EncodeDestination destination = feature.Placed(profile);
+        feature.Events.Signalled.Clear();
+
+        (HttpStatusCode status, _) = await feature.PostAsync("/api/encoding/jobs", new
+        {
+            recordingId = RecordingId.New().Wire,
+            destinationId = destination.Id.Value,
+        });
+
+        Assert.NotEqual(HttpStatusCode.Created, status);
+        Assert.Empty(feature.Events.Signalled);
+    }
+
+
+    [Fact]
+    public async Task CallingAJobOffTellsTheScreensTheJobsMoved()
+    {
+        await using var feature = new EncodingFeature();
+        EncodeProfile profile = feature.Defined();
+        EncodeDestination destination = feature.Placed(profile);
+        EncodeJob job = feature.Queued(feature.Recorded(), profile, destination);
+        feature.Events.Signalled.Clear();
+
+        await feature.PostAsync($"/api/encoding/jobs/{job.Id.Value}/cancel");
+
+        Assert.Equal([AppEventName.EncodeJobs], feature.Events.Signalled);
+    }
+
 }

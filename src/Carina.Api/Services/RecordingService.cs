@@ -3,6 +3,7 @@ using Carina.Contracts;
 using Carina.Domain.Base;
 using Carina.Domain.Driver;
 using Carina.Domain.Encodings;
+using Carina.Domain.Events;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Thumbnails;
 
@@ -52,6 +53,7 @@ public sealed class RecordingService(
     IThumbnailRemaker thumbnails,
     IRecordingFileEraser eraser,
     RecordingDeletions deletions,
+    IAppEventPublisher events,
     TimeProvider clock)
 {
     public async Task<ServiceResult<RecordingPage>> ListAsync(
@@ -123,6 +125,11 @@ public sealed class RecordingService(
 
         DateTime asked = clock.GetUtcNow().UtcDateTime;
         RecordingHalt halt = await recordings.HaltAsync(id, reason, asked, cancellationToken);
+
+        if (halt is RecordingHalt.Written)
+        {
+            events.Signal(AppEventName.Recordings);
+        }
 
         if (halt is RecordingHalt.AlreadyEnded)
         {
@@ -237,7 +244,15 @@ public sealed class RecordingService(
                 Failed(fault));
         }
 
-        return await recordings.DiscardAsync(id, cancellationToken) switch
+        RecordingDiscard discard = await recordings.DiscardAsync(id, cancellationToken);
+
+        if (discard is RecordingDiscard.Discarded)
+        {
+            events.Signal(AppEventName.Recordings);
+            events.Signal(AppEventName.Quality);
+        }
+
+        return discard switch
         {
             RecordingDiscard.Discarded => ServiceResult<RecordingDiscarded, RecordingFailure>.Success(
                 new RecordingDiscarded(id, erasure.FilesRemoved)),

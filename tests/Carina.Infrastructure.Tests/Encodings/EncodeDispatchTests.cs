@@ -1,3 +1,4 @@
+using Carina.Contracts;
 using Carina.Domain.Encodings;
 using Carina.Domain.Integrity;
 using Carina.Domain.Recordings;
@@ -157,11 +158,62 @@ public sealed class EncodeDispatchTests
     /// A dispatch over the held ledger. The runner is built from nothing, so a claimed job's run
     /// throws at once: what these tests look at is what the dispatch does around a run, not the run.
     /// </summary>
+    [Fact]
+    public async Task ALookThatStartedAJobTellsTheScreensTheJobsMoved()
+    {
+        var held = new HeldEncodeJobs();
+        held.Jobs.Add(Waiting());
+        var events = new SilentEvents();
+
+        await Dispatch(held, new EncodeSettings { MostAttempts = 3 }, events: events).LookAsync(Cancel);
+
+        Assert.Equal([AppEventName.EncodeJobs], events.Signalled);
+    }
+
+    [Fact]
+    public async Task ALookAtAnEmptyQueueTellsTheScreensNothing()
+    {
+        var held = new HeldEncodeJobs();
+        var events = new SilentEvents();
+        EncodeDispatch dispatch = Dispatch(held, new EncodeSettings(), events: events);
+
+        await dispatch.LookAsync(Cancel);
+        await dispatch.LookAsync(Cancel);
+        await dispatch.LookAsync(Cancel);
+
+        Assert.Empty(events.Signalled);
+    }
+
+    [Fact]
+    public async Task AStartUpThatPutNoJobBackTellsTheScreensNothing()
+    {
+        var held = new HeldEncodeJobs();
+        held.Jobs.Add(Waiting());
+        var events = new SilentEvents();
+
+        await Dispatch(held, new EncodeSettings(), events: events).RecoverAsync(Cancel);
+
+        Assert.Empty(events.Signalled);
+    }
+
+    [Fact]
+    public async Task AStartUpThatPutAJobBackTellsTheScreensTheJobsMoved()
+    {
+        var held = new HeldEncodeJobs();
+        held.Jobs.Add(Running(attempt: 1));
+        var events = new SilentEvents();
+
+        await Dispatch(held, new EncodeSettings { MostAttempts = 3 }, events: events).RecoverAsync(Cancel);
+
+        Assert.Equal([AppEventName.EncodeJobs], events.Signalled);
+    }
+
     private static EncodeDispatch Dispatch(
         HeldEncodeJobs held,
         EncodeSettings settings,
         HeldEncodeScratch? scratch = null,
-        Action<EncodeJob>? whenRun = null)
+        Action<EncodeJob>? whenRun = null,
+        SilentEvents? events = null)
     {
         var clock = new HandTurnedClock(new DateTimeOffset(Now));
         var services = new ServiceCollection();
@@ -182,6 +234,7 @@ public sealed class EncodeDispatchTests
         return new EncodeDispatch(
             services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),
             settings,
+            events ?? new SilentEvents(),
             clock,
             NullLogger<EncodeDispatch>.Instance);
     }

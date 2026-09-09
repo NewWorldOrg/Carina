@@ -26,6 +26,12 @@ public sealed record RecordingWatch(
     public bool SaysAnything
         => Broken > 0 || Resumed > 0 || Settled > 0 || Collisions > 0 || LeftOpen > 0 || StoodDown > 0
            || OutOfTouch > 0;
+
+    /// <summary>
+    /// The counts raised only on the pass a recording moves. LeftOpen and OutOfTouch say it is still
+    /// where the last pass left it, so they come back every pass and say nothing new.
+    /// </summary>
+    public bool AnythingMoved => Broken > 0 || Resumed > 0 || Settled > 0;
 }
 
 public sealed class RecordingStreamSupervisor(

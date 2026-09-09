@@ -1,6 +1,7 @@
 using Carina.Contracts;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
+using Carina.Domain.Events;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
@@ -580,6 +581,7 @@ public sealed class ReservationRecalculationHostedServiceTests
             services.AddSingleton<ITunerCapacityDirectory>(Seating);
             services.AddSingleton<IServiceTuningDirectory>(Tuning);
             services.AddSingleton<IAtomicWrite>(Write);
+            services.AddSingleton<IAppEventPublisher>(new SilentEvents());
             services.AddSingleton<IReservationRecordingContract>(new HeldClaims());
             services.AddSingleton(RollingHorizon.Default);
             services.AddSingleton(new RuleApplicationSettings());

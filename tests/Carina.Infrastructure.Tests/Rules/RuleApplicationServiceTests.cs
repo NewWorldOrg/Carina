@@ -296,6 +296,29 @@ public sealed class RuleApplicationServiceTests
     }
 
     [Fact]
+    public async Task APassThatWithdrewAReservationTellsTheScreensTheReservationsMoved()
+    {
+        World world = Vanished();
+
+        await world.Applying.EverythingAsync(Cancel);
+
+        Assert.Contains(AppEventName.Reservations, world.Events.Signalled);
+    }
+
+    [Fact]
+    public async Task APassThatLeftEveryReservationWhereItWasTellsTheScreensNothing()
+    {
+        World world = Vanished(VisitOutcome.Incomplete);
+
+        await world.Applying.EverythingAsync(Cancel);
+        world.Events.Signalled.Clear();
+
+        await world.Applying.EverythingAsync(Cancel);
+
+        Assert.Empty(world.Events.Signalled);
+    }
+
+    [Fact]
     public async Task WithdrawingSendsWhatIsLeftBackThroughTheOnePlaceThatWorksOutTheTuners()
     {
         World withdrawing = Vanished();
@@ -708,14 +731,18 @@ public sealed class RuleApplicationServiceTests
                     Tuning,
                     Write,
                     RollingHorizon.Default,
+                    new SilentEvents(),
                     new FixedClock(Now)),
                 new RuleMatcher(new ProgrammeSearchScope(Streams, Services), new FixedClock(Now)),
                 settings,
                 Write,
+                Events,
                 new FixedClock(Now));
         }
 
         public HeldRules Rules { get; } = new();
+
+        public SilentEvents Events { get; } = new();
 
         public HeldProgrammes Programmes { get; } = new();
 

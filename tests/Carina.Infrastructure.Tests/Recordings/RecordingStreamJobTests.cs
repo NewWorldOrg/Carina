@@ -174,6 +174,55 @@ public sealed class RecordingStreamJobTests
         Assert.Empty(ledger.Saved);
     }
 
+    [Fact]
+    public async Task AWatchThatGaveARecordingItsOutcomeTellsTheScreensAndTheQualityLedgerMoved()
+    {
+        Recording recording = InFlight();
+        var ledger = new StreamLedger();
+        ledger.Hold(recording);
+        var events = new SilentEvents();
+        using RecordingStreamJob job = Job(
+            ledger,
+            new WatchedDriver(),
+            new WatchClock(Airs.AddMinutes(30)),
+            new DriverSignalRelay(NullLogger<DriverSignalRelay>.Instance),
+            events: events);
+        using var stopping = new CancellationTokenSource();
+
+        await job.StartAsync(stopping.Token);
+        await Eventually.Happens(() => events.Signalled.Count >= 2, "the watch that ended one told the screens nothing");
+        await stopping.CancelAsync();
+        await job.StopAsync(Cancel);
+
+        Assert.Contains(AppEventName.Recordings, events.Signalled);
+        Assert.Contains(AppEventName.Quality, events.Signalled);
+    }
+
+    [Fact]
+    public async Task AWatchThatOnlyKeptWhatWasRunningTellsTheScreensNothing()
+    {
+        Recording recording = InFlight();
+        var ledger = new StreamLedger();
+        ledger.Hold(recording);
+        var driver = new WatchedDriver();
+        driver.Holding[RecordingSessions.Named(recording.Id)] = Live(recording, Airs);
+        var events = new SilentEvents();
+        using RecordingStreamJob job = Job(
+            ledger,
+            driver,
+            new WatchClock(Airs.AddMinutes(10)),
+            new DriverSignalRelay(NullLogger<DriverSignalRelay>.Instance),
+            events: events);
+        using var stopping = new CancellationTokenSource();
+
+        await job.StartAsync(stopping.Token);
+        await Eventually.Happens(() => ledger.Listings >= 3, "the loop never watched three times");
+        await stopping.CancelAsync();
+        await job.StopAsync(Cancel);
+
+        Assert.Empty(events.Signalled);
+    }
+
     private static async Task Stayed(Func<bool> condition, string what)
     {
         long start = Environment.TickCount64;
@@ -194,11 +243,13 @@ public sealed class RecordingStreamJobTests
         WatchedDriver driver,
         TimeProvider clock,
         DriverSignalRelay signals,
-        RecordingWatchSettings? settings = null)
+        RecordingWatchSettings? settings = null,
+        SilentEvents? events = null)
         => new(
             Supervisor(ledger, driver, clock, settings: settings ?? Settings),
             signals,
             settings ?? Settings,
+            events ?? new SilentEvents(),
             clock,
             NullLogger<RecordingStreamJob>.Instance);
 }

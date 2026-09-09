@@ -283,10 +283,12 @@ public sealed class RuleRetirementTests
                     Tuning,
                     Write,
                     RollingHorizon.Default,
+                    new SilentEvents(),
                     new FixedClock(Now)),
                 new RuleMatcher(new ProgrammeSearchScope(Streams, Services), new FixedClock(Now)),
                 new RuleApplicationSettings(),
                 Write,
+                new SilentEvents(),
                 new FixedClock(Now));
         }
 

@@ -1,5 +1,6 @@
 using Carina.Contracts;
 using Carina.Domain.Driver;
+using Carina.Domain.Events;
 
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -10,6 +11,7 @@ public sealed class RecordingStreamJob(
     RecordingStreamSupervisor supervisor,
     IDriverSignals signals,
     RecordingWatchSettings settings,
+    IAppEventPublisher events,
     TimeProvider clock,
     ILogger<RecordingStreamJob> logger) : BackgroundService
 {
@@ -33,7 +35,7 @@ public sealed class RecordingStreamJob(
 
             try
             {
-                Report(await supervisor.WatchAsync(stoppingToken));
+                Report(Told(await supervisor.WatchAsync(stoppingToken)));
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -85,6 +87,21 @@ public sealed class RecordingStreamJob(
         }
 
         return true;
+    }
+
+    private RecordingWatch Told(RecordingWatch watch)
+    {
+        if (watch.AnythingMoved)
+        {
+            events.Signal(AppEventName.Recordings);
+        }
+
+        if (watch.Settled > 0)
+        {
+            events.Signal(AppEventName.Quality);
+        }
+
+        return watch;
     }
 
     private void Report(RecordingWatch watch)
