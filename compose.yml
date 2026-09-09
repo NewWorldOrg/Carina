@@ -10,7 +10,7 @@ services:
       - driver-run:/run/carina
       - ${CARINA_RECORDINGS_DIR:-recordings}:/srv/recordings:ro
       - thumbnails:/srv/thumbnails
-      - encodes:/srv/encodes
+      - ${CARINA_ENCODES_DIR:-encodes}:/srv/encodes
     devices:
       - ${CARINA_DRI:-/dev/null}:${CARINA_DRI:-/dev/null}
     group_add:
