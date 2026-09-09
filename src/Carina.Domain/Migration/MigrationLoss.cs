@@ -44,6 +44,7 @@ public sealed class MigrationLoss
         {
             MigrationLossSubject.DuplicateAvoidance => aftermath.RulesRead,
             MigrationLossSubject.EnclosedCharacters => aftermath.RowsPastRestoring,
+            MigrationLossSubject.DayBoundary => aftermath.RulesNarrowedByDay,
             _ => throw new ArgumentOutOfRangeException(
                 nameof(subject),
                 subject,

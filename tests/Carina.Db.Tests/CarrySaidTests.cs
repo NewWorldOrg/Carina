@@ -100,6 +100,17 @@ public sealed class CarrySaidTests
             StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void HowManyRulesCrossedOverStillNarrowedToDaysIsSaidBecauseTheDayBeginsElsewhereHere()
+    {
+        string said = CarrySaid.Of(Report(MigrationPass.Rehearsal));
+
+        Assert.Contains(
+            "Carried and diminished, DayBoundary: 1 rows.",
+            said,
+            StringComparison.Ordinal);
+    }
+
     private static MigrationReport Report(MigrationPass pass)
         => MigrationCensus.Taken(
             Run,
@@ -173,5 +184,6 @@ public sealed class CarrySaidTests
             ],
             [MigrationRuleProposal.Rehydrate(Run, 3, null, true)],
             1,
-            2);
+            2,
+            1);
 }

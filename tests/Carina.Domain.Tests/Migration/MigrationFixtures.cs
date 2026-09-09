@@ -117,6 +117,7 @@ internal static class MigrationFixtures
                         true)),
             ],
             0,
+            0,
             0);
     }
 

@@ -24,11 +24,16 @@ public sealed record MigrationRuleConversion
 
     public const string Channel = "channel";
 
-    private MigrationRuleConversion(string name, RuleQuery? query, MigrationRefusal? refusal)
+    private MigrationRuleConversion(
+        string name,
+        RuleQuery? query,
+        MigrationRefusal? refusal,
+        bool narrowedByDay)
     {
         Name = name;
         Query = query;
         Refusal = refusal;
+        NarrowedByDay = narrowedByDay;
     }
 
     public string Name { get; }
@@ -38,6 +43,8 @@ public sealed record MigrationRuleConversion
     public MigrationRefusal? Refusal { get; }
 
     public bool Expressible => Refusal is null;
+
+    public bool NarrowedByDay { get; }
 
     public static MigrationRuleConversion Of(SourceRule rule, IReadOnlySet<ServiceKey> inReach)
     {
@@ -88,8 +95,24 @@ public sealed record MigrationRuleConversion
             return Cannot(rule, MigrationRefusal.Inexpressible);
         }
 
-        return new MigrationRuleConversion(name, query, null);
+        return new MigrationRuleConversion(name, query, null, Narrows(terms.Days));
     }
+
+    public static int RulesNarrowedByDay(SourceLedger ledger, IReadOnlySet<ServiceKey> inReach)
+    {
+        ArgumentNullException.ThrowIfNull(ledger);
+
+        int found = 0;
+
+        foreach (SourceRule rule in ledger.Rules)
+        {
+            found += Of(rule, inReach).NarrowedByDay ? 1 : 0;
+        }
+
+        return found;
+    }
+
+    private static bool Narrows(int days) => SourceWeek.Named(days) is { Count: > 0 };
 
     private static bool LooksAtTheExtendedBody(SourceRuleTerms terms)
         => terms.Fields.HasFlag(SourceRuleFields.ExtendedBody)
@@ -207,5 +230,5 @@ public sealed record MigrationRuleConversion
     }
 
     private static MigrationRuleConversion Cannot(SourceRule rule, MigrationRefusal refusal)
-        => new(MigrationNote.Of(rule.Name), null, MigrationRefusals.Named(refusal));
+        => new(MigrationNote.Of(rule.Name), null, MigrationRefusals.Named(refusal), false);
 }

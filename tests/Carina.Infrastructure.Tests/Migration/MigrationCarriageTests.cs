@@ -204,6 +204,21 @@ public sealed class MigrationCarriageTests
     }
 
     [Fact]
+    public async Task TheRulesThatCrossedOverStillNarrowedToDaysAreCountedAmongWhatArrivedDiminished()
+    {
+        SourceLedger ledger = Ledger(rules:
+        [
+            Rule(3, days: 0b000_0001),
+            Rule(4, days: 0b100_0001),
+            Rule(5, days: SourceWeek.EveryDay),
+        ]);
+
+        MigrationCarried carried = await CarriedAsync(MigrationPass.ForReal, ledger);
+
+        Assert.Equal(2, carried.Aftermath.RulesNarrowedByDay);
+    }
+
+    [Fact]
     public async Task ARehearsalMakesNoRuleAndStillSaysWhatItWouldHaveMade()
     {
         SourceLedger ledger = Ledger(rules: [Rule(3)]);

@@ -5,6 +5,8 @@ public enum MigrationLossSubject
     DuplicateAvoidance = 1,
 
     EnclosedCharacters = 2,
+
+    DayBoundary = 3,
 }
 
 public static class MigrationLossSubjects

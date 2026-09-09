@@ -112,7 +112,8 @@ public sealed class MigrationCarriage(
                     RescannedService.NamedBy(rescanned)),
                 meant,
                 ledger.Rules.Count,
-                MigrationTextLoss.RowsPastRestoring(ledger)));
+                MigrationTextLoss.RowsPastRestoring(ledger),
+                MigrationRuleConversion.RulesNarrowedByDay(ledger, inReach)));
     }
 
     private static string Said(MigrationRootStanding standing)
