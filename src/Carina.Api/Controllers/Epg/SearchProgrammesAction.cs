@@ -34,11 +34,14 @@ public sealed class SearchProgrammesAction(ProgrammeGuideService guide) : Contro
 
     private static string Refusal
         => "A search needs at least one condition that narrows: a keyword, a word to leave out, a genre, "
-            + "a broadcast type, a channel, or an end of a span. Naming where to look narrows nothing on its own, "
-            + "and neither does the sort or the page. "
+            + "a sub-genre, a day of the week, a broadcast type, a channel, or an end of a span. "
+            + "Naming where to look narrows nothing on its own, and neither does the sort or the page, "
+            + $"and neither does naming all {ProgrammeSearch.DaysInTheWeek} days of the week. "
             + $"A keyword, where one is given, carries a word of at least {ProgrammeSearch.ShortestKeyword} letters, "
             + $"at most {ProgrammeSearch.MostWords} words to look for and as many to leave out, "
             + $"genres between 0 and {ProgrammeSearch.HighestGenre}, "
+            + $"sub-genres named as genre-subgenre, each between 0 and {ProgrammeSearch.HighestSubGenre}, "
+            + "days named as the day they are called, "
             + $"at most {ProgrammeSearch.MostChannels} channels named as network-service, "
             + $"and a span of at most {ProgrammeSearch.LongestSpan.TotalDays:0} days that runs forwards.";
 }

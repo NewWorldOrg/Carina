@@ -1,3 +1,6 @@
+using System.Globalization;
+
+using Carina.Domain.Base;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Configurations;
 
@@ -38,6 +41,10 @@ public sealed class ArchivedProgrammeSearchColumnsTests
 
         Assert.Equal("ニュース1 ギョウザ", await ScalarAsync(reading, "searchable::text"));
         Assert.Equal("{8}", await ScalarAsync(reading, "genre_kinds::text"));
+        Assert.Equal(
+            ((int)BroadcastDay.Of(new DateTime(2026, 8, 1, 12, 0, 0, DateTimeKind.Utc)))
+                .ToString(CultureInfo.InvariantCulture),
+            await ScalarAsync(reading, "broadcast_dow::text"));
     }
 
     [Fact]

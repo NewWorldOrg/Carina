@@ -67,6 +67,30 @@ public sealed class ProgrammeSearchArmsTests(RepositoryDatabase database)
             network,
             string.Empty,
             new ProgrammeConditions { Genres = [3] }),
+        ["one sub genre"] = network => Ask(
+            network,
+            string.Empty,
+            new ProgrammeConditions { SubGenres = [new ProgrammeGenre(8, 1)] }),
+        ["a sub genre nothing is filed under"] = network => Ask(
+            network,
+            string.Empty,
+            new ProgrammeConditions { SubGenres = [new ProgrammeGenre(8, 7)] }),
+        ["a sub genre beside the whole of another genre"] = network => Ask(
+            network,
+            string.Empty,
+            new ProgrammeConditions { Genres = [6], SubGenres = [new ProgrammeGenre(8, 1)] }),
+        ["one day of the week"] = network => Ask(
+            network,
+            string.Empty,
+            new ProgrammeConditions { Days = [DayOfWeek.Tuesday] }),
+        ["a day the clock names that the broadcast day does not"] = network => Ask(
+            network,
+            string.Empty,
+            new ProgrammeConditions { Days = [DayOfWeek.Wednesday] }),
+        ["two days of the week"] = network => Ask(
+            network,
+            string.Empty,
+            new ProgrammeConditions { Days = [DayOfWeek.Saturday, DayOfWeek.Sunday] }),
         ["one channel"] = network => Ask(
             network,
             string.Empty,
@@ -241,6 +265,14 @@ public sealed class ProgrammeSearchArmsTests(RepositoryDatabase database)
             Held(network, Listed, 16, "ギョウザ入門", $"n{network} 作り方はこちら", []),
             Ran(network, Listed, 17, "ちょうど終わる", $"n{network}", At.AddMinutes(-30), At),
             Ran(network, Listed, 18, "まだ続く", $"n{network}", At.AddMinutes(-30), At.AddMinutes(30)),
+            Ran(
+                network,
+                Listed,
+                19,
+                "日をまたいで始まる",
+                $"n{network}",
+                At.AddHours(4).AddMinutes(30),
+                At.AddHours(5)),
         ];
         ArchivedProgramme[] kept =
         [

@@ -1,5 +1,7 @@
+using System.Globalization;
 using System.Text.Json;
 
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 
@@ -104,6 +106,10 @@ public sealed class ProgrammeConfiguration : IEntityTypeConfiguration<Programme>
             .HasColumnName(GenreKinds)
             .HasComputedColumnSql(GenreKindsSql, stored: true);
 
+        builder.Property<int>(BroadcastDayOfWeek)
+            .HasColumnName(BroadcastDayOfWeek)
+            .HasComputedColumnSql(BroadcastDayOfWeekSql, stored: true);
+
         builder.HasIndex(programme => programme.Revision).IsUnique();
 
         builder.HasIndex(programme => programme.StartsAt);
@@ -114,12 +120,22 @@ public sealed class ProgrammeConfiguration : IEntityTypeConfiguration<Programme>
 
     public const string GenreKinds = "genre_kinds";
 
+    public const string BroadcastDayOfWeek = "broadcast_dow";
+
     public const int SearchableStatisticsTarget = 1000;
 
     public const string SearchableSql =
         $"lower(pg_catalog.normalize(name || '{ProgrammeSearchText.BetweenNameAndSummary}' || summary, '{BroadcastText.Compatibility}'))";
 
     public static readonly string GenreKindsSql = GenreKindsSqlOver("genres");
+
+    public static readonly string BroadcastDayOfWeekSql = BroadcastDayOfWeekSqlOver("start_at");
+
+    public static string BroadcastDayOfWeekSqlOver(string column)
+        => string.Create(
+            CultureInfo.InvariantCulture,
+            $"extract(dow from (({column} AT TIME ZONE INTERVAL '+09:00')"
+                + $" - INTERVAL '{BroadcastDay.StartsAt.TotalHours} hours'))::integer");
 
     public static string GenreKindsSqlOver(string column)
         => "string_to_array("

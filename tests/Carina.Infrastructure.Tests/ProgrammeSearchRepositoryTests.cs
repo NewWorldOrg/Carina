@@ -6,6 +6,8 @@ using Carina.Infrastructure.Persistence.Configurations;
 using Carina.Infrastructure.Persistence.Repositories;
 using Carina.TestSupport;
 
+using Microsoft.EntityFrameworkCore;
+
 namespace Carina.Infrastructure.Tests;
 
 [Collection(RepositoryDatabaseCollection.Name)]
@@ -586,6 +588,89 @@ public sealed class ProgrammeSearchRepositoryTests(RepositoryDatabase database)
         Assert.Equal(2, found.Total);
         Assert.Equal([1, 3], found.Items.Select(match => match.EventId.Value));
     }
+
+    [Fact]
+    public async Task TheDayTheStoreWorksOutIsTheDayTheCodeWorksOut()
+    {
+        int network = BroadcastIds.NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        var repository = new ProgrammeRepository(context);
+        DateTime began = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        DateTime[] instants =
+        [
+            .. Enumerable.Range(0, 60).Select(carried => began.AddHours(carried * 143)),
+        ];
+
+        for (int carried = 0; carried < instants.Length; carried++)
+        {
+            await repository.AddAsync(Beginning(network, carried + 1, instants[carried]), Cancel);
+        }
+
+        await context.SaveChangesAsync(Cancel);
+
+        Dictionary<int, int> stored = await context.Set<ProgrammeMatch>()
+            .Where(match => match.NetworkId == new NetworkId(network))
+            .Select(match => new
+            {
+                Event = match.EventId,
+                Day = EF.Property<int>(match, ProgrammeConfiguration.BroadcastDayOfWeek),
+            })
+            .ToDictionaryAsync(row => row.Event.Value, row => row.Day, Cancel);
+
+        Assert.Equal(instants.Length, stored.Count);
+        Assert.All(
+            Enumerable.Range(0, instants.Length),
+            carried => Assert.Equal((int)BroadcastDay.Of(instants[carried]), stored[carried + 1]));
+    }
+
+    [Fact]
+    public async Task ASubGenreIsFoundWithoutTheRestOfItsGenreComingWithIt()
+    {
+        int network = BroadcastIds.NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        var repository = new ProgrammeRepository(context);
+        var searches = new ProgrammeSearchRepository(context);
+
+        await repository.AddAsync(Under(network, 1, $"報道{network}", new ProgrammeGenre(8, 0)), Cancel);
+        await repository.AddAsync(Under(network, 2, $"報道{network}", new ProgrammeGenre(8, 2)), Cancel);
+        await repository.AddAsync(Under(network, 3, $"報道{network}", new ProgrammeGenre(6, 2)), Cancel);
+        await context.SaveChangesAsync(Cancel);
+
+        PaginatedList<ProgrammeMatch> narrowed = await searches.SearchAsync(
+            Asking($"報道{network}", new ProgrammeConditions { SubGenres = [new ProgrammeGenre(8, 2)] }),
+            At,
+            Cancel);
+        PaginatedList<ProgrammeMatch> whole = await searches.SearchAsync(
+            Asking($"報道{network}", new ProgrammeConditions { Genres = [8] }),
+            At,
+            Cancel);
+
+        Assert.Equal([2], narrowed.Items.Select(match => match.EventId.Value));
+        Assert.Equal([1, 2], whole.Items.Select(match => match.EventId.Value));
+    }
+
+    private static Programme Beginning(int network, int carried, DateTime began)
+        => Held(new ProgrammeBroadcast(
+            new ProgrammeId(new NetworkId(network), new ServiceId(1049), new EventId(carried)),
+            new TransportStreamId(1),
+            began,
+            began.AddMinutes(30),
+            $"day{carried}",
+            string.Empty,
+            false));
+
+    private static Programme Under(int network, int carried, string name, ProgrammeGenre genre)
+        => Held(new ProgrammeBroadcast(
+            new ProgrammeId(new NetworkId(network), new ServiceId(1049), new EventId(carried)),
+            new TransportStreamId(1),
+            At.AddMinutes(carried),
+            At.AddMinutes(carried + 30),
+            name,
+            string.Empty,
+            false)
+        {
+            Genres = [genre],
+        });
 
     private static Programme Skeleton(int network, int carried, string name)
         => Held(new ProgrammeBroadcast(

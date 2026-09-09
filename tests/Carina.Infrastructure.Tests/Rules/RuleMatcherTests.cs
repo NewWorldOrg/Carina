@@ -315,6 +315,94 @@ public sealed class RuleMatcherTests
     private static RuleMatcher Matcher(HeldStreams streams)
         => new(new ProgrammeSearchScope(streams, new HeldServices()), new FixedClock(At));
 
+    [Fact]
+    public async Task ARuleThatNarrowsToOneDayLeavesTheOtherDaysWhereTheyAre()
+    {
+        var streams = new HeldStreams([Terrestrial(Listed)]);
+        RuleMatcher matcher = Matcher(streams);
+
+        RuleMatchRun run = await matcher.AgainstAsync(
+            [Written("keyword=hill&day=tuesday", 10, 1)],
+            Guide(
+                Broadcast(Listed, 1, "hill walking", [], false, At.AddHours(1)),
+                Broadcast(Listed, 2, "the hill at dawn", [], false, At.AddDays(1).AddHours(1))),
+            Cancel);
+
+        Assert.Equal(["hill walking"], Named(run));
+    }
+
+    [Fact]
+    public async Task AProgrammeAfterMidnightIsTakenByTheDayItsEveningBeganOn()
+    {
+        var streams = new HeldStreams([Terrestrial(Listed)]);
+        RuleMatcher matcher = Matcher(streams);
+        Programme[] guide = [Broadcast(Listed, 1, "hill at half past one", [], false, At.AddHours(4).AddMinutes(30))];
+
+        RuleMatchRun evening = await matcher.AgainstAsync(
+            [Written("keyword=hill&day=tuesday", 10, 1)],
+            Guide(guide),
+            Cancel);
+        RuleMatchRun clock = await matcher.AgainstAsync(
+            [Written("keyword=hill&day=wednesday", 10, 1)],
+            Guide(guide),
+            Cancel);
+
+        Assert.Equal(["hill at half past one"], Named(evening));
+        Assert.Empty(Named(clock));
+    }
+
+    [Fact]
+    public async Task ARuleThatNamesASubGenreLeavesTheRestOfThatGenreWhereItIs()
+    {
+        var streams = new HeldStreams([Terrestrial(Listed)]);
+        RuleMatcher matcher = Matcher(streams);
+
+        RuleMatchRun run = await matcher.AgainstAsync(
+            [Written("subgenre=8-2", 10, 1)],
+            Guide(
+                Broadcast(Listed, 1, "hill walking", [new ProgrammeGenre(8, 0)], false),
+                Broadcast(Listed, 2, "the hill at dawn", [new ProgrammeGenre(8, 2)], false),
+                Broadcast(Listed, 3, "river fishing", [new ProgrammeGenre(6, 2)], false)),
+            Cancel);
+
+        Assert.Equal(["the hill at dawn"], Named(run));
+    }
+
+    [Fact]
+    public async Task ARuleThatNamesAGenreGoesOnTakingEverythingUnderIt()
+    {
+        var streams = new HeldStreams([Terrestrial(Listed)]);
+        RuleMatcher matcher = Matcher(streams);
+
+        RuleMatchRun run = await matcher.AgainstAsync(
+            [Written("genre=8", 10, 1)],
+            Guide(
+                Broadcast(Listed, 1, "hill walking", [new ProgrammeGenre(8, 0)], false),
+                Broadcast(Listed, 2, "the hill at dawn", [new ProgrammeGenre(8, 2)], false),
+                Broadcast(Listed, 3, "river fishing", [new ProgrammeGenre(6, 2)], false)),
+            Cancel);
+
+        Assert.Equal(["hill walking", "the hill at dawn"], Named(run));
+    }
+
+    [Fact]
+    public async Task ARuleWrittenBeforeThereWereDaysOrSubGenresGoesOnTakingWhatItAlwaysTook()
+    {
+        var streams = new HeldStreams([Terrestrial(Listed)]);
+        RuleMatcher matcher = Matcher(streams);
+
+        RuleMatchRun run = await matcher.AgainstAsync(
+            [Written("keyword=hill&genre=8", 10, 1)],
+            Guide(
+                Broadcast(Listed, 1, "hill walking", [new ProgrammeGenre(8, 0)], false, At.AddHours(1)),
+                Broadcast(Listed, 2, "the hill at dawn", [new ProgrammeGenre(8, 2)], false, At.AddDays(1)),
+                Broadcast(Listed, 3, "hill fishing", [new ProgrammeGenre(6, 2)], false, At.AddDays(2))),
+            Cancel);
+
+        Assert.Equal(["hill walking", "the hill at dawn"], Named(run));
+        Assert.Empty(run.TurnedOff);
+    }
+
     private static IReadOnlyList<ProgrammeMatch> Guide(params Programme[] programmes)
         => ProgrammeSearchMatching.Layered(programmes, []);
 

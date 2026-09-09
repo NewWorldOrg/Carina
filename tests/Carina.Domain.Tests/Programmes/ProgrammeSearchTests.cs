@@ -45,7 +45,14 @@ public sealed class ProgrammeSearchTests
             null,
             null,
             null,
-            conditions: new ProgrammeConditions { Genres = [], Channels = [], Fields = [] }));
+            conditions: new ProgrammeConditions
+            {
+                Genres = [],
+                SubGenres = [],
+                Days = [],
+                Channels = [],
+                Fields = [],
+            }));
         Assert.Null(ProgrammeSearch.For(
             null,
             null,
@@ -81,6 +88,76 @@ public sealed class ProgrammeSearchTests
             null,
             null,
             conditions: new ProgrammeConditions { System = TuneSystem.IsdbT }));
+
+    [Fact]
+    public void ASubGenreOnItsOwnIsEnoughToAskWith()
+        => Assert.NotNull(ProgrammeSearch.For(
+            null,
+            null,
+            null,
+            conditions: new ProgrammeConditions { SubGenres = [new ProgrammeGenre(8, 2)] }));
+
+    [Fact]
+    public void ADayOfTheWeekOnItsOwnIsEnoughToAskWith()
+        => Assert.NotNull(ProgrammeSearch.For(
+            null,
+            null,
+            null,
+            conditions: new ProgrammeConditions { Days = [DayOfWeek.Monday] }));
+
+    [Fact]
+    public void NamingAllSevenDaysNarrowsNothingAndIsRefusedOnItsOwn()
+        => Assert.Null(ProgrammeSearch.For(
+            null,
+            null,
+            null,
+            conditions: new ProgrammeConditions { Days = [.. Enum.GetValues<DayOfWeek>()] }));
+
+    [Fact]
+    public void NamingAllSevenDaysBesideAKeywordLeavesTheSearchWithoutADayToNarrowBy()
+        => Assert.Empty(ProgrammeSearch.For(
+            "news",
+            null,
+            null,
+            conditions: new ProgrammeConditions { Days = [.. Enum.GetValues<DayOfWeek>()] })!.Days);
+
+    [Fact]
+    public void TheSameDayNamedTwiceIsTheOneDay()
+        => Assert.Equal(
+            [DayOfWeek.Monday],
+            ProgrammeSearch.For(
+                null,
+                null,
+                null,
+                conditions: new ProgrammeConditions { Days = [DayOfWeek.Monday, DayOfWeek.Monday] })!.Days);
+
+    [Fact]
+    public void ADayOutsideTheWeekIsRefusedRatherThanPassedOn()
+        => Assert.Null(ProgrammeSearch.For(
+            "news",
+            null,
+            null,
+            conditions: new ProgrammeConditions { Days = [(DayOfWeek)9] }));
+
+    [Fact]
+    public void ASubGenreOutsideWhatABroadcastCanCarryIsRefusedRatherThanPassedOn()
+    {
+        Assert.Null(ProgrammeSearch.For(
+            "news",
+            null,
+            null,
+            conditions: new ProgrammeConditions { SubGenres = [new ProgrammeGenre(16, 0)] }));
+        Assert.Null(ProgrammeSearch.For(
+            "news",
+            null,
+            null,
+            conditions: new ProgrammeConditions { SubGenres = [new ProgrammeGenre(8, 16)] }));
+        Assert.Null(ProgrammeSearch.For(
+            "news",
+            null,
+            null,
+            conditions: new ProgrammeConditions { SubGenres = [new ProgrammeGenre(8, -1)] }));
+    }
 
     [Fact]
     public void AChannelOnItsOwnIsEnoughToAskWith()

@@ -69,6 +69,9 @@ public sealed class ProgrammeMatchConfiguration : IEntityTypeConfiguration<Progr
 
         builder.Property<int[]>(ProgrammeConfiguration.GenreKinds)
             .HasColumnName(ProgrammeConfiguration.GenreKinds);
+
+        builder.Property<int>(ProgrammeConfiguration.BroadcastDayOfWeek)
+            .HasColumnName(ProgrammeConfiguration.BroadcastDayOfWeek);
     }
 
     public const string BothLayers = """
@@ -89,6 +92,7 @@ public sealed class ProgrammeMatchConfiguration : IEntityTypeConfiguration<Progr
             layered.related,
             layered.searchable,
             layered.genre_kinds,
+            layered.broadcast_dow,
             layered.is_archived
         FROM (
             SELECT
@@ -108,6 +112,7 @@ public sealed class ProgrammeMatchConfiguration : IEntityTypeConfiguration<Progr
                 related,
                 searchable,
                 genre_kinds,
+                broadcast_dow,
                 false AS is_archived
             FROM programme
             UNION ALL
@@ -128,6 +133,7 @@ public sealed class ProgrammeMatchConfiguration : IEntityTypeConfiguration<Progr
                 '[]'::jsonb,
                 kept.searchable,
                 kept.genre_kinds,
+                kept.broadcast_dow,
                 true
             FROM archived_programme AS kept
         ) AS layered

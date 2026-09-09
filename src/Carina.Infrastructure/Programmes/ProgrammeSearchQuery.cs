@@ -17,6 +17,10 @@ public static class ProgrammeSearchQuery
 
     public const string Genre = "genre";
 
+    public const string SubGenre = "subgenre";
+
+    public const string Day = "day";
+
     public const string Type = "type";
 
     public const string Channel = "channel";
@@ -39,6 +43,8 @@ public static class ProgrammeSearchQuery
         new(Exclude, typeof(string), false),
         new(Fields, typeof(ProgrammeField), true),
         new(Genre, typeof(int), true),
+        new(SubGenre, typeof(string), true),
+        new(Day, typeof(DayOfWeek), true),
         new(Type, typeof(TuneSystem), false),
         new(Channel, typeof(string), true),
         new(From, typeof(DateTimeOffset), false),
@@ -55,6 +61,8 @@ public static class ProgrammeSearchQuery
 
         if (Every<ProgrammeField>(All(asked, Fields)) is not { } fields
             || Numbers(All(asked, Genre)) is not { } genres
+            || SubGenres(All(asked, SubGenre)) is not { } subGenres
+            || Every<DayOfWeek>(All(asked, Day)) is not { } days
             || ProgrammeServiceText.Every(All(asked, Channel)) is not { } channels)
         {
             return null;
@@ -84,6 +92,8 @@ public static class ProgrammeSearchQuery
                 Exclude = One(asked, Exclude),
                 Fields = fields,
                 Genres = genres,
+                SubGenres = subGenres,
+                Days = days,
                 System = system,
                 Channels = channels,
             });
@@ -102,6 +112,27 @@ public static class ProgrammeSearchQuery
             }
 
             carried.Add(read);
+        }
+
+        return carried;
+    }
+
+    private static IReadOnlyList<ProgrammeGenre>? SubGenres(IReadOnlyList<string> texts)
+    {
+        var carried = new List<ProgrammeGenre>(texts.Count);
+
+        foreach (string text in texts)
+        {
+            string[] parts = text.Split('-');
+
+            if (parts.Length != 2
+                || !int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out int kind)
+                || !int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out int sort))
+            {
+                return null;
+            }
+
+            carried.Add(new ProgrammeGenre(kind, sort));
         }
 
         return carried;
