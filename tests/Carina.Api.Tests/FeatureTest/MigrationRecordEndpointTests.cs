@@ -65,7 +65,7 @@ public sealed class MigrationRecordEndpointTests
                 MigrationRefusal.Orphan,
                 "stray.sh",
                 null,
-                539));
+                1_024));
 
         (_, JsonElement body) = await feature.GetAsync(Record);
         JsonElement data = body.GetProperty("data");
@@ -95,7 +95,7 @@ public sealed class MigrationRecordEndpointTests
                 MigrationRefusal.Orphan,
                 "stray.sh",
                 null,
-                539));
+                1_024));
 
         (_, JsonElement body) = await feature.GetAsync(Record);
         JsonElement[] refusals = [.. body.GetProperty("data").GetProperty("refusals").EnumerateArray()];
@@ -141,7 +141,7 @@ public sealed class MigrationRecordEndpointTests
                 "7",
                 MigrationRefusal.ReallyEmpty,
                 "a programme",
-                17_171_113_480,
+                17_000_000_000,
                 0));
 
         (_, JsonElement body) = await feature.GetAsync(Record);
@@ -151,7 +151,7 @@ public sealed class MigrationRecordEndpointTests
         Assert.Equal("reallyEmpty", row.GetProperty("refusal").GetString());
         Assert.Equal("7", row.GetProperty("subject").GetString());
         Assert.Equal("a programme", row.GetProperty("note").GetString());
-        Assert.Equal(17_171_113_480, row.GetProperty("claimed").GetInt64());
+        Assert.Equal(17_000_000_000, row.GetProperty("claimed").GetInt64());
         Assert.Equal(0, row.GetProperty("observed").GetInt64());
     }
 

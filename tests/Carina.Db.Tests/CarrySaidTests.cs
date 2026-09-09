@@ -62,7 +62,7 @@ public sealed class CarrySaidTests
         Assert.DoesNotContain("what somebody watches", said, StringComparison.Ordinal);
         Assert.DoesNotContain("what somebody asked for", said, StringComparison.Ordinal);
         Assert.DoesNotContain("what somebody receives", said, StringComparison.Ordinal);
-        Assert.DoesNotContain("bash.sh", said, StringComparison.Ordinal);
+        Assert.DoesNotContain("notes.txt", said, StringComparison.Ordinal);
         Assert.DoesNotContain("what the rescan calls it", said, StringComparison.Ordinal);
         Assert.DoesNotContain("what somebody receives it on", said, StringComparison.Ordinal);
     }
@@ -130,11 +130,11 @@ public sealed class CarrySaidTests
                         0),
                     MigrationVerdict.Refuse(
                         MigrationPopulation.RecordingFiles,
-                        "bash.sh",
+                        "notes.txt",
                         MigrationRefusal.Orphan,
-                        "bash.sh",
+                        "notes.txt",
                         null,
-                        539),
+                        1_024),
                     MigrationVerdict.Carry(
                         MigrationPopulation.Rules,
                         "1",

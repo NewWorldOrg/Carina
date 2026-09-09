@@ -32,7 +32,7 @@ public sealed class WhatAMigrationLeftBehindStaysOnItsOwnRecordTests : IDisposab
         recordings = new HeldMigratedRecordings(bench.Journal);
 
         File.WriteAllText(Path.Combine(from, "one.m2ts"), "a recording");
-        File.WriteAllText(Path.Combine(from, "bash.sh"), "not a recording at all");
+        File.WriteAllText(Path.Combine(from, "notes.txt"), "not a recording at all");
         File.WriteAllText(Path.Combine(from, "empty.m2ts"), string.Empty);
     }
 

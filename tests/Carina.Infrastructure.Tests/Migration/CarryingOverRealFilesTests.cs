@@ -31,7 +31,7 @@ public sealed class CarryingOverRealFilesTests : IDisposable
         recordings = new HeldMigratedRecordings(bench.Journal);
 
         File.WriteAllText(Path.Combine(from, "one.m2ts"), "a recording");
-        File.WriteAllText(Path.Combine(from, "bash.sh"), "not a recording at all");
+        File.WriteAllText(Path.Combine(from, "notes.txt"), "not a recording at all");
         File.WriteAllText(Path.Combine(from, "empty.m2ts"), string.Empty);
     }
 
@@ -83,7 +83,7 @@ public sealed class CarryingOverRealFilesTests : IDisposable
         Assert.Single(Directory.GetFiles(into));
         Assert.DoesNotContain(
             Directory.GetFiles(into).Select(Path.GetFileName),
-            name => name is "bash.sh" or "empty.m2ts");
+            name => name is "notes.txt" or "empty.m2ts");
     }
 
     [Fact]
