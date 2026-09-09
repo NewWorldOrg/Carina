@@ -12,6 +12,8 @@ public sealed class RecordingQueryTests
     {
         RecordingQuery query = Assert.IsType<RecordingQuery>(RecordingQuery.For(null, null));
 
+        Assert.Equal(string.Empty, query.Keyword.Asked);
+        Assert.Empty(query.Keyword.Words);
         Assert.Null(query.Standing);
         Assert.Empty(query.Outcomes);
         Assert.Null(query.Drops);
@@ -253,6 +255,65 @@ public sealed class RecordingQueryTests
     }
 
     [Fact]
+    public void AKeywordOfASingleLetterIsReadRatherThanHeldToTheTwoTheGuideAsksFor()
+    {
+        RecordingQuery query = Keyworded("a");
+
+        Assert.Equal("a", query.Keyword.Asked);
+        Assert.Equal(["a"], query.Keyword.Words);
+    }
+
+    [Fact]
+    public void AKeywordAsLongAsTheCeilingAllowsIsRead()
+        => Assert.Equal(
+            RecordingKeyword.LongestKeyword,
+            Keyworded(new string('a', RecordingKeyword.LongestKeyword)).Keyword.Asked.Length);
+
+    [Fact]
+    public void OneLetterOverTheCeilingIsRefused()
+        => Assert.Null(RecordingQuery.For(
+            null,
+            null,
+            conditions: new RecordingConditions { Keyword = new string('a', RecordingKeyword.LongestKeyword + 1) }));
+
+    [Fact]
+    public void AsManyWordsAsTheCeilingAllowsAreRead()
+        => Assert.Equal(
+            RecordingKeyword.MostWords,
+            Keyworded(Words(RecordingKeyword.MostWords)).Keyword.Words.Count);
+
+    [Fact]
+    public void OneWordOverTheCeilingIsRefused()
+        => Assert.Null(RecordingQuery.For(
+            null,
+            null,
+            conditions: new RecordingConditions { Keyword = Words(RecordingKeyword.MostWords + 1) }));
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("　")]
+    [InlineData("　 　")]
+    public void AKeywordOfNothingButSpacesAsksForNothingRatherThanBeingRefused(string? asked)
+    {
+        RecordingQuery query = Assert.IsType<RecordingQuery>(RecordingQuery.For(
+            null,
+            null,
+            conditions: new RecordingConditions { Keyword = asked }));
+
+        Assert.Empty(query.Keyword.Words);
+    }
+
+    [Fact]
+    public void TheWordsAreFoldedTheWayTheStoreFoldsTheTextItSearches()
+        => Assert.Equal(["needy", "girl"], Keyworded("ＮＥＥＤＹ　ＧＩＲＬ").Keyword.Words);
+
+    [Fact]
+    public void AKeywordWrittenAroundAFullWidthSpaceIsReadAsTwoWords()
+        => Assert.Equal(2, Keyworded("weather　today").Keyword.Words.Count);
+
+    [Fact]
     public void ADescendingSortOnTheProgrammeIsCarriedAsAsked()
     {
         RecordingQuery query = Assert.IsType<RecordingQuery>(
@@ -261,4 +322,12 @@ public sealed class RecordingQueryTests
         Assert.Equal(RecordingSort.ProgrammeStartsAt, query.Sort);
         Assert.True(query.Descending);
     }
+
+    private static string Words(int count) => string.Join(' ', Enumerable.Range(1, count).Select(word => $"w{word}"));
+
+    private static RecordingQuery Keyworded(string keyword)
+        => Assert.IsType<RecordingQuery>(RecordingQuery.For(
+            null,
+            null,
+            conditions: new RecordingConditions { Keyword = keyword }));
 }
