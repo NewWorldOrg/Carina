@@ -160,6 +160,10 @@ public sealed class OidcSignInTests
         using HttpResponseMessage arrived = await probe.CallbackAsync(MockIdentityProvider.StateOf(authorize), code);
 
         Assert.Empty(probe.Sessions.Sessions);
+        Assert.Contains(
+            LoginRedirect.TheIdentityProviderFailed,
+            arrived.Headers.Location!.ToString(),
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -175,6 +179,10 @@ public sealed class OidcSignInTests
         using HttpResponseMessage arrived = await probe.CallbackAsync(MockIdentityProvider.StateOf(authorize), code);
 
         Assert.Empty(probe.Sessions.Sessions);
+        Assert.Contains(
+            LoginRedirect.TheIdentityProviderFailed,
+            arrived.Headers.Location!.ToString(),
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -191,6 +199,10 @@ public sealed class OidcSignInTests
             probe.Signed);
 
         Assert.Empty(probe.Sessions.Sessions);
+        Assert.Contains(
+            LoginRedirect.TheIdentityProviderFailed,
+            arrived.Headers.Location!.ToString(),
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -202,6 +214,10 @@ public sealed class OidcSignInTests
         using HttpResponseMessage arrived = await probe.SignInAsync(new MockIdentityUser("owner"));
 
         Assert.Empty(probe.Sessions.Sessions);
+        Assert.Contains(
+            LoginRedirect.TheIdentityProviderFailed,
+            arrived.Headers.Location!.ToString(),
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -213,6 +229,10 @@ public sealed class OidcSignInTests
         using HttpResponseMessage arrived = await probe.SignInAsync(new MockIdentityUser("owner"));
 
         Assert.Empty(probe.Sessions.Sessions);
+        Assert.Contains(
+            LoginRedirect.TheIdentityProviderFailed,
+            arrived.Headers.Location!.ToString(),
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -224,6 +244,10 @@ public sealed class OidcSignInTests
         using HttpResponseMessage arrived = await probe.SignInAsync(new MockIdentityUser("owner"));
 
         Assert.Empty(probe.Sessions.Sessions);
+        Assert.Contains(
+            LoginRedirect.TheIdentityProviderFailed,
+            arrived.Headers.Location!.ToString(),
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -235,6 +259,10 @@ public sealed class OidcSignInTests
         using HttpResponseMessage arrived = await probe.SignInAsync(new MockIdentityUser("owner"));
 
         Assert.Empty(probe.Sessions.Sessions);
+        Assert.Contains(
+            LoginRedirect.TheIdentityProviderFailed,
+            arrived.Headers.Location!.ToString(),
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -246,6 +274,10 @@ public sealed class OidcSignInTests
         using HttpResponseMessage arrived = await probe.SignInAsync(new MockIdentityUser("owner"));
 
         Assert.Empty(probe.Sessions.Sessions);
+        Assert.Contains(
+            LoginRedirect.TheIdentityProviderFailed,
+            arrived.Headers.Location!.ToString(),
+            StringComparison.Ordinal);
     }
 
     [Fact]
