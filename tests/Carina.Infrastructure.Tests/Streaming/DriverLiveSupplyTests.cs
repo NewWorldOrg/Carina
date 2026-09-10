@@ -7,6 +7,7 @@ using Carina.Infrastructure.Streaming;
 using Carina.TestSupport;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Carina.Infrastructure.Tests.Streaming;
 
@@ -706,7 +707,8 @@ public sealed class DriverLiveSupplyTests
                 .AddSingleton<IServiceTuningDirectory>(new ResolvedTuning(
                     resolution ?? TuningResolution.Tunable(new CandidateChannelId(Guid.NewGuid()), Channel27, impaired: false)))
                 .BuildServiceProvider()
-                .GetRequiredService<IServiceScopeFactory>());
+                .GetRequiredService<IServiceScopeFactory>(),
+            NullLogger<DriverLiveSupply>.Instance);
 
     private sealed class DeferredStatus(Func<DriverObservation> observed) : IDriverStatusReader
     {

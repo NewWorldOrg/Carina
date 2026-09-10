@@ -3,6 +3,8 @@ using Carina.Domain.Driver;
 using Carina.Domain.DriverStatus;
 using Carina.Domain.Streaming;
 
+using Microsoft.Extensions.Logging;
+
 namespace Carina.Infrastructure.Streaming;
 
 public sealed class DriverTransportStream : ILiveTransportStream
@@ -23,6 +25,8 @@ public sealed class DriverTransportStream : ILiveTransportStream
 
     private readonly ILiveLeases leases;
 
+    private readonly ILogger logger;
+
     private readonly Lock gate = new();
 
     private LiveSupplyEnding? ending;
@@ -41,6 +45,7 @@ public sealed class DriverTransportStream : ILiveTransportStream
         IDriverClient driver,
         IDriverStatusReader status,
         ILiveLeases leases,
+        ILogger logger,
         DateTimeOffset heldUntil)
     {
         this.session = session;
@@ -48,6 +53,7 @@ public sealed class DriverTransportStream : ILiveTransportStream
         this.driver = driver;
         this.status = status;
         this.leases = leases;
+        this.logger = logger;
         this.heldUntil = heldUntil;
         Bytes = new Reading(this);
     }
@@ -95,6 +101,13 @@ public sealed class DriverTransportStream : ILiveTransportStream
         if (held.Outcome is not DriverCallOutcome.Unreachable)
         {
             Volatile.Write(ref wontHold, 1);
+
+            logger.LogWarning(
+                "The driver will not hold the live session {SessionId} open past {HeldUntil} ({Refusal}); "
+                + "it is not asked again, and the viewing ends when that time comes.",
+                session.Value,
+                HeldUntil,
+                held.Problem?.Title ?? held.Failure);
         }
 
         return false;

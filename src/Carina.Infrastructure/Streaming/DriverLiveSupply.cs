@@ -8,6 +8,7 @@ using Carina.Domain.Streaming;
 using Carina.Infrastructure.Collection;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Carina.Infrastructure.Streaming;
 
@@ -15,7 +16,8 @@ public sealed class DriverLiveSupply(
     IDriverClient driver,
     IDriverStatusReader status,
     ILiveLeases leases,
-    IServiceScopeFactory scopes) : ILiveSupply
+    IServiceScopeFactory scopes,
+    ILogger<DriverLiveSupply> logger) : ILiveSupply
 {
     public const string NoStreamBecause = "no viewer stream could be opened on the session";
 
@@ -110,7 +112,14 @@ public sealed class DriverLiveSupply(
         }
 
         return LiveSupplyStart.Opened(
-            new DriverTransportStream(sessionId, bytes, driver, status, leases, session.EndsAt ?? session.StartedAt));
+            new DriverTransportStream(
+                sessionId,
+                bytes,
+                driver,
+                status,
+                leases,
+                logger,
+                session.EndsAt ?? session.StartedAt));
     }
 
     public async Task<IReadOnlyDictionary<SessionId, long>> DroppedOnTheWayInAsync(CancellationToken cancellationToken)
