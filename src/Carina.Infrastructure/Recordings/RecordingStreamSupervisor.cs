@@ -304,8 +304,9 @@ public sealed class RecordingStreamSupervisor(
                     return false;
                 }
 
-                if (tuneFailure is not null)
+                if (tuneFailure is not null && session is not null)
                 {
+                    Adopt(loaded, session.DeviceId);
                     loaded.Note(new OutcomeDetail(fault, tuneFailure, string.Empty, now));
                 }
 

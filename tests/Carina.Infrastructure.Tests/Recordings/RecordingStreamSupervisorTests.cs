@@ -159,6 +159,15 @@ public sealed class RecordingStreamSupervisorTests
     }
 
     [Fact]
+    public async Task ARecordingThatHadNotYetNamedItsTunerTakesTheOneTheBreakCameFrom()
+    {
+        Recording read = await BrokenAfterTheDriverSaid(SessionRefusalTitles.NoData, deviceId: null);
+
+        Assert.Equal("adapter1", read.TunerDeviceId!.Value);
+        Assert.Equal(TuneFailureKind.NoData, Assert.Single(read.OutcomeDetail).TuneFailure);
+    }
+
+    [Fact]
     public async Task ABreakThatSaysNothingAboutReceptionWritesNoClassOfItsOwn()
     {
         Recording read = await BrokenAfterTheDriverSaid(null);
@@ -637,9 +646,9 @@ public sealed class RecordingStreamSupervisorTests
         Assert.True(watch.AnythingMoved);
     }
 
-    private static async Task<Recording> BrokenAfterTheDriverSaid(string? title)
+    private static async Task<Recording> BrokenAfterTheDriverSaid(string? title, string? deviceId = "adapter1")
     {
-        Recording recording = InFlight();
+        Recording recording = InFlight(deviceId: deviceId);
         var ledger = new StreamLedger();
         ledger.Hold(recording);
         var driver = new WatchedDriver();
