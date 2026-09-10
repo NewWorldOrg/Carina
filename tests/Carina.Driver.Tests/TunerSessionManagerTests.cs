@@ -201,6 +201,82 @@ public sealed class TunerSessionManagerTests : IDisposable
     }
 
     [Fact]
+    public void AViewingThatSaysItIsStillWatchedIsHeldOpenForLonger()
+    {
+        TunerSessionManager manager = Manager(Configuration with { LiveSessionMinutes = 45 });
+        TunerSession session = Begin(manager, "s-1", "adapter0", SessionPurpose.Live);
+
+        Assert.Equal(Start.AddMinutes(45), session.EndsAt);
+
+        clock.Advance(TimeSpan.FromMinutes(10));
+
+        SessionExtension held = manager.Extend(
+            session.SessionId,
+            new ExtendSessionRequest { EndsAt = Start.AddMinutes(50) }
+        );
+
+        Assert.Equal(SessionExtendOutcome.Extended, held.Outcome);
+        Assert.Equal(Start.AddMinutes(50), session.EndsAt);
+
+        StopAndWait(session);
+    }
+
+    [Fact]
+    public void AViewingIsNeverHeldFurtherAheadThanTheWindowItsPurposeIsGiven()
+    {
+        TunerSessionManager manager = Manager(Configuration with { LiveSessionMinutes = 45 });
+        TunerSession session = Begin(manager, "s-1", "adapter0", SessionPurpose.Live);
+
+        SessionExtension held = manager.Extend(
+            session.SessionId,
+            new ExtendSessionRequest { EndsAt = Start.AddDays(7) }
+        );
+
+        Assert.Equal(SessionExtendOutcome.Extended, held.Outcome);
+        Assert.Equal(Start.AddMinutes(45), session.EndsAt);
+
+        StopAndWait(session);
+    }
+
+    [Fact]
+    public void AViewingAlreadyHeldPastWhatTheWindowAllowsIsLeftWhereItIs()
+    {
+        TunerSessionManager manager = Manager(Configuration with { LiveSessionMinutes = 45 });
+        SessionStart start = manager.Begin(
+            Request("s-1", "adapter0", SessionPurpose.Live, endsAt: Start.AddHours(3))
+        );
+
+        Assert.True(start.TryGetSession(out TunerSession? session));
+
+        SessionExtension held = manager.Extend(
+            session.SessionId,
+            new ExtendSessionRequest { EndsAt = Start.AddHours(4) }
+        );
+
+        Assert.Equal(SessionExtendOutcome.Extended, held.Outcome);
+        Assert.Equal(Start.AddHours(3), session.EndsAt);
+
+        StopAndWait(session);
+    }
+
+    [Fact]
+    public void ARecordingIsHeldToTheEndItAsksForAndNotToTheViewingWindow()
+    {
+        TunerSessionManager manager = Manager(Configuration with { LiveSessionMinutes = 45 });
+        TunerSession session = Begin(manager, "s-1", "adapter0");
+
+        SessionExtension held = manager.Extend(
+            session.SessionId,
+            new ExtendSessionRequest { EndsAt = Start.AddHours(6) }
+        );
+
+        Assert.Equal(SessionExtendOutcome.Extended, held.Outcome);
+        Assert.Equal(Start.AddHours(6), session.EndsAt);
+
+        StopAndWait(session);
+    }
+
+    [Fact]
     public void ARequestWithoutADeviceIsGivenAFreeOneOfTheRightKind()
     {
         TunerSessionManager manager = Manager();

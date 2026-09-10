@@ -253,6 +253,34 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
         }
     }
 
+    public async Task<DriverCall<SessionSnapshot>> ExtendSessionAsync(
+        SessionId sessionId,
+        DateTimeOffset endsAt,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            using CancellationTokenSource patience = Patience(cancellationToken);
+            using var body = JsonContent.Create(
+                new ExtendSessionRequest { EndsAt = endsAt },
+                DriverJson.Context.ExtendSessionRequest);
+            using HttpResponseMessage response = await http.PatchAsync(
+                DriverEndpoints.Session(sessionId),
+                body,
+                patience.Token);
+
+            return await ReadAsync(
+                response,
+                DriverJson.Context.SessionSnapshot,
+                bodyRequired: true,
+                patience.Token);
+        }
+        catch (Exception error) when (IsTransport(error, cancellationToken))
+        {
+            return DriverCall<SessionSnapshot>.Unreachable(WhyUnreachable(error));
+        }
+    }
+
     public async Task<DriverCall<SessionSnapshot>> StopSessionAsync(
         SessionId sessionId,
         string reason,

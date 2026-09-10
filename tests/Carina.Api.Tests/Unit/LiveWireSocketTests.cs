@@ -45,7 +45,9 @@ public sealed class LiveWireSocketTests
 
         await Carry(socket, frames);
 
-        Assert.Equal([0x00, 0x01], socket.Sent.Select(message => message[0]).ToArray());
+        Assert.Equal(
+            [(byte)LiveChannel.PictureHeader, (byte)LiveChannel.Picture, (byte)LiveChannel.Control],
+            socket.Sent.Select(message => message[0]).ToArray());
     }
 
     [Fact]
@@ -81,12 +83,42 @@ public sealed class LiveWireSocketTests
     }
 
     [Fact]
-    public void OnlyAWireThatTookItsSupplyForGoneConcludesAReasonOfItsOwn()
+    public void EveryWayTheSupplyItselfEndsNamesAReasonEvenWhenTheSupplySaidNothing()
     {
         Assert.Equal(LiveSupplyEnd.WentQuiet, LiveDepartures.Ending(LiveDeparture.SourceWentQuiet));
+        Assert.Equal(LiveSupplyEnd.DriverLost, LiveDepartures.Ending(LiveDeparture.SourceEnded));
+        Assert.Equal(LiveSupplyEnd.DriverLost, LiveDepartures.Ending(LiveDeparture.SourceBroke));
+    }
+
+    [Fact]
+    public void TheFourWaysThatAreTheViewerOrTheAppRatherThanTheSupplyNameNoReason()
+    {
         Assert.All(
-            Enum.GetValues<LiveDeparture>().Where(departure => departure is not LiveDeparture.SourceWentQuiet),
+            new[]
+            {
+                LiveDeparture.ViewerLeft,
+                LiveDeparture.ViewerStoppedReading,
+                LiveDeparture.SaidSomethingUnknown,
+                LiveDeparture.SaidMoreThanTheWireTakes,
+                LiveDeparture.ServerStopping,
+            },
             departure => Assert.Null(LiveDepartures.Ending(departure)));
+    }
+
+    [Fact]
+    public async Task AWireWhoseSupplyStoppedWithoutSayingWhyStillSaysThatMuch()
+    {
+        var socket = new ScriptedWebSocket();
+        Channel<LiveFrame> frames = Channel.CreateUnbounded<LiveFrame>();
+
+        frames.Writer.Complete();
+
+        Assert.Equal(LiveDeparture.SourceEnded, await Carry(socket, frames));
+
+        LiveFrame said = LiveFrame.Read(Assert.Single(socket.Sent)).Frame!;
+
+        Assert.Equal(LiveChannel.Control, said.Channel);
+        Assert.Equal(LiveSupplyEnd.DriverLost, LiveEndingReport.Read(said.Payload.Span).Report!.Why);
     }
 
     [Fact]
@@ -135,8 +167,9 @@ public sealed class LiveWireSocketTests
 
         await Carry(socket, frames);
 
-        Assert.Equal(20, socket.Sent.Count);
-        Assert.DoesNotContain((byte)LiveChannel.Control, socket.Sent.Select(message => message[0]));
+        Assert.Equal(
+            Enumerable.Repeat((byte)LiveChannel.Picture, 20).Append((byte)LiveChannel.Control),
+            socket.Sent.Select(message => message[0]));
     }
 
     [Fact]

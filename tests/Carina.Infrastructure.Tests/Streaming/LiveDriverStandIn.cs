@@ -21,6 +21,14 @@ internal sealed class LiveDriverStandIn : IDriverClient
 
     public List<SessionId> Looked { get; } = [];
 
+    public List<(SessionId Session, DateTimeOffset EndsAt)> Extended { get; } = [];
+
+    public DriverProblem? RefusingEveryExtension { get; set; }
+
+    public bool ExtensionUnreachable { get; set; }
+
+    public TimeSpan? CutsEveryExtensionTo { get; set; }
+
     public int HealthAsked { get; private set; }
 
     public DriverHello Hello { get; set; } = new(DriverProtocol.Version, "stand-in", ["recording", "live", "typedTuning"]);
@@ -67,6 +75,9 @@ internal sealed class LiveDriverStandIn : IDriverClient
             }
         }
     }
+
+    public DateTimeOffset HeldTo(DateTimeOffset asked)
+        => CutsEveryExtensionTo is { } window ? DateTimeOffset.UnixEpoch + window : asked;
 
     public SessionSnapshot Snapshot(SessionState state, SessionStopReason reason, string? failureCause = null)
         => new(Held!.Value, SessionPurpose.Live, DeviceId, state, DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch.AddHours(4))
@@ -139,6 +150,33 @@ internal sealed class LiveDriverStandIn : IDriverClient
         Stream reading = pipe.Reader.AsStream();
 
         return DriverCall<Stream>.Reached(StreamRefusesToClose ? new Unclosable(reading) : reading);
+    }
+
+    public Task<DriverCall<SessionSnapshot>> ExtendSessionAsync(
+        SessionId sessionId,
+        DateTimeOffset endsAt,
+        CancellationToken cancellationToken)
+    {
+        lock (gate)
+        {
+            Extended.Add((sessionId, endsAt));
+        }
+
+        if (Unreachable || ExtensionUnreachable)
+        {
+            return Task.FromResult(DriverCall<SessionSnapshot>.Unreachable("The driver's socket could not be reached."));
+        }
+
+        if (RefusingEveryExtension is { } refusal)
+        {
+            return Task.FromResult(DriverCall<SessionSnapshot>.Refused(refusal));
+        }
+
+        return Task.FromResult(DriverCall<SessionSnapshot>.Reached(
+            new SessionSnapshot(sessionId, SessionPurpose.Live, DeviceId, SessionState.Active, DateTimeOffset.UnixEpoch, HeldTo(endsAt))
+            {
+                StopReason = SessionStopReason.Running,
+            }));
     }
 
     public Task<DriverCall<SessionSnapshot>> StopSessionAsync(SessionId sessionId, string reason, CancellationToken cancellationToken)

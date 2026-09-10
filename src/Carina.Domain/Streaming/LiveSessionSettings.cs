@@ -8,6 +8,10 @@ public sealed record LiveSessionSettings
 
     private readonly TimeSpan longestWaitToBeFed = TimeSpan.FromSeconds(10);
 
+    private readonly TimeSpan heldAhead = TimeSpan.FromMinutes(10);
+
+    private readonly TimeSpan betweenHolds = TimeSpan.FromMinutes(1);
+
     public TimeSpan Linger
     {
         get => linger;
@@ -31,6 +35,42 @@ public sealed record LiveSessionSettings
                 value,
                 "A viewer waits to be seated for some time, not none, or no channel could ever be raised.");
     }
+
+    /// <summary>
+    /// How far ahead of now the supply is asked to be held open while it is being watched.
+    /// </summary>
+    /// <remarks>
+    /// This is what a viewing that is still there is worth once nothing more is heard from it: the
+    /// driver lets go of a supply this long after the last time it was asked to hold on to it.
+    /// </remarks>
+    public TimeSpan HeldAhead
+    {
+        get => heldAhead;
+
+        init => heldAhead = value > TimeSpan.Zero
+            ? value
+            : throw new ArgumentOutOfRangeException(
+                nameof(value),
+                value,
+                "A supply is held open for some time beyond now, not none, or it is let go of the moment it is asked for.");
+    }
+
+    /// <summary>
+    /// How often the supply is asked to be held open for longer.
+    /// </summary>
+    public TimeSpan BetweenHolds
+    {
+        get => betweenHolds;
+
+        init => betweenHolds = value > TimeSpan.Zero
+            ? value
+            : throw new ArgumentOutOfRangeException(
+                nameof(value),
+                value,
+                "A supply is asked to be held open every so often, and every so often is a span, not none.");
+    }
+
+    public bool AsksBeforeWhatItAskedForRunsOut => betweenHolds < heldAhead;
 
     /// <summary>
     /// How long one transcoder may keep the reading of the channel waiting before it is cut loose.

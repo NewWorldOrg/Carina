@@ -29,7 +29,7 @@ public sealed record ExtendSessionRequest
             ? []
             :
             [
-                $"endsAt: a recording only ever follows a programme later, so expected a time after {currentEndsAt:O}; got {EndsAt:O}.",
+                $"endsAt: an end only ever moves later, so expected a time after {currentEndsAt:O}; got {EndsAt:O}.",
             ];
 
     public IReadOnlyList<string> Validate(DateTimeOffset currentEndsAt, DateTimeOffset now)

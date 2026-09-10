@@ -252,9 +252,21 @@ public sealed class DriverOutputRootTests
         );
     }
 
+    [Fact]
+    public void AViewingMayBeGivenAWindowLongerThanADay()
+    {
+        DriverConfiguration configuration = DriverConfigurationReader
+            .Read(
+                Complete.Replace("\"socketPath\"", "\"liveSessionMinutes\": 2160,\n  \"socketPath\"")
+            )
+            .Configuration!;
+
+        Assert.Equal(2160, configuration.LiveSessionMinutes);
+    }
+
     [Theory]
     [InlineData(0)]
-    [InlineData(1441)]
+    [InlineData(4321)]
     public void ALiveSessionLengthOutsideItsRangeIsAFinding(int minutes)
     {
         Assert.Contains(

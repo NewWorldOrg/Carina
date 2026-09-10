@@ -1049,7 +1049,7 @@ public sealed class TunerSessionManager(
                 );
         }
 
-        if (session.Purpose is not SessionPurpose.Recording)
+        if (session.Purpose is not (SessionPurpose.Recording or SessionPurpose.Live))
         {
             return SessionExtension.Refused(
                 SessionExtendOutcome.NotARecording,
@@ -1057,10 +1057,8 @@ public sealed class TunerSessionManager(
             );
         }
 
-        IReadOnlyList<string> problems = request.Validate(
-            session.EndsAt,
-            timeProvider.GetUtcNow()
-        );
+        DateTimeOffset now = timeProvider.GetUtcNow();
+        IReadOnlyList<string> problems = request.Validate(session.EndsAt, now);
 
         if (problems.Count > 0)
         {
@@ -1070,15 +1068,22 @@ public sealed class TunerSessionManager(
             );
         }
 
-        if (session.RidesOn is { } host && request.EndsAt > host.EndsAt)
+        DateTimeOffset endsAt = HeldNoFurtherThan(session, request.EndsAt, now);
+
+        if (session.RidesOn is { } host && endsAt > host.EndsAt)
         {
             return SessionExtension.Refused(
                 SessionExtendOutcome.NotAnExtension,
-                $"endsAt: '{sessionId}' reads the tuner through '{host.SessionId}', which stops at {host.EndsAt:O}, so it cannot be held open until {request.EndsAt:O}."
+                $"endsAt: '{sessionId}' reads the tuner through '{host.SessionId}', which stops at {host.EndsAt:O}, so it cannot be held open until {endsAt:O}."
             );
         }
 
-        if (!session.Extend(request.EndsAt))
+        if (endsAt <= session.EndsAt)
+        {
+            return SessionExtension.Extended(session);
+        }
+
+        if (!session.Extend(endsAt))
         {
             return SessionExtension.Refused(
                 SessionExtendOutcome.AlreadyEnded,
@@ -1095,6 +1100,39 @@ public sealed class TunerSessionManager(
         events?.Signal(DriverEvents.Sessions);
 
         return SessionExtension.Extended(session);
+    }
+
+    /// <summary>
+    /// A viewing is held open for as long as the app keeps asking, but never further ahead than the
+    /// window its purpose is given, so a session nobody is asking for any more is let go of within
+    /// one window rather than for as long as the last request happened to name.
+    /// </summary>
+    private DateTimeOffset HeldNoFurtherThan(
+        TunerSession session,
+        DateTimeOffset asked,
+        DateTimeOffset now
+    )
+    {
+        if (session.Purpose is not SessionPurpose.Live)
+        {
+            return asked;
+        }
+
+        DateTimeOffset latest = now.AddMinutes(configuration.LiveSessionMinutes);
+
+        if (asked <= latest)
+        {
+            return asked;
+        }
+
+        logger.LogInformation(
+            "Session {SessionId} asked to be held until {Asked} and was cut to {Granted}.",
+            session.SessionId.Value,
+            asked,
+            latest
+        );
+
+        return latest;
     }
 
     public async Task<SessionStopOutcome> StopAsync(

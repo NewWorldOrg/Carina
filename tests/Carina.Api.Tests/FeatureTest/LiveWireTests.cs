@@ -227,6 +227,13 @@ public sealed class LiveWireTests
 
         held.NoMore();
 
+        LiveFrame said = await Take(socket);
+
+        Assert.Equal(LiveChannel.Control, said.Channel);
+        Assert.Equal(
+            LiveDepartures.Ending(LiveDeparture.SourceEnded),
+            LiveEndingReport.Read(said.Payload.Span).Report!.Why);
+
         WebSocketReceiveResult ending = await Heard(socket);
 
         Assert.Equal(WebSocketMessageType.Close, ending.MessageType);
@@ -275,6 +282,9 @@ public sealed class LiveWireTests
         Assert.Equal(LivePts.Of(90_000UL), (await Take(another)).Pts);
 
         fanout.End();
+
+        Assert.Equal(LiveChannel.Control, (await Take(one)).Channel);
+        Assert.Equal(LiveChannel.Control, (await Take(another)).Channel);
 
         WebSocketReceiveResult oneEnding = await Heard(one);
         WebSocketReceiveResult anotherEnding = await Heard(another);

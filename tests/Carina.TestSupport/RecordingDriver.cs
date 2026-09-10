@@ -94,6 +94,12 @@ public sealed class RecordingDriver : IDriverClient
             }));
     }
 
+    public Task<DriverCall<SessionSnapshot>> ExtendSessionAsync(
+        SessionId sessionId,
+        DateTimeOffset endsAt,
+        CancellationToken cancellationToken)
+        => throw new NotSupportedException();
+
     public Task<DriverCall<SessionSnapshot>> StopSessionAsync(
         SessionId sessionId,
         string reason,

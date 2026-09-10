@@ -116,6 +116,7 @@ public sealed class LiveSessionManager(
         }
 
         await Task.WhenAll(reading.Select(reception => reception.Life));
+        await Task.WhenAll(reading.Select(reception => reception.Holding));
     }
 
     private async Task<LiveJoin> SeatedAsync(LiveSessionKey key, CancellationToken cancellationToken)
@@ -202,7 +203,7 @@ public sealed class LiveSessionManager(
             return reading;
         }
 
-        LiveReception raised = new(network, service, supply, settings, Forget);
+        LiveReception raised = new(network, service, supply, settings, clock, Forget);
 
         receptions[channel] = raised;
         raised.Attach();

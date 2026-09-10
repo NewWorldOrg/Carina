@@ -3,6 +3,8 @@ using Carina.Domain.Driver;
 using Carina.Domain.DriverStatus;
 using Carina.Domain.Streaming;
 
+using Microsoft.Extensions.Logging;
+
 namespace Carina.Infrastructure.Streaming;
 
 public sealed class DriverTransportStream : ILiveTransportStream
@@ -23,24 +25,36 @@ public sealed class DriverTransportStream : ILiveTransportStream
 
     private readonly ILiveLeases leases;
 
+    private readonly ILogger logger;
+
+    private readonly Lock gate = new();
+
     private LiveSupplyEnding? ending;
+
+    private DateTimeOffset heldUntil;
 
     private int letGo;
 
     private int concluded;
+
+    private int wontHold;
 
     public DriverTransportStream(
         SessionId session,
         Stream inner,
         IDriverClient driver,
         IDriverStatusReader status,
-        ILiveLeases leases)
+        ILiveLeases leases,
+        ILogger logger,
+        DateTimeOffset heldUntil)
     {
         this.session = session;
         this.inner = inner;
         this.driver = driver;
         this.status = status;
         this.leases = leases;
+        this.logger = logger;
+        this.heldUntil = heldUntil;
         Bytes = new Reading(this);
     }
 
@@ -49,6 +63,66 @@ public sealed class DriverTransportStream : ILiveTransportStream
     public Stream Bytes { get; }
 
     public LiveSupplyEnding? Ending => Volatile.Read(ref ending);
+
+    public DateTimeOffset HeldUntil
+    {
+        get
+        {
+            lock (gate)
+            {
+                return heldUntil;
+            }
+        }
+    }
+
+    public async Task<bool> HoldOpenUntilAsync(DateTimeOffset until, CancellationToken cancellationToken)
+    {
+        if (until <= HeldUntil)
+        {
+            return true;
+        }
+
+        if (Volatile.Read(ref wontHold) is 1 || Volatile.Read(ref letGo) is 1 || Ending is not null)
+        {
+            return false;
+        }
+
+        DriverCall<SessionSnapshot> held = await driver.ExtendSessionAsync(session, until, cancellationToken);
+
+        if (held.TryGetValue(out SessionSnapshot? snapshot))
+        {
+            Hold(snapshot.EndsAt ?? until);
+
+            return HeldUntil >= until;
+        }
+
+        // A driver that spelled out a refusal spells out the same one every time from here; one that
+        // could not be reached may answer when it is next asked.
+        if (held.Outcome is not DriverCallOutcome.Unreachable)
+        {
+            Volatile.Write(ref wontHold, 1);
+
+            logger.LogWarning(
+                "The driver will not hold the live session {SessionId} open past {HeldUntil} ({Refusal}); "
+                + "it is not asked again, and the viewing ends when that time comes.",
+                session.Value,
+                HeldUntil,
+                held.Problem?.Title ?? held.Failure);
+        }
+
+        return false;
+    }
+
+    private void Hold(DateTimeOffset until)
+    {
+        lock (gate)
+        {
+            if (until > heldUntil)
+            {
+                heldUntil = until;
+            }
+        }
+    }
 
     public async ValueTask DisposeAsync()
     {

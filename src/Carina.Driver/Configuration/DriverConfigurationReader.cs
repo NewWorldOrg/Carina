@@ -43,7 +43,7 @@ public static class DriverConfigurationReader
     private const int MinShutdownGraceHours = 1;
     private const int MaxShutdownGraceHours = 168;
     private const int MinLiveSessionMinutes = 1;
-    private const int MaxLiveSessionMinutes = 1440;
+    private const int MaxLiveSessionMinutes = 4320;
 
     private const int MinWalkSessionMinutes = 1;
     private const int MaxWalkSessionMinutes = 240;

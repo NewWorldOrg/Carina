@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text;
 
 using Carina.Contracts;
+using Carina.Driver.Configuration;
 
 namespace Carina.Driver.Tests;
 
@@ -133,7 +134,72 @@ public sealed class RecordingExtensionApiTests
     }
 
     [Fact]
-    public async Task ASessionThatWritesNoFileIsNotHeldToAProgrammeAndIsNotExtended()
+    public async Task AViewingThatIsStillBeingWatchedIsHeldOpenForLonger()
+    {
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
+
+        DateTimeOffset almostOver = DateTimeOffset.UtcNow.AddMinutes(1);
+
+        using HttpResponseMessage created = await client.PostAsync(
+            DriverEndpoints.Sessions,
+            DriverUnderTest.Body(DriverUnderTest.Live("watching") with { EndsAt = almostOver }),
+            Soon()
+        );
+
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        Assert.Equal(almostOver, await RecordingUnderTest.EndOf(client, "watching"));
+
+        DateTimeOffset later = almostOver.AddMinutes(29);
+
+        using HttpResponseMessage patched = await client.PatchAsync(
+            DriverEndpoints.Session(SessionId.Parse("watching")),
+            Body(later),
+            Soon()
+        );
+
+        Assert.Equal(HttpStatusCode.OK, patched.StatusCode);
+        Assert.Equal(later, await RecordingUnderTest.EndOf(client, "watching"));
+    }
+
+    [Fact]
+    public async Task AViewingIsHeldNoFurtherAheadThanTheWindowItsPurposeIsGiven()
+    {
+        await using DriverUnderTest driver = await DriverUnderTest.Start();
+        using HttpClient client = driver.Client();
+
+        using HttpResponseMessage created = await client.PostAsync(
+            DriverEndpoints.Sessions,
+            DriverUnderTest.Body(DriverUnderTest.Live("greedy")),
+            Soon()
+        );
+
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+
+        DateTimeOffset asked = DateTimeOffset.UtcNow.AddDays(30);
+
+        using HttpResponseMessage patched = await client.PatchAsync(
+            DriverEndpoints.Session(SessionId.Parse("greedy")),
+            Body(asked),
+            Soon()
+        );
+
+        Assert.Equal(HttpStatusCode.OK, patched.StatusCode);
+
+        DateTimeOffset held = (await RecordingUnderTest.EndOf(client, "greedy"))!.Value;
+
+        Assert.True(held < asked);
+        Assert.True(
+            held
+                <= DateTimeOffset.UtcNow.AddMinutes(
+                    DriverConfiguration.DefaultLiveSessionMinutes
+                ),
+            $"a viewing was held until {held:O}, further ahead than the window it is given"
+        );
+    }
+
+    [Fact]
+    public async Task AViewingIsNotHeldOpenUntilATimeThatHasAlreadyPassed()
     {
         await using DriverUnderTest driver = await DriverUnderTest.Start();
         using HttpClient client = driver.Client();
@@ -150,37 +216,45 @@ public sealed class RecordingExtensionApiTests
 
         using HttpResponseMessage patched = await client.PatchAsync(
             DriverEndpoints.Session(SessionId.Parse("watching")),
-            Body(DateTimeOffset.UtcNow.AddHours(9)),
+            Body(DateTimeOffset.UtcNow.AddHours(-1)),
             Soon()
         );
 
         Assert.Equal(HttpStatusCode.BadRequest, patched.StatusCode);
-        Assert.Equal(SessionRefusalTitles.NotARecording, (await ProblemIn(patched))?.Title);
+        Assert.Equal(SessionRefusalTitles.NotAnExtension, (await ProblemIn(patched))?.Title);
         Assert.Equal(before, await RecordingUnderTest.EndOf(client, "watching"));
     }
 
     [Fact]
-    public async Task ASessionThatWritesNoFileIsTurnedAwayForThatAndNotForItsTime()
+    public async Task ASessionThatIsNeitherARecordingNorAViewingHasNoEndToMove()
     {
         await using DriverUnderTest driver = await DriverUnderTest.Start();
         using HttpClient client = driver.Client();
 
         using HttpResponseMessage created = await client.PostAsync(
             DriverEndpoints.Sessions,
-            DriverUnderTest.Body(DriverUnderTest.Live("watching")),
+            DriverUnderTest.Body(
+                DriverUnderTest.Live("walking") with
+                {
+                    Purpose = SessionPurpose.Survey,
+                }
+            ),
             Soon()
         );
 
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
 
+        DateTimeOffset? before = await RecordingUnderTest.EndOf(client, "walking");
+
         using HttpResponseMessage patched = await client.PatchAsync(
-            DriverEndpoints.Session(SessionId.Parse("watching")),
-            Body(DateTimeOffset.UtcNow.AddHours(-1)),
+            DriverEndpoints.Session(SessionId.Parse("walking")),
+            Body(DateTimeOffset.UtcNow.AddHours(9)),
             Soon()
         );
 
         Assert.Equal(HttpStatusCode.BadRequest, patched.StatusCode);
         Assert.Equal(SessionRefusalTitles.NotARecording, (await ProblemIn(patched))?.Title);
+        Assert.Equal(before, await RecordingUnderTest.EndOf(client, "walking"));
     }
 
     [Fact]

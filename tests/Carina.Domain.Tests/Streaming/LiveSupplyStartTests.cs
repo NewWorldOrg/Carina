@@ -54,6 +54,9 @@ public sealed class LiveSupplyStartTests
 
         public LiveSupplyEnding? Ending => null;
 
+        public Task<bool> HoldOpenUntilAsync(DateTimeOffset until, CancellationToken cancellationToken)
+            => Task.FromResult(true);
+
         public ValueTask DisposeAsync() => ValueTask.CompletedTask;
     }
 }
