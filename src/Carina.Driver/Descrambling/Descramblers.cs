@@ -33,30 +33,36 @@ public sealed class Descramblers : IDescramblerFactory
         AribB25Library? library = AribB25Library.Load(out string whyNot);
         if (library is null)
         {
-            Absent(logger, whyNot);
+            logger?.LogWarning(
+                "This driver does not unscramble and does not offer to: {Why} What it records stays as the tuner gave it, and its scrambled-packet count says how much of that was scrambled.",
+                whyNot
+            );
 
             return NoDescrambling.Instance;
         }
+
+        Descramblers descramblers = new(library, logger);
 
         try
         {
             CardDescrambler.Open(library).Dispose();
+
+            logger?.LogInformation(
+                "A card answered the reader, so this driver unscrambles what it records and says so in its greeting."
+            );
         }
         catch (DescramblingException error)
         {
-            Absent(logger, error.Message);
-
-            return NoDescrambling.Instance;
+            logger?.LogWarning(
+                "No card answered the reader when this driver started, so it asks again as each tuner opens and while one is being read: {Why}",
+                error.Message
+            );
         }
 
-        logger?.LogInformation(
-            "A card answered the reader, so this driver unscrambles what it records and says so in its greeting."
-        );
-
-        return new Descramblers(library, logger);
+        return descramblers;
     }
 
-    public bool CardAnswered => true;
+    public bool Unscrambles => true;
 
     public IDescrambler? Open()
     {
@@ -66,18 +72,12 @@ public sealed class Descramblers : IDescramblerFactory
         }
         catch (DescramblingException error)
         {
-            logger?.LogError(
-                "The card answered when this driver started but does not now, so what this session records stays scrambled and its scrambled-packet count will say so: {Why}",
+            logger?.LogDebug(
+                "The card was asked for and did not answer, so it is asked again: {Why}",
                 error.Message
             );
 
             return null;
         }
     }
-
-    private static void Absent(ILogger? logger, string why) =>
-        logger?.LogWarning(
-            "This driver does not unscramble and does not offer to: {Why} What it records stays as the tuner gave it, and its scrambled-packet count says how much of that was scrambled.",
-            why
-        );
 }

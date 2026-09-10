@@ -11,7 +11,7 @@ public interface IDescrambler : IDisposable
 
 public interface IDescramblerFactory
 {
-    bool CardAnswered { get; }
+    bool Unscrambles { get; }
 
     IDescrambler? Open();
 }
@@ -22,7 +22,7 @@ public sealed class NoDescrambling : IDescramblerFactory
 
     private NoDescrambling() { }
 
-    public bool CardAnswered => false;
+    public bool Unscrambles => false;
 
     public IDescrambler? Open() => null;
 }
