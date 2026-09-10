@@ -12,7 +12,7 @@ namespace Carina.Infrastructure.Encodings;
 /// Takes one job the ledger holds as running through to its end: the recording is found and looked
 /// at, the encoder is chosen against what this machine can do, ffmpeg writes the work file the
 /// ledger was told about, and the artefact is placed by the ledger or the job fails for one of the
-/// six reasons the ledger holds. Whatever the end, what the job still owes a removal for is swept.
+/// seven reasons the ledger holds. Whatever the end, what the job still owes a removal for is swept.
 /// A stop asked for by the caller is the one thing that leaves the job as it was: it stays running
 /// in the ledger for the next start to put back (BR-ED2-011).
 /// <para>

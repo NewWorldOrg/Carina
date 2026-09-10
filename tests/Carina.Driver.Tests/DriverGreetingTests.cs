@@ -8,13 +8,11 @@ public sealed class DriverGreetingTests
     [Fact]
     public void EveryPurposeBeyondTheBaselineIsDeclaredSoAnAppCanTellItIsSafeToAskFor()
     {
-        foreach (SessionPurpose purpose in Enum.GetValues<SessionPurpose>())
-        {
-            if (SessionPurposes.Capability(purpose) is { } capability)
-            {
-                Assert.Contains(capability, DriverGreeting.Capabilities);
-            }
-        }
+        IReadOnlyList<string> beyondTheBaseline =
+            [.. Enum.GetValues<SessionPurpose>().Select(SessionPurposes.Capability).OfType<string>()];
+
+        Assert.NotEmpty(beyondTheBaseline);
+        Assert.All(beyondTheBaseline, capability => Assert.Contains(capability, DriverGreeting.Capabilities));
     }
 
     [Fact]

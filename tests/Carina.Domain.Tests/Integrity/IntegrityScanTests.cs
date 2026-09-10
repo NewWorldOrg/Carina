@@ -239,9 +239,13 @@ public sealed class IntegrityScanTests
     {
         IntegrityReport swept = Compare(
             [StillWriting(Primary, "one.m2ts")],
-            [Holding(Primary, ("one.m2ts", 17))]);
+            [Holding(Primary, ("one.m2ts", 17), ("stray.m2ts", 5))]);
 
-        Assert.DoesNotContain(swept.Findings, finding => finding.Fault is IntegrityFault.NoLedgerRow);
+        IntegrityFinding orphan = Assert.Single(
+            swept.Findings,
+            finding => finding.Fault is IntegrityFault.NoLedgerRow);
+
+        Assert.Equal("stray.m2ts", orphan.Path);
     }
 
     [Fact]

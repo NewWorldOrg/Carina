@@ -106,11 +106,22 @@ public sealed class SyntheticBroadcastMaterialTests : IDisposable
     public async Task TheDualMonoSoundDecodesAsTwoChannelsOfSilence()
     {
         string written = await SyntheticBroadcast.Sounding(SyntheticSound.DualMono).WriteAsync(Path.Combine(room, "dual.m2ts"));
+        string decoded = Path.Combine(room, "dual.s16le");
 
         await FfmpegProgramme.RunAsync(
             FfmpegProgramme.Default,
-            ["-nostdin", "-hide_banner", "-loglevel", "error", "-xerror", "-i", written, "-map", "0:a", "-f", "null", "-"],
+            [
+                "-nostdin", "-hide_banner", "-loglevel", "error", "-xerror",
+                "-i", written, "-map", "0:a", "-ac", "2", "-f", "s16le", decoded,
+            ],
             CancellationToken.None);
+
+        byte[] sound = await File.ReadAllBytesAsync(decoded);
+
+        Assert.NotEmpty(sound);
+        Assert.False(
+            Array.Exists(sound, sample => sample is not 0),
+            "the dual-mono sound decoded to something other than silence");
     }
 
     [Fact]
