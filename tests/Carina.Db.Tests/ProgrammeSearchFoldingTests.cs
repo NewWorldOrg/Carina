@@ -355,11 +355,11 @@ public sealed class ProgrammeSearchFoldingTests
             INSERT INTO programme (
                 network_id, service_id, event_id, transport_stream_id,
                 start_at, end_at, name, summary, is_shadow,
-                genres, items, related, has_subtitles, source, updated_at)
+                genres, items, related, has_subtitles, audio, source, updated_at)
             VALUES (
                 1, 1049, @event, 1,
                 {At}, {At} + interval '30 minutes', @name, @summary, false,
-                '[]', '[]', '[]', false, 'ScheduleBasic', {At})
+                '[]', '[]', '[]', false, 'Undetermined', 'ScheduleBasic', {At})
             """;
         command.Parameters.AddWithValue("event", carried);
         command.Parameters.AddWithValue("name", name);

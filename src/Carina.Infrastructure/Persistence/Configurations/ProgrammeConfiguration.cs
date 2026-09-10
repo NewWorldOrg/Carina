@@ -25,6 +25,9 @@ public sealed class ProgrammeConfiguration : IEntityTypeConfiguration<Programme>
                 table.HasCheckConstraint(
                     "ck_programme_source",
                     "source IN ('PresentFollowing', 'ScheduleBasic', 'ScheduleExtended')");
+                table.HasCheckConstraint(
+                    "ck_programme_audio",
+                    "audio IN ('Undetermined', 'Mono', 'Stereo', 'DualMono', 'Surround')");
             });
 
         builder.HasKey(programme => new { programme.NetworkId, programme.ServiceId, programme.EventId });
@@ -61,6 +64,11 @@ public sealed class ProgrammeConfiguration : IEntityTypeConfiguration<Programme>
 
         builder.Property(programme => programme.IsShadow).IsRequired();
         builder.Property(programme => programme.HasSubtitles).IsRequired();
+
+        builder.Property(programme => programme.Audio)
+            .HasConversion<string>()
+            .HasMaxLength(32)
+            .IsRequired();
 
         builder.Property(programme => programme.Source)
             .HasConversion<string>()

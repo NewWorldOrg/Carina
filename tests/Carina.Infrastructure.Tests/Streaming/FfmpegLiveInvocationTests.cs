@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Reflection;
 
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Streaming;
 using Carina.Infrastructure.Streaming;

@@ -136,6 +136,18 @@ public sealed class RecordedEventInformationTests
     }
 
     [Fact]
+    public void TheRecordedEventSaysHowTheSoundOfItIsCarried()
+    {
+        AudioComponentDescription audio = Assert.Single(Assert.Single(Table(2).Events).AudioComponents);
+
+        Assert.Equal(2, audio.StreamContent);
+        Assert.Equal(0x03, audio.ComponentType);
+        Assert.True(audio.IsMainComponent);
+        Assert.Equal("jpn", audio.Language);
+        Assert.Equal(string.Empty, audio.SecondLanguage);
+    }
+
+    [Fact]
     public void AShortListeningLeavesTheScheduleUnfinishedAndSaysWhichSegmentsAreMissing()
     {
         var progress = new ScheduleProgress(HeldClock.Broadcasting(2026, 8, 19, 0, 0, 0));

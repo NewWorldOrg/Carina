@@ -20,6 +20,8 @@ public sealed record ProgrammeBroadcast(
 
     public bool HasSubtitles { get; init; }
 
+    public AudioMode Audio { get; init; }
+
     public ProgrammeSource Source { get; init; } = ProgrammeSource.ScheduleBasic;
 
     public static readonly TimeSpan FurthestBehind = TimeSpan.FromDays(1);

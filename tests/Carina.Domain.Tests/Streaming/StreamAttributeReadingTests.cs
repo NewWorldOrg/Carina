@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Streaming;
 
 namespace Carina.Domain.Tests.Streaming;

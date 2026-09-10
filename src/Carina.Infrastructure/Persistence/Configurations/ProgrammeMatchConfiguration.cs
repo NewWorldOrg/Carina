@@ -36,6 +36,7 @@ public sealed class ProgrammeMatchConfiguration : IEntityTypeConfiguration<Progr
         builder.Property(match => match.Summary).HasColumnName("summary");
         builder.Property(match => match.IsShadow).HasColumnName("is_shadow");
         builder.Property(match => match.HasSubtitles).HasColumnName("has_subtitles");
+        builder.Property(match => match.Audio).HasConversion<string>().HasColumnName("audio");
         builder.Property(match => match.Source).HasConversion<string>().HasColumnName("source");
         builder.Property(match => match.Revision).HasColumnName("revision");
         builder.Property(match => match.IsArchived).HasColumnName("is_archived");
@@ -85,6 +86,7 @@ public sealed class ProgrammeMatchConfiguration : IEntityTypeConfiguration<Progr
             layered.summary,
             layered.is_shadow,
             layered.has_subtitles,
+            layered.audio,
             layered.source,
             layered.revision,
             layered.genres,
@@ -105,6 +107,7 @@ public sealed class ProgrammeMatchConfiguration : IEntityTypeConfiguration<Progr
                 summary,
                 is_shadow,
                 has_subtitles,
+                audio,
                 source,
                 revision,
                 genres,
@@ -126,6 +129,7 @@ public sealed class ProgrammeMatchConfiguration : IEntityTypeConfiguration<Progr
                 kept.summary,
                 false,
                 kept.has_subtitles,
+                'Undetermined'::character varying(32),
                 NULL::character varying(32),
                 NULL::bigint,
                 kept.genres,

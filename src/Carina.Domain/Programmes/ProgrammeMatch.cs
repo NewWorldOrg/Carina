@@ -27,6 +27,8 @@ public sealed class ProgrammeMatch
 
     public bool HasSubtitles { get; private set; }
 
+    public AudioMode Audio { get; private set; }
+
     public ProgrammeSource? Source { get; private set; }
 
     public long? Revision { get; private set; }
@@ -56,6 +58,7 @@ public sealed class ProgrammeMatch
             Summary = programme.Summary,
             IsShadow = programme.IsShadow,
             HasSubtitles = programme.HasSubtitles,
+            Audio = programme.Audio,
             Source = programme.Source,
             Revision = programme.Revision,
             IsArchived = false,
@@ -80,6 +83,7 @@ public sealed class ProgrammeMatch
             Summary = programme.Summary,
             IsShadow = false,
             HasSubtitles = programme.HasSubtitles,
+            Audio = AudioMode.Undetermined,
             Source = null,
             Revision = null,
             IsArchived = true,

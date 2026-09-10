@@ -250,7 +250,7 @@ internal sealed class RuleFeature : IAsyncDisposable
             [],
             [],
             false,
-            ProgrammeSource.ScheduleBasic,
+            source: ProgrammeSource.ScheduleBasic,
             revision: eventId);
 
         Programmes.Programmes.Add(programme);

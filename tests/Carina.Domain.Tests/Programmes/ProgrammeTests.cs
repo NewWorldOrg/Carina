@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 
@@ -37,6 +38,7 @@ public sealed class ProgrammeTests
     [InlineData("items")]
     [InlineData("related")]
     [InlineData("subtitles")]
+    [InlineData("audio")]
     [InlineData("source")]
     public void AnyOneFieldMovingOnItsOwnCountsAsAChange(string moved)
     {
@@ -217,6 +219,23 @@ public sealed class ProgrammeTests
     }
 
     [Fact]
+    public void ASoundThatWasNotAnnouncedAgainDoesNotUnsayTheModeAlreadyKnown()
+    {
+        var programme = Programme.Discover(Moved("audio"), At);
+
+        Assert.False(programme.Absorb(Broadcast(), At.AddHours(1)));
+
+        Assert.Equal(AudioMode.DualMono, programme.Audio);
+        Assert.Equal(At, programme.UpdatedAt);
+    }
+
+    [Fact]
+    public void ASoundNobodyAnnouncedIsUnansweredRatherThanGuessedAt()
+    {
+        Assert.Equal(AudioMode.Undetermined, Programme.Discover(Broadcast(), At).Audio);
+    }
+
+    [Fact]
     public void ATimeThatIsNotInUniversalTimeIsRefused()
     {
         Assert.Throws<ArgumentException>(
@@ -292,6 +311,7 @@ public sealed class ProgrammeTests
                 Related = [new RelatedProgramme(32739, 1048, 47289, RelationKind.Shared)],
             },
             "subtitles" => Broadcast() with { HasSubtitles = true },
+            "audio" => Broadcast() with { Audio = AudioMode.DualMono },
             "source" => Broadcast() with { Source = ProgrammeSource.ScheduleExtended },
             _ => Broadcast(endsAt: At.AddHours(24)),
         };
