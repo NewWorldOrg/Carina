@@ -12,8 +12,6 @@ namespace Carina.Infrastructure.Migration;
 
 public sealed record MigrationCarried(MigrationRoll Roll, MigrationAftermath Aftermath);
 
-public sealed record MigrationQueueing(EncodeDestination Destination, EncodeProfileId ProfileId);
-
 public sealed class MigrationCarriage(
     IMigrationCarrier carrier,
     IRecordingRepository recordings,
@@ -50,7 +48,7 @@ public sealed class MigrationCarriage(
             .Where(file => file.Kind is SourceFileKind.AsBroadcast)
             .ToDictionary(file => file.RecordingId);
 
-        MigrationQueueing? queueing = await QueueingAsync(cancellationToken);
+        EncodeUnasked queueing = await QueueingAsync(cancellationToken);
 
         if (pass is MigrationPass.ForReal)
         {
@@ -63,7 +61,7 @@ public sealed class MigrationCarriage(
                     + "already there. Empty the ledger, delete the new root, make it again and start over.");
             }
 
-            if (queueing is null)
+            if (!queueing.IsSettled)
             {
                 throw new MigrationCarryRefusedException(
                     "What is carried over is encoded, and that needs exactly one destination that is still "
@@ -128,19 +126,10 @@ public sealed class MigrationCarriage(
             verdict.Claimed,
             verdict.Observed);
 
-    private async Task<MigrationQueueing?> QueueingAsync(CancellationToken cancellationToken)
-    {
-        IReadOnlyList<EncodeDestination> defined = await destinations.ListAsync(cancellationToken);
-
-        if (defined.Where(destination => !destination.IsRetired).ToList() is not [EncodeDestination only])
-        {
-            return null;
-        }
-
-        EncodeProfile? profile = await profiles.FindAsync(only.DefaultProfileId, cancellationToken);
-
-        return profile is null || profile.IsRetired ? null : new MigrationQueueing(only, profile.Id);
-    }
+    private async Task<EncodeUnasked> QueueingAsync(CancellationToken cancellationToken)
+        => EncodeUnasked.Of(
+            await destinations.ListAsync(cancellationToken),
+            await profiles.ListAsync(cancellationToken));
 
     private async Task<MigrationRuleProposal> MadeAsync(
         MigrationRunId runId,
@@ -188,7 +177,7 @@ public sealed class MigrationCarriage(
         MigrationVerdict verdict,
         IReadOnlyDictionary<string, SourceRecording> known,
         IReadOnlyDictionary<long, SourceRecordingFile> named,
-        MigrationQueueing? queueing,
+        EncodeUnasked queueing,
         MigrationPass pass,
         CancellationToken cancellationToken)
     {
@@ -236,17 +225,19 @@ public sealed class MigrationCarriage(
             Held(source, service, programme, id, name, verdict.Observed ?? 0),
             cancellationToken);
 
-        MigrationQueueing settled = queueing
-            ?? throw new MigrationCarryRefusedException(
+        if (queueing is not { Destination: { } destination, Profile: { } profile })
+        {
+            throw new MigrationCarryRefusedException(
                 "What is carried over is encoded, and nothing says where to put it.");
+        }
 
         await jobs.AddAsync(
             EncodeJob.Queue(
                 EncodeJobId.New(),
                 id,
-                settled.ProfileId,
-                settled.Destination.Id,
-                settled.Destination.OutputRoot,
+                profile.Id,
+                destination.Id,
+                destination.OutputRoot,
                 clock.GetUtcNow().UtcDateTime),
             cancellationToken);
 
