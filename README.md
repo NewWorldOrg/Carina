@@ -6,7 +6,7 @@
 
 ## 構成
 
-3 つのプロセスで動く。
+動くのは 3 つのプロセス。
 
 | | 役割 |
 | --- | --- |
@@ -14,12 +14,40 @@
 | `app` | 非特権。HTTP API を出す。番組表・予約・ライブ・エンコード・ライブラリ |
 | PostgreSQL | 台帳 |
 
-`driver` と `app` は Unix ドメインソケットで話す。
-別プロセスなので、`app` を入れ替えても進行中の録画は止まらない。
+`driver` と `app` は Unix ドメインソケットで話す(driver は TCP ポートを開かない)。
+**別プロセスなので、`app` を入れ替えても進行中の録画は止まらない。**
 録画ファイルを書くのは `driver` だけで、`app` には読み取り専用で渡す。
 
 API 文書は稼働中の `app` が `GET /openapi/v1.json` に出す。
 実行時に組み立てるものなので、このリポジトリには置いていない。
+
+### ディレクトリ
+
+```
+src/        アプリケーション本体
+tests/      テスト。src の各プロジェクトに対応する
+docker/     entrypoint、driver の開発用設定、/dev/dri の検出
+patches/    イメージの中でソースからビルドする ffmpeg へのパッチ
+```
+
+`src/` は 2 つのプロセスを 1 つのリポジトリに収めている。
+
+| プロジェクト | 中身 |
+| --- | --- |
+| `Carina.Driver` | 特権側。選局、TS の扱い、セッション、録画ファイル |
+| `Carina.Contracts` | 両プロセスが共有する唯一の成果物。プロセス間の契約 |
+| `Carina.Domain` | エンティティ、値オブジェクト、リポジトリのインタフェース |
+| `Carina.Broadcast` | 放送規格の解釈。何にも依存しないライブラリ |
+| `Carina.Infrastructure` | 永続化、driver への client、外部との境界 |
+| `Carina.Db` | スキーマ適用の入口 |
+| `Carina.Api` | HTTP の面と、そこが出す OpenAPI 文書 |
+
+参照は内向きの一方向で、`tests/Carina.Architecture.Tests` がそれを固定している。
+とくに `Carina.Driver` は `Carina.Contracts` 以外を参照できない。
+app の層に手を伸ばせるようにすると、2 つのプロセスを別々に入れ替えられなくなるため。
+
+技術スタックは .NET 10 / ASP.NET Core / EF Core / PostgreSQL。
+driver は Linux の DVB API を P/Invoke で叩く。
 
 ## 必要なもの
 
