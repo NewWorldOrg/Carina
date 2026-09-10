@@ -258,38 +258,10 @@ public sealed class RecordingRiderTests : IDisposable
         Assert.NotNull(rider.FailureCause);
     }
 
-    [Fact]
-    public async Task ARecordingRidingAlongIsNotAFailureWhenItsHostReachesItsEndTime()
-    {
-        var device = new PacedTunerDevice();
-        var manager = new TunerSessionManager(
-            Configuration,
-            new OneTunerDeviceFactory(device),
-            clock,
-            NullLogger<TunerSessionManager>.Instance
-        );
-
-        TunerSession host = Started(manager, Request("s-1", SessionPurpose.Recording));
-
-        device.AwaitParkedBefore(1);
-
-        TunerSession rider = Started(manager, Request("s-2", SessionPurpose.Recording));
-
-        host.Stop(SessionStopReason.EndTimeReached);
-
-        await rider.Completion.WaitAsync(Deadlock);
-
-        Assert.Equal(SessionState.Stopped, rider.State);
-        Assert.Equal(SessionStopReason.EndTimeReached, rider.StopReason);
-        Assert.Null(rider.FailureCause);
-
-        host.Dispose();
-    }
-
     [Theory]
     [InlineData(SessionStopReason.Requested)]
-    [InlineData(SessionStopReason.Preempted)]
-    public async Task ARecordingRidingAlongEndsWithTheReasonItsHostEndedFor(
+    [InlineData(SessionStopReason.EndTimeReached)]
+    public async Task ARecordingRidingAlongReadsTheTunerItselfWhenItsHostEnds(
         SessionStopReason ending
     )
     {
@@ -308,33 +280,30 @@ public sealed class RecordingRiderTests : IDisposable
         TunerSession rider = Started(manager, Request("s-2", SessionPurpose.Recording));
 
         Assert.Equal(host.DeviceId, rider.DeviceId);
+        Assert.Same(host, rider.RidesOn);
 
-        switch (ending)
+        if (ending is SessionStopReason.Requested)
         {
-            case SessionStopReason.Requested:
-                await manager.StopAsync(
-                    host.SessionId,
-                    "the operator said so",
-                    CancellationToken.None
-                );
-
-                break;
-
-            case SessionStopReason.Preempted:
-                host.Preempt("something more important wanted the tuner");
-
-                break;
-
-            default:
-                host.Stop(ending);
-
-                break;
+            await manager.StopAsync(host.SessionId, "the operator said so", CancellationToken.None);
         }
+        else
+        {
+            host.Stop(ending);
+        }
+
+        await host.Completion.WaitAsync(Deadlock);
+
+        device.AwaitParkedBefore(2);
+
+        Assert.Equal(SessionState.Active, rider.State);
+        Assert.Null(rider.RidesOn);
+
+        rider.Stop();
 
         await rider.Completion.WaitAsync(Deadlock);
 
-        Assert.Equal(SessionState.Failed, rider.State);
-        Assert.Equal(ending, rider.StopReason);
+        Assert.Equal(SessionState.Stopped, rider.State);
+        Assert.Null(rider.FailureCause);
 
         host.Dispose();
     }
@@ -402,7 +371,7 @@ public sealed class RecordingRiderTests : IDisposable
     }
 
     [Fact]
-    public void ARecordingRidingOnAnotherSessionIsNotHeldOpenPastItsHost()
+    public void ARecordingRidingOnAnotherSessionIsHeldOpenPastItsHostWhenItAsksFor()
     {
         TunerSessionManager manager = Manager();
         TunerSession host = Started(
@@ -421,17 +390,9 @@ public sealed class RecordingRiderTests : IDisposable
             new ExtendSessionRequest { EndsAt = Start.AddMinutes(45) }
         );
 
-        Assert.Equal(SessionExtendOutcome.NotAnExtension, beyond.Outcome);
-        Assert.Contains(host.SessionId.Value!, beyond.Detail, StringComparison.Ordinal);
-        Assert.Equal(Start.AddMinutes(10), rider.EndsAt);
-
-        SessionExtension within = manager.Extend(
-            rider.SessionId,
-            new ExtendSessionRequest { EndsAt = Start.AddMinutes(30) }
-        );
-
-        Assert.Equal(SessionExtendOutcome.Extended, within.Outcome);
-        Assert.Equal(Start.AddMinutes(30), rider.EndsAt);
+        Assert.Equal(SessionExtendOutcome.Extended, beyond.Outcome);
+        Assert.Equal(Start.AddMinutes(45), rider.EndsAt);
+        Assert.Equal(Start.AddMinutes(30), host.EndsAt);
 
         rider.Stop();
         rider.WaitForEnd(Deadlock);
@@ -440,7 +401,7 @@ public sealed class RecordingRiderTests : IDisposable
     }
 
     [Fact]
-    public void ARecordingThatAsksForLongerThanItsHostIsGivenTheHostsWindow()
+    public void ARecordingThatAsksForLongerThanItsHostIsGivenTheWindowItAskedFor()
     {
         TunerSessionManager manager = Manager();
         TunerSession host = Started(
@@ -453,9 +414,9 @@ public sealed class RecordingRiderTests : IDisposable
         );
 
         Assert.Same(host, rider.RidesOn);
-        Assert.Equal(Start.AddMinutes(30), rider.EndsAt);
+        Assert.Equal(Start.AddMinutes(60), rider.EndsAt);
         Assert.Equal(
-            Start.AddMinutes(30),
+            Start.AddMinutes(60),
             SessionViews.Of(rider, new DriverHello(DriverProtocol.Version, "instance", [])).EndsAt
         );
 
@@ -542,7 +503,7 @@ public sealed class RecordingRiderTests : IDisposable
     }
 
     [Fact]
-    public void ARiderFollowsItsHostOnceTheHostItselfHasBeenGivenLonger()
+    public void ARiderIsGivenLongerWithoutItsHostBeingGivenLongerFirst()
     {
         TunerSessionManager manager = Manager();
         TunerSession host = Started(
@@ -564,19 +525,11 @@ public sealed class RecordingRiderTests : IDisposable
 
         Assert.Same(host, rider.RidesOn);
         Assert.Equal(
-            SessionExtendOutcome.NotAnExtension,
-            manager.Extend(rider.SessionId, new ExtendSessionRequest { EndsAt = Start.AddMinutes(45) }).Outcome
-        );
-
-        Assert.Equal(
-            SessionExtendOutcome.Extended,
-            manager.Extend(host.SessionId, new ExtendSessionRequest { EndsAt = Start.AddMinutes(50) }).Outcome
-        );
-        Assert.Equal(
             SessionExtendOutcome.Extended,
             manager.Extend(rider.SessionId, new ExtendSessionRequest { EndsAt = Start.AddMinutes(45) }).Outcome
         );
         Assert.Equal(Start.AddMinutes(45), rider.EndsAt);
+        Assert.Equal(Start.AddMinutes(30), host.EndsAt);
 
         rider.Stop();
         rider.WaitForEnd(Deadlock);

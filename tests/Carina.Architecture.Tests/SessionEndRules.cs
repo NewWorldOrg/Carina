@@ -8,9 +8,7 @@ public static partial class SessionEndRules
 {
     public const string TheOneWayAnEndMovesEarlier = "EndsNoLaterThan";
 
-    public const string WhereItIsDeclared = "Carina.Driver/Sessions/TunerSession.cs";
-
-    public const string WhereItIsCalled = "Carina.Driver/Sessions/TunerSessionManager.cs";
+    public const string WhereItWasDeclared = "Carina.Driver/Sessions/TunerSession.cs";
 
     public static IReadOnlyList<SessionEndCaller> CallersThatMoveAnEndEarlier(string directory)
         => Directory
@@ -25,7 +23,7 @@ public static partial class SessionEndRules
 
     public static bool DeclaresTheMethod(string directory)
         => Declaration().IsMatch(
-            File.ReadAllText(Path.Combine(directory, WhereItIsDeclared.Replace('/', Path.DirectorySeparatorChar))));
+            File.ReadAllText(Path.Combine(directory, WhereItWasDeclared.Replace('/', Path.DirectorySeparatorChar))));
 
     private static bool IsBuildOutput(string path)
     {

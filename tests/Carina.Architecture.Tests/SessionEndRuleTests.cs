@@ -3,18 +3,16 @@ namespace Carina.Architecture.Tests;
 public sealed class SessionEndRuleTests
 {
     [Fact]
-    public void BRKD009_TheSeatSwapIsTheOnlyPlaceThatMovesASessionEndEarlierAndItDoesSoOnce()
+    public void BRKD009_NothingMovesASessionEndEarlierThanTheOneItWasGiven()
     {
-        Assert.Equal(
-            [new SessionEndCaller(SessionEndRules.WhereItIsCalled, 1)],
-            SessionEndRules.CallersThatMoveAnEndEarlier(RepositoryLayout.SourceDirectory));
+        Assert.Empty(SessionEndRules.CallersThatMoveAnEndEarlier(RepositoryLayout.SourceDirectory));
     }
 
     [Fact]
-    public void BRKD009_TheOneMethodThatMovesAnEndEarlierIsStillDeclaredWhereTheRuleExpects()
+    public void BRKD009_ThereIsNoLongerAWayToMoveASessionEndEarlierAtAll()
     {
-        Assert.True(
+        Assert.False(
             SessionEndRules.DeclaresTheMethod(RepositoryLayout.SourceDirectory),
-            $"{SessionEndRules.WhereItIsDeclared} no longer declares {SessionEndRules.TheOneWayAnEndMovesEarlier}, so the census above counts calls to nothing.");
+            $"{SessionEndRules.WhereItWasDeclared} declares {SessionEndRules.TheOneWayAnEndMovesEarlier} again. A session now keeps the window it asked for whoever else lets go of the tuner, so bringing the method back is a decision to be made rather than a change to slip in.");
     }
 }

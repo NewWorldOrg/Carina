@@ -680,11 +680,7 @@ public sealed class TunerSessionManager(
             );
         }
 
-        SubscriberKind kind = request.Purpose is SessionPurpose.Recording
-            ? SubscriberKind.Recording
-            : SubscriberKind.Piggyback;
-
-        if (!host.Broadcaster.TrySubscribe(kind, out SessionSubscription? seat))
+        if (!host.Broadcaster.TrySubscribe(SeatFor(request.Purpose), out SessionSubscription? seat))
         {
             pool.Leave(request.SessionId);
 
@@ -700,7 +696,7 @@ public sealed class TunerSessionManager(
             new PiggybackTunerDevice(host, seat),
             directory,
             now,
-            endsAt > host.EndsAt ? host.EndsAt : endsAt,
+            endsAt,
             holds: false,
             tuned: false,
             ridesOn: host,
@@ -757,6 +753,11 @@ public sealed class TunerSessionManager(
         );
     }
 
+    private static SubscriberKind SeatFor(SessionPurpose purpose) =>
+        purpose is SessionPurpose.Recording
+            ? SubscriberKind.Recording
+            : SubscriberKind.Piggyback;
+
     private bool Demote(TunerSession outgoing, TunerSession taking)
     {
         if (
@@ -775,7 +776,6 @@ public sealed class TunerSessionManager(
             return false;
         }
 
-        outgoing.EndsNoLaterThan(taking.EndsAt);
         pool.SeatTaken(taking.DeviceId, taking.SessionId);
 
         logger.LogInformation(
@@ -892,6 +892,7 @@ public sealed class TunerSessionManager(
             tunings[sessionId] = TuningKey.Of(request);
         }
 
+        session.Ending += PassTheTunerOn;
         session.Ended += Forget;
 
         try
@@ -944,6 +945,7 @@ public sealed class TunerSessionManager(
             new KeyValuePair<SessionId, TunerSession>(session.SessionId, session)
         );
         tunings.TryRemove(session.SessionId, out _);
+        session.Ending -= PassTheTunerOn;
         session.Ended -= Forget;
         pool.Leave(session.SessionId);
         LetGoOfTheRecording(claimed, session.SessionId);
@@ -1070,14 +1072,6 @@ public sealed class TunerSessionManager(
 
         DateTimeOffset endsAt = HeldNoFurtherThan(session, request.EndsAt, now);
 
-        if (session.RidesOn is { } host && endsAt > host.EndsAt)
-        {
-            return SessionExtension.Refused(
-                SessionExtendOutcome.NotAnExtension,
-                $"endsAt: '{sessionId}' reads the tuner through '{host.SessionId}', which stops at {host.EndsAt:O}, so it cannot be held open until {endsAt:O}."
-            );
-        }
-
         if (endsAt <= session.EndsAt)
         {
             return SessionExtension.Extended(session);
@@ -1164,6 +1158,85 @@ public sealed class TunerSessionManager(
         catch (Exception error) when (error is TimeoutException or OperationCanceledException)
         {
             return SessionStopOutcome.Stopping;
+        }
+    }
+
+    private void PassTheTunerOn(TunerSession leaving)
+    {
+        if (leaving.StopReason is SessionStopReason.DeviceFailed)
+        {
+            return;
+        }
+
+        if (pool.DeviceOf(leaving.DeviceId) is not { } tuner)
+        {
+            return;
+        }
+
+        foreach (SessionId candidate in pool.WhoElseIsReadingThrough(leaving.SessionId))
+        {
+            if (!IsReadingThrough(candidate, leaving, out TunerSession? next))
+            {
+                continue;
+            }
+
+            if (!pool.HandTheTunerOn(leaving.SessionId, candidate))
+            {
+                return;
+            }
+
+            if (
+                next.ReadFromInsteadOnceThisStreamEnds(new LeasedTunerDevice(tuner), null, null)
+            )
+            {
+                logger.LogInformation(
+                    "Session {SessionId} on {DeviceId} is ending, so {Successor} takes the tuner and everything else still on it reads the stream through that one from here on.",
+                    leaving.SessionId.Value,
+                    leaving.DeviceId,
+                    candidate.Value
+                );
+
+                TheRestReadThrough(next, leaving);
+            }
+
+            return;
+        }
+    }
+
+    private bool IsReadingThrough(
+        SessionId reader,
+        TunerSession host,
+        [NotNullWhen(true)] out TunerSession? session
+    ) =>
+        sessions.TryGetValue(reader, out session)
+        && session.State is SessionState.Active
+        && ReferenceEquals(session.RidesOn, host);
+
+    private void TheRestReadThrough(TunerSession holder, TunerSession leaving)
+    {
+        foreach (SessionId other in pool.WhoElseIsReadingThrough(holder.SessionId))
+        {
+            if (
+                !IsReadingThrough(other, leaving, out TunerSession? rider)
+                || !holder.Broadcaster.TrySubscribe(
+                    SeatFor(rider.Purpose),
+                    out SessionSubscription? seat
+                )
+            )
+            {
+                continue;
+            }
+
+            if (
+                !rider.ReadFromInsteadOnceThisStreamEnds(
+                    new PiggybackTunerDevice(holder, seat),
+                    holder,
+                    seat
+                )
+            )
+            {
+                holder.Broadcaster.Unsubscribe(seat);
+            }
         }
     }
 

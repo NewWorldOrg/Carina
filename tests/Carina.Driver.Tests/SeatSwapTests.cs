@@ -901,8 +901,6 @@ public sealed class SeatSwapTests : IDisposable
         var writers = new CountingRecordingWriterFactory();
         TunerSessionManager manager = Manager(tuners, writers);
 
-        var handedDown = new List<TunerSession>();
-
         for (int round = 0; round < 30; round++)
         {
             TunerSession watching = Started(
@@ -918,20 +916,16 @@ public sealed class SeatSwapTests : IDisposable
             Assert.Same(recording, watching.RidesOn);
             Assert.Equal(watching.DeviceId, recording.DeviceId);
 
-            handedDown.Add(watching);
-
-            StopAll(recording);
+            StopAll(watching, recording);
         }
 
         Assert.Equal(30, writers.Opened);
         Assert.Equal(1, tuners.Created);
         Assert.False(device.Disposed);
-
-        StopAll([.. handedDown]);
     }
 
     [Fact]
-    public void TheWatcherHandedDownIsHeldToTheWindowOfTheRecordingItRidesOn()
+    public void TheWatcherHandedDownKeepsTheWindowItAskedForPastTheRecording()
     {
         var hello = new DriverHello(DriverProtocol.Version, "instance", []);
         TunerSessionManager manager = Manager();
@@ -944,8 +938,9 @@ public sealed class SeatSwapTests : IDisposable
             Request("s-2", SessionPurpose.Recording) with { EndsAt = Start.AddMinutes(20) }
         );
 
-        Assert.Equal(Start.AddMinutes(20), watching.EndsAt);
-        Assert.Equal(Start.AddMinutes(20), SessionViews.Of(watching, hello).EndsAt);
+        Assert.Equal(Start.AddHours(1), watching.EndsAt);
+        Assert.Equal(Start.AddHours(1), SessionViews.Of(watching, hello).EndsAt);
+        Assert.Equal(Start.AddMinutes(20), recording.EndsAt);
 
         StopAll(recording, watching);
     }
@@ -1124,7 +1119,7 @@ public sealed class SeatSwapTests : IDisposable
     }
 
     [Fact]
-    public void ARecordingRidingOnAnotherStillOwnsTheFailureOfItsOwnRecording()
+    public void ARecordingRidingOnAnotherIsNotEndedByTheHostsOwnWriteFailure()
     {
         var writers = new OneBrittleRecordingWriterFactory("k-s-1");
         var diagnostics = new DiagnosticsStore(clock);
@@ -1147,26 +1142,21 @@ public sealed class SeatSwapTests : IDisposable
         writers.Brittle.FailFromHereOn();
 
         host.WaitForEnd(Deadlock);
-        rider.WaitForEnd(Deadlock);
 
         Assert.Equal(SessionStopReason.RecordingFailed, host.StopReason);
-        Assert.Equal(SessionState.Failed, rider.State);
-        Assert.Equal(SessionStopReason.RecordingFailed, rider.StopReason);
+
+        StopAll(rider);
+
+        Assert.Equal(SessionState.Stopped, rider.State);
+        Assert.Null(rider.FailureCause);
         Assert.DoesNotContain(
-            "quickly enough",
-            rider.FailureCause?.Message ?? string.Empty,
-            StringComparison.Ordinal
-        );
-        Assert.Contains(
             diagnostics.Snapshot(),
-            entry =>
-                entry.Reason is DiagnosticReason.RecordingWriteFailed
-                && entry.SessionId == rider.SessionId
+            entry => entry.SessionId == rider.SessionId
         );
     }
 
     [Fact]
-    public void TheWatcherHandedDownEndsWithTheRecordingAndIsNotCalledAFailure()
+    public void TheWatcherHandedDownTakesTheTunerBackWhenTheRecordingEnds()
     {
         TunerSessionManager manager = Manager(writers: new CountingRecordingWriterFactory());
         TunerSession watching = Started(
@@ -1178,18 +1168,84 @@ public sealed class SeatSwapTests : IDisposable
             Request("s-2", SessionPurpose.Recording) with { EndsAt = Start.AddMinutes(20) }
         );
 
-        Assert.Equal(Start.AddMinutes(20), watching.EndsAt);
+        Assert.Same(recording, watching.RidesOn);
+        Assert.Equal(Start.AddHours(1), watching.EndsAt);
 
         clock.Advance(TimeSpan.FromMinutes(21));
 
         recording.WaitForEnd(Deadlock);
-        watching.WaitForEnd(Deadlock);
 
         Assert.Equal(SessionState.Stopped, recording.State);
         Assert.Equal(SessionStopReason.EndTimeReached, recording.StopReason);
+
+        StopAll(watching);
+
         Assert.Equal(SessionState.Stopped, watching.State);
-        Assert.Equal(SessionStopReason.EndTimeReached, watching.StopReason);
+        Assert.Equal(SessionStopReason.Requested, watching.StopReason);
         Assert.Null(watching.FailureCause);
+    }
+
+    [Fact]
+    public void ASessionCutOffFromTheStreamItRodeTakesUpWhatItWasOfferedInstead()
+    {
+        using var host = new TunerSession(
+            SessionId.Parse("host"),
+            SessionPurpose.Live,
+            "adapter0",
+            new ScriptedTunerDevice(),
+            Start,
+            Start.AddHours(1),
+            clock
+        );
+
+        SessionSubscription seat = host.Broadcaster.Subscribe(SubscriberKind.Piggyback);
+        var replacement = new MarkedTunerDevice();
+
+        using TunerSession watching = Watching(new PiggybackTunerDevice(host, seat));
+
+        watching.Start();
+
+        Assert.True(watching.ReadFromInsteadOnceThisStreamEnds(replacement, null, null));
+
+        host.Broadcaster.Close(null, SessionStopReason.EndTimeReached);
+
+        replacement.AwaitParkedBefore(1);
+
+        Assert.Equal(SessionState.Active, watching.State);
+
+        StopAll(watching);
+
+        Assert.Equal(SessionState.Stopped, watching.State);
+        Assert.Null(watching.FailureCause);
+    }
+
+    [Fact]
+    public void ASessionCutOffFromTheStreamItRodeWithNothingOfferedEndsIncomplete()
+    {
+        using var host = new TunerSession(
+            SessionId.Parse("host"),
+            SessionPurpose.Live,
+            "adapter0",
+            new ScriptedTunerDevice(),
+            Start,
+            Start.AddHours(1),
+            clock
+        );
+
+        SessionSubscription seat = host.Broadcaster.Subscribe(SubscriberKind.Piggyback);
+
+        using TunerSession watching = Watching(new PiggybackTunerDevice(host, seat));
+
+        watching.Start();
+        host.Broadcaster.Close(null, SessionStopReason.Unspecified);
+        watching.WaitForEnd(Deadlock);
+
+        Assert.Equal(SessionState.Failed, watching.State);
+        Assert.Contains(
+            "incomplete",
+            watching.FailureCause?.Message ?? string.Empty,
+            StringComparison.Ordinal
+        );
     }
 
     private static byte[] Marked(byte mark)

@@ -2,6 +2,8 @@ namespace Carina.Architecture.Tests;
 
 public sealed class SessionEndRuleSelfCheckTests
 {
+    private const string TheSeatSwap = "Carina.Driver/Sessions/TunerSessionManager.cs";
+
     private const string Declaration = """
         public sealed class TunerSession
         {
@@ -32,14 +34,14 @@ public sealed class SessionEndRuleSelfCheckTests
     public void ASecondFileThatMovesAnEndEarlierIsReported()
     {
         using var tree = new SourceTree();
-        tree.Write(SessionEndRules.WhereItIsDeclared, Declaration);
-        tree.Write(SessionEndRules.WhereItIsCalled, SeatSwap);
+        tree.Write(SessionEndRules.WhereItWasDeclared, Declaration);
+        tree.Write(TheSeatSwap, SeatSwap);
         tree.Write("Carina.Driver/Ipc/DriverApi.cs", ShorteningEndpoint);
 
         Assert.Equal(
             [
                 new SessionEndCaller("Carina.Driver/Ipc/DriverApi.cs", 1),
-                new SessionEndCaller(SessionEndRules.WhereItIsCalled, 1),
+                new SessionEndCaller(TheSeatSwap, 1),
             ],
             SessionEndRules.CallersThatMoveAnEndEarlier(tree.Root));
     }
@@ -48,11 +50,11 @@ public sealed class SessionEndRuleSelfCheckTests
     public void ASecondCallInTheFileAllowedOneIsReportedAsTwo()
     {
         using var tree = new SourceTree();
-        tree.Write(SessionEndRules.WhereItIsDeclared, Declaration);
-        tree.Write(SessionEndRules.WhereItIsCalled, SeatSwap + "\n" + ShorteningEndpoint);
+        tree.Write(SessionEndRules.WhereItWasDeclared, Declaration);
+        tree.Write(TheSeatSwap, SeatSwap + "\n" + ShorteningEndpoint);
 
         Assert.Equal(
-            [new SessionEndCaller(SessionEndRules.WhereItIsCalled, 2)],
+            [new SessionEndCaller(TheSeatSwap, 2)],
             SessionEndRules.CallersThatMoveAnEndEarlier(tree.Root));
     }
 
@@ -60,7 +62,7 @@ public sealed class SessionEndRuleSelfCheckTests
     public void TheDeclarationItselfIsNotCountedAsACall()
     {
         using var tree = new SourceTree();
-        tree.Write(SessionEndRules.WhereItIsDeclared, Declaration);
+        tree.Write(SessionEndRules.WhereItWasDeclared, Declaration);
 
         Assert.Empty(SessionEndRules.CallersThatMoveAnEndEarlier(tree.Root));
         Assert.True(SessionEndRules.DeclaresTheMethod(tree.Root));
@@ -70,7 +72,7 @@ public sealed class SessionEndRuleSelfCheckTests
     public void ADeclarationThatWentAwayIsNoticed()
     {
         using var tree = new SourceTree();
-        tree.Write(SessionEndRules.WhereItIsDeclared, "public sealed class TunerSession;");
+        tree.Write(SessionEndRules.WhereItWasDeclared, "public sealed class TunerSession;");
 
         Assert.False(SessionEndRules.DeclaresTheMethod(tree.Root));
     }
@@ -79,7 +81,7 @@ public sealed class SessionEndRuleSelfCheckTests
     public void AShorteningSpeltWithoutTheMethodWalksStraightPast()
     {
         using var tree = new SourceTree();
-        tree.Write(SessionEndRules.WhereItIsDeclared, Declaration);
+        tree.Write(SessionEndRules.WhereItWasDeclared, Declaration);
         tree.Write(
             "Carina.Driver/Sessions/TunerSessionManager.cs",
             """

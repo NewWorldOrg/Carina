@@ -320,6 +320,78 @@ public sealed class TunerPoolTests
     }
 
     [Fact]
+    public void TheTunerPassesToWhoeverIsStillReadingThroughTheHolder()
+    {
+        TunerPool pool = Pool();
+
+        Take(pool, "s-1", SessionPurpose.Live);
+        pool.Acquire(Wanting("s-2", SessionPurpose.Live));
+
+        Assert.Equal(
+            [SessionId.Parse("s-2")],
+            pool.WhoElseIsReadingThrough(SessionId.Parse("s-1"))
+        );
+        Assert.True(pool.HandTheTunerOn(SessionId.Parse("s-1"), SessionId.Parse("s-2")));
+        Assert.Equal([SessionId.Parse("s-2")], pool.SinksOn("adapter0"));
+
+        PoolGrant third = pool.Acquire(Wanting("s-3", SessionPurpose.Live));
+
+        Assert.Equal(PoolVerdict.Shared, third.Verdict);
+        Assert.Equal(SessionId.Parse("s-2"), third.Holder);
+    }
+
+    [Fact]
+    public void TheMostImportantReaderIsTheOneOfferedTheTunerFirst()
+    {
+        TunerPool pool = Pool();
+
+        Take(pool, "s-1", SessionPurpose.Recording);
+        pool.Acquire(Wanting("s-2", SessionPurpose.Logo));
+        pool.Acquire(Wanting("s-3", SessionPurpose.Live));
+        pool.Acquire(Wanting("s-4", SessionPurpose.Survey));
+
+        Assert.Equal(
+            [SessionId.Parse("s-3"), SessionId.Parse("s-4"), SessionId.Parse("s-2")],
+            pool.WhoElseIsReadingThrough(SessionId.Parse("s-1"))
+        );
+    }
+
+    [Fact]
+    public void NobodyIsOfferedATunerBySomethingThatIsNotAnsweringForIt()
+    {
+        TunerPool pool = Pool();
+
+        Take(pool, "s-1", SessionPurpose.Live);
+        pool.Acquire(Wanting("s-2", SessionPurpose.Live));
+
+        Assert.Empty(pool.WhoElseIsReadingThrough(SessionId.Parse("s-2")));
+        Assert.False(pool.HandTheTunerOn(SessionId.Parse("s-2"), SessionId.Parse("s-1")));
+    }
+
+    [Fact]
+    public void ATunerIsNotPassedOnWhileTheSeatItWasTakenFromIsStillUnsettled()
+    {
+        TunerPool pool = Pool();
+
+        Take(pool, "s-1", SessionPurpose.Live);
+        pool.Acquire(Wanting("s-2", SessionPurpose.Recording));
+
+        Assert.Empty(pool.WhoElseIsReadingThrough(SessionId.Parse("s-2")));
+        Assert.False(pool.HandTheTunerOn(SessionId.Parse("s-2"), SessionId.Parse("s-1")));
+    }
+
+    [Fact]
+    public void ATunerIsOnlyPassedToSomethingThatIsAlreadyReadingThroughIt()
+    {
+        TunerPool pool = Pool();
+
+        Take(pool, "s-1", SessionPurpose.Live);
+
+        Assert.False(pool.HandTheTunerOn(SessionId.Parse("s-1"), SessionId.Parse("s-9")));
+        Assert.Equal([SessionId.Parse("s-1")], pool.SinksOn("adapter0"));
+    }
+
+    [Fact]
     public void TheTunerIsNobodysOnceTheRecordingThatTookTheSeatLeaves()
     {
         TunerPool pool = Pool();
