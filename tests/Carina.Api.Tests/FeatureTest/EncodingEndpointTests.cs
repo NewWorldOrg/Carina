@@ -5,6 +5,7 @@ using Carina.Contracts;
 using Carina.Domain.Encodings;
 using Carina.Domain.Machines;
 using Carina.Domain.Recordings;
+using Carina.Domain.Streaming;
 
 namespace Carina.Api.Tests.FeatureTest;
 
@@ -377,6 +378,57 @@ public sealed class EncodingEndpointTests
         JsonElement waits = items.Single(item => item.GetProperty("id").GetGuid() == waiting.Id.Value);
         Assert.Equal("queued", waits.GetProperty("status").GetString());
         Assert.Equal(JsonValueKind.Null, waits.GetProperty("quietForSeconds").ValueKind);
+    }
+
+    [Fact(DisplayName = "A job waiting because the card is making a picture for someone watching says so on the list, and a running one does not")]
+    public async Task AJobWaitingBecauseSomeoneIsWatchingSaysSoOnTheList()
+    {
+        await using var feature = new EncodingFeature(EncodeEncoder.Vaapi);
+        EncodeProfile profile = feature.Defined();
+        EncodeDestination destination = feature.Placed(profile);
+        EncodeJob running = feature.Queued(feature.Recorded(), profile, destination);
+        running.Start(EncodingFeature.Noon.AddMinutes(-5));
+        EncodeJob waiting = feature.Queued(feature.Recorded(), profile, destination);
+        using ITranscodeSeat watched = feature.Transcoders.Claim(TranscodePurpose.Live).Seat!;
+
+        (_, JsonElement body) = await feature.GetAsync("/api/encoding/jobs");
+        JsonElement[] items = [.. body.GetProperty("data").GetProperty("items").EnumerateArray()];
+
+        Assert.True(items.Single(item => item.GetProperty("id").GetGuid() == waiting.Id.Value)
+            .GetProperty("waitingForAViewer").GetBoolean());
+        Assert.False(items.Single(item => item.GetProperty("id").GetGuid() == running.Id.Value)
+            .GetProperty("waitingForAViewer").GetBoolean());
+    }
+
+    [Fact(DisplayName = "A job waiting with nobody watching is not said to be waiting for a viewer")]
+    public async Task AJobWaitingWithNobodyWatchingIsNotSaidToBeWaitingForAViewer()
+    {
+        await using var feature = new EncodingFeature(EncodeEncoder.Vaapi);
+        EncodeProfile profile = feature.Defined();
+        EncodeDestination destination = feature.Placed(profile);
+        EncodeJob waiting = feature.Queued(feature.Recorded(), profile, destination);
+
+        (_, JsonElement body) = await feature.GetAsync("/api/encoding/jobs");
+
+        Assert.False(body.GetProperty("data").GetProperty("items").EnumerateArray()
+            .Single(item => item.GetProperty("id").GetGuid() == waiting.Id.Value)
+            .GetProperty("waitingForAViewer").GetBoolean());
+    }
+
+    [Fact(DisplayName = "A job the processor will encode does not wait for a viewer, so the list never says it does")]
+    public async Task AJobTheProcessorWillEncodeDoesNotWaitForAViewer()
+    {
+        await using var feature = new EncodingFeature();
+        EncodeProfile profile = feature.Defined();
+        EncodeDestination destination = feature.Placed(profile);
+        EncodeJob waiting = feature.Queued(feature.Recorded(), profile, destination);
+        using ITranscodeSeat watched = feature.Transcoders.Claim(TranscodePurpose.Live).Seat!;
+
+        (_, JsonElement body) = await feature.GetAsync("/api/encoding/jobs");
+
+        Assert.False(body.GetProperty("data").GetProperty("items").EnumerateArray()
+            .Single(item => item.GetProperty("id").GetGuid() == waiting.Id.Value)
+            .GetProperty("waitingForAViewer").GetBoolean());
     }
 
     [Fact]

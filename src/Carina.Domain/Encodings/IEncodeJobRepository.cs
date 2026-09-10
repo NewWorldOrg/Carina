@@ -10,6 +10,11 @@ public enum ArtefactClaim
     TakenByAnother = 2,
 }
 
+/// <summary>
+/// How an attempt to start the next job ended. Four of these are the ledger's word on a claim.
+/// <see cref="AViewerHoldsTheCard"/> is the machine's own: the card was making a picture for
+/// someone watching, so the ledger was not asked at all.
+/// </summary>
 public enum EncodeClaimStanding
 {
     Claimed = 1,
@@ -19,6 +24,8 @@ public enum EncodeClaimStanding
     AnotherIsRunning = 3,
 
     TakenMeanwhile = 4,
+
+    AViewerHoldsTheCard = 5,
 }
 
 /// <summary>

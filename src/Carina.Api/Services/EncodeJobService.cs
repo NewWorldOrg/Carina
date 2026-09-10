@@ -13,9 +13,11 @@ public sealed record EncodeJobDraft(RecordingId RecordingId, EncodeProfileId? Pr
 
 /// <summary>
 /// A job as read at a moment: what the ledger holds, and what the reader works out from the time
-/// beside it — how long the job has gone without headway and whether that is a stall (BR-ED2-014).
+/// beside it — how long the job has gone without headway and whether that is a stall (BR-ED2-014),
+/// and, for a job still waiting, whether what holds it there is the card being used for someone
+/// watching rather than anything wrong with the job.
 /// </summary>
-public sealed record EncodeJobView(EncodeJob Job, TimeSpan? QuietFor, bool Stalled);
+public sealed record EncodeJobView(EncodeJob Job, TimeSpan? QuietFor, bool Stalled, bool WaitingForAViewer);
 
 /// <summary>
 /// Puts one recording in the queue by hand and calls one job off. One job is queued at a time, for
@@ -34,6 +36,7 @@ public sealed class EncodeJobService(
     IStrayProgrammes strays,
     EncodeScratchCleaner cleaner,
     EncodeSettings settings,
+    EncodeQueueTurn turn,
     IAppEventPublisher events,
     TimeProvider clock,
     ILogger<EncodeJobService> logger)
@@ -42,9 +45,10 @@ public sealed class EncodeJobService(
     {
         PaginatedList<EncodeJob> found = await jobs.ListAsync(query, cancellationToken);
         DateTime now = Now();
+        bool yielding = await turn.YieldsToAViewerAsync(cancellationToken);
 
         return ServiceResult<PaginatedList<EncodeJobView>>.Success(new PaginatedList<EncodeJobView>(
-            [.. found.Items.Select(job => Seen(job, now))],
+            [.. found.Items.Select(job => Seen(job, now, yielding))],
             found.Total,
             found.CurrentPage,
             found.PerPage));
@@ -123,7 +127,8 @@ public sealed class EncodeJobService(
 
         events.Signal(AppEventName.EncodeJobs);
 
-        return ServiceResult<EncodeJobView, EncodingFailure>.Success(Seen(queued, Now()));
+        return ServiceResult<EncodeJobView, EncodingFailure>.Success(
+            Seen(queued, Now(), await turn.YieldsToAViewerAsync(cancellationToken)));
     }
 
     public async Task<ServiceResult<EncodeJobView, EncodingFailure>> CancelAsync(EncodeJobId id, CancellationToken cancellationToken)
@@ -166,11 +171,16 @@ public sealed class EncodeJobService(
 
         await cleaner.ClearAsync(job, cancellationToken);
 
-        return ServiceResult<EncodeJobView, EncodingFailure>.Success(Seen(job, Now()));
+        return ServiceResult<EncodeJobView, EncodingFailure>.Success(
+            Seen(job, Now(), await turn.YieldsToAViewerAsync(cancellationToken)));
     }
 
-    private EncodeJobView Seen(EncodeJob job, DateTime now)
-        => new(job, job.QuietFor(now), job.IsStalled(now, settings.StalledAfter));
+    private EncodeJobView Seen(EncodeJob job, DateTime now, bool yielding)
+        => new(
+            job,
+            job.QuietFor(now),
+            job.IsStalled(now, settings.StalledAfter),
+            yielding && job.Status is EncodeJobStatus.Queued);
 
     private DateTime Now() => clock.GetUtcNow().UtcDateTime;
 

@@ -117,10 +117,12 @@ API はコンテナの 8080 番で待ち受け、ホストの 8081 番に公開�
 | `CARINA_ENCODES_DIR` | エンコードの成果物を書くホスト側のディレクトリ。未設定なら Docker のボリューム |
 | `CARINA_DRI` | 映像処理装置のディレクトリ(`/dev/dri`)。未設定なら何も渡さない |
 | `CARINA_DRI_VIDEO_GID` / `CARINA_DRI_RENDER_GID` | `card0` / `renderD128` の所有グループの番号 |
+| `CARINA_ENCODINGS_PREFER` | 録画をあとからエンコードするときの変換器(`Software` / `Vaapi`)。既定は `Software` |
 
 `task up` は起動のたびに `docker/dri-env.sh` でホストを見て、装置が在れば渡す。
-渡すことと使うことは別で、ハードウェアで変換させるなら `.env` に
-`CARINA_TRANSCODING_PREFER=Vaapi` と書く(`.env.example` に雛形がある)。
+渡すことと使うことは別で、ハードウェアで変換させるなら `.env` に書く(`.env.example` に雛形がある)。
+送りながら観るほうが `CARINA_TRANSCODING_PREFER=Vaapi`、あとからのエンコードが `CARINA_ENCODINGS_PREFER=Vaapi` で、
+装置は 1 つなので、後者は観ている人がいる間、次の仕事を始めずに待つ。
 
 **移行で録画を運ぶなら、`CARINA_RECORDINGS_DIR` を移行元と同じファイルシステムに置く。**
 ハードリンクで運ぶので、ファイルシステムをまたぐと 1 本も運べない。
