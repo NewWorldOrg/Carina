@@ -116,19 +116,26 @@ public sealed class TunerDeviceFactory : ITunerDeviceFactory
 
     private ITunerDevice Unscrambling(ITunerDevice opened)
     {
-        IDescrambler? descrambler = descramblers.Open();
-        if (descrambler is null)
+        if (!descramblers.Unscrambles)
         {
             return opened;
         }
 
+        IDescrambler? descrambler = descramblers.Open();
+        if (descrambler is null)
+        {
+            logger?.LogWarning(
+                "No card answered the reader as this tuner opened, so what it carries stays scrambled until one does; the card is asked for again while the tuner is read."
+            );
+        }
+
         try
         {
-            return new DescramblingTunerDevice(opened, descrambler, logger);
+            return new DescramblingTunerDevice(opened, descrambler, descramblers, time, logger);
         }
         catch
         {
-            descrambler.Dispose();
+            descrambler?.Dispose();
 
             throw;
         }
