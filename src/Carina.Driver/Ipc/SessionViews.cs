@@ -34,6 +34,7 @@ public static class SessionViews
             ],
             FirstFault = session.FirstFault?.Message,
             FailureCause = session.FailureCause?.Message,
+            FailureTitle = TuningFailureTitles.Of(session.FailureCause),
             Counters = session.Counters.Snapshot() with
             {
                 DiscardedBytes = session.DiscardedBytes,

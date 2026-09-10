@@ -342,6 +342,8 @@ public sealed record SessionSnapshot(
     }
 
     public string? RecordingId { get; init; }
+
+    public string? FailureTitle { get; init; }
 }
 
 public sealed record DriverProblem(string Title, IReadOnlyList<string> Problems)
