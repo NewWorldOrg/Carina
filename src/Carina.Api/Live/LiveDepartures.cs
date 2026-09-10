@@ -23,13 +23,22 @@ public static class LiveDepartures
                 "A wire ends in one of the ways named here."),
         };
 
+    /// <summary>
+    /// What a viewer is told the supply ended for when the supply itself named no reason.
+    /// </summary>
+    /// <remarks>
+    /// The four ways that are not the supply ending name nothing: a viewer that left is not owed an
+    /// explanation of its own leaving, a viewer that has stopped reading cannot be sent a frame at
+    /// all, and a viewer that said something the wire does not take is told so in the close itself
+    /// while the supply behind it goes on running.
+    /// </remarks>
     public static LiveSupplyEnd? Ending(LiveDeparture departure)
         => departure switch
         {
             LiveDeparture.SourceWentQuiet => LiveSupplyEnd.WentQuiet,
+            LiveDeparture.SourceEnded => LiveSupplyEnd.DriverLost,
+            LiveDeparture.SourceBroke => LiveSupplyEnd.DriverLost,
             LiveDeparture.ViewerLeft => null,
-            LiveDeparture.SourceEnded => null,
-            LiveDeparture.SourceBroke => null,
             LiveDeparture.ViewerStoppedReading => null,
             LiveDeparture.SaidSomethingUnknown => null,
             LiveDeparture.SaidMoreThanTheWireTakes => null,

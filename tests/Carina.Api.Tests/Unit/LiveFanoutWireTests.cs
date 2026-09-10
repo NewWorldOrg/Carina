@@ -37,7 +37,9 @@ public sealed class LiveFanoutWireTests
 
         Assert.Equal(LiveDeparture.SourceEnded, await promptCarrying);
         Assert.Equal(LiveDeparture.ViewerStoppedReading, await heldCarrying);
-        Assert.Equal(20, prompt.Sent.Count);
+        Assert.Equal(
+            Enumerable.Repeat((byte)LiveChannel.Picture, 20).Append((byte)LiveChannel.Control),
+            prompt.Sent.Select(message => message[0]));
         Assert.Equal(LiveBacklog.Empty, promptViewing.Backlog);
         Assert.InRange(heldViewing.Backlog.Dropped, 16L, 17L);
         Assert.Empty(held.Sent);
@@ -61,7 +63,9 @@ public sealed class LiveFanoutWireTests
         fanout.End();
 
         Assert.Equal(LiveDeparture.SourceEnded, await carrying);
-        Assert.Equal([0x00, 0x01], socket.Sent.Select(message => message[0]).ToArray());
+        Assert.Equal(
+            [(byte)LiveChannel.PictureHeader, (byte)LiveChannel.Picture, (byte)LiveChannel.Control],
+            socket.Sent.Select(message => message[0]).ToArray());
         Assert.Equal(2UL, LiveFrame.Read(socket.Sent[1]).Frame?.Pts.Value);
     }
 

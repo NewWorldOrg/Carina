@@ -129,7 +129,10 @@ public sealed class LiveWireSocketSilenceTests
         frames.Writer.Complete();
 
         Assert.Equal(LiveDeparture.SourceEnded, await carrying);
-        Assert.Equal(sent, socket.Sent.Count);
+        Assert.Equal(sent + 1, socket.Sent.Count);
+        Assert.Equal(
+            (byte)LiveChannel.Control,
+            socket.Sent[^1][0]);
     }
 
     private static void Started(LiveStartupRecord startup)
