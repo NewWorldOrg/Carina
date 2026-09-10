@@ -43,6 +43,8 @@ public sealed class Programme
 
     public AudioMode Audio { get; private set; }
 
+    public int Sounds { get; private set; }
+
     public ProgrammeSource Source { get; private set; }
 
     public DateTime UpdatedAt { get; private set; }
@@ -69,6 +71,7 @@ public sealed class Programme
             broadcast.Related,
             broadcast.HasSubtitles,
             broadcast.Audio,
+            broadcast.Sounds,
             broadcast.Source);
     }
 
@@ -86,6 +89,7 @@ public sealed class Programme
         IReadOnlyList<RelatedProgramme>? related = null,
         bool hasSubtitles = false,
         AudioMode audio = AudioMode.Undetermined,
+        int sounds = 0,
         ProgrammeSource source = ProgrammeSource.ScheduleBasic,
         long revision = 0,
         DateTime? lastHeardAt = null)
@@ -111,6 +115,7 @@ public sealed class Programme
             Related = related ?? [],
             HasSubtitles = hasSubtitles,
             Audio = audio,
+            Sounds = sounds,
             Source = source,
             UpdatedAt = UtcTimes.Required(updatedAt, nameof(updatedAt)),
             LastHeardAt = UtcTimes.Optional(lastHeardAt, nameof(lastHeardAt)),
@@ -157,6 +162,7 @@ public sealed class Programme
         IReadOnlyList<ProgrammeItem> items = Kept(Items, broadcast.Items);
         IReadOnlyList<RelatedProgramme> related = Kept(Related, broadcast.Related);
         AudioMode audio = Kept(Audio, broadcast.Audio);
+        int sounds = Kept(Sounds, broadcast.Sounds);
 
         if (TransportStreamId.Equals(broadcast.TransportStreamId)
             && StartsAt == startsAt
@@ -166,6 +172,7 @@ public sealed class Programme
             && IsShadow == broadcast.IsShadow
             && HasSubtitles == broadcast.HasSubtitles
             && Audio == audio
+            && Sounds == sounds
             && Source == broadcast.Source
             && Genres.SequenceEqual(genres)
             && Items.SequenceEqual(items)
@@ -185,6 +192,7 @@ public sealed class Programme
         Related = related;
         HasSubtitles = broadcast.HasSubtitles;
         Audio = audio;
+        Sounds = sounds;
         Source = broadcast.Source;
         UpdatedAt = at;
 
@@ -198,6 +206,8 @@ public sealed class Programme
 
     private static AudioMode Kept(AudioMode held, AudioMode arriving)
         => arriving is AudioMode.Undetermined ? held : arriving;
+
+    private static int Kept(int held, int arriving) => arriving == 0 ? held : arriving;
 
     private static IReadOnlyList<T> Kept<T>(IReadOnlyList<T> held, IReadOnlyList<T> arriving)
         => arriving.Count == 0 ? held : arriving;

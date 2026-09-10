@@ -90,6 +90,7 @@ public sealed class ProgrammeWriter(
             Related = seen.Related.Count > 0 ? seen.Related : arriving.Related,
             HasSubtitles = seen.HasSubtitles || arriving.HasSubtitles,
             Audio = seen.Audio is AudioMode.Undetermined ? arriving.Audio : seen.Audio,
+            Sounds = seen.Sounds == 0 ? arriving.Sounds : seen.Sounds,
             IsShadow = seen.IsShadow && arriving.IsShadow,
         };
     }
@@ -124,6 +125,7 @@ public sealed class ProgrammeWriter(
             Related = [.. Related(table.OriginalNetworkId, table.ServiceId, carried.EventId, groupings)],
             HasSubtitles = carried.DataContents.Any(content => content.CarriesCaptions),
             Audio = AnnouncedAudio.Of(carried.AudioComponents),
+            Sounds = AnnouncedAudio.Sounds(carried.AudioComponents),
             Source = Source(table),
         };
     }

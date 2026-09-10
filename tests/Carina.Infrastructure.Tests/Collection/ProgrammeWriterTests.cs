@@ -178,6 +178,69 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
     }
 
     [Fact]
+    public async Task ABroadcastCarriedOnTwoSoundsIsStoredCountingBothOfThem()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+
+        await Writer(context).WriteAsync(
+            [Table(network, 1, extra: [.. Sound(0x03), .. Sound(0x03, main: false)])],
+            [], Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        Programme? stored = await new ProgrammeRepository(reading).FindAsync(Id(network, 1), Cancel);
+
+        Assert.Equal(2, stored!.Sounds);
+        Assert.Equal(AudioMode.Stereo, stored.Audio);
+    }
+
+    [Fact]
+    public async Task ABroadcastCarriedOnOneSoundIsStoredCountingTheOne()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+
+        await Writer(context).WriteAsync([Table(network, 1, extra: Sound(0x03))], [], Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        Programme? stored = await new ProgrammeRepository(reading).FindAsync(Id(network, 1), Cancel);
+
+        Assert.Equal(1, stored!.Sounds);
+    }
+
+    [Fact]
+    public async Task ABroadcastThatAnnouncedNoSoundIsStoredCountingNone()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+
+        await Writer(context).WriteAsync([Table(network, 1)], [], Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        Programme? stored = await new ProgrammeRepository(reading).FindAsync(Id(network, 1), Cancel);
+
+        Assert.Equal(0, stored!.Sounds);
+    }
+
+    [Fact]
+    public async Task ATableThatSaysNothingAboutTheSoundDoesNotUnsayHowManyAnotherCounted()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        ProgrammeWriter writer = Writer(context);
+
+        await writer.WriteAsync(
+            [Table(network, 1, extra: [.. Sound(0x03), .. Sound(0x03, main: false)])],
+            [], Cancel);
+        await writer.WriteAsync([Table(network, 1, name: "つぎのばんぐみ")], [], Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        Programme? stored = await new ProgrammeRepository(reading).FindAsync(Id(network, 1), Cancel);
+
+        Assert.Equal(2, stored!.Sounds);
+    }
+
+    [Fact]
     public async Task TheModeAnnouncedInOneTableReachesAProgrammeSeenInSeveralOfThem()
     {
         int network = NextNetwork();
@@ -647,8 +710,8 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
         ];
     }
 
-    private static byte[] Sound(byte componentType)
-        => [0xC4, 0x09, 0xF2, componentType, 0x10, 0x0F, 0xFF, 0x6F, 0x6A, 0x70, 0x6E];
+    private static byte[] Sound(byte componentType, bool main = true)
+        => [0xC4, 0x09, 0xF2, componentType, 0x10, 0x0F, 0xFF, (byte)(main ? 0x6F : 0x2F), 0x6A, 0x70, 0x6E];
 
     private static byte[] Kanji(char letter)
     {

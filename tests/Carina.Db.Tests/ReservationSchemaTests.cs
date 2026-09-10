@@ -402,12 +402,12 @@ public sealed class ReservationSchemaTests(MigratedScratchDatabase database)
             $"""
             INSERT INTO programme (
                 network_id, service_id, event_id, transport_stream_id, start_at, end_at,
-                name, summary, is_shadow, genres, items, related, has_subtitles, audio, source,
-                updated_at)
+                name, summary, is_shadow, genres, items, related, has_subtitles, audio, sounds,
+                source, updated_at)
             VALUES (
                 {networkId}, 1024, {eventId}, 32736, {Airs}, {Ends},
                 'A programme', 'What it is about', false, '[]'::jsonb, '[]'::jsonb, '[]'::jsonb,
-                false, 'Undetermined', 'ScheduleBasic', {Now})
+                false, 'Undetermined', 0, 'ScheduleBasic', {Now})
             """);
 
     private static async Task<string?> Composite(NpgsqlConnection connection, int networkId, int eventId)

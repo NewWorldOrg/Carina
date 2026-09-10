@@ -71,8 +71,8 @@ public sealed class ProgrammeSearchNormalisationTests
         string summary,
         bool soundIsKept = true)
     {
-        string sound = soundIsKept ? " audio," : string.Empty;
-        string undetermined = soundIsKept ? " 'Undetermined'," : string.Empty;
+        string sound = soundIsKept ? " audio, sounds," : string.Empty;
+        string undetermined = soundIsKept ? " 'Undetermined', 0," : string.Empty;
 
         await using NpgsqlCommand command = connection.CreateCommand();
         command.CommandText = $"""

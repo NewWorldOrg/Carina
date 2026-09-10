@@ -14,6 +14,13 @@ public static class AnnouncedAudio
         return Mode(Main(announced)?.ComponentType);
     }
 
+    public static int Sounds(IReadOnlyList<AudioComponentDescription> announced)
+    {
+        ArgumentNullException.ThrowIfNull(announced);
+
+        return announced.Count(component => component.StreamContent == Sound);
+    }
+
     private static AudioComponentDescription? Main(IReadOnlyList<AudioComponentDescription> announced)
     {
         AudioComponentDescription? first = null;
