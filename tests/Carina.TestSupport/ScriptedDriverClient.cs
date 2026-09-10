@@ -20,6 +20,8 @@ public sealed record ChannelScript
 
     public string? FailureCause { get; init; }
 
+    public string? FailureTitle { get; init; }
+
     public DriverProblem? Refusal { get; init; }
 
     public DriverProblem? StreamRefusal { get; init; }
@@ -159,6 +161,7 @@ public sealed class ScriptedDriverClient : IDriverClient
                 {
                     InstanceId = InstanceId,
                     FailureCause = script.FailureCause,
+                    FailureTitle = script.FailureTitle,
                 }));
         }
     }

@@ -71,6 +71,31 @@ public sealed class StreamVisitorTests(RepositoryDatabase database)
         Assert.False(result.WorthWaitingOut);
     }
 
+    [Theory]
+    [InlineData(SessionRefusalTitles.NoLock, VisitOutcome.NoLock)]
+    [InlineData(SessionRefusalTitles.NoData, VisitOutcome.NoBytes)]
+    [InlineData(null, VisitOutcome.NoLock)]
+    public async Task ASessionHandedBackAlreadyFailedSaysWhichWayReceptionWentWrong(
+        string? title,
+        VisitOutcome outcome)
+    {
+        var driver = new ScriptedDriverClient();
+
+        driver.Script(
+            Channel,
+            new ChannelScript
+            {
+                State = SessionState.Failed,
+                FailureCause = "the tuner could not receive.",
+                FailureTitle = title,
+            });
+
+        await using CarinaDbContext context = database.Open();
+        VisitResult result = await Visitor(driver, context).VisitAsync(Channel, hurried: false, Cancel);
+
+        Assert.Equal(outcome, result.Outcome);
+    }
+
     [Fact]
     public async Task AChannelThatDoesNotLockIsNamedAsATuningFailure()
     {

@@ -88,6 +88,7 @@ public sealed class DriverLiveSupplyTests
     [InlineData(SessionRefusalTitles.NoDeviceFree, LiveRefusal.NoTunerFree)]
     [InlineData(SessionRefusalTitles.DeviceBusy, LiveRefusal.NoTunerFree)]
     [InlineData(SessionRefusalTitles.NoLock, LiveRefusal.WouldNotTune)]
+    [InlineData(SessionRefusalTitles.NoData, LiveRefusal.WouldNotTune)]
     [InlineData(SessionRefusalTitles.DeviceUnavailable, LiveRefusal.WouldNotTune)]
     [InlineData(SessionRefusalTitles.FaultedDevice, LiveRefusal.WouldNotTune)]
     [InlineData(SessionRefusalTitles.DisabledDevice, LiveRefusal.WouldNotTune)]
@@ -109,17 +110,21 @@ public sealed class DriverLiveSupplyTests
         Assert.Empty(driver.Opened);
     }
 
-    [Fact]
-    public async Task BrTd004ADriverThatSaysTheFrontendNeverLockedNamesThatOneOfTheFourOnTheRefusal()
+    [Theory]
+    [InlineData(SessionRefusalTitles.NoLock, TuneFailureKind.NoLock)]
+    [InlineData(SessionRefusalTitles.NoData, TuneFailureKind.NoData)]
+    public async Task BrTd004ADriverThatSaysReceptionFailedNamesWhichOfTheFourOnTheRefusal(
+        string title,
+        TuneFailureKind kind)
     {
         driver.RefusingToStart = new DriverProblem(
-            SessionRefusalTitles.NoLock,
-            ["The device 'adapter3' opened but the frontend did not lock: waited 5s."]);
+            title,
+            ["The device 'adapter3' could not receive: waited 5s."]);
 
         LiveSupplyStart refused = await Supply().OpenAsync(Network, Service, CancellationToken.None);
 
         Assert.Equal(LiveRefusal.WouldNotTune, refused.Refusal);
-        Assert.Equal(TuneFailureKind.NoLock, refused.Detail.TuneFailure);
+        Assert.Equal(kind, refused.Detail.TuneFailure);
     }
 
     [Theory]
@@ -139,11 +144,28 @@ public sealed class DriverLiveSupplyTests
         Assert.Null(refused.Detail.TuneFailure);
     }
 
-    [Fact]
-    public async Task BrTd004ASessionHandedBackAlreadyFailedIsUnclassifiedBecauseTheDriverOnlySendsItsWords()
+    [Theory]
+    [InlineData(SessionRefusalTitles.NoLock, TuneFailureKind.NoLock)]
+    [InlineData(SessionRefusalTitles.NoData, TuneFailureKind.NoData)]
+    public async Task BrTd004ASessionHandedBackAlreadyFailedStillSaysWhichOfTheFourItWas(
+        string title,
+        TuneFailureKind kind)
     {
         driver.StateOnStart = SessionState.Failed;
-        driver.FailureCauseOnStart = "the frontend did not lock.";
+        driver.FailureCauseOnStart = "the tuner could not receive.";
+        driver.FailureTitleOnStart = title;
+
+        LiveSupplyStart refused = await Supply().OpenAsync(Network, Service, CancellationToken.None);
+
+        Assert.Equal(LiveRefusal.WouldNotTune, refused.Refusal);
+        Assert.Equal(kind, refused.Detail.TuneFailure);
+    }
+
+    [Fact]
+    public async Task BrTd004ASessionThatFailedWithoutNamingTheReasonIsLeftUnclassified()
+    {
+        driver.StateOnStart = SessionState.Failed;
+        driver.FailureCauseOnStart = "the reader went away.";
 
         LiveSupplyStart refused = await Supply().OpenAsync(Network, Service, CancellationToken.None);
 

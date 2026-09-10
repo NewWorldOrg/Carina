@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 
 using Carina.Contracts;
 using Carina.Driver.Configuration;
+using Carina.Driver.Ipc;
 using Carina.Driver.Sessions;
 using Carina.Driver.Tuning;
 using Carina.Driver.Tuning.Dvb;
@@ -30,6 +31,21 @@ public sealed class TuneFailureClassificationTests
 
         Assert.Equal(SessionRefusal.NoLock, start.Refusal);
         Assert.Contains("did not lock", start.Detail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AFrontendThatLockedAndDeliveredNothingIsAnsweredAsThatChannelsOutcome()
+    {
+        TunerSessionManager manager = Manager(new ThrowingDeviceFactory(() =>
+            DvbFailure.LockedWithoutData(
+                "/dev/dvb/adapter0/dvr0: the frontend is still locked and no transport stream"
+                + " bytes arrived within 5 seconds."
+            )));
+
+        SessionStart start = manager.Begin(Request("scan-14", 14));
+
+        Assert.Equal(SessionRefusal.NoData, start.Refusal);
+        Assert.Contains("delivered nothing", start.Detail, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -64,6 +80,11 @@ public sealed class TuneFailureClassificationTests
         Assert.Equal(SessionState.Failed, silent.State);
         Assert.NotEqual(SessionStopReason.DeviceFailed, silent.StopReason);
         Assert.False(manager.IsFaulted("adapter0", out _));
+
+        Assert.Equal(
+            SessionRefusalTitles.NoData,
+            SessionViews.Of(silent, new DriverHello(DriverProtocol.Version, "instance-1", [])).FailureTitle
+        );
 
         SessionStart second = manager.Begin(Request("scan-15", 15));
 

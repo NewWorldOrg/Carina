@@ -67,7 +67,11 @@ public sealed class StreamVisitor(
             if (session.State is SessionState.Failed)
             {
                 return new VisitResult(
-                    VisitOutcome.NoLock,
+                    SessionRefusalReading.TuneFailureIn(session) switch
+                    {
+                        TuneFailureKind.NoData => VisitOutcome.NoBytes,
+                        _ => VisitOutcome.NoLock,
+                    },
                     new ProgrammesWritten(0, 0, 0),
                     session.FailureCause ?? session.FirstFault ?? "The driver could not tune this channel.");
             }

@@ -21,6 +21,7 @@ public enum SessionRefusal
     DeviceUnavailable,
     CapabilityMissing,
     NoLock,
+    NoData,
 }
 
 public enum SessionExtendOutcome

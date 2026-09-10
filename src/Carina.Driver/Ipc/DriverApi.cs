@@ -745,6 +745,7 @@ public static class DriverApi
                 SessionRefusalTitles.DeviceUnavailable
             ),
             SessionRefusal.NoLock => (StatusCodes.Status409Conflict, SessionRefusalTitles.NoLock),
+            SessionRefusal.NoData => (StatusCodes.Status409Conflict, SessionRefusalTitles.NoData),
             _ => (StatusCodes.Status503ServiceUnavailable, SessionRefusalTitles.Refused),
         };
 }

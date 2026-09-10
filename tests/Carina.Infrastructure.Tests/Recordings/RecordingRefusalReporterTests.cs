@@ -21,18 +21,22 @@ public sealed class RecordingRefusalReporterTests
             SessionRefusalTitles.DuplicateSession,
         ];
 
-    [Fact]
-    public async Task ATunerThatWouldNotLockIsWrittenDownAsOneOfTheFourAndToldToTheRotation()
+    [Theory]
+    [InlineData(SessionRefusalTitles.NoLock, TuneFailureKind.NoLock)]
+    [InlineData(SessionRefusalTitles.NoData, TuneFailureKind.NoData)]
+    public async Task ATunerThatCouldNotReceiveIsWrittenDownAsOneOfTheFourAndToldToTheRotation(
+        string title,
+        TuneFailureKind kind)
     {
         RecordingTick due = Due(1);
         RefusalLedger ledger = new RefusalLedger().Knowing(due);
 
-        await RunAsync(due, ledger, SessionRefusalTitles.NoLock);
+        await RunAsync(due, ledger, title);
 
         ReservationOutcome written = Assert.Single(ledger.Outcomes.Held);
 
         Assert.Equal(ReservationOutcomeKind.TuneFailure, written.Kind);
-        Assert.Equal(TuneFailureKind.NoLock, written.TuneFailure);
+        Assert.Equal(kind, written.TuneFailure);
         Assert.Equal([RecordingFault.TuneFailed], written.Faults);
         Assert.Null(written.RecordingOutcome);
         Assert.Equal(due.Id, written.ReservationId);

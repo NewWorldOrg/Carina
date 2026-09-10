@@ -40,6 +40,8 @@ public static class SessionRefusalTitles
 
     public const string NoLock = "noLock";
 
+    public const string NoData = "noData";
+
     public const string RecordingInProgress = "recordingInProgress";
 
     public const string FileLeftBehind = "fileLeftBehind";

@@ -3,6 +3,7 @@ using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.DriverStatus;
 using Carina.Domain.Recordings;
+using Carina.Infrastructure.Collection;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -289,6 +290,7 @@ public sealed class RecordingStreamSupervisor(
         CancellationToken cancellationToken)
     {
         RecordingFault fault = BrokeItOff(session);
+        TuneFailureKind? tuneFailure = SessionRefusalReading.TuneFailureIn(session);
         bool over = false;
 
         bool broke = await ApplyAsync(
@@ -297,7 +299,18 @@ public sealed class RecordingStreamSupervisor(
             {
                 over = ItIsOver(loaded, now);
 
-                return !over && OpenABreak(loaded, fault, now);
+                if (over || !OpenABreak(loaded, fault, now))
+                {
+                    return false;
+                }
+
+                if (tuneFailure is not null && session is not null)
+                {
+                    Adopt(loaded, session.DeviceId);
+                    loaded.Note(new OutcomeDetail(fault, tuneFailure, string.Empty, now));
+                }
+
+                return true;
             },
             tally,
             cancellationToken);
@@ -503,7 +516,9 @@ public sealed class RecordingStreamSupervisor(
         {
             SessionStopReason.Preempted => RecordingFault.TunerContended,
             SessionStopReason.DrainCapReached => RecordingFault.DrainGraceExpired,
-            _ => RecordingFault.DriverLost,
+            _ => SessionRefusalReading.TuneFailureIn(session) is null
+                ? RecordingFault.DriverLost
+                : RecordingFault.TuneFailed,
         };
 
     private static bool OpenABreak(Recording recording, RecordingFault fault, DateTime at)

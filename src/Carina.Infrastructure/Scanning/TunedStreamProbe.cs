@@ -4,6 +4,7 @@ using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.Scans;
+using Carina.Infrastructure.Collection;
 
 namespace Carina.Infrastructure.Scanning;
 
@@ -50,7 +51,11 @@ public sealed class TunedStreamProbe(IDriverClient driver, ScanSettings settings
             if (session.State is SessionState.Failed)
             {
                 return StreamProbe.Attempted(
-                    ScanAttemptOutcome.NoLock,
+                    SessionRefusalReading.TuneFailureIn(session) switch
+                    {
+                        TuneFailureKind.NoData => ScanAttemptOutcome.LockedWithoutData,
+                        _ => ScanAttemptOutcome.NoLock,
+                    },
                     session.FailureCause ?? session.FirstFault ?? "The driver could not tune this channel.");
             }
 
