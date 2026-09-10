@@ -135,8 +135,9 @@ public sealed class FfmpegLiveInvocationTests
     [MemberData(nameof(EveryProfileOnEveryEncoder))]
     public void EveryProfileAsksForSomethingOfItsOwn(LiveProfile profile, LiveEncoder encoder)
     {
-        IEnumerable<LiveProfile> others = LiveProfile.All.Where(other => !ReferenceEquals(other, profile));
+        IReadOnlyList<LiveProfile> others = [.. LiveProfile.All.Where(other => !ReferenceEquals(other, profile))];
 
+        Assert.NotEmpty(others);
         Assert.All(
             others,
             other => Assert.NotEqual(
@@ -320,6 +321,7 @@ public sealed class FfmpegLiveInvocationTests
     {
         string[] mapped = Mapped([.. FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, CaptionOutlet.None)]);
 
+        Assert.NotEmpty(mapped);
         Assert.All(mapped, map => Assert.StartsWith("p:1040:", map, StringComparison.Ordinal));
         Assert.DoesNotContain(mapped, map => map.StartsWith("0:", StringComparison.Ordinal));
     }

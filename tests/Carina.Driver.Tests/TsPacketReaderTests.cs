@@ -139,6 +139,7 @@ public sealed class TsPacketReaderTests
 
         IReadOnlyList<TsPacket> packets = reader.Read(Concat(Packet(0x100, 0), Packet(0x100, 1)));
 
+        Assert.Equal(2, packets.Count);
         Assert.All(packets, packet => Assert.False(packet.Provisional));
     }
 
