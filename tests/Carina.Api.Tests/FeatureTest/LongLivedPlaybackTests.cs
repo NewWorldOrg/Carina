@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 
 using Carina.Domain.Auth;
 using Carina.Domain.Channels;
+using Carina.Domain.Encodings;
 using Carina.Domain.Playback;
 using Carina.Domain.Recordings;
 using Carina.Domain.Streaming;
@@ -259,6 +260,8 @@ public sealed class LongLivedPlaybackTests
             services.RemoveAll<IPlaybackFileStore>();
             services.RemoveAll<IOnTheFlyPlayer>();
             services.AddSingleton<IRecordingDirectory>(recordings);
+            services.AddSingleton<IEncodeJobRepository>(new HeldEncodeJobs());
+            services.AddSingleton<IEncodeProfileRepository>(new HeldEncodeProfiles());
             services.AddSingleton(files);
             services.AddSingleton(player);
         });

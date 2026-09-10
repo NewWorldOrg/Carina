@@ -1,5 +1,6 @@
 using Carina.Api.Common;
 using Carina.Domain.Channels;
+using Carina.Domain.Encodings;
 using Carina.Domain.Playback;
 using Carina.Domain.Recordings;
 
@@ -20,7 +21,12 @@ public enum PlaybackFailure
 
 public sealed record PlaybackOffer(PlaybackPlan Plan, PlaybackFile Handover, ServiceId Service);
 
-public sealed class PlaybackService(IRecordingDirectory recordings, IPlaybackFileStore files)
+public sealed class PlaybackService(
+    IRecordingDirectory recordings,
+    IPlaybackFileStore files,
+    IEncodeJobRepository jobs,
+    IEncodeProfileRepository profiles,
+    ILogger<PlaybackService> logger)
 {
     public async Task<ServiceResult<PlaybackOffer, PlaybackFailure>> OfferAsync(
         RecordingId id,
@@ -37,7 +43,16 @@ public sealed class PlaybackService(IRecordingDirectory recordings, IPlaybackFil
 
         PlaybackFileSearch onDisk = files.Find(recording.OutputRoot, recording.FileName);
         PlaybackPlan plan = PlaybackPlan.For(
-            PlaybackSubject.NothingHasBeenEncodedYet(recording.Outcome, onDisk));
+            new PlaybackSubject(recording.Outcome, onDisk, await EncodedAsync(id, cancellationToken)));
+
+        if (plan.FellBack is { } fellBack)
+        {
+            logger.LogWarning(
+                "The ledger names an artefact of recording {Recording} that cannot be handed over ({Why}), "
+                + "so it is transcoded while playing instead.",
+                id.Wire,
+                fellBack);
+        }
 
         return plan.Handover is { } handover
             ? ServiceResult<PlaybackOffer, PlaybackFailure>.Success(new PlaybackOffer(plan, handover, recording.ServiceId))
@@ -62,6 +77,47 @@ public sealed class PlaybackService(IRecordingDirectory recordings, IPlaybackFil
             : ServiceResult<Stream, PlaybackFailure>.Failure(
                 "The file of this recording went out of reach while it was being read.",
                 PlaybackFailure.FileOutOfReach);
+    }
+
+    private async Task<IReadOnlyList<PlaybackFileSearch>> EncodedAsync(
+        RecordingId id,
+        CancellationToken cancellationToken)
+    {
+        EncodeJob[] made =
+        [
+            .. (await jobs.ListForRecordingAsync(id, cancellationToken))
+                .Where(job => job.Status is EncodeJobStatus.Completed && job.ArtefactName is not null)
+                .OrderByDescending(job => job.EndedAt)
+                .ThenByDescending(job => job.QueuedAt),
+        ];
+
+        if (made.Length is 0)
+        {
+            return [];
+        }
+
+        IReadOnlyList<EncodeProfile> defined = await profiles.ListAsync(cancellationToken);
+        List<PlaybackFileSearch> browserReady = [];
+
+        foreach (EncodeJob job in made)
+        {
+            EncodeProfile? asked = defined.FirstOrDefault(profile => profile.Id.Equals(job.ProfileId));
+
+            if (asked is null || !EncodeShapes.EveryBrowserPlays(asked.Codec))
+            {
+                logger.LogInformation(
+                    "The artefact job {Job} made of recording {Recording} is not one a browser plays as it is, "
+                    + "so it is left out of what playback is offered.",
+                    job.Id.Wire,
+                    id.Wire);
+
+                continue;
+            }
+
+            browserReady.Add(files.Find(job.OutputRoot, new RecordingFileName(job.ArtefactName!.Value)));
+        }
+
+        return browserReady;
     }
 
     private static ServiceResult<PlaybackOffer, PlaybackFailure> Nothing(RecordingId id, PlaybackRefusal refusal)

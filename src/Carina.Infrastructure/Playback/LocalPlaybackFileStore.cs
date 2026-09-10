@@ -1,3 +1,4 @@
+using Carina.Domain.Encodings;
 using Carina.Domain.Integrity;
 using Carina.Domain.Playback;
 using Carina.Domain.Recordings;
@@ -9,6 +10,7 @@ namespace Carina.Infrastructure.Playback;
 
 public sealed class LocalPlaybackFileStore(
     IntegritySettings mounts,
+    EncodeSettings encodes,
     ILogger<LocalPlaybackFileStore> logger) : IPlaybackFileStore
 {
     public PlaybackFileSearch Find(OutputRoot root, RecordingFileName fileName)
@@ -85,7 +87,9 @@ public sealed class LocalPlaybackFileStore(
 
     private string? Where(OutputRoot root, RecordingFileName fileName)
     {
-        StorageRootPath? mounted = mounts.OutputRoots.FirstOrDefault(candidate => candidate.Root.Equals(root));
+        StorageRootPath? mounted = mounts.OutputRoots
+            .Concat(encodes.OutputRoots)
+            .FirstOrDefault(candidate => candidate.Root.Equals(root));
 
         if (mounted is not null)
         {

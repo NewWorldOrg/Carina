@@ -32,6 +32,8 @@ public static class PlaybackHeaders
 
     public const string Refusal = "Carina-Playback-Refusal";
 
+    public const string FellBack = "Carina-Playback-Fell-Back";
+
     public static readonly IReadOnlyList<string> Every =
     [
         Standing,
@@ -46,6 +48,7 @@ public static class PlaybackHeaders
         AtOnce,
         AttributesWereMeasured,
         Refusal,
+        FellBack,
     ];
 
     public static void Say(HttpResponse response, PlaybackPlan plan)
@@ -60,6 +63,11 @@ public static class PlaybackHeaders
         if (plan.Seeking is { } seeking)
         {
             response.Headers[Seeking] = Named(seeking);
+        }
+
+        if (plan.FellBack is { } fellBack)
+        {
+            response.Headers[FellBack] = Named(fellBack);
         }
     }
 

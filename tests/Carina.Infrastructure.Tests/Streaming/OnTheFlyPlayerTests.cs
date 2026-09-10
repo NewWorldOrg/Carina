@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Runtime.Versioning;
 
 using Carina.Domain.Channels;
+using Carina.Domain.Encodings;
 using Carina.Domain.Integrity;
 using Carina.Domain.Playback;
 using Carina.Domain.Recordings;
@@ -470,6 +471,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
     private LocalPlaybackFileStore Store()
         => new(
             new IntegritySettings { OutputRoots = [new StorageRootPath(Root, standIns.Room)] },
+            new EncodeSettings(),
             NullLogger<LocalPlaybackFileStore>.Instance);
 
     private void Recorded(int bytes)

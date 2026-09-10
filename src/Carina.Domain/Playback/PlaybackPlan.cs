@@ -6,12 +6,14 @@ public sealed record PlaybackPlan
         PlaybackRoute route,
         PlaybackStanding standing,
         PlaybackFile? handover,
-        PlaybackRefusal? refusal)
+        PlaybackRefusal? refusal,
+        PlaybackFallback? fellBack)
     {
         Route = route;
         Standing = standing;
         Handover = handover;
         Refusal = refusal;
+        FellBack = fellBack;
     }
 
     public PlaybackRoute Route { get; }
@@ -21,6 +23,8 @@ public sealed record PlaybackPlan
     public PlaybackFile? Handover { get; }
 
     public PlaybackRefusal? Refusal { get; }
+
+    public PlaybackFallback? FellBack { get; }
 
     public bool PlaysAtAll => Route is not PlaybackRoute.Nothing;
 
@@ -38,12 +42,28 @@ public sealed record PlaybackPlan
 
         if (subject.Outcome is null)
         {
-            return Refused(standing, PlaybackRefusal.StillBeingWritten);
+            return Refused(standing, PlaybackRefusal.StillBeingWritten, null);
         }
 
-        if (subject.BrowserReady.FirstOrDefault(file => file.HoldsAnything) is { } encoded)
+        PlaybackFallback? fellBack = null;
+
+        foreach (PlaybackFileSearch encoded in subject.BrowserReady)
         {
-            return new PlaybackPlan(PlaybackRoute.Direct, standing, encoded, null);
+            if (encoded.Found is not { } artefact)
+            {
+                fellBack ??= encoded.Absence is PlaybackFileAbsence.Gone
+                    ? PlaybackFallback.EncodedFileGone
+                    : PlaybackFallback.EncodedFileOutOfReach;
+
+                continue;
+            }
+
+            if (artefact.HoldsAnything)
+            {
+                return new PlaybackPlan(PlaybackRoute.Direct, standing, artefact, null, null);
+            }
+
+            fellBack ??= PlaybackFallback.EncodedFileHoldsNothing;
         }
 
         if (subject.AsRecorded.Found is not { } recorded)
@@ -52,14 +72,18 @@ public sealed record PlaybackPlan
                 standing,
                 subject.AsRecorded.Absence is PlaybackFileAbsence.Gone
                     ? PlaybackRefusal.FileGone
-                    : PlaybackRefusal.FileOutOfReach);
+                    : PlaybackRefusal.FileOutOfReach,
+                fellBack);
         }
 
         return recorded.HoldsAnything
-            ? new PlaybackPlan(PlaybackRoute.OnTheFly, standing, recorded, null)
-            : Refused(standing, PlaybackRefusal.NothingWasWritten);
+            ? new PlaybackPlan(PlaybackRoute.OnTheFly, standing, recorded, null, fellBack)
+            : Refused(standing, PlaybackRefusal.NothingWasWritten, fellBack);
     }
 
-    private static PlaybackPlan Refused(PlaybackStanding standing, PlaybackRefusal refusal)
-        => new(PlaybackRoute.Nothing, standing, null, refusal);
+    private static PlaybackPlan Refused(
+        PlaybackStanding standing,
+        PlaybackRefusal refusal,
+        PlaybackFallback? fellBack)
+        => new(PlaybackRoute.Nothing, standing, null, refusal, fellBack);
 }

@@ -1,3 +1,4 @@
+using Carina.Domain.Encodings;
 using Carina.Domain.Integrity;
 using Carina.Domain.Playback;
 using Carina.Domain.Recordings;
@@ -72,6 +73,38 @@ public sealed class LocalPlaybackFileStoreTests : IDisposable
 
         Assert.Null(search.Found);
         Assert.Equal(PlaybackFileAbsence.OutOfReach, search.Absence);
+    }
+
+    [Fact]
+    public void AFileUnderARootHeldForWritingArtefactsIsFoundAsWellAsOneUnderARecordingRoot()
+    {
+        var shelf = new OutputRoot("shelf");
+        var artefact = new RecordingFileName("a1b2c3.d4e5f6.mp4");
+        File.WriteAllBytes(Path.Combine(mounted.FullName, artefact.Value), new byte[900]);
+
+        LocalPlaybackFileStore store = Store(
+            new IntegritySettings(),
+            new EncodeSettings { OutputRoots = [new StorageRootPath(shelf, mounted.FullName)] });
+
+        PlaybackFileSearch search = store.Find(shelf, artefact);
+
+        Assert.Null(search.Absence);
+        Assert.Equal(900, search.Found!.Bytes);
+        Assert.Equal(Path.Combine(mounted.FullName, artefact.Value), store.SourceOf(search.Found)!.Value);
+    }
+
+    [Fact]
+    public void AnArtefactTakenOffTheDiskUnderARootHeldForWritingIsGoneRatherThanOutOfReach()
+    {
+        var shelf = new OutputRoot("shelf");
+
+        PlaybackFileSearch search = Store(
+                new IntegritySettings(),
+                new EncodeSettings { OutputRoots = [new StorageRootPath(shelf, mounted.FullName)] })
+            .Find(shelf, new RecordingFileName("a1b2c3.d4e5f6.mp4"));
+
+        Assert.Null(search.Found);
+        Assert.Equal(PlaybackFileAbsence.Gone, search.Absence);
     }
 
     [Fact]
@@ -181,7 +214,10 @@ public sealed class LocalPlaybackFileStoreTests : IDisposable
     });
 
     private static LocalPlaybackFileStore Store(IntegritySettings mounts)
-        => new(mounts, NullLogger<LocalPlaybackFileStore>.Instance);
+        => Store(mounts, new EncodeSettings());
+
+    private static LocalPlaybackFileStore Store(IntegritySettings mounts, EncodeSettings encodes)
+        => new(mounts, encodes, NullLogger<LocalPlaybackFileStore>.Instance);
 
     private byte[] Write(int count)
     {

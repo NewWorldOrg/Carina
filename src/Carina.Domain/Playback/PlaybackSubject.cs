@@ -7,7 +7,7 @@ public sealed record PlaybackSubject
     public PlaybackSubject(
         RecordingOutcome? outcome,
         PlaybackFileSearch asRecorded,
-        IEnumerable<PlaybackFile> browserReady)
+        IEnumerable<PlaybackFileSearch> browserReady)
     {
         ArgumentNullException.ThrowIfNull(asRecorded);
         ArgumentNullException.ThrowIfNull(browserReady);
@@ -29,7 +29,7 @@ public sealed record PlaybackSubject
 
     public PlaybackFileSearch AsRecorded { get; }
 
-    public IReadOnlyList<PlaybackFile> BrowserReady { get; }
+    public IReadOnlyList<PlaybackFileSearch> BrowserReady { get; }
 
     public static PlaybackSubject NothingHasBeenEncodedYet(RecordingOutcome? outcome, PlaybackFileSearch asRecorded)
         => new(outcome, asRecorded, []);
