@@ -29,7 +29,7 @@ public sealed record IntegritySettings
 {
     public TimeSpan BeforeFirstSweep { get; init; } = TimeSpan.FromMinutes(5);
 
-    public TimeSpan BetweenSweeps { get; init; } = TimeSpan.FromHours(6);
+    public TimeSpan BetweenSweeps { get; init; } = TimeSpan.FromDays(1);
 
     public TimeSpan BetweenManualSweeps { get; init; } = TimeSpan.FromMinutes(5);
 

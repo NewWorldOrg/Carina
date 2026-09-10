@@ -95,6 +95,26 @@ public sealed class IntegritySchemaTests(MigratedScratchDatabase database)
     }
 
     [Fact]
+    public async Task TheTableTakesTheseFiveClassesAndNoOthers()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        Assert.Equal(
+            ["EmptyThoughComplete", "FileEmpty", "FileMissing", "NoLedgerRow", "SizeDisagrees"],
+            await ClassesTakenAsync(connection));
+    }
+
+    [Fact]
+    public async Task TheClassesTheTableTakesAreTheOnesTheApplicationCanNameAndNoOthers()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        Assert.Equal(
+            Enum.GetNames<IntegrityFault>().Order(StringComparer.Ordinal).ToArray(),
+            await ClassesTakenAsync(connection));
+    }
+
+    [Fact]
     public async Task TheIndexOverChecksReadsWhenEachOneFinished()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -388,6 +408,18 @@ public sealed class IntegritySchemaTests(MigratedScratchDatabase database)
             connection);
 
         return await ReadAllAsync(reading);
+    }
+
+    private static async Task<IReadOnlyList<string>> ClassesTakenAsync(NpgsqlConnection connection)
+    {
+        await using var reading = new NpgsqlCommand(
+            "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
+            + "WHERE conrelid = 'integrity_finding'::regclass AND conname = 'ck_integrity_finding_fault'",
+            connection);
+
+        string written = (string)(await reading.ExecuteScalarAsync())!;
+
+        return [.. written.Split('\'').Where((_, at) => at % 2 is 1).Order(StringComparer.Ordinal)];
     }
 
     private static async Task<IReadOnlyList<string>> ConstraintsAsync(NpgsqlConnection connection, string table)
