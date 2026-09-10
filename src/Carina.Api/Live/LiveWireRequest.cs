@@ -15,9 +15,13 @@ public static class LiveWireRequest
 
     public const string Profile = "profile";
 
+    public const string Sound = "sound";
+
     public static readonly string TheKeyThereIs =
         $"A wire is asked for by `{Network}` and `{Service}` as whole numbers and `{Profile}` as one of "
-        + $"{string.Join(", ", LiveProfile.All.Select(profile => profile.Name))}, each said once.";
+        + $"{string.Join(", ", LiveProfile.All.Select(profile => profile.Name))}, each said once. "
+        + $"`{Sound}` is left out for the main sound, or said once as one of "
+        + $"{string.Join(", ", SoundTracks.Names)}.";
 
     public static LiveSessionKey? KeyOf(IQueryCollection query)
     {
@@ -26,13 +30,22 @@ public static class LiveWireRequest
         if (!Numbered(query[Network], NetworkId.MinValue, NetworkId.MaxValue, out int network)
             || !Numbered(query[Service], ServiceId.MinValue, ServiceId.MaxValue, out int service)
             || query[Profile] is not { Count: 1 } named
-            || LiveProfile.Find(named[0]) is not { } profile)
+            || LiveProfile.Find(named[0]) is not { } profile
+            || Carried(query[Sound]) is not { } sound)
         {
             return null;
         }
 
-        return new LiveSessionKey(new NetworkId(network), new ServiceId(service), profile);
+        return new LiveSessionKey(new NetworkId(network), new ServiceId(service), profile, sound);
     }
+
+    private static SoundTrack? Carried(StringValues said)
+        => said.Count switch
+        {
+            0 => SoundTrack.Main,
+            1 => SoundTracks.Find(said[0]),
+            _ => null,
+        };
 
     private static bool Numbered(StringValues said, int lowest, int highest, out int number)
     {

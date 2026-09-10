@@ -48,9 +48,29 @@ public sealed class LiveSessionKeyTests
     }
 
     [Fact]
-    public void AKeyReadsAsNetworkServiceAndProfile()
+    public void TheSoundAloneMakesAnotherKey()
     {
-        Assert.Equal("32736:1024:720p30", new LiveSessionKey(Network, Service, LiveProfile.Hd30).ToString());
+        Assert.NotEqual(
+            new LiveSessionKey(Network, Service, LiveProfile.Hd30),
+            new LiveSessionKey(Network, Service, LiveProfile.Hd30, SoundTrack.Secondary));
+    }
+
+    [Fact]
+    public void AKeyThatNamesNoSoundNamesTheMainOne()
+    {
+        Assert.Equal(SoundTrack.Main, new LiveSessionKey(Network, Service, LiveProfile.Hd30).Sound);
+        Assert.Equal(
+            new LiveSessionKey(Network, Service, LiveProfile.Hd30, SoundTrack.Main),
+            new LiveSessionKey(Network, Service, LiveProfile.Hd30));
+    }
+
+    [Fact]
+    public void AKeyReadsAsNetworkServiceProfileAndSound()
+    {
+        Assert.Equal("32736:1024:720p30:main", new LiveSessionKey(Network, Service, LiveProfile.Hd30).ToString());
+        Assert.Equal(
+            "32736:1024:720p30:secondary",
+            new LiveSessionKey(Network, Service, LiveProfile.Hd30, SoundTrack.Secondary).ToString());
     }
 
     [Fact]
@@ -67,5 +87,7 @@ public sealed class LiveSessionKeyTests
         Assert.Throws<ArgumentNullException>(() => new LiveSessionKey(null!, Service, LiveProfile.Hd30));
         Assert.Throws<ArgumentNullException>(() => new LiveSessionKey(Network, null!, LiveProfile.Hd30));
         Assert.Throws<ArgumentNullException>(() => new LiveSessionKey(Network, Service, null!));
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => new LiveSessionKey(Network, Service, LiveProfile.Hd30, (SoundTrack)9));
     }
 }

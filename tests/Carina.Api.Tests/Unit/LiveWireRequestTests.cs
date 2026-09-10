@@ -33,6 +33,50 @@ public sealed class LiveWireRequestTests
         Assert.Equal(Asked, LiveWireRequest.KeyOf(Query(("network", "32736"), ("service", "1024"), ("profile", "720p30"))));
     }
 
+    [Fact]
+    public void AQueryThatNamesNoSoundAsksForTheMainOne()
+    {
+        LiveSessionKey? key = LiveWireRequest.KeyOf(
+            Query(("network", "32736"), ("service", "1024"), ("profile", "720p30")));
+
+        Assert.Equal(SoundTrack.Main, key!.Sound);
+    }
+
+    [Fact]
+    public void AQueryNamingTheSecondarySoundAsksForIt()
+    {
+        LiveSessionKey? key = LiveWireRequest.KeyOf(
+            Query(("network", "32736"), ("service", "1024"), ("profile", "720p30"), ("sound", "secondary")));
+
+        Assert.Equal(SoundTrack.Secondary, key!.Sound);
+        Assert.NotEqual(Asked, key);
+    }
+
+    [Theory]
+    [InlineData("sub")]
+    [InlineData("Main")]
+    [InlineData("1")]
+    [InlineData("")]
+    public void AQueryNamingASoundThisApplicationDoesNotCarryIsNoKey(string sound)
+    {
+        Assert.Null(LiveWireRequest.KeyOf(
+            Query(("network", "32736"), ("service", "1024"), ("profile", "720p30"), ("sound", sound))));
+    }
+
+    [Fact]
+    public void ASoundGivenTwiceIsNoKey()
+    {
+        QueryCollection query = new(new Dictionary<string, StringValues>
+        {
+            ["network"] = "32736",
+            ["service"] = "1024",
+            ["profile"] = "720p30",
+            ["sound"] = new StringValues(["main", "secondary"]),
+        });
+
+        Assert.Null(LiveWireRequest.KeyOf(query));
+    }
+
     [Theory]
     [MemberData(nameof(WhatIsNotAKey))]
     public void AQueryMissingOrMisspellingAPartIsNoKey(string network, string service, string profile)

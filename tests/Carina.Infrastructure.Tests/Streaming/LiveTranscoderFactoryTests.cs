@@ -434,9 +434,10 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
         CancellationToken cancellationToken = default,
         TimeSpan? grace = null,
         CaptionOutlet captions = CaptionOutlet.None,
-        StreamAttributes? attributes = null)
+        StreamAttributes? attributes = null,
+        SoundTrack sound = SoundTrack.Main)
     {
-        LiveTranscoderStart start = await Starting(programme, encoder, cancellationToken, grace, captions, attributes);
+        LiveTranscoderStart start = await Starting(programme, encoder, cancellationToken, grace, captions, attributes, sound);
 
         Assert.True(start.Running, start.Note);
 
@@ -449,7 +450,8 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
         CancellationToken cancellationToken = default,
         TimeSpan? grace = null,
         CaptionOutlet captions = CaptionOutlet.None,
-        StreamAttributes? attributes = null)
+        StreamAttributes? attributes = null,
+        SoundTrack sound = SoundTrack.Main)
     {
         var settings = new LiveTranscodeSettings
         {
@@ -459,7 +461,13 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
 
         var factory = new LiveTranscoderFactory(settings, budget, new AlreadyChosen(encoder), TimeProvider.System);
 
-        return factory.StartAsync(Service, LiveProfile.Hd30, attributes ?? Interlaced, captions, cancellationToken);
+        return factory.StartAsync(
+            Service,
+            LiveProfile.Hd30,
+            sound,
+            attributes ?? Interlaced,
+            captions,
+            cancellationToken);
     }
 
     private sealed class AlreadyChosen(LiveEncoder encoder) : ILiveEncoderSelector
