@@ -345,6 +345,19 @@ public sealed class SyntheticBroadcastMaterialTests : IDisposable
     }
 
     [Fact]
+    public async Task ADualMonoBroadcastReachesALiveViewerOnBothOfItsChannelsRatherThanFoldedIntoOne()
+    {
+        string written = await (SyntheticBroadcast.Sounding(SyntheticSound.DualMono) with { Length = PastTheProbe })
+            .WriteAsync(Path.Combine(room, "live-dual-mono.m2ts"));
+
+        IReadOnlyList<FfprobeRecord> tracks = await LiveTracksAsync(written, "live-dual-mono.mp4");
+
+        Assert.Equal(["video", "audio"], Types(tracks));
+        Assert.Equal("LC", Sound(tracks).Value("profile"));
+        Assert.Equal("2", Sound(tracks).Value("channels"));
+    }
+
+    [Fact]
     public async Task ARecordingCarryingTwoSoundsIsPlayedBackWithItsMainOneAlone()
     {
         string written = await (SyntheticBroadcast.Sounding(SyntheticSound.TwoLanguages) with { Length = PastTheProbe })
