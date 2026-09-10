@@ -6,6 +6,7 @@ using Carina.Domain.Channels;
 using Carina.Domain.Events;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
+using Carina.Domain.Streaming;
 
 namespace Carina.Infrastructure.Collection;
 
@@ -89,6 +90,7 @@ public sealed class ProgrammeWriter(
             Items = seen.Items.Count > 0 ? seen.Items : arriving.Items,
             Related = seen.Related.Count > 0 ? seen.Related : arriving.Related,
             HasSubtitles = seen.HasSubtitles || arriving.HasSubtitles,
+            Audio = seen.Audio is AudioMode.Undetermined ? arriving.Audio : seen.Audio,
             IsShadow = seen.IsShadow && arriving.IsShadow,
         };
     }
@@ -122,6 +124,7 @@ public sealed class ProgrammeWriter(
                 : [.. detailed.Items.Select(item => new ProgrammeItem(item.Heading, item.Text))],
             Related = [.. Related(table.OriginalNetworkId, table.ServiceId, carried.EventId, groupings)],
             HasSubtitles = carried.DataContents.Any(content => content.CarriesCaptions),
+            Audio = AnnouncedAudio.Of(carried.AudioComponents),
             Source = Source(table),
         };
     }

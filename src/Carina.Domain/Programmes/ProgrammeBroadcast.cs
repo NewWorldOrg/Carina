@@ -1,5 +1,6 @@
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
+using Carina.Domain.Streaming;
 
 namespace Carina.Domain.Programmes;
 
@@ -19,6 +20,8 @@ public sealed record ProgrammeBroadcast(
     public IReadOnlyList<RelatedProgramme> Related { get; init; } = [];
 
     public bool HasSubtitles { get; init; }
+
+    public AudioMode Audio { get; init; }
 
     public ProgrammeSource Source { get; init; } = ProgrammeSource.ScheduleBasic;
 

@@ -145,7 +145,8 @@ public sealed class ProgrammeSearchScale : IAsyncLifetime
     private const string HotLayer = """
         INSERT INTO programme (
             network_id, service_id, event_id, transport_stream_id, start_at, end_at,
-            name, summary, is_shadow, genres, items, related, has_subtitles, source, updated_at)
+            name, summary, is_shadow, genres, items, related, has_subtitles, audio, source,
+            updated_at)
         SELECT
             32736 + (n % 20) / 5,
             1024 + (n % 20),
@@ -164,6 +165,7 @@ public sealed class ProgrammeSearchScale : IAsyncLifetime
             ('[{"networkId":32736,"serviceId":' || (1024 + (n % 20)) || ',"eventId":'
                 || (1 + (n / 20) * 20 + (n % 20)) || ',"kind":"Shared"}]')::jsonb,
             n % 3 = 0,
+            'Stereo',
             'ScheduleExtended',
             @anchor
         FROM generate_series(0, @rows - 1) AS n,

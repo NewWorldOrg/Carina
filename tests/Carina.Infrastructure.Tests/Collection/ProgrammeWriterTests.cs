@@ -5,6 +5,7 @@ using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
+using Carina.Domain.Streaming;
 using Carina.Infrastructure.Collection;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
@@ -130,6 +131,66 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
         Assert.Equal(1048, related.ServiceId);
         Assert.Equal(1, related.EventId);
         Assert.Equal(RelationKind.Shared, related.Kind);
+    }
+
+    [Fact]
+    public async Task ABroadcastThatAnnouncesTwoLanguagesOnTwoChannelsIsStoredSaying()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+
+        await Writer(context).WriteAsync([Table(network, 1, extra: Sound(0x02))], [], Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        Programme? stored = await new ProgrammeRepository(reading).FindAsync(Id(network, 1), Cancel);
+
+        Assert.Equal(AudioMode.DualMono, stored!.Audio);
+    }
+
+    [Fact]
+    public async Task ABroadcastThatAnnouncedNoSoundLeavesTheModeUnanswered()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+
+        await Writer(context).WriteAsync([Table(network, 1)], [], Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        Programme? stored = await new ProgrammeRepository(reading).FindAsync(Id(network, 1), Cancel);
+
+        Assert.Equal(AudioMode.Undetermined, stored!.Audio);
+    }
+
+    [Fact]
+    public async Task ATableThatSaysNothingAboutTheSoundDoesNotUnsayWhatAnotherAnnounced()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        ProgrammeWriter writer = Writer(context);
+
+        await writer.WriteAsync([Table(network, 1, extra: Sound(0x02))], [], Cancel);
+        await writer.WriteAsync([Table(network, 1, name: "つぎのばんぐみ")], [], Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        Programme? stored = await new ProgrammeRepository(reading).FindAsync(Id(network, 1), Cancel);
+
+        Assert.Equal(AudioMode.DualMono, stored!.Audio);
+    }
+
+    [Fact]
+    public async Task TheModeAnnouncedInOneTableReachesAProgrammeSeenInSeveralOfThem()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+
+        await Writer(context).WriteAsync(
+            [Table(network, 1), Table(network, 1, extra: Sound(0x02))],
+            [], Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        Programme? stored = await new ProgrammeRepository(reading).FindAsync(Id(network, 1), Cancel);
+
+        Assert.Equal(AudioMode.DualMono, stored!.Audio);
     }
 
     [Fact]
@@ -585,6 +646,9 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
             .. carriedExtra,
         ];
     }
+
+    private static byte[] Sound(byte componentType)
+        => [0xC4, 0x09, 0xF2, componentType, 0x10, 0x0F, 0xFF, 0x6F, 0x6A, 0x70, 0x6E];
 
     private static byte[] Kanji(char letter)
     {

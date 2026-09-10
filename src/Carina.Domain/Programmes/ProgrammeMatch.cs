@@ -1,5 +1,6 @@
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
+using Carina.Domain.Streaming;
 
 namespace Carina.Domain.Programmes;
 
@@ -26,6 +27,8 @@ public sealed class ProgrammeMatch
     public bool IsShadow { get; private set; }
 
     public bool HasSubtitles { get; private set; }
+
+    public AudioMode Audio { get; private set; }
 
     public ProgrammeSource? Source { get; private set; }
 
@@ -56,6 +59,7 @@ public sealed class ProgrammeMatch
             Summary = programme.Summary,
             IsShadow = programme.IsShadow,
             HasSubtitles = programme.HasSubtitles,
+            Audio = programme.Audio,
             Source = programme.Source,
             Revision = programme.Revision,
             IsArchived = false,
@@ -80,6 +84,7 @@ public sealed class ProgrammeMatch
             Summary = programme.Summary,
             IsShadow = false,
             HasSubtitles = programme.HasSubtitles,
+            Audio = AudioMode.Undetermined,
             Source = null,
             Revision = null,
             IsArchived = true,

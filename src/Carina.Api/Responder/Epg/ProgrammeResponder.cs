@@ -2,6 +2,7 @@ using Carina.Api.Common;
 using Carina.Api.Services;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
+using Carina.Domain.Streaming;
 
 namespace Carina.Api.Responder.Epg;
 
@@ -54,6 +55,7 @@ public sealed record ProgrammeResponder(
     string Summary,
     bool IsShadow,
     bool HasSubtitles,
+    AudioMode Audio,
     ProgrammeSource Source,
     long Revision,
     bool IsArchived,
@@ -82,6 +84,7 @@ public sealed record ProgrammeResponder(
             match.Summary,
             match.IsShadow,
             match.HasSubtitles,
+            match.Audio,
             match.Source ?? ProgrammeSource.ScheduleBasic,
             match.Revision ?? 0,
             match.IsArchived,

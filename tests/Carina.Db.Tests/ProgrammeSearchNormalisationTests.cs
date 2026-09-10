@@ -31,7 +31,7 @@ public sealed class ProgrammeSearchNormalisationTests
 
         await using (NpgsqlConnection connection = await OpenAsync())
         {
-            await BroadcastAsync(connection, 1, "ﾆｭｰｽ①", "ｷﾞｮｳｻﾞ");
+            await BroadcastAsync(connection, 1, "ﾆｭｰｽ①", "ｷﾞｮｳｻﾞ", soundIsKept: false);
 
             Assert.Equal("ﾆｭｰｽ① ｷﾞｮｳｻﾞ", await SearchableAsync(connection, 1));
         }
@@ -64,18 +64,26 @@ public sealed class ProgrammeSearchNormalisationTests
         Assert.Equal("ニュース ", await SearchableAsync(connection, 2));
     }
 
-    private static async Task BroadcastAsync(NpgsqlConnection connection, int carried, string name, string summary)
+    private static async Task BroadcastAsync(
+        NpgsqlConnection connection,
+        int carried,
+        string name,
+        string summary,
+        bool soundIsKept = true)
     {
+        string sound = soundIsKept ? " audio," : string.Empty;
+        string undetermined = soundIsKept ? " 'Undetermined'," : string.Empty;
+
         await using NpgsqlCommand command = connection.CreateCommand();
         command.CommandText = $"""
             INSERT INTO programme (
                 network_id, service_id, event_id, transport_stream_id,
                 start_at, end_at, name, summary, is_shadow,
-                genres, items, related, has_subtitles, source, updated_at)
+                genres, items, related, has_subtitles,{sound} source, updated_at)
             VALUES (
                 1, 1049, @event, 1,
                 {At}, {At} + interval '30 minutes', @name, @summary, false,
-                '[]', '[]', '[]', false, 'ScheduleBasic', {At})
+                '[]', '[]', '[]', false,{undetermined} 'ScheduleBasic', {At})
             """;
         command.Parameters.AddWithValue("event", carried);
         command.Parameters.AddWithValue("name", name);

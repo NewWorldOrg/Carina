@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 
 using Carina.Domain.Programmes;
+using Carina.Domain.Streaming;
 
 using Carina.Infrastructure.Persistence.Configurations;
 
@@ -29,14 +30,17 @@ public static class ProgrammeAbsorption
 
     private const string Related = "CASE WHEN excluded.related = '[]'::jsonb THEN programme.related ELSE excluded.related END";
 
+    private const string Audio =
+        "CASE WHEN excluded.audio = 'Undetermined' THEN programme.audio ELSE excluded.audio END";
+
     public static readonly string Sql = $"""
         WITH written AS (
             INSERT INTO programme (
                 network_id, service_id, event_id, transport_stream_id, start_at, end_at, name, summary,
-                is_shadow, genres, items, related, has_subtitles, source, updated_at)
+                is_shadow, genres, items, related, has_subtitles, audio, source, updated_at)
             SELECT
                 network_id, service_id, event_id, transport_stream_id, start_at, end_at, name, summary,
-                is_shadow, genres, items, related, has_subtitles, source, updated_at
+                is_shadow, genres, items, related, has_subtitles, audio, source, updated_at
             FROM jsonb_to_recordset(@{RowsParameter}) AS arriving(
                 network_id integer,
                 service_id integer,
@@ -51,6 +55,7 @@ public static class ProgrammeAbsorption
                 items jsonb,
                 related jsonb,
                 has_subtitles boolean,
+                audio character varying(32),
                 source character varying(32),
                 updated_at timestamptz)
             ON CONFLICT (network_id, service_id, event_id) DO UPDATE SET
@@ -64,17 +69,18 @@ public static class ProgrammeAbsorption
                 items = {Items},
                 related = {Related},
                 has_subtitles = excluded.has_subtitles,
+                audio = {Audio},
                 source = excluded.source,
                 updated_at = excluded.updated_at,
                 revision = nextval('{ProgrammeRevisions.Sequence}')
             WHERE (
                 programme.transport_stream_id, programme.start_at, programme.end_at, programme.name, programme.summary,
                 programme.is_shadow, programme.genres, programme.items, programme.related, programme.has_subtitles,
-                programme.source)
+                programme.audio, programme.source)
             IS DISTINCT FROM (
                 excluded.transport_stream_id, excluded.start_at, {End}, {Name}, {Summary},
                 excluded.is_shadow, {Genres}, {Items}, {Related}, excluded.has_subtitles,
-                excluded.source)
+                {Audio}, excluded.source)
             RETURNING (xmax = 0) AS added)
         SELECT count(*) FILTER (WHERE added), count(*) FILTER (WHERE NOT added) FROM written
         """;
@@ -137,6 +143,7 @@ public static class ProgrammeAbsorption
         [property: JsonPropertyName("items")] IReadOnlyList<ProgrammeItem> Items,
         [property: JsonPropertyName("related")] IReadOnlyList<RelatedProgramme> Related,
         [property: JsonPropertyName("has_subtitles")] bool HasSubtitles,
+        [property: JsonPropertyName("audio")] AudioMode Audio,
         [property: JsonPropertyName("source")] ProgrammeSource Source,
         [property: JsonPropertyName("updated_at")] DateTime UpdatedAt)
     {
@@ -155,6 +162,7 @@ public static class ProgrammeAbsorption
                 programme.Items,
                 programme.Related,
                 programme.HasSubtitles,
+                programme.Audio,
                 programme.Source,
                 programme.UpdatedAt);
     }
