@@ -18,7 +18,7 @@ public sealed record QualityThresholdStanding(
 
         return
         [
-            .. QualityThresholdShapes.All.Select(shape => stored.TryGetValue(shape.Key, out QualityThreshold? threshold)
+            .. QualityThresholdShapes.Consulted.Select(shape => stored.TryGetValue(shape.Key, out QualityThreshold? threshold)
                 ? new QualityThresholdStanding(shape.Key, shape, threshold.Setting, true, threshold.UpdatedBy)
                 : AsShipped(shape.Key, at)),
         ];

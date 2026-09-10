@@ -11,7 +11,8 @@ public sealed class QualityThresholdStandingTests
     {
         IReadOnlyList<QualityThresholdStanding> standings = QualityThresholdStanding.Over([], At);
 
-        Assert.Equal(QualityThresholdShapes.All.Count, standings.Count);
+        Assert.Equal(QualityThresholdShapes.Consulted.Count, standings.Count);
+        Assert.DoesNotContain(QualityThresholdKey.SupplySilence, standings.Select(standing => standing.Key));
         Assert.All(standings, standing =>
         {
             Assert.False(standing.Stored);

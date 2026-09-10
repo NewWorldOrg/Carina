@@ -25,7 +25,9 @@ public sealed class ReviseQualityThresholdAction(QualityThresholdService thresho
         [FromBody] ReviseQualityThresholdRequest? request,
         CancellationToken cancellationToken)
     {
-        if (!Enum.TryParse(key, ignoreCase: true, out QualityThresholdKey named) || !Enum.IsDefined(named))
+        if (!Enum.TryParse(key, ignoreCase: true, out QualityThresholdKey named)
+            || !Enum.IsDefined(named)
+            || !QualityThresholdShapes.Of(named).Consulted)
         {
             return NotFound(BaseResponder<QualityThresholdResponder>.Error(QualitySaying.NoSuchThreshold()));
         }

@@ -6,7 +6,8 @@ public sealed record QualityThresholdShape(
     ThresholdSense Sense,
     double Lowest,
     double Highest,
-    double Shipped)
+    double Shipped,
+    bool Consulted)
 {
     public bool Holds(double value)
         => !double.IsNaN(value) && !double.IsInfinity(value) && value >= Lowest && value <= Highest;
@@ -26,21 +27,24 @@ public static class QualityThresholdShapes
 
     public static readonly IReadOnlyList<QualityThresholdShape> All =
     [
-        new(QualityThresholdKey.PacketsLostWarning, QualityMetric.PacketsLost, ThresholdSense.Ceiling, 0, WholeOfIt, 0.0002),
-        new(QualityThresholdKey.PacketsLostUnwatchable, QualityMetric.PacketsLost, ThresholdSense.Ceiling, 0, WholeOfIt, 0.001),
-        new(QualityThresholdKey.PacketsLeftScrambled, QualityMetric.PacketsLeftScrambled, ThresholdSense.Ceiling, 0, WholeOfIt, 0.0005),
-        new(QualityThresholdKey.Overflows, QualityMetric.Overflows, ThresholdSense.Ceiling, 0, MostOverflowsCountable, 1),
-        new(QualityThresholdKey.LockRate, null, ThresholdSense.Floor, 0, WholeOfIt, 0.99),
+        new(QualityThresholdKey.PacketsLostWarning, QualityMetric.PacketsLost, ThresholdSense.Ceiling, 0, WholeOfIt, 0.0002, true),
+        new(QualityThresholdKey.PacketsLostUnwatchable, QualityMetric.PacketsLost, ThresholdSense.Ceiling, 0, WholeOfIt, 0.001, true),
+        new(QualityThresholdKey.PacketsLeftScrambled, QualityMetric.PacketsLeftScrambled, ThresholdSense.Ceiling, 0, WholeOfIt, 0.0005, true),
+        new(QualityThresholdKey.Overflows, QualityMetric.Overflows, ThresholdSense.Ceiling, 0, MostOverflowsCountable, 1, true),
+        new(QualityThresholdKey.LockRate, null, ThresholdSense.Floor, 0, WholeOfIt, 0.99, true),
         new(
             QualityThresholdKey.CarrierToNoiseFloor,
             null,
             ThresholdSense.Floor,
             ColdestCarrierToNoiseInMilliDecibels,
             WarmestCarrierToNoiseInMilliDecibels,
-            15_000),
-        new(QualityThresholdKey.BitErrorRateCeiling, null, ThresholdSense.Ceiling, 0, WholeOfIt, 0.0001),
-        new(QualityThresholdKey.SupplySilence, null, ThresholdSense.Ceiling, 1, LongestSilenceInSeconds, 300),
+            15_000,
+            true),
+        new(QualityThresholdKey.BitErrorRateCeiling, null, ThresholdSense.Ceiling, 0, WholeOfIt, 0.0001, true),
+        new(QualityThresholdKey.SupplySilence, null, ThresholdSense.Ceiling, 1, LongestSilenceInSeconds, 300, false),
     ];
+
+    public static readonly IReadOnlyList<QualityThresholdShape> Consulted = [.. All.Where(shape => shape.Consulted)];
 
     public static QualityThresholdShape Of(QualityThresholdKey key)
         => All.FirstOrDefault(shape => shape.Key == key)

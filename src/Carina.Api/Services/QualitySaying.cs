@@ -6,7 +6,7 @@ public static class QualitySaying
 {
     public static string NoSuchThreshold()
         => "A threshold is asked for by one of the keys this domain names: "
-           + string.Join(", ", QualityThresholdShapes.All.Select(shape => shape.Key))
+           + string.Join(", ", QualityThresholdShapes.Consulted.Select(shape => shape.Key))
            + ".";
 
     public static string OutOfRange(QualityThresholdShape shape)

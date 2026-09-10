@@ -19,7 +19,7 @@ public sealed class QualityThresholdEndpointTests
 
         JsonElement items = body.GetProperty("data").GetProperty("items");
 
-        Assert.Equal(QualityThresholdShapes.All.Count, items.GetArrayLength());
+        Assert.Equal(QualityThresholdShapes.Consulted.Count, items.GetArrayLength());
         Assert.All(items.EnumerateArray(), item =>
         {
             Assert.True(item.GetProperty("provisional").GetBoolean());
@@ -108,6 +108,24 @@ public sealed class QualityThresholdEndpointTests
         Assert.Equal(
             HttpStatusCode.NotFound,
             (await feature.PatchAsync("/api/quality/thresholds/somethingElse", new { value = 0.5 })).Status);
+    }
+
+    [Fact(DisplayName = "a level nothing holds a reading against is neither offered nor there to move")]
+    public async Task ALevelNothingHoldsAReadingAgainstIsNotOffered()
+    {
+        await using var feature = new QualityFeature();
+
+        JsonElement items = (await feature.GetAsync("/api/quality/thresholds")).Body
+            .GetProperty("data")
+            .GetProperty("items");
+
+        Assert.DoesNotContain(
+            "supplySilence",
+            items.EnumerateArray().Select(item => item.GetProperty("key").GetString()));
+        Assert.Equal(
+            HttpStatusCode.NotFound,
+            (await feature.PatchAsync("/api/quality/thresholds/supplySilence", new { value = 600.0 })).Status);
+        Assert.Empty(feature.Changes.Changes);
     }
 
     [Fact]
