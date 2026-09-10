@@ -1,4 +1,5 @@
 using Carina.Domain.Playback;
+using Carina.Domain.Streaming;
 
 namespace Carina.Api.Responder.Playback;
 
@@ -10,12 +11,18 @@ public sealed record PlaybackPlanResponder(
     bool Transcodes,
     bool ShowsAsAWholeRecording,
     string MediaType,
-    long? Bytes)
+    long? Bytes,
+    IReadOnlyList<SoundTrack> Sounds)
 {
-    public static PlaybackPlanResponder Of(PlaybackPlan plan, PlaybackFile handover, string mediaType)
+    public static PlaybackPlanResponder Of(
+        PlaybackPlan plan,
+        PlaybackFile handover,
+        string mediaType,
+        IReadOnlyList<SoundTrack> sounds)
     {
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(handover);
+        ArgumentNullException.ThrowIfNull(sounds);
 
         return new PlaybackPlanResponder(
             plan.Standing,
@@ -25,6 +32,7 @@ public sealed record PlaybackPlanResponder(
             plan.Transcodes,
             plan.ShowsAsAWholeRecording,
             mediaType,
-            plan.Transcodes ? null : handover.Bytes);
+            plan.Transcodes ? null : handover.Bytes,
+            sounds);
     }
 }

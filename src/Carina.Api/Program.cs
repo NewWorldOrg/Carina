@@ -97,7 +97,10 @@ app.MapGet(
     .WithTags(PlaybackSurfaces.Tag)
     .WithSummary(PlaybackSurfaces.HowARecordingIsPlayedInABrowser)
     .Produces<BaseResponder<PlaybackPlanResponder>>(StatusCodes.Status200OK, PlayDelivery.Json)
-    .Reads(PlaybackSurfaces.WhereThePlayingStarts, PlaybackSurfaces.WhichProfileThePictureIsEncodedIn)
+    .Reads(
+        PlaybackSurfaces.WhereThePlayingStarts,
+        PlaybackSurfaces.WhichProfileThePictureIsEncodedIn,
+        PlaybackSurfaces.WhichSoundIsCarried)
     .WithEffect(EndpointEffect.Reading);
 
 app.MapGet(

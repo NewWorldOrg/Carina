@@ -22,6 +22,27 @@ public sealed class FfprobeInvocationTests
     }
 
     [Fact]
+    public void TheProgrammesAreAskedForAsJsonSoThatEachOnesStreamsStayWithIt()
+    {
+        List<string> arguments = [.. FfprobeInvocation.Programmes(new StreamSource("/srv/recordings/k-1.ts"))];
+
+        Assert.Equal("json", arguments[arguments.IndexOf("-of") + 1]);
+        Assert.Contains("-show_programs", arguments);
+        Assert.Equal("program=program_id:stream=codec_type", arguments[arguments.IndexOf("-show_entries") + 1]);
+        Assert.Equal("/srv/recordings/k-1.ts", arguments[^1]);
+        Assert.Equal("-i", arguments[^2]);
+    }
+
+    [Fact]
+    public void AskingWhichProgrammeCarriesWhatFillsNothingInButTheSource()
+    {
+        string[] one = [.. FfprobeInvocation.Programmes(new StreamSource("/srv/recordings/k-1.ts"))];
+        string[] other = [.. FfprobeInvocation.Programmes(new StreamSource("/srv/recordings/k-2.ts"))];
+
+        Assert.Equal(one[..^1], other[..^1]);
+    }
+
+    [Fact]
     public void TheSourceIsTheLastArgumentAndFollowsTheOneThatNamesAnInput()
     {
         string[] arguments = [.. FfprobeInvocation.Arguments(new StreamSource("/srv/recordings/k-1.ts"))];

@@ -41,4 +41,12 @@ public static class PlaybackSurfaces
         + "recording as it is for a live channel.",
         [.. LiveProfile.All.Select(profile => profile.Name)],
         null);
+
+    public static readonly QueryInput WhichSoundIsCarried = QueryInput.OneOfThese(
+        PlayDelivery.Sound,
+        "The sound carried with the picture while the recording is transcoded as it plays. Asking for none "
+        + "carries the main sound, as it always did. The plan names the sounds this recording can be asked "
+        + "for; one handed over as it is names none, because it carries the one sound it was encoded with.",
+        SoundTracks.Names,
+        SoundTracks.MainIsCalled);
 }

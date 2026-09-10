@@ -55,6 +55,61 @@ public sealed class OnTheFlyPlayerTests : IDisposable
     }
 
     [Fact]
+    public async Task TheCommandNamesTheSecondSoundWhenTheViewerAsksForIt()
+    {
+        Recorded(40_000);
+        string said = standIns.Named("arguments");
+
+        await using IOnTheFlyViewing viewing = await Running(
+            Player($"printf '%s\\n' \"$@\" > {said}; echo ready"),
+            TimeSpan.Zero,
+            LiveProfile.Hd30,
+            SoundTrack.Secondary);
+
+        string[] handed = File.ReadAllLines(said);
+
+        Assert.Contains("p:1040:a:1", handed);
+        Assert.DoesNotContain("p:1040:a:0", handed);
+        Assert.Equal("aac", handed[Array.IndexOf(handed, "-c:a") + 1]);
+    }
+
+    [Fact]
+    public async Task TheSoundsARecordingCarriesAreTheOnesTheStreamWasReadFor()
+    {
+        Recorded(40_000);
+
+        CarriedSounds carried = await Player("echo ready").SoundsAsync(Found(), Service, CancellationToken.None);
+
+        Assert.True(carried.Known);
+        Assert.Equal([SoundTrack.Main, SoundTrack.Secondary], carried.Tracks);
+    }
+
+    [Fact]
+    public async Task ARecordingWithNoBytesLeftHasNoSoundsToRead()
+    {
+        Recorded(40_000);
+        PlaybackFile found = Found();
+        File.Delete(Path.Combine(standIns.Room, Named.Value));
+
+        CarriedSounds carried = await Player("echo ready").SoundsAsync(found, Service, CancellationToken.None);
+
+        Assert.False(carried.Known);
+        Assert.NotEmpty(carried.Note);
+    }
+
+    [Fact]
+    public async Task ASoundThisApplicationDoesNotCarryIsRefusedBeforeATranscoderIsStarted()
+    {
+        Recorded(40_000);
+        OnTheFlyPlayer player = Player(TakesTheFileApart);
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
+            () => player.StartAsync(Found(), Service, TimeSpan.Zero, LiveProfile.Hd30, (SoundTrack)9, CancellationToken.None));
+
+        Assert.Equal(0, budget.Running);
+    }
+
+    [Fact]
     public async Task TheCommandNamesTheRecordedServiceForItsPictureAndItsMainSound()
     {
         Recorded(40_000);
@@ -151,6 +206,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
             Service,
             TimeSpan.Zero,
             LiveProfile.Hd30,
+            SoundTrack.Main,
             CancellationToken.None);
 
         Assert.False(second.Running);
@@ -173,6 +229,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
             Service,
             TimeSpan.Zero,
             LiveProfile.Hd30,
+            SoundTrack.Main,
             CancellationToken.None);
 
         Assert.Equal(2, first.Standing.Running);
@@ -220,6 +277,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
             Service,
             TimeSpan.Zero,
             LiveProfile.Hd30,
+            SoundTrack.Main,
             CancellationToken.None);
 
         Assert.False(start.Running);
@@ -237,6 +295,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
             Service,
             TimeSpan.Zero,
             LiveProfile.Hd30,
+            SoundTrack.Main,
             CancellationToken.None);
 
         Assert.False(start.Running);
@@ -255,6 +314,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
             Service,
             TimeSpan.Zero,
             LiveProfile.Hd30,
+            SoundTrack.Main,
             CancellationToken.None);
 
         Assert.False(start.Running);
@@ -272,6 +332,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
             Service,
             TimeSpan.Zero,
             LiveProfile.Hd30,
+            SoundTrack.Main,
             CancellationToken.None);
 
         Assert.False(start.Running);
@@ -289,6 +350,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
             Service,
             TimeSpan.Zero,
             LiveProfile.Hd30,
+            SoundTrack.Main,
             CancellationToken.None);
 
         Assert.Equal(OnTheFlyRefusal.NothingCameOut, start.Refusal);
@@ -305,6 +367,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
             Service,
             TimeSpan.Zero,
             LiveProfile.Hd30,
+            SoundTrack.Main,
             CancellationToken.None);
 
         Assert.Equal(OnTheFlyRefusal.TranscoderWouldNotStart, start.Refusal);
@@ -325,6 +388,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
             Service,
             TimeSpan.Zero,
             LiveProfile.Hd30,
+            SoundTrack.Main,
             CancellationToken.None);
 
         Assert.False(start.Running);
@@ -345,11 +409,12 @@ public sealed class OnTheFlyPlayerTests : IDisposable
                 Service,
                 TimeSpan.FromSeconds(-1),
                 LiveProfile.Hd30,
+                SoundTrack.Main,
                 CancellationToken.None));
         await Assert.ThrowsAsync<ArgumentNullException>(
-            () => player.StartAsync(null!, Service, TimeSpan.Zero, LiveProfile.Hd30, CancellationToken.None));
+            () => player.StartAsync(null!, Service, TimeSpan.Zero, LiveProfile.Hd30, SoundTrack.Main, CancellationToken.None));
         await Assert.ThrowsAsync<ArgumentNullException>(
-            () => player.StartAsync(Found(), null!, TimeSpan.Zero, LiveProfile.Hd30, CancellationToken.None));
+            () => player.StartAsync(Found(), null!, TimeSpan.Zero, LiveProfile.Hd30, SoundTrack.Main, CancellationToken.None));
     }
 
     [Fact]
@@ -452,13 +517,18 @@ public sealed class OnTheFlyPlayerTests : IDisposable
     private static Task<IOnTheFlyViewing> Running(OnTheFlyPlayer player, TimeSpan from)
         => Running(player, from, LiveProfile.Hd30);
 
-    private static async Task<IOnTheFlyViewing> Running(OnTheFlyPlayer player, TimeSpan from, LiveProfile? profile)
+    private static async Task<IOnTheFlyViewing> Running(
+        OnTheFlyPlayer player,
+        TimeSpan from,
+        LiveProfile? profile,
+        SoundTrack sound = SoundTrack.Main)
     {
         OnTheFlyStart start = await player.StartAsync(
             new PlaybackFile(Root, Named, 40_000),
             Service,
             from,
             profile,
+            sound,
             CancellationToken.None);
 
         Assert.True(start.Running, start.Note);
@@ -508,6 +578,12 @@ public sealed class OnTheFlyPlayerTests : IDisposable
     {
         public Task<StreamAttributeReading> ReadAsync(StreamSource source, CancellationToken cancellationToken)
             => Task.FromResult(StreamAttributeReading.Read(StreamAttributes.SafeSide, []));
+
+        public Task<CarriedSounds> SoundsAsync(
+            StreamSource source,
+            ServiceId service,
+            CancellationToken cancellationToken)
+            => Task.FromResult(CarriedSounds.Counted(2));
     }
 
     private sealed class AlreadyChosen(LiveEncoder encoder) : ILiveEncoderSelector
