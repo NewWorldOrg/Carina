@@ -23,6 +23,31 @@ public enum ReservationOutcomeKind
     ProgrammeReturned = 7,
 }
 
+/// <summary>
+/// A line in the ledger either settles the reservation, saying what became of the recording, or
+/// notes something that happened on the way to one. Only a settling line takes a reservation out of
+/// the run that judges what became of it: a broadcast that slipped by a few minutes is most of
+/// them, and a reservation held back by that line would never be written down as missed. Every
+/// classification is named in one list or the other, and a test holds that.
+/// </summary>
+public static class ReservationOutcomeKinds
+{
+    public static readonly IReadOnlyList<ReservationOutcomeKind> Settling =
+    [
+        ReservationOutcomeKind.Competing,
+        ReservationOutcomeKind.Missed,
+        ReservationOutcomeKind.RecordingFailure,
+    ];
+
+    public static readonly IReadOnlyList<ReservationOutcomeKind> AlongTheWay =
+    [
+        ReservationOutcomeKind.TuneFailure,
+        ReservationOutcomeKind.ProgrammeMoved,
+        ReservationOutcomeKind.ProgrammeGone,
+        ReservationOutcomeKind.ProgrammeReturned,
+    ];
+}
+
 public sealed class ReservationOutcome
 {
     private ReservationOutcome()

@@ -203,7 +203,7 @@ internal sealed class HeldReservations(IAtomicWrite? write = null, HeldOutcomes?
                 .Where(reservation => outcomes is null
                                       || !outcomes.Held.Any(outcome =>
                                           outcome.ReservationId.Equals(reservation.Id)
-                                          && outcome.Kind is not ReservationOutcomeKind.TuneFailure))
+                                          && ReservationOutcomeKinds.Settling.Contains(outcome.Kind)))
                 .Where(reservation => reservation.RecordingOutcome
                                           is RecordingOutcome.Failed or RecordingOutcome.Truncated
                                       || (reservation.RecordingOutcome is null

@@ -1,4 +1,5 @@
 using Carina.Contracts;
+using Carina.Domain.Channels;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Reservations;
@@ -15,6 +16,12 @@ public sealed class ReservationOutcomeServiceTests
     private static readonly TimeSpan Grace = TimeSpan.FromMinutes(5);
 
     private static readonly DateTime AfterItAll = Opens.AddHours(3);
+
+    public static TheoryData<ReservationOutcomeKind> WhatSettlesAReservation =>
+        [.. ReservationOutcomeKinds.Settling];
+
+    public static TheoryData<ReservationOutcomeKind> WhatIsOnlyNotedOnTheWay =>
+        [.. ReservationOutcomeKinds.AlongTheWay];
 
     [Fact]
     public async Task AReservationNothingEverClaimedStopsSayingItsTunerIsSecured()
@@ -352,6 +359,46 @@ public sealed class ReservationOutcomeServiceTests
 
         Assert.Empty(held.Events.Signalled);
     }
+
+    [Theory]
+    [MemberData(nameof(WhatIsOnlyNotedOnTheWay))]
+    public async Task AReservationCarryingALineThatSettledNothingIsStillJudgedWhenItsWindowCloses(
+        ReservationOutcomeKind noted)
+    {
+        Reservation waiting = ReservationFixtures.Rehydrated(ReservationState.Scheduled, startAt: Opens);
+        Held held = Standing(AfterItAll, waiting);
+        held.Outcomes.Standing(Noted(waiting, noted));
+
+        ReservationOutcomeRun run = await Run(held);
+
+        Assert.Equal([new ReservationOutcomeRecord(waiting.Id, ReservationOutcomeKind.Missed)], run.Recorded);
+        Assert.Equal(ReservationState.Missed, waiting.State);
+        Assert.Contains(held.Outcomes.Held, outcome => outcome.Kind == ReservationOutcomeKind.Missed);
+    }
+
+    [Theory]
+    [MemberData(nameof(WhatSettlesAReservation))]
+    public async Task AReservationAlreadySettledByALineIsLeftAlone(ReservationOutcomeKind settled)
+    {
+        Reservation waiting = ReservationFixtures.Rehydrated(ReservationState.Scheduled, startAt: Opens);
+        Held held = Standing(AfterItAll, waiting);
+        held.Outcomes.Standing(Noted(waiting, settled));
+
+        Assert.Empty((await Run(held)).Recorded);
+        Assert.Equal(ReservationState.Scheduled, waiting.State);
+        Assert.Equal([settled], [.. held.Outcomes.Held.Select(outcome => outcome.Kind)]);
+    }
+
+    private static ReservationOutcome Noted(Reservation reservation, ReservationOutcomeKind kind)
+        => ReservationOutcome.Record(
+            ReservationOutcomeId.New(),
+            reservation,
+            kind,
+            kind is ReservationOutcomeKind.TuneFailure ? TuneFailureKind.NoLock : null,
+            kind is ReservationOutcomeKind.RecordingFailure ? RecordingOutcome.Failed : null,
+            kind is ReservationOutcomeKind.TuneFailure ? [RecordingFault.TuneFailed] : [],
+            [],
+            reservation.EffectiveStartAt);
 
     private static Recording Settled(Reservation reservation, params RecordingFault[] faults)
     {

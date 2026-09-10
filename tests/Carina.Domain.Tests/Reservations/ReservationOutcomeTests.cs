@@ -132,6 +132,16 @@ public sealed class ReservationOutcomeTests
                 [],
                 [RecordingFault.TunerContended]));
 
+    [Fact]
+    public void EveryClassificationTheLedgerHoldsEitherSettlesTheReservationOrIsNotedOnTheWayToIt()
+    {
+        ReservationOutcomeKind[] held = [.. Enum.GetValues<ReservationOutcomeKind>().Order()];
+        ReservationOutcomeKind[] named =
+            [.. ReservationOutcomeKinds.Settling.Concat(ReservationOutcomeKinds.AlongTheWay).Order()];
+
+        Assert.Equal(held, named);
+    }
+
     private static ReservationOutcome Record(
         ReservationOutcomeKind kind,
         TuneFailureKind? tuneFailure,
