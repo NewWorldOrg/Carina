@@ -141,7 +141,30 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
 
-        await MeasurementAsync(connection, measured: "true", dropped: "2", total: "741375", measuredUpdatedAt: Later, endedAt: Later);
+        string session = Guid.NewGuid().ToString("N");
+
+        await MeasurementAsync(
+            connection,
+            measured: "true",
+            dropped: "2",
+            total: "741375",
+            measuredUpdatedAt: Later,
+            endedAt: Later,
+            session: session);
+
+        await using var asking = new NpgsqlCommand(
+            "SELECT purpose, ended_at, cc_dropped_packets, cc_total_packets FROM quality_session_measurement WHERE session_id = @session",
+            connection);
+        asking.Parameters.AddWithValue("session", session);
+
+        await using NpgsqlDataReader reading = await asking.ExecuteReaderAsync();
+
+        Assert.True(await reading.ReadAsync(), "the measurement of a session that has ended was not kept");
+        Assert.Equal("Survey", reading.GetString(0));
+        Assert.False(await reading.IsDBNullAsync(1));
+        Assert.Equal(2, reading.GetInt64(2));
+        Assert.Equal(741_375, reading.GetInt64(3));
+        Assert.False(await reading.ReadAsync());
     }
 
     [Fact(DisplayName = "BR-QD-003: a threshold that no longer calls itself provisional stands on measurement")]
@@ -354,14 +377,15 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         string dropped = "NULL",
         string total = "NULL",
         string measuredUpdatedAt = "NULL",
-        string endedAt = "NULL")
+        string endedAt = "NULL",
+        string? session = null)
         => new NpgsqlCommand(
             $"""
             INSERT INTO quality_session_measurement (
                 driver_instance_id, session_id, purpose, tuner_device_id, network_id, service_id,
                 started_at, ended_at, cc_measured, cc_dropped_packets, cc_total_packets, eovf_count, measured_updated_at)
             VALUES (
-                'driver-7', '{Guid.NewGuid():N}', '{purpose}', 'adapter0', 32736, 1024,
+                'driver-7', '{session ?? Guid.NewGuid().ToString("N")}', '{purpose}', 'adapter0', 32736, 1024,
                 {Taken}, {endedAt}, {measured}, {dropped}, {total}, 0, {measuredUpdatedAt})
             """,
             connection).ExecuteNonQueryAsync();

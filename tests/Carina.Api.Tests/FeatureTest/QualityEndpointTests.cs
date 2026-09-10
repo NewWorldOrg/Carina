@@ -107,6 +107,7 @@ public sealed class QualityEndpointTests
             .GetProperty("data")
             .GetProperty("signal");
 
+        Assert.Equal(3, signal.GetArrayLength());
         Assert.All(signal.EnumerateArray(), facet =>
             Assert.Equal("nothingToMeasure", facet.GetProperty("reading").GetProperty("state").GetString()));
     }
@@ -221,10 +222,13 @@ public sealed class QualityEndpointTests
         Assert.Equal(
             ["adapter3.frontend0", "adapter3.frontend1"],
             items.EnumerateArray().Select(item => item.GetProperty("deviceId").GetString()));
-        Assert.Equal(3, items[0].GetProperty("signal").GetArrayLength());
-        Assert.All(items.EnumerateArray(), item => Assert.All(
-            item.GetProperty("signal").EnumerateArray(),
-            facet => Assert.Equal("unmeasured", facet.GetProperty("reading").GetProperty("state").GetString())));
+        Assert.All(items.EnumerateArray(), item =>
+        {
+            Assert.Equal(3, item.GetProperty("signal").GetArrayLength());
+            Assert.All(
+                item.GetProperty("signal").EnumerateArray(),
+                facet => Assert.Equal("unmeasured", facet.GetProperty("reading").GetProperty("state").GetString()));
+        });
     }
 
     [Fact]
@@ -297,6 +301,7 @@ public sealed class QualityEndpointTests
             .GetProperty("data")
             .GetProperty("signal");
 
+        Assert.Equal(3, signal.GetArrayLength());
         Assert.All(signal.EnumerateArray(), facet =>
         {
             Assert.Equal("good", facet.GetProperty("reading").GetProperty("state").GetString());
@@ -359,6 +364,7 @@ public sealed class QualityEndpointTests
             .GetProperty("data")
             .GetProperty("signal");
 
+        Assert.Equal(3, signal.GetArrayLength());
         Assert.All(signal.EnumerateArray(), facet =>
         {
             Assert.Equal("good", facet.GetProperty("reading").GetProperty("state").GetString());
@@ -382,9 +388,11 @@ public sealed class QualityEndpointTests
             .EnumerateArray()
             .Single(item => item.GetProperty("deviceId").GetString() == "adapter3.frontend1");
 
+        Assert.Equal(3, onlySampled.GetProperty("signal").GetArrayLength());
         Assert.All(
             onlySampled.GetProperty("signal").EnumerateArray(),
             facet => Assert.Equal("good", facet.GetProperty("reading").GetProperty("state").GetString()));
+        Assert.Equal(3, onlySampled.GetProperty("measures").GetArrayLength());
         Assert.All(
             onlySampled.GetProperty("measures").EnumerateArray(),
             measure => Assert.Equal("nothingToMeasure", measure.GetProperty("reading").GetProperty("state").GetString()));
