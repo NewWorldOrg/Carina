@@ -19,6 +19,37 @@ public sealed class IntegritySettingsTests
     }
 
     [Fact]
+    public void SettingsNobodyTouchedWalkTheFilesOnceADay()
+    {
+        Assert.Equal(TimeSpan.FromDays(1), new IntegritySettings().BetweenSweeps);
+    }
+
+    [Fact]
+    public void SettingsNobodyTouchedWalkSoonAfterStartingRatherThanWaitingOutTheWholeDay()
+    {
+        var settings = new IntegritySettings();
+
+        Assert.Equal(TimeSpan.FromMinutes(5), settings.BeforeFirstSweep);
+        Assert.True(settings.BeforeFirstSweep < settings.BetweenSweeps);
+    }
+
+    [Fact]
+    public void TheGapBetweenSweepsAskedForIsTheOneThatWasSet()
+    {
+        var settings = new IntegritySettings { BetweenSweeps = TimeSpan.FromHours(2) };
+
+        Assert.Equal(TimeSpan.FromHours(2), settings.BetweenSweeps);
+    }
+
+    [Fact]
+    public void TheWaitBeforeTheFirstSweepAskedForIsTheOneThatWasSet()
+    {
+        var settings = new IntegritySettings { BeforeFirstSweep = TimeSpan.FromMinutes(1) };
+
+        Assert.Equal(TimeSpan.FromMinutes(1), settings.BeforeFirstSweep);
+    }
+
+    [Fact]
     public void TheHoldBackBetweenSweepsAskedForByHandIsTheOneThatWasSet()
     {
         var settings = new IntegritySettings { BetweenManualSweeps = TimeSpan.FromMinutes(20) };
