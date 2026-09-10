@@ -91,6 +91,7 @@ public sealed class FfprobeSourceLengthTests : IDisposable
         SourceLengthReading reading = await Reading(standIns.Named("no-such-programme"));
 
         Assert.Equal(SourceLengthFault.ProgrammeMissing, reading.Fault);
+        Assert.NotEmpty(reading.Note);
         Assert.DoesNotContain('/', reading.Note);
     }
 

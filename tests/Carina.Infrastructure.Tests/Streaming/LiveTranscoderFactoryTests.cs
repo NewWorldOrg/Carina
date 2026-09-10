@@ -103,6 +103,7 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
 
         Assert.False(start.Running);
         Assert.Equal(TranscoderFault.ProgrammeMissing, start.Fault);
+        Assert.NotEmpty(start.Note);
         Assert.DoesNotContain('/', start.Note);
     }
 

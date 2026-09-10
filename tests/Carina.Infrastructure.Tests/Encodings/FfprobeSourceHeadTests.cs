@@ -97,6 +97,7 @@ public sealed class FfprobeSourceHeadTests : IDisposable
         SourceHeadReading slow = await Reading(standIns.Script("sleep 60"), TimeSpan.FromMilliseconds(250));
 
         Assert.Equal(SourceHeadFault.ProgrammeMissing, missing.Fault);
+        Assert.NotEmpty(missing.Note);
         Assert.DoesNotContain('/', missing.Note);
         Assert.Equal(SourceHeadFault.TimedOut, slow.Fault);
     }

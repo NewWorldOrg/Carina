@@ -137,6 +137,7 @@ public sealed class EncodePlanTests
             EncodeSwerve.TheCardIsOutOfReach,
             "could not open /dev/dri/renderD128");
 
+        Assert.NotEmpty(plan.Note);
         Assert.DoesNotContain('/', plan.Note);
     }
 

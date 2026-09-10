@@ -54,6 +54,7 @@ public sealed class LiveTranscodeTypeTests
             CardStanding.DriverUnusable,
             "No VA display found for device /dev/dri/renderD128.");
 
+        Assert.NotEmpty(chosen.Note);
         Assert.DoesNotContain('/', chosen.Note);
     }
 
@@ -125,6 +126,7 @@ public sealed class LiveTranscodeTypeTests
         Assert.False(failed.Running);
         Assert.Null(failed.Transcoder);
         Assert.Equal(TranscoderFault.ProgrammeMissing, failed.Fault);
+        Assert.NotEmpty(failed.Note);
         Assert.DoesNotContain('/', failed.Note);
     }
 
