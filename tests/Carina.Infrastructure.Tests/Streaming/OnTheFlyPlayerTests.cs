@@ -371,6 +371,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
             CancellationToken.None);
 
         Assert.Equal(OnTheFlyRefusal.TranscoderWouldNotStart, start.Refusal);
+        Assert.NotEmpty(start.Note);
         Assert.DoesNotContain('/', start.Note);
     }
 

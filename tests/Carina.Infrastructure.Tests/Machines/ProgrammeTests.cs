@@ -87,6 +87,7 @@ public sealed class ProgrammeTests : IDisposable
         Assert.False(said.Ran);
         Assert.Equal(ProgrammeFault.ProgrammeMissing, said.Fault);
         Assert.Null(said.ExitCode);
+        Assert.NotEmpty(said.Complained);
         Assert.DoesNotContain('/', said.Complained);
     }
 

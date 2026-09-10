@@ -58,6 +58,7 @@ public sealed class LiveJoinTests
     {
         LiveJoin join = LiveJoin.Refused(LiveRefusal.TranscoderWouldNotStart, "could not open /usr/bin/ffmpeg here");
 
+        Assert.NotEmpty(join.Note);
         Assert.DoesNotContain('/', join.Note);
     }
 
