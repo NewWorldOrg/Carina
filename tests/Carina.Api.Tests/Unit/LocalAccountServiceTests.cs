@@ -13,6 +13,8 @@ public sealed class LocalAccountServiceTests
 
     private const string Caller = "10.0.0.9";
 
+    private const string Carrier = "0123456789abcdefghijklmnopqrstuvwxyz-_ABCDE";
+
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
     private readonly HeldClock clock = new(new DateTimeOffset(2026, 8, 19, 9, 0, 0, TimeSpan.Zero));
@@ -20,6 +22,10 @@ public sealed class LocalAccountServiceTests
     private readonly HeldLocalAccount accounts = new();
 
     private readonly HeldAuthSessions sessions = new();
+
+    private readonly PlaybackGrantStore grants = new(
+        new HeldClock(new DateTimeOffset(2026, 8, 19, 9, 0, 0, TimeSpan.Zero)),
+        PlaybackGrantPolicy.Default);
 
     private readonly CountingPasswordHasher hasher = new(new QuickPasswordHasher());
 
@@ -190,11 +196,28 @@ public sealed class LocalAccountServiceTests
         Assert.Equal(SessionStatus.Active, there.StatusAt(Now(), SessionPolicy.Default));
     }
 
+    [Fact]
+    public async Task ChangingThePasswordClosesWhatWasAlreadyBeingWatched()
+    {
+        Seed();
+
+        AuthSession here = await StartedAsync("this device");
+        PlaybackTarget target = PlaybackTarget.Recording("7");
+        grants.Open(Carrier, here.Subject, target);
+
+        Assert.NotNull(grants.Admit(Carrier, target));
+
+        await ChangeAsync(here, Password, "a replacement long enough");
+
+        Assert.Null(grants.Admit(Carrier, target));
+    }
+
     private LocalAccountService Held => held ??= Service();
 
     private LocalAccountService Service() => new(
         accounts,
         sessions,
+        grants,
         hasher,
         new LoginThrottle(LoginRatePolicy.Default, clock),
         PasswordHashPolicy.Default,

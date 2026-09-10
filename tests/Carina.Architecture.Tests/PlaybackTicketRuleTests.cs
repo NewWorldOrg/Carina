@@ -17,6 +17,7 @@ public sealed class PlaybackTicketRuleTests
                 "Carina.Api/Responder/Playback/PlaybackTicketResponder.cs",
                 "Carina.Api/Services/AuthSessionService.cs",
                 "Carina.Api/Services/LiveService.cs",
+                "Carina.Api/Services/LocalAccountService.cs",
                 "Carina.Api/Services/PlaybackTicketService.cs",
                 "Carina.Domain/Auth/IPlaybackGrantStore.cs",
                 "Carina.Domain/Auth/IPlaybackTicketStore.cs",

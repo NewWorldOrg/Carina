@@ -6,6 +6,7 @@ namespace Carina.Api.Services;
 public sealed class LocalAccountService(
     ILocalAccountRepository accounts,
     IAuthSessionRepository sessions,
+    IPlaybackGrantStore grants,
     IPasswordHasher hasher,
     ILoginThrottle throttle,
     PasswordHashPolicy hashPolicy,
@@ -93,8 +94,11 @@ public sealed class LocalAccountService(
 
         await accounts.SaveAsync(account, cancellationToken);
 
-        return ServiceResult<int, PasswordRefusal>.Success(
-            await EndEveryOtherSessionAsync(change, at, cancellationToken));
+        int ended = await EndEveryOtherSessionAsync(change, at, cancellationToken);
+
+        grants.RevokeEverythingOf(change.Subject);
+
+        return ServiceResult<int, PasswordRefusal>.Success(ended);
     }
 
     private async Task<int> EndEveryOtherSessionAsync(
