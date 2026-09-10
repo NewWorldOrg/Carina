@@ -83,26 +83,98 @@ public sealed class PlaybackPlanTests
     [Fact]
     public void AnEncodedFileTheBrowserCanDecodeIsHandedOverAsItIs()
     {
-        var encoded = new PlaybackFile(new OutputRoot("bulk"), new RecordingFileName("encoded.mp4"), 1_000_000);
+        PlaybackFile encoded = Encoded("encoded.mp4", 1_000_000);
 
         PlaybackPlan plan = PlaybackPlan.For(
-            new PlaybackSubject(RecordingOutcome.Complete, OnDisk(4_000_000), [encoded]));
+            new PlaybackSubject(RecordingOutcome.Complete, OnDisk(4_000_000), [PlaybackFileSearch.Of(encoded)]));
 
         Assert.Equal(PlaybackRoute.Direct, plan.Route);
         Assert.False(plan.Transcodes);
         Assert.Equal(encoded, plan.Handover);
+        Assert.Null(plan.FellBack);
+    }
+
+    [Fact]
+    public void TheFirstEncodedFileTheDiskHasIsTheOneHandedOver()
+    {
+        PlaybackFile first = Encoded("first.mp4", 1_000_000);
+        PlaybackFile second = Encoded("second.mp4", 2_000_000);
+
+        PlaybackPlan plan = PlaybackPlan.For(new PlaybackSubject(
+            RecordingOutcome.Complete,
+            OnDisk(4_000_000),
+            [PlaybackFileSearch.Of(first), PlaybackFileSearch.Of(second)]));
+
+        Assert.Equal(first, plan.Handover);
+    }
+
+    [Fact]
+    public void AnEncodedFileTheLedgerNamesAndTheDiskHasNotIsPassedOverForTheNextOne()
+    {
+        PlaybackFile second = Encoded("second.mp4", 2_000_000);
+
+        PlaybackPlan plan = PlaybackPlan.For(new PlaybackSubject(
+            RecordingOutcome.Complete,
+            OnDisk(4_000_000),
+            [Gone, PlaybackFileSearch.Of(second)]));
+
+        Assert.Equal(PlaybackRoute.Direct, plan.Route);
+        Assert.Equal(second, plan.Handover);
+        Assert.Null(plan.FellBack);
+    }
+
+    [Fact]
+    public void AnEncodedFileThatIsGoneSendsPlaybackBackToTheTranscoderAndSaysSo()
+    {
+        PlaybackPlan plan = PlaybackPlan.For(
+            new PlaybackSubject(RecordingOutcome.Complete, OnDisk(4_000_000), [Gone]));
+
+        Assert.Equal(PlaybackRoute.OnTheFly, plan.Route);
+        Assert.Equal(Written(4_000_000), plan.Handover);
+        Assert.Equal(PlaybackFallback.EncodedFileGone, plan.FellBack);
+    }
+
+    [Fact]
+    public void AnEncodedFileOutOfReachIsToldApartFromOneThatIsGone()
+    {
+        PlaybackPlan plan = PlaybackPlan.For(
+            new PlaybackSubject(RecordingOutcome.Complete, OnDisk(4_000_000), [OutOfReach]));
+
+        Assert.Equal(PlaybackRoute.OnTheFly, plan.Route);
+        Assert.Equal(PlaybackFallback.EncodedFileOutOfReach, plan.FellBack);
     }
 
     [Fact]
     public void AnEncodedFileHoldingNothingIsNotPreferredOverTheRecordingItself()
     {
-        var empty = new PlaybackFile(new OutputRoot("bulk"), new RecordingFileName("encoded.mp4"), 0);
+        PlaybackFileSearch empty = PlaybackFileSearch.Of(Encoded("encoded.mp4", 0));
 
         PlaybackPlan plan = PlaybackPlan.For(
             new PlaybackSubject(RecordingOutcome.Complete, OnDisk(4_000_000), [empty]));
 
         Assert.Equal(PlaybackRoute.OnTheFly, plan.Route);
         Assert.Equal(Written(4_000_000), plan.Handover);
+        Assert.Equal(PlaybackFallback.EncodedFileHoldsNothing, plan.FellBack);
+    }
+
+    [Fact]
+    public void ARecordingWhoseEncodedFileAndOwnFileAreBothGoneIsRefusedAndStillSaysWhatTheLedgerPromised()
+    {
+        PlaybackPlan plan = PlaybackPlan.For(
+            new PlaybackSubject(RecordingOutcome.Complete, Gone, [Gone]));
+
+        Assert.Equal(PlaybackRoute.Nothing, plan.Route);
+        Assert.Equal(PlaybackRefusal.FileGone, plan.Refusal);
+        Assert.Equal(PlaybackFallback.EncodedFileGone, plan.FellBack);
+    }
+
+    [Fact]
+    public void ARecordingNothingHasEncodedFallsBackFromNothing()
+    {
+        PlaybackPlan plan = PlaybackPlan.For(
+            PlaybackSubject.NothingHasBeenEncodedYet(RecordingOutcome.Complete, OnDisk(4_000_000)));
+
+        Assert.Null(plan.FellBack);
     }
 
     [Fact]
@@ -211,4 +283,7 @@ public sealed class PlaybackPlanTests
 
     private static PlaybackFile Written(long bytes)
         => new(new OutputRoot("bulk"), new RecordingFileName("a1b2c3.m2ts"), bytes);
+
+    private static PlaybackFile Encoded(string name, long bytes)
+        => new(new OutputRoot("shelf"), new RecordingFileName(name), bytes);
 }

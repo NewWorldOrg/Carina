@@ -23,6 +23,8 @@ public static class EncodeShapes
                 deinterlace,
                 "Interlacing is left alone or undone one of the two ways.");
 
+    public static bool EveryBrowserPlays(EncodeCodec codec) => Named(codec) is EncodeCodec.H264;
+
     public static EncodeEncoder Named(EncodeEncoder encoder)
         => Enum.IsDefined(encoder)
             ? encoder

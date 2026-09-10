@@ -4,6 +4,7 @@ using System.Text.Json;
 
 using Carina.Api.Playback;
 using Carina.Domain.Channels;
+using Carina.Domain.Encodings;
 using Carina.Domain.Integrity;
 using Carina.Domain.Playback;
 using Carina.Domain.Recordings;
@@ -98,6 +99,8 @@ internal sealed class PlayFeature : IAsyncDisposable
 
     private readonly DirectoryInfo mounted = Directory.CreateTempSubdirectory("carina-play-");
 
+    private readonly DirectoryInfo shelved = Directory.CreateTempSubdirectory("carina-play-shelf-");
+
     public PlayFeature()
     {
         WebApplicationFactory<Program> configured = factory
@@ -111,6 +114,12 @@ internal sealed class PlayFeature : IAsyncDisposable
                 {
                     OutputRoots = [new StorageRootPath(Root, mounted.FullName)],
                 });
+                services.AddSingleton(new EncodeSettings
+                {
+                    OutputRoots = [new StorageRootPath(EncodedArtefact.Shelf, shelved.FullName)],
+                });
+                services.AddSingleton<IEncodeJobRepository>(Jobs);
+                services.AddSingleton<IEncodeProfileRepository>(Profiles);
             }));
 
         Client = configured.WithTestScheme().CreateClient();
@@ -125,6 +134,10 @@ internal sealed class PlayFeature : IAsyncDisposable
     public HttpClient Stranger { get; }
 
     public HeldRecordings Recordings { get; } = new();
+
+    public HeldEncodeJobs Jobs { get; } = new();
+
+    public HeldEncodeProfiles Profiles { get; } = new();
 
     public HeldOnTheFlyPlayer Player { get; } = new();
 
@@ -171,6 +184,32 @@ internal sealed class PlayFeature : IAsyncDisposable
         return recording;
     }
 
+    public byte[] Encoded(
+        Recording recording,
+        EncodeCodec codec = EncodeCodec.H264,
+        int minutesLater = 0,
+        int bytes = 900,
+        bool onDisk = true)
+    {
+        EncodeProfile profile = EncodedArtefact.Profile(codec, RecordingFeature.Noon.AddHours(-1));
+        Profiles.Profiles.Add(profile);
+
+        EncodeJob job = EncodedArtefact.Made(
+            recording,
+            profile,
+            RecordingFeature.Noon.AddHours(1).AddMinutes(minutesLater));
+        Jobs.Jobs.Add(job);
+
+        byte[] made = [.. Enumerable.Range(0, bytes).Select(index => (byte)((index * 3) % 251))];
+
+        if (onDisk)
+        {
+            File.WriteAllBytes(Path.Combine(shelved.FullName, job.ArtefactName!.Value), made);
+        }
+
+        return made;
+    }
+
     public Task<HttpResponseMessage> PlanAsync(Recording recording, string query = "")
         => AskAsync(recording, query, PlayDelivery.Json);
 
@@ -187,6 +226,11 @@ internal sealed class PlayFeature : IAsyncDisposable
         {
             mounted.Delete(recursive: true);
         }
+
+        if (Directory.Exists(shelved.FullName))
+        {
+            shelved.Delete(recursive: true);
+        }
     }
 
     public static async Task<JsonElement> PlanOfAsync(HttpResponseMessage answer)
@@ -198,7 +242,14 @@ internal sealed class PlayFeature : IAsyncDisposable
         return read.RootElement.Clone();
     }
 
-    private async Task<HttpResponseMessage> AskAsync(Recording recording, string query, string accepting)
+    public Task<HttpResponseMessage> PictureAsync(Recording recording, string query, string range)
+        => AskAsync(recording, query, "*/*", range);
+
+    private async Task<HttpResponseMessage> AskAsync(
+        Recording recording,
+        string query,
+        string accepting,
+        string? range = null)
     {
         ArgumentNullException.ThrowIfNull(recording);
 
@@ -207,6 +258,11 @@ internal sealed class PlayFeature : IAsyncDisposable
             new Uri($"/api/videos/{recording.Id.Wire}/play{query}", UriKind.Relative));
 
         asking.Headers.TryAddWithoutValidation("Accept", accepting);
+
+        if (range is not null)
+        {
+            asking.Headers.TryAddWithoutValidation("Range", range);
+        }
 
         return await Client.SendAsync(asking, HttpCompletionOption.ResponseHeadersRead);
     }

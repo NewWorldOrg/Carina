@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 
+using Carina.Domain.Encodings;
 using Carina.Domain.Integrity;
 using Carina.Domain.Recordings;
 using Carina.TestSupport;
@@ -30,6 +31,8 @@ internal sealed class TicketedFeature : IAsyncDisposable
             {
                 services.RemoveAll<IHostedService>();
                 services.AddSingleton<IRecordingDirectory>(Recordings);
+                services.AddSingleton<IEncodeJobRepository>(new HeldEncodeJobs());
+                services.AddSingleton<IEncodeProfileRepository>(new HeldEncodeProfiles());
                 services.AddSingleton(new IntegritySettings
                 {
                     OutputRoots = [new StorageRootPath(Root, mounted.FullName)],

@@ -9,7 +9,7 @@ public sealed class PlaybackSeekingTests
     public void AnEncodedRecordingIsMovedAboutByAskingForAnotherRangeOfTheSameFile()
     {
         PlaybackPlan plan = PlaybackPlan.For(
-            new PlaybackSubject(RecordingOutcome.Complete, OnDisk("a1b2c3.m2ts", 4_000_000), [Written("a1b2c3.mp4", 900_000)]));
+            new PlaybackSubject(RecordingOutcome.Complete, OnDisk("a1b2c3.m2ts", 4_000_000), [OnDisk("a1b2c3.mp4", 900_000)]));
 
         Assert.Equal(PlaybackRoute.Direct, plan.Route);
         Assert.Equal(PlaybackSeeking.ByRange, plan.Seeking);

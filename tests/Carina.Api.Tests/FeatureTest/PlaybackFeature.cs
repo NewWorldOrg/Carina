@@ -1,5 +1,6 @@
 using System.Net.Http.Headers;
 
+using Carina.Domain.Encodings;
 using Carina.Domain.Integrity;
 using Carina.Domain.Playback;
 using Carina.Domain.Recordings;
@@ -21,6 +22,8 @@ internal sealed class PlaybackFeature : IAsyncDisposable
 
     private readonly DirectoryInfo mounted = Directory.CreateTempSubdirectory("carina-playback-");
 
+    private readonly DirectoryInfo shelved = Directory.CreateTempSubdirectory("carina-playback-shelf-");
+
     public PlaybackFeature(IPlaybackFileStore? files = null)
     {
         WebApplicationFactory<Program> configured = factory
@@ -32,6 +35,12 @@ internal sealed class PlaybackFeature : IAsyncDisposable
                 {
                     OutputRoots = [new StorageRootPath(Root, mounted.FullName)],
                 });
+                services.AddSingleton(new EncodeSettings
+                {
+                    OutputRoots = [new StorageRootPath(EncodedArtefact.Shelf, shelved.FullName)],
+                });
+                services.AddSingleton<IEncodeJobRepository>(Jobs);
+                services.AddSingleton<IEncodeProfileRepository>(Profiles);
 
                 if (files is not null)
                 {
@@ -54,6 +63,10 @@ internal sealed class PlaybackFeature : IAsyncDisposable
     public HttpClient Stranger { get; }
 
     public HeldRecordings Recordings { get; } = new();
+
+    public HeldEncodeJobs Jobs { get; } = new();
+
+    public HeldEncodeProfiles Profiles { get; } = new();
 
     public Recording Ended(RecordingOutcome outcome, byte[] bytes, bool onDisk = true)
     {
@@ -97,6 +110,20 @@ internal sealed class PlaybackFeature : IAsyncDisposable
 
     public static byte[] Bytes(int count) => [.. Enumerable.Range(0, count).Select(index => (byte)(index % 251))];
 
+    public byte[] Encoded(Recording recording, int bytes = 900)
+    {
+        EncodeProfile profile = EncodedArtefact.Profile(EncodeCodec.H264, RecordingFeature.Noon.AddHours(-1));
+        Profiles.Profiles.Add(profile);
+
+        EncodeJob job = EncodedArtefact.Made(recording, profile, RecordingFeature.Noon.AddHours(1));
+        Jobs.Jobs.Add(job);
+
+        byte[] made = Bytes(bytes);
+        File.WriteAllBytes(Path.Combine(shelved.FullName, job.ArtefactName!.Value), made);
+
+        return made;
+    }
+
     public Task<HttpResponseMessage> GetAsync(Recording recording, string? range = null)
         => SendAsync(HttpMethod.Get, recording, range);
 
@@ -112,6 +139,11 @@ internal sealed class PlaybackFeature : IAsyncDisposable
         if (Directory.Exists(mounted.FullName))
         {
             mounted.Delete(recursive: true);
+        }
+
+        if (Directory.Exists(shelved.FullName))
+        {
+            shelved.Delete(recursive: true);
         }
     }
 
