@@ -1,6 +1,6 @@
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
-using Carina.Domain.Streaming;
 
 namespace Carina.Domain.Tests.Programmes;
 

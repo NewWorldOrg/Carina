@@ -6,7 +6,6 @@ using Carina.Domain.Channels;
 using Carina.Domain.Events;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
-using Carina.Domain.Streaming;
 
 namespace Carina.Infrastructure.Collection;
 

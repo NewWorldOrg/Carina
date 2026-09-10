@@ -1,3 +1,5 @@
+using Carina.Domain.Base;
+
 namespace Carina.Domain.Streaming;
 
 public enum ScanType
@@ -7,19 +9,6 @@ public enum ScanType
     Progressive = 1,
 
     Interlaced = 2,
-}
-
-public enum AudioMode
-{
-    Undetermined = 0,
-
-    Mono = 1,
-
-    Stereo = 2,
-
-    DualMono = 3,
-
-    Surround = 4,
 }
 
 public sealed record VideoSize

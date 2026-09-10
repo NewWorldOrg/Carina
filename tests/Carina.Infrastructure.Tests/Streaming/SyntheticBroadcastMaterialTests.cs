@@ -4,6 +4,7 @@ using System.IO.Pipes;
 using System.Runtime.Versioning;
 
 using Carina.BroadcastTestSupport;
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Recordings;
 using Carina.Domain.Streaming;

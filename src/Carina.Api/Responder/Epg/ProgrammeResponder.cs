@@ -1,8 +1,8 @@
 using Carina.Api.Common;
 using Carina.Api.Services;
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
-using Carina.Domain.Streaming;
 
 namespace Carina.Api.Responder.Epg;
 

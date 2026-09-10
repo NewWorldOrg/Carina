@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Streaming;
 
 using Carina.Infrastructure.Machines;

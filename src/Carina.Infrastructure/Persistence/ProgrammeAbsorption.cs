@@ -1,8 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+using Carina.Domain.Base;
 using Carina.Domain.Programmes;
-using Carina.Domain.Streaming;
 
 using Carina.Infrastructure.Persistence.Configurations;
 

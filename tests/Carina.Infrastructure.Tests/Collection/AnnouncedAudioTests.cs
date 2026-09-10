@@ -1,5 +1,5 @@
 using Carina.Broadcast.Descriptors;
-using Carina.Domain.Streaming;
+using Carina.Domain.Base;
 using Carina.Infrastructure.Collection;
 
 namespace Carina.Infrastructure.Tests.Collection;
