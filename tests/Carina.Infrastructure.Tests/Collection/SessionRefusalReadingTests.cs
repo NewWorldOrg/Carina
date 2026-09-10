@@ -1,4 +1,5 @@
 using Carina.Contracts;
+using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Infrastructure.Collection;
 
@@ -6,11 +7,54 @@ namespace Carina.Infrastructure.Tests.Collection;
 
 public sealed class SessionRefusalReadingTests
 {
+    [Theory]
+    [InlineData(SessionRefusalTitles.NoLock, VisitOutcome.NoLock)]
+    [InlineData(SessionRefusalTitles.NoData, VisitOutcome.NoBytes)]
+    public void TheTwoWaysReceptionFailsAreToldApart(string title, VisitOutcome outcome)
+        => Assert.Equal(outcome, SessionRefusalReading.Of(new DriverProblem(title, [])));
+
+    [Theory]
+    [InlineData(SessionRefusalTitles.NoLock, TuneFailureKind.NoLock)]
+    [InlineData(SessionRefusalTitles.NoData, TuneFailureKind.NoData)]
+    public void ARefusalThatNamesAReceptionFailureIsReadAsThatKind(string title, TuneFailureKind kind)
+        => Assert.Equal(kind, SessionRefusalReading.TuneFailureIn(new DriverProblem(title, [])));
+
+    [Theory]
+    [InlineData(SessionRefusalTitles.DeviceUnavailable)]
+    [InlineData(SessionRefusalTitles.FaultedDevice)]
+    [InlineData(SessionRefusalTitles.DeviceBusy)]
+    [InlineData(SessionRefusalTitles.Draining)]
+    [InlineData(SessionRefusalTitles.Rejected)]
+    [InlineData("somethingTheDriverLearnedToSayLater")]
+    public void NoOtherRefusalIsDressedUpAsAReceptionFailure(string title)
+        => Assert.Null(SessionRefusalReading.TuneFailureIn(new DriverProblem(title, [])));
+
+    [Theory]
+    [InlineData(SessionRefusalTitles.NoLock, TuneFailureKind.NoLock)]
+    [InlineData(SessionRefusalTitles.NoData, TuneFailureKind.NoData)]
+    public void ASessionThatDiedOfATuningFailureSaysWhichOneItWas(string title, TuneFailureKind kind)
+        => Assert.Equal(kind, SessionRefusalReading.TuneFailureIn(Failed(title)));
+
     [Fact]
-    public void OnlyAFailureToLockSaysAnythingAboutReception()
-        => Assert.Equal(
-            VisitOutcome.NoLock,
-            SessionRefusalReading.Of(new DriverProblem(SessionRefusalTitles.NoLock, [])));
+    public void ASessionThatNamedNothingLeavesTheKindUnsaid()
+    {
+        Assert.Null(SessionRefusalReading.TuneFailureIn(Failed(null)));
+        Assert.Null(SessionRefusalReading.TuneFailureIn((SessionSnapshot?)null));
+    }
+
+    [Fact]
+    public void TheOnlyTitlesThatNameATuningFailureAreTheTwoTheDriverCanSee()
+    {
+        string[] said =
+        [
+            .. typeof(SessionRefusalTitles)
+                .GetFields()
+                .Select(field => (string)field.GetRawConstantValue()!)
+                .Where(title => SessionRefusalReading.TuneFailureIn(new DriverProblem(title, [])) is not null),
+        ];
+
+        Assert.Equal([SessionRefusalTitles.NoLock, SessionRefusalTitles.NoData], said);
+    }
 
     [Theory]
     [InlineData(SessionRefusalTitles.DeviceBusy)]
@@ -81,4 +125,15 @@ public sealed class SessionRefusalReadingTests
     }
 
     private static DriverProblem Named(string title) => new(title, []);
+
+    private static SessionSnapshot Failed(string? title)
+        => new(
+            SessionId.Parse("recording-1"),
+            SessionPurpose.Recording,
+            "adapter0",
+            SessionState.Failed,
+            new DateTimeOffset(2026, 9, 11, 3, 0, 0, TimeSpan.Zero))
+        {
+            FailureTitle = title,
+        };
 }

@@ -7,12 +7,18 @@ namespace Carina.Infrastructure.Collection;
 public static class SessionRefusalReading
 {
     public static VisitOutcome Of(DriverProblem? problem)
-        => problem?.Title == SessionRefusalTitles.NoLock
-            ? VisitOutcome.NoLock
-            : VisitOutcome.Interrupted;
+        => Named(problem?.Title) switch
+        {
+            TuneFailureKind.NoLock => VisitOutcome.NoLock,
+            TuneFailureKind.NoData => VisitOutcome.NoBytes,
+            _ => VisitOutcome.Interrupted,
+        };
 
     public static TuneFailureKind? TuneFailureIn(DriverProblem? problem)
-        => problem?.Title == SessionRefusalTitles.NoLock ? TuneFailureKind.NoLock : null;
+        => Named(problem?.Title);
+
+    public static TuneFailureKind? TuneFailureIn(SessionSnapshot? session)
+        => Named(session?.FailureTitle);
 
     public static bool IsContended(DriverProblem? problem)
         => problem?.Title is SessionRefusalTitles.DeviceBusy
@@ -23,4 +29,12 @@ public static class SessionRefusalReading
         => problem?.Title is SessionRefusalTitles.DeviceBusy
             or SessionRefusalTitles.NoDeviceFree
             or SessionRefusalTitles.Draining;
+
+    private static TuneFailureKind? Named(string? title)
+        => title switch
+        {
+            SessionRefusalTitles.NoLock => TuneFailureKind.NoLock,
+            SessionRefusalTitles.NoData => TuneFailureKind.NoData,
+            _ => null,
+        };
 }

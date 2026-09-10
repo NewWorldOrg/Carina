@@ -41,6 +41,8 @@ internal sealed class LiveDriverStandIn : IDriverClient
 
     public string? FailureCauseOnStart { get; set; }
 
+    public string? FailureTitleOnStart { get; set; }
+
     public DriverProblem? RefusingToOpen { get; set; }
 
     public bool StreamRefusesToClose { get; set; }
@@ -127,6 +129,7 @@ internal sealed class LiveDriverStandIn : IDriverClient
             new SessionSnapshot(request.SessionId, request.Purpose, DeviceId, StateOnStart, DateTimeOffset.UnixEpoch)
             {
                 FailureCause = FailureCauseOnStart,
+                FailureTitle = FailureTitleOnStart,
             }));
     }
 

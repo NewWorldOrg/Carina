@@ -1,4 +1,5 @@
 using Carina.Contracts;
+using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.DriverStatus;
 using Carina.Domain.Recordings;
@@ -138,6 +139,32 @@ public sealed class RecordingStreamSupervisorTests
         Assert.Equal(RecordingFault.DrainGraceExpired, await BrokeBy(SessionStopReason.DrainCapReached));
         Assert.Equal(RecordingFault.DriverLost, await BrokeBy(SessionStopReason.DeviceFailed));
         Assert.Equal(RecordingFault.DriverLost, await BrokeBy(null));
+    }
+
+    [Theory]
+    [InlineData(SessionRefusalTitles.NoLock, TuneFailureKind.NoLock)]
+    [InlineData(SessionRefusalTitles.NoData, TuneFailureKind.NoData)]
+    public async Task ARecordingCutShortByReceptionKeepsWhichOfTheFourItWas(
+        string title,
+        TuneFailureKind kind)
+    {
+        Recording read = await BrokenAfterTheDriverSaid(title);
+
+        Assert.Equal(RecordingFault.TuneFailed, Assert.Single(read.Interruptions).Fault);
+
+        OutcomeDetail noted = Assert.Single(read.OutcomeDetail);
+
+        Assert.Equal(RecordingFault.TuneFailed, noted.Fault);
+        Assert.Equal(kind, noted.TuneFailure);
+    }
+
+    [Fact]
+    public async Task ABreakThatSaysNothingAboutReceptionWritesNoClassOfItsOwn()
+    {
+        Recording read = await BrokenAfterTheDriverSaid(null);
+
+        Assert.Equal(RecordingFault.DriverLost, Assert.Single(read.Interruptions).Fault);
+        Assert.Empty(read.OutcomeDetail);
     }
 
     [Fact]
@@ -608,6 +635,21 @@ public sealed class RecordingStreamSupervisorTests
 
         Assert.Equal(1, watch.Settled);
         Assert.True(watch.AnythingMoved);
+    }
+
+    private static async Task<Recording> BrokenAfterTheDriverSaid(string? title)
+    {
+        Recording recording = InFlight();
+        var ledger = new StreamLedger();
+        ledger.Hold(recording);
+        var driver = new WatchedDriver();
+
+        driver.Holding[RecordingSessions.Named(recording.Id)] =
+            Over(recording, SessionStopReason.Unspecified, title);
+
+        await Supervisor(ledger, driver, new WatchClock(Airs.AddMinutes(10))).WatchAsync(Cancel);
+
+        return ledger.Read(recording.Id);
     }
 
     private static async Task<RecordingFault> BrokeBy(SessionStopReason? reason)

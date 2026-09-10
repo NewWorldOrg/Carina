@@ -484,7 +484,8 @@ internal static class RecordingStreamFixture
 
     public static DriverCall<SessionSnapshot> Over(
         Recording recording,
-        SessionStopReason reason = SessionStopReason.EndTimeReached)
+        SessionStopReason reason = SessionStopReason.EndTimeReached,
+        string? failureTitle = null)
         => DriverCall<SessionSnapshot>.Reached(
             new SessionSnapshot(
                 RecordingSessions.Named(recording.Id),
@@ -496,6 +497,7 @@ internal static class RecordingStreamFixture
                 RecordingId = recording.Id.Wire,
                 Concluded = true,
                 StopReason = reason,
+                FailureTitle = failureTitle,
             });
 
     public static RecordingStreamSupervisor Supervisor(

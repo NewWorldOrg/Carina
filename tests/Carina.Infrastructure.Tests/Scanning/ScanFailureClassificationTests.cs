@@ -40,6 +40,24 @@ public sealed class ScanFailureClassificationTests
         Assert.Contains("noDeviceOfThatKind", attempt.Detail!, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData(SessionRefusalTitles.NoLock, ScanAttemptOutcome.NoLock)]
+    [InlineData(SessionRefusalTitles.NoData, ScanAttemptOutcome.LockedWithoutData)]
+    [InlineData(null, ScanAttemptOutcome.NoLock)]
+    public async Task ASessionHandedBackAlreadyFailedKeepsTheWayReceptionWentWrong(
+        string? title,
+        ScanAttemptOutcome expected)
+    {
+        ScanOutcome outcome = await ScanOne(new ChannelScript
+        {
+            State = SessionState.Failed,
+            FailureCause = "the tuner could not receive.",
+            FailureTitle = title,
+        });
+
+        Assert.Equal(expected, Single(outcome).Outcome);
+    }
+
     [Fact]
     public async Task ALockedTunerWhoseDemuxDeliversNothingIsRecordedAsLockedWithoutData()
     {

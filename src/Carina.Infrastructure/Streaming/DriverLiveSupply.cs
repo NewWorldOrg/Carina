@@ -88,7 +88,10 @@ public sealed class DriverLiveSupply(
 
             return LiveSupplyStart.Refused(
                 LiveRefusal.WouldNotTune,
-                session.FailureCause ?? session.FirstFault ?? "the driver could not tune this channel.");
+                session.FailureCause ?? session.FirstFault ?? "the driver could not tune this channel.",
+                SessionRefusalReading.TuneFailureIn(session) is { } named
+                    ? LiveRefusalDetail.Of(named)
+                    : LiveRefusalDetail.Unsaid);
         }
 
         DriverCall<Stream> opened;
@@ -157,6 +160,7 @@ public sealed class DriverLiveSupply(
         {
             SessionRefusalTitles.NoDeviceFree or SessionRefusalTitles.DeviceBusy => LiveRefusal.NoTunerFree,
             SessionRefusalTitles.NoLock
+                or SessionRefusalTitles.NoData
                 or SessionRefusalTitles.DeviceUnavailable
                 or SessionRefusalTitles.FaultedDevice
                 or SessionRefusalTitles.DisabledDevice
