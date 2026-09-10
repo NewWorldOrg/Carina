@@ -16,6 +16,7 @@ public sealed class ProgrammeSearchVocabularyTests(TestingWebApplicationFactory 
         JsonNode document = await ServedOpenApi.FetchAsync(factory);
         JsonArray declared = document["paths"]!["/api/programs/search"]!["get"]!["parameters"]!.AsArray();
 
+        Assert.NotEmpty(ProgrammeSearchQuery.Vocabulary);
         Assert.Equal(
             [.. ProgrammeSearchQuery.Vocabulary.Select(term => term.Name).Order(StringComparer.Ordinal)],
             [.. declared.Select(parameter => parameter!["name"]!.GetValue<string>()).Order(StringComparer.Ordinal)]);

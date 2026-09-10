@@ -747,8 +747,12 @@ public sealed class TunerSessionTests : IDisposable
         session.Stop();
         WaitForEnd(session);
 
-        await foreach (byte[] _ in viewer.Reader.ReadAllAsync())
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+
+        await foreach (byte[] _ in viewer.Reader.ReadAllAsync(deadline.Token))
         { }
+
+        Assert.True(viewer.Reader.Completion.IsCompletedSuccessfully);
     }
 
     [Fact]

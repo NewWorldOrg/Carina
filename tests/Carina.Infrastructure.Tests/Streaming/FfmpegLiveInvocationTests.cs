@@ -126,6 +126,7 @@ public sealed class FfmpegLiveInvocationTests
     [MemberData(nameof(EveryProfileOnEveryEncoder))]
     public void TheSameProfileAsksForTheSameThingEveryTime(LiveProfile profile, LiveEncoder encoder)
     {
+        Assert.NotEmpty(FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, CaptionOutlet.None));
         Assert.Equal(
             FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, CaptionOutlet.None),
             FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, CaptionOutlet.None));

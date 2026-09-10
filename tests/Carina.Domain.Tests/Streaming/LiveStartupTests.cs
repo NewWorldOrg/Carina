@@ -201,8 +201,9 @@ public sealed class LiveStartupTests
     [Fact]
     public void AProgressReportIsAsLongAsFiveMarksAndNoLonger()
     {
+        Assert.Equal(5, LiveStartupSegments.InOrder.Count);
+        Assert.Equal(LiveStartup.PayloadLength, LiveStartupSegments.InOrder.Count * LiveStartup.MarkLength);
         Assert.Equal(LiveStartup.PayloadLength, LiveStartup.NotStarted.ToProgressPayload().Length);
-        Assert.NotEqual(1, LiveStartup.NotStarted.ToProgressPayload().Length);
     }
 
     [Fact]
