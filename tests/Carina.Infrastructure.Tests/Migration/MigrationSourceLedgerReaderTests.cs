@@ -23,6 +23,7 @@ public sealed class MigrationSourceLedgerReaderTests
     {
         await Reader().ReadAsync(Cancel);
 
+        Assert.Equal(MigrationSourceLedgerReader.Populations.Count, source.Statements.Count - 2);
         Assert.All(
             source.Statements[1..^1],
             statement => Assert.StartsWith("SELECT ", statement, StringComparison.Ordinal));
@@ -54,6 +55,7 @@ public sealed class MigrationSourceLedgerReaderTests
     {
         await Reader().ReadAsync(Cancel);
 
+        Assert.Equal(MigrationSourceLedgerReader.Populations.Count, source.Statements.Count - 2);
         Assert.All(
             source.Statements,
             statement => Assert.DoesNotContain($"FROM {table}", statement, StringComparison.Ordinal));
