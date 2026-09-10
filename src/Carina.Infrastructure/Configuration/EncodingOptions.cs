@@ -16,6 +16,8 @@ public sealed class EncodingOptions
 
     public string? WorkedIn { get; set; }
 
+    public string? Automatically { get; set; }
+
     public string? Prefer { get; set; }
 
     public string? MostCores { get; set; }
@@ -34,6 +36,7 @@ public sealed class EncodingOptions
 
         OutputRoots = named[nameof(OutputRoots)];
         WorkedIn = named[nameof(WorkedIn)];
+        Automatically = named[nameof(Automatically)];
         Prefer = named[nameof(Prefer)];
         MostCores = named[nameof(MostCores)];
         MostAttempts = named[nameof(MostAttempts)];
@@ -49,6 +52,7 @@ public sealed class EncodingOptions
         {
             OutputRoots = Held(),
             WorkedIn = Absolute(WorkedIn, nameof(WorkedIn)),
+            Automatically = Told(Automatically, nameof(Automatically), unset.Automatically),
             Prefer = Named(Prefer, nameof(Prefer), unset.Prefer),
             MostCores = Counted(MostCores, nameof(MostCores), unset.MostCores, "cores"),
             MostAttempts = Counted(MostAttempts, nameof(MostAttempts), unset.MostAttempts, "attempts"),
@@ -71,6 +75,18 @@ public sealed class EncodingOptions
             : throw new ArgumentException(
                 $"{Section}:{name} is written where the process can reach it, and '{setting}' is not absolute.",
                 name);
+    }
+
+    private static bool Told(string? setting, string name, bool unset)
+    {
+        if (string.IsNullOrWhiteSpace(setting))
+        {
+            return unset;
+        }
+
+        return bool.TryParse(setting, out bool told)
+            ? told
+            : throw new ArgumentException($"{Section}:{name} is either true or false.", name);
     }
 
     private static EncodeEncoder Named(string? setting, string name, EncodeEncoder unset)

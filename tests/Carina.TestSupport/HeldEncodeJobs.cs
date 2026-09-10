@@ -81,6 +81,20 @@ public sealed class HeldEncodeJobs : IEncodeJobRepository, IEncodeStandingReader
         return Task.FromResult(listed);
     }
 
+    public Task<IReadOnlySet<RecordingId>> WithAJobAsync(
+        IReadOnlyCollection<RecordingId> recordings,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(recordings);
+
+        IReadOnlySet<RecordingId> held = Jobs
+            .Select(job => job.RecordingId)
+            .Where(recordings.Contains)
+            .ToHashSet();
+
+        return Task.FromResult(held);
+    }
+
     public Task<EncodeClaim> ClaimNextAsync(DateTime at, CancellationToken cancellationToken)
     {
         if (Jobs.Any(job => job.Status is EncodeJobStatus.Running))

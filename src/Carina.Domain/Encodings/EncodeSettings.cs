@@ -10,15 +10,17 @@ namespace Carina.Domain.Encodings;
 /// artefact it will become, under the same root, so the rename that finishes the job never crosses
 /// a mount; set, <see cref="WorkedIn"/> names one directory for every root, and the check at
 /// startup refuses a directory on another mount than any root (A-エンコード-024). The rest says
-/// which encoder a job asks for first, how many of the machine's cores a run may use, how often
-/// the queue is looked at, how long a job may go without making headway, and how many attempts it
-/// gets before it is given up.
+/// whether a recording that has ended is queued without anyone asking, which encoder a job asks
+/// for first, how many of the machine's cores a run may use, how often the queue is looked at, how
+/// long a job may go without making headway, and how many attempts it gets before it is given up.
 /// </summary>
 public sealed record EncodeSettings
 {
     public IReadOnlyList<StorageRootPath> OutputRoots { get; init; } = [];
 
     public string? WorkedIn { get; init; }
+
+    public bool Automatically { get; init; } = true;
 
     public EncodeEncoder Prefer { get; init; } = EncodeEncoder.Software;
 

@@ -73,6 +73,7 @@ public sealed class EncodeSettingRuleTests
         "/Carina.Domain/Encodings/EncodeScratchFile.cs EncodeScratchFile.OutputRoot OutputRoot",
         "/Carina.Domain/Encodings/EncodeScratchFile.cs EncodeScratchFile.RemovedAt DateTime?",
         "/Carina.Domain/Encodings/EncodeScratchFile.cs EncodeScratchFile.WrittenAt DateTime",
+        "/Carina.Domain/Encodings/EncodeSettings.cs EncodeSettings.Automatically bool",
         "/Carina.Domain/Encodings/EncodeSettings.cs EncodeSettings.BeforeFirstLook TimeSpan",
         "/Carina.Domain/Encodings/EncodeSettings.cs EncodeSettings.BetweenLooks TimeSpan",
         "/Carina.Domain/Encodings/EncodeSettings.cs EncodeSettings.MostAttempts int",

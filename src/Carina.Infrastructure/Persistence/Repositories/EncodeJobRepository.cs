@@ -82,6 +82,29 @@ public sealed class EncodeJobRepository(CarinaDbContext context) : IEncodeJobRep
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<IReadOnlySet<RecordingId>> WithAJobAsync(
+        IReadOnlyCollection<RecordingId> recordings,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(recordings);
+
+        if (recordings.Count is 0)
+        {
+            return new HashSet<RecordingId>();
+        }
+
+        RecordingId[] asked = [.. recordings.Distinct()];
+
+        List<RecordingId> held = await context.Set<EncodeJob>()
+            .AsNoTracking()
+            .Where(row => asked.Contains(row.RecordingId))
+            .Select(row => row.RecordingId)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        return held.ToHashSet();
+    }
+
     /// <summary>
     /// The oldest waiting job is moved to running by a conditional update, and only when that update
     /// changed one row is the job read back and handed over. The unique index over the running
