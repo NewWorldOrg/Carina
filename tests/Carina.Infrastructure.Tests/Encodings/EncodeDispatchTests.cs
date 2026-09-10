@@ -1,8 +1,11 @@
 using Carina.Contracts;
 using Carina.Domain.Encodings;
 using Carina.Domain.Integrity;
+using Carina.Domain.Machines;
 using Carina.Domain.Recordings;
+using Carina.Domain.Streaming;
 using Carina.Infrastructure.Encodings;
+using Carina.Infrastructure.Streaming;
 using Carina.TestSupport;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -15,6 +18,13 @@ public sealed class EncodeDispatchTests
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
     private static readonly DateTime Now = new(2026, 9, 5, 4, 0, 0, DateTimeKind.Utc);
+
+    private static readonly MachineCapabilities WithACard = MachineCapabilities.Of(
+        CardStanding.Usable,
+        [Faculty.EncodeH264OnTheCard, Faculty.EncodeH264OnTheProcessor],
+        string.Empty);
+
+    private static readonly EncodeSettings OnTheCard = new() { Prefer = EncodeEncoder.Vaapi, MostAttempts = 3 };
 
     [Fact(DisplayName = "BR-ED2-011: when the process comes up, every job the ledger holds as running goes back to the queue or is given up, and nothing else is touched")]
     public async Task WhenTheProcessComesUpEveryRunningJobIsPutBackOrGivenUp()
@@ -132,6 +142,98 @@ public sealed class EncodeDispatchTests
         Assert.DoesNotContain(held.Moves, move => move.StartsWith("saved", StringComparison.Ordinal));
     }
 
+    [Fact(DisplayName = "While the card is making a picture for someone watching, a look bound for the card asks the ledger nothing and says why")]
+    public async Task WhileSomeoneIsWatchingALookBoundForTheCardAsksTheLedgerNothing()
+    {
+        var held = new HeldEncodeJobs();
+        EncodeJob waiting = Waiting();
+        held.Jobs.Add(waiting);
+
+        EncodeLook look = await Dispatch(held, OnTheCard, viewers: new Watching(1).Budget).LookAsync(Cancel);
+
+        Assert.Equal(EncodeClaimStanding.AViewerHoldsTheCard, look.Standing);
+        Assert.Null(look.Job);
+        Assert.Null(look.Ended);
+        Assert.Equal(EncodeJobStatus.Queued, waiting.Status);
+        Assert.Equal(EncodeJob.FirstAttempt, waiting.Attempt);
+        Assert.Empty(held.Moves);
+    }
+
+    [Fact(DisplayName = "A look bound for the card takes the job as soon as nobody is watching any more")]
+    public async Task ALookBoundForTheCardTakesTheJobOnceNobodyIsWatching()
+    {
+        var held = new HeldEncodeJobs();
+        held.Jobs.Add(Waiting());
+        var viewers = new Watching(1);
+        EncodeDispatch dispatch = Dispatch(held, OnTheCard, viewers: viewers.Budget);
+
+        EncodeLook waited = await dispatch.LookAsync(Cancel);
+        viewers.AllLeave();
+        EncodeLook took = await dispatch.LookAsync(Cancel);
+
+        Assert.Equal(EncodeClaimStanding.AViewerHoldsTheCard, waited.Standing);
+        Assert.Equal(EncodeClaimStanding.Claimed, took.Standing);
+    }
+
+    [Fact(DisplayName = "A look bound for the processor starts a job while someone is watching, because it takes no card")]
+    public async Task ALookBoundForTheProcessorStartsAJobWhileSomeoneIsWatching()
+    {
+        var held = new HeldEncodeJobs();
+        held.Jobs.Add(Waiting());
+
+        EncodeLook look = await Dispatch(held, new EncodeSettings { MostAttempts = 3 }, viewers: new Watching(2).Budget).LookAsync(Cancel);
+
+        Assert.Equal(EncodeClaimStanding.Claimed, look.Standing);
+    }
+
+    [Fact(DisplayName = "A look bound for a card this machine cannot use starts a job while someone is watching, because it will swerve to the processor")]
+    public async Task ALookBoundForACardThisMachineCannotUseStartsAJob()
+    {
+        var held = new HeldEncodeJobs();
+        held.Jobs.Add(Waiting());
+
+        EncodeLook look = await Dispatch(held, OnTheCard, viewers: new Watching(1).Budget, cardIsUsable: false).LookAsync(Cancel);
+
+        Assert.Equal(EncodeClaimStanding.Claimed, look.Standing);
+    }
+
+    [Fact]
+    public async Task ALookThatGaveWayToSomeoneWatchingTellsTheScreensNothing()
+    {
+        var held = new HeldEncodeJobs();
+        held.Jobs.Add(Waiting());
+        var events = new SilentEvents();
+
+        await Dispatch(held, OnTheCard, viewers: new Watching(1).Budget, events: events).LookAsync(Cancel);
+
+        Assert.Empty(events.Signalled);
+    }
+
+    private sealed class Watching
+    {
+        private readonly List<ITranscodeSeat> seats = [];
+
+        public Watching(int viewers)
+        {
+            for (int seated = 0; seated < viewers; seated++)
+            {
+                seats.Add(Budget.Claim(TranscodePurpose.Live).Seat!);
+            }
+        }
+
+        public TranscodeBudget Budget { get; } = new(new TranscodeBudgetSettings { AtOnce = 4 });
+
+        public void AllLeave()
+        {
+            foreach (ITranscodeSeat seat in seats)
+            {
+                seat.Dispose();
+            }
+
+            seats.Clear();
+        }
+    }
+
     private static EncodeJob Waiting()
         => EncodeJob.Queue(EncodeJobId.New(), RecordingId.New(), EncodeProfileId.New(), EncodeDestinationId.New(), EncodeHarness.Primary, EncodeHarness.Queued);
 
@@ -213,7 +315,9 @@ public sealed class EncodeDispatchTests
         EncodeSettings settings,
         HeldEncodeScratch? scratch = null,
         Action<EncodeJob>? whenRun = null,
-        SilentEvents? events = null)
+        SilentEvents? events = null,
+        ITranscodeBudget? viewers = null,
+        bool cardIsUsable = true)
     {
         var clock = new HandTurnedClock(new DateTimeOffset(Now));
         var services = new ServiceCollection();
@@ -231,9 +335,17 @@ public sealed class EncodeDispatchTests
             throw new InvalidOperationException("this run cannot be built");
         });
 
+        var machine = new AskedMachine();
+
+        if (cardIsUsable)
+        {
+            machine.Can = WithACard;
+        }
+
         return new EncodeDispatch(
             services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),
             settings,
+            new EncodeQueueTurn(settings, viewers ?? new TranscodeBudget(new TranscodeBudgetSettings()), machine),
             events ?? new SilentEvents(),
             clock,
             NullLogger<EncodeDispatch>.Instance);

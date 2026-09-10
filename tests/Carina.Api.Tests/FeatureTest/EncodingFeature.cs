@@ -13,6 +13,7 @@ using Carina.Domain.Machines;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
+using Carina.Infrastructure.Streaming;
 using Carina.TestSupport;
 
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -37,8 +38,18 @@ internal sealed class ScriptedStrays : IStrayProgrammes
     }
 }
 
+internal sealed class AnsweredMachine(MachineCapabilities can) : IMachineCapabilityReader
+{
+    public Task<MachineCapabilities> ReadAsync(CancellationToken cancellationToken) => Task.FromResult(can);
+}
+
 internal sealed class EncodingFeature : IAsyncDisposable
 {
+    public static readonly MachineCapabilities WithACard = MachineCapabilities.Of(
+        CardStanding.Usable,
+        [Faculty.EncodeH264OnTheCard, Faculty.EncodeH264OnTheProcessor],
+        string.Empty);
+
     public static readonly DateTime Noon = new(2026, 9, 5, 12, 0, 0, DateTimeKind.Utc);
 
     public static readonly OutputRoot Primary = new("primary");
@@ -49,9 +60,9 @@ internal sealed class EncodingFeature : IAsyncDisposable
 
     private readonly RecordingStore shelf = new();
 
-    public EncodingFeature()
+    public EncodingFeature(EncodeEncoder prefer = EncodeEncoder.Software)
     {
-        Settings = new EncodeSettings { OutputRoots = [new StorageRootPath(Encodes, shelf.Root)] };
+        Settings = new EncodeSettings { OutputRoots = [new StorageRootPath(Encodes, shelf.Root)], Prefer = prefer };
         Driver.Roots.Add(new StorageRootDto { Name = Primary.Value, FreeBytes = 900, TotalBytes = 1_000, Writable = true });
 
         WebApplicationFactory<Program> configured = factory
@@ -69,6 +80,8 @@ internal sealed class EncodingFeature : IAsyncDisposable
                 services.AddSingleton<IEncodeDestinationRepository>(Destinations);
                 services.AddSingleton<IEncodeScratchLedger>(Scratch);
                 services.AddSingleton<IStrayProgrammes>(Strays);
+                services.AddSingleton<Carina.Domain.Streaming.ITranscodeBudget>(Transcoders);
+                services.AddSingleton<IMachineCapabilityReader>(new AnsweredMachine(WithACard));
             }));
 
         Client = configured.WithTestScheme().CreateClient();
@@ -78,6 +91,8 @@ internal sealed class EncodingFeature : IAsyncDisposable
     public HttpClient Client { get; }
 
     public MovingClock Clock { get; } = new(Noon);
+
+    public TranscodeBudget Transcoders { get; } = new(new Carina.Domain.Streaming.TranscodeBudgetSettings());
 
     public EncodeSettings Settings { get; }
 

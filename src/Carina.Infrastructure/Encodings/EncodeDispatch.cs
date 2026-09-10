@@ -16,10 +16,16 @@ public sealed record EncodeLook(EncodeClaimStanding Standing, EncodeJobId? Job, 
 /// to its end, and the queue is looked at again at once, or after a pause when nothing was waiting.
 /// Two of these looking at the same ledger cannot both start a job, because the ledger holds one
 /// running job and refuses the second claim (BR-ED2-005).
+/// <para>
+/// Before it asks the ledger for anything, a look gives way to someone watching: while the card is
+/// making a picture for a viewer, a job bound for the card is left where it is and the next look
+/// takes it. A job already running is left to finish, watched or not.
+/// </para>
 /// </summary>
 public sealed class EncodeDispatch(
     IServiceScopeFactory scopes,
     EncodeSettings settings,
+    EncodeQueueTurn turn,
     IAppEventPublisher events,
     TimeProvider clock,
     ILogger<EncodeDispatch> logger) : BackgroundService
@@ -54,6 +60,11 @@ public sealed class EncodeDispatch(
 
     private async Task<EncodeLook> LookedAsync(CancellationToken cancellationToken)
     {
+        if (await turn.YieldsToAViewerAsync(cancellationToken))
+        {
+            return new EncodeLook(EncodeClaimStanding.AViewerHoldsTheCard, null, null);
+        }
+
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
         IEncodeJobRepository jobs = scope.ServiceProvider.GetRequiredService<IEncodeJobRepository>();
         EncodeClaim claim = await jobs.ClaimNextAsync(clock.GetUtcNow().UtcDateTime, cancellationToken);
@@ -162,6 +173,11 @@ public sealed class EncodeDispatch(
                 if (look.Standing is EncodeClaimStanding.AnotherIsRunning)
                 {
                     logger.LogInformation("The ledger holds a running job this process is not running, so the queue waits for it.");
+                }
+
+                if (look.Standing is EncodeClaimStanding.AViewerHoldsTheCard)
+                {
+                    logger.LogInformation("The card is making a picture for someone watching, so the queue waits rather than take it from them.");
                 }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
