@@ -73,10 +73,16 @@ public sealed class StateChangeGuardSweepTests(TestingWebApplicationFactory fact
     [Fact]
     public void TheSweepReadsTheSameGuardTableForEveryMethodItSends()
     {
-        foreach (RoutedSurface surface in Inventory().Where(ChangesState))
-        {
-            Assert.Contains(StateChangeGuard.Origin, EndpointRules.GuardsRequiredBy(surface.Method, carriesABody: false));
-        }
+        IReadOnlyList<RoutedSurface> changing = [.. Inventory().Where(ChangesState)];
+
+        Assert.True(
+            changing.Count >= TheStateChangingSurfacesThisRepositoryHadWhenTheSweepWasWritten,
+            $"the sweep read {changing.Count} surfaces, which is fewer than it was written against");
+        Assert.All(
+            changing,
+            surface => Assert.Contains(
+                StateChangeGuard.Origin,
+                EndpointRules.GuardsRequiredBy(surface.Method, carriesABody: false)));
     }
 
     private async Task SweepAsync(

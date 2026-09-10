@@ -529,6 +529,7 @@ public sealed class TunerLedgerEndpointTests
         (HttpStatusCode status, JsonElement _) = await ReadAsync(response);
 
         Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(2, feature.Candidates.Candidates.Count);
         Assert.All(feature.Candidates.Candidates, candidate => Assert.True(candidate.NeedsRevalidation));
     }
 
@@ -546,6 +547,7 @@ public sealed class TunerLedgerEndpointTests
         (HttpStatusCode status, JsonElement _) = await ReadAsync(response);
 
         Assert.Equal(HttpStatusCode.BadRequest, status);
+        Assert.Single(feature.Candidates.Candidates);
         Assert.All(feature.Candidates.Candidates, candidate => Assert.False(candidate.NeedsRevalidation));
     }
 
@@ -566,6 +568,7 @@ public sealed class TunerLedgerEndpointTests
         (HttpStatusCode status, JsonElement _) = await ReadAsync(response);
 
         Assert.NotEqual(HttpStatusCode.OK, status);
+        Assert.Single(feature.Candidates.Candidates);
         Assert.All(feature.Candidates.Candidates, candidate => Assert.False(candidate.NeedsRevalidation));
     }
 

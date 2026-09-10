@@ -418,10 +418,10 @@ public sealed class SessionViewsTests : IDisposable
     {
         TunerSessionManager manager = Manager();
 
-        Assert.All(
-            SessionViews.Tuners(Configuration, manager),
-            tuner => Assert.Null(tuner.SignalQuality)
-        );
+        IReadOnlyList<TunerSnapshot> tuners = SessionViews.Tuners(Configuration, manager);
+
+        Assert.NotEmpty(tuners);
+        Assert.All(tuners, tuner => Assert.Null(tuner.SignalQuality));
     }
 
     [Fact]
@@ -544,10 +544,10 @@ public sealed class SessionViewsTests : IDisposable
     {
         TunerSessionManager manager = Manager();
 
-        Assert.All(
-            SessionViews.Tuners(Configuration, manager),
-            tuner => Assert.Null(tuner.CurrentSession)
-        );
+        IReadOnlyList<TunerSnapshot> tuners = SessionViews.Tuners(Configuration, manager);
+
+        Assert.NotEmpty(tuners);
+        Assert.All(tuners, tuner => Assert.Null(tuner.CurrentSession));
     }
 
     [Fact]

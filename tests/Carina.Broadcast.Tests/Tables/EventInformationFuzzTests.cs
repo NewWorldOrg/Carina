@@ -7,10 +7,15 @@ public sealed class EventInformationFuzzTests
 {
     private const int SomeService = 1024;
 
+    private const int SectionBodiesThatParsedWhenTheFuzzWasWritten = 4;
+
+    private const int DescriptorRunsThatParsedWhenTheFuzzWasWritten = 34;
+
     [Fact]
     public void NoSectionBodyAtAllMakesTheReaderThrowOrRunAway()
     {
         var random = new Random(20260818);
+        int reached = 0;
 
         for (int round = 0; round < 2000; round++)
         {
@@ -29,6 +34,8 @@ public sealed class EventInformationFuzzTests
                 continue;
             }
 
+            reached++;
+
             foreach (DescribedEvent carried in parsed.Table.Events)
             {
                 _ = carried.Described;
@@ -40,12 +47,17 @@ public sealed class EventInformationFuzzTests
                 _ = carried.EndsAt;
             }
         }
+
+        Assert.True(
+            reached >= SectionBodiesThatParsedWhenTheFuzzWasWritten,
+            $"{reached} of the bodies parsed, so the fields below the parse were read fewer times than when this was written");
     }
 
     [Fact]
     public void NoRunOfDescriptorBytesAtAllMakesTheReadersThrow()
     {
         var random = new Random(20260819);
+        int reached = 0;
 
         for (int round = 0; round < 2000; round++)
         {
@@ -64,6 +76,8 @@ public sealed class EventInformationFuzzTests
                 continue;
             }
 
+            reached++;
+
             foreach (DescribedEvent carried in parsed.Table.Events)
             {
                 _ = carried.Described;
@@ -74,6 +88,10 @@ public sealed class EventInformationFuzzTests
                 _ = carried.Groupings;
             }
         }
+
+        Assert.True(
+            reached >= DescriptorRunsThatParsedWhenTheFuzzWasWritten,
+            $"{reached} of the runs parsed, so the fields below the parse were read fewer times than when this was written");
     }
 
     private static byte[] Header() => [0x7F, 0xE3, 0x7F, 0xE3, 0x00, 0x4E];

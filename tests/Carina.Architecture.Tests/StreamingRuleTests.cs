@@ -20,6 +20,7 @@ public sealed class StreamingRuleTests
     {
         IReadOnlyList<string> opening = StreamingRules.FilesOpeningTheDriversStream(RepositoryLayout.SourceDirectory);
 
+        Assert.NotEmpty(opening);
         Assert.True(
             opening.Count <= 1,
             $"the driver's stream is opened from {opening.Count} files of the streaming feature: {string.Join(", ", opening)}");
