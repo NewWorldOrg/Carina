@@ -179,11 +179,23 @@ public sealed class AuthSessionRepositoryTests(RepositoryDatabase database)
     }
 
     [Fact]
-    public async Task DeletingASessionThatIsAlreadyGoneIsNotAFailure()
+    public async Task DeletingASessionThatIsAlreadyGoneIsNotAFailureAndSweepsNoOtherAway()
     {
-        await using CarinaDbContext deleting = database.Open();
+        AuthSession started = Started(new Subject("carina"), "a device");
 
-        await new AuthSessionRepository(deleting).DeleteAsync(SessionId.Issue(), Cancel);
+        await using (CarinaDbContext writing = database.Open())
+        {
+            await new AuthSessionRepository(writing).SaveAsync(started, Cancel);
+        }
+
+        await using (CarinaDbContext deleting = database.Open())
+        {
+            await new AuthSessionRepository(deleting).DeleteAsync(SessionId.Issue(), Cancel);
+        }
+
+        await using CarinaDbContext reading = database.Open();
+
+        Assert.NotNull(await new AuthSessionRepository(reading).FindAsync(started.Id, Cancel));
     }
 
     private static AuthSession Started(Subject subject, string device)

@@ -36,6 +36,10 @@ public sealed class OidcAdmissionTests
             new MockIdentityUser("a-stranger") { Groups = ["strangers"] });
 
         Assert.Empty(probe.Sessions.Sessions);
+        Assert.Contains(
+            LoginRedirect.TheIdentityProviderFailed,
+            arrived.Headers.Location!.ToString(),
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -47,6 +51,10 @@ public sealed class OidcAdmissionTests
             new MockIdentityUser("owner") { GroupsOverflowed = true });
 
         Assert.Empty(probe.Sessions.Sessions);
+        Assert.Contains(
+            LoginRedirect.TheIdentityProviderFailed,
+            arrived.Headers.Location!.ToString(),
+            StringComparison.Ordinal);
         Assert.DoesNotContain(probe.Idp.Visits, visit => visit.EndsWith("/groups", StringComparison.Ordinal));
     }
 
@@ -81,6 +89,10 @@ public sealed class OidcAdmissionTests
             new MockIdentityUser("a-stranger") { HostedDomain = "elsewhere.test" });
 
         Assert.Empty(probe.Sessions.Sessions);
+        Assert.Contains(
+            LoginRedirect.TheIdentityProviderFailed,
+            arrived.Headers.Location!.ToString(),
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -91,6 +103,10 @@ public sealed class OidcAdmissionTests
         using HttpResponseMessage arrived = await probe.SignInAsync(new MockIdentityUser("a-stranger"));
 
         Assert.Empty(probe.Sessions.Sessions);
+        Assert.Contains(
+            LoginRedirect.TheIdentityProviderFailed,
+            arrived.Headers.Location!.ToString(),
+            StringComparison.Ordinal);
     }
 
     [Fact]
