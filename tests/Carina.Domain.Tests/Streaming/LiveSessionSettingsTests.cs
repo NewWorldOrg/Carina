@@ -27,4 +27,43 @@ public sealed class LiveSessionSettingsTests
     {
         Assert.Equal(TimeSpan.FromSeconds(12), new LiveSessionSettings { Linger = TimeSpan.FromSeconds(12) }.Linger);
     }
+
+    [Fact]
+    public void BeingWatchedHoldsTheSupplyTenMinutesAheadAndSaysSoEveryMinute()
+    {
+        LiveSessionSettings settings = new();
+
+        Assert.Equal(TimeSpan.FromMinutes(10), settings.HeldAhead);
+        Assert.Equal(TimeSpan.FromMinutes(1), settings.BetweenHolds);
+    }
+
+    [Fact]
+    public void TheSupplyIsAskedAgainWellBeforeWhatWasAskedForRunsOut()
+    {
+        Assert.True(new LiveSessionSettings().AsksBeforeWhatItAskedForRunsOut);
+    }
+
+    [Fact]
+    public void AskingLessOftenThanWhatIsAskedForLastsIsSeenForWhatItIs()
+    {
+        LiveSessionSettings settings = new()
+        {
+            HeldAhead = TimeSpan.FromMinutes(2),
+            BetweenHolds = TimeSpan.FromMinutes(5),
+        };
+
+        Assert.False(settings.AsksBeforeWhatItAskedForRunsOut);
+    }
+
+    [Fact]
+    public void HoldingTheSupplyOpenForNoTimeAtAllIsRefused()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new LiveSessionSettings { HeldAhead = TimeSpan.Zero });
+    }
+
+    [Fact]
+    public void AskingToHoldItOpenNeverIsRefused()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new LiveSessionSettings { BetweenHolds = TimeSpan.Zero });
+    }
 }

@@ -99,6 +99,10 @@ public sealed class PipedTransportStream : ILiveTransportStream
 
     public LiveSupplyEnding? Ending { get; set; }
 
+    public List<DateTimeOffset> HeldOpenUntil { get; } = [];
+
+    public bool RefusingToBeHeldOpen { get; set; }
+
     public bool Disposed => TimesLetGo > 0;
 
     public int TimesLetGo { get; private set; }
@@ -108,6 +112,13 @@ public sealed class PipedTransportStream : ILiveTransportStream
         ArgumentNullException.ThrowIfNull(bytes);
 
         await pipe.Writer.WriteAsync(bytes);
+    }
+
+    public Task<bool> HoldOpenUntilAsync(DateTimeOffset until, CancellationToken cancellationToken)
+    {
+        HeldOpenUntil.Add(until);
+
+        return Task.FromResult(!RefusingToBeHeldOpen);
     }
 
     public void NoMore() => Complete();

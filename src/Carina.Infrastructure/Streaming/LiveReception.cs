@@ -29,6 +29,8 @@ internal sealed class LiveReception
 
     private readonly LiveSessionSettings settings;
 
+    private readonly TimeProvider clock;
+
     private readonly Action<LiveReception> forget;
 
     private readonly CancellationTokenSource stopping = new();
@@ -50,12 +52,14 @@ internal sealed class LiveReception
         ServiceId service,
         ILiveSupply supply,
         LiveSessionSettings settings,
+        TimeProvider clock,
         Action<LiveReception> forget)
     {
         this.network = network;
         this.service = service;
         this.supply = supply;
         this.settings = settings;
+        this.clock = clock;
         this.forget = forget;
     }
 
@@ -64,6 +68,8 @@ internal sealed class LiveReception
     internal ServiceId Service => service;
 
     internal Task Life { get; private set; } = Task.CompletedTask;
+
+    internal Task Holding { get; private set; } = Task.CompletedTask;
 
     internal LiveSupplyEnding? Ending => stream?.Ending;
 
@@ -201,9 +207,33 @@ internal sealed class LiveReception
             stream = bytes;
         }
 
+        Holding = HoldOpenAsync(bytes);
         Life = CarryAsync(bytes);
 
         return opened;
+    }
+
+    /// <summary>
+    /// Says, for as long as this reading is attached to, that what it is reading is still being read.
+    /// </summary>
+    /// <remarks>
+    /// The reading is let go of within one linger of the last viewer leaving, so a supply that is
+    /// still being asked for is one somebody is still behind, and one that stops being asked for is
+    /// let go of by the driver a window later even if this app never says so.
+    /// </remarks>
+    private async Task HoldOpenAsync(ILiveTransportStream held)
+    {
+        try
+        {
+            while (true)
+            {
+                await Task.Delay(settings.BetweenHolds, clock, stopping.Token);
+                await held.HoldOpenUntilAsync(clock.GetUtcNow() + settings.HeldAhead, stopping.Token);
+            }
+        }
+        catch (Exception gone) when (gone is OperationCanceledException or ObjectDisposedException)
+        {
+        }
     }
 
     private async Task CarryAsync(ILiveTransportStream from)

@@ -16,6 +16,12 @@ public sealed class LiveSessionManagerTests
 
     private static readonly TimeSpan StopGrace = TimeSpan.FromSeconds(2);
 
+    private static readonly TimeSpan BetweenHolds = TimeSpan.FromMinutes(1);
+
+    private static readonly TimeSpan HeldAhead = TimeSpan.FromMinutes(10);
+
+    private const int TheHoldOnTheSupply = 1;
+
     private static readonly LiveSessionKey EveryFrame = new(new NetworkId(32736), new ServiceId(1024), LiveProfile.Hd30);
 
     private static readonly LiveSessionKey EveryField = new(new NetworkId(32736), new ServiceId(1024), LiveProfile.Hd60);
@@ -142,7 +148,7 @@ public sealed class LiveSessionManagerTests
         Assert.Equal(1, transcoders.Started);
         Assert.False(transcoders.Raised[0].Disposed);
         Assert.Equal(1, budget.Running);
-        Assert.Equal(0, clock.Pending);
+        Assert.Equal(TheHoldOnTheSupply, clock.Pending);
     }
 
     [Fact]
@@ -153,7 +159,7 @@ public sealed class LiveSessionManagerTests
 
         await leaving.DisposeAsync();
 
-        Assert.Equal(0, clock.Pending);
+        Assert.Equal(TheHoldOnTheSupply, clock.Pending);
 
         clock.Turn(Linger * 2);
 
@@ -278,7 +284,7 @@ public sealed class LiveSessionManagerTests
         Assert.True(supply.Opened[0].Disposed);
         Assert.Equal([AnotherChannel], manager.Keys);
         Assert.Equal(3, supply.Asked);
-        Assert.Equal(0, clock.Pending);
+        Assert.Equal(TheHoldOnTheSupply, clock.Pending);
     }
 
     [Fact]
@@ -375,7 +381,7 @@ public sealed class LiveSessionManagerTests
     {
         await using ILiveViewing viewing = await Joined(EveryFrame);
 
-        Assert.Equal(0, clock.Pending);
+        Assert.Equal(TheHoldOnTheSupply, clock.Pending);
     }
 
     [Fact]
@@ -691,7 +697,7 @@ public sealed class LiveSessionManagerTests
         clock.Turn(Linger);
 
         await Eventually.Happens(
-            () => transcoders.Raised[0].Disposed && clock.Pending is 1,
+            () => transcoders.Raised[0].Disposed && clock.Pending is TheHoldOnTheSupply + 1,
             "the teardown is waiting out what the transcoder left behind");
 
         Assert.False(supply.Opened[0].Disposed);
@@ -1093,9 +1099,88 @@ public sealed class LiveSessionManagerTests
         return await viewing.Frames.ReadAsync(patience.Token);
     }
 
+    [Fact]
+    public async Task AChannelSomebodyIsWatchingIsAskedToBeHeldOpenAgainAndAgain()
+    {
+        await using ILiveViewing viewing = await Joined(EveryFrame);
+
+        clock.Turn(BetweenHolds);
+
+        await Eventually.Happens(
+            () => supply.Opened[0].HeldOpenUntil.Count is 1,
+            "the supply is asked to be held open once the first interval is up");
+
+        Assert.Equal(clock.GetUtcNow() + HeldAhead, supply.Opened[0].HeldOpenUntil[0]);
+
+        clock.Turn(BetweenHolds);
+
+        await Eventually.Happens(
+            () => supply.Opened[0].HeldOpenUntil.Count is 2,
+            "the supply goes on being asked for as long as it is watched");
+
+        Assert.Equal(clock.GetUtcNow() + HeldAhead, supply.Opened[0].HeldOpenUntil[1]);
+    }
+
+    [Fact]
+    public async Task AChannelIsNotAskedToBeHeldOpenBeforeTheFirstIntervalIsUp()
+    {
+        await using ILiveViewing viewing = await Joined(EveryFrame);
+
+        clock.Turn(BetweenHolds - TimeSpan.FromSeconds(1));
+
+        Assert.Empty(supply.Opened[0].HeldOpenUntil);
+    }
+
+    [Fact]
+    public async Task AChannelNobodyIsWatchingAnyMoreIsNotAskedToBeHeldOpenAgain()
+    {
+        ILiveViewing viewing = await Joined(EveryFrame);
+
+        await viewing.DisposeAsync();
+
+        clock.Turn(Linger);
+
+        await Eventually.Happens(
+            () => supply.Opened[0].Disposed,
+            "the stream is let go once the linger is over");
+
+        clock.Turn(BetweenHolds * 3);
+
+        Assert.Empty(supply.Opened[0].HeldOpenUntil);
+    }
+
+    [Fact]
+    public async Task ASupplyThatWillNotBeHeldOpenIsStillAskedTheNextTimeRoundAndKeepsPlaying()
+    {
+        await using ILiveViewing viewing = await Joined(EveryFrame);
+
+        supply.Opened[0].RefusingToBeHeldOpen = true;
+
+        clock.Turn(BetweenHolds);
+
+        await Eventually.Happens(
+            () => supply.Opened[0].HeldOpenUntil.Count is 1,
+            "the supply is asked even though it will refuse");
+
+        clock.Turn(BetweenHolds);
+
+        await Eventually.Happens(
+            () => supply.Opened[0].HeldOpenUntil.Count is 2,
+            "a refusal is the supply's to remember, not something that stops the viewing");
+
+        Assert.Equal(1, manager.Viewers(EveryFrame));
+        Assert.False(transcoders.Raised[0].Disposed);
+    }
+
     private LiveSessionManager Managing(TranscodeBudget counting, HeldTranscoders? raising = null)
         => new(
-            new LiveSessionSettings { Linger = Linger, LongestRaise = LongestRaise },
+            new LiveSessionSettings
+            {
+                Linger = Linger,
+                LongestRaise = LongestRaise,
+                BetweenHolds = BetweenHolds,
+                HeldAhead = HeldAhead,
+            },
             new LiveFanoutSettings(),
             new LiveTranscodeSettings { StopGrace = StopGrace },
             supply,

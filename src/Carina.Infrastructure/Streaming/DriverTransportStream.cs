@@ -23,24 +23,32 @@ public sealed class DriverTransportStream : ILiveTransportStream
 
     private readonly ILiveLeases leases;
 
+    private readonly Lock gate = new();
+
     private LiveSupplyEnding? ending;
+
+    private DateTimeOffset heldUntil;
 
     private int letGo;
 
     private int concluded;
+
+    private int wontHold;
 
     public DriverTransportStream(
         SessionId session,
         Stream inner,
         IDriverClient driver,
         IDriverStatusReader status,
-        ILiveLeases leases)
+        ILiveLeases leases,
+        DateTimeOffset heldUntil)
     {
         this.session = session;
         this.inner = inner;
         this.driver = driver;
         this.status = status;
         this.leases = leases;
+        this.heldUntil = heldUntil;
         Bytes = new Reading(this);
     }
 
@@ -49,6 +57,59 @@ public sealed class DriverTransportStream : ILiveTransportStream
     public Stream Bytes { get; }
 
     public LiveSupplyEnding? Ending => Volatile.Read(ref ending);
+
+    public DateTimeOffset HeldUntil
+    {
+        get
+        {
+            lock (gate)
+            {
+                return heldUntil;
+            }
+        }
+    }
+
+    public async Task<bool> HoldOpenUntilAsync(DateTimeOffset until, CancellationToken cancellationToken)
+    {
+        if (until <= HeldUntil)
+        {
+            return true;
+        }
+
+        if (Volatile.Read(ref wontHold) is 1 || Volatile.Read(ref letGo) is 1 || Ending is not null)
+        {
+            return false;
+        }
+
+        DriverCall<SessionSnapshot> held = await driver.ExtendSessionAsync(session, until, cancellationToken);
+
+        if (held.TryGetValue(out SessionSnapshot? snapshot))
+        {
+            Hold(snapshot.EndsAt ?? until);
+
+            return HeldUntil >= until;
+        }
+
+        // A driver that spelled out a refusal spells out the same one every time from here; one that
+        // could not be reached may answer when it is next asked.
+        if (held.Outcome is not DriverCallOutcome.Unreachable)
+        {
+            Volatile.Write(ref wontHold, 1);
+        }
+
+        return false;
+    }
+
+    private void Hold(DateTimeOffset until)
+    {
+        lock (gate)
+        {
+            if (until > heldUntil)
+            {
+                heldUntil = until;
+            }
+        }
+    }
 
     public async ValueTask DisposeAsync()
     {

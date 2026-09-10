@@ -55,6 +55,12 @@ internal sealed class WritingDriver : IDriverClient
             ? DriverCall<IReadOnlyList<SessionSnapshot>>.Unreachable(failure)
             : DriverCall<IReadOnlyList<SessionSnapshot>>.Reached([.. sessions]));
 
+    public Task<DriverCall<SessionSnapshot>> ExtendSessionAsync(
+        SessionId sessionId,
+        DateTimeOffset endsAt,
+        CancellationToken cancellationToken)
+        => throw new NotSupportedException();
+
     public Task<DriverCall<SessionSnapshot>> StopSessionAsync(
         SessionId sessionId,
         string reason,

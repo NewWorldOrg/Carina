@@ -29,6 +29,11 @@ public interface IDriverClient
 
     Task<DriverCall<SessionSnapshot>> StartSessionAsync(StartSessionRequest request, CancellationToken cancellationToken);
 
+    Task<DriverCall<SessionSnapshot>> ExtendSessionAsync(
+        SessionId sessionId,
+        DateTimeOffset endsAt,
+        CancellationToken cancellationToken);
+
     Task<DriverCall<SessionSnapshot>> StopSessionAsync(SessionId sessionId, string reason, CancellationToken cancellationToken);
 
     Task<DriverCall<IReadOnlyList<DiagnosticSnapshot>>> GetDiagnosticsAsync(CancellationToken cancellationToken);

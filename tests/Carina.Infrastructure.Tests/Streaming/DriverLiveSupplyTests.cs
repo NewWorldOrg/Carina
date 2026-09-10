@@ -623,6 +623,80 @@ public sealed class DriverLiveSupplyTests
         Assert.Empty(leases.Held);
     }
 
+    [Fact]
+    public async Task AViewingStillBeingWatchedAsksTheDriverToHoldTheSessionOpenForLonger()
+    {
+        LiveSupplyStart opened = await Supply().OpenAsync(Network, Service, CancellationToken.None);
+        DateTimeOffset until = DateTimeOffset.UnixEpoch.AddHours(4);
+
+        Assert.True(await opened.Stream!.HoldOpenUntilAsync(until, CancellationToken.None));
+        Assert.Equal([(driver.Held!.Value, until)], driver.Extended);
+    }
+
+    [Fact]
+    public async Task ASessionAlreadyHeldThatFarIsNotAskedAgain()
+    {
+        LiveSupplyStart opened = await Supply().OpenAsync(Network, Service, CancellationToken.None);
+        DateTimeOffset until = DateTimeOffset.UnixEpoch.AddHours(4);
+
+        Assert.True(await opened.Stream!.HoldOpenUntilAsync(until, CancellationToken.None));
+        Assert.True(await opened.Stream!.HoldOpenUntilAsync(until.AddMinutes(-1), CancellationToken.None));
+
+        Assert.Single(driver.Extended);
+    }
+
+    [Fact]
+    public async Task ADriverThatCutTheAskingShortIsAskedAgainForWhatItWouldNotGive()
+    {
+        driver.CutsEveryExtensionTo = TimeSpan.FromHours(1);
+
+        LiveSupplyStart opened = await Supply().OpenAsync(Network, Service, CancellationToken.None);
+
+        Assert.False(await opened.Stream!.HoldOpenUntilAsync(DateTimeOffset.UnixEpoch.AddHours(4), CancellationToken.None));
+        Assert.False(await opened.Stream!.HoldOpenUntilAsync(DateTimeOffset.UnixEpoch.AddHours(2), CancellationToken.None));
+
+        Assert.Equal(2, driver.Extended.Count);
+    }
+
+    [Fact]
+    public async Task ADriverThatSpelledOutWhyItWillNotHoldASessionOpenIsNotAskedEveryMinuteForever()
+    {
+        driver.RefusingEveryExtension = new DriverProblem("notARecording", ["this driver holds a viewing to its window."]);
+
+        LiveSupplyStart opened = await Supply().OpenAsync(Network, Service, CancellationToken.None);
+
+        Assert.False(await opened.Stream!.HoldOpenUntilAsync(DateTimeOffset.UnixEpoch.AddHours(4), CancellationToken.None));
+        Assert.False(await opened.Stream!.HoldOpenUntilAsync(DateTimeOffset.UnixEpoch.AddHours(5), CancellationToken.None));
+
+        Assert.Single(driver.Extended);
+    }
+
+    [Fact]
+    public async Task ADriverThatCouldNotBeReachedIsAskedAgainTheNextTime()
+    {
+        driver.ExtensionUnreachable = true;
+
+        LiveSupplyStart opened = await Supply().OpenAsync(Network, Service, CancellationToken.None);
+
+        Assert.False(await opened.Stream!.HoldOpenUntilAsync(DateTimeOffset.UnixEpoch.AddHours(4), CancellationToken.None));
+
+        driver.ExtensionUnreachable = false;
+
+        Assert.True(await opened.Stream!.HoldOpenUntilAsync(DateTimeOffset.UnixEpoch.AddHours(4), CancellationToken.None));
+        Assert.Equal(2, driver.Extended.Count);
+    }
+
+    [Fact]
+    public async Task AStreamThatHasBeenLetGoOfIsNotHeldOpenAnyLonger()
+    {
+        LiveSupplyStart opened = await Supply().OpenAsync(Network, Service, CancellationToken.None);
+
+        await opened.Stream!.DisposeAsync();
+
+        Assert.False(await opened.Stream!.HoldOpenUntilAsync(DateTimeOffset.UnixEpoch.AddHours(4), CancellationToken.None));
+        Assert.Empty(driver.Extended);
+    }
+
     private DriverLiveSupply Supply(TuningResolution? resolution = null)
         => new(
             driver,

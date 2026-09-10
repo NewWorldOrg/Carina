@@ -109,7 +109,8 @@ public sealed class DriverLiveSupply(
             return await RefusedAsync(opened, tune, cancellationToken);
         }
 
-        return LiveSupplyStart.Opened(new DriverTransportStream(sessionId, bytes, driver, status, leases));
+        return LiveSupplyStart.Opened(
+            new DriverTransportStream(sessionId, bytes, driver, status, leases, session.EndsAt ?? session.StartedAt));
     }
 
     public async Task<IReadOnlyDictionary<SessionId, long>> DroppedOnTheWayInAsync(CancellationToken cancellationToken)
