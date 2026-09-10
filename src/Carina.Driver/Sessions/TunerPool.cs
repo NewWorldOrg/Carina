@@ -486,6 +486,52 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
         }
     }
 
+    public IReadOnlyList<SessionId> WhoElseIsReadingThrough(SessionId holder)
+    {
+        lock (gate)
+        {
+            if (
+                !bySink.TryGetValue(holder, out Lease? lease)
+                || lease.Holder != holder
+                || lease.Displacing is not null
+            )
+            {
+                return [];
+            }
+
+            return
+            [
+                .. lease
+                    .Sinks.Where(sink => sink.SessionId != holder)
+                    .OrderByDescending(sink => sink.Priority)
+                    .Select(sink => sink.SessionId),
+            ];
+        }
+    }
+
+    public bool HandTheTunerOn(SessionId holder, SessionId next)
+    {
+        lock (gate)
+        {
+            if (
+                !bySink.TryGetValue(holder, out Lease? lease)
+                || lease.Holder != holder
+                || lease.Displacing is not null
+                || lease.Sinks.All(sink => sink.SessionId != next)
+            )
+            {
+                return false;
+            }
+
+            bySink.Remove(holder);
+            lease.Sinks.RemoveAll(sink => sink.SessionId == holder);
+            lease.Holder = next;
+            lease.Displacing = null;
+
+            return true;
+        }
+    }
+
     private static SessionId? TheOneItWasTakenFrom(Lease lease) =>
         lease.Displacing is { } previous && lease.Sinks.Any(sink => sink.SessionId == previous)
             ? previous

@@ -23,12 +23,15 @@ public sealed class TunerSession : IDisposable
     private sealed class Handover(
         ITunerDevice replacement,
         TunerSession? host,
-        SessionSubscription? seat
+        SessionSubscription? seat,
+        bool onlyOnceTheStreamEnds
     )
     {
         private readonly SettledOnce settled = new();
 
         public ITunerDevice Replacement { get; } = replacement;
+
+        public bool OnlyOnceTheStreamEnds { get; } = onlyOnceTheStreamEnds;
 
         public TunerSession? Host { get; } = host;
 
@@ -258,6 +261,8 @@ public sealed class TunerSession : IDisposable
 
     public event Action<TunerSession>? Ended;
 
+    public event Action<TunerSession>? Ending;
+
     public void Start()
     {
         lock (gate)
@@ -307,26 +312,6 @@ public sealed class TunerSession : IDisposable
         }
     }
 
-    public bool EndsNoLaterThan(DateTimeOffset limit)
-    {
-        lock (gate)
-        {
-            if (state is not (SessionState.Requested or SessionState.Active))
-            {
-                return false;
-            }
-
-            if (limit.UtcTicks >= endsAtTicks)
-            {
-                return false;
-            }
-
-            Interlocked.Exchange(ref endsAtTicks, limit.UtcTicks);
-
-            return true;
-        }
-    }
-
     public bool ReadFromInstead(
         ITunerDevice replacement,
         TunerSession? host,
@@ -334,18 +319,9 @@ public sealed class TunerSession : IDisposable
         TimeSpan within
     )
     {
-        ArgumentNullException.ThrowIfNull(replacement);
-
-        var asked = new Handover(replacement, host, takenSeat);
-
-        lock (gate)
+        if (Offer(replacement, host, takenSeat, onlyOnceTheStreamEnds: false) is not { } asked)
         {
-            if (state is not SessionState.Active || handover is not null)
-            {
-                return false;
-            }
-
-            handover = asked;
+            return false;
         }
 
         if (Answered(asked.TakenUp, within) || !asked.TryGiveUp())
@@ -362,6 +338,44 @@ public sealed class TunerSession : IDisposable
         }
 
         return false;
+    }
+
+    public bool ReadFromInsteadOnceThisStreamEnds(
+        ITunerDevice replacement,
+        TunerSession? host,
+        SessionSubscription? takenSeat
+    ) => Offer(replacement, host, takenSeat, onlyOnceTheStreamEnds: true) is not null;
+
+    private Handover? Offer(
+        ITunerDevice replacement,
+        TunerSession? host,
+        SessionSubscription? takenSeat,
+        bool onlyOnceTheStreamEnds
+    )
+    {
+        ArgumentNullException.ThrowIfNull(replacement);
+
+        var asked = new Handover(replacement, host, takenSeat, onlyOnceTheStreamEnds);
+
+        lock (gate)
+        {
+            if (state is not SessionState.Active || handover is not null)
+            {
+                return null;
+            }
+
+            handover = asked;
+
+            return asked;
+        }
+    }
+
+    private bool AnotherStreamIsWaiting()
+    {
+        lock (gate)
+        {
+            return handover is not null;
+        }
     }
 
     private bool Answered(Task takenUp, TimeSpan within)
@@ -437,9 +451,23 @@ public sealed class TunerSession : IDisposable
         {
             seatIsMine.Wait(token);
 
+            bool afterACut = false;
+
             while (!token.IsCancellationRequested && timeProvider.GetUtcNow() < EndsAt)
             {
-                byte[] chunk = Reading().Read(chunkSize, token);
+                byte[] chunk;
+
+                try
+                {
+                    chunk = Reading(afterACut).Read(chunkSize, token);
+                    afterACut = false;
+                }
+                catch (StreamCutException) when (AnotherStreamIsWaiting())
+                {
+                    afterACut = true;
+
+                    continue;
+                }
 
                 if (chunk.Length is 0)
                 {
@@ -497,14 +525,14 @@ public sealed class TunerSession : IDisposable
         }
     }
 
-    private ITunerDevice Reading()
+    private ITunerDevice Reading(bool afterACut)
     {
         ITunerDevice? previous = null;
         ITunerDevice current;
 
         lock (gate)
         {
-            if (handover is { } asked)
+            if (handover is { } asked && (afterACut || !asked.OnlyOnceTheStreamEnds))
             {
                 if (asked.TryTakeUp())
                 {
@@ -700,7 +728,10 @@ public sealed class TunerSession : IDisposable
         lock (gate)
         {
             state = SessionState.Stopping;
+            stopReason = reason;
         }
+
+        RaiseEnding();
 
         var causes = new List<Exception>();
         if (cause is not null)
@@ -846,9 +877,12 @@ public sealed class TunerSession : IDisposable
         return deviceFault is not null ? SessionStopReason.DeviceFailed : reason;
     }
 
-    private void RaiseEnded()
+    private void RaiseEnded() => Raise(Ended);
+
+    private void RaiseEnding() => Raise(Ending);
+
+    private void Raise(Action<TunerSession>? handlers)
     {
-        Action<TunerSession>? handlers = Ended;
         if (handlers is null)
         {
             return;

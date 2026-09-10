@@ -133,6 +133,10 @@ public sealed class TunerPoolSessionTests : IDisposable
 
         holder.Stop();
         holder.WaitForEnd(Deadlock);
+
+        device.AwaitParkedBefore(6);
+
+        rider.Stop();
         rider.WaitForEnd(Deadlock);
 
         Assert.Equal(4, device.Reads);
@@ -158,6 +162,7 @@ public sealed class TunerPoolSessionTests : IDisposable
 
         holder.Stop();
         holder.WaitForEnd(Deadlock);
+        rider.Stop();
         rider.WaitForEnd(Deadlock);
     }
 
@@ -179,11 +184,12 @@ public sealed class TunerPoolSessionTests : IDisposable
 
         holder.Stop();
         holder.WaitForEnd(Deadlock);
+        rider.Stop();
         rider.WaitForEnd(Deadlock);
     }
 
     [Fact]
-    public void ARiderWhoseHolderStoppedIsNeverMistakenForOneThatFinished()
+    public void ARiderWhoseHolderStoppedReadsTheTunerItselfRatherThanEnding()
     {
         var device = new PacedTunerDevice();
         TunerSessionManager manager = Manager(new OneDeviceFactory(device));
@@ -196,11 +202,100 @@ public sealed class TunerPoolSessionTests : IDisposable
 
         holder.Stop();
         holder.WaitForEnd(Deadlock);
+
+        device.AwaitParkedBefore(4);
+
+        Assert.Equal(SessionState.Active, rider.State);
+        Assert.Null(rider.RidesOn);
+
+        rider.Stop();
         rider.WaitForEnd(Deadlock);
 
-        Assert.Equal(SessionState.Failed, rider.State);
-        Assert.NotNull(rider.FailureCause);
-        Assert.Contains("incomplete", rider.FailureCause!.Message, StringComparison.Ordinal);
+        Assert.Equal(SessionState.Stopped, rider.State);
+        Assert.Null(rider.FailureCause);
+    }
+
+    [Fact]
+    public void AWatcherRidingOnASweepKeepsReadingOnceTheSweepIsDone()
+    {
+        var device = new PacedTunerDevice();
+        TunerSessionManager manager = Manager(new OneDeviceFactory(device));
+
+        TunerSession sweep = Started(manager, Request("s-1", SessionPurpose.Survey));
+        TunerSession watching = Started(manager, Request("s-2", SessionPurpose.Live));
+
+        Assert.Same(sweep, watching.RidesOn);
+        Assert.Equal(Start.AddHours(1), watching.EndsAt);
+
+        sweep.Stop();
+        sweep.WaitForEnd(Deadlock);
+
+        device.AwaitParkedBefore(2);
+
+        Assert.Equal(SessionState.Active, watching.State);
+        Assert.Null(watching.RidesOn);
+
+        watching.Stop();
+        watching.WaitForEnd(Deadlock);
+
+        Assert.Equal(SessionState.Stopped, watching.State);
+        Assert.Null(watching.FailureCause);
+    }
+
+    [Fact]
+    public void EveryOtherReaderIsMovedOntoTheOneThatTookTheTuner()
+    {
+        var device = new PacedTunerDevice();
+        TunerSessionManager manager = Manager(new OneDeviceFactory(device));
+
+        TunerSession holder = Started(manager, Request("s-1", SessionPurpose.Live));
+        TunerSession next = Started(manager, Request("s-2", SessionPurpose.Live));
+        TunerSession last = Started(manager, Request("s-3", SessionPurpose.Live));
+
+        Assert.Same(holder, next.RidesOn);
+        Assert.Same(holder, last.RidesOn);
+
+        holder.Stop();
+        holder.WaitForEnd(Deadlock);
+
+        Assert.Equal(1, next.Broadcaster.SubscriberCount);
+
+        device.AwaitParkedBefore(2);
+
+        Assert.Null(next.RidesOn);
+        Assert.Equal(SessionState.Active, last.State);
+
+        next.Stop();
+        last.Stop();
+        next.WaitForEnd(Deadlock);
+        last.WaitForEnd(Deadlock);
+
+        Assert.Null(next.FailureCause);
+    }
+
+    [Fact]
+    public void TheTunerIsClosedOnceTheOneItWasPassedToHasLeftAsWell()
+    {
+        var device = new PacedTunerDevice();
+        TunerSessionManager manager = Manager(
+            new OneDeviceFactory(device),
+            grace: TimeSpan.Zero
+        );
+
+        TunerSession holder = Started(manager, Request("s-1", SessionPurpose.Live));
+        TunerSession rider = Started(manager, Request("s-2", SessionPurpose.Live));
+
+        holder.Stop();
+        holder.WaitForEnd(Deadlock);
+
+        device.AwaitParkedBefore(2);
+
+        Assert.False(device.Disposed);
+
+        rider.Stop();
+        rider.WaitForEnd(Deadlock);
+
+        Assert.True(device.Disposed);
     }
 
     [Fact]
