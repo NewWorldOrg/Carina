@@ -67,6 +67,14 @@ public sealed class EncodingOptionsTests
         Assert.True(validated.Failed);
     }
 
+    [Fact(DisplayName = "BR-ED2-004: a recording that ends is queued for encoding unless this machine was told otherwise")]
+    public void ARecordingThatEndsIsQueuedUnlessThisMachineWasToldOtherwise()
+    {
+        Assert.True(Read().Automatically);
+        Assert.True(Read(("Encodings:Automatically", "true")).Automatically);
+        Assert.False(Read(("Encodings:Automatically", "false")).Automatically);
+    }
+
     [Fact]
     public void NothingConfiguredAsksForTheProcessorAndGivesAJobThreeAttempts()
     {
@@ -97,6 +105,7 @@ public sealed class EncodingOptionsTests
     }
 
     [Theory]
+    [InlineData("Encodings:Automatically", "yes")]
     [InlineData("Encodings:Prefer", "quicksync")]
     [InlineData("Encodings:Prefer", "3")]
     [InlineData("Encodings:MostCores", "0")]

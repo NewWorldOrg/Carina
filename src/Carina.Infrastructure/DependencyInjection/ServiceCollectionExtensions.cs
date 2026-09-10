@@ -154,6 +154,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<EncodeArtefactPlacer>();
         services.AddScoped<EncodeJobRunner>();
         services.AddScoped<EncodeRestart>();
+        services.AddScoped<EncodeIntakeRound>();
         services.AddScoped<IThumbnailWorklist, ThumbnailWorklist>();
         services.AddScoped<IChannelScanOrchestrator, ChannelScanOrchestrator>();
         services.AddScoped<ScanApplier>();
@@ -292,6 +293,7 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<LiveStraySweep>();
         services.AddHostedService<EncodeMountCheck>();
         services.AddHostedService<EncodeDispatch>();
+        services.AddHostedService<EncodeIntakeJob>();
         services.AddHostedService<SignalSampleJob>();
         services.AddHostedService<QualitySignalRollupJob>();
         services.AddHostedService(provider => provider.GetRequiredService<IntegrityCheckJob>());

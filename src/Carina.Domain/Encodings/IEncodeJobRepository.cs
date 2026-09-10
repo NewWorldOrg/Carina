@@ -84,6 +84,16 @@ public interface IEncodeJobRepository
     Task<IReadOnlyList<EncodeJob>> ListForRecordingAsync(RecordingId recordingId, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Which of the recordings asked after the ledger already holds a job for, whatever became of
+    /// it. This is what keeps a recording from being queued a second time without anyone asking:
+    /// a job that failed is tried again by a person, and one called off was called off by a person,
+    /// so neither is an invitation to queue another (BR-ED2-004).
+    /// </summary>
+    Task<IReadOnlySet<RecordingId>> WithAJobAsync(
+        IReadOnlyCollection<RecordingId> recordings,
+        CancellationToken cancellationToken);
+
+    /// <summary>
     /// Moves the oldest waiting job to running by a conditional update, and hands it back only when
     /// that update changed one row. One running job is all the ledger holds, so a second claim while
     /// one runs is refused by the ledger itself, never by anything this process remembers (BR-ED2-005).
