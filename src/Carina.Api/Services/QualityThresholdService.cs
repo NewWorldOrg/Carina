@@ -1,4 +1,6 @@
 using Carina.Api.Common;
+using Carina.Contracts;
+using Carina.Domain.Events;
 using Carina.Domain.Quality;
 
 namespace Carina.Api.Services;
@@ -6,6 +8,7 @@ namespace Carina.Api.Services;
 public sealed class QualityThresholdService(
     IQualityThresholdRepository thresholds,
     IQualityThresholdChangeRepository changes,
+    IAppEventPublisher events,
     TimeProvider clock)
 {
     public async Task<ServiceResult<IReadOnlyList<QualityThresholdBook>>> ListAsync(CancellationToken cancellationToken)
@@ -62,6 +65,8 @@ public sealed class QualityThresholdService(
             null);
 
         await changes.AddAsync(recorded, cancellationToken);
+
+        events.Signal(AppEventName.Quality);
 
         return ServiceResult<QualityThresholdBook, QualityThresholdFailure>.Success(new QualityThresholdBook(
             new QualityThresholdStanding(key, standing.Shape, revised.Setting, true, revised.UpdatedBy),

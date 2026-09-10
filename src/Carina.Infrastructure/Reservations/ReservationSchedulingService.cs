@@ -1,5 +1,7 @@
+using Carina.Contracts;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
+using Carina.Domain.Events;
 using Carina.Domain.Reservations;
 
 namespace Carina.Infrastructure.Reservations;
@@ -10,6 +12,7 @@ public sealed class ReservationSchedulingService(
     IServiceTuningDirectory tuning,
     IAtomicWrite write,
     RollingHorizon horizon,
+    IAppEventPublisher events,
     TimeProvider clock)
 {
     public Task<SchedulingRun> CreateAsync(Reservation reservation, CancellationToken cancellationToken)
@@ -74,7 +77,9 @@ public sealed class ReservationSchedulingService(
             return SchedulingRun.Refused(SchedulingRefusal.CapacityUnknown);
         }
 
-        return await write.AllOrNothingAsync(
+        int moved = 0;
+
+        SchedulingRun written = await write.AllOrNothingAsync(
             async token =>
             {
                 IReadOnlyList<Reservation> standing = await reservations.ListPendingAsync(Reaching(at), token);
@@ -96,7 +101,7 @@ public sealed class ReservationSchedulingService(
                     return run;
                 }
 
-                Apply(run.Plan, considered, at);
+                moved = Apply(run.Plan, considered, at);
 
                 await reservations.SaveAllAsync(Touched(standing, revised), token);
 
@@ -108,6 +113,13 @@ public sealed class ReservationSchedulingService(
                 return run;
             },
             cancellationToken);
+
+        if (written.Settled && (moved > 0 || joining.Count > 0 || revised is not null))
+        {
+            events.Signal(AppEventName.Reservations);
+        }
+
+        return written;
     }
 
     private static bool Applied(Reservation reservation, ReservationRevision revision)
@@ -163,30 +175,41 @@ public sealed class ReservationSchedulingService(
         return stillRunning ? [.. others, revised, .. joining] : [.. others, .. joining];
     }
 
-    private static void Apply(AllocationPlan plan, IReadOnlyList<Reservation> considered, DateTime at)
+    private static int Apply(AllocationPlan plan, IReadOnlyList<Reservation> considered, DateTime at)
     {
+        int moved = 0;
+
         foreach (Reservation reservation in considered)
         {
+            ReservationState stood = reservation.State;
+            bool unreachable = reservation.ReceptionUnavailable;
             AllocationVerdict verdict = plan.For(reservation.Id).Verdict;
 
             if (verdict is AllocationVerdict.Unreachable)
             {
                 reservation.LoseReception(at);
-
-                continue;
-            }
-
-            reservation.RegainReception();
-
-            if (verdict is AllocationVerdict.Contended)
-            {
-                reservation.Contend();
             }
             else
             {
-                reservation.Secure();
+                reservation.RegainReception();
+
+                if (verdict is AllocationVerdict.Contended)
+                {
+                    reservation.Contend();
+                }
+                else
+                {
+                    reservation.Secure();
+                }
+            }
+
+            if (reservation.State != stood || reservation.ReceptionUnavailable != unreachable)
+            {
+                moved++;
             }
         }
+
+        return moved;
     }
 
     private async Task<Dictionary<ServiceKey, TuningResolution>?> ResolveAsync(

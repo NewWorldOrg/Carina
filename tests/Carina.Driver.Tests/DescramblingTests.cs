@@ -114,8 +114,81 @@ public sealed class DescramblingTests
     [Fact]
     public void ADriverWithNoCardOffersNothingAndHandsOutNothing()
     {
-        Assert.False(NoDescrambling.Instance.CardAnswered);
+        Assert.False(NoDescrambling.Instance.Unscrambles);
         Assert.Null(NoDescrambling.Instance.Open());
+    }
+
+    [Fact]
+    public void ACardThatAnswersAgainUnscramblesTheRestOfTheStreamWithNothingRestarted()
+    {
+        var clock = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
+        var source = new ChunkByChunkTunerDevice([[1], [2]]);
+        var dying = new ScriptedDescrambler(
+            _ => throw new DescramblingException("the card went away"));
+        var cards = new CardsOnRequest(() =>
+            new ScriptedDescrambler(scrambled =>
+                [.. scrambled.ToArray().Select(b => (byte)(b + 10))]));
+
+        using var device = new DescramblingTunerDevice(source, dying, cards, clock);
+
+        Assert.Equal([1], device.Read(1, CancellationToken.None));
+
+        clock.Advance(DescramblingTunerDevice.BetweenAsksForTheCard);
+
+        Assert.Equal([12], device.Read(1, CancellationToken.None));
+        Assert.True(dying.Disposed);
+    }
+
+    [Fact]
+    public void ATunerOpenedWhileTheCardIsAwayIsReadAsItComesAndTakesTheCardWhenItAnswers()
+    {
+        var clock = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
+        var source = new ChunkByChunkTunerDevice([[1], [2]]);
+        bool answering = false;
+        var cards = new CardsOnRequest(() =>
+            answering
+                ? new ScriptedDescrambler(scrambled =>
+                    [.. scrambled.ToArray().Select(b => (byte)(b + 10))])
+                : null);
+
+        using var device = new DescramblingTunerDevice(source, descrambler: null, cards, clock);
+
+        Assert.Equal([1], device.Read(1, CancellationToken.None));
+
+        answering = true;
+        clock.Advance(DescramblingTunerDevice.BetweenAsksForTheCard);
+
+        Assert.Equal([12], device.Read(1, CancellationToken.None));
+    }
+
+    [Fact]
+    public void TheCardIsNotAskedForOnEveryPacketWhileItIsAway()
+    {
+        var clock = new ManualTimeProvider(DateTimeOffset.UnixEpoch);
+        var source = new ChunkByChunkTunerDevice([[1], [2], [3], [4]]);
+        var cards = new CardsOnRequest(() => null);
+
+        using var device = new DescramblingTunerDevice(source, descrambler: null, cards, clock);
+
+        device.Read(1, CancellationToken.None);
+        device.Read(1, CancellationToken.None);
+        device.Read(1, CancellationToken.None);
+
+        Assert.Equal(0, cards.Asked);
+
+        clock.Advance(DescramblingTunerDevice.BetweenAsksForTheCard);
+        device.Read(1, CancellationToken.None);
+
+        Assert.Equal(1, cards.Asked);
+    }
+
+    [Fact]
+    public void ATunerIsOnlyReadThroughACardWhenThereIsOneOrSomewhereToAskForOne()
+    {
+        var source = new ChunkByChunkTunerDevice([]);
+
+        Assert.Throws<ArgumentException>(() =>
+            new DescramblingTunerDevice(source, descrambler: null));
     }
 
     [Fact]
@@ -201,6 +274,20 @@ public sealed class ThrowingDescrambler : IDescrambler
     public void Dispose() { }
 }
 
+public sealed class CardsOnRequest(Func<IDescrambler?> answer) : IDescramblerFactory
+{
+    public int Asked { get; private set; }
+
+    public bool Unscrambles => true;
+
+    public IDescrambler? Open()
+    {
+        Asked++;
+
+        return answer();
+    }
+}
+
 public sealed class ScriptedDescrambler(Unlocking unlock) : IDescrambler
 {
     public byte[] Unread { get; set; } = [];
@@ -244,11 +331,11 @@ public sealed class DescramblingWiringTests
     }
 
     [Fact]
-    public void ACardThatStoppedAnsweringLeavesTheTunerReadableRatherThanRefusingToTune()
+    public void ATunerOpenedWhileNoCardAnswersIsStillTheOneThatWillAskAgain()
     {
         ITunerDevice opened = Open(new OneDescramblerFactory { Answers = false });
 
-        Assert.IsNotType<DescramblingTunerDevice>(opened);
+        Assert.IsType<DescramblingTunerDevice>(opened);
 
         opened.Dispose();
     }
@@ -275,7 +362,7 @@ public sealed class DescramblingWiringTests
     {
         public bool Answers { get; set; } = true;
 
-        public bool CardAnswered => true;
+        public bool Unscrambles => true;
 
         public IDescrambler? Open() =>
             Answers ? new ScriptedDescrambler(_ => [1]) : null;
@@ -289,16 +376,16 @@ public sealed class DescramblingOnThisMachineTests
     {
         IDescramblerFactory descramblers = Descramblers.Probe(logger: null);
 
-        if (!descramblers.CardAnswered)
+        using IDescrambler? descrambler = descramblers.Open();
+
+        if (descrambler is null)
         {
-            Assert.Same(NoDescrambling.Instance, descramblers);
+            Assert.Null(NoDescrambling.Instance.Open());
 
             return;
         }
 
-        using IDescrambler? descrambler = descramblers.Open();
-
-        Assert.NotNull(descrambler);
+        Assert.True(descramblers.Unscrambles);
         Assert.Empty(descrambler.Descramble([]));
     }
 }

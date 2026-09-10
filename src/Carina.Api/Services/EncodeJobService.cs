@@ -1,6 +1,8 @@
 using Carina.Api.Common;
+using Carina.Contracts;
 using Carina.Domain.Base;
 using Carina.Domain.Encodings;
+using Carina.Domain.Events;
 using Carina.Domain.Machines;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Encodings;
@@ -32,6 +34,7 @@ public sealed class EncodeJobService(
     IStrayProgrammes strays,
     EncodeScratchCleaner cleaner,
     EncodeSettings settings,
+    IAppEventPublisher events,
     TimeProvider clock,
     ILogger<EncodeJobService> logger)
 {
@@ -118,6 +121,8 @@ public sealed class EncodeJobService(
 
         await jobs.AddAsync(queued, cancellationToken);
 
+        events.Signal(AppEventName.EncodeJobs);
+
         return ServiceResult<EncodeJobView, EncodingFailure>.Success(Seen(queued, Now()));
     }
 
@@ -146,6 +151,8 @@ public sealed class EncodeJobService(
         {
             return Failure($"Job {id.Wire} moved in the ledger while it was being called off; read it again.", EncodingFailure.MovedMeanwhile);
         }
+
+        events.Signal(AppEventName.EncodeJobs);
 
         if (running is { } programme)
         {

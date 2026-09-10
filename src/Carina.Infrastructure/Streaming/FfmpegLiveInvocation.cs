@@ -18,6 +18,8 @@ public static class FfmpegLiveInvocation
 
     public const string DrawnCaptions = "[c]";
 
+    public const int SoundKilobitsPerSecond = 192;
+
     private const int KeyframeSeconds = 2;
 
     private const string LightestCompression = "1";
@@ -72,10 +74,7 @@ public static class FfmpegLiveInvocation
             "-vf",
             Filter(profile, attributes, encoder),
             .. Encoding(profile, encoder),
-            "-c:a",
-            "copy",
-            "-bsf:a",
-            "aac_adtstoasc",
+            .. Sound(),
         ];
     }
 
@@ -225,6 +224,15 @@ public static class FfmpegLiveInvocation
                 "-bufsize",
                 Kilobits(profile.SoftwareRateControl.KilobitsPerSecond * BufferedSeconds),
             ];
+
+    internal static IReadOnlyList<string> Sound()
+        =>
+        [
+            "-c:a",
+            "aac",
+            "-b:a",
+            Kilobits(SoundKilobitsPerSecond),
+        ];
 
     private static bool WantsEveryField(LiveProfile profile)
         => profile.Rate.PerSecond > FrameRate.BroadcastFrames.PerSecond;

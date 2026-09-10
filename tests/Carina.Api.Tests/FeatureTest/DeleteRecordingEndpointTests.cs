@@ -429,4 +429,30 @@ public sealed class DeleteRecordingEndpointTests
             Directory.Delete(gallery, recursive: true);
         }
     }
+
+    [Fact]
+    public async Task ThrowingARecordingAwayTellsTheScreensTheRecordingsAndTheQualityLedgerMoved()
+    {
+        await using var feature = new RecordingFeature();
+        Recording held = Ended(feature);
+        feature.Eraser.Answer = RecordingErasure.Erased(2);
+        feature.Events.Signalled.Clear();
+
+        await feature.DeleteAsync($"/api/recordings/{held.Id.Wire}");
+
+        Assert.Equal([AppEventName.Recordings, AppEventName.Quality], feature.Events.Signalled);
+    }
+
+    [Fact]
+    public async Task ARecordingThatWasNotThrownAwayTellsTheScreensNothing()
+    {
+        await using var feature = new RecordingFeature();
+        Recording writing = feature.Held();
+        feature.Events.Signalled.Clear();
+
+        await feature.DeleteAsync($"/api/recordings/{writing.Id.Wire}");
+
+        Assert.Empty(feature.Events.Signalled);
+    }
+
 }

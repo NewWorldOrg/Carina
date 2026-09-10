@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text.Json;
 
+using Carina.Contracts;
 using Carina.Domain.Quality;
 
 namespace Carina.Api.Tests.FeatureTest;
@@ -168,4 +169,25 @@ public sealed class QualityThresholdEndpointTests
             .GetProperty("reading")
             .GetProperty("state")
             .GetString();
+
+    [Fact]
+    public async Task MovingALevelTellsTheScreensTheQualityMoved()
+    {
+        await using var feature = new QualityFeature();
+
+        await feature.PatchAsync("/api/quality/thresholds/packetsLostWarning", new { value = 0.0009 });
+
+        Assert.Equal([AppEventName.Quality], feature.Events.Signalled);
+    }
+
+    [Fact]
+    public async Task ALevelThatWasRefusedTellsTheScreensNothing()
+    {
+        await using var feature = new QualityFeature();
+
+        await feature.PatchAsync("/api/quality/thresholds/packetsLostWarning", new { value = 500.0 });
+
+        Assert.Empty(feature.Events.Signalled);
+    }
+
 }

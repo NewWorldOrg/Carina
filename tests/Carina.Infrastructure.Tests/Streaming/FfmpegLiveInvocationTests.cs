@@ -76,9 +76,9 @@ public sealed class FfmpegLiveInvocationTests
                 "-bufsize",
                 "6000k",
                 "-c:a",
-                "copy",
-                "-bsf:a",
-                "aac_adtstoasc",
+                "aac",
+                "-b:a",
+                "192k",
             ],
             FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, CaptionOutlet.None));
     }
@@ -114,9 +114,9 @@ public sealed class FfmpegLiveInvocationTests
                 "-qp",
                 "24",
                 "-c:a",
-                "copy",
-                "-bsf:a",
-                "aac_adtstoasc",
+                "aac",
+                "-b:a",
+                "192k",
             ],
             FfmpegLiveInvocation.Arguments(Service, LiveProfile.FullHd60, Interlaced, LiveEncoder.Vaapi, CaptionOutlet.None));
     }
@@ -158,22 +158,57 @@ public sealed class FfmpegLiveInvocationTests
 
     [Theory]
     [MemberData(nameof(EveryProfileOnEveryEncoder))]
-    public void SoundIsCarriedOverRatherThanEncodedAgain(LiveProfile profile, LiveEncoder encoder)
+    public void BrPd008TheSoundIsBuiltAgainSoAGapInTheFeedIsHeardAsABreakRatherThanEndingThePlayback(
+        LiveProfile profile,
+        LiveEncoder encoder)
     {
         string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, CaptionOutlet.None)];
 
-        Assert.Equal("copy", arguments[arguments.IndexOf("-c:a") + 1]);
-        Assert.Equal("aac_adtstoasc", arguments[arguments.IndexOf("-bsf:a") + 1]);
+        Assert.Equal("aac", arguments[arguments.IndexOf("-c:a") + 1]);
+        Assert.Equal("192k", arguments[arguments.IndexOf("-b:a") + 1]);
+        Assert.DoesNotContain("copy", arguments);
         Assert.Single(arguments, argument => string.Equals(argument, "-c:a", StringComparison.Ordinal));
         Assert.DoesNotContain(arguments, argument => argument.StartsWith("-c:a:", StringComparison.Ordinal));
-        Assert.DoesNotContain("aac", arguments);
-        Assert.DoesNotContain("-b:a", arguments);
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void TheFilterThatDressedAdtsFramesAsAnAscIsGoneBecauseNothingIsCarriedOverAnyMore(
+        LiveProfile profile,
+        LiveEncoder encoder)
+    {
+        string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, CaptionOutlet.None)];
+
+        Assert.DoesNotContain("-bsf:a", arguments);
+        Assert.DoesNotContain("aac_adtstoasc", arguments);
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void NothingReshapesTheSoundSoTwoLanguagesCarriedOnTwoChannelsStayOnTwoChannels(
+        LiveProfile profile,
+        LiveEncoder encoder)
+    {
+        string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, CaptionOutlet.None)];
+
         Assert.DoesNotContain("-ac", arguments);
         Assert.DoesNotContain("-ar", arguments);
         Assert.DoesNotContain("-af", arguments);
         Assert.DoesNotContain("-filter:a", arguments);
         Assert.DoesNotContain("-filter_complex", arguments);
         Assert.DoesNotContain("-channel_layout", arguments);
+        Assert.DoesNotContain("-dual_mono_mode", arguments);
+    }
+
+    [Fact]
+    public void TheSoundIsGivenAsMuchRoomAsTheBroadcastGaveIt()
+    {
+        string[] arguments = [.. FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, CaptionOutlet.None)];
+
+        Assert.Equal(192, FfmpegLiveInvocation.SoundKilobitsPerSecond);
+        Assert.Equal(
+            FormattableString.Invariant($"{FfmpegLiveInvocation.SoundKilobitsPerSecond}k"),
+            arguments[arguments.IndexOf("-b:a") + 1]);
     }
 
     [Theory]

@@ -71,15 +71,7 @@ public sealed class RecordingLibraryRepository(CarinaDbContext context) : IRecor
         IQueryable<Recording> found,
         RecordingSearchCriteria criteria)
     {
-        foreach (string word in criteria.Words)
-        {
-            string pattern = RecordingSearchPattern.Containing(word);
-
-            found = found.Where(recording => EF.Functions.ILike(
-                EF.Property<string>(recording, ProgrammeConfiguration.Searchable),
-                pattern,
-                RecordingSearchPattern.Escape));
-        }
+        found = SearchableText.Carrying(found, criteria.Words);
 
         if (criteria.Channels.Count > 0)
         {

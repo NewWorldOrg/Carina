@@ -266,6 +266,7 @@ public sealed class ReservationGuideServiceTests
             directory,
             write,
             RollingHorizon.Default,
+            new SilentEvents(),
             clock);
 
         return new Held(

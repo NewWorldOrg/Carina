@@ -1,3 +1,5 @@
+using Carina.Contracts;
+using Carina.Domain.Events;
 using Carina.Domain.Reservations;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -10,6 +12,7 @@ public sealed class RecordingTickJob(
     IServiceScopeFactory scopes,
     RecordingSettings settings,
     IRecalculationNotice notices,
+    IAppEventPublisher events,
     TimeProvider clock,
     ILogger<RecordingTickJob> logger) : BackgroundService
 {
@@ -54,6 +57,11 @@ public sealed class RecordingTickJob(
 
     private RecordingRun Asked(RecordingRun run)
     {
+        if (run.Started.Count > 0 || run.Stopped.Count > 0)
+        {
+            events.Signal(AppEventName.Recordings);
+        }
+
         if (run.Started.Count > 0)
         {
             notices.Nudge(RecalculationTrigger.RecordingStarted);
@@ -62,6 +70,11 @@ public sealed class RecordingTickJob(
         if (run.Stopped.Count > 0)
         {
             notices.Nudge(RecalculationTrigger.RecordingEnded);
+        }
+
+        if (run.Refused.Count > 0)
+        {
+            events.Signal(AppEventName.Reservations);
         }
 
         return run;

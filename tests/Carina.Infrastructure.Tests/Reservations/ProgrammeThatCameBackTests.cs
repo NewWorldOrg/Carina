@@ -208,6 +208,7 @@ public sealed class ProgrammeThatCameBackTests
                 tuning,
                 Write,
                 RollingHorizon.Default,
+                new SilentEvents(),
                 clock);
 
             Applying = new RuleApplicationService(
@@ -221,6 +222,7 @@ public sealed class ProgrammeThatCameBackTests
                 new RuleMatcher(new ProgrammeSearchScope(Streams, new CountedServices()), clock),
                 new RuleApplicationSettings(),
                 Write,
+                new SilentEvents(),
                 clock);
 
             Guiding = new ReservationGuideService(

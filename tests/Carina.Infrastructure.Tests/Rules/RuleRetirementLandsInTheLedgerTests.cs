@@ -157,10 +157,12 @@ public sealed class RuleRetirementLandsInTheLedgerTests(RepositoryDatabase datab
                 new TuningByService { Otherwise = Tunable() },
                 new DatabaseAtomicWrite(context),
                 RollingHorizon.Default,
+                new SilentEvents(),
                 new FixedClock(Now)),
             new RuleMatcher(new ProgrammeSearchScope(streams, new HeldServices()), new FixedClock(Now)),
             new RuleApplicationSettings(),
             new DatabaseAtomicWrite(context),
+            new SilentEvents(),
             new FixedClock(Now));
     }
 

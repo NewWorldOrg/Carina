@@ -27,6 +27,8 @@ public enum RecordingSort
 
 public sealed record RecordingConditions
 {
+    public string? Keyword { get; init; }
+
     public RecordingStanding? Standing { get; init; }
 
     public IReadOnlyList<RecordingOutcome>? Outcomes { get; init; }
@@ -47,6 +49,7 @@ public sealed class RecordingQuery
     public static readonly TimeSpan LongestSpan = TimeSpan.FromDays(366);
 
     private RecordingQuery(
+        RecordingKeyword keyword,
         RecordingStanding? standing,
         IReadOnlyList<RecordingOutcome> outcomes,
         DropReading? drops,
@@ -58,6 +61,7 @@ public sealed class RecordingQuery
         int page,
         int perPage)
     {
+        Keyword = keyword;
         Standing = standing;
         Outcomes = outcomes;
         Drops = drops;
@@ -69,6 +73,8 @@ public sealed class RecordingQuery
         Page = page;
         PerPage = perPage;
     }
+
+    public RecordingKeyword Keyword { get; }
 
     public RecordingStanding? Standing { get; }
 
@@ -101,7 +107,9 @@ public sealed class RecordingQuery
     {
         RecordingConditions beside = conditions ?? new RecordingConditions();
 
-        if (OutcomesIn(beside.Outcomes) is not { } outcomes || ChannelsIn(beside.Channels) is not { } channels)
+        if (RecordingKeyword.For(beside.Keyword) is not { } keyword
+            || OutcomesIn(beside.Outcomes) is not { } outcomes
+            || ChannelsIn(beside.Channels) is not { } channels)
         {
             return null;
         }
@@ -137,6 +145,7 @@ public sealed class RecordingQuery
         }
 
         return new RecordingQuery(
+            keyword,
             beside.Standing,
             outcomes,
             beside.Drops,

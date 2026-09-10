@@ -259,6 +259,119 @@ public sealed class RecordingDirectoryTests(MigratedScratchDatabase database)
     }
 
     [Fact]
+    public async Task AWordInTheTitleBringsBackTheRecordingThatCarriesItAndLeavesTheRest()
+    {
+        int network = await StockedAsync(0);
+        Recording wanted = await AddAsync(network, 1, name: "Zephyr diary");
+        await AddAsync(network, 2, name: "Harbour lights");
+
+        PaginatedList<Recording> found = await ListAsync(Query(network, keyword: "zephyr"));
+
+        Assert.Equal(wanted.Id, Assert.Single(found.Items).Id);
+        Assert.Equal(1, found.Total);
+    }
+
+    [Fact]
+    public async Task APerformerNamedOnlyInTheDetailIsFoundBecauseTheDetailIsSearchedToo()
+    {
+        int network = await StockedAsync(0);
+        Recording wanted = await AddAsync(network, 1, name: "Zephyr diary", extended: "◇出演者 みかん博士");
+        await AddAsync(network, 2, name: "Harbour lights");
+
+        PaginatedList<Recording> found = await ListAsync(Query(network, keyword: "みかん博士"));
+
+        Assert.Equal(wanted.Id, Assert.Single(found.Items).Id);
+    }
+
+    [Fact]
+    public async Task EveryWordHasToBeSomewhereInTheRecordedTextAndAnyOfTheThreeMayCarryIt()
+    {
+        int network = await StockedAsync(0);
+        Recording wanted = await AddAsync(
+            network,
+            1,
+            name: "Zephyr diary",
+            summary: "A walk along the water",
+            extended: "◇出演者 みかん博士");
+        await AddAsync(network, 2, name: "Zephyr diary", summary: "A walk up the hill");
+
+        PaginatedList<Recording> found = await ListAsync(Query(network, keyword: "zephyr みかん博士"));
+
+        Assert.Equal(wanted.Id, Assert.Single(found.Items).Id);
+    }
+
+    [Fact]
+    public async Task AnUnderscoreInATitleIsAskedForLiterallyRatherThanAsAnyLetterAtAll()
+    {
+        int network = await StockedAsync(0);
+        Recording wanted = await AddAsync(network, 1, name: "a_b");
+        await AddAsync(network, 2, name: "axb");
+
+        PaginatedList<Recording> found = await ListAsync(Query(network, keyword: "a_b"));
+
+        Assert.Equal(wanted.Id, Assert.Single(found.Items).Id);
+    }
+
+    [Fact]
+    public async Task APerCentSignInATitleIsAskedForLiterallyToo()
+    {
+        int network = await StockedAsync(0);
+        Recording wanted = await AddAsync(network, 1, name: "100% cotton");
+        await AddAsync(network, 2, name: "100 cotton");
+
+        PaginatedList<Recording> found = await ListAsync(Query(network, keyword: "100%"));
+
+        Assert.Equal(wanted.Id, Assert.Single(found.Items).Id);
+    }
+
+    [Fact]
+    public async Task ATitleCopiedOutOfTheGuideInFullWidthFindsTheRecordingOfIt()
+    {
+        int network = await StockedAsync(0);
+        Recording wanted = await AddAsync(network, 1, name: "ZEPHYR diary");
+
+        PaginatedList<Recording> found = await ListAsync(Query(network, keyword: "Ｚｅｐｈｙｒ"));
+
+        Assert.Equal(wanted.Id, Assert.Single(found.Items).Id);
+    }
+
+    [Fact]
+    public async Task ATitleWrittenInHalfWidthKanaIsFoundByTheWideFormAndTheOtherWayRound()
+    {
+        int network = await StockedAsync(0);
+        Recording wanted = await AddAsync(network, 1, name: "ｶﾞｰﾃﾞﾝ特集");
+
+        PaginatedList<Recording> found = await ListAsync(Query(network, keyword: "ガーデン"));
+
+        Assert.Equal(wanted.Id, Assert.Single(found.Items).Id);
+    }
+
+    [Fact]
+    public async Task AKeywordThatMatchesNothingLeavesAnEmptyPageRatherThanTheWholeShelf()
+    {
+        int network = await StockedAsync(3);
+
+        PaginatedList<Recording> found = await ListAsync(Query(network, keyword: "zephyr"));
+
+        Assert.Empty(found.Items);
+        Assert.Equal(0, found.Total);
+    }
+
+    [Fact]
+    public async Task NamingNoKeywordLeavesEveryRowWhereItWas()
+    {
+        int network = await StockedAsync(3);
+
+        PaginatedList<Recording> everything = await ListAsync(Query(network));
+        PaginatedList<Recording> spaces = await ListAsync(Query(network, keyword: "　"));
+
+        Assert.Equal(3, everything.Total);
+        Assert.Equal(
+            everything.Items.Select(recording => recording.Id.Value),
+            spaces.Items.Select(recording => recording.Id.Value));
+    }
+
+    [Fact]
     public async Task RowsThatStartedAtTheSameMomentAreReadInAnOrderThatDoesNotMove()
     {
         int network = await StockedAsync(0);
@@ -274,6 +387,7 @@ public sealed class RecordingDirectoryTests(MigratedScratchDatabase database)
 
     private static RecordingQuery Query(
         int network,
+        string? keyword = null,
         RecordingStanding? standing = null,
         IReadOnlyList<RecordingOutcome>? outcomes = null,
         DropReading? drops = null,
@@ -294,6 +408,7 @@ public sealed class RecordingDirectoryTests(MigratedScratchDatabase database)
             perPage,
             new RecordingConditions
             {
+                Keyword = keyword,
                 Standing = standing,
                 Outcomes = outcomes,
                 Drops = drops,
@@ -387,7 +502,10 @@ public sealed class RecordingDirectoryTests(MigratedScratchDatabase database)
         DateTime? startedAt = null,
         DateTime? programmeStartsAt = null,
         RecordingOutcome? outcome = null,
-        DropCounters? counters = null)
+        DropCounters? counters = null,
+        string name = "A programme",
+        string summary = "",
+        string extended = "")
     {
         RecordingId id = RecordingId.New();
         DateTime started = startedAt ?? Noon.AddMinutes(eventId);
@@ -404,7 +522,7 @@ public sealed class RecordingDirectoryTests(MigratedScratchDatabase database)
             RecordingFileName.For(id, ".m2ts"),
             started,
             started.AddHours(1),
-            new ProgrammeSnapshot("A programme", string.Empty, string.Empty, [], started),
+            new ProgrammeSnapshot(name, summary, extended, [], started),
             null,
             BroadcastGroupRole.Standalone,
             started,

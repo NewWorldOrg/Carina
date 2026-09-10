@@ -18,7 +18,9 @@ public sealed class RecordingDirectory(CarinaDbContext context) : IRecordingDire
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        IQueryable<Recording> found = context.Set<Recording>().AsNoTracking();
+        IQueryable<Recording> found = SearchableText.Carrying(
+            context.Set<Recording>().AsNoTracking(),
+            query.Keyword.Words);
 
         if (query.Standing is { } standing)
         {

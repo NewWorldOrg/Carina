@@ -1,4 +1,6 @@
+using Carina.Contracts;
 using Carina.Domain.Base;
+using Carina.Domain.Events;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 
@@ -15,6 +17,7 @@ public sealed class ReservationOutcomeService(
     IRecordingRepository recordings,
     IAtomicWrite write,
     ReservationOutcomeSettings settings,
+    IAppEventPublisher events,
     TimeProvider clock)
 {
     public async Task<ReservationOutcomeRun> RecordAsync(CancellationToken cancellationToken)
@@ -33,7 +36,7 @@ public sealed class ReservationOutcomeService(
             ? await reservations.ListClaimedOverAsync(contested, cancellationToken)
             : [];
 
-        return await write.AllOrNothingAsync(
+        ReservationOutcomeRun run = await write.AllOrNothingAsync(
             async token =>
             {
                 List<ReservationOutcomeRecord> recorded = [];
@@ -93,6 +96,13 @@ public sealed class ReservationOutcomeService(
                 return new ReservationOutcomeRun(recorded);
             },
             cancellationToken);
+
+        if (run.Recorded.Count > 0)
+        {
+            events.Signal(AppEventName.Reservations);
+        }
+
+        return run;
     }
 
     private async Task<IReadOnlyList<RecordingFault>> WhyItFailedAsync(

@@ -143,10 +143,12 @@ public sealed class RuleApplicationLandsInTheLedgerTests(RepositoryDatabase data
                 tuning,
                 new DatabaseAtomicWrite(context),
                 RollingHorizon.Default,
+                new SilentEvents(),
                 new FixedClock(Now)),
             new RuleMatcher(new ProgrammeSearchScope(streams, new HeldServices()), new FixedClock(Now)),
             new RuleApplicationSettings(),
             new DatabaseAtomicWrite(context),
+            new SilentEvents(),
             new FixedClock(Now));
     }
 

@@ -19,6 +19,7 @@ public sealed class ListRecordingsAction(RecordingService recordings) : Controll
     [ProducesResponseType<BaseResponder<RecordingListResponder>>(StatusCodes.Status200OK)]
     [ProducesResponseType<BaseResponder<RecordingListResponder>>(StatusCodes.Status400BadRequest)]
     public async Task<IActionResult> Invoke(
+        [FromQuery] string? keyword,
         [FromQuery] RecordingStanding? standing,
         [FromQuery] RecordingOutcome[]? outcome,
         [FromQuery] DropReading? drops,
@@ -41,6 +42,7 @@ public sealed class ListRecordingsAction(RecordingService recordings) : Controll
                 perPage,
                 new RecordingConditions
                 {
+                    Keyword = keyword,
                     Standing = standing,
                     Outcomes = outcome,
                     Drops = drops,
@@ -65,5 +67,8 @@ public sealed class ListRecordingsAction(RecordingService recordings) : Controll
             + $"at most {RecordingQuery.MostChannels} channels are named as network-service, "
             + "and the state, the outcome, the drop reading and the sort are each one of the values this "
             + "endpoint names. A recording still being written has no outcome yet, so asking for both at once "
-            + "asks for nothing.";
+            + "asks for nothing. A keyword, where one is given, is at most "
+            + $"{RecordingKeyword.LongestKeyword} letters long and carries at most "
+            + $"{RecordingKeyword.MostWords} words, each of which has to be somewhere in the title, the summary "
+            + "or the detail of a recording for it to come back.";
 }

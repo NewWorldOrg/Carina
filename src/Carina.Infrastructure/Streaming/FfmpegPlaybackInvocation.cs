@@ -9,8 +9,6 @@ public static class FfmpegPlaybackInvocation
 {
     public const string Seconds = "0.###";
 
-    public const int SoundKilobitsPerSecond = 192;
-
     public static IReadOnlyList<string> Arguments(
         ServiceId service,
         LiveProfile profile,
@@ -48,18 +46,9 @@ public static class FfmpegPlaybackInvocation
             "-vf",
             FfmpegLiveInvocation.Filter(profile, attributes, encoder),
             .. FfmpegLiveInvocation.Encoding(profile, encoder),
-            .. Sound(),
+            .. FfmpegLiveInvocation.Sound(),
         ];
     }
-
-    internal static IReadOnlyList<string> Sound()
-        =>
-        [
-            "-c:a",
-            "aac",
-            "-b:a",
-            string.Create(CultureInfo.InvariantCulture, $"{SoundKilobitsPerSecond}k"),
-        ];
 
     internal static IReadOnlyList<string> Mapping(ServiceId service)
     {

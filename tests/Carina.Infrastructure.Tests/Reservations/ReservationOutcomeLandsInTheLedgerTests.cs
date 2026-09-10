@@ -243,6 +243,7 @@ public sealed class ReservationOutcomeLandsInTheLedgerTests(RepositoryDatabase d
                 new RecordingRepository(context),
                 new DatabaseAtomicWrite(context),
                 new ReservationOutcomeSettings { Grace = Grace },
+                new Carina.TestSupport.SilentEvents(),
                 new FixedClock(at))
             .RecordAsync(Cancel)
             .WaitAsync(TimeSpan.FromSeconds(60), Cancel);

@@ -9,6 +9,7 @@ using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.Encodings;
+using Carina.Domain.Events;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
@@ -219,6 +220,7 @@ internal sealed class RecordingFeature : IAsyncDisposable
             {
                 services.RemoveAll<IHostedService>();
                 services.AddSingleton<IRecordingDirectory>(Recordings);
+                services.AddSingleton<IAppEventPublisher>(Events);
                 services.AddSingleton<IEncodeStandingReader>(Jobs);
                 services.AddSingleton<IDriverClient>(Driver);
                 services.AddSingleton<IThumbnailRemaker>(Remaker);
@@ -236,6 +238,8 @@ internal sealed class RecordingFeature : IAsyncDisposable
     public HttpClient Client { get; }
 
     public HeldRecordings Recordings { get; } = new();
+
+    public SilentEvents Events { get; } = new();
 
     public HeldEncodeJobs Jobs { get; } = new();
 
@@ -313,6 +317,13 @@ internal sealed class RecordingFeature : IAsyncDisposable
         using HttpResponseMessage response = await Client.GetAsync(new Uri(path, UriKind.Relative));
 
         return await ReadAsync(response);
+    }
+
+    public async Task<string> GetTextAsync(string path)
+    {
+        using HttpResponseMessage response = await Client.GetAsync(new Uri(path, UriKind.Relative));
+
+        return await response.Content.ReadAsStringAsync();
     }
 
     public async Task<(HttpStatusCode Status, JsonElement Body)> PostAsync(string path, object? body = null)

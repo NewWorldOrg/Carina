@@ -68,13 +68,15 @@ public sealed class FfmpegPlaybackInvocationTests
     }
 
     [Fact]
-    public void ALiveViewerIsStillGivenTheSoundAsItWasBroadcastRatherThanEncodedAgain()
+    public void ALiveViewerIsGivenTheSoundBuiltTheSameWayAPlayedRecordingIs()
     {
         IReadOnlyList<string> live = FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, CaptionOutlet.None);
+        IReadOnlyList<string> playing = Arguments(TimeSpan.Zero);
 
-        Assert.Equal("copy", After(live, "-c:a"));
-        Assert.Equal("aac_adtstoasc", After(live, "-bsf:a"));
-        Assert.DoesNotContain("-b:a", live);
+        Assert.Equal("aac", After(live, "-c:a"));
+        Assert.Equal(After(playing, "-c:a"), After(live, "-c:a"));
+        Assert.Equal(After(playing, "-b:a"), After(live, "-b:a"));
+        Assert.DoesNotContain("-bsf:a", live);
     }
 
     [Fact]
@@ -111,9 +113,9 @@ public sealed class FfmpegPlaybackInvocationTests
     [Fact]
     public void TheSoundIsGivenBackAtTheRateItWasBroadcastAtRatherThanAtWhateverTextWasHandedIn()
     {
-        Assert.Equal(192, FfmpegPlaybackInvocation.SoundKilobitsPerSecond);
+        Assert.Equal(192, FfmpegLiveInvocation.SoundKilobitsPerSecond);
         Assert.Equal(
-            FormattableString.Invariant($"{FfmpegPlaybackInvocation.SoundKilobitsPerSecond}k"),
+            FormattableString.Invariant($"{FfmpegLiveInvocation.SoundKilobitsPerSecond}k"),
             After(Arguments(TimeSpan.Zero), "-b:a"));
     }
 
