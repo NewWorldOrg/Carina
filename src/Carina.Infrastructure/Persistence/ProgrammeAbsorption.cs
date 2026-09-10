@@ -33,14 +33,16 @@ public static class ProgrammeAbsorption
     private const string Audio =
         "CASE WHEN excluded.audio = 'Undetermined' THEN programme.audio ELSE excluded.audio END";
 
+    private const string Sounds = "CASE WHEN excluded.sounds = 0 THEN programme.sounds ELSE excluded.sounds END";
+
     public static readonly string Sql = $"""
         WITH written AS (
             INSERT INTO programme (
                 network_id, service_id, event_id, transport_stream_id, start_at, end_at, name, summary,
-                is_shadow, genres, items, related, has_subtitles, audio, source, updated_at)
+                is_shadow, genres, items, related, has_subtitles, audio, sounds, source, updated_at)
             SELECT
                 network_id, service_id, event_id, transport_stream_id, start_at, end_at, name, summary,
-                is_shadow, genres, items, related, has_subtitles, audio, source, updated_at
+                is_shadow, genres, items, related, has_subtitles, audio, sounds, source, updated_at
             FROM jsonb_to_recordset(@{RowsParameter}) AS arriving(
                 network_id integer,
                 service_id integer,
@@ -56,6 +58,7 @@ public static class ProgrammeAbsorption
                 related jsonb,
                 has_subtitles boolean,
                 audio character varying(32),
+                sounds integer,
                 source character varying(32),
                 updated_at timestamptz)
             ON CONFLICT (network_id, service_id, event_id) DO UPDATE SET
@@ -70,17 +73,18 @@ public static class ProgrammeAbsorption
                 related = {Related},
                 has_subtitles = excluded.has_subtitles,
                 audio = {Audio},
+                sounds = {Sounds},
                 source = excluded.source,
                 updated_at = excluded.updated_at,
                 revision = nextval('{ProgrammeRevisions.Sequence}')
             WHERE (
                 programme.transport_stream_id, programme.start_at, programme.end_at, programme.name, programme.summary,
                 programme.is_shadow, programme.genres, programme.items, programme.related, programme.has_subtitles,
-                programme.audio, programme.source)
+                programme.audio, programme.sounds, programme.source)
             IS DISTINCT FROM (
                 excluded.transport_stream_id, excluded.start_at, {End}, {Name}, {Summary},
                 excluded.is_shadow, {Genres}, {Items}, {Related}, excluded.has_subtitles,
-                {Audio}, excluded.source)
+                {Audio}, {Sounds}, excluded.source)
             RETURNING (xmax = 0) AS added)
         SELECT count(*) FILTER (WHERE added), count(*) FILTER (WHERE NOT added) FROM written
         """;
@@ -144,6 +148,7 @@ public static class ProgrammeAbsorption
         [property: JsonPropertyName("related")] IReadOnlyList<RelatedProgramme> Related,
         [property: JsonPropertyName("has_subtitles")] bool HasSubtitles,
         [property: JsonPropertyName("audio")] AudioMode Audio,
+        [property: JsonPropertyName("sounds")] int Sounds,
         [property: JsonPropertyName("source")] ProgrammeSource Source,
         [property: JsonPropertyName("updated_at")] DateTime UpdatedAt)
     {
@@ -163,6 +168,7 @@ public static class ProgrammeAbsorption
                 programme.Related,
                 programme.HasSubtitles,
                 programme.Audio,
+                programme.Sounds,
                 programme.Source,
                 programme.UpdatedAt);
     }

@@ -39,6 +39,7 @@ public sealed class ProgrammeTests
     [InlineData("related")]
     [InlineData("subtitles")]
     [InlineData("audio")]
+    [InlineData("sounds")]
     [InlineData("source")]
     public void AnyOneFieldMovingOnItsOwnCountsAsAChange(string moved)
     {
@@ -236,6 +237,23 @@ public sealed class ProgrammeTests
     }
 
     [Fact]
+    public void ACountOfSoundsThatWasNotAnnouncedAgainDoesNotUnsayTheOneAlreadyKnown()
+    {
+        var programme = Programme.Discover(Moved("sounds"), At);
+
+        Assert.False(programme.Absorb(Broadcast(), At.AddHours(1)));
+
+        Assert.Equal(2, programme.Sounds);
+        Assert.Equal(At, programme.UpdatedAt);
+    }
+
+    [Fact]
+    public void ABroadcastThatNamedNoSoundAtAllIsCountedAsNoneRatherThanOne()
+    {
+        Assert.Equal(0, Programme.Discover(Broadcast(), At).Sounds);
+    }
+
+    [Fact]
     public void ATimeThatIsNotInUniversalTimeIsRefused()
     {
         Assert.Throws<ArgumentException>(
@@ -312,6 +330,7 @@ public sealed class ProgrammeTests
             },
             "subtitles" => Broadcast() with { HasSubtitles = true },
             "audio" => Broadcast() with { Audio = AudioMode.DualMono },
+            "sounds" => Broadcast() with { Sounds = 2 },
             "source" => Broadcast() with { Source = ProgrammeSource.ScheduleExtended },
             _ => Broadcast(endsAt: At.AddHours(24)),
         };

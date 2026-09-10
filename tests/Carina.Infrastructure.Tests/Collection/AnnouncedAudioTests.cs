@@ -64,6 +64,39 @@ public sealed class AnnouncedAudioTests
         Assert.Throws<ArgumentNullException>(() => AnnouncedAudio.Of(null!));
     }
 
+    [Fact]
+    public void TwoSoundsAnnouncedSideBySideAreBothCounted()
+    {
+        Assert.Equal(2, AnnouncedAudio.Sounds([Component(0x03), Component(0x03, main: false)]));
+    }
+
+    [Fact]
+    public void ASecondSoundIsCountedEvenThoughTheModeReadsTheMainOneAlone()
+    {
+        IReadOnlyList<AudioComponentDescription> announced = [Component(0x03), Component(0x03, main: false)];
+
+        Assert.Equal(AudioMode.Stereo, AnnouncedAudio.Of(announced));
+        Assert.Equal(2, AnnouncedAudio.Sounds(announced));
+    }
+
+    [Fact]
+    public void AComponentThatIsNotSoundIsNotCountedAmongTheSounds()
+    {
+        Assert.Equal(1, AnnouncedAudio.Sounds([Component(0x03, streamContent: 1), Component(0x03)]));
+    }
+
+    [Fact]
+    public void ABroadcastThatAnnouncedNoSoundAtAllCountsNone()
+    {
+        Assert.Equal(0, AnnouncedAudio.Sounds([]));
+    }
+
+    [Fact]
+    public void NoCountIsReadFromAListThatWasNeverHandedOver()
+    {
+        Assert.Throws<ArgumentNullException>(() => AnnouncedAudio.Sounds(null!));
+    }
+
     private static AudioComponentDescription Component(int componentType, bool main = true, int streamContent = 2)
         => new(
             streamContent,

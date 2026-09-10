@@ -28,6 +28,7 @@ public sealed class ProgrammeConfiguration : IEntityTypeConfiguration<Programme>
                 table.HasCheckConstraint(
                     "ck_programme_audio",
                     "audio IN ('Undetermined', 'Mono', 'Stereo', 'DualMono', 'Surround')");
+                table.HasCheckConstraint("ck_programme_sounds", "sounds >= 0");
             });
 
         builder.HasKey(programme => new { programme.NetworkId, programme.ServiceId, programme.EventId });
@@ -69,6 +70,8 @@ public sealed class ProgrammeConfiguration : IEntityTypeConfiguration<Programme>
             .HasConversion<string>()
             .HasMaxLength(32)
             .IsRequired();
+
+        builder.Property(programme => programme.Sounds).IsRequired();
 
         builder.Property(programme => programme.Source)
             .HasConversion<string>()

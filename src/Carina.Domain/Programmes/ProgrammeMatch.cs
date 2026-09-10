@@ -29,6 +29,8 @@ public sealed class ProgrammeMatch
 
     public AudioMode Audio { get; private set; }
 
+    public int Sounds { get; private set; }
+
     public ProgrammeSource? Source { get; private set; }
 
     public long? Revision { get; private set; }
@@ -59,6 +61,7 @@ public sealed class ProgrammeMatch
             IsShadow = programme.IsShadow,
             HasSubtitles = programme.HasSubtitles,
             Audio = programme.Audio,
+            Sounds = programme.Sounds,
             Source = programme.Source,
             Revision = programme.Revision,
             IsArchived = false,
@@ -84,6 +87,7 @@ public sealed class ProgrammeMatch
             IsShadow = false,
             HasSubtitles = programme.HasSubtitles,
             Audio = AudioMode.Undetermined,
+            Sounds = 0,
             Source = null,
             Revision = null,
             IsArchived = true,
