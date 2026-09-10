@@ -32,6 +32,7 @@ services:
       Integrity__OutputRoots: primary=/srv/recordings
       Thumbnails__WrittenTo: /srv/thumbnails
       Encodings__OutputRoots: encodes=/srv/encodes
+      Encodings__Prefer: ${CARINA_ENCODINGS_PREFER:-Software}
       Transcoding__Prefer: ${CARINA_TRANSCODING_PREFER:-Software}
     depends_on:
       db:
