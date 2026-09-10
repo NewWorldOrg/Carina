@@ -495,7 +495,8 @@ internal sealed class ReservationFeature : IAsyncDisposable
             acknowledgedAt,
             receptionUnavailable,
             receptionUnavailable ? Noon : null,
-            Noon);
+            Noon,
+            state is ReservationState.Cancelled ? ReservationCancellation.ByHand : null);
 
         Reservations.Standing(reservation);
 

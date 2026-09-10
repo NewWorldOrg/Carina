@@ -63,7 +63,7 @@ public sealed class ReservationHealthTests(RepositoryDatabase database)
 
         Reservation cancelled = ReservationFixtures.Planned(startAt: Now.AddHours(2));
         cancelled.Contend();
-        cancelled.Cancel();
+        cancelled.Cancel(ReservationCancellation.ByHand);
         Reservation missed = ReservationFixtures.Rehydrated(ReservationState.Missed, startAt: Now.AddHours(2));
         Reservation recorded = ReservationFixtures.Rehydrated(
             ReservationState.Scheduled,

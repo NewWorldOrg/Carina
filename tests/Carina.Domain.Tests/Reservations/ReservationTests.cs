@@ -73,18 +73,79 @@ public sealed class ReservationTests
     {
         Reservation reservation = ReservationFactory.Planned();
 
-        reservation.Cancel();
+        reservation.Cancel(ReservationCancellation.ByHand);
         Assert.Equal(ReservationState.Cancelled, reservation.State);
 
         reservation.Restore();
         Assert.Equal(ReservationState.Scheduled, reservation.State);
     }
 
+    [Theory]
+    [InlineData(ReservationCancellation.ByHand)]
+    [InlineData(ReservationCancellation.ProgrammeGone)]
+    public void ACancelledReservationCarriesWhyItWasCancelledUntilItComesBack(ReservationCancellation why)
+    {
+        Reservation reservation = ReservationFactory.Planned();
+
+        reservation.Cancel(why);
+        Assert.Equal(why, reservation.Cancellation);
+
+        reservation.Restore();
+        Assert.Null(reservation.Cancellation);
+    }
+
+    [Fact]
+    public void AReasonThisDomainDoesNotOwnIsNotACancellation()
+        => Assert.Throws<ArgumentOutOfRangeException>(
+            () => ReservationFactory.Planned().Cancel((ReservationCancellation)9));
+
+    [Fact]
+    public void ACancelledReservationReadBackWithoutAReasonIsRefused()
+    {
+        ArgumentException refused = Assert.Throws<ArgumentException>(() => Reservation.Rehydrate(
+            ReservationId.New(),
+            ReservationFactory.Programme(),
+            null,
+            Priority.Default,
+            ReservationFactory.Now.AddHours(2),
+            ReservationFactory.Now.AddHours(3),
+            true,
+            Margin.None,
+            Margin.None,
+            ReservationFactory.Snapshot(),
+            null,
+            BroadcastGroupRole.Standalone,
+            ReservationState.Cancelled,
+            null,
+            null,
+            false,
+            [],
+            false,
+            null,
+            false,
+            null,
+            ReservationFactory.Now));
+
+        Assert.Equal("cancellation", refused.ParamName);
+    }
+
+    [Fact]
+    public void AReservationStillInTheRunningReadBackWithAReasonIsRefusedToo()
+    {
+        ArgumentException refused = Assert.Throws<ArgumentException>(() => ReservationFactory.Rehydrated(
+            ReservationState.Scheduled,
+            null,
+            null,
+            cancellation: ReservationCancellation.ByHand));
+
+        Assert.Equal("cancellation", refused.ParamName);
+    }
+
     [Fact]
     public void ACancelledReservationDoesNotFallToConflict()
     {
         Reservation reservation = ReservationFactory.Planned();
-        reservation.Cancel();
+        reservation.Cancel(ReservationCancellation.ByHand);
 
         Assert.Throws<InvalidOperationException>(reservation.Contend);
         Assert.Throws<InvalidOperationException>(reservation.Miss);
@@ -337,7 +398,7 @@ public sealed class ReservationTests
     {
         Reservation reservation = ReservationFactory.Planned();
         reservation.LoseReception(ReservationFactory.Now);
-        reservation.Cancel();
+        reservation.Cancel(ReservationCancellation.ByHand);
 
         InvalidOperationException refused = Assert.Throws<InvalidOperationException>(reservation.Secure);
 
@@ -362,7 +423,7 @@ public sealed class ReservationTests
     {
         Reservation reservation = ReservationFactory.Claimed();
 
-        InvalidOperationException refusal = Assert.Throws<InvalidOperationException>(reservation.Cancel);
+        InvalidOperationException refusal = Assert.Throws<InvalidOperationException>(() => reservation.Cancel(ReservationCancellation.ByHand));
 
         Assert.Contains("holding a tuner", refusal.Message, StringComparison.Ordinal);
         Assert.Equal(ReservationState.Scheduled, reservation.State);
@@ -373,7 +434,7 @@ public sealed class ReservationTests
     {
         Reservation reservation = ReservationFactory.Planned();
 
-        reservation.Cancel();
+        reservation.Cancel(ReservationCancellation.ByHand);
 
         Assert.Equal(ReservationState.Cancelled, reservation.State);
     }

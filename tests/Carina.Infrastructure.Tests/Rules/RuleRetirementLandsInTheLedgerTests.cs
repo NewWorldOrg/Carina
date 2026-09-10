@@ -148,6 +148,7 @@ public sealed class RuleRetirementLandsInTheLedgerTests(RepositoryDatabase datab
             new RuleRepository(context),
             new ProgrammeRepository(context),
             reservations,
+            new ReservationOutcomeRepository(context),
             new StreamVisitRepository(context),
             streams,
             new ReservationSchedulingService(
@@ -209,7 +210,8 @@ public sealed class RuleRetirementLandsInTheLedgerTests(RepositoryDatabase datab
             null,
             false,
             null,
-            Now);
+            Now,
+            state is ReservationState.Cancelled ? ReservationCancellation.ByHand : null);
 
         await using CarinaDbContext context = database.Open();
         await new ReservationRepository(context).AddAsync(reservation, Cancel);

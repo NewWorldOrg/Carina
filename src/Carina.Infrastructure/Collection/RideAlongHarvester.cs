@@ -174,7 +174,7 @@ public sealed class RideAlongHarvester(
             await using AsyncServiceScope scope = scopes.CreateAsyncScope();
             ProgrammesWritten written = await scope.ServiceProvider
                 .GetRequiredService<ProgrammeWriter>()
-                .WriteAsync(gathered, cancellationToken);
+                .WriteAsync(gathered, harvest.Progress.HeardWhole(), cancellationToken);
 
             logger.LogInformation(
                 "Riding along with {SessionId} added {Added} and updated {Updated} programme(s).",

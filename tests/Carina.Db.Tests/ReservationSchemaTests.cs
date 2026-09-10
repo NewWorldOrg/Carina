@@ -271,6 +271,54 @@ public sealed class ReservationSchemaTests(MigratedScratchDatabase database)
         Assert.Equal(0, reaching);
     }
 
+    [Fact]
+    public async Task ACancelledReservationOnTheShelfSaysWhyItWasCancelled()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Reserve(connection, 70011, 4001, Airs, state: "Cancelled", cancelledBecause: "NULL"));
+
+        Assert.Equal("ck_reservation_cancellation", refusal.ConstraintName);
+    }
+
+    [Fact]
+    public async Task AReservationStillInTheRunningCarriesNoReasonForBeingCancelled()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Reserve(connection, 70012, 4001, Airs, cancelledBecause: "'ByHand'"));
+
+        Assert.Equal("ck_reservation_cancellation", refusal.ConstraintName);
+    }
+
+    [Fact]
+    public async Task TheDatabaseKnowsOnlyTheTwoReasonsAReservationIsTakenOutOfTheRunning()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        foreach ((int order, string owned) in new[] { "ByHand", "ProgrammeGone" }.Index())
+        {
+            await Reserve(
+                connection,
+                70013,
+                4001 + order,
+                Airs,
+                state: "Cancelled",
+                cancelledBecause: $"'{owned}'");
+        }
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Reserve(connection, 70013, 4003, Airs, state: "Cancelled", cancelledBecause: "'Whenever'"));
+
+        Assert.Equal("ck_reservation_cancellation", refusal.ConstraintName);
+        Assert.Equal(2, await Count(connection, "reservation WHERE network_id = 70013"));
+    }
+
+    private static string Because(string state, string? cancelledBecause)
+        => cancelledBecause ?? (state is "Cancelled" ? "'ByHand'" : "NULL");
+
     private static async Task<Guid> Reserve(
         NpgsqlConnection connection,
         int networkId,
@@ -282,7 +330,8 @@ public sealed class ReservationSchemaTests(MigratedScratchDatabase database)
         string? acknowledgedAt = null,
         Guid? ruleId = null,
         bool? receptionUnavailable = null,
-        string? receptionUnavailableSince = null)
+        string? receptionUnavailableSince = null,
+        string? cancelledBecause = null)
     {
         var id = Guid.NewGuid();
 
@@ -295,7 +344,8 @@ public sealed class ReservationSchemaTests(MigratedScratchDatabase database)
                 snapshot_name, snapshot_summary, snapshot_extended, snapshot_genres, captured_at,
                 epg_diverged, epg_diverged_detail, epg_missing, acknowledged_at,
                 reception_unavailable, reception_unavailable_since,
-                broadcast_group_key, broadcast_group_role, state, started_at, recording_outcome, created_at)
+                broadcast_group_key, broadcast_group_role, state, cancelled_because,
+                started_at, recording_outcome, created_at)
             VALUES (
                 '{id}', {networkId}, 1024, {eventId}, {programmeStartAt},
                 {(ruleId is { } rule ? $"'{rule}'" : "NULL")}, 10,
@@ -304,7 +354,9 @@ public sealed class ReservationSchemaTests(MigratedScratchDatabase database)
                 false, '[]'::jsonb, false, {acknowledgedAt ?? "NULL"},
                 {(receptionUnavailable ?? receptionUnavailableSince is not null).ToString().ToLowerInvariant()},
                 {receptionUnavailableSince ?? "NULL"},
-                NULL, 'Standalone', '{state}', {startedAt ?? "NULL"}, {recordingOutcome ?? "NULL"}, {Now})
+                NULL, 'Standalone', '{state}',
+                {Because(state, cancelledBecause)},
+                {startedAt ?? "NULL"}, {recordingOutcome ?? "NULL"}, {Now})
             """);
 
         return id;

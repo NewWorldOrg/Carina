@@ -271,7 +271,7 @@ public sealed class ReservationListingTests(RepositoryDatabase database)
         var repository = new ReservationRepository(context);
         Reservation found = (await repository.FindAsync(id, Cancel))!;
 
-        found.Cancel();
+        found.Cancel(ReservationCancellation.ByHand);
 
         await repository.SaveAsync(found, Cancel);
     }

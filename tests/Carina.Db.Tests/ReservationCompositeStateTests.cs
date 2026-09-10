@@ -95,7 +95,8 @@ public sealed class ReservationCompositeStateTests(MigratedScratchDatabase datab
             null,
             false,
             null,
-            Now);
+            Now,
+            state is ReservationState.Cancelled ? ReservationCancellation.ByHand : null);
 
     private static async Task Reserve(
         NpgsqlConnection connection,
@@ -112,13 +113,16 @@ public sealed class ReservationCompositeStateTests(MigratedScratchDatabase datab
                 snapshot_name, snapshot_summary, snapshot_extended, snapshot_genres, captured_at,
                 epg_diverged, epg_diverged_detail, epg_missing, acknowledged_at,
                 reception_unavailable, reception_unavailable_since,
-                broadcast_group_key, broadcast_group_role, state, started_at, recording_outcome, created_at)
+                broadcast_group_key, broadcast_group_role, state, cancelled_because,
+                started_at, recording_outcome, created_at)
             VALUES (
                 '{Guid.NewGuid()}', 60100, 1024, {eventId}, {Airs}, NULL, 10,
                 {Airs}, {Ends}, true, 10, 30,
                 'A programme', 'What it is about', '', '[]'::jsonb, {Airs},
                 false, '[]'::jsonb, false, NULL, false, NULL,
-                NULL, 'Standalone', '{state}', {(startedAt is null ? "NULL" : Claimed)},
+                NULL, 'Standalone', '{state}',
+                {(state is ReservationState.Cancelled ? "'ByHand'" : "NULL")},
+                {(startedAt is null ? "NULL" : Claimed)},
                 {(outcome is null ? "NULL" : $"'{outcome}'")}, {Airs})
             """;
 

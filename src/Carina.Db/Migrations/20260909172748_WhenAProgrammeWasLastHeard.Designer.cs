@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Carina.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Carina.Db.Migrations
 {
     [DbContext(typeof(CarinaDbContext))]
-    partial class CarinaDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260909172748_WhenAProgrammeWasLastHeard")]
+    partial class WhenAProgrammeWasLastHeard
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2480,11 +2483,6 @@ namespace Carina.Db.Migrations
                         .HasColumnType("character varying(32)")
                         .HasColumnName("broadcast_group_role");
 
-                    b.Property<string>("Cancellation")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)")
-                        .HasColumnName("cancelled_because");
-
                     b.Property<DateTime>("CapturedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("captured_at");
@@ -2627,8 +2625,6 @@ namespace Carina.Db.Migrations
                         {
                             t.HasCheckConstraint("ck_reservation_broadcast_group", "broadcast_group_role IN ('Standalone', 'MovementPrimary', 'MovementSuppressed', 'RelaySegment')\nAND (broadcast_group_role = 'Standalone' OR broadcast_group_key IS NOT NULL)");
 
-                            t.HasCheckConstraint("ck_reservation_cancellation", "(cancelled_because IS NULL OR cancelled_because IN ('ByHand', 'ProgrammeGone'))\nAND (state = 'Cancelled') = (cancelled_because IS NOT NULL)");
-
                             t.HasCheckConstraint("ck_reservation_divergence", "epg_diverged = (jsonb_array_length(epg_diverged_detail) > 0)\nAND (acknowledged_at IS NULL OR epg_diverged OR epg_missing)");
 
                             t.HasCheckConstraint("ck_reservation_margins", "margin_before BETWEEN 0 AND 3600 AND margin_after BETWEEN 0 AND 3600");
@@ -2737,7 +2733,7 @@ namespace Carina.Db.Migrations
                         {
                             t.HasCheckConstraint("ck_reservation_outcome_faults", "faults <@ '[\"TuneFailed\", \"RefusedByDiskPrecheck\", \"DiskExhausted\", \"DriverLost\", \"DrainGraceExpired\", \"StoppedByHand\", \"TunerContended\", \"ScramblingUnresolved\", \"ShortOfTheWindow\", \"NothingLanded\", \"SizeUnobserved\", \"StoppedUnasked\", \"LighterThanTheStream\", \"HeavierThanTheStream\"]'::jsonb\nAND (kind <> 'TuneFailure' OR faults @> '[\"TuneFailed\"]'::jsonb)");
 
-                            t.HasCheckConstraint("ck_reservation_outcome_kind", "kind IN ('Competing', 'Missed', 'TuneFailure', 'RecordingFailure', 'ProgrammeMoved', 'ProgrammeGone', 'ProgrammeReturned')");
+                            t.HasCheckConstraint("ck_reservation_outcome_kind", "kind IN ('Competing', 'Missed', 'TuneFailure', 'RecordingFailure', 'ProgrammeMoved', 'ProgrammeGone')");
 
                             t.HasCheckConstraint("ck_reservation_outcome_recorded_instead", "kind = 'Competing' OR jsonb_array_length(recorded_instead) = 0");
 

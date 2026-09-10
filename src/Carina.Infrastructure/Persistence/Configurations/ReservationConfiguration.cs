@@ -49,6 +49,12 @@ public sealed class ReservationConfiguration : IEntityTypeConfiguration<Reservat
                 "ck_reservation_state",
                 "state IN ('Scheduled', 'Conflict', 'Cancelled', 'Missed')");
             table.HasCheckConstraint(
+                "ck_reservation_cancellation",
+                """
+                (cancelled_because IS NULL OR cancelled_because IN ('ByHand', 'ProgrammeGone'))
+                AND (state = 'Cancelled') = (cancelled_because IS NOT NULL)
+                """);
+            table.HasCheckConstraint(
                 "ck_reservation_broadcast_group",
                 """
                 broadcast_group_role IN ('Standalone', 'MovementPrimary', 'MovementSuppressed', 'RelaySegment')
@@ -177,6 +183,11 @@ public sealed class ReservationConfiguration : IEntityTypeConfiguration<Reservat
             .HasConversion<string>()
             .HasMaxLength(32)
             .IsRequired();
+
+        builder.Property(reservation => reservation.Cancellation)
+            .HasConversion<string>()
+            .HasMaxLength(32)
+            .HasColumnName("cancelled_because");
 
         builder.Property(reservation => reservation.CreatedAt).IsRequired();
 

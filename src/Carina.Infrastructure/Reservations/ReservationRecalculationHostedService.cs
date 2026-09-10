@@ -154,6 +154,31 @@ public sealed class ReservationRecalculationHostedService(
             }
         }
 
+        GuideRun? reconciled = null;
+
+        if (reach is RecalculationReach.Increment or RecalculationReach.Everything)
+        {
+            try
+            {
+                reconciled = await scope.ServiceProvider
+                    .GetRequiredService<ReservationGuideService>()
+                    .ReconcileAsync(cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception failure)
+            {
+                faults.Add(new RecalculationFault(RecalculationStage.Guide, failure.GetType().Name));
+
+                logger.LogError(
+                    failure,
+                    "Holding the reservations still ahead against the guide failed; they keep the windows they "
+                    + "already had and the next pass reads the guide again.");
+            }
+        }
+
         ReservationOutcomeRun? recorded = null;
 
         try
@@ -195,7 +220,7 @@ public sealed class ReservationRecalculationHostedService(
             logger.LogError(failure, "Settling the allocation failed; the next pass is unaffected.");
         }
 
-        return RecalculationPass.Of(answering, reach, cursor, applied, recorded, settled, faults);
+        return RecalculationPass.Of(answering, reach, cursor, applied, reconciled, recorded, settled, faults);
     }
 
     private async Task<bool> WaitAsync(TimeSpan waiting, CancellationToken stoppingToken)
@@ -253,13 +278,16 @@ public sealed class ReservationRecalculationHostedService(
 
         logger.LogInformation(
             "A recalculation pass answering {Triggers} reached {Reach} and left the guide read to {Revision}: "
-            + "{Made} reservation(s) made, {Withdrawn} withdrawn, {Recorded} written down as not recorded, "
-            + "{Faults} stage(s) faulted.",
+            + "{Made} reservation(s) made, {Withdrawn} withdrawn, {Followed} moved onto a broadcast that "
+            + "shifted, {Cancelled} taken out because the broadcast is gone, {Recorded} written down as not "
+            + "recorded, {Faults} stage(s) faulted.",
             string.Join(", ", pass.Answering),
             pass.Reach,
             pass.Revision,
             pass.Applied?.Made.Count ?? 0,
             pass.Applied?.Withdrawn.Count ?? 0,
+            pass.Reconciled?.Followed.Count ?? 0,
+            pass.Reconciled?.Cancelled.Count ?? 0,
             pass.Recorded?.Recorded.Count ?? 0,
             pass.Faults.Count);
 

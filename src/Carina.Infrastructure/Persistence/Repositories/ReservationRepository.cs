@@ -159,7 +159,7 @@ public sealed class ReservationRepository(CarinaDbContext context) : IReservatio
         return await context.Set<Reservation>()
             .Where(reservation => !context.Set<ReservationOutcome>()
                 .Any(outcome => outcome.ReservationId == reservation.Id
-                                && outcome.Kind != ReservationOutcomeKind.TuneFailure))
+                                && ReservationOutcomeKinds.Settling.Contains(outcome.Kind)))
             .Where(reservation => reservation.RecordingOutcome == RecordingOutcome.Failed
                                   || reservation.RecordingOutcome == RecordingOutcome.Truncated
                                   || (reservation.RecordingOutcome == null

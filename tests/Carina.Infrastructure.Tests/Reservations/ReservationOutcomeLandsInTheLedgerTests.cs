@@ -232,6 +232,32 @@ public sealed class ReservationOutcomeLandsInTheLedgerTests(RepositoryDatabase d
         Assert.DoesNotContain(far.Id.Value, found);
     }
 
+    [Fact]
+    public async Task AReservationThatFollowedItsProgrammeIsStillOfferedOnceItsWindowHasClosed()
+    {
+        DateTime opens = LongBefore.AddHours(110);
+        Reservation followed = await LaidDownAsync(ReservationState.Scheduled, opens, opens.AddHours(1));
+
+        await AddAsync(followed, ReservationOutcomeKind.ProgrammeMoved, opens.AddMinutes(-30));
+
+        await using (CarinaDbContext context = database.Open())
+        {
+            IReadOnlyList<ReservationAwaitingOutcome> offered =
+                await new ReservationRepository(context).ListAwaitingOutcomeAsync(opens.AddHours(2), Cancel);
+
+            Assert.Contains(followed.Id.Value, offered.Select(one => one.Reservation.Id.Value));
+        }
+
+        Assert.Contains(
+            new ReservationOutcomeRecord(followed.Id, ReservationOutcomeKind.Missed),
+            (await RecordingAsync(opens.AddHours(2))).Recorded);
+
+        Assert.Equal(
+            [ReservationOutcomeKind.Missed, ReservationOutcomeKind.ProgrammeMoved],
+            [.. (await ForAsync(followed.Id)).Select(outcome => outcome.Kind).Order()]);
+        Assert.Equal(ReservationState.Missed, await StateOfAsync(followed.Id));
+    }
+
     private async Task<ReservationOutcomeRun> RecordingAsync(DateTime at)
     {
         await using CarinaDbContext context = database.Open();

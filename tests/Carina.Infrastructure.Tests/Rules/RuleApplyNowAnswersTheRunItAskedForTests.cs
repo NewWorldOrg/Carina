@@ -116,7 +116,8 @@ public sealed class RuleApplyNowAnswersTheRunItAskedForTests
         private World()
         {
             Write = new WatchedWrite();
-            Reservations = new HeldReservations(Write);
+            Outcomes = new HeldOutcomes(Write);
+            Reservations = new HeldReservations(Write, Outcomes);
             Streams = new CountedStreams(
             [
                 new BroadcastStream(
@@ -148,6 +149,7 @@ public sealed class RuleApplyNowAnswersTheRunItAskedForTests
             services.AddSingleton<IRuleRepository>(Rules);
             services.AddSingleton<IProgrammeRepository>(Programmes);
             services.AddSingleton<IReservationRepository>(Reservations);
+            services.AddSingleton<IReservationOutcomeRepository>(Outcomes);
             services.AddSingleton<IStreamVisitRepository>(Visits);
             services.AddSingleton<IBroadcastStreamDirectory>(Streams);
             services.AddSingleton<IBroadcastServiceRepository>(Services);
@@ -178,6 +180,8 @@ public sealed class RuleApplyNowAnswersTheRunItAskedForTests
         public HeldRules Rules { get; } = new();
 
         public HeldProgrammes Programmes { get; } = new();
+
+        public HeldOutcomes Outcomes { get; }
 
         public HeldReservations Reservations { get; }
 

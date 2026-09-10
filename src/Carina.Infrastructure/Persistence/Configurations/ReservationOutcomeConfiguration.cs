@@ -26,7 +26,8 @@ public sealed class ReservationOutcomeConfiguration : IEntityTypeConfiguration<R
         {
             table.HasCheckConstraint(
                 "ck_reservation_outcome_kind",
-                "kind IN ('Competing', 'Missed', 'TuneFailure', 'RecordingFailure')");
+                "kind IN ('Competing', 'Missed', 'TuneFailure', 'RecordingFailure', 'ProgrammeMoved', "
+                + "'ProgrammeGone', 'ProgrammeReturned')");
             table.HasCheckConstraint(
                 "ck_reservation_outcome_tune_failure",
                 """

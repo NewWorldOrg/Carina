@@ -155,8 +155,23 @@ public sealed class ReservationRecalculationHostedServiceTests
         Assert.True(pass.Ran);
         Assert.Equal(RecalculationReach.Settle, pass.Reach);
         Assert.Null(pass.Applied);
+        Assert.Null(pass.Reconciled);
         Assert.NotNull(pass.Settled);
         Assert.Equal(1, world.Seating.Entered);
+    }
+
+    [Fact]
+    public async Task AGuideThatChangedHasTheReservationsStillAheadHeldAgainstIt()
+    {
+        using World world = World.Of();
+
+        world.Recalculating.Nudge(RecalculationTrigger.ProgrammesChanged);
+
+        RecalculationPass pass = await world.Passing();
+
+        Assert.True(pass.Ran);
+        Assert.Equal(RecalculationReach.Increment, pass.Reach);
+        Assert.NotNull(pass.Reconciled);
     }
 
     [Fact]
@@ -583,6 +598,7 @@ public sealed class ReservationRecalculationHostedServiceTests
             services.AddSingleton<IAtomicWrite>(Write);
             services.AddSingleton<IAppEventPublisher>(new SilentEvents());
             services.AddSingleton<IReservationRecordingContract>(new HeldClaims());
+            services.AddSingleton<IAppEventPublisher>(new SilentEvents());
             services.AddSingleton(RollingHorizon.Default);
             services.AddSingleton(new RuleApplicationSettings());
             services.AddSingleton(new ReservationOutcomeSettings());
@@ -590,6 +606,7 @@ public sealed class ReservationRecalculationHostedServiceTests
             services.AddScoped<RuleMatcher>();
             services.AddScoped<ReservationSchedulingService>();
             services.AddScoped<ReservationOutcomeService>();
+            services.AddScoped<ReservationGuideService>();
             services.AddScoped<RuleApplicationService>();
 
             provider = services.BuildServiceProvider();

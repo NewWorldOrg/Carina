@@ -225,6 +225,7 @@ public sealed class ReservationOutcomeJudgementTests
             null,
             false,
             null,
-            Opens);
+            Opens,
+            ReservationFactory.Cancelling(state, null));
     }
 }

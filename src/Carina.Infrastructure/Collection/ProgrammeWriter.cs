@@ -20,9 +20,11 @@ public sealed class ProgrammeWriter(
 {
     public async Task<ProgrammesWritten> WriteAsync(
         IReadOnlyList<EventInformationTable> tables,
+        IReadOnlyList<ScheduledService> heardWhole,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(tables);
+        ArgumentNullException.ThrowIfNull(heardWhole);
 
         ProgrammesWritten written = await writes.AllOrNothingAsync(
             async token =>
@@ -52,7 +54,11 @@ public sealed class ProgrammeWriter(
                     }
                 }
 
-                ProgrammesAbsorbed absorbed = await programmes.AbsorbAsync([.. gathered.Values], at, token);
+                ProgrammesAbsorbed absorbed = await programmes.AbsorbAsync(
+                    [.. gathered.Values],
+                    [.. heardWhole.Select(service => new ProgrammeService(service.NetworkId, service.ServiceId))],
+                    at,
+                    token);
 
                 return new ProgrammesWritten(absorbed.Added, absorbed.Updated, discarded);
             },

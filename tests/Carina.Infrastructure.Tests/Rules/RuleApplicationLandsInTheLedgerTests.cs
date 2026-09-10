@@ -134,6 +134,7 @@ public sealed class RuleApplicationLandsInTheLedgerTests(RepositoryDatabase data
             new RuleRepository(context),
             new ProgrammeRepository(context),
             reservations,
+            new ReservationOutcomeRepository(context),
             new StreamVisitRepository(context),
             streams,
             new ReservationSchedulingService(

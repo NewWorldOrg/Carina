@@ -146,7 +146,7 @@ public sealed class StreamVisitor(
         using var writing = new CancellationTokenSource(settings.LongestVisit);
 
         ProgrammesWritten written = done.Tables.Count > 0
-            ? await writer.WriteAsync(done.Tables, writing.Token)
+            ? await writer.WriteAsync(done.Tables, done.Progress.HeardWhole(), writing.Token)
             : new ProgrammesWritten(0, 0, 0);
 
         return new VisitResult(done.Outcome, written, null)

@@ -94,6 +94,9 @@ public sealed class ScheduleProgress(TimeProvider clock)
         progress.Saw(table.SectionNumber, table.SegmentLastSectionNumber);
     }
 
+    public IReadOnlyList<ScheduledService> HeardWhole()
+        => [.. services.Where(service => CompletenessOf(service) is not ScheduleCompleteness.Incomplete)];
+
     public ScheduleCompleteness CompletenessOf(ScheduledService service)
     {
         if (!IsWhole(service, EventInformationTable.FirstScheduleActualTableId))

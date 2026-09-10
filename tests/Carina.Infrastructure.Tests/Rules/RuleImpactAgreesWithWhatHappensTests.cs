@@ -208,7 +208,8 @@ public sealed class RuleImpactAgreesWithWhatHappensTests
         private World()
         {
             Write = new WatchedWrite();
-            Reservations = new HeldReservations(Write);
+            Outcomes = new HeldOutcomes(Write);
+            Reservations = new HeldReservations(Write, Outcomes);
             Streams = new CountedStreams(
             [
                 Terrestrial(Vouched, 27, Listed, Alongside),
@@ -234,6 +235,7 @@ public sealed class RuleImpactAgreesWithWhatHappensTests
                 Rules,
                 Programmes,
                 Reservations,
+                Outcomes,
                 Visits,
                 Streams,
                 new ReservationSchedulingService(
@@ -254,6 +256,8 @@ public sealed class RuleImpactAgreesWithWhatHappensTests
         public HeldRules Rules { get; } = new();
 
         public HeldProgrammes Programmes { get; } = new();
+
+        public HeldOutcomes Outcomes { get; }
 
         public HeldReservations Reservations { get; }
 
@@ -409,7 +413,8 @@ public sealed class RuleImpactAgreesWithWhatHappensTests
                 null,
                 false,
                 null,
-                Now));
+                Now,
+                state is ReservationState.Cancelled ? ReservationCancellation.ByHand : null));
         }
     }
 }

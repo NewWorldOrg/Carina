@@ -56,6 +56,12 @@ internal static class ReservationFixtures
             Now);
     }
 
+    public static ReservationCancellation? Cancelling(
+        ReservationState state,
+        ReservationCancellation? cancellation)
+        => cancellation
+           ?? (state is ReservationState.Cancelled ? ReservationCancellation.ByHand : null);
+
     public static Reservation Rehydrated(
         ReservationState state,
         DateTime? startedAt = null,
@@ -68,7 +74,8 @@ internal static class ReservationFixtures
         Margin? marginBefore = null,
         Margin? marginAfter = null,
         bool receptionUnavailable = false,
-        DateTime? receptionUnavailableSince = null)
+        DateTime? receptionUnavailableSince = null,
+        ReservationCancellation? cancellation = null)
     {
         ProgrammeRef reference = programme ?? Programme(NextEventId());
         DateTime opens = startAt ?? reference.StartsAt;
@@ -95,6 +102,7 @@ internal static class ReservationFixtures
             null,
             receptionUnavailable,
             receptionUnavailableSince,
-            Now);
+            Now,
+            Cancelling(state, cancellation));
     }
 }

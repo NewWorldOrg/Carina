@@ -72,6 +72,8 @@ public sealed class Reservation
 
     public ReservationState State { get; private set; }
 
+    public ReservationCancellation? Cancellation { get; private set; }
+
     public DateTime? StartedAt { get; private set; }
 
     public RecordingOutcome? RecordingOutcome { get; private set; }
@@ -164,7 +166,8 @@ public sealed class Reservation
         DateTime? acknowledgedAt,
         bool receptionUnavailable,
         DateTime? receptionUnavailableSince,
-        DateTime createdAt)
+        DateTime createdAt,
+        ReservationCancellation? cancellation = null)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(programme);
@@ -177,6 +180,21 @@ public sealed class Reservation
         if (!Enum.IsDefined(state))
         {
             throw new ArgumentOutOfRangeException(nameof(state), state, "A reservation is in one of the four states it owns.");
+        }
+
+        if (cancellation is { } named && !Enum.IsDefined(named))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(cancellation),
+                cancellation,
+                "A cancellation names one of the reasons a reservation is taken out of the running.");
+        }
+
+        if ((state is ReservationState.Cancelled) != (cancellation is not null))
+        {
+            throw new ArgumentException(
+                "A cancelled reservation says why it was cancelled, and one still in the running says nothing.",
+                nameof(cancellation));
         }
 
         if (!Enum.IsDefined(broadcastGroupRole))
@@ -246,6 +264,7 @@ public sealed class Reservation
             BroadcastGroupKey = broadcastGroupKey,
             BroadcastGroupRole = broadcastGroupRole,
             State = state,
+            Cancellation = cancellation,
             StartedAt = UtcTimes.Optional(startedAt, nameof(startedAt)),
             RecordingOutcome = recordingOutcome,
             EpgDiverged = epgDiverged,
@@ -285,8 +304,16 @@ public sealed class Reservation
         State = ReservationState.Conflict;
     }
 
-    public void Cancel()
+    public void Cancel(ReservationCancellation cancellation)
     {
+        if (!Enum.IsDefined(cancellation))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(cancellation),
+                cancellation,
+                "A cancellation names one of the reasons a reservation is taken out of the running.");
+        }
+
         RefuseUnless(State is ReservationState.Scheduled or ReservationState.Conflict);
 
         if (IsPinned)
@@ -297,6 +324,7 @@ public sealed class Reservation
         }
 
         State = ReservationState.Cancelled;
+        Cancellation = cancellation;
     }
 
     public void Restore()
@@ -304,6 +332,7 @@ public sealed class Reservation
         RefuseUnless(State is ReservationState.Cancelled);
 
         State = ReservationState.Scheduled;
+        Cancellation = null;
     }
 
     public void Miss()
@@ -365,6 +394,42 @@ public sealed class Reservation
         EndAtConfirmed = endAtConfirmed;
     }
 
+    /// <summary>
+    /// Moves this reservation onto the broadcast the guide now announces, and says what moved. The
+    /// broadcast is the same one throughout — it is named by the guide's own identifier, so a
+    /// renamed programme is still this programme — and only the times and the snapshot follow it.
+    /// A reservation that is already holding a tuner does not move, because the recording under it
+    /// is already writing to the window it was given.
+    /// </summary>
+    public void Follow(
+        DateTime programmeStartsAt,
+        DateTime endAt,
+        bool endAtConfirmed,
+        ProgrammeSnapshot snapshot,
+        IReadOnlyList<EpgDivergence> divergences)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+
+        RefuseUnless(State is ReservationState.Scheduled or ReservationState.Conflict);
+
+        if (IsPinned)
+        {
+            throw new InvalidOperationException(
+                "A reservation that has been claimed is being recorded against the window it was given, "
+                + "and moving that window underneath the recording would not move the recording.");
+        }
+
+        Reframe(UtcTimes.Required(programmeStartsAt, nameof(programmeStartsAt)), endAt, endAtConfirmed);
+        Diverge(divergences);
+
+        ProgrammeStartsAt = StartAt;
+        SnapshotName = snapshot.Name;
+        SnapshotSummary = snapshot.Summary;
+        SnapshotExtended = snapshot.Extended;
+        SnapshotGenres = snapshot.Genres;
+        CapturedAt = snapshot.CapturedAt;
+    }
+
     public void Diverge(IReadOnlyList<EpgDivergence> divergences)
     {
         ArgumentNullException.ThrowIfNull(divergences);
@@ -382,6 +447,12 @@ public sealed class Reservation
     public void Disappear()
     {
         EpgMissing = true;
+        AcknowledgedAt = null;
+    }
+
+    public void Reappear()
+    {
+        EpgMissing = false;
         AcknowledgedAt = null;
     }
 

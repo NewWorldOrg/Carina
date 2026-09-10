@@ -82,7 +82,7 @@ internal sealed class AnsweredPasses : IRecalculationPass
 
     public RecalculationPass? Answers { get; set; }
 
-    public RuleApplicationRun? Applied { get; set; } = new(11, 0, [], [], [], [], []);
+    public RuleApplicationRun? Applied { get; set; } = new(11, 0, [], [], [], [], [], []);
 
     public IReadOnlyList<RecalculationTrigger> Asked
     {
@@ -121,6 +121,7 @@ internal sealed class AnsweredPasses : IRecalculationPass
             RecalculationReaches.Of(asking),
             11,
             Applied,
+            null,
             null,
             null,
             []);

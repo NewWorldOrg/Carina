@@ -19,6 +19,8 @@ public sealed record ReservationRevision
 
     public ReservationMove Move { get; init; } = ReservationMove.Keep;
 
+    public ReservationCancellation Cancellation { get; init; } = ReservationCancellation.ByHand;
+
     public bool ChangesNothing
         => Priority is null && MarginBefore is null && MarginAfter is null && Move is ReservationMove.Keep;
 }

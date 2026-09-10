@@ -13,6 +13,8 @@ internal sealed class HeldOutcomes(WatchedWrite? write = null) : IReservationOut
 
     public Exception? Throws { get; set; }
 
+    public void Standing(params ReservationOutcome[] outcomes) => held.AddRange(outcomes);
+
     public Task AddAsync(ReservationOutcome outcome, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(outcome);
