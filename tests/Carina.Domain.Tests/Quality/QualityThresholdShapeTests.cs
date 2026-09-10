@@ -10,6 +10,36 @@ public sealed class QualityThresholdShapeTests
             Enum.GetValues<QualityThresholdKey>().Order(),
             QualityThresholdShapes.All.Select(shape => shape.Key).Order());
 
+    [Fact(DisplayName = "the levels this build offers are the ones it holds a reading against")]
+    public void TheLevelsThisBuildOffersAreTheOnesItHoldsAReadingAgainst()
+    {
+        List<QualityThresholdKey> held = [.. QualitySignalSurvey.Keys];
+
+        foreach (QualityMetric metric in QualityMetrics.All)
+        {
+            held.Add(QualityThresholdShapes.Warning(metric));
+
+            if (QualityThresholdShapes.Unwatchable(metric) is { } unwatchable)
+            {
+                held.Add(unwatchable);
+            }
+        }
+
+        Assert.Equal(
+            held.Distinct().Order(),
+            QualityThresholdShapes.Consulted.Select(shape => shape.Key).Order());
+    }
+
+    [Fact(DisplayName = "a level nothing holds a reading against is named but not offered")]
+    public void ALevelNothingHoldsAReadingAgainstIsNamedButNotOffered()
+    {
+        Assert.Contains(QualityThresholdKey.SupplySilence, QualityThresholdShapes.All.Select(shape => shape.Key));
+        Assert.DoesNotContain(
+            QualityThresholdKey.SupplySilence,
+            QualityThresholdShapes.Consulted.Select(shape => shape.Key));
+        Assert.False(QualityThresholdShapes.Of(QualityThresholdKey.SupplySilence).Consulted);
+    }
+
     [Fact]
     public void AKeyThisDomainDoesNotNameHasNoShape()
         => Assert.Throws<ArgumentOutOfRangeException>(() => QualityThresholdShapes.Of((QualityThresholdKey)99));
