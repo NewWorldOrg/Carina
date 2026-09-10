@@ -223,7 +223,7 @@ public sealed class RuleApplyNowTests
                     [asking],
                     RecalculationReaches.Of(asking),
                     7,
-                    new RuleApplicationRun(7, 0, [], [], [], [], []),
+                    new RuleApplicationRun(7, 0, [], [], [], [], [], []),
                     null,
                     null,
                     null,

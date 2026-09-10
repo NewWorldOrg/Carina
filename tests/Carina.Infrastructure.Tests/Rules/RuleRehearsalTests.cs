@@ -314,7 +314,8 @@ public sealed class RuleRehearsalTests
         private World(int seats)
         {
             Write = new WatchedWrite();
-            Reservations = new HeldReservations(Write);
+            Outcomes = new HeldOutcomes(Write);
+            Reservations = new HeldReservations(Write, Outcomes);
             Streams = new CountedStreams([Terrestrial(Carried, Listed, Alongside)]);
             Seating = new HeldSeating(new TunerCapacity(
                 [
@@ -335,6 +336,7 @@ public sealed class RuleRehearsalTests
                 Rules,
                 Programmes,
                 Reservations,
+                Outcomes,
                 Visits,
                 Streams,
                 Scheduling,
@@ -347,6 +349,8 @@ public sealed class RuleRehearsalTests
         public HeldRules Rules { get; } = new();
 
         public HeldProgrammes Programmes { get; } = new();
+
+        public HeldOutcomes Outcomes { get; }
 
         public HeldReservations Reservations { get; }
 

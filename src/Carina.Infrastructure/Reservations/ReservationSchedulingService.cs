@@ -127,7 +127,7 @@ public sealed class ReservationSchedulingService(
         switch (revision.Move)
         {
             case ReservationMove.Cancel:
-                reservation.Cancel();
+                reservation.Cancel(revision.Cancellation);
 
                 return false;
 

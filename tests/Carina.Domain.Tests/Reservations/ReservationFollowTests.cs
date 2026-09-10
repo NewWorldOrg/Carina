@@ -102,6 +102,19 @@ public sealed class ReservationFollowTests
         Assert.Null(booked.AcknowledgedAt);
     }
 
+    [Fact]
+    public void ABroadcastTheGuideAnnouncesAgainCarriesNoMarkSayingItIsMissing()
+    {
+        Reservation booked = ReservationFactory.Planned();
+        booked.Disappear();
+        booked.Acknowledge(ReservationFactory.Now);
+
+        booked.Reappear();
+
+        Assert.False(booked.EpgMissing);
+        Assert.Null(booked.AcknowledgedAt);
+    }
+
     private static EpgDivergence Slipped(Reservation reservation)
         => new(
             DivergedField.StartAt,

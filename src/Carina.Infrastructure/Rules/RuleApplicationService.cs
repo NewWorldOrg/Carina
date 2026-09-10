@@ -22,6 +22,7 @@ public sealed record RuleApplicationRun(
     int Read,
     IReadOnlyList<Reservation> Made,
     IReadOnlyList<Reservation> Refused,
+    IReadOnlyList<Reservation> Revived,
     IReadOnlyList<Reservation> Withdrawn,
     IReadOnlyList<Rule> TurnedOff,
     IReadOnlyList<RuleFault> Faulted);
@@ -44,6 +45,7 @@ public sealed class RuleApplicationService(
     IRuleRepository rules,
     IProgrammeRepository programmes,
     IReservationRepository reservations,
+    IReservationOutcomeRepository outcomes,
     IStreamVisitRepository visits,
     IBroadcastStreamDirectory directory,
     ReservationSchedulingService scheduling,
@@ -222,28 +224,29 @@ public sealed class RuleApplicationService(
             await rules.SaveAsync(off, cancellationToken);
         }
 
-        (IReadOnlyList<Reservation> made, IReadOnlyList<Reservation> refused) =
-            await MakeAsync(run.Matches, at, cancellationToken);
+        Making making = await MakeAsync(run.Matches, at, cancellationToken);
 
         IReadOnlyList<Reservation> withdrawn = await LeaveAsync(read, run, enabled, sweeping, at, cancellationToken);
 
         return new RuleApplicationRun(
             revision,
             read.Count,
-            made,
-            refused,
+            making.Made,
+            making.Refused,
+            making.Revived,
             withdrawn,
             run.TurnedOff,
             run.Faulted);
     }
 
-    private async Task<(IReadOnlyList<Reservation> Made, IReadOnlyList<Reservation> Refused)> MakeAsync(
+    private async Task<Making> MakeAsync(
         IReadOnlyList<RuleMatch> matches,
         DateTime at,
         CancellationToken cancellationToken)
     {
         var made = new List<Reservation>();
         var refused = new List<Reservation>();
+        var revived = new List<Reservation>();
 
         foreach (RuleMatch match in matches)
         {
@@ -253,8 +256,13 @@ public sealed class RuleApplicationService(
                 match.Programme.EventId,
                 match.Programme.StartsAt);
 
-            if (await reservations.FindByProgrammeAsync(reference, cancellationToken) is not null)
+            if (await reservations.FindByProgrammeAsync(reference, cancellationToken) is { } already)
             {
+                if (await RevivedAsync(already, at, cancellationToken))
+                {
+                    revived.Add(already);
+                }
+
                 continue;
             }
 
@@ -271,7 +279,55 @@ public sealed class RuleApplicationService(
             refused.Add(planned);
         }
 
-        return (made, refused);
+        return new Making(made, refused, revived);
+    }
+
+    /// <summary>
+    /// A broadcaster that drops a programme from the guide and puts it back at the same hour leaves
+    /// a cancelled reservation sitting on the one key that names that broadcast, and a rule taking
+    /// the programme again cannot write a second row on top of it. So the row that is already there
+    /// is the one brought back. Only a reservation a rule made and the guide took out comes back
+    /// this way: a person who cancels means it, and nothing here overrules that.
+    /// </summary>
+    private async Task<bool> RevivedAsync(
+        Reservation already,
+        DateTime at,
+        CancellationToken cancellationToken)
+    {
+        if (already.Cancellation is not ReservationCancellation.ProgrammeGone
+            || !already.IsRuleBorn
+            || already.EffectiveEndAt <= at)
+        {
+            return false;
+        }
+
+        SchedulingRun settled = await scheduling.ReviseAsync(
+            already,
+            new ReservationRevision { Move = ReservationMove.Restore },
+            cancellationToken);
+
+        if (!settled.Settled)
+        {
+            return false;
+        }
+
+        await write.AllOrNothingAsync(
+            async token =>
+            {
+                already.Reappear();
+
+                await reservations.SaveAllAsync([already], token);
+
+                return await ReservationLedger.WriteOnceAsync(
+                    outcomes,
+                    already,
+                    ReservationOutcomeKind.ProgrammeReturned,
+                    at,
+                    token);
+            },
+            cancellationToken);
+
+        return true;
     }
 
     private async Task<IReadOnlyList<Reservation>> LeaveAsync(
@@ -435,6 +491,11 @@ public sealed class RuleApplicationService(
             reservation.ProgrammeStartsAt);
 
     private DateTime Moment() => clock.GetUtcNow().UtcDateTime;
+
+    private readonly record struct Making(
+        IReadOnlyList<Reservation> Made,
+        IReadOnlyList<Reservation> Refused,
+        IReadOnlyList<Reservation> Revived);
 
     private readonly record struct ProgrammeKey(int NetworkId, int ServiceId, int EventId, DateTime StartsAt);
 

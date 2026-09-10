@@ -19,6 +19,8 @@ public enum ReservationOutcomeKind
     ProgrammeMoved = 5,
 
     ProgrammeGone = 6,
+
+    ProgrammeReturned = 7,
 }
 
 public sealed class ReservationOutcome

@@ -644,7 +644,8 @@ public sealed class RuleApplicationServiceTests
         RuleId? ruleId,
         DateTime? startedAt = null,
         DateTime? startAt = null,
-        int marginBefore = 0)
+        int marginBefore = 0,
+        ReservationCancellation? cancellation = null)
     {
         DateTime opens = startAt ?? programme.StartsAt;
 
@@ -670,7 +671,9 @@ public sealed class RuleApplicationServiceTests
             null,
             false,
             null,
-            Now);
+            Now,
+            cancellation
+            ?? (state is ReservationState.Cancelled ? ReservationCancellation.ByHand : null));
     }
 
     private static BroadcastStream Terrestrial(int stream, params int[] services)
@@ -685,7 +688,8 @@ public sealed class RuleApplicationServiceTests
         private World(RuleApplicationSettings settings)
         {
             Write = new WatchedWrite();
-            Reservations = new HeldReservations(Write);
+            Outcomes = new HeldOutcomes(Write);
+            Reservations = new HeldReservations(Write, Outcomes);
             Streams = new CountedStreams([Terrestrial(Carried, Listed, Alongside)]);
             Seating = new HeldSeating(new TunerCapacity(
                 [
@@ -700,6 +704,7 @@ public sealed class RuleApplicationServiceTests
                 Rules,
                 Programmes,
                 Reservations,
+                Outcomes,
                 Visits,
                 Streams,
                 new ReservationSchedulingService(
@@ -718,6 +723,8 @@ public sealed class RuleApplicationServiceTests
         public HeldRules Rules { get; } = new();
 
         public HeldProgrammes Programmes { get; } = new();
+
+        public HeldOutcomes Outcomes { get; }
 
         public HeldReservations Reservations { get; }
 

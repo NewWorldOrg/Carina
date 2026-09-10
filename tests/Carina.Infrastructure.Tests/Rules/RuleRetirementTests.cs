@@ -250,7 +250,8 @@ public sealed class RuleRetirementTests
             null,
             false,
             null,
-            Now);
+            Now,
+            state is ReservationState.Cancelled ? ReservationCancellation.ByHand : null);
 
     private static BroadcastStream Terrestrial(int stream, params int[] services)
         => new(
@@ -264,7 +265,8 @@ public sealed class RuleRetirementTests
         private World()
         {
             Write = new WatchedWrite();
-            Reservations = new HeldReservations(Write);
+            Outcomes = new HeldOutcomes(Write);
+            Reservations = new HeldReservations(Write, Outcomes);
             Streams = new CountedStreams([Terrestrial(Carried, Listed)]);
             Seating = new HeldSeating(new TunerCapacity(
                 [new TunerSeat("first", BroadcastReception.Of(TunerKind.Terrestrial), Faulted: false)],
@@ -275,6 +277,7 @@ public sealed class RuleRetirementTests
                 Rules,
                 Programmes,
                 Reservations,
+                Outcomes,
                 Visits,
                 Streams,
                 new ReservationSchedulingService(
@@ -293,6 +296,8 @@ public sealed class RuleRetirementTests
         public HeldRules Rules { get; } = new();
 
         public HeldProgrammes Programmes { get; } = new();
+
+        public HeldOutcomes Outcomes { get; }
 
         public HeldReservations Reservations { get; }
 

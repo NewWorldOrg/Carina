@@ -586,6 +586,7 @@ public sealed class RuleEndpointTests
             2,
             [feature.Booked(taken, written.Id)],
             [],
+            [],
             [feature.Booked(gone, written.Id)],
             [],
             []);

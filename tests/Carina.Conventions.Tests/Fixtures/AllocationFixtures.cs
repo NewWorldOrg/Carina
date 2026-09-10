@@ -18,7 +18,7 @@ public static class AllocationFixtures
     {
         ArgumentNullException.ThrowIfNull(reservation);
 
-        reservation.Cancel();
+        reservation.Cancel(ReservationCancellation.ByHand);
     }
 
     public static AllocationPlan PlansOnItsOwn(

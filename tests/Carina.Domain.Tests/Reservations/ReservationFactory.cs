@@ -44,6 +44,12 @@ internal static class ReservationFactory
     public static Reservation Claimed(DateTime? at = null)
         => Rehydrated(ReservationState.Scheduled, at ?? Now, null);
 
+    public static ReservationCancellation? Cancelling(
+        ReservationState state,
+        ReservationCancellation? cancellation)
+        => cancellation
+           ?? (state is ReservationState.Cancelled ? ReservationCancellation.ByHand : null);
+
     public static Reservation Rehydrated(
         ReservationState state,
         DateTime? startedAt,
@@ -55,7 +61,8 @@ internal static class ReservationFactory
         bool epgMissing = false,
         DateTime? acknowledgedAt = null,
         bool receptionUnavailable = false,
-        DateTime? receptionUnavailableSince = null)
+        DateTime? receptionUnavailableSince = null,
+        ReservationCancellation? cancellation = null)
     {
         ProgrammeRef programme = Programme();
 
@@ -81,6 +88,7 @@ internal static class ReservationFactory
             acknowledgedAt,
             receptionUnavailable,
             receptionUnavailableSince,
-            Now);
+            Now,
+            Cancelling(state, cancellation));
     }
 }
