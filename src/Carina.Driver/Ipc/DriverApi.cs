@@ -516,7 +516,7 @@ public static class DriverApi
                 context,
                 StatusCodes.Status400BadRequest,
                 "malformedRequest",
-                "The body was empty; an extension names the time the recording now runs to."
+                "The body was empty; an extension names the time the session now runs to."
             );
 
             return;
