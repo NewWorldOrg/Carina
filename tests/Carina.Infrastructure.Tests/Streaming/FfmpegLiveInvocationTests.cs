@@ -225,6 +225,87 @@ public sealed class FfmpegLiveInvocationTests
 
     [Theory]
     [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void AViewerWhoNamesNoSoundIsGivenTheOneTheyAlwaysWere(LiveProfile profile, LiveEncoder encoder)
+    {
+        Assert.Equal(
+            FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, CaptionOutlet.None),
+            FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, CaptionOutlet.None, SoundTrack.Main));
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void TheSecondSoundOfTheServiceIsTakenWhenItIsAskedFor(LiveProfile profile, LiveEncoder encoder)
+    {
+        string[] arguments =
+        [
+            .. FfmpegLiveInvocation.Arguments(
+                Service,
+                profile,
+                Interlaced,
+                encoder,
+                CaptionOutlet.None,
+                SoundTrack.Secondary),
+        ];
+
+        Assert.Equal(["p:1040:v:0", "p:1040:a:1"], Mapped(arguments));
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void OnlyTheSoundMapChangesWhenTheSecondSoundIsAskedFor(LiveProfile profile, LiveEncoder encoder)
+    {
+        string[] main = [.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, CaptionOutlet.None)];
+        string[] second =
+        [
+            .. FfmpegLiveInvocation.Arguments(
+                Service,
+                profile,
+                Interlaced,
+                encoder,
+                CaptionOutlet.None,
+                SoundTrack.Secondary),
+        ];
+
+        Assert.Equal(main.Length, second.Length);
+        Assert.Equal(
+            main.Where(argument => !string.Equals(argument, "p:1040:a:0", StringComparison.Ordinal)),
+            second.Where(argument => !string.Equals(argument, "p:1040:a:1", StringComparison.Ordinal)));
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
+    public void StillOnlyOneSoundIsBuiltWhenTheSecondOneIsAskedFor(LiveProfile profile, LiveEncoder encoder)
+    {
+        string[] arguments =
+        [
+            .. FfmpegLiveInvocation.Arguments(
+                Service,
+                profile,
+                Interlaced,
+                encoder,
+                CaptionOutlet.None,
+                SoundTrack.Secondary),
+        ];
+
+        Assert.Single(arguments, argument => string.Equals(argument, "-c:a", StringComparison.Ordinal));
+        Assert.DoesNotContain(arguments, argument => argument.StartsWith("-c:a:", StringComparison.Ordinal));
+        Assert.Single(Mapped(arguments), map => map.StartsWith("p:1040:a", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ASoundThisApplicationDoesNotCarryIsRefusedBeforeAnythingIsBuilt()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => FfmpegLiveInvocation.Arguments(
+            Service,
+            LiveProfile.Hd30,
+            Interlaced,
+            LiveEncoder.Software,
+            CaptionOutlet.None,
+            (SoundTrack)9));
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryProfileOnEveryEncoder))]
     public void OneSoundIsNamedBecauseAMediaSourceWillNotTakeASecond(LiveProfile profile, LiveEncoder encoder)
     {
         string[] mapped = Mapped([.. FfmpegLiveInvocation.Arguments(Service, profile, Interlaced, encoder, CaptionOutlet.None)]);

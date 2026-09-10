@@ -35,7 +35,8 @@ public static class FfmpegLiveInvocation
         LiveProfile profile,
         StreamAttributes attributes,
         LiveEncoder encoder,
-        CaptionOutlet captions)
+        CaptionOutlet captions,
+        SoundTrack sound = SoundTrack.Main)
     {
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(profile);
@@ -57,6 +58,14 @@ public static class FfmpegLiveInvocation
                 "The captions are either drawn beside the picture or left out.");
         }
 
+        if (!Enum.IsDefined(sound))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(sound),
+                sound,
+                "A picture is carried with one of the sounds named here.");
+        }
+
         return
         [
             "-nostdin",
@@ -70,7 +79,7 @@ public static class FfmpegLiveInvocation
             .. Decoding(attributes, captions),
             "-i",
             Input,
-            .. Mapping(service),
+            .. Mapping(service, sound),
             "-vf",
             Filter(profile, attributes, encoder),
             .. Encoding(profile, encoder),
@@ -160,16 +169,17 @@ public static class FfmpegLiveInvocation
     internal static string Pipe(int descriptor)
         => string.Create(CultureInfo.InvariantCulture, $"pipe:{descriptor}");
 
-    internal static IReadOnlyList<string> Mapping(ServiceId service)
+    internal static IReadOnlyList<string> Mapping(ServiceId service, SoundTrack sound)
     {
         int programNumber = service.Value;
+        int ordinal = SoundTracks.Ordinal(sound);
 
         return
         [
             "-map",
             string.Create(CultureInfo.InvariantCulture, $"p:{programNumber}:v:0"),
             "-map",
-            string.Create(CultureInfo.InvariantCulture, $"p:{programNumber}:a:0"),
+            string.Create(CultureInfo.InvariantCulture, $"p:{programNumber}:a:{ordinal}"),
         ];
     }
 
