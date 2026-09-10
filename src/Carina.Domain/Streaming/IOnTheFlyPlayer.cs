@@ -10,5 +10,8 @@ public interface IOnTheFlyPlayer
         ServiceId service,
         TimeSpan from,
         LiveProfile? profile,
+        SoundTrack sound,
         CancellationToken cancellationToken);
+
+    Task<CarriedSounds> SoundsAsync(PlaybackFile file, ServiceId service, CancellationToken cancellationToken);
 }

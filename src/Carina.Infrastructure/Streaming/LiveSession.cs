@@ -291,6 +291,7 @@ internal sealed class LiveSession
         LiveTranscoderStart started = await transcoders.StartAsync(
             Key.Service,
             Key.Profile,
+            Key.Sound,
             StreamAttributes.SafeSide,
             asked,
             cancellationToken);

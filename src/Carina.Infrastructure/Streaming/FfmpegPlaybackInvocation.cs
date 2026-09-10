@@ -15,7 +15,8 @@ public static class FfmpegPlaybackInvocation
         StreamAttributes attributes,
         LiveEncoder encoder,
         StreamSource source,
-        TimeSpan from)
+        TimeSpan from,
+        SoundTrack sound = SoundTrack.Main)
     {
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(profile);
@@ -31,6 +32,14 @@ public static class FfmpegPlaybackInvocation
                 "A picture is encoded by one of the two the benchmark compared.");
         }
 
+        if (!Enum.IsDefined(sound))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(sound),
+                sound,
+                "A picture is carried with one of the sounds named here.");
+        }
+
         return
         [
             "-nostdin",
@@ -42,7 +51,7 @@ public static class FfmpegPlaybackInvocation
             from.TotalSeconds.ToString(Seconds, CultureInfo.InvariantCulture),
             "-i",
             source.Value,
-            .. Mapping(service),
+            .. Mapping(service, sound),
             "-vf",
             FfmpegLiveInvocation.Filter(profile, attributes, encoder),
             .. FfmpegLiveInvocation.Encoding(profile, encoder),
@@ -50,16 +59,17 @@ public static class FfmpegPlaybackInvocation
         ];
     }
 
-    internal static IReadOnlyList<string> Mapping(ServiceId service)
+    internal static IReadOnlyList<string> Mapping(ServiceId service, SoundTrack sound)
     {
         int programNumber = service.Value;
+        int ordinal = SoundTracks.Ordinal(sound);
 
         return
         [
             "-map",
             string.Create(CultureInfo.InvariantCulture, $"p:{programNumber}:v:0"),
             "-map",
-            string.Create(CultureInfo.InvariantCulture, $"p:{programNumber}:a:0"),
+            string.Create(CultureInfo.InvariantCulture, $"p:{programNumber}:a:{ordinal}"),
         ];
     }
 }

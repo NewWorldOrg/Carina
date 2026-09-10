@@ -20,6 +20,9 @@ public sealed class LiveSessionManagerTests
 
     private static readonly LiveSessionKey EveryField = new(new NetworkId(32736), new ServiceId(1024), LiveProfile.Hd60);
 
+    private static readonly LiveSessionKey TheSecondSound =
+        new(new NetworkId(32736), new ServiceId(1024), LiveProfile.Hd30, SoundTrack.Secondary);
+
     private static readonly LiveSessionKey AnotherChannel = new(new NetworkId(32736), new ServiceId(1032), LiveProfile.Hd30);
 
     private readonly HandTurnedClock clock = new();
@@ -192,6 +195,27 @@ public sealed class LiveSessionManagerTests
 
         Assert.Equal(2, transcoders.Started);
         Assert.Equal(1, supply.Asked);
+    }
+
+    [Fact]
+    public async Task TwoSoundsOfOneChannelAreMadeFromOneReadingOfTheTuner()
+    {
+        await using ILiveViewing mainSound = await Joined(EveryFrame);
+        await using ILiveViewing secondSound = await Joined(TheSecondSound);
+
+        Assert.Equal(2, transcoders.Started);
+        Assert.Equal(1, supply.Asked);
+        Assert.Equal([SoundTrack.Main, SoundTrack.Secondary], transcoders.Raised.Select(raised => raised.Sound));
+    }
+
+    [Fact]
+    public async Task TwoViewersAskingForTheSameSoundShareTheOneTranscoder()
+    {
+        await using ILiveViewing one = await Joined(TheSecondSound);
+        await using ILiveViewing another = await Joined(TheSecondSound);
+
+        Assert.Equal(1, transcoders.Started);
+        Assert.Equal(2, manager.Viewers(TheSecondSound));
     }
 
     [Fact]

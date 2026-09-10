@@ -58,6 +58,12 @@ internal sealed class HeldOnTheFlyPlayer : IOnTheFlyPlayer
 
     public List<ServiceId> AskedOf { get; } = [];
 
+    public List<SoundTrack> AskedWith { get; } = [];
+
+    public int Sounds { get; set; } = 1;
+
+    public string? SoundsCannotBeRead { get; set; }
+
     public HeldViewing? Handed { get; private set; }
 
     public Task<OnTheFlyStart> StartAsync(
@@ -65,11 +71,13 @@ internal sealed class HeldOnTheFlyPlayer : IOnTheFlyPlayer
         ServiceId service,
         TimeSpan from,
         LiveProfile? profile,
+        SoundTrack sound,
         CancellationToken cancellationToken)
     {
         AskedFrom.Add(from);
         AskedFor.Add(profile?.Name);
         AskedOf.Add(service);
+        AskedWith.Add(sound);
 
         if (Refuses is { } refusal)
         {
@@ -89,6 +97,14 @@ internal sealed class HeldOnTheFlyPlayer : IOnTheFlyPlayer
 
         return Task.FromResult(OnTheFlyStart.Started(Handed));
     }
+
+    public Task<CarriedSounds> SoundsAsync(
+        PlaybackFile file,
+        ServiceId service,
+        CancellationToken cancellationToken)
+        => Task.FromResult(SoundsCannotBeRead is { } why
+            ? CarriedSounds.Unread(why)
+            : CarriedSounds.Counted(Sounds));
 }
 
 internal sealed class PlayFeature : IAsyncDisposable
@@ -291,6 +307,107 @@ public sealed class PlayDeliveryTests
         Assert.Equal(said, read.GetProperty("data").GetProperty("standing").GetString());
         Assert.Equal(whole, read.GetProperty("data").GetProperty("showsAsAWholeRecording").GetBoolean());
         Assert.Equal(said, Header(picture, PlaybackHeaders.Standing));
+    }
+
+    [Fact]
+    public async Task AViewerWhoNamesNoSoundIsGivenTheMainOneAsTheyAlwaysWere()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Player.Sounds = 2;
+
+        using HttpResponseMessage answer = await feature.PictureAsync(recording);
+
+        Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
+        Assert.Equal([SoundTrack.Main], feature.Player.AskedWith);
+    }
+
+    [Fact]
+    public async Task AViewerWhoAsksForTheSecondSoundIsGivenIt()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Player.Sounds = 2;
+
+        using HttpResponseMessage answer = await feature.PictureAsync(recording, "?sound=secondary");
+
+        Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
+        Assert.Equal([SoundTrack.Secondary], feature.Player.AskedWith);
+    }
+
+    [Fact]
+    public async Task ARecordingOfABroadcastThatCarriedOneSoundHasNoSecondOneToAskFor()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Player.Sounds = 1;
+
+        using HttpResponseMessage answer = await feature.PictureAsync(recording, "?sound=secondary");
+
+        Assert.Equal(HttpStatusCode.BadRequest, answer.StatusCode);
+        Assert.Empty(feature.Player.AskedWith);
+        Assert.Equal(
+            PlayDelivery.TheBroadcastCarriedTheOneSound,
+            (await PlayFeature.PlanOfAsync(answer)).GetProperty("message").GetString());
+    }
+
+    [Fact]
+    public async Task ARecordingWhoseSoundsCouldNotBeReadIsNotStartedOnAGuess()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Player.SoundsCannotBeRead = "the programme was still reading the stream";
+
+        using HttpResponseMessage answer = await feature.PictureAsync(recording, "?sound=secondary");
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, answer.StatusCode);
+        Assert.Empty(feature.Player.AskedWith);
+    }
+
+    [Theory]
+    [InlineData("sub")]
+    [InlineData("Main")]
+    [InlineData("1")]
+    public async Task ASoundThisApplicationDoesNotCarryIsRefusedAndTheOnesItDoesAreNamed(string said)
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+
+        using HttpResponseMessage answer = await feature.PictureAsync(recording, $"?sound={said}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, answer.StatusCode);
+        Assert.Empty(feature.Player.AskedWith);
+        Assert.Equal(
+            PlayDelivery.TheSoundsThereAre,
+            (await PlayFeature.PlanOfAsync(answer)).GetProperty("message").GetString());
+    }
+
+    [Fact]
+    public async Task ThePlanNamesTheSoundsTheRecordingCanBeAskedFor()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Player.Sounds = 2;
+
+        JsonElement read = (await PlayFeature.PlanOfAsync(await feature.PlanAsync(recording))).GetProperty("data");
+
+        Assert.Equal(
+            ["main", "secondary"],
+            read.GetProperty("sounds").EnumerateArray().Select(sound => sound.GetString()!).ToArray());
+    }
+
+    [Fact]
+    public async Task ThePlanOfABroadcastThatCarriedOneSoundNamesOnlyTheMainOne()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Player.Sounds = 1;
+
+        JsonElement read = (await PlayFeature.PlanOfAsync(await feature.PlanAsync(recording))).GetProperty("data");
+
+        Assert.Equal(
+            ["main"],
+            read.GetProperty("sounds").EnumerateArray().Select(sound => sound.GetString()!).ToArray());
     }
 
     [Fact]

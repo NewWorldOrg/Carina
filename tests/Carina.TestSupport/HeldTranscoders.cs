@@ -46,6 +46,7 @@ public sealed class HeldTranscoders(ITranscodeBudget budget) : ILiveTranscoderFa
     public async Task<LiveTranscoderStart> StartAsync(
         ServiceId service,
         LiveProfile profile,
+        SoundTrack sound,
         StreamAttributes attributes,
         CaptionOutlet captions,
         CancellationToken cancellationToken)
@@ -73,7 +74,7 @@ public sealed class HeldTranscoders(ITranscodeBudget budget) : ILiveTranscoderFa
             return LiveTranscoderStart.Failed(fault, "held back for the test.");
         }
 
-        HeldTranscoder transcoder = new(service, profile, attributes, captions, seat);
+        HeldTranscoder transcoder = new(service, profile, sound, attributes, captions, seat);
 
         if (WithoutACaptionStream && captions is CaptionOutlet.Drawn)
         {
@@ -103,10 +104,17 @@ public sealed class HeldTranscoder : ILiveTranscoder
 
     private bool completed;
 
-    public HeldTranscoder(ServiceId service, LiveProfile profile, StreamAttributes attributes, CaptionOutlet captioned, ITranscodeSeat seat)
+    public HeldTranscoder(
+        ServiceId service,
+        LiveProfile profile,
+        SoundTrack sound,
+        StreamAttributes attributes,
+        CaptionOutlet captioned,
+        ITranscodeSeat seat)
     {
         Service = service;
         Profile = profile;
+        Sound = sound;
         Attributes = attributes;
         Captioned = captioned;
         this.seat = seat;
@@ -121,6 +129,8 @@ public sealed class HeldTranscoder : ILiveTranscoder
     public ServiceId Service { get; }
 
     public LiveProfile Profile { get; }
+
+    public SoundTrack Sound { get; }
 
     public StreamAttributes Attributes { get; }
 

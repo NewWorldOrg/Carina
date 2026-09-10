@@ -69,6 +69,49 @@ public sealed class FfmpegPlaybackInvocationTests
     }
 
     [Fact]
+    public void AViewerWhoNamesNoSoundIsGivenTheOneTheyAlwaysWere()
+    {
+        Assert.Equal(Arguments(TimeSpan.Zero), Arguments(TimeSpan.Zero, SoundTrack.Main));
+    }
+
+    [Fact]
+    public void TheSecondSoundOfTheRecordedServiceIsTakenWhenItIsAskedFor()
+    {
+        Assert.Equal(["p:1040:v:0", "p:1040:a:1"], Mapped(Arguments(TimeSpan.Zero, SoundTrack.Secondary)));
+    }
+
+    [Fact]
+    public void StillOnlyOneSoundIsBuiltWhenTheSecondOneIsAskedFor()
+    {
+        IReadOnlyList<string> arguments = Arguments(TimeSpan.FromMinutes(1), SoundTrack.Secondary);
+
+        Assert.Equal("aac", After(arguments, "-c:a"));
+        Assert.Single(arguments, argument => string.Equals(argument, "-c:a", StringComparison.Ordinal));
+        Assert.DoesNotContain(arguments, argument => argument.StartsWith("-c:a:", StringComparison.Ordinal));
+        Assert.Single(Mapped(arguments), map => map.StartsWith("p:1040:a", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void APlayedRecordingIsGivenTheSameSecondSoundALiveViewerIs()
+    {
+        IReadOnlyList<string> live = FfmpegLiveInvocation.Arguments(
+            Service,
+            LiveProfile.Hd30,
+            Interlaced,
+            LiveEncoder.Software,
+            CaptionOutlet.None,
+            SoundTrack.Secondary);
+
+        Assert.Equal(Mapped(live), Mapped(Arguments(TimeSpan.FromMinutes(1), SoundTrack.Secondary)));
+    }
+
+    [Fact]
+    public void ASoundThisApplicationDoesNotCarryIsRefusedBeforeAnythingIsBuilt()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => Arguments(TimeSpan.Zero, (SoundTrack)9));
+    }
+
+    [Fact]
     public void ALiveViewerIsGivenTheSoundBuiltTheSameWayAPlayedRecordingIs()
     {
         IReadOnlyList<string> live = FfmpegLiveInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, CaptionOutlet.None);
@@ -215,6 +258,16 @@ public sealed class FfmpegPlaybackInvocationTests
 
     private static IReadOnlyList<string> Arguments(TimeSpan from)
         => FfmpegPlaybackInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, Recorded, from);
+
+    private static IReadOnlyList<string> Arguments(TimeSpan from, SoundTrack sound)
+        => FfmpegPlaybackInvocation.Arguments(
+            Service,
+            LiveProfile.Hd30,
+            Interlaced,
+            LiveEncoder.Software,
+            Recorded,
+            from,
+            sound);
 
     private static string[] Mapped(IReadOnlyList<string> arguments)
         =>

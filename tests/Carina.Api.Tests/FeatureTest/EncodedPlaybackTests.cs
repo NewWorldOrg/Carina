@@ -33,6 +33,49 @@ public sealed class EncodedPlaybackTests
     }
 
     [Fact]
+    public async Task AnArtefactCarriesTheOneSoundItWasEncodedWithSoThePlanNamesNoneToChooseFrom()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Encoded(recording);
+        feature.Player.Sounds = 2;
+
+        JsonElement read = (await PlayFeature.PlanOfAsync(await feature.PlanAsync(recording))).GetProperty("data");
+
+        Assert.Equal("direct", read.GetProperty("route").GetString());
+        Assert.Empty(read.GetProperty("sounds").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task AskingAnArtefactForASecondSoundIsRefusedRatherThanQuietlyGivingTheOneItHas()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Encoded(recording);
+
+        using HttpResponseMessage picture = await feature.PictureAsync(recording, "?sound=secondary");
+
+        Assert.Equal(HttpStatusCode.BadRequest, picture.StatusCode);
+        Assert.Equal(
+            PlayDelivery.NothingToChooseFrom,
+            (await PlayFeature.PlanOfAsync(picture)).GetProperty("message").GetString());
+        Assert.Null(feature.Player.Handed);
+    }
+
+    [Fact]
+    public async Task AskingAnArtefactForTheMainSoundHandsItOverAsItAlwaysWas()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        byte[] artefact = feature.Encoded(recording);
+
+        using HttpResponseMessage picture = await feature.PictureAsync(recording, "?sound=main");
+
+        Assert.Equal(HttpStatusCode.OK, picture.StatusCode);
+        Assert.Equal(artefact, await picture.Content.ReadAsByteArrayAsync());
+    }
+
+    [Fact]
     public async Task AnArtefactIsMovedAboutByAskingForARangeOfItRatherThanByStartingAgain()
     {
         await using var feature = new PlayFeature();

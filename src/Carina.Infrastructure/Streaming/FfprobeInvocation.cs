@@ -9,6 +9,10 @@ public static class FfprobeInvocation
     public const string Entries =
         "stream=codec_type,codec_name,width,height,field_order,r_frame_rate,channels,channel_layout";
 
+    public const string AsJson = "json";
+
+    public const string ProgrammeEntries = "program=program_id:stream=codec_type";
+
     public static IReadOnlyList<string> Arguments(StreamSource source)
     {
         ArgumentNullException.ThrowIfNull(source);
@@ -22,6 +26,25 @@ public static class FfprobeInvocation
             Format,
             "-show_entries",
             Entries,
+            "-i",
+            source.Value,
+        ];
+    }
+
+    public static IReadOnlyList<string> Programmes(StreamSource source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        return
+        [
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-of",
+            AsJson,
+            "-show_programs",
+            "-show_entries",
+            ProgrammeEntries,
             "-i",
             source.Value,
         ];

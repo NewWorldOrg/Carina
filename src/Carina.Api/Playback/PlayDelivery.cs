@@ -20,6 +20,8 @@ public static class PlayDelivery
 
     public const string Quality = "profile";
 
+    public const string Sound = "sound";
+
     public const string Json = "application/json";
 
     public const string NoSeeking = "none";
@@ -31,6 +33,17 @@ public static class PlayDelivery
 
     public const string ThePositionsThereAre =
         "A recording is played from a whole number of seconds into it, or from its beginning.";
+
+    public const string TheSoundsThereAre =
+        "A recording is played with the main sound the broadcast carried or with its secondary sound, "
+        + "and with no other.";
+
+    public const string NothingToChooseFrom =
+        "A recording handed over as it is carries the one sound it was encoded with, so there is no sound "
+        + "to choose. Ask for it without naming a sound.";
+
+    public const string TheBroadcastCarriedTheOneSound =
+        "The broadcast this recording was made from carried one sound, so it has no secondary sound to play.";
 
     public static async Task Invoke(
         HttpContext context,
@@ -68,6 +81,15 @@ public static class PlayDelivery
             return;
         }
 
+        AskedSound sound = AskedSound.Read(context.Request.Query[Sound]);
+
+        if (sound.Answer is SoundAnswer.NotOneOfThese)
+        {
+            await RefuseAsync(context, StatusCodes.Status400BadRequest, TheSoundsThereAre);
+
+            return;
+        }
+
         ServiceResult<PlaybackOffer, PlaybackFailure> offered =
             await playback.OfferAsync(recordingId, context.RequestAborted);
 
@@ -85,28 +107,78 @@ public static class PlayDelivery
 
         if (AsksForThePlan(context.Request))
         {
-            await TellAsync(context, plan, handover);
+            await TellAsync(context, plan, handover, offered.Data!.Service, player);
 
             return;
         }
 
-        if (plan.Transcodes)
+        if (!plan.Transcodes)
         {
-            await TranscodedAsync(context, handover, offered.Data!.Service, from, profile.Named, player);
+            if (sound.Track is not SoundTrack.Main)
+            {
+                await RefuseAsync(context, StatusCodes.Status400BadRequest, NothingToChooseFrom);
+
+                return;
+            }
+
+            await StraightAsync(context, handover, playback);
 
             return;
         }
 
-        await StraightAsync(context, handover, playback);
+        if (sound.Track is not SoundTrack.Main
+            && await WhyTheSoundIsNotThereAsync(
+                handover,
+                offered.Data!.Service,
+                sound.Track,
+                player,
+                context.RequestAborted) is { } why)
+        {
+            await RefuseAsync(context, why.Status, why.Said);
+
+            return;
+        }
+
+        await TranscodedAsync(context, handover, offered.Data!.Service, from, profile.Named, sound.Track, player);
     }
 
-    private static async Task TellAsync(HttpContext context, PlaybackPlan plan, PlaybackFile handover)
+    private static async Task<Refusal?> WhyTheSoundIsNotThereAsync(
+        PlaybackFile handover,
+        ServiceId service,
+        SoundTrack asked,
+        IOnTheFlyPlayer player,
+        CancellationToken cancellationToken)
     {
+        CarriedSounds carried = await player.SoundsAsync(handover, service, cancellationToken);
+
+        if (!carried.Known)
+        {
+            return new Refusal(
+                StatusCodes.Status503ServiceUnavailable,
+                $"The sounds this recording carries could not be read: {carried.Note}");
+        }
+
+        return carried.Holds(asked)
+            ? null
+            : new Refusal(StatusCodes.Status400BadRequest, TheBroadcastCarriedTheOneSound);
+    }
+
+    private static async Task TellAsync(
+        HttpContext context,
+        PlaybackPlan plan,
+        PlaybackFile handover,
+        ServiceId service,
+        IOnTheFlyPlayer player)
+    {
+        CarriedSounds carried = plan.Transcodes
+            ? await player.SoundsAsync(handover, service, context.RequestAborted)
+            : CarriedSounds.Counted(0);
+
         context.Response.StatusCode = StatusCodes.Status200OK;
 
         await context.Response.WriteAsJsonAsync(
             BaseResponder<PlaybackPlanResponder>.Success(
-                PlaybackPlanResponder.Of(plan, handover, MediaTypeOf(plan, handover))),
+                PlaybackPlanResponder.Of(plan, handover, MediaTypeOf(plan, handover), carried.Tracks)),
             context.RequestAborted);
     }
 
@@ -147,11 +219,18 @@ public static class PlayDelivery
         ServiceId service,
         TimeSpan from,
         LiveProfile? profile,
+        SoundTrack sound,
         IOnTheFlyPlayer player)
     {
         context.Response.Headers.AcceptRanges = NoSeeking;
 
-        OnTheFlyStart start = await player.StartAsync(handover, service, from, profile, context.RequestAborted);
+        OnTheFlyStart start = await player.StartAsync(
+            handover,
+            service,
+            from,
+            profile,
+            sound,
+            context.RequestAborted);
 
         if (start.Viewing is not { } viewing)
         {
@@ -231,4 +310,6 @@ public static class PlayDelivery
         OnTheFlyRefusal.NothingCameOut => "The transcoder ended without producing a picture of this recording.",
         _ => "The transcoder produced nothing in the time it is given to start.",
     };
+
+    private readonly record struct Refusal(int Status, string Said);
 }

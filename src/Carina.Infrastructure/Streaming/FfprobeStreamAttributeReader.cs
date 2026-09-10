@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 
+using Carina.Domain.Channels;
 using Carina.Domain.Streaming;
 
 namespace Carina.Infrastructure.Streaming;
@@ -12,6 +13,37 @@ public sealed class FfprobeStreamAttributeReader(StreamAttributeSettings setting
     {
         ArgumentNullException.ThrowIfNull(source);
 
+        FfprobeAnswer answer = await AskedAsync(FfprobeInvocation.Arguments(source), cancellationToken);
+
+        if (answer.Fault is StreamProbeFault.Refused)
+        {
+            return StreamAttributeReading.Refused(answer.ExitCode!.Value, answer.Note);
+        }
+
+        return answer.Fault is { } fault
+            ? StreamAttributeReading.Unanswered(fault, answer.Note)
+            : FfprobeAttributes.Read(answer.Said);
+    }
+
+    public async Task<CarriedSounds> SoundsAsync(
+        StreamSource source,
+        ServiceId service,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(service);
+
+        FfprobeAnswer answer = await AskedAsync(FfprobeInvocation.Programmes(source), cancellationToken);
+
+        return answer.Fault is null
+            ? FfprobeSounds.Read(answer.Said, service)
+            : CarriedSounds.Unread(answer.Note);
+    }
+
+    private async Task<FfprobeAnswer> AskedAsync(
+        IReadOnlyList<string> arguments,
+        CancellationToken cancellationToken)
+    {
         var start = new ProcessStartInfo(settings.Programme)
         {
             RedirectStandardOutput = true,
@@ -19,7 +51,7 @@ public sealed class FfprobeStreamAttributeReader(StreamAttributeSettings setting
             UseShellExecute = false,
         };
 
-        foreach (string argument in FfprobeInvocation.Arguments(source))
+        foreach (string argument in arguments)
         {
             start.ArgumentList.Add(argument);
         }
@@ -32,14 +64,14 @@ public sealed class FfprobeStreamAttributeReader(StreamAttributeSettings setting
         }
         catch (Win32Exception failure)
         {
-            return StreamAttributeReading.Unanswered(
+            return FfprobeAnswer.Unanswered(
                 StreamProbeFault.ProgrammeMissing,
                 $"'{settings.Programme}' could not be started on this machine: {failure.Message}");
         }
 
         if (started is null)
         {
-            return StreamAttributeReading.Unanswered(
+            return FfprobeAnswer.Unanswered(
                 StreamProbeFault.ProgrammeMissing,
                 $"'{settings.Programme}' started no process of its own.");
         }
@@ -61,7 +93,7 @@ public sealed class FfprobeStreamAttributeReader(StreamAttributeSettings setting
         {
             GiveUpOn(running);
 
-            return StreamAttributeReading.Unanswered(
+            return FfprobeAnswer.Unanswered(
                 StreamProbeFault.TimedOut,
                 $"the programme was still reading the stream after {settings.LongestRead}");
         }
@@ -72,12 +104,9 @@ public sealed class FfprobeStreamAttributeReader(StreamAttributeSettings setting
             throw;
         }
 
-        if (running.ExitCode is not 0)
-        {
-            return StreamAttributeReading.Refused(running.ExitCode, await complaint);
-        }
-
-        return FfprobeAttributes.Read(await answer);
+        return running.ExitCode is 0
+            ? FfprobeAnswer.Answered(await answer)
+            : FfprobeAnswer.Refused(running.ExitCode, await complaint);
     }
 
     private static void GiveUpOn(Process running)
@@ -90,5 +119,16 @@ public sealed class FfprobeStreamAttributeReader(StreamAttributeSettings setting
         {
             return;
         }
+    }
+
+    private readonly record struct FfprobeAnswer(string Said, StreamProbeFault? Fault, int? ExitCode, string Note)
+    {
+        public static FfprobeAnswer Answered(string said) => new(said, null, null, string.Empty);
+
+        public static FfprobeAnswer Unanswered(StreamProbeFault fault, string note)
+            => new(string.Empty, fault, null, note);
+
+        public static FfprobeAnswer Refused(int exitCode, string note)
+            => new(string.Empty, StreamProbeFault.Refused, exitCode, note);
     }
 }

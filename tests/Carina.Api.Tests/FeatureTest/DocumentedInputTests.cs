@@ -82,6 +82,20 @@ public sealed class DocumentedInputTests(TestingWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task ThePlayingSaysWhichSoundsItCarriesAndThatNamingNoneCarriesTheMainOne()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode sound = Parameter(document, PlayDelivery.Path, PlayDelivery.Sound);
+
+        Assert.Equal("query", sound["in"]!.GetValue<string>());
+        Assert.Equal("string", sound["schema"]!["type"]!.GetValue<string>());
+        Assert.Equal(
+            ["main", "secondary"],
+            sound["schema"]!["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
+        Assert.Equal("main", sound["schema"]!["default"]!.GetValue<string>());
+    }
+
+    [Fact]
     public async Task NoQueryInputIsAskedForAsSomethingTheCallerHasToSend()
     {
         JsonNode document = await ServedOpenApi.FetchAsync(factory);

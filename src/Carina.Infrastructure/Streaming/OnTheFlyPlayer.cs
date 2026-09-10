@@ -20,11 +20,20 @@ public sealed class OnTheFlyPlayer(
         ServiceId service,
         TimeSpan from,
         LiveProfile? profile,
+        SoundTrack sound,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(file);
         ArgumentNullException.ThrowIfNull(service);
         ArgumentOutOfRangeException.ThrowIfLessThan(from, TimeSpan.Zero);
+
+        if (!Enum.IsDefined(sound))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(sound),
+                sound,
+                "A picture is carried with one of the sounds named here.");
+        }
 
         if (WhatIsStillThere(file) is not { } source)
         {
@@ -44,7 +53,7 @@ public sealed class OnTheFlyPlayer(
 
         try
         {
-            OnTheFlyStart start = await StartedAsync(source, service, from, profile, seat, cancellationToken);
+            OnTheFlyStart start = await StartedAsync(source, service, from, profile, sound, seat, cancellationToken);
 
             handedOver = start.Running;
 
@@ -59,11 +68,25 @@ public sealed class OnTheFlyPlayer(
         }
     }
 
+    public Task<CarriedSounds> SoundsAsync(
+        PlaybackFile file,
+        ServiceId service,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(file);
+        ArgumentNullException.ThrowIfNull(service);
+
+        return WhatIsStillThere(file) is { } source
+            ? attributes.SoundsAsync(source, service, cancellationToken)
+            : Task.FromResult(CarriedSounds.Unread("the recording holds no bytes to read the sounds of."));
+    }
+
     private async Task<OnTheFlyStart> StartedAsync(
         StreamSource source,
         ServiceId service,
         TimeSpan from,
         LiveProfile? profile,
+        SoundTrack sound,
         ITranscodeSeat seat,
         CancellationToken cancellationToken)
     {
@@ -76,7 +99,14 @@ public sealed class OnTheFlyPlayer(
         LiveTranscoderStart started = TranscoderProcess.Start(
             transcoding,
             [
-                .. FfmpegPlaybackInvocation.Arguments(service, opening, read.Attributes, chosen.Encoder, source, from),
+                .. FfmpegPlaybackInvocation.Arguments(
+                    service,
+                    opening,
+                    read.Attributes,
+                    chosen.Encoder,
+                    source,
+                    from,
+                    sound),
                 .. FfmpegLiveInvocation.DeliveryFromTheStart(),
             ],
             chosen,

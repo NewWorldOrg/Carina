@@ -12,6 +12,7 @@ public sealed class LiveTranscoderFactory(
     public async Task<LiveTranscoderStart> StartAsync(
         ServiceId service,
         LiveProfile profile,
+        SoundTrack sound,
         StreamAttributes attributes,
         CaptionOutlet captions,
         CancellationToken cancellationToken)
@@ -31,7 +32,8 @@ public sealed class LiveTranscoderFactory(
 
         try
         {
-            LiveTranscoderStart started = await StartedAsync(service, profile, attributes, captions, seat, cancellationToken);
+            LiveTranscoderStart started =
+                await StartedAsync(service, profile, sound, attributes, captions, seat, cancellationToken);
 
             handedOver = started.Running;
 
@@ -49,6 +51,7 @@ public sealed class LiveTranscoderFactory(
     private async Task<LiveTranscoderStart> StartedAsync(
         ServiceId service,
         LiveProfile profile,
+        SoundTrack sound,
         StreamAttributes attributes,
         CaptionOutlet captions,
         ITranscodeSeat seat,
@@ -60,7 +63,7 @@ public sealed class LiveTranscoderFactory(
         LiveTranscoderStart started = TranscoderProcess.Start(
             settings,
             [
-                .. FfmpegLiveInvocation.Arguments(service, profile, attributes, chosen.Encoder, captions),
+                .. FfmpegLiveInvocation.Arguments(service, profile, attributes, chosen.Encoder, captions, sound),
                 .. FfmpegLiveInvocation.Delivery(),
                 .. drawn is null ? [] : FfmpegLiveInvocation.CaptionDelivery(service, drawn.Descriptor),
             ],
