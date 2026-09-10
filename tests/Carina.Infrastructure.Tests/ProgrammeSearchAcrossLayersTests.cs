@@ -38,6 +38,29 @@ public sealed class ProgrammeSearchAcrossLayersTests(RepositoryDatabase database
     }
 
     [Fact]
+    public async Task HowManySoundsAProgrammeAnnouncedSurvivesTheSearchAndAnArchivedOneCountsNone()
+    {
+        int network = BroadcastIds.NextNetwork();
+        await using CarinaDbContext context = database.Open();
+
+        await new ArchivedProgrammeRepository(context).KeepAsync(
+            [Archived(network, 1, $"紀行{network}", startsAt: At.AddHours(-3))],
+            Cancel);
+        await new ProgrammeRepository(context).AddAsync(
+            Programme(network, 2, $"紀行{network}", string.Empty, At.AddHours(-2), sounds: 2),
+            Cancel);
+        await context.SaveChangesAsync(Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        PaginatedList<ProgrammeMatch> found = await new ProgrammeSearchRepository(reading).SearchAsync(
+            Asking($"紀行{network}"),
+            At,
+            Cancel);
+
+        Assert.Equal([0, 2], found.Items.Select(match => match.Sounds));
+    }
+
+    [Fact]
     public async Task OnePageCarriesBothLayersInOneOrder()
     {
         int network = BroadcastIds.NextNetwork();
@@ -346,7 +369,13 @@ public sealed class ProgrammeSearchAcrossLayersTests(RepositoryDatabase database
             [],
             At);
 
-    private static Programme Programme(int network, int carried, string name, string summary, DateTime began)
+    private static Programme Programme(
+        int network,
+        int carried,
+        string name,
+        string summary,
+        DateTime began,
+        int sounds = 0)
         => Domain.Programmes.Programme.Discover(
             new ProgrammeBroadcast(
                 new ProgrammeId(new NetworkId(network), new ServiceId(1049), new EventId(carried)),
@@ -355,6 +384,9 @@ public sealed class ProgrammeSearchAcrossLayersTests(RepositoryDatabase database
                 began.AddMinutes(30),
                 name,
                 summary,
-                false),
+                false)
+            {
+                Sounds = sounds,
+            },
             At);
 }
