@@ -46,6 +46,7 @@ public sealed class MigrationSurveyTests
             [OnDisk("notes.txt", 1_024)],
             Rescanned());
 
+        Assert.Single(rolled.Verdicts);
         Assert.All(rolled.Verdicts, verdict => Assert.False(verdict.Carried));
         Assert.Equal(1, rolled.OfferedIn(MigrationPopulation.RecordingFiles));
     }
@@ -123,6 +124,7 @@ public sealed class MigrationSurveyTests
             [OnDisk("one.m2ts", 0)],
             Rescanned(InReach));
 
+        Assert.Equal(2, rolled.Verdicts.Count);
         Assert.All(rolled.Verdicts, verdict => Assert.Equal(MigrationRefusal.ReallyEmpty, verdict.Refusal));
     }
 }
