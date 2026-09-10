@@ -141,7 +141,7 @@ docker compose exec app dotnet run --project src/Carina.Db -- \
   --carry --from <移行元の録画ディレクトリ> --into <新しい録画ルート>
 ```
 
-`--for-real` を付けなければ下見で、**移行元も新システムも一切変えないので何度でも走らせてよい**。
+`--for-real` を付けなければ下見で、**移行元を一切変えないので何度でも走らせてよい**。
 移行元の台帳は `CARINA_MIGRATION_SOURCE_CONNECTION` が持つ接続で、読み取り専用トランザクションの中から読む。
 `--into` はディレクトリ名がそのまま出力ルートの名前になるので、`Integrity__OutputRoots` の名前と揃える。
 録画はハードリンクで運ぶので、置き場所は設定の `CARINA_RECORDINGS_DIR` に従う。
