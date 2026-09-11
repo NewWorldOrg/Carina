@@ -72,8 +72,29 @@ public sealed class DiskPrecheckVerdictTests
         Assert.Equal(RecordingFault.RefusedByDiskPrecheck, detail.Fault);
         Assert.Null(detail.TuneFailure);
         Assert.Equal(Noon, detail.NoticedAt);
-        Assert.Equal("NoRoomLeft: 3 recordings weigh 10 bytes against 20 free", detail.Note);
         Assert.Contains(detail.Fault, RecordingFaults.ThatCanInterrupt);
+    }
+
+    [Fact]
+    public void NoDetailAPrecheckHandsTheLedgerCarriesWordsOfItsOwn()
+    {
+        foreach (DiskShortfall shortfall in Enum.GetValues<DiskShortfall>())
+        {
+            Assert.Equal(
+                string.Empty,
+                DiskPrecheckVerdict.Of(shortfall, 10, 20, 3).Detail(Noon).Note);
+        }
+    }
+
+    [Fact]
+    public void WhatAPrecheckMeasuredStaysOnTheVerdictAsNumbers()
+    {
+        DiskPrecheckVerdict verdict = DiskPrecheckVerdict.Of(DiskShortfall.ShortOfTheEstimate, 10, 20, 3);
+
+        Assert.Equal(DiskShortfall.ShortOfTheEstimate, verdict.Shortfall);
+        Assert.Equal((Int128)10, verdict.EstimatedBytes);
+        Assert.Equal(20L, verdict.FreeBytes);
+        Assert.Equal(3, verdict.Weighed);
     }
 
     [Fact]

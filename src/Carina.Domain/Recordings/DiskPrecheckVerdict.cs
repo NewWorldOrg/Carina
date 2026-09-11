@@ -1,5 +1,3 @@
-using System.Globalization;
-
 namespace Carina.Domain.Recordings;
 
 public enum DiskShortfall
@@ -71,13 +69,7 @@ public sealed record DiskPrecheckVerdict
     }
 
     public OutcomeDetail Detail(DateTime noticedAt)
-        => Shortfall is { } shortfall
-            ? new OutcomeDetail(RecordingFault.RefusedByDiskPrecheck, null, Note(shortfall), noticedAt)
-            : throw new InvalidOperationException(
-                "A precheck that found room has nothing to write down.");
-
-    private string Note(DiskShortfall shortfall)
-        => string.Create(
-            CultureInfo.InvariantCulture,
-            $"{shortfall}: {Weighed} recordings weigh {EstimatedBytes} bytes against {FreeBytes} free");
+        => HasRoom
+            ? throw new InvalidOperationException("A precheck that found room has nothing to write down.")
+            : new OutcomeDetail(RecordingFault.RefusedByDiskPrecheck, null, string.Empty, noticedAt);
 }

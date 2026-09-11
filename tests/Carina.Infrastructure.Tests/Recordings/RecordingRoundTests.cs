@@ -12,6 +12,10 @@ namespace Carina.Infrastructure.Tests.Recordings;
 
 public sealed class RecordingRoundTests
 {
+    private const long RoomForTheOneStarting = 3_681_562_500L;
+
+    private const long RoomForItAndTheOneAlreadyRunning = 6_156_562_500L;
+
     [Fact]
     public async Task WhatIsOverIsStoppedBeforeWhatIsDueIsStarted()
     {
@@ -316,7 +320,7 @@ public sealed class RecordingRoundTests
 
         Assert.Single(run.Started);
         Assert.Equal(RecordingFault.RefusedByDiskPrecheck, reason.Fault);
-        Assert.Contains("NoRoomLeft", reason.Note, StringComparison.Ordinal);
+        Assert.Equal(string.Empty, reason.Note);
         Assert.Equal(Airs, reason.NoticedAt);
     }
 
@@ -333,16 +337,11 @@ public sealed class RecordingRoundTests
     [Fact]
     public async Task WhatIsAlreadyRunningIsWeighedBesideWhatIsStarting()
     {
-        var recordings = new HeldRecordings();
-        recordings.Rows.Add(InFlight(Airs.AddMinutes(-10), Airs.AddMinutes(20)));
+        IReadOnlyList<Recording> running = [InFlight(Airs.AddMinutes(-10), Airs.AddMinutes(20))];
 
-        var driver = new RecordingDriver { FreeBytes = 1 };
-
-        await Round(Holding(Due(1)), recordings, driver).RunAsync(CancellationToken.None);
-
-        Recording written = recordings.Rows[^1];
-
-        Assert.Contains("2 recordings weigh 6156562500 bytes", Assert.Single(written.OutcomeDetail).Note, StringComparison.Ordinal);
+        Assert.Empty(await Weighing([], free: RoomForTheOneStarting));
+        Assert.Single(await Weighing(running, free: RoomForTheOneStarting));
+        Assert.Empty(await Weighing(running, free: RoomForItAndTheOneAlreadyRunning));
     }
 
     [Fact]
@@ -356,19 +355,19 @@ public sealed class RecordingRoundTests
     }
 
     [Fact]
-    public async Task ARecordingThisTickStoppedIsNoLongerWeighedAgainstTheDisk()
+    public async Task ARecordingThisTickStoppedIsNoLongerOneThatIsRunning()
     {
-        var recordings = new HeldRecordings();
-        recordings.Rows.Add(InFlight(Airs.AddMinutes(-30), Airs));
+        Assert.Empty(await Instead(Airs));
+        Assert.Single(await Instead(Airs.AddTicks(1)));
+    }
 
-        var driver = new RecordingDriver { FreeBytes = 1 };
+    [Fact]
+    public async Task ARecordingThisTickStoppedLeavesTheDiskRoomForTheNextOne()
+    {
+        IReadOnlyList<Recording> stopping = [InFlight(Airs.AddMinutes(-30), Airs)];
 
-        await Round(Holding(Due(1)), recordings, driver).RunAsync(CancellationToken.None);
-
-        Assert.Contains(
-            "1 recordings weigh 3681562500 bytes",
-            Assert.Single(recordings.Rows[^1].OutcomeDetail).Note,
-            StringComparison.Ordinal);
+        Assert.Empty(await Weighing(stopping, free: RoomForTheOneStarting));
+        Assert.Single(await Weighing(stopping, free: RoomForTheOneStarting - 1));
     }
 
     [Fact]
@@ -544,20 +543,17 @@ public sealed class RecordingRoundTests
     [Fact]
     public async Task ARecordingStartedThisTickIsWeighedAgainstTheDiskForTheNextOne()
     {
-        var recordings = new HeldRecordings();
-        var driver = new RecordingDriver { FreeBytes = 1 };
+        IReadOnlyList<IReadOnlyList<OutcomeDetail>> forOne = await StartingTwo(RoomForTheOneStarting);
 
-        await Round(Holding(Due(1), Due(2)), recordings, driver).RunAsync(CancellationToken.None);
+        Assert.Empty(forOne[0]);
+        Assert.Equal(
+            RecordingFault.RefusedByDiskPrecheck,
+            Assert.Single(forOne[1]).Fault);
 
-        Assert.Equal(2, recordings.Rows.Count);
-        Assert.Contains(
-            "1 recordings weigh",
-            Assert.Single(recordings.Rows[0].OutcomeDetail).Note,
-            StringComparison.Ordinal);
-        Assert.Contains(
-            "2 recordings weigh 7363125000 bytes",
-            Assert.Single(recordings.Rows[1].OutcomeDetail).Note,
-            StringComparison.Ordinal);
+        IReadOnlyList<IReadOnlyList<OutcomeDetail>> forBoth = await StartingTwo(RoomForTheOneStarting * 2);
+
+        Assert.Empty(forBoth[0]);
+        Assert.Empty(forBoth[1]);
     }
 
     [Fact]
@@ -685,6 +681,34 @@ public sealed class RecordingRoundTests
             .RunAsync(CancellationToken.None);
 
         return recordings.Rows[^1].OutcomeDetail;
+    }
+
+    private static async Task<IReadOnlyList<Guid>> Instead(DateTime windowEnd)
+    {
+        var recordings = new HeldRecordings();
+        recordings.Rows.Add(InFlight(Airs.AddMinutes(-30), windowEnd));
+
+        var driver = new RecordingDriver
+        {
+            RefusesToStart = DriverCall<SessionSnapshot>.Refused(
+                new DriverProblem(SessionRefusalTitles.NoDeviceFree, [])),
+        };
+
+        RecordingRun run = await Round(Holding(Due(1)), recordings, driver).RunAsync(CancellationToken.None);
+
+        return Assert.Single(run.Refused).RecordedInstead;
+    }
+
+    private static async Task<IReadOnlyList<IReadOnlyList<OutcomeDetail>>> StartingTwo(long free)
+    {
+        var recordings = new HeldRecordings();
+
+        await Round(Holding(Due(1), Due(2)), recordings, new RecordingDriver { FreeBytes = free })
+            .RunAsync(CancellationToken.None);
+
+        Assert.Equal(2, recordings.Rows.Count);
+
+        return [.. recordings.Rows.Select(row => row.OutcomeDetail)];
     }
 
     private static async Task<IReadOnlyList<RecordingId>> Stopping(DateTime windowEnd)

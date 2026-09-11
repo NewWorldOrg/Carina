@@ -97,6 +97,76 @@ public sealed class RecordingRuleSelfCheckTests
         Assert.Empty(RecordingRules.EitReadersInsideTheRecordingFeature(tree.Root));
     }
 
+    private const string ComposesItsOwnNote = """
+        using Carina.Domain.Recordings;
+        internal static class Weighing
+        {
+            public static OutcomeDetail Detail(DateTime at)
+                => new OutcomeDetail(RecordingFault.ShortOfTheWindow, null, Measured(), at);
+        }
+        """;
+
+    private const string LeavesTheNoteEmpty = """
+        using Carina.Domain.Recordings;
+        internal static class Weighing
+        {
+            public static OutcomeDetail Detail(RecordingFault fault, DateTime at)
+                => new OutcomeDetail(fault, null, string.Empty, at);
+        }
+        """;
+
+    private const string ComposesItsOwnNoteAfterANestedCall = """
+        using Carina.Domain.Recordings;
+        internal static class Weighing
+        {
+            public static OutcomeDetail Detail(DateTime at)
+                => new OutcomeDetail(Named(Faults.First(), at), Kind(at), $"covered {0.5:F4}", at);
+        }
+        """;
+
+    [Fact]
+    public void DetectsAFileThatComposesTheNoteAFaultCarries()
+    {
+        using var tree = new SourceTree();
+        tree.Write("Carina.Domain/Recordings/Weighing.cs", ComposesItsOwnNote);
+        tree.Write("Carina.Domain/Recordings/Quiet.cs", LeavesTheNoteEmpty);
+
+        Assert.Equal(
+            ["/Carina.Domain/Recordings/Weighing.cs"],
+            RecordingRules.ComposersOfTheOutcomeDetailNote(tree.Root));
+    }
+
+    [Fact]
+    public void ReadsPastACallInAnEarlierArgumentToReachTheNote()
+    {
+        using var tree = new SourceTree();
+        tree.Write("Carina.Infrastructure/Recordings/Weighing.cs", ComposesItsOwnNoteAfterANestedCall);
+
+        Assert.Equal(
+            ["/Carina.Infrastructure/Recordings/Weighing.cs"],
+            RecordingRules.ComposersOfTheOutcomeDetailNote(tree.Root));
+    }
+
+    [Fact]
+    public void LeavesTheOnePlaceWhereAPersonsWordsArrive()
+    {
+        using var tree = new SourceTree();
+        tree.Write(
+            "Carina.Infrastructure/Persistence/Repositories/RecordingDirectory.cs",
+            ComposesItsOwnNote);
+
+        Assert.Empty(RecordingRules.ComposersOfTheOutcomeDetailNote(tree.Root));
+    }
+
+    [Fact]
+    public void LeavesAFileThatBuildsNoDetailAtAll()
+    {
+        using var tree = new SourceTree();
+        tree.Write("Carina.Domain/Recordings/Weighing.cs", SubscribesToTheWatcher);
+
+        Assert.Empty(RecordingRules.ComposersOfTheOutcomeDetailNote(tree.Root));
+    }
+
     [Fact]
     public void ReadsTheRepositoryOnDisk()
     {

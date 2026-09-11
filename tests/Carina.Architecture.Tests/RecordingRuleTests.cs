@@ -15,6 +15,36 @@ public sealed class RecordingRuleTests
     }
 
     [Fact]
+    public void TheOnlyNoteAFaultCarriesIsOneSomebodyWrote()
+    {
+        Assert.Empty(RecordingRules.ComposersOfTheOutcomeDetailNote(RepositoryLayout.SourceDirectory));
+    }
+
+    [Fact]
+    public void TheOnePlaceAllowedToFillItIsWhereAPersonsWordsArrive()
+    {
+        Assert.Equal(
+            ["/Carina.Infrastructure/Persistence/Repositories/RecordingDirectory.cs"],
+            RecordingRules.AllowedToFillTheNote);
+
+        string arriving = Path.Combine(
+            RepositoryLayout.SourceDirectory,
+            "Carina.Infrastructure",
+            "Persistence",
+            "Repositories",
+            "RecordingDirectory.cs");
+
+        Assert.True(File.Exists(arriving));
+        Assert.Contains("RecordingStopReason", File.ReadAllText(arriving), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheDetailIsStillBuiltSomewhereForThatRuleToHaveRead()
+    {
+        Assert.NotEmpty(SourceScan.FilesMentioning(RepositoryLayout.SourceDirectory, "new OutcomeDetail("));
+    }
+
+    [Fact]
     public void TheRecordingFeatureIsOnDiskForThoseRulesToRead()
     {
         IReadOnlyList<string> feature = SourceScan.FilesMentioning(
