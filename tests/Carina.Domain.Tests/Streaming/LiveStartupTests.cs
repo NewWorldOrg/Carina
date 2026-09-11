@@ -44,6 +44,18 @@ public sealed class LiveStartupTests
     }
 
     [Fact]
+    public void ASegmentTheEnumNamesIsInTheOrderAndHasWhatItWaitsForAnswered()
+    {
+        Assert.All(
+            Enum.GetValues<LiveStartupSegment>(),
+            segment =>
+            {
+                Assert.Contains(segment, LiveStartupSegments.InOrder);
+                Assert.NotNull(LiveStartupSegments.Behind(segment));
+            });
+    }
+
+    [Fact]
     public void WhatASegmentWaitsForComesEarlierInTheOrderTheWireReports()
     {
         List<LiveStartupSegment> order = [.. LiveStartupSegments.InOrder];
