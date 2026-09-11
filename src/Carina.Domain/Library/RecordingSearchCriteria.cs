@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 
@@ -97,8 +98,8 @@ public sealed class RecordingSearchCriteria
         RecordingSearchConditions beside = conditions ?? new RecordingSearchConditions();
 
         if (RecordingKeyword.For(keyword) is not { } asked
-            || ChannelsIn(beside.Channels) is not { } channels
-            || OutcomesIn(beside.Outcomes) is not { } outcomes)
+            || ListingGuards.NoMoreThan(beside.Channels, MostChannels) is not { } channels
+            || ListingGuards.NamedIn(beside.Outcomes) is not { } outcomes)
         {
             return null;
         }
@@ -118,7 +119,8 @@ public sealed class RecordingSearchCriteria
             return null;
         }
 
-        if (SpanIsUnusable(from, to) || after is { StartedAt.Kind: not DateTimeKind.Utc })
+        if (ListingGuards.SpanIsUnusable(from, to, LongestSpan)
+            || after is { StartedAt.Kind: not DateTimeKind.Utc })
         {
             return null;
         }
@@ -134,46 +136,6 @@ public sealed class RecordingSearchCriteria
             to,
             sort,
             after,
-            Clamped(perPage));
+            ListingGuards.Clamped(perPage, DefaultPerPage, MostPerPage));
     }
-
-    private static IReadOnlyList<ProgrammeService>? ChannelsIn(IReadOnlyList<ProgrammeService>? asked)
-    {
-        if (asked is null || asked.Count is 0)
-        {
-            return [];
-        }
-
-        ProgrammeService[] apart = [.. asked.Distinct()];
-
-        return apart.Length > MostChannels ? null : apart;
-    }
-
-    private static IReadOnlyList<RecordingOutcome>? OutcomesIn(IReadOnlyList<RecordingOutcome>? asked)
-    {
-        if (asked is null || asked.Count is 0)
-        {
-            return [];
-        }
-
-        return asked.Any(outcome => !Enum.IsDefined(outcome)) ? null : [.. asked.Distinct()];
-    }
-
-    private static bool SpanIsUnusable(DateTime? from, DateTime? to)
-    {
-        if (from is { Kind: not DateTimeKind.Utc } || to is { Kind: not DateTimeKind.Utc })
-        {
-            return true;
-        }
-
-        return from is { } began && to is { } finished && (finished <= began || finished - began > LongestSpan);
-    }
-
-    private static int Clamped(int? perPage)
-        => perPage switch
-        {
-            null or < 1 => DefaultPerPage,
-            > MostPerPage => MostPerPage,
-            { } asked => asked,
-        };
 }

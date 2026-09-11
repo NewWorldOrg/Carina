@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Programmes;
 
 namespace Carina.Domain.Recordings;
@@ -108,8 +109,8 @@ public sealed class RecordingQuery
         RecordingConditions beside = conditions ?? new RecordingConditions();
 
         if (RecordingKeyword.For(beside.Keyword) is not { } keyword
-            || OutcomesIn(beside.Outcomes) is not { } outcomes
-            || ChannelsIn(beside.Channels) is not { } channels)
+            || ListingGuards.NamedIn(beside.Outcomes) is not { } outcomes
+            || ListingGuards.NoMoreThan(beside.Channels, MostChannels) is not { } channels)
         {
             return null;
         }
@@ -134,7 +135,7 @@ public sealed class RecordingQuery
             return null;
         }
 
-        if (SpanIsUnusable(from, to))
+        if (ListingGuards.SpanIsUnusable(from, to, LongestSpan))
         {
             return null;
         }
@@ -155,51 +156,6 @@ public sealed class RecordingQuery
             sort,
             descending,
             page ?? 1,
-            Clamped(perPage));
-    }
-
-    private static int Clamped(int? perPage)
-        => perPage switch
-        {
-            null or < 1 => DefaultPerPage,
-            > MostPerPage => MostPerPage,
-            { } asked => asked,
-        };
-
-    private static bool SpanIsUnusable(DateTime? from, DateTime? to)
-    {
-        if (from is { } start && start.Kind is not DateTimeKind.Utc)
-        {
-            return true;
-        }
-
-        if (to is { } end && end.Kind is not DateTimeKind.Utc)
-        {
-            return true;
-        }
-
-        return from is { } began && to is { } finished && (finished <= began || finished - began > LongestSpan);
-    }
-
-    private static IReadOnlyList<RecordingOutcome>? OutcomesIn(IReadOnlyList<RecordingOutcome>? asked)
-    {
-        if (asked is null || asked.Count == 0)
-        {
-            return [];
-        }
-
-        return asked.Any(outcome => !Enum.IsDefined(outcome)) ? null : [.. asked.Distinct()];
-    }
-
-    private static IReadOnlyList<ProgrammeService>? ChannelsIn(IReadOnlyList<ProgrammeService>? asked)
-    {
-        if (asked is null || asked.Count == 0)
-        {
-            return [];
-        }
-
-        ProgrammeService[] apart = [.. asked.Distinct()];
-
-        return apart.Length > MostChannels ? null : apart;
+            ListingGuards.Clamped(perPage, DefaultPerPage, MostPerPage));
     }
 }

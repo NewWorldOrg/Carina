@@ -161,7 +161,7 @@ public sealed class ProgrammeSearch
             || GenresIn(beside.Genres) is not { } genres
             || SubGenresIn(beside.SubGenres) is not { } subGenres
             || DaysIn(beside.Days) is not { } days
-            || ChannelsIn(beside.Channels) is not { } channels)
+            || ListingGuards.NoMoreThan(beside.Channels, MostChannels) is not { } channels)
         {
             return null;
         }
@@ -181,12 +181,7 @@ public sealed class ProgrammeSearch
             return null;
         }
 
-        if (to is { } end && end.Kind is not DateTimeKind.Utc)
-        {
-            return null;
-        }
-
-        if (from is { } began && to is { } finished && (finished <= began || finished - began > LongestSpan))
+        if (ListingGuards.SpanIsUnusable(from, to, LongestSpan))
         {
             return null;
         }
@@ -208,7 +203,7 @@ public sealed class ProgrammeSearch
             sort,
             descending,
             page is { } asking && asking > 1 ? asking : 1,
-            Clamped(perPage));
+            ListingGuards.Clamped(perPage, DefaultPerPage, MostPerPage));
 
         return looking.NarrowsNothing ? null : looking;
     }
@@ -336,24 +331,4 @@ public sealed class ProgrammeSearch
 
         return apart.Length == DaysInTheWeek ? [] : apart;
     }
-
-    private static IReadOnlyList<ProgrammeService>? ChannelsIn(IReadOnlyList<ProgrammeService>? asked)
-    {
-        if (asked is null || asked.Count == 0)
-        {
-            return [];
-        }
-
-        ProgrammeService[] apart = [.. asked.Distinct()];
-
-        return apart.Length > MostChannels ? null : apart;
-    }
-
-    private static int Clamped(int? perPage)
-        => perPage switch
-        {
-            null or < 1 => DefaultPerPage,
-            > MostPerPage => MostPerPage,
-            { } asked => asked,
-        };
 }

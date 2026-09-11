@@ -1,3 +1,5 @@
+using Carina.Domain.Base;
+
 namespace Carina.Domain.Streaming;
 
 public enum LiveChannelSort
@@ -70,14 +72,6 @@ public sealed class LiveChannelQuery
             descending,
             fields is null ? [] : [.. fields.Distinct()],
             page ?? 1,
-            Clamped(perPage));
+            ListingGuards.Clamped(perPage, DefaultPerPage, MostPerPage));
     }
-
-    private static int Clamped(int? perPage)
-        => perPage switch
-        {
-            null or < 1 => DefaultPerPage,
-            > MostPerPage => MostPerPage,
-            { } asked => asked,
-        };
 }

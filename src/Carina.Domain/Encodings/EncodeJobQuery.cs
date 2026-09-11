@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Recordings;
 
 namespace Carina.Domain.Encodings;
@@ -48,13 +49,10 @@ public sealed class EncodeJobQuery
             return null;
         }
 
-        int size = perPage switch
-        {
-            null or < 1 => DefaultPerPage,
-            > MostPerPage => MostPerPage,
-            _ => perPage.Value,
-        };
-
-        return new EncodeJobQuery(asked, recording, page ?? 1, size);
+        return new EncodeJobQuery(
+            asked,
+            recording,
+            page ?? 1,
+            ListingGuards.Clamped(perPage, DefaultPerPage, MostPerPage));
     }
 }
