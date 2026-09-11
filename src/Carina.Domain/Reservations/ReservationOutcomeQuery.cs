@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Programmes;
 using Carina.Domain.Rules;
 
@@ -19,13 +20,13 @@ public sealed record ReservationOutcomeConditions
 /// </summary>
 public sealed class ReservationOutcomeQuery
 {
-    public const int MostPerPage = ListingGuards.MostPerPage;
+    public const int MostPerPage = ReservationQuery.MostPerPage;
 
-    public const int DefaultPerPage = ListingGuards.DefaultPerPage;
+    public const int DefaultPerPage = ReservationQuery.DefaultPerPage;
 
-    public const int MostChannels = ListingGuards.MostChannels;
+    public const int MostChannels = ReservationQuery.MostChannels;
 
-    public static readonly TimeSpan LongestSpan = ListingGuards.LongestSpan;
+    public static readonly TimeSpan LongestSpan = ReservationQuery.LongestSpan;
 
     private ReservationOutcomeQuery(
         IReadOnlyList<ReservationOutcomeKind> kinds,
@@ -69,12 +70,12 @@ public sealed class ReservationOutcomeQuery
         ReservationOutcomeConditions beside = conditions ?? new ReservationOutcomeConditions();
 
         if (ListingGuards.NamedIn(beside.Kinds) is not { } kinds
-            || ListingGuards.ChannelsIn(beside.Channels) is not { } channels)
+            || ListingGuards.NoMoreThan(beside.Channels, MostChannels) is not { } channels)
         {
             return null;
         }
 
-        if (ListingGuards.SpanIsUnusable(from, to) || page is < 1)
+        if (ListingGuards.SpanIsUnusable(from, to, LongestSpan) || page is < 1)
         {
             return null;
         }
@@ -86,6 +87,6 @@ public sealed class ReservationOutcomeQuery
             from,
             to,
             page ?? 1,
-            ListingGuards.Clamped(perPage));
+            ListingGuards.Clamped(perPage, DefaultPerPage, MostPerPage));
     }
 }

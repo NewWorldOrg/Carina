@@ -1,3 +1,5 @@
+using Carina.Domain.Base;
+
 namespace Carina.Domain.Migration;
 
 public sealed class MigrationDetailQuery
@@ -17,13 +19,7 @@ public sealed class MigrationDetailQuery
     public int PerPage { get; }
 
     public static MigrationDetailQuery? For(int? page, int? perPage)
-        => page is < 1 ? null : new MigrationDetailQuery(page ?? 1, Clamped(perPage));
-
-    private static int Clamped(int? perPage)
-        => perPage switch
-        {
-            null or < 1 => DefaultPerPage,
-            > MostPerPage => MostPerPage,
-            { } asked => asked,
-        };
+        => page is < 1
+            ? null
+            : new MigrationDetailQuery(page ?? 1, ListingGuards.Clamped(perPage, DefaultPerPage, MostPerPage));
 }

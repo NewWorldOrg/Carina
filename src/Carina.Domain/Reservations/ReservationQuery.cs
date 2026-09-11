@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Programmes;
 
 namespace Carina.Domain.Reservations;
@@ -48,15 +49,15 @@ public sealed record ReservationConditions
 
 public sealed class ReservationQuery
 {
-    public const int MostPerPage = ListingGuards.MostPerPage;
+    public const int MostPerPage = 200;
 
-    public const int DefaultPerPage = ListingGuards.DefaultPerPage;
+    public const int DefaultPerPage = 50;
 
-    public const int MostChannels = ListingGuards.MostChannels;
+    public const int MostChannels = 64;
 
     public const int ShortestKeyword = 2;
 
-    public static readonly TimeSpan LongestSpan = ListingGuards.LongestSpan;
+    public static readonly TimeSpan LongestSpan = TimeSpan.FromDays(366);
 
     private ReservationQuery(
         IReadOnlyList<ReservationStanding> standings,
@@ -114,7 +115,7 @@ public sealed class ReservationQuery
         ReservationConditions beside = conditions ?? new ReservationConditions();
 
         if (ListingGuards.NamedIn(beside.Standings) is not { } standings
-            || ListingGuards.ChannelsIn(beside.Channels) is not { } channels)
+            || ListingGuards.NoMoreThan(beside.Channels, MostChannels) is not { } channels)
         {
             return null;
         }
@@ -134,7 +135,7 @@ public sealed class ReservationQuery
             return null;
         }
 
-        if (ListingGuards.SpanIsUnusable(from, to) || page is < 1)
+        if (ListingGuards.SpanIsUnusable(from, to, LongestSpan) || page is < 1)
         {
             return null;
         }
@@ -149,7 +150,7 @@ public sealed class ReservationQuery
             sort,
             descending,
             page ?? 1,
-            ListingGuards.Clamped(perPage));
+            ListingGuards.Clamped(perPage, DefaultPerPage, MostPerPage));
     }
 
     private static string? KeywordIn(string? asked)
