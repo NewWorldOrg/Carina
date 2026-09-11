@@ -4,6 +4,7 @@ public sealed class FileSystemRuleTests
 {
     private static readonly string[] Inventory =
     [
+        "/Carina.Api/Authentication/SessionAuthenticationHandler.cs .Delete(",
         "/Carina.Api/Controllers/Auth/LogOutAction.cs .Delete(",
         "/Carina.Api/Events/ProgrammeFeedStream.cs newStreamWriter",
         "/Carina.Broadcast/Descriptors/ExtendedEventDescription.cs .CopyTo(",

@@ -25,28 +25,16 @@ public sealed class SessionAuthenticationHandler(
             return AuthenticateResult.NoResult();
         }
 
-        SessionId id;
-
-        try
-        {
-            id = new SessionId(carried);
-        }
-        catch (ArgumentException)
-        {
-            return AuthenticateResult.NoResult();
-        }
-
-        AuthSession? session = await sessions.FindAsync(id, Context.RequestAborted);
-
-        if (session is null)
-        {
-            return AuthenticateResult.NoResult();
-        }
+        AuthSession? session = Named(carried) is { } id
+            ? await sessions.FindAsync(id, Context.RequestAborted)
+            : null;
 
         DateTime now = clock.GetUtcNow().UtcDateTime;
 
-        if (session.StatusAt(now, policy) is not SessionStatus.Active)
+        if (session is null || session.StatusAt(now, policy) is not SessionStatus.Active)
         {
+            Response.Cookies.Delete(SessionCookie.Name, SessionCookie.Discarding(Request.IsHttps));
+
             return AuthenticateResult.NoResult();
         }
 
@@ -57,5 +45,17 @@ public sealed class SessionAuthenticationHandler(
 
         return AuthenticateResult.Success(
             new AuthenticationTicket(SessionClaims.Principal(session, Scheme.Name), Scheme.Name));
+    }
+
+    private static SessionId? Named(string carried)
+    {
+        try
+        {
+            return new SessionId(carried);
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
     }
 }

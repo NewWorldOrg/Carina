@@ -70,6 +70,80 @@ public sealed class SessionEndpointTests
     }
 
     [Fact]
+    public async Task ACookieNamingASessionTheLedgerNeverHeldIsTakenBackFromTheBrowser()
+    {
+        await using AuthProbe probe = AuthProbe.OverHttp().WithAnAccount();
+        using HttpClient client = probe.Relaying($"{SessionCookie.Name}={SessionId.Issue().Value}");
+
+        using HttpResponseMessage response = await client.GetAsync(Me);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.StartsWith($"{SessionCookie.Name}=;", Discarded(response), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ACookieCarryingSomethingThatIsNotASessionIdIsTakenBackTooRatherThanLeftToAskAgain()
+    {
+        await using AuthProbe probe = AuthProbe.OverHttp().WithAnAccount();
+        using HttpClient client = probe.Relaying($"{SessionCookie.Name}=not-a-session-id");
+
+        using HttpResponseMessage response = await client.GetAsync(Me);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.StartsWith($"{SessionCookie.Name}=;", Discarded(response), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ACookieNamingASessionThatWasEndedIsTakenBackSoTheBrowserStopsSendingIt()
+    {
+        await using AuthProbe probe = AuthProbe.OverHttp().WithAnAccount();
+        AuthSession ended = probe.Sitting("a device that was signed out from elsewhere");
+
+        ended.Revoke(DateTime.UtcNow);
+
+        using HttpClient client = probe.Relaying($"{SessionCookie.Name}={ended.Id.Value}");
+        using HttpResponseMessage response = await client.GetAsync(Me);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.StartsWith($"{SessionCookie.Name}=;", Discarded(response), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ACookieNamingASessionThatHasLapsedIsTakenBackSoTheBrowserStopsSendingIt()
+    {
+        await using AuthProbe probe = AuthProbe.OverHttp().WithAnAccount();
+
+        using HttpClient client = probe.Relaying($"{SessionCookie.Name}={Lapsed(probe).Id.Value}");
+        using HttpResponseMessage response = await client.GetAsync(Me);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.StartsWith($"{SessionCookie.Name}=;", Discarded(response), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ACallerCarryingNoCookieAtAllIsHandedNoneBack()
+    {
+        await using AuthProbe probe = AuthProbe.OverHttp().WithAnAccount();
+
+        using HttpResponseMessage response = await probe.Client.GetAsync(Me);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.False(response.Headers.Contains("Set-Cookie"));
+    }
+
+    [Fact]
+    public async Task ACookieThatStillOpensSomethingIsLeftWhereItIs()
+    {
+        await using AuthProbe probe = AuthProbe.OverHttp();
+        await probe.SignedInAsync();
+
+        using HttpResponseMessage response = await probe.Client.GetAsync(Me);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.False(response.Headers.Contains("Set-Cookie"));
+    }
+
+    [Fact]
     public async Task TheSessionListMarksTheDeviceThatIsAskingAndShowsTheOthersBesideIt()
     {
         await using AuthProbe probe = AuthProbe.OverHttp();
@@ -285,6 +359,27 @@ public sealed class SessionEndpointTests
         };
 
         return await probe.Client.SendAsync(asking);
+    }
+
+    private static string Discarded(HttpResponseMessage response)
+        => Assert.Single(response.Headers.GetValues("Set-Cookie"));
+
+    private static AuthSession Lapsed(AuthProbe probe)
+    {
+        DateTime now = DateTime.UtcNow;
+        AuthSession lapsed = AuthSession.Rehydrate(
+            SessionId.Issue(),
+            new Subject(FirstCredentials.Username),
+            FirstCredentials.Username,
+            AuthMethod.Local,
+            now - TimeSpan.FromDays(40),
+            now - TimeSpan.FromDays(39),
+            "a device that stopped asking",
+            null);
+
+        probe.Sessions.Sessions.Add(lapsed);
+
+        return lapsed;
     }
 
     private static AuthSession SomebodyElseSitting(AuthProbe probe)
