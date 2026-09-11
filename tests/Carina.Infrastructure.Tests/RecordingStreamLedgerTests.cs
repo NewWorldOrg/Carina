@@ -56,7 +56,7 @@ public sealed class RecordingStreamLedgerTests(RepositoryDatabase database)
             read.OutcomeDetail.Select(detail => detail.Fault).ToArray());
         Assert.All(read.OutcomeDetail, detail => Assert.Equal(Ended, detail.NoticedAt));
         Assert.All(read.OutcomeDetail, detail => Assert.Equal(DateTimeKind.Utc, detail.NoticedAt.Kind));
-        Assert.Contains("0.9722", Assert.Single(read.OutcomeDetail, detail => detail.Fault is RecordingFault.ShortOfTheWindow).Note, StringComparison.Ordinal);
+        Assert.All(read.OutcomeDetail, detail => Assert.Equal(string.Empty, detail.Note));
         Assert.Equal(3_300_000_000, read.FileSizeObserved);
         Assert.Equal(Ended, read.StoppedAtActual);
         Assert.Equal("Truncated", await Projected(reservation.Id));

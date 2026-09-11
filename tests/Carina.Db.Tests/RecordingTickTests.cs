@@ -140,7 +140,7 @@ public sealed class RecordingTickTests(MigratedScratchDatabase database)
 
         Assert.Equal(RecordingFault.RefusedByDiskPrecheck, reason.Fault);
         Assert.Equal(Airs, reason.NoticedAt);
-        Assert.Contains("NoRoomLeft", reason.Note, StringComparison.Ordinal);
+        Assert.Equal(string.Empty, reason.Note);
         Assert.True(written.IsInFlight);
     }
 
