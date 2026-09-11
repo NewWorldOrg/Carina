@@ -169,4 +169,47 @@ public sealed class TcpBindingGateTests
             finding => Assert.Contains("never binds a TCP port", finding, StringComparison.Ordinal)
         );
     }
+
+    [Fact]
+    public void TheVariablesTheEntrypointDropsAreTheOnesTheGateNames()
+    {
+        string[] lines = File.ReadAllLines(Path.Combine(RepositoryRoot(), "docker", "entrypoint.sh"));
+        int opened = Array.FindIndex(
+            lines,
+            line => line.StartsWith("drop_web_server_variables()", StringComparison.Ordinal)
+        );
+
+        Assert.True(opened >= 0, "docker/entrypoint.sh no longer has a drop_web_server_variables function.");
+
+        int looped = Array.FindIndex(lines, opened, line => line.Contains(Loop, StringComparison.Ordinal));
+
+        Assert.True(looped >= 0, $"docker/entrypoint.sh no longer names the variables it drops after '{Loop}'.");
+
+        string named = lines[looped][(lines[looped].IndexOf(Loop, StringComparison.Ordinal) + Loop.Length)..];
+
+        Assert.Equal(
+            TcpBindingGate.Variables,
+            named[..named.IndexOf(';')]
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        );
+    }
+
+    private const string Loop = "for name in ";
+
+    private static string RepositoryRoot()
+    {
+        DirectoryInfo? directory = new(AppContext.BaseDirectory);
+
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "Carina.slnx")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new InvalidOperationException("Could not locate the repository root.");
+    }
 }

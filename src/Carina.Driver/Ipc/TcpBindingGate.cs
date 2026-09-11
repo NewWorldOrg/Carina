@@ -16,13 +16,14 @@ public static class TcpBindingGate
 
     public const string EndpointsSection = "Kestrel:Endpoints";
 
-    private static readonly string[] PortSettings = ["http_ports", "https_ports"];
-
-    private static readonly string[] PortVariables =
+    public static readonly IReadOnlyList<string> Variables =
     [
+        UrlsVariable,
         HttpPortsVariable,
         HttpsPortsVariable,
     ];
+
+    private static readonly string[] PortSettings = ["http_ports", "https_ports"];
 
     private const string Reason =
         "The driver answers on a Unix socket only and never binds a TCP port.";
@@ -36,16 +37,11 @@ public static class TcpBindingGate
         Func<string, string?> read = environment ?? Environment.GetEnvironmentVariable;
         var findings = new List<string>();
 
-        if (read(UrlsVariable) is { Length: > 0 } fromEnvironment)
+        foreach (string variable in Variables)
         {
-            findings.Add($"{UrlsVariable} is set to '{fromEnvironment}'. {Reason}");
-        }
-
-        foreach (string variable in PortVariables)
-        {
-            if (read(variable) is { Length: > 0 } ports)
+            if (read(variable) is { Length: > 0 } set)
             {
-                findings.Add($"{variable} is set to '{ports}'. {Reason}");
+                findings.Add($"{variable} is set to '{set}'. {Reason}");
             }
         }
 
