@@ -59,6 +59,13 @@ public sealed class LocalAccount
         PasswordChangedAt = at;
     }
 
+    public void ReplaceTheHashOfTheSamePassword(PasswordHash passwordHash)
+    {
+        ArgumentNullException.ThrowIfNull(passwordHash);
+
+        PasswordHash = passwordHash;
+    }
+
     private static string ValidatedUsername(string username)
     {
         ArgumentNullException.ThrowIfNull(username);

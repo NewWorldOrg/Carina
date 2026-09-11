@@ -60,6 +60,8 @@ public sealed class LocalAccountService(
 
         await sessions.SaveAsync(session, cancellationToken);
 
+        await RemakeTheStoredHashIfItIsWeakerThanThePolicyAsync(account, attempt.Password, cancellationToken);
+
         return ServiceResult<LoginOutcome>.Success(
             LoginOutcome.Started(session, sessionPolicy.AbsoluteLifetime));
     }
@@ -99,6 +101,27 @@ public sealed class LocalAccountService(
         grants.RevokeEverythingOf(change.Subject);
 
         return ServiceResult<int, PasswordRefusal>.Success(ended);
+    }
+
+    private async Task RemakeTheStoredHashIfItIsWeakerThanThePolicyAsync(
+        LocalAccount account,
+        string password,
+        CancellationToken cancellationToken)
+    {
+        if (!hashPolicy.NeedsRehash(account.PasswordHash))
+        {
+            return;
+        }
+
+        try
+        {
+            account.ReplaceTheHashOfTheSamePassword(hasher.Hash(password, hashPolicy));
+
+            await accounts.SaveAsync(account, cancellationToken);
+        }
+        catch (Exception)
+        {
+        }
     }
 
     private async Task<int> EndEveryOtherSessionAsync(
