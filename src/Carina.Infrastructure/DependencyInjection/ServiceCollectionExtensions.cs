@@ -283,7 +283,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IAppEventPublisher>(provider =>
             provider.GetRequiredService<AppEventHub>());
         services.AddHostedService<LocalAccountBootstrap>();
-        services.AddHostedService<OidcDiscoveryProbe>();
+        services.AddHostedService<AuthUpkeepJob>();
         services.AddHostedService<DriverConnectionSupervisor>();
         services.AddHostedService<AppEventHubLifetime>();
         services.AddHostedService(provider => provider.GetRequiredService<ScanRunner>());

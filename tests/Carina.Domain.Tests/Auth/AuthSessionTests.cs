@@ -167,6 +167,51 @@ public sealed class AuthSessionTests
     }
 
     [Fact]
+    public void ASessionThatStillOpensSomethingIsNotForgotten()
+    {
+        AuthSession session = Start();
+
+        Assert.False(session.CanBeForgotten(Started + Policy.IdleTimeout - TimeSpan.FromTicks(1), Policy));
+    }
+
+    [Fact]
+    public void ASessionPastItsIdleWindowIsForgottenAsSoonAsItIsSpent()
+    {
+        AuthSession session = Start();
+
+        Assert.True(session.CanBeForgotten(Started + Policy.IdleTimeout, Policy));
+    }
+
+    [Fact]
+    public void ASessionKeptWarmUntilItsAbsoluteLifetimeIsForgottenThen()
+    {
+        AuthSession session = Start();
+        session.Touch(Started + Policy.AbsoluteLifetime - TimeSpan.FromHours(1), Policy);
+
+        Assert.True(session.CanBeForgotten(Started + Policy.AbsoluteLifetime, Policy));
+    }
+
+    [Fact]
+    public void ASessionEndedAMomentAgoIsKeptAsLongAsAnUnusedOneWouldHaveBeen()
+    {
+        AuthSession session = Start();
+        session.Revoke(Started.AddMinutes(1));
+
+        Assert.False(session.CanBeForgotten(
+            Started.AddMinutes(1) + Policy.IdleTimeout - TimeSpan.FromTicks(1),
+            Policy));
+    }
+
+    [Fact]
+    public void ASessionEndedLongEnoughAgoIsForgotten()
+    {
+        AuthSession session = Start();
+        session.Revoke(Started.AddMinutes(1));
+
+        Assert.True(session.CanBeForgotten(Started.AddMinutes(1) + Policy.IdleTimeout, Policy));
+    }
+
+    [Fact]
     public void UseWithinTheThrottleDoesNotBecomeAWrite()
     {
         AuthSession session = Start();
