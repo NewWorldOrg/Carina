@@ -35,6 +35,39 @@ public sealed class AuthSessionRepositoryTests(RepositoryDatabase database)
     }
 
     [Fact]
+    public async Task TheSessionsHandedOverAreTheOnlyRowsThatLeaveTheTable()
+    {
+        AuthSession going = Started(new Subject("carina"), "a device that stopped asking");
+        AuthSession staying = Started(new Subject("carina"), "the device still asking");
+
+        await using (CarinaDbContext writing = database.Open())
+        {
+            var repository = new AuthSessionRepository(writing);
+            await repository.SaveAsync(going, Cancel);
+            await repository.SaveAsync(staying, Cancel);
+        }
+
+        await using (CarinaDbContext forgetting = database.Open())
+        {
+            Assert.Equal(1, await new AuthSessionRepository(forgetting).ForgetAsync([going], Cancel));
+        }
+
+        await using CarinaDbContext reading = database.Open();
+        var after = new AuthSessionRepository(reading);
+
+        Assert.Null(await after.FindAsync(going.Id, Cancel));
+        Assert.NotNull(await after.FindAsync(staying.Id, Cancel));
+    }
+
+    [Fact]
+    public async Task ForgettingNothingIsAskedOfTheStoreAsNothing()
+    {
+        await using CarinaDbContext context = database.Open();
+
+        Assert.Equal(0, await new AuthSessionRepository(context).ForgetAsync([], Cancel));
+    }
+
+    [Fact]
     public async Task AnIdentifierThatWasNeverIssuedFindsNothing()
     {
         await using CarinaDbContext reading = database.Open();

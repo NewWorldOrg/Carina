@@ -108,6 +108,19 @@ public sealed class AuthSession
         return SessionStatus.Active;
     }
 
+    public bool CanBeForgotten(DateTime at, SessionPolicy policy)
+    {
+        ArgumentNullException.ThrowIfNull(policy);
+        UtcTimes.Required(at, nameof(at));
+
+        if (RevokedAt is { } revoked)
+        {
+            return at >= revoked + policy.IdleTimeout;
+        }
+
+        return StatusAt(at, policy) is SessionStatus.Expired;
+    }
+
     public bool Touch(DateTime at, SessionPolicy policy)
     {
         ArgumentNullException.ThrowIfNull(policy);

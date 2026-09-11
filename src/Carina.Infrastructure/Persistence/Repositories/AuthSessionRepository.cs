@@ -66,6 +66,20 @@ public sealed class AuthSessionRepository(CarinaDbContext context) : IAuthSessio
         await context.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task<int> ForgetAsync(IReadOnlyList<AuthSession> sessions, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(sessions);
+
+        if (sessions.Count == 0)
+        {
+            return 0;
+        }
+
+        context.Set<AuthSession>().RemoveRange(sessions);
+
+        return await context.SaveChangesAsync(cancellationToken);
+    }
+
     private void Hold(AuthSession session)
     {
         if (context.Entry(session).State is EntityState.Detached)

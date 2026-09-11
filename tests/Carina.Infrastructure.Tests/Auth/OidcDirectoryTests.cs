@@ -113,11 +113,12 @@ public sealed class OidcDirectoryTests
                 Reachability,
                 OidcLoginPolicy.Default,
                 Clock);
-            Probe = new OidcDiscoveryProbe(
+            Probe = new AuthUpkeepJob(
                 new ThrowingScopes(),
                 Reachability,
+                SessionPolicy.Default,
                 Clock,
-                NullLogger<OidcDiscoveryProbe>.Instance);
+                NullLogger<AuthUpkeepJob>.Instance);
         }
 
         public MockIdentityProvider Idp { get; } = new();
@@ -128,7 +129,7 @@ public sealed class OidcDirectoryTests
 
         public OidcDirectory Directory { get; }
 
-        public OidcDiscoveryProbe Probe { get; }
+        public AuthUpkeepJob Probe { get; }
 
         public ValueTask DisposeAsync()
         {

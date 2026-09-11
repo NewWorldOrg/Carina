@@ -86,6 +86,20 @@ public sealed class HeldAuthSessions : IAuthSessionRepository
 
         return Task.CompletedTask;
     }
+
+    public Task<int> ForgetAsync(IReadOnlyList<AuthSession> sessions, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(sessions);
+
+        int forgotten = 0;
+
+        foreach (AuthSession session in sessions)
+        {
+            forgotten += Sessions.RemoveAll(held => held.Id.Equals(session.Id));
+        }
+
+        return Task.FromResult(forgotten);
+    }
 }
 
 public sealed class HeldLocalAccount : ILocalAccountRepository
