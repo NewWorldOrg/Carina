@@ -1,3 +1,4 @@
+using Carina.Contracts;
 using Carina.Domain.Channels;
 
 using Microsoft.EntityFrameworkCore;
@@ -15,9 +16,9 @@ public sealed class SatelliteTransportStreamConfiguration : IEntityTypeConfigura
             "satellite_transport_stream",
             table => table.HasCheckConstraint(
                 "ck_satellite_transport_stream_slot",
-                """
-                bs_channel BETWEEN 1 AND 23 AND bs_channel % 2 = 1 AND bs_channel NOT IN (7, 17)
-                AND relative_stream_number BETWEEN 0 AND 7
+                $"""
+                bs_channel BETWEEN {BroadcastStandards.BsFirstChannel} AND {BroadcastStandards.BsLastChannel} AND bs_channel % 2 = 1 AND bs_channel NOT IN ({string.Join(", ", BroadcastStandards.BsChannelsWithoutDemodulation)})
+                AND relative_stream_number BETWEEN {SatelliteTransportStream.FirstRelativeStreamNumber} AND {SatelliteTransportStream.LastRelativeStreamNumber}
                 """));
 
         builder.HasKey(stream => new { stream.BsChannel, stream.RelativeStreamNumber });
