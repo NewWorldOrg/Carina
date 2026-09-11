@@ -1,5 +1,3 @@
-using System.Globalization;
-
 namespace Carina.Domain.Recordings;
 
 public sealed record RecordingVerdict
@@ -42,8 +40,5 @@ public sealed record RecordingVerdict
     public bool Names(RecordingFault fault) => Faults.Contains(fault);
 
     public IReadOnlyList<OutcomeDetail> Detail(DateTime noticedAt)
-        => [.. Faults.Select(fault => new OutcomeDetail(fault, null, Measured(), noticedAt))];
-
-    private string Measured()
-        => string.Create(CultureInfo.InvariantCulture, $"covered {Coverage:F4} of the window");
+        => [.. Faults.Select(fault => new OutcomeDetail(fault, null, string.Empty, noticedAt))];
 }

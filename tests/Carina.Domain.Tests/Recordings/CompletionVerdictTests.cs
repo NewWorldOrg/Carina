@@ -136,35 +136,43 @@ public sealed class CompletionVerdictTests
     }
 
     [Fact]
-    public void TheDetailAVerdictHandsTheLedgerSaysHowMuchOfTheWindowWasWritten()
+    public void HowMuchOfTheWindowWasWrittenStaysANumberOnTheVerdict()
     {
         RecordingVerdict verdict = CompletionFactory.Judge(
             bytes: 2_400_000_000,
             written: TimeSpan.FromSeconds(960));
 
-        Assert.Equal(
-            ["covered 0.9600 of the window"],
-            verdict.Detail(CompletionFactory.WindowEnd).Select(detail => detail.Note).ToArray());
+        Assert.Equal(0.96, verdict.Coverage, 4);
+        Assert.Equal(1.0, CompletionFactory.Judge(bytes: 0).Coverage, 4);
     }
 
     [Fact]
-    public void TheDetailAVerdictHandsTheLedgerSpellsAWholeWindowOut()
+    public void NoDetailAVerdictHandsTheLedgerCarriesWordsOfItsOwn()
     {
-        RecordingVerdict verdict = CompletionFactory.Judge(bytes: 0);
+        foreach (RecordingVerdict verdict in Sweep)
+        {
+            Assert.All(
+                verdict.Detail(CompletionFactory.WindowEnd),
+                detail => Assert.Equal(string.Empty, detail.Note));
+        }
 
-        Assert.Equal(
-            ["covered 1.0000 of the window"],
-            verdict.Detail(CompletionFactory.WindowEnd).Select(detail => detail.Note).ToArray());
+        Assert.All(
+            CompletionFactory.Judge(bytes: 1, asked: false).Detail(CompletionFactory.WindowEnd),
+            detail => Assert.Equal(string.Empty, detail.Note));
     }
 
     [Fact]
-    public void EveryDetailAVerdictHandsTheLedgerSaysSomething()
+    public void EveryDetailAVerdictHandsTheLedgerNamesAFaultAndNothingElse()
     {
         RecordingVerdict verdict = CompletionFactory.Judge(bytes: 1, asked: false);
 
-        Assert.DoesNotContain(
+        Assert.All(
             verdict.Detail(CompletionFactory.WindowEnd),
-            detail => string.IsNullOrWhiteSpace(detail.Note));
+            detail =>
+            {
+                Assert.Contains(detail.Fault, CompletionFactory.FaultsTheCrossCheckNames);
+                Assert.Null(detail.TuneFailure);
+            });
     }
 
     [Fact]
