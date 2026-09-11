@@ -15,6 +15,10 @@ public sealed class LocalAccountServiceTests
 
     private const string Carrier = "0123456789abcdefghijklmnopqrstuvwxyz-_ABCDE";
 
+    private static readonly PasswordHashPolicy WeakerThanTheCurrentPolicy = new(12288, 3, 1, 16, 32);
+
+    private static readonly TimeSpan LongBeforeThisSignIn = TimeSpan.FromDays(30);
+
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
     private readonly HeldClock clock = new(new DateTimeOffset(2026, 8, 19, 9, 0, 0, TimeSpan.Zero));
@@ -131,6 +135,78 @@ public sealed class LocalAccountServiceTests
     }
 
     [Fact]
+    public async Task AGoodSignInUnderAHashWeakerThanThePolicyLeavesTheStoredHashMeetingIt()
+    {
+        SeedUnder(WeakerThanTheCurrentPolicy);
+
+        Assert.NotNull((await LogInAsync(FirstCredentials.Username, Password)).Session);
+
+        Assert.False(PasswordHashPolicy.Default.NeedsRehash(accounts.Account!.PasswordHash));
+        Assert.Equal(1, accounts.Saves);
+    }
+
+    [Fact]
+    public async Task TheRemadeHashIsStillOpenedByTheSamePassword()
+    {
+        SeedUnder(WeakerThanTheCurrentPolicy);
+
+        await LogInAsync(FirstCredentials.Username, Password);
+
+        Assert.NotNull((await LogInAsync(FirstCredentials.Username, Password)).Session);
+        Assert.Null((await LogInAsync(FirstCredentials.Username, "the wrong password")).Session);
+    }
+
+    [Fact]
+    public async Task AHashThatAlreadyMeetsThePolicyIsNotWrittenBackOnEverySignIn()
+    {
+        Seed();
+
+        Assert.NotNull((await LogInAsync(FirstCredentials.Username, Password)).Session);
+
+        Assert.Equal(0, accounts.Saves);
+    }
+
+    [Fact]
+    public async Task AWrongPasswordRemakesNothingHoweverWeakTheStoredHashIs()
+    {
+        SeedUnder(WeakerThanTheCurrentPolicy);
+        string held = accounts.Account!.PasswordHash.Value;
+
+        Assert.Null((await LogInAsync(FirstCredentials.Username, "the wrong password")).Session);
+
+        Assert.Equal(held, accounts.Account.PasswordHash.Value);
+        Assert.Equal(0, accounts.Saves);
+    }
+
+    [Fact]
+    public async Task ARemadeHashIsNotThePasswordHavingBeenChanged()
+    {
+        SeedUnder(WeakerThanTheCurrentPolicy);
+
+        await LogInAsync(FirstCredentials.Username, Password);
+
+        Assert.Equal(Now() - LongBeforeThisSignIn, accounts.Account!.PasswordChangedAt);
+        Assert.NotEqual(Now(), accounts.Account.PasswordChangedAt);
+    }
+
+    [Fact]
+    public async Task ASignInSucceedsEvenWhenTheRemadeHashCannotBeWrittenBack()
+    {
+        var refusing = new RefusingLocalAccount(LocalAccount.Bootstrap(
+            FirstCredentials.Username,
+            hasher.Hash(Password, WeakerThanTheCurrentPolicy),
+            Now() - LongBeforeThisSignIn));
+
+        ServiceResult<LoginOutcome> asked = await Service(refusing).LogInAsync(
+            new LoginAttempt(FirstCredentials.Username, Password, "a device", Caller),
+            Cancel);
+
+        Assert.NotNull(asked.Data!.Session);
+        Assert.Single(sessions.Sessions);
+        Assert.Equal(1, refusing.Saves);
+    }
+
+    [Fact]
     public async Task ChangingThePasswordEndsEveryOtherDeviceAndLeavesTheOneThatAskedSignedIn()
     {
         Seed();
@@ -214,8 +290,10 @@ public sealed class LocalAccountServiceTests
 
     private LocalAccountService Held => held ??= Service();
 
-    private LocalAccountService Service() => new(
-        accounts,
+    private LocalAccountService Service() => Service(accounts);
+
+    private LocalAccountService Service(ILocalAccountRepository repository) => new(
+        repository,
         sessions,
         grants,
         hasher,
@@ -230,6 +308,11 @@ public sealed class LocalAccountServiceTests
         FirstCredentials.Username,
         hasher.Hash(Password, PasswordHashPolicy.Default),
         Now());
+
+    private void SeedUnder(PasswordHashPolicy policy) => accounts.Account = LocalAccount.Bootstrap(
+        FirstCredentials.Username,
+        hasher.Hash(Password, policy),
+        Now() - LongBeforeThisSignIn);
 
     private async Task<LoginOutcome> LogInAsync(string username, string password)
     {
@@ -256,4 +339,19 @@ public sealed class LocalAccountServiceTests
         => Held.ChangePasswordAsync(
             new PasswordChange(here.Subject, here.Id, current, replacement),
             Cancel);
+
+    private sealed class RefusingLocalAccount(LocalAccount held) : ILocalAccountRepository
+    {
+        public int Saves { get; private set; }
+
+        public Task<LocalAccount?> FindAsync(CancellationToken cancellationToken)
+            => Task.FromResult<LocalAccount?>(held);
+
+        public Task SaveAsync(LocalAccount account, CancellationToken cancellationToken)
+        {
+            Saves++;
+
+            throw new InvalidOperationException("the account row cannot be written just now");
+        }
+    }
 }

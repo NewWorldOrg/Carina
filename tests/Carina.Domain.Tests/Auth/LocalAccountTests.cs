@@ -45,6 +45,36 @@ public sealed class LocalAccountTests
     }
 
     [Fact]
+    public void RemakingTheHashOfTheSamePasswordReplacesWhatIsStored()
+    {
+        LocalAccount account = Account();
+
+        account.ReplaceTheHashOfTheSamePassword(Hash(0x22));
+
+        Assert.Equal(Hash(0x22), account.PasswordHash);
+    }
+
+    [Fact]
+    public void RemakingTheHashOfTheSamePasswordLeavesTheMomentOtherSessionsAreMeasuredAgainstWhereItWas()
+    {
+        LocalAccount account = Account();
+
+        account.ChangePassword(Hash(0x22), Created.AddDays(3));
+        account.ReplaceTheHashOfTheSamePassword(Hash(0x33));
+
+        Assert.Equal(Created.AddDays(3), account.PasswordChangedAt);
+        Assert.Equal(Created, account.CreatedAt);
+    }
+
+    [Fact]
+    public void RemakingTheHashNeedsAHashToRemakeItTo()
+    {
+        LocalAccount account = Account();
+
+        Assert.Throws<ArgumentNullException>(() => account.ReplaceTheHashOfTheSamePassword(null!));
+    }
+
+    [Fact]
     public void APasswordCannotHaveBeenChangedBeforeTheAccountExisted()
     {
         LocalAccount account = Account();
