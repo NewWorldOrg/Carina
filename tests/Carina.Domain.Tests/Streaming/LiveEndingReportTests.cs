@@ -19,7 +19,7 @@ public sealed class LiveEndingReportTests
         Assert.Equal(LiveEndingReport.PayloadLength, LiveEndingReport.Of(LiveSupplyEnding.Of(LiveSupplyEnd.LetGo, "let go.")).ToPayload().Length);
         Assert.NotEqual(1, LiveEndingReport.PayloadLength);
         Assert.NotEqual(LiveRefusalReport.PayloadLength, LiveEndingReport.PayloadLength);
-        Assert.NotEqual(LiveStartup.PayloadLength, LiveEndingReport.PayloadLength);
+        Assert.NotEqual(LiveEndingReport.PayloadLength, LiveStartup.PayloadLength);
     }
 
     [Fact]

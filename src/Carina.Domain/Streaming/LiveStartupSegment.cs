@@ -16,15 +16,9 @@ public enum LiveStartupSegment
 public static class LiveStartupSegments
 {
     public static IReadOnlyList<LiveStartupSegment> InOrder { get; } =
-    [
-        LiveStartupSegment.TunerSecured,
-        LiveStartupSegment.ChannelLocked,
-        LiveStartupSegment.TranscoderStarted,
-        LiveStartupSegment.InitReached,
-        LiveStartupSegment.FirstPicture,
-    ];
+        [.. Enum.GetValues<LiveStartupSegment>().Order()];
 
-    public static LiveStartupSegment Last => LiveStartupSegment.FirstPicture;
+    public static LiveStartupSegment Last => InOrder[^1];
 
     public static IReadOnlyList<LiveStartupSegment> Behind(LiveStartupSegment segment)
         => segment switch

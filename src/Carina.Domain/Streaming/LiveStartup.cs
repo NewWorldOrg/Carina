@@ -47,7 +47,7 @@ public sealed class LiveStartup
 {
     public const int MarkLength = 5;
 
-    public const int PayloadLength = MarkLength * 5;
+    public static readonly int PayloadLength = MarkLength * LiveStartupSegments.InOrder.Count;
 
     private const byte NotReached = 0;
 
@@ -130,7 +130,7 @@ public sealed class LiveStartup
 
     public static LiveStartupReading ReadProgress(ReadOnlySpan<byte> payload)
     {
-        if (payload.Length is not PayloadLength)
+        if (payload.Length != PayloadLength)
         {
             return LiveStartupReading.Broken(LiveStartupFault.NotAsLongAsAProgressReport);
         }

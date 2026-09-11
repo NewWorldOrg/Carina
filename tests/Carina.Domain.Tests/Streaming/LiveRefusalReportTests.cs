@@ -32,7 +32,7 @@ public sealed class LiveRefusalReportTests
     {
         Assert.Equal(LiveRefusalReport.PayloadLength, LiveRefusalReport.Of(LiveJoin.Refused(new TranscodeCeiling(4, 4))).ToPayload().Length);
         Assert.NotEqual(1, LiveRefusalReport.PayloadLength);
-        Assert.NotEqual(LiveStartup.PayloadLength, LiveRefusalReport.PayloadLength);
+        Assert.NotEqual(LiveRefusalReport.PayloadLength, LiveStartup.PayloadLength);
     }
 
     [Fact]
