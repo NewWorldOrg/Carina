@@ -140,6 +140,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "getStorage",
                 "getTunerHealth",
                 "getTuners",
+                "getVersion",
                 "getVideoScrubFrame",
                 "getVideoThumbnail",
                 "impactOfRules",
@@ -212,6 +213,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
             [
                 "videos",
                 "services",
+                "version",
                 "tuners",
                 "storage",
                 "rules",

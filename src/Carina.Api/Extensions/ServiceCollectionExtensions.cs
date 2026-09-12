@@ -21,6 +21,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<OidcLoginService>();
         services.AddScoped<OidcConfigService>();
         services.AddScoped<HealthService>();
+        services.AddScoped<VersionService>();
         services.AddScoped<DriverStatusService>();
         services.AddScoped<DriverRestartService>();
         services.AddScoped<TunerLedgerService>();
