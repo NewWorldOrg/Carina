@@ -66,6 +66,8 @@ internal sealed class ScriptedWebSocket : WebSocket
     {
         CloseAttempted = true;
 
+        ThrowIfTheWireIsNoLongerOpen();
+
         if (HoldEverySend > TimeSpan.Zero)
         {
             await Task.Delay(HoldEverySend, cancellationToken);
@@ -75,7 +77,7 @@ internal sealed class ScriptedWebSocket : WebSocket
 
         Closed = closeStatus;
         ClosedBecause = statusDescription;
-        state = WebSocketState.Closed;
+        state = WebSocketState.CloseSent;
         incoming.Writer.TryWrite(new WebSocketSaying(WebSocketMessageType.Close, []));
     }
 
@@ -119,6 +121,8 @@ internal sealed class ScriptedWebSocket : WebSocket
         bool endOfMessage,
         CancellationToken cancellationToken)
     {
+        ThrowIfTheWireIsNoLongerOpen();
+
         if (HoldEverySend > TimeSpan.Zero)
         {
             await Task.Delay(HoldEverySend, cancellationToken);
@@ -130,5 +134,17 @@ internal sealed class ScriptedWebSocket : WebSocket
         {
             sent.Add([.. buffer.AsSpan()]);
         }
+    }
+
+    private void ThrowIfTheWireIsNoLongerOpen()
+    {
+        if (state is WebSocketState.Open or WebSocketState.CloseReceived)
+        {
+            return;
+        }
+
+        throw new WebSocketException(
+            WebSocketError.InvalidState,
+            $"The WebSocket is in the '{state}' state and takes nothing more.");
     }
 }

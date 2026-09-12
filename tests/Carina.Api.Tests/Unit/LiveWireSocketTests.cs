@@ -59,6 +59,7 @@ public sealed class LiveWireSocketTests
         frames.Writer.Complete();
 
         Assert.Equal(LiveDeparture.SourceEnded, await Carry(socket, frames));
+        Assert.True(socket.CloseAttempted);
         Assert.Equal(WebSocketCloseStatus.NormalClosure, socket.Closed);
     }
 
@@ -286,45 +287,8 @@ public sealed class LiveWireSocketTests
 
         Assert.Equal(LiveDeparture.ViewerStoppedReading, await Carry(socket, frames));
         Assert.True(socket.Aborted);
-    }
-
-    [Fact]
-    public async Task AWireThatIsTakingNothingDoesNotTakeACloseFrameEither()
-    {
-        var socket = new ScriptedWebSocket { HoldEverySend = TimeSpan.FromSeconds(30) };
-        using var patience = new CancellationTokenSource(TimeSpan.FromMilliseconds(50));
-
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(
-            () => socket.CloseOutputAsync(WebSocketCloseStatus.PolicyViolation, "unread", patience.Token));
-
-        Assert.Null(socket.Closed);
-    }
-
-    [Fact]
-    public async Task AViewerThatStoppedReadingIsNotSentAReasonItCouldNotTake()
-    {
-        var socket = new ScriptedWebSocket { HoldEverySend = TimeSpan.FromSeconds(30) };
-        Channel<LiveFrame> frames = Channel.CreateUnbounded<LiveFrame>();
-
-        frames.Writer.TryWrite(new LiveFrame(LiveChannel.Picture, LivePts.Start, Picture));
-
-        Assert.Equal(LiveDeparture.ViewerStoppedReading, await Carry(socket, frames));
         Assert.False(socket.CloseAttempted);
         Assert.Null(socket.Closed);
-        Assert.True(socket.Aborted);
-    }
-
-    [Fact]
-    public async Task AWireEndingAnyOtherWayIsClosedRatherThanCutOff()
-    {
-        var socket = new ScriptedWebSocket();
-        Channel<LiveFrame> frames = Channel.CreateUnbounded<LiveFrame>();
-
-        frames.Writer.Complete();
-
-        Assert.Equal(LiveDeparture.SourceEnded, await Carry(socket, frames));
-        Assert.True(socket.CloseAttempted);
-        Assert.Equal(WebSocketCloseStatus.NormalClosure, socket.Closed);
     }
 
     [Fact]

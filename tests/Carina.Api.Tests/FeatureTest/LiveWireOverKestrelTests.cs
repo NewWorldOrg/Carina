@@ -29,26 +29,6 @@ public sealed class LiveWireOverKestrelTests
         LiveDeparture departure = await host.DepartureAsync(Patiently());
 
         Assert.Equal(LiveDeparture.ViewerStoppedReading, departure);
-    }
-
-    [Fact]
-    public async Task AViewerThatStopsReadingOverRealKestrelIsCutOffWithNoCloseFrameToReadTheReasonFrom()
-    {
-        var held = new HeldLiveSource();
-        await using LiveKestrelHost host = await LiveKestrelHost.StartAsync(
-            held,
-            new LiveWireSettings
-            {
-                BetweenPings = TimeSpan.FromSeconds(30),
-                WritePatience = TimeSpan.FromMilliseconds(300),
-            });
-
-        using var client = new ClientWebSocket();
-        await client.ConnectAsync(host.Wire, Patiently());
-
-        held.Send(new LiveFrame(LiveChannel.Picture, LivePts.Start, new byte[8 * 1024 * 1024]));
-
-        Assert.Equal(LiveDeparture.ViewerStoppedReading, await host.DepartureAsync(Patiently()));
 
         WebSocketException cut = await Assert.ThrowsAsync<WebSocketException>(() => ReadUntilClose(client));
 
