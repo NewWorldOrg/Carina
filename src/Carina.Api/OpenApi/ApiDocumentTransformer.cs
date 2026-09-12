@@ -1,3 +1,5 @@
+using Carina.Api.Common;
+
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.OpenApi;
 
@@ -28,7 +30,7 @@ public sealed class ApiDocumentTransformer : IOpenApiDocumentTransformer
         document.Info = new OpenApiInfo
         {
             Title = "Carina",
-            Version = "1.0.0",
+            Version = DeclaredVersion.Of(typeof(ApiDocumentTransformer).Assembly),
             Description = Description,
         };
 

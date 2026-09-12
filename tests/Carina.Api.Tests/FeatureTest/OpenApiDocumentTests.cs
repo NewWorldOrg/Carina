@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 
 using Carina.Api.Authentication;
+using Carina.Api.Common;
 
 namespace Carina.Api.Tests.FeatureTest;
 
@@ -10,6 +11,16 @@ namespace Carina.Api.Tests.FeatureTest;
 public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
     : IClassFixture<TestingWebApplicationFactory>
 {
+    [Fact]
+    public async Task TheDocumentIsStampedWithTheVersionTheApplicationWasBuiltAs()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+
+        Assert.Equal(
+            DeclaredVersion.Of(typeof(DeclaredVersion).Assembly),
+            document["info"]!["version"]!.GetValue<string>());
+    }
+
     [Fact]
     public async Task EveryDescribedResponseIsJsonOnly()
     {
