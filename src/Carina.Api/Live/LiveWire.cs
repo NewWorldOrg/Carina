@@ -68,15 +68,21 @@ public static class LiveWire
             using WebSocket socket = await context.WebSockets.AcceptWebSocketAsync();
 
             long opened = clock.GetTimestamp();
+            LiveDeparture departure = LiveDeparture.SourceBroke;
 
-            LiveDeparture departure = await new LiveWireSocket(
-                socket,
-                settings,
-                viewing.Startup,
-                viewing.Ending,
-                clock).CarryAsync(viewing.Frames, running.ApplicationStopping, context.RequestAborted);
-
-            departures.Note(key, departure, clock.GetElapsedTime(opened));
+            try
+            {
+                departure = await new LiveWireSocket(
+                    socket,
+                    settings,
+                    viewing.Startup,
+                    viewing.Ending,
+                    clock).CarryAsync(viewing.Frames, running.ApplicationStopping, context.RequestAborted);
+            }
+            finally
+            {
+                departures.Note(key, departure, clock.GetElapsedTime(opened));
+            }
         }
     }
 

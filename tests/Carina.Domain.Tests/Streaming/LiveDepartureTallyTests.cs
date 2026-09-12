@@ -6,6 +6,8 @@ public sealed class LiveDepartureTallyTests
 {
     private static readonly DateTime Since = new(2026, 9, 13, 4, 0, 0, DateTimeKind.Utc);
 
+    private static readonly TimeSpan Lasted = TimeSpan.FromSeconds(4);
+
     [Fact]
     public void ATallyAnswersForEveryWayAWireCanEnd()
     {
@@ -38,24 +40,68 @@ public sealed class LiveDepartureTallyTests
     }
 
     [Fact]
-    public void AWayThatHappenedSaysWhenItLastDid()
+    public void AWayThatHappenedSaysWhenItLastDidAndHowLongTheShortestAndTheLongestLasted()
     {
-        LiveDepartureCount counted = new(LiveDeparture.ViewerLeft, 3L, Since);
+        LiveDepartureCount counted = new(
+            LiveDeparture.ViewerLeft,
+            3L,
+            Since,
+            TimeSpan.FromSeconds(3),
+            TimeSpan.FromMinutes(20));
 
         Assert.Equal(3L, counted.Times);
         Assert.Equal(Since, counted.LastAt);
+        Assert.Equal(TimeSpan.FromSeconds(3), counted.Shortest);
+        Assert.Equal(TimeSpan.FromMinutes(20), counted.Longest);
     }
 
     [Fact]
     public void AWayCountedWithoutATimeIsRefused()
     {
-        Assert.Throws<ArgumentException>(() => new LiveDepartureCount(LiveDeparture.ViewerLeft, 3L, null));
+        Assert.Throws<ArgumentException>(
+            () => new LiveDepartureCount(LiveDeparture.ViewerLeft, 3L, null, Lasted, Lasted));
     }
 
     [Fact]
     public void ATimeWithoutACountIsRefused()
     {
-        Assert.Throws<ArgumentException>(() => new LiveDepartureCount(LiveDeparture.ViewerLeft, 0L, Since));
+        Assert.Throws<ArgumentException>(
+            () => new LiveDepartureCount(LiveDeparture.ViewerLeft, 0L, Since, Lasted, Lasted));
+    }
+
+    [Fact]
+    public void AWayCountedWithoutHowLongItLastedIsRefused()
+    {
+        Assert.Throws<ArgumentException>(() => new LiveDepartureCount(LiveDeparture.ViewerLeft, 3L, Since));
+    }
+
+    [Fact]
+    public void AWayNoWireHasEndedInThatStillNamesHowLongItLastedIsRefused()
+    {
+        Assert.Throws<ArgumentException>(
+            () => new LiveDepartureCount(LiveDeparture.ViewerLeft, 0L, null, Lasted, Lasted));
+    }
+
+    [Fact]
+    public void ALongestShorterThanTheShortestIsRefused()
+    {
+        Assert.Throws<ArgumentException>(() => new LiveDepartureCount(
+            LiveDeparture.ViewerLeft,
+            2L,
+            Since,
+            TimeSpan.FromMinutes(20),
+            TimeSpan.FromSeconds(3)));
+    }
+
+    [Fact]
+    public void AWireThatLastedLessThanNoTimeIsRefused()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new LiveDepartureCount(
+            LiveDeparture.ViewerLeft,
+            1L,
+            Since,
+            TimeSpan.FromSeconds(-1),
+            Lasted));
     }
 
     [Fact]
@@ -67,7 +113,8 @@ public sealed class LiveDepartureTallyTests
     [Fact]
     public void ACountBelowNoneIsRefused()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => new LiveDepartureCount(LiveDeparture.ViewerLeft, -1L, Since));
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => new LiveDepartureCount(LiveDeparture.ViewerLeft, -1L, Since, Lasted, Lasted));
     }
 
     private static LiveDepartureCount[] Nothing()

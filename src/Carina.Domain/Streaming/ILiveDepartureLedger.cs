@@ -11,7 +11,12 @@ public interface ILiveDepartureLedger
 
 public sealed record LiveDepartureCount
 {
-    public LiveDepartureCount(LiveDeparture departure, long times, DateTime? lastAt)
+    public LiveDepartureCount(
+        LiveDeparture departure,
+        long times,
+        DateTime? lastAt,
+        TimeSpan? shortest = null,
+        TimeSpan? longest = null)
     {
         if (!Enum.IsDefined(departure))
         {
@@ -31,9 +36,30 @@ public sealed record LiveDepartureCount
                 nameof(lastAt));
         }
 
+        if ((times is 0) != (shortest is null) || (times is 0) != (longest is null))
+        {
+            throw new ArgumentException(
+                "A way a wire has ended says how long the shortest and the longest of them lasted.",
+                nameof(shortest));
+        }
+
+        if (shortest is { } least && longest is { } most)
+        {
+            ArgumentOutOfRangeException.ThrowIfLessThan(least, TimeSpan.Zero, nameof(shortest));
+
+            if (most < least)
+            {
+                throw new ArgumentException(
+                    "The longest a wire lasted is not shorter than the shortest.",
+                    nameof(longest));
+            }
+        }
+
         Departure = departure;
         Times = times;
         LastAt = lastAt;
+        Shortest = shortest;
+        Longest = longest;
     }
 
     public LiveDeparture Departure { get; }
@@ -41,6 +67,10 @@ public sealed record LiveDepartureCount
     public long Times { get; }
 
     public DateTime? LastAt { get; }
+
+    public TimeSpan? Shortest { get; }
+
+    public TimeSpan? Longest { get; }
 }
 
 public sealed record LiveDepartureTally

@@ -29,7 +29,12 @@ public sealed class LiveDepartureEndpointTests
     {
         await using LiveFeature feature = new();
 
-        feature.Departures.Counted(LiveDeparture.ViewerStoppedReading, 7L, LiveFeature.At.AddMinutes(20));
+        feature.Departures.Counted(
+            LiveDeparture.ViewerStoppedReading,
+            7L,
+            LiveFeature.At.AddMinutes(20),
+            TimeSpan.FromSeconds(3.25),
+            TimeSpan.FromMinutes(20));
 
         (_, JsonDocument body) = await feature.GetAsync("/api/live/departures");
 
@@ -37,6 +42,8 @@ public sealed class LiveDepartureEndpointTests
 
         Assert.Equal(7L, counted.GetProperty("times").GetInt64());
         Assert.Equal(LiveFeature.At.AddMinutes(20), counted.GetProperty("lastAt").GetDateTime());
+        Assert.Equal(3.25, counted.GetProperty("shortestSeconds").GetDouble());
+        Assert.Equal(1_200, counted.GetProperty("longestSeconds").GetDouble());
     }
 
     [Fact]
@@ -44,11 +51,20 @@ public sealed class LiveDepartureEndpointTests
     {
         await using LiveFeature feature = new();
 
-        feature.Departures.Counted(LiveDeparture.ViewerLeft, 1L, LiveFeature.At);
+        feature.Departures.Counted(
+            LiveDeparture.ViewerLeft,
+            1L,
+            LiveFeature.At,
+            TimeSpan.FromSeconds(1),
+            TimeSpan.FromSeconds(1));
 
         (_, JsonDocument body) = await feature.GetAsync("/api/live/departures");
 
-        Assert.Equal(JsonValueKind.Null, Named(body, LiveDeparture.SourceBroke).GetProperty("lastAt").ValueKind);
+        JsonElement never = Named(body, LiveDeparture.SourceBroke);
+
+        Assert.Equal(JsonValueKind.Null, never.GetProperty("lastAt").ValueKind);
+        Assert.Equal(JsonValueKind.Null, never.GetProperty("shortestSeconds").ValueKind);
+        Assert.Equal(JsonValueKind.Null, never.GetProperty("longestSeconds").ValueKind);
     }
 
     [Fact]
@@ -74,7 +90,7 @@ public sealed class LiveDepartureEndpointTests
             ["since", "departures"],
             tally.EnumerateObject().Select(field => field.Name));
         Assert.Equal(
-            ["departure", "times", "lastAt"],
+            ["departure", "times", "lastAt", "shortestSeconds", "longestSeconds"],
             tally.GetProperty("departures")[0].EnumerateObject().Select(field => field.Name));
     }
 

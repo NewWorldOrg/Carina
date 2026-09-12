@@ -35,12 +35,17 @@ internal sealed class HeldDepartures : ILiveDepartureLedger
 
     public LiveDepartureTally Read() => Tally;
 
-    public void Counted(LiveDeparture departure, long times, DateTime? lastAt)
+    public void Counted(
+        LiveDeparture departure,
+        long times,
+        DateTime? lastAt,
+        TimeSpan? shortest = null,
+        TimeSpan? longest = null)
         => Tally = new LiveDepartureTally(
             Tally.Since,
             [
                 .. Tally.Counted.Select(counted => counted.Departure == departure
-                    ? new LiveDepartureCount(departure, times, lastAt)
+                    ? new LiveDepartureCount(departure, times, lastAt, shortest, longest)
                     : counted),
             ]);
 }

@@ -401,8 +401,7 @@ public sealed class LiveWireTests
 
         await Take(socket);
         await Heard(socket);
-
-        Assert.Equal(0L, Everything(probe));
+        await Stays(() => Everything(probe) is 0L);
     }
 
     private static long Counted(AuthProbe probe, LiveDeparture departure)
@@ -460,6 +459,16 @@ public sealed class LiveWireTests
         return framing.Frame!;
     }
 
+    private static async Task Stays(Func<bool> so)
+    {
+        for (int tries = 0; tries < 40; tries++)
+        {
+            Assert.True(so(), "What was to stay as it was did not.");
+
+            await Task.Delay(25);
+        }
+    }
+
     private static async Task Until(Func<bool> settled)
     {
         for (int tries = 0; tries < 200; tries++)
@@ -480,35 +489,5 @@ public sealed class LiveWireTests
         byte[] heard = new byte[64 * 1024];
 
         return await socket.ReceiveAsync(new ArraySegment<byte>(heard), Patiently());
-    }
-
-    private sealed class SeatingAt(ILiveWireSource source) : ILiveSessionManager
-    {
-        private readonly Lock gate = new();
-
-        private readonly List<LiveSessionKey> asked = [];
-
-        public IReadOnlyList<LiveSessionKey> Asked
-        {
-            get
-            {
-                lock (gate)
-                {
-                    return [.. asked];
-                }
-            }
-        }
-
-        public async Task<LiveJoin> JoinAsync(LiveSessionKey key, CancellationToken cancellationToken)
-        {
-            lock (gate)
-            {
-                asked.Add(key);
-            }
-
-            return await source.JoinAsync(cancellationToken) is { } viewing
-                ? LiveJoin.Joined(viewing)
-                : LiveJoin.Refused(LiveRefusal.TranscoderWouldNotStart, "what was being sent ended before a viewer could be seated.");
-        }
     }
 }

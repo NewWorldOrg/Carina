@@ -25,6 +25,8 @@ public sealed class LiveDepartureLedgerTests
         Assert.Equal(Enum.GetValues<LiveDeparture>(), tally.Counted.Select(counted => counted.Departure));
         Assert.All(tally.Counted, counted => Assert.Equal(0L, counted.Times));
         Assert.All(tally.Counted, counted => Assert.Null(counted.LastAt));
+        Assert.All(tally.Counted, counted => Assert.Null(counted.Shortest));
+        Assert.All(tally.Counted, counted => Assert.Null(counted.Longest));
         Assert.Equal(Opened.UtcDateTime, tally.Since);
     }
 
@@ -55,6 +57,57 @@ public sealed class LiveDepartureLedgerTests
 
         Assert.Equal(2L, left.Times);
         Assert.Equal(Opened.UtcDateTime.AddMinutes(20), left.LastAt);
+    }
+
+    [Fact]
+    public void HowLongTheShortestAndTheLongestWireOfAWayLastedAreBothKept()
+    {
+        LiveDepartureLedger ledger = new(new HandTurnedClock(Opened), NullLogger<LiveDepartureLedger>.Instance);
+
+        ledger.Note(Watched, LiveDeparture.ViewerStoppedReading, TimeSpan.FromMinutes(20));
+        ledger.Note(Watched, LiveDeparture.ViewerStoppedReading, TimeSpan.FromSeconds(3));
+        ledger.Note(Watched, LiveDeparture.ViewerStoppedReading, TimeSpan.FromMinutes(19));
+
+        LiveDepartureCount counted = Counted(ledger, LiveDeparture.ViewerStoppedReading);
+
+        Assert.Equal(TimeSpan.FromSeconds(3), counted.Shortest);
+        Assert.Equal(TimeSpan.FromMinutes(20), counted.Longest);
+    }
+
+    [Fact]
+    public void OneWireOfAWayIsBothTheShortestAndTheLongestOfIt()
+    {
+        LiveDepartureLedger ledger = new(new HandTurnedClock(Opened), NullLogger<LiveDepartureLedger>.Instance);
+
+        ledger.Note(Watched, LiveDeparture.SourceWentQuiet, TimeSpan.FromMinutes(20));
+
+        LiveDepartureCount counted = Counted(ledger, LiveDeparture.SourceWentQuiet);
+
+        Assert.Equal(TimeSpan.FromMinutes(20), counted.Shortest);
+        Assert.Equal(TimeSpan.FromMinutes(20), counted.Longest);
+        Assert.Null(Counted(ledger, LiveDeparture.ViewerLeft).Shortest);
+    }
+
+    [Fact]
+    public void HowLongAWireLastedIsKeptApartByTheWayItEnded()
+    {
+        LiveDepartureLedger ledger = new(new HandTurnedClock(Opened), NullLogger<LiveDepartureLedger>.Instance);
+
+        ledger.Note(Watched, LiveDeparture.ViewerLeft, TimeSpan.FromSeconds(3));
+        ledger.Note(Watched, LiveDeparture.SourceWentQuiet, TimeSpan.FromMinutes(20));
+
+        Assert.Equal(TimeSpan.FromSeconds(3), Counted(ledger, LiveDeparture.ViewerLeft).Longest);
+        Assert.Equal(TimeSpan.FromMinutes(20), Counted(ledger, LiveDeparture.SourceWentQuiet).Shortest);
+    }
+
+    [Fact]
+    public void AWireThatLastedLessThanNoTimeIsRefusedRatherThanCounted()
+    {
+        LiveDepartureLedger ledger = new(new HandTurnedClock(Opened), NullLogger<LiveDepartureLedger>.Instance);
+
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => ledger.Note(Watched, LiveDeparture.ViewerLeft, TimeSpan.FromSeconds(-1)));
+        Assert.Equal(0L, Counted(ledger, LiveDeparture.ViewerLeft).Times);
     }
 
     [Fact]

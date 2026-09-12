@@ -14,6 +14,10 @@ public sealed class LiveDepartureLedger : ILiveDepartureLedger
 
     private readonly DateTime?[] lastAt = new DateTime?[Ways.Length];
 
+    private readonly TimeSpan?[] shortest = new TimeSpan?[Ways.Length];
+
+    private readonly TimeSpan?[] longest = new TimeSpan?[Ways.Length];
+
     private readonly TimeProvider clock;
 
     private readonly ILogger<LiveDepartureLedger> logger;
@@ -44,10 +48,14 @@ public sealed class LiveDepartureLedger : ILiveDepartureLedger
                 "A wire ends in one of the ways named here.");
         }
 
+        ArgumentOutOfRangeException.ThrowIfLessThan(carried, TimeSpan.Zero);
+
         lock (gate)
         {
             times[at]++;
             lastAt[at] = clock.GetUtcNow().UtcDateTime;
+            shortest[at] = shortest[at] is { } least && least < carried ? least : carried;
+            longest[at] = longest[at] is { } most && most > carried ? most : carried;
         }
 
         logger.LogInformation(
@@ -63,7 +71,14 @@ public sealed class LiveDepartureLedger : ILiveDepartureLedger
         {
             return new LiveDepartureTally(
                 since,
-                [.. Ways.Select((way, at) => new LiveDepartureCount(way, times[at], lastAt[at]))]);
+                [
+                    .. Ways.Select((way, at) => new LiveDepartureCount(
+                        way,
+                        times[at],
+                        lastAt[at],
+                        shortest[at],
+                        longest[at])),
+                ]);
         }
     }
 }
