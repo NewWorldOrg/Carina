@@ -13,12 +13,14 @@ public static class LiveWire
     public static async Task Invoke(
         HttpContext context,
         ILiveSessionManager sessions,
+        ILiveDepartureLedger departures,
         LiveWireSettings settings,
         IHostApplicationLifetime running,
         TimeProvider clock)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(sessions);
+        ArgumentNullException.ThrowIfNull(departures);
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(running);
         ArgumentNullException.ThrowIfNull(clock);
@@ -65,10 +67,22 @@ public static class LiveWire
         {
             using WebSocket socket = await context.WebSockets.AcceptWebSocketAsync();
 
-            await new LiveWireSocket(socket, settings, viewing.Startup, viewing.Ending, clock).CarryAsync(
-                viewing.Frames,
-                running.ApplicationStopping,
-                context.RequestAborted);
+            long opened = clock.GetTimestamp();
+            LiveDeparture departure = LiveDeparture.SourceBroke;
+
+            try
+            {
+                departure = await new LiveWireSocket(
+                    socket,
+                    settings,
+                    viewing.Startup,
+                    viewing.Ending,
+                    clock).CarryAsync(viewing.Frames, running.ApplicationStopping, context.RequestAborted);
+            }
+            finally
+            {
+                departures.Note(key, departure, clock.GetElapsedTime(opened));
+            }
         }
     }
 

@@ -25,6 +25,7 @@ public sealed class LiveService(
     IBroadcastServiceRepository services,
     ICandidateChannelRepository candidates,
     ILiveSessionLedger sessions,
+    ILiveDepartureLedger departures,
     IPlaybackTicketStore tickets,
     ILiveEncoderSelector encoders)
 {
@@ -68,6 +69,9 @@ public sealed class LiveService(
             .. (await sessions.RunningAsync(cancellationToken))
                 .OrderBy(session => session.Key.ToString(), StringComparer.Ordinal),
         ]);
+
+    public ServiceResult<LiveDepartureTally> ReadDepartures()
+        => ServiceResult<LiveDepartureTally>.Success(departures.Read());
 
     public async Task<ServiceResult<IssuedPlaybackTicket, LiveTicketRefusal>> IssueTicketAsync(
         NetworkId network,

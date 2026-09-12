@@ -1,8 +1,8 @@
-using System.Net.WebSockets;
 using System.Threading.Channels;
 
 using Carina.Api.Live;
 using Carina.Domain.Streaming;
+using Carina.Infrastructure.Streaming;
 
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -12,28 +12,38 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Carina.Api.Tests.FeatureTest;
 
 internal sealed class LiveKestrelHost : IAsyncDisposable
 {
+    private const string Handshake = "?network=32736&service=1024&profile=720p30";
+
     private readonly WebApplication app;
 
-    private readonly ILiveWireSource source;
+    private readonly SeatingAt seating;
 
     private readonly LiveWireSettings settings;
 
     private readonly Channel<LiveDeparture> departures = Channel.CreateUnbounded<LiveDeparture>();
 
+    private readonly NotedInto noted;
+
     private LiveKestrelHost(WebApplication app, ILiveWireSource source, LiveWireSettings settings)
     {
         this.app = app;
-        this.source = source;
         this.settings = settings;
-        Wire = new Uri("ws://localhost" + LiveWire.Path);
+        seating = new SeatingAt(source);
+        noted = new NotedInto(
+            departures,
+            new LiveDepartureLedger(TimeProvider.System, NullLogger<LiveDepartureLedger>.Instance));
+        Wire = new Uri("ws://localhost" + LiveWire.Path + Handshake);
     }
 
     public Uri Wire { get; private set; }
+
+    public LiveDepartureTally Tally => noted.Read();
 
     public static async Task<LiveKestrelHost> StartAsync(ILiveWireSource source, LiveWireSettings? settings = null)
     {
@@ -64,36 +74,8 @@ internal sealed class LiveKestrelHost : IAsyncDisposable
         await app.DisposeAsync();
     }
 
-    private async Task CarryAsync(HttpContext context)
-    {
-        if (!context.WebSockets.IsWebSocketRequest)
-        {
-            context.Response.StatusCode = StatusCodes.Status400BadRequest;
-
-            return;
-        }
-
-        ILiveViewing? viewing = await source.JoinAsync(context.RequestAborted);
-
-        if (viewing is null)
-        {
-            context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
-
-            return;
-        }
-
-        await using (viewing)
-        {
-            using WebSocket socket = await context.WebSockets.AcceptWebSocketAsync();
-
-            LiveDeparture departure = await new LiveWireSocket(socket, settings).CarryAsync(
-                viewing.Frames,
-                CancellationToken.None,
-                context.RequestAborted);
-
-            departures.Writer.TryWrite(departure);
-        }
-    }
+    private Task CarryAsync(HttpContext context)
+        => LiveWire.Invoke(context, seating, noted, settings, app.Lifetime, TimeProvider.System);
 
     private Uri ResolveWire()
     {
@@ -106,6 +88,17 @@ internal sealed class LiveKestrelHost : IAsyncDisposable
 
         var http = new Uri(address);
 
-        return new Uri($"ws://{http.Host}:{http.Port}{LiveWire.Path}");
+        return new Uri($"ws://{http.Host}:{http.Port}{LiveWire.Path}{Handshake}");
+    }
+
+    private sealed class NotedInto(Channel<LiveDeparture> departures, ILiveDepartureLedger kept) : ILiveDepartureLedger
+    {
+        public void Note(LiveSessionKey key, LiveDeparture departure, TimeSpan carried)
+        {
+            kept.Note(key, departure, carried);
+            departures.Writer.TryWrite(departure);
+        }
+
+        public LiveDepartureTally Read() => kept.Read();
     }
 }

@@ -31,6 +31,8 @@ internal sealed class ScriptedWebSocket : WebSocket
 
     public TimeSpan HoldEverySend { get; set; } = TimeSpan.Zero;
 
+    public Exception? ReceiveThrows { get; set; }
+
     public IReadOnlyList<byte[]> Sent
     {
         get
@@ -76,6 +78,11 @@ internal sealed class ScriptedWebSocket : WebSocket
         ArraySegment<byte> buffer,
         CancellationToken cancellationToken)
     {
+        if (ReceiveThrows is { } refused)
+        {
+            throw refused;
+        }
+
         WebSocketSaying saying;
 
         try

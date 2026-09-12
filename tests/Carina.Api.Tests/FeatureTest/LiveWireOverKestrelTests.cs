@@ -49,6 +49,11 @@ public sealed class LiveWireOverKestrelTests
         Assert.Equal(WebSocketCloseStatus.NormalClosure, client.CloseStatus);
         Assert.Equal(LiveDepartures.Because(LiveDeparture.SourceEnded), client.CloseStatusDescription);
         Assert.Equal(LiveDeparture.SourceEnded, await host.DepartureAsync(Patiently()));
+        Assert.Equal(
+            1L,
+            host.Tally.Counted.Single(counted => counted.Departure == LiveDeparture.SourceEnded).Times);
+        Assert.NotNull(
+            host.Tally.Counted.Single(counted => counted.Departure == LiveDeparture.SourceEnded).Longest);
     }
 
     private static async Task<WebSocketReceiveResult> ReadUntilClose(ClientWebSocket client)

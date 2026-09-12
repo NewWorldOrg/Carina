@@ -83,13 +83,18 @@ public sealed class LiveWireSocket(
             {
             }
         }
-        catch (Exception gone)
-            when (gone is OperationCanceledException or WebSocketException or IOException
-                      or ObjectDisposedException or InvalidOperationException)
+        catch (Exception gone) when (TheWireIsGone(gone))
         {
             socket.Abort();
         }
     }
+
+    private static bool TheWireIsGone(Exception gone)
+        => gone is OperationCanceledException
+            or WebSocketException
+            or IOException
+            or ObjectDisposedException
+            or InvalidOperationException;
 
     private static async Task Swallow(Task running)
     {
@@ -97,7 +102,7 @@ public sealed class LiveWireSocket(
         {
             await running;
         }
-        catch (Exception gone) when (gone is OperationCanceledException or WebSocketException or IOException)
+        catch (Exception gone) when (TheWireIsGone(gone))
         {
         }
     }
@@ -118,7 +123,7 @@ public sealed class LiveWireSocket(
                 }
             }
         }
-        catch (Exception gone) when (gone is OperationCanceledException or WebSocketException or IOException)
+        catch (Exception gone) when (TheWireIsGone(gone))
         {
             return LiveDeparture.ViewerLeft;
         }
@@ -241,8 +246,7 @@ public sealed class LiveWireSocket(
         {
             await SayWhyItEnded(departure, cancellationToken);
         }
-        catch (Exception gone)
-            when (gone is OperationCanceledException or WebSocketException or IOException or ViewerTooSlow)
+        catch (Exception gone) when (TheWireIsGone(gone) || gone is ViewerTooSlow)
         {
         }
     }
@@ -364,9 +368,7 @@ public sealed class LiveWireSocket(
                 await drain.WaitAsync(patience.Token);
             }
         }
-        catch (Exception gone)
-            when (gone is OperationCanceledException or WebSocketException or IOException
-                      or ObjectDisposedException or InvalidOperationException)
+        catch (Exception gone) when (TheWireIsGone(gone))
         {
             socket.Abort();
         }

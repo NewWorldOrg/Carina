@@ -336,6 +336,82 @@ public sealed class LiveWireTests
             Seating(probe).Asked);
     }
 
+    [Fact]
+    public async Task AWireThatAViewerLeftIsCountedAsTheViewerLeaving()
+    {
+        var held = new HeldLiveSource();
+        await using AuthProbe probe = Wiring(held);
+        string cookie = await probe.SignedInCookieAsync();
+
+        using WebSocket socket = await Carrying(probe, cookie).ConnectAsync(Handshake, Patiently());
+
+        Assert.Equal(0L, Everything(probe));
+
+        await Say(socket, LiveControl.Leaving);
+        await Heard(socket);
+        await Until(() => Counted(probe, LiveDeparture.ViewerLeft) is 1L);
+
+        Assert.Equal(1L, Everything(probe));
+    }
+
+    [Fact]
+    public async Task AWireEndedByWhatTheViewerSaidIsCountedUnderThatAndNotUnderLeaving()
+    {
+        var held = new HeldLiveSource();
+        await using AuthProbe probe = Wiring(held);
+        string cookie = await probe.SignedInCookieAsync();
+
+        using WebSocket socket = await Carrying(probe, cookie).ConnectAsync(Handshake, Patiently());
+
+        await socket.SendAsync("seek 42"u8.ToArray(), WebSocketMessageType.Text, true, Patiently());
+        await Heard(socket);
+        await Until(() => Counted(probe, LiveDeparture.SaidSomethingUnknown) is 1L);
+
+        Assert.Equal(0L, Counted(probe, LiveDeparture.ViewerLeft));
+    }
+
+    [Fact]
+    public async Task AWireEndedBecauseTheSourceRanOutIsCountedAsTheSourceEnding()
+    {
+        var held = new HeldLiveSource();
+        await using AuthProbe probe = Wiring(held);
+        string cookie = await probe.SignedInCookieAsync();
+
+        using WebSocket socket = await Carrying(probe, cookie).ConnectAsync(Handshake, Patiently());
+
+        held.NoMore();
+
+        await Take(socket);
+        await Heard(socket);
+        await Until(() => Counted(probe, LiveDeparture.SourceEnded) is 1L);
+
+        Assert.Equal(1L, Everything(probe));
+    }
+
+    [Fact]
+    public async Task AWireThatWasNeverSeatedIsNotCountedAsHavingEnded()
+    {
+        LiveFanout fanout = new(new LiveFanoutSettings());
+        await using AuthProbe probe = Wiring(fanout);
+        string cookie = await probe.SignedInCookieAsync();
+
+        fanout.End();
+
+        using WebSocket socket = await Carrying(probe, cookie).ConnectAsync(Handshake, Patiently());
+
+        await Take(socket);
+        await Heard(socket);
+        await Stays(() => Everything(probe) is 0L);
+    }
+
+    private static long Counted(AuthProbe probe, LiveDeparture departure)
+        => Departures(probe).Counted.Single(counted => counted.Departure == departure).Times;
+
+    private static long Everything(AuthProbe probe) => Departures(probe).Counted.Sum(counted => counted.Times);
+
+    private static LiveDepartureTally Departures(AuthProbe probe)
+        => probe.Wired.Services.GetRequiredService<ILiveDepartureLedger>().Read();
+
     private static CancellationToken Patiently() => new CancellationTokenSource(TimeSpan.FromSeconds(20)).Token;
 
     private static AuthProbe Wiring(ILiveWireSource source, LiveWireSettings? settings = null)
@@ -383,6 +459,16 @@ public sealed class LiveWireTests
         return framing.Frame!;
     }
 
+    private static async Task Stays(Func<bool> so)
+    {
+        for (int tries = 0; tries < 40; tries++)
+        {
+            Assert.True(so(), "What was to stay as it was did not.");
+
+            await Task.Delay(25);
+        }
+    }
+
     private static async Task Until(Func<bool> settled)
     {
         for (int tries = 0; tries < 200; tries++)
@@ -403,35 +489,5 @@ public sealed class LiveWireTests
         byte[] heard = new byte[64 * 1024];
 
         return await socket.ReceiveAsync(new ArraySegment<byte>(heard), Patiently());
-    }
-
-    private sealed class SeatingAt(ILiveWireSource source) : ILiveSessionManager
-    {
-        private readonly Lock gate = new();
-
-        private readonly List<LiveSessionKey> asked = [];
-
-        public IReadOnlyList<LiveSessionKey> Asked
-        {
-            get
-            {
-                lock (gate)
-                {
-                    return [.. asked];
-                }
-            }
-        }
-
-        public async Task<LiveJoin> JoinAsync(LiveSessionKey key, CancellationToken cancellationToken)
-        {
-            lock (gate)
-            {
-                asked.Add(key);
-            }
-
-            return await source.JoinAsync(cancellationToken) is { } viewing
-                ? LiveJoin.Joined(viewing)
-                : LiveJoin.Refused(LiveRefusal.TranscoderWouldNotStart, "what was being sent ended before a viewer could be seated.");
-        }
     }
 }

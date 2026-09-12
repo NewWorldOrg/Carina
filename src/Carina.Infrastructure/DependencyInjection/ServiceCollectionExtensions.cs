@@ -246,6 +246,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<LiveSessionManager>();
         services.TryAddSingleton<ILiveSessionManager>(provider => provider.GetRequiredService<LiveSessionManager>());
         services.TryAddSingleton<ILiveSessionLedger>(provider => provider.GetRequiredService<LiveSessionManager>());
+        services.TryAddSingleton<ILiveDepartureLedger, LiveDepartureLedger>();
         services.TryAddSingleton<IStreamAttributeReader, FfprobeStreamAttributeReader>();
         services.TryAddSingleton(new MachineSettings());
         services.TryAddSingleton<QualitySignalSettings>(provider =>

@@ -23,6 +23,33 @@ internal sealed class HeldLiveLedger : ILiveSessionLedger
         => Task.FromResult<IReadOnlyList<LiveSessionView>>([.. Sessions]);
 }
 
+internal sealed class HeldDepartures : ILiveDepartureLedger
+{
+    public LiveDepartureTally Tally { get; set; } = new(
+        LiveFeature.At,
+        [.. Enum.GetValues<LiveDeparture>().Select(departure => new LiveDepartureCount(departure, 0L, null))]);
+
+    public void Note(LiveSessionKey key, LiveDeparture departure, TimeSpan carried)
+    {
+    }
+
+    public LiveDepartureTally Read() => Tally;
+
+    public void Counted(
+        LiveDeparture departure,
+        long times,
+        DateTime? lastAt,
+        TimeSpan? shortest = null,
+        TimeSpan? longest = null)
+        => Tally = new LiveDepartureTally(
+            Tally.Since,
+            [
+                .. Tally.Counted.Select(counted => counted.Departure == departure
+                    ? new LiveDepartureCount(departure, times, lastAt, shortest, longest)
+                    : counted),
+            ]);
+}
+
 internal sealed class AlreadyChosen(LiveEncoder encoder) : ILiveEncoderSelector
 {
     public Task<LiveEncoderChoice> ChooseAsync(CancellationToken cancellationToken)
@@ -45,6 +72,7 @@ internal sealed class LiveFeature : IAsyncDisposable
                 services.AddSingleton<ILiveSessionLedger>(Ledger);
                 services.AddSingleton<IPlaybackTicketStore>(Tickets);
                 services.AddSingleton<ILiveEncoderSelector>(new AlreadyChosen(encoder));
+                services.AddSingleton<ILiveDepartureLedger>(Departures);
             }));
 
         Client = configured.CreateAuthenticatedClient();
@@ -62,6 +90,8 @@ internal sealed class LiveFeature : IAsyncDisposable
     public HeldLiveLedger Ledger { get; } = new();
 
     public HeldPlaybackTickets Tickets { get; } = new();
+
+    public HeldDepartures Departures { get; } = new();
 
     public BroadcastService Seed(
         int serviceId,
@@ -168,6 +198,7 @@ public sealed class LiveEndpointTests
     [InlineData("GET", "/api/live/channels")]
     [InlineData("GET", "/api/live/profiles")]
     [InlineData("GET", "/api/live/sessions")]
+    [InlineData("GET", "/api/live/departures")]
     [InlineData("POST", "/api/live/ticket")]
     public async Task EveryLiveSurfaceRefusesACallerCarryingNoCredentialsWithoutABodyAndWithoutRedirecting(string method, string path)
     {
