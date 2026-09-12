@@ -29,6 +29,8 @@ internal sealed class ScriptedWebSocket : WebSocket
 
     public bool Aborted { get; private set; }
 
+    public bool CloseAttempted { get; private set; }
+
     public TimeSpan HoldEverySend { get; set; } = TimeSpan.Zero;
 
     public IReadOnlyList<byte[]> Sent
@@ -57,17 +59,24 @@ internal sealed class ScriptedWebSocket : WebSocket
         CancellationToken cancellationToken)
         => CloseOutputAsync(closeStatus, statusDescription, cancellationToken);
 
-    public override Task CloseOutputAsync(
+    public override async Task CloseOutputAsync(
         WebSocketCloseStatus closeStatus,
         string? statusDescription,
         CancellationToken cancellationToken)
     {
+        CloseAttempted = true;
+
+        if (HoldEverySend > TimeSpan.Zero)
+        {
+            await Task.Delay(HoldEverySend, cancellationToken);
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+
         Closed = closeStatus;
         ClosedBecause = statusDescription;
         state = WebSocketState.Closed;
         incoming.Writer.TryWrite(new WebSocketSaying(WebSocketMessageType.Close, []));
-
-        return Task.CompletedTask;
     }
 
     public override void Dispose() => incoming.Writer.TryComplete();
