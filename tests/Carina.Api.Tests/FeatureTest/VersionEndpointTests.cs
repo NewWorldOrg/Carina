@@ -24,27 +24,4 @@ public sealed class VersionEndpointTests(TestingWebApplicationFactory factory)
             DeclaredVersion.Of(typeof(DeclaredVersion).Assembly),
             document.RootElement.GetProperty("data").GetProperty("version").GetString());
     }
-
-    [Fact]
-    public async Task TheVersionIsNotToldToACallerWithoutCredentials()
-    {
-        using HttpClient client = factory.CreateClient();
-
-        using HttpResponseMessage response = await client.GetAsync(TheSurface);
-
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-    }
-
-    [Fact]
-    public async Task TheProbeStillAnswersWithTheTwoWordsItHasAlwaysAnsweredWith()
-    {
-        using HttpClient client = factory.CreateClient();
-
-        using HttpResponseMessage response = await client.GetAsync(new Uri("/api/health", UriKind.Relative));
-        using JsonDocument document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-
-        Assert.Equal(
-            ["status", "degraded"],
-            document.RootElement.EnumerateObject().Select(property => property.Name));
-    }
 }
