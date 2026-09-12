@@ -29,6 +29,8 @@ internal sealed class ScriptedWebSocket : WebSocket
 
     public bool Aborted { get; private set; }
 
+    public bool CloseAttempted { get; private set; }
+
     public TimeSpan HoldEverySend { get; set; } = TimeSpan.Zero;
 
     public Exception? ReceiveThrows { get; set; }
@@ -59,17 +61,26 @@ internal sealed class ScriptedWebSocket : WebSocket
         CancellationToken cancellationToken)
         => CloseOutputAsync(closeStatus, statusDescription, cancellationToken);
 
-    public override Task CloseOutputAsync(
+    public override async Task CloseOutputAsync(
         WebSocketCloseStatus closeStatus,
         string? statusDescription,
         CancellationToken cancellationToken)
     {
+        CloseAttempted = true;
+
+        ThrowIfTheWireIsNoLongerOpen();
+
+        if (HoldEverySend > TimeSpan.Zero)
+        {
+            await Task.Delay(HoldEverySend, cancellationToken);
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+
         Closed = closeStatus;
         ClosedBecause = statusDescription;
-        state = WebSocketState.Closed;
+        state = WebSocketState.CloseSent;
         incoming.Writer.TryWrite(new WebSocketSaying(WebSocketMessageType.Close, []));
-
-        return Task.CompletedTask;
     }
 
     public override void Dispose() => incoming.Writer.TryComplete();
@@ -117,6 +128,8 @@ internal sealed class ScriptedWebSocket : WebSocket
         bool endOfMessage,
         CancellationToken cancellationToken)
     {
+        ThrowIfTheWireIsNoLongerOpen();
+
         if (HoldEverySend > TimeSpan.Zero)
         {
             await Task.Delay(HoldEverySend, cancellationToken);
@@ -128,5 +141,17 @@ internal sealed class ScriptedWebSocket : WebSocket
         {
             sent.Add([.. buffer.AsSpan()]);
         }
+    }
+
+    private void ThrowIfTheWireIsNoLongerOpen()
+    {
+        if (state is WebSocketState.Open or WebSocketState.CloseReceived)
+        {
+            return;
+        }
+
+        throw new WebSocketException(
+            WebSocketError.InvalidState,
+            $"The WebSocket is in the '{state}' state and takes nothing more.");
     }
 }

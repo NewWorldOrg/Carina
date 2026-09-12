@@ -29,6 +29,11 @@ public sealed class LiveWireOverKestrelTests
         LiveDeparture departure = await host.DepartureAsync(Patiently());
 
         Assert.Equal(LiveDeparture.ViewerStoppedReading, departure);
+
+        WebSocketException cut = await Assert.ThrowsAsync<WebSocketException>(() => ReadUntilClose(client));
+
+        Assert.Equal(WebSocketError.ConnectionClosedPrematurely, cut.WebSocketErrorCode);
+        Assert.Null(client.CloseStatus);
     }
 
     [Fact]

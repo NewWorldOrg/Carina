@@ -59,6 +59,7 @@ public sealed class LiveWireSocketTests
         frames.Writer.Complete();
 
         Assert.Equal(LiveDeparture.SourceEnded, await Carry(socket, frames));
+        Assert.True(socket.CloseAttempted);
         Assert.Equal(WebSocketCloseStatus.NormalClosure, socket.Closed);
     }
 
@@ -286,6 +287,8 @@ public sealed class LiveWireSocketTests
 
         Assert.Equal(LiveDeparture.ViewerStoppedReading, await Carry(socket, frames));
         Assert.True(socket.Aborted);
+        Assert.False(socket.CloseAttempted);
+        Assert.Null(socket.Closed);
     }
 
     [Fact]
