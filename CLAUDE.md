@@ -128,6 +128,11 @@ nothing.
   a directory of its own. One call throws away one recording; there is no call that
   throws away more than one.
 
+- **The version is declared once, in `Directory.Build.props`,** so every assembly
+  built from this repository carries the same one. The application answers with
+  what it was built as rather than with a string written down beside it, and a
+  test holds the two together.
+
 - **The driver asks nobody who they are.** The gate is the socket's permissions
   and owning group, and adding authentication would mean putting a secret in the
   privileged process. Only the app process holds secrets; the driver holds none,
