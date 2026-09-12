@@ -97,7 +97,8 @@ public sealed class LiveWireSocket(
         {
             await running;
         }
-        catch (Exception gone) when (gone is OperationCanceledException or WebSocketException or IOException)
+        catch (Exception gone)
+            when (gone is OperationCanceledException or WebSocketException or IOException or ObjectDisposedException)
         {
         }
     }

@@ -79,10 +79,11 @@ app.MapGet(
         LiveWire.Path,
         (HttpContext context,
             ILiveSessionManager sessions,
+            ILiveDepartureLedger departures,
             LiveWireSettings settings,
             IHostApplicationLifetime running,
             TimeProvider clock) =>
-            LiveWire.Invoke(context, sessions, settings, running, clock))
+            LiveWire.Invoke(context, sessions, departures, settings, running, clock))
     .ExcludeFromDescription()
     .WithEffect(EndpointEffect.Reading);
 
