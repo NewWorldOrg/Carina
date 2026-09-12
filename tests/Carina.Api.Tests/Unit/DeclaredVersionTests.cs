@@ -38,7 +38,7 @@ public sealed class DeclaredVersionTests
     }
 
     [Fact]
-    public void EveryProcessBuiltFromThisRepositoryCarriesTheSameVersion()
+    public void EveryAssemblyTheApplicationIsBuiltFromCarriesTheSameVersion()
     {
         Assembly[] built =
         [
