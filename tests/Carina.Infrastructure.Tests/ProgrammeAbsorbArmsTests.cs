@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Infrastructure.Persistence;
@@ -109,6 +110,18 @@ public sealed class ProgrammeAbsorbArmsTests(RepositoryDatabase database)
         ["subtitles that went away"] = new(
             network => [Broadcast(network) with { HasSubtitles = true }],
             network => [Broadcast(network)]),
+        ["a picture that arrives undetermined for one already known"] = new(
+            network => [Broadcast(network) with { Video = VideoMode.Interlaced1080, Aspect = AspectRatio.SixteenByNine }],
+            network => [Broadcast(network)]),
+        ["a picture for a programme that had none"] = new(
+            network => [Broadcast(network)],
+            network => [Broadcast(network) with { Video = VideoMode.Progressive720, Aspect = AspectRatio.SixteenByNine }]),
+        ["a sound that arrives undetermined for one already known"] = new(
+            network => [Broadcast(network) with { Audio = AudioMode.Stereo, Sounds = 2 }],
+            network => [Broadcast(network)]),
+        ["a sound for a programme that had none"] = new(
+            network => [Broadcast(network)],
+            network => [Broadcast(network) with { Audio = AudioMode.DualMono, Sounds = 1 }]),
         ["a source that changed"] = new(
             network => [Broadcast(network)],
             network => [Broadcast(network) with { Source = ProgrammeSource.PresentFollowing }]),
@@ -185,6 +198,10 @@ public sealed class ProgrammeAbsorbArmsTests(RepositoryDatabase database)
                     string.Join(",", programme.Items),
                     string.Join(",", programme.Related),
                     programme.HasSubtitles,
+                    programme.Audio,
+                    programme.Sounds,
+                    programme.Video,
+                    programme.Aspect,
                     programme.Source,
                     programme.UpdatedAt.ToString("O"))),
         ];
