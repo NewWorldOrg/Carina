@@ -113,6 +113,58 @@ public sealed class FfmpegEncodeInvocationTests
                 HeadSkip,
                 TwoLanguagesOnOneSound));
 
+    [Fact(DisplayName = "BR-PD-008: the card puts the main language in both ears exactly as the processor does, because the real machine encodes on the card")]
+    public void TheArgumentsForTwoLanguagesOnOneSoundOnTheCardAreExactlyThese()
+        => Assert.Equal(
+            [
+                "-nostdin",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-nostats",
+                "-progress",
+                "pipe:1",
+                "-y",
+                "-filter_threads",
+                "2",
+                "-vaapi_device",
+                FfmpegEncodeInvocation.RenderNode,
+                "-threads",
+                "2",
+                "-i",
+                Source,
+                "-ss",
+                "0.5072",
+                "-map",
+                "p:1040:v:0",
+                "-map",
+                "p:1040:a:0",
+                "-vf",
+                "bwdif=mode=send_frame,setsar=1,format=nv12,hwupload",
+                "-c:v",
+                "h264_vaapi",
+                "-rc_mode",
+                "CQP",
+                "-qp",
+                "24",
+                "-threads",
+                "2",
+                "-af",
+                "pan=stereo|c0=c0|c1=c0",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "192k",
+            ],
+            FfmpegEncodeInvocation.Arguments(
+                Service,
+                Profile(),
+                EncodeEncoder.Vaapi,
+                Source,
+                Cores,
+                HeadSkip,
+                TwoLanguagesOnOneSound));
+
     [Fact]
     public void TheMainLanguageIsTakenFromTheSameChannelPlaybackTakesItFrom()
         => Assert.Contains(
@@ -298,6 +350,7 @@ public sealed class FfmpegEncodeInvocationTests
             "-map",
             "p:1040:v:0",
             "p:1040:a",
+            "p:1040:a:0",
             "-vf",
             "-c:v",
             "libx264",
@@ -316,6 +369,11 @@ public sealed class FfmpegEncodeInvocationTests
             "copy",
             "-bsf:a",
             "aac_adtstoasc",
+            "-af",
+            FfmpegPlaybackInvocation.TheLeftChannelInBothEars,
+            "aac",
+            "-b:a",
+            "192k",
             "bwdif=mode=send_frame,setsar=1",
             "bwdif=mode=send_field,setsar=1",
             "setsar=1",
@@ -336,14 +394,25 @@ public sealed class FfmpegEncodeInvocationTests
             "scale=1280:720:flags=bicubic,setsar=1,format=nv12,hwupload",
         ];
 
-        IReadOnlyList<string> arguments = FfmpegEncodeInvocation.Arguments(
-            Service,
-            Profile(codec, resolution, deinterlace),
-            encoder,
-            Source,
-            Cores,
-            HeadSkip,
-            AsItStands);
+        IReadOnlyList<string> arguments =
+        [
+            .. FfmpegEncodeInvocation.Arguments(
+                Service,
+                Profile(codec, resolution, deinterlace),
+                encoder,
+                Source,
+                Cores,
+                HeadSkip,
+                AsItStands),
+            .. FfmpegEncodeInvocation.Arguments(
+                Service,
+                Profile(codec, resolution, deinterlace),
+                encoder,
+                Source,
+                Cores,
+                HeadSkip,
+                TwoLanguagesOnOneSound),
+        ];
 
         Assert.All(arguments, argument => Assert.Contains(argument, known, StringComparer.Ordinal));
     }
@@ -359,13 +428,20 @@ public sealed class FfmpegEncodeInvocationTests
         IReadOnlyList<string> arguments =
         [
             .. FfmpegEncodeInvocation.Arguments(Service, Profile(codec, resolution, deinterlace), encoder, Source, Cores, HeadSkip, AsItStands),
+            .. FfmpegEncodeInvocation.Arguments(Service, Profile(codec, resolution, deinterlace), encoder, Source, Cores, HeadSkip, TwoLanguagesOnOneSound),
             .. FfmpegEncodeInvocation.Delivery(Destination),
         ];
 
         string[] whatAShellWouldReadAgain = [" ", ";", "|", "&", "`", "$(", "\n"];
+        string[] writtenHereAndReadByNoShell =
+        [
+            Source,
+            Destination,
+            FfmpegPlaybackInvocation.TheLeftChannelInBothEars,
+        ];
 
         Assert.All(
-            arguments.Where(argument => argument != Source && argument != Destination),
+            arguments.Where(argument => !writtenHereAndReadByNoShell.Contains(argument, StringComparer.Ordinal)),
             argument => Assert.DoesNotContain(
                 whatAShellWouldReadAgain,
                 mark => argument.Contains(mark, StringComparison.Ordinal)));
