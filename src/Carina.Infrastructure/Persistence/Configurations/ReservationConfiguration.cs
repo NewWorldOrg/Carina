@@ -1,5 +1,6 @@
 using System.Text.Json;
 
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
@@ -73,7 +74,7 @@ public sealed class ReservationConfiguration : IEntityTypeConfiguration<Reservat
             table.HasCheckConstraint("ck_reservation_window", "end_at > start_at");
             table.HasCheckConstraint(
                 "ck_reservation_snapshot_audio",
-                "snapshot_audio IN ('Undetermined', 'Mono', 'Stereo', 'DualMono', 'Surround')");
+                $"snapshot_audio IN ({Vocabulary<AudioMode>()})");
             table.HasCheckConstraint("ck_reservation_snapshot_sounds", "snapshot_sounds >= 0");
             table.HasCheckConstraint(
                 "ck_reservation_priority",
@@ -252,6 +253,10 @@ public sealed class ReservationConfiguration : IEntityTypeConfiguration<Reservat
         builder.Metadata.SetBeforeSaveBehavior(PropertySaveBehavior.Ignore);
         builder.Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Ignore);
     }
+
+    private static string Vocabulary<T>()
+        where T : struct, Enum
+        => string.Join(", ", Enum.GetNames<T>().Select(name => $"'{name}'"));
 
     private static IReadOnlyList<T> Read<T>(string stored)
         => JsonSerializer.Deserialize<List<T>>(stored, ProgrammeJson.Options) ?? [];
