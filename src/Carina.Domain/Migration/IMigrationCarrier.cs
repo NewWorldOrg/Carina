@@ -8,6 +8,8 @@ public interface IMigrationCarrier
 
     Task<MigrationRootStanding> StandingAsync(CancellationToken cancellationToken);
 
+    Task<MigrationCarryStanding> WouldCarryAsync(CancellationToken cancellationToken);
+
     Task<MigrationCarry> CarryAsync(
         string sourcePath,
         RecordingFileName name,

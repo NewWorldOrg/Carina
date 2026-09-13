@@ -46,6 +46,7 @@ public sealed class FileSystemRuleTests
         "/Carina.Infrastructure/Machines/MachineCapabilityReader.cs File.Open",
         "/Carina.Infrastructure/Machines/MachineCapabilityReader.cs FileMode.",
         "/Carina.Infrastructure/Migration/HardLinkMigrationCarrier.cs DllImport",
+        "/Carina.Infrastructure/Migration/HardLinkMigrationCarrier.cs File.Delete",
         "/Carina.Infrastructure/Programmes/ProgrammeSearchQuery.cs .Replace(",
         "/Carina.Infrastructure/Recordings/DriverRecordingFileEraser.cs File.Delete",
         "/Carina.Infrastructure/Streaming/FfprobeStreamAttributeReader.cs Process.Start",
@@ -101,10 +102,13 @@ public sealed class FileSystemRuleTests
     }
 
     [Fact]
-    public void TheOnlyWayTheMigrationReachesTheDiskIsTheHardLinkItMakes()
+    public void TheOnlyWaysTheMigrationReachesTheDiskAreTheLinkItMakesAndTheOneItAsksWith()
     {
         Assert.Equal(
-            ["/Carina.Infrastructure/Migration/HardLinkMigrationCarrier.cs DllImport"],
+            [
+                "/Carina.Infrastructure/Migration/HardLinkMigrationCarrier.cs DllImport",
+                "/Carina.Infrastructure/Migration/HardLinkMigrationCarrier.cs File.Delete",
+            ],
             Inventory.Where(entry => entry.Contains("/Migration/", StringComparison.Ordinal)).ToArray());
     }
 

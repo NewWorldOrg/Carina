@@ -13,6 +13,8 @@ public sealed class HardLinkMigrationCarrier : IMigrationCarrier
 
     private const int AcrossDevices = 18;
 
+    private const string Probe = ".carina-carry-probe-";
+
     private readonly string from;
 
     private readonly string into;
@@ -36,6 +38,34 @@ public sealed class HardLinkMigrationCarrier : IMigrationCarrier
                 ? MigrationRootStanding.NotEmpty
                 : MigrationRootStanding.Empty
             : MigrationRootStanding.Missing);
+
+    public Task<MigrationCarryStanding> WouldCarryAsync(CancellationToken cancellationToken)
+    {
+        if (!Directory.Exists(into))
+        {
+            return Task.FromResult(MigrationCarryStanding.TheNewRootDoesNotTakeALink);
+        }
+
+        string? existing = Directory.EnumerateFiles(from).FirstOrDefault();
+
+        if (existing is null)
+        {
+            return Task.FromResult(MigrationCarryStanding.NothingIsThereToCarry);
+        }
+
+        string made = Path.Combine(into, Probe + Guid.NewGuid().ToString("N"));
+
+        if (Link(existing, made) is not 0)
+        {
+            return Task.FromResult(Marshal.GetLastPInvokeError() is AcrossDevices
+                ? MigrationCarryStanding.WouldCrossAMount
+                : MigrationCarryStanding.TheNewRootDoesNotTakeALink);
+        }
+
+        File.Delete(made);
+
+        return Task.FromResult(MigrationCarryStanding.WouldBeAHardLink);
+    }
 
     public Task<MigrationCarry> CarryAsync(
         string sourcePath,

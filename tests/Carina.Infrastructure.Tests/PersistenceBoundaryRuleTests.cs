@@ -185,7 +185,7 @@ public sealed class PersistenceBoundaryRuleTests
     }
 
     [Fact]
-    public void WhatTheMigrationRecordsIsSixTablesAndItsForeignKeysNeverLeaveIt()
+    public void WhatTheMigrationRecordsIsSevenTablesAndItsForeignKeysNeverLeaveIt()
     {
         using CarinaDbContext context = Carina();
 
@@ -196,6 +196,7 @@ public sealed class PersistenceBoundaryRuleTests
                 "migration_loss",
                 "migration_rule_proposal",
                 "migration_run",
+                "migration_standing",
                 "migration_tally",
             ],
             PersistenceBoundaryRules.TablesOf(context.Model, PersistenceFamily.Migration));
@@ -214,6 +215,7 @@ public sealed class PersistenceBoundaryRuleTests
                 "migration_detail -> migration_run",
                 "migration_loss -> migration_run",
                 "migration_rule_proposal -> migration_run",
+                "migration_standing -> migration_run",
                 "migration_tally -> migration_run",
             ],
             pointing);

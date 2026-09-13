@@ -262,6 +262,7 @@ public sealed class ChannelSchemaTests
                 "migration_loss",
                 "migration_rule_proposal",
                 "migration_run",
+                "migration_standing",
                 "migration_tally",
                 "oidc_config",
                 "programme",

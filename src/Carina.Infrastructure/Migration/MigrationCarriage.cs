@@ -10,7 +10,12 @@ using Carina.Domain.Rules;
 
 namespace Carina.Infrastructure.Migration;
 
-public sealed record MigrationCarried(MigrationRoll Roll, MigrationAftermath Aftermath);
+public sealed record MigrationCarried(
+    MigrationRoll Roll,
+    MigrationAftermath Aftermath,
+    MigrationRootStanding NewRoot,
+    EncodeUnaskedStanding WhereEncodesGo,
+    MigrationCarryStanding Carrying);
 
 public sealed class MigrationCarriage(
     IMigrationCarrier carrier,
@@ -49,11 +54,11 @@ public sealed class MigrationCarriage(
             .ToDictionary(file => file.RecordingId);
 
         EncodeUnasked queueing = await QueueingAsync(cancellationToken);
+        MigrationRootStanding standing = await carrier.StandingAsync(cancellationToken);
+        MigrationCarryStanding carrying = await carrier.WouldCarryAsync(cancellationToken);
 
         if (pass is MigrationPass.ForReal)
         {
-            MigrationRootStanding standing = await carrier.StandingAsync(cancellationToken);
-
             if (standing is not MigrationRootStanding.Empty)
             {
                 throw new MigrationCarryRefusedException(
@@ -67,6 +72,14 @@ public sealed class MigrationCarriage(
                 throw new MigrationCarryRefusedException(
                     "What is carried over is encoded, and that needs exactly one destination that is still "
                     + "offered, whose default profile is still offered. Define one and start over.");
+            }
+
+            if (MigrationFindings.WouldStopARunForReal(MigrationFindings.Of(carrying)))
+            {
+                throw new MigrationCarryRefusedException(
+                    $"A recording is carried by linking it into the new root '{carrier.Into.Value}', and here "
+                    + $"that link {Said(carrying)}. Nothing was carried. A rehearsal says the same thing "
+                    + "without stopping.");
             }
         }
 
@@ -112,11 +125,19 @@ public sealed class MigrationCarriage(
                 meant,
                 ledger.Rules.Count,
                 MigrationTextLoss.RowsPastRestoring(ledger),
-                MigrationRuleConversion.RulesNarrowedByDay(ledger, inReach)));
+                MigrationRuleConversion.RulesNarrowedByDay(ledger, inReach)),
+            standing,
+            queueing.Standing,
+            carrying);
     }
 
     private static string Said(MigrationRootStanding standing)
         => standing is MigrationRootStanding.Missing ? "not there" : "not empty";
+
+    private static string Said(MigrationCarryStanding standing)
+        => standing is MigrationCarryStanding.WouldCrossAMount
+            ? "would cross a mount, which a hard link cannot do"
+            : "cannot be made at all";
 
     private static MigrationVerdict Instead(MigrationVerdict verdict, MigrationRefusal refusal)
         => MigrationVerdict.Refuse(

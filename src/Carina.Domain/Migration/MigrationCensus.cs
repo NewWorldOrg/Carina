@@ -1,3 +1,5 @@
+using Carina.Domain.Encodings;
+
 namespace Carina.Domain.Migration;
 
 public static class MigrationCensus
@@ -8,6 +10,9 @@ public static class MigrationCensus
         MigrationPass pass,
         MigrationRoll roll,
         MigrationAftermath aftermath,
+        MigrationRootStanding newRoot,
+        EncodeUnaskedStanding whereEncodesGo,
+        MigrationCarryStanding carrying,
         DateTime startedAt,
         DateTime finishedAt)
     {
@@ -79,6 +84,7 @@ public static class MigrationCensus
             tallies,
             details,
             MigrationLoss.EveryOne(id, aftermath),
+            MigrationStanding.EveryOne(id, newRoot, whereEncodesGo, carrying),
             aftermath.ChannelProposals,
             aftermath.RuleProposals);
     }

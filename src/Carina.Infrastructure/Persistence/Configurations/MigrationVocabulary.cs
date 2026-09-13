@@ -10,6 +10,10 @@ internal static class MigrationVocabulary
         where T : struct, Enum
         => Listed(Enum.GetNames<T>());
 
+    public static string Naming<T>(IReadOnlyList<T> values)
+        where T : struct, Enum
+        => Listed([.. values.Select(value => value.ToString())]);
+
     public static string Counted()
         => Listed([.. MigrationPopulations.Counted.Select(population => population.ToString())]);
 

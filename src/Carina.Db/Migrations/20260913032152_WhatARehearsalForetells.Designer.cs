@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Carina.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Carina.Db.Migrations
 {
     [DbContext(typeof(CarinaDbContext))]
-    partial class CarinaDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260913032152_WhatARehearsalForetells")]
+    partial class WhatARehearsalForetells
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1295,9 +1298,9 @@ namespace Carina.Db.Migrations
 
                     b.ToTable("migration_standing", null, t =>
                         {
-                            t.HasCheckConstraint("ck_migration_standing_finding", "(subject <> 'TheNewRoot' OR finding IN ('TheNewRootIsEmpty', 'TheNewRootIsNotEmpty', 'TheNewRootIsNotThere'))\nAND (subject <> 'WhereEncodesGo' OR finding IN ('WhereEncodesGoIsSettled', 'NothingSaysWhereEncodesGo', 'MoreThanOneSaysWhereEncodesGo', 'TheProfileIsNotOffered'))\nAND (subject <> 'CarryingIntoTheNewRoot' OR finding IN ('TheCarryWouldBeAHardLink', 'TheCarryWouldCrossAMount', 'TheNewRootDoesNotTakeALink', 'NothingIsThereToCarry'))");
+                            t.HasCheckConstraint("ck_migration_standing_finding", "(subject <> 'TheNewRoot' OR finding IN ('TheNewRootIsEmpty', 'TheNewRootIsNotEmpty', 'TheNewRootIsNotThere'))\nAND (subject <> 'WhereEncodesGo' OR finding IN ('WhereEncodesGoIsSettled', 'NothingSaysWhereEncodesGo', 'MoreThanOneSaysWhereEncodesGo', 'TheProfileIsNotOffered'))");
 
-                            t.HasCheckConstraint("ck_migration_standing_subject", "subject IN ('TheNewRoot', 'WhereEncodesGo', 'CarryingIntoTheNewRoot')");
+                            t.HasCheckConstraint("ck_migration_standing_subject", "subject IN ('TheNewRoot', 'WhereEncodesGo')");
                         });
                 });
 

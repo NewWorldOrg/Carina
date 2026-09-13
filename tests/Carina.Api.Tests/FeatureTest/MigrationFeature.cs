@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 
 using Carina.Domain.Base;
+using Carina.Domain.Encodings;
 using Carina.Domain.Migration;
 
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -119,6 +120,9 @@ internal sealed class MigrationFeature : IAsyncDisposable
             pass,
             MigrationRoll.Of(offered, verdicts),
             MigrationAftermath.Nothing,
+            MigrationRootStanding.Empty,
+            EncodeUnaskedStanding.Settled,
+            MigrationCarryStanding.WouldBeAHardLink,
             Small,
             Small.AddMinutes(6));
     }

@@ -118,11 +118,45 @@ public sealed class CarryingOverRealFilesTests : IDisposable
             .Order(StringComparer.Ordinal)
             .Select(file => $"{Path.GetFileName(file)} {new FileInfo(file).Length} {File.GetLastWriteTimeUtc(file):O}")];
 
-    private MigrationPassage Passage()
+    [Fact]
+    public async Task ANewRootThatWentAwayAfterItWasLookedAtIsWrittenDownRatherThanThrownOver()
+    {
+        string gone = Path.Combine(into, "gone-by-then");
+        Directory.CreateDirectory(gone);
+        Directory.Delete(gone);
+
+        await Passage(gone).RunAsync(MigrationPass.Rehearsal, Rescanned(), Cancel);
+
+        MigrationReport written = records.Saved.Single();
+
+        Assert.Equal(
+            MigrationFinding.TheNewRootIsNotThere,
+            Found(written, MigrationStandingSubject.TheNewRoot));
+        Assert.Equal(
+            MigrationFinding.TheNewRootDoesNotTakeALink,
+            Found(written, MigrationStandingSubject.CarryingIntoTheNewRoot));
+    }
+
+    [Fact]
+    public async Task WhatARehearsalForetellsAboutTheLinkIsWrittenDownWithTheRest()
+    {
+        await Passage().RunAsync(MigrationPass.Rehearsal, Rescanned(), Cancel);
+
+        Assert.Equal(
+            MigrationFinding.TheCarryWouldBeAHardLink,
+            Found(records.Saved.Single(), MigrationStandingSubject.CarryingIntoTheNewRoot));
+    }
+
+    private static MigrationFinding Found(MigrationReport written, MigrationStandingSubject subject)
+        => written.Standings.Single(standing => standing.Subject == subject).Finding;
+
+    private MigrationPassage Passage() => Passage(into);
+
+    private MigrationPassage Passage(string root)
         => new(
             new SourceOnDisk(from),
             new SourceOnDisk(from),
-            bench.Carriage(new HardLinkMigrationCarrier(from, into, Root), recordings),
+            bench.Carriage(new HardLinkMigrationCarrier(from, root, Root), recordings),
             records,
             lease,
             clock);

@@ -1,3 +1,4 @@
+using Carina.Domain.Encodings;
 using Carina.Domain.Migration;
 
 using static Carina.Domain.Tests.Migration.MigrationFixtures;
@@ -138,6 +139,27 @@ public sealed class MigrationCensusTests
     }
 
     [Fact]
+    public void ARehearsalWritesDownWhatARunForRealWouldHaveMet()
+    {
+        MigrationReport told = MigrationCensus.Taken(
+            Run,
+            Source,
+            MigrationPass.Rehearsal,
+            Roll(Nothing()),
+            MigrationAftermath.Nothing,
+            MigrationRootStanding.NotEmpty,
+            EncodeUnaskedStanding.MoreThanOneIsOffered,
+            MigrationCarryStanding.WouldCrossAMount,
+            Began,
+            Ended);
+
+        Assert.Equal(
+            MigrationStandingSubjects.All,
+            told.Standings.Select(standing => standing.Subject).Order());
+        Assert.All(told.Standings, standing => Assert.True(standing.WouldStopARunForReal));
+    }
+
+    [Fact]
     public void ARunSaysWhichSourceItReadAndWhetherItWasARehearsal()
     {
         MigrationReport told = MigrationCensus.Taken(
@@ -146,6 +168,9 @@ public sealed class MigrationCensusTests
             MigrationPass.ForReal,
             Roll(Nothing()),
             MigrationAftermath.Nothing,
+            MigrationRootStanding.Empty,
+            EncodeUnaskedStanding.Settled,
+            MigrationCarryStanding.WouldBeAHardLink,
             Began,
             Ended);
 

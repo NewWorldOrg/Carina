@@ -170,8 +170,13 @@ internal sealed class ScriptedCarrier(MigrationJournal journal) : IMigrationCarr
 
     public MigrationRootStanding Standing { get; set; } = MigrationRootStanding.Empty;
 
+    public MigrationCarryStanding WouldCarry { get; set; } = MigrationCarryStanding.WouldBeAHardLink;
+
     public Task<MigrationRootStanding> StandingAsync(CancellationToken cancellationToken)
         => Task.FromResult(Standing);
+
+    public Task<MigrationCarryStanding> WouldCarryAsync(CancellationToken cancellationToken)
+        => Task.FromResult(WouldCarry);
 
     public void Answers(string sourcePath, MigrationCarry carry) => answers[sourcePath] = carry;
 

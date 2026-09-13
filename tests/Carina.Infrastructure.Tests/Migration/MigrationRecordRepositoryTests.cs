@@ -1,4 +1,5 @@
 using Carina.Domain.Base;
+using Carina.Domain.Encodings;
 using Carina.Domain.Migration;
 using Carina.Infrastructure.Migration;
 using Carina.Infrastructure.Persistence;
@@ -55,6 +56,9 @@ public sealed class MigrationRecordRepositoryTests(RepositoryDatabase database)
                     null,
                     1_024)),
             MigrationAftermath.Nothing,
+            MigrationRootStanding.Empty,
+            EncodeUnaskedStanding.Settled,
+            MigrationCarryStanding.WouldBeAHardLink,
             At,
             At.AddMinutes(4));
 
@@ -113,6 +117,9 @@ public sealed class MigrationRecordRepositoryTests(RepositoryDatabase database)
             MigrationPass.Rehearsal,
             Rolled(Offered()),
             MigrationAftermath.Nothing,
+            MigrationRootStanding.Empty,
+            EncodeUnaskedStanding.Settled,
+            MigrationCarryStanding.WouldBeAHardLink,
             At,
             At));
 
@@ -145,6 +152,9 @@ public sealed class MigrationRecordRepositoryTests(RepositoryDatabase database)
             MigrationPass.Rehearsal,
             Rolled(Offered()),
             MigrationAftermath.Nothing,
+            MigrationRootStanding.Empty,
+            EncodeUnaskedStanding.Settled,
+            MigrationCarryStanding.WouldBeAHardLink,
             At,
             At));
         await SaveAsync(MigrationCensus.Taken(
@@ -153,6 +163,9 @@ public sealed class MigrationRecordRepositoryTests(RepositoryDatabase database)
             MigrationPass.ForReal,
             Rolled(Offered()),
             MigrationAftermath.Nothing,
+            MigrationRootStanding.Empty,
+            EncodeUnaskedStanding.Settled,
+            MigrationCarryStanding.WouldBeAHardLink,
             At.AddHours(6),
             At.AddHours(6)));
 
@@ -184,6 +197,9 @@ public sealed class MigrationRecordRepositoryTests(RepositoryDatabase database)
                     null,
                     1)),
             MigrationAftermath.Nothing,
+            MigrationRootStanding.Empty,
+            EncodeUnaskedStanding.Settled,
+            MigrationCarryStanding.WouldBeAHardLink,
             At,
             At));
 
@@ -201,12 +217,35 @@ public sealed class MigrationRecordRepositoryTests(RepositoryDatabase database)
                     null,
                     1)),
             MigrationAftermath.Nothing,
+            MigrationRootStanding.Empty,
+            EncodeUnaskedStanding.Settled,
+            MigrationCarryStanding.WouldBeAHardLink,
             At,
             At));
 
         MigrationReport read = Assert.IsType<MigrationReport>(await ReadAsync(mine));
 
         Assert.Equal(["mine.m2ts"], read.Details.Select(detail => detail.Subject));
+    }
+
+    [Fact]
+    public async Task ARunFromBeforeTheRecordKnewToLookAtSomethingStillReadsBack()
+    {
+        MigrationRunId id = await AnEmptyRunAsync();
+
+        await using (NpgsqlConnection connection = await OpenAsync())
+        {
+            await using NpgsqlCommand forgetting = new(
+                $"DELETE FROM migration_standing WHERE run_id = '{id.Value}'",
+                connection);
+
+            await forgetting.ExecuteNonQueryAsync();
+        }
+
+        MigrationReport? read = await ReadAsync(id);
+
+        Assert.NotNull(read);
+        Assert.Empty(read.Standings);
     }
 
     [Fact]
@@ -371,6 +410,9 @@ public sealed class MigrationRecordRepositoryTests(RepositoryDatabase database)
                     null,
                     1_024)),
             MigrationAftermath.Nothing,
+            MigrationRootStanding.Empty,
+            EncodeUnaskedStanding.Settled,
+            MigrationCarryStanding.WouldBeAHardLink,
             At,
             At.AddMinutes(4)));
 
@@ -438,6 +480,9 @@ public sealed class MigrationRecordRepositoryTests(RepositoryDatabase database)
             MigrationPass.ForReal,
             Rolled(Offered(files: left.Length), left),
             MigrationAftermath.Nothing,
+            MigrationRootStanding.Empty,
+            EncodeUnaskedStanding.Settled,
+            MigrationCarryStanding.WouldBeAHardLink,
             At,
             At.AddMinutes(1)));
 
@@ -495,6 +540,9 @@ public sealed class MigrationRecordRepositoryTests(RepositoryDatabase database)
             pass,
             Rolled(Offered()),
             MigrationAftermath.Nothing,
+            MigrationRootStanding.Empty,
+            EncodeUnaskedStanding.Settled,
+            MigrationCarryStanding.WouldBeAHardLink,
             at,
             at);
 
@@ -524,6 +572,9 @@ public sealed class MigrationRecordRepositoryTests(RepositoryDatabase database)
             MigrationPass.Rehearsal,
             Rolled(Offered()),
             MigrationAftermath.Nothing,
+            MigrationRootStanding.Empty,
+            EncodeUnaskedStanding.Settled,
+            MigrationCarryStanding.WouldBeAHardLink,
             At,
             At));
 
