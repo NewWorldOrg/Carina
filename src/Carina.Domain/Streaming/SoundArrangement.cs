@@ -15,7 +15,7 @@ public sealed record SoundArrangement
 
     private static readonly SoundArrangement Nothing = new([]);
 
-    private static readonly SoundArrangement TheOneStream = new([SoundPlacement.WholeStream(0)]);
+    public static readonly SoundArrangement TheMainSoundAlone = new([SoundPlacement.WholeStream(0)]);
 
     private static readonly SoundArrangement TwoStreams = new(
         [SoundPlacement.WholeStream(0), SoundPlacement.WholeStream(1)]);
@@ -53,7 +53,7 @@ public sealed record SoundArrangement
         {
             { Audio: AudioMode.DualMono, Sounds: < StreamsOfTheirOwn } => TwoChannelsOfOneStream,
             { Sounds: >= StreamsOfTheirOwn } => TwoStreams,
-            _ => TheOneStream,
+            _ => TheMainSoundAlone,
         };
 
     public static SoundArrangement Of(CarriedSounds read)
@@ -63,7 +63,7 @@ public sealed record SoundArrangement
         return read.Tracks.Count switch
         {
             0 => Nothing,
-            1 => TheOneStream,
+            1 => TheMainSoundAlone,
             _ => TwoStreams,
         };
     }

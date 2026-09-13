@@ -18,6 +18,7 @@ public sealed class FfmpegArgumentRuleTests
     private static readonly string[] Inventory =
     [
         "/Carina.Infrastructure/Encodings/FfmpegEncodeInvocation.cs string.Join(",
+        "/Carina.Infrastructure/Encodings/FfmpegEncodeInvocation.cs {ordinal}",
         "/Carina.Infrastructure/Encodings/FfmpegEncodeInvocation.cs {programNumber}",
         "/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs string.Join(",
         "/Carina.Infrastructure/Streaming/FfmpegLiveInvocation.cs {descriptor}",

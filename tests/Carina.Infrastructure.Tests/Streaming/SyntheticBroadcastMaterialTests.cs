@@ -6,8 +6,10 @@ using System.Runtime.Versioning;
 using Carina.BroadcastTestSupport;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
+using Carina.Domain.Encodings;
 using Carina.Domain.Recordings;
 using Carina.Domain.Streaming;
+using Carina.Infrastructure.Encodings;
 using Carina.Infrastructure.Machines;
 using Carina.Infrastructure.Streaming;
 using Carina.TestSupport;
@@ -25,6 +27,16 @@ public sealed class SyntheticBroadcastMaterialTests : IDisposable
     private static readonly ServiceId Service = new(SyntheticBroadcast.SomeProgramNumber);
 
     private static readonly SoundPlacement TheWholeFirstStream = SoundPlacement.WholeStream(0);
+
+    private static readonly EncodeProfile Standard = EncodeProfile.Define(
+        EncodeProfileId.New(),
+        new EncodeLabel("Standard"),
+        EncodeCodec.H264,
+        EncodeResolution.AsSource,
+        Deinterlace.EveryFrame,
+        new ConstantRateFactor(28),
+        new Carina.Domain.Encodings.ConstantQuantiser(24),
+        new DateTime(2026, 9, 14, 3, 0, 0, DateTimeKind.Utc));
 
     private static readonly StreamAttributes Interlaced = new(
         new VideoSize(1440, 1080),
@@ -477,6 +489,44 @@ public sealed class SyntheticBroadcastMaterialTests : IDisposable
             Assert.True(
                 other.Secondary > other.Main * TimesLouder,
                 $"the secondary sound in ear {ear} carried {other.Secondary:F5} of its own tone and {other.Main:F5} of the other one");
+        }
+    }
+
+    [Fact(DisplayName = "BR-PD-008: the artefact of a recording that carried two languages on one sound holds the main language in both ears and not the other one")]
+    public async Task BrPd008TheEncodeOfARecordingCarryingTwoLanguagesOnOneSoundBakesInTheMainOne()
+    {
+        string written = await (SyntheticBroadcast.Sounding(SyntheticSound.TwoLanguagesOnOneSound) with { Length = PastTheProbe })
+            .WriteAsync(Path.Combine(room, "encoded-two-languages.m2ts"));
+        string artefact = Path.Combine(room, "encoded-two-languages.mp4");
+
+        await FfmpegProgramme.RunAsync(
+            FfmpegProgramme.Default,
+            [
+                .. FfmpegEncodeInvocation.Arguments(
+                    Service,
+                    Standard,
+                    EncodeEncoder.Software,
+                    written,
+                    1,
+                    TimeSpan.Zero,
+                    EncodeSound.Of(AudioMode.DualMono, 1)),
+                .. FfmpegEncodeInvocation.Delivery(artefact),
+            ],
+            CancellationToken.None);
+
+        IReadOnlyList<FfprobeRecord> made = await ProbedAsync(artefact);
+
+        Assert.Equal(["video", "audio"], Types(made));
+        Assert.Equal("2", Sound(made).Value("channels"));
+        Assert.Equal("aac", Sound(made).Value("codec_name"));
+
+        foreach (int ear in new[] { 0, 1 })
+        {
+            Tones heard = await HeardAsync("encoded-two-languages.mp4", ear);
+
+            Assert.True(
+                heard.Main > heard.Secondary * TimesLouder,
+                $"the artefact in ear {ear} carried {heard.Main:F5} of the main language and {heard.Secondary:F5} of the other one");
         }
     }
 

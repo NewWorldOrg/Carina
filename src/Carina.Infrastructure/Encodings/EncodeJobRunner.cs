@@ -164,7 +164,14 @@ public sealed class EncodeJobRunner(
         EncodeRunOutcome ran = await FfmpegEncodeRun.RunAsync(
             programmes.Programme,
             [
-                .. FfmpegEncodeInvocation.Arguments(recording.ServiceId, profile, encoder, source.FullName, cores, headSkip),
+                .. FfmpegEncodeInvocation.Arguments(
+                    recording.ServiceId,
+                    profile,
+                    encoder,
+                    source.FullName,
+                    cores,
+                    headSkip,
+                    EncodeSound.Of(recording.SnapshotAudio, recording.SnapshotSounds)),
                 .. FfmpegEncodeInvocation.Delivery(work),
             ],
             timeline.Expected,

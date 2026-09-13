@@ -3,6 +3,7 @@ using Carina.Api.Common;
 using Carina.Api.Services;
 using Carina.Domain.Playback;
 using Carina.Domain.Recordings;
+using Carina.Domain.Streaming;
 
 namespace Carina.Api.Playback;
 
@@ -42,7 +43,7 @@ public static class VideoDelivery
     private static async Task ServeAsync(HttpContext context, RecordingId recordingId, PlaybackService playback)
     {
         ServiceResult<PlaybackOffer, PlaybackFailure> offered =
-            await playback.OfferAsync(recordingId, context.RequestAborted);
+            await playback.OfferAsync(recordingId, SoundTrack.Main, context.RequestAborted);
 
         if (!offered.IsSuccess)
         {

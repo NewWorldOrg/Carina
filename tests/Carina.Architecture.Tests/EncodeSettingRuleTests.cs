@@ -82,6 +82,7 @@ public sealed class EncodeSettingRuleTests
         "/Carina.Domain/Encodings/EncodeSettings.cs EncodeSettings.Prefer EncodeEncoder",
         "/Carina.Domain/Encodings/EncodeSettings.cs EncodeSettings.StalledAfter TimeSpan",
         "/Carina.Domain/Encodings/EncodeSettings.cs EncodeSettings.WorkedIn string?",
+        "/Carina.Domain/Encodings/EncodeSound.cs EncodeSound.OneChannel SoundPlacement?",
         "/Carina.Domain/Encodings/EncodeTimeline.cs EncodeTimeline.ArtefactLength TimeSpan?",
         "/Carina.Domain/Encodings/EncodeTimeline.cs EncodeTimeline.HeadSkip TimeSpan",
         "/Carina.Domain/Encodings/EncodeTimeline.cs EncodeTimeline.SourceLength TimeSpan?",
