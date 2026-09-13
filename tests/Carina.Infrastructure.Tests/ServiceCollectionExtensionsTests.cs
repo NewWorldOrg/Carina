@@ -5,6 +5,7 @@ using Carina.Domain.DriverStatus;
 using Carina.Domain.Events;
 using Carina.Domain.Integrity;
 using Carina.Domain.Migration;
+using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
@@ -237,6 +238,26 @@ public sealed class ServiceCollectionExtensionsTests
         using IServiceScope scope = provider.CreateScope();
 
         Assert.IsType<DatabaseAtomicWrite>(scope.ServiceProvider.GetRequiredService<IAtomicWrite>());
+    }
+
+    [Fact]
+    public void RegistersTheReadTheStoreIsOnlyGivenSoLongToAnswer()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+        using IServiceScope scope = provider.CreateScope();
+
+        Assert.IsType<DatabaseBoundedRead>(scope.ServiceProvider.GetRequiredService<IBoundedRead>());
+    }
+
+    [Fact]
+    public void RegistersWhatTheBulkFeedIsHeldToAsOneSettingForTheWholeApplication()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        ProgrammeFeedSettings held = provider.GetRequiredService<ProgrammeFeedSettings>();
+
+        Assert.Equal(new ProgrammeFeedSettings(), held);
+        Assert.Same(held, provider.GetRequiredService<ProgrammeFeedSettings>());
     }
 
     [Fact]
