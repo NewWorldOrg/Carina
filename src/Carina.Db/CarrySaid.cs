@@ -47,6 +47,15 @@ public static class CarrySaid
             $"Rules converted, every one of them turned off: {report.RuleProposals.Count}, of which "
             + $"{report.RuleProposals.Count(proposal => proposal.EnabledAtTheSource)} were on at the source.");
 
+        foreach (MigrationStanding standing in report.Standings.OrderBy(standing => standing.Subject))
+        {
+            string stops = standing.WouldStopARunForReal ? " A run for real stops here." : string.Empty;
+
+            said.AppendLine(
+                CultureInfo.InvariantCulture,
+                $"Before carrying, {standing.Subject}: {standing.Finding}.{stops}");
+        }
+
         foreach (MigrationLoss loss in report.Losses.OrderBy(loss => loss.Subject))
         {
             said.AppendLine(

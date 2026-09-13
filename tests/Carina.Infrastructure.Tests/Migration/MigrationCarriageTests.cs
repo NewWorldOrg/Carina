@@ -107,6 +107,42 @@ public sealed class MigrationCarriageTests
     }
 
     [Fact]
+    public async Task ARehearsalSaysWhatARunForRealWouldMeetInsteadOfRefusing()
+    {
+        carrier.Standing = MigrationRootStanding.NotEmpty;
+        bench.Destinations.Destinations.Add(EncodeDestination.Define(
+            EncodeDestinationId.New(),
+            new EncodeLabel("Elsewhere"),
+            new OutputRoot("elsewhere"),
+            bench.Profile.Id,
+            Began));
+
+        MigrationCarried carried = await CarriedAsync(MigrationPass.Rehearsal);
+
+        Assert.Equal(MigrationRootStanding.NotEmpty, carried.NewRoot);
+        Assert.Equal(EncodeUnaskedStanding.MoreThanOneIsOffered, carried.WhereEncodesGo);
+    }
+
+    [Fact]
+    public async Task ARehearsalThatWouldMeetNothingInTheWaySaysSo()
+    {
+        MigrationCarried carried = await CarriedAsync(MigrationPass.Rehearsal);
+
+        Assert.Equal(MigrationRootStanding.Empty, carried.NewRoot);
+        Assert.Equal(EncodeUnaskedStanding.Settled, carried.WhereEncodesGo);
+    }
+
+    [Fact]
+    public async Task ARehearsalLooksAtTheNewRootTooRatherThanLeavingTheQuestionToTheRunForReal()
+    {
+        carrier.Standing = MigrationRootStanding.Missing;
+
+        MigrationCarried carried = await CarriedAsync(MigrationPass.Rehearsal);
+
+        Assert.Equal(MigrationRootStanding.Missing, carried.NewRoot);
+    }
+
+    [Fact]
     public async Task ARehearsalLinksNothingAndWritesNoRow()
     {
         MigrationRoll settled = await CarryAsync(MigrationPass.Rehearsal);

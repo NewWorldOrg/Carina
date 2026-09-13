@@ -16,6 +16,7 @@ public sealed class MigrationRecordRepository(CarinaDbContext context) : IMigrat
         context.AddRange(report.Tallies);
         context.AddRange(report.Details);
         context.AddRange(report.Losses);
+        context.AddRange(report.Standings);
         context.AddRange(report.ChannelProposals);
         context.AddRange(report.RuleProposals);
 
@@ -126,6 +127,12 @@ public sealed class MigrationRecordRepository(CarinaDbContext context) : IMigrat
             .OrderBy(loss => loss.Subject)
             .ToListAsync(cancellationToken);
 
+        List<MigrationStanding> standings = await context.Set<MigrationStanding>()
+            .AsNoTracking()
+            .Where(standing => standing.RunId == runId)
+            .OrderBy(standing => standing.Subject)
+            .ToListAsync(cancellationToken);
+
         List<MigrationChannelProposal> channelProposals = await context.Set<MigrationChannelProposal>()
             .AsNoTracking()
             .Where(proposal => proposal.RunId == runId)
@@ -139,6 +146,6 @@ public sealed class MigrationRecordRepository(CarinaDbContext context) : IMigrat
             .OrderBy(proposal => proposal.SourceRow)
             .ToListAsync(cancellationToken);
 
-        return MigrationReport.Of(run, tallies, details, losses, channelProposals, ruleProposals);
+        return MigrationReport.Of(run, tallies, details, losses, standings, channelProposals, ruleProposals);
     }
 }
