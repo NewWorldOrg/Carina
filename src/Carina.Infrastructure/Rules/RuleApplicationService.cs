@@ -463,7 +463,9 @@ public sealed class RuleApplicationService(
                 match.Programme.Summary,
                 match.Programme.Items,
                 match.Programme.Genres,
-                at),
+                at,
+                match.Programme.Audio,
+                match.Programme.Sounds),
             null,
             BroadcastGroupRole.Standalone,
             at);

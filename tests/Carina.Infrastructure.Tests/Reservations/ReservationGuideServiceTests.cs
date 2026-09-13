@@ -1,4 +1,5 @@
 using Carina.Contracts;
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
@@ -246,6 +247,22 @@ public sealed class ReservationGuideServiceTests
         Assert.Equal(AppEventName.Reservations, Assert.Single(held.Events.Signalled));
     }
 
+    [Fact]
+    public async Task AReservationThatFollowsItsBroadcastTakesTheSoundTheGuideAnnounces()
+    {
+        Held held = Standing();
+        Reservation booked = held.Book();
+        held.Announce(
+            Opens.AddMinutes(40),
+            Opens.AddMinutes(100),
+            audio: AudioMode.DualMono,
+            sounds: 2);
+
+        Assert.Equal([booked.Id], (await held.Service.ReconcileAsync(Cancel)).Followed);
+        Assert.Equal(AudioMode.DualMono, booked.SnapshotAudio);
+        Assert.Equal(2, booked.SnapshotSounds);
+    }
+
     private static Held Standing(DateTime? at = null)
     {
         var write = new WatchedWrite();
@@ -306,7 +323,9 @@ public sealed class ReservationGuideServiceTests
             DateTime endsAt,
             bool heardWhole = true,
             bool isShadow = false,
-            string? name = null)
+            string? name = null,
+            AudioMode audio = AudioMode.Undetermined,
+            int sounds = ProgrammeSnapshot.SoundsUnannounced)
         {
             Programmes.Programmes.RemoveAll(programme => programme.EventId.Value == Carried);
             Programmes.Programmes.Add(Programme.Rehydrate(
@@ -318,6 +337,8 @@ public sealed class ReservationGuideServiceTests
                 "What it is about",
                 isShadow,
                 Now,
+                audio: audio,
+                sounds: sounds,
                 lastHeardAt: heardWhole ? Now : null));
         }
 

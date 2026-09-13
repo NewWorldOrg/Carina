@@ -5,23 +5,30 @@ namespace Carina.Domain.Reservations;
 
 public sealed class ProgrammeSnapshot
 {
+    public const int SoundsUnannounced = 0;
+
     public ProgrammeSnapshot(
         string name,
         string summary,
         string extended,
         IReadOnlyList<ProgrammeGenre> genres,
-        DateTime capturedAt)
+        DateTime capturedAt,
+        AudioMode audio,
+        int sounds)
     {
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(summary);
         ArgumentNullException.ThrowIfNull(extended);
         ArgumentNullException.ThrowIfNull(genres);
+        ArgumentOutOfRangeException.ThrowIfNegative(sounds);
 
         Name = Within(name, Reservation.NameMaxLength, nameof(name));
         Summary = Within(summary, Reservation.SummaryMaxLength, nameof(summary));
         Extended = Within(extended, Reservation.ExtendedMaxLength, nameof(extended));
         Genres = genres;
         CapturedAt = UtcTimes.Required(capturedAt, nameof(capturedAt));
+        Audio = audio;
+        Sounds = sounds;
     }
 
     public string Name { get; }
@@ -34,12 +41,18 @@ public sealed class ProgrammeSnapshot
 
     public DateTime CapturedAt { get; }
 
+    public AudioMode Audio { get; }
+
+    public int Sounds { get; }
+
     public static ProgrammeSnapshot Of(
         string name,
         string summary,
         IReadOnlyList<ProgrammeItem> items,
         IReadOnlyList<ProgrammeGenre> genres,
-        DateTime at)
+        DateTime at,
+        AudioMode audio,
+        int sounds)
     {
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(summary);
@@ -52,7 +65,9 @@ public sealed class ProgrammeSnapshot
                 string.Join("\n\n", items.Select(item => $"{item.Heading}\n{item.Text}")),
                 Reservation.ExtendedMaxLength),
             genres,
-            at);
+            at,
+            audio,
+            sounds);
     }
 
     private static string Clipped(string text, int longest)

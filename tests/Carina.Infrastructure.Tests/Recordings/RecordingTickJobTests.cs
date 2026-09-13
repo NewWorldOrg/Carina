@@ -280,6 +280,7 @@ public sealed class RecordingTickJobTests
         services.AddScoped(_ => new RecordingRound(
             reservations,
             recordings,
+            new HeldProgrammes(),
             new ResolvedTuning(Terrestrial),
             new DiskPrecheckService(new StorageMonitor(driver, clock, StorageMonitorSettings.Default)),
             driver,

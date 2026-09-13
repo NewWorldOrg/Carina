@@ -125,7 +125,9 @@ public sealed class ReservationGuideService(
                             announced.Summary,
                             announced.Items,
                             announced.Genres,
-                            at),
+                            at,
+                            announced.Audio,
+                            announced.Sounds),
                         divergences);
 
                     touched.Add(reservation);

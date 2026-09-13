@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Encodings;
 using Carina.Domain.Integrity;
@@ -162,7 +163,14 @@ internal sealed class EncodeHarness : IDisposable
             RecordingFileName.For(id, ".ts"),
             Queued,
             Queued + Whole,
-            new ProgrammeSnapshot("A programme", string.Empty, string.Empty, [], Queued),
+            new ProgrammeSnapshot(
+                "A programme",
+                string.Empty,
+                string.Empty,
+                [],
+                Queued,
+                AudioMode.Undetermined,
+                ProgrammeSnapshot.SoundsUnannounced),
             null,
             BroadcastGroupRole.Standalone,
             Queued,

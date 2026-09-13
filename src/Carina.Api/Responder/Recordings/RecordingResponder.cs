@@ -16,6 +16,8 @@ public sealed record RecordingProgrammeResponder(
     string Name,
     string Summary,
     string Extended,
+    AudioMode Audio,
+    int Sounds,
     IReadOnlyList<ProgrammeGenreResponder> Genres,
     DateTime CapturedAt);
 
@@ -89,6 +91,8 @@ public sealed record RecordingResponder(
                 recording.SnapshotName,
                 recording.SnapshotSummary,
                 recording.SnapshotExtended,
+                recording.SnapshotAudio,
+                recording.SnapshotSounds,
                 [.. recording.SnapshotGenres.Select(ProgrammeGenreResponder.Of)],
                 recording.CapturedAt),
             recording.IsInFlight ? RecordingStanding.InFlight : RecordingStanding.Ended,

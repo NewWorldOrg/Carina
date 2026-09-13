@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
@@ -22,7 +23,14 @@ internal static class ReservationFixtures
             startsAt ?? Now.AddHours(2));
 
     public static ProgrammeSnapshot Snapshot(string name = "A programme", string summary = "What it is about")
-        => new(name, summary, string.Empty, [new ProgrammeGenre(7, 1)], Now);
+        => new(
+            name,
+            summary,
+            string.Empty,
+            [new ProgrammeGenre(7, 1)],
+            Now,
+            AudioMode.Undetermined,
+            ProgrammeSnapshot.SoundsUnannounced);
 
     public static Reservation Planned(
         ProgrammeRef? programme = null,

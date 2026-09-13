@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
@@ -14,7 +15,14 @@ internal static class ReservationFactory
         => new(new NetworkId(32736), new ServiceId(1024), new EventId(eventId), startsAt ?? Now.AddHours(2));
 
     public static ProgrammeSnapshot Snapshot()
-        => new("A programme", "What it is about", string.Empty, [new ProgrammeGenre(7, 1)], Now);
+        => new(
+            "A programme",
+            "What it is about",
+            string.Empty,
+            [new ProgrammeGenre(7, 1)],
+            Now,
+            AudioMode.Undetermined,
+            ProgrammeSnapshot.SoundsUnannounced);
 
     public static Reservation Planned(
         RuleId? ruleId = null,

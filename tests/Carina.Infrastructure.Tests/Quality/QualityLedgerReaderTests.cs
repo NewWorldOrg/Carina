@@ -1,4 +1,5 @@
 using Carina.Contracts;
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Quality;
@@ -134,7 +135,14 @@ public sealed class QualityLedgerReaderTests(RepositoryDatabase database)
             RecordingFileName.For(id, ".ts"),
             airs,
             airs.AddMinutes(30),
-            new ProgrammeSnapshot("A programme", string.Empty, string.Empty, [], airs.AddHours(-6)),
+            new ProgrammeSnapshot(
+                "A programme",
+                string.Empty,
+                string.Empty,
+                [],
+                airs.AddHours(-6),
+                AudioMode.Undetermined,
+                ProgrammeSnapshot.SoundsUnannounced),
             null,
             BroadcastGroupRole.Standalone,
             airs,

@@ -286,13 +286,14 @@ public sealed class RecordingUniquenessSchemaTests(MigratedScratchDatabase datab
             INSERT INTO reservation (
                 id, network_id, service_id, event_id, programme_start_at, rule_id, priority,
                 start_at, end_at, end_at_confirmed, margin_before, margin_after,
-                snapshot_name, snapshot_summary, snapshot_extended, snapshot_genres, captured_at,
+                snapshot_name, snapshot_summary, snapshot_extended, snapshot_genres,
+                snapshot_audio, snapshot_sounds, captured_at,
                 epg_diverged, epg_diverged_detail, epg_missing, acknowledged_at,
                 broadcast_group_key, broadcast_group_role, state, started_at, recording_outcome, created_at)
             VALUES (
                 '{id}', {networkId}, 1024, {eventId}, {Airs}, NULL, 10,
                 {Airs}, {Ends}, true, 0, 0,
-                'A programme', 'What it is about', '', '[]'::jsonb, {Now},
+                'A programme', 'What it is about', '', '[]'::jsonb, 'Undetermined', 0, {Now},
                 false, '[]'::jsonb, false, NULL,
                 NULL, 'Standalone', 'Scheduled', {Airs}, NULL, {Now})
             """);
@@ -319,7 +320,8 @@ public sealed class RecordingUniquenessSchemaTests(MigratedScratchDatabase datab
                 expected_window_start, expected_window_end,
                 recording_outcome, outcome_detail,
                 scrambled_packets, eovf_count, measured_updated_at,
-                snapshot_name, snapshot_summary, snapshot_extended, snapshot_genres, captured_at,
+                snapshot_name, snapshot_summary, snapshot_extended, snapshot_genres,
+                snapshot_audio, snapshot_sounds, captured_at,
                 broadcast_group_key, broadcast_group_role,
                 cc_measured, cc_dropped_packets, cc_total_packets,
                 pcr_anchor, drop_positions, pcr_reanchors, tuner_device_id, thumbnail_state)
@@ -332,7 +334,7 @@ public sealed class RecordingUniquenessSchemaTests(MigratedScratchDatabase datab
                 {Airs}, {Ends},
                 NULL, '[]'::jsonb,
                 NULL, 0, NULL,
-                'A programme', 'What it is about', '', '[]'::jsonb, {Now},
+                'A programme', 'What it is about', '', '[]'::jsonb, 'Undetermined', 0, {Now},
                 NULL, 'Standalone',
                 false, NULL, NULL,
                 NULL, '[]'::jsonb, '[]'::jsonb, 'pt3-0', 'Pending')

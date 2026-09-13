@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
@@ -213,7 +214,14 @@ public sealed class ReservationOutcomeJudgementTests
             true,
             Before,
             length is null ? After : Margin.None,
-            new ProgrammeSnapshot("A programme", string.Empty, string.Empty, [], Opens),
+            new ProgrammeSnapshot(
+                "A programme",
+                string.Empty,
+                string.Empty,
+                [],
+                Opens,
+                AudioMode.Undetermined,
+                ProgrammeSnapshot.SoundsUnannounced),
             null,
             BroadcastGroupRole.Standalone,
             state,

@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
 
@@ -123,5 +124,12 @@ public sealed class ReservationFollowTests
             Later);
 
     private static ProgrammeSnapshot Snapshot(string name = "A programme")
-        => new(name, "What it is about", string.Empty, [new ProgrammeGenre(7, 1)], Later);
+        => new(
+            name,
+            "What it is about",
+            string.Empty,
+            [new ProgrammeGenre(7, 1)],
+            Later,
+            AudioMode.Undetermined,
+            ProgrammeSnapshot.SoundsUnannounced);
 }

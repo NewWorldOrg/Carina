@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Integrity;
 using Carina.Domain.Programmes;
@@ -164,7 +165,14 @@ public sealed class ScrubberTests
             RecordingFileName.For(id, ".m2ts"),
             Noon,
             Noon.AddHours(1),
-            new ProgrammeSnapshot("A programme", "What it is about", string.Empty, [], Noon),
+            new ProgrammeSnapshot(
+                "A programme",
+                "What it is about",
+                string.Empty,
+                [],
+                Noon,
+                AudioMode.Undetermined,
+                ProgrammeSnapshot.SoundsUnannounced),
             null,
             BroadcastGroupRole.Standalone,
             Noon);

@@ -1,4 +1,5 @@
 using Carina.Contracts;
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
@@ -288,7 +289,14 @@ public sealed class RuleRehearsalTests
             true,
             Margin.None,
             Margin.None,
-            new ProgrammeSnapshot(programme.Name, programme.Summary, string.Empty, [], Now),
+            new ProgrammeSnapshot(
+                programme.Name,
+                programme.Summary,
+                string.Empty,
+                [],
+                Now,
+                AudioMode.Undetermined,
+                ProgrammeSnapshot.SoundsUnannounced),
             null,
             BroadcastGroupRole.Standalone,
             ReservationState.Scheduled,

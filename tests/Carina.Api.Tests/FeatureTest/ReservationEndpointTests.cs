@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.Json;
 
 using Carina.Contracts;
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
@@ -270,6 +271,20 @@ public sealed class ReservationEndpointTests
         Assert.Empty(data.GetProperty("instead").EnumerateArray());
         Assert.Equal("scheduled", Standing(data.GetProperty("reservation")));
         Assert.Single(feature.Reservations.Held);
+    }
+
+    [Fact]
+    public async Task TheSoundTheGuideAnnouncedIsCopiedOntoTheReservationWhenItIsMade()
+    {
+        await using var feature = new ReservationFeature();
+        feature.Announced(4001, audio: AudioMode.DualMono, sounds: 2);
+
+        (HttpStatusCode status, _) = await feature.PostAsync("/api/reservations", Asking(4001));
+        Reservation made = Assert.Single(feature.Reservations.Held);
+
+        Assert.Equal(HttpStatusCode.Created, status);
+        Assert.Equal(AudioMode.DualMono, made.SnapshotAudio);
+        Assert.Equal(2, made.SnapshotSounds);
     }
 
     [Fact]

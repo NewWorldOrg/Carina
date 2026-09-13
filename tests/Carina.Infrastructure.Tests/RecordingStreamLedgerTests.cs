@@ -1,4 +1,5 @@
 using Carina.Contracts;
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
@@ -205,7 +206,14 @@ public sealed class RecordingStreamLedgerTests(RepositoryDatabase database)
         => new(new NetworkId(32736), new ServiceId(1024), new EventId(eventId), Airs);
 
     private static ProgrammeSnapshot Snapshot()
-        => new("A programme", "What it is about", string.Empty, [new ProgrammeGenre(7, 1)], Airs);
+        => new(
+            "A programme",
+            "What it is about",
+            string.Empty,
+            [new ProgrammeGenre(7, 1)],
+            Airs,
+            AudioMode.Undetermined,
+            ProgrammeSnapshot.SoundsUnannounced);
 
     private async Task Add<T>(T entity)
         where T : class

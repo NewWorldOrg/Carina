@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 
 using Carina.Contracts;
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.Encodings;
@@ -155,7 +156,14 @@ internal sealed class EncodingFeature : IAsyncDisposable
             RecordingFileName.For(id, ".ts"),
             started,
             started.AddHours(1),
-            new ProgrammeSnapshot("A programme", "What it is about", string.Empty, [], started),
+            new ProgrammeSnapshot(
+                "A programme",
+                "What it is about",
+                string.Empty,
+                [],
+                started,
+                AudioMode.Undetermined,
+                ProgrammeSnapshot.SoundsUnannounced),
             null,
             BroadcastGroupRole.Standalone,
             started,

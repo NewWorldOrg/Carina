@@ -9,6 +9,9 @@ public sealed class RecordedMaterialTests : IDisposable
     private static readonly string[] TheStreamsOwnWords =
         ["Video", "Audio", "Resolution", "Scan", "FrameRate", "Component", "Width", "Height", "Aspect", "Codec", "Interlace"];
 
+    private static readonly string[] WhatTheBroadcastAnnouncedRatherThanWhatTheStreamIs =
+        [nameof(Recording.SnapshotAudio), nameof(ProgrammeSnapshot.Audio)];
+
     private readonly DirectoryInfo mounted = Directory.CreateTempSubdirectory("carina-recorded");
 
     public void Dispose() => mounted.Delete(recursive: true);
@@ -51,7 +54,7 @@ public sealed class RecordedMaterialTests : IDisposable
     }
 
     [Fact]
-    public void ARecordingRowSaysNothingAboutThePictureOrTheSoundSoBothAreReadFromTheStream()
+    public void ARecordingRowSaysNothingTheStreamItselfAnswersApartFromTheSoundTheBroadcastAnnounced()
     {
         string[] said =
         [
@@ -59,8 +62,14 @@ public sealed class RecordedMaterialTests : IDisposable
             .. typeof(ProgrammeSnapshot).GetProperties().Select(property => property.Name),
         ];
 
+        Assert.Equal(
+            [.. WhatTheBroadcastAnnouncedRatherThanWhatTheStreamIs.Order(StringComparer.Ordinal)],
+            [.. said.Where(Announced).Order(StringComparer.Ordinal)]);
         Assert.DoesNotContain(
-            said,
+            said.Where(name => !Announced(name)),
             name => TheStreamsOwnWords.Any(word => name.Contains(word, StringComparison.Ordinal)));
     }
+
+    private static bool Announced(string name)
+        => WhatTheBroadcastAnnouncedRatherThanWhatTheStreamIs.Contains(name, StringComparer.Ordinal);
 }

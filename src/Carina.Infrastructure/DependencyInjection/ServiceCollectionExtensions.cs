@@ -121,6 +121,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IStationLogoRepository, StationLogoRepository>();
         services.AddScoped<ILogoVisitRepository, LogoVisitRepository>();
         services.AddScoped<IProgrammeRepository, ProgrammeRepository>();
+        services.AddScoped<IAnnouncedProgrammes>(provider => provider.GetRequiredService<IProgrammeRepository>());
         services.AddScoped<IProgrammeSearchRepository, ProgrammeSearchRepository>();
         services.AddScoped<ProgrammeSearchScope>();
         services.AddScoped<IStreamVisitRepository, StreamVisitRepository>();

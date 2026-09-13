@@ -1,5 +1,6 @@
 using System.Text.Json;
 
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
@@ -71,6 +72,10 @@ public sealed class ReservationConfiguration : IEntityTypeConfiguration<Reservat
                 $"margin_before BETWEEN 0 AND {(int)Margin.Longest.TotalSeconds} "
                 + $"AND margin_after BETWEEN 0 AND {(int)Margin.Longest.TotalSeconds}");
             table.HasCheckConstraint("ck_reservation_window", "end_at > start_at");
+            table.HasCheckConstraint(
+                "ck_reservation_snapshot_audio",
+                $"snapshot_audio IN ({Vocabulary<AudioMode>()})");
+            table.HasCheckConstraint("ck_reservation_snapshot_sounds", "snapshot_sounds >= 0");
             table.HasCheckConstraint(
                 "ck_reservation_priority",
                 $"priority BETWEEN {Priority.MinValue} AND {Priority.MaxValue}");
@@ -150,6 +155,13 @@ public sealed class ReservationConfiguration : IEntityTypeConfiguration<Reservat
             .HasColumnName("snapshot_genres")
             .HasColumnType("jsonb")
             .IsRequired();
+
+        builder.Property(reservation => reservation.SnapshotAudio)
+            .HasConversion<string>()
+            .HasMaxLength(32)
+            .IsRequired();
+
+        builder.Property(reservation => reservation.SnapshotSounds).IsRequired();
 
         builder.Property(reservation => reservation.CapturedAt).IsRequired();
 
@@ -241,6 +253,10 @@ public sealed class ReservationConfiguration : IEntityTypeConfiguration<Reservat
         builder.Metadata.SetBeforeSaveBehavior(PropertySaveBehavior.Ignore);
         builder.Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Ignore);
     }
+
+    private static string Vocabulary<T>()
+        where T : struct, Enum
+        => string.Join(", ", Enum.GetNames<T>().Select(name => $"'{name}'"));
 
     private static IReadOnlyList<T> Read<T>(string stored)
         => JsonSerializer.Deserialize<List<T>>(stored, ProgrammeJson.Options) ?? [];

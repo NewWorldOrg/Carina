@@ -6,6 +6,7 @@ using System.Text.Json;
 using Carina.Api.Services;
 using Carina.Api.Tests.Unit;
 using Carina.Contracts;
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.Encodings;
@@ -267,7 +268,9 @@ internal sealed class RecordingFeature : IAsyncDisposable
         string extended = "",
         IReadOnlyList<ProgrammeGenre>? genres = null,
         string? groupKey = null,
-        BroadcastGroupRole groupRole = BroadcastGroupRole.Standalone)
+        BroadcastGroupRole groupRole = BroadcastGroupRole.Standalone,
+        AudioMode audio = AudioMode.Undetermined,
+        int sounds = ProgrammeSnapshot.SoundsUnannounced)
     {
         DateTime started = startedAt ?? Noon;
 
@@ -279,7 +282,7 @@ internal sealed class RecordingFeature : IAsyncDisposable
             RecordingFileName.For(id, ".m2ts"),
             started,
             started + (window ?? TimeSpan.FromHours(1)),
-            new ProgrammeSnapshot(name, summary, extended, genres ?? [], started),
+            new ProgrammeSnapshot(name, summary, extended, genres ?? [], started, audio, sounds),
             groupKey is null ? null : new BroadcastGroupKey(groupKey),
             groupRole,
             started,
@@ -297,7 +300,9 @@ internal sealed class RecordingFeature : IAsyncDisposable
         string extended = "",
         IReadOnlyList<ProgrammeGenre>? genres = null,
         string? groupKey = null,
-        BroadcastGroupRole groupRole = BroadcastGroupRole.Standalone)
+        BroadcastGroupRole groupRole = BroadcastGroupRole.Standalone,
+        AudioMode audio = AudioMode.Undetermined,
+        int sounds = ProgrammeSnapshot.SoundsUnannounced)
     {
         Recording recording = Begin(
             RecordingId.New(),
@@ -311,7 +316,9 @@ internal sealed class RecordingFeature : IAsyncDisposable
             extended,
             genres,
             groupKey,
-            groupRole);
+            groupRole,
+            audio,
+            sounds);
 
         Recordings.Recordings.Add(recording);
 

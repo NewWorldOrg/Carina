@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
@@ -93,7 +94,14 @@ public sealed class RecordingDirectoryDiscardTests(RepositoryDatabase database)
             RecordingFileName.For(id, ".ts"),
             Airs,
             Airs.AddMinutes(30),
-            new ProgrammeSnapshot("A programme", string.Empty, string.Empty, [], Airs.AddHours(-6)),
+            new ProgrammeSnapshot(
+                "A programme",
+                string.Empty,
+                string.Empty,
+                [],
+                Airs.AddHours(-6),
+                AudioMode.Undetermined,
+                ProgrammeSnapshot.SoundsUnannounced),
             null,
             BroadcastGroupRole.Standalone,
             Airs,

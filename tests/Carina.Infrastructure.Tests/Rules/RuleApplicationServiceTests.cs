@@ -1,4 +1,5 @@
 using Carina.Contracts;
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
@@ -643,13 +644,30 @@ public sealed class RuleApplicationServiceTests
             Margin.OfSeconds(marginAfter),
             Now.AddDays(-30));
 
+    [Fact]
+    public async Task AReservationARuleMadeCarriesTheSoundTheBroadcastAnnounced()
+    {
+        World world = World.Of();
+        world.Rules.Rules.Add(Written("keyword=hill"));
+        world.Guide(Broadcast(Listed, 1, "hill walking", audio: AudioMode.DualMono, sounds: 2));
+
+        RuleApplicationRun run = await world.Applying.EverythingAsync(Cancel);
+
+        Reservation made = Assert.Single(run.Made);
+
+        Assert.Equal(AudioMode.DualMono, made.SnapshotAudio);
+        Assert.Equal(2, made.SnapshotSounds);
+    }
+
     private static Programme Broadcast(
         int service,
         int carried,
         string name,
         DateTime? startsAt = null,
         long revision = 1,
-        int stream = Carried)
+        int stream = Carried,
+        AudioMode audio = AudioMode.Undetermined,
+        int sounds = ProgrammeSnapshot.SoundsUnannounced)
         => Programme.Rehydrate(
             new ProgrammeId(new NetworkId(Network), new ServiceId(service), new EventId(carried)),
             new TransportStreamId(stream),
@@ -659,6 +677,8 @@ public sealed class RuleApplicationServiceTests
             "a summary",
             false,
             Now,
+            audio: audio,
+            sounds: sounds,
             revision: revision);
 
     private static Reservation Standing(
@@ -682,7 +702,14 @@ public sealed class RuleApplicationServiceTests
             true,
             Margin.OfSeconds(marginBefore),
             Margin.None,
-            new ProgrammeSnapshot(programme.Name, programme.Summary, string.Empty, [], Now),
+            new ProgrammeSnapshot(
+                programme.Name,
+                programme.Summary,
+                string.Empty,
+                [],
+                Now,
+                AudioMode.Undetermined,
+                ProgrammeSnapshot.SoundsUnannounced),
             null,
             BroadcastGroupRole.Standalone,
             state,

@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
@@ -273,5 +274,12 @@ public sealed class ReservationPromiseTests
         => new(new NetworkId(32736), new ServiceId(1024), new EventId(4001), Airs);
 
     private static ProgrammeSnapshot Snapshot()
-        => new("A programme", "What it is about", string.Empty, [new ProgrammeGenre(7, 1)], Airs.AddHours(-6));
+        => new(
+            "A programme",
+            "What it is about",
+            string.Empty,
+            [new ProgrammeGenre(7, 1)],
+            Airs.AddHours(-6),
+            AudioMode.Undetermined,
+            ProgrammeSnapshot.SoundsUnannounced);
 }

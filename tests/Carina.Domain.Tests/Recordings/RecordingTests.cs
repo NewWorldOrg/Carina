@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
@@ -25,6 +26,25 @@ public sealed class RecordingTests
     [Fact]
     public void ARecordingKeepsNoPublicConstructorBesideRehydrate()
         => Assert.Empty(typeof(Recording).GetConstructors());
+
+    [Fact]
+    public void ARecordingKeepsTheSoundTheBroadcastAnnouncedWhenItBegan()
+    {
+        Recording recording = RecordingFactory.Started(
+            snapshot: RecordingFactory.Snapshot(AudioMode.DualMono, 2));
+
+        Assert.Equal(AudioMode.DualMono, recording.SnapshotAudio);
+        Assert.Equal(2, recording.SnapshotSounds);
+    }
+
+    [Fact]
+    public void ARecordingOfABroadcastThatAnnouncedNoSoundSaysSoRatherThanGuessing()
+    {
+        Recording recording = RecordingFactory.Started();
+
+        Assert.Equal(AudioMode.Undetermined, recording.SnapshotAudio);
+        Assert.Equal(ProgrammeSnapshot.SoundsUnannounced, recording.SnapshotSounds);
+    }
 
     [Fact]
     public void ARecordingWithoutAReservationIsStillARecording()

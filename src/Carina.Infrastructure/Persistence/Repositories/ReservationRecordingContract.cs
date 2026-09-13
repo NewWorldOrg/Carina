@@ -1,6 +1,7 @@
 using System.Data.Common;
 using System.Text.Json;
 
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
@@ -18,7 +19,7 @@ public sealed class ReservationRecordingContract(CarinaDbContext context) : IRes
         SELECT id, network_id, service_id, event_id, programme_start_at, snapshot_name, priority,
                broadcast_group_key, broadcast_group_role, effective_start_at, effective_end_at,
                end_at_confirmed, started_at, snapshot_summary, snapshot_extended, snapshot_genres,
-               captured_at
+               captured_at, snapshot_audio, snapshot_sounds
         FROM {View}
         WHERE in_flight OR (effective_start_at <= $1 AND $1 < effective_end_at)
         ORDER BY effective_start_at, id
@@ -104,7 +105,9 @@ public sealed class ReservationRecordingContract(CarinaDbContext context) : IRes
                 reader.GetString(13),
                 reader.GetString(14),
                 JsonSerializer.Deserialize<List<ProgrammeGenre>>(reader.GetString(15), ProgrammeJson.Options) ?? [],
-                reader.GetDateTime(16)),
+                reader.GetDateTime(16),
+                Enum.Parse<AudioMode>(reader.GetString(17)),
+                reader.GetInt32(18)),
             new Priority(reader.GetInt32(6)),
             reader.IsDBNull(7) ? null : new BroadcastGroupKey(reader.GetString(7)),
             Enum.Parse<BroadcastGroupRole>(reader.GetString(8)),
