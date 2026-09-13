@@ -119,6 +119,15 @@ public sealed class SoundArrangementTests
     }
 
     [Fact]
+    public void OnlyTheWholeOfTheFirstStreamIsTheOneEveryPlayableRecordingHas()
+    {
+        Assert.True(SoundPlacement.WholeStream(0).IsAllOfTheFirstStream);
+        Assert.False(SoundPlacement.WholeStream(1).IsAllOfTheFirstStream);
+        Assert.False(SoundPlacement.OneChannelOf(0, SoundChannel.Left).IsAllOfTheFirstStream);
+        Assert.False(SoundPlacement.OneChannelOf(0, SoundChannel.Right).IsAllOfTheFirstStream);
+    }
+
+    [Fact]
     public void ASoundIsTakenFromAStreamTheProgrammeCouldHaveAndFromASideAChannelCouldBeOn()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => SoundPlacement.WholeStream(-1));

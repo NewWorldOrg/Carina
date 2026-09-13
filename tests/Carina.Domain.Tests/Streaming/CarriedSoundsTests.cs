@@ -35,6 +35,42 @@ public sealed class CarriedSoundsTests
         Assert.Equal("the programme said nothing", carried.Note);
     }
 
+    [Theory]
+    [InlineData(2, 1, true)]
+    [InlineData(2, 0, true)]
+    [InlineData(1, 1, false)]
+    [InlineData(1, 0, true)]
+    [InlineData(0, 0, false)]
+    public void AStreamCarriesAWholeStreamPlacementOnlyWhereTheSoundItPointsAtIsThere(
+        int counted,
+        int ordinal,
+        bool carried)
+    {
+        Assert.Equal(carried, CarriedSounds.Counted(counted).Carries(SoundPlacement.WholeStream(ordinal)));
+    }
+
+    [Fact]
+    public void APlacementOnOneChannelIsCarriedWhereTheStreamItPointsAtIsThere()
+    {
+        Assert.True(CarriedSounds.Counted(1).Carries(SoundPlacement.OneChannelOf(0, SoundChannel.Left)));
+        Assert.False(CarriedSounds.Counted(0).Carries(SoundPlacement.OneChannelOf(0, SoundChannel.Right)));
+    }
+
+    [Fact]
+    public void WhatCouldNotBeReadCarriesNoPlacementAtAll()
+    {
+        CarriedSounds carried = CarriedSounds.Unread("the programme said nothing");
+
+        Assert.False(carried.Carries(SoundPlacement.WholeStream(0)));
+        Assert.False(carried.Carries(SoundPlacement.OneChannelOf(0, SoundChannel.Left)));
+    }
+
+    [Fact]
+    public void APlacementIsAskedOfSomethingRatherThanOfNothing()
+    {
+        Assert.Throws<ArgumentNullException>(() => CarriedSounds.Counted(1).Carries(null!));
+    }
+
     [Fact]
     public void ALongComplaintIsKeptToItsEnd()
     {

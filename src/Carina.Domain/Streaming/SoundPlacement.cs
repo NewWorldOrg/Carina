@@ -21,6 +21,8 @@ public sealed record SoundPlacement
 
     public bool IsWholeStream => Channel is null;
 
+    public bool IsAllOfTheFirstStream => Ordinal is 0 && Channel is null;
+
     public static SoundPlacement WholeStream(int ordinal)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(ordinal);
