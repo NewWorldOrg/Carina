@@ -91,7 +91,8 @@ public sealed class MigrationCarriageTests
         MigrationCarryRefusedException stopped = await Assert.ThrowsAsync<MigrationCarryRefusedException>(
             () => CarryAsync(MigrationPass.ForReal));
 
-        Assert.Contains("delete the new root", stopped.Message, StringComparison.Ordinal);
+        Assert.Contains("take out of the new root", stopped.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("delete the new root", stopped.Message, StringComparison.Ordinal);
         Assert.Empty(journal.Steps);
         Assert.Empty(recordings.Written);
     }

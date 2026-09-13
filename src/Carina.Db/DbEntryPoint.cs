@@ -2,6 +2,7 @@ using System.Globalization;
 
 using Carina.Domain.Channels;
 using Carina.Domain.Migration;
+using Carina.Domain.Recordings;
 using Carina.Infrastructure.Migration;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
@@ -101,6 +102,17 @@ public static class DbEntryPoint
             return UnusableConfigurationExitCode;
         }
 
+        if (!MigrationRootSettings.TryRead(
+                Environment.GetEnvironmentVariable,
+                carry.Into,
+                out MigrationRootSettings? root,
+                out string undeclared))
+        {
+            await error.WriteLineAsync(undeclared);
+
+            return UnusableConfigurationExitCode;
+        }
+
         if (!MigrationSourceSettings.TryRead(
                 Environment.GetEnvironmentVariable,
                 out MigrationSourceSettings? source,
@@ -126,12 +138,13 @@ public static class DbEntryPoint
 
         await using (context)
         {
-            return await CarriedAsync(carry, source, context, error, output);
+            return await CarriedAsync(carry, root.Root, source, context, error, output);
         }
     }
 
     private static async Task<int> CarriedAsync(
         CarryArguments carry,
+        OutputRoot root,
         MigrationSourceSettings source,
         CarinaDbContext context,
         TextWriter error,
@@ -145,7 +158,7 @@ public static class DbEntryPoint
                 new MigrationSourceLedgerReader(new MySqlMigrationSourceConnection(source)),
                 new LocalMigrationSourceDirectory(carry.From),
                 new MigrationCarriage(
-                    new HardLinkMigrationCarrier(carry.From, carry.Into, carry.Root),
+                    new HardLinkMigrationCarrier(carry.From, carry.Into, root),
                     new RecordingRepository(context),
                     new RuleRepository(context),
                     new EncodeJobRepository(context),
