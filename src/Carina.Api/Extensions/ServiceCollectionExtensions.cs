@@ -1,6 +1,7 @@
 using System.Net;
 
 using Carina.Api.Authentication;
+using Carina.Api.Events;
 using Carina.Api.Services;
 
 using Microsoft.AspNetCore.Builder;
@@ -33,6 +34,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<EpgRebuildService>();
         services.AddScoped<ProgrammeGuideService>();
         services.AddScoped<ProgrammeFeedService>();
+        services.AddSingleton<ProgrammeFeedReaders>();
         services.AddScoped<ArchiveService>();
         services.AddScoped<ReservationService>();
         services.AddScoped<RuleService>();

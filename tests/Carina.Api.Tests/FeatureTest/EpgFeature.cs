@@ -28,7 +28,9 @@ internal sealed class EpgFeature : IAsyncDisposable
         IReadOnlyList<BroadcastStream>? streams = null,
         IDriverClient? driver = null,
         CollectionSettings? collection = null,
-        TimeProvider? clock = null)
+        TimeProvider? clock = null,
+        ProgrammeFeedSettings? feed = null,
+        IBoundedRead? reads = null)
     {
         Streams = new HeldStreams(streams ?? []);
         configured = factory
@@ -42,6 +44,7 @@ internal sealed class EpgFeature : IAsyncDisposable
                 services.AddSingleton<ICandidateChannelRepository>(Candidates);
                 services.AddSingleton<IBroadcastServiceRepository>(Catalogue);
                 services.AddSingleton<IAtomicWrite, UnguardedWrites>();
+                services.AddSingleton(reads ?? new UnboundedReads());
                 services.RemoveAll<IHostedService>();
                 services.AddSingleton<IBroadcastStreamDirectory>(Streams);
 
@@ -58,6 +61,11 @@ internal sealed class EpgFeature : IAsyncDisposable
                 if (clock is not null)
                 {
                     services.AddSingleton(clock);
+                }
+
+                if (feed is not null)
+                {
+                    services.AddSingleton(feed);
                 }
             }));
         authenticated = configured.WithTestScheme();

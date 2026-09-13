@@ -1,8 +1,10 @@
 using System.Net;
 
 using Carina.Api.Events;
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
+using Carina.TestSupport;
 
 namespace Carina.Api.Tests.FeatureTest;
 
@@ -107,6 +109,83 @@ public sealed class ProgrammeFeedEndpointTests
         Assert.Equal("1:3", Cursor(response));
     }
 
+    [Fact]
+    public async Task AFeedAskedForWhileEveryPlaceIsTakenIsToldToComeBackLater()
+    {
+        var held = new ReadsHeldOpen();
+        await using var feature = new EpgFeature(
+            feed: new ProgrammeFeedSettings { ConcurrentReaders = 1, StatementTimeout = TimeSpan.FromSeconds(20) },
+            reads: held);
+
+        Task<HttpResponseMessage> reading = feature.Client.GetAsync(
+            new Uri("/api/programs/bulk", UriKind.Relative),
+            HttpCompletionOption.ResponseHeadersRead);
+        await held.Started;
+
+        using HttpResponseMessage turnedAway = await feature.Client.GetAsync(
+            new Uri("/api/programs/bulk", UriKind.Relative));
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, turnedAway.StatusCode);
+        Assert.Equal(TimeSpan.FromSeconds(1), turnedAway.Headers.RetryAfter?.Delta);
+        Assert.Contains(
+            "they are all taken",
+            await turnedAway.Content.ReadAsStringAsync(),
+            StringComparison.Ordinal);
+
+        held.LetGo();
+
+        using HttpResponseMessage answered = await reading;
+
+        Assert.Equal(HttpStatusCode.OK, answered.StatusCode);
+    }
+
+    [Fact]
+    public async Task ThePlaceComesBackWhenTheFeedBeforeItIsOver()
+    {
+        await using var feature = new EpgFeature(
+            feed: new ProgrammeFeedSettings { ConcurrentReaders = 1 });
+
+        feature.Programmes.Programmes.Add(Programme(1, 10));
+
+        using HttpResponseMessage first = await feature.Client.GetAsync(
+            new Uri("/api/programs/bulk", UriKind.Relative));
+        using HttpResponseMessage second = await feature.Client.GetAsync(
+            new Uri("/api/programs/bulk", UriKind.Relative));
+
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+    }
+
+    [Fact]
+    public async Task AStatementThatRanOutOfTimeSaysSoAndNamesTheCursorToResumeFrom()
+    {
+        await using var feature = new EpgFeature(
+            feed: new ProgrammeFeedSettings { StatementTimeout = TimeSpan.FromSeconds(20) },
+            reads: new ReadsThatRunOutOfTime());
+
+        using HttpResponseMessage response = await feature.Client.GetAsync(
+            new Uri("/api/programs/bulk?cursor=1:40", UriKind.Relative));
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Equal(TimeSpan.FromSeconds(20), response.Headers.RetryAfter?.Delta);
+        Assert.Equal("1:40", Cursor(response));
+    }
+
+    [Fact]
+    public async Task AFeedIsGivenTheTimeOneStatementIsAllowed()
+    {
+        var counted = new UnboundedReads();
+        await using var feature = new EpgFeature(
+            feed: new ProgrammeFeedSettings { StatementTimeout = TimeSpan.FromSeconds(7) },
+            reads: counted);
+
+        using HttpResponseMessage response = await feature.Client.GetAsync(
+            new Uri("/api/programs/bulk", UriKind.Relative));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal(TimeSpan.FromSeconds(7), counted.Patience);
+    }
+
     private static string? Cursor(HttpResponseMessage response)
         => response.Headers.TryGetValues(ProgrammeFeedStream.CursorHeader, out IEnumerable<string>? carried)
             ? carried.First()
@@ -129,4 +208,38 @@ public sealed class ProgrammeFeedEndpointTests
 
         return programme;
     }
+}
+
+internal sealed class ReadsHeldOpen : IBoundedRead
+{
+    private readonly TaskCompletionSource started = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    private readonly TaskCompletionSource letGo = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    public Task Started => started.Task;
+
+    public void LetGo() => letGo.TrySetResult();
+
+    public async Task<T> NoLongerThanAsync<T>(
+        TimeSpan patience,
+        Func<CancellationToken, Task<T>> read,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(read);
+
+        started.TrySetResult();
+
+        await letGo.Task.WaitAsync(cancellationToken);
+
+        return await read(cancellationToken);
+    }
+}
+
+internal sealed class ReadsThatRunOutOfTime : IBoundedRead
+{
+    public Task<T> NoLongerThanAsync<T>(
+        TimeSpan patience,
+        Func<CancellationToken, Task<T>> read,
+        CancellationToken cancellationToken)
+        => Task.FromException<T>(new ReadTookTooLongException(patience));
 }
