@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using System.Text;
 
 using Carina.Domain.Auth;
+using Carina.Domain.Base;
 using Carina.Domain.Programmes;
 using Carina.TestSupport;
 
@@ -27,6 +28,7 @@ internal sealed class AuthProbe : IAsyncDisposable
             services.AddSingleton<IPasswordHasher>(Hasher);
             services.AddSingleton<IProgrammeRepository>(Programmes);
             services.AddSingleton<ICollectionEpochRepository>(Epochs);
+            services.AddSingleton<IBoundedRead>(new UnboundedReads());
             alsoWired?.Invoke(services);
         }));
 

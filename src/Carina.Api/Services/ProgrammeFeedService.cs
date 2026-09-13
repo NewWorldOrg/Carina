@@ -1,4 +1,5 @@
 using Carina.Api.Common;
+using Carina.Domain.Base;
 using Carina.Domain.Programmes;
 
 namespace Carina.Api.Services;
@@ -11,9 +12,20 @@ public sealed record FeedPage(
 public sealed class ProgrammeFeedService(
     IProgrammeRepository programmes,
     ICollectionEpochRepository epochs,
+    IBoundedRead reads,
+    ProgrammeFeedSettings settings,
     TimeProvider clock)
 {
     public async Task<ServiceResult<FeedPage>> ReadAsync(
+        BulkCursor? asked,
+        int rows,
+        CancellationToken cancellationToken)
+        => await reads.NoLongerThanAsync(
+            settings.StatementTimeout,
+            within => PageAsync(asked, rows, within),
+            cancellationToken);
+
+    private async Task<ServiceResult<FeedPage>> PageAsync(
         BulkCursor? asked,
         int rows,
         CancellationToken cancellationToken)

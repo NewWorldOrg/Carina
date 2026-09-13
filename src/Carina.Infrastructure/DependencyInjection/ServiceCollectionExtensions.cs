@@ -109,10 +109,16 @@ public static class ServiceCollectionExtensions
             .Configure(options => options.ReadFrom(configuration))
             .ValidateOnStart();
 
+        services.AddSingleton<IValidateOptions<ProgrammeFeedOptions>, ProgrammeFeedValidation>();
+        services.AddOptions<ProgrammeFeedOptions>()
+            .Configure(options => options.ReadFrom(configuration))
+            .ValidateOnStart();
+
         services.AddDbContext<CarinaDbContext>((provider, options) =>
             options.UseCarinaDatabase(provider.GetRequiredService<IOptions<DatabaseOptions>>().Value.ConnectionString));
 
         services.AddScoped<IAtomicWrite, DatabaseAtomicWrite>();
+        services.AddScoped<IBoundedRead, DatabaseBoundedRead>();
         services.AddScoped<IAuthSessionRepository, AuthSessionRepository>();
         services.AddScoped<ILocalAccountRepository, LocalAccountRepository>();
         services.AddScoped<IOidcSettingsRepository, OidcSettingsRepository>();
@@ -279,6 +285,8 @@ public static class ServiceCollectionExtensions
             provider.GetRequiredService<IOptions<CollectionOptions>>().Value.Read());
         services.TryAddSingleton<LogoSweepSettings>(provider =>
             provider.GetRequiredService<IOptions<LogoSweepOptions>>().Value.Read());
+        services.TryAddSingleton<ProgrammeFeedSettings>(provider =>
+            provider.GetRequiredService<IOptions<ProgrammeFeedOptions>>().Value.Read());
         services.TryAddSingleton<RescanNoticeBoard>();
         services.TryAddSingleton<CollectionBoost>();
         services.TryAddSingleton(new AppEventHub());

@@ -107,6 +107,8 @@ API はコンテナの 8080 番で待ち受け、ホストの 8081 番に公開�
 | `Integrity__OutputRoots` | `driver` の出力ルートが `app` からどこに見えるか(`primary=/srv/recordings`) |
 | `Thumbnails__WrittenTo` | サムネイルの置き場所。空なら作らない |
 | `Encodings__OutputRoots` | エンコードの成果物を書くルート(`encodes=/srv/encodes`) |
+| `ProgrammeFeed__ConcurrentReaders` | 一括番組表を同時に何本まで配るか。既定は 4 で、超えた要求はその場で断る |
+| `ProgrammeFeed__StatementTimeout` | 一括番組表の 1 文に与える時間。既定は 30 秒で、超えたら何も送らずカーソルを添えて断る |
 
 `CARINA_PUBLIC_ORIGIN` は ID プロバイダへ登録する redirect URI の出所。
 未設定でも起動するが、リクエストの届いたアドレスからの推定になる。

@@ -158,6 +158,23 @@ public sealed class UnguardedWrites : IAtomicWrite
     }
 }
 
+public sealed class UnboundedReads : IBoundedRead
+{
+    public TimeSpan? Patience { get; private set; }
+
+    public Task<T> NoLongerThanAsync<T>(
+        TimeSpan patience,
+        Func<CancellationToken, Task<T>> read,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(read);
+
+        Patience = patience;
+
+        return read(cancellationToken);
+    }
+}
+
 public sealed class HeldCandidates : ICandidateChannelRepository
 {
     public List<CandidateChannel> Candidates { get; } = [];

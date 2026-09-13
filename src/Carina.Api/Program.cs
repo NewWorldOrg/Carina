@@ -72,8 +72,12 @@ app.MapControllers();
 app.MapGet(AppEventStream.Path, (HttpContext context, AppEventHub hub) =>
     AppEventStream.Invoke(context, hub)).ExcludeFromDescription().WithEffect(EndpointEffect.Reading);
 
-app.MapGet(ProgrammeFeedStream.Path, (HttpContext context, ProgrammeFeedService feed) =>
-    ProgrammeFeedStream.Invoke(context, feed)).ExcludeFromDescription().WithEffect(EndpointEffect.Reading);
+app.MapGet(
+        ProgrammeFeedStream.Path,
+        (HttpContext context, ProgrammeFeedService feed, ProgrammeFeedReaders readers) =>
+            ProgrammeFeedStream.Invoke(context, feed, readers))
+    .ExcludeFromDescription()
+    .WithEffect(EndpointEffect.Reading);
 
 app.MapGet(
         LiveWire.Path,
