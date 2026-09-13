@@ -574,9 +574,12 @@ public sealed class LiveSessionManagerTests
 
         clock.Turn(Linger * 2);
 
+        await Eventually.Happens(
+            () => clock.Pending is 0,
+            "every alarm this clock was holding is let go once the supply is");
+
         Assert.Equal(1, supply.Asked);
         Assert.Equal(1, supply.Opened[0].TimesLetGo);
-        Assert.Equal(0, clock.Pending);
         Assert.Empty(manager.Keys);
     }
 
