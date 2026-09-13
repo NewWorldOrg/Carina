@@ -6,6 +6,7 @@ using Carina.Api.Responder.Playback;
 using Carina.Api.Services;
 using Carina.Domain.Channels;
 using Carina.Domain.Playback;
+using Carina.Domain.Recordings;
 using Carina.Domain.Streaming;
 
 using Microsoft.Net.Http.Headers;
@@ -46,6 +47,8 @@ public static class PlayDelivery
         "The broadcast this recording was made from carried one sound, so it has no secondary sound to play.";
 
     public const string TheSoundsCouldNotBeRead = "The sounds this recording carries could not be read";
+
+    private static readonly IReadOnlyList<SoundTrack> TheMainSoundAlone = [SoundTrack.Main];
 
     public static async Task Invoke(
         HttpContext context,
@@ -97,6 +100,17 @@ public static class PlayDelivery
 
         if (!offered.IsSuccess)
         {
+            if (AsksForThePlan(context.Request)
+                && sound.Track is not SoundTrack.Main
+                && await WhatIsStillWithinReachAsync(playback, recordingId, context.RequestAborted) is { } narrowed)
+            {
+                PlaybackHeaders.Say(context.Response, narrowed.Plan);
+
+                await TellAsync(context, narrowed.Plan, narrowed.Handover, TheMainSoundAlone);
+
+                return;
+            }
+
             await RefuseAsync(context, PlaybackStatus.Of(offered.ErrorType), offered.ErrorMessage!);
 
             return;
@@ -111,7 +125,11 @@ public static class PlayDelivery
 
         if (AsksForThePlan(context.Request))
         {
-            await TellAsync(context, plan, handover, service, announced, player);
+            await TellAsync(
+                context,
+                plan,
+                handover,
+                await OfferedAsync(plan, handover, service, announced, player, context.RequestAborted));
 
             return;
         }
@@ -203,22 +221,25 @@ public static class PlayDelivery
         return carried.Carries(placement) ? SoundChoice.At(placement) : SoundChoice.NotCarried;
     }
 
+    private static async Task<PlaybackOffer?> WhatIsStillWithinReachAsync(
+        PlaybackService playback,
+        RecordingId recording,
+        CancellationToken cancellationToken)
+    {
+        ServiceResult<PlaybackOffer, PlaybackFailure> asItWasEncoded =
+            await playback.OfferAsync(recording, SoundTrack.Main, cancellationToken);
+
+        return asItWasEncoded.IsSuccess && !asItWasEncoded.Data!.Plan.Transcodes
+            ? asItWasEncoded.Data
+            : null;
+    }
+
     private static async Task TellAsync(
         HttpContext context,
         PlaybackPlan plan,
         PlaybackFile handover,
-        ServiceId service,
-        AnnouncedSound announced,
-        IOnTheFlyPlayer player)
+        IReadOnlyList<SoundTrack> sounds)
     {
-        IReadOnlyList<SoundTrack> sounds = await OfferedAsync(
-            plan,
-            handover,
-            service,
-            announced,
-            player,
-            context.RequestAborted);
-
         context.Response.StatusCode = StatusCodes.Status200OK;
 
         await context.Response.WriteAsJsonAsync(

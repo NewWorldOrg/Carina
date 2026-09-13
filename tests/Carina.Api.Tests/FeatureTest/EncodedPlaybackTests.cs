@@ -142,6 +142,47 @@ public sealed class EncodedPlaybackTests
         Assert.Equal("byStartingAgain", read.GetProperty("seeking").GetString());
     }
 
+    [Fact(DisplayName = "BR-PD-008: when the recording itself is out of reach, the plan of an encoded recording asked for its second sound offers the artefact and the one sound it carries")]
+    public async Task ThePlanNarrowsToTheArtefactWhenTheSoundAskedForCannotBeReachedAnyMore()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(
+            RecordingOutcome.Complete,
+            onDisk: false,
+            audio: AudioMode.DualMono,
+            sounds: 1);
+        byte[] artefact = feature.Encoded(recording);
+
+        using HttpResponseMessage plan = await feature.PlanAsync(recording, "?sound=secondary");
+        JsonElement read = (await PlayFeature.PlanOfAsync(plan)).GetProperty("data");
+
+        Assert.Equal(HttpStatusCode.OK, plan.StatusCode);
+        Assert.Equal("direct", read.GetProperty("route").GetString());
+        Assert.False(read.GetProperty("transcodes").GetBoolean());
+        Assert.Equal(artefact.Length, read.GetProperty("bytes").GetInt64());
+        Assert.Equal(
+            ["main"],
+            read.GetProperty("sounds").EnumerateArray().Select(sound => sound.GetString()!).ToArray());
+    }
+
+    [Fact(DisplayName = "BR-PD-008: a picture asked for a sound that cannot be reached is refused rather than quietly handed the artefact of another sound")]
+    public async Task ThePictureOfASoundThatCannotBeReachedIsRefusedRatherThanQuietlyHandedTheArtefact()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(
+            RecordingOutcome.Complete,
+            onDisk: false,
+            audio: AudioMode.DualMono,
+            sounds: 1);
+        byte[] artefact = feature.Encoded(recording);
+
+        using HttpResponseMessage picture = await feature.PictureAsync(recording, "?sound=secondary");
+
+        Assert.Equal(HttpStatusCode.NotFound, picture.StatusCode);
+        Assert.NotEqual(artefact, await picture.Content.ReadAsByteArrayAsync());
+        Assert.Null(feature.Player.Handed);
+    }
+
     [Fact]
     public async Task AnArtefactIsMovedAboutByAskingForARangeOfItRatherThanByStartingAgain()
     {
