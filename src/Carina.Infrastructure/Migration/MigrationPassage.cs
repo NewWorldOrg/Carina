@@ -44,6 +44,8 @@ public sealed class MigrationPassage(
                     pass,
                     settled.Roll,
                     settled.Aftermath,
+                    settled.NewRoot,
+                    settled.WhereEncodesGo,
                     began,
                     clock.GetUtcNow().UtcDateTime),
                 cancellationToken);

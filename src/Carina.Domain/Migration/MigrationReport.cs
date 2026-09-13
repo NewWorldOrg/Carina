@@ -7,6 +7,7 @@ public sealed class MigrationReport
         IReadOnlyList<MigrationTally> tallies,
         IReadOnlyList<MigrationDetail> details,
         IReadOnlyList<MigrationLoss> losses,
+        IReadOnlyList<MigrationStanding> standings,
         IReadOnlyList<MigrationChannelProposal> channelProposals,
         IReadOnlyList<MigrationRuleProposal> ruleProposals)
     {
@@ -14,6 +15,7 @@ public sealed class MigrationReport
         ArgumentNullException.ThrowIfNull(tallies);
         ArgumentNullException.ThrowIfNull(details);
         ArgumentNullException.ThrowIfNull(losses);
+        ArgumentNullException.ThrowIfNull(standings);
         ArgumentNullException.ThrowIfNull(channelProposals);
         ArgumentNullException.ThrowIfNull(ruleProposals);
 
@@ -44,6 +46,7 @@ public sealed class MigrationReport
         }
 
         Lost(run, losses);
+        Stood(run, standings);
         Proposed(run, channelProposals, counted[MigrationPopulation.ChannelDefinitions]);
         Meant(run, ruleProposals, counted[MigrationPopulation.Rules]);
 
@@ -51,6 +54,7 @@ public sealed class MigrationReport
         Tallies = [.. tallies];
         Details = [.. details];
         Losses = [.. losses];
+        Standings = [.. standings];
         ChannelProposals = [.. channelProposals];
         RuleProposals = [.. ruleProposals];
     }
@@ -63,6 +67,8 @@ public sealed class MigrationReport
 
     public IReadOnlyList<MigrationLoss> Losses { get; }
 
+    public IReadOnlyList<MigrationStanding> Standings { get; }
+
     public IReadOnlyList<MigrationChannelProposal> ChannelProposals { get; }
 
     public IReadOnlyList<MigrationRuleProposal> RuleProposals { get; }
@@ -72,9 +78,10 @@ public sealed class MigrationReport
         IReadOnlyList<MigrationTally> tallies,
         IReadOnlyList<MigrationDetail> details,
         IReadOnlyList<MigrationLoss> losses,
+        IReadOnlyList<MigrationStanding> standings,
         IReadOnlyList<MigrationChannelProposal> channelProposals,
         IReadOnlyList<MigrationRuleProposal> ruleProposals)
-        => new(run, tallies, details, losses, channelProposals, ruleProposals);
+        => new(run, tallies, details, losses, standings, channelProposals, ruleProposals);
 
     private static Dictionary<MigrationPopulation, MigrationTally> Counted(
         MigrationRun run,
@@ -148,6 +155,35 @@ public sealed class MigrationReport
                     $"What was carried of {subject} reached the new system diminished and the run does not say "
                     + "so, which later reads as a feature that went missing.",
                     nameof(losses));
+            }
+        }
+    }
+
+    private static void Stood(MigrationRun run, IReadOnlyList<MigrationStanding> standings)
+    {
+        HashSet<MigrationStandingSubject> found = [];
+
+        foreach (MigrationStanding standing in standings)
+        {
+            ArgumentNullException.ThrowIfNull(standing);
+            Belongs(run, standing.RunId, nameof(standings));
+
+            if (!found.Add(standing.Subject))
+            {
+                throw new ArgumentException(
+                    $"A run says once what it found about {standing.Subject} before it carried anything.",
+                    nameof(standings));
+            }
+        }
+
+        foreach (MigrationStandingSubject subject in MigrationStandingSubjects.All)
+        {
+            if (!found.Contains(subject))
+            {
+                throw new ArgumentException(
+                    $"A rehearsal is worth running because it says what a run for real would meet, and this "
+                    + $"one does not say what it found about {subject}.",
+                    nameof(standings));
             }
         }
     }
