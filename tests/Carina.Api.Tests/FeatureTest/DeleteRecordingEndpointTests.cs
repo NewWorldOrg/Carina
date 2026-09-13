@@ -135,25 +135,25 @@ public sealed class DeleteRecordingEndpointTests
         await using var feature = new RecordingFeature();
         Recording first = Ended(feature);
         Recording second = Ended(feature);
-        using var reached = new SemaphoreSlim(0);
-        using var release = new SemaphoreSlim(0);
+        TaskCompletionSource underway = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource refused = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         feature.Eraser.WhenErasing = () =>
         {
-            reached.Release();
-            release.Wait(TimeSpan.FromSeconds(30));
+            underway.TrySetResult();
+            refused.Task.Wait();
         };
 
         Task<(HttpStatusCode Status, JsonElement Body)> running =
             feature.DeleteAsync($"/api/recordings/{first.Id.Wire}");
 
-        Assert.True(await reached.WaitAsync(TimeSpan.FromSeconds(30)));
+        await underway.Task;
 
         feature.Eraser.WhenErasing = null;
 
         (HttpStatusCode status, JsonElement body) = await feature.DeleteAsync($"/api/recordings/{second.Id.Wire}");
 
-        release.Release();
+        refused.SetResult();
 
         Assert.Equal(HttpStatusCode.OK, (await running).Status);
         Assert.Equal(HttpStatusCode.Conflict, status);
