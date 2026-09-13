@@ -30,7 +30,7 @@ public sealed class DatabaseBoundedRead(CarinaDbContext context) : IBoundedRead
 
             found = await read(cancellationToken);
         }
-        catch (PostgresException raised) when (raised.SqlState == PostgresErrorCodes.QueryCanceled)
+        catch (Exception raised) when (!cancellationToken.IsCancellationRequested && RanOutOfTime(raised))
         {
             await LetGoAsync(transaction);
 
@@ -46,6 +46,19 @@ public sealed class DatabaseBoundedRead(CarinaDbContext context) : IBoundedRead
         await transaction.CommitAsync(CancellationToken.None);
 
         return found;
+    }
+
+    private static bool RanOutOfTime(Exception raised)
+    {
+        for (Exception? walking = raised; walking is not null; walking = walking.InnerException)
+        {
+            if (walking is PostgresException stopped && stopped.SqlState == PostgresErrorCodes.QueryCanceled)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static string Bounding(TimeSpan patience)
