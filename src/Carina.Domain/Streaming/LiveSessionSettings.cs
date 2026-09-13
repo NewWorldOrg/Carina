@@ -2,39 +2,77 @@ namespace Carina.Domain.Streaming;
 
 public sealed record LiveSessionSettings
 {
-    private readonly TimeSpan linger = TimeSpan.FromSeconds(5);
-
-    private readonly TimeSpan longestRaise = TimeSpan.FromSeconds(30);
-
-    private readonly TimeSpan longestWaitToBeFed = TimeSpan.FromSeconds(10);
-
-    private readonly TimeSpan heldAhead = TimeSpan.FromMinutes(10);
-
-    private readonly TimeSpan betweenHolds = TimeSpan.FromMinutes(1);
-
-    public TimeSpan Linger
+    public LiveSessionSettings(
+        TimeSpan? linger = null,
+        TimeSpan? longestRaise = null,
+        TimeSpan? heldAhead = null,
+        TimeSpan? betweenHolds = null,
+        TimeSpan? longestWaitToBeFed = null)
     {
-        get => linger;
+        TimeSpan outliving = linger ?? TimeSpan.FromSeconds(5);
+        TimeSpan raise = longestRaise ?? TimeSpan.FromSeconds(30);
+        TimeSpan ahead = heldAhead ?? TimeSpan.FromMinutes(10);
+        TimeSpan holds = betweenHolds ?? TimeSpan.FromMinutes(1);
+        TimeSpan mouthful = longestWaitToBeFed ?? TimeSpan.FromSeconds(10);
 
-        init => linger = value > TimeSpan.Zero
-            ? value
-            : throw new ArgumentOutOfRangeException(
-                nameof(value),
-                value,
+        if (outliving <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(linger),
+                outliving,
                 "A session outlives its last viewer for some time, not none, or every reload pays the whole start again.");
-    }
+        }
 
-    public TimeSpan LongestRaise
-    {
-        get => longestRaise;
-
-        init => longestRaise = value > TimeSpan.Zero
-            ? value
-            : throw new ArgumentOutOfRangeException(
-                nameof(value),
-                value,
+        if (raise <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(longestRaise),
+                raise,
                 "A viewer waits to be seated for some time, not none, or no channel could ever be raised.");
+        }
+
+        if (ahead <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(heldAhead),
+                ahead,
+                "A supply is held open for some time beyond now, not none, or it is let go of the moment it is asked for.");
+        }
+
+        if (holds <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(betweenHolds),
+                holds,
+                "A supply is asked to be held open every so often, and every so often is a span, not none.");
+        }
+
+        if (mouthful <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(longestWaitToBeFed),
+                mouthful,
+                "A transcoder is given some time to take a mouthful, not none, or the first one is cut.");
+        }
+
+        if (holds >= ahead)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(betweenHolds),
+                holds,
+                "A supply asked to be held open again only once what was asked for has run out is let go of while it is still being watched.");
+        }
+
+        Linger = outliving;
+        LongestRaise = raise;
+        HeldAhead = ahead;
+        BetweenHolds = holds;
+        LongestWaitToBeFed = mouthful;
     }
+
+    public TimeSpan Linger { get; }
+
+    public TimeSpan LongestRaise { get; }
 
     /// <summary>
     /// How far ahead of now the supply is asked to be held open while it is being watched.
@@ -43,34 +81,12 @@ public sealed record LiveSessionSettings
     /// This is what a viewing that is still there is worth once nothing more is heard from it: the
     /// driver lets go of a supply this long after the last time it was asked to hold on to it.
     /// </remarks>
-    public TimeSpan HeldAhead
-    {
-        get => heldAhead;
-
-        init => heldAhead = value > TimeSpan.Zero
-            ? value
-            : throw new ArgumentOutOfRangeException(
-                nameof(value),
-                value,
-                "A supply is held open for some time beyond now, not none, or it is let go of the moment it is asked for.");
-    }
+    public TimeSpan HeldAhead { get; }
 
     /// <summary>
     /// How often the supply is asked to be held open for longer.
     /// </summary>
-    public TimeSpan BetweenHolds
-    {
-        get => betweenHolds;
-
-        init => betweenHolds = value > TimeSpan.Zero
-            ? value
-            : throw new ArgumentOutOfRangeException(
-                nameof(value),
-                value,
-                "A supply is asked to be held open every so often, and every so often is a span, not none.");
-    }
-
-    public bool AsksBeforeWhatItAskedForRunsOut => betweenHolds < heldAhead;
+    public TimeSpan BetweenHolds { get; }
 
     /// <summary>
     /// How long one transcoder may keep the reading of the channel waiting before it is cut loose.
@@ -80,15 +96,5 @@ public sealed record LiveSessionSettings
     /// that has stopped reading is let go of rather than waited for: the others are watching the
     /// same channel through the same reading.
     /// </remarks>
-    public TimeSpan LongestWaitToBeFed
-    {
-        get => longestWaitToBeFed;
-
-        init => longestWaitToBeFed = value > TimeSpan.Zero
-            ? value
-            : throw new ArgumentOutOfRangeException(
-                nameof(value),
-                value,
-                "A transcoder is given some time to take a mouthful, not none, or the first one is cut.");
-    }
+    public TimeSpan LongestWaitToBeFed { get; }
 }

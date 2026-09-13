@@ -13,19 +13,31 @@ public sealed class LiveSessionSettingsTests
     [Fact]
     public void ALingerOfNothingWouldTearDownOnEveryReload()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => new LiveSessionSettings { Linger = TimeSpan.Zero });
+        Assert.Throws<ArgumentOutOfRangeException>(() => new LiveSessionSettings(linger: TimeSpan.Zero));
     }
 
     [Fact]
     public void ALingerOfLessThanNothingIsRefused()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => new LiveSessionSettings { Linger = TimeSpan.FromSeconds(-1) });
+        Assert.Throws<ArgumentOutOfRangeException>(() => new LiveSessionSettings(linger: TimeSpan.FromSeconds(-1)));
     }
 
     [Fact]
     public void AnyPositiveLingerIsKept()
     {
-        Assert.Equal(TimeSpan.FromSeconds(12), new LiveSessionSettings { Linger = TimeSpan.FromSeconds(12) }.Linger);
+        Assert.Equal(TimeSpan.FromSeconds(12), new LiveSessionSettings(linger: TimeSpan.FromSeconds(12)).Linger);
+    }
+
+    [Fact]
+    public void ARaiseOfNoTimeAtAllIsRefused()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new LiveSessionSettings(longestRaise: TimeSpan.Zero));
+    }
+
+    [Fact]
+    public void GivingATranscoderNoTimeAtAllToTakeAMouthfulIsRefused()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new LiveSessionSettings(longestWaitToBeFed: TimeSpan.Zero));
     }
 
     [Fact]
@@ -38,32 +50,50 @@ public sealed class LiveSessionSettingsTests
     }
 
     [Fact]
-    public void TheSupplyIsAskedAgainWellBeforeWhatWasAskedForRunsOut()
+    public void TheRestOfWhatASessionIsGivenByDefaultIsWhatItAlwaysWas()
     {
-        Assert.True(new LiveSessionSettings().AsksBeforeWhatItAskedForRunsOut);
+        LiveSessionSettings settings = new();
+
+        Assert.Equal(TimeSpan.FromSeconds(30), settings.LongestRaise);
+        Assert.Equal(TimeSpan.FromSeconds(10), settings.LongestWaitToBeFed);
     }
 
     [Fact]
-    public void AskingLessOftenThanWhatIsAskedForLastsIsSeenForWhatItIs()
+    public void AskingLessOftenThanWhatIsAskedForLastsIsRefused()
     {
-        LiveSessionSettings settings = new()
-        {
-            HeldAhead = TimeSpan.FromMinutes(2),
-            BetweenHolds = TimeSpan.FromMinutes(5),
-        };
+        Assert.Throws<ArgumentOutOfRangeException>(() => new LiveSessionSettings(
+            heldAhead: TimeSpan.FromMinutes(2),
+            betweenHolds: TimeSpan.FromMinutes(5)));
+    }
 
-        Assert.False(settings.AsksBeforeWhatItAskedForRunsOut);
+    [Fact]
+    public void AskingExactlyAsOftenAsWhatIsAskedForLastsIsRefusedToo()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new LiveSessionSettings(
+            heldAhead: TimeSpan.FromMinutes(2),
+            betweenHolds: TimeSpan.FromMinutes(2)));
+    }
+
+    [Fact]
+    public void AskingMoreOftenThanWhatIsAskedForLastsIsTakenAsGiven()
+    {
+        LiveSessionSettings settings = new(
+            heldAhead: TimeSpan.FromMinutes(2),
+            betweenHolds: TimeSpan.FromSeconds(30));
+
+        Assert.Equal(TimeSpan.FromMinutes(2), settings.HeldAhead);
+        Assert.Equal(TimeSpan.FromSeconds(30), settings.BetweenHolds);
     }
 
     [Fact]
     public void HoldingTheSupplyOpenForNoTimeAtAllIsRefused()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => new LiveSessionSettings { HeldAhead = TimeSpan.Zero });
+        Assert.Throws<ArgumentOutOfRangeException>(() => new LiveSessionSettings(heldAhead: TimeSpan.Zero));
     }
 
     [Fact]
     public void AskingToHoldItOpenNeverIsRefused()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => new LiveSessionSettings { BetweenHolds = TimeSpan.Zero });
+        Assert.Throws<ArgumentOutOfRangeException>(() => new LiveSessionSettings(betweenHolds: TimeSpan.Zero));
     }
 }

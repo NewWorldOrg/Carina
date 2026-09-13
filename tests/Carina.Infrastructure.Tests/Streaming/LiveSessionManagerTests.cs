@@ -790,7 +790,7 @@ public sealed class LiveSessionManagerTests
     public async Task TheLedgerCountsWhatASlowViewerLost()
     {
         LiveSessionManager crowded = new(
-            new LiveSessionSettings { Linger = Linger, LongestRaise = LongestRaise },
+            new LiveSessionSettings(linger: Linger, longestRaise: LongestRaise),
             new LiveFanoutSettings { LongestBacklog = 1 },
             new LiveTranscodeSettings { StopGrace = StopGrace },
             supply,
@@ -1040,7 +1040,7 @@ public sealed class LiveSessionManagerTests
     public async Task EachViewerOfOneSessionIsAnsweredForApartAndNotOnlyAsATotal()
     {
         LiveSessionManager crowded = new(
-            new LiveSessionSettings { Linger = Linger, LongestRaise = LongestRaise },
+            new LiveSessionSettings(linger: Linger, longestRaise: LongestRaise),
             new LiveFanoutSettings { LongestBacklog = 1 },
             new LiveTranscodeSettings { StopGrace = StopGrace },
             supply,
@@ -1198,13 +1198,11 @@ public sealed class LiveSessionManagerTests
 
     private LiveSessionManager Managing(TranscodeBudget counting, HeldTranscoders? raising = null)
         => new(
-            new LiveSessionSettings
-            {
-                Linger = Linger,
-                LongestRaise = LongestRaise,
-                BetweenHolds = BetweenHolds,
-                HeldAhead = HeldAhead,
-            },
+            new LiveSessionSettings(
+                linger: Linger,
+                longestRaise: LongestRaise,
+                heldAhead: HeldAhead,
+                betweenHolds: BetweenHolds),
             new LiveFanoutSettings(),
             new LiveTranscodeSettings { StopGrace = StopGrace },
             supply,
