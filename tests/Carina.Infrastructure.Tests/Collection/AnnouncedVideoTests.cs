@@ -70,11 +70,27 @@ public sealed class AnnouncedVideoTests
     }
 
     [Fact]
-    public void TheFirstPictureAnnouncedIsTheOneRead()
+    public void TheMainPictureIsTheOneReadEvenWhenAnotherWasAnnouncedFirst()
+    {
+        Assert.Equal(
+            VideoMode.Interlaced1080,
+            AnnouncedVideo.ModeOf([Component(0xC3, componentTag: 0x01), Component(0xB3, componentTag: 0x00)]));
+    }
+
+    [Fact]
+    public void TheMainPictureAlsoNamesTheShapeEvenWhenAnotherWasAnnouncedFirst()
+    {
+        Assert.Equal(
+            AspectRatio.FourByThree,
+            AnnouncedVideo.AspectOf([Component(0xC3, componentTag: 0x01), Component(0xB1, componentTag: 0x00)]));
+    }
+
+    [Fact]
+    public void WhenNoPictureCarriesTheMainTagTheFirstAnnouncedIsRead()
     {
         Assert.Equal(
             VideoMode.Progressive720,
-            AnnouncedVideo.ModeOf([Component(0xC3), Component(0xB3)]));
+            AnnouncedVideo.ModeOf([Component(0xC3, componentTag: 0x01), Component(0xB3, componentTag: 0x02)]));
     }
 
     [Fact]
@@ -84,6 +100,6 @@ public sealed class AnnouncedVideoTests
         Assert.Throws<ArgumentNullException>(() => AnnouncedVideo.AspectOf(null!));
     }
 
-    private static ComponentDescription Component(int componentType, int streamContent = 1)
-        => new(streamContent, componentType, 0x00, "jpn", string.Empty);
+    private static ComponentDescription Component(int componentType, int streamContent = 1, int componentTag = 0x00)
+        => new(streamContent, componentType, componentTag, "jpn", string.Empty);
 }

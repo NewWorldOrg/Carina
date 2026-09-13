@@ -9,31 +9,42 @@ public static class AnnouncedVideo
 
     private const int AvcPicture = 5;
 
+    private const int MainPicture = 0x00;
+
     public static VideoMode ModeOf(IReadOnlyList<ComponentDescription> announced)
     {
         ArgumentNullException.ThrowIfNull(announced);
 
-        return Mode(First(announced)?.ComponentType);
+        return Mode(Main(announced)?.ComponentType);
     }
 
     public static AspectRatio AspectOf(IReadOnlyList<ComponentDescription> announced)
     {
         ArgumentNullException.ThrowIfNull(announced);
 
-        return Aspect(First(announced)?.ComponentType);
+        return Aspect(Main(announced)?.ComponentType);
     }
 
-    private static ComponentDescription? First(IReadOnlyList<ComponentDescription> announced)
+    private static ComponentDescription? Main(IReadOnlyList<ComponentDescription> announced)
     {
+        ComponentDescription? first = null;
+
         foreach (ComponentDescription component in announced)
         {
-            if (component.StreamContent is MpegPicture or AvcPicture)
+            if (component.StreamContent is not (MpegPicture or AvcPicture))
+            {
+                continue;
+            }
+
+            if (component.ComponentTag == MainPicture)
             {
                 return component;
             }
+
+            first ??= component;
         }
 
-        return null;
+        return first;
     }
 
     private static VideoMode Mode(int? componentType)
