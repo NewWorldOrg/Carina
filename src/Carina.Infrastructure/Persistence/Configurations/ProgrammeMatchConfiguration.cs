@@ -38,6 +38,8 @@ public sealed class ProgrammeMatchConfiguration : IEntityTypeConfiguration<Progr
         builder.Property(match => match.HasSubtitles).HasColumnName("has_subtitles");
         builder.Property(match => match.Audio).HasConversion<string>().HasColumnName("audio");
         builder.Property(match => match.Sounds).HasColumnName("sounds");
+        builder.Property(match => match.Video).HasConversion<string>().HasColumnName("video");
+        builder.Property(match => match.Aspect).HasConversion<string>().HasColumnName("aspect");
         builder.Property(match => match.Source).HasConversion<string>().HasColumnName("source");
         builder.Property(match => match.Revision).HasColumnName("revision");
         builder.Property(match => match.IsArchived).HasColumnName("is_archived");
@@ -89,6 +91,8 @@ public sealed class ProgrammeMatchConfiguration : IEntityTypeConfiguration<Progr
             layered.has_subtitles,
             layered.audio,
             layered.sounds,
+            layered.video,
+            layered.aspect,
             layered.source,
             layered.revision,
             layered.genres,
@@ -111,6 +115,8 @@ public sealed class ProgrammeMatchConfiguration : IEntityTypeConfiguration<Progr
                 has_subtitles,
                 audio,
                 sounds,
+                video,
+                aspect,
                 source,
                 revision,
                 genres,
@@ -134,6 +140,8 @@ public sealed class ProgrammeMatchConfiguration : IEntityTypeConfiguration<Progr
                 kept.has_subtitles,
                 'Undetermined'::character varying(32),
                 0,
+                'Undetermined'::character varying(32),
+                'Undetermined'::character varying(32),
                 NULL::character varying(32),
                 NULL::bigint,
                 kept.genres,

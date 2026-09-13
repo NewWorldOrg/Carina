@@ -39,6 +39,8 @@ public sealed class ProgrammeTests
     [InlineData("related")]
     [InlineData("subtitles")]
     [InlineData("audio")]
+    [InlineData("video")]
+    [InlineData("aspect")]
     [InlineData("sounds")]
     [InlineData("source")]
     public void AnyOneFieldMovingOnItsOwnCountsAsAChange(string moved)
@@ -254,6 +256,37 @@ public sealed class ProgrammeTests
     }
 
     [Fact]
+    public void APictureThatWasNotAnnouncedAgainDoesNotUnsayTheShapeAlreadyKnown()
+    {
+        var programme = Programme.Discover(Moved("video"), At);
+
+        Assert.False(programme.Absorb(Broadcast(), At.AddHours(1)));
+
+        Assert.Equal(VideoMode.Interlaced1080, programme.Video);
+        Assert.Equal(At, programme.UpdatedAt);
+    }
+
+    [Fact]
+    public void AShapeThatWasNotAnnouncedAgainDoesNotUnsayTheOneAlreadyKnown()
+    {
+        var programme = Programme.Discover(Moved("aspect"), At);
+
+        Assert.False(programme.Absorb(Broadcast(), At.AddHours(1)));
+
+        Assert.Equal(AspectRatio.SixteenByNine, programme.Aspect);
+        Assert.Equal(At, programme.UpdatedAt);
+    }
+
+    [Fact]
+    public void APictureNobodyAnnouncedIsUnansweredRatherThanGuessedAt()
+    {
+        var programme = Programme.Discover(Broadcast(), At);
+
+        Assert.Equal(VideoMode.Undetermined, programme.Video);
+        Assert.Equal(AspectRatio.Undetermined, programme.Aspect);
+    }
+
+    [Fact]
     public void ATimeThatIsNotInUniversalTimeIsRefused()
     {
         Assert.Throws<ArgumentException>(
@@ -330,6 +363,8 @@ public sealed class ProgrammeTests
             },
             "subtitles" => Broadcast() with { HasSubtitles = true },
             "audio" => Broadcast() with { Audio = AudioMode.DualMono },
+            "video" => Broadcast() with { Video = VideoMode.Interlaced1080 },
+            "aspect" => Broadcast() with { Aspect = AspectRatio.SixteenByNine },
             "sounds" => Broadcast() with { Sounds = 2 },
             "source" => Broadcast() with { Source = ProgrammeSource.ScheduleExtended },
             _ => Broadcast(endsAt: At.AddHours(24)),

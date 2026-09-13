@@ -91,6 +91,8 @@ public sealed class ProgrammeWriter(
             HasSubtitles = seen.HasSubtitles || arriving.HasSubtitles,
             Audio = seen.Audio is AudioMode.Undetermined ? arriving.Audio : seen.Audio,
             Sounds = seen.Sounds == 0 ? arriving.Sounds : seen.Sounds,
+            Video = seen.Video is VideoMode.Undetermined ? arriving.Video : seen.Video,
+            Aspect = seen.Aspect is AspectRatio.Undetermined ? arriving.Aspect : seen.Aspect,
             IsShadow = seen.IsShadow && arriving.IsShadow,
         };
     }
@@ -126,6 +128,8 @@ public sealed class ProgrammeWriter(
             HasSubtitles = carried.DataContents.Any(content => content.CarriesCaptions),
             Audio = AnnouncedAudio.Of(carried.AudioComponents),
             Sounds = AnnouncedAudio.Sounds(carried.AudioComponents),
+            Video = AnnouncedVideo.ModeOf(carried.Components),
+            Aspect = AnnouncedVideo.AspectOf(carried.Components),
             Source = Source(table),
         };
     }
