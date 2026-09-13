@@ -6,6 +6,7 @@ using Carina.Infrastructure.Persistence;
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Carina.Infrastructure.Tests;
 
@@ -131,6 +132,19 @@ public sealed class DatabaseBoundedReadTests(RepositoryDatabase database)
                 TimeSpan.FromSeconds(30),
                 cancellationToken => context.Database.ExecuteSqlRawAsync("SELECT pg_sleep(5)", cancellationToken),
                 goingAway.Token));
+    }
+
+    [Fact]
+    public async Task AReadStartedWhileTheStoreIsAlreadyInATransactionIsRefused()
+    {
+        await using CarinaDbContext context = database.Open();
+        await using IDbContextTransaction already = await context.Database.BeginTransactionAsync(Cancel);
+
+        await Assert.ThrowsAsync<NestedReadRefusedException>(
+            () => new DatabaseBoundedRead(context).NoLongerThanAsync(
+                TimeSpan.FromSeconds(30),
+                _ => Task.FromResult(0),
+                Cancel));
     }
 
     private static async Task<int> Begun(CarinaDbContext context, CancellationToken cancellationToken)

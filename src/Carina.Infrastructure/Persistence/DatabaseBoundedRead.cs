@@ -19,6 +19,11 @@ public sealed class DatabaseBoundedRead(CarinaDbContext context) : IBoundedRead
         ArgumentNullException.ThrowIfNull(read);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(patience, TimeSpan.Zero);
 
+        if (context.Database.CurrentTransaction is not null)
+        {
+            throw new NestedReadRefusedException();
+        }
+
         await using IDbContextTransaction transaction =
             await context.Database.BeginTransactionAsync(cancellationToken);
 
