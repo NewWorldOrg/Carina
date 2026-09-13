@@ -47,7 +47,7 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
         await candidates.SelectAsync(
             first.Id, SelectionSource.Manual, SignalMeasurement.WithLock(At, 21_000), At, Cancel);
         await candidates.SelectAsync(
-            second.Id, SelectionSource.Scan, SignalMeasurement.WithLock(At, 22_000), At, Cancel);
+            second.Id, SelectionSource.AutoSwitch, SignalMeasurement.WithLock(At, 22_000), At, Cancel);
 
         await using CarinaDbContext reading = database.Open();
         IReadOnlyList<CandidateChannel> stored = await new CandidateChannelRepository(reading)
@@ -55,7 +55,7 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
 
         CandidateChannel selected = Assert.Single(stored, candidate => candidate.IsSelected);
         Assert.Equal(second.Id, selected.Id);
-        Assert.Equal(SelectionSource.Scan, selected.SelectionSource);
+        Assert.Equal(SelectionSource.AutoSwitch, selected.SelectionSource);
         Assert.Equal(22_000, selected.SelectionMeasurement?.CnrMilliDecibels);
     }
 
@@ -147,7 +147,7 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
 
         await using CarinaDbContext elsewhere = database.Open();
         await new CandidateChannelRepository(elsewhere)
-            .SelectAsync(candidate.Id, SelectionSource.Scan, null, At, Cancel);
+            .SelectAsync(candidate.Id, SelectionSource.AutoSwitch, null, At, Cancel);
 
         candidate.RecordTuningFailure(RotationBackoff.Default, At.AddMinutes(1));
         await using CarinaDbContext stale = database.Open();
@@ -156,7 +156,7 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
         await using CarinaDbContext reading = database.Open();
         CandidateChannel? stored = await new CandidateChannelRepository(reading).FindAsync(candidate.Id, Cancel);
         Assert.True(stored!.IsSelected);
-        Assert.Equal(SelectionSource.Scan, stored.SelectionSource);
+        Assert.Equal(SelectionSource.AutoSwitch, stored.SelectionSource);
         Assert.Equal(RotationState.BackingOff, stored.RotationState);
     }
 

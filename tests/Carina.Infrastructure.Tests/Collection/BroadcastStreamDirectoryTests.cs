@@ -233,7 +233,7 @@ public sealed class BroadcastStreamDirectoryTests
             TuningParameters.Terrestrial(channel),
             At);
 
-        candidate.Select(SelectionSource.Scan, null, At);
+        candidate.Select(SelectionSource.AutoSwitch, null, At);
 
         if (streamId is { } observed)
         {

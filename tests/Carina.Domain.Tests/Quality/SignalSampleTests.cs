@@ -113,10 +113,14 @@ public sealed class SignalSampleTests
 
     [Fact(DisplayName = "BR-QD-008: why a reading could not be taken is kept as a class of its own")]
     public void WhyAReadingCouldNotBeTakenIsKeptAsAClassOfItsOwn()
-        => Assert.Equal(
-            Enum.GetValues<SignalNotTaken>(),
-            [.. Enum.GetValues<SignalNotTaken>()
-                .Select(why => SignalSample.NotTaken(LockRead, why).NotTakenBecause!.Value)]);
+    {
+        SignalNotTaken[] reasons = Enum.GetValues<SignalNotTaken>();
+
+        Assert.NotEmpty(reasons);
+        Assert.Equal(
+            reasons,
+            [.. reasons.Select(why => SignalSample.NotTaken(LockRead, why).NotTakenBecause!.Value)]);
+    }
 
     [Fact]
     public void AReadingThatWasTakenSaysNothingAboutWhyItCouldNotBe()
