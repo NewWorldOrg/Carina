@@ -1,4 +1,5 @@
 using Carina.Contracts;
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.DriverStatus;
@@ -145,7 +146,9 @@ internal static class LedgerCopy
                 recording.SnapshotSummary,
                 recording.SnapshotExtended,
                 recording.SnapshotGenres,
-                recording.CapturedAt),
+                recording.CapturedAt,
+                recording.SnapshotAudio,
+                recording.SnapshotSounds),
             recording.BroadcastGroupKey,
             recording.BroadcastGroupRole,
             recording.ThumbnailFault);
@@ -440,7 +443,14 @@ internal static class RecordingStreamFixture
             RecordingFileName.For(id, ".ts"),
             start,
             until ?? Airs.AddMinutes(30),
-            new ProgrammeSnapshot("Another programme", string.Empty, string.Empty, [], Airs.AddHours(-6)),
+            new ProgrammeSnapshot(
+                "Another programme",
+                string.Empty,
+                string.Empty,
+                [],
+                Airs.AddHours(-6),
+                AudioMode.Undetermined,
+                ProgrammeSnapshot.SoundsUnannounced),
             null,
             BroadcastGroupRole.Standalone,
             start,

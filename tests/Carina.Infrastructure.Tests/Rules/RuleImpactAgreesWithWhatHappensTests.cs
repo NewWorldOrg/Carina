@@ -1,4 +1,5 @@
 using Carina.Contracts;
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
@@ -401,7 +402,14 @@ public sealed class RuleImpactAgreesWithWhatHappensTests
                 true,
                 Margin.None,
                 Margin.None,
-                new ProgrammeSnapshot(name, "a summary", string.Empty, [], Now),
+                new ProgrammeSnapshot(
+                    name,
+                    "a summary",
+                    string.Empty,
+                    [],
+                    Now,
+                    AudioMode.Undetermined,
+                    ProgrammeSnapshot.SoundsUnannounced),
                 null,
                 BroadcastGroupRole.Standalone,
                 state,

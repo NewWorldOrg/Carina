@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
@@ -258,7 +259,14 @@ public sealed class ThumbnailWorklistTests(RepositoryDatabase database)
             RecordingFileName.For(id, ".m2ts"),
             Now,
             Now.AddHours(1),
-            new ProgrammeSnapshot("A programme", "What it is about", string.Empty, [], Now),
+            new ProgrammeSnapshot(
+                "A programme",
+                "What it is about",
+                string.Empty,
+                [],
+                Now,
+                AudioMode.Undetermined,
+                ProgrammeSnapshot.SoundsUnannounced),
             null,
             BroadcastGroupRole.Standalone,
             Now);

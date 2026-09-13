@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
@@ -107,7 +108,14 @@ public sealed class RecordingOwnedColumnTests(MigratedScratchDatabase database)
         => new(new NetworkId(32736), new ServiceId(1024), new EventId(eventId), Now.AddHours(2));
 
     private static ProgrammeSnapshot Snapshot()
-        => new("A programme", "What it is about", string.Empty, [new ProgrammeGenre(7, 1)], Now);
+        => new(
+            "A programme",
+            "What it is about",
+            string.Empty,
+            [new ProgrammeGenre(7, 1)],
+            Now,
+            AudioMode.Undetermined,
+            ProgrammeSnapshot.SoundsUnannounced);
 
     private static async Task<object?> Read(NpgsqlConnection connection, ReservationId id, string column)
     {

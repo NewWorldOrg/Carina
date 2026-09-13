@@ -13,8 +13,8 @@ public sealed class ProgrammeSnapshot
         string extended,
         IReadOnlyList<ProgrammeGenre> genres,
         DateTime capturedAt,
-        AudioMode audio = AudioMode.Undetermined,
-        int sounds = SoundsUnannounced)
+        AudioMode audio,
+        int sounds)
     {
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(summary);
@@ -51,8 +51,8 @@ public sealed class ProgrammeSnapshot
         IReadOnlyList<ProgrammeItem> items,
         IReadOnlyList<ProgrammeGenre> genres,
         DateTime at,
-        AudioMode audio = AudioMode.Undetermined,
-        int sounds = SoundsUnannounced)
+        AudioMode audio,
+        int sounds)
     {
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(summary);

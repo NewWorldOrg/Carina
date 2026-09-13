@@ -27,7 +27,14 @@ public sealed class ProgrammeSnapshotSoundTests
     [Fact]
     public void ASnapshotOfABroadcastThatAnnouncedNoSoundSaysSoRatherThanGuessing()
     {
-        var snapshot = new ProgrammeSnapshot("A programme", string.Empty, string.Empty, [], Now);
+        var snapshot = new ProgrammeSnapshot(
+            "A programme",
+            string.Empty,
+            string.Empty,
+            [],
+            Now,
+            AudioMode.Undetermined,
+            ProgrammeSnapshot.SoundsUnannounced);
 
         Assert.Equal(AudioMode.Undetermined, snapshot.Audio);
         Assert.Equal(ProgrammeSnapshot.SoundsUnannounced, snapshot.Sounds);

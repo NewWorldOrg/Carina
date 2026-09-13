@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Library;
 using Carina.Domain.Programmes;
@@ -403,7 +404,9 @@ public sealed class RecordingLibraryRepositoryTests(RepositoryDatabase database)
                 summary,
                 extended,
                 genre is { } kind ? [new ProgrammeGenre(kind, 0)] : [],
-                startedAt),
+                startedAt,
+                AudioMode.Undetermined,
+                ProgrammeSnapshot.SoundsUnannounced),
             null,
             BroadcastGroupRole.Standalone,
             startedAt,

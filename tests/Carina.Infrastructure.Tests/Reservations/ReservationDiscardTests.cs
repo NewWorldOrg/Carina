@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Persistence;
@@ -313,7 +314,14 @@ public sealed class ReservationDiscardTests(RepositoryDatabase database)
             RecordingFileName.For(id, ".ts"),
             reservation.EffectiveStartAt,
             reservation.EffectiveEndAt,
-            new ProgrammeSnapshot("A programme", string.Empty, string.Empty, [], Now),
+            new ProgrammeSnapshot(
+                "A programme",
+                string.Empty,
+                string.Empty,
+                [],
+                Now,
+                AudioMode.Undetermined,
+                ProgrammeSnapshot.SoundsUnannounced),
             null,
             BroadcastGroupRole.Standalone,
             Now,

@@ -146,7 +146,14 @@ public sealed class ReservationRecordingContractTests(MigratedScratchDatabase da
             true,
             Margin.OfSeconds(120),
             Margin.OfSeconds(180),
-            new ProgrammeSnapshot("A programme", "What it is about", string.Empty, [new ProgrammeGenre(7, 1)], Made),
+            new ProgrammeSnapshot(
+                "A programme",
+                "What it is about",
+                string.Empty,
+                [new ProgrammeGenre(7, 1)],
+                Made,
+                AudioMode.Undetermined,
+                ProgrammeSnapshot.SoundsUnannounced),
             null,
             BroadcastGroupRole.Standalone,
             asking);

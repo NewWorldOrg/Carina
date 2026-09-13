@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
@@ -44,7 +45,14 @@ public sealed class RecordedMaterial(DirectoryInfo mounted, OutputRoot root)
             name,
             Noon,
             Noon + Ran,
-            new ProgrammeSnapshot("A synthetic programme", "What the generator drew", string.Empty, [], Noon),
+            new ProgrammeSnapshot(
+                "A synthetic programme",
+                "What the generator drew",
+                string.Empty,
+                [],
+                Noon,
+                AudioMode.Undetermined,
+                ProgrammeSnapshot.SoundsUnannounced),
             null,
             BroadcastGroupRole.Standalone,
             Noon,

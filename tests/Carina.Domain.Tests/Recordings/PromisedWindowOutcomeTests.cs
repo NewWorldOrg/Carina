@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
@@ -106,7 +107,9 @@ public sealed class PromisedWindowOutcomeTests
                 "What it is about",
                 string.Empty,
                 [new ProgrammeGenre(7, 1)],
-                Airs.AddHours(-6)),
+                Airs.AddHours(-6),
+                AudioMode.Undetermined,
+                ProgrammeSnapshot.SoundsUnannounced),
             null,
             BroadcastGroupRole.Standalone,
             askedAt);

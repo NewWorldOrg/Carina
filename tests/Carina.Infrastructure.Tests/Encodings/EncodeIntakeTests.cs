@@ -1,4 +1,5 @@
 using Carina.Contracts;
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Encodings;
 using Carina.Domain.Programmes;
@@ -307,7 +308,14 @@ public sealed class EncodeIntakeTests
                 RecordingFileName.For(id, ".ts"),
                 began,
                 began.AddMinutes(30),
-                new ProgrammeSnapshot("A programme", string.Empty, string.Empty, [], began),
+                new ProgrammeSnapshot(
+                    "A programme",
+                    string.Empty,
+                    string.Empty,
+                    [],
+                    began,
+                    AudioMode.Undetermined,
+                    ProgrammeSnapshot.SoundsUnannounced),
                 null,
                 BroadcastGroupRole.Standalone,
                 began,

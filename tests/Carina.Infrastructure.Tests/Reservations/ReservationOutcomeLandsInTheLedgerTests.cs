@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
@@ -320,7 +321,14 @@ public sealed class ReservationOutcomeLandsInTheLedgerTests(RepositoryDatabase d
                 RecordingFileName.For(id, ".ts"),
                 from,
                 reservation.EffectiveEndAt,
-                new ProgrammeSnapshot(reservation.SnapshotName, string.Empty, string.Empty, [], from),
+                new ProgrammeSnapshot(
+                    reservation.SnapshotName,
+                    string.Empty,
+                    string.Empty,
+                    [],
+                    from,
+                    AudioMode.Undetermined,
+                    ProgrammeSnapshot.SoundsUnannounced),
                 null,
                 BroadcastGroupRole.Standalone,
                 from,

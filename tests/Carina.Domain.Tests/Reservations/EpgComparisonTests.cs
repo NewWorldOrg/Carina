@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
@@ -88,7 +89,14 @@ public sealed class EpgComparisonTests
             true,
             Margin.None,
             Margin.None,
-            new ProgrammeSnapshot("もとの題名", "何の話か", string.Empty, [], Now),
+            new ProgrammeSnapshot(
+                "もとの題名",
+                "何の話か",
+                string.Empty,
+                [],
+                Now,
+                AudioMode.Undetermined,
+                ProgrammeSnapshot.SoundsUnannounced),
             null,
             BroadcastGroupRole.Standalone,
             ReservationState.Scheduled,

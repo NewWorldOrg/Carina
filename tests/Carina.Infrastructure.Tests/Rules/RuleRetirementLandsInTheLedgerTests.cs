@@ -1,4 +1,5 @@
 using Carina.Contracts;
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
@@ -198,7 +199,14 @@ public sealed class RuleRetirementLandsInTheLedgerTests(RepositoryDatabase datab
             true,
             Margin.None,
             Margin.None,
-            new ProgrammeSnapshot($"a broadcast {carried}", "what it is about", string.Empty, [], Now),
+            new ProgrammeSnapshot(
+                $"a broadcast {carried}",
+                "what it is about",
+                string.Empty,
+                [],
+                Now,
+                AudioMode.Undetermined,
+                ProgrammeSnapshot.SoundsUnannounced),
             null,
             BroadcastGroupRole.Standalone,
             state,
