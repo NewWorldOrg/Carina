@@ -5,6 +5,8 @@ namespace Carina.Infrastructure.Tests.Encodings;
 
 public sealed class FfmpegProgressTests
 {
+    private static readonly EncodeSound AsItStands = EncodeSound.EveryStreamAsItStands;
+
     /// <summary>
     /// What ffmpeg 6.1.6 actually writes to <c>-progress pipe:1</c>, read off the container on
     /// 2026-09-05: the first block before anything has been written carries N/A throughout, and
@@ -159,7 +161,8 @@ public sealed class FfmpegProgressTests
             EncodeEncoder.Software,
             "/srv/recordings/0f8c.ts",
             2,
-            TimeSpan.Zero)];
+            TimeSpan.Zero,
+            AsItStands)];
 
         Assert.Contains("-progress", arguments);
         Assert.Equal("pipe:1", arguments[arguments.IndexOf("-progress") + 1]);

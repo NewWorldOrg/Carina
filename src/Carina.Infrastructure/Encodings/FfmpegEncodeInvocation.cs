@@ -3,6 +3,7 @@ using System.Globalization;
 using Carina.Domain.Channels;
 using Carina.Domain.Encodings;
 using Carina.Domain.Machines;
+using Carina.Infrastructure.Streaming;
 
 namespace Carina.Infrastructure.Encodings;
 
@@ -36,10 +37,12 @@ public static class FfmpegEncodeInvocation
         EncodeEncoder encoder,
         string source,
         int cores,
-        TimeSpan headSkip)
+        TimeSpan headSkip,
+        EncodeSound sound)
     {
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(profile);
+        ArgumentNullException.ThrowIfNull(sound);
         ArgumentException.ThrowIfNullOrEmpty(source);
         ArgumentOutOfRangeException.ThrowIfLessThan(cores, 1);
 
@@ -72,16 +75,13 @@ public static class FfmpegEncodeInvocation
             source,
             "-ss",
             headSkip.TotalSeconds.ToString(Seconds, CultureInfo.InvariantCulture),
-            .. Mapping(service),
+            .. Mapping(service, sound),
             "-vf",
             Filter(profile, encoder),
             .. Encoding(profile, encoder),
             "-threads",
             threads,
-            "-c:a",
-            "copy",
-            "-bsf:a",
-            "aac_adtstoasc",
+            .. Audio(sound),
         ];
     }
 
@@ -102,14 +102,40 @@ public static class FfmpegEncodeInvocation
     internal static IReadOnlyList<string> Device(EncodeEncoder encoder)
         => EncodeShapes.Named(encoder) is EncodeEncoder.Vaapi ? ["-vaapi_device", RenderNode] : [];
 
-    internal static IReadOnlyList<string> Mapping(ServiceId service)
-        =>
+    internal static IReadOnlyList<string> Mapping(ServiceId service, EncodeSound sound)
+    {
+        ArgumentNullException.ThrowIfNull(service);
+        ArgumentNullException.ThrowIfNull(sound);
+
+        return
         [
             "-map",
             VideoStream(service),
             "-map",
-            AudioStreams(service),
+            sound.OneChannel is { } placement
+                ? OneAudioStream(service, placement.Ordinal)
+                : AudioStreams(service),
         ];
+    }
+
+    internal static IReadOnlyList<string> Audio(EncodeSound sound)
+    {
+        ArgumentNullException.ThrowIfNull(sound);
+
+        return sound.OneChannel is { } placement
+            ?
+            [
+                .. FfmpegPlaybackInvocation.Panning(placement),
+                .. FfmpegLiveInvocation.Sound(),
+            ]
+            :
+            [
+                "-c:a",
+                "copy",
+                "-bsf:a",
+                "aac_adtstoasc",
+            ];
+    }
 
     public static string VideoStream(ServiceId service)
     {
@@ -125,6 +151,13 @@ public static class FfmpegEncodeInvocation
         int programNumber = service.Value;
 
         return string.Create(CultureInfo.InvariantCulture, $"p:{programNumber}:a");
+    }
+
+    private static string OneAudioStream(ServiceId service, int ordinal)
+    {
+        int programNumber = service.Value;
+
+        return string.Create(CultureInfo.InvariantCulture, $"p:{programNumber}:a:{ordinal}");
     }
 
     internal static string Filter(EncodeProfile profile, EncodeEncoder encoder)

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 
+using Carina.Domain.Base;
 using Carina.Domain.Encodings;
 using Carina.Domain.Machines;
 using Carina.Domain.Recordings;
@@ -354,6 +355,43 @@ public sealed class EncodeJobRunnerTests
         Assert.Equal(harness.WorkPathOf(job), handed[^1]);
         Assert.Contains("p:1064:v:0", handed);
         Assert.DoesNotContain(handed, argument => argument.Contains("A programme", StringComparison.Ordinal));
+    }
+
+    [Fact(DisplayName = "BR-PD-008: a recording of a broadcast that put two languages on one sound is encoded with the main language in both ears")]
+    public async Task ARecordingOfTwoLanguagesOnOneSoundIsEncodedWithTheMainLanguageInBothEars()
+    {
+        using var harness = new EncodeHarness();
+        string arguments = harness.Room.Under("arguments");
+        harness.Standing($"printf '%s\\n' \"$@\" > \"{arguments}\"; printf 'the picture' > \"$destination\"");
+        Recording recording = harness.Recorded(audio: AudioMode.DualMono, sounds: 1);
+        EncodeJob job = harness.Running(recording.Id, harness.Defined().Id);
+
+        EncodeJobStatus ended = await harness.Runner.RunAsync(job, Cancel);
+
+        string[] handed = File.ReadAllLines(arguments);
+        Assert.Equal(EncodeJobStatus.Completed, ended);
+        Assert.Contains("pan=stereo|c0=c0|c1=c0", handed);
+        Assert.Contains("p:1064:a:0", handed);
+        Assert.Contains("aac", handed);
+        Assert.DoesNotContain("copy", handed);
+        Assert.DoesNotContain("aac_adtstoasc", handed);
+    }
+
+    [Fact(DisplayName = "BR-PD-008: a recording whose broadcast announced nothing about its sound is encoded with every sound copied over as it stands")]
+    public async Task ARecordingThatAnnouncedNothingIsEncodedWithEverySoundCopiedOver()
+    {
+        using var harness = new EncodeHarness();
+        string arguments = harness.Room.Under("arguments");
+        harness.Standing($"printf '%s\\n' \"$@\" > \"{arguments}\"; printf 'the picture' > \"$destination\"");
+        EncodeJob job = harness.Running(harness.Recorded().Id, harness.Defined().Id);
+
+        await harness.Runner.RunAsync(job, Cancel);
+
+        string[] handed = File.ReadAllLines(arguments);
+        Assert.Contains("p:1064:a", handed);
+        Assert.Contains("copy", handed);
+        Assert.Contains("aac_adtstoasc", handed);
+        Assert.DoesNotContain(handed, argument => argument.StartsWith("pan=", StringComparison.Ordinal));
     }
 
     [Fact(DisplayName = "BR-ED2-011: a stop asked for while the programme runs stops the programme and leaves the job running in the ledger, programme and all, for the next start to put back")]

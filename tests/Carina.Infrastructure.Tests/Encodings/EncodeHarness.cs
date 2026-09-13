@@ -132,9 +132,13 @@ internal sealed class EncodeHarness : IDisposable
         return profile;
     }
 
-    public Recording Recorded(string content = Broadcast, OutputRoot? root = null)
+    public Recording Recorded(
+        string content = Broadcast,
+        OutputRoot? root = null,
+        AudioMode audio = AudioMode.Undetermined,
+        int sounds = ProgrammeSnapshot.SoundsUnannounced)
     {
-        Recording recording = Ended(root ?? Primary, 1064, content.Length);
+        Recording recording = Ended(root ?? Primary, 1064, content.Length, audio, sounds);
 
         if (root is null)
         {
@@ -144,15 +148,19 @@ internal sealed class EncodeHarness : IDisposable
         return recording;
     }
 
-    public Recording RecordedFrom(string written, int serviceId)
+    public Recording RecordedFrom(
+        string written,
+        int serviceId,
+        AudioMode audio = AudioMode.Undetermined,
+        int sounds = ProgrammeSnapshot.SoundsUnannounced)
     {
-        Recording recording = Ended(Primary, serviceId, new FileInfo(written).Length);
+        Recording recording = Ended(Primary, serviceId, new FileInfo(written).Length, audio, sounds);
         File.Copy(written, SourcePathOf(recording));
 
         return recording;
     }
 
-    private Recording Ended(OutputRoot root, int serviceId, long size)
+    private Recording Ended(OutputRoot root, int serviceId, long size, AudioMode audio, int sounds)
     {
         var id = RecordingId.New();
         Recording recording = Recording.Begin(
@@ -169,8 +177,8 @@ internal sealed class EncodeHarness : IDisposable
                 string.Empty,
                 [],
                 Queued,
-                AudioMode.Undetermined,
-                ProgrammeSnapshot.SoundsUnannounced),
+                audio,
+                sounds),
             null,
             BroadcastGroupRole.Standalone,
             Queued,
