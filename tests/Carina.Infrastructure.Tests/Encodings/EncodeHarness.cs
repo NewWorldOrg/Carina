@@ -1,6 +1,6 @@
-using Carina.Domain.Base;
 using System.Collections.Concurrent;
 
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Encodings;
 using Carina.Domain.Integrity;
