@@ -99,20 +99,6 @@ public sealed class StreamHarvest(TimeProvider clock)
         }
     }
 
-    public IReadOnlyList<ServiceDescriptionTable> TakeWhatWasDescribed()
-    {
-        if (descriptions.Count == 0)
-        {
-            return [];
-        }
-
-        ServiceDescriptionTable[] taken = [.. descriptions];
-
-        descriptions.Clear();
-
-        return taken;
-    }
-
     public IReadOnlyList<EventInformationTable> TakeWhatIsGathered()
     {
         if (tables.Count == 0)

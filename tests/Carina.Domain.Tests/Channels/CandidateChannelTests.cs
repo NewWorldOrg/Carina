@@ -73,10 +73,10 @@ public sealed class CandidateChannelTests
     {
         CandidateChannel candidate = Discovered();
 
-        candidate.Select(SelectionSource.AutoSwitch, SignalMeasurement.WithLock(At, 20_500), At);
+        candidate.Select(SelectionSource.Scan, SignalMeasurement.WithLock(At, 20_500), At);
 
         Assert.True(candidate.IsSelected);
-        Assert.Equal(SelectionSource.AutoSwitch, candidate.SelectionSource);
+        Assert.Equal(SelectionSource.Scan, candidate.SelectionSource);
         Assert.Equal(At, candidate.SelectedAt);
         Assert.Equal(20_500, candidate.SelectionMeasurement?.CnrMilliDecibels);
     }
@@ -112,9 +112,9 @@ public sealed class CandidateChannelTests
     }
 
     [Fact]
-    public void AnAutomaticSwitchIsToldApartFromAManualOne()
+    public void AScanIsToldApartFromAManualSelection()
     {
-        Assert.Equal(SelectionSource.AutoSwitch, Rehydrated(true, SelectionSource.AutoSwitch).SelectionSource);
+        Assert.Equal(SelectionSource.Scan, Rehydrated(true, SelectionSource.Scan).SelectionSource);
         Assert.Equal(SelectionSource.Manual, Rehydrated(true, SelectionSource.Manual).SelectionSource);
     }
 
@@ -247,21 +247,6 @@ public sealed class CandidateChannelTests
         Assert.True(candidate.LastMeasurement?.Locked);
         Assert.Null(candidate.LastMeasurement?.CnrMilliDecibels);
         Assert.Equal(At, candidate.LastMeasurement?.MeasuredAt);
-    }
-
-    [Fact]
-    public void ManualConfirmationReturnsACandidateThatLeftRotation()
-    {
-        var backoff = new RotationBackoff(TimeSpan.FromMinutes(1), 2, TimeSpan.FromHours(1), 2);
-        CandidateChannel candidate = Discovered();
-        candidate.RecordTuningFailure(backoff, At);
-        candidate.RecordTuningFailure(backoff, At);
-
-        candidate.ReturnToRotation(At.AddDays(1));
-
-        Assert.Equal(RotationState.Active, candidate.RotationState);
-        Assert.True(candidate.IsInRotation);
-        Assert.Null(candidate.NeedsAttentionSince);
     }
 
     [Fact]

@@ -183,16 +183,6 @@ public sealed class CandidateChannel
         NeedsAttentionSince = null;
     }
 
-    public void ReturnToRotation(DateTime at)
-    {
-        UtcTimes.Required(at, nameof(at));
-
-        RotationState = RotationState.Active;
-        ConsecutiveFailures = 0;
-        NextAttemptAt = null;
-        NeedsAttentionSince = null;
-    }
-
     public void RequireRevalidation()
     {
         NeedsRevalidation = true;

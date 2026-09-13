@@ -61,7 +61,7 @@ public sealed class LiveWireDepartureTests
         => ledger.Read().Counted.Single(counted => counted.Departure == departure);
 
     private static LiveWireSettings Impatient()
-        => new() { BetweenPings = TimeSpan.FromSeconds(30), WritePatience = TimeSpan.FromSeconds(30) };
+        => new(betweenPings: TimeSpan.FromSeconds(30), writePatience: TimeSpan.FromSeconds(30));
 
     private static TimeProvider Clock => new HandTurnedClock(Opened);
 

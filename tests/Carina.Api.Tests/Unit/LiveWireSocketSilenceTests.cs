@@ -10,11 +10,9 @@ namespace Carina.Api.Tests.Unit;
 
 public sealed class LiveWireSocketSilenceTests
 {
-    private static readonly LiveWireSettings Gateway = new()
-    {
-        BetweenPings = TimeSpan.FromSeconds(15),
-        SilenceCeiling = TimeSpan.FromSeconds(100),
-    };
+    private static readonly LiveWireSettings Gateway = new(
+        betweenPings: TimeSpan.FromSeconds(15),
+        silenceCeiling: TimeSpan.FromSeconds(100));
 
     private static readonly byte[] Picture = [0x01, 0x02, 0x03];
 

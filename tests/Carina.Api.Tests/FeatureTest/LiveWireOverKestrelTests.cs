@@ -15,11 +15,9 @@ public sealed class LiveWireOverKestrelTests
         var held = new HeldLiveSource();
         await using LiveKestrelHost host = await LiveKestrelHost.StartAsync(
             held,
-            new LiveWireSettings
-            {
-                BetweenPings = TimeSpan.FromSeconds(30),
-                WritePatience = TimeSpan.FromMilliseconds(300),
-            });
+            new LiveWireSettings(
+                betweenPings: TimeSpan.FromSeconds(30),
+                writePatience: TimeSpan.FromMilliseconds(300)));
 
         using var client = new ClientWebSocket();
         await client.ConnectAsync(host.Wire, Patiently());
