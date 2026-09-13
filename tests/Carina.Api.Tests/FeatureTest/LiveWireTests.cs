@@ -158,7 +158,7 @@ public sealed class LiveWireTests
     public async Task APingArrivesOnAWireThatIsCarryingNothing()
     {
         var held = new HeldLiveSource();
-        await using AuthProbe probe = Wiring(held, new LiveWireSettings { BetweenPings = TimeSpan.FromMilliseconds(50) });
+        await using AuthProbe probe = Wiring(held, new LiveWireSettings(betweenPings: TimeSpan.FromMilliseconds(50)));
         string cookie = await probe.SignedInCookieAsync();
 
         using WebSocket socket = await Carrying(probe, cookie)

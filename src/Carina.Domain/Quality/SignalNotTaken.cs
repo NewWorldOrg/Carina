@@ -10,14 +10,3 @@ public enum SignalNotTaken
 
     FiguresRefused = 4,
 }
-
-public static class SignalNotTakens
-{
-    public static readonly IReadOnlyList<SignalNotTaken> All =
-    [
-        SignalNotTaken.DriverUnreachable,
-        SignalNotTaken.NothingReported,
-        SignalNotTaken.NoTimeGiven,
-        SignalNotTaken.FiguresRefused,
-    ];
-}

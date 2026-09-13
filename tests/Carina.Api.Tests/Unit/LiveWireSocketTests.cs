@@ -8,11 +8,9 @@ namespace Carina.Api.Tests.Unit;
 
 public sealed class LiveWireSocketTests
 {
-    private static readonly LiveWireSettings Impatient = new()
-    {
-        BetweenPings = TimeSpan.FromMilliseconds(30),
-        WritePatience = TimeSpan.FromMilliseconds(200),
-    };
+    private static readonly LiveWireSettings Impatient = new(
+        betweenPings: TimeSpan.FromMilliseconds(30),
+        writePatience: TimeSpan.FromMilliseconds(200));
 
     private static readonly byte[] Picture = [0x01, 0x02, 0x03];
 
