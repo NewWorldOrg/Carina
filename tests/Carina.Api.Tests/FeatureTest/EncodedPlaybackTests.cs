@@ -2,8 +2,10 @@ using System.Net;
 using System.Text.Json;
 
 using Carina.Api.Playback;
+using Carina.Domain.Base;
 using Carina.Domain.Encodings;
 using Carina.Domain.Recordings;
+using Carina.Domain.Streaming;
 
 namespace Carina.Api.Tests.FeatureTest;
 
@@ -73,6 +75,71 @@ public sealed class EncodedPlaybackTests
 
         Assert.Equal(HttpStatusCode.OK, picture.StatusCode);
         Assert.Equal(artefact, await picture.Content.ReadAsByteArrayAsync());
+    }
+
+    [Fact(DisplayName = "BR-PD-008: an encoded recording of a broadcast that announced two sounds still offers both of them")]
+    public async Task ThePlanOfAnEncodedRecordingStillNamesTheSoundsTheBroadcastAnnounced()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete, audio: AudioMode.DualMono, sounds: 1);
+        feature.Encoded(recording);
+        feature.Player.SoundsCannotBeRead = "the stream is never asked when the broadcast announced its sound";
+
+        JsonElement read = (await PlayFeature.PlanOfAsync(await feature.PlanAsync(recording))).GetProperty("data");
+
+        Assert.Equal("direct", read.GetProperty("route").GetString());
+        Assert.Equal(
+            ["main", "secondary"],
+            read.GetProperty("sounds").EnumerateArray().Select(sound => sound.GetString()!).ToArray());
+        Assert.Equal(0, feature.Player.AskedWhatItCarries);
+    }
+
+    [Fact(DisplayName = "BR-PD-008: the secondary sound of an encoded recording is transcoded from the recording, because the artefact was baked with the main one")]
+    public async Task AskingAnEncodedRecordingForItsSecondSoundGoesBackToTheRecordingItself()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete, audio: AudioMode.DualMono, sounds: 1);
+        byte[] artefact = feature.Encoded(recording);
+
+        using HttpResponseMessage picture = await feature.PictureAsync(recording, "?sound=secondary");
+        byte[] body = await picture.Content.ReadAsByteArrayAsync();
+
+        Assert.Equal(HttpStatusCode.OK, picture.StatusCode);
+        Assert.Equal("onTheFly", Header(picture, PlaybackHeaders.Route));
+        Assert.Equal([SoundPlacement.OneChannelOf(0, SoundChannel.Right)], feature.Player.AskedWith);
+        Assert.Equal(feature.Player.Picture, body);
+        Assert.NotEqual(artefact, body);
+    }
+
+    [Fact(DisplayName = "BR-PD-008: the main sound of an encoded recording is the artefact itself, whatever the broadcast announced")]
+    public async Task AskingAnEncodedRecordingForItsMainSoundHandsOverTheArtefact()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete, audio: AudioMode.DualMono, sounds: 1);
+        byte[] artefact = feature.Encoded(recording);
+
+        using HttpResponseMessage picture = await feature.PictureAsync(recording, "?sound=main");
+
+        Assert.Equal(HttpStatusCode.OK, picture.StatusCode);
+        Assert.Equal("direct", Header(picture, PlaybackHeaders.Route));
+        Assert.Equal(artefact, await picture.Content.ReadAsByteArrayAsync());
+        Assert.Null(feature.Player.Handed);
+    }
+
+    [Fact]
+    public async Task ThePlanOfAnEncodedRecordingAskedForItsSecondSoundIsThePlanOfATranscode()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete, audio: AudioMode.DualMono, sounds: 1);
+        feature.Encoded(recording);
+
+        JsonElement read = (await PlayFeature.PlanOfAsync(
+            await feature.PlanAsync(recording, "?sound=secondary"))).GetProperty("data");
+
+        Assert.Equal("onTheFly", read.GetProperty("route").GetString());
+        Assert.True(read.GetProperty("transcodes").GetBoolean());
+        Assert.False(read.GetProperty("canSeek").GetBoolean());
+        Assert.Equal("byStartingAgain", read.GetProperty("seeking").GetString());
     }
 
     [Fact]

@@ -35,6 +35,7 @@ public sealed class PlaybackService(
 {
     public async Task<ServiceResult<PlaybackOffer, PlaybackFailure>> OfferAsync(
         RecordingId id,
+        SoundTrack wanted,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(id);
@@ -47,8 +48,11 @@ public sealed class PlaybackService(
         }
 
         PlaybackFileSearch onDisk = files.Find(recording.OutputRoot, recording.FileName);
+        var announced = new AnnouncedSound(recording.SnapshotAudio, recording.SnapshotSounds);
         PlaybackPlan plan = PlaybackPlan.For(
-            new PlaybackSubject(recording.Outcome, onDisk, await EncodedAsync(id, cancellationToken)));
+            new PlaybackSubject(recording.Outcome, onDisk, await EncodedAsync(id, cancellationToken)),
+            wanted,
+            SoundArrangement.Of(announced));
 
         if (plan.FellBack is { } fellBack)
         {
@@ -64,7 +68,7 @@ public sealed class PlaybackService(
                 plan,
                 handover,
                 recording.ServiceId,
-                new AnnouncedSound(recording.SnapshotAudio, recording.SnapshotSounds)))
+                announced))
             : Nothing(id, plan.Refusal!.Value);
     }
 

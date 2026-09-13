@@ -93,7 +93,7 @@ public static class PlayDelivery
         }
 
         ServiceResult<PlaybackOffer, PlaybackFailure> offered =
-            await playback.OfferAsync(recordingId, context.RequestAborted);
+            await playback.OfferAsync(recordingId, sound.Track, context.RequestAborted);
 
         if (!offered.IsSuccess)
         {
@@ -235,14 +235,14 @@ public static class PlayDelivery
         IOnTheFlyPlayer player,
         CancellationToken cancellationToken)
     {
-        if (!plan.Transcodes)
+        if (!announced.SaidNothing)
         {
-            return [];
+            return SoundArrangement.Of(announced).Tracks;
         }
 
-        return announced.SaidNothing
+        return plan.Transcodes
             ? SoundArrangement.Of(await player.SoundsAsync(handover, service, cancellationToken)).Tracks
-            : SoundArrangement.Of(announced).Tracks;
+            : [];
     }
 
     private static async Task StraightAsync(HttpContext context, PlaybackFile file, PlaybackService playback)

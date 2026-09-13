@@ -1,3 +1,5 @@
+using Carina.Domain.Streaming;
+
 namespace Carina.Domain.Playback;
 
 public sealed record PlaybackPlan
@@ -35,8 +37,12 @@ public sealed record PlaybackPlan
     public bool ShowsAsAWholeRecording => Standing is PlaybackStanding.Whole;
 
     public static PlaybackPlan For(PlaybackSubject subject)
+        => For(subject, SoundTrack.Main, SoundArrangement.TheMainSoundAlone);
+
+    public static PlaybackPlan For(PlaybackSubject subject, SoundTrack wanted, SoundArrangement carried)
     {
         ArgumentNullException.ThrowIfNull(subject);
+        ArgumentNullException.ThrowIfNull(carried);
 
         PlaybackStanding standing = PlaybackStandings.Of(subject.Outcome);
 
@@ -47,23 +53,26 @@ public sealed record PlaybackPlan
 
         PlaybackFallback? fellBack = null;
 
-        foreach (PlaybackFileSearch encoded in subject.BrowserReady)
+        if (TheArtefactCarriesIt(wanted, carried))
         {
-            if (encoded.Found is not { } artefact)
+            foreach (PlaybackFileSearch encoded in subject.BrowserReady)
             {
-                fellBack ??= encoded.Absence is PlaybackFileAbsence.Gone
-                    ? PlaybackFallback.EncodedFileGone
-                    : PlaybackFallback.EncodedFileOutOfReach;
+                if (encoded.Found is not { } artefact)
+                {
+                    fellBack ??= encoded.Absence is PlaybackFileAbsence.Gone
+                        ? PlaybackFallback.EncodedFileGone
+                        : PlaybackFallback.EncodedFileOutOfReach;
 
-                continue;
+                    continue;
+                }
+
+                if (artefact.HoldsAnything)
+                {
+                    return new PlaybackPlan(PlaybackRoute.Direct, standing, artefact, null, null);
+                }
+
+                fellBack ??= PlaybackFallback.EncodedFileHoldsNothing;
             }
-
-            if (artefact.HoldsAnything)
-            {
-                return new PlaybackPlan(PlaybackRoute.Direct, standing, artefact, null, null);
-            }
-
-            fellBack ??= PlaybackFallback.EncodedFileHoldsNothing;
         }
 
         if (subject.AsRecorded.Found is not { } recorded)
@@ -80,6 +89,9 @@ public sealed record PlaybackPlan
             ? new PlaybackPlan(PlaybackRoute.OnTheFly, standing, recorded, null, fellBack)
             : Refused(standing, PlaybackRefusal.NothingWasWritten, fellBack);
     }
+
+    private static bool TheArtefactCarriesIt(SoundTrack wanted, SoundArrangement carried)
+        => wanted is SoundTrack.Main || !carried.Holds(wanted);
 
     private static PlaybackPlan Refused(
         PlaybackStanding standing,

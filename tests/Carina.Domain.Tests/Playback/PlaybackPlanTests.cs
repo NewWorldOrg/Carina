@@ -1,5 +1,7 @@
+using Carina.Domain.Base;
 using Carina.Domain.Playback;
 using Carina.Domain.Recordings;
+using Carina.Domain.Streaming;
 
 namespace Carina.Domain.Tests.Playback;
 
@@ -275,6 +277,96 @@ public sealed class PlaybackPlanTests
             () => new PlaybackFile(new OutputRoot("bulk"), new RecordingFileName("a.m2ts"), -1));
     }
 
+    [Fact]
+    public void APlanAskedForNoSoundInParticularIsThePlanForTheMainOneOfABroadcastThatCarriedOne()
+    {
+        var subject = new PlaybackSubject(
+            RecordingOutcome.Complete,
+            OnDisk(4_000_000),
+            [PlaybackFileSearch.Of(Encoded("encoded.mp4", 1_000_000))]);
+
+        Assert.Equal(
+            PlaybackPlan.For(subject, SoundTrack.Main, SoundArrangement.TheMainSoundAlone),
+            PlaybackPlan.For(subject));
+    }
+
+    [Fact(DisplayName = "BR-PD-008: the main sound of a recording that has been encoded is still handed over as the artefact")]
+    public void TheMainSoundIsHandedOverAsTheArtefactEvenWhereTheBroadcastCarriedTwo()
+    {
+        PlaybackFile encoded = Encoded("encoded.mp4", 1_000_000);
+
+        PlaybackPlan plan = PlaybackPlan.For(
+            new PlaybackSubject(RecordingOutcome.Complete, OnDisk(4_000_000), [PlaybackFileSearch.Of(encoded)]),
+            SoundTrack.Main,
+            TwoLanguages);
+
+        Assert.Equal(PlaybackRoute.Direct, plan.Route);
+        Assert.Equal(encoded, plan.Handover);
+    }
+
+    [Fact(DisplayName = "BR-PD-008: a secondary sound the broadcast announced is transcoded from the recording, because the artefact was baked with the main one")]
+    public void ASecondSoundTheBroadcastAnnouncedIsTakenFromTheRecordingRatherThanTheArtefact()
+    {
+        PlaybackPlan plan = PlaybackPlan.For(
+            new PlaybackSubject(
+                RecordingOutcome.Complete,
+                OnDisk(4_000_000),
+                [PlaybackFileSearch.Of(Encoded("encoded.mp4", 1_000_000))]),
+            SoundTrack.Secondary,
+            TwoLanguages);
+
+        Assert.Equal(PlaybackRoute.OnTheFly, plan.Route);
+        Assert.Equal(Written(4_000_000), plan.Handover);
+        Assert.Null(plan.FellBack);
+    }
+
+    [Fact]
+    public void ASecondSoundTheBroadcastNeverAnnouncedLeavesTheArtefactWhereItIs()
+    {
+        PlaybackFile encoded = Encoded("encoded.mp4", 1_000_000);
+
+        PlaybackPlan plan = PlaybackPlan.For(
+            new PlaybackSubject(RecordingOutcome.Complete, OnDisk(4_000_000), [PlaybackFileSearch.Of(encoded)]),
+            SoundTrack.Secondary,
+            SoundArrangement.TheMainSoundAlone);
+
+        Assert.Equal(PlaybackRoute.Direct, plan.Route);
+        Assert.Equal(encoded, plan.Handover);
+    }
+
+    [Fact]
+    public void ASecondSoundIsTranscodedFromTheRecordingWhetherOrNotAnArtefactWasEverMade()
+    {
+        PlaybackPlan plan = PlaybackPlan.For(
+            PlaybackSubject.NothingHasBeenEncodedYet(RecordingOutcome.Complete, OnDisk(4_000_000)),
+            SoundTrack.Secondary,
+            TwoLanguages);
+
+        Assert.Equal(PlaybackRoute.OnTheFly, plan.Route);
+        Assert.Equal(Written(4_000_000), plan.Handover);
+    }
+
+    [Fact]
+    public void NothingSaysAPlanFellBackWhenTheArtefactWasNeverTheOneAskedFor()
+    {
+        PlaybackPlan plan = PlaybackPlan.For(
+            new PlaybackSubject(RecordingOutcome.Complete, OnDisk(4_000_000), [Gone]),
+            SoundTrack.Secondary,
+            TwoLanguages);
+
+        Assert.Equal(PlaybackRoute.OnTheFly, plan.Route);
+        Assert.Null(plan.FellBack);
+    }
+
+    [Fact]
+    public void APlanIsAskedForTheSoundsTheRecordingCarries()
+    {
+        Assert.Throws<ArgumentNullException>(() => PlaybackPlan.For(
+            PlaybackSubject.NothingHasBeenEncodedYet(RecordingOutcome.Complete, OnDisk(4_000_000)),
+            SoundTrack.Main,
+            null!));
+    }
+
     private static readonly PlaybackFileSearch Gone = PlaybackFileSearch.Missing(PlaybackFileAbsence.Gone);
 
     private static readonly PlaybackFileSearch OutOfReach = PlaybackFileSearch.Missing(PlaybackFileAbsence.OutOfReach);
@@ -283,6 +375,9 @@ public sealed class PlaybackPlanTests
 
     private static PlaybackFile Written(long bytes)
         => new(new OutputRoot("bulk"), new RecordingFileName("a1b2c3.m2ts"), bytes);
+
+    private static readonly SoundArrangement TwoLanguages =
+        SoundArrangement.Of(new AnnouncedSound(AudioMode.DualMono, 1));
 
     private static PlaybackFile Encoded(string name, long bytes)
         => new(new OutputRoot("shelf"), new RecordingFileName(name), bytes);
