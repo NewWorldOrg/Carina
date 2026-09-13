@@ -126,7 +126,7 @@ public sealed class ProgrammeFeedEndpointTests
             new Uri("/api/programs/bulk", UriKind.Relative));
 
         Assert.Equal(HttpStatusCode.TooManyRequests, turnedAway.StatusCode);
-        Assert.Equal(TimeSpan.FromSeconds(20), turnedAway.Headers.RetryAfter?.Delta);
+        Assert.Equal(TimeSpan.FromSeconds(1), turnedAway.Headers.RetryAfter?.Delta);
         Assert.Contains(
             "they are all taken",
             await turnedAway.Content.ReadAsStringAsync(),

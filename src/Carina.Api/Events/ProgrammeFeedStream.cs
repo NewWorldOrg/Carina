@@ -23,6 +23,8 @@ public static class ProgrammeFeedStream
 
     public const string CursorHeader = "X-Carina-Cursor";
 
+    private static readonly TimeSpan APlaceOpensUpIn = TimeSpan.FromSeconds(1);
+
     public static async Task Invoke(HttpContext context, ProgrammeFeedService feed, ProgrammeFeedReaders readers)
     {
         ArgumentNullException.ThrowIfNull(context);
@@ -102,7 +104,7 @@ public static class ProgrammeFeedStream
 
     private static async Task TurnAwayAsync(HttpContext context, ProgrammeFeedReaders readers)
     {
-        context.Response.Headers[HeaderNames.RetryAfter] = Patience(readers.ComeBackIn);
+        context.Response.Headers[HeaderNames.RetryAfter] = Patience(APlaceOpensUpIn);
 
         await SayAsync(
             context,
@@ -117,7 +119,7 @@ public static class ProgrammeFeedStream
         ProgrammeFeedReaders readers,
         BulkCursor? from)
     {
-        context.Response.Headers[HeaderNames.RetryAfter] = Patience(readers.ComeBackIn);
+        context.Response.Headers[HeaderNames.RetryAfter] = Patience(readers.StatementTimeout);
 
         if (from is not null)
         {
@@ -127,7 +129,8 @@ public static class ProgrammeFeedStream
         await SayAsync(
             context,
             StatusCodes.Status503ServiceUnavailable,
-            "The store took longer than one bulk feed statement is given; nothing was sent, so ask again from the cursor.");
+            "The store took longer than one bulk feed statement is given; nothing was sent, so ask again "
+            + (from is not null ? "from the cursor." : "from the beginning."));
     }
 
     private static async Task SayAsync(HttpContext context, int status, string saying)

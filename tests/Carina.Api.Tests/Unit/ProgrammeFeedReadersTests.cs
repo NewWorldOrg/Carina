@@ -73,11 +73,11 @@ public sealed class ProgrammeFeedReadersTests
     }
 
     [Fact]
-    public void HowLongToWaitBeforeAskingAgainIsTheTimeOneStatementIsGiven()
+    public void TheTimeOneStatementIsGivenIsCarriedAlongsideThePlaces()
         => Assert.Equal(
             TimeSpan.FromSeconds(5),
             new ProgrammeFeedReaders(new ProgrammeFeedSettings
             {
                 StatementTimeout = TimeSpan.FromSeconds(5),
-            }).ComeBackIn);
+            }).StatementTimeout);
 }

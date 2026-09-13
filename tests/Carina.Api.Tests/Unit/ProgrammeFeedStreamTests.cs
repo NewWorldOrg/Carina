@@ -30,7 +30,7 @@ public sealed class ProgrammeFeedStreamTests
         await ProgrammeFeedStream.Invoke(context, Feed(new UnboundedReads()), readers);
 
         Assert.Equal(StatusCodes.Status429TooManyRequests, context.Response.StatusCode);
-        Assert.Equal("20", context.Response.Headers[HeaderNames.RetryAfter].ToString());
+        Assert.Equal("1", context.Response.Headers[HeaderNames.RetryAfter].ToString());
         Assert.Contains(
             "carries 1 bulk programme feed readers at a time and they are all taken",
             Said(context),
@@ -76,6 +76,7 @@ public sealed class ProgrammeFeedStreamTests
         Assert.Equal(StatusCodes.Status503ServiceUnavailable, context.Response.StatusCode);
         Assert.Equal("20", context.Response.Headers[HeaderNames.RetryAfter].ToString());
         Assert.Equal("2:40", context.Response.Headers[ProgrammeFeedStream.CursorHeader].ToString());
+        Assert.Contains("ask again from the cursor", Said(context), StringComparison.Ordinal);
         Assert.Equal(1, readers.Free);
     }
 
@@ -91,6 +92,7 @@ public sealed class ProgrammeFeedStreamTests
 
         Assert.Equal(StatusCodes.Status503ServiceUnavailable, context.Response.StatusCode);
         Assert.False(context.Response.Headers.ContainsKey(ProgrammeFeedStream.CursorHeader));
+        Assert.Contains("ask again from the beginning", Said(context), StringComparison.Ordinal);
     }
 
     [Fact]

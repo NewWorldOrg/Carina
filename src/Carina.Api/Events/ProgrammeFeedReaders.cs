@@ -13,13 +13,13 @@ public sealed class ProgrammeFeedReaders
         ArgumentNullException.ThrowIfNull(settings);
 
         Limit = settings.ConcurrentReaders;
-        ComeBackIn = settings.StatementTimeout;
+        StatementTimeout = settings.StatementTimeout;
         places = new SemaphoreSlim(Limit, Limit);
     }
 
     public int Limit { get; }
 
-    public TimeSpan ComeBackIn { get; }
+    public TimeSpan StatementTimeout { get; }
 
     public int Free => places.CurrentCount;
 
