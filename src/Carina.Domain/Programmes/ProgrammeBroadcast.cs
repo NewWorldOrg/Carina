@@ -24,6 +24,10 @@ public sealed record ProgrammeBroadcast(
 
     public int Sounds { get; init; }
 
+    public VideoMode Video { get; init; }
+
+    public AspectRatio Aspect { get; init; }
+
     public ProgrammeSource Source { get; init; } = ProgrammeSource.ScheduleBasic;
 
     public static readonly TimeSpan FurthestBehind = TimeSpan.FromDays(1);

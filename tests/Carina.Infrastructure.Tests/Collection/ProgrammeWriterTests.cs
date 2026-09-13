@@ -257,6 +257,70 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
     }
 
     [Fact]
+    public async Task ABroadcastThatAnnouncesTheShapeOfItsPictureIsStoredSaying()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+
+        await Writer(context).WriteAsync([Table(network, 1, extra: Picture(0xB3))], [], Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        Programme? stored = await new ProgrammeRepository(reading).FindAsync(Id(network, 1), Cancel);
+
+        Assert.Equal(VideoMode.Interlaced1080, stored!.Video);
+        Assert.Equal(AspectRatio.SixteenByNine, stored.Aspect);
+    }
+
+    [Fact]
+    public async Task ABroadcastThatAnnouncedNoPictureLeavesItUnanswered()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+
+        await Writer(context).WriteAsync([Table(network, 1)], [], Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        Programme? stored = await new ProgrammeRepository(reading).FindAsync(Id(network, 1), Cancel);
+
+        Assert.Equal(VideoMode.Undetermined, stored!.Video);
+        Assert.Equal(AspectRatio.Undetermined, stored.Aspect);
+    }
+
+    [Fact]
+    public async Task ATableThatSaysNothingAboutThePictureDoesNotUnsayWhatAnotherAnnounced()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        ProgrammeWriter writer = Writer(context);
+
+        await writer.WriteAsync([Table(network, 1, extra: Picture(0xB3))], [], Cancel);
+        await writer.WriteAsync([Table(network, 1, name: "つぎのばんぐみ")], [], Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        Programme? stored = await new ProgrammeRepository(reading).FindAsync(Id(network, 1), Cancel);
+
+        Assert.Equal(VideoMode.Interlaced1080, stored!.Video);
+        Assert.Equal(AspectRatio.SixteenByNine, stored.Aspect);
+    }
+
+    [Fact]
+    public async Task ThePictureAnnouncedInOneTableReachesAProgrammeSeenInSeveralOfThem()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+
+        await Writer(context).WriteAsync(
+            [Table(network, 1), Table(network, 1, extra: Picture(0xC2))],
+            [], Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        Programme? stored = await new ProgrammeRepository(reading).FindAsync(Id(network, 1), Cancel);
+
+        Assert.Equal(VideoMode.Progressive720, stored!.Video);
+        Assert.Equal(AspectRatio.SixteenByNineWithPanVector, stored.Aspect);
+    }
+
+    [Fact]
     public async Task EventsTheTableItselfThrewAwayAreCountedHereToo()
     {
         int network = NextNetwork();
@@ -712,6 +776,9 @@ public sealed class ProgrammeWriterTests(RepositoryDatabase database)
 
     private static byte[] Sound(byte componentType, bool main = true)
         => [0xC4, 0x09, 0xF2, componentType, 0x10, 0x0F, 0xFF, (byte)(main ? 0x6F : 0x2F), 0x6A, 0x70, 0x6E];
+
+    private static byte[] Picture(byte componentType)
+        => [0x50, 0x06, 0xF1, componentType, 0x00, 0x6A, 0x70, 0x6E];
 
     private static byte[] Kanji(char letter)
     {

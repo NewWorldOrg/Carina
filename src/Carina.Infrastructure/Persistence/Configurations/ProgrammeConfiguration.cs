@@ -24,11 +24,11 @@ public sealed class ProgrammeConfiguration : IEntityTypeConfiguration<Programme>
                 table.HasCheckConstraint("ck_programme_runs_forward", "end_at IS NULL OR end_at > start_at");
                 table.HasCheckConstraint(
                     "ck_programme_source",
-                    "source IN ('PresentFollowing', 'ScheduleBasic', 'ScheduleExtended')");
-                table.HasCheckConstraint(
-                    "ck_programme_audio",
-                    "audio IN ('Undetermined', 'Mono', 'Stereo', 'DualMono', 'Surround')");
+                    $"source IN ({Vocabulary<ProgrammeSource>()})");
+                table.HasCheckConstraint("ck_programme_audio", $"audio IN ({Vocabulary<AudioMode>()})");
                 table.HasCheckConstraint("ck_programme_sounds", "sounds >= 0");
+                table.HasCheckConstraint("ck_programme_video", $"video IN ({Vocabulary<VideoMode>()})");
+                table.HasCheckConstraint("ck_programme_aspect", $"aspect IN ({Vocabulary<AspectRatio>()})");
             });
 
         builder.HasKey(programme => new { programme.NetworkId, programme.ServiceId, programme.EventId });
@@ -72,6 +72,16 @@ public sealed class ProgrammeConfiguration : IEntityTypeConfiguration<Programme>
             .IsRequired();
 
         builder.Property(programme => programme.Sounds).IsRequired();
+
+        builder.Property(programme => programme.Video)
+            .HasConversion<string>()
+            .HasMaxLength(32)
+            .IsRequired();
+
+        builder.Property(programme => programme.Aspect)
+            .HasConversion<string>()
+            .HasMaxLength(32)
+            .IsRequired();
 
         builder.Property(programme => programme.Source)
             .HasConversion<string>()
@@ -154,6 +164,10 @@ public sealed class ProgrammeConfiguration : IEntityTypeConfiguration<Programme>
         => "string_to_array("
             + $"nullif(translate(jsonb_path_query_array({column}, '$[*].kind')::text, '[] ', ''), '')"
             + ", ',')::integer[]";
+
+    private static string Vocabulary<T>()
+        where T : struct, Enum
+        => string.Join(", ", Enum.GetNames<T>().Select(name => $"'{name}'"));
 
     private static IReadOnlyList<T> Read<T>(string stored)
         => JsonSerializer.Deserialize<List<T>>(stored, ProgrammeJson.Options) ?? [];

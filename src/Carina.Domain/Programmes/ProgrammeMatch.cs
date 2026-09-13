@@ -31,6 +31,10 @@ public sealed class ProgrammeMatch
 
     public int Sounds { get; private set; }
 
+    public VideoMode Video { get; private set; }
+
+    public AspectRatio Aspect { get; private set; }
+
     public ProgrammeSource? Source { get; private set; }
 
     public long? Revision { get; private set; }
@@ -62,6 +66,8 @@ public sealed class ProgrammeMatch
             HasSubtitles = programme.HasSubtitles,
             Audio = programme.Audio,
             Sounds = programme.Sounds,
+            Video = programme.Video,
+            Aspect = programme.Aspect,
             Source = programme.Source,
             Revision = programme.Revision,
             IsArchived = false,
@@ -88,6 +94,8 @@ public sealed class ProgrammeMatch
             HasSubtitles = programme.HasSubtitles,
             Audio = AudioMode.Undetermined,
             Sounds = 0,
+            Video = VideoMode.Undetermined,
+            Aspect = AspectRatio.Undetermined,
             Source = null,
             Revision = null,
             IsArchived = true,

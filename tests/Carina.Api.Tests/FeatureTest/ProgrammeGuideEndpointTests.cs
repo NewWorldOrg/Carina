@@ -1,15 +1,18 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 using Carina.Contracts;
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 
 namespace Carina.Api.Tests.FeatureTest;
 
 [Collection(FeatureTestCollection.Name)]
-public sealed class ProgrammeGuideEndpointTests
+public sealed class ProgrammeGuideEndpointTests(TestingWebApplicationFactory factory)
+    : IClassFixture<TestingWebApplicationFactory>
 {
     private static readonly DateTime From = new(2026, 8, 18, 0, 0, 0, DateTimeKind.Utc);
 
@@ -210,7 +213,78 @@ public sealed class ProgrammeGuideEndpointTests
             tuning,
             [new ServiceId(service)]);
 
-    private static Programme Programme(int network, int service, int carried, DateTime startsAt)
+    [Fact]
+    public async Task ThePictureTheBroadcastAnnouncedComesBackBesideTheProgrammeItBelongsTo()
+    {
+        await using var feature = new EpgFeature([Terrestrial(4, 32_736, 1049)]);
+
+        feature.Programmes.Programmes.Add(
+            Programme(4, 1049, 1, From.AddHours(9), VideoMode.Interlaced1080, AspectRatio.SixteenByNine));
+
+        (_, JsonElement body) = await feature.GetAsync($"/api/programs{ADay}");
+        JsonElement programme = body.GetProperty("data").GetProperty("programmes")[0];
+
+        Assert.Equal("interlaced1080", programme.GetProperty("video").GetString());
+        Assert.Equal("sixteenByNine", programme.GetProperty("aspect").GetString());
+    }
+
+    [Fact]
+    public async Task AProgrammeNobodyAnnouncedAPictureForSaysUndeterminedRatherThanNothing()
+    {
+        await using var feature = new EpgFeature([Terrestrial(4, 32_736, 1049)]);
+
+        feature.Programmes.Programmes.Add(Programme(4, 1049, 1, From.AddHours(9)));
+
+        (_, JsonElement body) = await feature.GetAsync($"/api/programs{ADay}");
+        JsonElement programme = body.GetProperty("data").GetProperty("programmes")[0];
+
+        Assert.Equal("undetermined", programme.GetProperty("video").GetString());
+        Assert.Equal("undetermined", programme.GetProperty("aspect").GetString());
+    }
+
+    [Fact]
+    public async Task TheVocabularyAClientIsGeneratedForNamesEveryPictureTheGuideCanHand()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonObject schemas = document["components"]!["schemas"]!.AsObject();
+        JsonObject programme = schemas["ProgrammeResponder"]!["properties"]!.AsObject();
+
+        Assert.Contains("VideoMode", programme["video"]!["$ref"]!.GetValue<string>(), StringComparison.Ordinal);
+        Assert.Contains("AspectRatio", programme["aspect"]!["$ref"]!.GetValue<string>(), StringComparison.Ordinal);
+
+        Assert.Equal(
+            [
+                "interlaced1080",
+                "interlaced480",
+                "progressive1080",
+                "progressive180",
+                "progressive2160",
+                "progressive240",
+                "progressive4320",
+                "progressive480",
+                "progressive720",
+                "undetermined",
+            ],
+            Named(schemas, "VideoMode"));
+
+        Assert.Equal(
+            ["fourByThree", "sixteenByNine", "sixteenByNineWithPanVector", "undetermined", "widerThanSixteenByNine"],
+            Named(schemas, "AspectRatio"));
+    }
+
+    private static IEnumerable<string> Named(JsonObject schemas, string schema)
+        => schemas[schema]!["enum"]!
+            .AsArray()
+            .Select(value => value!.GetValue<string>())
+            .Order(StringComparer.Ordinal);
+
+    private static Programme Programme(
+        int network,
+        int service,
+        int carried,
+        DateTime startsAt,
+        VideoMode video = VideoMode.Undetermined,
+        AspectRatio aspect = AspectRatio.Undetermined)
         => Domain.Programmes.Programme.Discover(
             new ProgrammeBroadcast(
                 new ProgrammeId(new NetworkId(network), new ServiceId(service), new EventId(carried)),
@@ -219,6 +293,10 @@ public sealed class ProgrammeGuideEndpointTests
                 startsAt.AddMinutes(30),
                 "a programme",
                 string.Empty,
-                false),
+                false)
+            {
+                Video = video,
+                Aspect = aspect,
+            },
             startsAt);
 }

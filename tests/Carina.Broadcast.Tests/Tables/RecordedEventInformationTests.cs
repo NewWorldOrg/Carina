@@ -148,6 +148,16 @@ public sealed class RecordedEventInformationTests
     }
 
     [Fact]
+    public void TheRecordedEventSaysHowThePictureOfItIsCarried()
+    {
+        ComponentDescription picture = Assert.Single(Assert.Single(Table(2).Events).Components);
+
+        Assert.Equal(1, picture.StreamContent);
+        Assert.Equal(0xB3, picture.ComponentType);
+        Assert.Equal("jpn", picture.Language);
+    }
+
+    [Fact]
     public void AShortListeningLeavesTheScheduleUnfinishedAndSaysWhichSegmentsAreMissing()
     {
         var progress = new ScheduleProgress(HeldClock.Broadcasting(2026, 8, 19, 0, 0, 0));

@@ -45,6 +45,10 @@ public sealed class Programme
 
     public int Sounds { get; private set; }
 
+    public VideoMode Video { get; private set; }
+
+    public AspectRatio Aspect { get; private set; }
+
     public ProgrammeSource Source { get; private set; }
 
     public DateTime UpdatedAt { get; private set; }
@@ -72,6 +76,8 @@ public sealed class Programme
             broadcast.HasSubtitles,
             broadcast.Audio,
             broadcast.Sounds,
+            broadcast.Video,
+            broadcast.Aspect,
             broadcast.Source);
     }
 
@@ -90,6 +96,8 @@ public sealed class Programme
         bool hasSubtitles = false,
         AudioMode audio = AudioMode.Undetermined,
         int sounds = 0,
+        VideoMode video = VideoMode.Undetermined,
+        AspectRatio aspect = AspectRatio.Undetermined,
         ProgrammeSource source = ProgrammeSource.ScheduleBasic,
         long revision = 0,
         DateTime? lastHeardAt = null)
@@ -116,6 +124,8 @@ public sealed class Programme
             HasSubtitles = hasSubtitles,
             Audio = audio,
             Sounds = sounds,
+            Video = video,
+            Aspect = aspect,
             Source = source,
             UpdatedAt = UtcTimes.Required(updatedAt, nameof(updatedAt)),
             LastHeardAt = UtcTimes.Optional(lastHeardAt, nameof(lastHeardAt)),
@@ -163,6 +173,8 @@ public sealed class Programme
         IReadOnlyList<RelatedProgramme> related = Kept(Related, broadcast.Related);
         AudioMode audio = Kept(Audio, broadcast.Audio);
         int sounds = Kept(Sounds, broadcast.Sounds);
+        VideoMode video = Kept(Video, broadcast.Video);
+        AspectRatio aspect = Kept(Aspect, broadcast.Aspect);
 
         if (TransportStreamId.Equals(broadcast.TransportStreamId)
             && StartsAt == startsAt
@@ -173,6 +185,8 @@ public sealed class Programme
             && HasSubtitles == broadcast.HasSubtitles
             && Audio == audio
             && Sounds == sounds
+            && Video == video
+            && Aspect == aspect
             && Source == broadcast.Source
             && Genres.SequenceEqual(genres)
             && Items.SequenceEqual(items)
@@ -193,6 +207,8 @@ public sealed class Programme
         HasSubtitles = broadcast.HasSubtitles;
         Audio = audio;
         Sounds = sounds;
+        Video = video;
+        Aspect = aspect;
         Source = broadcast.Source;
         UpdatedAt = at;
 
@@ -208,6 +224,12 @@ public sealed class Programme
         => arriving is AudioMode.Undetermined ? held : arriving;
 
     private static int Kept(int held, int arriving) => arriving == 0 ? held : arriving;
+
+    private static VideoMode Kept(VideoMode held, VideoMode arriving)
+        => arriving is VideoMode.Undetermined ? held : arriving;
+
+    private static AspectRatio Kept(AspectRatio held, AspectRatio arriving)
+        => arriving is AspectRatio.Undetermined ? held : arriving;
 
     private static IReadOnlyList<T> Kept<T>(IReadOnlyList<T> held, IReadOnlyList<T> arriving)
         => arriving.Count == 0 ? held : arriving;
