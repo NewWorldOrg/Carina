@@ -1,5 +1,6 @@
 using System.Text.Json;
 
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
@@ -105,6 +106,10 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
                 "ck_recording_observation",
                 "(file_size_observed IS NULL) = (observed_at IS NULL)");
             table.HasCheckConstraint("ck_recording_window", "expected_window_end > expected_window_start");
+            table.HasCheckConstraint(
+                "ck_recording_snapshot_audio",
+                $"snapshot_audio IN ({Vocabulary<AudioMode>(quoted: true)})");
+            table.HasCheckConstraint("ck_recording_snapshot_sounds", "snapshot_sounds >= 0");
             table.HasCheckConstraint(
                 "ck_recording_identifiers",
                 $"""
@@ -316,6 +321,13 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
             .HasColumnName("snapshot_genres")
             .HasColumnType("jsonb")
             .IsRequired();
+
+        builder.Property(recording => recording.SnapshotAudio)
+            .HasConversion<string>()
+            .HasMaxLength(32)
+            .IsRequired();
+
+        builder.Property(recording => recording.SnapshotSounds).IsRequired();
 
         builder.Property(recording => recording.CapturedAt).IsRequired();
 

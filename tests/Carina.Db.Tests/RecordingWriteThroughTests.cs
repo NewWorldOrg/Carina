@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
@@ -151,7 +152,64 @@ public sealed class RecordingWriteThroughTests(MigratedScratchDatabase database)
         Assert.Equal(2, read.EovfCount);
     }
 
-    private static Recording Begin(int eventId, ReservationId? reservationId = null)
+    [Fact]
+    public async Task TheSoundABroadcastAnnouncedSurvivesTheRoundTripBesideTheNameItWasRecordedUnder()
+    {
+        Recording recording = Begin(60106, audio: AudioMode.DualMono, sounds: 2);
+        await Add(recording);
+
+        await using CarinaDbContext context = Context();
+        Recording read = await Load(context, recording.Id);
+
+        Assert.Equal(AudioMode.DualMono, read.SnapshotAudio);
+        Assert.Equal(2, read.SnapshotSounds);
+    }
+
+    [Fact]
+    public async Task ARecordingOfABroadcastThatAnnouncedNoSoundLandsSayingSo()
+    {
+        Recording recording = Begin(60107);
+        await Add(recording);
+
+        await using CarinaDbContext context = Context();
+        Recording read = await Load(context, recording.Id);
+
+        Assert.Equal(AudioMode.Undetermined, read.SnapshotAudio);
+        Assert.Equal(ProgrammeSnapshot.SoundsUnannounced, read.SnapshotSounds);
+    }
+
+    [Fact]
+    public async Task ASoundTheSystemHasNoWordForNeverLandsOnARecording()
+    {
+        Recording recording = Begin(60108);
+        await Add(recording);
+
+        Assert.Equal(
+            "ck_recording_snapshot_audio",
+            await Refused($"UPDATE recording SET snapshot_audio = 'Quadraphonic' WHERE id = '{recording.Id.Value}'"));
+        Assert.Equal(
+            "ck_recording_snapshot_sounds",
+            await Refused($"UPDATE recording SET snapshot_sounds = -1 WHERE id = '{recording.Id.Value}'"));
+    }
+
+    private async Task<string?> Refused(string sql)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        await using var command = new NpgsqlCommand(sql, connection);
+
+        PostgresException refusal =
+            await Assert.ThrowsAsync<PostgresException>(() => command.ExecuteNonQueryAsync());
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
+
+        return refusal.ConstraintName;
+    }
+
+    private static Recording Begin(
+        int eventId,
+        ReservationId? reservationId = null,
+        AudioMode audio = AudioMode.Undetermined,
+        int sounds = ProgrammeSnapshot.SoundsUnannounced)
     {
         RecordingId id = RecordingId.New();
 
@@ -163,7 +221,14 @@ public sealed class RecordingWriteThroughTests(MigratedScratchDatabase database)
             RecordingFileName.For(id, ".m2ts"),
             Now,
             Now.AddHours(1),
-            new ProgrammeSnapshot("A programme", "What it is about", string.Empty, [new ProgrammeGenre(7, 1)], Now),
+            new ProgrammeSnapshot(
+                "A programme",
+                "What it is about",
+                string.Empty,
+                [new ProgrammeGenre(7, 1)],
+                Now,
+                audio,
+                sounds),
             null,
             BroadcastGroupRole.Standalone,
             Now);

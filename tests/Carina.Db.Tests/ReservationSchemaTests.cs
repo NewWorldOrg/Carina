@@ -115,6 +115,27 @@ public sealed class ReservationSchemaTests(MigratedScratchDatabase database)
     }
 
     [Fact]
+    public async Task ASoundTheSystemHasNoWordForNeverLandsOnAReservation()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        Guid reserved = await Reserve(connection, 70020, 4001, Airs);
+
+        PostgresException named = await Assert.ThrowsAsync<PostgresException>(
+            () => Execute(
+                connection,
+                $"UPDATE reservation SET snapshot_audio = 'Quadraphonic' WHERE id = '{reserved}'"));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, named.SqlState);
+        Assert.Equal("ck_reservation_snapshot_audio", named.ConstraintName);
+
+        PostgresException counted = await Assert.ThrowsAsync<PostgresException>(
+            () => Execute(connection, $"UPDATE reservation SET snapshot_sounds = -1 WHERE id = '{reserved}'"));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, counted.SqlState);
+        Assert.Equal("ck_reservation_snapshot_sounds", counted.ConstraintName);
+    }
+
+    [Fact]
     public async Task DeletingARuleAReservationStillPointsAtIsRefusedByTheDatabaseItself()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -341,7 +362,8 @@ public sealed class ReservationSchemaTests(MigratedScratchDatabase database)
             INSERT INTO reservation (
                 id, network_id, service_id, event_id, programme_start_at, rule_id, priority,
                 start_at, end_at, end_at_confirmed, margin_before, margin_after,
-                snapshot_name, snapshot_summary, snapshot_extended, snapshot_genres, captured_at,
+                snapshot_name, snapshot_summary, snapshot_extended, snapshot_genres,
+                snapshot_audio, snapshot_sounds, captured_at,
                 epg_diverged, epg_diverged_detail, epg_missing, acknowledged_at,
                 reception_unavailable, reception_unavailable_since,
                 broadcast_group_key, broadcast_group_role, state, cancelled_because,
@@ -350,7 +372,7 @@ public sealed class ReservationSchemaTests(MigratedScratchDatabase database)
                 '{id}', {networkId}, 1024, {eventId}, {programmeStartAt},
                 {(ruleId is { } rule ? $"'{rule}'" : "NULL")}, 10,
                 {Airs}, {Ends}, true, 10, 30,
-                'A programme', 'What it is about', '', '[]'::jsonb, {Now},
+                'A programme', 'What it is about', '', '[]'::jsonb, 'Undetermined', 0, {Now},
                 false, '[]'::jsonb, false, {acknowledgedAt ?? "NULL"},
                 {(receptionUnavailable ?? receptionUnavailableSince is not null).ToString().ToLowerInvariant()},
                 {receptionUnavailableSince ?? "NULL"},

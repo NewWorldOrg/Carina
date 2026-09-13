@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
@@ -15,15 +16,18 @@ internal static class RecordingFactory
     public static ProgrammeRef Programme(int eventId = 4001)
         => new(new NetworkId(32736), new ServiceId(1024), new EventId(eventId), Now.AddMinutes(-5));
 
-    public static ProgrammeSnapshot Snapshot()
-        => new("A programme", "What it is about", string.Empty, [new ProgrammeGenre(7, 1)], Now);
+    public static ProgrammeSnapshot Snapshot(
+        AudioMode audio = AudioMode.Undetermined,
+        int sounds = ProgrammeSnapshot.SoundsUnannounced)
+        => new("A programme", "What it is about", string.Empty, [new ProgrammeGenre(7, 1)], Now, audio, sounds);
 
     public static Recording Started(
         RecordingId? id = null,
         ReservationId? reservationId = null,
         BroadcastGroupKey? groupKey = null,
         BroadcastGroupRole groupRole = BroadcastGroupRole.Standalone,
-        TunerDeviceId? tuner = null)
+        TunerDeviceId? tuner = null,
+        ProgrammeSnapshot? snapshot = null)
     {
         RecordingId recordingId = id ?? RecordingId.New();
 
@@ -35,7 +39,7 @@ internal static class RecordingFactory
             RecordingFileName.For(recordingId, ".m2ts"),
             Now.AddMinutes(-5),
             Now.AddMinutes(55),
-            Snapshot(),
+            snapshot ?? Snapshot(),
             groupKey,
             groupRole,
             Now,

@@ -162,7 +162,9 @@ public sealed class HeldRecordings : IRecordingDirectory
                 held.SnapshotSummary,
                 held.SnapshotExtended,
                 held.SnapshotGenres,
-                held.CapturedAt),
+                held.CapturedAt,
+                held.SnapshotAudio,
+                held.SnapshotSounds),
             held.BroadcastGroupKey,
             held.BroadcastGroupRole,
             held.ThumbnailFault);

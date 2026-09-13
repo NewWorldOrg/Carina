@@ -110,7 +110,8 @@ public sealed class ReservationCompositeStateTests(MigratedScratchDatabase datab
             INSERT INTO reservation (
                 id, network_id, service_id, event_id, programme_start_at, rule_id, priority,
                 start_at, end_at, end_at_confirmed, margin_before, margin_after,
-                snapshot_name, snapshot_summary, snapshot_extended, snapshot_genres, captured_at,
+                snapshot_name, snapshot_summary, snapshot_extended, snapshot_genres,
+                snapshot_audio, snapshot_sounds, captured_at,
                 epg_diverged, epg_diverged_detail, epg_missing, acknowledged_at,
                 reception_unavailable, reception_unavailable_since,
                 broadcast_group_key, broadcast_group_role, state, cancelled_because,
@@ -118,7 +119,7 @@ public sealed class ReservationCompositeStateTests(MigratedScratchDatabase datab
             VALUES (
                 '{Guid.NewGuid()}', 60100, 1024, {eventId}, {Airs}, NULL, 10,
                 {Airs}, {Ends}, true, 10, 30,
-                'A programme', 'What it is about', '', '[]'::jsonb, {Airs},
+                'A programme', 'What it is about', '', '[]'::jsonb, 'Undetermined', 0, {Airs},
                 false, '[]'::jsonb, false, NULL, false, NULL,
                 NULL, 'Standalone', '{state}',
                 {(state is ReservationState.Cancelled ? "'ByHand'" : "NULL")},

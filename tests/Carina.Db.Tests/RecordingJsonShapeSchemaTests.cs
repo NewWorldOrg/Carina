@@ -602,7 +602,8 @@ public sealed class RecordingJsonShapeSchemaTests(MigratedScratchDatabase databa
                 expected_window_start, expected_window_end,
                 recording_outcome, outcome_detail,
                 scrambled_packets, eovf_count, measured_updated_at,
-                snapshot_name, snapshot_summary, snapshot_extended, snapshot_genres, captured_at,
+                snapshot_name, snapshot_summary, snapshot_extended, snapshot_genres,
+                snapshot_audio, snapshot_sounds, captured_at,
                 broadcast_group_key, broadcast_group_role,
                 cc_measured, cc_dropped_packets, cc_total_packets,
                 pcr_anchor, drop_positions, pcr_reanchors, tuner_device_id, thumbnail_state)
@@ -614,7 +615,7 @@ public sealed class RecordingJsonShapeSchemaTests(MigratedScratchDatabase databa
                 {Airs}, {Ends},
                 NULL, {detail ?? "'[]'::jsonb"},
                 {scrambled ?? "200"}, 0, {measuredAt ?? "NULL"},
-                'A programme', 'What it is about', '', '[]'::jsonb, {Now},
+                'A programme', 'What it is about', '', '[]'::jsonb, 'Undetermined', 0, {Now},
                 NULL, 'Standalone',
                 {ccMeasured}, {ccDropped ?? "NULL"}, {ccTotal ?? "NULL"},
                 {anchor ?? "NULL"}, {positions ?? "'[]'::jsonb"}, {reanchors ?? "'[]'::jsonb"}, 'pt3-0', {thumbnail ?? "'Pending'"})

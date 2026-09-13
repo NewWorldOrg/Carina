@@ -1,3 +1,4 @@
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
 using Carina.Domain.Reservations;
@@ -187,6 +188,36 @@ public sealed class ReservationRecordingContractTests(MigratedScratchDatabase da
     }
 
     [Fact]
+    public async Task TheSoundTheReservationCopiedIsHandedToTheRecorderWithTheRest()
+    {
+        await Clear();
+        Reservation reservation = Build(21703, Airs, Margin.None, Margin.None, AudioMode.DualMono, 2);
+
+        await using (CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString))
+        {
+            context.Add(reservation);
+            await context.SaveChangesAsync();
+        }
+
+        RecordingTick tick = Assert.Single(await Ticks(Tick));
+
+        Assert.Equal(AudioMode.DualMono, tick.Snapshot.Audio);
+        Assert.Equal(2, tick.Snapshot.Sounds);
+    }
+
+    [Fact]
+    public async Task AReservationOfABroadcastThatAnnouncedNoSoundHandsOnThatItSaidNothing()
+    {
+        await Clear();
+        await Plan(21704, ReservationState.Scheduled);
+
+        RecordingTick tick = Assert.Single(await Ticks(Tick));
+
+        Assert.Equal(AudioMode.Undetermined, tick.Snapshot.Audio);
+        Assert.Equal(ProgrammeSnapshot.SoundsUnannounced, tick.Snapshot.Sounds);
+    }
+
+    [Fact]
     public async Task TheMarginsDecideWhetherTheTickHasArrived()
     {
         await Clear();
@@ -345,7 +376,13 @@ public sealed class ReservationRecordingContractTests(MigratedScratchDatabase da
 
     private static IReadOnlyList<Guid> Sorted(IReadOnlyList<Guid> ids) => [.. ids.Order()];
 
-    private static Reservation Build(int eventId, DateTime airs, Margin marginBefore, Margin marginAfter)
+    private static Reservation Build(
+        int eventId,
+        DateTime airs,
+        Margin marginBefore,
+        Margin marginAfter,
+        AudioMode audio = AudioMode.Undetermined,
+        int sounds = ProgrammeSnapshot.SoundsUnannounced)
     {
         var programme = new ProgrammeRef(new NetworkId(32736), new ServiceId(1024), new EventId(eventId), airs);
 
@@ -359,7 +396,14 @@ public sealed class ReservationRecordingContractTests(MigratedScratchDatabase da
             true,
             marginBefore,
             marginAfter,
-            new ProgrammeSnapshot("A programme", "What it is about", string.Empty, [new ProgrammeGenre(7, 1)], Made),
+            new ProgrammeSnapshot(
+                "A programme",
+                "What it is about",
+                string.Empty,
+                [new ProgrammeGenre(7, 1)],
+                Made,
+                audio,
+                sounds),
             null,
             BroadcastGroupRole.Standalone,
             Made);
@@ -399,14 +443,15 @@ public sealed class ReservationRecordingContractTests(MigratedScratchDatabase da
             INSERT INTO reservation (
                 id, network_id, service_id, event_id, programme_start_at, rule_id, priority,
                 start_at, end_at, end_at_confirmed, margin_before, margin_after,
-                snapshot_name, snapshot_summary, snapshot_extended, snapshot_genres, captured_at,
+                snapshot_name, snapshot_summary, snapshot_extended, snapshot_genres,
+                snapshot_audio, snapshot_sounds, captured_at,
                 epg_diverged, epg_diverged_detail, epg_missing, acknowledged_at,
                 broadcast_group_key, broadcast_group_role, state, cancelled_because,
                 started_at, recording_outcome, created_at)
             VALUES (
                 '{id}', 32736, 1024, {eventId}, '{Sql(starts)}', NULL, 10,
                 '{Sql(starts)}', '{Sql(starts.AddHours(1))}', true, {marginBefore}, {marginAfter},
-                'A programme', 'What it is about', '', '[]'::jsonb, '{Sql(Made)}',
+                'A programme', 'What it is about', '', '[]'::jsonb, 'Undetermined', 0, '{Sql(Made)}',
                 false, '[]'::jsonb, false, NULL,
                 NULL, 'Standalone', '{state}',
                 {(state is ReservationState.Cancelled ? "'ByHand'" : "NULL")},

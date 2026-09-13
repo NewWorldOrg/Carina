@@ -304,7 +304,14 @@ public sealed class ReservationService(
     }
 
     private static ProgrammeSnapshot Snapshot(Programme programme, DateTime at)
-        => ProgrammeSnapshot.Of(programme.Name, programme.Summary, programme.Items, programme.Genres, at);
+        => ProgrammeSnapshot.Of(
+            programme.Name,
+            programme.Summary,
+            programme.Items,
+            programme.Genres,
+            at,
+            programme.Audio,
+            programme.Sounds);
 
     private static ServiceResult<T, ReservationFailure> Missing<T>(ReservationId id)
         => ServiceResult<T, ReservationFailure>.Failure(

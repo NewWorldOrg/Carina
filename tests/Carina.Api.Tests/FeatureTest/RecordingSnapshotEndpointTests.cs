@@ -2,6 +2,7 @@ using System.Net;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
+using Carina.Domain.Base;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
@@ -192,6 +193,48 @@ public sealed class RecordingSnapshotEndpointTests(TestingWebApplicationFactory 
             "BroadcastGroupRole",
             group["role"]!["$ref"]?.GetValue<string>() ?? string.Empty,
             StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheSoundTheBroadcastAnnouncedComesBackBesideTheNameItWasRecordedUnder()
+    {
+        await using var feature = new RecordingFeature();
+        feature.Held(audio: AudioMode.DualMono, sounds: 2);
+
+        JsonElement programme = await OnlyProgrammeAsync(feature);
+
+        Assert.Equal("dualMono", programme.GetProperty("audio").GetString());
+        Assert.Equal(2, programme.GetProperty("sounds").GetInt32());
+    }
+
+    [Fact]
+    public async Task ARecordingOfABroadcastThatAnnouncedNoSoundSaysUndeterminedRatherThanNothing()
+    {
+        await using var feature = new RecordingFeature();
+        feature.Held();
+
+        JsonElement programme = await OnlyProgrammeAsync(feature);
+
+        Assert.Equal("undetermined", programme.GetProperty("audio").GetString());
+        Assert.Equal(0, programme.GetProperty("sounds").GetInt32());
+    }
+
+    [Fact]
+    public async Task TheSoundAClientIsGeneratedForIsTheOneTheGuideAlreadyHands()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonObject schemas = document["components"]!["schemas"]!.AsObject();
+
+        string guide = schemas["ProgrammeResponder"]!["properties"]!["audio"]!["$ref"]!.GetValue<string>();
+        JsonNode recorded = schemas["RecordingProgrammeResponder"]!["properties"]!["audio"]!;
+
+        Assert.Equal(guide, recorded["$ref"]!.GetValue<string>());
+        Assert.Equal(
+            ["dualMono", "mono", "stereo", "surround", "undetermined"],
+            schemas["AudioMode"]!["enum"]!
+                .AsArray()
+                .Select(value => value!.GetValue<string>())
+                .Order(StringComparer.Ordinal));
     }
 
     private static string[] Types(JsonNode schema)

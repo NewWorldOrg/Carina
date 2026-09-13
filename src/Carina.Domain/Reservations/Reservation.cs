@@ -52,6 +52,10 @@ public sealed class Reservation
 
     public IReadOnlyList<ProgrammeGenre> SnapshotGenres { get; private set; } = [];
 
+    public AudioMode SnapshotAudio { get; private set; }
+
+    public int SnapshotSounds { get; private set; }
+
     public DateTime CapturedAt { get; private set; }
 
     public bool EpgDiverged { get; private set; }
@@ -260,6 +264,8 @@ public sealed class Reservation
             SnapshotSummary = snapshot.Summary,
             SnapshotExtended = snapshot.Extended,
             SnapshotGenres = snapshot.Genres,
+            SnapshotAudio = snapshot.Audio,
+            SnapshotSounds = snapshot.Sounds,
             CapturedAt = snapshot.CapturedAt,
             BroadcastGroupKey = broadcastGroupKey,
             BroadcastGroupRole = broadcastGroupRole,
@@ -427,6 +433,8 @@ public sealed class Reservation
         SnapshotSummary = snapshot.Summary;
         SnapshotExtended = snapshot.Extended;
         SnapshotGenres = snapshot.Genres;
+        SnapshotAudio = snapshot.Audio;
+        SnapshotSounds = snapshot.Sounds;
         CapturedAt = snapshot.CapturedAt;
     }
 

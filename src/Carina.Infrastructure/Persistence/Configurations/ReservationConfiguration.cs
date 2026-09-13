@@ -72,6 +72,10 @@ public sealed class ReservationConfiguration : IEntityTypeConfiguration<Reservat
                 + $"AND margin_after BETWEEN 0 AND {(int)Margin.Longest.TotalSeconds}");
             table.HasCheckConstraint("ck_reservation_window", "end_at > start_at");
             table.HasCheckConstraint(
+                "ck_reservation_snapshot_audio",
+                "snapshot_audio IN ('Undetermined', 'Mono', 'Stereo', 'DualMono', 'Surround')");
+            table.HasCheckConstraint("ck_reservation_snapshot_sounds", "snapshot_sounds >= 0");
+            table.HasCheckConstraint(
                 "ck_reservation_priority",
                 $"priority BETWEEN {Priority.MinValue} AND {Priority.MaxValue}");
             table.HasCheckConstraint(
@@ -150,6 +154,13 @@ public sealed class ReservationConfiguration : IEntityTypeConfiguration<Reservat
             .HasColumnName("snapshot_genres")
             .HasColumnType("jsonb")
             .IsRequired();
+
+        builder.Property(reservation => reservation.SnapshotAudio)
+            .HasConversion<string>()
+            .HasMaxLength(32)
+            .IsRequired();
+
+        builder.Property(reservation => reservation.SnapshotSounds).IsRequired();
 
         builder.Property(reservation => reservation.CapturedAt).IsRequired();
 

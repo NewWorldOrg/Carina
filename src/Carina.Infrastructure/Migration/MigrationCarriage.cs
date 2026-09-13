@@ -1,6 +1,7 @@
 using System.Globalization;
 
 using Carina.Contracts;
+using Carina.Domain.Base;
 using Carina.Domain.Encodings;
 using Carina.Domain.Migration;
 using Carina.Domain.Programmes;
@@ -298,7 +299,14 @@ public sealed class MigrationCarriage(
             null,
             null,
             ThumbnailState.Pending,
-            ProgrammeSnapshot.Of(source.Name, string.Empty, [], [], source.StartAt),
+            ProgrammeSnapshot.Of(
+                source.Name,
+                string.Empty,
+                [],
+                [],
+                source.StartAt,
+                AudioMode.Undetermined,
+                ProgrammeSnapshot.SoundsUnannounced),
             null,
             BroadcastGroupRole.Standalone);
 }

@@ -222,13 +222,14 @@ public sealed class RecordingTickTests(MigratedScratchDatabase database)
             INSERT INTO reservation (
                 id, network_id, service_id, event_id, programme_start_at, rule_id, priority,
                 start_at, end_at, end_at_confirmed, margin_before, margin_after,
-                snapshot_name, snapshot_summary, snapshot_extended, snapshot_genres, captured_at,
+                snapshot_name, snapshot_summary, snapshot_extended, snapshot_genres,
+                snapshot_audio, snapshot_sounds, captured_at,
                 epg_diverged, epg_diverged_detail, epg_missing, acknowledged_at,
                 broadcast_group_key, broadcast_group_role, state, started_at, recording_outcome, created_at)
             VALUES (
                 '{id}', 32736, 1024, {eventId}, '{Sql(Airs)}', NULL, 10,
                 '{Sql(Airs)}', '{Sql(Airs.AddHours(1))}', true, 0, 0,
-                'A programme', 'What it is about', '', '[]'::jsonb, '{Sql(Made)}',
+                'A programme', 'What it is about', '', '[]'::jsonb, 'Undetermined', 0, '{Sql(Made)}',
                 false, '[]'::jsonb, false, NULL,
                 NULL, 'Standalone', '{state}', NULL, NULL, '{Sql(Made)}')
             """);
