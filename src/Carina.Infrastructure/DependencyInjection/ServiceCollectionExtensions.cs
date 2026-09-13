@@ -114,6 +114,11 @@ public static class ServiceCollectionExtensions
             .Configure(options => options.ReadFrom(configuration))
             .ValidateOnStart();
 
+        services.AddSingleton<IValidateOptions<AuthOptions>, AuthValidation>();
+        services.AddOptions<AuthOptions>()
+            .Configure(options => options.ReadFrom(configuration))
+            .ValidateOnStart();
+
         services.AddDbContext<CarinaDbContext>((provider, options) =>
             options.UseCarinaDatabase(provider.GetRequiredService<IOptions<DatabaseOptions>>().Value.ConnectionString));
 
@@ -196,9 +201,11 @@ public static class ServiceCollectionExtensions
             provider.GetRequiredService<ReservationRecalculationHostedService>());
         services.TryAddSingleton(new RuleApplySettings());
         services.TryAddSingleton<RuleApplyNow>();
-        services.TryAddSingleton(SessionPolicy.Default);
+        services.TryAddSingleton<SessionPolicy>(provider =>
+            provider.GetRequiredService<IOptions<AuthOptions>>().Value.ReadSession());
         services.TryAddSingleton(PasswordHashPolicy.Default);
-        services.TryAddSingleton(LoginRatePolicy.Default);
+        services.TryAddSingleton<LoginRatePolicy>(provider =>
+            provider.GetRequiredService<IOptions<AuthOptions>>().Value.ReadLogin());
         services.TryAddSingleton(OidcLoginPolicy.Default);
         services.TryAddSingleton<OidcDirectoryCache>();
         services.TryAddSingleton<IOidcReachability, OidcReachability>();

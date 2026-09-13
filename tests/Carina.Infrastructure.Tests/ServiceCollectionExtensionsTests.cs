@@ -1,3 +1,4 @@
+using Carina.Domain.Auth;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
@@ -11,6 +12,7 @@ using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
 using Carina.Domain.Scans;
 using Carina.Domain.Thumbnails;
+using Carina.Infrastructure.Auth;
 using Carina.Infrastructure.Collection;
 using Carina.Infrastructure.Configuration;
 using Carina.Infrastructure.DependencyInjection;
@@ -25,6 +27,7 @@ using Carina.Infrastructure.Reservations;
 using Carina.Infrastructure.Rules;
 using Carina.Infrastructure.Scanning;
 using Carina.Infrastructure.Thumbnails;
+using Carina.TestSupport;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -398,6 +401,91 @@ public sealed class ServiceCollectionExtensionsTests
             () => provider.GetRequiredService<IOptions<ThumbnailOptions>>().Value);
 
         Assert.Contains("Thumbnails:WrittenTo", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RegistersHowLongASessionLastsAsOneSettingForTheWholeApplication()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        SessionPolicy held = provider.GetRequiredService<SessionPolicy>();
+
+        Assert.Equal(SessionPolicy.Default, held);
+        Assert.Same(held, provider.GetRequiredService<SessionPolicy>());
+    }
+
+    [Fact]
+    public void RegistersHowOftenALoginMayBeWrongAsOneSettingForTheWholeApplication()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        LoginRatePolicy held = provider.GetRequiredService<LoginRatePolicy>();
+
+        Assert.Equal(LoginRatePolicy.Default, held);
+        Assert.Same(held, provider.GetRequiredService<LoginRatePolicy>());
+    }
+
+    [Fact]
+    public void ReadsHowLongASessionLastsFromConfiguration()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings["Auth:SessionAbsoluteLifetime"] = "10.00:00:00";
+        settings["Auth:SessionIdleTimeout"] = "1.00:00:00";
+        using ServiceProvider provider = Build(settings);
+
+        SessionPolicy read = provider.GetRequiredService<SessionPolicy>();
+
+        Assert.Equal(TimeSpan.FromDays(10), read.AbsoluteLifetime);
+        Assert.Equal(TimeSpan.FromDays(1), read.IdleTimeout);
+    }
+
+    [Fact]
+    public void ReadsHowOftenALoginMayBeWrongFromConfiguration()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings["Auth:LoginFailuresBeforeRefusing"] = "3";
+        settings["Auth:LoginWindow"] = "00:02:00";
+        using ServiceProvider provider = Build(settings);
+
+        LoginRatePolicy read = provider.GetRequiredService<LoginRatePolicy>();
+
+        Assert.Equal(3, read.FailuresBeforeRefusing);
+        Assert.Equal(TimeSpan.FromMinutes(2), read.Window);
+    }
+
+    [Fact]
+    public void RejectsASessionLeftIdleForLongerThanItLives()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings["Auth:SessionIdleTimeout"] = "60.00:00:00";
+        using ServiceProvider provider = Build(settings);
+
+        OptionsValidationException exception = Assert.Throws<OptionsValidationException>(
+            () => provider.GetRequiredService<IOptions<AuthOptions>>().Value);
+
+        Assert.Contains("Auth:SessionIdleTimeout", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheUpkeepForgetsSessionsByTheSameIdleTimeoutEverythingElseIsHeldTo()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings["Auth:SessionIdleTimeout"] = "01:00:00";
+        using ServiceProvider provider = Build(settings);
+
+        AuthUpkeepJob job = Assert.Single(provider.GetServices<IHostedService>().OfType<AuthUpkeepJob>());
+        var held = new HeldAuthSessions();
+
+        held.Sessions.Add(AuthSession.Start(
+            SessionId.Issue(),
+            new Subject("carina"),
+            "carina",
+            AuthMethod.Local,
+            "a device that stopped asking",
+            DateTime.UtcNow - TimeSpan.FromHours(2)));
+
+        Assert.Equal(1, await job.ForgetEndedSessionsAsync(held, CancellationToken.None));
+        Assert.Empty(held.Sessions);
     }
 
     [Fact]
