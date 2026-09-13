@@ -24,6 +24,8 @@ public enum SyntheticSound
     Surround = 4,
 
     TwoLanguages = 5,
+
+    TwoLanguagesOnOneSound = 6,
 }
 
 public enum SyntheticCaptions
@@ -57,6 +59,10 @@ public sealed record SyntheticBroadcast
 
     public const int CaptionClearedAtSecond = 9;
 
+    public const int MainTone = 440;
+
+    public const int SecondaryTone = 880;
+
     public static readonly TimeSpan DefaultLength = TimeSpan.FromSeconds(3);
 
     private const int TicksPerSecond = 90_000;
@@ -82,6 +88,9 @@ public sealed record SyntheticBroadcast
     public string Programme { get; init; } = FfmpegProgramme.Default;
 
     private bool CarriesSideInformation => WithCaptions || WithSuperimpose;
+
+    private bool CarriesASoundEncodedAhead
+        => Sound is SyntheticSound.DualMono or SyntheticSound.TwoLanguagesOnOneSound;
 
     public static SyntheticBroadcast AsMeasured() => new();
 
@@ -208,7 +217,7 @@ public sealed record SyntheticBroadcast
                 nameof(sideInformation));
         }
 
-        if (Sound is SyntheticSound.DualMono != sound is not null)
+        if (CarriesASoundEncodedAhead != sound is not null)
         {
             throw new ArgumentException(
                 "A sound file is handed over exactly when the sound cannot be encoded on the way.",
@@ -336,6 +345,15 @@ public sealed record SyntheticBroadcast
                 await File.WriteAllBytesAsync(sound, DualMonoAdts.Silence(Length), cancellationToken);
             }
 
+            if (Sound is SyntheticSound.TwoLanguagesOnOneSound)
+            {
+                sound = Path.Combine(held.FullName, "two-languages.aac");
+                await FfmpegProgramme.RunAsync(
+                    Programme,
+                    TwoTonesOnOneSound(sound),
+                    cancellationToken);
+            }
+
             await FfmpegProgramme.RunAsync(Programme, Arguments(side, sound, path), cancellationToken);
 
             return path;
@@ -358,6 +376,31 @@ public sealed record SyntheticBroadcast
             "+bitexact",
             "-flags",
             "+bitexact",
+        ];
+
+    private IReadOnlyList<string> TwoTonesOnOneSound(string destination)
+        =>
+        [
+            .. Preamble(),
+            "-f",
+            "lavfi",
+            "-i",
+            Tone(MainTone),
+            "-f",
+            "lavfi",
+            "-i",
+            Tone(SecondaryTone),
+            "-filter_complex",
+            "[0:a][1:a]join=inputs=2:channel_layout=stereo[both]",
+            "-map",
+            "[both]",
+            "-t",
+            Length.TotalSeconds.ToString(CultureInfo.InvariantCulture),
+            "-c:a",
+            "aac",
+            "-f",
+            "adts",
+            destination,
         ];
 
     private static string Tone(int hertz) => Invariant($"sine=frequency={hertz}:sample_rate={DualMonoAdts.SampleRate}");
@@ -414,6 +457,7 @@ public sealed record SyntheticBroadcast
                 "language=eng",
             ],
             SyntheticSound.DualMono => ["-c:a", "copy"],
+            SyntheticSound.TwoLanguagesOnOneSound => ["-c:a", "copy"],
             _ => throw new InvalidOperationException("Sound arrives in one of the modes named here."),
         };
 }

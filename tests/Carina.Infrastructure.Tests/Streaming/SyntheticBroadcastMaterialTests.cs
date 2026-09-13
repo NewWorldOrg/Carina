@@ -37,6 +37,10 @@ public sealed class SyntheticBroadcastMaterialTests : IDisposable
 
     private const string Counted = "stream=codec_type,nb_read_packets";
 
+    private const int SampleRate = 48_000;
+
+    private const int TimesLouder = 8;
+
     private readonly string room = Directory.CreateTempSubdirectory("carina-material").FullName;
 
     public void Dispose() => Directory.Delete(room, recursive: true);
@@ -432,6 +436,126 @@ public sealed class SyntheticBroadcastMaterialTests : IDisposable
         Assert.Equal("5.1", Sound(tracks).Value("channel_layout"));
         await BothTracksCarrySomethingAsync("played-surround.mp4");
     }
+
+    [Fact]
+    public async Task BrPd008ARecordingCarryingTwoLanguagesOnOneSoundIsPlayedWithOnlyTheLanguageThatWasAskedFor()
+    {
+        string written = await (SyntheticBroadcast.Sounding(SyntheticSound.TwoLanguagesOnOneSound) with { Length = PastTheProbe })
+            .WriteAsync(Path.Combine(room, "played-two-languages.m2ts"));
+
+        IReadOnlyList<FfprobeRecord> carried = await ProbedAsync(
+            written,
+            "stream=index,codec_type,channels",
+            "-select_streams",
+            "a");
+
+        Assert.Single(carried.Select(record => record.Value("index")).Distinct(StringComparer.Ordinal));
+        Assert.Equal("2", Sound(carried).Value("channels"));
+
+        IReadOnlyList<FfprobeRecord> main = await PlayedAsync(
+            written,
+            "played-main.mp4",
+            SoundPlacement.OneChannelOf(0, SoundChannel.Left));
+        IReadOnlyList<FfprobeRecord> secondary = await PlayedAsync(
+            written,
+            "played-secondary.mp4",
+            SoundPlacement.OneChannelOf(0, SoundChannel.Right));
+
+        Assert.Equal(["video", "audio"], Types(main));
+        Assert.Equal(["video", "audio"], Types(secondary));
+        Assert.Equal("2", Sound(main).Value("channels"));
+        Assert.Equal("2", Sound(secondary).Value("channels"));
+
+        foreach (int ear in new[] { 0, 1 })
+        {
+            Tones heard = await HeardAsync("played-main.mp4", ear);
+            Tones other = await HeardAsync("played-secondary.mp4", ear);
+
+            Assert.True(
+                heard.Main > heard.Secondary * TimesLouder,
+                $"the main sound in ear {ear} carried {heard.Main:F5} of its own tone and {heard.Secondary:F5} of the other one");
+            Assert.True(
+                other.Secondary > other.Main * TimesLouder,
+                $"the secondary sound in ear {ear} carried {other.Secondary:F5} of its own tone and {other.Main:F5} of the other one");
+        }
+    }
+
+    private async Task<IReadOnlyList<FfprobeRecord>> PlayedAsync(string written, string name, SoundPlacement sound)
+    {
+        string delivered = Path.Combine(room, name);
+
+        await TranscodedAsync(
+            [
+                .. FfmpegPlaybackInvocation.Arguments(
+                    Service,
+                    LiveProfile.Hd30,
+                    Interlaced,
+                    LiveEncoder.Software,
+                    new StreamSource(written),
+                    TimeSpan.Zero,
+                    sound),
+                .. FfmpegLiveInvocation.DeliveryFromTheStart(),
+            ],
+            fed: null,
+            delivered);
+
+        return await ProbedAsync(delivered);
+    }
+
+    private async Task<Tones> HeardAsync(string name, int ear)
+    {
+        string decoded = Path.Combine(room, FormattableString.Invariant($"{name}.ear{ear}.f32le"));
+
+        await FfmpegProgramme.RunAsync(
+            FfmpegProgramme.Default,
+            [
+                "-nostdin",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-i",
+                Path.Combine(room, name),
+                "-map",
+                "0:a:0",
+                "-af",
+                FormattableString.Invariant($"pan=mono|c0=c{ear}"),
+                "-ar",
+                SampleRate.ToString(CultureInfo.InvariantCulture),
+                "-f",
+                "f32le",
+                decoded,
+            ],
+            CancellationToken.None);
+
+        byte[] samples = await File.ReadAllBytesAsync(decoded);
+
+        Assert.True(samples.Length > sizeof(float) * SampleRate, $"{name} decoded to {samples.Length} bytes of sound");
+
+        return new Tones(
+            LoudnessAt(samples, SyntheticBroadcast.MainTone),
+            LoudnessAt(samples, SyntheticBroadcast.SecondaryTone));
+    }
+
+    private static double LoudnessAt(byte[] samples, int hertz)
+    {
+        int taken = samples.Length / sizeof(float);
+        double coefficient = 2 * Math.Cos(2 * Math.PI * hertz / SampleRate);
+        double last = 0;
+        double before = 0;
+
+        for (int at = 0; at < taken; at++)
+        {
+            double now = BitConverter.ToSingle(samples, at * sizeof(float)) + (coefficient * last) - before;
+
+            before = last;
+            last = now;
+        }
+
+        return Math.Sqrt(Math.Max(0, (last * last) + (before * before) - (coefficient * last * before))) / taken;
+    }
+
+    private readonly record struct Tones(double Main, double Secondary);
 
     private async Task BothTracksCarrySomethingAsync(string name)
     {
