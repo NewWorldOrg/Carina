@@ -19,6 +19,13 @@ public sealed record CarriedSounds
 
     public bool Holds(SoundTrack track) => Tracks.Contains(track);
 
+    public bool Carries(SoundPlacement placement)
+    {
+        ArgumentNullException.ThrowIfNull(placement);
+
+        return placement.Ordinal < Tracks.Count;
+    }
+
     public static CarriedSounds Counted(int sounds) => new(SoundTracks.OutOf(sounds), true, string.Empty);
 
     public static CarriedSounds Unread(string note)

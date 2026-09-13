@@ -138,7 +138,7 @@ internal sealed class GatedOnTheFlyPlayer(byte[] bytes) : IOnTheFlyPlayer
         ServiceId service,
         TimeSpan from,
         LiveProfile? profile,
-        SoundTrack sound,
+        SoundPlacement sound,
         CancellationToken cancellationToken)
         => Task.FromResult(OnTheFlyStart.Started(new GatedViewing(Handed)));
 

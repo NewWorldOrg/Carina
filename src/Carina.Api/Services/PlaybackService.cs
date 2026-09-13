@@ -3,6 +3,7 @@ using Carina.Domain.Channels;
 using Carina.Domain.Encodings;
 using Carina.Domain.Playback;
 using Carina.Domain.Recordings;
+using Carina.Domain.Streaming;
 
 namespace Carina.Api.Services;
 
@@ -19,7 +20,11 @@ public enum PlaybackFailure
     FileGone = 5,
 }
 
-public sealed record PlaybackOffer(PlaybackPlan Plan, PlaybackFile Handover, ServiceId Service);
+public sealed record PlaybackOffer(
+    PlaybackPlan Plan,
+    PlaybackFile Handover,
+    ServiceId Service,
+    AnnouncedSound Announced);
 
 public sealed class PlaybackService(
     IRecordingDirectory recordings,
@@ -55,7 +60,11 @@ public sealed class PlaybackService(
         }
 
         return plan.Handover is { } handover
-            ? ServiceResult<PlaybackOffer, PlaybackFailure>.Success(new PlaybackOffer(plan, handover, recording.ServiceId))
+            ? ServiceResult<PlaybackOffer, PlaybackFailure>.Success(new PlaybackOffer(
+                plan,
+                handover,
+                recording.ServiceId,
+                new AnnouncedSound(recording.SnapshotAudio, recording.SnapshotSounds)))
             : Nothing(id, plan.Refusal!.Value);
     }
 
