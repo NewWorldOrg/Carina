@@ -46,7 +46,7 @@ public sealed record RecordingRun(
 public sealed class RecordingRound(
     IReservationRecordingContract reservations,
     IRecordingRepository recordings,
-    IProgrammeRepository programmes,
+    IAnnouncedProgrammes programmes,
     IServiceTuningDirectory directory,
     DiskPrecheckService disks,
     IDriverClient driver,

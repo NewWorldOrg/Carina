@@ -198,6 +198,7 @@ public sealed class RecordingTickTests(MigratedScratchDatabase database)
         return new RecordingRound(
             reservations ?? new ReservationRecordingContract(context),
             new RecordingRepository(context),
+            new ProgrammeRepository(context),
             new ResolvedTuning(TuningResolution.Tunable(
                 new CandidateChannelId(Guid.NewGuid()),
                 TuningParameters.Terrestrial(27),

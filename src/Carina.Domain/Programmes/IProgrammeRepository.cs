@@ -6,10 +6,13 @@ public sealed record ProgrammeService(int NetworkId, int ServiceId);
 
 public sealed record ProgrammesAbsorbed(int Added, int Updated);
 
-public interface IProgrammeRepository
+public interface IAnnouncedProgrammes
 {
     Task<Programme?> FindAsync(ProgrammeId id, CancellationToken cancellationToken);
+}
 
+public interface IProgrammeRepository : IAnnouncedProgrammes
+{
     Task<IReadOnlyList<Programme>> ListAsync(ProgrammeWindow window, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<Programme>> ListForServicesAsync(
