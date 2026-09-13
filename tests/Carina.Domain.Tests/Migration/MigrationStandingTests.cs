@@ -7,54 +7,95 @@ public sealed class MigrationStandingTests
 {
     private static readonly MigrationRunId Run = new(new Guid("00000001-0000-0000-0000-000000000001"));
 
+    public static TheoryData<MigrationRootStanding> HowTheNewRootCanStand =>
+        [.. Enum.GetValues<MigrationRootStanding>()];
+
+    public static TheoryData<EncodeUnaskedStanding> HowWhereEncodesGoCanStand =>
+        [.. Enum.GetValues<EncodeUnaskedStanding>()];
+
+    public static TheoryData<MigrationCarryStanding> HowTheCarryCanStand =>
+        [.. Enum.GetValues<MigrationCarryStanding>()];
+
+    public static TheoryData<MigrationStandingSubject> Subjects => [.. Enum.GetValues<MigrationStandingSubject>()];
+
+    public static TheoryData<MigrationFinding> Findings => [.. Enum.GetValues<MigrationFinding>()];
+
     [Fact]
     public void ARunSaysWhatItFoundAboutEverySubjectAndSaysItOnce()
     {
-        IReadOnlyList<MigrationStanding> stood = MigrationStanding.EveryOne(
-            Run,
+        IReadOnlyList<MigrationStanding> stood = Every(
             MigrationRootStanding.Empty,
-            EncodeUnaskedStanding.Settled);
+            EncodeUnaskedStanding.Settled,
+            MigrationCarryStanding.WouldBeAHardLink);
 
         Assert.Equal(MigrationStandingSubjects.All, stood.Select(standing => standing.Subject).Order());
     }
 
     [Theory]
-    [InlineData(MigrationRootStanding.Empty, MigrationFinding.TheNewRootIsEmpty)]
-    [InlineData(MigrationRootStanding.NotEmpty, MigrationFinding.TheNewRootIsNotEmpty)]
-    [InlineData(MigrationRootStanding.Missing, MigrationFinding.TheNewRootIsNotThere)]
-    public void HowTheNewRootStandsIsWrittenDownWhicheverWayItStands(
-        MigrationRootStanding standing,
-        MigrationFinding written)
-        => Assert.Equal(
-            written,
-            Found(MigrationStandingSubject.TheNewRoot, standing, EncodeUnaskedStanding.Settled));
+    [MemberData(nameof(HowTheNewRootCanStand))]
+    public void HowTheNewRootStandsIsWrittenDownWhicheverWayItStands(MigrationRootStanding standing)
+        => Assert.Contains(
+            MigrationFindings.Of(standing),
+            MigrationFindings.Under(MigrationStandingSubject.TheNewRoot));
 
     [Theory]
-    [InlineData(EncodeUnaskedStanding.Settled, MigrationFinding.WhereEncodesGoIsSettled)]
-    [InlineData(EncodeUnaskedStanding.NothingIsDefined, MigrationFinding.NothingSaysWhereEncodesGo)]
-    [InlineData(EncodeUnaskedStanding.MoreThanOneIsOffered, MigrationFinding.MoreThanOneSaysWhereEncodesGo)]
-    [InlineData(EncodeUnaskedStanding.TheProfileIsNotOffered, MigrationFinding.TheProfileIsNotOffered)]
-    public void WhereEncodesGoIsWrittenDownWhicheverWayItStands(
-        EncodeUnaskedStanding standing,
-        MigrationFinding written)
-        => Assert.Equal(
-            written,
-            Found(MigrationStandingSubject.WhereEncodesGo, MigrationRootStanding.Empty, standing));
+    [MemberData(nameof(HowWhereEncodesGoCanStand))]
+    public void WhereEncodesGoIsWrittenDownWhicheverWayItStands(EncodeUnaskedStanding standing)
+        => Assert.Contains(
+            MigrationFindings.Of(standing),
+            MigrationFindings.Under(MigrationStandingSubject.WhereEncodesGo));
+
+    [Theory]
+    [MemberData(nameof(HowTheCarryCanStand))]
+    public void WhatALinkIntoTheNewRootWouldMeetIsWrittenDownWhicheverWayItStands(MigrationCarryStanding standing)
+        => Assert.Contains(
+            MigrationFindings.Of(standing),
+            MigrationFindings.Under(MigrationStandingSubject.CarryingIntoTheNewRoot));
+
+    [Theory]
+    [MemberData(nameof(Subjects))]
+    public void EverySubjectHasFindingsAndNoneOfThemBelongToAnotherSubject(MigrationStandingSubject subject)
+    {
+        IReadOnlyList<MigrationFinding> under = MigrationFindings.Under(subject);
+
+        Assert.NotEmpty(under);
+        Assert.All(
+            MigrationStandingSubjects.All.Where(other => other != subject),
+            other => Assert.Empty(under.Intersect(MigrationFindings.Under(other))));
+    }
+
+    [Theory]
+    [MemberData(nameof(Findings))]
+    public void EveryFindingIsOneSomeSubjectCanComeBackWith(MigrationFinding finding)
+        => Assert.Contains(finding, MigrationStandingSubjects.All.SelectMany(MigrationFindings.Under));
 
     [Fact]
     public void NothingInTheWayIsTheOnlyPairARunForRealWouldGetPast()
     {
         Assert.All(
-            MigrationStanding.EveryOne(Run, MigrationRootStanding.Empty, EncodeUnaskedStanding.Settled),
+            Every(
+                MigrationRootStanding.Empty,
+                EncodeUnaskedStanding.Settled,
+                MigrationCarryStanding.WouldBeAHardLink),
             standing => Assert.False(standing.WouldStopARunForReal));
 
         Assert.All(
-            MigrationStanding.EveryOne(
-                Run,
+            Every(
                 MigrationRootStanding.NotEmpty,
-                EncodeUnaskedStanding.MoreThanOneIsOffered),
+                EncodeUnaskedStanding.MoreThanOneIsOffered,
+                MigrationCarryStanding.WouldCrossAMount),
             standing => Assert.True(standing.WouldStopARunForReal));
     }
+
+    [Fact]
+    public void ARunForRealIsNotStoppedByASourceThatHasNothingLeftToCarry()
+        => Assert.False(
+            Found(
+                MigrationStandingSubject.CarryingIntoTheNewRoot,
+                MigrationRootStanding.Empty,
+                EncodeUnaskedStanding.Settled,
+                MigrationCarryStanding.NothingIsThereToCarry)
+                .WouldStopARunForReal);
 
     [Fact]
     public void AFindingThatBelongsToAnotherSubjectIsRefused()
@@ -77,7 +118,12 @@ public sealed class MigrationStandingTests
     public void EveryFindingIsEitherOneARunForRealGetsPastOrOneItStopsAt()
     {
         Assert.Equal(
-            [MigrationFinding.TheNewRootIsEmpty, MigrationFinding.WhereEncodesGoIsSettled],
+            [
+                MigrationFinding.TheNewRootIsEmpty,
+                MigrationFinding.WhereEncodesGoIsSettled,
+                MigrationFinding.TheCarryWouldBeAHardLink,
+                MigrationFinding.NothingIsThereToCarry,
+            ],
             MigrationFindings.All.Where(finding => !MigrationFindings.WouldStopARunForReal(finding)).Order());
     }
 
@@ -86,18 +132,25 @@ public sealed class MigrationStandingTests
     {
         Assert.Throws<ArgumentOutOfRangeException>(
             () => MigrationStandingSubjects.Named((MigrationStandingSubject)9));
-        Assert.Throws<ArgumentOutOfRangeException>(() => MigrationFindings.Named((MigrationFinding)9));
+        Assert.Throws<ArgumentOutOfRangeException>(() => MigrationFindings.Named((MigrationFinding)99));
         Assert.Throws<ArgumentOutOfRangeException>(
             () => MigrationFindings.Of((MigrationRootStanding)9));
         Assert.Throws<ArgumentOutOfRangeException>(
             () => MigrationFindings.Of((EncodeUnaskedStanding)9));
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => MigrationFindings.Of((MigrationCarryStanding)9));
     }
 
-    private static MigrationFinding Found(
+    private static IReadOnlyList<MigrationStanding> Every(
+        MigrationRootStanding newRoot,
+        EncodeUnaskedStanding whereEncodesGo,
+        MigrationCarryStanding carrying)
+        => MigrationStanding.EveryOne(Run, newRoot, whereEncodesGo, carrying);
+
+    private static MigrationStanding Found(
         MigrationStandingSubject subject,
         MigrationRootStanding newRoot,
-        EncodeUnaskedStanding whereEncodesGo)
-        => MigrationStanding.EveryOne(Run, newRoot, whereEncodesGo)
-            .Single(standing => standing.Subject == subject)
-            .Finding;
+        EncodeUnaskedStanding whereEncodesGo,
+        MigrationCarryStanding carrying)
+        => Every(newRoot, whereEncodesGo, carrying).Single(standing => standing.Subject == subject);
 }

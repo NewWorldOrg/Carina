@@ -17,6 +17,14 @@ public enum MigrationFinding
     MoreThanOneSaysWhereEncodesGo = 6,
 
     TheProfileIsNotOffered = 7,
+
+    TheCarryWouldBeAHardLink = 8,
+
+    TheCarryWouldCrossAMount = 9,
+
+    TheNewRootDoesNotTakeALink = 10,
+
+    NothingIsThereToCarry = 11,
 }
 
 public static class MigrationFindings
@@ -47,6 +55,13 @@ public static class MigrationFindings
                 MigrationFinding.MoreThanOneSaysWhereEncodesGo,
                 MigrationFinding.TheProfileIsNotOffered,
             ],
+            MigrationStandingSubject.CarryingIntoTheNewRoot =>
+            [
+                MigrationFinding.TheCarryWouldBeAHardLink,
+                MigrationFinding.TheCarryWouldCrossAMount,
+                MigrationFinding.TheNewRootDoesNotTakeALink,
+                MigrationFinding.NothingIsThereToCarry,
+            ],
             _ => throw new ArgumentOutOfRangeException(
                 nameof(subject),
                 subject,
@@ -54,7 +69,10 @@ public static class MigrationFindings
         };
 
     public static bool WouldStopARunForReal(MigrationFinding finding)
-        => Named(finding) is not (MigrationFinding.TheNewRootIsEmpty or MigrationFinding.WhereEncodesGoIsSettled);
+        => Named(finding) is not (MigrationFinding.TheNewRootIsEmpty
+            or MigrationFinding.WhereEncodesGoIsSettled
+            or MigrationFinding.TheCarryWouldBeAHardLink
+            or MigrationFinding.NothingIsThereToCarry);
 
     public static MigrationFinding Of(MigrationRootStanding standing)
         => standing switch
@@ -79,5 +97,19 @@ public static class MigrationFindings
                 nameof(standing),
                 standing,
                 "Where encodes go is settled or unsettled for one of the reasons the record knows to name."),
+        };
+
+    public static MigrationFinding Of(MigrationCarryStanding standing)
+        => standing switch
+        {
+            MigrationCarryStanding.WouldBeAHardLink => MigrationFinding.TheCarryWouldBeAHardLink,
+            MigrationCarryStanding.WouldCrossAMount => MigrationFinding.TheCarryWouldCrossAMount,
+            MigrationCarryStanding.TheNewRootDoesNotTakeALink => MigrationFinding.TheNewRootDoesNotTakeALink,
+            MigrationCarryStanding.NothingIsThereToCarry => MigrationFinding.NothingIsThereToCarry,
+            _ => throw new ArgumentOutOfRangeException(
+                nameof(standing),
+                standing,
+                "What a link from the source into the new root would meet is one of the things the record "
+                + "knows to name."),
         };
 }

@@ -147,6 +147,69 @@ public sealed class HardLinkMigrationCarrierTests : IDisposable
     }
 
     [Fact]
+    public async Task WhatALinkWouldMeetIsAskedWithoutLeavingAnythingOnEitherSide()
+    {
+        await File.WriteAllTextAsync(Path.Combine(from, "one.m2ts"), "the recording", Cancel);
+        IReadOnlyList<string> before = [.. Directory.GetFileSystemEntries(from).Order(StringComparer.Ordinal)];
+
+        Assert.Equal(MigrationCarryStanding.WouldBeAHardLink, await Carrier().WouldCarryAsync(Cancel));
+
+        Assert.Equal(before, Directory.GetFileSystemEntries(from).Order(StringComparer.Ordinal));
+        Assert.Empty(Directory.GetFileSystemEntries(into));
+    }
+
+    [Fact]
+    public async Task AskingWhatALinkWouldMeetTakesNothingOutOfTheNewRootThatWasAlreadyThere()
+    {
+        await File.WriteAllTextAsync(Path.Combine(from, "one.m2ts"), "the recording", Cancel);
+        await File.WriteAllTextAsync(Path.Combine(into, "left-over.ts"), "from a run before", Cancel);
+
+        Assert.Equal(MigrationCarryStanding.WouldBeAHardLink, await Carrier().WouldCarryAsync(Cancel));
+
+        Assert.Equal(["left-over.ts"], Directory.GetFiles(into).Select(Path.GetFileName));
+    }
+
+    [Fact]
+    public async Task ASourceWithNothingLeftInItSaysSoRatherThanThatNoLinkCanBeMade()
+        => Assert.Equal(MigrationCarryStanding.NothingIsThereToCarry, await Carrier().WouldCarryAsync(Cancel));
+
+    [Fact]
+    public async Task ANewRootThatIsNotThereTakesNoLink()
+    {
+        await File.WriteAllTextAsync(Path.Combine(from, "one.m2ts"), "the recording", Cancel);
+
+        Assert.Equal(
+            MigrationCarryStanding.TheNewRootDoesNotTakeALink,
+            await new HardLinkMigrationCarrier(from, Path.Combine(into, "not-made-yet"), Root)
+                .WouldCarryAsync(Cancel));
+    }
+
+    [Fact]
+    public async Task WhatIsForetoldAboutALinkIsWhatALinkThenMeetsAcrossTwoMounts()
+    {
+        string elsewhere = Path.Combine(SharedMemory(), $"carina-migration-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(elsewhere);
+
+        try
+        {
+            await File.WriteAllTextAsync(Path.Combine(from, "one.m2ts"), "the recording", Cancel);
+            HardLinkMigrationCarrier carrier = new(from, elsewhere, Root);
+
+            MigrationCarryStanding foretold = await carrier.WouldCarryAsync(Cancel);
+            MigrationCarry met = await carrier.CarryAsync("one.m2ts", Named(RecordingId.New()), Cancel);
+
+            Assert.Equal(foretold is MigrationCarryStanding.WouldBeAHardLink, met.Carried);
+            Assert.Equal(
+                foretold is MigrationCarryStanding.WouldCrossAMount,
+                met.Outcome is MigrationCarryOutcome.NotOnTheSameFilesystem);
+        }
+        finally
+        {
+            Directory.Delete(elsewhere, recursive: true);
+        }
+    }
+
+    [Fact]
     public void EveryWayALinkCanEndIsReadIntoAnAnswerTheRecordCanName()
     {
         Assert.Equal(MigrationCarryOutcome.SourceGone, HardLinkMigrationCarrier.Read(2).Outcome);

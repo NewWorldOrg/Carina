@@ -98,6 +98,7 @@ internal static class MigrationFixtures
             Aftermath(roll),
             MigrationRootStanding.Empty,
             EncodeUnaskedStanding.Settled,
+            MigrationCarryStanding.WouldBeAHardLink,
             Began,
             Ended);
 

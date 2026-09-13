@@ -118,7 +118,8 @@ public sealed class CarrySaidTests
         string said = CarrySaid.Of(Report(
             MigrationPass.Rehearsal,
             MigrationRootStanding.NotEmpty,
-            EncodeUnaskedStanding.MoreThanOneIsOffered));
+            EncodeUnaskedStanding.MoreThanOneIsOffered,
+            MigrationCarryStanding.WouldCrossAMount));
 
         Assert.Contains(
             "Before carrying, TheNewRoot: TheNewRootIsNotEmpty. A run for real stops here.",
@@ -126,6 +127,10 @@ public sealed class CarrySaidTests
             StringComparison.Ordinal);
         Assert.Contains(
             "Before carrying, WhereEncodesGo: MoreThanOneSaysWhereEncodesGo. A run for real stops here.",
+            said,
+            StringComparison.Ordinal);
+        Assert.Contains(
+            "Before carrying, CarryingIntoTheNewRoot: TheCarryWouldCrossAMount. A run for real stops here.",
             said,
             StringComparison.Ordinal);
     }
@@ -140,13 +145,18 @@ public sealed class CarrySaidTests
             "Before carrying, WhereEncodesGo: WhereEncodesGoIsSettled.",
             said,
             StringComparison.Ordinal);
+        Assert.Contains(
+            "Before carrying, CarryingIntoTheNewRoot: TheCarryWouldBeAHardLink.",
+            said,
+            StringComparison.Ordinal);
         Assert.DoesNotContain("A run for real stops here", said, StringComparison.Ordinal);
     }
 
     private static MigrationReport Report(
         MigrationPass pass,
         MigrationRootStanding newRoot = MigrationRootStanding.Empty,
-        EncodeUnaskedStanding whereEncodesGo = EncodeUnaskedStanding.Settled)
+        EncodeUnaskedStanding whereEncodesGo = EncodeUnaskedStanding.Settled,
+        MigrationCarryStanding carrying = MigrationCarryStanding.WouldBeAHardLink)
         => MigrationCensus.Taken(
             Run,
             new MigrationSourceName("the recording system being replaced"),
@@ -204,6 +214,7 @@ public sealed class CarrySaidTests
             Aftermath(),
             newRoot,
             whereEncodesGo,
+            carrying,
             Began,
             Ended);
 

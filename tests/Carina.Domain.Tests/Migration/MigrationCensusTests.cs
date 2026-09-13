@@ -149,6 +149,7 @@ public sealed class MigrationCensusTests
             MigrationAftermath.Nothing,
             MigrationRootStanding.NotEmpty,
             EncodeUnaskedStanding.MoreThanOneIsOffered,
+            MigrationCarryStanding.WouldCrossAMount,
             Began,
             Ended);
 
@@ -169,6 +170,7 @@ public sealed class MigrationCensusTests
             MigrationAftermath.Nothing,
             MigrationRootStanding.Empty,
             EncodeUnaskedStanding.Settled,
+            MigrationCarryStanding.WouldBeAHardLink,
             Began,
             Ended);
 

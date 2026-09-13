@@ -44,10 +44,15 @@ public sealed class MigrationStanding
     public static IReadOnlyList<MigrationStanding> EveryOne(
         MigrationRunId runId,
         MigrationRootStanding newRoot,
-        EncodeUnaskedStanding whereEncodesGo)
+        EncodeUnaskedStanding whereEncodesGo,
+        MigrationCarryStanding carrying)
         =>
         [
             Rehydrate(runId, MigrationStandingSubject.TheNewRoot, MigrationFindings.Of(newRoot)),
             Rehydrate(runId, MigrationStandingSubject.WhereEncodesGo, MigrationFindings.Of(whereEncodesGo)),
+            Rehydrate(
+                runId,
+                MigrationStandingSubject.CarryingIntoTheNewRoot,
+                MigrationFindings.Of(carrying)),
         ];
 }

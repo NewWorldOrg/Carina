@@ -122,6 +122,7 @@ internal sealed class MigrationFeature : IAsyncDisposable
             MigrationAftermath.Nothing,
             MigrationRootStanding.Empty,
             EncodeUnaskedStanding.Settled,
+            MigrationCarryStanding.WouldBeAHardLink,
             Small,
             Small.AddMinutes(6));
     }

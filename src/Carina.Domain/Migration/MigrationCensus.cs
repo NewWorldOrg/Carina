@@ -12,6 +12,7 @@ public static class MigrationCensus
         MigrationAftermath aftermath,
         MigrationRootStanding newRoot,
         EncodeUnaskedStanding whereEncodesGo,
+        MigrationCarryStanding carrying,
         DateTime startedAt,
         DateTime finishedAt)
     {
@@ -83,7 +84,7 @@ public static class MigrationCensus
             tallies,
             details,
             MigrationLoss.EveryOne(id, aftermath),
-            MigrationStanding.EveryOne(id, newRoot, whereEncodesGo),
+            MigrationStanding.EveryOne(id, newRoot, whereEncodesGo, carrying),
             aftermath.ChannelProposals,
             aftermath.RuleProposals);
     }

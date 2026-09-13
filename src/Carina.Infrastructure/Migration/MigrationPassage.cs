@@ -46,6 +46,7 @@ public sealed class MigrationPassage(
                     settled.Aftermath,
                     settled.NewRoot,
                     settled.WhereEncodesGo,
+                    settled.Carrying,
                     began,
                     clock.GetUtcNow().UtcDateTime),
                 cancellationToken);

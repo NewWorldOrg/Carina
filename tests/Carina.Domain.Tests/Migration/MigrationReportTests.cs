@@ -240,7 +240,11 @@ public sealed class MigrationReportTests
             () => MigrationReport.Of(Ran(), Empty(), [], Told(Run), Stood(Another), [], []));
 
     private static IReadOnlyList<MigrationStanding> Stood(MigrationRunId run)
-        => MigrationStanding.EveryOne(run, MigrationRootStanding.Empty, EncodeUnaskedStanding.Settled);
+        => MigrationStanding.EveryOne(
+            run,
+            MigrationRootStanding.Empty,
+            EncodeUnaskedStanding.Settled,
+            MigrationCarryStanding.WouldBeAHardLink);
 
     private static IReadOnlyList<MigrationLoss> Told(MigrationRunId run)
         => MigrationLoss.EveryOne(run, MigrationAftermath.Nothing);

@@ -111,6 +111,7 @@ public sealed class MigrationCarriageTests
     public async Task ARehearsalSaysWhatARunForRealWouldMeetInsteadOfRefusing()
     {
         carrier.Standing = MigrationRootStanding.NotEmpty;
+        carrier.WouldCarry = MigrationCarryStanding.WouldCrossAMount;
         bench.Destinations.Destinations.Add(EncodeDestination.Define(
             EncodeDestinationId.New(),
             new EncodeLabel("Elsewhere"),
@@ -122,6 +123,9 @@ public sealed class MigrationCarriageTests
 
         Assert.Equal(MigrationRootStanding.NotEmpty, carried.NewRoot);
         Assert.Equal(EncodeUnaskedStanding.MoreThanOneIsOffered, carried.WhereEncodesGo);
+        Assert.Equal(MigrationCarryStanding.WouldCrossAMount, carried.Carrying);
+        Assert.Empty(journal.Steps);
+        Assert.Empty(recordings.Written);
     }
 
     [Fact]
@@ -131,6 +135,9 @@ public sealed class MigrationCarriageTests
 
         Assert.Equal(MigrationRootStanding.Empty, carried.NewRoot);
         Assert.Equal(EncodeUnaskedStanding.Settled, carried.WhereEncodesGo);
+        Assert.Equal(MigrationCarryStanding.WouldBeAHardLink, carried.Carrying);
+        Assert.Empty(journal.Steps);
+        Assert.Empty(recordings.Written);
     }
 
     [Fact]
@@ -141,6 +148,49 @@ public sealed class MigrationCarriageTests
         MigrationCarried carried = await CarriedAsync(MigrationPass.Rehearsal);
 
         Assert.Equal(MigrationRootStanding.Missing, carried.NewRoot);
+        Assert.Empty(journal.Steps);
+        Assert.Empty(recordings.Written);
+    }
+
+    [Theory]
+    [InlineData(MigrationCarryStanding.WouldCrossAMount)]
+    [InlineData(MigrationCarryStanding.TheNewRootDoesNotTakeALink)]
+    public async Task ARehearsalSaysWhatALinkIntoTheNewRootWouldMeetInsteadOfRefusing(
+        MigrationCarryStanding standing)
+    {
+        carrier.WouldCarry = standing;
+
+        MigrationCarried carried = await CarriedAsync(MigrationPass.Rehearsal);
+
+        Assert.Equal(standing, carried.Carrying);
+        Assert.Empty(journal.Steps);
+        Assert.Empty(recordings.Written);
+    }
+
+    [Theory]
+    [InlineData(MigrationCarryStanding.WouldCrossAMount)]
+    [InlineData(MigrationCarryStanding.TheNewRootDoesNotTakeALink)]
+    public async Task ARunForRealStopsBeforeTheFirstLinkWhenNoLinkCouldBeMade(MigrationCarryStanding standing)
+    {
+        carrier.WouldCarry = standing;
+
+        MigrationCarryRefusedException stopped = await Assert.ThrowsAsync<MigrationCarryRefusedException>(
+            () => CarryAsync(MigrationPass.ForReal));
+
+        Assert.Contains("Nothing was carried", stopped.Message, StringComparison.Ordinal);
+        Assert.Empty(journal.Steps);
+        Assert.Empty(recordings.Written);
+    }
+
+    [Fact]
+    public async Task ARunForRealIsNotStoppedByASourceThatHasNothingLeftToCarry()
+    {
+        carrier.WouldCarry = MigrationCarryStanding.NothingIsThereToCarry;
+
+        MigrationCarried carried = await CarriedAsync(MigrationPass.ForReal);
+
+        Assert.Equal(MigrationCarryStanding.NothingIsThereToCarry, carried.Carrying);
+        Assert.NotEmpty(recordings.Written);
     }
 
     [Fact]
