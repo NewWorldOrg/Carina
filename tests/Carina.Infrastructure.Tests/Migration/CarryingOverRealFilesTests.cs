@@ -96,7 +96,8 @@ public sealed class CarryingOverRealFilesTests : IDisposable
         MigrationCarryRefusedException stopped = await Assert.ThrowsAsync<MigrationCarryRefusedException>(
             () => Passage().RunAsync(MigrationPass.ForReal, Rescanned(), Cancel));
 
-        Assert.Contains("delete the new root", stopped.Message, StringComparison.Ordinal);
+        Assert.Contains("take out of the new root", stopped.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("delete the new root", stopped.Message, StringComparison.Ordinal);
 
         foreach (string carried in Directory.GetFiles(into))
         {
