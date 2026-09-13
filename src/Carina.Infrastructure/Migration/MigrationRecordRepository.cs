@@ -146,6 +146,6 @@ public sealed class MigrationRecordRepository(CarinaDbContext context) : IMigrat
             .OrderBy(proposal => proposal.SourceRow)
             .ToListAsync(cancellationToken);
 
-        return MigrationReport.Of(run, tallies, details, losses, standings, channelProposals, ruleProposals);
+        return MigrationReport.Read(run, tallies, details, losses, standings, channelProposals, ruleProposals);
     }
 }

@@ -235,6 +235,25 @@ public sealed class MigrationReportTests
     }
 
     [Fact]
+    public void ARunWrittenDownBeforeTheRecordKnewToLookAtSomethingIsStillReadable()
+    {
+        MigrationReport read = MigrationReport.Read(Ran(), Empty(), [], [], [], [], []);
+
+        Assert.Empty(read.Standings);
+        Assert.Empty(read.Losses);
+    }
+
+    [Fact]
+    public void WhatIsReadBackIsStillOnlyTheRowsOfTheRunItIsAbout()
+    {
+        Assert.Throws<ArgumentException>(
+            () => MigrationReport.Read(Ran(), Empty(), [], [], Stood(Another), [], []));
+
+        Assert.Throws<ArgumentException>(
+            () => MigrationReport.Read(Ran(), Empty(), [], [], [.. Stood(Run), .. Stood(Run)], [], []));
+    }
+
+    [Fact]
     public void WhatAnotherRunFoundIsNotCarriedOnThisRunsReport()
         => Assert.Throws<ArgumentException>(
             () => MigrationReport.Of(Ran(), Empty(), [], Told(Run), Stood(Another), [], []));

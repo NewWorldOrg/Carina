@@ -81,7 +81,50 @@ public sealed class MigrationReport
         IReadOnlyList<MigrationStanding> standings,
         IReadOnlyList<MigrationChannelProposal> channelProposals,
         IReadOnlyList<MigrationRuleProposal> ruleProposals)
+    {
+        MigrationReport made = new(run, tallies, details, losses, standings, channelProposals, ruleProposals);
+
+        EverySubjectIsSpokenFor(losses, standings);
+
+        return made;
+    }
+
+    public static MigrationReport Read(
+        MigrationRun run,
+        IReadOnlyList<MigrationTally> tallies,
+        IReadOnlyList<MigrationDetail> details,
+        IReadOnlyList<MigrationLoss> losses,
+        IReadOnlyList<MigrationStanding> standings,
+        IReadOnlyList<MigrationChannelProposal> channelProposals,
+        IReadOnlyList<MigrationRuleProposal> ruleProposals)
         => new(run, tallies, details, losses, standings, channelProposals, ruleProposals);
+
+    private static void EverySubjectIsSpokenFor(
+        IReadOnlyList<MigrationLoss> losses,
+        IReadOnlyList<MigrationStanding> standings)
+    {
+        foreach (MigrationLossSubject subject in MigrationLossSubjects.All)
+        {
+            if (!losses.Any(loss => loss.Subject == subject))
+            {
+                throw new ArgumentException(
+                    $"What was carried of {subject} reached the new system diminished and the run does not say "
+                    + "so, which later reads as a feature that went missing.",
+                    nameof(losses));
+            }
+        }
+
+        foreach (MigrationStandingSubject subject in MigrationStandingSubjects.All)
+        {
+            if (!standings.Any(standing => standing.Subject == subject))
+            {
+                throw new ArgumentException(
+                    $"A rehearsal is worth running because it says what a run for real would meet, and this "
+                    + $"one does not say what it found about {subject}.",
+                    nameof(standings));
+            }
+        }
+    }
 
     private static Dictionary<MigrationPopulation, MigrationTally> Counted(
         MigrationRun run,
@@ -146,17 +189,6 @@ public sealed class MigrationReport
                     nameof(losses));
             }
         }
-
-        foreach (MigrationLossSubject subject in MigrationLossSubjects.All)
-        {
-            if (!found.Contains(subject))
-            {
-                throw new ArgumentException(
-                    $"What was carried of {subject} reached the new system diminished and the run does not say "
-                    + "so, which later reads as a feature that went missing.",
-                    nameof(losses));
-            }
-        }
     }
 
     private static void Stood(MigrationRun run, IReadOnlyList<MigrationStanding> standings)
@@ -172,17 +204,6 @@ public sealed class MigrationReport
             {
                 throw new ArgumentException(
                     $"A run says once what it found about {standing.Subject} before it carried anything.",
-                    nameof(standings));
-            }
-        }
-
-        foreach (MigrationStandingSubject subject in MigrationStandingSubjects.All)
-        {
-            if (!found.Contains(subject))
-            {
-                throw new ArgumentException(
-                    $"A rehearsal is worth running because it says what a run for real would meet, and this "
-                    + $"one does not say what it found about {subject}.",
                     nameof(standings));
             }
         }

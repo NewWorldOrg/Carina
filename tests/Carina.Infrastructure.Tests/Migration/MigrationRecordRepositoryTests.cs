@@ -229,6 +229,26 @@ public sealed class MigrationRecordRepositoryTests(RepositoryDatabase database)
     }
 
     [Fact]
+    public async Task ARunFromBeforeTheRecordKnewToLookAtSomethingStillReadsBack()
+    {
+        MigrationRunId id = await AnEmptyRunAsync();
+
+        await using (NpgsqlConnection connection = await OpenAsync())
+        {
+            await using NpgsqlCommand forgetting = new(
+                $"DELETE FROM migration_standing WHERE run_id = '{id.Value}'",
+                connection);
+
+            await forgetting.ExecuteNonQueryAsync();
+        }
+
+        MigrationReport? read = await ReadAsync(id);
+
+        Assert.NotNull(read);
+        Assert.Empty(read.Standings);
+    }
+
+    [Fact]
     public async Task ARunThatWasNeverMadeReadsBackAsNothing()
     {
         Assert.Null(await ReadAsync(MigrationRunId.New()));
