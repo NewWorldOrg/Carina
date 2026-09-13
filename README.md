@@ -139,11 +139,11 @@ API はコンテナの 8080 番で待ち受け、ホストの 8081 番に公開�
 実行は CLI で、結果は移行記録の画面に残る。
 
 ```bash
-docker compose run --rm \
-  -v <移行元の録画ディレクトリ>:/srv/recorded:ro \
-  -v <新しい録画ルート>:/srv/recordings \
+docker compose run --rm --no-deps \
+  -v <移行元と新しいルートの両方を含むディレクトリ>:/srv/carry \
+  -e Integrity__OutputRoots=primary=/srv/carry/<新しい録画ルート> \
   app dotnet run --project src/Carina.Db -- \
-  --carry --from /srv/recorded --into /srv/recordings
+  --carry --from /srv/carry/<移行元の録画ディレクトリ> --into /srv/carry/<新しい録画ルート>
 ```
 
 `docker compose exec app` では走らない。
@@ -151,6 +151,8 @@ compose の `app` は `/srv/recordings` を読み取り専用でしか持たず�
 下見も本番も、書ける録画ルートと移行元を渡した 1 回きりのコンテナで走らせる。
 ハードリンクは 2 つのマウントをまたげないので、移行元と新しいルートを別々の `-v` で渡すと、同じディスクの上でも 1 本も運べない。
 両方を含む 1 つのディレクトリを 1 つの `-v` で渡す。
+そのコンテナの `Integrity__OutputRoots` だけを、載せた先の新しいルートへ向け直す。
+名前は宣言のまま、パスがそのコンテナ限りで変わるだけである。
 
 `--for-real` を付けなければ下見で、**移行元を一切変えないので何度でも走らせてよい**。
 移行元の台帳は `CARINA_MIGRATION_SOURCE_CONNECTION` が持つ接続で、読み取り専用トランザクションの中から読む。
