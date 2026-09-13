@@ -27,11 +27,11 @@ public sealed class CarryArgumentsTests
     public void WhatARunCarriesIntoIsADirectoryAndTheArgumentsDoNotNameARootForIt()
     {
         Assert.True(CarryArguments.TryRead(
-            ["--carry", "--from", "/a", "--into", "/disk/carina/recordings"],
+            ["--carry", "--from", "/a", "--into", "/disk/carried"],
             out CarryArguments? read,
             out _));
         Assert.NotNull(read);
-        Assert.Equal("/disk/carina/recordings", read.Into);
+        Assert.Equal("/disk/carried", read.Into);
     }
 
     [Theory]
