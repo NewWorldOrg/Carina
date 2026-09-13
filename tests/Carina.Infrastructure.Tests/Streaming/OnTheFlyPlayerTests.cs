@@ -34,6 +34,8 @@ public sealed class OnTheFlyPlayerTests : IDisposable
 
     private static readonly ServiceId Service = new(1040);
 
+    private static readonly SoundPlacement TheWholeFirstStream = SoundPlacement.WholeStream(0);
+
     private readonly StandIns standIns = new();
 
     private TranscodeBudget budget = new(new TranscodeBudgetSettings { AtOnce = 2 });
@@ -64,7 +66,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
             Player($"printf '%s\\n' \"$@\" > {said}; echo ready"),
             TimeSpan.Zero,
             LiveProfile.Hd30,
-            SoundTrack.Secondary);
+            SoundPlacement.WholeStream(1));
 
         string[] handed = File.ReadAllLines(said);
 
@@ -98,15 +100,35 @@ public sealed class OnTheFlyPlayerTests : IDisposable
     }
 
     [Fact]
-    public async Task ASoundThisApplicationDoesNotCarryIsRefusedBeforeATranscoderIsStarted()
+    public async Task ASoundTakenFromNowhereIsRefusedBeforeATranscoderIsStarted()
     {
         Recorded(40_000);
         OnTheFlyPlayer player = Player(TakesTheFileApart);
 
-        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
-            () => player.StartAsync(Found(), Service, TimeSpan.Zero, LiveProfile.Hd30, (SoundTrack)9, CancellationToken.None));
+        await Assert.ThrowsAsync<ArgumentNullException>(
+            () => player.StartAsync(Found(), Service, TimeSpan.Zero, LiveProfile.Hd30, null!, CancellationToken.None));
 
         Assert.Equal(0, budget.Running);
+    }
+
+    [Fact]
+    public async Task TheCommandTakesOneChannelOfTheOneStreamWhenThatIsWhereTheSoundSits()
+    {
+        Recorded(40_000);
+        string said = standIns.Named("channelled");
+
+        await using IOnTheFlyViewing viewing = await Running(
+            Player($"printf '%s\\n' \"$@\" > {said}; echo ready"),
+            TimeSpan.Zero,
+            LiveProfile.Hd30,
+            SoundPlacement.OneChannelOf(0, SoundChannel.Right));
+
+        string[] handed = File.ReadAllLines(said);
+
+        Assert.Contains("p:1040:a:0", handed);
+        Assert.Equal(
+            FfmpegPlaybackInvocation.TheRightChannelInBothEars,
+            handed[Array.IndexOf(handed, "-af") + 1]);
     }
 
     [Fact]
@@ -206,7 +228,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
             Service,
             TimeSpan.Zero,
             LiveProfile.Hd30,
-            SoundTrack.Main,
+            TheWholeFirstStream,
             CancellationToken.None);
 
         Assert.False(second.Running);
@@ -229,7 +251,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
             Service,
             TimeSpan.Zero,
             LiveProfile.Hd30,
-            SoundTrack.Main,
+            TheWholeFirstStream,
             CancellationToken.None);
 
         Assert.Equal(2, first.Standing.Running);
@@ -277,7 +299,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
             Service,
             TimeSpan.Zero,
             LiveProfile.Hd30,
-            SoundTrack.Main,
+            TheWholeFirstStream,
             CancellationToken.None);
 
         Assert.False(start.Running);
@@ -295,7 +317,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
             Service,
             TimeSpan.Zero,
             LiveProfile.Hd30,
-            SoundTrack.Main,
+            TheWholeFirstStream,
             CancellationToken.None);
 
         Assert.False(start.Running);
@@ -314,7 +336,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
             Service,
             TimeSpan.Zero,
             LiveProfile.Hd30,
-            SoundTrack.Main,
+            TheWholeFirstStream,
             CancellationToken.None);
 
         Assert.False(start.Running);
@@ -332,7 +354,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
             Service,
             TimeSpan.Zero,
             LiveProfile.Hd30,
-            SoundTrack.Main,
+            TheWholeFirstStream,
             CancellationToken.None);
 
         Assert.False(start.Running);
@@ -350,7 +372,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
             Service,
             TimeSpan.Zero,
             LiveProfile.Hd30,
-            SoundTrack.Main,
+            TheWholeFirstStream,
             CancellationToken.None);
 
         Assert.Equal(OnTheFlyRefusal.NothingCameOut, start.Refusal);
@@ -367,7 +389,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
             Service,
             TimeSpan.Zero,
             LiveProfile.Hd30,
-            SoundTrack.Main,
+            TheWholeFirstStream,
             CancellationToken.None);
 
         Assert.Equal(OnTheFlyRefusal.TranscoderWouldNotStart, start.Refusal);
@@ -389,7 +411,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
             Service,
             TimeSpan.Zero,
             LiveProfile.Hd30,
-            SoundTrack.Main,
+            TheWholeFirstStream,
             CancellationToken.None);
 
         Assert.False(start.Running);
@@ -410,12 +432,12 @@ public sealed class OnTheFlyPlayerTests : IDisposable
                 Service,
                 TimeSpan.FromSeconds(-1),
                 LiveProfile.Hd30,
-                SoundTrack.Main,
+                TheWholeFirstStream,
                 CancellationToken.None));
         await Assert.ThrowsAsync<ArgumentNullException>(
-            () => player.StartAsync(null!, Service, TimeSpan.Zero, LiveProfile.Hd30, SoundTrack.Main, CancellationToken.None));
+            () => player.StartAsync(null!, Service, TimeSpan.Zero, LiveProfile.Hd30, TheWholeFirstStream, CancellationToken.None));
         await Assert.ThrowsAsync<ArgumentNullException>(
-            () => player.StartAsync(Found(), null!, TimeSpan.Zero, LiveProfile.Hd30, SoundTrack.Main, CancellationToken.None));
+            () => player.StartAsync(Found(), null!, TimeSpan.Zero, LiveProfile.Hd30, TheWholeFirstStream, CancellationToken.None));
     }
 
     [Fact]
@@ -522,14 +544,14 @@ public sealed class OnTheFlyPlayerTests : IDisposable
         OnTheFlyPlayer player,
         TimeSpan from,
         LiveProfile? profile,
-        SoundTrack sound = SoundTrack.Main)
+        SoundPlacement? sound = null)
     {
         OnTheFlyStart start = await player.StartAsync(
             new PlaybackFile(Root, Named, 40_000),
             Service,
             from,
             profile,
-            sound,
+            sound ?? TheWholeFirstStream,
             CancellationToken.None);
 
         Assert.True(start.Running, start.Note);

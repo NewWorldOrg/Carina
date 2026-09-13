@@ -24,6 +24,8 @@ public sealed class SyntheticBroadcastMaterialTests : IDisposable
 
     private static readonly ServiceId Service = new(SyntheticBroadcast.SomeProgramNumber);
 
+    private static readonly SoundPlacement TheWholeFirstStream = SoundPlacement.WholeStream(0);
+
     private static readonly StreamAttributes Interlaced = new(
         new VideoSize(1440, 1080),
         ScanType.Interlaced,
@@ -385,7 +387,8 @@ public sealed class SyntheticBroadcastMaterialTests : IDisposable
                     Interlaced,
                     LiveEncoder.Software,
                     new StreamSource(written),
-                    TimeSpan.Zero),
+                    TimeSpan.Zero,
+                    TheWholeFirstStream),
                 .. FfmpegLiveInvocation.DeliveryFromTheStart(),
             ],
             fed: null,
@@ -415,7 +418,8 @@ public sealed class SyntheticBroadcastMaterialTests : IDisposable
                     Interlaced,
                     LiveEncoder.Software,
                     new StreamSource(written),
-                    TimeSpan.Zero),
+                    TimeSpan.Zero,
+                    TheWholeFirstStream),
                 .. FfmpegLiveInvocation.DeliveryFromTheStart(),
             ],
             fed: null,

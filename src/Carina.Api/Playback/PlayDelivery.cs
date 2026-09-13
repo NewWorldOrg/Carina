@@ -102,12 +102,14 @@ public static class PlayDelivery
 
         PlaybackPlan plan = offered.Data!.Plan;
         PlaybackFile handover = offered.Data!.Handover;
+        ServiceId service = offered.Data!.Service;
+        AnnouncedSound announced = offered.Data!.Announced;
 
         PlaybackHeaders.Say(context.Response, plan);
 
         if (AsksForThePlan(context.Request))
         {
-            await TellAsync(context, plan, handover, offered.Data!.Service, player);
+            await TellAsync(context, plan, handover, service, announced, player);
 
             return;
         }
@@ -126,41 +128,40 @@ public static class PlayDelivery
             return;
         }
 
-        if (sound.Track is not SoundTrack.Main
-            && await WhyTheSoundIsNotThereAsync(
-                handover,
-                offered.Data!.Service,
-                sound.Track,
-                player,
-                context.RequestAborted) is { } why)
+        SoundArrangement arrangement = SoundArrangement.Of(announced);
+
+        if (announced.SaidNothing && sound.Track is not SoundTrack.Main)
         {
-            await RefuseAsync(context, why.Status, why.Said);
+            CarriedSounds read = await player.SoundsAsync(handover, service, context.RequestAborted);
+
+            if (!read.Known)
+            {
+                await RefuseAsync(
+                    context,
+                    StatusCodes.Status503ServiceUnavailable,
+                    $"The sounds this recording carries could not be read: {read.Note}");
+
+                return;
+            }
+
+            arrangement = SoundArrangement.Of(read);
+        }
+
+        if (!arrangement.Holds(sound.Track))
+        {
+            await RefuseAsync(context, StatusCodes.Status400BadRequest, TheBroadcastCarriedTheOneSound);
 
             return;
         }
 
-        await TranscodedAsync(context, handover, offered.Data!.Service, from, profile.Named, sound.Track, player);
-    }
-
-    private static async Task<Refusal?> WhyTheSoundIsNotThereAsync(
-        PlaybackFile handover,
-        ServiceId service,
-        SoundTrack asked,
-        IOnTheFlyPlayer player,
-        CancellationToken cancellationToken)
-    {
-        CarriedSounds carried = await player.SoundsAsync(handover, service, cancellationToken);
-
-        if (!carried.Known)
-        {
-            return new Refusal(
-                StatusCodes.Status503ServiceUnavailable,
-                $"The sounds this recording carries could not be read: {carried.Note}");
-        }
-
-        return carried.Holds(asked)
-            ? null
-            : new Refusal(StatusCodes.Status400BadRequest, TheBroadcastCarriedTheOneSound);
+        await TranscodedAsync(
+            context,
+            handover,
+            service,
+            from,
+            profile.Named,
+            arrangement.Placement(sound.Track),
+            player);
     }
 
     private static async Task TellAsync(
@@ -168,18 +169,41 @@ public static class PlayDelivery
         PlaybackPlan plan,
         PlaybackFile handover,
         ServiceId service,
+        AnnouncedSound announced,
         IOnTheFlyPlayer player)
     {
-        CarriedSounds carried = plan.Transcodes
-            ? await player.SoundsAsync(handover, service, context.RequestAborted)
-            : CarriedSounds.Counted(0);
+        IReadOnlyList<SoundTrack> sounds = await OfferedAsync(
+            plan,
+            handover,
+            service,
+            announced,
+            player,
+            context.RequestAborted);
 
         context.Response.StatusCode = StatusCodes.Status200OK;
 
         await context.Response.WriteAsJsonAsync(
             BaseResponder<PlaybackPlanResponder>.Success(
-                PlaybackPlanResponder.Of(plan, handover, MediaTypeOf(plan, handover), carried.Tracks)),
+                PlaybackPlanResponder.Of(plan, handover, MediaTypeOf(plan, handover), sounds)),
             context.RequestAborted);
+    }
+
+    private static async Task<IReadOnlyList<SoundTrack>> OfferedAsync(
+        PlaybackPlan plan,
+        PlaybackFile handover,
+        ServiceId service,
+        AnnouncedSound announced,
+        IOnTheFlyPlayer player,
+        CancellationToken cancellationToken)
+    {
+        if (!plan.Transcodes)
+        {
+            return [];
+        }
+
+        return announced.SaidNothing
+            ? SoundArrangement.Of(await player.SoundsAsync(handover, service, cancellationToken)).Tracks
+            : SoundArrangement.Of(announced).Tracks;
     }
 
     private static async Task StraightAsync(HttpContext context, PlaybackFile file, PlaybackService playback)
@@ -219,7 +243,7 @@ public static class PlayDelivery
         ServiceId service,
         TimeSpan from,
         LiveProfile? profile,
-        SoundTrack sound,
+        SoundPlacement sound,
         IOnTheFlyPlayer player)
     {
         context.Response.Headers.AcceptRanges = NoSeeking;
@@ -310,6 +334,4 @@ public static class PlayDelivery
         OnTheFlyRefusal.NothingCameOut => "The transcoder ended without producing a picture of this recording.",
         _ => "The transcoder produced nothing in the time it is given to start.",
     };
-
-    private readonly record struct Refusal(int Status, string Said);
 }

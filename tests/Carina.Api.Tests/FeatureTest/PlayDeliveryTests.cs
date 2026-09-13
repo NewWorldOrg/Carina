@@ -3,11 +3,13 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 
 using Carina.Api.Playback;
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Encodings;
 using Carina.Domain.Integrity;
 using Carina.Domain.Playback;
 using Carina.Domain.Recordings;
+using Carina.Domain.Reservations;
 using Carina.Domain.Streaming;
 using Carina.TestSupport;
 
@@ -58,7 +60,7 @@ internal sealed class HeldOnTheFlyPlayer : IOnTheFlyPlayer
 
     public List<ServiceId> AskedOf { get; } = [];
 
-    public List<SoundTrack> AskedWith { get; } = [];
+    public List<SoundPlacement> AskedWith { get; } = [];
 
     public int Sounds { get; set; } = 1;
 
@@ -71,7 +73,7 @@ internal sealed class HeldOnTheFlyPlayer : IOnTheFlyPlayer
         ServiceId service,
         TimeSpan from,
         LiveProfile? profile,
-        SoundTrack sound,
+        SoundPlacement sound,
         CancellationToken cancellationToken)
     {
         AskedFrom.Add(from);
@@ -159,9 +161,14 @@ internal sealed class PlayFeature : IAsyncDisposable
 
     public string MountedAt => mounted.FullName;
 
-    public Recording Ended(RecordingOutcome outcome, int bytes = 4_000, bool onDisk = true)
+    public Recording Ended(
+        RecordingOutcome outcome,
+        int bytes = 4_000,
+        bool onDisk = true,
+        AudioMode audio = AudioMode.Undetermined,
+        int sounds = ProgrammeSnapshot.SoundsUnannounced)
     {
-        Recording recording = RecordingFeature.Begin(RecordingId.New());
+        Recording recording = RecordingFeature.Begin(RecordingId.New(), audio: audio, sounds: sounds);
         recording.Wrote(TimeSpan.FromMinutes(30));
 
         if (outcome is RecordingOutcome.Complete)
@@ -319,7 +326,7 @@ public sealed class PlayDeliveryTests
         using HttpResponseMessage answer = await feature.PictureAsync(recording);
 
         Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
-        Assert.Equal([SoundTrack.Main], feature.Player.AskedWith);
+        Assert.Equal([SoundPlacement.WholeStream(0)], feature.Player.AskedWith);
     }
 
     [Fact]
@@ -332,7 +339,7 @@ public sealed class PlayDeliveryTests
         using HttpResponseMessage answer = await feature.PictureAsync(recording, "?sound=secondary");
 
         Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
-        Assert.Equal([SoundTrack.Secondary], feature.Player.AskedWith);
+        Assert.Equal([SoundPlacement.WholeStream(1)], feature.Player.AskedWith);
     }
 
     [Fact]
@@ -405,6 +412,70 @@ public sealed class PlayDeliveryTests
 
         JsonElement read = (await PlayFeature.PlanOfAsync(await feature.PlanAsync(recording))).GetProperty("data");
 
+        Assert.Equal(
+            ["main"],
+            read.GetProperty("sounds").EnumerateArray().Select(sound => sound.GetString()!).ToArray());
+    }
+
+    [Fact]
+    public async Task BrPd008ARecordingWhoseBroadcastPutTwoLanguagesOnOneSoundIsPlayedWithOneOfThemInBothEars()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete, audio: AudioMode.DualMono, sounds: 1);
+        feature.Player.SoundsCannotBeRead = "the stream is never asked when the broadcast announced its sound";
+
+        using HttpResponseMessage main = await feature.PictureAsync(recording);
+        using HttpResponseMessage secondary = await feature.PictureAsync(recording, "?sound=secondary");
+
+        Assert.Equal(HttpStatusCode.OK, main.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, secondary.StatusCode);
+        Assert.Equal(
+            [
+                SoundPlacement.OneChannelOf(0, SoundChannel.Left),
+                SoundPlacement.OneChannelOf(0, SoundChannel.Right),
+            ],
+            feature.Player.AskedWith);
+    }
+
+    [Fact]
+    public async Task ThePlanOfABroadcastThatPutTwoLanguagesOnOneSoundNamesBothOfThem()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete, audio: AudioMode.DualMono, sounds: 1);
+        feature.Player.SoundsCannotBeRead = "the stream is never asked when the broadcast announced its sound";
+
+        JsonElement read = (await PlayFeature.PlanOfAsync(await feature.PlanAsync(recording))).GetProperty("data");
+
+        Assert.Equal(
+            ["main", "secondary"],
+            read.GetProperty("sounds").EnumerateArray().Select(sound => sound.GetString()!).ToArray());
+    }
+
+    [Fact]
+    public async Task ABroadcastThatAnnouncedTwoSoundsOfTheirOwnIsStillPlayedByTakingTheSecondStream()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete, audio: AudioMode.Stereo, sounds: 2);
+        feature.Player.Sounds = 1;
+
+        using HttpResponseMessage answer = await feature.PictureAsync(recording, "?sound=secondary");
+
+        Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
+        Assert.Equal([SoundPlacement.WholeStream(1)], feature.Player.AskedWith);
+    }
+
+    [Fact]
+    public async Task ABroadcastThatAnnouncedTheOneSoundHasNoSecondOneEvenWhereTheStreamCarriesTwo()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete, audio: AudioMode.Stereo, sounds: 1);
+        feature.Player.Sounds = 2;
+
+        using HttpResponseMessage answer = await feature.PictureAsync(recording, "?sound=secondary");
+        JsonElement read = (await PlayFeature.PlanOfAsync(await feature.PlanAsync(recording))).GetProperty("data");
+
+        Assert.Equal(HttpStatusCode.BadRequest, answer.StatusCode);
+        Assert.Empty(feature.Player.AskedWith);
         Assert.Equal(
             ["main"],
             read.GetProperty("sounds").EnumerateArray().Select(sound => sound.GetString()!).ToArray());

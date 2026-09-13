@@ -9,6 +9,10 @@ public static class FfmpegPlaybackInvocation
 {
     public const string Seconds = "0.###";
 
+    public const string TheLeftChannelInBothEars = "pan=stereo|c0=c0|c1=c0";
+
+    public const string TheRightChannelInBothEars = "pan=stereo|c0=c1|c1=c1";
+
     public static IReadOnlyList<string> Arguments(
         ServiceId service,
         LiveProfile profile,
@@ -16,12 +20,13 @@ public static class FfmpegPlaybackInvocation
         LiveEncoder encoder,
         StreamSource source,
         TimeSpan from,
-        SoundTrack sound = SoundTrack.Main)
+        SoundPlacement sound)
     {
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(attributes);
         ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(sound);
         ArgumentOutOfRangeException.ThrowIfLessThan(from, TimeSpan.Zero);
 
         if (!Enum.IsDefined(encoder))
@@ -30,14 +35,6 @@ public static class FfmpegPlaybackInvocation
                 nameof(encoder),
                 encoder,
                 "A picture is encoded by one of the two the benchmark compared.");
-        }
-
-        if (!Enum.IsDefined(sound))
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(sound),
-                sound,
-                "A picture is carried with one of the sounds named here.");
         }
 
         return
@@ -56,13 +53,14 @@ public static class FfmpegPlaybackInvocation
             FfmpegLiveInvocation.Filter(profile, attributes, encoder),
             .. FfmpegLiveInvocation.Encoding(profile, encoder),
             .. FfmpegLiveInvocation.Sound(),
+            .. Panning(sound),
         ];
     }
 
-    internal static IReadOnlyList<string> Mapping(ServiceId service, SoundTrack sound)
+    internal static IReadOnlyList<string> Mapping(ServiceId service, SoundPlacement sound)
     {
         int programNumber = service.Value;
-        int ordinal = SoundTracks.Ordinal(sound);
+        int ordinal = sound.Ordinal;
 
         return
         [
@@ -72,4 +70,12 @@ public static class FfmpegPlaybackInvocation
             string.Create(CultureInfo.InvariantCulture, $"p:{programNumber}:a:{ordinal}"),
         ];
     }
+
+    internal static IReadOnlyList<string> Panning(SoundPlacement sound)
+        => sound.Channel switch
+        {
+            SoundChannel.Left => ["-af", TheLeftChannelInBothEars],
+            SoundChannel.Right => ["-af", TheRightChannelInBothEars],
+            _ => [],
+        };
 }

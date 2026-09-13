@@ -20,20 +20,13 @@ public sealed class OnTheFlyPlayer(
         ServiceId service,
         TimeSpan from,
         LiveProfile? profile,
-        SoundTrack sound,
+        SoundPlacement sound,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(file);
         ArgumentNullException.ThrowIfNull(service);
+        ArgumentNullException.ThrowIfNull(sound);
         ArgumentOutOfRangeException.ThrowIfLessThan(from, TimeSpan.Zero);
-
-        if (!Enum.IsDefined(sound))
-        {
-            throw new ArgumentOutOfRangeException(
-                nameof(sound),
-                sound,
-                "A picture is carried with one of the sounds named here.");
-        }
 
         if (WhatIsStillThere(file) is not { } source)
         {
@@ -86,7 +79,7 @@ public sealed class OnTheFlyPlayer(
         ServiceId service,
         TimeSpan from,
         LiveProfile? profile,
-        SoundTrack sound,
+        SoundPlacement sound,
         ITranscodeSeat seat,
         CancellationToken cancellationToken)
     {

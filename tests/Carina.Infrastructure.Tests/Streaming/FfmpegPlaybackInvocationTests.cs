@@ -17,6 +17,16 @@ public sealed class FfmpegPlaybackInvocationTests
 
     private static readonly ServiceId Service = new(1040);
 
+    private static readonly SoundPlacement TheWholeFirstStream = SoundPlacement.WholeStream(0);
+
+    private static readonly SoundPlacement TheWholeSecondStream = SoundPlacement.WholeStream(1);
+
+    private static readonly SoundPlacement TheLeftOfTheFirstStream =
+        SoundPlacement.OneChannelOf(0, SoundChannel.Left);
+
+    private static readonly SoundPlacement TheRightOfTheFirstStream =
+        SoundPlacement.OneChannelOf(0, SoundChannel.Right);
+
     [Fact]
     public void TheStartingPositionIsGivenBeforeTheInputSoTheSeekHappensBeforeAnythingIsRead()
     {
@@ -71,19 +81,19 @@ public sealed class FfmpegPlaybackInvocationTests
     [Fact]
     public void AViewerWhoNamesNoSoundIsGivenTheOneTheyAlwaysWere()
     {
-        Assert.Equal(Arguments(TimeSpan.Zero), Arguments(TimeSpan.Zero, SoundTrack.Main));
+        Assert.Equal(Arguments(TimeSpan.Zero), Arguments(TimeSpan.Zero, TheWholeFirstStream));
     }
 
     [Fact]
     public void TheSecondSoundOfTheRecordedServiceIsTakenWhenItIsAskedFor()
     {
-        Assert.Equal(["p:1040:v:0", "p:1040:a:1"], Mapped(Arguments(TimeSpan.Zero, SoundTrack.Secondary)));
+        Assert.Equal(["p:1040:v:0", "p:1040:a:1"], Mapped(Arguments(TimeSpan.Zero, TheWholeSecondStream)));
     }
 
     [Fact]
     public void StillOnlyOneSoundIsBuiltWhenTheSecondOneIsAskedFor()
     {
-        IReadOnlyList<string> arguments = Arguments(TimeSpan.FromMinutes(1), SoundTrack.Secondary);
+        IReadOnlyList<string> arguments = Arguments(TimeSpan.FromMinutes(1), TheWholeSecondStream);
 
         Assert.Equal("aac", After(arguments, "-c:a"));
         Assert.Single(arguments, argument => string.Equals(argument, "-c:a", StringComparison.Ordinal));
@@ -102,13 +112,89 @@ public sealed class FfmpegPlaybackInvocationTests
             CaptionOutlet.None,
             SoundTrack.Secondary);
 
-        Assert.Equal(Mapped(live), Mapped(Arguments(TimeSpan.FromMinutes(1), SoundTrack.Secondary)));
+        Assert.Equal(Mapped(live), Mapped(Arguments(TimeSpan.FromMinutes(1), TheWholeSecondStream)));
     }
 
     [Fact]
-    public void ASoundThisApplicationDoesNotCarryIsRefusedBeforeAnythingIsBuilt()
+    public void ASoundTakenFromNowhereIsRefusedBeforeAnythingIsBuilt()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => Arguments(TimeSpan.Zero, (SoundTrack)9));
+        Assert.Throws<ArgumentNullException>(() => Arguments(TimeSpan.Zero, null!));
+    }
+
+    [Fact]
+    public void TheWholeOfAStreamIsBuiltWordForWordTheWayItWasBeforeAnySoundCouldBeSplit()
+    {
+        Assert.Equal(
+            [
+                "-nostdin",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-ss",
+                "60",
+                "-i",
+                "/srv/recordings/a1b2c3.ts",
+                "-map",
+                "p:1040:v:0",
+                "-map",
+                "p:1040:a:0",
+                "-vf",
+                "bwdif=mode=send_frame,scale=1280:720:flags=bicubic,setsar=1",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "veryfast",
+                "-tune",
+                "zerolatency",
+                "-g",
+                "60",
+                "-b:v",
+                "3000k",
+                "-maxrate",
+                "3000k",
+                "-bufsize",
+                "6000k",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "192k",
+            ],
+            Arguments(TimeSpan.FromMinutes(1)));
+    }
+
+    [Fact]
+    public void TheMainSoundOfABroadcastThatPutTwoLanguagesOnOneStreamIsItsLeftChannelInBothEars()
+    {
+        IReadOnlyList<string> arguments = Arguments(TimeSpan.Zero, TheLeftOfTheFirstStream);
+
+        Assert.Equal(["p:1040:v:0", "p:1040:a:0"], Mapped(arguments));
+        Assert.Equal("pan=stereo|c0=c0|c1=c0", After(arguments, "-af"));
+        Assert.Single(arguments, argument => string.Equals(argument, "-af", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void TheSecondarySoundOfABroadcastThatPutTwoLanguagesOnOneStreamIsItsRightChannelInBothEars()
+    {
+        IReadOnlyList<string> arguments = Arguments(TimeSpan.Zero, TheRightOfTheFirstStream);
+
+        Assert.Equal(["p:1040:v:0", "p:1040:a:0"], Mapped(arguments));
+        Assert.Equal("pan=stereo|c0=c1|c1=c1", After(arguments, "-af"));
+    }
+
+    [Fact]
+    public void OneChannelTakenOutOfAStreamIsHandedBackOnBothOfThemRatherThanOnTheSideItCameFrom()
+    {
+        Assert.Equal(FfmpegPlaybackInvocation.TheLeftChannelInBothEars, "pan=stereo|c0=c0|c1=c0");
+        Assert.Equal(FfmpegPlaybackInvocation.TheRightChannelInBothEars, "pan=stereo|c0=c1|c1=c1");
+    }
+
+    [Fact]
+    public void ChoosingOneChannelOfAStreamChangesNothingElseInTheCommand()
+    {
+        IReadOnlyList<string> whole = Arguments(TimeSpan.FromMinutes(1));
+        IReadOnlyList<string> half = Arguments(TimeSpan.FromMinutes(1), TheLeftOfTheFirstStream);
+
+        Assert.Equal([.. whole, "-af", FfmpegPlaybackInvocation.TheLeftChannelInBothEars], half);
     }
 
     [Fact]
@@ -164,16 +250,21 @@ public sealed class FfmpegPlaybackInvocationTests
     }
 
     [Fact]
-    public void NothingReshapesTheSoundOnTheWayThroughSoASurroundRecordingKeepsItsChannels()
+    public void NothingReshapesASoundTakenWholeSoASurroundRecordingKeepsItsChannels()
     {
-        IReadOnlyList<string> arguments = Arguments(TimeSpan.Zero);
-
-        Assert.DoesNotContain("-bsf:a", arguments);
-        Assert.DoesNotContain("-ac", arguments);
-        Assert.DoesNotContain("-ar", arguments);
-        Assert.DoesNotContain("-af", arguments);
-        Assert.DoesNotContain("-filter:a", arguments);
-        Assert.DoesNotContain("-channel_layout", arguments);
+        foreach (IReadOnlyList<string> arguments in new[]
+        {
+            Arguments(TimeSpan.Zero),
+            Arguments(TimeSpan.Zero, TheWholeSecondStream),
+        })
+        {
+            Assert.DoesNotContain("-bsf:a", arguments);
+            Assert.DoesNotContain("-ac", arguments);
+            Assert.DoesNotContain("-ar", arguments);
+            Assert.DoesNotContain("-af", arguments);
+            Assert.DoesNotContain("-filter:a", arguments);
+            Assert.DoesNotContain("-channel_layout", arguments);
+        }
     }
 
     [Fact]
@@ -185,7 +276,8 @@ public sealed class FfmpegPlaybackInvocationTests
             Interlaced,
             LiveEncoder.Vaapi,
             Recorded,
-            TimeSpan.FromMinutes(1));
+            TimeSpan.FromMinutes(1),
+            TheWholeFirstStream);
 
         Assert.Equal(FfmpegLiveInvocation.RenderNode, After(arguments, "-vaapi_device"));
         Assert.True(Where(arguments, "-vaapi_device") < Where(arguments, "-i"));
@@ -210,28 +302,32 @@ public sealed class FfmpegPlaybackInvocationTests
             Interlaced,
             LiveEncoder.Software,
             Recorded,
-            TimeSpan.Zero));
+            TimeSpan.Zero,
+            TheWholeFirstStream));
         Assert.Throws<ArgumentNullException>(() => FfmpegPlaybackInvocation.Arguments(
             Service,
             null!,
             Interlaced,
             LiveEncoder.Software,
             Recorded,
-            TimeSpan.Zero));
+            TimeSpan.Zero,
+            TheWholeFirstStream));
         Assert.Throws<ArgumentNullException>(() => FfmpegPlaybackInvocation.Arguments(
             Service,
             LiveProfile.Hd30,
             Interlaced,
             LiveEncoder.Software,
             null!,
-            TimeSpan.Zero));
+            TimeSpan.Zero,
+            TheWholeFirstStream));
         Assert.Throws<ArgumentOutOfRangeException>(() => FfmpegPlaybackInvocation.Arguments(
             Service,
             LiveProfile.Hd30,
             Interlaced,
             (LiveEncoder)99,
             Recorded,
-            TimeSpan.Zero));
+            TimeSpan.Zero,
+            TheWholeFirstStream));
     }
 
     private static int Where(IReadOnlyList<string> arguments, string option)
@@ -257,9 +353,9 @@ public sealed class FfmpegPlaybackInvocationTests
     }
 
     private static IReadOnlyList<string> Arguments(TimeSpan from)
-        => FfmpegPlaybackInvocation.Arguments(Service, LiveProfile.Hd30, Interlaced, LiveEncoder.Software, Recorded, from);
+        => Arguments(from, TheWholeFirstStream);
 
-    private static IReadOnlyList<string> Arguments(TimeSpan from, SoundTrack sound)
+    private static IReadOnlyList<string> Arguments(TimeSpan from, SoundPlacement sound)
         => FfmpegPlaybackInvocation.Arguments(
             Service,
             LiveProfile.Hd30,
