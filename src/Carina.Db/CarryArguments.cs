@@ -1,7 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 
 using Carina.Domain.Migration;
-using Carina.Domain.Recordings;
 
 namespace Carina.Db;
 
@@ -9,19 +8,16 @@ public sealed class CarryArguments
 {
     public const string Verb = "--carry";
 
-    private CarryArguments(string from, string into, OutputRoot root, MigrationPass pass)
+    private CarryArguments(string from, string into, MigrationPass pass)
     {
         From = from;
         Into = into;
-        Root = root;
         Pass = pass;
     }
 
     public string From { get; }
 
     public string Into { get; }
-
-    public OutputRoot Root { get; }
 
     public MigrationPass Pass { get; }
 
@@ -82,21 +78,7 @@ public sealed class CarryArguments
             return false;
         }
 
-        string named = Path.GetFileName(Path.TrimEndingDirectorySeparator(Path.GetFullPath(into)));
-        OutputRoot root;
-
-        try
-        {
-            root = new OutputRoot(named);
-        }
-        catch (ArgumentException unusable)
-        {
-            problem = $"The new root is named by the directory it is, and '{named}' is not such a name: {unusable.Message}";
-
-            return false;
-        }
-
-        read = new CarryArguments(from, into, root, forReal ? MigrationPass.ForReal : MigrationPass.Rehearsal);
+        read = new CarryArguments(from, into, forReal ? MigrationPass.ForReal : MigrationPass.Rehearsal);
         problem = string.Empty;
 
         return true;

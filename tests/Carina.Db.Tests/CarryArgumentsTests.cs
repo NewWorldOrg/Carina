@@ -24,14 +24,14 @@ public sealed class CarryArgumentsTests
     }
 
     [Fact]
-    public void TheNewRootIsNamedByTheDirectoryItIs()
+    public void WhatARunCarriesIntoIsADirectoryAndTheArgumentsDoNotNameARootForIt()
     {
         Assert.True(CarryArguments.TryRead(
-            ["--carry", "--from", "/a", "--into", "/disk/carried"],
+            ["--carry", "--from", "/a", "--into", "/disk/carina/recordings"],
             out CarryArguments? read,
             out _));
         Assert.NotNull(read);
-        Assert.Equal("carried", read.Root.Value);
+        Assert.Equal("/disk/carina/recordings", read.Into);
     }
 
     [Theory]
@@ -43,7 +43,6 @@ public sealed class CarryArgumentsTests
     [InlineData("--carry", "--from", "/a", "--into")]
     [InlineData("--carry", "--from", "a", "--into", "/b")]
     [InlineData("--carry", "--from", "/a", "--into", "b")]
-    [InlineData("--carry", "--from", "/a", "--into", "/disk/carried too far")]
     public void AnythingElseIsRefusedWithAReason(params string[] args)
     {
         Assert.False(CarryArguments.TryRead(args, out CarryArguments? read, out string problem));
