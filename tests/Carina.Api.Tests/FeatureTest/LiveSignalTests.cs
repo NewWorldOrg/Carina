@@ -127,6 +127,6 @@ public sealed class LiveSignalTests
             services.AddSingleton<ILiveSupply>(supply);
             services.AddSingleton<ITranscodeBudget>(budget);
             services.AddSingleton<ILiveTranscoderFactory>(new HeldTranscoders(budget));
-            services.AddSingleton(new LiveSessionSettings { Linger = TimeSpan.FromMilliseconds(100) });
+            services.AddSingleton(new LiveSessionSettings(linger: TimeSpan.FromMilliseconds(100)));
         });
 }

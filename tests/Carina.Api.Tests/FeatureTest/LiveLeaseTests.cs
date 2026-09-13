@@ -215,7 +215,7 @@ public sealed class LiveLeaseTests
             services.AddSingleton<IDriverClient>(driver);
             services.AddSingleton<IServiceTuningDirectory>(new ResolvedTuning(
                 TuningResolution.Tunable(new CandidateChannelId(Guid.NewGuid()), Channel27, impaired: false)));
-            services.AddSingleton(new LiveSessionSettings { Linger = Linger });
+            services.AddSingleton(new LiveSessionSettings(linger: Linger));
             services.AddSingleton<ITranscodeBudget>(budget);
             services.AddSingleton<ILiveTranscoderFactory>(transcoders);
         });
