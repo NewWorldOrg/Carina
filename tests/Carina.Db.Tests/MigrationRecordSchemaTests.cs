@@ -24,6 +24,24 @@ public sealed class MigrationRecordSchemaTests(MigratedScratchDatabase database)
     public static TheoryData<string> Losses =>
         Named(MigrationLossSubjects.All.Select(subject => subject.ToString()));
 
+    public static TheoryData<string, string> Findings
+    {
+        get
+        {
+            TheoryData<string, string> named = [];
+
+            foreach (MigrationStandingSubject subject in MigrationStandingSubjects.All)
+            {
+                foreach (MigrationFinding finding in MigrationFindings.Under(subject))
+                {
+                    named.Add(subject.ToString(), finding.ToString());
+                }
+            }
+
+            return named;
+        }
+    }
+
     [Theory]
     [MemberData(nameof(Refusals))]
     public async Task EveryReasonTheApplicationCanNameIsOneTheTableTakes(string refusal)
@@ -160,6 +178,58 @@ public sealed class MigrationRecordSchemaTests(MigratedScratchDatabase database)
             () => LossAsync(connection, run, "EnclosedCharacters", "-1"));
 
         Assert.Equal("ck_migration_loss_affected", refused.ConstraintName);
+    }
+
+    [Theory]
+    [MemberData(nameof(Findings))]
+    public async Task EveryFindingTheApplicationCanComeBackWithIsOneTheTableTakes(string subject, string finding)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        Guid run = await RunAsync(connection);
+
+        await StandingAsync(connection, run, subject, finding);
+
+        Assert.Equal(
+            1L,
+            await CountAsync(
+                connection,
+                $"SELECT count(*) FROM migration_standing WHERE run_id = '{run}' AND finding = '{finding}'"));
+    }
+
+    [Fact]
+    public async Task AFindingAboutAnotherSubjectIsRefused()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        Guid run = await RunAsync(connection);
+
+        PostgresException refused = await Assert.ThrowsAsync<PostgresException>(
+            () => StandingAsync(connection, run, "TheNewRoot", "NothingSaysWhereEncodesGo"));
+
+        Assert.Equal("ck_migration_standing_finding", refused.ConstraintName);
+    }
+
+    [Fact]
+    public async Task ASubjectTheApplicationNeverLooksAtIsRefused()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        Guid run = await RunAsync(connection);
+
+        PostgresException refused = await Assert.ThrowsAsync<PostgresException>(
+            () => StandingAsync(connection, run, "Whatever", "TheNewRootIsEmpty"));
+
+        Assert.Equal("ck_migration_standing_subject", refused.ConstraintName);
+    }
+
+    [Fact]
+    public async Task ARunSaysWhatItFoundAboutASubjectOnce()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        Guid run = await RunAsync(connection);
+
+        await StandingAsync(connection, run, "TheNewRoot", "TheNewRootIsEmpty");
+
+        await Assert.ThrowsAsync<PostgresException>(
+            () => StandingAsync(connection, run, "TheNewRoot", "TheNewRootIsNotEmpty"));
     }
 
     [Fact]
@@ -321,6 +391,20 @@ public sealed class MigrationRecordSchemaTests(MigratedScratchDatabase database)
             "INSERT INTO migration_detail (id, run_id, population, refusal, subject, note, claimed, observed) "
             + $"VALUES ('{Guid.NewGuid()}', '{run}', '{population}', '{refusal}', {subject}, 'a programme', "
             + "NULL, NULL)",
+            connection);
+
+        await writing.ExecuteNonQueryAsync();
+    }
+
+    private static async Task StandingAsync(
+        NpgsqlConnection connection,
+        Guid run,
+        string subject,
+        string finding)
+    {
+        await using NpgsqlCommand writing = new(
+            "INSERT INTO migration_standing (run_id, subject, finding) "
+            + $"VALUES ('{run}', '{subject}', '{finding}')",
             connection);
 
         await writing.ExecuteNonQueryAsync();

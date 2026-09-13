@@ -1,6 +1,7 @@
 using System.Globalization;
 
 using Carina.Domain.Channels;
+using Carina.Domain.Encodings;
 using Carina.Domain.Migration;
 using Carina.Domain.Programmes;
 
@@ -89,7 +90,16 @@ internal static class MigrationFixtures
         => MigrationVerdict.Refuse(population, subject, refusal, "a programme", null, null);
 
     public static MigrationReport Report(MigrationRoll roll)
-        => MigrationCensus.Taken(Run, Source, MigrationPass.Rehearsal, roll, Aftermath(roll), Began, Ended);
+        => MigrationCensus.Taken(
+            Run,
+            Source,
+            MigrationPass.Rehearsal,
+            roll,
+            Aftermath(roll),
+            MigrationRootStanding.Empty,
+            EncodeUnaskedStanding.Settled,
+            Began,
+            Ended);
 
     public static MigrationAftermath Aftermath(MigrationRoll roll)
     {
