@@ -11,6 +11,8 @@ public sealed class ProgrammeFeedOptions
 {
     public const string Section = "ProgrammeFeed";
 
+    private static readonly TimeSpan Longest = TimeSpan.FromMilliseconds(int.MaxValue);
+
     public string? ConcurrentReaders { get; set; }
 
     public string? StatementTimeout { get; set; }
@@ -70,9 +72,17 @@ public sealed class ProgrammeFeedOptions
                 $"{Section}:{name} reads a duration as [d.]hh:mm:ss, and '{setting}' is not one.",
                 name);
 
-        return read > TimeSpan.Zero
+        if (read <= TimeSpan.Zero)
+        {
+            throw new ArgumentException($"{Section}:{name} has to be longer than nothing.", name);
+        }
+
+        return read <= Longest
             ? read
-            : throw new ArgumentException($"{Section}:{name} has to be longer than nothing.", name);
+            : throw new ArgumentException(
+                $"{Section}:{name} cannot be longer than {Longest}, "
+                + "which is as many milliseconds as a statement_timeout counts.",
+                name);
     }
 }
 

@@ -55,6 +55,21 @@ public sealed class ProgrammeFeedOptionsTests
             Refused(("StatementTimeout", "half a minute")),
             StringComparison.Ordinal);
 
+    [Theory]
+    [InlineData("30")]
+    [InlineData("24.20:31:23.648")]
+    public void AStatementTimeLongerThanPostgresCanBeToldToWaitIsRefused(string setting)
+        => Assert.Contains(
+            "cannot be longer than",
+            Refused(("StatementTimeout", setting)),
+            StringComparison.Ordinal);
+
+    [Fact]
+    public void TheLongestStatementTimePostgresCanBeToldToWaitIsStillRead()
+        => Assert.Equal(
+            TimeSpan.FromMilliseconds(int.MaxValue),
+            Read(("StatementTimeout", "24.20:31:23.647")).StatementTimeout);
+
     private static string Refused(params (string Key, string Value)[] settings)
     {
         ValidateOptionsResult verdict = new ProgrammeFeedValidation().Validate(null, Options(settings));
