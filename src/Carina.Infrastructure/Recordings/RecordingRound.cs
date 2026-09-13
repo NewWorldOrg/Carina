@@ -1,6 +1,8 @@
 using Carina.Contracts;
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
+using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Collection;
@@ -44,6 +46,7 @@ public sealed record RecordingRun(
 public sealed class RecordingRound(
     IReservationRecordingContract reservations,
     IRecordingRepository recordings,
+    IProgrammeRepository programmes,
     IServiceTuningDirectory directory,
     DiskPrecheckService disks,
     IDriverClient driver,
@@ -197,6 +200,8 @@ public sealed class RecordingRound(
                 now,
                 cancellationToken);
 
+            ProgrammeSnapshot snapshot = await SoundedAsync(due, cancellationToken);
+
             issued = RecordingSessions.Named(id);
 
             DriverCall<SessionSnapshot> answer = await driver.StartSessionAsync(
@@ -226,7 +231,7 @@ public sealed class RecordingRound(
                 RecordingFileName.For(id, RecordingSettings.FileExtension),
                 window.Start,
                 window.End,
-                due.Snapshot,
+                snapshot,
                 due.BroadcastGroupKey,
                 due.BroadcastGroupRole,
                 now,
@@ -265,6 +270,30 @@ public sealed class RecordingRound(
                 TuningRefusal.None,
                 failure.GetType().Name));
         }
+    }
+
+    private async Task<ProgrammeSnapshot> SoundedAsync(RecordingTick due, CancellationToken cancellationToken)
+    {
+        if (await programmes.FindAsync(due.Programme.Id, cancellationToken) is not { } announced)
+        {
+            return due.Snapshot;
+        }
+
+        AudioMode audio = announced.Audio is AudioMode.Undetermined ? due.Snapshot.Audio : announced.Audio;
+        int sounds = announced.Sounds is ProgrammeSnapshot.SoundsUnannounced
+            ? due.Snapshot.Sounds
+            : announced.Sounds;
+
+        return audio == due.Snapshot.Audio && sounds == due.Snapshot.Sounds
+            ? due.Snapshot
+            : new ProgrammeSnapshot(
+                due.Snapshot.Name,
+                due.Snapshot.Summary,
+                due.Snapshot.Extended,
+                due.Snapshot.Genres,
+                due.Snapshot.CapturedAt,
+                audio,
+                sounds);
     }
 
     private async Task<(SessionStanding Standing, SessionSnapshot? Session)> StandingAsync(

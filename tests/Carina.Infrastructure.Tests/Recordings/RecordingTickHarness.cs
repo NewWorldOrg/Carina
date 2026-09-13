@@ -1,4 +1,5 @@
 using Carina.Contracts;
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.Programmes;
@@ -155,7 +156,9 @@ internal static class RecordingTickFixture
         int eventId,
         DateTime? from = null,
         DateTime? until = null,
-        DateTime? startedAt = null)
+        DateTime? startedAt = null,
+        AudioMode audio = AudioMode.Undetermined,
+        int sounds = ProgrammeSnapshot.SoundsUnannounced)
         => new(
             ReservationId.New(),
             new NetworkId(32736),
@@ -167,7 +170,9 @@ internal static class RecordingTickFixture
                 "What it is about",
                 "Every detail of it",
                 [new ProgrammeGenre(7, 1)],
-                Airs.AddHours(-6)),
+                Airs.AddHours(-6),
+                audio,
+                sounds),
             Priority.Default,
             null,
             BroadcastGroupRole.Standalone,
@@ -175,6 +180,30 @@ internal static class RecordingTickFixture
             until ?? Airs.AddMinutes(30),
             true,
             startedAt);
+
+    public static HeldProgrammes Announcing(RecordingTick due, AudioMode audio, int sounds)
+    {
+        ArgumentNullException.ThrowIfNull(due);
+
+        var programmes = new HeldProgrammes();
+
+        programmes.Programmes.Add(Programme.Discover(
+            new ProgrammeBroadcast(
+                due.Programme.Id,
+                new TransportStreamId(32736),
+                due.ProgrammeStartsAt,
+                due.EffectiveEndAt,
+                "A programme",
+                "What it is about",
+                false)
+            {
+                Audio = audio,
+                Sounds = sounds,
+            },
+            due.ProgrammeStartsAt.AddHours(-3)));
+
+        return programmes;
+    }
 
     public static Reservation Planned(RecordingTick due, RuleId? ruleId = null)
         => Reservation.Plan(

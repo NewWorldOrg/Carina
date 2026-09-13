@@ -1,4 +1,5 @@
 using Carina.Contracts;
+using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.Recordings;
@@ -672,6 +673,83 @@ public sealed class RecordingRoundTests
         Assert.False(Assert.Single(reservations.ReleaseTokens).CanBeCanceled);
     }
 
+    [Fact]
+    public async Task TheSoundIsTakenFromWhatTheGuideAnnouncesWhenTheRecordingStarts()
+    {
+        RecordingTick due = Due(1);
+        var recordings = new HeldRecordings();
+
+        await Round(
+                Holding(due),
+                recordings,
+                new RecordingDriver(),
+                programmes: Announcing(due, AudioMode.DualMono, 2))
+            .RunAsync(CancellationToken.None);
+
+        Assert.Equal(AudioMode.Undetermined, due.Snapshot.Audio);
+        Assert.Equal(ProgrammeSnapshot.SoundsUnannounced, due.Snapshot.Sounds);
+
+        Recording written = Assert.Single(recordings.Rows);
+
+        Assert.Equal(AudioMode.DualMono, written.SnapshotAudio);
+        Assert.Equal(2, written.SnapshotSounds);
+    }
+
+    [Fact]
+    public async Task TheSoundTheReservationCarriesStandsWhenTheGuideNoLongerHoldsTheProgramme()
+    {
+        RecordingTick due = Due(1, audio: AudioMode.DualMono, sounds: 2);
+        var recordings = new HeldRecordings();
+
+        await Round(Holding(due), recordings, new RecordingDriver()).RunAsync(CancellationToken.None);
+
+        Recording written = Assert.Single(recordings.Rows);
+
+        Assert.Equal(AudioMode.DualMono, written.SnapshotAudio);
+        Assert.Equal(2, written.SnapshotSounds);
+    }
+
+    [Fact]
+    public async Task AnAnnouncementThatSaysNothingOfTheSoundLeavesTheReservationsWordStanding()
+    {
+        RecordingTick due = Due(1, audio: AudioMode.DualMono, sounds: 2);
+        var recordings = new HeldRecordings();
+
+        await Round(
+                Holding(due),
+                recordings,
+                new RecordingDriver(),
+                programmes: Announcing(due, AudioMode.Undetermined, ProgrammeSnapshot.SoundsUnannounced))
+            .RunAsync(CancellationToken.None);
+
+        Recording written = Assert.Single(recordings.Rows);
+
+        Assert.Equal(AudioMode.DualMono, written.SnapshotAudio);
+        Assert.Equal(2, written.SnapshotSounds);
+    }
+
+    [Fact]
+    public async Task NothingElseInTheSnapshotIsReReadWhenTheRecordingStarts()
+    {
+        RecordingTick due = Due(1);
+        var recordings = new HeldRecordings();
+
+        await Round(
+                Holding(due),
+                recordings,
+                new RecordingDriver(),
+                programmes: Announcing(due, AudioMode.Stereo, 1))
+            .RunAsync(CancellationToken.None);
+
+        Recording written = Assert.Single(recordings.Rows);
+
+        Assert.Equal(due.Snapshot.Name, written.SnapshotName);
+        Assert.Equal(due.Snapshot.Summary, written.SnapshotSummary);
+        Assert.Equal(due.Snapshot.Extended, written.SnapshotExtended);
+        Assert.Equal(due.Snapshot.Genres, written.SnapshotGenres);
+        Assert.Equal(due.Snapshot.CapturedAt, written.CapturedAt);
+    }
+
     private static async Task<IReadOnlyList<OutcomeDetail>> Weighing(IReadOnlyList<Recording> running, long free)
     {
         var recordings = new HeldRecordings();
@@ -769,13 +847,15 @@ public sealed class RecordingRoundTests
         RecordingDriver driver,
         TuningResolution? resolution = null,
         DateTime? at = null,
-        RefusalLedger? ledger = null)
+        RefusalLedger? ledger = null,
+        HeldProgrammes? programmes = null)
     {
         var clock = new HeldMoment(at ?? Airs);
 
         return new RecordingRound(
             reservations,
             recordings,
+            programmes ?? new HeldProgrammes(),
             new ResolvedTuning(resolution ?? Terrestrial),
             new DiskPrecheckService(new StorageMonitor(driver, clock, StorageMonitorSettings.Default)),
             driver,

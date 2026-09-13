@@ -191,6 +191,7 @@ public sealed class RecordingRefusalReporterTests
         return new RecordingRound(
             new PlannedReservations().Holding(due),
             recordings,
+            new HeldProgrammes(),
             new ResolvedTuning(Terrestrial),
             new DiskPrecheckService(new StorageMonitor(driver, clock, StorageMonitorSettings.Default)),
             driver,
