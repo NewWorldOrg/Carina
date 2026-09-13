@@ -58,7 +58,8 @@ public sealed class MigrationCarriage(
             {
                 throw new MigrationCarryRefusedException(
                     $"The new root '{carrier.Into.Value}' is {Said(standing)}, and a run does not add to what is "
-                    + "already there. Empty the ledger, delete the new root, make it again and start over.");
+                    + "already there. Empty the ledger, take out of the new root what a run put into it, "
+                    + "and start over. The new root itself stays: live recordings are written into it.");
             }
 
             if (!queueing.IsSettled)

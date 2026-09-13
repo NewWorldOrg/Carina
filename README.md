@@ -126,8 +126,8 @@ API はコンテナの 8080 番で待ち受け、ホストの 8081 番に公開�
 送りながら観るほうが `CARINA_TRANSCODING_PREFER=Vaapi`、あとからのエンコードが `CARINA_ENCODINGS_PREFER=Vaapi` で、
 装置は 1 つなので、後者は観ている人がいる間、次の仕事を始めずに待つ。
 
-**移行で録画を運ぶなら、`CARINA_RECORDINGS_DIR` を移行元と同じファイルシステムに置く。**
-ハードリンクで運ぶので、ファイルシステムをまたぐと 1 本も運べない。
+**移行で録画を運ぶなら、`CARINA_RECORDINGS_DIR` を移行元と同じマウントの下に置く。**
+ハードリンクで運ぶので、マウントをまたぐと 1 本も運べない。
 
 番組表を集める間隔、サムネイルやエンコードの回し方、信号品質の保持期間といった調整つまみは
 `Collection:` `Thumbnails:` `Encodings:` `QualitySignal:` `Transcoding:` の各名前空間にある。
@@ -139,9 +139,18 @@ API はコンテナの 8080 番で待ち受け、ホストの 8081 番に公開�
 実行は CLI で、結果は移行記録の画面に残る。
 
 ```bash
-docker compose exec app dotnet run --project src/Carina.Db -- \
-  --carry --from <移行元の録画ディレクトリ> --into <新しい録画ルート>
+docker compose run --rm \
+  -v <移行元の録画ディレクトリ>:/srv/recorded:ro \
+  -v <新しい録画ルート>:/srv/recordings \
+  app dotnet run --project src/Carina.Db -- \
+  --carry --from /srv/recorded --into /srv/recordings
 ```
+
+`docker compose exec app` では走らない。
+compose の `app` は `/srv/recordings` を読み取り専用でしか持たず、移行元のディレクトリを一切持たない。
+下見も本番も、書ける録画ルートと移行元を渡した 1 回きりのコンテナで走らせる。
+ハードリンクは 2 つのマウントをまたげないので、移行元と新しいルートを別々の `-v` で渡すと、同じディスクの上でも 1 本も運べない。
+両方を含む 1 つのディレクトリを 1 つの `-v` で渡す。
 
 `--for-real` を付けなければ下見で、**移行元を一切変えないので何度でも走らせてよい**。
 移行元の台帳は `CARINA_MIGRATION_SOURCE_CONNECTION` が持つ接続で、読み取り専用トランザクションの中から読む。
@@ -158,7 +167,9 @@ docker compose exec app dotnet run --project src/Carina.Db -- \
 4. エンコードの保存先とプロファイルが 1 つずつ在ること
 
 本番は新しいルートが空でなければ断る。
-失敗したら台帳を空にし、新しいルートを作り直して、もう一度実行する。
+失敗したら台帳を空にし、その実行が新しいルートへ運び込んだリンクだけを外して、もう一度実行する。
+新しいルート自体は消さない。
+driver がライブ録画を書き込むルートそのもので、移行が運んだもの以外もそこに入る。
 運び直しは一瞬で終わるので、巻き戻しの仕組みは持たない。
 
 予約は運ばない。
