@@ -26,6 +26,8 @@ public sealed class LiveTicketReachTests
 
     private static readonly Uri Exit = new("/api/live/32736-1024/stream", UriKind.Relative);
 
+    private readonly PipedSupply supply = new();
+
     [Theory]
     [InlineData("/api/live/ws")]
     [InlineData("/api/live/sessions")]
@@ -53,7 +55,7 @@ public sealed class LiveTicketReachTests
         string ticket = await IssuedAsync(probe);
 
         using HttpClient player = Carrying(probe, ticket);
-        HttpResponseMessage opened = await player.GetAsync(Exit, HttpCompletionOption.ResponseHeadersRead);
+        HttpResponseMessage opened = await OpenedAsync(player);
 
         Assert.Equal(HttpStatusCode.OK, opened.StatusCode);
         Assert.Equal(LiveStreamDelivery.MediaType, opened.Content.Headers.ContentType?.MediaType);
@@ -140,7 +142,20 @@ public sealed class LiveTicketReachTests
         return read.RootElement.GetProperty("data").GetProperty("inTheClear").GetString()!;
     }
 
-    private static AuthProbe Wiring(out Recording recording)
+    private static byte[] Mouthful() => [.. Enumerable.Range(0, 4_000).Select(at => (byte)(at % 251))];
+
+    private async Task<HttpResponseMessage> OpenedAsync(HttpClient player)
+    {
+        int raised = supply.Opened.Count;
+        Task<HttpResponseMessage> opening = player.GetAsync(Exit, HttpCompletionOption.ResponseHeadersRead);
+
+        await Eventually.Happens(() => supply.Opened.Count > raised, "the reading of the channel is raised");
+        await supply.Opened[^1].WriteAsync(Mouthful());
+
+        return await opening;
+    }
+
+    private AuthProbe Wiring(out Recording recording)
     {
         HeldServices services = new();
         HeldCandidates candidates = new();
@@ -169,7 +184,7 @@ public sealed class LiveTicketReachTests
             wired.AddSingleton<IBroadcastServiceRepository>(services);
             wired.AddSingleton<ICandidateChannelRepository>(candidates);
             wired.AddSingleton<IRecordingDirectory>(recordings);
-            wired.AddSingleton<ILiveSupply>(new PipedSupply());
+            wired.AddSingleton<ILiveSupply>(supply);
         });
     }
 }

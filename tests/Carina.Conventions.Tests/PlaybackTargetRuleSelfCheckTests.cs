@@ -10,7 +10,7 @@ public sealed class PlaybackTargetRuleSelfCheckTests
         Assert.Equal(
             [
                 $"{typeof(UnboundTicketStore).FullName}.Issue(Subject)",
-                $"{typeof(UnboundTicketStore).FullName}.Spend(String)",
+                $"{typeof(UnboundTicketStore).FullName}.Take(String)",
             ],
             ConventionRules.CarrierHandoutsNamingNoTarget([typeof(UnboundTicketStore), typeof(BoundTicketStore)]));
     }

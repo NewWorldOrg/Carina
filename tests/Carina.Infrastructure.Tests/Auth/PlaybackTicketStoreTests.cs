@@ -29,7 +29,7 @@ public sealed class PlaybackTicketStoreTests
         PlaybackTicketStore store = Store(out _);
         IssuedPlaybackTicket issued = Issued(store, Watcher, Seven);
 
-        Assert.Equal(Watcher, store.Spend(issued.InTheClear, Seven));
+        Assert.Equal(Watcher, store.Take(issued.InTheClear, Seven)?.Subject);
     }
 
     [Fact]
@@ -38,9 +38,9 @@ public sealed class PlaybackTicketStoreTests
         PlaybackTicketStore store = Store(out _);
         IssuedPlaybackTicket issued = Issued(store, Watcher, Seven);
 
-        Assert.NotNull(store.Spend(issued.InTheClear, Seven));
-        Assert.Null(store.Spend(issued.InTheClear, Seven));
-        Assert.Null(store.Spend(issued.InTheClear, Seven));
+        Assert.NotNull(store.Take(issued.InTheClear, Seven));
+        Assert.Null(store.Take(issued.InTheClear, Seven));
+        Assert.Null(store.Take(issued.InTheClear, Seven));
     }
 
     [Fact]
@@ -49,7 +49,7 @@ public sealed class PlaybackTicketStoreTests
         PlaybackTicketStore store = Store(out _);
         IssuedPlaybackTicket issued = Issued(store, Watcher, Seven);
 
-        Assert.Null(store.Spend(issued.InTheClear, Eight));
+        Assert.Null(store.Take(issued.InTheClear, Eight));
     }
 
     [Fact]
@@ -58,7 +58,7 @@ public sealed class PlaybackTicketStoreTests
         PlaybackTicketStore store = Store(out _);
         IssuedPlaybackTicket issued = Issued(store, Watcher, Seven);
 
-        Assert.Null(store.Spend(issued.InTheClear, PlaybackTarget.LiveChannel("7")));
+        Assert.Null(store.Take(issued.InTheClear, PlaybackTarget.LiveChannel("7")));
     }
 
     [Fact]
@@ -67,8 +67,8 @@ public sealed class PlaybackTicketStoreTests
         PlaybackTicketStore store = Store(out _);
         IssuedPlaybackTicket issued = Issued(store, Watcher, Seven);
 
-        Assert.Null(store.Spend(issued.InTheClear, Eight));
-        Assert.Null(store.Spend(issued.InTheClear, Seven));
+        Assert.Null(store.Take(issued.InTheClear, Eight));
+        Assert.Null(store.Take(issued.InTheClear, Seven));
     }
 
     [Fact]
@@ -79,7 +79,7 @@ public sealed class PlaybackTicketStoreTests
 
         clock.Wind(PlaybackTicketPolicy.Default.Lifetime - TimeSpan.FromSeconds(1));
 
-        Assert.NotNull(store.Spend(issued.InTheClear, Seven));
+        Assert.NotNull(store.Take(issued.InTheClear, Seven));
     }
 
     [Fact]
@@ -90,7 +90,7 @@ public sealed class PlaybackTicketStoreTests
 
         clock.Wind(PlaybackTicketPolicy.Default.Lifetime);
 
-        Assert.Null(store.Spend(issued.InTheClear, Seven));
+        Assert.Null(store.Take(issued.InTheClear, Seven));
     }
 
     [Fact]
@@ -101,7 +101,7 @@ public sealed class PlaybackTicketStoreTests
 
         clock.Wind(PlaybackTicketPolicy.Default.Lifetime + TimeSpan.FromSeconds(1));
 
-        Assert.Null(store.Spend(issued.InTheClear, Seven));
+        Assert.Null(store.Take(issued.InTheClear, Seven));
     }
 
     [Fact]
@@ -109,7 +109,7 @@ public sealed class PlaybackTicketStoreTests
     {
         PlaybackTicketStore store = Store(out _);
 
-        Assert.Null(store.Spend(Unguessable.Issue(), Seven));
+        Assert.Null(store.Take(Unguessable.Issue(), Seven));
     }
 
     [Theory]
@@ -124,7 +124,7 @@ public sealed class PlaybackTicketStoreTests
 
         Issued(store, Watcher, Seven);
 
-        Assert.Null(store.Spend(offered, Seven));
+        Assert.Null(store.Take(offered, Seven));
     }
 
     [Fact]
@@ -132,7 +132,7 @@ public sealed class PlaybackTicketStoreTests
     {
         PlaybackTicketStore store = Store(out _);
 
-        Assert.Null(store.Spend(null, Seven));
+        Assert.Null(store.Take(null, Seven));
     }
 
     [Fact]
@@ -143,8 +143,8 @@ public sealed class PlaybackTicketStoreTests
         char first = issued.InTheClear[0];
         string nearly = (first == 'a' ? 'b' : 'a') + issued.InTheClear[1..];
 
-        Assert.Null(store.Spend(nearly, Seven));
-        Assert.NotNull(store.Spend(issued.InTheClear, Seven));
+        Assert.Null(store.Take(nearly, Seven));
+        Assert.NotNull(store.Take(issued.InTheClear, Seven));
     }
 
     [Fact]
@@ -169,7 +169,7 @@ public sealed class PlaybackTicketStoreTests
                 {
                     gun.SignalAndWait();
 
-                    if (store.Spend(tickets[round].InTheClear, Seven) is not null)
+                    if (store.Take(tickets[round].InTheClear, Seven) is not null)
                     {
                         Interlocked.Increment(ref admitted[round]);
                     }
@@ -240,7 +240,7 @@ public sealed class PlaybackTicketStoreTests
         Issued(store, Watcher, Eight);
 
         Assert.Equal(1, store.Count);
-        Assert.Null(store.Spend(stale.InTheClear, Seven));
+        Assert.Null(store.Take(stale.InTheClear, Seven));
     }
 
     [Fact]
@@ -264,7 +264,7 @@ public sealed class PlaybackTicketStoreTests
 
         for (int asked = 0; asked < PlaybackTicketStore.MostHeldPerSubject * 4; asked++)
         {
-            Assert.NotNull(store.Spend(Issued(store, Watcher, Seven).InTheClear, Seven));
+            Assert.NotNull(store.Take(Issued(store, Watcher, Seven).InTheClear, Seven));
         }
     }
 
@@ -295,7 +295,7 @@ public sealed class PlaybackTicketStoreTests
             store.Issue(new Subject($"flooder-{flooded}"), Eight);
         }
 
-        Assert.Equal(Watcher, store.Spend(mine.InTheClear, Seven));
+        Assert.Equal(Watcher, store.Take(mine.InTheClear, Seven)?.Subject);
     }
 
     [Fact]
@@ -318,7 +318,50 @@ public sealed class PlaybackTicketStoreTests
         PlaybackTicketStore store = Store(out _);
         IssuedPlaybackTicket issued = Issued(store, Watcher, Seven);
 
-        Assert.Throws<ArgumentNullException>(() => store.Spend(issued.InTheClear, null!));
+        Assert.Throws<ArgumentNullException>(() => store.Take(issued.InTheClear, null!));
+    }
+
+    [Fact]
+    public void ATicketHandedBackUnspentOpensWhatItWasIssuedForOnceAfterAll()
+    {
+        PlaybackTicketStore store = Store(out _);
+        IssuedPlaybackTicket issued = Issued(store, Watcher, Seven);
+        PlaybackTicket? taken = store.Take(issued.InTheClear, Seven);
+
+        Assert.NotNull(taken);
+
+        store.HandBack(taken, Seven);
+
+        Assert.Equal(Watcher, store.Take(issued.InTheClear, Seven)?.Subject);
+        Assert.Null(store.Take(issued.InTheClear, Seven));
+    }
+
+    [Fact]
+    public void ATicketIsHandedBackForWhatItWasTakenForAndForNothingElse()
+    {
+        PlaybackTicketStore store = Store(out _);
+        IssuedPlaybackTicket issued = Issued(store, Watcher, Seven);
+        PlaybackTicket? taken = store.Take(issued.InTheClear, Seven);
+
+        Assert.NotNull(taken);
+        Assert.Throws<ArgumentException>(() => store.HandBack(taken, Eight));
+        Assert.Throws<ArgumentNullException>(() => store.HandBack(taken, null!));
+        Assert.Null(store.Take(issued.InTheClear, Seven));
+    }
+
+    [Fact]
+    public void ATicketThatLapsedWhileItWasOutIsNotPutBack()
+    {
+        PlaybackTicketStore store = Store(out WoundClock clock);
+        IssuedPlaybackTicket issued = Issued(store, Watcher, Seven);
+        PlaybackTicket? taken = store.Take(issued.InTheClear, Seven);
+
+        Assert.NotNull(taken);
+
+        clock.Wind(PlaybackTicketPolicy.Default.Lifetime);
+        store.HandBack(taken, Seven);
+
+        Assert.Equal(0, store.Count);
     }
 
     private static IssuedPlaybackTicket Issued(PlaybackTicketStore store, Subject subject, PlaybackTarget target)

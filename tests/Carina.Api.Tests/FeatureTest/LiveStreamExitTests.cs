@@ -23,6 +23,8 @@ public sealed class LiveStreamExitTests
 
     private static readonly DateTime At = new(2026, 9, 3, 0, 0, 0, DateTimeKind.Utc);
 
+    private static readonly TimeSpan NoTimeAtAllToSayAnything = TimeSpan.FromMilliseconds(200);
+
     private readonly PipedSupply supply = new();
 
     private readonly TranscodeBudget budget = new(new TranscodeBudgetSettings { AtOnce = 4 });
@@ -38,7 +40,7 @@ public sealed class LiveStreamExitTests
         string ticket = await IssuedAsync(probe);
 
         using HttpClient player = Carrying(probe, ticket);
-        using HttpResponseMessage first = await player.GetAsync(Asked(), HttpCompletionOption.ResponseHeadersRead);
+        HttpResponseMessage first = await OpenedAsync(player);
 
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
         Assert.Equal(LiveStreamDelivery.MediaType, first.Content.Headers.ContentType?.MediaType);
@@ -76,18 +78,18 @@ public sealed class LiveStreamExitTests
         string ticket = await IssuedAsync(probe);
 
         using HttpClient player = Carrying(probe, ticket);
-        using HttpResponseMessage opened = await player.GetAsync(Asked(), HttpCompletionOption.ResponseHeadersRead);
+        using HttpResponseMessage opened = await OpenedAsync(player);
 
         Assert.Equal(HttpStatusCode.OK, opened.StatusCode);
 
-        byte[] sent = [.. Enumerable.Range(0, 4_000).Select(at => (byte)(at % 251))];
+        byte[] sent = Mouthful();
+        byte[] twice = [.. sent, .. sent];
 
-        await Eventually.Happens(() => supply.Opened.Count is 1, "the reading of the channel is raised");
         await supply.Opened[0].WriteAsync(sent);
 
         await using Stream reading = await opened.Content.ReadAsStreamAsync();
 
-        Assert.Equal(sent, await ReadAsync(reading, sent.Length));
+        Assert.Equal(twice, await ReadAsync(reading, twice.Length));
     }
 
     [Fact]
@@ -104,7 +106,7 @@ public sealed class LiveStreamExitTests
         Assert.Equal(1, transcoders.Started);
 
         using HttpClient player = Carrying(probe, ticket);
-        using HttpResponseMessage opened = await player.GetAsync(Asked(), HttpCompletionOption.ResponseHeadersRead);
+        using HttpResponseMessage opened = await OpenedAsync(player);
 
         Assert.Equal(HttpStatusCode.OK, opened.StatusCode);
         Assert.Equal(1, supply.Asked);
@@ -120,11 +122,10 @@ public sealed class LiveStreamExitTests
         string ticket = await IssuedAsync(probe);
 
         using HttpClient player = Carrying(probe, ticket);
-        HttpResponseMessage opened = await player.GetAsync(Asked(), HttpCompletionOption.ResponseHeadersRead);
+        HttpResponseMessage opened = await OpenedAsync(player);
 
         Assert.Equal(HttpStatusCode.OK, opened.StatusCode);
 
-        await Eventually.Happens(() => supply.Opened.Count is 1, "the reading of the channel is raised");
         await Eventually.Happens(
             () => supply.Opened[0].HeldOpenUntil.Count > 0,
             "the reading is asked to be held open while it is being read");
@@ -150,7 +151,7 @@ public sealed class LiveStreamExitTests
     }
 
     [Fact]
-    public async Task AChannelNoTunerWillReachIsRefusedAndNothingIsHandedOver()
+    public async Task AChannelNoTunerWillReachIsRefusedInWordsAndTheTicketIsGoodAfterwards()
     {
         supply.Refusing = LiveRefusal.NoTunerFree;
 
@@ -161,6 +162,28 @@ public sealed class LiveStreamExitTests
         using HttpResponseMessage refused = await player.GetAsync(Asked(), HttpCompletionOption.ResponseHeadersRead);
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, refused.StatusCode);
+        Assert.Equal(
+            LiveRefusalClosures.Because(LiveRefusal.NoTunerFree),
+            await refused.Content.ReadAsStringAsync());
+
+        supply.Refusing = null;
+
+        using HttpResponseMessage opened = await OpenedAsync(player);
+
+        Assert.Equal(HttpStatusCode.OK, opened.StatusCode);
+    }
+
+    [Fact]
+    public async Task AChannelThatSaysNothingInTimeIsRefusedRatherThanOpenedOnNothing()
+    {
+        await using AuthProbe probe = Wiring(NoTimeAtAllToSayAnything);
+        string ticket = await IssuedAsync(probe);
+
+        using HttpClient player = Carrying(probe, ticket);
+        using HttpResponseMessage refused = await player.GetAsync(Asked(), HttpCompletionOption.ResponseHeadersRead);
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, refused.StatusCode);
+        Assert.Equal(LiveStreamDelivery.NothingCameInTime, await refused.Content.ReadAsStringAsync());
     }
 
     private static Uri Asked() => new(Watched, UriKind.Relative);
@@ -169,6 +192,8 @@ public sealed class LiveStreamExitTests
         => new($"ws://localhost{LiveWire.Path}?network=32736&service=1024&profile=720p30");
 
     private static CancellationToken Patiently() => new CancellationTokenSource(Eventually.Patience).Token;
+
+    private static byte[] Mouthful() => [.. Enumerable.Range(0, 4_000).Select(at => (byte)(at % 251))];
 
     private static WebSocketClient Wired(AuthProbe probe, string cookie)
     {
@@ -227,7 +252,26 @@ public sealed class LiveStreamExitTests
         return read.RootElement.GetProperty("data").GetProperty("inTheClear").GetString()!;
     }
 
-    private AuthProbe Wiring()
+    private async Task<HttpResponseMessage> OpenedAsync(HttpClient player)
+    {
+        Task<HttpResponseMessage> opening = player.GetAsync(Asked(), HttpCompletionOption.ResponseHeadersRead);
+
+        while (!opening.IsCompleted)
+        {
+            if (supply.Opened.Count > 0)
+            {
+                await supply.Opened[^1].WriteAsync(Mouthful());
+            }
+
+            await Task.WhenAny(opening, Task.Delay(TimeSpan.FromMilliseconds(20)));
+        }
+
+        return await opening;
+    }
+
+    private AuthProbe Wiring() => Wiring(new LiveSessionSettings().LongestRaise);
+
+    private AuthProbe Wiring(TimeSpan longestRaise)
     {
         HeldServices services = new();
         HeldCandidates candidates = new();
@@ -252,6 +296,7 @@ public sealed class LiveStreamExitTests
             wired.AddSingleton<ITranscodeBudget>(budget);
             wired.AddSingleton<ILiveTranscoderFactory>(transcoders);
             wired.AddSingleton(new LiveSessionSettings(
+                longestRaise: longestRaise,
                 betweenHolds: TimeSpan.FromMilliseconds(50),
                 heldAhead: TimeSpan.FromSeconds(2)));
         });

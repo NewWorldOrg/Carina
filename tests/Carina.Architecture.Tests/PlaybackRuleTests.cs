@@ -90,7 +90,7 @@ public sealed class PlaybackRuleTests
             Path.Combine(RepositoryLayout.SourceDirectory, LiveHandedOver.TrimStart('/')));
 
         Assert.Contains("video/mp2t", handed, StringComparison.Ordinal);
-        Assert.Contains("AdmitOnceAsync", handed, StringComparison.Ordinal);
+        Assert.Contains("AdmitOnceUnlessItIsHandedBackAsync", handed, StringComparison.Ordinal);
         Assert.Empty(PlaybackRules.WhatTranscodesIn(RepositoryLayout.SourceDirectory, LiveHandedOver));
         Assert.DoesNotContain(PlaybackRules.DeliveryEndpoint, handed, StringComparison.Ordinal);
     }

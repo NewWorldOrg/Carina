@@ -15,6 +15,8 @@ public static class LiveStreamDelivery
 
     public const string NoSeeking = "none";
 
+    public const string NothingCameInTime = "Nothing came from this channel in time to start sending it.";
+
     private const int Mouthful = 64 * 1024;
 
     public static Task Invoke(HttpContext context, int networkId, int serviceId, ILiveSessionManager sessions)
@@ -41,25 +43,34 @@ public static class LiveStreamDelivery
 
         return context.RequestServices
             .GetRequiredService<PlaybackTicketGate>()
-            .AdmitOnceAsync(
+            .AdmitOnceUnlessItIsHandedBackAsync(
                 context,
                 LiveService.TargetOf(channel.Network, channel.Service),
                 (_, _) => CarryAsync(context, channel, sessions));
     }
 
-    private static async Task CarryAsync(HttpContext context, LiveChannelKey channel, ILiveSessionManager sessions)
+    private static async Task<bool> CarryAsync(HttpContext context, LiveChannelKey channel, ILiveSessionManager sessions)
     {
         LiveHandover handed = await sessions.HandOverAsync(channel, context.RequestAborted);
 
         if (handed.Handed is not { } carrying)
         {
-            context.Response.StatusCode = Of(handed.Refusal!.Value);
+            LiveRefusal refused = handed.Refusal!.Value;
 
-            return;
+            await RefuseAsync(context, Of(refused), LiveRefusalClosures.Because(refused));
+
+            return false;
         }
 
         await using (carrying)
         {
+            if (!await carrying.ReachedAsync(context.RequestAborted))
+            {
+                await RefuseAsync(context, StatusCodes.Status503ServiceUnavailable, NothingCameInTime);
+
+                return false;
+            }
+
             context.Response.StatusCode = StatusCodes.Status200OK;
             context.Response.ContentType = MediaType;
             context.Response.Headers.AcceptRanges = NoSeeking;
@@ -67,6 +78,23 @@ public static class LiveStreamDelivery
             await context.Response.StartAsync(context.RequestAborted);
             await context.Response.Body.FlushAsync(context.RequestAborted);
             await Quietly(carrying.Bytes, context.Response, context.RequestAborted);
+        }
+
+        return true;
+    }
+
+    private static async Task RefuseAsync(HttpContext context, int status, string because)
+    {
+        context.Response.StatusCode = status;
+        context.Response.ContentType = PlaybackTicketGate.TheRefusalContentType;
+
+        try
+        {
+            await context.Response.WriteAsync(because, context.RequestAborted);
+        }
+        catch (Exception gone) when (gone is IOException or ObjectDisposedException or OperationCanceledException)
+        {
+            return;
         }
     }
 
