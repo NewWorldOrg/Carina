@@ -153,7 +153,7 @@ public static class FfmpegEncodeInvocation
         return string.Create(CultureInfo.InvariantCulture, $"p:{programNumber}:a");
     }
 
-    private static string OneAudioStream(ServiceId service, int ordinal)
+    internal static string OneAudioStream(ServiceId service, int ordinal)
     {
         int programNumber = service.Value;
 
