@@ -39,6 +39,38 @@ public sealed class EncodeIntakeTests
         Assert.Equal(Now, queued.QueuedAt);
     }
 
+    [Fact(DisplayName = "BR-ED2-004: with the auto-run turned off in the ledger, a recording that ended is left where it is")]
+    public async Task WithTheAutoRunTurnedOffARecordingThatEndedIsLeftWhereItIs()
+    {
+        var machine = new Machine();
+        machine.Recorded(RecordingOutcome.Complete);
+        machine.AutoRun.Standing = new EncodeAutoRunStanding(false, 2, true, Now);
+
+        EncodeIntake took = await machine.Round().TakeAsync(1, Cancel);
+
+        Assert.False(took.Automatically);
+        Assert.Equal(0, took.Queued);
+        Assert.Equal(0, took.Looked);
+        Assert.Empty(machine.Jobs.Jobs);
+        Assert.Empty(machine.Events.Signalled);
+    }
+
+    [Fact(DisplayName = "BR-ED2-004: turning the auto-run back on takes hold at the next look, without a restart")]
+    public async Task TurningTheAutoRunBackOnTakesHoldAtTheNextLook()
+    {
+        var machine = new Machine();
+        machine.Recorded(RecordingOutcome.Complete);
+        machine.AutoRun.Standing = new EncodeAutoRunStanding(false, 2, true, Now);
+        await machine.Round().TakeAsync(1, Cancel);
+
+        machine.AutoRun.Standing = new EncodeAutoRunStanding(true, 2, true, Now);
+        EncodeIntake took = await machine.Round().TakeAsync(1, Cancel);
+
+        Assert.True(took.Automatically);
+        Assert.Equal(1, took.Queued);
+        Assert.Single(machine.Jobs.Jobs);
+    }
+
     [Fact(DisplayName = "BR-ED2-004: a recording that failed has nothing to encode and is never queued")]
     public async Task ARecordingThatFailedIsNeverQueued()
     {
@@ -263,12 +295,15 @@ public sealed class EncodeIntakeTests
 
         public SilentEvents Events { get; } = new();
 
+        public StandingEncodeAutoRun AutoRun { get; } = new();
+
         public EncodeIntakeRound Round()
             => new(
                 Recordings,
                 Jobs,
                 Destinations,
                 Profiles,
+                AutoRun,
                 Events,
                 new HandTurnedClock(new DateTimeOffset(Now)),
                 NullLogger<EncodeIntakeRound>.Instance);

@@ -109,6 +109,13 @@ public interface IEncodeJobRepository
     /// </summary>
     Task<ArtefactClaim> ClaimArtefactAsync(EncodeJob job, EncodeFileName name, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// How long the last few jobs that ran to their end took, at most <paramref name="most"/> of
+    /// them, newest first. Only a job that completed is asked after: one that failed partway and
+    /// one a person called off say nothing about how long an encode takes.
+    /// </summary>
+    Task<IReadOnlyList<EncodeSpell>> RecentSpellsAsync(int most, CancellationToken cancellationToken);
+
     Task<EncodeHold> HoldOnProfileAsync(EncodeProfileId profileId, CancellationToken cancellationToken);
 
     Task<EncodeHold> HoldOnDestinationAsync(EncodeDestinationId destinationId, CancellationToken cancellationToken);

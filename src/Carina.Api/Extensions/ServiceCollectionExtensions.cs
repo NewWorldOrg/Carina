@@ -48,6 +48,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<EncodeProfileService>();
         services.AddScoped<EncodeDestinationService>();
         services.AddScoped<EncodeJobService>();
+        services.AddScoped<EncodeAutoRunService>();
         services.AddScoped<QualityService>();
         services.AddScoped<QualityThresholdService>();
         services.AddScoped<MigrationRecordService>();

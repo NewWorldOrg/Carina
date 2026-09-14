@@ -157,6 +157,20 @@ public sealed class HeldEncodeJobs : IEncodeJobRepository, IEncodeStandingReader
         return Task.FromResult(ArtefactClaim.Claimed);
     }
 
+    public Task<IReadOnlyList<EncodeSpell>> RecentSpellsAsync(int most, CancellationToken cancellationToken)
+    {
+        IReadOnlyList<EncodeSpell> spells =
+        [
+            .. Jobs
+                .Where(job => job.Status is EncodeJobStatus.Completed && job.StartedAt is not null && job.EndedAt is not null)
+                .OrderByDescending(job => job.EndedAt)
+                .Take(most)
+                .Select(job => new EncodeSpell(job.EndedAt!.Value, job.EndedAt!.Value - job.StartedAt!.Value)),
+        ];
+
+        return Task.FromResult(spells);
+    }
+
     public Task<EncodeHold> HoldOnProfileAsync(EncodeProfileId profileId, CancellationToken cancellationToken)
         => Task.FromResult(HeldBy(Jobs.Where(job => job.ProfileId.Equals(profileId))));
 

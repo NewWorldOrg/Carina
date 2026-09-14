@@ -149,6 +149,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IEncodeProfileRepository, EncodeProfileRepository>();
         services.AddScoped<IEncodeDestinationRepository, EncodeDestinationRepository>();
         services.AddScoped<IEncodeJobRepository, EncodeJobRepository>();
+        services.AddScoped<IEncodeAutoRunRepository, EncodeAutoRunRepository>();
         services.AddScoped<IEncodeStandingReader, EncodeStandingReader>();
         services.AddScoped<IEncodeScratchLedger, EncodeScratchLedger>();
         services.AddScoped<IQualityLedgerReader, QualityLedgerReader>();
@@ -162,6 +163,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<EncodeScratchFiles>();
         services.AddScoped<EncodeScratchCleaner>();
         services.AddScoped<EncodeArtefactPlacer>();
+        services.AddScoped<IEncodeAutoRunReader, EncodeAutoRunReader>();
         services.AddScoped<EncodeJobRunner>();
         services.AddScoped<EncodeRestart>();
         services.AddScoped<EncodeIntakeRound>();

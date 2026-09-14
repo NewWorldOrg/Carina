@@ -400,7 +400,7 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
     }
 
     [Fact]
-    public async Task TheDatabaseHoldsExactlyTheseChecksOnTheFourTables()
+    public async Task TheDatabaseHoldsExactlyTheseChecksOnTheFiveTables()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
 
@@ -438,6 +438,38 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
                 "ck_encode_scratch_file_removal",
             ],
             await ConstraintsAsync(connection, "encode_scratch_file"));
+        Assert.Equal(
+            ["ck_encode_auto_run_cores", "ck_encode_auto_run_single_row"],
+            await ConstraintsAsync(connection, "encode_auto_run"));
+    }
+
+    [Theory]
+    [InlineData("1, true, 2", null)]
+    [InlineData("1, false, 1", null)]
+    [InlineData("1, true, 256", null)]
+    [InlineData("2, true, 2", "ck_encode_auto_run_single_row")]
+    [InlineData("1, true, 0", "ck_encode_auto_run_cores")]
+    [InlineData("1, true, 257", "ck_encode_auto_run_cores")]
+    public async Task HowTheQueueRunsIsOneRowAndACapTheMachineCouldHold(string values, string? refusedBy)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        await using (var clearing = new NpgsqlCommand("DELETE FROM encode_auto_run", connection))
+        {
+            await clearing.ExecuteNonQueryAsync();
+        }
+
+        await using var writing = new NpgsqlCommand(
+            $"INSERT INTO encode_auto_run (id, automatically, most_cores, updated_at) VALUES ({values}, {Queued})",
+            connection);
+
+        if (refusedBy is null)
+        {
+            Assert.Equal(1, await writing.ExecuteNonQueryAsync());
+
+            return;
+        }
+
+        Assert.Equal(refusedBy, (await Assert.ThrowsAsync<PostgresException>(writing.ExecuteNonQueryAsync)).ConstraintName);
     }
 
     [Theory]

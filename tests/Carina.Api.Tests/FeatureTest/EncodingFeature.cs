@@ -80,6 +80,8 @@ internal sealed class EncodingFeature : IAsyncDisposable
                 services.AddSingleton<IEncodeProfileRepository>(Profiles);
                 services.AddSingleton<IEncodeDestinationRepository>(Destinations);
                 services.AddSingleton<IEncodeScratchLedger>(Scratch);
+                services.AddSingleton<IEncodeAutoRunRepository>(AutoRun);
+                services.AddSingleton(Machine);
                 services.AddSingleton<IStrayProgrammes>(Strays);
                 services.AddSingleton<Carina.Domain.Streaming.ITranscodeBudget>(Transcoders);
                 services.AddSingleton<IMachineCapabilityReader>(new AnsweredMachine(WithACard));
@@ -110,6 +112,10 @@ internal sealed class EncodingFeature : IAsyncDisposable
     public HeldEncodeDestinations Destinations { get; } = new();
 
     public HeldEncodeScratch Scratch { get; } = new();
+
+    public HeldEncodeAutoRun AutoRun { get; } = new();
+
+    public MachineSettings Machine { get; } = new() { Cores = 6 };
 
     public ScriptedStrays Strays { get; } = new();
 
@@ -215,6 +221,13 @@ internal sealed class EncodingFeature : IAsyncDisposable
     public async Task<(HttpStatusCode Status, JsonElement Body)> PostAsync(string path, object? body = null)
     {
         using HttpResponseMessage response = await Client.PostAsJsonAsync(new Uri(path, UriKind.Relative), body ?? new { });
+
+        return await ReadAsync(response);
+    }
+
+    public async Task<(HttpStatusCode Status, JsonElement Body)> PutAsync(string path, object body)
+    {
+        using HttpResponseMessage response = await Client.PutAsJsonAsync(new Uri(path, UriKind.Relative), body);
 
         return await ReadAsync(response);
     }

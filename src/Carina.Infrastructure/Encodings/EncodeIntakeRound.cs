@@ -8,7 +8,13 @@ using Microsoft.Extensions.Logging;
 
 namespace Carina.Infrastructure.Encodings;
 
-public sealed record EncodeIntake(int Page, int LastPage, int Looked, int Queued, EncodeUnaskedStanding Standing)
+public sealed record EncodeIntake(
+    int Page,
+    int LastPage,
+    int Looked,
+    int Queued,
+    EncodeUnaskedStanding Standing,
+    bool Automatically)
 {
     public bool MorePages => Page < LastPage;
 }
@@ -18,7 +24,9 @@ public sealed record EncodeIntake(int Page, int LastPage, int Looked, int Queued
 /// The ledger is read a page at a time and nothing else is asked for, so this asks for no new
 /// event contract and cannot be starved by a run that takes half an hour (BR-ED2-004).
 /// <para>
-/// A recording that failed has nothing to encode and is left out by the question itself; one cut
+/// A machine whose auto-run is turned off looks at nothing at all, and the answer says so, because
+/// the setting is read on every look rather than at a start: turning it back on is in force at the
+/// next one. A recording that failed has nothing to encode and is left out by the question itself; one cut
 /// short has a file and is queued like any other, and what says it was cut short is the recording,
 /// not the job. A recording the ledger already holds any job for is passed over, whatever became
 /// of that job. Where the artefact goes and what shape it takes is what the machine settles when
@@ -31,18 +39,21 @@ public sealed class EncodeIntakeRound(
     IEncodeJobRepository jobs,
     IEncodeDestinationRepository destinations,
     IEncodeProfileRepository profiles,
+    IEncodeAutoRunReader autoRun,
     IAppEventPublisher events,
     TimeProvider clock,
     ILogger<EncodeIntakeRound> logger)
 {
     public const int PerLook = 100;
 
-    private static readonly RecordingOutcome[] WithSomethingToEncode =
-        [RecordingOutcome.Complete, RecordingOutcome.Truncated];
-
     public async Task<EncodeIntake> TakeAsync(int page, CancellationToken cancellationToken)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(page, 1);
+
+        if (!(await autoRun.ReadAsync(cancellationToken)).Automatically)
+        {
+            return new EncodeIntake(page, page, 0, 0, EncodeUnaskedStanding.Settled, Automatically: false);
+        }
 
         RecordingQuery query = RecordingQuery.For(
                 null,
@@ -51,7 +62,7 @@ public sealed class EncodeIntakeRound(
                 descending: false,
                 page,
                 PerLook,
-                new RecordingConditions { Outcomes = WithSomethingToEncode })
+                new RecordingConditions { Outcomes = [.. EncodeAutoRun.Subject] })
             ?? throw new InvalidOperationException($"Page {page} of the recordings that have ended cannot be asked for.");
 
         PaginatedList<Recording> ended = await recordings.ListAsync(query, cancellationToken);
@@ -63,7 +74,7 @@ public sealed class EncodeIntakeRound(
 
         if (waiting.Length is 0)
         {
-            return new EncodeIntake(page, ended.LastPage, ended.Items.Count, 0, EncodeUnaskedStanding.Settled);
+            return new EncodeIntake(page, ended.LastPage, ended.Items.Count, 0, EncodeUnaskedStanding.Settled, Automatically: true);
         }
 
         EncodeUnasked unasked = EncodeUnasked.Of(
@@ -78,7 +89,7 @@ public sealed class EncodeIntakeRound(
                 waiting.Length,
                 unasked.Standing);
 
-            return new EncodeIntake(page, ended.LastPage, ended.Items.Count, 0, unasked.Standing);
+            return new EncodeIntake(page, ended.LastPage, ended.Items.Count, 0, unasked.Standing, Automatically: true);
         }
 
         foreach (Recording recording in waiting)
@@ -102,6 +113,6 @@ public sealed class EncodeIntakeRound(
             "{Queued} recording(s) that had ended were put in the encode queue without being asked for.",
             waiting.Length);
 
-        return new EncodeIntake(page, ended.LastPage, ended.Items.Count, waiting.Length, EncodeUnaskedStanding.Settled);
+        return new EncodeIntake(page, ended.LastPage, ended.Items.Count, waiting.Length, EncodeUnaskedStanding.Settled, Automatically: true);
     }
 }
