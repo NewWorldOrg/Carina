@@ -384,6 +384,7 @@ internal sealed class ReservationFeature : IAsyncDisposable
             {
                 services.RemoveAll<IHostedService>();
                 services.AddSingleton<IReservationRepository>(Reservations);
+                services.AddSingleton<IRecordingRepository>(new NoRecordings());
                 services.AddSingleton<IReservationOutcomeRepository>(Outcomes);
                 services.AddSingleton<IProgrammeRepository>(Programmes);
                 services.AddSingleton<ITunerCapacityDirectory>(Seating);
