@@ -6,13 +6,14 @@ namespace Carina.Infrastructure.Encodings;
 /// The one place a moment another programme reported is put on the artefact's own clock. A run
 /// that looks for the breaks reads the source as it lies, keeping the source's own clock, so what
 /// comes back is measured from where the container begins — which for a broadcast is the hour of
-/// the day the recorder happened to be started in, not zero. A moment at or past that beginning is
-/// read as being on it and has it taken off; one before it cannot be on it and is taken as already
-/// counted from zero. Then the head the encode skips comes off, because the artefact begins where
-/// the first picture that could be decoded was. A moment that lands outside the artefact after all
-/// that is not placed at all: it is thrown away rather than clamped, and
-/// <see cref="TooMuchOutOfReach"/> says when so many were thrown away that the reading was against
-/// some other clock and none of it can be believed.
+/// the day the recorder happened to be started in, not zero. That beginning comes off whatever the
+/// moment is, because every run that reports one keeps the source's clock: a moment below the
+/// beginning is on no clock this source is on, and falls out as being outside the artefact rather
+/// than being read as a second measurement counted from zero. Then the head the encode skips comes
+/// off, because the artefact begins where the first picture that could be decoded was. A moment
+/// that lands outside the artefact after all that is not placed at all: it is thrown away rather
+/// than clamped, and <see cref="TooMuchOutOfReach"/> says when so many were thrown away that the
+/// reading was against some other clock and none of it can be believed.
 /// </summary>
 public static class ChapterClock
 {
@@ -28,8 +29,7 @@ public static class ChapterClock
         ArgumentOutOfRangeException.ThrowIfLessThan(headSkip, TimeSpan.Zero, nameof(headSkip));
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(artefactLength, TimeSpan.Zero, nameof(artefactLength));
 
-        TimeSpan onTheSource = reported >= sourceStart ? reported - sourceStart : reported;
-        TimeSpan onTheArtefact = onTheSource - headSkip;
+        TimeSpan onTheArtefact = reported - sourceStart - headSkip;
 
         return onTheArtefact >= TimeSpan.Zero && onTheArtefact <= artefactLength ? onTheArtefact : null;
     }

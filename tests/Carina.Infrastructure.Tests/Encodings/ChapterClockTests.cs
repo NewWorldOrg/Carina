@@ -5,11 +5,11 @@ namespace Carina.Infrastructure.Tests.Encodings;
 
 public sealed class ChapterClockTests
 {
-    private static readonly TimeSpan Broadcast = TimeSpan.FromSeconds(62170.5);
+    private static readonly TimeSpan Broadcast = TimeSpan.FromSeconds(61200);
 
-    private static readonly TimeSpan HeadSkip = TimeSpan.FromSeconds(0.483878);
+    private static readonly TimeSpan HeadSkip = TimeSpan.FromSeconds(0.5);
 
-    private static readonly TimeSpan Artefact = TimeSpan.FromSeconds(7195.521667);
+    private static readonly TimeSpan Artefact = TimeSpan.FromSeconds(7200);
 
     [Fact(DisplayName = "a moment reported on the clock the broadcast was carrying has that clock's beginning taken off it")]
     public void AMomentOnTheBroadcastsOwnClockHasItsBeginningTakenOff()
@@ -17,11 +17,12 @@ public sealed class ChapterClockTests
             TimeSpan.FromSeconds(300) - HeadSkip,
             ChapterClock.OnTheArtefact(Broadcast + TimeSpan.FromSeconds(300), Broadcast, HeadSkip, Artefact));
 
-    [Fact(DisplayName = "a moment already counted from the beginning of the source is left where it is and only the skipped head comes off")]
-    public void AMomentAlreadyCountedFromTheBeginningIsLeftWhereItIs()
-        => Assert.Equal(
-            TimeSpan.FromSeconds(300) - HeadSkip,
-            ChapterClock.OnTheArtefact(TimeSpan.FromSeconds(300), Broadcast, HeadSkip, Artefact));
+    [Fact(DisplayName = "a moment reported before the source's clock began is on no clock the artefact knows and falls outside it rather than being read as counted from zero")]
+    public void AMomentBeforeTheSourcesClockBeganFallsOutside()
+    {
+        Assert.Null(ChapterClock.OnTheArtefact(TimeSpan.FromSeconds(300), Broadcast, HeadSkip, Artefact));
+        Assert.Null(ChapterClock.OnTheArtefact(Broadcast - TimeSpan.FromSeconds(0.001), Broadcast, HeadSkip, Artefact));
+    }
 
     [Fact(DisplayName = "the head the encode skips is what the artefact's own zero is, so a moment inside it is no moment of the artefact")]
     public void AMomentInsideTheSkippedHeadIsNoMomentOfTheArtefact()

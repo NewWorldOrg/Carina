@@ -19,6 +19,14 @@ namespace Carina.Infrastructure.Encodings;
 /// then the only place that converts one.
 /// </para>
 /// <para>
+/// Keeping it costs a tenth of a second of resolution, and what is asked for is set above that
+/// cost. A moment is printed to six figures, so a broadcast recorded seventeen hours into the
+/// day — five figures before the point — is reported in steps of 0.1 s. Anything the filters are
+/// asked to find that lasts less than one of those steps can be printed as a single moment,
+/// beginning and ending at once, and a stretch that begins where it ends is no stretch: it would
+/// be dropped rather than found. That is what <see cref="Blackness"/>'s duration is set against.
+/// </para>
+/// <para>
 /// Every argument is an option name, a constant written here, or a number this repository holds
 /// rendered the same way whatever language the machine is set to, beside the path of the source
 /// (BR-EV-002). Nothing a broadcaster wrote reaches one, and there is no setting a filter could be
@@ -27,7 +35,12 @@ namespace Carina.Infrastructure.Encodings;
 /// </summary>
 public static class FfmpegChapterInvocation
 {
-    public const string Blackness = "blackdetect=d=0.05:pix_th=0.10";
+    /// <summary>
+    /// A stretch of dark is worth reporting once it lasts longer than the tenth of a second that
+    /// keeping the source's clock costs to print, so that a marginal one is reported as a stretch
+    /// rather than as one moment nothing can be made of.
+    /// </summary>
+    public const string Blackness = "blackdetect=d=0.15:pix_th=0.10";
 
     public const string Printed = "metadata=mode=print:file=-";
 

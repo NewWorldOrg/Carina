@@ -1,3 +1,5 @@
+using System.Globalization;
+
 using Carina.Domain.Channels;
 using Carina.Domain.Encodings;
 using Carina.Infrastructure.Encodings;
@@ -10,6 +12,8 @@ public sealed class FfmpegChapterInvocationTests
 
     private const int Cores = 2;
 
+    private const double PrintedInStepsOf = 0.1;
+
     private static readonly ServiceId Service = new(1040);
 
     private static readonly ChapterSettings AsItStands = new();
@@ -17,10 +21,10 @@ public sealed class FfmpegChapterInvocationTests
     public static TheoryData<int, int, double, string, string> EveryWayOfLooking
         => new()
         {
-            { -50, 150, 0.30, "silencedetect=n=-50dB:d=0.15", "blackdetect=d=0.05:pix_th=0.10,select=gte(scene\\,0.3),metadata=mode=print:file=-" },
-            { -100, 1, 1, "silencedetect=n=-100dB:d=0.001", "blackdetect=d=0.05:pix_th=0.10,select=gte(scene\\,1),metadata=mode=print:file=-" },
-            { -1, 2500, 0.001, "silencedetect=n=-1dB:d=2.5", "blackdetect=d=0.05:pix_th=0.10,select=gte(scene\\,0.001),metadata=mode=print:file=-" },
-            { -42, 400, 0.45, "silencedetect=n=-42dB:d=0.4", "blackdetect=d=0.05:pix_th=0.10,select=gte(scene\\,0.45),metadata=mode=print:file=-" },
+            { -50, 150, 0.30, "silencedetect=n=-50dB:d=0.15", "blackdetect=d=0.15:pix_th=0.10,select=gte(scene\\,0.3),metadata=mode=print:file=-" },
+            { -100, 1, 1, "silencedetect=n=-100dB:d=0.001", "blackdetect=d=0.15:pix_th=0.10,select=gte(scene\\,1),metadata=mode=print:file=-" },
+            { -1, 2500, 0.001, "silencedetect=n=-1dB:d=2.5", "blackdetect=d=0.15:pix_th=0.10,select=gte(scene\\,0.001),metadata=mode=print:file=-" },
+            { -42, 400, 0.45, "silencedetect=n=-42dB:d=0.4", "blackdetect=d=0.15:pix_th=0.10,select=gte(scene\\,0.45),metadata=mode=print:file=-" },
         };
 
     [Fact(DisplayName = "the run that listens to the whole of the sound decodes no picture and asks for exactly these")]
@@ -70,7 +74,7 @@ public sealed class FfmpegChapterInvocationTests
                 "-map",
                 "p:1040:v:0",
                 "-vf",
-                "blackdetect=d=0.05:pix_th=0.10,select=gte(scene\\,0.3),metadata=mode=print:file=-",
+                "blackdetect=d=0.15:pix_th=0.10,select=gte(scene\\,0.3),metadata=mode=print:file=-",
                 "-f",
                 "null",
                 "-",
@@ -121,6 +125,20 @@ public sealed class FfmpegChapterInvocationTests
             () => FfmpegChapterInvocation.Listening(Source, Service, 0, AsItStands));
         Assert.Throws<ArgumentOutOfRangeException>(
             () => FfmpegChapterInvocation.Peeking(Source, Service, 0, TimeSpan.FromSeconds(100), AsItStands));
+    }
+
+    [Fact(DisplayName = "the dark the run looks for outlasts the tenth of a second that keeping the source's clock costs to print, so a marginal one comes back as a stretch rather than as one moment")]
+    public void TheDarkTheRunLooksForOutlastsWhatKeepingTheClockCostsToPrint()
+    {
+        const string Named = "blackdetect=d=";
+
+        Assert.StartsWith(Named, FfmpegChapterInvocation.Blackness, StringComparison.Ordinal);
+
+        string asked = FfmpegChapterInvocation.Blackness[Named.Length..].Split(':')[0];
+
+        Assert.True(
+            double.Parse(asked, CultureInfo.InvariantCulture) > PrintedInStepsOf,
+            $"a dark stretch of {asked} s is looked for where a moment is printed in steps of {PrintedInStepsOf} s, so a marginal one would begin and end at the same printed moment and be dropped");
     }
 
     [Fact(DisplayName = "both runs keep the source's own clock, because what ffmpeg takes off a reported moment otherwise depends on where a seek landed")]

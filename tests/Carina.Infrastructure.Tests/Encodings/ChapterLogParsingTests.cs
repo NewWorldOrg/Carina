@@ -94,7 +94,7 @@ public sealed class ChapterLogParsingTests
             "[h264 @ 0x5624353b4b80] non-existing PPS 0 referenced",
             "    Last message repeated 3 times",
             "[mpeg2video @ 0x56243531e200] Invalid frame dimensions 0x0.",
-            "  Duration: 00:00:20.02, start: 30500.852667, bitrate: 2219 kb/s",
+            "  Duration: 00:00:20.02, start: 30500.25, bitrate: 2219 kb/s",
             "[out#0/null @ 0x556829056180] video:0kB audio:393172kB subtitle:0kB other streams:0kB",
             string.Empty);
 
@@ -128,6 +128,18 @@ public sealed class ChapterLogParsingTests
 
         Assert.Empty(backwards.Silences);
         Assert.Empty(backwards.Blacks);
+    }
+
+    [Fact(DisplayName = "at a broadcast's own magnitudes the tool prints a moment to six figures, so a dark stretch shorter than the tenth of a second that costs is printed as one moment and is no stretch")]
+    public void AtBroadcastMagnitudesADarkStretchUnderATenthOfASecondIsPrintedAsOneMoment()
+    {
+        ChapterLog quantised = Complaining(
+            "[blackdetect @ 0x1] black_start:61200.5 black_end:61200.5 black_duration:0.05",
+            "[blackdetect @ 0x1] black_start:61260.5 black_end:61260.7 black_duration:0.2");
+
+        Assert.Equal(
+            [new ChapterSpan(TimeSpan.FromSeconds(61260.5), TimeSpan.FromSeconds(61260.7))],
+            quantised.Blacks);
     }
 
     [Fact(DisplayName = "nothing is read out of a line that was never handed over")]
