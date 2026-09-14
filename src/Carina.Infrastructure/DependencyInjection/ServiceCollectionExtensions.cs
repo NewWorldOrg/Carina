@@ -154,6 +154,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IEncodeAutoRunRepository, EncodeAutoRunRepository>();
         services.AddScoped<IEncodeStandingReader, EncodeStandingReader>();
         services.AddScoped<IEncodeScratchLedger, EncodeScratchLedger>();
+        services.AddScoped<IEncodeChapterRepository, EncodeChapterRepository>();
         services.AddScoped<IQualityLedgerReader, QualityLedgerReader>();
         services.AddScoped<IQualityThresholdRepository, QualityThresholdRepository>();
         services.AddScoped<IQualityThresholdChangeRepository, QualityThresholdChangeRepository>();

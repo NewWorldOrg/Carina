@@ -44,11 +44,15 @@ public sealed class EncodeJob
 
     public EncodeTimeline? Timeline { get; private set; }
 
+    public ChapterReading? Chapters { get; private set; }
+
     public bool HasEnded => EncodeStandings.IsTerminal(Status);
 
     public EncodeStanding Standing => EncodeStandings.Of(Status);
 
     public EncodeFileName WorkFileName => EncodeFileName.Working(RecordingId, Id, Attempt);
+
+    public EncodeFileName ChaptersFileName => EncodeFileName.Chapters(RecordingId, Id, Attempt);
 
     public static EncodeJob Queue(
         EncodeJobId id,
@@ -66,6 +70,7 @@ public sealed class EncodeJob
             EncodeJobStatus.Queued,
             FirstAttempt,
             at,
+            null,
             null,
             null,
             null,
@@ -91,7 +96,8 @@ public sealed class EncodeJob
         EncodeRoute? route,
         RunningProgramme? programme,
         EncodeHeadway? headway,
-        EncodeTimeline? timeline)
+        EncodeTimeline? timeline,
+        ChapterReading? chapters)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(recordingId);
@@ -119,7 +125,8 @@ public sealed class EncodeJob
             throw new ArgumentException("Only a job the ledger holds as running has a programme of its own.", nameof(programme));
         }
 
-        if ((route is not null || headway is not null || timeline is not null) && status is EncodeJobStatus.Queued)
+        if ((route is not null || headway is not null || timeline is not null || chapters is not null)
+            && status is EncodeJobStatus.Queued)
         {
             throw new ArgumentException("A job that is waiting has run nowhere and got nowhere.", nameof(route));
         }
@@ -142,6 +149,7 @@ public sealed class EncodeJob
             Programme = programme,
             Headway = headway,
             Timeline = timeline,
+            Chapters = chapters,
         };
     }
 
@@ -183,6 +191,19 @@ public sealed class EncodeJob
         Only(EncodeJobStatus.Running, "say where its clock stands");
 
         Timeline = timeline;
+    }
+
+    /// <summary>
+    /// What the run made of where the breaks in this job's recording are, written down before the
+    /// encode that bakes them in starts. It is written whatever the answer, so that a job nobody
+    /// looked at says so rather than looking like one from before anything looked.
+    /// </summary>
+    public void Judged(ChapterReading reading)
+    {
+        ArgumentNullException.ThrowIfNull(reading);
+        Only(EncodeJobStatus.Running, "say where the breaks in it are");
+
+        Chapters = reading;
     }
 
     public void Measured(TimeSpan artefactLength)
@@ -288,6 +309,7 @@ public sealed class EncodeJob
         Programme = null;
         Headway = null;
         Timeline = null;
+        Chapters = null;
     }
 
     /// <summary>
