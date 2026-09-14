@@ -34,6 +34,7 @@ public sealed class EncodeJobRunner(
     IMachineCapabilityReader machine,
     ISourceLengthReader lengths,
     ISourceHeadReader heads,
+    IChapterDetector chapters,
     MachineSettings programmes,
     EncodeSettings settings,
     TimeProvider clock,
@@ -138,6 +139,18 @@ public sealed class EncodeJobRunner(
 
         var timeline = new EncodeTimeline(head.Start!.Value, headSkip, whole.Length, null);
         job.Aligned(timeline);
+
+        ChapterDetection marks = await chapters.MarkAsync(source.FullName, recording.ServiceId, timeline, cancellationToken);
+
+        if (marks.Verdict is not ChapterVerdict.NotAsked)
+        {
+            logger.LogInformation(
+                "Job {Job} was read for the breaks in it and came back {Verdict} with {Chapters} chapter(s) over {Share} of its length.",
+                job.Id.Wire,
+                marks.Verdict,
+                marks.Segments.Count,
+                marks.BreakShare.ToString("0.000", CultureInfo.InvariantCulture));
+        }
 
         if (await scratch.RecordAsync(job, EncodeScratchKind.WorkFile, job.WorkFileName, cancellationToken) is not { } work)
         {

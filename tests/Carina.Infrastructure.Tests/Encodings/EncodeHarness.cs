@@ -82,6 +82,8 @@ internal sealed class EncodeHarness : IDisposable
 
     public ISourceHeadReader HeadReader { get; set; }
 
+    public IChapterDetector ChapterDetector { get; set; } = new NoChapterDetector();
+
     public MachineSettings Programmes { get; set; } = new();
 
     public IRenameProbe Probe { get; set; } = new DirectoryRenameProbe();
@@ -111,6 +113,7 @@ internal sealed class EncodeHarness : IDisposable
         MachineReader,
         LengthReader,
         HeadReader,
+        ChapterDetector,
         Programmes,
         Settings,
         Clock,
