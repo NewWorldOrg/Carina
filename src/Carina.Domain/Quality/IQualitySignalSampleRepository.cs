@@ -1,3 +1,5 @@
+using Carina.Domain.Recordings;
+
 namespace Carina.Domain.Quality;
 
 public interface IQualitySignalSampleRepository
@@ -8,6 +10,8 @@ public interface IQualitySignalSampleRepository
         DateTime from,
         DateTime until,
         CancellationToken cancellationToken);
+
+    Task<IReadOnlyDictionary<TunerDeviceId, DateTime>> ListLastTakenAsync(CancellationToken cancellationToken);
 
     Task<int> ForgetTakenBeforeAsync(DateTime cutoff, CancellationToken cancellationToken);
 }

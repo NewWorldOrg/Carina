@@ -29,6 +29,12 @@ public sealed class QualityIncidentConfiguration : IEntityTypeConfiguration<Qual
                 "ck_quality_incident_classification",
                 $"(owner = '{nameof(QualityIncidentOwner.Quality)}') = (classification IS NULL)");
             table.HasCheckConstraint(
+                "ck_quality_incident_silence",
+                $"""
+                (breached = '{nameof(QualityThresholdKey.SupplySilence)}') = (silence IS NOT NULL)
+                AND (silence IS NULL OR silence IN ({QualityVocabulary.Of<SupplySilence>()}))
+                """);
+            table.HasCheckConstraint(
                 "ck_quality_incident_applied",
                 """
                 applied_observations >= 0
@@ -87,6 +93,10 @@ public sealed class QualityIncidentConfiguration : IEntityTypeConfiguration<Qual
         builder.Property(incident => incident.Classification)
             .HasMaxLength(QualityIncident.ClassificationMaxLength);
 
+        builder.Property(incident => incident.Silence)
+            .HasConversion<string>()
+            .HasMaxLength(QualityVocabulary.NameLength);
+
         builder.ComplexProperty(incident => incident.Applied, applied =>
         {
             applied.Property(value => value.Default).HasColumnName("applied_default");
@@ -115,7 +125,7 @@ public sealed class QualityIncidentConfiguration : IEntityTypeConfiguration<Qual
         builder.Ignore(incident => incident.HasSettled);
 
         builder.HasIndex(incident => incident.DetectedAt)
-            .HasFilter("resolved_at IS NULL AND acknowledged_at IS NULL")
+            .HasFilter("resolved_at IS NULL")
             .HasDatabaseName(UnsettledIndexName);
     }
 }

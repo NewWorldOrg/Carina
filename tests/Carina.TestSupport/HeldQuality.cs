@@ -1,4 +1,5 @@
 using Carina.Domain.Quality;
+using Carina.Domain.Recordings;
 
 namespace Carina.TestSupport;
 
@@ -93,6 +94,13 @@ public sealed class HeldQualitySignalSamples : IQualitySignalSampleRepository
         CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<QualitySignalSample>>(
             [.. Samples.Where(sample => sample.TakenAt >= from && sample.TakenAt < until).OrderBy(sample => sample.TakenAt)]);
+
+    public Task<IReadOnlyDictionary<TunerDeviceId, DateTime>> ListLastTakenAsync(
+        CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyDictionary<TunerDeviceId, DateTime>>(
+            Samples
+                .GroupBy(sample => sample.Tuner)
+                .ToDictionary(held => held.Key, held => held.Max(sample => sample.TakenAt)));
 
     public Task<int> ForgetTakenBeforeAsync(DateTime cutoff, CancellationToken cancellationToken)
         => Task.FromResult(Samples.RemoveAll(sample => sample.TakenAt < cutoff));

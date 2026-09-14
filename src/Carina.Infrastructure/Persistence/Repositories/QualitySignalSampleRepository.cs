@@ -1,4 +1,5 @@
 using Carina.Domain.Quality;
+using Carina.Domain.Recordings;
 
 using Microsoft.EntityFrameworkCore;
 
@@ -32,8 +33,22 @@ public sealed class QualitySignalSampleRepository(CarinaDbContext context) : IQu
             .ThenBy(sample => sample.Session)
             .ToListAsync(cancellationToken);
 
+    public async Task<IReadOnlyDictionary<TunerDeviceId, DateTime>> ListLastTakenAsync(
+        CancellationToken cancellationToken)
+    {
+        List<LastTaken> latest = await context.Set<QualitySignalSample>()
+            .AsNoTracking()
+            .GroupBy(sample => sample.Tuner)
+            .Select(held => new LastTaken(held.Key, held.Max(sample => sample.TakenAt)))
+            .ToListAsync(cancellationToken);
+
+        return latest.ToDictionary(held => held.Tuner, held => held.TakenAt);
+    }
+
     public async Task<int> ForgetTakenBeforeAsync(DateTime cutoff, CancellationToken cancellationToken)
         => await context.Set<QualitySignalSample>()
             .Where(sample => sample.TakenAt < cutoff)
             .ExecuteDeleteAsync(cancellationToken);
+
+    private sealed record LastTaken(TunerDeviceId Tuner, DateTime TakenAt);
 }

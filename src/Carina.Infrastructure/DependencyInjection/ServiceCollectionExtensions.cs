@@ -161,7 +161,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IQualitySignalSampleRepository, QualitySignalSampleRepository>();
         services.AddScoped<IQualitySignalRollupRepository, QualitySignalRollupRepository>();
         services.AddScoped<IQualitySignalReader, QualitySignalReader>();
+        services.AddScoped<IQualityIncidentRepository, QualityIncidentRepository>();
+        services.AddScoped<IQualitySupplyReader, QualitySupplyReader>();
         services.AddScoped<SignalSampleRound>();
+        services.AddScoped<SupplyWatchRound>();
         services.AddScoped<QualitySignalRollupRound>();
         services.AddScoped<EncodeScratchFiles>();
         services.AddScoped<EncodeScratchCleaner>();
@@ -327,6 +330,7 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<EncodeIntakeJob>();
         services.AddHostedService<SignalSampleJob>();
         services.AddHostedService<QualitySignalRollupJob>();
+        services.AddHostedService<SupplyWatchJob>();
         services.AddHostedService(provider => provider.GetRequiredService<IntegrityCheckJob>());
         services.AddHostedService(provider => provider.GetRequiredService<ThumbnailJob>());
         services.AddHostedService(provider =>

@@ -130,6 +130,7 @@ public sealed class QualityIncidentTests
             0.004,
             QualityIncidentOwner.Quality,
             null,
+            null,
             Applied,
             QualityIncidentState.Acknowledged,
             Later,
@@ -150,6 +151,7 @@ public sealed class QualityIncidentTests
             0.004,
             QualityIncidentOwner.Quality,
             null,
+            null,
             Applied,
             QualityIncidentState.Resolved,
             Later,
@@ -166,6 +168,7 @@ public sealed class QualityIncidentTests
             QualitySubject.Of(QualitySubjectKind.Recording, Guid.NewGuid().ToString("N")),
             0.004,
             QualityIncidentOwner.Quality,
+            null,
             null,
             Applied,
             QualityIncidentState.Acknowledged,
@@ -190,4 +193,36 @@ public sealed class QualityIncidentTests
             QualitySubject.Of(QualitySubjectKind.Recording, Guid.NewGuid().ToString("N")),
             0.004,
             Applied);
+
+    [Fact(DisplayName = "BR-QD-008: a supply that went quiet says which of the four supplies it was")]
+    public void ASupplyThatWentQuietSaysWhichOfTheFourSuppliesItWas()
+        => Assert.Throws<ArgumentException>(() => QualityIncident.Detect(
+            QualityIncidentId.New(),
+            Detected,
+            QualityThresholdKey.SupplySilence,
+            QualitySubject.Of(QualitySubjectKind.Tuner, "adapter2"),
+            300,
+            Applied));
+
+    [Fact(DisplayName = "BR-QD-008: nothing but a supply going quiet carries one of the four")]
+    public void NothingButASupplyGoingQuietCarriesOneOfTheFour()
+        => Assert.Throws<ArgumentException>(() => QualityIncident.Detect(
+            QualityIncidentId.New(),
+            Detected,
+            QualityThresholdKey.PacketsLostWarning,
+            QualitySubject.Of(QualitySubjectKind.Tuner, "adapter2"),
+            0.004,
+            Applied,
+            silence: SupplySilence.SignalSamples));
+
+    [Fact(DisplayName = "BR-QD-008: a supply going quiet under a name this domain does not know is refused")]
+    public void ASupplyGoingQuietUnderANameThisDomainDoesNotKnowIsRefused()
+        => Assert.Throws<ArgumentOutOfRangeException>(() => QualityIncident.Detect(
+            QualityIncidentId.New(),
+            Detected,
+            QualityThresholdKey.SupplySilence,
+            QualitySubject.Of(QualitySubjectKind.Tuner, "adapter2"),
+            300,
+            Applied,
+            silence: (SupplySilence)9));
 }

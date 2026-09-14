@@ -110,8 +110,8 @@ public sealed class QualityThresholdEndpointTests
             (await feature.PatchAsync("/api/quality/thresholds/somethingElse", new { value = 0.5 })).Status);
     }
 
-    [Fact(DisplayName = "a level nothing holds a reading against is neither offered nor there to move")]
-    public async Task ALevelNothingHoldsAReadingAgainstIsNotOffered()
+    [Fact(DisplayName = "BR-QD-003: the level a supply watch holds silence against is offered and can be moved")]
+    public async Task TheLevelASupplyWatchHoldsSilenceAgainstIsOfferedAndCanBeMoved()
     {
         await using var feature = new QualityFeature();
 
@@ -119,13 +119,13 @@ public sealed class QualityThresholdEndpointTests
             .GetProperty("data")
             .GetProperty("items");
 
-        Assert.DoesNotContain(
+        Assert.Contains(
             "supplySilence",
             items.EnumerateArray().Select(item => item.GetProperty("key").GetString()));
         Assert.Equal(
-            HttpStatusCode.NotFound,
+            HttpStatusCode.OK,
             (await feature.PatchAsync("/api/quality/thresholds/supplySilence", new { value = 600.0 })).Status);
-        Assert.Empty(feature.Changes.Changes);
+        Assert.Equal(600.0, Assert.Single(feature.Changes.Changes).NextValue);
     }
 
     [Fact]
