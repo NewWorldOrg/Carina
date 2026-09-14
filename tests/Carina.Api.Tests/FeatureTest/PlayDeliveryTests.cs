@@ -144,6 +144,8 @@ internal sealed class PlayFeature : IAsyncDisposable
                 });
                 services.AddSingleton<IEncodeJobRepository>(Jobs);
                 services.AddSingleton<IEncodeProfileRepository>(Profiles);
+                services.RemoveAll<IEncodeChapterRepository>();
+                services.AddSingleton<IEncodeChapterRepository>(Chapters);
             }));
 
         Client = configured.WithTestScheme().CreateClient();
@@ -162,6 +164,8 @@ internal sealed class PlayFeature : IAsyncDisposable
     public HeldEncodeJobs Jobs { get; } = new();
 
     public HeldEncodeProfiles Profiles { get; } = new();
+
+    public HeldEncodeChapters Chapters { get; } = new();
 
     public HeldOnTheFlyPlayer Player { get; } = new();
 
@@ -237,6 +241,17 @@ internal sealed class PlayFeature : IAsyncDisposable
         }
 
         return made;
+    }
+
+    public async Task<IReadOnlyList<EncodeChapter>> MarkedAsync(EncodeJob job, params ChapterSegment[] segments)
+    {
+        ArgumentNullException.ThrowIfNull(job);
+        ArgumentNullException.ThrowIfNull(segments);
+
+        IReadOnlyList<EncodeChapter> marked = EncodeChapter.Mark(job.Id, segments);
+        await Chapters.RecordAsync(job.Id, marked, CancellationToken.None);
+
+        return marked;
     }
 
     public Task<HttpResponseMessage> PlanAsync(Recording recording, string query = "")

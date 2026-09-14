@@ -267,6 +267,93 @@ public sealed class EncodedPlaybackTests
         Assert.Equal(artefact, await answer.Content.ReadAsByteArrayAsync());
     }
 
+    [Fact]
+    public async Task TheChaptersAJobMarkedComeBackWithThePlanOfTheArtefactItMade()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Encoded(recording);
+        await feature.MarkedAsync(
+            feature.Jobs.Jobs[0],
+            new ChapterSegment(TimeSpan.Zero, TimeSpan.FromSeconds(90), ChapterKind.Programme),
+            new ChapterSegment(TimeSpan.FromSeconds(90), TimeSpan.FromSeconds(150), ChapterKind.Break),
+            new ChapterSegment(TimeSpan.FromSeconds(150), TimeSpan.FromSeconds(300), ChapterKind.Programme));
+
+        JsonElement read = (await PlayFeature.PlanOfAsync(await feature.PlanAsync(recording))).GetProperty("data");
+        JsonElement[] chapters = [.. read.GetProperty("chapters").EnumerateArray()];
+
+        Assert.Equal("direct", read.GetProperty("route").GetString());
+        Assert.Equal([0d, 90d, 150d], chapters.Select(chapter => chapter.GetProperty("startsAtSec").GetDouble()).ToArray());
+        Assert.Equal([90d, 150d, 300d], chapters.Select(chapter => chapter.GetProperty("endsAtSec").GetDouble()).ToArray());
+        Assert.Equal(
+            ["programme", "break", "programme"],
+            chapters.Select(chapter => chapter.GetProperty("kind").GetString()!).ToArray());
+    }
+
+    [Fact]
+    public async Task TheChaptersThatComeBackBelongToTheArtefactThatIsPlayedRatherThanToAnEarlierOne()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Encoded(recording, bytes: 700);
+        feature.Encoded(recording, minutesLater: 90, bytes: 1_300);
+        await feature.MarkedAsync(
+            feature.Jobs.Jobs[0],
+            new ChapterSegment(TimeSpan.Zero, TimeSpan.FromSeconds(30), ChapterKind.Break));
+        await feature.MarkedAsync(
+            feature.Jobs.Jobs[1],
+            new ChapterSegment(TimeSpan.Zero, TimeSpan.FromSeconds(45), ChapterKind.Programme));
+
+        JsonElement read = (await PlayFeature.PlanOfAsync(await feature.PlanAsync(recording))).GetProperty("data");
+        JsonElement[] chapters = [.. read.GetProperty("chapters").EnumerateArray()];
+        JsonElement chapter = Assert.Single(chapters);
+
+        Assert.Equal(45d, chapter.GetProperty("endsAtSec").GetDouble());
+        Assert.Equal("programme", chapter.GetProperty("kind").GetString());
+    }
+
+    [Fact]
+    public async Task ThePlanOfAnArtefactWhoseRunMarkedNothingCarriesAnEmptyListRatherThanNoField()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Encoded(recording);
+
+        JsonElement read = (await PlayFeature.PlanOfAsync(await feature.PlanAsync(recording))).GetProperty("data");
+
+        Assert.Equal("direct", read.GetProperty("route").GetString());
+        Assert.Empty(read.GetProperty("chapters").EnumerateArray());
+    }
+
+    [Fact(DisplayName = "A recording played as it was recorded is answered with no chapters, because the ledger holds them on the artefact's clock")]
+    public async Task ThePlanOfARecordingPlayedAsItWasRecordedCarriesNoChapters()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+
+        JsonElement read = (await PlayFeature.PlanOfAsync(await feature.PlanAsync(recording))).GetProperty("data");
+
+        Assert.Equal("onTheFly", read.GetProperty("route").GetString());
+        Assert.Empty(read.GetProperty("chapters").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task ThePlanOfAnEncodedRecordingAskedForItsSecondSoundCarriesNoneOfTheArtefactsChapters()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete, audio: AudioMode.DualMono, sounds: 1);
+        feature.Encoded(recording);
+        await feature.MarkedAsync(
+            feature.Jobs.Jobs[0],
+            new ChapterSegment(TimeSpan.Zero, TimeSpan.FromSeconds(90), ChapterKind.Programme));
+
+        JsonElement read = (await PlayFeature.PlanOfAsync(
+            await feature.PlanAsync(recording, "?sound=secondary"))).GetProperty("data");
+
+        Assert.Equal("onTheFly", read.GetProperty("route").GetString());
+        Assert.Empty(read.GetProperty("chapters").EnumerateArray());
+    }
+
     private static string? Header(HttpResponseMessage answer, string named)
         => answer.Headers.TryGetValues(named, out IEnumerable<string>? values) ? values.Single() : null;
 }
