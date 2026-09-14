@@ -270,6 +270,7 @@ public sealed class EncodeJobTests
             null,
             null,
             null,
+            null,
             null);
 
         EncodeRecovery recovery = job.Recover(3, Ended);
@@ -379,7 +380,8 @@ public sealed class EncodeJobTests
             null,
             null,
             null,
-            timeline));
+            timeline,
+            null));
     }
 
     [Fact(DisplayName = "BR-ED2-012: a reason nobody named cannot be recorded as one")]
@@ -434,6 +436,7 @@ public sealed class EncodeJobTests
             EncodeJobStatus.Queued,
             0,
             Queued,
+            null,
             null,
             null,
             null,
@@ -635,6 +638,7 @@ public sealed class EncodeJobRunMarkTests
             status is EncodeJobStatus.Completed ? EncodeFileName.Artefact(recording, profile) : null,
             route,
             programme,
+            null,
             null,
             null);
     }

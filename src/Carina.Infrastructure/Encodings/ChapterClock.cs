@@ -46,6 +46,28 @@ public static class ChapterClock
         return from is { } starts && until is { } ends && ends > starts ? new ChapterSpan(starts, ends) : null;
     }
 
+    /// <summary>
+    /// The other way round: a moment on the artefact's clock put onto the clock the metadata file
+    /// handed to the encode has to be written on. ffmpeg moves every chapter it copies back by the
+    /// output seek and throws away what that puts outside the output, so a moment written on the
+    /// artefact's own clock would arrive at the artefact a head skip early. The head skip is added
+    /// back here so that it is taken off again there and the chapter lands where it was meant to.
+    /// Measured, not assumed: <c>ChapterEmbeddingMaterialTests</c> encodes a broadcast with a head
+    /// to skip and reads the chapters back off the artefact.
+    /// <para>
+    /// Only the output seek comes back into it. Where the source's own clock began does not,
+    /// because the seek and the timestamps it is measured against are both counted from the first
+    /// moment of the source rather than from the hour of the day the recorder was started in.
+    /// </para>
+    /// </summary>
+    public static TimeSpan InTheMetadata(TimeSpan onTheArtefact, TimeSpan headSkip)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(onTheArtefact, TimeSpan.Zero, nameof(onTheArtefact));
+        ArgumentOutOfRangeException.ThrowIfLessThan(headSkip, TimeSpan.Zero, nameof(headSkip));
+
+        return onTheArtefact + headSkip;
+    }
+
     public static bool TooMuchOutOfReach(int outOfReach, int reported)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(outOfReach);

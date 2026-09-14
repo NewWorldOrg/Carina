@@ -23,6 +23,13 @@ namespace Carina.Domain.Encodings;
 /// </summary>
 public interface IChapterDetector
 {
+    /// <summary>
+    /// Which reader this is, for the ledger to keep beside the verdict. It is a name from a fixed
+    /// set rather than the name of this class, so a reading written down today still says what
+    /// made it after the class has been renamed.
+    /// </summary>
+    ChapterDetectorName Name { get; }
+
     Task<ChapterDetection> MarkAsync(
         string source,
         ServiceId service,

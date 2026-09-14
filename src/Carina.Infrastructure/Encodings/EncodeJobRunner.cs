@@ -26,6 +26,14 @@ namespace Carina.Infrastructure.Encodings;
 /// every tenth and at least every <see cref="HeartbeatEvery"/>, so a job that has stopped getting
 /// on can be told from one that is (BR-ED2-014).
 /// </para>
+/// <para>
+/// What the run made of where the breaks are goes into the ledger before the encode starts, and
+/// goes in whatever the answer, so a job nobody looked at says so rather than looking like one
+/// from before anything looked. When there were breaks to mark they are written down as chapters
+/// of the artefact-to-be and handed to the encode as a metadata file, which is a scratch file like
+/// any other: recorded before it is written (BR-ED2-010) and swept when the job ends. The ledger
+/// is what a player is answered from; the file is only what bakes them into the artefact.
+/// </para>
 /// </summary>
 public sealed class EncodeJobRunner(
     IEncodeJobRepository jobs,
@@ -38,7 +46,8 @@ public sealed class EncodeJobRunner(
     IMachineCapabilityReader machine,
     ISourceLengthReader lengths,
     ISourceHeadReader heads,
-    IChapterDetector chapters,
+    IChapterDetector detector,
+    IEncodeChapterRepository chapters,
     MachineSettings programmes,
     EncodeSettings settings,
     IEncodeAutoRunReader autoRun,
@@ -168,6 +177,31 @@ public sealed class EncodeJobRunner(
                 marks.Note);
         }
 
+        job.Judged(ChapterReading.Of(detector.Name, marks, clock.GetUtcNow().UtcDateTime));
+        await jobs.SaveAsync(job, cancellationToken);
+
+        await chapters.RecordAsync(
+            job.Id,
+            marks.Marks ? EncodeChapter.Mark(job.Id, marks.Segments) : [],
+            cancellationToken);
+
+        string? breaks = null;
+
+        if (marks.Marks)
+        {
+            if (await scratch.RecordAsync(job, EncodeScratchKind.Chapters, job.ChaptersFileName, cancellationToken) is not { } written)
+            {
+                return await RefuseAsync(
+                    job,
+                    EncodeFailure.CapabilityUnavailable,
+                    $"nothing tells this process where output root '{job.OutputRoot.Value}' is mounted",
+                    cancellationToken);
+            }
+
+            await ChapterMetadataFile.WriteAsync(written, marks.Segments, timeline.HeadSkip, cancellationToken);
+            breaks = written;
+        }
+
         if (await scratch.RecordAsync(job, EncodeScratchKind.WorkFile, job.WorkFileName, cancellationToken) is not { } work)
         {
             return await RefuseAsync(
@@ -198,7 +232,8 @@ public sealed class EncodeJobRunner(
                     source.FullName,
                     cores,
                     headSkip,
-                    EncodeSound.Of(recording.SnapshotAudio, recording.SnapshotSounds)),
+                    EncodeSound.Of(recording.SnapshotAudio, recording.SnapshotSounds),
+                    breaks),
                 .. FfmpegEncodeInvocation.Delivery(work),
             ],
             timeline.Expected,
@@ -268,7 +303,7 @@ public sealed class EncodeJobRunner(
     {
         try
         {
-            return await chapters.MarkAsync(source, service, timeline, cores, began, cancellationToken);
+            return await detector.MarkAsync(source, service, timeline, cores, began, cancellationToken);
         }
         catch (Exception failure) when (!cancellationToken.IsCancellationRequested)
         {

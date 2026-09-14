@@ -256,6 +256,7 @@ public sealed class EncodeIntakeTests
             null,
             null,
             null,
+            null,
             null);
 
     private sealed class Machine

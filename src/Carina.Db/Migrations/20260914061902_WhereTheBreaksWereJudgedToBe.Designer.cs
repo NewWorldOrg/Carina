@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Carina.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Carina.Db.Migrations
 {
     [DbContext(typeof(CarinaDbContext))]
-    partial class CarinaDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260914061902_WhereTheBreaksWereJudgedToBe")]
+    partial class WhereTheBreaksWereJudgedToBe
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -2633,7 +2636,7 @@ namespace Carina.Db.Migrations
 
                             t.HasCheckConstraint("ck_recording_reanchors", "recording_reanchors_hold(pcr_reanchors, 8589934592)");
 
-                            t.HasCheckConstraint("ck_recording_reasons", "recording_reasons_hold(outcome_detail, ARRAY['TuneFailed', 'RefusedByDiskPrecheck', 'DiskExhausted', 'DriverLost', 'DrainGraceExpired', 'StoppedByHand', 'TunerContended', 'ScramblingUnresolved', 'ShortOfTheWindow', 'NothingLanded', 'SizeUnobserved', 'StoppedUnasked', 'LighterThanTheStream', 'HeavierThanTheStream', 'EndStillUndecided']::text[], ARRAY['NoLock', 'NoData', 'IncompletePsi', 'StreamMismatch']::text[], started_at_actual)");
+                            t.HasCheckConstraint("ck_recording_reasons", "recording_reasons_hold(outcome_detail, ARRAY['TuneFailed', 'RefusedByDiskPrecheck', 'DiskExhausted', 'DriverLost', 'DrainGraceExpired', 'StoppedByHand', 'TunerContended', 'ScramblingUnresolved', 'ShortOfTheWindow', 'NothingLanded', 'SizeUnobserved', 'StoppedUnasked', 'LighterThanTheStream', 'HeavierThanTheStream']::text[], ARRAY['NoLock', 'NoData', 'IncompletePsi', 'StreamMismatch']::text[], started_at_actual)");
 
                             t.HasCheckConstraint("ck_recording_runs_forwards", "(stopped_at_actual IS NULL OR stopped_at_actual >= started_at_actual)\nAND (aborted_at IS NULL OR aborted_at >= started_at_actual)\nAND (observed_at IS NULL OR observed_at >= started_at_actual)\nAND (measured_updated_at IS NULL OR measured_updated_at >= started_at_actual)");
 
@@ -2939,7 +2942,7 @@ namespace Carina.Db.Migrations
 
                     b.ToTable("reservation_outcome", null, t =>
                         {
-                            t.HasCheckConstraint("ck_reservation_outcome_faults", "faults <@ '[\"TuneFailed\", \"RefusedByDiskPrecheck\", \"DiskExhausted\", \"DriverLost\", \"DrainGraceExpired\", \"StoppedByHand\", \"TunerContended\", \"ScramblingUnresolved\", \"ShortOfTheWindow\", \"NothingLanded\", \"SizeUnobserved\", \"StoppedUnasked\", \"LighterThanTheStream\", \"HeavierThanTheStream\", \"EndStillUndecided\"]'::jsonb\nAND (kind <> 'TuneFailure' OR faults @> '[\"TuneFailed\"]'::jsonb)");
+                            t.HasCheckConstraint("ck_reservation_outcome_faults", "faults <@ '[\"TuneFailed\", \"RefusedByDiskPrecheck\", \"DiskExhausted\", \"DriverLost\", \"DrainGraceExpired\", \"StoppedByHand\", \"TunerContended\", \"ScramblingUnresolved\", \"ShortOfTheWindow\", \"NothingLanded\", \"SizeUnobserved\", \"StoppedUnasked\", \"LighterThanTheStream\", \"HeavierThanTheStream\"]'::jsonb\nAND (kind <> 'TuneFailure' OR faults @> '[\"TuneFailed\"]'::jsonb)");
 
                             t.HasCheckConstraint("ck_reservation_outcome_kind", "kind IN ('Competing', 'Missed', 'TuneFailure', 'RecordingFailure', 'ProgrammeMoved', 'ProgrammeGone', 'ProgrammeReturned')");
 
