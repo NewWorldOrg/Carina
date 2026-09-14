@@ -12,7 +12,7 @@ namespace Carina.Infrastructure.Tests.Integrity;
 
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]
-public sealed class EncodeWorkLedgerTests(RepositoryDatabase database)
+public sealed class EncodeWorkLedgerTests(RepositoryDatabase database) : IAsyncLifetime
 {
     private static readonly DateTime Defined = new(2026, 9, 5, 2, 0, 0, DateTimeKind.Utc);
 
@@ -26,10 +26,13 @@ public sealed class EncodeWorkLedgerTests(RepositoryDatabase database)
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
+    public Task InitializeAsync() => ClearAsync();
+
+    public Task DisposeAsync() => ClearAsync();
+
     [Fact]
     public async Task AFileAJobHasNotStartedWritingYetIsAlreadyDeclared()
     {
-        await ClearAsync();
         EncodeJob job = await QueuedAsync();
         EncodeScratchFile scratch = await WritingAsync(job);
 
@@ -43,7 +46,6 @@ public sealed class EncodeWorkLedgerTests(RepositoryDatabase database)
     [Fact]
     public async Task AFileTheJobRunningRightNowIsWritingIsDeclared()
     {
-        await ClearAsync();
         EncodeJob job = await QueuedAsync();
         EncodeScratchFile scratch = await WritingAsync(job);
         await MoveAsync(job, running => running.Start(Started));
@@ -54,7 +56,6 @@ public sealed class EncodeWorkLedgerTests(RepositoryDatabase database)
     [Fact]
     public async Task AFileOfAJobThatHasEndedIsNotDeclaredAnyMore()
     {
-        await ClearAsync();
         EncodeJob job = await QueuedAsync();
         await WritingAsync(job);
         await MoveAsync(job, failing =>
@@ -69,7 +70,6 @@ public sealed class EncodeWorkLedgerTests(RepositoryDatabase database)
     [Fact]
     public async Task AFileOfAJobSomebodyCalledOffIsNotDeclaredAnyMore()
     {
-        await ClearAsync();
         EncodeJob job = await QueuedAsync();
         await WritingAsync(job);
         await MoveAsync(job, called => called.Cancel(Ended));
@@ -80,7 +80,6 @@ public sealed class EncodeWorkLedgerTests(RepositoryDatabase database)
     [Fact]
     public async Task AFileAlreadyRemovedIsNotDeclaredEvenWhileItsJobRuns()
     {
-        await ClearAsync();
         EncodeJob job = await QueuedAsync();
         EncodeScratchFile scratch = await WritingAsync(job);
         await MoveAsync(job, running => running.Start(Started));
@@ -97,7 +96,6 @@ public sealed class EncodeWorkLedgerTests(RepositoryDatabase database)
     [Fact]
     public async Task EveryFileStillOwedARemovalComesBackInAnOrderThatDoesNotWander()
     {
-        await ClearAsync();
         EncodeJob one = await QueuedAsync();
         EncodeJob other = await QueuedAsync();
         await WritingAsync(one);
