@@ -110,6 +110,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
 
         Assert.Equal(
             [
+                "acknowledgeQualityIncident",
                 "addCandidateChannel",
                 "applyRuleNow",
                 "applyScan",
@@ -140,6 +141,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "getProgramme",
                 "getProgrammeGuide",
                 "getQualitySummary",
+                "getQualitySupplyHealth",
                 "getRecording",
                 "getRecordingIntegrity",
                 "getReservation",
@@ -167,6 +169,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "listLiveProfiles",
                 "listLiveSessions",
                 "listQualityChannels",
+                "listQualityIncidents",
                 "listQualityRecordings",
                 "listQualityThresholds",
                 "listQualityTuners",
