@@ -94,6 +94,8 @@ public sealed class HeldTranscoder : ILiveTranscoder
 {
     private readonly Pipe pipe = new();
 
+    private readonly TakingIn input = new();
+
     private readonly Stream output;
 
     private readonly Channel<LiveFrame> captions = Channel.CreateUnbounded<LiveFrame>();
@@ -138,7 +140,15 @@ public sealed class HeldTranscoder : ILiveTranscoder
 
     public LiveEncoderChoice Encoder { get; } = LiveEncoderChoice.Asked(LiveEncoder.Software);
 
-    public Stream Input => Disposed ? throw new ObjectDisposedException(nameof(HeldTranscoder)) : Stream.Null;
+    public Stream Input => Disposed ? throw new ObjectDisposedException(nameof(HeldTranscoder)) : input;
+
+    public long TakenIn => input.TakenIn;
+
+    public Exception? FailingToTake
+    {
+        get => input.Failing;
+        set => input.Failing = value;
+    }
 
     public Stream Output => Disposed ? throw new ObjectDisposedException(nameof(HeldTranscoder)) : output;
 
@@ -207,5 +217,60 @@ public sealed class HeldTranscoder : ILiveTranscoder
 
         completed = true;
         pipe.Writer.Complete();
+    }
+
+    private sealed class TakingIn : Stream
+    {
+        private long takenIn;
+
+        public override bool CanRead => false;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => true;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        internal long TakenIn => Interlocked.Read(ref takenIn);
+
+        internal Exception? Failing { get; set; }
+
+        public override void Flush()
+        {
+        }
+
+        public override Task FlushAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count)
+            => Write(new ReadOnlySpan<byte>(buffer, offset, count));
+
+        public override void Write(ReadOnlySpan<byte> buffer)
+        {
+            if (Failing is { } refusing)
+            {
+                throw refusing;
+            }
+
+            Interlocked.Add(ref takenIn, buffer.Length);
+        }
+
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            Write(buffer.Span);
+
+            return ValueTask.CompletedTask;
+        }
     }
 }

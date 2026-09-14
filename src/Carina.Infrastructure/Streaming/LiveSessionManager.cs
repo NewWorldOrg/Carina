@@ -120,10 +120,10 @@ public sealed class LiveSessionManager(
         {
             reading.Detach();
 
-            return LiveHandover.Refused(opened.Refusal!.Value, opened.Note);
+            return LiveHandover.Refused(opened.Refusal!.Value);
         }
 
-        return LiveHandover.Carrying(new LiveHandedOverReading(reading));
+        return LiveHandover.Carrying(new LiveHandedOverReading(reading, settings, clock));
     }
 
     public async ValueTask DisposeAsync()

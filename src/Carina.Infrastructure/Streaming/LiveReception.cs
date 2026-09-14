@@ -152,22 +152,14 @@ internal sealed class LiveReception
         return answering.WaitAsync(cancellationToken);
     }
 
-    internal LiveSeat Take(Stream into) => Take(into, static () => { }, static _ => { });
+    internal LiveSeat Take(Stream into, TimeSpan patience)
+        => Take(into, static () => { }, static _ => { }, patience);
 
     internal LiveSeat Take(
         Stream into,
         Action locked,
         Action<LiveSupplyEnding> ended)
-    {
-        LiveSeat seat = new(into, locked, ended, settings.LongestWaitToBeFed);
-
-        lock (gate)
-        {
-            seats.Add(seat);
-        }
-
-        return seat;
-    }
+        => Take(into, locked, ended, settings.LongestWaitToBeFed);
 
     internal void Drop(LiveSeat seat)
     {
@@ -175,6 +167,8 @@ internal sealed class LiveReception
         {
             seats.Remove(seat);
         }
+
+        seat.LetGo();
     }
 
     internal void Close()
@@ -191,6 +185,22 @@ internal sealed class LiveReception
 
         forget(this);
         stopping.Cancel();
+    }
+
+    private LiveSeat Take(
+        Stream into,
+        Action locked,
+        Action<LiveSupplyEnding> ended,
+        TimeSpan patience)
+    {
+        LiveSeat seat = new(into, locked, ended, patience);
+
+        lock (gate)
+        {
+            seats.Add(seat);
+        }
+
+        return seat;
     }
 
     private async Task<LiveSupplyStart> RaiseAsync()
@@ -255,13 +265,15 @@ internal sealed class LiveReception
                 LiveSupplyEnd.DriverLost,
                 "the transport stream ended and the supply did not say why."));
         }
-        catch (Exception gone) when (gone is IOException or ObjectDisposedException or OperationCanceledException)
+        catch (Exception gone)
+            when (gone is IOException or ObjectDisposedException or OperationCanceledException or InvalidOperationException)
         {
             EndEverySeat(from.Ending);
         }
         finally
         {
             ArrayPool<byte>.Shared.Return(mouthful);
+            Close();
             await from.DisposeAsync();
         }
     }
@@ -312,8 +324,17 @@ internal sealed class LiveSeat(
 {
     private bool fed;
 
+    private volatile bool letGo;
+
+    internal void LetGo() => letGo = true;
+
     internal async Task<bool> OfferAsync(ReadOnlyMemory<byte> mouthful, CancellationToken cancellationToken)
     {
+        if (letGo)
+        {
+            return false;
+        }
+
         try
         {
             using CancellationTokenSource deadline = new(patience);
@@ -331,7 +352,8 @@ internal sealed class LiveSeat(
 
             return true;
         }
-        catch (Exception gone) when (gone is IOException or ObjectDisposedException or OperationCanceledException)
+        catch (Exception gone)
+            when (gone is IOException or ObjectDisposedException or OperationCanceledException or InvalidOperationException)
         {
             return false;
         }

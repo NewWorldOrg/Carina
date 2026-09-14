@@ -20,9 +20,7 @@ internal sealed class SeatingAt(ILiveWireSource source) : ILiveSessionManager
     }
 
     public Task<LiveHandover> HandOverAsync(LiveChannelKey channel, CancellationToken cancellationToken)
-        => Task.FromResult(LiveHandover.Refused(
-            LiveRefusal.DriverUnavailable,
-            "this seating hands nothing over as it is."));
+        => Task.FromResult(LiveHandover.Refused(LiveRefusal.DriverUnavailable));
 
     public async Task<LiveJoin> JoinAsync(LiveSessionKey key, CancellationToken cancellationToken)
     {
