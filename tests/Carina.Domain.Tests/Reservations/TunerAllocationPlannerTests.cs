@@ -1213,6 +1213,76 @@ public sealed class TunerAllocationPlannerTests
         }
     }
 
+    [Fact]
+    public void ARecordingThatFollowedItsProgrammeHoldsItsSeatForTheWindowItWasGranted()
+    {
+        AllocationCandidate recording = Candidate(
+            Terrestrial27,
+            from: Now.AddMinutes(-30),
+            to: Now.AddMinutes(30),
+            pinned: true,
+            heldUntil: Now.AddMinutes(90),
+            id: new ReservationId(Guid.Parse("00000000-0000-0000-0000-0000000000b1")),
+            eventId: 4001);
+        AllocationCandidate next = Candidate(
+            Terrestrial29,
+            from: Now.AddMinutes(45),
+            to: Now.AddMinutes(105),
+            id: new ReservationId(Guid.Parse("00000000-0000-0000-0000-0000000000b2")),
+            eventId: 4002);
+
+        AllocationPlan plan = Planned([recording, next], Capacity(TunerKind.Terrestrial));
+
+        Assert.Equal(AllocationVerdict.Pinned, Verdict(plan, recording));
+        Assert.Equal(AllocationVerdict.Contended, Verdict(plan, next));
+        Assert.Equal([recording.Id], plan.For(next.Id).Instead);
+    }
+
+    [Fact]
+    public void ThatSameNextReservationIsSecuredWhileTheRecordingStillStopsWhenItWasPlannedTo()
+    {
+        AllocationCandidate recording = Candidate(
+            Terrestrial27,
+            from: Now.AddMinutes(-30),
+            to: Now.AddMinutes(30),
+            pinned: true,
+            id: new ReservationId(Guid.Parse("00000000-0000-0000-0000-0000000000b1")),
+            eventId: 4001);
+        AllocationCandidate next = Candidate(
+            Terrestrial29,
+            from: Now.AddMinutes(45),
+            to: Now.AddMinutes(105),
+            id: new ReservationId(Guid.Parse("00000000-0000-0000-0000-0000000000b2")),
+            eventId: 4002);
+
+        AllocationPlan plan = Planned([recording, next], Capacity(TunerKind.Terrestrial));
+
+        Assert.Equal(AllocationVerdict.Secured, Verdict(plan, next));
+    }
+
+    [Fact]
+    public void AWindowGrantedShorterThanTheOneThePlanAlreadyReadsIsNotReadBackwards()
+    {
+        AllocationCandidate recording = Candidate(
+            Terrestrial27,
+            from: Now.AddMinutes(-30),
+            to: Now.AddMinutes(30),
+            pinned: true,
+            heldUntil: Now.AddMinutes(10),
+            id: new ReservationId(Guid.Parse("00000000-0000-0000-0000-0000000000b1")),
+            eventId: 4001);
+        AllocationCandidate next = Candidate(
+            Terrestrial29,
+            from: Now.AddMinutes(20),
+            to: Now.AddMinutes(80),
+            id: new ReservationId(Guid.Parse("00000000-0000-0000-0000-0000000000b2")),
+            eventId: 4002);
+
+        AllocationPlan plan = Planned([recording, next], Capacity(TunerKind.Terrestrial));
+
+        Assert.Equal(AllocationVerdict.Contended, Verdict(plan, next));
+    }
+
     private static AllocationPlan Planned(IReadOnlyList<AllocationCandidate> candidates, TunerCapacity capacity)
         => TunerAllocationPlanner.Plan(candidates, capacity, RollingHorizon.Default, Now);
 
@@ -1263,7 +1333,8 @@ public sealed class TunerAllocationPlannerTests
         bool pinned = false,
         ReservationId? id = null,
         ProgrammeRef? programme = null,
-        int eventId = 4001)
+        int eventId = 4001,
+        DateTime? heldUntil = null)
     {
         DateTime opens = from ?? Now.AddMinutes(fromMinutes);
 
@@ -1275,6 +1346,7 @@ public sealed class TunerAllocationPlannerTests
             opens,
             to ?? opens.AddMinutes(forMinutes),
             endAtConfirmed,
-            pinned);
+            pinned,
+            heldUntil);
     }
 }

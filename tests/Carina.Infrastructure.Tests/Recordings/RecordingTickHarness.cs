@@ -130,6 +130,32 @@ internal sealed class PlannedReservations : IReservationRecordingContract
     }
 }
 
+internal sealed class UnreadableGuide : IAnnouncedProgrammes
+{
+    public Task<Programme?> FindAsync(ProgrammeId id, CancellationToken cancellationToken)
+        => Task.FromException<Programme?>(Refused());
+
+    public Task<DateTime?> HeardWholeAtAsync(int networkId, int serviceId, CancellationToken cancellationToken)
+        => Task.FromException<DateTime?>(Refused());
+
+    private static Exception Refused()
+        => new InvalidOperationException("The guide could not be read on this tick.");
+}
+
+internal sealed class GuideThatRefusesOnce(IAnnouncedProgrammes inner) : IAnnouncedProgrammes
+{
+    private int refusalsLeft = 1;
+
+    public Task<Programme?> FindAsync(ProgrammeId id, CancellationToken cancellationToken)
+        => inner.FindAsync(id, cancellationToken);
+
+    public Task<DateTime?> HeardWholeAtAsync(int networkId, int serviceId, CancellationToken cancellationToken)
+        => Interlocked.Decrement(ref refusalsLeft) >= 0
+            ? Task.FromException<DateTime?>(
+                new InvalidOperationException("The guide could not be read for this one."))
+            : inner.HeardWholeAtAsync(networkId, serviceId, cancellationToken);
+}
+
 internal sealed class HeldMoment(DateTime now) : TimeProvider
 {
     public override DateTimeOffset GetUtcNow() => now;

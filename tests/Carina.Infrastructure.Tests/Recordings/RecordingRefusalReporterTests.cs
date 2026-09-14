@@ -201,6 +201,7 @@ public sealed class RecordingRefusalReporterTests
                 recordings,
                 new HeldProgrammes(),
                 driver,
+                new EndsAlreadyAsked(),
                 Settings,
                 NullLogger<ProgramExtensionFollower>.Instance),
             ledger.Reporter,

@@ -219,6 +219,121 @@ public sealed class ProgramExtensionFollowerTests
         Assert.Empty(driver.Extended);
     }
 
+    [Fact]
+    public async Task ADriverThatWouldNotHoldTheTunerIsNotAskedTheSameThingEveryTick()
+    {
+        var recordings = new HeldRecordings();
+        Recording running = InFlight(Airs, Airs.AddMinutes(30));
+        recordings.Rows.Add(running);
+
+        var driver = new RecordingDriver
+        {
+            RefusesToExtend = DriverCall<SessionSnapshot>.Refused(
+                new DriverProblem(SessionRefusalTitles.SessionEnded, [])),
+        };
+        ProgramExtensionFollower follower = Follower(recordings, driver, Announcing(Airs.AddMinutes(45)));
+
+        Assert.Empty(await Tick(follower, running));
+        Assert.Empty(await Tick(follower, running));
+        Assert.Single(driver.Extended);
+        Assert.Equal(Airs.AddMinutes(30), running.ExpectedWindowEnd);
+    }
+
+    [Fact]
+    public async Task AnEndTheDriverCutBackIsNotPutToItAgainUntilTheProgrammeRunsLaterStill()
+    {
+        var recordings = new HeldRecordings();
+        Recording running = InFlight(Airs, Airs.AddMinutes(30));
+        recordings.Rows.Add(running);
+
+        var driver = new RecordingDriver { ExtendsByLessThanAsked = TimeSpan.FromMinutes(10) };
+        HeldProgrammes guide = Announcing(Airs.AddMinutes(45));
+        ProgramExtensionFollower follower = Follower(recordings, driver, guide);
+
+        Assert.Single(await Tick(follower, running));
+        Assert.Equal(Airs.AddMinutes(35), running.ExpectedWindowEnd);
+
+        Assert.Empty(await Tick(follower, running));
+        Assert.Single(driver.Extended);
+
+        NowRunsUntil(guide, Airs.AddMinutes(60));
+
+        Assert.Single(await Tick(follower, running));
+        Assert.Equal(2, driver.Extended.Count);
+        Assert.Equal(Airs.AddMinutes(50), running.ExpectedWindowEnd);
+    }
+
+    [Fact]
+    public async Task AnAskThatNeverReachedTheDriverIsPutToItAgainOnTheNextTick()
+    {
+        var recordings = new HeldRecordings();
+        Recording running = InFlight(Airs, Airs.AddMinutes(30));
+        recordings.Rows.Add(running);
+
+        var driver = new RecordingDriver
+        {
+            RefusesToExtend = DriverCall<SessionSnapshot>.Unreachable("the driver did not answer"),
+        };
+        ProgramExtensionFollower follower = Follower(recordings, driver, Announcing(Airs.AddMinutes(45)));
+
+        Assert.Empty(await Tick(follower, running));
+        Assert.Empty(await Tick(follower, running));
+        Assert.Equal(2, driver.Extended.Count);
+    }
+
+    [Fact]
+    public async Task AGuideThatCannotBeReadForOneRecordingLeavesTheOthersFollowed()
+    {
+        var recordings = new HeldRecordings();
+        Recording first = InFlight(Airs, Airs.AddMinutes(30));
+        Recording second = InFlight(Airs, Airs.AddMinutes(30));
+        recordings.Rows.Add(first);
+        recordings.Rows.Add(second);
+
+        var driver = new RecordingDriver();
+        var guide = new GuideThatRefusesOnce(Announcing(Airs.AddMinutes(45)));
+
+        IReadOnlyList<RecordingFollowed> followed = await new ProgramExtensionFollower(
+                recordings,
+                guide,
+                driver,
+                new EndsAlreadyAsked(),
+                Settings,
+                NullLogger<ProgramExtensionFollower>.Instance)
+            .FollowAsync(
+                [first, second],
+                [
+                    Due(9, startedAt: Airs) with { Id = Named(first) },
+                    Due(9, startedAt: Airs) with { Id = Named(second) },
+                ],
+                Now,
+                CancellationToken.None);
+
+        Assert.Equal(second.Id, Assert.Single(followed).Id);
+        Assert.Equal(Airs.AddMinutes(30), first.ExpectedWindowEnd);
+        Assert.Equal(Airs.AddMinutes(45), second.ExpectedWindowEnd);
+    }
+
+    [Fact]
+    public async Task ARecordingThatIsNoLongerRunningIsForgottenRatherThanRememberedForever()
+    {
+        var recordings = new HeldRecordings();
+        Recording running = InFlight(Airs, Airs.AddMinutes(30));
+        recordings.Rows.Add(running);
+
+        var driver = new RecordingDriver { ExtendsByLessThanAsked = TimeSpan.FromMinutes(20) };
+        var asked = new EndsAlreadyAsked();
+        HeldProgrammes guide = Announcing(Airs.AddMinutes(45));
+
+        Assert.Empty(await Tick(Follower(recordings, driver, guide, asked), running));
+        Assert.Single(driver.Extended);
+
+        await Follower(recordings, driver, guide, asked).FollowAsync([], [], Now, CancellationToken.None);
+
+        Assert.Empty(await Tick(Follower(recordings, driver, guide, asked), running));
+        Assert.Equal(2, driver.Extended.Count);
+    }
+
     private static async Task<IReadOnlyList<RecordingFollowed>> Follow(
         HeldRecordings recordings,
         RecordingDriver driver,
@@ -238,13 +353,37 @@ public sealed class ProgramExtensionFollowerTests
     private static ProgramExtensionFollower Follower(
         HeldRecordings recordings,
         RecordingDriver driver,
-        HeldProgrammes programmes)
+        HeldProgrammes programmes,
+        EndsAlreadyAsked? asked = null)
         => new(
             recordings,
             programmes,
             driver,
+            asked ?? new EndsAlreadyAsked(),
             Settings,
             NullLogger<ProgramExtensionFollower>.Instance);
+
+    private static Task<IReadOnlyList<RecordingFollowed>> Tick(
+        ProgramExtensionFollower follower,
+        Recording running,
+        DateTime? at = null)
+        => follower.FollowAsync(
+            [running],
+            [Due(9, startedAt: Airs) with { Id = Named(running) }],
+            at ?? Now,
+            CancellationToken.None);
+
+    private static void NowRunsUntil(HeldProgrammes guide, DateTime endsAt)
+        => guide.Programmes[0].Absorb(
+            new ProgrammeBroadcast(
+                Broadcast,
+                new TransportStreamId(32736),
+                Airs,
+                endsAt,
+                "A programme",
+                "What it is about",
+                false),
+            Now);
 
     private static HeldProgrammes Announcing(DateTime? endsAt)
     {

@@ -44,18 +44,20 @@ public sealed class RecordingFenceRuleTests
             RecordingFenceRules.WriteMembersOnThePortCollectionHolds(RepositoryLayout.SourceDirectory));
     }
 
-    [Fact(DisplayName = "BR-ED-001: the round reaches the guide through the read-only port and never names the writing one")]
-    public void TheRoundReachesTheGuideThroughTheReadOnlyPort()
+    [Fact(DisplayName = "BR-ED-001: every place in recording that reaches the guide holds the read-only port")]
+    public void EveryPlaceInRecordingThatReachesTheGuideHoldsTheReadOnlyPort()
     {
-        string round = File.ReadAllText(Path.Combine(
-            RepositoryLayout.SourceDirectory,
-            "Carina.Infrastructure",
-            "Recordings",
-            "RecordingRound.cs"));
-
-        Assert.Contains(RecordingFenceRules.ReadOnlyProgrammePort, round, StringComparison.Ordinal);
-        Assert.DoesNotContain(RecordingFenceRules.FullProgrammePort, round, StringComparison.Ordinal);
+        Assert.Equal(
+            [
+                "/Carina.Infrastructure/Recordings/ProgramExtensionFollower.cs",
+                "/Carina.Infrastructure/Recordings/RecordingRound.cs",
+            ],
+            RecordingFenceRules.HoldersOfTheReadOnlyGuidePort(RepositoryLayout.SourceDirectory));
     }
+
+    [Fact(DisplayName = "BR-ED-001: and nothing in the recording feature names the port that can write it")]
+    public void NothingInTheRecordingFeatureNamesThePortThatCanWriteTheGuide()
+        => Assert.Empty(RecordingFenceRules.NamersOfTheWritingGuidePort(RepositoryLayout.SourceDirectory));
 
     [Fact(DisplayName = "BR-KA-001: the recording feature offers no deletion beside the one route the library owns")]
     public void TheRecordingFeatureOffersNoDeletionBesideTheOneRouteTheLibraryOwns()

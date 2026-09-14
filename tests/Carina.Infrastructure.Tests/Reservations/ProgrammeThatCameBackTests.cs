@@ -203,6 +203,7 @@ public sealed class ProgrammeThatCameBackTests
 
             Scheduling = new ReservationSchedulingService(
                 Reservations,
+                new NoRecordings(),
                 new HeldSeating(new TunerCapacity(
                     [new TunerSeat("seat0", BroadcastReception.Of(TunerKind.Terrestrial), Faulted: false)],
                     [])),

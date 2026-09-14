@@ -759,6 +759,7 @@ public sealed class RuleApplicationServiceTests
                 Streams,
                 new ReservationSchedulingService(
                     Reservations,
+                    new NoRecordings(),
                     Seating,
                     Tuning,
                     Write,

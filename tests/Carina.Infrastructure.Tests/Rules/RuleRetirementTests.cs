@@ -290,6 +290,7 @@ public sealed class RuleRetirementTests
                 Streams,
                 new ReservationSchedulingService(
                     Reservations,
+                    new NoRecordings(),
                     Seating,
                     Tuning,
                     Write,

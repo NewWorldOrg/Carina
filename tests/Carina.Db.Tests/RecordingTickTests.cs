@@ -210,6 +210,7 @@ public sealed class RecordingTickTests(MigratedScratchDatabase database)
                 new RecordingRepository(context),
                 new ProgrammeRepository(context),
                 driver,
+                new EndsAlreadyAsked(),
                 Settings,
                 NullLogger<ProgramExtensionFollower>.Instance),
             new RecordingRefusalReporter(

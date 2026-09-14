@@ -2,6 +2,7 @@ using Carina.Contracts;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
+using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Recordings;
@@ -840,6 +841,29 @@ public sealed class RecordingRoundTests
         Assert.Equal(opens + Head, written.ExpectedWindowStart);
     }
 
+    [Fact]
+    public async Task AGuideThatCannotBeReadLeavesTheRestOfTheRoundStanding()
+    {
+        var recordings = new HeldRecordings();
+        ReservationId following = ReservationId.New();
+        Recording over = InFlight(Airs.AddMinutes(-30), Airs);
+        Recording running = InFlight(Airs.AddMinutes(-30), Airs.AddMinutes(30), reservationId: following);
+
+        recordings.Rows.Add(over);
+        recordings.Rows.Add(running);
+
+        var driver = new RecordingDriver();
+        RecordingRun run = await Round(
+                Holding(Due(9, startedAt: Airs) with { Id = following }),
+                recordings,
+                driver,
+                programmes: new UnreadableGuide())
+            .RunAsync(CancellationToken.None);
+
+        Assert.Equal(over.Id, Assert.Single(run.Stopped));
+        Assert.Empty(run.Followed);
+    }
+
     private static PlannedReservations Holding(params RecordingTick[] ticks)
         => new PlannedReservations().Holding(ticks);
 
@@ -850,10 +874,10 @@ public sealed class RecordingRoundTests
         TuningResolution? resolution = null,
         DateTime? at = null,
         RefusalLedger? ledger = null,
-        HeldProgrammes? programmes = null)
+        IAnnouncedProgrammes? programmes = null)
     {
         var clock = new HeldMoment(at ?? Airs);
-        HeldProgrammes held = programmes ?? new HeldProgrammes();
+        IAnnouncedProgrammes held = programmes ?? new HeldProgrammes();
 
         return new RecordingRound(
             reservations,
@@ -866,6 +890,7 @@ public sealed class RecordingRoundTests
                 recordings,
                 held,
                 driver,
+                new EndsAlreadyAsked(),
                 Settings,
                 NullLogger<ProgramExtensionFollower>.Instance),
             (ledger ?? new RefusalLedger()).Reporter,

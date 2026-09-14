@@ -140,6 +140,7 @@ public sealed class RuleApplicationLandsInTheLedgerTests(RepositoryDatabase data
             streams,
             new ReservationSchedulingService(
                 reservations,
+                new NoRecordings(),
                 new HeldSeating(Seats()),
                 tuning,
                 new DatabaseAtomicWrite(context),

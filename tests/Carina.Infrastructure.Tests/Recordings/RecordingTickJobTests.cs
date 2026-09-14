@@ -289,6 +289,7 @@ public sealed class RecordingTickJobTests
                 recordings,
                 new HeldProgrammes(),
                 driver,
+                new EndsAlreadyAsked(),
                 held,
                 NullLogger<ProgramExtensionFollower>.Instance),
             new RefusalLedger().Reporter,

@@ -91,6 +91,20 @@ public sealed class RecordingSettingsTests
             "A window held further ahead than the tuner seat under it is a promise the allocation never made.");
 
     [Fact]
+    public void AWindowHeldAsFarAheadAsTheSeatUnderItIsRefused()
+    {
+        ArgumentOutOfRangeException refused = Assert.Throws<ArgumentOutOfRangeException>(
+            () => Built(ahead: RollingHorizon.Provisional));
+
+        Assert.Equal("undecidedEndAhead", refused.ParamName);
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => Built(ahead: RollingHorizon.Provisional + TimeSpan.FromTicks(1)));
+        Assert.Equal(
+            RollingHorizon.Provisional - TimeSpan.FromTicks(1),
+            Built(ahead: RollingHorizon.Provisional - TimeSpan.FromTicks(1)).UndecidedEndAhead);
+    }
+
+    [Fact]
     public void EverySettingTheSectionCarriesIsRead()
     {
         RecordingSettings read = Read(new Dictionary<string, string?>
