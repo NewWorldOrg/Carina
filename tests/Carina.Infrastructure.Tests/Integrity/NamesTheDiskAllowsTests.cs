@@ -167,6 +167,7 @@ public sealed class NamesTheDiskAllowsTests
 
         var services = new ServiceCollection();
         services.AddScoped<IRecordingLedger>(_ => new HeldLedger());
+        services.AddScoped<IEncodeWorkLedger>(_ => new HeldEncodeWork());
         services.AddScoped<IIntegrityCheckRepository>(_ => checks);
 
         return new IntegrityCheckJob(

@@ -316,6 +316,7 @@ public sealed class ServiceCollectionExtensionsTests
         Assert.IsType<IntegrityCheckRepository>(
             scope.ServiceProvider.GetRequiredService<IIntegrityCheckRepository>());
         Assert.IsType<RecordingLedger>(scope.ServiceProvider.GetRequiredService<IRecordingLedger>());
+        Assert.IsType<EncodeWorkLedger>(scope.ServiceProvider.GetRequiredService<IEncodeWorkLedger>());
     }
 
     [Fact]

@@ -44,7 +44,7 @@ public sealed class IntegrityFindingConfiguration : IEntityTypeConfiguration<Int
                 "length(path) > 0 AND left(path, 1) <> '/'");
         });
 
-        builder.HasKey(finding => finding.Id);
+        builder.HasKey(finding => new { finding.CheckId, finding.Id });
 
         builder.Property(finding => finding.Id)
             .HasConversion(id => id.Value, value => new IntegrityFindingId(value))

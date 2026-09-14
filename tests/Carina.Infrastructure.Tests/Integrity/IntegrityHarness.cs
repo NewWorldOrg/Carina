@@ -30,6 +30,20 @@ internal sealed class HeldLedger(params LedgerFile[] rows) : IRecordingLedger
     }
 }
 
+internal sealed class HeldEncodeWork(params DeclaredFile[] files) : IEncodeWorkLedger
+{
+    private readonly List<DeclaredFile> files = [.. files];
+
+    public int Reads { get; private set; }
+
+    public Task<IReadOnlyList<DeclaredFile>> ListAsync(CancellationToken cancellationToken)
+    {
+        Reads++;
+
+        return Task.FromResult<IReadOnlyList<DeclaredFile>>([.. files]);
+    }
+}
+
 internal sealed class HeldSurvey : IRecordingFileSurvey
 {
     private readonly Dictionary<string, RootListing> listings = new(StringComparer.Ordinal);

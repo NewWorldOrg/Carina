@@ -276,6 +276,26 @@ public sealed class RecordingEndpointTests
         Assert.Equal(1, body.GetProperty("data").GetProperty("recording").GetProperty("resumeCount").GetInt32());
     }
 
+    [Theory]
+    [InlineData(ThumbnailState.Pending, null, "pending")]
+    [InlineData(ThumbnailState.Ready, null, "ready")]
+    [InlineData(ThumbnailState.Skipped, null, "skipped")]
+    [InlineData(ThumbnailState.Failed, ThumbnailFault.SourceOutOfReach, "failed")]
+    public async Task TheListSaysWhereThePictureOfEachRecordingStands(
+        ThumbnailState state,
+        ThumbnailFault? fault,
+        string said)
+    {
+        await using var feature = new RecordingFeature();
+        Recording recording = feature.Held();
+        recording.Illustrate(state, fault);
+
+        (_, JsonElement body) = await feature.GetAsync("/api/recordings");
+        JsonElement item = body.GetProperty("data").GetProperty("items")[0];
+
+        Assert.Equal(said, item.GetProperty("thumbnail").GetProperty("state").GetString());
+    }
+
     [Fact]
     public async Task TheDetailSaysWhyThereIsNoPicture()
     {

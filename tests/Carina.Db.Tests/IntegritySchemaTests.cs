@@ -352,6 +352,46 @@ public sealed class IntegritySchemaTests(MigratedScratchDatabase database)
         Assert.Equal("ck_integrity_check_counts", refusal.ConstraintName);
     }
 
+    [Fact]
+    public async Task WhatMakesAFindingUniqueIsTheCheckAndTheNameItKeepsTogether()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        Assert.Equal(
+            "CREATE UNIQUE INDEX pk_integrity_finding ON public.integrity_finding "
+            + "USING btree (check_id, id)",
+            await IndexDefinition(connection, "pk_integrity_finding"));
+    }
+
+    [Fact]
+    public async Task AFindingThatOutlastsASweepComesBackUnderTheNextOneWithTheNameItAlreadyHad()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        Guid first = await CheckAsync(connection);
+        Guid again = await CheckAsync(connection);
+        var named = Guid.NewGuid();
+
+        await FindingAsync(connection, first, Shaped(IntegrityFault.SizeDisagrees), "'one.m2ts'", named);
+        await FindingAsync(connection, again, Shaped(IntegrityFault.SizeDisagrees), "'one.m2ts'", named);
+
+        Assert.Equal(2L, await CountAsync(connection, $"id = '{named}'"));
+    }
+
+    [Fact]
+    public async Task OneSweepCannotBringTheSameNameBackTwice()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        Guid check = await CheckAsync(connection);
+        var named = Guid.NewGuid();
+
+        await FindingAsync(connection, check, Shaped(IntegrityFault.SizeDisagrees), "'one.m2ts'", named);
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => FindingAsync(connection, check, Shaped(IntegrityFault.SizeDisagrees), "'one.m2ts'", named));
+
+        Assert.Equal(PostgresErrorCodes.UniqueViolation, refusal.SqlState);
+    }
+
     private static string Shaped(IntegrityFault fault)
         => fault switch
         {
@@ -380,12 +420,20 @@ public sealed class IntegritySchemaTests(MigratedScratchDatabase database)
         return id;
     }
 
-    private static async Task FindingAsync(NpgsqlConnection connection, Guid check, string values, string path)
+    private static Task FindingAsync(NpgsqlConnection connection, Guid check, string values, string path)
+        => FindingAsync(connection, check, values, path, Guid.NewGuid());
+
+    private static async Task FindingAsync(
+        NpgsqlConnection connection,
+        Guid check,
+        string values,
+        string path,
+        Guid named)
     {
         await using var writing = new NpgsqlCommand(
             "INSERT INTO integrity_finding "
             + "(id, check_id, fault, recording_id, ledger_size, observed_size, output_root, path, noticed_at) "
-            + $"VALUES ('{Guid.NewGuid()}', '{check}', {values}, 'primary', {path}, {Began})",
+            + $"VALUES ('{named}', '{check}', {values}, 'primary', {path}, {Began})",
             connection);
         await writing.ExecuteNonQueryAsync();
     }

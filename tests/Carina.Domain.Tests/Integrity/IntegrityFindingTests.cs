@@ -69,12 +69,12 @@ public sealed class IntegrityFindingTests
     }
 
     [Fact]
-    public void TwoFindingsAreTwoFindingsEvenWhenTheySayTheSameThing()
+    public void TwoFindingsAboutTheSameFactCarryTheSameName()
     {
         IntegrityFinding one = IntegrityFinding.FileMissing(Check, Primary, Id(3), Name, 100, At);
-        IntegrityFinding other = IntegrityFinding.FileMissing(Check, Primary, Id(3), Name, 100, At);
+        IntegrityFinding other = IntegrityFinding.FileMissing(Check, Primary, Id(3), Name, 200, At);
 
-        Assert.NotEqual(one.Id, other.Id);
+        Assert.Equal(one.Id, other.Id);
     }
 
     [Fact]
@@ -117,7 +117,7 @@ public sealed class IntegrityFindingTests
     {
         Assert.Throws<ArgumentOutOfRangeException>(
             () => IntegrityFinding.Rehydrate(
-                IntegrityFindingId.New(),
+                new IntegrityFindingId(new Guid("11111111-2222-3333-4444-555555555556")),
                 Check,
                 (IntegrityFault)99,
                 Primary,

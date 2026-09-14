@@ -148,7 +148,7 @@ public sealed class IntegrityFinding
         long observedSize,
         DateTime noticedAt)
         => Rehydrate(
-            IntegrityFindingId.New(),
+            IntegrityFindingId.Of(IntegrityFault.NoLedgerRow, root, path, null),
             checkId,
             IntegrityFault.NoLedgerRow,
             root,
@@ -172,7 +172,7 @@ public sealed class IntegrityFinding
         ArgumentNullException.ThrowIfNull(fileName);
 
         return Rehydrate(
-            IntegrityFindingId.New(),
+            IntegrityFindingId.Of(fault, root, fileName.Value, recordingId),
             checkId,
             fault,
             root,

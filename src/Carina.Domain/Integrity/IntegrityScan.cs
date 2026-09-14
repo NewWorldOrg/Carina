@@ -7,16 +7,18 @@ public static class IntegrityScan
     public static IntegrityReport Compare(
         IntegrityCheckId id,
         IReadOnlyList<LedgerFile> ledger,
+        IReadOnlyList<DeclaredFile> declared,
         IReadOnlyList<RootListing> listings,
         DateTime startedAt,
         DateTime finishedAt)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(ledger);
+        ArgumentNullException.ThrowIfNull(declared);
         ArgumentNullException.ThrowIfNull(listings);
 
         Dictionary<string, RootListing> reachable = Reachable(listings, out int outOfReach);
-        HashSet<string> claimed = Claimed(ledger);
+        HashSet<string> claimed = Claimed(ledger, declared);
         List<IntegrityFinding> findings = [];
 
         int judged = 0;
@@ -146,7 +148,7 @@ public static class IntegrityScan
         return reachable;
     }
 
-    private static HashSet<string> Claimed(IReadOnlyList<LedgerFile> ledger)
+    private static HashSet<string> Claimed(IReadOnlyList<LedgerFile> ledger, IReadOnlyList<DeclaredFile> declared)
     {
         HashSet<string> claimed = new(StringComparer.Ordinal);
 
@@ -161,6 +163,13 @@ public static class IntegrityScan
                     + "cannot appear twice.",
                     nameof(ledger));
             }
+        }
+
+        foreach (DeclaredFile file in declared)
+        {
+            ArgumentNullException.ThrowIfNull(file);
+
+            claimed.Add(Key(file.Root, file.Path));
         }
 
         return claimed;
