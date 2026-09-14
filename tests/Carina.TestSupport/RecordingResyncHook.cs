@@ -32,10 +32,15 @@ public sealed class RecordingResyncHook : IDriverSessionResyncHook
 
     public Exception? Failure { get; set; }
 
+    public DriverHello? LastHello { get; private set; }
+
     public Task ReadoptAsync(
+        DriverHello hello,
         IReadOnlyList<SessionSnapshot> sessions,
         CancellationToken cancellationToken)
     {
+        LastHello = hello;
+
         if (Failure is { } failure)
         {
             throw failure;

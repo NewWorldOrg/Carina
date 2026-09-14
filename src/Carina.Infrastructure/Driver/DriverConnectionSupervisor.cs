@@ -109,7 +109,7 @@ public sealed class DriverConnectionSupervisor(
                 return Serve.Of(ServeOutcome.Alive);
             }
 
-            if (!await ReadoptAsync(held, stoppingToken))
+            if (!await ReadoptAsync(hello, held, stoppingToken))
             {
                 return Serve.Of(ServeOutcome.Alive);
             }
@@ -173,12 +173,13 @@ public sealed class DriverConnectionSupervisor(
     }
 
     private async Task<bool> ReadoptAsync(
+        DriverHello hello,
         IReadOnlyList<SessionSnapshot> held,
         CancellationToken stoppingToken)
     {
         try
         {
-            await resyncHook.ReadoptAsync(held, stoppingToken);
+            await resyncHook.ReadoptAsync(hello, held, stoppingToken);
 
             return true;
         }

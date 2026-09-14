@@ -259,10 +259,10 @@ public sealed class RecordingStreamSupervisor(
                     return false;
                 }
 
-                Adopt(loaded, session.DeviceId);
+                RecordingResumption.Adopt(loaded, session.DeviceId);
                 Advance(loaded, opened, now);
                 loaded.Measure(counters, positions, scrambled, reading.EovfCount, now);
-                resumed = CloseAnyOpenBreak(loaded, now);
+                resumed = RecordingResumption.CloseAnyOpenBreak(loaded, now);
 
                 return true;
             },
@@ -299,14 +299,14 @@ public sealed class RecordingStreamSupervisor(
             {
                 over = ItIsOver(loaded, now);
 
-                if (over || !OpenABreak(loaded, fault, now))
+                if (over || !RecordingResumption.OpenABreak(loaded, fault, now))
                 {
                     return false;
                 }
 
                 if (tuneFailure is not null && session is not null)
                 {
-                    Adopt(loaded, session.DeviceId);
+                    RecordingResumption.Adopt(loaded, session.DeviceId);
                     loaded.Note(new OutcomeDetail(fault, tuneFailure, string.Empty, now));
                 }
 
@@ -337,7 +337,7 @@ public sealed class RecordingStreamSupervisor(
             cancellationToken.ThrowIfCancellationRequested();
 
             DriverCall<SessionSnapshot> answer = await driver.StartSessionAsync(
-                Request(recording, tune),
+                RecordingResumption.Request(recording, tune),
                 cancellationToken);
 
             if (answer.TryGetValue(out SessionSnapshot? reopened))
@@ -375,8 +375,8 @@ public sealed class RecordingStreamSupervisor(
             recording.Id,
             loaded =>
             {
-                Adopt(loaded, reopened.DeviceId);
-                resumed = CloseAnyOpenBreak(loaded, at);
+                RecordingResumption.Adopt(loaded, reopened.DeviceId);
+                resumed = RecordingResumption.CloseAnyOpenBreak(loaded, at);
 
                 return true;
             },
@@ -521,38 +521,6 @@ public sealed class RecordingStreamSupervisor(
                 : RecordingFault.TuneFailed,
         };
 
-    private static bool OpenABreak(Recording recording, RecordingFault fault, DateTime at)
-    {
-        if (recording.Interruptions.Count > 0 && recording.Interruptions[^1].IsOpen)
-        {
-            return false;
-        }
-
-        recording.Interrupt(fault, at);
-
-        return true;
-    }
-
-    private static bool CloseAnyOpenBreak(Recording recording, DateTime at)
-    {
-        if (recording.Interruptions.Count is 0 || !recording.Interruptions[^1].IsOpen)
-        {
-            return false;
-        }
-
-        recording.Resume(at);
-
-        return true;
-    }
-
-    private static void Adopt(Recording recording, string deviceId)
-    {
-        if (recording.TunerDeviceId is null && deviceId is { Length: > 0 })
-        {
-            recording.Acquire(new TunerDeviceId(deviceId));
-        }
-    }
-
     private static DateTime AsFarAsItIsCounted(Recording recording)
         => recording.MeasuredUpdatedAt ?? recording.StartedAtActual;
 
@@ -576,18 +544,6 @@ public sealed class RecordingStreamSupervisor(
                     new DropBucket(bucket.Second, bucket.Continuity, bucket.Scrambled))],
                 [.. positions.Reanchors.Select(reanchor =>
                     new PcrReanchor(reanchor.Second, reanchor.Before, reanchor.After))]);
-
-    private static StartSessionRequest Request(Recording recording, TuneParams tune)
-        => new()
-        {
-            SessionId = RecordingSessions.Named(recording.Id),
-            Purpose = SessionPurpose.Recording,
-            Tuning = tune.ToLegacyRequest(),
-            Tune = tune,
-            OutputRoot = recording.OutputRoot.Value,
-            RecordingId = recording.Id.Wire,
-            EndsAt = recording.ExpectedWindowEnd,
-        };
 
     private sealed class Tally
     {

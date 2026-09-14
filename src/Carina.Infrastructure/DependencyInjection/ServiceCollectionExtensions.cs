@@ -226,7 +226,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<DriverSignalRelay>();
         services.AddSingleton<IDriverSignals>(provider =>
             provider.GetRequiredService<DriverSignalRelay>());
-        services.TryAddSingleton<IDriverSessionResyncHook, NoopDriverSessionResyncHook>();
+        services.TryAddSingleton<IDriverSessionResyncHook, OrphanRecoveryService>();
         services.TryAddSingleton(DriverSupervisionSettings.Default);
         services.TryAddSingleton(StorageMonitorSettings.Default);
         services.TryAddSingleton<StorageMonitor>();
