@@ -266,19 +266,21 @@ internal sealed class AppSwapFeature : IAsyncDisposable
     public RunningApp App => running
         ?? throw new InvalidOperationException("No app is running against the driver.");
 
-    public static async Task<AppSwapFeature> StartAsync()
+    public static async Task<AppSwapFeature> StartAsync(bool takingRecordingsBack = false)
     {
         SyntheticDriverHost driver = await SyntheticDriverHost.StartAsync();
         var feature = new AppSwapFeature(driver, DateTimeOffset.UtcNow);
 
         feature.Reservations.Add(feature.Due());
 
-        await feature.StartAppAsync();
+        await feature.StartAppAsync(takingRecordingsBack);
 
         return feature;
     }
 
-    public async Task StartAppAsync()
+    public Task RaiseAnotherDriverAsync() => driver.RaiseAnotherDriverAsync();
+
+    public async Task StartAppAsync(bool takingRecordingsBack = false)
     {
         await StopAppAsync();
 
@@ -289,7 +291,12 @@ internal sealed class AppSwapFeature : IAsyncDisposable
             {
                 services.RemoveAll<IHostedService>();
                 services.AddHostedService<DriverConnectionSupervisor>();
-                services.AddSingleton<IDriverSessionResyncHook>(readoptions);
+
+                if (!takingRecordingsBack)
+                {
+                    services.AddSingleton<IDriverSessionResyncHook>(readoptions);
+                }
+
                 services.AddSingleton(Impatient);
                 services.AddSingleton<TimeProvider>(Clock);
                 services.AddSingleton<IReservationRecordingContract>(Reservations);

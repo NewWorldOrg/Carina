@@ -64,17 +64,23 @@ internal sealed class SyntheticDriverHost : IAsyncDisposable
     ];
 
     private readonly string root;
-    private readonly IHost host;
+    private readonly string ledger;
+    private readonly DriverConfiguration configuration;
     private readonly IReadOnlyList<string?> inherited;
+
+    private IHost host;
 
     private SyntheticDriverHost(
         IHost host,
         string root,
+        string ledger,
         DriverConfiguration configuration,
         IReadOnlyList<string?> inherited)
     {
         this.host = host;
         this.root = root;
+        this.ledger = ledger;
+        this.configuration = configuration;
         this.inherited = inherited;
         SocketPath = configuration.SocketPath!;
         RecordingsDirectory = configuration.OutputRoots![0].Path!;
@@ -109,6 +115,26 @@ internal sealed class SyntheticDriverHost : IAsyncDisposable
 
         await File.WriteAllTextAsync(ledger, DriverConfigurationWriter.Serialize(configuration));
 
+        IHost host = await RaisedAsync(configuration, ledger);
+
+        return new SyntheticDriverHost(host, root, ledger, configuration, inherited);
+    }
+
+    /// <summary>
+    /// Puts the driver down and raises another one on the same socket and the same output root. The
+    /// new process greets with an instance of its own and holds none of the sessions the one before
+    /// it did, which is the whole of what a recording left running has to be recovered from.
+    /// </summary>
+    public async Task RaiseAnotherDriverAsync()
+    {
+        await host.StopAsync(TimeSpan.FromSeconds(20));
+
+        host.Dispose();
+        host = await RaisedAsync(configuration, ledger);
+    }
+
+    private static async Task<IHost> RaisedAsync(DriverConfiguration configuration, string ledger)
+    {
         DriverHostResult built = DriverHost.Create(
             [],
             configuration,
@@ -119,7 +145,7 @@ internal sealed class SyntheticDriverHost : IAsyncDisposable
 
         await host.StartAsync();
 
-        return new SyntheticDriverHost(host, root, configuration, inherited);
+        return host;
     }
 
     public static SessionCounters ContinuityOf(string path)

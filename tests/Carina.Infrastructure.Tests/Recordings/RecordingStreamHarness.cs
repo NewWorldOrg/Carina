@@ -510,6 +510,28 @@ internal static class RecordingStreamFixture
                 FailureTitle = failureTitle,
             });
 
+    public static OrphanRecoveryService Recovery(
+        StreamLedger ledger,
+        WatchedDriver driver,
+        TimeProvider clock,
+        WeighedFiles? files = null,
+        IAnnouncedProgrammes? guide = null,
+        TuningResolution? tuning = null,
+        ILogger<OrphanRecoveryService>? logger = null)
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<IRecordingRepository>(_ => ledger);
+        services.AddScoped<IServiceTuningDirectory>(_ => new ResolvedTuning(tuning ?? Terrestrial));
+        services.AddScoped<IAnnouncedProgrammes>(_ => guide ?? new HeldProgrammes());
+
+        return new OrphanRecoveryService(
+            services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),
+            driver,
+            files ?? new WeighedFiles { Weighs = 0 },
+            clock,
+            logger ?? NullLogger<OrphanRecoveryService>.Instance);
+    }
+
     public static RecordingStreamSupervisor Supervisor(
         StreamLedger ledger,
         WatchedDriver driver,
