@@ -10,6 +10,8 @@ public sealed class PlaybackRuleTests
 
     private const string Picture = "/Carina.Api/Playback/ThumbnailDelivery.cs";
 
+    private const string LiveHandedOver = "/Carina.Api/Live/LiveStreamDelivery.cs";
+
     private const string WhereItIsMapped = "/Carina.Api/Program.cs";
 
     private const string WhereTheDocumentSaysItExists = "/Carina.Api/OpenApi/ApiDocumentTransformer.cs";
@@ -79,6 +81,18 @@ public sealed class PlaybackRuleTests
         Assert.Contains("PlaybackHeaders.Say(context.Response, viewing.Standing)", play, StringComparison.Ordinal);
         Assert.Contains("AcceptRanges = NoSeeking", play, StringComparison.Ordinal);
         Assert.DoesNotContain(PlaybackRules.DeliveryEndpoint, play, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheLiveChannelAnExternalPlayerOpensIsHandedOverWithoutATranscoderToo()
+    {
+        string handed = File.ReadAllText(
+            Path.Combine(RepositoryLayout.SourceDirectory, LiveHandedOver.TrimStart('/')));
+
+        Assert.Contains("video/mp2t", handed, StringComparison.Ordinal);
+        Assert.Contains("AdmitOnceAsync", handed, StringComparison.Ordinal);
+        Assert.Empty(PlaybackRules.WhatTranscodesIn(RepositoryLayout.SourceDirectory, LiveHandedOver));
+        Assert.DoesNotContain(PlaybackRules.DeliveryEndpoint, handed, StringComparison.Ordinal);
     }
 
     private static string Mapping()

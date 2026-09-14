@@ -152,6 +152,8 @@ internal sealed class LiveReception
         return answering.WaitAsync(cancellationToken);
     }
 
+    internal LiveSeat Take(Stream into) => Take(into, static () => { }, static _ => { });
+
     internal LiveSeat Take(
         Stream into,
         Action locked,
