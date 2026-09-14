@@ -1,5 +1,6 @@
 using Carina.Contracts;
 using Carina.Domain.Recordings;
+using Carina.Domain.Reservations;
 
 namespace Carina.Infrastructure.Recordings;
 
@@ -68,6 +69,16 @@ public sealed record RecordingSettings
                 undecidedEndAhead,
                 "A recording whose end nobody has announced is carried forward tick by tick, so a horizon no "
                 + $"longer than the {betweenTicks} between two ticks is a window that has already run out.");
+        }
+
+        if (undecidedEndAhead >= RollingHorizon.Provisional)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(undecidedEndAhead),
+                undecidedEndAhead,
+                "The seat under a window has to outlast the window, and the allocation rolls a tuner seat "
+                + $"{RollingHorizon.Provisional} ahead, so a window carried that far or further is one the "
+                + "allocation never made room for.");
         }
 
         BeforeFirstTick = beforeFirstTick;

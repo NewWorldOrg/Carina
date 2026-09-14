@@ -75,6 +75,14 @@ public sealed class RecordingRound(
         Unknowable = 3,
     }
 
+    /// <summary>
+    /// Following comes before stopping and starting. A broadcaster announces that a programme runs
+    /// long at about the moment it was due to end, so the tick that reads that announcement is
+    /// often the same tick on which the recording's window closes: following first is what saves
+    /// that recording, and following after the stop would cut it at the end the guide has just
+    /// withdrawn. Following is guarded per recording instead, so one recording that cannot be
+    /// followed no longer keeps the stops and starts of this tick from happening.
+    /// </summary>
     public async Task<RecordingRun> RunAsync(CancellationToken cancellationToken)
     {
         DateTime now = clock.GetUtcNow().UtcDateTime;

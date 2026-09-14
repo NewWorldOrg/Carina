@@ -17,14 +17,21 @@ public sealed record RecordingFollowed(RecordingId Id, DateTime EndsAt, bool End
 /// reader of that row.
 ///
 /// The driver is asked first and the ledger is written second, and the ledger is written with the
-/// time the driver actually promised rather than the time that was asked for. A recording riding
-/// along on somebody else's tuner is cut back to the host's own end, and a window written from the
-/// asking rather than the answer would be a promise nothing can keep.
+/// time the driver actually promised rather than the time that was asked for. The driver holds
+/// ends to limits of its own, so a window written from the asking rather than the answer would be
+/// a promise nothing made. An end the driver has already answered is not put to it again until the
+/// guide announces a later one, so an answer that grants nothing is asked for once and not once
+/// per tick.
+///
+/// One recording failing to be followed says nothing about the next, so each is followed inside
+/// its own guard: an unreadable guide row or a driver that throws leaves that recording on the
+/// window it already holds and the rest of the round untouched.
 /// </summary>
 public sealed class ProgramExtensionFollower(
     IRecordingRepository recordings,
     IAnnouncedProgrammes programmes,
     IDriverClient driver,
+    EndsAlreadyAsked asked,
     RecordingSettings settings,
     ILogger<ProgramExtensionFollower> logger)
 {
@@ -37,6 +44,8 @@ public sealed class ProgramExtensionFollower(
         ArgumentNullException.ThrowIfNull(running);
         ArgumentNullException.ThrowIfNull(reservations);
 
+        asked.KeepOnly(running.Select(recording => recording.Id).ToHashSet());
+
         List<RecordingFollowed> followed = [];
 
         foreach (Recording recording in running)
@@ -46,19 +55,38 @@ public sealed class ProgramExtensionFollower(
                 continue;
             }
 
-            if (await MovedAsync(recording, reservations, now, cancellationToken) is not { } move)
+            try
             {
-                continue;
+                if (await FollowedAsync(recording, reservations, now, cancellationToken) is { } taken)
+                {
+                    followed.Add(taken);
+                }
             }
-
-            if (await ExtendedAsync(recording, move, now, cancellationToken) is { } taken)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                followed.Add(taken);
+                throw;
+            }
+            catch (Exception failure)
+            {
+                logger.LogError(
+                    failure,
+                    "Recording {Recording} could not be followed on this tick; it stays on the window it holds "
+                    + "and the rest of the round is unaffected.",
+                    recording.Id.Wire);
             }
         }
 
         return followed;
     }
+
+    private async Task<RecordingFollowed?> FollowedAsync(
+        Recording recording,
+        IReadOnlyList<RecordingTick> reservations,
+        DateTime now,
+        CancellationToken cancellationToken)
+        => await MovedAsync(recording, reservations, now, cancellationToken) is { } move
+            ? await ExtendedAsync(recording, move, now, cancellationToken)
+            : null;
 
     private async Task<WindowMove?> MovedAsync(
         Recording recording,
@@ -92,10 +120,20 @@ public sealed class ProgramExtensionFollower(
         DateTime now,
         CancellationToken cancellationToken)
     {
+        if (asked.AlreadyPut(recording.Id, move.EndsAt))
+        {
+            return null;
+        }
+
         DriverCall<SessionSnapshot> answer = await driver.ExtendSessionAsync(
             RecordingSessions.Named(recording.Id),
             new DateTimeOffset(move.EndsAt, TimeSpan.Zero),
             cancellationToken);
+
+        if (answer.Outcome is not DriverCallOutcome.Unreachable)
+        {
+            asked.Answered(recording.Id, move.EndsAt);
+        }
 
         if (!answer.TryGetValue(out SessionSnapshot? session))
         {

@@ -2,12 +2,14 @@ using Carina.Contracts;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Events;
+using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 
 namespace Carina.Infrastructure.Reservations;
 
 public sealed class ReservationSchedulingService(
     IReservationRepository reservations,
+    IRecordingRepository recordings,
     ITunerCapacityDirectory seating,
     IServiceTuningDirectory tuning,
     IAtomicWrite write,
@@ -51,9 +53,10 @@ public sealed class ReservationSchedulingService(
 
         IReadOnlyList<Reservation> standing = await reservations.ListPendingAsync(Reaching(at), cancellationToken);
         Reservation[] considered = [.. standing, .. proposed];
+        IReadOnlyDictionary<ReservationId, DateTime> held = await HeldUntilAsync(cancellationToken);
 
         return await ResolveAsync(considered, cancellationToken) is { } selections
-            ? Weigh(considered, selections, capacity, at)
+            ? Weigh(considered, selections, capacity, at, held)
             : SchedulingRun.Refused(SchedulingRefusal.CapacityUnknown);
     }
 
@@ -71,6 +74,7 @@ public sealed class ReservationSchedulingService(
         }
 
         IReadOnlyList<Reservation> looked = await reservations.ListPendingAsync(Reaching(at), cancellationToken);
+        IReadOnlyDictionary<ReservationId, DateTime> held = await HeldUntilAsync(cancellationToken);
 
         if (await ResolveAsync(Foreseen(looked, joining, revised), cancellationToken) is not { } selections)
         {
@@ -94,7 +98,7 @@ public sealed class ReservationSchedulingService(
                     ? [.. standing, .. joining]
                     : Alongside(standing, joining, revised, Applied(revised, revision!));
 
-                SchedulingRun run = Weigh(considered, selections, capacity, at);
+                SchedulingRun run = Weigh(considered, selections, capacity, at, held);
 
                 if (!run.Settled)
                 {
@@ -247,17 +251,50 @@ public sealed class ReservationSchedulingService(
         IReadOnlyList<Reservation> considered,
         IReadOnlyDictionary<ServiceKey, TuningResolution> selections,
         TunerCapacity capacity,
-        DateTime at)
+        DateTime at,
+        IReadOnlyDictionary<ReservationId, DateTime> held)
     {
         List<AllocationCandidate> candidates =
         [
             .. considered.Select(reservation =>
-                AllocationCandidate.Of(reservation, selections[Naming(reservation)].Tuning)),
+                AllocationCandidate.Of(
+                    reservation,
+                    selections[Naming(reservation)].Tuning,
+                    held.TryGetValue(reservation.Id, out DateTime until) ? until : null)),
         ];
 
         return SchedulingRun.Of(
             TunerAllocationPlanner.Plan(candidates, capacity, horizon, at),
             capacity.Undetermined.Count);
+    }
+
+    /// <summary>
+    /// How far the recordings that are already running are actually promised, read against the
+    /// reservation each of them belongs to. A recording that followed its programme past the end
+    /// its reservation still names holds its tuner until the window it was granted, and the
+    /// reservation row says nothing about that: without this the plan would seat the next
+    /// reservation on a tuner that is not free yet.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<ReservationId, DateTime>> HeldUntilAsync(
+        CancellationToken cancellationToken)
+    {
+        Dictionary<ReservationId, DateTime> held = [];
+
+        foreach (Recording recording in await recordings.ListInFlightAsync(cancellationToken))
+        {
+            if (recording.ReservationId is not { } reservation)
+            {
+                continue;
+            }
+
+            if (!held.TryGetValue(reservation, out DateTime standing)
+                || recording.ExpectedWindowEnd > standing)
+            {
+                held[reservation] = recording.ExpectedWindowEnd;
+            }
+        }
+
+        return held;
     }
 
     private static ServiceKey Naming(Reservation reservation)
