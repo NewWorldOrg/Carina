@@ -49,6 +49,7 @@ public sealed class RecordingFenceRuleTests
     {
         Assert.Equal(
             [
+                "/Carina.Infrastructure/Recordings/OrphanRecoveryService.cs",
                 "/Carina.Infrastructure/Recordings/ProgramExtensionFollower.cs",
                 "/Carina.Infrastructure/Recordings/RecordingRound.cs",
             ],

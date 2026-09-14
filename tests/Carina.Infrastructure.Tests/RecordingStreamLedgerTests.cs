@@ -39,8 +39,11 @@ public sealed class RecordingStreamLedgerTests(RepositoryDatabase database)
         recording.Wrote(TimeSpan.FromSeconds(1750));
         await Add(recording);
 
+        var driver = new WatchedDriver();
+        driver.Holding[RecordingSessions.Named(recording.Id)] = Over(recording);
+
         RecordingWatch watch = await Supervisor(
-                new WatchedDriver(),
+                driver,
                 new WeighedFiles { Weighs = 3_300_000_000 },
                 new WatchClock(Ended),
                 recording.Id,

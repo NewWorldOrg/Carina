@@ -137,7 +137,14 @@ public sealed class RecordingStreamSupervisor(
 
         if (ItIsOver(row, now))
         {
-            await SettleAsync(row, now, tally, cancellationToken);
+            if (session is null)
+            {
+                await MarkWhatWasLeftBehindAsync(row, now, tally, cancellationToken);
+            }
+            else
+            {
+                await SettleAsync(row, now, tally, cancellationToken);
+            }
 
             return;
         }
@@ -259,10 +266,10 @@ public sealed class RecordingStreamSupervisor(
                     return false;
                 }
 
-                Adopt(loaded, session.DeviceId);
+                RecordingResumption.Adopt(loaded, session.DeviceId);
                 Advance(loaded, opened, now);
                 loaded.Measure(counters, positions, scrambled, reading.EovfCount, now);
-                resumed = CloseAnyOpenBreak(loaded, now);
+                resumed = RecordingResumption.CloseAnyOpenBreak(loaded, now);
 
                 return true;
             },
@@ -299,14 +306,14 @@ public sealed class RecordingStreamSupervisor(
             {
                 over = ItIsOver(loaded, now);
 
-                if (over || !OpenABreak(loaded, fault, now))
+                if (over || !RecordingResumption.OpenABreak(loaded, fault, now))
                 {
                     return false;
                 }
 
                 if (tuneFailure is not null && session is not null)
                 {
-                    Adopt(loaded, session.DeviceId);
+                    RecordingResumption.Adopt(loaded, session.DeviceId);
                     loaded.Note(new OutcomeDetail(fault, tuneFailure, string.Empty, now));
                 }
 
@@ -337,7 +344,7 @@ public sealed class RecordingStreamSupervisor(
             cancellationToken.ThrowIfCancellationRequested();
 
             DriverCall<SessionSnapshot> answer = await driver.StartSessionAsync(
-                Request(recording, tune),
+                RecordingResumption.Request(recording, tune),
                 cancellationToken);
 
             if (answer.TryGetValue(out SessionSnapshot? reopened))
@@ -375,8 +382,8 @@ public sealed class RecordingStreamSupervisor(
             recording.Id,
             loaded =>
             {
-                Adopt(loaded, reopened.DeviceId);
-                resumed = CloseAnyOpenBreak(loaded, at);
+                RecordingResumption.Adopt(loaded, reopened.DeviceId);
+                resumed = RecordingResumption.CloseAnyOpenBreak(loaded, at);
 
                 return true;
             },
@@ -387,6 +394,58 @@ public sealed class RecordingStreamSupervisor(
         {
             tally.Resumed++;
         }
+    }
+
+    /// <summary>
+    /// A recording that is over and whose session the driver does not know is one nobody concluded:
+    /// there is no session to have ended it, so there is nothing to judge it against and no reading
+    /// of the file that could make it complete. It is marked the way recovery marks what it finds,
+    /// so that the two sides that may reach this row — this pass and the hook that runs on the
+    /// driver's greeting — cannot disagree over which of them got there first.
+    /// </summary>
+    private async Task MarkWhatWasLeftBehindAsync(
+        Recording recording,
+        DateTime now,
+        Tally tally,
+        CancellationToken cancellationToken)
+    {
+        long? weighed = await weigher.WeighAsync(recording.OutputRoot, recording.FileName, cancellationToken);
+        RecordingOutcome outcome = OrphanRecovery.WhatIsLeftOf(weighed);
+
+        bool marked = await ApplyAsync(
+            recording.Id,
+            loaded =>
+            {
+                if (!ItIsOver(loaded, now))
+                {
+                    return false;
+                }
+
+                foreach (RecordingFault fault in OrphanRecovery.WhyItEndedWhereItDid(false, weighed))
+                {
+                    loaded.Note(new OutcomeDetail(fault, null, string.Empty, now));
+                }
+
+                loaded.Settle(outcome, weighed ?? 0, now);
+
+                return true;
+            },
+            tally,
+            cancellationToken);
+
+        if (!marked)
+        {
+            return;
+        }
+
+        tally.Settled++;
+
+        logger.LogWarning(
+            "Recording {Recording} is over and the driver knows no session of its name, so nothing concluded it; "
+            + "it ends {Outcome} against a file of {Bytes} byte(s) that stays where it is.",
+            recording.Id.Wire,
+            outcome,
+            weighed);
     }
 
     private async Task SettleAsync(
@@ -521,38 +580,6 @@ public sealed class RecordingStreamSupervisor(
                 : RecordingFault.TuneFailed,
         };
 
-    private static bool OpenABreak(Recording recording, RecordingFault fault, DateTime at)
-    {
-        if (recording.Interruptions.Count > 0 && recording.Interruptions[^1].IsOpen)
-        {
-            return false;
-        }
-
-        recording.Interrupt(fault, at);
-
-        return true;
-    }
-
-    private static bool CloseAnyOpenBreak(Recording recording, DateTime at)
-    {
-        if (recording.Interruptions.Count is 0 || !recording.Interruptions[^1].IsOpen)
-        {
-            return false;
-        }
-
-        recording.Resume(at);
-
-        return true;
-    }
-
-    private static void Adopt(Recording recording, string deviceId)
-    {
-        if (recording.TunerDeviceId is null && deviceId is { Length: > 0 })
-        {
-            recording.Acquire(new TunerDeviceId(deviceId));
-        }
-    }
-
     private static DateTime AsFarAsItIsCounted(Recording recording)
         => recording.MeasuredUpdatedAt ?? recording.StartedAtActual;
 
@@ -576,18 +603,6 @@ public sealed class RecordingStreamSupervisor(
                     new DropBucket(bucket.Second, bucket.Continuity, bucket.Scrambled))],
                 [.. positions.Reanchors.Select(reanchor =>
                     new PcrReanchor(reanchor.Second, reanchor.Before, reanchor.After))]);
-
-    private static StartSessionRequest Request(Recording recording, TuneParams tune)
-        => new()
-        {
-            SessionId = RecordingSessions.Named(recording.Id),
-            Purpose = SessionPurpose.Recording,
-            Tuning = tune.ToLegacyRequest(),
-            Tune = tune,
-            OutputRoot = recording.OutputRoot.Value,
-            RecordingId = recording.Id.Wire,
-            EndsAt = recording.ExpectedWindowEnd,
-        };
 
     private sealed class Tally
     {

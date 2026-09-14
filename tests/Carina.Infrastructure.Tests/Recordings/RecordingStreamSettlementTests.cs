@@ -37,6 +37,46 @@ public sealed class RecordingStreamSettlementTests
     }
 
     [Fact]
+    public async Task ARecordingOverAndUnknownToTheDriverIsMarkedTheWayRecoveryMarksItRatherThanJudged()
+    {
+        Recording recording = Ready(TimeSpan.FromMinutes(30), asked: true);
+        var ledger = new StreamLedger();
+        ledger.Hold(recording);
+
+        RecordingWatch watch = await Supervisor(
+                ledger,
+                new WatchedDriver(),
+                new WatchClock(Ended),
+                new WeighedFiles { Weighs = 3_400_000_000 })
+            .WatchAsync(Cancel);
+
+        Recording read = ledger.Read(recording.Id);
+
+        Assert.Equal(1, watch.Settled);
+        Assert.NotEqual(RecordingOutcome.Complete, read.Outcome);
+        Assert.Contains(read.OutcomeDetail, detail => detail.Fault is RecordingFault.LeftRunningUnwatched);
+        Assert.Equal(3_400_000_000, read.FileSizeObserved);
+    }
+
+    [Fact]
+    public async Task ARecordingOverAndUnknownToTheDriverEndsWhereRecoveryWouldHaveEndedItToo()
+    {
+        Recording recording = Ready(TimeSpan.FromMinutes(30), asked: true);
+        var ledger = new StreamLedger();
+        ledger.Hold(recording);
+        var files = new WeighedFiles { Weighs = 3_400_000_000 };
+
+        await Supervisor(ledger, new WatchedDriver(), new WatchClock(Ended), files).WatchAsync(Cancel);
+
+        Recording read = ledger.Read(recording.Id);
+
+        Assert.Equal(OrphanRecovery.WhatIsLeftOf(3_400_000_000), read.Outcome);
+        Assert.Equal(
+            OrphanRecovery.WhyItEndedWhereItDid(driverIsAnotherInstance: false, 3_400_000_000),
+            read.OutcomeDetail.Select(detail => detail.Fault).ToArray());
+    }
+
+    [Fact]
     public async Task AnEmptyFileIsAFailureWhateverElseWasObserved()
     {
         Recording read = await Judged(TimeSpan.FromMinutes(30), 0, asked: true);
@@ -111,7 +151,7 @@ public sealed class RecordingStreamSettlementTests
         ledger.Hold(recording);
         var files = new WeighedFiles { Weighs = 3_400_000_000 };
 
-        await Supervisor(ledger, new WatchedDriver(), new WatchClock(Ended), files).WatchAsync(Cancel);
+        await Supervisor(ledger, Concluded(recording), new WatchClock(Ended), files).WatchAsync(Cancel);
 
         Assert.Equal($"{recording.OutputRoot.Value}/{recording.FileName.Value}", Assert.Single(files.Read));
     }
@@ -125,7 +165,7 @@ public sealed class RecordingStreamSettlementTests
 
         RecordingWatch watch = await Supervisor(
                 ledger,
-                new WatchedDriver(),
+                Concluded(recording),
                 new WatchClock(Ended),
                 new WeighedFiles { Weighs = 3_400_000_000 },
                 tuning: TuningResolution.Refused(TuningRefusal.NoSuchService))
@@ -148,7 +188,7 @@ public sealed class RecordingStreamSettlementTests
 
         await Supervisor(
                 ledger,
-                new WatchedDriver(),
+                Concluded(recording),
                 new WatchClock(Ended),
                 new WeighedFiles { Weighs = 3_300_000_000 })
             .WatchAsync(Cancel);
@@ -160,6 +200,14 @@ public sealed class RecordingStreamSettlementTests
             [RecordingFault.StoppedByHand, RecordingFault.ShortOfTheWindow],
             read.OutcomeDetail.Select(detail => detail.Fault).ToArray());
         Assert.Equal("the wrong programme", read.OutcomeDetail[0].Note);
+    }
+
+    private static WatchedDriver Concluded(Recording recording)
+    {
+        var driver = new WatchedDriver();
+        driver.Holding[RecordingSessions.Named(recording.Id)] = Over(recording);
+
+        return driver;
     }
 
     private static Recording Ready(TimeSpan written, bool asked)
@@ -191,7 +239,7 @@ public sealed class RecordingStreamSettlementTests
 
         await Supervisor(
                 ledger,
-                new WatchedDriver(),
+                Concluded(recording),
                 new WatchClock(Ended),
                 new WeighedFiles { Weighs = weighs },
                 tuning: tuning)

@@ -305,7 +305,7 @@ public sealed class ServiceCollectionExtensionsTests
         Assert.Same(
             provider.GetRequiredService<DriverSignalRelay>(),
             provider.GetRequiredService<IDriverSignals>());
-        Assert.IsType<NoopDriverSessionResyncHook>(
+        Assert.IsType<OrphanRecoveryService>(
             provider.GetRequiredService<IDriverSessionResyncHook>());
         Assert.Same(
             DriverSupervisionSettings.Default,

@@ -34,6 +34,10 @@ public enum RecordingFault
     HeavierThanTheStream = 14,
 
     EndStillUndecided = 15,
+
+    LeftRunningUnwatched = 16,
+
+    DriverReplaced = 17,
 }
 
 public sealed record OutcomeDetail(RecordingFault Fault, TuneFailureKind? TuneFailure, string Note, DateTime NoticedAt)
@@ -70,6 +74,8 @@ public static class RecordingFaults
         RecordingFault.StoppedByHand,
         RecordingFault.TunerContended,
         RecordingFault.ScramblingUnresolved,
+        RecordingFault.LeftRunningUnwatched,
+        RecordingFault.DriverReplaced,
     ];
 
     /// <summary>
