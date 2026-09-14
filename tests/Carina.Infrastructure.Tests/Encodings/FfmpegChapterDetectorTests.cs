@@ -1,3 +1,5 @@
+using System.Globalization;
+
 using Carina.Domain.Channels;
 using Carina.Domain.Encodings;
 using Carina.Domain.Machines;
@@ -16,6 +18,8 @@ public sealed class FfmpegChapterDetectorTests : IDisposable
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
     private static readonly ServiceId Service = new(1040);
+
+    private static readonly Func<RunningProgramme, Task> Unwatched = _ => Task.CompletedTask;
 
     private static readonly EncodeTimeline Aligned = new(
         TimeSpan.FromSeconds(1000),
@@ -47,7 +51,7 @@ public sealed class FfmpegChapterDetectorTests : IDisposable
     [Fact(DisplayName = "a pod of advertisements is heard as two quiet stretches, seen as two dark ones, and comes back marked")]
     public async Task APodOfAdvertisementsComesBackMarked()
     {
-        ChapterDetection read = await Looking(APodOfAdvertisements).MarkAsync(Source, Service, Aligned, Cores, Cancel);
+        ChapterDetection read = await Looking(APodOfAdvertisements).MarkAsync(Source, Service, Aligned, Cores, Unwatched, Cancel);
 
         Assert.Equal(ChapterVerdict.Marked, read.Verdict);
         Assert.Equal(3, read.Segments.Count);
@@ -66,7 +70,7 @@ public sealed class FfmpegChapterDetectorTests : IDisposable
         string calls = tree.Under("calls");
 
         await Looking($"printf '%s\\n' \"$*\" >> \"{calls}\"\n{APodOfAdvertisements}")
-            .MarkAsync(Source, Service, Aligned, Cores, Cancel);
+            .MarkAsync(Source, Service, Aligned, Cores, Unwatched, Cancel);
 
         string[] ran = File.ReadAllLines(calls);
 
@@ -81,7 +85,7 @@ public sealed class FfmpegChapterDetectorTests : IDisposable
     [Fact(DisplayName = "a source nothing went quiet in was looked at and had nothing to mark, which is not the same as nobody having looked")]
     public async Task ASourceNothingWentQuietInHasNothingToMark()
     {
-        ChapterDetection read = await Looking("exit 0").MarkAsync(Source, Service, Aligned, Cores, Cancel);
+        ChapterDetection read = await Looking("exit 0").MarkAsync(Source, Service, Aligned, Cores, Unwatched, Cancel);
 
         Assert.Equal(ChapterVerdict.NothingFound, read.Verdict);
         Assert.Empty(read.Segments);
@@ -91,7 +95,7 @@ public sealed class FfmpegChapterDetectorTests : IDisposable
     public async Task AProgrammeThatRefusedLeavesAReadingThatCouldNotBeMade()
     {
         ChapterDetection read = await Looking($"echo 'cannot open {Source}' >&2; exit 3")
-            .MarkAsync(Source, Service, Aligned, Cores, Cancel);
+            .MarkAsync(Source, Service, Aligned, Cores, Unwatched, Cancel);
 
         Assert.Equal(ChapterVerdict.Unreadable, read.Verdict);
         Assert.Empty(read.Segments);
@@ -114,7 +118,7 @@ public sealed class FfmpegChapterDetectorTests : IDisposable
                     exit 218
                     ;;
             esac
-            """).MarkAsync(Source, Service, Aligned, Cores, Cancel);
+            """).MarkAsync(Source, Service, Aligned, Cores, Unwatched, Cancel);
 
         Assert.Equal(ChapterVerdict.Unreadable, read.Verdict);
         Assert.Contains("exited 218", read.Note, StringComparison.Ordinal);
@@ -127,7 +131,7 @@ public sealed class FfmpegChapterDetectorTests : IDisposable
         ChapterDetection read = await new FfmpegChapterDetector(
             new MachineSettings { Programme = tree.Under("no-such-programme") },
             new EncodeSettings(),
-            TimeProvider.System).MarkAsync(Source, Service, Aligned, Cores, Cancel);
+            TimeProvider.System).MarkAsync(Source, Service, Aligned, Cores, Unwatched, Cancel);
 
         Assert.Equal(ChapterVerdict.Unreadable, read.Verdict);
         Assert.DoesNotContain(tree.Root, read.Note, StringComparison.Ordinal);
@@ -142,7 +146,7 @@ public sealed class FfmpegChapterDetectorTests : IDisposable
             new MachineSettings { Programme = Standing($"sleep 30\nprintf woke > \"{marker}\"") },
             new EncodeSettings(),
             TimeProvider.System,
-            TimeSpan.FromMilliseconds(300)).MarkAsync(Source, Service, Aligned, Cores, Cancel);
+            TimeSpan.FromMilliseconds(300)).MarkAsync(Source, Service, Aligned, Cores, Unwatched, Cancel);
 
         Assert.Equal(ChapterVerdict.Unreadable, read.Verdict);
         Assert.Contains("was stopped", read.Note, StringComparison.Ordinal);
@@ -161,7 +165,7 @@ public sealed class FfmpegChapterDetectorTests : IDisposable
             echo '[silencedetect @ 0x1] silence_end: 99100.5 | silence_duration: 0.5' >&2
             echo '[silencedetect @ 0x1] silence_start: 99200' >&2
             echo '[silencedetect @ 0x1] silence_end: 99200.5 | silence_duration: 0.5' >&2
-            """).MarkAsync(Source, Service, Aligned, Cores, Cancel);
+            """).MarkAsync(Source, Service, Aligned, Cores, Unwatched, Cancel);
 
         Assert.Equal(ChapterVerdict.Unreadable, read.Verdict);
         Assert.Contains("3 of the 4", read.Note, StringComparison.Ordinal);
@@ -175,6 +179,7 @@ public sealed class FfmpegChapterDetectorTests : IDisposable
             Service,
             new EncodeTimeline(TimeSpan.FromSeconds(1000), TimeSpan.FromSeconds(0.5), null, null),
             Cores,
+            Unwatched,
             Cancel);
 
         Assert.Equal(ChapterVerdict.Unreadable, read.Verdict);
@@ -188,7 +193,7 @@ public sealed class FfmpegChapterDetectorTests : IDisposable
         string marker = tree.Under("woke");
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Looking($"sleep 30\nprintf woke > \"{marker}\"")
-            .MarkAsync(Source, Service, Aligned, Cores, stopping.Token));
+            .MarkAsync(Source, Service, Aligned, Cores, Unwatched, stopping.Token));
 
         Assert.False(File.Exists(marker));
     }
@@ -205,7 +210,7 @@ public sealed class FfmpegChapterDetectorTests : IDisposable
                 Cores = 8,
             },
             new EncodeSettings { MostCores = 6 },
-            TimeProvider.System).MarkAsync(Source, Service, Aligned, 3, Cancel);
+            TimeProvider.System).MarkAsync(Source, Service, Aligned, 3, Unwatched, Cancel);
 
         Assert.All(
             File.ReadAllLines(calls),
@@ -219,7 +224,53 @@ public sealed class FfmpegChapterDetectorTests : IDisposable
     [Fact(DisplayName = "a look allowed no core at all is asked for by a caller that has not worked one out, and is refused rather than run")]
     public async Task ALookAllowedNoCoreAtAllIsRefused()
         => await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
-            () => Looking(APodOfAdvertisements).MarkAsync(Source, Service, Aligned, 0, Cancel));
+            () => Looking(APodOfAdvertisements).MarkAsync(Source, Service, Aligned, 0, Unwatched, Cancel));
+
+    [Fact(DisplayName = "BR-ED2-011: every programme the look starts is handed over before it says anything, so a process that dies mid-look leaves nothing nobody can find")]
+    public async Task EveryProgrammeTheLookStartsIsHandedOverBeforeItSaysAnything()
+    {
+        string ownIds = tree.Under("own-ids");
+        List<RunningProgramme> handedOver = [];
+
+        ChapterDetection read = await Looking($"printf '%s\\n' \"$$\" >> \"{ownIds}\"\n{APodOfAdvertisements}")
+            .MarkAsync(
+                Source,
+                Service,
+                Aligned,
+                Cores,
+                spawned =>
+                {
+                    handedOver.Add(spawned);
+
+                    return Task.CompletedTask;
+                },
+                Cancel);
+
+        Assert.Equal(ChapterVerdict.Marked, read.Verdict);
+        Assert.Equal(
+            File.ReadAllLines(ownIds),
+            handedOver.Select(spawned => spawned.ProcessId.ToString(CultureInfo.InvariantCulture)));
+        Assert.All(handedOver, spawned => Assert.InRange(
+            spawned.StartedAt,
+            DateTime.UtcNow - TimeSpan.FromMinutes(5),
+            DateTime.UtcNow + TimeSpan.FromMinutes(5)));
+    }
+
+    [Fact(DisplayName = "BR-ED2-011: a programme whose identity cannot be written down is stopped rather than left running unrecorded")]
+    public async Task AProgrammeWhoseIdentityCannotBeWrittenDownIsStopped()
+    {
+        string marker = tree.Under("woke");
+
+        await Assert.ThrowsAsync<IOException>(() => Looking($"sleep 30\nprintf woke > \"{marker}\"").MarkAsync(
+            Source,
+            Service,
+            Aligned,
+            Cores,
+            _ => throw new IOException("the ledger refused"),
+            Cancel));
+
+        Assert.False(File.Exists(marker));
+    }
 
     private FfmpegChapterDetector Looking(string body)
         => new(

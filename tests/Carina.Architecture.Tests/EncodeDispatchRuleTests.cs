@@ -141,6 +141,21 @@ public sealed class EncodeDispatchRuleTests
         Assert.Equal(1, peeking.Split("\"-copyts\"").Length - 1);
     }
 
+    [Fact(DisplayName = "BR-ED2-011: the look hands over who its programme is before it reads a line of either stream, and stops the programme when that cannot be written down")]
+    public void TheLookHandsOverWhoItsProgrammeIsBeforeItReadsALine()
+    {
+        string source = File.ReadAllText(Look);
+        int started = source.IndexOf("AnotherProgramme.Start(programme, arguments, ProgrammePriority.Yielding)", StringComparison.Ordinal);
+        int handedOver = source.IndexOf("await began(spawned);", StringComparison.Ordinal);
+        int stoppedInstead = source.IndexOf("AnotherProgramme.GiveUpOn(running);\n\n                throw;", StringComparison.Ordinal);
+        int read = source.IndexOf("ReadAsync(running.Standard", StringComparison.Ordinal);
+
+        Assert.True(started >= 0, "the programme is started yielding");
+        Assert.True(handedOver > started, "the identity is handed over after the start");
+        Assert.True(stoppedInstead > handedOver, "a hand-over that fails stops the programme");
+        Assert.True(read > handedOver, "neither stream is read until the identity is handed over");
+    }
+
     [Fact(DisplayName = "BR-ED2-005: the look for the breaks starts its programme yielding, reads both of its streams as they come, and starts nothing else")]
     public void TheLookForTheBreaksStartsItsProgrammeYielding()
     {

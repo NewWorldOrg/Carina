@@ -1,5 +1,6 @@
 using Carina.Domain.Channels;
 using Carina.Domain.Encodings;
+using Carina.Domain.Machines;
 
 namespace Carina.Infrastructure.Encodings;
 
@@ -14,6 +15,7 @@ public sealed class NoChapterDetector : IChapterDetector
         ServiceId service,
         EncodeTimeline timeline,
         int cores,
+        Func<RunningProgramme, Task> began,
         CancellationToken cancellationToken)
         => Task.FromResult(ChapterDetection.NotAsked);
 }

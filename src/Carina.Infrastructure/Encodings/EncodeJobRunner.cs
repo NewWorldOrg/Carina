@@ -20,7 +20,9 @@ namespace Carina.Infrastructure.Encodings;
 /// <para>
 /// Three things about the run are written on the job as it goes: where it ran, so a degraded run
 /// is in the ledger (BR-EV-004); the programme's id and start, before its first line of progress
-/// is read, so the next process can stop it if this one dies (BR-ED2-011); and its headway, at
+/// is read, so the next process can stop it if this one dies — which is the same row the look for
+/// the breaks writes each of its own programmes on, one at a time, the two never overlapping
+/// (BR-ED2-011); and its headway, at
 /// every tenth and at least every <see cref="HeartbeatEvery"/>, so a job that has stopped getting
 /// on can be told from one that is (BR-ED2-014).
 /// </para>
@@ -147,7 +149,13 @@ public sealed class EncodeJobRunner(
 
         int cores = Math.Min((await autoRun.ReadAsync(cancellationToken)).MostCores, programmes.Cores);
 
-        ChapterDetection marks = await MarkedAsync(source.FullName, recording.ServiceId, timeline, cores, cancellationToken);
+        ChapterDetection marks = await MarkedAsync(
+            source.FullName,
+            recording.ServiceId,
+            timeline,
+            cores,
+            spawned => SpawnedAsync(job, spawned, cancellationToken),
+            cancellationToken);
 
         if (marks.Verdict is not ChapterVerdict.NotAsked)
         {
@@ -255,11 +263,12 @@ public sealed class EncodeJobRunner(
         ServiceId service,
         EncodeTimeline timeline,
         int cores,
+        Func<RunningProgramme, Task> began,
         CancellationToken cancellationToken)
     {
         try
         {
-            return await chapters.MarkAsync(source, service, timeline, cores, cancellationToken);
+            return await chapters.MarkAsync(source, service, timeline, cores, began, cancellationToken);
         }
         catch (Exception failure) when (!cancellationToken.IsCancellationRequested)
         {

@@ -27,6 +27,11 @@ namespace Carina.Infrastructure.Encodings;
 /// looking and the encode that follows it are bounded by the one cap the operator holds
 /// (BR-ED2-005).
 /// </para>
+/// <para>
+/// Every programme either pass starts is handed to the caller before it is read from, on the same
+/// terms the encode's own run is written down on, so that a process killed mid-look does not leave
+/// an ffmpeg nobody has a record of (BR-ED2-011).
+/// </para>
 /// </summary>
 public sealed class FfmpegChapterDetector(
     MachineSettings machine,
@@ -46,12 +51,14 @@ public sealed class FfmpegChapterDetector(
         ServiceId service,
         EncodeTimeline timeline,
         int cores,
+        Func<RunningProgramme, Task> began,
         CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrEmpty(source);
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(timeline);
         ArgumentOutOfRangeException.ThrowIfLessThan(cores, 1);
+        ArgumentNullException.ThrowIfNull(began);
 
         if (timeline.Expected is not { } artefactLength || artefactLength <= TimeSpan.Zero)
         {
@@ -59,13 +66,14 @@ public sealed class FfmpegChapterDetector(
                 "nothing measured how long the source is, so no moment reported in it could be placed on the artefact");
         }
 
-        DateTimeOffset began = clock.GetUtcNow();
+        DateTimeOffset from = clock.GetUtcNow();
         ChapterSettings asked = settings.Chapters;
         var heard = new ChapterLog();
 
         ChapterRunOutcome listened = await RunAsync(
             FfmpegChapterInvocation.Listening(source, service, cores, asked),
             heard,
+            from,
             began,
             cancellationToken);
 
@@ -105,6 +113,7 @@ public sealed class FfmpegChapterDetector(
             ChapterRunOutcome peeked = await RunAsync(
                 FfmpegChapterInvocation.Peeking(source, service, cores, middle, asked),
                 seen,
+                from,
                 began,
                 cancellationToken);
 
@@ -157,10 +166,11 @@ public sealed class FfmpegChapterDetector(
     private async Task<ChapterRunOutcome> RunAsync(
         IReadOnlyList<string> arguments,
         ChapterLog log,
-        DateTimeOffset began,
+        DateTimeOffset from,
+        Func<RunningProgramme, Task> began,
         CancellationToken cancellationToken)
     {
-        TimeSpan left = patience - (clock.GetUtcNow() - began);
+        TimeSpan left = patience - (clock.GetUtcNow() - from);
 
         return left <= TimeSpan.Zero
             ? new ChapterRunOutcome(null, ChapterRunFault.TookTooLong, string.Empty)
@@ -170,6 +180,7 @@ public sealed class FfmpegChapterDetector(
                 log.Said,
                 log.Complained,
                 left,
+                began,
                 clock,
                 cancellationToken);
     }

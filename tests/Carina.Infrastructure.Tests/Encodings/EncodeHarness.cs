@@ -360,6 +360,7 @@ internal sealed class ScriptedChapters : IChapterDetector
         ServiceId service,
         EncodeTimeline timeline,
         int cores,
+        Func<RunningProgramme, Task> began,
         CancellationToken cancellationToken)
     {
         Asked.Add((source, service, cores));
