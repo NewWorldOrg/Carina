@@ -68,6 +68,8 @@ public sealed class FfmpegChapterDetector(
     {
     }
 
+    public ChapterDetectorName Name => ChapterDetectorName.Ffmpeg;
+
     public async Task<ChapterDetection> MarkAsync(
         string source,
         ServiceId service,

@@ -26,10 +26,27 @@ public static class FfmpegEncodeInvocation
     public const string Seconds = "0.######";
 
     /// <summary>
+    /// Where the chapters stand among the inputs, which is what says which input the run is told
+    /// to take them from.
+    /// </summary>
+    public const string ChaptersInput = "1";
+
+    /// <summary>
     /// The arguments for one run. The core cap is written three times because ffmpeg counts
     /// threads per stage: once before the input for the decoder, once for the filters, and once
     /// for the encoder (BR-ED2-005). The stages are a pipeline, so the run as a whole is bounded
     /// by the slowest of them rather than by their sum.
+    /// <para>
+    /// Chapters to bake into the artefact come in as a second input, and it goes <em>after</em> the
+    /// recording. A stream is asked for here by its programme — <c>p:1040:v:0</c> — and a specifier
+    /// that opens with no file number is read as naming the first input, so a metadata file put in
+    /// front of the recording would quietly take the picture and the sound with it. What holds the
+    /// order is a test, not this paragraph.
+    /// </para>
+    /// <para>
+    /// With nothing to bake in, not one argument is added and the run is the run it was before,
+    /// which is what makes the looking switchable off.
+    /// </para>
     /// </summary>
     public static IReadOnlyList<string> Arguments(
         ServiceId service,
@@ -38,7 +55,8 @@ public static class FfmpegEncodeInvocation
         string source,
         int cores,
         TimeSpan headSkip,
-        EncodeSound sound)
+        EncodeSound sound,
+        string? chapters = null)
     {
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(profile);
@@ -73,9 +91,11 @@ public static class FfmpegEncodeInvocation
             threads,
             "-i",
             source,
+            .. ReadingChapters(chapters),
             "-ss",
             headSkip.TotalSeconds.ToString(Seconds, CultureInfo.InvariantCulture),
             .. Mapping(service, sound),
+            .. BakingChapters(chapters),
             "-vf",
             Filter(profile, encoder),
             .. Encoding(profile, encoder),
@@ -98,6 +118,12 @@ public static class FfmpegEncodeInvocation
             destination,
         ];
     }
+
+    internal static IReadOnlyList<string> ReadingChapters(string? chapters)
+        => string.IsNullOrEmpty(chapters) ? [] : ["-f", "ffmetadata", "-i", chapters];
+
+    internal static IReadOnlyList<string> BakingChapters(string? chapters)
+        => string.IsNullOrEmpty(chapters) ? [] : ["-map_chapters", ChaptersInput];
 
     internal static IReadOnlyList<string> Device(EncodeEncoder encoder)
         => EncodeShapes.Named(encoder) is EncodeEncoder.Vaapi ? ["-vaapi_device", RenderNode] : [];

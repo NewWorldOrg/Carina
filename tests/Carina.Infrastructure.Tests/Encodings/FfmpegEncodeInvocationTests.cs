@@ -13,6 +13,8 @@ public sealed class FfmpegEncodeInvocationTests
 
     private const string Destination = "/srv/encoded/0f8c.mp4";
 
+    private const string Breaks = "/srv/encodes/0f8c.attempt1.chapters";
+
     private static readonly ServiceId Service = new(1040);
 
     private static readonly EncodeSound AsItStands = EncodeSound.EveryStreamAsItStands;
@@ -164,6 +166,158 @@ public sealed class FfmpegEncodeInvocationTests
                 Cores,
                 HeadSkip,
                 TwoLanguagesOnOneSound));
+
+    [Fact(DisplayName = "A-エンコード-057: the chapters are read from an input of their own and baked into the output, and the arguments are exactly these")]
+    public void TheArgumentsWithChaptersToBakeInAreExactlyThese()
+        => Assert.Equal(
+            [
+                "-nostdin",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-nostats",
+                "-progress",
+                "pipe:1",
+                "-y",
+                "-filter_threads",
+                "2",
+                "-threads",
+                "2",
+                "-i",
+                Source,
+                "-f",
+                "ffmetadata",
+                "-i",
+                Breaks,
+                "-ss",
+                "0.5072",
+                "-map",
+                "p:1040:v:0",
+                "-map",
+                "p:1040:a",
+                "-map_chapters",
+                "1",
+                "-vf",
+                "bwdif=mode=send_frame,setsar=1",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "medium",
+                "-crf",
+                "22",
+                "-threads",
+                "2",
+                "-c:a",
+                "copy",
+                "-bsf:a",
+                "aac_adtstoasc",
+            ],
+            FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, Source, Cores, HeadSkip, AsItStands, Breaks));
+
+    [Fact(DisplayName = "A-エンコード-057: the card bakes the chapters in exactly as the processor does, because the real machine encodes on the card")]
+    public void TheCardsArgumentsWithChaptersToBakeInAreExactlyThese()
+        => Assert.Equal(
+            [
+                "-nostdin",
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-nostats",
+                "-progress",
+                "pipe:1",
+                "-y",
+                "-filter_threads",
+                "2",
+                "-vaapi_device",
+                FfmpegEncodeInvocation.RenderNode,
+                "-threads",
+                "2",
+                "-i",
+                Source,
+                "-f",
+                "ffmetadata",
+                "-i",
+                Breaks,
+                "-ss",
+                "0.5072",
+                "-map",
+                "p:1040:v:0",
+                "-map",
+                "p:1040:a",
+                "-map_chapters",
+                "1",
+                "-vf",
+                "bwdif=mode=send_frame,setsar=1,format=nv12,hwupload",
+                "-c:v",
+                "h264_vaapi",
+                "-rc_mode",
+                "CQP",
+                "-qp",
+                "24",
+                "-threads",
+                "2",
+                "-c:a",
+                "copy",
+                "-bsf:a",
+                "aac_adtstoasc",
+            ],
+            FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Vaapi, Source, Cores, HeadSkip, AsItStands, Breaks));
+
+    [Theory(DisplayName = "A-エンコード-057: a run with nothing to bake in is the run it was before, argument for argument, on either encoder")]
+    [InlineData(EncodeEncoder.Software)]
+    [InlineData(EncodeEncoder.Vaapi)]
+    public void ARunWithNothingToBakeInIsTheRunItWasBefore(EncodeEncoder encoder)
+    {
+        IReadOnlyList<string> withoutSaying =
+            FfmpegEncodeInvocation.Arguments(Service, Profile(), encoder, Source, Cores, HeadSkip, AsItStands);
+
+        Assert.Equal(withoutSaying, FfmpegEncodeInvocation.Arguments(Service, Profile(), encoder, Source, Cores, HeadSkip, AsItStands, null));
+        Assert.Equal(withoutSaying, FfmpegEncodeInvocation.Arguments(Service, Profile(), encoder, Source, Cores, HeadSkip, AsItStands, string.Empty));
+        Assert.Equal(
+            FfmpegEncodeInvocation.Arguments(Service, Profile(), encoder, Source, Cores, HeadSkip, TwoLanguagesOnOneSound),
+            FfmpegEncodeInvocation.Arguments(Service, Profile(), encoder, Source, Cores, HeadSkip, TwoLanguagesOnOneSound, null));
+        Assert.Equal(1, withoutSaying.Count(argument => argument == "-i"));
+        Assert.DoesNotContain("-map_chapters", withoutSaying);
+        Assert.DoesNotContain("ffmetadata", withoutSaying);
+    }
+
+    [Fact(DisplayName = "A-エンコード-057: the chapters stand after the recording among the inputs, because a stream asked for by its programme with no file number in front of it names the first input")]
+    public void TheChaptersStandAfterTheRecordingAmongTheInputs()
+    {
+        string[] arguments =
+        [
+            .. FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, Source, Cores, HeadSkip, AsItStands, Breaks),
+        ];
+
+        int recording = Array.IndexOf(arguments, Source);
+        int breaks = Array.IndexOf(arguments, Breaks);
+        int mapped = Array.IndexOf(arguments, "-map_chapters");
+
+        Assert.Equal(2, arguments.Count(argument => argument == "-i"));
+        Assert.Equal(Source, arguments[Array.IndexOf(arguments, "-i") + 1]);
+        Assert.True(recording < breaks, "the recording is the first input and the chapters the second");
+        Assert.Equal("ffmetadata", arguments[Array.IndexOf(arguments, "-f") + 1]);
+        Assert.True(Array.IndexOf(arguments, "-f") < breaks, "the chapters are declared to be metadata before they are opened");
+        Assert.True(breaks < Array.IndexOf(arguments, "-ss"), "the skip stays an output option, after every input");
+        Assert.True(mapped > Array.IndexOf(arguments, "-map"), "the chapters are taken from the input the streams are not");
+        Assert.Equal(FfmpegEncodeInvocation.ChaptersInput, arguments[mapped + 1]);
+        Assert.All(
+            arguments.Select((argument, at) => (argument, at)).Where(pair => pair.at > 0 && arguments[pair.at - 1] == "-map"),
+            pair => Assert.StartsWith("p:", pair.argument, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void TheArgumentsForOneSoundAndTheChaptersToBakeInAreBothTakenTogether()
+    {
+        string[] arguments =
+        [
+            .. FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, Source, Cores, HeadSkip, TwoLanguagesOnOneSound, Breaks),
+        ];
+
+        Assert.Contains("p:1040:a:0", arguments);
+        Assert.Contains("pan=stereo|c0=c0|c1=c0", arguments);
+        Assert.Contains("-map_chapters", arguments);
+    }
 
     [Fact]
     public void TheMainLanguageIsTakenFromTheSameChannelPlaybackTakesItFrom()
@@ -345,6 +499,11 @@ public sealed class FfmpegEncodeInvocationTests
             FfmpegEncodeInvocation.RenderNode,
             "-i",
             Source,
+            "-f",
+            "ffmetadata",
+            Breaks,
+            "-map_chapters",
+            "1",
             "-ss",
             "0.5072",
             "-map",
@@ -411,7 +570,8 @@ public sealed class FfmpegEncodeInvocationTests
                 Source,
                 Cores,
                 HeadSkip,
-                TwoLanguagesOnOneSound),
+                TwoLanguagesOnOneSound,
+                Breaks),
         ];
 
         Assert.All(arguments, argument => Assert.Contains(argument, known, StringComparer.Ordinal));
@@ -428,7 +588,7 @@ public sealed class FfmpegEncodeInvocationTests
         IReadOnlyList<string> arguments =
         [
             .. FfmpegEncodeInvocation.Arguments(Service, Profile(codec, resolution, deinterlace), encoder, Source, Cores, HeadSkip, AsItStands),
-            .. FfmpegEncodeInvocation.Arguments(Service, Profile(codec, resolution, deinterlace), encoder, Source, Cores, HeadSkip, TwoLanguagesOnOneSound),
+            .. FfmpegEncodeInvocation.Arguments(Service, Profile(codec, resolution, deinterlace), encoder, Source, Cores, HeadSkip, TwoLanguagesOnOneSound, Breaks),
             .. FfmpegEncodeInvocation.Delivery(Destination),
         ];
 
@@ -437,6 +597,7 @@ public sealed class FfmpegEncodeInvocationTests
         [
             Source,
             Destination,
+            Breaks,
             FfmpegPlaybackInvocation.TheLeftChannelInBothEars,
         ];
 
