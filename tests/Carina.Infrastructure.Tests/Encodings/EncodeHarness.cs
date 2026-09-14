@@ -353,15 +353,17 @@ internal sealed class ScriptedChapters : IChapterDetector
 {
     public Func<ChapterDetection>? Answers { get; set; }
 
-    public List<(string Source, ServiceId Service)> Asked { get; } = [];
+    public List<(string Source, ServiceId Service, int Cores)> Asked { get; } = [];
 
     public Task<ChapterDetection> MarkAsync(
         string source,
         ServiceId service,
         EncodeTimeline timeline,
+        int cores,
+        Func<RunningProgramme, Task> began,
         CancellationToken cancellationToken)
     {
-        Asked.Add((source, service));
+        Asked.Add((source, service, cores));
 
         return Task.FromResult(Answers?.Invoke() ?? ChapterDetection.NotAsked);
     }

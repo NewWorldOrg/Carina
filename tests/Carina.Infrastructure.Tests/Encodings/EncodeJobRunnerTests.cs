@@ -560,6 +560,8 @@ public sealed class EncodeJobRunnerTests
         string arguments = harness.Room.Under("arguments");
         harness.Standing($"printf '%s\\n' \"$@\" > \"{arguments}\"; printf 'the picture' > \"$destination\"");
         harness.Programmes = harness.Programmes with { Cores = 4 };
+        var looked = new ScriptedChapters();
+        harness.ChapterDetector = looked;
         EncodeJob job = harness.Running(harness.Recorded().Id, harness.Defined().Id);
 
         await harness.Runner.RunAsync(job, Cancel);
@@ -568,11 +570,13 @@ public sealed class EncodeJobRunnerTests
         Assert.Equal(2, handed.Count(argument => argument == "-threads"));
         Assert.Equal("1", handed[Array.IndexOf(handed, "-threads") + 1]);
         Assert.Equal("1", handed[Array.IndexOf(handed, "-filter_threads") + 1]);
+        Assert.Equal(1, Assert.Single(looked.Asked).Cores);
 
         harness.AutoRun.Standing = harness.AutoRun.Standing with { MostCores = EncodeAutoRun.MostCoresAnyMachineHas };
         await harness.Runner.RunAsync(harness.Running(harness.Recorded().Id, harness.Defined().Id), Cancel);
         handed = File.ReadAllLines(arguments);
         Assert.Equal("4", handed[Array.IndexOf(handed, "-threads") + 1]);
+        Assert.Equal([1, 4], looked.Asked.Select(look => look.Cores));
     }
 
     [Fact(DisplayName = "BR-ED2-005: a machine nobody has settled runs on the cap it was deployed with")]

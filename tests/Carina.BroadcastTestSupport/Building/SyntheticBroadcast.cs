@@ -65,11 +65,15 @@ public sealed record SyntheticBroadcast
 
     public static readonly TimeSpan DefaultLength = TimeSpan.FromSeconds(3);
 
+    public static readonly TimeSpan QuietBreakLasts = TimeSpan.FromMilliseconds(400);
+
     private const int TicksPerSecond = 90_000;
 
     private const int CaptionRow = 7;
 
     private const int CaptionColumn = 2;
+
+    private const string Interlaced = "setfield=tff";
 
     public SyntheticPicture Picture { get; init; } = SyntheticPicture.BroadcastHd;
 
@@ -84,6 +88,22 @@ public sealed record SyntheticBroadcast
     public int ProgramNumber { get; init; } = SomeProgramNumber;
 
     public TimeSpan Length { get; init; } = DefaultLength;
+
+    /// <summary>
+    /// Where the broadcast goes quiet and dark at once, the way it does either side of a pod of
+    /// advertisements. Each moment named here is the start of a stretch <see cref="QuietBreakLasts"/>
+    /// long in which the sound is taken to nothing and the picture is painted over black, so a pair
+    /// of them a whole number of grid steps apart is a pod with a programme either side of it.
+    /// </summary>
+    public IReadOnlyList<TimeSpan> QuietBreaks { get; init; } = [];
+
+    /// <summary>
+    /// Where the written stream's own clock begins. A recorder started in the evening writes a
+    /// broadcast whose first timestamp is the hour of the day it was started in rather than zero,
+    /// which is the magnitude anything reading such a file has to survive; left at zero the stream
+    /// begins where ffmpeg would begin it on its own.
+    /// </summary>
+    public TimeSpan StartsAt { get; init; } = TimeSpan.Zero;
 
     public string Programme { get; init; } = FfmpegProgramme.Default;
 
@@ -224,6 +244,17 @@ public sealed record SyntheticBroadcast
                 nameof(sound));
         }
 
+        if (StartsAt < TimeSpan.Zero)
+        {
+            throw new InvalidOperationException("A stream's clock begins at or after zero.");
+        }
+
+        if (QuietBreaks.Count > 0 && (Picture is SyntheticPicture.None || CarriesASoundEncodedAhead))
+        {
+            throw new InvalidOperationException(
+                "A break is quiet and dark at once, so it needs a picture to darken and a sound this run encodes itself.");
+        }
+
         List<string> arguments = [.. Preamble()];
         int inputs = 0;
         int? picture = null;
@@ -289,7 +320,7 @@ public sealed record SyntheticBroadcast
             arguments.AddRange(
             [
                 "-vf",
-                "setfield=tff",
+                Painted(),
                 "-c:v",
                 "mpeg2video",
                 "-flags",
@@ -303,7 +334,9 @@ public sealed record SyntheticBroadcast
             ]);
         }
 
+        arguments.AddRange(Quieted());
         arguments.AddRange(SoundEncoding());
+        arguments.AddRange(Offset());
         arguments.AddRange(
         [
             "-f",
@@ -402,6 +435,25 @@ public sealed record SyntheticBroadcast
             "adts",
             destination,
         ];
+
+    private string Painted()
+        => QuietBreaks.Count is 0
+            ? Interlaced
+            : Invariant($"{Interlaced},drawbox=x=0:y=0:w=iw:h=ih:color=black@1:t=fill:enable={Whenever()}");
+
+    private IReadOnlyList<string> Offset()
+        => StartsAt <= TimeSpan.Zero
+            ? []
+            : ["-output_ts_offset", Invariant($"{StartsAt.TotalSeconds:0.######}")];
+
+    private IReadOnlyList<string> Quieted()
+        => QuietBreaks.Count is 0 ? [] : ["-af", Invariant($"volume=0:enable={Whenever()}")];
+
+    private string Whenever()
+        => string.Join(
+            '+',
+            QuietBreaks.Select(from => Invariant(
+                $"between(t\\,{from.TotalSeconds:0.###}\\,{(from + QuietBreakLasts).TotalSeconds:0.###})")));
 
     private static string Tone(int hertz) => Invariant($"sine=frequency={hertz}:sample_rate={DualMonoAdts.SampleRate}");
 
