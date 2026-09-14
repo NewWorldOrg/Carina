@@ -6,7 +6,7 @@ public static partial class LibraryFeature
 {
     public const string Folder = "/Library/";
 
-    public const string CriteriaType = "RecordingSearchCriteria";
+    public const string SearchType = "RecordingSearchPattern";
 
     public static IReadOnlyList<SourceFile> Files(string directory)
         => [.. Scanned(directory).Where(Belongs)];
@@ -26,7 +26,7 @@ public static partial class LibraryFeature
     private static bool Belongs(SourceFile file)
         => file.Relative.Contains(Folder, StringComparison.Ordinal)
             || FeatureNamespace().IsMatch(file.Source)
-            || file.Source.Contains(CriteriaType, StringComparison.Ordinal);
+            || file.Source.Contains(SearchType, StringComparison.Ordinal);
 
     private static IEnumerable<SourceFile> Scanned(string directory)
         => Directory

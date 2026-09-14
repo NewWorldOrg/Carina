@@ -58,9 +58,9 @@ public sealed class QualityThresholdRuleSelfCheckTests
     }
 
     [Fact]
-    public void AFileThatMerelyBuildsTheSearchCriteriaIsLibraryCodeToo()
+    public void AFileThatMerelyBuildsTheSearchPatternIsLibraryCodeToo()
     {
-        DirectoryInfo directory = Directory.CreateTempSubdirectory("carina-threshold-criteria-");
+        DirectoryInfo directory = Directory.CreateTempSubdirectory("carina-threshold-pattern-");
 
         try
         {
@@ -69,7 +69,7 @@ public sealed class QualityThresholdRuleSelfCheckTests
                 "Carina.Api/Services/RecordingsService.cs",
                 Source(
                     "Carina.Api.Services",
-                    $"private static object? Read() => {LibraryFeature.CriteriaType}.For(null, null, null);",
+                    $"private static object? Read() => {LibraryFeature.SearchType}.Containing(\"a\");",
                     "private const double Warning = 0.0002;"));
 
             Assert.NotEmpty(QualityThresholdRules.QualityNumbersInsideTheLibraryFeature(directory.FullName));

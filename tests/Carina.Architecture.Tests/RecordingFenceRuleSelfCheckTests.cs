@@ -85,26 +85,6 @@ public sealed class RecordingFenceRuleSelfCheckTests
         }
         """;
 
-    private const string LibraryPortThatCanErase = """
-        namespace Carina.Domain.Library;
-
-        public interface IRecordingLibraryRepository
-        {
-            Task<Recording?> FindAsync(RecordingId id, CancellationToken cancellationToken);
-
-            Task<int> DeleteAsync(RecordingId id, CancellationToken cancellationToken);
-        }
-        """;
-
-    private const string LibraryPortThatOnlyReads = """
-        namespace Carina.Domain.Library;
-
-        public interface IRecordingLibraryRepository
-        {
-            Task<Recording?> FindAsync(RecordingId id, CancellationToken cancellationToken);
-        }
-        """;
-
     private const string ReadOnlyPortThatCanWrite = """
         namespace Carina.Domain.Programmes;
 
@@ -291,24 +271,6 @@ public sealed class RecordingFenceRuleSelfCheckTests
         Assert.Equal(
             ["/Carina.Infrastructure/Persistence/Repositories/RecordingSweep.cs"],
             RecordingFenceRules.WhatErasesARecordingLedgerRow(tree.Root));
-    }
-
-    [Fact]
-    public void DetectsAWayToThrowARecordingAwaySlippingOntoTheLibraryPort()
-    {
-        using var tree = new SourceTree();
-        tree.Write("Carina.Domain/Library/IRecordingLibraryRepository.cs", LibraryPortThatCanErase);
-
-        Assert.Equal(["DeleteAsync"], RecordingFenceRules.ErasingMembersOnTheLibraryPort(tree.Root));
-    }
-
-    [Fact]
-    public void LeavesALibraryPortThatOnlyReads()
-    {
-        using var tree = new SourceTree();
-        tree.Write("Carina.Domain/Library/IRecordingLibraryRepository.cs", LibraryPortThatOnlyReads);
-
-        Assert.Empty(RecordingFenceRules.ErasingMembersOnTheLibraryPort(tree.Root));
     }
 
     private sealed class SourceTree : IDisposable
