@@ -13,7 +13,7 @@ public sealed class QualityThresholdShapeTests
     [Fact(DisplayName = "the levels this build offers are the ones it holds a reading against")]
     public void TheLevelsThisBuildOffersAreTheOnesItHoldsAReadingAgainst()
     {
-        List<QualityThresholdKey> held = [.. QualitySignalSurvey.Keys];
+        List<QualityThresholdKey> held = [.. QualitySignalSurvey.Keys, QualityThresholdKey.SupplySilence];
 
         foreach (QualityMetric metric in QualityMetrics.All)
         {
@@ -30,14 +30,13 @@ public sealed class QualityThresholdShapeTests
             QualityThresholdShapes.Consulted.Select(shape => shape.Key).Order());
     }
 
-    [Fact(DisplayName = "a level nothing holds a reading against is named but not offered")]
-    public void ALevelNothingHoldsAReadingAgainstIsNamedButNotOffered()
+    [Fact(DisplayName = "BR-QD-003: the level a supply watch holds silence against is one the screen can move")]
+    public void TheLevelASupplyWatchHoldsSilenceAgainstIsOneTheScreenCanMove()
     {
-        Assert.Contains(QualityThresholdKey.SupplySilence, QualityThresholdShapes.All.Select(shape => shape.Key));
-        Assert.DoesNotContain(
+        Assert.Contains(
             QualityThresholdKey.SupplySilence,
             QualityThresholdShapes.Consulted.Select(shape => shape.Key));
-        Assert.False(QualityThresholdShapes.Of(QualityThresholdKey.SupplySilence).Consulted);
+        Assert.True(QualityThresholdShapes.Of(QualityThresholdKey.SupplySilence).Consulted);
     }
 
     [Fact]

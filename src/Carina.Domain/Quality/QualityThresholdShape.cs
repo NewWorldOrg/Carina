@@ -41,7 +41,7 @@ public static class QualityThresholdShapes
             15_000,
             true),
         new(QualityThresholdKey.BitErrorRateCeiling, null, ThresholdSense.Ceiling, 0, WholeOfIt, 0.0001, true),
-        new(QualityThresholdKey.SupplySilence, null, ThresholdSense.Ceiling, 1, LongestSilenceInSeconds, 300, false),
+        new(QualityThresholdKey.SupplySilence, null, ThresholdSense.Ceiling, 1, LongestSilenceInSeconds, 300, true),
     ];
 
     public static readonly IReadOnlyList<QualityThresholdShape> Consulted = [.. All.Where(shape => shape.Consulted)];

@@ -281,6 +281,99 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         Assert.Equal("ck_quality_incident_classification", refusal.ConstraintName);
     }
 
+    [Fact(DisplayName = "BR-QD-008: a supply that went quiet names which of the four supplies it was")]
+    public async Task ASupplyThatWentQuietNamesWhichOfTheFourSuppliesItWas()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        await IncidentAsync(
+            connection,
+            state: "Detected",
+            breached: "SupplySilence",
+            silence: "'SignalSamples'");
+
+        PostgresException nameless = await Assert.ThrowsAsync<PostgresException>(
+            () => IncidentAsync(connection, state: "Detected", breached: "SupplySilence"));
+
+        Assert.Equal("ck_quality_incident_silence", nameless.ConstraintName);
+
+        PostgresException unasked = await Assert.ThrowsAsync<PostgresException>(
+            () => IncidentAsync(connection, state: "Detected", silence: "'SignalSamples'"));
+
+        Assert.Equal("ck_quality_incident_silence", unasked.ConstraintName);
+    }
+
+    [Fact(DisplayName = "BR-QD-007: the visit ledger is a subject of its own rather than one stream standing in for it")]
+    public async Task TheVisitLedgerIsASubjectOfItsOwn()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        await IncidentAsync(
+            connection,
+            state: "Detected",
+            breached: "SupplySilence",
+            silence: "'GuideVisits'",
+            subjectKind: "Guide");
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => IncidentAsync(connection, state: "Detected", subjectKind: "SomethingElse"));
+
+        Assert.Equal("ck_quality_incident_vocabulary", refusal.ConstraintName);
+    }
+
+    [Fact(DisplayName = "BR-QD-008: a supply named outside this domain's vocabulary is refused")]
+    public async Task ASupplyNamedOutsideThisDomainsVocabularyIsRefused()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => IncidentAsync(
+                connection,
+                state: "Detected",
+                breached: "SupplySilence",
+                silence: "'SomethingElse'"));
+
+        Assert.Equal("ck_quality_incident_silence", refusal.ConstraintName);
+    }
+
+    [Fact(DisplayName = "BR-QS-002: the lookup for what still stands reads the unsettled index, acknowledged ones included")]
+    public async Task TheLookupForWhatStillStandsReadsTheUnsettledIndex()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        await new NpgsqlCommand("SET enable_seqscan = off", connection).ExecuteNonQueryAsync();
+
+        await using var explaining = new NpgsqlCommand(
+            """
+            EXPLAIN SELECT id FROM quality_incident
+            WHERE resolved_at IS NULL
+            ORDER BY detected_at DESC
+            """,
+            connection);
+
+        List<string> plan = [];
+        await using (NpgsqlDataReader reading = await explaining.ExecuteReaderAsync())
+        {
+            while (await reading.ReadAsync())
+            {
+                plan.Add(reading.GetString(0));
+            }
+        }
+
+        await new NpgsqlCommand("SET enable_seqscan = on", connection).ExecuteNonQueryAsync();
+
+        Assert.Contains(plan, line => line.Contains("ix_quality_incident_unsettled", StringComparison.Ordinal));
+
+        await using var filtering = new NpgsqlCommand(
+            "SELECT indexdef FROM pg_indexes WHERE indexname = 'ix_quality_incident_unsettled'",
+            connection);
+
+        string declared = (string)(await filtering.ExecuteScalarAsync())!;
+
+        Assert.Contains("resolved_at IS NULL", declared, StringComparison.Ordinal);
+        Assert.DoesNotContain("acknowledged_at", declared, StringComparison.Ordinal);
+    }
+
     [Fact(DisplayName = "BR-QS-003: the raw samples carry the index a retention sweep reads them by")]
     public async Task TheRawSamplesCarryTheIndexARetentionSweepReadsThemBy()
     {
@@ -421,16 +514,19 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         string resolvedAt = "NULL",
         string owner = "Quality",
         string classification = "NULL",
-        string? subject = null)
+        string? subject = null,
+        string breached = "PacketsLostWarning",
+        string silence = "NULL",
+        string subjectKind = "Recording")
         => new NpgsqlCommand(
             $"""
             INSERT INTO quality_incident (
-                id, detected_at, breached, subject_kind, subject_key, observed, owner, classification,
+                id, detected_at, breached, subject_kind, subject_key, observed, owner, classification, silence,
                 applied_default, applied_current, applied_provisional, applied_observations, applied_updated_at,
                 state, notified_at, acknowledged_at, acknowledged_by, resolved_at)
             VALUES (
-                '{Guid.NewGuid()}', {Taken}, 'PacketsLostWarning', 'Recording', '{subject ?? Guid.NewGuid().ToString("N")}', 0.004,
-                '{owner}', {classification}, 0.0002, 0.0002, true, 0, {Taken},
+                '{Guid.NewGuid()}', {Taken}, '{breached}', '{subjectKind}', '{subject ?? Guid.NewGuid().ToString("N")}', 0.004,
+                '{owner}', {classification}, {silence}, 0.0002, 0.0002, true, 0, {Taken},
                 '{state}', {notifiedAt}, {acknowledgedAt}, {acknowledgedBy}, {resolvedAt})
             """,
             connection).ExecuteNonQueryAsync();

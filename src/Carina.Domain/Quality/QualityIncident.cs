@@ -26,6 +26,8 @@ public sealed class QualityIncident
 
     public string? Classification { get; private set; }
 
+    public SupplySilence? Silence { get; private set; }
+
     public Threshold Applied { get; private set; } = null!;
 
     public QualityIncidentState State { get; private set; }
@@ -50,7 +52,8 @@ public sealed class QualityIncident
         double observed,
         Threshold applied,
         QualityIncidentOwner owner = QualityIncidentOwner.Quality,
-        string? classification = null)
+        string? classification = null,
+        SupplySilence? silence = null)
         => Rehydrate(
             id,
             detectedAt,
@@ -59,6 +62,7 @@ public sealed class QualityIncident
             observed,
             owner,
             classification,
+            silence,
             applied,
             QualityIncidentState.Detected,
             null,
@@ -74,6 +78,7 @@ public sealed class QualityIncident
         double observed,
         QualityIncidentOwner owner,
         string? classification,
+        SupplySilence? silence,
         Threshold applied,
         QualityIncidentState state,
         DateTime? notifiedAt,
@@ -93,6 +98,18 @@ public sealed class QualityIncident
             throw new ArgumentException(
                 "An anomaly another domain defines is kept under that domain's own classification, and one of this domain's own has none to keep.",
                 nameof(classification));
+        }
+
+        if ((breached is QualityThresholdKey.SupplySilence) != (silence is not null))
+        {
+            throw new ArgumentException(
+                "A supply that went quiet says which supply it was, and nothing else carries one.",
+                nameof(silence));
+        }
+
+        if (silence is { } quiet)
+        {
+            Named(quiet);
         }
 
         if (classification is not null)
@@ -140,6 +157,7 @@ public sealed class QualityIncident
             Observed = observed,
             Owner = owner,
             Classification = classification,
+            Silence = silence,
             Applied = applied,
             State = state,
             NotifiedAt = notifiedAt,
