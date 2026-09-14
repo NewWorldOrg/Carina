@@ -22,14 +22,7 @@ public sealed class EncodeIntakeJob(
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (!settings.Automatically)
-        {
-            logger.LogInformation(
-                "A recording that ends is not queued for encoding on this machine, because Encodings:Automatically is off.");
-
-            return;
-        }
-
+        bool told = false;
         int page = 1;
         TimeSpan waiting = settings.BeforeFirstLook;
 
@@ -50,6 +43,19 @@ public sealed class EncodeIntakeJob(
             {
                 EncodeIntake took = await TakeAsync(page, stoppingToken);
 
+                if (!took.Automatically)
+                {
+                    if (!told)
+                    {
+                        logger.LogInformation(
+                            "A recording that ends is not being queued for encoding, because the auto-run is turned off.");
+                        told = true;
+                    }
+
+                    continue;
+                }
+
+                told = false;
                 page = took.MorePages ? took.Page + 1 : took.LastPage;
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)

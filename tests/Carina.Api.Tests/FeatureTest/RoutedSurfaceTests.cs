@@ -97,7 +97,7 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
     }
 
     [Fact]
-    public void TheEncodingSurfacesAreTheElevenAProfileADestinationAndAJobAreDefinedChangedRemovedListedQueuedAndCalledOffThrough()
+    public void TheEncodingSurfacesAreTheFourteenTheDefinitionsTheQueueAndTheAutoRunAreReachedThrough()
     {
         Assert.Equal(
             [
@@ -105,13 +105,16 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
                 "DELETE /api/encoding/profiles/{id:guid}",
                 "GET /api/encoding/destinations",
                 "GET /api/encoding/jobs",
+                "GET /api/encoding/jobs/durations",
                 "GET /api/encoding/profiles",
+                "GET /api/encoding/settings",
                 "PATCH /api/encoding/destinations/{id:guid}",
                 "PATCH /api/encoding/profiles/{id:guid}",
                 "POST /api/encoding/destinations",
                 "POST /api/encoding/jobs",
                 "POST /api/encoding/jobs/{id:guid}/cancel",
                 "POST /api/encoding/profiles",
+                "PUT /api/encoding/settings",
             ],
             Inventory()
                 .Where(surface => surface.Pattern.StartsWith("/api/encoding", StringComparison.Ordinal))

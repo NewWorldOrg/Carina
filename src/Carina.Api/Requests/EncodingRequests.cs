@@ -58,3 +58,10 @@ public sealed record QueueEncodeJobRequest
 
     public Guid? DestinationId { get; init; }
 }
+
+public sealed record PutEncodeSettingsRequest
+{
+    public bool? Automatically { get; init; }
+
+    public int? MostCores { get; init; }
+}

@@ -72,13 +72,13 @@ public sealed class PersistenceBoundaryRuleTests
         Assert.Equal(["integrity_check"], pointing);
     }
 
-    [Fact(DisplayName = "BR-D-004: the encode ledger is four tables, and its foreign keys never leave it")]
-    public void TheEncodeLedgerIsFourTablesAndItsForeignKeysNeverLeaveIt()
+    [Fact(DisplayName = "BR-D-004: the encode ledger is five tables, and its foreign keys never leave it")]
+    public void TheEncodeLedgerIsFiveTablesAndItsForeignKeysNeverLeaveIt()
     {
         using CarinaDbContext context = Carina();
 
         Assert.Equal(
-            ["encode_destination", "encode_job", "encode_profile", "encode_scratch_file"],
+            ["encode_auto_run", "encode_destination", "encode_job", "encode_profile", "encode_scratch_file"],
             PersistenceBoundaryRules.TablesOf(context.Model, PersistenceFamily.Encodings));
 
         IReadOnlyList<string> pointing = [.. context.Model

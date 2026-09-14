@@ -86,6 +86,8 @@ internal sealed class EncodeHarness : IDisposable
 
     public MachineSettings Programmes { get; set; } = new();
 
+    public StandingEncodeAutoRun AutoRun { get; } = new();
+
     public IRenameProbe Probe { get; set; } = new DirectoryRenameProbe();
 
     public HeardOf<EncodeArtefactPlacer> PlacerLog { get; } = new();
@@ -116,6 +118,7 @@ internal sealed class EncodeHarness : IDisposable
         ChapterDetector,
         Programmes,
         Settings,
+        AutoRun,
         Clock,
         RunnerLog);
 
