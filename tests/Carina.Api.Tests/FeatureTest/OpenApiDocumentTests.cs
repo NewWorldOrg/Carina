@@ -367,6 +367,35 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
         };
 
     [Fact]
+    public async Task ThePlanOfARecordingDescribesTheChaptersItCarriesAsAShapeOfItsOwn()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonObject schemas = document["components"]!["schemas"]!.AsObject();
+        JsonNode chapters = schemas["PlaybackPlanResponder"]!["properties"]!["chapters"]!;
+
+        Assert.Equal("array", chapters["type"]!.GetValue<string>());
+        Assert.EndsWith(
+            "/PlaybackChapterResponder",
+            chapters["items"]!["$ref"]!.GetValue<string>(),
+            StringComparison.Ordinal);
+        Assert.Equal(
+            ["startsAtSec", "endsAtSec", "kind"],
+            schemas["PlaybackChapterResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
+    }
+
+    [Fact]
+    public async Task TheKindsAChapterCanBeAreSpelledInTheDocumentTheWayThePlanSpellsThem()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode kind = document["components"]!["schemas"]!["ChapterKind"]!;
+
+        Assert.Equal("string", kind["type"]!.GetValue<string>());
+        Assert.Equal(
+            ["programme", "break"],
+            kind["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
+    }
+
+    [Fact]
     public async Task TheEnvelopeIsDescribedRatherThanLeftOpaque()
     {
         JsonNode document = await ServedOpenApi.FetchAsync(factory);

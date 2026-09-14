@@ -12,6 +12,7 @@ using Carina.Api.Responder;
 using Carina.Api.Responder.Playback;
 using Carina.Api.Services;
 using Carina.Domain.Channels;
+using Carina.Domain.Encodings;
 using Carina.Domain.Streaming;
 using Carina.Domain.Thumbnails;
 using Carina.Infrastructure.DependencyInjection;
@@ -104,8 +105,12 @@ app.MapMethods(VideoDelivery.Path, VideoDelivery.Methods, (HttpContext context, 
 
 app.MapGet(
         PlayDelivery.Path,
-        (HttpContext context, string id, PlaybackService playback, IOnTheFlyPlayer player) =>
-            PlayDelivery.Invoke(context, id, playback, player))
+        (HttpContext context,
+                string id,
+                PlaybackService playback,
+                IOnTheFlyPlayer player,
+                IEncodeChapterRepository chapters) =>
+            PlayDelivery.Invoke(context, id, playback, player, chapters))
     .WithName(PlaybackSurfaces.PlayingIsCalled)
     .WithTags(PlaybackSurfaces.Tag)
     .WithSummary(PlaybackSurfaces.HowARecordingIsPlayedInABrowser)

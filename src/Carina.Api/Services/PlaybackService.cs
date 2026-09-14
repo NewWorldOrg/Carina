@@ -24,7 +24,8 @@ public sealed record PlaybackOffer(
     PlaybackPlan Plan,
     PlaybackFile Handover,
     ServiceId Service,
-    AnnouncedSound Announced);
+    AnnouncedSound Announced,
+    EncodeJobId? Artefact);
 
 public sealed class PlaybackService(
     IRecordingDirectory recordings,
@@ -49,8 +50,9 @@ public sealed class PlaybackService(
 
         PlaybackFileSearch onDisk = files.Find(recording.OutputRoot, recording.FileName);
         var announced = new AnnouncedSound(recording.SnapshotAudio, recording.SnapshotSounds);
+        EncodedArtefacts encoded = await EncodedAsync(id, cancellationToken);
         PlaybackPlan plan = PlaybackPlan.For(
-            new PlaybackSubject(recording.Outcome, onDisk, await EncodedAsync(id, cancellationToken)),
+            new PlaybackSubject(recording.Outcome, onDisk, encoded.BrowserReady),
             wanted,
             SoundArrangement.Of(announced));
 
@@ -68,7 +70,8 @@ public sealed class PlaybackService(
                 plan,
                 handover,
                 recording.ServiceId,
-                announced))
+                announced,
+                encoded.Made(plan)))
             : Nothing(id, plan.Refusal!.Value);
     }
 
@@ -92,7 +95,7 @@ public sealed class PlaybackService(
                 PlaybackFailure.FileOutOfReach);
     }
 
-    private async Task<IReadOnlyList<PlaybackFileSearch>> EncodedAsync(
+    private async Task<EncodedArtefacts> EncodedAsync(
         RecordingId id,
         CancellationToken cancellationToken)
     {
@@ -106,11 +109,12 @@ public sealed class PlaybackService(
 
         if (made.Length is 0)
         {
-            return [];
+            return EncodedArtefacts.None;
         }
 
         IReadOnlyList<EncodeProfile> defined = await profiles.ListAsync(cancellationToken);
         List<PlaybackFileSearch> browserReady = [];
+        Dictionary<ArtefactOnDisk, EncodeJobId> whoMadeIt = [];
 
         foreach (EncodeJob job in made)
         {
@@ -127,10 +131,13 @@ public sealed class PlaybackService(
                 continue;
             }
 
-            browserReady.Add(files.Find(job.OutputRoot, new RecordingFileName(job.ArtefactName!.Value)));
+            var artefact = new RecordingFileName(job.ArtefactName!.Value);
+
+            browserReady.Add(files.Find(job.OutputRoot, artefact));
+            whoMadeIt.TryAdd(new ArtefactOnDisk(job.OutputRoot, artefact), job.Id);
         }
 
-        return browserReady;
+        return new EncodedArtefacts(browserReady, whoMadeIt);
     }
 
     private static ServiceResult<PlaybackOffer, PlaybackFailure> Nothing(RecordingId id, PlaybackRefusal refusal)
@@ -143,6 +150,25 @@ public sealed class PlaybackService(
                 PlaybackRefusal.FileGone => PlaybackFailure.FileGone,
                 _ => PlaybackFailure.FileOutOfReach,
             });
+
+    private readonly record struct ArtefactOnDisk(OutputRoot Root, RecordingFileName Name);
+
+    private sealed record EncodedArtefacts(
+        IReadOnlyList<PlaybackFileSearch> BrowserReady,
+        IReadOnlyDictionary<ArtefactOnDisk, EncodeJobId> WhoMadeIt)
+    {
+        public static readonly EncodedArtefacts None = new([], new Dictionary<ArtefactOnDisk, EncodeJobId>());
+
+        public EncodeJobId? Made(PlaybackPlan plan)
+        {
+            ArgumentNullException.ThrowIfNull(plan);
+
+            return plan is { Route: PlaybackRoute.Direct, Handover: { } handover }
+                   && WhoMadeIt.TryGetValue(new ArtefactOnDisk(handover.Root, handover.Name), out EncodeJobId? made)
+                ? made
+                : null;
+        }
+    }
 
     private static string Said(RecordingId id, PlaybackRefusal refusal) => refusal switch
     {

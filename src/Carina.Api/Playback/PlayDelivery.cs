@@ -5,6 +5,7 @@ using Carina.Api.Responder;
 using Carina.Api.Responder.Playback;
 using Carina.Api.Services;
 using Carina.Domain.Channels;
+using Carina.Domain.Encodings;
 using Carina.Domain.Playback;
 using Carina.Domain.Recordings;
 using Carina.Domain.Streaming;
@@ -54,11 +55,13 @@ public static class PlayDelivery
         HttpContext context,
         string id,
         PlaybackService playback,
-        IOnTheFlyPlayer player)
+        IOnTheFlyPlayer player,
+        IEncodeChapterRepository chapters)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(playback);
         ArgumentNullException.ThrowIfNull(player);
+        ArgumentNullException.ThrowIfNull(chapters);
 
         context.Response.Headers.CacheControl = NeverCached;
         context.Response.Headers.Vary = HeaderNames.Accept;
@@ -106,7 +109,12 @@ public static class PlayDelivery
             {
                 PlaybackHeaders.Say(context.Response, narrowed.Plan);
 
-                await TellAsync(context, narrowed.Plan, narrowed.Handover, TheMainSoundAlone);
+                await TellAsync(
+                    context,
+                    narrowed.Plan,
+                    narrowed.Handover,
+                    TheMainSoundAlone,
+                    await MarkedAsync(narrowed, chapters, context.RequestAborted));
 
                 return;
             }
@@ -129,7 +137,8 @@ public static class PlayDelivery
                 context,
                 plan,
                 handover,
-                await OfferedAsync(plan, handover, service, announced, player, context.RequestAborted));
+                await OfferedAsync(plan, handover, service, announced, player, context.RequestAborted),
+                await MarkedAsync(offered.Data!, chapters, context.RequestAborted));
 
             return;
         }
@@ -238,14 +247,28 @@ public static class PlayDelivery
         HttpContext context,
         PlaybackPlan plan,
         PlaybackFile handover,
-        IReadOnlyList<SoundTrack> sounds)
+        IReadOnlyList<SoundTrack> sounds,
+        IReadOnlyList<PlaybackChapterResponder> chapters)
     {
         context.Response.StatusCode = StatusCodes.Status200OK;
 
         await context.Response.WriteAsJsonAsync(
             BaseResponder<PlaybackPlanResponder>.Success(
-                PlaybackPlanResponder.Of(plan, handover, MediaTypeOf(plan, handover), sounds)),
+                PlaybackPlanResponder.Of(plan, handover, MediaTypeOf(plan, handover), sounds, chapters)),
             context.RequestAborted);
+    }
+
+    private static async Task<IReadOnlyList<PlaybackChapterResponder>> MarkedAsync(
+        PlaybackOffer offer,
+        IEncodeChapterRepository chapters,
+        CancellationToken cancellationToken)
+    {
+        if (offer.Plan.Route is not PlaybackRoute.Direct || offer.Artefact is not { } made)
+        {
+            return [];
+        }
+
+        return [.. (await chapters.ListForJobAsync(made, cancellationToken)).Select(PlaybackChapterResponder.Of)];
     }
 
     private static async Task<IReadOnlyList<SoundTrack>> OfferedAsync(
