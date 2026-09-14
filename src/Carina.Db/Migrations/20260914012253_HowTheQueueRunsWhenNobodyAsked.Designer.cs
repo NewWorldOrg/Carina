@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Carina.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Carina.Db.Migrations
 {
     [DbContext(typeof(CarinaDbContext))]
-    partial class CarinaDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260914012253_HowTheQueueRunsWhenNobodyAsked")]
+    partial class HowTheQueueRunsWhenNobodyAsked
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1028,13 +1031,13 @@ namespace Carina.Db.Migrations
 
             modelBuilder.Entity("Carina.Domain.Integrity.IntegrityFinding", b =>
                 {
-                    b.Property<Guid>("CheckId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("check_id");
-
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid")
                         .HasColumnName("id");
+
+                    b.Property<Guid>("CheckId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("check_id");
 
                     b.Property<string>("Fault")
                         .IsRequired()
@@ -1069,7 +1072,7 @@ namespace Carina.Db.Migrations
                         .HasColumnType("character varying(64)")
                         .HasColumnName("output_root");
 
-                    b.HasKey("CheckId", "Id")
+                    b.HasKey("Id")
                         .HasName("pk_integrity_finding");
 
                     b.HasIndex("RecordingId")

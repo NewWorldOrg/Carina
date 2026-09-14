@@ -39,6 +39,7 @@ public sealed class EncodeJobRunner(
     IChapterDetector chapters,
     MachineSettings programmes,
     EncodeSettings settings,
+    IEncodeAutoRunReader autoRun,
     TimeProvider clock,
     ILogger<EncodeJobRunner> logger)
 {
@@ -166,7 +167,7 @@ public sealed class EncodeJobRunner(
                 cancellationToken);
         }
 
-        int cores = Math.Min(settings.MostCores, Environment.ProcessorCount);
+        int cores = Math.Min((await autoRun.ReadAsync(cancellationToken)).MostCores, programmes.Cores);
 
         logger.LogInformation(
             "Job {Job} starts attempt {Attempt} on the {Encoder} over {Cores} core(s), {Whole} of source to get through after skipping {HeadSkip} s of head; the artefact's zero is {CaptionShift} s on the source's clock.",

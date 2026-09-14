@@ -216,6 +216,22 @@ public sealed class EncodeJobRepository(CarinaDbContext context) : IEncodeJobRep
         return ArtefactClaim.Claimed;
     }
 
+    public async Task<IReadOnlyList<EncodeSpell>> RecentSpellsAsync(int most, CancellationToken cancellationToken)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(most, 1);
+
+        var finished = await context.Set<EncodeJob>()
+            .AsNoTracking()
+            .Where(row => row.Status == EncodeJobStatus.Completed && row.StartedAt != null && row.EndedAt != null)
+            .OrderByDescending(row => row.EndedAt)
+            .ThenByDescending(row => row.Id)
+            .Take(most)
+            .Select(row => new { Started = row.StartedAt!.Value, Ended = row.EndedAt!.Value })
+            .ToListAsync(cancellationToken);
+
+        return [.. finished.Select(row => new EncodeSpell(row.Ended, row.Ended - row.Started))];
+    }
+
     public Task<EncodeHold> HoldOnProfileAsync(EncodeProfileId profileId, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(profileId);

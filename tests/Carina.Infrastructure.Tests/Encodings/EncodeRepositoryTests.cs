@@ -488,6 +488,85 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         Assert.Null(read.Failure);
     }
 
+    [Fact(DisplayName = "the ledger answers how long the jobs that completed took, newest first, and counts nothing else")]
+    public async Task TheLedgerAnswersHowLongTheJobsThatCompletedTook()
+    {
+        await ClearAsync();
+        (EncodeProfile profile, EncodeDestination destination) = await DefinedAsync();
+
+        await WrittenAsync(profile, destination, EncodeJobStatus.Completed, Queued, Started, Started.AddMinutes(10));
+        await WrittenAsync(profile, destination, EncodeJobStatus.Completed, Queued, Started.AddHours(1), Started.AddHours(1).AddMinutes(30));
+        await WrittenAsync(profile, destination, EncodeJobStatus.Failed, Queued, Started.AddHours(2), Started.AddHours(2).AddMinutes(1));
+        await WrittenAsync(profile, destination, EncodeJobStatus.Cancelled, Queued, Started.AddHours(3), Started.AddHours(3).AddMinutes(1));
+        await WrittenAsync(profile, destination, EncodeJobStatus.Queued, Queued, null, null);
+
+        await using CarinaDbContext reading = database.Open();
+        IReadOnlyList<EncodeSpell> spells = await new EncodeJobRepository(reading).RecentSpellsAsync(20, Cancel);
+
+        Assert.Equal(2, spells.Count);
+        Assert.Equal(TimeSpan.FromMinutes(30), spells[0].Took);
+        Assert.Equal(TimeSpan.FromMinutes(10), spells[1].Took);
+        Assert.Equal(Started.AddHours(1).AddMinutes(30), spells[0].EndedAt);
+    }
+
+    [Fact(DisplayName = "only the last few are asked after")]
+    public async Task OnlyTheLastFewAreAskedAfter()
+    {
+        await ClearAsync();
+        (EncodeProfile profile, EncodeDestination destination) = await DefinedAsync();
+
+        for (int each = 0; each < 4; each++)
+        {
+            await WrittenAsync(
+                profile,
+                destination,
+                EncodeJobStatus.Completed,
+                Queued,
+                Started.AddHours(each),
+                Started.AddHours(each).AddMinutes(5 + each));
+        }
+
+        await using CarinaDbContext reading = database.Open();
+        IReadOnlyList<EncodeSpell> spells = await new EncodeJobRepository(reading).RecentSpellsAsync(2, Cancel);
+
+        Assert.Equal(2, spells.Count);
+        Assert.Equal(TimeSpan.FromMinutes(8), spells[0].Took);
+        Assert.Equal(TimeSpan.FromMinutes(7), spells[1].Took);
+    }
+
+    private async Task WrittenAsync(
+        EncodeProfile profile,
+        EncodeDestination destination,
+        EncodeJobStatus status,
+        DateTime queuedAt,
+        DateTime? startedAt,
+        DateTime? endedAt)
+    {
+        var recordingId = RecordingId.New();
+        EncodeJob job = EncodeJob.Rehydrate(
+            EncodeJobId.New(),
+            recordingId,
+            profile.Id,
+            destination.Id,
+            destination.OutputRoot,
+            status,
+            EncodeJob.FirstAttempt,
+            queuedAt,
+            startedAt,
+            endedAt,
+            status is EncodeJobStatus.Failed
+                ? new EncodeFailureDetail(EncodeFailure.FfmpegExitedNonZero, "it stopped", endedAt!.Value)
+                : null,
+            status is EncodeJobStatus.Completed ? EncodeFileName.Artefact(recordingId, profile.Id) : null,
+            null,
+            null,
+            null,
+            null);
+
+        await using CarinaDbContext writing = database.Open();
+        await new EncodeJobRepository(writing).AddAsync(job, Cancel);
+    }
+
     private async Task ClearAsync()
     {
         await using CarinaDbContext clearing = database.Open();

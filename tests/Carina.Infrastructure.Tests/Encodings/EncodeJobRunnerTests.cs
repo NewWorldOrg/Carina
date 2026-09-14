@@ -551,13 +551,15 @@ public sealed class EncodeJobRunnerTests
         Assert.InRange(heartbeats, 2, 5);
     }
 
-    [Fact(DisplayName = "BR-ED2-005: the programme is handed the core cap, and no more cores than this machine has")]
+    [Fact(DisplayName = "BR-ED2-005: the programme is handed the cap the ledger holds, and no more cores than this machine has")]
     public async Task TheProgrammeIsHandedTheCoreCap()
     {
         using var harness = new EncodeHarness();
-        harness.Settings = harness.Settings with { MostCores = 1 };
+        harness.Settings = harness.Settings with { MostCores = 6 };
+        harness.AutoRun.Standing = new EncodeAutoRunStanding(true, 1, true, EncodeHarness.Queued);
         string arguments = harness.Room.Under("arguments");
         harness.Standing($"printf '%s\\n' \"$@\" > \"{arguments}\"; printf 'the picture' > \"$destination\"");
+        harness.Programmes = harness.Programmes with { Cores = 4 };
         EncodeJob job = harness.Running(harness.Recorded().Id, harness.Defined().Id);
 
         await harness.Runner.RunAsync(job, Cancel);
@@ -567,10 +569,26 @@ public sealed class EncodeJobRunnerTests
         Assert.Equal("1", handed[Array.IndexOf(handed, "-threads") + 1]);
         Assert.Equal("1", handed[Array.IndexOf(handed, "-filter_threads") + 1]);
 
-        harness.Settings = harness.Settings with { MostCores = Environment.ProcessorCount + 40 };
+        harness.AutoRun.Standing = harness.AutoRun.Standing with { MostCores = EncodeAutoRun.MostCoresAnyMachineHas };
         await harness.Runner.RunAsync(harness.Running(harness.Recorded().Id, harness.Defined().Id), Cancel);
         handed = File.ReadAllLines(arguments);
-        Assert.Equal(Environment.ProcessorCount.ToString(System.Globalization.CultureInfo.InvariantCulture), handed[Array.IndexOf(handed, "-threads") + 1]);
+        Assert.Equal("4", handed[Array.IndexOf(handed, "-threads") + 1]);
+    }
+
+    [Fact(DisplayName = "BR-ED2-005: a machine nobody has settled runs on the cap it was deployed with")]
+    public async Task AMachineNobodyHasSettledRunsOnTheCapItWasDeployedWith()
+    {
+        using var harness = new EncodeHarness();
+        harness.Settings = harness.Settings with { MostCores = 3 };
+        string arguments = harness.Room.Under("arguments");
+        harness.Standing($"printf '%s\\n' \"$@\" > \"{arguments}\"; printf 'the picture' > \"$destination\"");
+        harness.Programmes = harness.Programmes with { Cores = 8 };
+        harness.AutoRun.Standing = EncodeAutoRunStanding.Over(null, harness.Settings, harness.Programmes);
+
+        await harness.Runner.RunAsync(harness.Running(harness.Recorded().Id, harness.Defined().Id), Cancel);
+
+        string[] handed = File.ReadAllLines(arguments);
+        Assert.Equal("3", handed[Array.IndexOf(handed, "-threads") + 1]);
     }
 
     [Fact(DisplayName = "BR-EV-004: a programme that is not on this machine fails the job as capability unavailable rather than blaming the recording")]

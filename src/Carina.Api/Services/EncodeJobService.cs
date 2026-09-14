@@ -54,6 +54,10 @@ public sealed class EncodeJobService(
             found.PerPage));
     }
 
+    public async Task<ServiceResult<EncodeSpells>> RecentSpellsAsync(CancellationToken cancellationToken)
+        => ServiceResult<EncodeSpells>.Success(EncodeSpells.Of(
+            await jobs.RecentSpellsAsync(EncodeSpells.MostLookedAt, cancellationToken)));
+
     public async Task<ServiceResult<EncodeJobView, EncodingFailure>> QueueAsync(EncodeJobDraft draft, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(draft);
