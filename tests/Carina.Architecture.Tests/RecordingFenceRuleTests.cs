@@ -101,10 +101,4 @@ public sealed class RecordingFenceRuleTests
             [RecordingFenceRules.ErasureTheGuardedRouteReaches],
             RecordingFenceRules.WhatErasesARecordingLedgerRow(RepositoryLayout.SourceDirectory));
     }
-
-    [Fact(DisplayName = "BR-LA-003: the library port carries no way to throw a recording away")]
-    public void TheLibraryPortCarriesNoWayToThrowARecordingAway()
-    {
-        Assert.Empty(RecordingFenceRules.ErasingMembersOnTheLibraryPort(RepositoryLayout.SourceDirectory));
-    }
 }

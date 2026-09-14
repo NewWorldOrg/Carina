@@ -14,10 +14,6 @@ public static partial class RecordingFenceRules
     public const string ErasureTheGuardedRouteReaches =
         "/Carina.Infrastructure/Persistence/Repositories/RecordingDirectory.cs";
 
-    public const string LibraryPort = "IRecordingLibraryRepository";
-
-    public const string LibraryPortFile = "/Carina.Domain/Library/IRecordingLibraryRepository.cs";
-
     public const string ReadOnlyProgrammePort = "IAnnouncedProgrammes";
 
     public const string FullProgrammePort = "IProgrammeRepository";
@@ -86,18 +82,6 @@ public static partial class RecordingFenceRules
         => Scanned(directory)
             .Where(file => ErasesALedgerRow().IsMatch(file.Source))
             .Select(file => file.Relative)
-            .Order(StringComparer.Ordinal)
-            .ToArray();
-
-    public static IReadOnlyList<string> ErasingMembersOnTheLibraryPort(string directory)
-        => ErasingMembersIn(BodyOf(Read(directory, LibraryPortFile), LibraryPort));
-
-    private static IReadOnlyList<string> ErasingMembersIn(string body)
-        => MemberNamesIn()
-            .Matches(body)
-            .Select(match => match.Groups[1].Value)
-            .Where(name => NamesAnErasure().IsMatch(name))
-            .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToArray();
 
@@ -205,12 +189,6 @@ public static partial class RecordingFenceRules
 
     [GeneratedRegex(@"Set<\s*Recording\s*>[\s\S]{0,400}?\bExecuteDelete\w*\s*\(")]
     private static partial Regex ErasesALedgerRow();
-
-    [GeneratedRegex(@"\b(\w+)\s*\(")]
-    private static partial Regex MemberNamesIn();
-
-    [GeneratedRegex(@"Delete|Discard|Drop|Erase|Forget|Purge|Remove|Throw|Wipe")]
-    private static partial Regex NamesAnErasure();
 
     private readonly record struct SourceFile(string Relative, string Source);
 }

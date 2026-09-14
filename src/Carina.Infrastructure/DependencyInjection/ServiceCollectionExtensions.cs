@@ -6,7 +6,6 @@ using Carina.Domain.DriverStatus;
 using Carina.Domain.Encodings;
 using Carina.Domain.Events;
 using Carina.Domain.Integrity;
-using Carina.Domain.Library;
 using Carina.Domain.Machines;
 using Carina.Domain.Migration;
 using Carina.Domain.Playback;
@@ -145,7 +144,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IReservationOutcomeRepository, ReservationOutcomeRepository>();
         services.AddScoped<IReservationRecordingContract, ReservationRecordingContract>();
         services.AddScoped<IRecordingLedger, RecordingLedger>();
-        services.AddScoped<IRecordingLibraryRepository, RecordingLibraryRepository>();
         services.AddScoped<IIntegrityCheckRepository, IntegrityCheckRepository>();
         services.AddScoped<IMigrationRecordRepository, MigrationRecordRepository>();
         services.AddScoped<IEncodeProfileRepository, EncodeProfileRepository>();
