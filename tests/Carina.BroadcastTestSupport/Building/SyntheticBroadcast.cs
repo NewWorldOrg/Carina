@@ -65,11 +65,15 @@ public sealed record SyntheticBroadcast
 
     public static readonly TimeSpan DefaultLength = TimeSpan.FromSeconds(3);
 
+    public static readonly TimeSpan QuietBreakLasts = TimeSpan.FromMilliseconds(400);
+
     private const int TicksPerSecond = 90_000;
 
     private const int CaptionRow = 7;
 
     private const int CaptionColumn = 2;
+
+    private const string Interlaced = "setfield=tff";
 
     public SyntheticPicture Picture { get; init; } = SyntheticPicture.BroadcastHd;
 
@@ -84,6 +88,14 @@ public sealed record SyntheticBroadcast
     public int ProgramNumber { get; init; } = SomeProgramNumber;
 
     public TimeSpan Length { get; init; } = DefaultLength;
+
+    /// <summary>
+    /// Where the broadcast goes quiet and dark at once, the way it does either side of a pod of
+    /// advertisements. Each moment named here is the start of a stretch <see cref="QuietBreakLasts"/>
+    /// long in which the sound is taken to nothing and the picture is painted over black, so a pair
+    /// of them a whole number of grid steps apart is a pod with a programme either side of it.
+    /// </summary>
+    public IReadOnlyList<TimeSpan> QuietBreaks { get; init; } = [];
 
     public string Programme { get; init; } = FfmpegProgramme.Default;
 
@@ -224,6 +236,12 @@ public sealed record SyntheticBroadcast
                 nameof(sound));
         }
 
+        if (QuietBreaks.Count > 0 && (Picture is SyntheticPicture.None || CarriesASoundEncodedAhead))
+        {
+            throw new InvalidOperationException(
+                "A break is quiet and dark at once, so it needs a picture to darken and a sound this run encodes itself.");
+        }
+
         List<string> arguments = [.. Preamble()];
         int inputs = 0;
         int? picture = null;
@@ -289,7 +307,7 @@ public sealed record SyntheticBroadcast
             arguments.AddRange(
             [
                 "-vf",
-                "setfield=tff",
+                Painted(),
                 "-c:v",
                 "mpeg2video",
                 "-flags",
@@ -303,6 +321,7 @@ public sealed record SyntheticBroadcast
             ]);
         }
 
+        arguments.AddRange(Quieted());
         arguments.AddRange(SoundEncoding());
         arguments.AddRange(
         [
@@ -402,6 +421,20 @@ public sealed record SyntheticBroadcast
             "adts",
             destination,
         ];
+
+    private string Painted()
+        => QuietBreaks.Count is 0
+            ? Interlaced
+            : Invariant($"{Interlaced},drawbox=x=0:y=0:w=iw:h=ih:color=black@1:t=fill:enable={Whenever()}");
+
+    private IReadOnlyList<string> Quieted()
+        => QuietBreaks.Count is 0 ? [] : ["-af", Invariant($"volume=0:enable={Whenever()}")];
+
+    private string Whenever()
+        => string.Join(
+            '+',
+            QuietBreaks.Select(from => Invariant(
+                $"between(t\\,{from.TotalSeconds:0.###}\\,{(from + QuietBreakLasts).TotalSeconds:0.###})")));
 
     private static string Tone(int hertz) => Invariant($"sine=frequency={hertz}:sample_rate={DualMonoAdts.SampleRate}");
 
