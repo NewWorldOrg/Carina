@@ -71,17 +71,34 @@ public sealed class ServiceCollectionExtensionsTests
             provider.GetRequiredService<IRecalculationPass>());
     }
 
-    [Theory]
-    [InlineData("true")]
-    [InlineData("false")]
-    public void NothingLooksForTheBreaksInARecordingUntilSomethingIsWrittenThatCan(string marked)
+    [Fact]
+    public void AMachineToldToLookForTheBreaksGetsTheOneThatLooks()
     {
         Dictionary<string, string?> settings = ValidSettings();
-        settings["Encodings:Chapters:Marked"] = marked;
+        settings["Encodings:Chapters:Marked"] = "true";
+
+        using ServiceProvider provider = Build(settings);
+
+        Assert.IsType<FfmpegChapterDetector>(provider.GetRequiredService<IChapterDetector>());
+    }
+
+    [Fact]
+    public void AMachineToldNotToLookGetsTheOneThatReadsNothingAndSaysNobodyAsked()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings["Encodings:Chapters:Marked"] = "false";
 
         using ServiceProvider provider = Build(settings);
 
         Assert.IsType<NoChapterDetector>(provider.GetRequiredService<IChapterDetector>());
+    }
+
+    [Fact]
+    public void AMachineToldNothingLooksForTheBreaks()
+    {
+        using ServiceProvider provider = Build(ValidSettings());
+
+        Assert.IsType<FfmpegChapterDetector>(provider.GetRequiredService<IChapterDetector>());
     }
 
     [Fact]

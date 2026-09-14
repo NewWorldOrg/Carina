@@ -277,7 +277,17 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<ISourceHeadReader>(provider => new FfprobeSourceHead(
             provider.GetRequiredService<MachineSettings>(),
             provider.GetRequiredService<TimeProvider>()));
-        services.TryAddSingleton<IChapterDetector, NoChapterDetector>();
+        services.TryAddSingleton<IChapterDetector>(provider =>
+        {
+            EncodeSettings encoding = provider.GetRequiredService<EncodeSettings>();
+
+            return encoding.Chapters.Marked
+                ? new FfmpegChapterDetector(
+                    provider.GetRequiredService<MachineSettings>(),
+                    encoding,
+                    provider.GetRequiredService<TimeProvider>())
+                : new NoChapterDetector();
+        });
         services.TryAddSingleton<IStrayProgrammes, StrayProgrammes>();
         services.TryAddSingleton<IMachineCapabilityReader>(provider => new MachineCapabilityReader(
             provider.GetRequiredService<MachineSettings>(),
