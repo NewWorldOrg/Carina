@@ -59,6 +59,27 @@ public sealed class EncodeAutoRunEndpointTests
         Assert.Contains(AppEventName.EncodeJobs, feature.Events.Signalled);
     }
 
+    [Fact(DisplayName = "BR-ED2-004: turning the auto-run off stops making jobs, and leaves the one already running alone")]
+    public async Task TurningTheAutoRunOffLeavesTheJobAlreadyRunningAlone()
+    {
+        await using var feature = new EncodingFeature();
+        EncodeProfile profile = feature.Defined();
+        EncodeDestination destination = feature.Placed(profile);
+        EncodeJob running = feature.Queued(feature.Recorded(), profile, destination);
+        running.Start(EncodingFeature.Noon.AddMinutes(-20));
+        EncodeJob waiting = feature.Queued(feature.Recorded(), profile, destination);
+
+        (HttpStatusCode status, _) = await feature.PutAsync(
+            "/api/encoding/settings",
+            new { automatically = false, mostCores = 2 });
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(EncodeJobStatus.Running, running.Status);
+        Assert.Equal(EncodeJobStatus.Queued, waiting.Status);
+        Assert.Empty(feature.Jobs.Moves);
+        Assert.Empty(feature.Strays.Stopped);
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]
