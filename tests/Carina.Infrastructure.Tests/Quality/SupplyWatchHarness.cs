@@ -34,6 +34,8 @@ internal sealed class SupplyWatchHarness
 
     public SamplingDriverStandIn Driver { get; } = new();
 
+    public SupplyStandingBoard Board { get; } = new();
+
     public SilentEvents Events { get; } = new();
 
     public SupplyWatchRound Round()
@@ -43,6 +45,7 @@ internal sealed class SupplyWatchHarness
             Supply,
             Samples,
             Driver,
+            Board,
             Events,
             Clock,
             NullLogger<SupplyWatchRound>.Instance);

@@ -36,6 +36,8 @@ internal sealed class QualityFeature : IAsyncDisposable
                 services.AddSingleton<IQualityThresholdRepository>(Thresholds);
                 services.AddSingleton<IQualityThresholdChangeRepository>(Changes);
                 services.AddSingleton<IQualitySignalReader>(Signals);
+                services.AddSingleton<IQualityIncidentRepository>(Incidents);
+                services.AddSingleton<ISupplyStandingBoard>(Board);
             }));
 
         Client = configured.WithTestScheme().CreateClient();
@@ -56,6 +58,48 @@ internal sealed class QualityFeature : IAsyncDisposable
     public HeldQualityThresholdChanges Changes { get; } = new();
 
     public HeldQualitySignals Signals { get; } = new();
+
+    public HeldQualityIncidents Incidents { get; } = new();
+
+    public StandingHeld Board { get; } = new();
+
+    public QualityIncident Quiet(
+        SupplySilence silence = SupplySilence.SignalSamples,
+        string subject = "adapter3.frontend0",
+        QualitySubjectKind kind = QualitySubjectKind.Tuner)
+    {
+        QualityIncident opened = QualityIncident.Detect(
+            QualityIncidentId.New(),
+            Noon.AddMinutes(-10),
+            QualityThresholdKey.SupplySilence,
+            QualitySubject.Of(kind, subject),
+            300,
+            QualityThresholdShapes.AsShipped(QualityThresholdKey.SupplySilence, Noon.AddMinutes(-10)),
+            silence: silence);
+
+        opened.Notify(Noon.AddMinutes(-10));
+        Incidents.Incidents.Add(opened);
+
+        return opened;
+    }
+
+    public QualityIncident Restated()
+    {
+        QualityIncident elsewhere = QualityIncident.Detect(
+            QualityIncidentId.New(),
+            Noon.AddMinutes(-20),
+            QualityThresholdKey.LockRate,
+            QualitySubject.Of(QualitySubjectKind.Tuner, "adapter3.frontend0"),
+            0.4,
+            QualityThresholdShapes.AsShipped(QualityThresholdKey.LockRate, Noon.AddMinutes(-20)),
+            QualityIncidentOwner.Tuner,
+            "NoLock");
+
+        elsewhere.Notify(Noon.AddMinutes(-20));
+        Incidents.Incidents.Add(elsewhere);
+
+        return elsewhere;
+    }
 
     public SignalFigures Sampled(
         string tuner = "adapter3.frontend0",
@@ -118,6 +162,14 @@ internal sealed class QualityFeature : IAsyncDisposable
         return await ReadAsync(response);
     }
 
+    public async Task<(HttpStatusCode Status, JsonElement Body)> PostAsync(string path)
+    {
+        using HttpResponseMessage response =
+            await Client.PostAsJsonAsync(new Uri(path, UriKind.Relative), new { });
+
+        return await ReadAsync(response);
+    }
+
     public async Task<(HttpStatusCode Status, JsonElement Body)> PatchAsync(string path, object body)
     {
         using HttpResponseMessage response = await Client.PatchAsJsonAsync(new Uri(path, UriKind.Relative), body);
@@ -144,4 +196,11 @@ internal sealed class QualityFeature : IAsyncDisposable
 
         return (response.StatusCode, document.RootElement.Clone());
     }
+}
+
+internal sealed class StandingHeld : ISupplyStandingBoard
+{
+    public SupplyStanding? Latest { get; private set; }
+
+    public void Held(SupplyStanding standing) => Latest = standing;
 }
