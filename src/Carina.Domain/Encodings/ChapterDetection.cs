@@ -4,10 +4,11 @@ namespace Carina.Domain.Encodings;
 
 /// <summary>
 /// What a run has to say about where the breaks in one artefact are. A marked reading carries the
-/// whole artefact laid out end to end with no gap, and every other verdict carries nothing to
-/// mark: a reading that was thrown away leaves no half of itself behind. <see cref="BreakShare"/>
-/// is how much of the length the reading took for breaks, kept whatever the verdict, so the run
-/// that tripped the safety valve can be found afterwards without reading logs.
+/// whole artefact laid out end to end with no gap, from its zero to its length, turning from
+/// programme to break and back at every mark, and every other verdict carries nothing to mark: a
+/// reading that was thrown away leaves no half of itself behind. <see cref="BreakShare"/> is how
+/// much of the length the reading took for breaks, kept whatever the verdict, so the run that
+/// tripped the safety valve can be found afterwards without reading logs.
 /// </summary>
 public sealed record ChapterDetection
 {
@@ -38,7 +39,10 @@ public sealed record ChapterDetection
 
     public int Breaks => Segments.Count(segment => segment.Kind is ChapterKind.Break);
 
-    public static ChapterDetection Marked(IReadOnlyList<ChapterSegment> segments, double breakShare)
+    public static ChapterDetection Marked(
+        IReadOnlyList<ChapterSegment> segments,
+        TimeSpan length,
+        double breakShare)
     {
         ArgumentNullException.ThrowIfNull(segments);
 
@@ -60,6 +64,20 @@ public sealed record ChapterDetection
                     "A marked reading lays its chapters end to end, so one starts where the one before it ended.",
                     nameof(segments));
             }
+
+            if (segments[next].Kind == segments[next - 1].Kind)
+            {
+                throw new ArgumentException(
+                    "A marked reading turns from programme to break and back at every mark, so two chapters of one kind never sit side by side.",
+                    nameof(segments));
+            }
+        }
+
+        if (segments[^1].Ends != length)
+        {
+            throw new ArgumentException(
+                "A marked reading covers the artefact to its end, so the last chapter ends where the artefact does.",
+                nameof(segments));
         }
 
         if (!segments.Any(segment => segment.Kind is ChapterKind.Break))

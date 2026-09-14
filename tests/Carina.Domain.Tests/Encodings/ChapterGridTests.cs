@@ -291,6 +291,69 @@ public sealed class ChapterGridTests
             () => ChapterGrid.Mark(new ChapterEvidence(), TimeSpan.Zero, new ChapterSettings()));
     }
 
+    [Fact]
+    public void NothingIsReadWithoutSomethingObservedAndSomethingToReadItBy()
+    {
+        Assert.Throws<ArgumentNullException>(() => ChapterGrid.Mark(null!, HalfAnHour, new ChapterSettings()));
+        Assert.Throws<ArgumentNullException>(() => ChapterGrid.Mark(new ChapterEvidence(), HalfAnHour, null!));
+    }
+
+    [Fact]
+    public void AGridOfNoLengthIsNoGridToLayAPodOn()
+    {
+        Refused(new ChapterSettings { Grid = TimeSpan.Zero });
+        Refused(new ChapterSettings { Grid = TimeSpan.FromSeconds(-15) });
+    }
+
+    [Fact]
+    public void AToleranceHalfTheGridOrWiderIsRefusedWhereTheReadingIsMadeAndNotOnlyWhereItIsWritten()
+    {
+        Refused(new ChapterSettings { GridTolerance = TimeSpan.FromSeconds(7.5) });
+        Refused(new ChapterSettings { GridTolerance = TimeSpan.FromSeconds(8) });
+        Refused(new ChapterSettings { GridTolerance = TimeSpan.FromSeconds(-1) });
+    }
+
+    [Fact]
+    public void AThresholdForThePictureThatIsNoShareOfTheWholeIsRefused()
+    {
+        Refused(new ChapterSettings { Scene = 0 });
+        Refused(new ChapterSettings { Scene = 1.001 });
+        Refused(new ChapterSettings { Scene = double.NaN });
+    }
+
+    [Fact]
+    public void ASafetyValveSetToNoShareOfTheWholeIsRefusedRatherThanLeftOpen()
+    {
+        Refused(new ChapterSettings { MostBreakShare = 0 });
+        Refused(new ChapterSettings { MostBreakShare = 1.001 });
+        Refused(new ChapterSettings { MostBreakShare = double.NaN });
+    }
+
+    [Fact]
+    public void AReadingIsAllowedAtLeastOneMark()
+    {
+        Refused(new ChapterSettings { MostChapters = 0 });
+        Refused(new ChapterSettings { MostChapters = -1 });
+    }
+
+    [Fact(DisplayName = "a change scoring exactly what was asked for corroborates, so the filter that feeds this reads gte and not gt")]
+    public void AChangeScoringExactlyWhatWasAskedForCorroborates()
+    {
+        ChapterEvidence heard = new()
+        {
+            Silences = [Quiet(At(300)), Quiet(At(360))],
+            Scenes = [new ChapterScene(At(300), 0.30), new ChapterScene(At(360), 0.30)],
+        };
+
+        Assert.Equal(
+            ChapterVerdict.Marked,
+            ChapterGrid.Mark(heard, HalfAnHour, new ChapterSettings { Scene = 0.30 }).Verdict);
+    }
+
+    private static void Refused(ChapterSettings settings)
+        => Assert.Throws<ArgumentOutOfRangeException>(
+            () => ChapterGrid.Mark(Observed(At(300), At(360)), HalfAnHour, settings));
+
     private static TimeSpan At(double second) => TimeSpan.FromSeconds(second);
 
     private static ChapterSpan Quiet(TimeSpan around)

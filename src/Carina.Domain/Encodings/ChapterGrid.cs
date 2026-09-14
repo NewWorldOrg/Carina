@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Runtime.CompilerServices;
 
 namespace Carina.Domain.Encodings;
 
@@ -12,7 +13,10 @@ namespace Carina.Domain.Encodings;
 /// beside it. Two safety valves follow, and both throw the reading away whole rather than leave
 /// half of it believed: one for a reading that took more of the length for breaks than it is
 /// allowed to, one for a reading that put in more marks than it is allowed to. What comes back
-/// covers the whole length end to end with no gap.
+/// covers the whole length end to end with no gap. What it was told to read by is checked before
+/// anything is read, so a grid of no length, a tolerance half that grid or wider, a threshold or a
+/// valve that is no share of the whole, and a reading allowed no marks at all are all refused here
+/// rather than worked around further in.
 /// </summary>
 public static class ChapterGrid
 {
@@ -29,6 +33,12 @@ public static class ChapterGrid
         ArgumentNullException.ThrowIfNull(evidence);
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(length, TimeSpan.Zero, nameof(length));
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(settings.Grid, TimeSpan.Zero);
+        ArgumentOutOfRangeException.ThrowIfLessThan(settings.GridTolerance, TimeSpan.Zero);
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(settings.GridTolerance, settings.Grid / 2);
+        ArgumentOutOfRangeException.ThrowIfLessThan(settings.MostChapters, 1);
+        Bounded(settings.Scene);
+        Bounded(settings.MostBreakShare);
 
         List<ChapterSpan> breaks = Settled(
             Snapped(Sized(Merged(Paired(Corroborated(evidence, length, settings), settings)), settings), settings, length),
@@ -61,7 +71,18 @@ public static class ChapterGrid
                 string.Create(
                     CultureInfo.InvariantCulture,
                     $"the reading put in {segments.Count - 1} marks, and no more than {settings.MostChapters} may be put in"))
-            : ChapterDetection.Marked(segments, share);
+            : ChapterDetection.Marked(segments, length, share);
+    }
+
+    private static void Bounded(double share, [CallerArgumentExpression(nameof(share))] string? named = null)
+    {
+        if (double.IsNaN(share) || share <= 0 || share > 1)
+        {
+            throw new ArgumentOutOfRangeException(
+                named,
+                share,
+                "A share of the whole lies above none of it and at most all of it.");
+        }
     }
 
     private static List<TimeSpan> Corroborated(ChapterEvidence evidence, TimeSpan length, ChapterSettings settings)
