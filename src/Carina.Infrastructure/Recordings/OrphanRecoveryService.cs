@@ -172,13 +172,7 @@ public sealed class OrphanRecoveryService(
         if (!answer.TryGetValue(out SessionSnapshot? reopened))
         {
             tally.LeftOpen++;
-
-            logger.LogWarning(
-                "Recording {Recording} is still on the air and the driver would not take it up again "
-                + "({Outcome}, {Problem}); it stays interrupted and its file is untouched.",
-                recording.Id.Wire,
-                answer.Outcome,
-                answer.Problem?.Title);
+            WhyItWasNotOpened(recording, answer);
 
             return;
         }
@@ -202,6 +196,37 @@ public sealed class OrphanRecoveryService(
             "Recording {Recording} was left running by a driver that is gone and carries on into the file it "
             + "already has.",
             recording.Id.Wire);
+    }
+
+    /// <summary>
+    /// A driver that refuses because a session of this recording's name, or a writer on this
+    /// recording, is already there is not a driver that turned the recording away: the pass that
+    /// watches the stream opens the same session, and one that landed between the list this side
+    /// was handed and this request reads exactly like a refusal. The break stays open either way
+    /// and the next pass closes it on whatever is running, so that reading is said rather than the
+    /// one that would have the recording stopped.
+    /// </summary>
+    private void WhyItWasNotOpened(Recording recording, DriverCall<SessionSnapshot> answer)
+    {
+        if (answer.Problem?.Title is SessionRefusalTitles.DuplicateSession
+            or SessionRefusalTitles.RecordingAlreadyExists)
+        {
+            logger.LogInformation(
+                "Recording {Recording} is still on the air and the driver already holds a stream of its own name "
+                + "({Problem}), so a second one was not opened for it; what is running keeps the file and the "
+                + "break is closed by the pass that watches it.",
+                recording.Id.Wire,
+                answer.Problem?.Title);
+
+            return;
+        }
+
+        logger.LogWarning(
+            "Recording {Recording} is still on the air and the driver would not take it up again "
+            + "({Outcome}, {Problem}); it stays interrupted and its file is untouched.",
+            recording.Id.Wire,
+            answer.Outcome,
+            answer.Problem?.Title);
     }
 
     private async Task MarkAsync(

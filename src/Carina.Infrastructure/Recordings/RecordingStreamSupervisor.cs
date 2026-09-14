@@ -137,7 +137,14 @@ public sealed class RecordingStreamSupervisor(
 
         if (ItIsOver(row, now))
         {
-            await SettleAsync(row, now, tally, cancellationToken);
+            if (session is null)
+            {
+                await MarkWhatWasLeftBehindAsync(row, now, tally, cancellationToken);
+            }
+            else
+            {
+                await SettleAsync(row, now, tally, cancellationToken);
+            }
 
             return;
         }
@@ -387,6 +394,58 @@ public sealed class RecordingStreamSupervisor(
         {
             tally.Resumed++;
         }
+    }
+
+    /// <summary>
+    /// A recording that is over and whose session the driver does not know is one nobody concluded:
+    /// there is no session to have ended it, so there is nothing to judge it against and no reading
+    /// of the file that could make it complete. It is marked the way recovery marks what it finds,
+    /// so that the two sides that may reach this row — this pass and the hook that runs on the
+    /// driver's greeting — cannot disagree over which of them got there first.
+    /// </summary>
+    private async Task MarkWhatWasLeftBehindAsync(
+        Recording recording,
+        DateTime now,
+        Tally tally,
+        CancellationToken cancellationToken)
+    {
+        long? weighed = await weigher.WeighAsync(recording.OutputRoot, recording.FileName, cancellationToken);
+        RecordingOutcome outcome = OrphanRecovery.WhatIsLeftOf(weighed);
+
+        bool marked = await ApplyAsync(
+            recording.Id,
+            loaded =>
+            {
+                if (!ItIsOver(loaded, now))
+                {
+                    return false;
+                }
+
+                foreach (RecordingFault fault in OrphanRecovery.WhyItEndedWhereItDid(false, weighed))
+                {
+                    loaded.Note(new OutcomeDetail(fault, null, string.Empty, now));
+                }
+
+                loaded.Settle(outcome, weighed ?? 0, now);
+
+                return true;
+            },
+            tally,
+            cancellationToken);
+
+        if (!marked)
+        {
+            return;
+        }
+
+        tally.Settled++;
+
+        logger.LogWarning(
+            "Recording {Recording} is over and the driver knows no session of its name, so nothing concluded it; "
+            + "it ends {Outcome} against a file of {Bytes} byte(s) that stays where it is.",
+            recording.Id.Wire,
+            outcome,
+            weighed);
     }
 
     private async Task SettleAsync(

@@ -17,8 +17,8 @@ public sealed class OrphanRecoveryTests
         { false, true, true, OrphanTreatment.ReadoptTheSession },
         { true, false, false, OrphanTreatment.MarkWhatWasLeftBehind },
         { true, false, true, OrphanTreatment.ResumeIntoTheSameFile },
-        { true, true, false, OrphanTreatment.MarkWhatWasLeftBehind },
-        { true, true, true, OrphanTreatment.ResumeIntoTheSameFile },
+        { true, true, false, OrphanTreatment.ReadoptTheSession },
+        { true, true, true, OrphanTreatment.ReadoptTheSession },
     };
 
     public static TheoryData<long?> EverySize => new(null, 0L, 1L, 188L, 64L * 1024 * 1024 * 1024);
@@ -40,6 +40,24 @@ public sealed class OrphanRecoveryTests
                 DriverIsAnotherInstance: false,
                 SessionStands: true,
                 StillOnAir: true)));
+
+    [Fact]
+    public void ASessionStandingOnTheDriverThatAnsweredIsTakenBackUpWhoeverThatDriverSaysItIs()
+        => Assert.Equal(
+            OrphanTreatment.ReadoptTheSession,
+            OrphanRecovery.For(new OrphanSighting(
+                DriverIsAnotherInstance: true,
+                SessionStands: true,
+                StillOnAir: true)));
+
+    [Fact]
+    public void ASessionThatStandsIsNeverMarkedForWhatWasLeftOfItHoweverLongTheBroadcastIsOver()
+        => Assert.Equal(
+            OrphanTreatment.ReadoptTheSession,
+            OrphanRecovery.For(new OrphanSighting(
+                DriverIsAnotherInstance: true,
+                SessionStands: true,
+                StillOnAir: false)));
 
     [Fact]
     public void ASessionThatIsGoneWhileTheBroadcastRunsIsCarriedOnRatherThanEnded()

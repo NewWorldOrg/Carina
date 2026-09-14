@@ -26,13 +26,12 @@ public readonly record struct OrphanSighting(
 /// <summary>
 /// The three things that may be done with a recording nobody was watching, and nothing else.
 ///
-/// The rule folds a driver that has been replaced and a session that is no longer there into one
-/// cell, because they are the same fact seen twice: either way the session this recording was
-/// started on is gone. The cell they do not cover — a driver that has been replaced while a
-/// session of this recording's own name stands on it — is not reachable from a driver that keeps
-/// its sessions in memory, and it is read as resuming; the driver then refuses to open a second
-/// writer on the one recording, the break stays open, and the pass that watches the stream closes
-/// it again on the session it finds running.
+/// What is asked first is whether a session of this recording's own name stands on the driver that
+/// answered. If one does, something is writing the file, and taking that session back up is the
+/// only reading that does not reach for a second writer on it — which instance the driver says it
+/// is changes nothing about that. Only where nothing stands does the broadcast matter: one still
+/// on the air carries on into the file it already has, and one that is over is marked for what was
+/// left of it.
 ///
 /// Nothing here can say a recording is complete. Completion is a thing this side asked for, and
 /// recovery is the case where nobody asked: the outcomes it can write are the two that say so.
@@ -46,7 +45,7 @@ public static class OrphanRecovery
     ];
 
     public static OrphanTreatment For(OrphanSighting sighting)
-        => sighting is { DriverIsAnotherInstance: false, SessionStands: true }
+        => sighting.SessionStands
             ? OrphanTreatment.ReadoptTheSession
             : sighting.StillOnAir
                 ? OrphanTreatment.ResumeIntoTheSameFile
