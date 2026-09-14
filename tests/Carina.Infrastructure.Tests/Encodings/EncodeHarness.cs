@@ -84,6 +84,8 @@ internal sealed class EncodeHarness : IDisposable
 
     public IChapterDetector ChapterDetector { get; set; } = new NoChapterDetector();
 
+    public HeldEncodeChapters Chapters { get; } = new();
+
     public MachineSettings Programmes { get; set; } = new();
 
     public StandingEncodeAutoRun AutoRun { get; } = new();
@@ -116,6 +118,7 @@ internal sealed class EncodeHarness : IDisposable
         LengthReader,
         HeadReader,
         ChapterDetector,
+        Chapters,
         Programmes,
         Settings,
         AutoRun,
@@ -232,6 +235,7 @@ internal sealed class EncodeHarness : IDisposable
             null,
             null,
             null,
+            null,
             null);
         Jobs.Jobs.Add(job);
 
@@ -254,6 +258,8 @@ internal sealed class EncodeHarness : IDisposable
     }
 
     public string WorkPathOf(EncodeJob job) => Path.Combine(WorkDirectory, job.WorkFileName.Value);
+
+    public string ChaptersPathOf(EncodeJob job) => Path.Combine(WorkDirectory, job.ChaptersFileName.Value);
 
     public string ArtefactPathOf(EncodeJob job)
         => Path.Combine(Shelf.Root, EncodeFileName.Artefact(job.RecordingId, job.ProfileId).Value);
@@ -352,6 +358,8 @@ internal sealed class MeasuredLengths : ISourceLengthReader
 internal sealed class ScriptedChapters : IChapterDetector
 {
     public Func<ChapterDetection>? Answers { get; set; }
+
+    public ChapterDetectorName Name { get; init; } = ChapterDetectorName.Ffmpeg;
 
     public List<(string Source, ServiceId Service, int Cores)> Asked { get; } = [];
 

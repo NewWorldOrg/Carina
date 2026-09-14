@@ -34,6 +34,7 @@ public sealed class FileSystemRuleTests
         "/Carina.Driver/Tuning/TunerLedgerStore.cs .Replace(",
         "/Carina.Infrastructure/Auth/SigningKeys.cs .Create()",
         "/Carina.Infrastructure/Collection/StreamHarvest.cs .CopyTo(",
+        "/Carina.Infrastructure/Encodings/ChapterMetadataFile.cs File.WriteAllTextAsync",
         "/Carina.Infrastructure/Encodings/EncodeArtefactPlacer.cs File.Move",
         "/Carina.Infrastructure/Encodings/EncodeScratchCleaner.cs File.Delete",
         "/Carina.Infrastructure/Encodings/RenameProbe.cs Directory.CreateDirectory",
@@ -197,6 +198,7 @@ public sealed class FileSystemRuleTests
     {
         Assert.Equal(
             [
+                "/Carina.Infrastructure/Encodings/ChapterMetadataFile.cs File.WriteAllTextAsync",
                 "/Carina.Infrastructure/Encodings/EncodeArtefactPlacer.cs File.Move",
                 "/Carina.Infrastructure/Encodings/EncodeScratchCleaner.cs File.Delete",
                 "/Carina.Infrastructure/Encodings/RenameProbe.cs Directory.CreateDirectory",

@@ -39,6 +39,7 @@ internal static class EncodedArtefact
             null,
             null,
             null,
+            null,
             null);
     }
 }

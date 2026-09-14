@@ -10,6 +10,8 @@ namespace Carina.Infrastructure.Encodings;
 /// </summary>
 public sealed class NoChapterDetector : IChapterDetector
 {
+    public ChapterDetectorName Name => ChapterDetectorName.Nobody;
+
     public Task<ChapterDetection> MarkAsync(
         string source,
         ServiceId service,

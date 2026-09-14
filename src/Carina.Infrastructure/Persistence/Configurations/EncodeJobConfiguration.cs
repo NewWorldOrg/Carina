@@ -84,6 +84,18 @@ public sealed class EncodeJobConfiguration : IEntityTypeConfiguration<EncodeJob>
                 AND (artefact_length IS NULL OR (head_skip IS NOT NULL AND artefact_length >= interval '0'))
                 """);
             table.HasCheckConstraint(
+                "ck_encode_job_chapters",
+                $"""
+                ((chapters_verdict IS NULL) = (chapters_decided_at IS NULL))
+                AND ((chapters_verdict IS NULL) = (chapters_detector IS NULL))
+                AND ((chapters_verdict IS NULL) = (chapters_break_share IS NULL))
+                AND (chapters_verdict IS NULL OR status <> 'Queued')
+                AND (chapters_verdict IS NULL OR chapters_verdict IN ({EncodeVocabulary.Of<ChapterVerdict>()}))
+                AND (chapters_detector IS NULL OR chapters_detector IN ({EncodeVocabulary.Of<ChapterDetectorName>()}))
+                AND (chapters_break_share IS NULL OR chapters_break_share BETWEEN 0 AND 1)
+                AND (chapters_decided_at IS NULL OR chapters_decided_at >= started_at)
+                """);
+            table.HasCheckConstraint(
                 "ck_encode_job_artefact",
                 $"""
                 (status <> 'Completed' OR artefact_name IS NOT NULL)
@@ -197,9 +209,28 @@ public sealed class EncodeJobConfiguration : IEntityTypeConfiguration<EncodeJob>
             timeline.Ignore(detail => detail.LengthsAgree);
         });
 
+        builder.ComplexProperty(job => job.Chapters, chapters =>
+        {
+            chapters.Property(reading => reading.Detector)
+                .HasConversion<string>()
+                .HasColumnName("chapters_detector")
+                .HasMaxLength(32);
+
+            chapters.Property(reading => reading.Verdict)
+                .HasConversion<string>()
+                .HasColumnName("chapters_verdict")
+                .HasMaxLength(32);
+
+            chapters.Property(reading => reading.BreakShare).HasColumnName("chapters_break_share");
+            chapters.Property(reading => reading.DecidedAt).HasColumnName("chapters_decided_at");
+
+            chapters.Ignore(reading => reading.Marks);
+        });
+
         builder.Ignore(job => job.HasEnded);
         builder.Ignore(job => job.Standing);
         builder.Ignore(job => job.WorkFileName);
+        builder.Ignore(job => job.ChaptersFileName);
 
         builder.HasOne<EncodeProfile>()
             .WithMany()

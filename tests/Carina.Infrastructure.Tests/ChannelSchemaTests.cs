@@ -250,6 +250,7 @@ public sealed class ChannelSchemaTests
                 "candidate_channel",
                 "collection_epoch",
                 "encode_auto_run",
+                "encode_chapter",
                 "encode_destination",
                 "encode_job",
                 "encode_profile",

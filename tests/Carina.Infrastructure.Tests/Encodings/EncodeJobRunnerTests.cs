@@ -461,10 +461,12 @@ public sealed class EncodeJobRunnerTests
 
         await harness.Runner.RunAsync(job, Cancel);
 
-        (RunningProgramme? programme, EncodeHeadway? headway, EncodeJobStatus status) = saved[0];
+        (RunningProgramme? programme, EncodeHeadway? headway, EncodeJobStatus status) =
+            saved.First(save => save.Programme is not null);
         Assert.Equal(EncodeJobStatus.Running, status);
         Assert.NotNull(programme);
         Assert.Null(headway);
+        Assert.All(saved.TakeWhile(save => save.Programme is null), save => Assert.Null(save.Headway));
         Assert.InRange(programme.ProcessId, 2, int.MaxValue);
         Assert.InRange(programme.StartedAt, DateTime.UtcNow.AddMinutes(-1), DateTime.UtcNow.AddSeconds(2));
         Assert.Null(job.Programme);
@@ -678,4 +680,178 @@ public sealed class EncodeJobRunnerTests
 
         Assert.DoesNotContain(unasked.RunnerLog.Said, line => line.Contains("read for the breaks", StringComparison.Ordinal));
     }
+
+    [Fact(DisplayName = "A-エンコード-057: a reading that marked something is written into the ledger as chapters on the artefact's clock, written out as a file the ledger was told about first, and handed to the programme as a second input")]
+    public async Task AReadingThatMarkedSomethingIsWrittenIntoTheLedgerAndHandedToTheProgramme()
+    {
+        using var harness = new EncodeHarness();
+        string arguments = harness.Room.Under("arguments");
+        harness.Standing($"printf '%s\\n' \"$@\" > \"{arguments}\"; printf 'the picture' > \"$destination\"");
+        harness.Heads.Reading = SourceHeadReading.Read(MeasuredHeads.Start, MeasuredHeads.Start + Skipped);
+        harness.ChapterDetector = new ScriptedChapters { Answers = () => APodInTheMiddle };
+        EncodeJob job = harness.Running(harness.Recorded().Id, harness.Defined().Id);
+        string? seenWhenRecorded = null;
+        harness.Scratch.WhenRecording = scratch =>
+        {
+            if (scratch.Kind is EncodeScratchKind.Chapters)
+            {
+                seenWhenRecorded = File.Exists(harness.ChaptersPathOf(job)) ? "it was already written" : "nothing was there yet";
+            }
+        };
+
+        EncodeJobStatus ended = await harness.Runner.RunAsync(job, Cancel);
+
+        Assert.Equal(EncodeJobStatus.Completed, ended);
+        Assert.Equal("nothing was there yet", seenWhenRecorded);
+        Assert.Equal(
+            [job.ChaptersFileName.Value, job.WorkFileName.Value],
+            harness.Scratch.Files.Select(scratch => scratch.FileName.Value));
+        Assert.Equal(
+            [EncodeScratchKind.Chapters, EncodeScratchKind.WorkFile],
+            harness.Scratch.Files.Select(scratch => scratch.Kind));
+
+        Assert.Equal(
+            [
+                (EncodeChapter.FirstOrdinal, TimeSpan.Zero, TimeSpan.FromSeconds(2), ChapterKind.Programme),
+                (1, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(5), ChapterKind.Break),
+                (2, TimeSpan.FromSeconds(5), Artefact, ChapterKind.Programme),
+            ],
+            harness.Chapters.Chapters.Select(chapter => (chapter.Ordinal, chapter.StartsAt, chapter.EndsAt, chapter.Kind)));
+        Assert.All(harness.Chapters.Chapters, chapter => Assert.Equal(job.Id, chapter.JobId));
+
+        string[] handed = File.ReadAllLines(arguments);
+        int breaks = Array.IndexOf(handed, harness.ChaptersPathOf(job));
+        Assert.Contains("ffmetadata", handed);
+        Assert.Contains("-map_chapters", handed);
+        Assert.True(breaks > Array.IndexOf(handed, harness.SourcePathOf(harness.Recordings.Rows[0])), "the chapters are the input after the recording");
+    }
+
+    [Fact(DisplayName = "A-エンコード-057: what the chapters file holds is the artefact's chapters with the head the encode skips added back on, so ffmpeg's own shift lands them where they were meant to be")]
+    public async Task WhatTheChaptersFileHoldsIsTheArtefactsChaptersWithTheHeadSkipAddedBackOn()
+    {
+        using var harness = new EncodeHarness();
+        string kept = harness.Room.Under("what-the-programme-was-given");
+        harness.Standing($"for given in \"$@\"; do case \"$given\" in *{EncodeFileName.ChaptersExtension}) cp \"$given\" \"{kept}\";; esac; done; printf 'the picture' > \"$destination\"");
+        harness.Heads.Reading = SourceHeadReading.Read(MeasuredHeads.Start, MeasuredHeads.Start + Skipped);
+        harness.ChapterDetector = new ScriptedChapters { Answers = () => APodInTheMiddle };
+        EncodeJob job = harness.Running(harness.Recorded().Id, harness.Defined().Id);
+
+        await harness.Runner.RunAsync(job, Cancel);
+
+        Assert.Equal(ChapterMetadataFile.Written(APodInTheMiddle.Segments, Skipped), File.ReadAllText(kept));
+        Assert.Contains("START=2500", File.ReadAllText(kept), StringComparison.Ordinal);
+        Assert.Contains("END=5500", File.ReadAllText(kept), StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "A-エンコード-057: a reading that marked nothing writes no chapters, no file and not one argument, and the programme is handed the run it was handed before")]
+    public async Task AReadingThatMarkedNothingWritesNothingAndAddsNoArgument()
+    {
+        foreach (ChapterDetection nothing in ToMarkNothingBy)
+        {
+            using var harness = new EncodeHarness();
+            string arguments = harness.Room.Under("arguments");
+            harness.Standing($"printf '%s\\n' \"$@\" > \"{arguments}\"; printf 'the picture' > \"$destination\"");
+            harness.ChapterDetector = new ScriptedChapters { Answers = () => nothing };
+            EncodeJob job = harness.Running(harness.Recorded().Id, harness.Defined().Id);
+
+            Assert.Equal(EncodeJobStatus.Completed, await harness.Runner.RunAsync(job, Cancel));
+
+            string[] handed = File.ReadAllLines(arguments);
+            Assert.Empty(harness.Chapters.Chapters);
+            Assert.Equal([EncodeScratchKind.WorkFile], harness.Scratch.Files.Select(scratch => scratch.Kind));
+            Assert.False(File.Exists(harness.ChaptersPathOf(job)));
+            Assert.DoesNotContain("-map_chapters", handed);
+            Assert.DoesNotContain("ffmetadata", handed);
+            Assert.Equal(1, handed.Count(argument => argument == "-i"));
+        }
+    }
+
+    [Fact(DisplayName = "A-エンコード-057: what the run made of the breaks goes onto the job whatever it was, so a job nobody looked at says who it was that did not look")]
+    public async Task WhatTheRunMadeOfTheBreaksGoesOntoTheJobWhateverItWas()
+    {
+        using var harness = new EncodeHarness();
+        harness.Standing(WritesTheWorkFileAndReportsProgress);
+        harness.ChapterDetector = new ScriptedChapters
+        {
+            Answers = () => ChapterDetection.Discarded(0.7, "the breaks came to too much of the length"),
+        };
+        EncodeJob thrownAway = harness.Running(harness.Recorded().Id, harness.Defined().Id);
+
+        await harness.Runner.RunAsync(thrownAway, Cancel);
+
+        Assert.Equal(ChapterVerdict.Discarded, thrownAway.Chapters!.Verdict);
+        Assert.Equal(ChapterDetectorName.Ffmpeg, thrownAway.Chapters.Detector);
+        Assert.Equal(0.7, thrownAway.Chapters.BreakShare);
+        Assert.Equal(harness.Clock.GetUtcNow().UtcDateTime, thrownAway.Chapters.DecidedAt);
+
+        using var unasked = new EncodeHarness();
+        unasked.Standing(WritesTheWorkFileAndReportsProgress);
+        EncodeJob nobodyLooked = unasked.Running(unasked.Recorded().Id, unasked.Defined().Id);
+
+        await unasked.Runner.RunAsync(nobodyLooked, Cancel);
+
+        Assert.Equal(ChapterVerdict.NotAsked, nobodyLooked.Chapters!.Verdict);
+        Assert.Equal(ChapterDetectorName.Nobody, nobodyLooked.Chapters.Detector);
+        Assert.Empty(unasked.Chapters.Chapters);
+    }
+
+    [Fact(DisplayName = "A-エンコード-057: the reading is in the ledger before the programme that bakes it in is started, and what was marked is in the ledger before the file it is written to exists")]
+    public async Task TheReadingIsInTheLedgerBeforeTheProgrammeStarts()
+    {
+        using var harness = new EncodeHarness();
+        string marker = harness.Room.Under("it-ran");
+        harness.Standing($"printf ran > \"{marker}\"; printf 'the picture' > \"$destination\"");
+        harness.Heads.Reading = SourceHeadReading.Read(MeasuredHeads.Start, MeasuredHeads.Start + Skipped);
+        harness.ChapterDetector = new ScriptedChapters { Answers = () => APodInTheMiddle };
+        EncodeJob job = harness.Running(harness.Recorded().Id, harness.Defined().Id);
+        List<ChapterVerdict?> saved = [];
+        harness.Jobs.WhenSaving = saving => saved.Add(saving.Chapters?.Verdict);
+        bool nothingHadRunWhenRecorded = false;
+        harness.Chapters.WhenRecording = _ => nothingHadRunWhenRecorded = !File.Exists(marker);
+
+        await harness.Runner.RunAsync(job, Cancel);
+
+        Assert.Equal(ChapterVerdict.Marked, saved[0]);
+        Assert.True(nothingHadRunWhenRecorded, "the chapters were in the ledger while the programme had not yet run");
+        Assert.True(File.Exists(marker), "the programme ran");
+    }
+
+    [Fact(DisplayName = "BR-ED2-010: the chapters file is swept by the ledger when the job ends, the same as any other scratch")]
+    public async Task TheChaptersFileIsSweptByTheLedgerWhenTheJobEnds()
+    {
+        using var harness = new EncodeHarness();
+        harness.Standing("printf 'the picture' > \"$destination\"");
+        harness.Heads.Reading = SourceHeadReading.Read(MeasuredHeads.Start, MeasuredHeads.Start + Skipped);
+        harness.ChapterDetector = new ScriptedChapters { Answers = () => APodInTheMiddle };
+        EncodeJob job = harness.Running(harness.Recorded().Id, harness.Defined().Id);
+
+        await harness.Runner.RunAsync(job, Cancel);
+
+        Assert.Equal(EncodeJobStatus.Completed, job.Status);
+        Assert.False(File.Exists(harness.ChaptersPathOf(job)));
+        Assert.Equal(
+            [EncodeScratchFate.Removed, EncodeScratchFate.BecameTheArtefact],
+            harness.Scratch.Files.Select(scratch => scratch.Fate));
+    }
+
+    private static readonly TimeSpan Skipped = TimeSpan.FromSeconds(0.5);
+
+    private static readonly TimeSpan Artefact = EncodeHarness.Whole - Skipped;
+
+    private static ChapterDetection APodInTheMiddle => ChapterDetection.Marked(
+        [
+            new ChapterSegment(TimeSpan.Zero, TimeSpan.FromSeconds(2), ChapterKind.Programme),
+            new ChapterSegment(TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(5), ChapterKind.Break),
+            new ChapterSegment(TimeSpan.FromSeconds(5), Artefact, ChapterKind.Programme),
+        ],
+        Artefact,
+        0.3);
+
+    private static IEnumerable<ChapterDetection> ToMarkNothingBy =>
+    [
+        ChapterDetection.NotAsked,
+        ChapterDetection.NothingFound(),
+        ChapterDetection.Discarded(0.7, "the breaks came to too much of the length"),
+        ChapterDetection.Unreadable("the source could not be read"),
+    ];
 }

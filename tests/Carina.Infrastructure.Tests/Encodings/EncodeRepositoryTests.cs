@@ -534,6 +534,144 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         Assert.Equal(TimeSpan.FromMinutes(7), spells[1].Took);
     }
 
+    [Fact(DisplayName = "A-エンコード-057: the chapters a run marked come back in the order they were marked, on the artefact's clock, and only the ones belonging to the job asked for")]
+    public async Task TheChaptersARunMarkedComeBackInTheOrderTheyWereMarked()
+    {
+        await ClearAsync();
+        (EncodeProfile profile, EncodeDestination destination) = await DefinedAsync();
+        EncodeJob job = Job(profile, destination);
+        EncodeJob other = Job(profile, destination);
+        IReadOnlyList<ChapterSegment> segments =
+        [
+            new ChapterSegment(TimeSpan.Zero, TimeSpan.FromSeconds(30), ChapterKind.Programme),
+            new ChapterSegment(TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(90), ChapterKind.Break),
+            new ChapterSegment(TimeSpan.FromSeconds(90), TimeSpan.FromSeconds(130.5), ChapterKind.Programme),
+        ];
+
+        await using (CarinaDbContext writing = database.Open())
+        {
+            await new EncodeJobRepository(writing).AddAsync(job, Cancel);
+            await new EncodeJobRepository(writing).AddAsync(other, Cancel);
+        }
+
+        await using (CarinaDbContext writing = database.Open())
+        {
+            await new EncodeChapterRepository(writing).RecordAsync(job.Id, EncodeChapter.Mark(job.Id, segments), Cancel);
+            await new EncodeChapterRepository(writing).RecordAsync(
+                other.Id,
+                EncodeChapter.Mark(other.Id, [new ChapterSegment(TimeSpan.Zero, TimeSpan.FromSeconds(5), ChapterKind.Break)]),
+                Cancel);
+        }
+
+        await using CarinaDbContext reading = database.Open();
+        IReadOnlyList<EncodeChapter> read = await new EncodeChapterRepository(reading).ListForJobAsync(job.Id, Cancel);
+
+        Assert.Equal([EncodeChapter.FirstOrdinal, 1, 2], read.Select(chapter => chapter.Ordinal));
+        Assert.Equal(segments, read.Select(chapter => chapter.Segment));
+        Assert.All(read, chapter => Assert.Equal(job.Id, chapter.JobId));
+        Assert.Equal(TimeSpan.FromSeconds(130.5), read[^1].EndsAt);
+        Assert.Empty(await new EncodeChapterRepository(reading).ListForJobAsync(EncodeJobId.New(), Cancel));
+        Assert.Equal(
+            [ChapterKind.Break],
+            (await new EncodeChapterRepository(reading).ListForJobAsync(other.Id, Cancel)).Select(chapter => chapter.Kind));
+    }
+
+    [Fact(DisplayName = "A-エンコード-057: a reading of nothing writes nothing, and what a run made of the breaks comes back on the job as it was written")]
+    public async Task WhatARunMadeOfTheBreaksComesBackOnTheJobAsItWasWritten()
+    {
+        await ClearAsync();
+        (EncodeProfile profile, EncodeDestination destination) = await DefinedAsync();
+        EncodeJob judged = Job(profile, destination);
+        EncodeJob unjudged = Job(profile, destination);
+        judged.Start(Started);
+        judged.Judged(new ChapterReading(ChapterDetectorName.Ffmpeg, ChapterVerdict.Discarded, 0.71, Started));
+
+        await using (CarinaDbContext writing = database.Open())
+        {
+            await new EncodeJobRepository(writing).AddAsync(judged, Cancel);
+            await new EncodeJobRepository(writing).AddAsync(unjudged, Cancel);
+            await new EncodeChapterRepository(writing).RecordAsync(judged.Id, [], Cancel);
+        }
+
+        await using CarinaDbContext reading = database.Open();
+        EncodeJob? readJudged = await new EncodeJobRepository(reading).FindAsync(judged.Id, Cancel);
+        EncodeJob? readUnjudged = await new EncodeJobRepository(reading).FindAsync(unjudged.Id, Cancel);
+
+        Assert.NotNull(readJudged);
+        Assert.Equal(ChapterDetectorName.Ffmpeg, readJudged.Chapters!.Detector);
+        Assert.Equal(ChapterVerdict.Discarded, readJudged.Chapters.Verdict);
+        Assert.Equal(0.71, readJudged.Chapters.BreakShare);
+        Assert.Equal(Started, readJudged.Chapters.DecidedAt);
+        Assert.Null(readUnjudged!.Chapters);
+        Assert.Empty(await new EncodeChapterRepository(reading).ListForJobAsync(judged.Id, Cancel));
+    }
+
+    [Fact(DisplayName = "A-エンコード-057: a job read a second time holds what the second reading marked and nothing of the first, and a second reading that marked nothing leaves it holding none")]
+    public async Task AJobReadASecondTimeHoldsWhatTheSecondReadingMarked()
+    {
+        await ClearAsync();
+        (EncodeProfile profile, EncodeDestination destination) = await DefinedAsync();
+        EncodeJob job = Job(profile, destination);
+
+        await using (CarinaDbContext writing = database.Open())
+        {
+            await new EncodeJobRepository(writing).AddAsync(job, Cancel);
+        }
+
+        await using (CarinaDbContext writing = database.Open())
+        {
+            await new EncodeChapterRepository(writing).RecordAsync(
+                job.Id,
+                EncodeChapter.Mark(
+                    job.Id,
+                    [
+                        new ChapterSegment(TimeSpan.Zero, TimeSpan.FromSeconds(30), ChapterKind.Programme),
+                        new ChapterSegment(TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(90), ChapterKind.Break),
+                    ]),
+                Cancel);
+        }
+
+        await using (CarinaDbContext writing = database.Open())
+        {
+            await new EncodeChapterRepository(writing).RecordAsync(
+                job.Id,
+                EncodeChapter.Mark(job.Id, [new ChapterSegment(TimeSpan.Zero, TimeSpan.FromSeconds(45), ChapterKind.Break)]),
+                Cancel);
+        }
+
+        await using (CarinaDbContext reading = database.Open())
+        {
+            EncodeChapter only = Assert.Single(await new EncodeChapterRepository(reading).ListForJobAsync(job.Id, Cancel));
+
+            Assert.Equal(EncodeChapter.FirstOrdinal, only.Ordinal);
+            Assert.Equal(TimeSpan.FromSeconds(45), only.EndsAt);
+            Assert.Equal(ChapterKind.Break, only.Kind);
+        }
+
+        await using (CarinaDbContext writing = database.Open())
+        {
+            await new EncodeChapterRepository(writing).RecordAsync(job.Id, [], Cancel);
+        }
+
+        await using CarinaDbContext after = database.Open();
+        Assert.Empty(await new EncodeChapterRepository(after).ListForJobAsync(job.Id, Cancel));
+    }
+
+    [Fact]
+    public async Task AJobIsWrittenTheChaptersOfItsOwnReading()
+    {
+        await ClearAsync();
+        (EncodeProfile profile, EncodeDestination destination) = await DefinedAsync();
+        EncodeJob job = Job(profile, destination);
+
+        await using CarinaDbContext writing = database.Open();
+
+        await Assert.ThrowsAsync<ArgumentException>(() => new EncodeChapterRepository(writing).RecordAsync(
+            job.Id,
+            EncodeChapter.Mark(EncodeJobId.New(), [new ChapterSegment(TimeSpan.Zero, TimeSpan.FromSeconds(5), ChapterKind.Break)]),
+            Cancel));
+    }
+
     private async Task WrittenAsync(
         EncodeProfile profile,
         EncodeDestination destination,
@@ -561,6 +699,7 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
             null,
             null,
             null,
+            null,
             null);
 
         await using CarinaDbContext writing = database.Open();
@@ -570,6 +709,7 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
     private async Task ClearAsync()
     {
         await using CarinaDbContext clearing = database.Open();
+        await clearing.Set<EncodeChapter>().ExecuteDeleteAsync(Cancel);
         await clearing.Set<EncodeScratchFile>().ExecuteDeleteAsync(Cancel);
         await clearing.Set<EncodeJob>().ExecuteDeleteAsync(Cancel);
     }

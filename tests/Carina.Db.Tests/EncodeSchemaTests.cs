@@ -25,6 +25,12 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
 
     public static TheoryData<string> Failures => Named(Enum.GetNames<EncodeFailure>());
 
+    public static TheoryData<string> Verdicts => Named(Enum.GetNames<ChapterVerdict>());
+
+    public static TheoryData<string> Detectors => Named(Enum.GetNames<ChapterDetectorName>());
+
+    public static TheoryData<string> Kinds => Named(Enum.GetNames<ChapterKind>());
+
     [Fact(DisplayName = "BR-D-004: no encode table holds a foreign key into another domain's table")]
     public async Task NoEncodeTableHoldsAForeignKeyIntoAnotherDomainsTable()
     {
@@ -51,6 +57,7 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
 
         Assert.Equal(
             [
+                "encode_chapter -> encode_job",
                 "encode_destination -> encode_profile",
                 "encode_job -> encode_destination",
                 "encode_job -> encode_profile",
@@ -400,7 +407,7 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
     }
 
     [Fact]
-    public async Task TheDatabaseHoldsExactlyTheseChecksOnTheFiveTables()
+    public async Task TheDatabaseHoldsExactlyTheseChecksOnTheSixTables()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
 
@@ -421,6 +428,7 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
                 "ck_encode_job_alignment",
                 "ck_encode_job_artefact",
                 "ck_encode_job_attempt",
+                "ck_encode_job_chapters",
                 "ck_encode_job_failure",
                 "ck_encode_job_headway",
                 "ck_encode_job_output_root",
@@ -430,6 +438,9 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
                 "ck_encode_job_timeline",
             ],
             await ConstraintsAsync(connection, "encode_job"));
+        Assert.Equal(
+            ["ck_encode_chapter_kind", "ck_encode_chapter_ordinal", "ck_encode_chapter_span"],
+            await ConstraintsAsync(connection, "encode_chapter"));
         Assert.Equal(
             [
                 "ck_encode_scratch_file_kind",
@@ -558,6 +569,167 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
         Assert.Equal(1, await dropping.ExecuteNonQueryAsync());
     }
 
+    [Theory(DisplayName = "A-エンコード-057: what a run made of the breaks is a reader, a verdict, a share and a time together or none of them, and only on a job that ran")]
+    [InlineData("'Running'", Started, "'Ffmpeg', 'Marked', 0.31, " + Ended, null)]
+    [InlineData("'Running'", Started, "'Nobody', 'NotAsked', 0, " + Ended, null)]
+    [InlineData("'Completed'", Started, "'Ffmpeg', 'Discarded', 1, " + Ended, null)]
+    [InlineData("'Running'", Started, "NULL, NULL, NULL, NULL", null)]
+    [InlineData("'Running'", Started, "'Ffmpeg', NULL, NULL, NULL", "ck_encode_job_chapters")]
+    [InlineData("'Running'", Started, "NULL, 'Marked', 0.31, " + Ended, "ck_encode_job_chapters")]
+    [InlineData("'Running'", Started, "'Ffmpeg', 'Marked', NULL, " + Ended, "ck_encode_job_chapters")]
+    [InlineData("'Running'", Started, "'Ffmpeg', 'Marked', 0.31, NULL", "ck_encode_job_chapters")]
+    [InlineData("'Running'", Started, "'Ffmpeg', 'Guessed', 0.31, " + Ended, "ck_encode_job_chapters")]
+    [InlineData("'Running'", Started, "'Somebody', 'Marked', 0.31, " + Ended, "ck_encode_job_chapters")]
+    [InlineData("'Running'", Started, "'Ffmpeg', 'Marked', 1.01, " + Ended, "ck_encode_job_chapters")]
+    [InlineData("'Running'", Started, "'Ffmpeg', 'Marked', -0.01, " + Ended, "ck_encode_job_chapters")]
+    [InlineData("'Running'", Started, "'Ffmpeg', 'Marked', 0.31, " + Queued, "ck_encode_job_chapters")]
+    [InlineData("'Queued'", "NULL", "'Ffmpeg', 'Marked', 0.31, " + Ended, "ck_encode_job_chapters")]
+    public async Task WhatARunMadeOfTheBreaksIsAReaderAVerdictAShareAndATimeTogether(
+        string status,
+        string started,
+        string chapters,
+        string? refusedBy)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        await SeedAsync(connection);
+        await ClearJobsAsync(connection);
+
+        Task writing = MarkedJobAsync(connection, status, started, "NULL, NULL", "NULL, NULL, NULL", "NULL, NULL, NULL", Unaligned, chapters);
+
+        if (refusedBy is null)
+        {
+            await writing;
+
+            return;
+        }
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(() => writing);
+        Assert.Equal(refusedBy, refusal.ConstraintName);
+    }
+
+    [Theory]
+    [MemberData(nameof(Verdicts))]
+    public async Task EveryWayAReadingCanEndIsOneTheLedgerTakes(string verdict)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        await SeedAsync(connection);
+        await ClearJobsAsync(connection);
+
+        await MarkedJobAsync(
+            connection,
+            "'Running'",
+            Started,
+            "NULL, NULL",
+            "NULL, NULL, NULL",
+            "NULL, NULL, NULL",
+            Unaligned,
+            $"'Ffmpeg', '{verdict}', 0, {Ended}");
+    }
+
+    [Theory]
+    [MemberData(nameof(Detectors))]
+    public async Task EveryReaderThatCanAnswerIsOneTheLedgerTakes(string detector)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        await SeedAsync(connection);
+        await ClearJobsAsync(connection);
+
+        await MarkedJobAsync(
+            connection,
+            "'Running'",
+            Started,
+            "NULL, NULL",
+            "NULL, NULL, NULL",
+            "NULL, NULL, NULL",
+            Unaligned,
+            $"'{detector}', 'NotAsked', 0, {Ended}");
+    }
+
+    [Theory(DisplayName = "A-エンコード-057: a chapter belongs to a job, ends after it starts, starts no earlier than the artefact does, and is one of the kinds named")]
+    [InlineData(0, "interval '0'", "interval '00:00:30'", "'Programme'", null)]
+    [InlineData(1, "interval '00:00:30'", "interval '00:01:30'", "'Break'", null)]
+    [InlineData(0, "interval '00:00:30'", "interval '00:00:30'", "'Programme'", "ck_encode_chapter_span")]
+    [InlineData(0, "interval '00:00:30'", "interval '00:00:29'", "'Programme'", "ck_encode_chapter_span")]
+    [InlineData(0, "interval '-00:00:01'", "interval '00:00:30'", "'Programme'", "ck_encode_chapter_span")]
+    [InlineData(-1, "interval '0'", "interval '00:00:30'", "'Programme'", "ck_encode_chapter_ordinal")]
+    [InlineData(0, "interval '0'", "interval '00:00:30'", "'Advertisement'", "ck_encode_chapter_kind")]
+    public async Task AChapterBelongsToAJobAndEndsAfterItStarts(
+        int ordinal,
+        string startsAt,
+        string endsAt,
+        string kind,
+        string? refusedBy)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        await SeedAsync(connection);
+        await ClearJobsAsync(connection);
+        var job = Guid.NewGuid();
+        await JobAsync(connection, job, Guid.NewGuid(), "'Running'", Started, "NULL", "NULL, NULL, NULL", "NULL");
+
+        Task writing = ChapterAsync(connection, job, ordinal, startsAt, endsAt, kind);
+
+        if (refusedBy is null)
+        {
+            await writing;
+
+            return;
+        }
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(() => writing);
+        Assert.Equal(refusedBy, refusal.ConstraintName);
+    }
+
+    [Theory]
+    [MemberData(nameof(Kinds))]
+    public async Task EveryKindOfChapterIsOneTheLedgerTakes(string kind)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        await SeedAsync(connection);
+        await ClearJobsAsync(connection);
+        var job = Guid.NewGuid();
+        await JobAsync(connection, job, Guid.NewGuid(), "'Running'", Started, "NULL", "NULL, NULL, NULL", "NULL");
+
+        await ChapterAsync(connection, job, 0, "interval '0'", "interval '00:00:30'", $"'{kind}'");
+    }
+
+    [Fact(DisplayName = "A-エンコード-057: one job holds one chapter at each place in the order, and the second claimant is refused by the index")]
+    public async Task OneJobHoldsOneChapterAtEachPlaceInTheOrder()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        await SeedAsync(connection);
+        await ClearJobsAsync(connection);
+        var job = Guid.NewGuid();
+        var other = Guid.NewGuid();
+        await JobAsync(connection, job, Guid.NewGuid(), "'Running'", Started, "NULL", "NULL, NULL, NULL", "NULL");
+        await JobAsync(connection, other, Guid.NewGuid(), "'Queued'", "NULL", "NULL", "NULL, NULL, NULL", "NULL");
+
+        await ChapterAsync(connection, job, 0, "interval '0'", "interval '00:00:30'", "'Programme'");
+        await ChapterAsync(connection, other, 0, "interval '0'", "interval '00:00:30'", "'Programme'");
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => ChapterAsync(connection, job, 0, "interval '00:00:30'", "interval '00:01:30'", "'Break'"));
+
+        Assert.Equal(PostgresErrorCodes.UniqueViolation, refusal.SqlState);
+        Assert.Equal(EncodeChapterConfiguration.OrdinalIndexName, refusal.ConstraintName);
+    }
+
+    [Fact(DisplayName = "A-エンコード-057: the database refuses to drop a job whose chapters are still held, so a reading is never left pointing at nothing")]
+    public async Task TheDatabaseRefusesToDropAJobWhoseChaptersAreStillHeld()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        await SeedAsync(connection);
+        await ClearJobsAsync(connection);
+        var job = Guid.NewGuid();
+        await JobAsync(connection, job, Guid.NewGuid(), "'Running'", Started, "NULL", "NULL, NULL, NULL", "NULL");
+        await ChapterAsync(connection, job, 0, "interval '0'", "interval '00:00:30'", "'Programme'");
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(() => new NpgsqlCommand(
+            $"DELETE FROM encode_job WHERE id = '{job}'",
+            connection).ExecuteNonQueryAsync());
+
+        Assert.Equal(PostgresErrorCodes.RestrictViolation, refusal.SqlState);
+    }
+
     private static TheoryData<string> Named(IEnumerable<string> names)
     {
         var named = new TheoryData<string>();
@@ -588,7 +760,9 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
 
     private static async Task ClearJobsAsync(NpgsqlConnection connection)
     {
-        await using var clearing = new NpgsqlCommand("DELETE FROM encode_scratch_file; DELETE FROM encode_job", connection);
+        await using var clearing = new NpgsqlCommand(
+            "DELETE FROM encode_chapter; DELETE FROM encode_scratch_file; DELETE FROM encode_job",
+            connection);
 
         await clearing.ExecuteNonQueryAsync();
     }
@@ -615,6 +789,8 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
 
     private const string Unaligned = "NULL, NULL, NULL, NULL";
 
+    private const string Unjudged = "NULL, NULL, NULL, NULL";
+
     private static Task MarkedJobAsync(
         NpgsqlConnection connection,
         string status,
@@ -622,7 +798,8 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
         string programme,
         string headway,
         string route,
-        string timeline)
+        string timeline,
+        string chapters = Unjudged)
     {
         bool ended = status is "'Completed'" or "'Failed'";
         var recording = Guid.NewGuid();
@@ -636,14 +813,29 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
                 queued_at, started_at, ended_at, failure, failure_note, failure_noticed_at, artefact_name,
                 process_id, process_started_at, progress_portion, progress_left, progress_at,
                 encoder_asked, encoder_ran, swerve,
-                source_start, head_skip, source_length, artefact_length)
+                source_start, head_skip, source_length, artefact_length,
+                chapters_detector, chapters_verdict, chapters_break_share, chapters_decided_at)
             VALUES (
                 '{Guid.NewGuid()}', '{recording}', '{Profile}', '{Destination}', 'primary', {status}, 1,
                 {Queued}, {started}, {(ended ? Ended : "NULL")}, {failure}, {artefact},
-                {programme}, {headway}, {route}, {timeline})
+                {programme}, {headway}, {route}, {timeline}, {chapters})
             """,
             connection).ExecuteNonQueryAsync();
     }
+
+    private static Task ChapterAsync(
+        NpgsqlConnection connection,
+        Guid job,
+        int ordinal,
+        string startsAt,
+        string endsAt,
+        string kind)
+        => new NpgsqlCommand(
+            $"""
+            INSERT INTO encode_chapter (id, job_id, ordinal, starts_at, ends_at, kind)
+            VALUES ('{Guid.NewGuid()}', '{job}', {ordinal}, {startsAt}, {endsAt}, {kind})
+            """,
+            connection).ExecuteNonQueryAsync();
 
     private static Task ScratchAsync(NpgsqlConnection connection, Guid job, string name, string removedAt, string fate)
         => new NpgsqlCommand(

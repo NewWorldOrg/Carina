@@ -101,6 +101,7 @@ public sealed class EncodeRestartTests
             null,
             programme,
             null,
+            null,
             null);
 
     private static EncodeRestart Restart(HeldEncodeJobs held, ScriptedStrays strays, int mostAttempts = 3)
