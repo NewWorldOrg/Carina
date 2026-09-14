@@ -8,14 +8,17 @@ namespace Carina.Domain.Encodings;
 /// <summary>
 /// The name of a file this domain writes under an output root. A work file is named for the
 /// recording, the job and the attempt, so two jobs on one recording, or two attempts of one job,
-/// cannot write into the same file; the artefact is named for the recording and the profile, and
-/// for nothing a broadcaster wrote (BR-ED2-009).
+/// cannot write into the same file, and the chapters an attempt reads are named the same way; the
+/// artefact is named for the recording and the profile, and for nothing a broadcaster wrote
+/// (BR-ED2-009).
 /// </summary>
 public sealed class EncodeFileName : CommonValueObject<string>
 {
     public const int MaxLength = RecordingFileName.MaxLength;
 
     public const string WorkExtension = ".encoding";
+
+    public const string ChaptersExtension = ".chapters";
 
     public const string ArtefactExtension = ".mp4";
 
@@ -35,6 +38,17 @@ public sealed class EncodeFileName : CommonValueObject<string>
         return new EncodeFileName(string.Create(
             CultureInfo.InvariantCulture,
             $"{recording.Wire}.{job.Wire}.attempt{attempt}{WorkExtension}"));
+    }
+
+    public static EncodeFileName Chapters(RecordingId recording, EncodeJobId job, int attempt)
+    {
+        ArgumentNullException.ThrowIfNull(recording);
+        ArgumentNullException.ThrowIfNull(job);
+        ArgumentOutOfRangeException.ThrowIfLessThan(attempt, EncodeJob.FirstAttempt);
+
+        return new EncodeFileName(string.Create(
+            CultureInfo.InvariantCulture,
+            $"{recording.Wire}.{job.Wire}.attempt{attempt}{ChaptersExtension}"));
     }
 
     public static EncodeFileName Artefact(RecordingId recording, EncodeProfileId profile)
