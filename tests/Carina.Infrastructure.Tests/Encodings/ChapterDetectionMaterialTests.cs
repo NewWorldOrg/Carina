@@ -14,7 +14,11 @@ namespace Carina.Infrastructure.Tests.Encodings;
 /// so that what its filters say and where they say it happened is measured rather than believed.
 /// One broadcast carries a pod of advertisements — two stretches quiet and dark at once, a whole
 /// number of grid steps apart — and one carries a single such stretch, which is the shape a
-/// programme without advertisements has and which must be marked nowhere.
+/// programme without advertisements has and which must be marked nowhere. The third is the first
+/// one again with the stream's clock started seventeen hours into the day, which is where a
+/// recorder actually starts one: the runs keep that clock, so every moment comes back at five
+/// figures and is printed a tenth of a second at a time, and the same pod has to be found in the
+/// same place all the same.
 /// </summary>
 [SupportedOSPlatform("linux")]
 [Trait("Category", "Material")]
@@ -29,6 +33,10 @@ public sealed class ChapterDetectionMaterialTests : IDisposable
     private const int Cores = 2;
 
     private static readonly Func<RunningProgramme, Task> Unwatched = _ => Task.CompletedTask;
+
+    private static readonly TimeSpan LateInTheDay = TimeSpan.FromSeconds(61200);
+
+    private static readonly TimeSpan WhatTheMuxerAddsToTheHead = TimeSpan.FromSeconds(5);
 
     private readonly TempTree tree = new();
 
@@ -58,6 +66,30 @@ public sealed class ChapterDetectionMaterialTests : IDisposable
         Assert.InRange(read.BreakShare, 0.4, 0.5);
     }
 
+    [Fact(DisplayName = "the same pod is found in the same place when the stream carries the clock a recorder really starts it on, seventeen hours into the day")]
+    public async Task TheSamePodIsFoundOnTheClockARecorderReallyStartsOn()
+    {
+        TimeSpan opens = TimeSpan.FromSeconds(30);
+        TimeSpan closes = TimeSpan.FromSeconds(90);
+        TimeSpan whole = TimeSpan.FromSeconds(130);
+        string broadcast = await BroadcastingFrom(whole, LateInTheDay, opens, closes);
+        EncodeTimeline timeline = await AlignedTo(broadcast);
+
+        Assert.InRange(timeline.SourceStart, LateInTheDay, LateInTheDay + WhatTheMuxerAddsToTheHead);
+
+        ChapterDetection read = await Detecting().MarkAsync(broadcast, Service, timeline, Cores, Unwatched, Cancel);
+
+        Assert.Equal(ChapterVerdict.Marked, read.Verdict);
+        Assert.Equal(3, read.Segments.Count);
+        Assert.Equal(1, read.Breaks);
+
+        ChapterSegment gap = Assert.Single(read.Segments, segment => segment.Kind is ChapterKind.Break);
+        Assert.InRange(gap.Starts, opens - Tolerance, opens + Tolerance);
+        Assert.InRange(gap.Ends, closes - Tolerance, closes + Tolerance);
+        Assert.Equal(TimeSpan.Zero, read.Segments[0].Starts);
+        Assert.Equal(timeline.Expected, read.Segments[^1].Ends);
+    }
+
     [Fact(DisplayName = "a programme carrying no advertisements goes quiet too, and one stretch on its own is marked nowhere")]
     public async Task AProgrammeCarryingNoAdvertisementsIsMarkedNowhere()
     {
@@ -75,14 +107,18 @@ public sealed class ChapterDetectionMaterialTests : IDisposable
         => new(new MachineSettings(), new EncodeSettings(), TimeProvider.System);
 
     private Task<string> Broadcasting(TimeSpan whole, params TimeSpan[] quiet)
+        => BroadcastingFrom(whole, TimeSpan.Zero, quiet);
+
+    private Task<string> BroadcastingFrom(TimeSpan whole, TimeSpan startsAt, params TimeSpan[] quiet)
         => new SyntheticBroadcast
         {
             Picture = SyntheticPicture.StandardDefinition,
             WithCaptions = false,
             WithSuperimpose = false,
             Length = whole,
+            StartsAt = startsAt,
             QuietBreaks = quiet,
-        }.WriteAsync(tree.Under("broadcast" + SyntheticBroadcast.TransportStream), Cancel);
+        }.WriteAsync(tree.Under($"broadcast-{startsAt.TotalSeconds:0}{SyntheticBroadcast.TransportStream}"), Cancel);
 
     private static async Task<EncodeTimeline> AlignedTo(string broadcast)
     {

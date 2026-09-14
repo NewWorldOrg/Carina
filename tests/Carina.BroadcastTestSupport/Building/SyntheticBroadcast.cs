@@ -97,6 +97,14 @@ public sealed record SyntheticBroadcast
     /// </summary>
     public IReadOnlyList<TimeSpan> QuietBreaks { get; init; } = [];
 
+    /// <summary>
+    /// Where the written stream's own clock begins. A recorder started in the evening writes a
+    /// broadcast whose first timestamp is the hour of the day it was started in rather than zero,
+    /// which is the magnitude anything reading such a file has to survive; left at zero the stream
+    /// begins where ffmpeg would begin it on its own.
+    /// </summary>
+    public TimeSpan StartsAt { get; init; } = TimeSpan.Zero;
+
     public string Programme { get; init; } = FfmpegProgramme.Default;
 
     private bool CarriesSideInformation => WithCaptions || WithSuperimpose;
@@ -236,6 +244,11 @@ public sealed record SyntheticBroadcast
                 nameof(sound));
         }
 
+        if (StartsAt < TimeSpan.Zero)
+        {
+            throw new InvalidOperationException("A stream's clock begins at or after zero.");
+        }
+
         if (QuietBreaks.Count > 0 && (Picture is SyntheticPicture.None || CarriesASoundEncodedAhead))
         {
             throw new InvalidOperationException(
@@ -323,6 +336,7 @@ public sealed record SyntheticBroadcast
 
         arguments.AddRange(Quieted());
         arguments.AddRange(SoundEncoding());
+        arguments.AddRange(Offset());
         arguments.AddRange(
         [
             "-f",
@@ -426,6 +440,11 @@ public sealed record SyntheticBroadcast
         => QuietBreaks.Count is 0
             ? Interlaced
             : Invariant($"{Interlaced},drawbox=x=0:y=0:w=iw:h=ih:color=black@1:t=fill:enable={Whenever()}");
+
+    private IReadOnlyList<string> Offset()
+        => StartsAt <= TimeSpan.Zero
+            ? []
+            : ["-output_ts_offset", Invariant($"{StartsAt.TotalSeconds:0.######}")];
 
     private IReadOnlyList<string> Quieted()
         => QuietBreaks.Count is 0 ? [] : ["-af", Invariant($"volume=0:enable={Whenever()}")];
