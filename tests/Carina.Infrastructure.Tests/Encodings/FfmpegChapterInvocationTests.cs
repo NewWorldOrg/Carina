@@ -37,6 +37,8 @@ public sealed class FfmpegChapterInvocationTests
                 "info",
                 "-nostats",
                 "-copyts",
+                "-filter_threads",
+                "2",
                 "-threads",
                 "2",
                 "-vn",
@@ -62,6 +64,8 @@ public sealed class FfmpegChapterInvocationTests
                 "info",
                 "-nostats",
                 "-copyts",
+                "-filter_threads",
+                "2",
                 "-threads",
                 "2",
                 "-an",
@@ -118,9 +122,13 @@ public sealed class FfmpegChapterInvocationTests
     public void NeitherRunIsAllowedMoreOfTheMachineThanAnEncodeIs()
     {
         Assert.Equal("3", After(FfmpegChapterInvocation.Listening(Source, Service, 3, AsItStands), "-threads"));
+        Assert.Equal("3", After(FfmpegChapterInvocation.Listening(Source, Service, 3, AsItStands), "-filter_threads"));
         Assert.Equal(
             "3",
             After(FfmpegChapterInvocation.Peeking(Source, Service, 3, TimeSpan.FromSeconds(100), AsItStands), "-threads"));
+        Assert.Equal(
+            "3",
+            After(FfmpegChapterInvocation.Peeking(Source, Service, 3, TimeSpan.FromSeconds(100), AsItStands), "-filter_threads"));
         Assert.Throws<ArgumentOutOfRangeException>(
             () => FfmpegChapterInvocation.Listening(Source, Service, 0, AsItStands));
         Assert.Throws<ArgumentOutOfRangeException>(
@@ -177,6 +185,8 @@ public sealed class FfmpegChapterInvocationTests
             "info",
             "-nostats",
             "-copyts",
+            "-filter_threads",
+            "2",
             "-threads",
             "2",
             "-vn",

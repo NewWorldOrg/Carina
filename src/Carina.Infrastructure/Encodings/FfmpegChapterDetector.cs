@@ -22,6 +22,11 @@ namespace Carina.Infrastructure.Encodings;
 /// out of the exit code and the reason: not one word of what the programme said is kept, because
 /// what it says carries the source it was reading.
 /// </para>
+/// <para>
+/// How much of the machine the two passes may take is handed in rather than read here, so that the
+/// looking and the encode that follows it are bounded by the one cap the operator holds
+/// (BR-ED2-005).
+/// </para>
 /// </summary>
 public sealed class FfmpegChapterDetector(
     MachineSettings machine,
@@ -40,11 +45,13 @@ public sealed class FfmpegChapterDetector(
         string source,
         ServiceId service,
         EncodeTimeline timeline,
+        int cores,
         CancellationToken cancellationToken)
     {
         ArgumentException.ThrowIfNullOrEmpty(source);
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(timeline);
+        ArgumentOutOfRangeException.ThrowIfLessThan(cores, 1);
 
         if (timeline.Expected is not { } artefactLength || artefactLength <= TimeSpan.Zero)
         {
@@ -53,7 +60,6 @@ public sealed class FfmpegChapterDetector(
         }
 
         DateTimeOffset began = clock.GetUtcNow();
-        int cores = Math.Min(settings.MostCores, Environment.ProcessorCount);
         ChapterSettings asked = settings.Chapters;
         var heard = new ChapterLog();
 

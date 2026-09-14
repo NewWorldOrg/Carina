@@ -13,6 +13,7 @@ public sealed class NoChapterDetector : IChapterDetector
         string source,
         ServiceId service,
         EncodeTimeline timeline,
+        int cores,
         CancellationToken cancellationToken)
         => Task.FromResult(ChapterDetection.NotAsked);
 }

@@ -26,6 +26,8 @@ public sealed class ChapterDetectionMaterialTests : IDisposable
 
     private static readonly TimeSpan Tolerance = TimeSpan.FromSeconds(1);
 
+    private const int Cores = 2;
+
     private readonly TempTree tree = new();
 
     public void Dispose() => tree.Dispose();
@@ -39,7 +41,7 @@ public sealed class ChapterDetectionMaterialTests : IDisposable
         string broadcast = await Broadcasting(whole, opens, closes);
         EncodeTimeline timeline = await AlignedTo(broadcast);
 
-        ChapterDetection read = await Detecting().MarkAsync(broadcast, Service, timeline, Cancel);
+        ChapterDetection read = await Detecting().MarkAsync(broadcast, Service, timeline, Cores, Cancel);
 
         Assert.Equal(ChapterVerdict.Marked, read.Verdict);
         Assert.Equal(3, read.Segments.Count);
@@ -60,7 +62,7 @@ public sealed class ChapterDetectionMaterialTests : IDisposable
         string broadcast = await Broadcasting(TimeSpan.FromSeconds(40), TimeSpan.FromSeconds(20));
         EncodeTimeline timeline = await AlignedTo(broadcast);
 
-        ChapterDetection read = await Detecting().MarkAsync(broadcast, Service, timeline, Cancel);
+        ChapterDetection read = await Detecting().MarkAsync(broadcast, Service, timeline, Cores, Cancel);
 
         Assert.Equal(ChapterVerdict.NothingFound, read.Verdict);
         Assert.Empty(read.Segments);

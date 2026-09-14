@@ -132,7 +132,10 @@ public static class FfmpegChapterInvocation
     }
 
     private static IReadOnlyList<string> Preamble(int cores)
-        =>
+    {
+        string allowed = cores.ToString(CultureInfo.InvariantCulture);
+
+        return
         [
             "-nostdin",
             "-hide_banner",
@@ -140,9 +143,12 @@ public static class FfmpegChapterInvocation
             "info",
             "-nostats",
             "-copyts",
+            "-filter_threads",
+            allowed,
             "-threads",
-            cores.ToString(CultureInfo.InvariantCulture),
+            allowed,
         ];
+    }
 
     private static string Rendered(TimeSpan length)
         => length.TotalSeconds.ToString(Seconds, CultureInfo.InvariantCulture);

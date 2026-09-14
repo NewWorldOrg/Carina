@@ -145,7 +145,9 @@ public sealed class EncodeJobRunner(
         var timeline = new EncodeTimeline(head.Start!.Value, headSkip, whole.Length, null);
         job.Aligned(timeline);
 
-        ChapterDetection marks = await MarkedAsync(source.FullName, recording.ServiceId, timeline, cancellationToken);
+        int cores = Math.Min((await autoRun.ReadAsync(cancellationToken)).MostCores, programmes.Cores);
+
+        ChapterDetection marks = await MarkedAsync(source.FullName, recording.ServiceId, timeline, cores, cancellationToken);
 
         if (marks.Verdict is not ChapterVerdict.NotAsked)
         {
@@ -166,8 +168,6 @@ public sealed class EncodeJobRunner(
                 $"nothing tells this process where output root '{job.OutputRoot.Value}' is mounted",
                 cancellationToken);
         }
-
-        int cores = Math.Min((await autoRun.ReadAsync(cancellationToken)).MostCores, programmes.Cores);
 
         logger.LogInformation(
             "Job {Job} starts attempt {Attempt} on the {Encoder} over {Cores} core(s), {Whole} of source to get through after skipping {HeadSkip} s of head; the artefact's zero is {CaptionShift} s on the source's clock.",
@@ -254,11 +254,12 @@ public sealed class EncodeJobRunner(
         string source,
         ServiceId service,
         EncodeTimeline timeline,
+        int cores,
         CancellationToken cancellationToken)
     {
         try
         {
-            return await chapters.MarkAsync(source, service, timeline, cancellationToken);
+            return await chapters.MarkAsync(source, service, timeline, cores, cancellationToken);
         }
         catch (Exception failure) when (!cancellationToken.IsCancellationRequested)
         {
