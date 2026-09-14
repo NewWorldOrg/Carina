@@ -75,6 +75,8 @@ public sealed class DefaultDenyTests(TestingWebApplicationFactory factory)
         "/api/tuners/scan-runs",
         "/api/services",
         "/api/recordings",
+        "/api/encoding/jobs/durations",
+        "/api/encoding/settings",
         AppEventStream.Path,
     ];
 

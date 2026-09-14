@@ -16,7 +16,6 @@ public sealed class GetEncodeDurationsAction(EncodeJobService jobs) : Controller
 {
     [HttpGet]
     [ProducesResponseType<BaseResponder<EncodeDurationsResponder>>(StatusCodes.Status200OK)]
-    [ProducesResponseType<BaseResponder<EncodeDurationsResponder>>(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Invoke(CancellationToken cancellationToken)
     {
         ServiceResult<EncodeSpells> took = await jobs.RecentSpellsAsync(cancellationToken);

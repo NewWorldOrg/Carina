@@ -16,7 +16,6 @@ public sealed class GetEncodeSettingsAction(EncodeAutoRunService autoRun) : Cont
 {
     [HttpGet]
     [ProducesResponseType<BaseResponder<EncodeAutoRunResponder>>(StatusCodes.Status200OK)]
-    [ProducesResponseType<BaseResponder<EncodeAutoRunResponder>>(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Invoke(CancellationToken cancellationToken)
     {
         ServiceResult<EncodeAutoRunStanding> read = await autoRun.ReadAsync(cancellationToken);

@@ -19,7 +19,6 @@ public sealed class PutEncodeSettingsAction(EncodeAutoRunService autoRun) : Cont
     [Consumes("application/json")]
     [ProducesResponseType<BaseResponder<EncodeAutoRunResponder>>(StatusCodes.Status200OK)]
     [ProducesResponseType<BaseResponder<EncodeAutoRunResponder>>(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType<BaseResponder<EncodeAutoRunResponder>>(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Invoke(
         [FromBody] PutEncodeSettingsRequest? request,
         CancellationToken cancellationToken)
