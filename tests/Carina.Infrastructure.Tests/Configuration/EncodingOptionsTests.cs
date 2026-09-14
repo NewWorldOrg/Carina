@@ -181,18 +181,18 @@ public sealed class EncodingOptionsTests
     [Theory]
     [InlineData("Encodings:Chapters:Marked", "sometimes")]
     [InlineData("Encodings:Chapters:Noise", "-101")]
-    [InlineData("Encodings:Chapters:Noise", "0")]
+    [InlineData("Encodings:Chapters:Noise", "+0")]
     [InlineData("Encodings:Chapters:Noise", "quiet")]
     [InlineData("Encodings:Chapters:ShortestSilence", "00:00:00")]
     [InlineData("Encodings:Chapters:ShortestSilence", "-00:00:01")]
-    [InlineData("Encodings:Chapters:Scene", "0")]
+    [InlineData("Encodings:Chapters:Scene", "0.0")]
     [InlineData("Encodings:Chapters:Scene", "1.001")]
     [InlineData("Encodings:Chapters:Scene", "a lot")]
     [InlineData("Encodings:Chapters:Grid", "00:00:00")]
     [InlineData("Encodings:Chapters:Grid", "-00:00:15")]
     [InlineData("Encodings:Chapters:GridTolerance", "00:00:00")]
     [InlineData("Encodings:Chapters:GridTolerance", "00:00:07.500")]
-    [InlineData("Encodings:Chapters:MostBreakShare", "0")]
+    [InlineData("Encodings:Chapters:MostBreakShare", "0.0")]
     [InlineData("Encodings:Chapters:MostBreakShare", "1.001")]
     [InlineData("Encodings:Chapters:MostBreakShare", "half")]
     [InlineData("Encodings:Chapters:MostChapters", "0")]
@@ -202,6 +202,7 @@ public sealed class EncodingOptionsTests
         ArgumentException refusal = Assert.Throws<ArgumentException>(() => Read((key, value)));
 
         Assert.Contains(key, refusal.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(value, refusal.Message, StringComparison.Ordinal);
         Assert.True(new EncodingValidation().Validate(null, Written(key, value)).Failed);
     }
 
