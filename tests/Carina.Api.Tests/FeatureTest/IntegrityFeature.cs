@@ -54,6 +54,14 @@ internal sealed class HeldLedgerFiles : IRecordingLedger
     }
 }
 
+internal sealed class HeldEncodeWorkFiles : IEncodeWorkLedger
+{
+    public List<DeclaredFile> Files { get; } = [];
+
+    public Task<IReadOnlyList<DeclaredFile>> ListAsync(CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<DeclaredFile>>([.. Files]);
+}
+
 internal sealed class HeldIntegrityChecks : IIntegrityCheckRepository
 {
     public List<IntegrityReport> Saved { get; } = [];
@@ -288,6 +296,7 @@ internal sealed class IntegrityFeature : IAsyncDisposable
                 services.AddSingleton<IRecordingFileSurvey>(
                     new LocalRecordingFileSurvey(Settings, NullLogger<LocalRecordingFileSurvey>.Instance));
                 services.AddScoped<IRecordingLedger>(_ => Ledger);
+                services.AddScoped<IEncodeWorkLedger>(_ => Working);
                 services.AddScoped<IIntegrityCheckRepository>(_ => Checks);
             }));
 
@@ -309,6 +318,8 @@ internal sealed class IntegrityFeature : IAsyncDisposable
     public EncodeSettings Encoding { get; }
 
     public HeldLedgerFiles Ledger { get; } = new();
+
+    public HeldEncodeWorkFiles Working { get; } = new();
 
     public HeldIntegrityChecks Checks { get; } = new();
 

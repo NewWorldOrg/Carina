@@ -250,6 +250,7 @@ public sealed class NoRecordingIsEverDeletedTests
 
         var services = new ServiceCollection();
         services.AddScoped<IRecordingLedger>(_ => ledger);
+        services.AddScoped<IEncodeWorkLedger>(_ => new HeldEncodeWork());
         services.AddScoped<IIntegrityCheckRepository>(_ => checks);
 
         return new IntegrityCheckJob(

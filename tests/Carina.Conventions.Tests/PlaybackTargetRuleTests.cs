@@ -27,14 +27,16 @@ public sealed class PlaybackTargetRuleTests
             [
                 "Carina.Domain.Auth.IPlaybackGrantStore.Admit(String, PlaybackTarget)",
                 "Carina.Domain.Auth.IPlaybackGrantStore.Open(String, Subject, PlaybackTarget)",
+                "Carina.Domain.Auth.IPlaybackTicketStore.HandBack(PlaybackTicket, PlaybackTarget)",
                 "Carina.Domain.Auth.IPlaybackTicketStore.Issue(Subject, PlaybackTarget)",
-                "Carina.Domain.Auth.IPlaybackTicketStore.Spend(String, PlaybackTarget)",
+                "Carina.Domain.Auth.IPlaybackTicketStore.Take(String, PlaybackTarget)",
                 "Carina.Domain.Auth.PlaybackGrant.OpenedBy(String, Subject, PlaybackTarget, DateTime)",
                 "Carina.Domain.Auth.PlaybackTicket.Issue(Subject, PlaybackTarget, DateTime, String&)",
                 "Carina.Infrastructure.Auth.PlaybackGrantStore.Admit(String, PlaybackTarget)",
                 "Carina.Infrastructure.Auth.PlaybackGrantStore.Open(String, Subject, PlaybackTarget)",
+                "Carina.Infrastructure.Auth.PlaybackTicketStore.HandBack(PlaybackTicket, PlaybackTarget)",
                 "Carina.Infrastructure.Auth.PlaybackTicketStore.Issue(Subject, PlaybackTarget)",
-                "Carina.Infrastructure.Auth.PlaybackTicketStore.Spend(String, PlaybackTarget)",
+                "Carina.Infrastructure.Auth.PlaybackTicketStore.Take(String, PlaybackTarget)",
             ],
             ConventionRules.CarrierHandouts(ProductionTypes));
     }
@@ -53,7 +55,7 @@ public sealed class PlaybackTargetRuleTests
     {
         Assert.Empty(ConventionRules.CarrierHandoutsNamingNoTarget([typeof(PlaybackTicketStore)]));
         Assert.Contains(
-            "Carina.Infrastructure.Auth.PlaybackTicketStore.Spend(String, PlaybackTarget)",
+            "Carina.Infrastructure.Auth.PlaybackTicketStore.Take(String, PlaybackTarget)",
             ConventionRules.CarrierHandouts([typeof(PlaybackTicketStore)]));
     }
 }

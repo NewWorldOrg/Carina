@@ -92,6 +92,40 @@ public sealed class LiveSessionManager(
             : join;
     }
 
+    public async Task<LiveHandover> HandOverAsync(LiveChannelKey channel, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(channel);
+
+        LiveReception reading;
+
+        lock (gate)
+        {
+            reading = Receiving(channel.Network, channel.Service);
+        }
+
+        LiveSupplyStart opened;
+
+        try
+        {
+            opened = await reading.OpenAsync(cancellationToken);
+        }
+        catch (Exception)
+        {
+            reading.Detach();
+
+            throw;
+        }
+
+        if (opened.Stream is null)
+        {
+            reading.Detach();
+
+            return LiveHandover.Refused(opened.Refusal!.Value);
+        }
+
+        return LiveHandover.Carrying(new LiveHandedOverReading(reading, settings, clock));
+    }
+
     public async ValueTask DisposeAsync()
     {
         List<LiveSession> closing;

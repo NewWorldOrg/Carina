@@ -1028,13 +1028,13 @@ namespace Carina.Db.Migrations
 
             modelBuilder.Entity("Carina.Domain.Integrity.IntegrityFinding", b =>
                 {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
                     b.Property<Guid>("CheckId")
                         .HasColumnType("uuid")
                         .HasColumnName("check_id");
+
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
 
                     b.Property<string>("Fault")
                         .IsRequired()
@@ -1069,7 +1069,7 @@ namespace Carina.Db.Migrations
                         .HasColumnType("character varying(64)")
                         .HasColumnName("output_root");
 
-                    b.HasKey("Id")
+                    b.HasKey("CheckId", "Id")
                         .HasName("pk_integrity_finding");
 
                     b.HasIndex("RecordingId")

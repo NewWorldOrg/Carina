@@ -105,6 +105,10 @@ public sealed class IntegrityCheckJob(
             .GetRequiredService<IRecordingLedger>()
             .ListAsync(cancellationToken);
 
+        IReadOnlyList<DeclaredFile> declared = await scope.ServiceProvider
+            .GetRequiredService<IEncodeWorkLedger>()
+            .ListAsync(cancellationToken);
+
         IReadOnlyList<OutputRoot> roots = await survey.RootsAsync(cancellationToken);
         List<RootListing> listings = [];
 
@@ -116,6 +120,7 @@ public sealed class IntegrityCheckJob(
         IntegrityReport swept = IntegrityScan.Compare(
             id,
             ledger,
+            declared,
             listings,
             startedAt,
             clock.GetUtcNow().UtcDateTime);

@@ -104,6 +104,7 @@ public static class ServiceCollectionExtensions
             .ValidateOnStart();
 
         services.AddSingleton<IValidateOptions<EncodingOptions>, EncodingValidation>();
+        services.AddSingleton<IValidateOptions<EncodingOptions>, RootsHeldApartValidation>();
         services.AddOptions<EncodingOptions>()
             .Configure(options => options.ReadFrom(configuration))
             .ValidateOnStart();
@@ -144,6 +145,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IReservationOutcomeRepository, ReservationOutcomeRepository>();
         services.AddScoped<IReservationRecordingContract, ReservationRecordingContract>();
         services.AddScoped<IRecordingLedger, RecordingLedger>();
+        services.AddScoped<IEncodeWorkLedger, EncodeWorkLedger>();
         services.AddScoped<IIntegrityCheckRepository, IntegrityCheckRepository>();
         services.AddScoped<IMigrationRecordRepository, MigrationRecordRepository>();
         services.AddScoped<IEncodeProfileRepository, EncodeProfileRepository>();
@@ -277,6 +279,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<ISourceHeadReader>(provider => new FfprobeSourceHead(
             provider.GetRequiredService<MachineSettings>(),
             provider.GetRequiredService<TimeProvider>()));
+        services.TryAddSingleton<IChapterDetector, NoChapterDetector>();
         services.TryAddSingleton<IStrayProgrammes, StrayProgrammes>();
         services.TryAddSingleton<IMachineCapabilityReader>(provider => new MachineCapabilityReader(
             provider.GetRequiredService<MachineSettings>(),

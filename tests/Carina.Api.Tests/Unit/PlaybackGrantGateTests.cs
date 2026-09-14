@@ -40,7 +40,7 @@ public sealed class PlaybackGrantGateTests
 
         await gate.EnterAsync(carrier, Seven);
 
-        Assert.Null(gate.Tickets.Spend(carrier, Seven));
+        Assert.Null(gate.Tickets.Take(carrier, Seven));
     }
 
     [Fact]

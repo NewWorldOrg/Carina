@@ -13,6 +13,7 @@ namespace Carina.Domain.Encodings;
 /// whether a recording that has ended is queued without anyone asking, which encoder a job asks
 /// for first, how many of the machine's cores a run may use, how often the queue is looked at, how
 /// long a job may go without making headway, and how many attempts it gets before it is given up.
+/// <see cref="Chapters"/> is the separate matter of looking for the breaks in a recording first.
 /// </summary>
 public sealed record EncodeSettings
 {
@@ -34,5 +35,37 @@ public sealed record EncodeSettings
 
     public TimeSpan StalledAfter { get; init; } = TimeSpan.FromMinutes(10);
 
+    public ChapterSettings Chapters { get; init; } = new();
+
     public bool HoldsAnyRoot => OutputRoots.Count > 0;
+}
+
+/// <summary>
+/// How a run looks for the breaks in a recording before it encodes it. <see cref="Marked"/> is the
+/// switch: turned off, nothing looks and a run's command line is what it was before. The rest is
+/// what the look is made of — how quiet a stretch has to be to count as quiet and for how long,
+/// how much the picture has to change to count as a change, the grid a pod of advertisements is
+/// laid on and how far off that grid a pair of boundaries may sit and still be taken as a pair —
+/// and two safety valves: <see cref="MostBreakShare"/> throws the whole reading away when it took
+/// more than that much of the recording for breaks, and <see cref="MostChapters"/> throws it away
+/// when it put in more marks than that. Every one of them is a number, a truth or a length of
+/// time; none of them is text a filter could be written in.
+/// </summary>
+public sealed record ChapterSettings
+{
+    public bool Marked { get; init; } = true;
+
+    public int Noise { get; init; } = -50;
+
+    public TimeSpan ShortestSilence { get; init; } = TimeSpan.FromMilliseconds(150);
+
+    public double Scene { get; init; } = 0.30;
+
+    public TimeSpan Grid { get; init; } = TimeSpan.FromSeconds(15);
+
+    public TimeSpan GridTolerance { get; init; } = TimeSpan.FromSeconds(1);
+
+    public double MostBreakShare { get; init; } = 0.5;
+
+    public int MostChapters { get; init; } = 40;
 }

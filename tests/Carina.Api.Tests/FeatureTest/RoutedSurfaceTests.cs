@@ -305,6 +305,7 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
         Assert.Contains("/api/events", patterns, StringComparer.Ordinal);
         Assert.Contains("/api/programs/bulk", patterns, StringComparer.Ordinal);
         Assert.Contains(LiveWire.Path, patterns, StringComparer.Ordinal);
+        Assert.Contains(LiveStreamDelivery.Path, patterns, StringComparer.Ordinal);
         Assert.Contains(VideoDelivery.Path, patterns, StringComparer.Ordinal);
         Assert.Contains("/api/health", patterns, StringComparer.Ordinal);
         Assert.Contains(OidcHandshake.StartPath, patterns, StringComparer.Ordinal);

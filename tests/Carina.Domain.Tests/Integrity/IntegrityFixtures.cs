@@ -42,8 +42,16 @@ internal static class IntegrityFixtures
 
     public static RootListing Empty(OutputRoot root) => RootListing.Of(root, []);
 
+    public static DeclaredFile Declared(OutputRoot root, string path) => new(root, path);
+
     public static IntegrityReport Compare(
         IReadOnlyList<LedgerFile> ledger,
         IReadOnlyList<RootListing> listings)
-        => IntegrityScan.Compare(Check, ledger, listings, At, Done);
+        => IntegrityScan.Compare(Check, ledger, [], listings, At, Done);
+
+    public static IntegrityReport Compare(
+        IReadOnlyList<LedgerFile> ledger,
+        IReadOnlyList<DeclaredFile> declared,
+        IReadOnlyList<RootListing> listings)
+        => IntegrityScan.Compare(Check, ledger, declared, listings, At, Done);
 }

@@ -3,6 +3,7 @@ using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.DriverStatus;
+using Carina.Domain.Encodings;
 using Carina.Domain.Events;
 using Carina.Domain.Integrity;
 using Carina.Domain.Migration;
@@ -17,6 +18,7 @@ using Carina.Infrastructure.Collection;
 using Carina.Infrastructure.Configuration;
 using Carina.Infrastructure.DependencyInjection;
 using Carina.Infrastructure.Driver;
+using Carina.Infrastructure.Encodings;
 using Carina.Infrastructure.Events;
 using Carina.Infrastructure.Integrity;
 using Carina.Infrastructure.Migration;
@@ -67,6 +69,19 @@ public sealed class ServiceCollectionExtensionsTests
         Assert.Same(
             provider.GetRequiredService<ReservationRecalculationHostedService>(),
             provider.GetRequiredService<IRecalculationPass>());
+    }
+
+    [Theory]
+    [InlineData("true")]
+    [InlineData("false")]
+    public void NothingLooksForTheBreaksInARecordingUntilSomethingIsWrittenThatCan(string marked)
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings["Encodings:Chapters:Marked"] = marked;
+
+        using ServiceProvider provider = Build(settings);
+
+        Assert.IsType<NoChapterDetector>(provider.GetRequiredService<IChapterDetector>());
     }
 
     [Fact]
@@ -316,6 +331,7 @@ public sealed class ServiceCollectionExtensionsTests
         Assert.IsType<IntegrityCheckRepository>(
             scope.ServiceProvider.GetRequiredService<IIntegrityCheckRepository>());
         Assert.IsType<RecordingLedger>(scope.ServiceProvider.GetRequiredService<IRecordingLedger>());
+        Assert.IsType<EncodeWorkLedger>(scope.ServiceProvider.GetRequiredService<IEncodeWorkLedger>());
     }
 
     [Fact]

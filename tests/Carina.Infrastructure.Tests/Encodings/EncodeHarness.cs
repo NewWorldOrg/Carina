@@ -82,6 +82,8 @@ internal sealed class EncodeHarness : IDisposable
 
     public ISourceHeadReader HeadReader { get; set; }
 
+    public IChapterDetector ChapterDetector { get; set; } = new NoChapterDetector();
+
     public MachineSettings Programmes { get; set; } = new();
 
     public StandingEncodeAutoRun AutoRun { get; } = new();
@@ -113,6 +115,7 @@ internal sealed class EncodeHarness : IDisposable
         MachineReader,
         LengthReader,
         HeadReader,
+        ChapterDetector,
         Programmes,
         Settings,
         AutoRun,
@@ -343,6 +346,24 @@ internal sealed class MeasuredLengths : ISourceLengthReader
         Asked.Add(source);
 
         return Task.FromResult(ByPath?.Invoke(source) ?? Reading);
+    }
+}
+
+internal sealed class ScriptedChapters : IChapterDetector
+{
+    public Func<ChapterDetection>? Answers { get; set; }
+
+    public List<(string Source, ServiceId Service)> Asked { get; } = [];
+
+    public Task<ChapterDetection> MarkAsync(
+        string source,
+        ServiceId service,
+        EncodeTimeline timeline,
+        CancellationToken cancellationToken)
+    {
+        Asked.Add((source, service));
+
+        return Task.FromResult(Answers?.Invoke() ?? ChapterDetection.NotAsked);
     }
 }
 

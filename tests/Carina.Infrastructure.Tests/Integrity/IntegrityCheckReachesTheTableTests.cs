@@ -133,6 +133,7 @@ public sealed class IntegrityCheckReachesTheTableTests(RepositoryDatabase databa
 
         var services = new ServiceCollection();
         services.AddScoped<IRecordingLedger>(_ => ledger);
+        services.AddScoped<IEncodeWorkLedger>(_ => new HeldEncodeWork());
         services.AddScoped(_ => database.Open());
         services.AddScoped<IIntegrityCheckRepository, IntegrityCheckRepository>();
 

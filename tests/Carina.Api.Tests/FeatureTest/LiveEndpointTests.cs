@@ -188,7 +188,11 @@ internal sealed class HeldPlaybackTickets : IPlaybackTicketStore
         return new IssuedPlaybackTicket(Unguessable.Issue(), LiveFeature.At.AddSeconds(30));
     }
 
-    public Subject? Spend(string? offered, PlaybackTarget target) => null;
+    public PlaybackTicket? Take(string? offered, PlaybackTarget target) => null;
+
+    public void HandBack(PlaybackTicket spent, PlaybackTarget target)
+    {
+    }
 }
 
 [Collection(FeatureTestCollection.Name)]
