@@ -346,6 +346,24 @@ internal sealed class MeasuredLengths : ISourceLengthReader
     }
 }
 
+internal sealed class ScriptedChapters : IChapterDetector
+{
+    public Func<ChapterDetection>? Answers { get; set; }
+
+    public List<(string Source, ServiceId Service)> Asked { get; } = [];
+
+    public Task<ChapterDetection> MarkAsync(
+        string source,
+        ServiceId service,
+        EncodeTimeline timeline,
+        CancellationToken cancellationToken)
+    {
+        Asked.Add((source, service));
+
+        return Task.FromResult(Answers?.Invoke() ?? ChapterDetection.NotAsked);
+    }
+}
+
 internal sealed class MeasuredHeads : ISourceHeadReader
 {
     public static readonly TimeSpan Start = TimeSpan.FromSeconds(30499.474078);

@@ -1,5 +1,7 @@
 using System.Globalization;
 
+using Carina.Domain.Base;
+using Carina.Domain.Channels;
 using Carina.Domain.Encodings;
 using Carina.Domain.Machines;
 using Carina.Domain.Recordings;
@@ -43,6 +45,8 @@ public sealed class EncodeJobRunner(
     public const int Tenths = 10;
 
     public static readonly TimeSpan HeartbeatEvery = TimeSpan.FromSeconds(10);
+
+    private const int LongestComplaint = 500;
 
     public async Task<EncodeJobStatus> RunAsync(EncodeJob job, CancellationToken cancellationToken)
     {
@@ -140,16 +144,17 @@ public sealed class EncodeJobRunner(
         var timeline = new EncodeTimeline(head.Start!.Value, headSkip, whole.Length, null);
         job.Aligned(timeline);
 
-        ChapterDetection marks = await chapters.MarkAsync(source.FullName, recording.ServiceId, timeline, cancellationToken);
+        ChapterDetection marks = await MarkedAsync(source.FullName, recording.ServiceId, timeline, cancellationToken);
 
         if (marks.Verdict is not ChapterVerdict.NotAsked)
         {
             logger.LogInformation(
-                "Job {Job} was read for the breaks in it and came back {Verdict} with {Chapters} chapter(s) over {Share} of its length.",
+                "Job {Job} was read for the breaks in it and came back {Verdict} with {Chapters} chapter(s) over {Share} of its length: {Note}",
                 job.Id.Wire,
                 marks.Verdict,
                 marks.Segments.Count,
-                marks.BreakShare.ToString("0.000", CultureInfo.InvariantCulture));
+                marks.BreakShare.ToString("0.000", CultureInfo.InvariantCulture),
+                marks.Note);
         }
 
         if (await scratch.RecordAsync(job, EncodeScratchKind.WorkFile, job.WorkFileName, cancellationToken) is not { } work)
@@ -238,6 +243,28 @@ public sealed class EncodeJobRunner(
         => head.Fault is SourceHeadFault.Refused
             ? $"the programme exited {head.ExitCode} while reading the head of the source: {head.Note}"
             : $"the head of the source could not be read ({head.Fault}), so nothing says where the artefact's clock would begin: {head.Note}";
+
+    /// <summary>
+    /// Asks where the breaks are and comes back with an answer whatever happens, because a job
+    /// that would have encoded without anyone looking is not failed by the looking. A stop the
+    /// caller asked for is the one thing that is let through.
+    /// </summary>
+    private async Task<ChapterDetection> MarkedAsync(
+        string source,
+        ServiceId service,
+        EncodeTimeline timeline,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await chapters.MarkAsync(source, service, timeline, cancellationToken);
+        }
+        catch (Exception failure) when (!cancellationToken.IsCancellationRequested)
+        {
+            return ChapterDetection.Unreadable(
+                $"looking for the breaks ended in {failure.GetType().Name}: {ProgrammeNote.Of(failure.Message, LongestComplaint)}");
+        }
+    }
 
     private async Task MeasureAsync(EncodeJob job, string work, CancellationToken cancellationToken)
     {
