@@ -13,6 +13,7 @@ public sealed class PlaybackTicketRuleTests
                 "Carina.Api/Controllers/Live/IssueLiveTicketAction.cs",
                 "Carina.Api/Controllers/Videos/IssueVideoTicketAction.cs",
                 "Carina.Api/Extensions/ServiceCollectionExtensions.cs",
+                "Carina.Api/Live/LiveStreamDelivery.cs",
                 "Carina.Api/Playback/VideoDelivery.cs",
                 "Carina.Api/Responder/Playback/PlaybackTicketResponder.cs",
                 "Carina.Api/Services/AuthSessionService.cs",

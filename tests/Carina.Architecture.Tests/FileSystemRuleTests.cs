@@ -51,6 +51,7 @@ public sealed class FileSystemRuleTests
         "/Carina.Infrastructure/Recordings/DriverRecordingFileEraser.cs File.Delete",
         "/Carina.Infrastructure/Streaming/FfprobeStreamAttributeReader.cs Process.Start",
         "/Carina.Infrastructure/Streaming/FfprobeStreamAttributeReader.cs ProcessStartInfo",
+        "/Carina.Infrastructure/Streaming/LiveHandedOverReading.cs .CopyTo(",
         "/Carina.Infrastructure/Streaming/NutFrames.cs .CopyTo(",
         "/Carina.Infrastructure/Streaming/TranscoderProcess.cs Process.Start",
         "/Carina.Infrastructure/Streaming/TranscoderProcess.cs ProcessStartInfo",

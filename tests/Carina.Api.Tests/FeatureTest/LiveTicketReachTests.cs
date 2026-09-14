@@ -7,6 +7,7 @@ using Carina.Api.Events;
 using Carina.Api.Live;
 using Carina.Domain.Channels;
 using Carina.Domain.Recordings;
+using Carina.Domain.Streaming;
 using Carina.TestSupport;
 
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -23,12 +24,18 @@ public sealed class LiveTicketReachTests
 
     private static readonly Uri Handshake = new("ws://localhost" + LiveWire.Path + "?network=32736&service=1024&profile=720p30");
 
+    private static readonly Uri Exit = new("/api/live/32736-1024/stream", UriKind.Relative);
+
+    private readonly PipedSupply supply = new();
+
     [Theory]
     [InlineData("/api/live/ws")]
     [InlineData("/api/live/sessions")]
     [InlineData("/api/live/channels")]
+    [InlineData("/api/live/profiles")]
+    [InlineData("/api/live/departures")]
     [InlineData(AppEventStream.Path)]
-    public async Task ALiveTicketOpensNoSurfaceABrowserReachesWithItsCookie(string path)
+    public async Task ALiveTicketOpensNoOtherSurfaceABrowserReachesWithItsCookie(string path)
     {
         await using AuthProbe probe = Wiring(out _);
         string ticket = await IssuedAsync(probe);
@@ -39,6 +46,40 @@ public sealed class LiveTicketReachTests
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         Assert.Null(response.Headers.Location);
         Assert.Empty(await response.Content.ReadAsByteArrayAsync());
+    }
+
+    [Fact]
+    public async Task TheOneSurfaceALiveTicketOpensIsTheChannelHandedOverAsItIsAndItOpensItOnce()
+    {
+        await using AuthProbe probe = Wiring(out _);
+        string ticket = await IssuedAsync(probe);
+
+        using HttpClient player = Carrying(probe, ticket);
+        HttpResponseMessage opened = await OpenedAsync(player);
+
+        Assert.Equal(HttpStatusCode.OK, opened.StatusCode);
+        Assert.Equal(LiveStreamDelivery.MediaType, opened.Content.Headers.ContentType?.MediaType);
+
+        opened.Dispose();
+
+        using HttpResponseMessage again = await player.GetAsync(Exit, HttpCompletionOption.ResponseHeadersRead);
+
+        Assert.Equal(HttpStatusCode.Forbidden, again.StatusCode);
+        Assert.Null(again.Headers.Location);
+    }
+
+    [Fact]
+    public async Task ATicketForOneChannelOpensTheChannelHandedOverOnNoOther()
+    {
+        await using AuthProbe probe = Wiring(out _);
+        string ticket = await IssuedAsync(probe);
+
+        using HttpClient player = Carrying(probe, ticket);
+        using HttpResponseMessage refused = await player.GetAsync(
+            new Uri("/api/live/32736-1025/stream", UriKind.Relative),
+            HttpCompletionOption.ResponseHeadersRead);
+
+        Assert.Equal(HttpStatusCode.Forbidden, refused.StatusCode);
     }
 
     [Fact]
@@ -101,7 +142,20 @@ public sealed class LiveTicketReachTests
         return read.RootElement.GetProperty("data").GetProperty("inTheClear").GetString()!;
     }
 
-    private static AuthProbe Wiring(out Recording recording)
+    private static byte[] Mouthful() => [.. Enumerable.Range(0, 4_000).Select(at => (byte)(at % 251))];
+
+    private async Task<HttpResponseMessage> OpenedAsync(HttpClient player)
+    {
+        int raised = supply.Opened.Count;
+        Task<HttpResponseMessage> opening = player.GetAsync(Exit, HttpCompletionOption.ResponseHeadersRead);
+
+        await Eventually.Happens(() => supply.Opened.Count > raised, "the reading of the channel is raised");
+        await supply.Opened[^1].WriteAsync(Mouthful());
+
+        return await opening;
+    }
+
+    private AuthProbe Wiring(out Recording recording)
     {
         HeldServices services = new();
         HeldCandidates candidates = new();
@@ -130,6 +184,7 @@ public sealed class LiveTicketReachTests
             wired.AddSingleton<IBroadcastServiceRepository>(services);
             wired.AddSingleton<ICandidateChannelRepository>(candidates);
             wired.AddSingleton<IRecordingDirectory>(recordings);
+            wired.AddSingleton<ILiveSupply>(supply);
         });
     }
 }

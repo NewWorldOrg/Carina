@@ -1082,7 +1082,7 @@ public sealed class LiveSessionManagerTests
     }
 
     [Fact]
-    public void TheOnlyThingAViewerCanAskOfTheManagerIsToJoinAKey()
+    public void AViewerAsksTheManagerToJoinAKeyOrToHandAChannelOverAndNothingElse()
     {
         MethodInfo[] asked =
         [
@@ -1092,14 +1092,16 @@ public sealed class LiveSessionManagerTests
         ];
 
         Assert.Equal(
-            ["DisposeAsync", "JoinAsync", "RunningAsync", "Startup", "Viewers"],
+            ["DisposeAsync", "HandOverAsync", "JoinAsync", "RunningAsync", "Startup", "Viewers"],
             asked.Select(method => method.Name).Order());
         Assert.All(
             asked.SelectMany(method => method.GetParameters()),
             parameter => Assert.DoesNotContain(
                 parameter.ParameterType,
                 (Type[])[typeof(NetworkId), typeof(ServiceId), typeof(TuningParameters), typeof(LiveProfile)]));
-        Assert.Equal([nameof(ILiveSessionManager.JoinAsync)], typeof(ILiveSessionManager).GetMethods().Select(method => method.Name));
+        Assert.Equal(
+            [nameof(ILiveSessionManager.HandOverAsync), nameof(ILiveSessionManager.JoinAsync)],
+            typeof(ILiveSessionManager).GetMethods().Select(method => method.Name).Order());
     }
 
     private static ILiveViewing Seated(LiveJoin join)
