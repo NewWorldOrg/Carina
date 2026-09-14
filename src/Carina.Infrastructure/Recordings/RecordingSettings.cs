@@ -18,17 +18,21 @@ public sealed record RecordingSettings
     public static readonly TimeSpan LongestWayToTheFirstByte =
         NoticingItIsDue + WaitingForASeat + WaitingForALock + WaitingForTheFirstByte;
 
+    public static readonly TimeSpan HoldingAnUnannouncedEnd = TimeSpan.FromMinutes(20);
+
     public static readonly RecordingSettings Default = new(
         TimeSpan.FromSeconds(10),
         NoticingItIsDue,
         LongestWayToTheFirstByte,
-        new OutputRoot("primary"));
+        new OutputRoot("primary"),
+        HoldingAnUnannouncedEnd);
 
     public RecordingSettings(
         TimeSpan beforeFirstTick,
         TimeSpan betweenTicks,
         TimeSpan tuningLead,
-        OutputRoot outputRoot)
+        OutputRoot outputRoot,
+        TimeSpan undecidedEndAhead)
     {
         ArgumentNullException.ThrowIfNull(outputRoot);
 
@@ -57,10 +61,20 @@ public sealed record RecordingSettings
                 + $"{betweenTicks} does not even cover the noticing, let alone the tuning.");
         }
 
+        if (undecidedEndAhead <= betweenTicks)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(undecidedEndAhead),
+                undecidedEndAhead,
+                "A recording whose end nobody has announced is carried forward tick by tick, so a horizon no "
+                + $"longer than the {betweenTicks} between two ticks is a window that has already run out.");
+        }
+
         BeforeFirstTick = beforeFirstTick;
         BetweenTicks = betweenTicks;
         TuningLead = tuningLead;
         OutputRoot = outputRoot;
+        UndecidedEndAhead = undecidedEndAhead;
     }
 
     public TimeSpan BeforeFirstTick { get; }
@@ -70,4 +84,11 @@ public sealed record RecordingSettings
     public TimeSpan TuningLead { get; }
 
     public OutputRoot OutputRoot { get; }
+
+    /// <summary>
+    /// How far ahead of now a recording is promised while the programme it is recording announces
+    /// no end. It is the recording's own horizon and not the one the allocation rolls a tuner seat
+    /// on: the seat has to outlast the window it is held for, so this is the shorter of the two.
+    /// </summary>
+    public TimeSpan UndecidedEndAhead { get; }
 }

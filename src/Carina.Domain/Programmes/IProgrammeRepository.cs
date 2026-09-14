@@ -9,6 +9,14 @@ public sealed record ProgrammesAbsorbed(int Added, int Updated);
 public interface IAnnouncedProgrammes
 {
     Task<Programme?> FindAsync(ProgrammeId id, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// When this service's announced schedule was last heard whole, read from the mark the reading
+    /// left on the programmes it named. A programme of that service carrying an older mark was not
+    /// in that reading, which is the only evidence there is that a broadcast is no longer announced.
+    /// Null means no reading has ever heard this service whole, and then nothing about it is known.
+    /// </summary>
+    Task<DateTime?> HeardWholeAtAsync(int networkId, int serviceId, CancellationToken cancellationToken);
 }
 
 public interface IProgrammeRepository : IAnnouncedProgrammes
@@ -37,14 +45,6 @@ public interface IProgrammeRepository : IAnnouncedProgrammes
     Task<int> ForgetAsync(IReadOnlyList<Programme> programmes, CancellationToken cancellationToken);
 
     Task<DateTime?> CoveredUntilAsync(int networkId, int serviceId, CancellationToken cancellationToken);
-
-    /// <summary>
-    /// When this service's announced schedule was last heard whole, read from the mark the reading
-    /// left on the programmes it named. A programme of that service carrying an older mark was not
-    /// in that reading, which is the only evidence there is that a broadcast is no longer announced.
-    /// Null means no reading has ever heard this service whole, and then nothing about it is known.
-    /// </summary>
-    Task<DateTime?> HeardWholeAtAsync(int networkId, int serviceId, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<Programme>> ListAfterAsync(
         long revision,

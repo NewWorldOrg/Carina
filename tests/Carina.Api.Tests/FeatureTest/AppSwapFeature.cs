@@ -302,7 +302,8 @@ internal sealed class AppSwapFeature : IAsyncDisposable
                     RecordingSettings.NoticingItIsDue,
                     RecordingSettings.NoticingItIsDue,
                     RecordingSettings.LongestWayToTheFirstByte,
-                    new OutputRoot(SyntheticDriverHost.RootName)));
+                    new OutputRoot(SyntheticDriverHost.RootName),
+                    RecordingSettings.HoldingAnUnannouncedEnd));
             }))
             .WithTestScheme();
 
@@ -373,6 +374,7 @@ internal sealed class AppSwapFeature : IAsyncDisposable
             airs,
             airs + Window,
             true,
+            TimeSpan.Zero,
             null);
     }
 }

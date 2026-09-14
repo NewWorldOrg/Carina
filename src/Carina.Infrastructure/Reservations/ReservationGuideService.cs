@@ -81,20 +81,18 @@ public sealed class ReservationGuideService(
             reservation.NetworkId.Value,
             reservation.ServiceId.Value,
             cancellationToken);
+        Programme? announced = await programmes.FindAsync(reservation.Programme.Id, cancellationToken);
 
-        if (await programmes.FindAsync(reservation.Programme.Id, cancellationToken) is not { } announced)
-        {
-            return heardWholeAt is null ? Reading.Nothing : Reading.Vanished;
-        }
+        GuideStanding standing = GuideReading.Of(announced, heardWholeAt);
 
-        if (heardWholeAt is { } whole && announced.LastHeardAt is { } named && named < whole)
+        if (standing is GuideStanding.NoLongerAnnounced)
         {
             return Reading.Vanished;
         }
 
-        return announced.IsShadow
-            ? Reading.Nothing
-            : new Reading(false, announced, EpgComparison.Of(reservation, announced, at));
+        return standing is GuideStanding.Announced && announced is not null
+            ? new Reading(false, announced, EpgComparison.Of(reservation, announced, at))
+            : Reading.Nothing;
     }
 
     private async Task<IReadOnlyList<ReservationId>> FollowAsync(

@@ -41,7 +41,10 @@ public sealed record RecordingRun(
     IReadOnlyList<RecordingId> Started,
     IReadOnlyList<RecordingId> Stopped,
     IReadOnlyList<RecordingId> Unconfirmed,
-    IReadOnlyList<RecordingRefusal> Refused);
+    IReadOnlyList<RecordingRefusal> Refused)
+{
+    public IReadOnlyList<RecordingFollowed> Followed { get; init; } = [];
+}
 
 public sealed class RecordingRound(
     IReservationRecordingContract reservations,
@@ -50,6 +53,7 @@ public sealed class RecordingRound(
     IServiceTuningDirectory directory,
     DiskPrecheckService disks,
     IDriverClient driver,
+    ProgramExtensionFollower follower,
     RecordingRefusalReporter reporter,
     RecordingSettings settings,
     TimeProvider clock)
@@ -75,13 +79,22 @@ public sealed class RecordingRound(
     {
         DateTime now = clock.GetUtcNow().UtcDateTime;
         List<Recording> running = [.. await recordings.ListInFlightAsync(cancellationToken)];
+        IReadOnlyList<RecordingTick> due = await reservations.DueAtAsync(now, cancellationToken);
 
+        IReadOnlyList<RecordingFollowed> followed = await follower.FollowAsync(
+            running,
+            due,
+            now,
+            cancellationToken);
         IReadOnlyList<RecordingId> stopped = await StopAsync(running, now, cancellationToken);
-        Starting starting = await StartAsync(running, now, cancellationToken);
+        Starting starting = await StartAsync(due, running, now, cancellationToken);
 
         await reporter.ReportAsync(starting.Refused, now, cancellationToken);
 
-        return new RecordingRun(starting.Started, stopped, starting.Unconfirmed, starting.Refused);
+        return new RecordingRun(starting.Started, stopped, starting.Unconfirmed, starting.Refused)
+        {
+            Followed = followed,
+        };
     }
 
     private async Task<IReadOnlyList<RecordingId>> StopAsync(
@@ -120,13 +133,14 @@ public sealed class RecordingRound(
     }
 
     private async Task<Starting> StartAsync(
+        IReadOnlyList<RecordingTick> reservationsDue,
         List<Recording> running,
         DateTime now,
         CancellationToken cancellationToken)
     {
         var starting = new Starting();
 
-        foreach (RecordingTick due in await reservations.DueAtAsync(now, cancellationToken))
+        foreach (RecordingTick due in reservationsDue)
         {
             if (due.InFlight)
             {

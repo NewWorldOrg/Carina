@@ -6,6 +6,8 @@ using Carina.Domain.Reservations;
 using Carina.Infrastructure.Recordings;
 using Carina.TestSupport;
 
+using Microsoft.Extensions.Logging.Abstractions;
+
 using static Carina.Infrastructure.Tests.Recordings.RecordingTickFixture;
 
 namespace Carina.Infrastructure.Tests.Recordings;
@@ -195,6 +197,12 @@ public sealed class RecordingRefusalReporterTests
             new ResolvedTuning(Terrestrial),
             new DiskPrecheckService(new StorageMonitor(driver, clock, StorageMonitorSettings.Default)),
             driver,
+            new ProgramExtensionFollower(
+                recordings,
+                new HeldProgrammes(),
+                driver,
+                Settings,
+                NullLogger<ProgramExtensionFollower>.Instance),
             ledger.Reporter,
             Settings,
             clock);

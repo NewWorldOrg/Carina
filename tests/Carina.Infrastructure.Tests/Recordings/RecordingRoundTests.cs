@@ -7,6 +7,8 @@ using Carina.Domain.Reservations;
 using Carina.Infrastructure.Recordings;
 using Carina.TestSupport;
 
+using Microsoft.Extensions.Logging.Abstractions;
+
 using static Carina.Infrastructure.Tests.Recordings.RecordingTickFixture;
 
 namespace Carina.Infrastructure.Tests.Recordings;
@@ -851,14 +853,21 @@ public sealed class RecordingRoundTests
         HeldProgrammes? programmes = null)
     {
         var clock = new HeldMoment(at ?? Airs);
+        HeldProgrammes held = programmes ?? new HeldProgrammes();
 
         return new RecordingRound(
             reservations,
             recordings,
-            programmes ?? new HeldProgrammes(),
+            held,
             new ResolvedTuning(resolution ?? Terrestrial),
             new DiskPrecheckService(new StorageMonitor(driver, clock, StorageMonitorSettings.Default)),
             driver,
+            new ProgramExtensionFollower(
+                recordings,
+                held,
+                driver,
+                Settings,
+                NullLogger<ProgramExtensionFollower>.Instance),
             (ledger ?? new RefusalLedger()).Reporter,
             Settings,
             clock);

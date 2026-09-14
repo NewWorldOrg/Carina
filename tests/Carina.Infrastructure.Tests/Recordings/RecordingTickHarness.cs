@@ -145,7 +145,8 @@ internal static class RecordingTickFixture
         TimeSpan.FromSeconds(10),
         TimeSpan.FromSeconds(5),
         Head,
-        new OutputRoot("primary"));
+        new OutputRoot("primary"),
+        RecordingSettings.HoldingAnUnannouncedEnd);
 
     public static readonly TuningResolution Terrestrial = TuningResolution.Tunable(
         new CandidateChannelId(Guid.NewGuid()),
@@ -158,7 +159,8 @@ internal static class RecordingTickFixture
         DateTime? until = null,
         DateTime? startedAt = null,
         AudioMode audio = AudioMode.Undetermined,
-        int sounds = ProgrammeSnapshot.SoundsUnannounced)
+        int sounds = ProgrammeSnapshot.SoundsUnannounced,
+        TimeSpan? marginAfter = null)
         => new(
             ReservationId.New(),
             new NetworkId(32736),
@@ -179,6 +181,7 @@ internal static class RecordingTickFixture
             from ?? Airs,
             until ?? Airs.AddMinutes(30),
             true,
+            marginAfter ?? TimeSpan.Zero,
             startedAt);
 
     public static HeldProgrammes Announcing(RecordingTick due, AudioMode audio, int sounds)

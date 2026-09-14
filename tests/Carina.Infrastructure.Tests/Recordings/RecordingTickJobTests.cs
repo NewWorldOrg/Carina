@@ -33,7 +33,8 @@ public sealed class RecordingTickJobTests
                 TimeSpan.FromMinutes(3),
                 TimeSpan.FromHours(2),
                 TimeSpan.FromHours(3),
-                new OutputRoot("primary")));
+                new OutputRoot("primary"),
+                TimeSpan.FromHours(4)));
         using var stopping = new CancellationTokenSource();
 
         await job.StartAsync(stopping.Token);
@@ -284,6 +285,12 @@ public sealed class RecordingTickJobTests
             new ResolvedTuning(Terrestrial),
             new DiskPrecheckService(new StorageMonitor(driver, clock, StorageMonitorSettings.Default)),
             driver,
+            new ProgramExtensionFollower(
+                recordings,
+                new HeldProgrammes(),
+                driver,
+                held,
+                NullLogger<ProgramExtensionFollower>.Instance),
             new RefusalLedger().Reporter,
             held,
             new HeldMoment(Airs)));

@@ -19,7 +19,7 @@ public sealed class RecordingFaultVocabularyTests(MigratedScratchDatabase databa
 
     public static TheoryData<string> BreakingFaults => Named(RecordingFaults.ThatCanInterrupt);
 
-    public static TheoryData<string> ConcludingFaults
+    public static TheoryData<string> FaultsNoInterruptionMayCarry
         => Named(Enum.GetValues<RecordingFault>().Except(RecordingFaults.ThatCanInterrupt));
 
     [Theory]
@@ -45,8 +45,8 @@ public sealed class RecordingFaultVocabularyTests(MigratedScratchDatabase databa
     }
 
     [Theory]
-    [MemberData(nameof(ConcludingFaults))]
-    public async Task AFaultOnlyTheCrossCheckCanNameIsRefusedInTheHistory(string fault)
+    [MemberData(nameof(FaultsNoInterruptionMayCarry))]
+    public async Task AFaultThatIsNotSomethingHappeningToARecordingIsRefusedInTheHistory(string fault)
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
 

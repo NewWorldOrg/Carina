@@ -57,7 +57,7 @@ public sealed class RecordingTickJob(
 
     private RecordingRun Asked(RecordingRun run)
     {
-        if (run.Started.Count > 0 || run.Stopped.Count > 0)
+        if (run.Started.Count > 0 || run.Stopped.Count > 0 || run.Followed.Count > 0)
         {
             events.Signal(AppEventName.Recordings);
         }
@@ -72,6 +72,11 @@ public sealed class RecordingTickJob(
             notices.Nudge(RecalculationTrigger.RecordingEnded);
         }
 
+        if (run.Followed.Count > 0)
+        {
+            notices.Nudge(RecalculationTrigger.RecordingExtended);
+        }
+
         if (run.Refused.Count > 0)
         {
             events.Signal(AppEventName.Reservations);
@@ -82,6 +87,14 @@ public sealed class RecordingTickJob(
 
     private void Report(RecordingRun run)
     {
+        foreach (RecordingFollowed followed in run.Followed)
+        {
+            logger.LogInformation(
+                "Recording {Recording} now runs until {EndsAt:O} because the programme it is recording does.",
+                followed.Id.Wire,
+                followed.EndsAt);
+        }
+
         if (run.Started.Count is 0 && run.Stopped.Count is 0 && run.Refused.Count is 0)
         {
             return;

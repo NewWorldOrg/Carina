@@ -132,6 +132,24 @@ public sealed class ReservationRecordingContractTests(MigratedScratchDatabase da
     }
 
     [Fact]
+    public async Task TheMarginTheRecordingRunsPastTheProgrammeIsHandedOnAsWell()
+    {
+        await Clear();
+        Reservation reservation = Build(21705, Airs, Margin.OfSeconds(10), Margin.OfSeconds(45));
+
+        await using (CarinaDbContext context = CarinaDbContextFactory.Create(database.ConnectionString))
+        {
+            context.Add(reservation);
+            await context.SaveChangesAsync();
+        }
+
+        RecordingTick tick = Assert.Single(await Ticks(Tick));
+
+        Assert.Equal(TimeSpan.FromSeconds(45), tick.MarginAfter);
+        Assert.Equal(tick.EffectiveEndAt, reservation.EndAt + tick.MarginAfter);
+    }
+
+    [Fact]
     public async Task AReservationMadeWhileItsBroadcastIsRunningIsDueTheMomentItWasMade()
     {
         await Clear();
