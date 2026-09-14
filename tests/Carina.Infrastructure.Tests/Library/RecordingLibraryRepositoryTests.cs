@@ -307,40 +307,6 @@ public sealed class RecordingLibraryRepositoryTests(RepositoryDatabase database)
         Assert.Null(await new RecordingLibraryRepository(reading).FindAsync(RecordingId.New(), Cancel));
     }
 
-    [Fact]
-    public async Task DeletingARecordingThatHasEndedTakesTheOneRowWithIt()
-    {
-        await Clear();
-        Recording kept = await Kept(Ended(Airs, "A programme"));
-
-        await using CarinaDbContext writing = database.Open();
-
-        Assert.Equal(1, await new RecordingLibraryRepository(writing).DeleteAsync(kept.Id, Cancel));
-        Assert.Empty((await Search(Criteria())).Rows);
-    }
-
-    [Fact]
-    public async Task DeletingARecordingThatIsStillBeingWrittenChangesNoRowAtAll()
-    {
-        await Clear();
-        Recording running = await Kept(Started(Airs, "Still going"));
-
-        await using CarinaDbContext writing = database.Open();
-
-        Assert.Equal(0, await new RecordingLibraryRepository(writing).DeleteAsync(running.Id, Cancel));
-
-        await using CarinaDbContext reading = database.Open();
-        Assert.NotNull(await new RecordingLibraryRepository(reading).FindAsync(running.Id, Cancel));
-    }
-
-    [Fact]
-    public async Task DeletingSomethingThatIsNotThereChangesNoRowAtAll()
-    {
-        await using CarinaDbContext writing = database.Open();
-
-        Assert.Equal(0, await new RecordingLibraryRepository(writing).DeleteAsync(RecordingId.New(), Cancel));
-    }
-
     private static RecordingSearchCriteria Criteria(
         string? keyword = null,
         int? perPage = null,

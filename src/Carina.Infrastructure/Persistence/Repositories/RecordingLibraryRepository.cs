@@ -55,15 +55,6 @@ public sealed class RecordingLibraryRepository(CarinaDbContext context) : IRecor
             .FirstOrDefaultAsync(recording => recording.Id == id, cancellationToken);
     }
 
-    public async Task<int> DeleteAsync(RecordingId id, CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(id);
-
-        return await context.Set<Recording>()
-            .Where(recording => recording.Id == id && recording.Outcome != null)
-            .ExecuteDeleteAsync(cancellationToken);
-    }
-
     private IQueryable<Recording> BuildBaseQuery()
         => context.Set<Recording>().AsNoTracking().Where(recording => recording.Outcome != null);
 

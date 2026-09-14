@@ -94,16 +94,17 @@ public sealed class RecordingFenceRuleTests
             < service.IndexOf("recordings.DiscardAsync(id", StringComparison.Ordinal));
     }
 
-    [Fact(DisplayName = "BR-KA-001: two places can erase a ledger row, and only the guarded one is asked to")]
-    public void TwoPlacesCanEraseALedgerRowAndOnlyTheGuardedOneIsAskedTo()
+    [Fact(DisplayName = "BR-KA-001: one place can erase a ledger row, and it is the one the guarded route reaches")]
+    public void OnePlaceCanEraseALedgerRowAndItIsTheOneTheGuardedRouteReaches()
     {
         Assert.Equal(
-            [
-                RecordingFenceRules.ErasureTheGuardedRouteReaches,
-                RecordingFenceRules.ErasureNothingAsksFor,
-            ],
+            [RecordingFenceRules.ErasureTheGuardedRouteReaches],
             RecordingFenceRules.WhatErasesARecordingLedgerRow(RepositoryLayout.SourceDirectory));
+    }
 
-        Assert.Empty(RecordingFenceRules.WhatAsksTheLibraryToEraseALedgerRow(RepositoryLayout.SourceDirectory));
+    [Fact(DisplayName = "BR-LA-003: the library port carries no way to throw a recording away")]
+    public void TheLibraryPortCarriesNoWayToThrowARecordingAway()
+    {
+        Assert.Empty(RecordingFenceRules.ErasingMembersOnTheLibraryPort(RepositoryLayout.SourceDirectory));
     }
 }

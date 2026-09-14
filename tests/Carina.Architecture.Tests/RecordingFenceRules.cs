@@ -14,10 +14,9 @@ public static partial class RecordingFenceRules
     public const string ErasureTheGuardedRouteReaches =
         "/Carina.Infrastructure/Persistence/Repositories/RecordingDirectory.cs";
 
-    public const string ErasureNothingAsksFor =
-        "/Carina.Infrastructure/Persistence/Repositories/RecordingLibraryRepository.cs";
-
     public const string LibraryPort = "IRecordingLibraryRepository";
+
+    public const string LibraryPortFile = "/Carina.Domain/Library/IRecordingLibraryRepository.cs";
 
     public const string ReadOnlyProgrammePort = "IAnnouncedProgrammes";
 
@@ -90,12 +89,15 @@ public static partial class RecordingFenceRules
             .Order(StringComparer.Ordinal)
             .ToArray();
 
-    public static IReadOnlyList<string> WhatAsksTheLibraryToEraseALedgerRow(string directory)
-        => Scanned(directory)
-            .Where(file => !string.Equals(file.Relative, ErasureNothingAsksFor, StringComparison.Ordinal))
-            .Where(file => file.Source.Contains(LibraryPort, StringComparison.Ordinal))
-            .Where(file => AsksToDelete().IsMatch(file.Source))
-            .Select(file => file.Relative)
+    public static IReadOnlyList<string> ErasingMembersOnTheLibraryPort(string directory)
+        => ErasingMembersIn(BodyOf(Read(directory, LibraryPortFile), LibraryPort));
+
+    private static IReadOnlyList<string> ErasingMembersIn(string body)
+        => MemberNamesIn()
+            .Matches(body)
+            .Select(match => match.Groups[1].Value)
+            .Where(name => NamesAnErasure().IsMatch(name))
+            .Distinct(StringComparer.Ordinal)
             .Order(StringComparer.Ordinal)
             .ToArray();
 
@@ -204,8 +206,11 @@ public static partial class RecordingFenceRules
     [GeneratedRegex(@"Set<\s*Recording\s*>[\s\S]{0,400}?\bExecuteDelete\w*\s*\(")]
     private static partial Regex ErasesALedgerRow();
 
-    [GeneratedRegex(@"\.\s*DeleteAsync\s*\(")]
-    private static partial Regex AsksToDelete();
+    [GeneratedRegex(@"\b(\w+)\s*\(")]
+    private static partial Regex MemberNamesIn();
+
+    [GeneratedRegex(@"Delete|Discard|Drop|Erase|Forget|Purge|Remove|Throw|Wipe")]
+    private static partial Regex NamesAnErasure();
 
     private readonly record struct SourceFile(string Relative, string Source);
 }
