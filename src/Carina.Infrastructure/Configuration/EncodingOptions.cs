@@ -146,3 +146,41 @@ public sealed class EncodingValidation : IValidateOptions<EncodingOptions>
         return ValidateOptionsResult.Success;
     }
 }
+
+public sealed class RootsHeldApartValidation(IOptions<IntegrityOptions> sweeping) : IValidateOptions<EncodingOptions>
+{
+    public ValidateOptionsResult Validate(string? name, EncodingOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+
+        IReadOnlyList<StorageRootPath> held;
+        IReadOnlyList<StorageRootPath> walked;
+
+        try
+        {
+            held = options.Read().OutputRoots;
+            walked = sweeping.Value.Read().OutputRoots;
+        }
+        catch (ArgumentException refusal)
+        {
+            return ValidateOptionsResult.Fail(refusal.Message);
+        }
+
+        string[] shared =
+        [
+            .. held
+                .Select(root => root.Root.Value)
+                .Intersect(walked.Select(root => root.Root.Value), StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal),
+        ];
+
+        return shared.Length is 0
+            ? ValidateOptionsResult.Success
+            : ValidateOptionsResult.Fail(
+                $"{EncodingOptions.Section}:{nameof(EncodingOptions.OutputRoots)} and "
+                + $"{IntegrityOptions.Section}:{nameof(IntegrityOptions.OutputRoots)} both name "
+                + $"{string.Join(", ", shared)}. The two are separate sets: an artefact is written only into a root "
+                + "this process holds, and the ledger sweep walks only the roots the recordings are read from, so a "
+                + "name in both would have the sweep report finished artefacts as files no ledger row claims.");
+    }
+}

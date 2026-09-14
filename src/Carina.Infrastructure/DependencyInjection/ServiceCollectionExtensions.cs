@@ -104,6 +104,7 @@ public static class ServiceCollectionExtensions
             .ValidateOnStart();
 
         services.AddSingleton<IValidateOptions<EncodingOptions>, EncodingValidation>();
+        services.AddSingleton<IValidateOptions<EncodingOptions>, RootsHeldApartValidation>();
         services.AddOptions<EncodingOptions>()
             .Configure(options => options.ReadFrom(configuration))
             .ValidateOnStart();
