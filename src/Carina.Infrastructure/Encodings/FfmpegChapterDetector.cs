@@ -15,12 +15,22 @@ namespace Carina.Infrastructure.Encodings;
 /// two passes observed is handed to <see cref="ChapterGrid"/>, which decides — nothing is decided
 /// here.
 /// <para>
-/// This answers, it does not fail. A programme that is not on this machine, one that refused, one
-/// that outlived <see cref="Patience"/>, and a source measured against some other clock all come
-/// back as a reading that could not be made, so an encode that would have run without anyone
-/// looking is not failed by the looking. What is written down beside such a reading is built here
-/// out of the exit code and the reason: not one word of what the programme said is kept, because
-/// what it says carries the source it was reading.
+/// This answers, it does not fail. A programme that is not on this machine, one that refused while
+/// listening, one that outlived <see cref="Patience"/> before a word of the sound was read, and a
+/// source measured against some other clock all come back as a reading that could not be made, so
+/// an encode that would have run without anyone looking is not failed by the looking. What is
+/// written down beside such a reading is built here out of the exit code and the reason: not one
+/// word of what the programme said is kept, because what it says carries the source it was
+/// reading.
+/// </para>
+/// <para>
+/// Only the sound is read whole; looking at the picture is what has a ceiling on it, at
+/// <see cref="MostLooksPerMark"/> looks for every mark the reading is allowed, taking the longest
+/// quiet stretches first. Nothing that happens to one of those looks throws the reading away: one
+/// that refused leaves its own stretch uncorroborated, and running out of time stops the looking
+/// where it stands. Either way what has been gathered by then is still handed to
+/// <see cref="ChapterGrid"/> — a reading of part of the evidence is the reading that part gives —
+/// and the answer says on its face that it was made that way.
 /// </para>
 /// <para>
 /// How much of the machine the two passes may take is handed in rather than read here, so that the
@@ -39,6 +49,18 @@ public sealed class FfmpegChapterDetector(
     TimeProvider clock,
     TimeSpan patience) : IChapterDetector
 {
+    /// <summary>
+    /// How many quiet stretches are worth looking at the picture around, as a multiple of the
+    /// marks a reading is allowed to put in. Two corroborated boundaries make one pod, so a
+    /// reading allowed so many marks can use about twice that many boundaries and the rest of this
+    /// is slack for the ones that corroborate nothing. Without a ceiling the number of looks is
+    /// whatever the sound happened to do: a two-hour recording of people talking reports hundreds
+    /// of quiet stretches, and starting one programme after another for all of them spends the
+    /// whole of <see cref="Patience"/> on a machine that is recording and then comes back having
+    /// read nothing at all.
+    /// </summary>
+    public const int MostLooksPerMark = 4;
+
     public static readonly TimeSpan Patience = TimeSpan.FromMinutes(5);
 
     public FfmpegChapterDetector(MachineSettings machine, EncodeSettings settings, TimeProvider clock)
@@ -77,7 +99,7 @@ public sealed class FfmpegChapterDetector(
             began,
             cancellationToken);
 
-        if (WhyNothingWasRead(listened, "listening to the whole of the sound") is { } deaf)
+        if (WhyNothingWasReadAtAll(listened, "listening to the whole of the sound") is { } deaf)
         {
             return ChapterDetection.Unreadable(deaf);
         }
@@ -105,9 +127,22 @@ public sealed class FfmpegChapterDetector(
         }
 
         var seen = new ChapterLog();
+        List<string> asides = [];
+        int mostToLookAt = MostLooksPerMark * asked.MostChapters;
+        int lookedThrough = 0;
+        int refused = 0;
 
-        foreach (ChapterSpan quiet in silences)
+        foreach (ChapterSpan quiet in Ranked(silences))
         {
+            if (lookedThrough + refused >= mostToLookAt)
+            {
+                asides.Add(string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"only the {mostToLookAt} longest of the {silences.Count} quiet stretches were looked at"));
+
+                break;
+            }
+
             TimeSpan middle = quiet.Starts + ((quiet.Ends - quiet.Starts) / 2) + timeline.HeadSkip;
 
             ChapterRunOutcome peeked = await RunAsync(
@@ -117,10 +152,30 @@ public sealed class FfmpegChapterDetector(
                 began,
                 cancellationToken);
 
-            if (WhyNothingWasRead(peeked, "looking at the picture around a quiet stretch") is { } blind)
+            if (peeked.Fault is ChapterRunFault.TookTooLong)
             {
-                return ChapterDetection.Unreadable(blind);
+                asides.Add(string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"looking at the picture was stopped after {patience:c}, with {lookedThrough} of the {silences.Count} quiet stretches looked at"));
+
+                break;
             }
+
+            if (peeked.Succeeded)
+            {
+                lookedThrough++;
+
+                continue;
+            }
+
+            refused++;
+        }
+
+        if (refused > 0)
+        {
+            asides.Add(string.Create(
+                CultureInfo.InvariantCulture,
+                $"{refused} of the looks refused, so what lies around those quiet stretches went unseen"));
         }
 
         List<ChapterSpan> blacks = [];
@@ -144,14 +199,26 @@ public sealed class FfmpegChapterDetector(
         }
 
         var evidence = new ChapterEvidence { Silences = silences, Blacks = blacks, Scenes = changes };
+        ChapterDetection read = ChapterGrid.Mark(evidence, artefactLength, asked);
 
-        return ChapterGrid.Mark(evidence, artefactLength, asked);
+        return asides.Count is 0 ? read : read.Noting(string.Join("; ", asides));
     }
+
+    /// <summary>
+    /// The order the quiet stretches are worth looking at the picture around in: the longest
+    /// first, because a stretch of silence long enough to be an advertisement break is the one
+    /// most likely to be one, and then the earliest, so that the order is the same twice over the
+    /// same reading.
+    /// </summary>
+    private static IEnumerable<ChapterSpan> Ranked(List<ChapterSpan> silences)
+        => silences
+            .OrderByDescending(quiet => quiet.Ends - quiet.Starts)
+            .ThenBy(quiet => quiet.Starts);
 
     private static ChapterSpan? Placed(ChapterSpan reported, EncodeTimeline timeline, TimeSpan artefactLength)
         => ChapterClock.OnTheArtefact(reported, timeline.SourceStart, timeline.HeadSkip, artefactLength);
 
-    private string? WhyNothingWasRead(ChapterRunOutcome ran, string doing)
+    private string? WhyNothingWasReadAtAll(ChapterRunOutcome ran, string doing)
         => ran.Fault switch
         {
             ChapterRunFault.ProgrammeMissing => $"nothing looked, {doing} being beyond this machine: {ran.Complained}",

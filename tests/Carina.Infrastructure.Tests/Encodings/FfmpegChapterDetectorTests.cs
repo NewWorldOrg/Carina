@@ -105,24 +105,117 @@ public sealed class FfmpegChapterDetectorTests : IDisposable
         Assert.DoesNotContain("/srv/recordings", read.Note, StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "a programme that refused while looking at the picture leaves the same answer, named for what it was doing")]
-    public async Task AProgrammeThatRefusedWhileLookingAtThePictureLeavesTheSameAnswer()
+    [Fact(DisplayName = "one look at the picture that refused leaves that quiet stretch uncorroborated and the rest of the reading standing, and the reading says so")]
+    public async Task OneLookThatRefusedLeavesTheRestOfTheReadingStanding()
     {
-        ChapterDetection read = await Looking($"""
+        string calls = tree.Under("calls");
+        ChapterDetection read = await Looking($$"""
+            printf '%s\n' "$*" >> "{{calls}}"
             case "$*" in
                 *silencedetect*)
                     echo '[silencedetect @ 0x1] silence_start: 1300.25' >&2
                     echo '[silencedetect @ 0x1] silence_end: 1300.75 | silence_duration: 0.5' >&2
+                    echo '[silencedetect @ 0x1] silence_start: 1360.25' >&2
+                    echo '[silencedetect @ 0x1] silence_end: 1360.75 | silence_duration: 0.5' >&2
+                    ;;
+                *"-ss 297.5 "*)
+                    exit 218
                     ;;
                 *)
-                    exit 218
+                    echo '[blackdetect @ 0x1] black_start:1300.2 black_end:1300.8 black_duration:0.6' >&2
+                    echo '[blackdetect @ 0x1] black_start:1360.2 black_end:1360.8 black_duration:0.6' >&2
+                    printf 'frame:0    pts:0 pts_time:1300.25\nlavfi.scene_score=0.900000\n'
+                    printf 'frame:1    pts:0 pts_time:1360.25\nlavfi.scene_score=0.900000\n'
                     ;;
             esac
             """).MarkAsync(Source, Service, Aligned, Cores, Unwatched, Cancel);
 
-        Assert.Equal(ChapterVerdict.Unreadable, read.Verdict);
-        Assert.Contains("exited 218", read.Note, StringComparison.Ordinal);
-        Assert.Contains("looking at the picture", read.Note, StringComparison.Ordinal);
+        Assert.Equal(3, File.ReadAllLines(calls).Length);
+        Assert.Equal(ChapterVerdict.Marked, read.Verdict);
+        Assert.Equal(1, read.Breaks);
+        Assert.Contains("1 of the looks refused", read.Note, StringComparison.Ordinal);
+        Assert.DoesNotContain("218", read.Note, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "only so many quiet stretches are worth looking at the picture around, and the ones looked at are the longest, longest first")]
+    public async Task OnlySoManyQuietStretchesAreLookedAtAndTheLongestComeFirst()
+    {
+        string calls = tree.Under("calls");
+        FfmpegChapterDetector detector = new(
+            new MachineSettings
+            {
+                Programme = Standing($$"""
+                    printf '%s\n' "$*" >> "{{calls}}"
+                    case "$*" in
+                        *silencedetect*)
+                            echo '[silencedetect @ 0x1] silence_start: 1100' >&2
+                            echo '[silencedetect @ 0x1] silence_end: 1100.1 | silence_duration: 0.1' >&2
+                            echo '[silencedetect @ 0x1] silence_start: 1200' >&2
+                            echo '[silencedetect @ 0x1] silence_end: 1200.5 | silence_duration: 0.5' >&2
+                            echo '[silencedetect @ 0x1] silence_start: 1300' >&2
+                            echo '[silencedetect @ 0x1] silence_end: 1300.2 | silence_duration: 0.2' >&2
+                            echo '[silencedetect @ 0x1] silence_start: 1400' >&2
+                            echo '[silencedetect @ 0x1] silence_end: 1400.4 | silence_duration: 0.4' >&2
+                            echo '[silencedetect @ 0x1] silence_start: 1500' >&2
+                            echo '[silencedetect @ 0x1] silence_end: 1500.3 | silence_duration: 0.3' >&2
+                            ;;
+                    esac
+                    """),
+            },
+            new EncodeSettings { Chapters = new ChapterSettings { MostChapters = 1 } },
+            TimeProvider.System);
+
+        ChapterDetection read = await detector.MarkAsync(Source, Service, Aligned, Cores, Unwatched, Cancel);
+
+        string[] ran = File.ReadAllLines(calls);
+
+        Assert.Equal(1 + (FfmpegChapterDetector.MostLooksPerMark * 1), ran.Length);
+        Assert.Contains("-ss 197.25 ", ran[1], StringComparison.Ordinal);
+        Assert.Contains("-ss 397.2 ", ran[2], StringComparison.Ordinal);
+        Assert.Contains("-ss 497.15 ", ran[3], StringComparison.Ordinal);
+        Assert.Contains("-ss 297.1 ", ran[4], StringComparison.Ordinal);
+        Assert.DoesNotContain(ran, line => line.Contains("-ss 97.05 ", StringComparison.Ordinal));
+        Assert.Contains("4 longest of the 5", read.Note, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "a look that runs out of time part way through the picture is still a reading of what it did see, not a reading thrown away")]
+    public async Task ALookThatRunsOutOfTimePartWayThroughIsStillAReadingOfWhatItSaw()
+    {
+        FfmpegChapterDetector detector = new(
+            new MachineSettings
+            {
+                Programme = Standing("""
+                    case "$*" in
+                        *silencedetect*)
+                            echo '[silencedetect @ 0x1] silence_start: 1300.25' >&2
+                            echo '[silencedetect @ 0x1] silence_end: 1300.75 | silence_duration: 0.5' >&2
+                            echo '[silencedetect @ 0x1] silence_start: 1360.25' >&2
+                            echo '[silencedetect @ 0x1] silence_end: 1360.75 | silence_duration: 0.5' >&2
+                            echo '[silencedetect @ 0x1] silence_start: 1500' >&2
+                            echo '[silencedetect @ 0x1] silence_end: 1500.1 | silence_duration: 0.1' >&2
+                            ;;
+                        *"-ss 497.05 "*)
+                            sleep 30
+                            ;;
+                        *)
+                            echo '[blackdetect @ 0x1] black_start:1300.2 black_end:1300.8 black_duration:0.6' >&2
+                            echo '[blackdetect @ 0x1] black_start:1360.2 black_end:1360.8 black_duration:0.6' >&2
+                            printf 'frame:0    pts:0 pts_time:1300.25\nlavfi.scene_score=0.900000\n'
+                            printf 'frame:1    pts:0 pts_time:1360.25\nlavfi.scene_score=0.900000\n'
+                            ;;
+                    esac
+                    """),
+            },
+            new EncodeSettings(),
+            TimeProvider.System,
+            TimeSpan.FromSeconds(3));
+
+        ChapterDetection read = await detector.MarkAsync(Source, Service, Aligned, Cores, Unwatched, Cancel);
+
+        Assert.Equal(ChapterVerdict.Marked, read.Verdict);
+        Assert.Equal(1, read.Breaks);
+        Assert.Contains("was stopped after", read.Note, StringComparison.Ordinal);
+        Assert.Contains("2 of the 3", read.Note, StringComparison.Ordinal);
     }
 
     [Fact(DisplayName = "a programme that is not on this machine is a reading that could not be made, not a job that failed")]

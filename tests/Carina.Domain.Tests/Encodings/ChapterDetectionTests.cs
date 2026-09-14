@@ -159,6 +159,34 @@ public sealed class ChapterDetectionTests
         Assert.Equal(ProgrammeNote.Longest, ChapterDetection.Discarded(0.5, new string('x', ProgrammeNote.Longest + 10)).Note.Length);
     }
 
+    [Fact]
+    public void AReadingCanSaySomethingFurtherAboutHowItWasMadeWithoutBecomingAnotherReading()
+    {
+        ChapterDetection marked = ChapterDetection.Marked(Laid(), TimeSpan.FromMinutes(10), 0.1)
+            .Noting("only the 4 longest quiet stretches were looked at");
+
+        Assert.Equal(ChapterVerdict.Marked, marked.Verdict);
+        Assert.Equal(3, marked.Segments.Count);
+        Assert.Equal(0.1, marked.BreakShare);
+        Assert.Equal("only the 4 longest quiet stretches were looked at", marked.Note);
+
+        Assert.Equal(
+            "the breaks came to too much; only the 4 longest were looked at",
+            ChapterDetection.Discarded(0.7, "the breaks came to too much")
+                .Noting("only the 4 longest were looked at")
+                .Note);
+    }
+
+    [Fact]
+    public void SomethingFurtherSaidAboutAReadingKeepsNeitherThePathsOnThisMachineNorMoreThanItIsAllowed()
+    {
+        Assert.Equal("… was never looked at", ChapterDetection.NothingFound().Noting("/srv/recordings/a.ts was never looked at").Note);
+        Assert.Equal(
+            ProgrammeNote.Longest,
+            ChapterDetection.NothingFound().Noting(new string('x', ProgrammeNote.Longest + 10)).Note.Length);
+        Assert.Throws<ArgumentException>(() => ChapterDetection.NothingFound().Noting(string.Empty));
+    }
+
     private static IReadOnlyList<ChapterSegment> Laid() =>
     [
         Chapter(0, 3, ChapterKind.Programme),

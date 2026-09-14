@@ -9,6 +9,8 @@ namespace Carina.Domain.Encodings;
 /// reading that was thrown away leaves no half of itself behind. <see cref="BreakShare"/> is how
 /// much of the length the reading took for breaks, kept whatever the verdict, so the run that
 /// tripped the safety valve can be found afterwards without reading logs.
+/// <see cref="Noting"/> is how a reading says that it was made from part of what there was to see:
+/// it changes nothing that was read, only what is known about the reading of it.
 /// </summary>
 public sealed record ChapterDetection
 {
@@ -88,6 +90,23 @@ public sealed record ChapterDetection
         }
 
         return new ChapterDetection(ChapterVerdict.Marked, [.. segments], Shared(breakShare), string.Empty);
+    }
+
+    /// <summary>
+    /// The same reading with something further said about how it was made — that only part of what
+    /// there was to see was looked at, and why. A reading made from part of the evidence is still
+    /// the reading that evidence gives; what is added here is the standing to doubt it, kept
+    /// whatever the verdict so that it is read wherever the reading is.
+    /// </summary>
+    public ChapterDetection Noting(string note)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(note);
+
+        return new ChapterDetection(
+            Verdict,
+            Segments,
+            BreakShare,
+            Shortened(Note.Length is 0 ? note : $"{Note}; {note}"));
     }
 
     public static ChapterDetection NothingFound()
