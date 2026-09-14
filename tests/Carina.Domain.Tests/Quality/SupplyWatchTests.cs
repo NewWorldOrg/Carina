@@ -10,16 +10,43 @@ public sealed class SupplyWatchTests
 
     private static readonly QualitySubject Adapter = QualitySubject.Of(QualitySubjectKind.Tuner, "adapter0");
 
-    [Theory(DisplayName = "BR-QS-002: what a pass does about one supply follows only whether it is quiet and whether one already stands")]
-    [InlineData(true, false, SupplyWatchStep.Open)]
-    [InlineData(true, true, SupplyWatchStep.Nothing)]
-    [InlineData(false, true, SupplyWatchStep.Resolve)]
-    [InlineData(false, false, SupplyWatchStep.Nothing)]
-    public void WhatAPassDoesAboutOneSupplyFollowsOnlyWhetherItIsQuietAndWhetherOneAlreadyStands(
+    [Theory(DisplayName = "BR-QS-002: what a pass does about one supply follows whether it read it, whether it is quiet and whether one already stands")]
+    [InlineData(true, true, false, SupplyWatchStep.Open)]
+    [InlineData(true, true, true, SupplyWatchStep.Nothing)]
+    [InlineData(true, false, true, SupplyWatchStep.Resolve)]
+    [InlineData(true, false, false, SupplyWatchStep.Nothing)]
+    [InlineData(false, false, true, SupplyWatchStep.Nothing)]
+    [InlineData(false, false, false, SupplyWatchStep.Nothing)]
+    [InlineData(false, true, false, SupplyWatchStep.Nothing)]
+    [InlineData(false, true, true, SupplyWatchStep.Nothing)]
+    public void WhatAPassDoesAboutOneSupplyFollowsWhetherItReadItAndWhetherItIsQuiet(
+        bool observed,
         bool quiet,
         bool standing,
         SupplyWatchStep expected)
-        => Assert.Equal(expected, SupplyWatch.NextStep(quiet, standing));
+        => Assert.Equal(expected, SupplyWatch.NextStep(observed, quiet, standing));
+
+    [Fact(DisplayName = "BR-QD-007: every supply is answered for by the driver or by the ledger, and by only one of them")]
+    public void EverySupplyIsAnsweredForByTheDriverOrByTheLedgerAndByOnlyOneOfThem()
+    {
+        Assert.Equal(
+            SupplySilences.Every.Order(),
+            SupplySilences.TheDriverAnswersFor.Concat(SupplySilences.TheLedgerAnswersFor).Order());
+        Assert.Empty(SupplySilences.TheDriverAnswersFor.Intersect(SupplySilences.TheLedgerAnswersFor));
+        Assert.Contains(SupplySilence.SignalSamples, SupplySilences.TheDriverAnswersFor);
+    }
+
+    [Fact(DisplayName = "BR-QS-002: a supply this pass could not read is neither opened nor resolved")]
+    public void ASupplyThisPassCouldNotReadIsNeitherOpenedNorResolved()
+    {
+        QualityIncident standing = Standing();
+
+        SupplyWatchPlan plan = SupplyWatch.Plan([], [standing], SupplySilences.TheLedgerAnswersFor);
+
+        Assert.Empty(plan.ToOpen);
+        Assert.Empty(plan.ToResolve);
+        Assert.Equal(QualityIncidentState.Detected, standing.State);
+    }
 
     [Fact(DisplayName = "BR-QD-007: a supply heard from within the threshold is not quiet")]
     public void ASupplyHeardFromWithinTheThresholdIsNotQuiet()
@@ -56,7 +83,7 @@ public sealed class SupplyWatchTests
 
         Assert.Equal(2, quiet.Count);
 
-        SupplyWatchPlan plan = SupplyWatch.Plan(quiet, []);
+        SupplyWatchPlan plan = SupplyWatch.Plan(quiet, [], SupplySilences.Every);
 
         Assert.Equal(
             [SupplySilence.RecordingProgress, SupplySilence.RecordingMeasurement],
@@ -66,7 +93,7 @@ public sealed class SupplyWatchTests
     [Fact(DisplayName = "BR-QS-002: a silence that is already standing is not opened a second time")]
     public void ASilenceThatIsAlreadyStandingIsNotOpenedASecondTime()
     {
-        SupplyWatchPlan plan = SupplyWatch.Plan([Found()], [Standing()]);
+        SupplyWatchPlan plan = SupplyWatch.Plan([Found()], [Standing()], SupplySilences.Every);
 
         Assert.Empty(plan.ToOpen);
         Assert.Empty(plan.ToResolve);
@@ -77,7 +104,7 @@ public sealed class SupplyWatchTests
     {
         QualityIncident standing = Standing();
 
-        SupplyWatchPlan plan = SupplyWatch.Plan([], [standing]);
+        SupplyWatchPlan plan = SupplyWatch.Plan([], [standing], SupplySilences.Every);
 
         Assert.Empty(plan.ToOpen);
         Assert.Same(standing, Assert.Single(plan.ToResolve));
@@ -91,7 +118,7 @@ public sealed class SupplyWatchTests
         settled.Notify(Noon);
         settled.Resolve(Noon);
 
-        SupplyWatchPlan plan = SupplyWatch.Plan([Found()], [settled]);
+        SupplyWatchPlan plan = SupplyWatch.Plan([Found()], [settled], SupplySilences.Every);
 
         Assert.Single(plan.ToOpen);
         Assert.Empty(plan.ToResolve);
@@ -106,7 +133,7 @@ public sealed class SupplyWatchTests
         acknowledged.Acknowledge(Noon, "someone");
         acknowledged.Resolve(Noon);
 
-        SupplyWatchPlan plan = SupplyWatch.Plan([Found()], [acknowledged]);
+        SupplyWatchPlan plan = SupplyWatch.Plan([Found()], [acknowledged], SupplySilences.Every);
 
         Assert.Single(plan.ToOpen);
     }
@@ -119,7 +146,7 @@ public sealed class SupplyWatchTests
         acknowledged.Notify(Noon);
         acknowledged.Acknowledge(Noon, "someone");
 
-        SupplyWatchPlan plan = SupplyWatch.Plan([Found()], [acknowledged]);
+        SupplyWatchPlan plan = SupplyWatch.Plan([Found()], [acknowledged], SupplySilences.Every);
 
         Assert.Empty(plan.ToOpen);
         Assert.Empty(plan.ToResolve);
@@ -138,7 +165,7 @@ public sealed class SupplyWatchTests
             QualityIncidentOwner.Tuner,
             "NoLock");
 
-        SupplyWatchPlan plan = SupplyWatch.Plan([], [elsewhere]);
+        SupplyWatchPlan plan = SupplyWatch.Plan([], [elsewhere], SupplySilences.Every);
 
         Assert.Empty(plan.ToResolve);
     }

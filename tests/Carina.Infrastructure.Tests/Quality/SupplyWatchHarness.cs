@@ -79,6 +79,6 @@ internal sealed class SupplyWatchHarness
     public void Visited(DateTime at)
         => Supply.Readings.Add(SupplyReading.Of(
             SupplySilence.GuideVisits,
-            QualitySubject.Of(QualitySubjectKind.TransportStream, "32736-32736"),
+            QualitySubject.TheGuideLedger,
             at + TimeSpan.FromHours(6)));
 }

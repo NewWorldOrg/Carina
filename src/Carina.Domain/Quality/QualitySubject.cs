@@ -9,6 +9,8 @@ public enum QualitySubjectKind
     Recording = 3,
 
     TransportStream = 4,
+
+    Guide = 5,
 }
 
 public sealed record QualitySubject
@@ -25,11 +27,13 @@ public sealed record QualitySubject
 
     public string Key { get; }
 
+    public static QualitySubject TheGuideLedger { get; } = Of(QualitySubjectKind.Guide, "visits");
+
     public static QualitySubject Of(QualitySubjectKind kind, string key)
     {
         if (!Enum.IsDefined(kind))
         {
-            throw new ArgumentOutOfRangeException(nameof(kind), kind, "A subject is one of the four things this domain watches.");
+            throw new ArgumentOutOfRangeException(nameof(kind), kind, "A subject is one of the five things this domain watches.");
         }
 
         ArgumentException.ThrowIfNullOrWhiteSpace(key);

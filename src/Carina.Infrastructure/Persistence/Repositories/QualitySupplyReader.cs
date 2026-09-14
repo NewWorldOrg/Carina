@@ -55,28 +55,32 @@ public sealed class QualitySupplyReader(CarinaDbContext context, CollectionSetti
     {
         List<StreamVisit> walked = await context.Set<StreamVisit>()
             .AsNoTracking()
-            .OrderBy(visit => visit.NetworkId)
-            .ThenBy(visit => visit.TransportStreamId)
             .ToListAsync(cancellationToken);
 
-        List<SupplyReading> read = [];
+        DateTime? soonestDue = null;
+        DateTime? latestAttempt = null;
 
         foreach (StreamVisit visit in walked)
         {
-            if (CollectionBackOff.NotBefore(visit, settings) is not { } due)
+            if (CollectionBackOff.NotBefore(visit, settings) is { } due && (soonestDue is null || due < soonestDue))
             {
-                continue;
+                soonestDue = due;
             }
 
-            read.Add(SupplyReading.Of(
-                SupplySilence.GuideVisits,
-                QualitySubject.Of(
-                    QualitySubjectKind.TransportStream,
-                    $"{visit.NetworkId.Value}-{visit.TransportStreamId.Value}"),
-                due));
+            if (latestAttempt is null || visit.LastAttemptedAt > latestAttempt)
+            {
+                latestAttempt = visit.LastAttemptedAt;
+            }
         }
 
-        return read;
+        if (soonestDue is not { } overdue)
+        {
+            return [];
+        }
+
+        DateTime heard = latestAttempt is { } attempted && attempted > overdue ? attempted : overdue;
+
+        return [SupplyReading.Of(SupplySilence.GuideVisits, QualitySubject.TheGuideLedger, heard)];
     }
 
     private sealed record Writing(

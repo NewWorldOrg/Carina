@@ -112,7 +112,7 @@ public sealed class SupplyWatchRoundTests
         QualityIncident opened = Assert.Single(harness.Incidents.Incidents);
 
         Assert.Equal(SupplySilence.GuideVisits, opened.Silence);
-        Assert.Equal(QualitySubjectKind.TransportStream, opened.Subject.Kind);
+        Assert.Equal(QualitySubject.TheGuideLedger, opened.Subject);
     }
 
     [Fact(DisplayName = "BR-QD-007: a visit that is not due again yet is not quiet")]
@@ -235,6 +235,33 @@ public sealed class SupplyWatchRoundTests
 
         Assert.False(pass.TunersWereAsked);
         Assert.Empty(harness.Incidents.Incidents);
+    }
+
+    [Fact(DisplayName = "BR-QS-002: a driver that cannot be asked leaves the silence it can no longer see standing")]
+    public async Task ADriverThatCannotBeAskedLeavesTheSilenceItCanNoLongerSeeStanding()
+    {
+        SupplyWatchHarness harness = new();
+
+        harness.HoldingATuner(Noon - TimeSpan.FromMinutes(30));
+
+        await harness.Round().WatchAsync(Cancel);
+
+        QualityIncident opened = Assert.Single(harness.Incidents.Incidents);
+
+        Assert.Equal(QualityIncidentState.Notified, opened.State);
+
+        harness.Events.Signalled.Clear();
+        harness.Driver.Tuners = DriverCall<IReadOnlyList<TunerSnapshot>>.Unreachable("the socket is not there");
+
+        SupplyWatchPass second = await harness.Round().WatchAsync(Cancel);
+
+        Assert.False(second.TunersWereAsked);
+        Assert.Equal(0, second.Opened);
+        Assert.Equal(0, second.Resolved);
+        Assert.Same(opened, Assert.Single(harness.Incidents.Incidents));
+        Assert.Equal(QualityIncidentState.Notified, opened.State);
+        Assert.Null(opened.ResolvedAt);
+        Assert.Empty(harness.Events.Signalled);
     }
 
     [Fact(DisplayName = "BR-QD-008: the four supplies are counted apart from one another")]

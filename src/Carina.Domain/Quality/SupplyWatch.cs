@@ -13,6 +13,17 @@ public enum SupplySilence
     GuideVisits = 4,
 }
 
+public static class SupplySilences
+{
+    public static IReadOnlySet<SupplySilence> Every { get; } = Enum.GetValues<SupplySilence>().ToHashSet();
+
+    public static IReadOnlySet<SupplySilence> TheDriverAnswersFor { get; } =
+        new HashSet<SupplySilence> { SupplySilence.SignalSamples };
+
+    public static IReadOnlySet<SupplySilence> TheLedgerAnswersFor { get; } =
+        Every.Where(silence => !TheDriverAnswersFor.Contains(silence)).ToHashSet();
+}
+
 public enum SupplyWatchStep
 {
     Nothing = 1,
@@ -93,12 +104,14 @@ public sealed record SupplyWatchPlan(
 
 public static class SupplyWatch
 {
-    public static SupplyWatchStep NextStep(bool quiet, bool standing) => (quiet, standing) switch
-    {
-        (true, false) => SupplyWatchStep.Open,
-        (false, true) => SupplyWatchStep.Resolve,
-        _ => SupplyWatchStep.Nothing,
-    };
+    public static SupplyWatchStep NextStep(bool observed, bool quiet, bool standing)
+        => (observed, quiet, standing) switch
+        {
+            (false, _, _) => SupplyWatchStep.Nothing,
+            (true, true, false) => SupplyWatchStep.Open,
+            (true, false, true) => SupplyWatchStep.Resolve,
+            _ => SupplyWatchStep.Nothing,
+        };
 
     public static IReadOnlyList<SupplySilenceFinding> Quiet(
         IReadOnlyList<SupplyReading> readings,
@@ -133,23 +146,29 @@ public static class SupplyWatch
 
     public static SupplyWatchPlan Plan(
         IReadOnlyList<SupplySilenceFinding> quiet,
-        IReadOnlyList<QualityIncident> standing)
+        IReadOnlyList<QualityIncident> standing,
+        IReadOnlySet<SupplySilence> observed)
     {
         ArgumentNullException.ThrowIfNull(quiet);
         ArgumentNullException.ThrowIfNull(standing);
+        ArgumentNullException.ThrowIfNull(observed);
 
         List<QualityIncident> watched = [.. standing.Where(Watched)];
 
         List<SupplySilenceFinding> opening =
         [
-            .. quiet.Where(finding =>
-                NextStep(true, watched.Exists(incident => About(incident, finding))) is SupplyWatchStep.Open),
+            .. quiet.Where(finding => NextStep(
+                observed.Contains(finding.Silence),
+                true,
+                watched.Exists(incident => About(incident, finding))) is SupplyWatchStep.Open),
         ];
 
         List<QualityIncident> resolving =
         [
-            .. watched.Where(incident =>
-                NextStep(quiet.Any(finding => About(incident, finding)), true) is SupplyWatchStep.Resolve),
+            .. watched.Where(incident => NextStep(
+                incident.Silence is { } silence && observed.Contains(silence),
+                quiet.Any(finding => About(incident, finding)),
+                true) is SupplyWatchStep.Resolve),
         ];
 
         return new SupplyWatchPlan(opening, resolving);

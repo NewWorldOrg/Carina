@@ -2021,7 +2021,7 @@ partial class WhenASupplyGoesQuiet
 
                         t.HasCheckConstraint("ck_quality_incident_silence", "(breached = 'SupplySilence') = (silence IS NOT NULL)\nAND (silence IS NULL OR silence IN ('RecordingProgress', 'RecordingMeasurement', 'SignalSamples', 'GuideVisits'))");
 
-                        t.HasCheckConstraint("ck_quality_incident_vocabulary", "breached IN ('PacketsLostWarning', 'PacketsLostUnwatchable', 'PacketsLeftScrambled', 'Overflows', 'LockRate', 'CarrierToNoiseFloor', 'BitErrorRateCeiling', 'SupplySilence')\nAND owner IN ('Quality', 'Tuner', 'Guide', 'Reservation', 'Recording')\nAND state IN ('Detected', 'Notified', 'Acknowledged', 'Resolved')\nAND subject_kind IN ('Tuner', 'Channel', 'Recording', 'TransportStream')");
+                        t.HasCheckConstraint("ck_quality_incident_vocabulary", "breached IN ('PacketsLostWarning', 'PacketsLostUnwatchable', 'PacketsLeftScrambled', 'Overflows', 'LockRate', 'CarrierToNoiseFloor', 'BitErrorRateCeiling', 'SupplySilence')\nAND owner IN ('Quality', 'Tuner', 'Guide', 'Reservation', 'Recording')\nAND state IN ('Detected', 'Notified', 'Acknowledged', 'Resolved')\nAND subject_kind IN ('Tuner', 'Channel', 'Recording', 'TransportStream', 'Guide')");
                     });
             });
 

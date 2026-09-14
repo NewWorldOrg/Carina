@@ -50,7 +50,7 @@ public sealed class SupplyWatchRound(
 
         IReadOnlyList<SupplySilenceFinding> quiet = SupplyWatch.Quiet(readings, longest, now);
         IReadOnlyList<QualityIncident> unsettled = await incidents.ListUnsettledAsync(cancellationToken);
-        SupplyWatchPlan plan = SupplyWatch.Plan(quiet, unsettled);
+        SupplyWatchPlan plan = SupplyWatch.Plan(quiet, unsettled, Observed(asked));
 
         int opened = await OpenAsync(plan.ToOpen, standing.Setting, now, cancellationToken);
         int resolved = await ResolveAsync(plan.ToResolve, now, cancellationToken);
@@ -75,6 +75,9 @@ public sealed class SupplyWatchRound(
         return pass;
     }
 
+    private static IReadOnlySet<SupplySilence> Observed(bool asked)
+        => asked ? SupplySilences.Every : SupplySilences.TheLedgerAnswersFor;
+
     private static IReadOnlyList<SupplyWatchTally> Tallies(
         IReadOnlyList<SupplyReading> readings,
         IReadOnlyList<SupplySilenceFinding> quiet)
@@ -95,8 +98,8 @@ public sealed class SupplyWatchRound(
         if (!asked.TryGetValue(out IReadOnlyList<TunerSnapshot>? tuners))
         {
             logger.LogWarning(
-                "The driver would not say what tuners it holds, so this pass names no tuner as quiet rather than "
-                + "naming ones it cannot see.");
+                "The driver would not say what tuners it holds, so this pass leaves every signal sample silence "
+                + "where the last pass that could see them left it.");
 
             return (false, []);
         }

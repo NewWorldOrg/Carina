@@ -303,6 +303,24 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         Assert.Equal("ck_quality_incident_silence", unasked.ConstraintName);
     }
 
+    [Fact(DisplayName = "BR-QD-007: the visit ledger is a subject of its own rather than one stream standing in for it")]
+    public async Task TheVisitLedgerIsASubjectOfItsOwn()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        await IncidentAsync(
+            connection,
+            state: "Detected",
+            breached: "SupplySilence",
+            silence: "'GuideVisits'",
+            subjectKind: "Guide");
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => IncidentAsync(connection, state: "Detected", subjectKind: "SomethingElse"));
+
+        Assert.Equal("ck_quality_incident_vocabulary", refusal.ConstraintName);
+    }
+
     [Fact(DisplayName = "BR-QD-008: a supply named outside this domain's vocabulary is refused")]
     public async Task ASupplyNamedOutsideThisDomainsVocabularyIsRefused()
     {
@@ -498,7 +516,8 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         string classification = "NULL",
         string? subject = null,
         string breached = "PacketsLostWarning",
-        string silence = "NULL")
+        string silence = "NULL",
+        string subjectKind = "Recording")
         => new NpgsqlCommand(
             $"""
             INSERT INTO quality_incident (
@@ -506,7 +525,7 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
                 applied_default, applied_current, applied_provisional, applied_observations, applied_updated_at,
                 state, notified_at, acknowledged_at, acknowledged_by, resolved_at)
             VALUES (
-                '{Guid.NewGuid()}', {Taken}, '{breached}', 'Recording', '{subject ?? Guid.NewGuid().ToString("N")}', 0.004,
+                '{Guid.NewGuid()}', {Taken}, '{breached}', '{subjectKind}', '{subject ?? Guid.NewGuid().ToString("N")}', 0.004,
                 '{owner}', {classification}, {silence}, 0.0002, 0.0002, true, 0, {Taken},
                 '{state}', {notifiedAt}, {acknowledgedAt}, {acknowledgedBy}, {resolvedAt})
             """,

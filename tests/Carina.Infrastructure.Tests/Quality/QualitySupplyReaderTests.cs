@@ -17,6 +17,10 @@ public sealed class QualitySupplyReaderTests(RepositoryDatabase database)
 {
     private static readonly DateTime Airs = new(2026, 9, 7, 3, 0, 0, DateTimeKind.Utc);
 
+    private static readonly DateTime Now = Airs.AddHours(12);
+
+    private static readonly TimeSpan FiveMinutes = TimeSpan.FromMinutes(5);
+
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
     [Fact(DisplayName = "BR-QD-007: a recording in flight is read as two supplies, not one")]
@@ -63,25 +67,62 @@ public sealed class QualitySupplyReaderTests(RepositoryDatabase database)
         Assert.Empty(await ReadAsync());
     }
 
-    [Fact(DisplayName = "BR-QD-007: a visit is heard from when the back-off says it is due again")]
-    public async Task AVisitIsHeardFromWhenTheBackOffSaysItIsDueAgain()
+    [Fact(DisplayName = "BR-QD-007: the visit ledger is heard from when the back-off says the first visit is due again")]
+    public async Task TheVisitLedgerIsHeardFromWhenTheBackOffSaysTheFirstVisitIsDueAgain()
     {
         await ClearAsync();
-        await VisitedAsync(VisitOutcome.Complete, Airs);
+        await VisitedAsync(VisitOutcome.Complete, Airs, 32_736);
 
         SupplyReading read = Assert.Single(await ReadAsync());
 
         Assert.Equal(SupplySilence.GuideVisits, read.Silence);
-        Assert.Equal(QualitySubjectKind.TransportStream, read.Subject.Kind);
-        Assert.Equal("32736-32736", read.Subject.Key);
+        Assert.Equal(QualitySubject.TheGuideLedger, read.Subject);
         Assert.Equal(Airs + new CollectionSettings().BetweenVisits, read.LastHeardAt);
     }
 
-    [Fact(DisplayName = "BR-QD-007: a visit the sweep broke off is not one the back-off has made due")]
-    public async Task AVisitTheSweepBrokeOffIsNotOneTheBackOffHasMadeDue()
+    [Fact(DisplayName = "BR-QD-007: the whole visit ledger is one supply rather than one for each stream")]
+    public async Task TheWholeVisitLedgerIsOneSupplyRatherThanOneForEachStream()
     {
         await ClearAsync();
-        await VisitedAsync(VisitOutcome.Interrupted, Airs);
+        await VisitedAsync(VisitOutcome.Complete, Airs, 32_736);
+        await VisitedAsync(VisitOutcome.Complete, Airs.AddMinutes(1), 32_737);
+        await VisitedAsync(VisitOutcome.Complete, Airs.AddMinutes(2), 32_738);
+
+        Assert.Single(await ReadAsync());
+    }
+
+    [Fact(DisplayName = "BR-QD-007: a ledger something was attempted on within the threshold is not quiet, overdue visit or not")]
+    public async Task ALedgerSomethingWasAttemptedOnWithinTheThresholdIsNotQuiet()
+    {
+        await ClearAsync();
+        await VisitedAsync(VisitOutcome.Complete, Airs, 32_736);
+        await VisitedAsync(VisitOutcome.Complete, Now - TimeSpan.FromMinutes(1), 32_737);
+
+        SupplyReading read = Assert.Single(await ReadAsync());
+
+        Assert.Equal(Now - TimeSpan.FromMinutes(1), read.LastHeardAt);
+        Assert.Empty(SupplyWatch.Quiet([read], FiveMinutes, Now));
+    }
+
+    [Fact(DisplayName = "BR-QD-007: a ledger with a visit overdue and nothing attempted for longer than the threshold is quiet")]
+    public async Task ALedgerWithAVisitOverdueAndNothingAttemptedForLongerThanTheThresholdIsQuiet()
+    {
+        await ClearAsync();
+        await VisitedAsync(VisitOutcome.Complete, Airs, 32_736);
+        await VisitedAsync(VisitOutcome.Complete, Now - TimeSpan.FromMinutes(10), 32_737);
+
+        SupplyReading read = Assert.Single(await ReadAsync());
+
+        Assert.Equal(Now - TimeSpan.FromMinutes(10), read.LastHeardAt);
+        Assert.Single(SupplyWatch.Quiet([read], FiveMinutes, Now));
+    }
+
+    [Fact(DisplayName = "BR-QD-007: a ledger whose visits the sweep all broke off is not one the back-off has made due")]
+    public async Task ALedgerWhoseVisitsTheSweepAllBrokeOffIsNotOneTheBackOffHasMadeDue()
+    {
+        await ClearAsync();
+        await VisitedAsync(VisitOutcome.Interrupted, Airs, 32_736);
+        await VisitedAsync(VisitOutcome.Interrupted, Airs.AddMinutes(1), 32_737);
 
         Assert.Empty(await ReadAsync());
     }
@@ -100,14 +141,14 @@ public sealed class QualitySupplyReaderTests(RepositoryDatabase database)
         await clearing.Set<StreamVisit>().ExecuteDeleteAsync(Cancel);
     }
 
-    private async Task VisitedAsync(VisitOutcome outcome, DateTime at)
+    private async Task VisitedAsync(VisitOutcome outcome, DateTime at, int stream)
     {
         await using CarinaDbContext writing = database.Open();
 
         await new StreamVisitRepository(writing).SaveAsync(
             StreamVisit.Record(
                 new NetworkId(32_736),
-                new TransportStreamId(32_736),
+                new TransportStreamId(stream),
                 outcome,
                 at,
                 TimeSpan.FromSeconds(1)),

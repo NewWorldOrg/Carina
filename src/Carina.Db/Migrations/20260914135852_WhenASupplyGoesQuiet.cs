@@ -27,6 +27,15 @@ public partial class WhenASupplyGoesQuiet : Migration
             column: "detected_at",
             filter: "resolved_at IS NULL");
 
+        migrationBuilder.DropCheckConstraint(
+            name: "ck_quality_incident_vocabulary",
+            table: "quality_incident");
+
+        migrationBuilder.AddCheckConstraint(
+            name: "ck_quality_incident_vocabulary",
+            table: "quality_incident",
+            sql: "breached IN ('PacketsLostWarning', 'PacketsLostUnwatchable', 'PacketsLeftScrambled', 'Overflows', 'LockRate', 'CarrierToNoiseFloor', 'BitErrorRateCeiling', 'SupplySilence')\nAND owner IN ('Quality', 'Tuner', 'Guide', 'Reservation', 'Recording')\nAND state IN ('Detected', 'Notified', 'Acknowledged', 'Resolved')\nAND subject_kind IN ('Tuner', 'Channel', 'Recording', 'TransportStream', 'Guide')");
+
         migrationBuilder.AddCheckConstraint(
             name: "ck_quality_incident_silence",
             table: "quality_incident",
@@ -43,6 +52,15 @@ public partial class WhenASupplyGoesQuiet : Migration
         migrationBuilder.DropCheckConstraint(
             name: "ck_quality_incident_silence",
             table: "quality_incident");
+
+        migrationBuilder.DropCheckConstraint(
+            name: "ck_quality_incident_vocabulary",
+            table: "quality_incident");
+
+        migrationBuilder.AddCheckConstraint(
+            name: "ck_quality_incident_vocabulary",
+            table: "quality_incident",
+            sql: "breached IN ('PacketsLostWarning', 'PacketsLostUnwatchable', 'PacketsLeftScrambled', 'Overflows', 'LockRate', 'CarrierToNoiseFloor', 'BitErrorRateCeiling', 'SupplySilence')\nAND owner IN ('Quality', 'Tuner', 'Guide', 'Reservation', 'Recording')\nAND state IN ('Detected', 'Notified', 'Acknowledged', 'Resolved')\nAND subject_kind IN ('Tuner', 'Channel', 'Recording', 'TransportStream')");
 
         migrationBuilder.DropColumn(
             name: "silence",
