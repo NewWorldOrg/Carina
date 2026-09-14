@@ -18,27 +18,12 @@ public sealed class EncodeAutoRunTests
         Assert.Equal(Noon, settled.UpdatedAt);
     }
 
-    [Fact]
-    public void SettlingItAgainMovesBothValuesAndTheTimeTheyWereSettled()
-    {
-        EncodeAutoRun settled = EncodeAutoRun.Settled(false, 3, Noon);
-
-        settled.Settle(true, 1, Noon.AddHours(2));
-
-        Assert.True(settled.Automatically);
-        Assert.Equal(1, settled.MostCores);
-        Assert.Equal(Noon.AddHours(2), settled.UpdatedAt);
-    }
-
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]
     [InlineData(EncodeAutoRun.MostCoresAnyMachineHas + 1)]
     public void ARunTakesAtLeastOneCoreAndNoMoreThanAnyMachineHas(int cores)
-    {
-        Assert.Throws<ArgumentOutOfRangeException>(() => EncodeAutoRun.Settled(true, cores, Noon));
-        Assert.Throws<ArgumentOutOfRangeException>(() => EncodeAutoRun.Settled(true, 2, Noon).Settle(true, cores, Noon));
-    }
+        => Assert.Throws<ArgumentOutOfRangeException>(() => EncodeAutoRun.Settled(true, cores, Noon));
 
     [Fact]
     public void TheRowIsTimedInUtc()

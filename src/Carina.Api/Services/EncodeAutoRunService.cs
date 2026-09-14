@@ -47,11 +47,7 @@ public sealed class EncodeAutoRunService(
                 + "which is how many this machine has.");
         }
 
-        DateTime at = Now();
-        EncodeAutoRun settled = await rows.ReadAsync(cancellationToken) ?? EncodeAutoRun.Settled(running, cores, at);
-        settled.Settle(running, cores, at);
-
-        await rows.SaveAsync(settled, cancellationToken);
+        await rows.SaveAsync(EncodeAutoRun.Settled(running, cores, Now()), cancellationToken);
 
         events.Signal(AppEventName.EncodeJobs);
 

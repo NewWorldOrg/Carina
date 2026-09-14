@@ -64,6 +64,37 @@ public sealed class EncodeAutoRunRepositoryTests(RepositoryDatabase database)
                 () => RunAsync($"UPDATE {EncodeAutoRunConfiguration.TableName} SET most_cores = 0"))).ConstraintName);
     }
 
+    [Fact(DisplayName = "hands settling it at once on a table that holds no row all get through, and one of them stands")]
+    public async Task HandsSettlingItAtOnceAllGetThroughAndOneOfThemStands()
+    {
+        await ClearAsync();
+
+        const int Hands = 8;
+        using var gate = new Barrier(Hands);
+        EncodeAutoRun[] settling =
+        [
+            .. Enumerable.Range(0, Hands).Select(hand => EncodeAutoRun.Settled(hand % 2 is 0, hand + 1, Settled.AddHours(hand))),
+        ];
+
+        await Task.WhenAll(settling.Select(autoRun => Task.Run(async () =>
+        {
+            await using CarinaDbContext writing = database.Open();
+            await writing.Database.OpenConnectionAsync(Cancel);
+            gate.SignalAndWait(Cancel);
+
+            await new EncodeAutoRunRepository(writing).SaveAsync(autoRun, Cancel);
+        })));
+
+        await using CarinaDbContext reading = database.Open();
+        EncodeAutoRun? held = await new EncodeAutoRunRepository(reading).ReadAsync(Cancel);
+
+        Assert.NotNull(held);
+        Assert.Equal(1, await reading.Set<EncodeAutoRun>().CountAsync(Cancel));
+        Assert.Contains(
+            (held.Automatically, held.MostCores, held.UpdatedAt),
+            settling.Select(autoRun => (autoRun.Automatically, autoRun.MostCores, autoRun.UpdatedAt)));
+    }
+
     private async Task SaveAsync(EncodeAutoRun autoRun)
     {
         await using CarinaDbContext writing = database.Open();

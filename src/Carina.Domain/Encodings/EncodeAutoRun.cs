@@ -55,15 +55,6 @@ public sealed class EncodeAutoRun
         };
     }
 
-    public void Settle(bool automatically, int mostCores, DateTime at)
-    {
-        Counted(mostCores);
-
-        Automatically = automatically;
-        MostCores = mostCores;
-        UpdatedAt = UtcTimes.Required(at, nameof(at));
-    }
-
     private static void Counted(int mostCores)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(mostCores, FewestCores, nameof(mostCores));
