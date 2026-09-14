@@ -54,7 +54,7 @@ public sealed class EncodeAutoRunService(
         return ServiceResult<EncodeAutoRunStanding>.Success(await standings.ReadAsync(cancellationToken));
     }
 
-    public int Cores => Math.Min(machine.Cores, EncodeAutoRun.MostCoresAnyMachineHas);
+    public int Cores => EncodeAutoRun.CoresOn(machine);
 
     private DateTime Now() => clock.GetUtcNow().UtcDateTime;
 }

@@ -580,10 +580,10 @@ public sealed class EncodeJobRunnerTests
     {
         using var harness = new EncodeHarness();
         harness.Settings = harness.Settings with { MostCores = 3 };
-        harness.AutoRun.Standing = EncodeAutoRunStanding.Over(null, harness.Settings);
         string arguments = harness.Room.Under("arguments");
         harness.Standing($"printf '%s\\n' \"$@\" > \"{arguments}\"; printf 'the picture' > \"$destination\"");
         harness.Programmes = harness.Programmes with { Cores = 8 };
+        harness.AutoRun.Standing = EncodeAutoRunStanding.Over(null, harness.Settings, harness.Programmes);
 
         await harness.Runner.RunAsync(harness.Running(harness.Recorded().Id, harness.Defined().Id), Cancel);
 
