@@ -586,4 +586,74 @@ public sealed class EncodeJobRunnerTests
         Assert.Equal(EncodeFailure.CapabilityUnavailable, job.Failure!.Failure);
         Assert.DoesNotContain(harness.Room.Root, job.Failure.Note, StringComparison.Ordinal);
     }
+
+    [Fact(DisplayName = "BR-ED2-011: a detector that throws does not fail the encode; the job runs on and the reading written down is that the source could not be read")]
+    public async Task ADetectorThatThrowsDoesNotFailTheEncode()
+    {
+        using var harness = new EncodeHarness();
+        harness.Standing(WritesTheWorkFileAndReportsProgress);
+        harness.ChapterDetector = new ScriptedChapters
+        {
+            Answers = () => throw new IOException("/srv/recordings/a.ts could not be opened"),
+        };
+        EncodeJob job = harness.Running(harness.Recorded().Id, harness.Defined().Id);
+
+        EncodeJobStatus ended = await harness.Runner.RunAsync(job, Cancel);
+
+        Assert.Equal(EncodeJobStatus.Completed, ended);
+        Assert.Equal("the picture", File.ReadAllText(harness.ArtefactPathOf(job)));
+        string told = Assert.Single(harness.RunnerLog.Said, line => line.Contains("read for the breaks", StringComparison.Ordinal));
+        Assert.Contains(nameof(ChapterVerdict.Unreadable), told, StringComparison.Ordinal);
+        Assert.Contains(nameof(IOException), told, StringComparison.Ordinal);
+        Assert.DoesNotContain("/srv/recordings", told, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "BR-ED2-011: a stop the caller asked for while the source was being read for its breaks is a stop, not a source that could not be read")]
+    public async Task AStopAskedForWhileTheSourceIsReadForItsBreaksIsAStop()
+    {
+        using var harness = new EncodeHarness();
+        harness.Standing(WritesTheWorkFileAndReportsProgress);
+        using var stopping = new CancellationTokenSource();
+        harness.ChapterDetector = new ScriptedChapters
+        {
+            Answers = () =>
+            {
+                stopping.Cancel();
+
+                throw new OperationCanceledException(stopping.Token);
+            },
+        };
+        EncodeJob job = harness.Running(harness.Recorded().Id, harness.Defined().Id);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => harness.Runner.RunAsync(job, stopping.Token));
+
+        Assert.Equal(EncodeJobStatus.Running, job.Status);
+        Assert.DoesNotContain(harness.RunnerLog.Said, line => line.Contains("read for the breaks", StringComparison.Ordinal));
+    }
+
+    [Fact(DisplayName = "BR-ED2-011: what the reading said is written down beside its verdict, and nobody having looked is not written down at all")]
+    public async Task WhatTheReadingSaidIsWrittenDownBesideItsVerdict()
+    {
+        using var harness = new EncodeHarness();
+        harness.Standing(WritesTheWorkFileAndReportsProgress);
+        harness.ChapterDetector = new ScriptedChapters
+        {
+            Answers = () => ChapterDetection.Discarded(0.7, "the breaks came to too much of the length"),
+        };
+        EncodeJob job = harness.Running(harness.Recorded().Id, harness.Defined().Id);
+
+        Assert.Equal(EncodeJobStatus.Completed, await harness.Runner.RunAsync(job, Cancel));
+
+        string told = Assert.Single(harness.RunnerLog.Said, line => line.Contains("read for the breaks", StringComparison.Ordinal));
+        Assert.Contains(nameof(ChapterVerdict.Discarded), told, StringComparison.Ordinal);
+        Assert.Contains("0.700", told, StringComparison.Ordinal);
+        Assert.Contains("the breaks came to too much of the length", told, StringComparison.Ordinal);
+
+        using var unasked = new EncodeHarness();
+        unasked.Standing(WritesTheWorkFileAndReportsProgress);
+
+        await unasked.Runner.RunAsync(unasked.Running(unasked.Recorded().Id, unasked.Defined().Id), Cancel);
+
+        Assert.DoesNotContain(unasked.RunnerLog.Said, line => line.Contains("read for the breaks", StringComparison.Ordinal));
+    }
 }

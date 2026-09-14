@@ -8,6 +8,20 @@ public sealed class EncodeSettingRuleTests
 
     private static readonly string[] Kept =
     [
+        "/Carina.Domain/Encodings/ChapterDetection.cs ChapterDetection.BreakShare double",
+        "/Carina.Domain/Encodings/ChapterDetection.cs ChapterDetection.Note string",
+        "/Carina.Domain/Encodings/ChapterDetection.cs ChapterDetection.Segments IReadOnlyList<ChapterSegment>",
+        "/Carina.Domain/Encodings/ChapterDetection.cs ChapterDetection.Verdict ChapterVerdict",
+        "/Carina.Domain/Encodings/ChapterEvidence.cs ChapterEvidence.Blacks IReadOnlyList<ChapterSpan>",
+        "/Carina.Domain/Encodings/ChapterEvidence.cs ChapterEvidence.Scenes IReadOnlyList<ChapterScene>",
+        "/Carina.Domain/Encodings/ChapterEvidence.cs ChapterEvidence.Silences IReadOnlyList<ChapterSpan>",
+        "/Carina.Domain/Encodings/ChapterEvidence.cs ChapterScene.At TimeSpan",
+        "/Carina.Domain/Encodings/ChapterEvidence.cs ChapterScene.Score double",
+        "/Carina.Domain/Encodings/ChapterEvidence.cs ChapterSpan.Ends TimeSpan",
+        "/Carina.Domain/Encodings/ChapterEvidence.cs ChapterSpan.Starts TimeSpan",
+        "/Carina.Domain/Encodings/ChapterSegment.cs ChapterSegment.Ends TimeSpan",
+        "/Carina.Domain/Encodings/ChapterSegment.cs ChapterSegment.Kind ChapterKind",
+        "/Carina.Domain/Encodings/ChapterSegment.cs ChapterSegment.Starts TimeSpan",
         "/Carina.Domain/Encodings/EncodeDestination.cs EncodeDestination.DefaultProfileId EncodeProfileId",
         "/Carina.Domain/Encodings/EncodeDestination.cs EncodeDestination.DefinedAt DateTime",
         "/Carina.Domain/Encodings/EncodeDestination.cs EncodeDestination.Id EncodeDestinationId",
@@ -73,9 +87,18 @@ public sealed class EncodeSettingRuleTests
         "/Carina.Domain/Encodings/EncodeScratchFile.cs EncodeScratchFile.OutputRoot OutputRoot",
         "/Carina.Domain/Encodings/EncodeScratchFile.cs EncodeScratchFile.RemovedAt DateTime?",
         "/Carina.Domain/Encodings/EncodeScratchFile.cs EncodeScratchFile.WrittenAt DateTime",
+        "/Carina.Domain/Encodings/EncodeSettings.cs ChapterSettings.Grid TimeSpan",
+        "/Carina.Domain/Encodings/EncodeSettings.cs ChapterSettings.GridTolerance TimeSpan",
+        "/Carina.Domain/Encodings/EncodeSettings.cs ChapterSettings.Marked bool",
+        "/Carina.Domain/Encodings/EncodeSettings.cs ChapterSettings.MostBreakShare double",
+        "/Carina.Domain/Encodings/EncodeSettings.cs ChapterSettings.MostChapters int",
+        "/Carina.Domain/Encodings/EncodeSettings.cs ChapterSettings.Noise int",
+        "/Carina.Domain/Encodings/EncodeSettings.cs ChapterSettings.Scene double",
+        "/Carina.Domain/Encodings/EncodeSettings.cs ChapterSettings.ShortestSilence TimeSpan",
         "/Carina.Domain/Encodings/EncodeSettings.cs EncodeSettings.Automatically bool",
         "/Carina.Domain/Encodings/EncodeSettings.cs EncodeSettings.BeforeFirstLook TimeSpan",
         "/Carina.Domain/Encodings/EncodeSettings.cs EncodeSettings.BetweenLooks TimeSpan",
+        "/Carina.Domain/Encodings/EncodeSettings.cs EncodeSettings.Chapters ChapterSettings",
         "/Carina.Domain/Encodings/EncodeSettings.cs EncodeSettings.MostAttempts int",
         "/Carina.Domain/Encodings/EncodeSettings.cs EncodeSettings.MostCores int",
         "/Carina.Domain/Encodings/EncodeSettings.cs EncodeSettings.OutputRoots IReadOnlyList<StorageRootPath>",
@@ -116,6 +139,9 @@ public sealed class EncodeSettingRuleTests
 
     private static readonly string[] WorkedOut =
     [
+        "/Carina.Domain/Encodings/ChapterDetection.cs ChapterDetection.Breaks int",
+        "/Carina.Domain/Encodings/ChapterDetection.cs ChapterDetection.Marks bool",
+        "/Carina.Domain/Encodings/ChapterSegment.cs ChapterSegment.Length TimeSpan",
         "/Carina.Domain/Encodings/EncodeDestination.cs EncodeDestination.IsRetired bool",
         "/Carina.Domain/Encodings/EncodeDestinationId.cs EncodeDestinationId.Wire string",
         "/Carina.Domain/Encodings/EncodeJob.cs EncodeJob.HasEnded bool",
@@ -142,6 +168,7 @@ public sealed class EncodeSettingRuleTests
 
     private static readonly string[] TheOnlyFreeTextTakenIn =
     [
+        "/Carina.Domain/Encodings/ChapterDetection.cs ChapterDetection.Note string",
         "/Carina.Domain/Encodings/EncodeFailure.cs EncodeFailureDetail.Note string",
         "/Carina.Domain/Encodings/EncodePlan.cs EncodePlan.Note string",
         "/Carina.Domain/Encodings/EncodeSettings.cs EncodeSettings.WorkedIn string?",

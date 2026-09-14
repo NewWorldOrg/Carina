@@ -35,6 +35,35 @@ public sealed class EncodeFileNameTests
         Assert.NotEqual(second, another);
     }
 
+    [Fact]
+    public void TheChaptersOfAnAttemptAreNamedTheWayItsWorkFileIs()
+    {
+        EncodeFileName chapters = EncodeFileName.Chapters(Recording, Job, 3);
+
+        Assert.Equal(
+            "1872e6a880e94ac6a8f93f740239ef00.5b1f2c3d4e5f4a6b8c7d9e0f1a2b3c4d.attempt3.chapters",
+            chapters.Value);
+        Assert.True(chapters.Names(Recording));
+        Assert.True(chapters.Names(Job));
+        Assert.NotEqual(EncodeFileName.Working(Recording, Job, 3), chapters);
+    }
+
+    [Fact]
+    public void TwoAttemptsOfOneJobAndTwoJobsOnOneRecordingNeverShareTheirChapters()
+    {
+        EncodeFileName first = EncodeFileName.Chapters(Recording, Job, 1);
+        EncodeFileName second = EncodeFileName.Chapters(Recording, Job, 2);
+        EncodeFileName another = EncodeFileName.Chapters(Recording, EncodeJobId.New(), 1);
+
+        Assert.NotEqual(first, second);
+        Assert.NotEqual(first, another);
+        Assert.NotEqual(second, another);
+    }
+
+    [Fact]
+    public void AnAttemptBeforeTheFirstNamesNoChapters()
+        => Assert.Throws<ArgumentOutOfRangeException>(() => EncodeFileName.Chapters(Recording, Job, 0));
+
     [Fact(DisplayName = "BR-ED2-009: an attempt before the first names no work file")]
     public void AnAttemptBeforeTheFirstNamesNoWorkFile()
         => Assert.Throws<ArgumentOutOfRangeException>(() => EncodeFileName.Working(Recording, Job, 0));

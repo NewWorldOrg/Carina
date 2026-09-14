@@ -277,6 +277,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<ISourceHeadReader>(provider => new FfprobeSourceHead(
             provider.GetRequiredService<MachineSettings>(),
             provider.GetRequiredService<TimeProvider>()));
+        services.TryAddSingleton<IChapterDetector, NoChapterDetector>();
         services.TryAddSingleton<IStrayProgrammes, StrayProgrammes>();
         services.TryAddSingleton<IMachineCapabilityReader>(provider => new MachineCapabilityReader(
             provider.GetRequiredService<MachineSettings>(),

@@ -139,6 +139,24 @@ API はコンテナの 8080 番で待ち受け、ホストの 8081 番に公開�
 `Collection:` `Thumbnails:` `Encodings:` `QualitySignal:` `Transcoding:` の各名前空間にある。
 **どれも既定のままで動く。**
 
+本編と CM の切れ目を探す設定は `Encodings:Chapters:` にある。
+**この版には切れ目を探す実装がまだ入っておらず、設定は読まれて検証されるが、結果はどの録画でも「訊いていない」になる。**
+下の 8 つは、探す実装が入ったときに効く。
+
+| 変数 | 用途 |
+| --- | --- |
+| `Encodings__Chapters__Marked` | エンコードの前に切れ目を探すかどうか。既定は `true`。`false` なら何も探さず、ffmpeg に渡す引数は探さなかったときと同じになる |
+| `Encodings__Chapters__Noise` | 無音とみなす音量。デシベルの整数で既定は `-50`、`-100` から `-1` まで |
+| `Encodings__Chapters__ShortestSilence` | これより短い無音は切れ目の候補にしない。既定は `00:00:00.150` |
+| `Encodings__Chapters__Scene` | 画がこれ以上変われば候補を裏づけたとみなす。0 より大きく 1 以下で、既定は `0.30` |
+| `Encodings__Chapters__Grid` | CM の並びが乗るグリッド。既定は `00:00:15` |
+| `Encodings__Chapters__GridTolerance` | グリッドからこれだけまでのずれは組とみなす。既定は `00:00:01`、`Encodings__Chapters__Grid` の半分より短いこと |
+| `Encodings__Chapters__MostBreakShare` | 全体のうち CM と判定してよい割合の上限。超えたら読み取りを丸ごと捨てる。0 より大きく 1 以下で、既定は `0.5` |
+| `Encodings__Chapters__MostChapters` | 打ってよい印の数の上限。超えたら読み取りを丸ごと捨てる。1 以上の整数で、既定は `40` |
+
+**単独の切れ目からは何も作らない。**
+グリッドの倍数だけ離れた 2 つの切れ目が揃ったときだけ CM の区間とみなすので、CM の無い番組では 1 つも打たれない。
+
 ## 移行
 
 現行の録画システムから、録画・ルール・チャンネル定義を引き継ぐ。
