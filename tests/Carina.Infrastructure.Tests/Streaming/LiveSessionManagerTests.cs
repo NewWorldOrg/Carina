@@ -1082,7 +1082,7 @@ public sealed class LiveSessionManagerTests
     }
 
     [Fact]
-    public void TheOnlyThingAViewerCanAskOfTheManagerIsToJoinAKey()
+    public void AViewerAsksTheManagerToJoinAKeyOrToHandAChannelOverAndNothingElse()
     {
         MethodInfo[] asked =
         [
