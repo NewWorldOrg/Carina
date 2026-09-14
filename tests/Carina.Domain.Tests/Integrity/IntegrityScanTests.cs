@@ -446,25 +446,25 @@ public sealed class IntegrityScanTests
     [Fact]
     public void ACheckNobodyNamedIsRefused()
     {
-        Assert.Throws<ArgumentNullException>(() => IntegrityScan.Compare(null!, [], [], At, Done));
+        Assert.Throws<ArgumentNullException>(() => IntegrityScan.Compare(null!, [], [], [], At, Done));
     }
 
     [Fact]
     public void ALedgerNobodyHandedOverIsRefused()
     {
-        Assert.Throws<ArgumentNullException>(() => IntegrityScan.Compare(Check, null!, [], At, Done));
+        Assert.Throws<ArgumentNullException>(() => IntegrityScan.Compare(Check, null!, [], [], At, Done));
     }
 
     [Fact]
     public void AListingNobodyHandedOverIsRefused()
     {
-        Assert.Throws<ArgumentNullException>(() => IntegrityScan.Compare(Check, [], null!, At, Done));
+        Assert.Throws<ArgumentNullException>(() => IntegrityScan.Compare(Check, [], [], null!, At, Done));
     }
 
     [Fact]
     public void NothingHandedOverAtAllIsStillRefused()
     {
-        Assert.Throws<ArgumentNullException>(() => IntegrityScan.Compare(null!, null!, null!, At, Done));
+        Assert.Throws<ArgumentNullException>(() => IntegrityScan.Compare(null!, null!, null!, null!, At, Done));
     }
 
     [Fact]
@@ -507,6 +507,7 @@ public sealed class IntegrityScanTests
                 Check,
                 [],
                 [],
+                [],
                 new DateTime(2026, 8, 26, 3, 0, 0, DateTimeKind.Local),
                 Done));
     }
@@ -518,6 +519,7 @@ public sealed class IntegrityScanTests
             () => IntegrityScan.Compare(
                 Check,
                 [],
+                [],
                 [Holding(Primary, ("stray.m2ts", 1))],
                 new DateTime(2026, 8, 26, 3, 0, 0, DateTimeKind.Unspecified),
                 Done));
@@ -526,6 +528,141 @@ public sealed class IntegrityScanTests
     [Fact]
     public void ACheckThatFinishesBeforeItStartsIsRefused()
     {
-        Assert.Throws<ArgumentException>(() => IntegrityScan.Compare(Check, [], [], Done, At));
+        Assert.Throws<ArgumentException>(() => IntegrityScan.Compare(Check, [], [], [], Done, At));
+    }
+
+    [Fact]
+    public void AFileAnEncodeJobSaysItIsWritingIsNotCalledAnOrphan()
+    {
+        IntegrityReport swept = Compare(
+            [],
+            [Declared(Primary, "one.encoding")],
+            [Holding(Primary, ("one.encoding", 512), ("stray.m2ts", 5))]);
+
+        IntegrityFinding orphan = Assert.Single(swept.Findings);
+
+        Assert.Equal(IntegrityFault.NoLedgerRow, orphan.Fault);
+        Assert.Equal("stray.m2ts", orphan.Path);
+        Assert.Equal(2, swept.Check.FilesRead);
+    }
+
+    [Fact]
+    public void AFileDeclaredUnderOneRootDoesNotCoverTheSameNameUnderAnother()
+    {
+        IntegrityReport swept = Compare(
+            [],
+            [Declared(Bulk, "one.encoding")],
+            [Holding(Primary, ("one.encoding", 512))]);
+
+        Assert.Equal("primary", Assert.Single(swept.Findings).Root.Value);
+    }
+
+    [Fact]
+    public void AFileDeclaredBeforeItExistsIsNotReportedAsAnythingAtAll()
+    {
+        IntegrityReport swept = Compare([], [Declared(Primary, "one.encoding")], [Empty(Primary)]);
+
+        Assert.Empty(swept.Findings);
+        Assert.Equal(0, swept.Check.FilesRead);
+    }
+
+    [Fact]
+    public void AFileDeclaredTwiceIsStillOneClaimAndNotARefusal()
+    {
+        IntegrityReport swept = Compare(
+            [],
+            [Declared(Primary, "one.encoding"), Declared(Primary, "one.encoding")],
+            [Holding(Primary, ("one.encoding", 512))]);
+
+        Assert.Empty(swept.Findings);
+    }
+
+    [Fact]
+    public void ADeclarationOverARowChangesNothingAboutHowTheRowIsJudged()
+    {
+        IntegrityReport swept = Compare(
+            [Complete(Primary, "one.m2ts", 100, 7)],
+            [Declared(Primary, "one.m2ts")],
+            [Holding(Primary, ("one.m2ts", 99))]);
+
+        Assert.Equal(IntegrityFault.SizeDisagrees, Assert.Single(swept.Findings).Fault);
+    }
+
+    [Fact]
+    public void TheSameDisagreementCarriesTheSameNameWhenTheSweepRunsAgain()
+    {
+        IntegrityReport first = Compare(
+            [Complete(Primary, "one.m2ts", 100, 7)],
+            [Holding(Primary, ("one.m2ts", 99))]);
+        IntegrityReport again = IntegrityScan.Compare(
+            new IntegrityCheckId(new Guid("9f2b7c10-0000-0000-0000-000000000002")),
+            [Complete(Primary, "one.m2ts", 100, 7)],
+            [],
+            [Holding(Primary, ("one.m2ts", 98))],
+            At.AddDays(1),
+            Done.AddDays(1));
+
+        Assert.NotEqual(first.Check.Id, again.Check.Id);
+        Assert.Equal(Assert.Single(first.Findings).Id, Assert.Single(again.Findings).Id);
+    }
+
+    [Fact]
+    public void AnOrphanCarriesTheSameNameWhenTheSweepRunsAgain()
+    {
+        IntegrityReport first = Compare([], [Holding(Primary, ("stray.m2ts", 5))]);
+        IntegrityReport again = Compare([], [Holding(Primary, ("stray.m2ts", 6))]);
+
+        Assert.Equal(Assert.Single(first.Findings).Id, Assert.Single(again.Findings).Id);
+    }
+
+    [Fact]
+    public void EveryDisagreementInOneSweepCarriesANameOfItsOwn()
+    {
+        IntegrityReport swept = Compare(
+            [
+                Complete(Primary, "disagrees.m2ts", 100, 1),
+                Truncated(Primary, "empty.m2ts", 100, 2),
+                Complete(Primary, "gone.m2ts", 100, 3),
+                Complete(Primary, "hollow.m2ts", 100, 5),
+                Complete(Bulk, "disagrees.m2ts", 100, 6),
+            ],
+            [
+                Holding(
+                    Primary,
+                    ("disagrees.m2ts", 99),
+                    ("empty.m2ts", 0),
+                    ("hollow.m2ts", 0),
+                    ("stray.m2ts", 5)),
+                Holding(Bulk, ("disagrees.m2ts", 99)),
+            ]);
+
+        Assert.Equal(6, swept.Findings.Count);
+        Assert.Equal(6, swept.Findings.Select(finding => finding.Id).Distinct().Count());
+    }
+
+    [Fact]
+    public void AnEmptyFileAndAnEmptyFileTheLedgerCallsCompleteAreTwoDifferentThingsWithTwoDifferentNames()
+    {
+        IntegrityReport truncated = Compare(
+            [Truncated(Primary, "one.m2ts", 100, 7)],
+            [Holding(Primary, ("one.m2ts", 0))]);
+        IntegrityReport complete = Compare(
+            [Complete(Primary, "one.m2ts", 100, 7)],
+            [Holding(Primary, ("one.m2ts", 0))]);
+
+        IntegrityFinding empty = Assert.Single(truncated.Findings);
+        IntegrityFinding hollow = Assert.Single(complete.Findings);
+
+        Assert.Equal(IntegrityFault.FileEmpty, empty.Fault);
+        Assert.Equal(IntegrityFault.EmptyThoughComplete, hollow.Fault);
+        Assert.NotEqual(empty.Id, hollow.Id);
+    }
+
+    [Fact]
+    public void TheSweepClassesDisagreementsInFiveWaysAndHasNoWordForADeletion()
+    {
+        Assert.Equal(
+            ["EmptyThoughComplete", "FileEmpty", "FileMissing", "NoLedgerRow", "SizeDisagrees"],
+            Enum.GetNames<IntegrityFault>().Order(StringComparer.Ordinal).ToArray());
     }
 }

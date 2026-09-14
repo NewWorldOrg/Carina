@@ -7,6 +7,8 @@ public sealed class IntegrityReport
         ArgumentNullException.ThrowIfNull(check);
         ArgumentNullException.ThrowIfNull(findings);
 
+        HashSet<Guid> named = [];
+
         foreach (IntegrityFinding finding in findings)
         {
             ArgumentNullException.ThrowIfNull(finding);
@@ -15,6 +17,13 @@ public sealed class IntegrityReport
             {
                 throw new ArgumentException(
                     "A report carries the findings of the check it is about and no others.",
+                    nameof(findings));
+            }
+
+            if (!named.Add(finding.Id.Value))
+            {
+                throw new ArgumentException(
+                    "A finding is named for the fact it is about, so one sweep cannot bring the same name back twice.",
                     nameof(findings));
             }
         }

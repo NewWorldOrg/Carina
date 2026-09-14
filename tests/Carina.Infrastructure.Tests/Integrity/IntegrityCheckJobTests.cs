@@ -300,10 +300,12 @@ public sealed class IntegrityCheckJobTests
         IRecordingFileSurvey survey,
         HeldChecks checks,
         IntegritySettings? settings = null,
-        TimeProvider? clock = null)
+        TimeProvider? clock = null,
+        HeldEncodeWork? working = null)
     {
         var services = new ServiceCollection();
         services.AddScoped<IRecordingLedger>(_ => ledger);
+        services.AddScoped<IEncodeWorkLedger>(_ => working ?? new HeldEncodeWork());
         services.AddScoped<IIntegrityCheckRepository>(_ => checks);
 
         return new IntegrityCheckJob(
@@ -315,5 +317,21 @@ public sealed class IntegrityCheckJobTests
             },
             clock ?? new StoppedClock(Now),
             NullLogger<IntegrityCheckJob>.Instance);
+    }
+
+    [Fact]
+    public async Task ARunAsksWhatAnEncodeJobIsWritingAndLeavesThoseFilesAlone()
+    {
+        var working = new HeldEncodeWork(new DeclaredFile(Primary, "one.encoding"));
+        using IntegrityCheckJob job = Job(
+            new HeldLedger(),
+            new HeldSurvey().Declaring(Primary, ("one.encoding", 512), ("stray.m2ts", 5)),
+            new HeldChecks(),
+            working: working);
+
+        IntegrityRun run = await job.RunAsync(Cancel);
+
+        Assert.Equal(1, working.Reads);
+        Assert.Equal("stray.m2ts", Assert.Single(run.Swept!.Findings).Path);
     }
 }

@@ -54,6 +54,7 @@ public sealed class WhatAMigrationLeftBehindStaysOnItsOwnRecordTests : IDisposab
         IntegrityReport swept = IntegrityScan.Compare(
             IntegrityCheckId.New(),
             [.. recordings.Written.Select(Weighed)],
+            [],
             [RootListing.Of(Root, [.. Directory.GetFiles(into).Select(Listed)])],
             Began,
             Ended);
