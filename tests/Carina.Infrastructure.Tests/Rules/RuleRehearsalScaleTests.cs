@@ -59,6 +59,7 @@ public sealed class RuleRehearsalScaleTests
             streams,
             new ReservationSchedulingService(
                 reservations,
+                new NoRecordings(),
                 new HeldSeating(Seats()),
                 new TuningByService { Otherwise = Tunable() },
                 write,

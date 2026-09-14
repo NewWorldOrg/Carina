@@ -8,7 +8,7 @@ public sealed class RecordingInterruptionFaultTests
 
     public static TheoryData<RecordingFault> Breaking => Set(RecordingFaults.ThatCanInterrupt);
 
-    public static TheoryData<RecordingFault> Concluding
+    public static TheoryData<RecordingFault> NotBreaking
         => Set(Enum.GetValues<RecordingFault>().Except(RecordingFaults.ThatCanInterrupt));
 
     [Theory]
@@ -23,8 +23,8 @@ public sealed class RecordingInterruptionFaultTests
     }
 
     [Theory]
-    [MemberData(nameof(Concluding))]
-    public void ARecordingDoesNotBreakOnSomethingOnlyItsEndingCouldName(RecordingFault fault)
+    [MemberData(nameof(NotBreaking))]
+    public void ARecordingDoesNotBreakOnAReasonThatIsNotSomethingHappeningToIt(RecordingFault fault)
     {
         Recording recording = RecordingFactory.Started();
 
@@ -39,10 +39,21 @@ public sealed class RecordingInterruptionFaultTests
         => Assert.Empty(RecordingFaults.ThatCanInterrupt.Intersect(CompletionFactory.FaultsTheCrossCheckNames));
 
     [Fact]
-    public void EveryFaultTheLedgerHoldsEitherBreaksARecordingOrConcludesOne()
+    public void EveryFaultTheLedgerHoldsBreaksARecordingOrConcludesOneOrExplainsItsWindow()
         => Assert.Equal(
             Enum.GetValues<RecordingFault>().Order().ToArray(),
-            RecordingFaults.ThatCanInterrupt.Concat(CompletionFactory.FaultsTheCrossCheckNames).Order().ToArray());
+            RecordingFaults.ThatCanInterrupt
+                .Concat(CompletionFactory.FaultsTheCrossCheckNames)
+                .Concat(RecordingFaults.ThatExplainTheWindow)
+                .Order()
+                .ToArray());
+
+    [Fact]
+    public void NoFaultIsInTwoOfThoseThreeAtOnce()
+    {
+        Assert.Empty(RecordingFaults.ThatCanInterrupt.Intersect(RecordingFaults.ThatExplainTheWindow));
+        Assert.Empty(CompletionFactory.FaultsTheCrossCheckNames.Intersect(RecordingFaults.ThatExplainTheWindow));
+    }
 
     [Fact]
     public void AFaultTheLedgerDoesNotHoldStillBreaksNothing()

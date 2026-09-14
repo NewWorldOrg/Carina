@@ -13,7 +13,8 @@ public sealed record AllocationCandidate
         DateTime effectiveStartAt,
         DateTime effectiveEndAt,
         bool endAtConfirmed,
-        bool pinned)
+        bool pinned,
+        DateTime? heldUntil = null)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(programme);
@@ -37,6 +38,7 @@ public sealed record AllocationCandidate
         EffectiveEndAt = closes;
         EndAtConfirmed = endAtConfirmed;
         Pinned = pinned;
+        HeldUntil = heldUntil is { } held ? UtcTimes.Required(held, nameof(heldUntil)) : null;
     }
 
     public ReservationId Id { get; }
@@ -55,7 +57,19 @@ public sealed record AllocationCandidate
 
     public bool Pinned { get; }
 
-    public static AllocationCandidate Of(Reservation reservation, TuningParameters? tuning)
+    /// <summary>
+    /// How far the recording this reservation has already started is actually promised, when that
+    /// is further than the reservation's own end. A recording that followed its programme past the
+    /// end the reservation was planned for holds its tuner for the window it was granted, not the
+    /// one the reservation still says: without this the planner would seat the next reservation on
+    /// a tuner that is not free yet and call it secured until the moment it is refused.
+    /// </summary>
+    public DateTime? HeldUntil { get; }
+
+    public static AllocationCandidate Of(
+        Reservation reservation,
+        TuningParameters? tuning,
+        DateTime? heldUntil = null)
     {
         ArgumentNullException.ThrowIfNull(reservation);
 
@@ -67,6 +81,7 @@ public sealed record AllocationCandidate
             reservation.EffectiveStartAt,
             reservation.EffectiveEndAt,
             reservation.EndAtConfirmed,
-            reservation.IsPinned);
+            reservation.IsPinned,
+            heldUntil);
     }
 }

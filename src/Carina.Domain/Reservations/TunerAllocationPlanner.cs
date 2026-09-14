@@ -81,14 +81,18 @@ public static class TunerAllocationPlanner
 
     private static DateTime EndsAt(AllocationCandidate candidate, DateTime at, RollingHorizon horizon)
     {
+        DateTime promised = candidate.HeldUntil is { } held && held > candidate.EffectiveEndAt
+            ? held
+            : candidate.EffectiveEndAt;
+
         if (candidate.EndAtConfirmed || !candidate.Pinned)
         {
-            return candidate.EffectiveEndAt;
+            return promised;
         }
 
         DateTime rolled = at + horizon.Value;
 
-        return rolled > candidate.EffectiveEndAt ? rolled : candidate.EffectiveEndAt;
+        return rolled > promised ? rolled : promised;
     }
 
     private static bool Seatable(List<Held> held, Held added, TunerCapacity capacity)

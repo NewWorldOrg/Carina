@@ -31,9 +31,10 @@ public sealed class RecordingTickJobTests
             clock,
             new RecordingSettings(
                 TimeSpan.FromMinutes(3),
-                TimeSpan.FromHours(2),
-                TimeSpan.FromHours(3),
-                new OutputRoot("primary")));
+                TimeSpan.FromMinutes(2),
+                TimeSpan.FromMinutes(4),
+                new OutputRoot("primary"),
+                TimeSpan.FromMinutes(5)));
         using var stopping = new CancellationTokenSource();
 
         await job.StartAsync(stopping.Token);
@@ -41,7 +42,7 @@ public sealed class RecordingTickJobTests
         await stopping.CancelAsync();
         await job.StopAsync(Cancel);
 
-        Assert.Equal([TimeSpan.FromMinutes(3), TimeSpan.FromHours(2)], clock.Waits.Take(2).ToArray());
+        Assert.Equal([TimeSpan.FromMinutes(3), TimeSpan.FromMinutes(2)], clock.Waits.Take(2).ToArray());
     }
 
     [Fact]
@@ -284,6 +285,13 @@ public sealed class RecordingTickJobTests
             new ResolvedTuning(Terrestrial),
             new DiskPrecheckService(new StorageMonitor(driver, clock, StorageMonitorSettings.Default)),
             driver,
+            new ProgramExtensionFollower(
+                recordings,
+                new HeldProgrammes(),
+                driver,
+                new EndsAlreadyAsked(),
+                held,
+                NullLogger<ProgramExtensionFollower>.Instance),
             new RefusalLedger().Reporter,
             held,
             new HeldMoment(Airs)));

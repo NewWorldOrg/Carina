@@ -105,6 +105,7 @@ API はコンテナの 8080 番で待ち受け、ホストの 8081 番に公開�
 | `CARINA_DB_CONNECTION` | スキーマ適用時の接続文字列 |
 | `CARINA_PUBLIC_ORIGIN` | ブラウザがこのインストールに到達するアドレス(`https://host`) |
 | `Integrity__OutputRoots` | `driver` の出力ルートが `app` からどこに見えるか(`primary=/srv/recordings`) |
+| `Recording__UndecidedEndAhead` | 終わりを名乗らない番組を録るとき、実効終了時刻を今からどれだけ先に置くか。既定は 20 分で、半分を過ぎるたびに置き直す。予約がチューナーの席を確保するローリングホライズン(30 分)とは別の値 |
 | `Thumbnails__WrittenTo` | サムネイルの置き場所。空なら作らない |
 | `Encodings__OutputRoots` | エンコードの成果物を書くルート(`encodes=/srv/encodes`) |
 | `ProgrammeFeed__ConcurrentReaders` | 一括番組表を同時に何本まで配るか。既定は 4 で、超えた要求はその場で断る |

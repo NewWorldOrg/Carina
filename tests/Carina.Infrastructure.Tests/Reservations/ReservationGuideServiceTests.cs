@@ -277,6 +277,7 @@ public sealed class ReservationGuideServiceTests
 
         var scheduling = new ReservationSchedulingService(
             ledger,
+            new NoRecordings(),
             new HeldSeating(new TunerCapacity(
                 [new TunerSeat("seat0", BroadcastReception.Of(TunerKind.Terrestrial), Faulted: false)],
                 [])),

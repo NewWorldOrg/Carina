@@ -265,6 +265,7 @@ public sealed class ReservationSchedulingLandsInTheLedgerTests(RepositoryDatabas
 
         return new ReservationSchedulingService(
             new ReservationRepository(context),
+            new RecordingRepository(context),
             new HeldSeating(Seating(seats)),
             directory,
             new DatabaseAtomicWrite(context),
@@ -284,6 +285,7 @@ public sealed class ReservationSchedulingLandsInTheLedgerTests(RepositoryDatabas
 
         return new ReservationSchedulingService(
             new ReservationRepository(context),
+            new RecordingRepository(context),
             new HeldSeating(capacity),
             directory,
             new DatabaseAtomicWrite(context),

@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Carina.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Carina.Db.Migrations
 {
     [DbContext(typeof(CarinaDbContext))]
-    partial class CarinaDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260914074532_FollowingAProgrammeThatRunsLong")]
+    partial class FollowingAProgrammeThatRunsLong
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -608,51 +611,6 @@ namespace Carina.Db.Migrations
                         });
                 });
 
-            modelBuilder.Entity("Carina.Domain.Encodings.EncodeChapter", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<TimeSpan>("EndsAt")
-                        .HasColumnType("interval")
-                        .HasColumnName("ends_at");
-
-                    b.Property<Guid>("JobId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("job_id");
-
-                    b.Property<string>("Kind")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)")
-                        .HasColumnName("kind");
-
-                    b.Property<int>("Ordinal")
-                        .HasColumnType("integer")
-                        .HasColumnName("ordinal");
-
-                    b.Property<TimeSpan>("StartsAt")
-                        .HasColumnType("interval")
-                        .HasColumnName("starts_at");
-
-                    b.HasKey("Id")
-                        .HasName("pk_encode_chapter");
-
-                    b.HasIndex("JobId", "Ordinal")
-                        .IsUnique()
-                        .HasDatabaseName("ux_encode_chapter_ordinal");
-
-                    b.ToTable("encode_chapter", null, t =>
-                        {
-                            t.HasCheckConstraint("ck_encode_chapter_kind", "kind IN ('Programme', 'Break')");
-
-                            t.HasCheckConstraint("ck_encode_chapter_ordinal", "ordinal >= 0");
-
-                            t.HasCheckConstraint("ck_encode_chapter_span", "starts_at >= interval '0' AND ends_at > starts_at");
-                        });
-                });
-
             modelBuilder.Entity("Carina.Domain.Encodings.EncodeDestination", b =>
                 {
                     b.Property<Guid>("Id")
@@ -753,29 +711,6 @@ namespace Carina.Db.Migrations
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("xid")
                         .HasColumnName("xmin");
-
-                    b.ComplexProperty(typeof(Dictionary<string, object>), "Chapters", "Carina.Domain.Encodings.EncodeJob.Chapters#ChapterReading", b1 =>
-                        {
-                            b1.Property<double>("BreakShare")
-                                .HasColumnType("double precision")
-                                .HasColumnName("chapters_break_share");
-
-                            b1.Property<DateTime>("DecidedAt")
-                                .HasColumnType("timestamp with time zone")
-                                .HasColumnName("chapters_decided_at");
-
-                            b1.Property<string>("Detector")
-                                .IsRequired()
-                                .HasMaxLength(32)
-                                .HasColumnType("character varying(32)")
-                                .HasColumnName("chapters_detector");
-
-                            b1.Property<string>("Verdict")
-                                .IsRequired()
-                                .HasMaxLength(32)
-                                .HasColumnType("character varying(32)")
-                                .HasColumnName("chapters_verdict");
-                        });
 
                     b.ComplexProperty(typeof(Dictionary<string, object>), "Failure", "Carina.Domain.Encodings.EncodeJob.Failure#EncodeFailureDetail", b1 =>
                         {
@@ -894,8 +829,6 @@ namespace Carina.Db.Migrations
                             t.HasCheckConstraint("ck_encode_job_artefact", "(status <> 'Completed' OR artefact_name IS NOT NULL)\nAND (artefact_name IS NULL\n    OR (btrim(artefact_name) = artefact_name\nAND length(artefact_name) > 0\nAND artefact_name <> '.'\nAND strpos(artefact_name, '/') = 0\nAND strpos(artefact_name, chr(92)) = 0\nAND strpos(artefact_name, '..') = 0\n        AND strpos(artefact_name, replace(recording_id::text, '-', '')) > 0\n        AND strpos(artefact_name, replace(profile_id::text, '-', '')) > 0))");
 
                             t.HasCheckConstraint("ck_encode_job_attempt", "attempt >= 1");
-
-                            t.HasCheckConstraint("ck_encode_job_chapters", "((chapters_verdict IS NULL) = (chapters_decided_at IS NULL))\nAND ((chapters_verdict IS NULL) = (chapters_detector IS NULL))\nAND ((chapters_verdict IS NULL) = (chapters_break_share IS NULL))\nAND (chapters_verdict IS NULL OR status <> 'Queued')\nAND (chapters_verdict IS NULL OR chapters_verdict IN ('NotAsked', 'Marked', 'NothingFound', 'Discarded', 'Unreadable'))\nAND (chapters_detector IS NULL OR chapters_detector IN ('Nobody', 'Ffmpeg'))\nAND (chapters_break_share IS NULL OR chapters_break_share BETWEEN 0 AND 1)\nAND (chapters_decided_at IS NULL OR chapters_decided_at >= started_at)");
 
                             t.HasCheckConstraint("ck_encode_job_failure", "((status = 'Failed') = (failure IS NOT NULL))\nAND ((failure IS NULL) = (failure_note IS NULL))\nAND ((failure IS NULL) = (failure_noticed_at IS NULL))\nAND (failure IS NULL OR failure IN ('FfmpegExitedNonZero', 'NotEnoughRoom', 'SourceMissing', 'CapabilityUnavailable', 'TimedOut', 'DestinationCollision', 'HeadTooFar'))");
 
@@ -3161,16 +3094,6 @@ namespace Carina.Db.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_candidate_channel_broadcast_service_network_id_service_id");
-                });
-
-            modelBuilder.Entity("Carina.Domain.Encodings.EncodeChapter", b =>
-                {
-                    b.HasOne("Carina.Domain.Encodings.EncodeJob", null)
-                        .WithMany()
-                        .HasForeignKey("JobId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_encode_chapter_encode_job_job_id");
                 });
 
             modelBuilder.Entity("Carina.Domain.Encodings.EncodeDestination", b =>

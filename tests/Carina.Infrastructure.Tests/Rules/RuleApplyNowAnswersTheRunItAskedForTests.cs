@@ -3,6 +3,7 @@ using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Events;
 using Carina.Domain.Programmes;
+using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Domain.Rules;
 using Carina.Infrastructure.Programmes;
@@ -149,6 +150,7 @@ public sealed class RuleApplyNowAnswersTheRunItAskedForTests
             services.AddSingleton<IRuleRepository>(Rules);
             services.AddSingleton<IProgrammeRepository>(Programmes);
             services.AddSingleton<IReservationRepository>(Reservations);
+            services.AddSingleton<IRecordingRepository>(new NoRecordings());
             services.AddSingleton<IReservationOutcomeRepository>(Outcomes);
             services.AddSingleton<IStreamVisitRepository>(Visits);
             services.AddSingleton<IBroadcastStreamDirectory>(Streams);

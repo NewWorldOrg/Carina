@@ -26,7 +26,8 @@ public sealed class RecordingTickTests(MigratedScratchDatabase database)
         TimeSpan.FromSeconds(10),
         TimeSpan.FromSeconds(5),
         TimeSpan.FromSeconds(15),
-        new OutputRoot("primary"));
+        new OutputRoot("primary"),
+        RecordingSettings.HoldingAnUnannouncedEnd);
 
     [Fact]
     public async Task TwoRecordersReachingForTheSameReservationStartOneRecording()
@@ -205,6 +206,13 @@ public sealed class RecordingTickTests(MigratedScratchDatabase database)
                 impaired: false)),
             new DiskPrecheckService(new StorageMonitor(driver, clock, StorageMonitorSettings.Default)),
             driver,
+            new ProgramExtensionFollower(
+                new RecordingRepository(context),
+                new ProgrammeRepository(context),
+                driver,
+                new EndsAlreadyAsked(),
+                Settings,
+                NullLogger<ProgramExtensionFollower>.Instance),
             new RecordingRefusalReporter(
                 new ReservationRepository(context),
                 new ReservationOutcomeRepository(context),

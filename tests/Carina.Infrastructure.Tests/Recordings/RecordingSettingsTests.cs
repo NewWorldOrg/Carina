@@ -1,4 +1,5 @@
 using Carina.Domain.Recordings;
+using Carina.Domain.Reservations;
 using Carina.Infrastructure.Configuration;
 using Carina.Infrastructure.Recordings;
 
@@ -17,6 +18,7 @@ public sealed class RecordingSettingsTests
         Assert.Equal(TimeSpan.FromSeconds(5), unset.BetweenTicks);
         Assert.Equal(TimeSpan.FromSeconds(25), unset.TuningLead);
         Assert.Equal("primary", unset.OutputRoot.Value);
+        Assert.Equal(TimeSpan.FromMinutes(20), unset.UndecidedEndAhead);
         Assert.Equal(".ts", RecordingSettings.FileExtension);
     }
 
@@ -67,7 +69,8 @@ public sealed class RecordingSettingsTests
                     TimeSpan.FromSeconds(10),
                     TimeSpan.FromSeconds(5),
                     TimeSpan.FromSeconds(15),
-                    null!)).ParamName);
+                    null!,
+                    RecordingSettings.HoldingAnUnannouncedEnd)).ParamName);
     }
 
     [Fact]
@@ -78,6 +81,27 @@ public sealed class RecordingSettingsTests
         Assert.Equal(RecordingSettings.Default.BetweenTicks, read.BetweenTicks);
         Assert.Equal(RecordingSettings.Default.TuningLead, read.TuningLead);
         Assert.Equal(RecordingSettings.Default.OutputRoot, read.OutputRoot);
+        Assert.Equal(RecordingSettings.Default.UndecidedEndAhead, read.UndecidedEndAhead);
+    }
+
+    [Fact]
+    public void ARecordingWithNoAnnouncedEndIsHeldForLessThanTheSeatTheAllocationRolls()
+        => Assert.True(
+            RecordingSettings.HoldingAnUnannouncedEnd < RollingHorizon.Provisional,
+            "A window held further ahead than the tuner seat under it is a promise the allocation never made.");
+
+    [Fact]
+    public void AWindowHeldAsFarAheadAsTheSeatUnderItIsRefused()
+    {
+        ArgumentOutOfRangeException refused = Assert.Throws<ArgumentOutOfRangeException>(
+            () => Built(ahead: RollingHorizon.Provisional));
+
+        Assert.Equal("undecidedEndAhead", refused.ParamName);
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => Built(ahead: RollingHorizon.Provisional + TimeSpan.FromTicks(1)));
+        Assert.Equal(
+            RollingHorizon.Provisional - TimeSpan.FromTicks(1),
+            Built(ahead: RollingHorizon.Provisional - TimeSpan.FromTicks(1)).UndecidedEndAhead);
     }
 
     [Fact]
@@ -89,12 +113,14 @@ public sealed class RecordingSettingsTests
             ["Recording:BetweenTicks"] = "00:00:02",
             ["Recording:TuningLead"] = "00:00:30",
             ["Recording:OutputRoot"] = "archive",
+            ["Recording:UndecidedEndAhead"] = "00:25:00",
         });
 
         Assert.Equal(TimeSpan.FromSeconds(20), read.BeforeFirstTick);
         Assert.Equal(TimeSpan.FromSeconds(2), read.BetweenTicks);
         Assert.Equal(TimeSpan.FromSeconds(30), read.TuningLead);
         Assert.Equal("archive", read.OutputRoot.Value);
+        Assert.Equal(TimeSpan.FromMinutes(25), read.UndecidedEndAhead);
     }
 
     [Fact]
@@ -114,6 +140,18 @@ public sealed class RecordingSettingsTests
             "OutputRoot",
             Assert.Throws<ArgumentException>(
                 () => Read(new Dictionary<string, string?> { ["Recording:OutputRoot"] = "/srv/recordings" })).ParamName);
+
+        Assert.Equal(
+            "undecidedEndAhead",
+            Assert.Throws<ArgumentException>(
+                () => Read(new Dictionary<string, string?> { ["Recording:UndecidedEndAhead"] = "00:00:04" }))
+                .ParamName);
+
+        Assert.Equal(
+            "UndecidedEndAhead",
+            Assert.Throws<ArgumentException>(
+                () => Read(new Dictionary<string, string?> { ["Recording:UndecidedEndAhead"] = "a while" }))
+                .ParamName);
     }
 
     [Fact]
@@ -129,12 +167,14 @@ public sealed class RecordingSettingsTests
     private static RecordingSettings Built(
         TimeSpan? before = null,
         TimeSpan? between = null,
-        TimeSpan? lead = null)
+        TimeSpan? lead = null,
+        TimeSpan? ahead = null)
         => new(
             before ?? TimeSpan.FromSeconds(10),
             between ?? TimeSpan.FromSeconds(5),
             lead ?? TimeSpan.FromSeconds(15),
-            new OutputRoot("primary"));
+            new OutputRoot("primary"),
+            ahead ?? RecordingSettings.HoldingAnUnannouncedEnd);
 
     private static RecordingSettings Read(IDictionary<string, string?> settings)
     {

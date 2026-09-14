@@ -216,6 +216,45 @@ public sealed class RecordingFenceRuleSelfCheckTests
         Assert.Empty(RecordingFenceRules.BroadcastTableReadersInsideTheRecordingFeature(tree.Root));
     }
 
+    private const string ReachesTheGuideThroughTheReadOnlyPort = """
+        using Carina.Domain.Programmes;
+        namespace Carina.Infrastructure.Recordings;
+        internal sealed class RecordingRound(IAnnouncedProgrammes programmes);
+        """;
+
+    private const string ReachesTheGuideThroughThePortThatWrites = """
+        using Carina.Domain.Programmes;
+        namespace Carina.Infrastructure.Recordings;
+        internal sealed class ProgramExtensionFollower(IProgrammeRepository programmes);
+        """;
+
+    [Fact]
+    public void DetectsASecondPlaceInRecordingThatReachesTheGuide()
+    {
+        using var tree = new SourceTree();
+        tree.Write("Carina.Infrastructure/Recordings/RecordingRound.cs", ReachesTheGuideThroughTheReadOnlyPort);
+        tree.Write(
+            "Carina.Infrastructure/Recordings/ProgramExtensionFollower.cs",
+            ReachesTheGuideThroughThePortThatWrites);
+
+        Assert.Equal(
+            ["/Carina.Infrastructure/Recordings/RecordingRound.cs"],
+            RecordingFenceRules.HoldersOfTheReadOnlyGuidePort(tree.Root));
+        Assert.Equal(
+            ["/Carina.Infrastructure/Recordings/ProgramExtensionFollower.cs"],
+            RecordingFenceRules.NamersOfTheWritingGuidePort(tree.Root));
+    }
+
+    [Fact]
+    public void LeavesTheGuidesOwnDeclarationOutOfTheRecordingFeature()
+    {
+        using var tree = new SourceTree();
+        tree.Write("Carina.Domain/Programmes/IProgrammeRepository.cs", ReadOnlyPortThatOnlyReads);
+
+        Assert.Empty(RecordingFenceRules.HoldersOfTheReadOnlyGuidePort(tree.Root));
+        Assert.Empty(RecordingFenceRules.NamersOfTheWritingGuidePort(tree.Root));
+    }
+
     [Fact]
     public void DetectsAWriteMemberSlippingOntoThePortTheRoundHolds()
     {

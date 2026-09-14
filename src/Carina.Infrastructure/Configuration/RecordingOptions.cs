@@ -20,6 +20,8 @@ public sealed class RecordingOptions
 
     public string? OutputRoot { get; set; }
 
+    public string? UndecidedEndAhead { get; set; }
+
     public void ReadFrom(IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
@@ -30,6 +32,7 @@ public sealed class RecordingOptions
         BetweenTicks = named[nameof(BetweenTicks)];
         TuningLead = named[nameof(TuningLead)];
         OutputRoot = named[nameof(OutputRoot)];
+        UndecidedEndAhead = named[nameof(UndecidedEndAhead)];
     }
 
     public RecordingSettings Read()
@@ -42,7 +45,8 @@ public sealed class RecordingOptions
                 Positive(BeforeFirstTick, nameof(BeforeFirstTick), unset.BeforeFirstTick),
                 Positive(BetweenTicks, nameof(BetweenTicks), unset.BetweenTicks),
                 Positive(TuningLead, nameof(TuningLead), unset.TuningLead),
-                Named(unset.OutputRoot));
+                Named(unset.OutputRoot),
+                Positive(UndecidedEndAhead, nameof(UndecidedEndAhead), unset.UndecidedEndAhead));
         }
         catch (ArgumentOutOfRangeException refusal)
         {

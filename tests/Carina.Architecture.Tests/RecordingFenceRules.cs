@@ -53,6 +53,22 @@ public static partial class RecordingFenceRules
             .Order(StringComparer.Ordinal)
             .ToArray();
 
+    public static IReadOnlyList<string> HoldersOfTheReadOnlyGuidePort(string directory)
+        => Scanned(directory)
+            .Where(BelongsToTheRecordingFeature)
+            .Where(file => file.Source.Contains(ReadOnlyProgrammePort, StringComparison.Ordinal))
+            .Select(file => file.Relative)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+    public static IReadOnlyList<string> NamersOfTheWritingGuidePort(string directory)
+        => Scanned(directory)
+            .Where(BelongsToTheRecordingFeature)
+            .Where(file => NamesTheWritingPort().IsMatch(file.Source))
+            .Select(file => file.Relative)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
     public static IReadOnlyList<string> WriteMembersOnThePortTheRoundHolds(string directory)
         => WriteMembersIn(BodyOf(Read(directory, ProgrammePortFile), ReadOnlyProgrammePort));
 
@@ -180,6 +196,9 @@ public static partial class RecordingFenceRules
         + @"|\bTableDefect\b"
         + @"|\bTableRead\s*<")]
     private static partial Regex ReadsABroadcastTable();
+
+    [GeneratedRegex(@"\b" + FullProgrammePort + @"\b")]
+    private static partial Regex NamesTheWritingPort();
 
     [GeneratedRegex(@"\bHttpDelete\b|\bMapDelete\b")]
     private static partial Regex OffersADeletion();

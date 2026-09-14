@@ -154,6 +154,7 @@ public sealed class RuleRetirementLandsInTheLedgerTests(RepositoryDatabase datab
             streams,
             new ReservationSchedulingService(
                 reservations,
+                new NoRecordings(),
                 new HeldSeating(Seats()),
                 new TuningByService { Otherwise = Tunable() },
                 new DatabaseAtomicWrite(context),

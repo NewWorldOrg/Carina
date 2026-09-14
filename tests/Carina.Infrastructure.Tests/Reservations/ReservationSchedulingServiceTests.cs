@@ -456,6 +456,7 @@ public sealed class ReservationSchedulingServiceTests
 
         ReservationSchedulingService scheduler = new(
             ledger,
+            new NoRecordings(),
             seats,
             directory,
             write,
@@ -495,6 +496,7 @@ public sealed class ReservationSchedulingServiceTests
 
         ReservationSchedulingService scheduler = new(
             ledger,
+            new NoRecordings(),
             seats,
             directory,
             write,
@@ -530,6 +532,7 @@ public sealed class ReservationSchedulingServiceTests
 
         ReservationSchedulingService scheduler = new(
             ledger,
+            new NoRecordings(),
             seats,
             directory,
             write,
@@ -676,6 +679,7 @@ public sealed class ReservationSchedulingServiceTests
         SilentEvents events)
         => new(
             ledger,
+            new NoRecordings(),
             new HeldSeating(capacity),
             directory,
             write,

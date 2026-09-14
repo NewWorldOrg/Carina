@@ -37,6 +37,12 @@ public sealed class RecordingDriver : IDriverClient
 
     public List<SessionId> Asked { get; } = [];
 
+    public List<(SessionId Session, DateTimeOffset EndsAt)> Extended { get; } = [];
+
+    public DriverCall<SessionSnapshot>? RefusesToExtend { get; set; }
+
+    public TimeSpan ExtendsByLessThanAsked { get; set; }
+
     public DriverCall<SessionSnapshot>? AnswersWhenAsked { get; set; }
 
     public bool HoldsWhatItStarted { get; set; }
@@ -98,7 +104,32 @@ public sealed class RecordingDriver : IDriverClient
         SessionId sessionId,
         DateTimeOffset endsAt,
         CancellationToken cancellationToken)
-        => throw new NotSupportedException();
+    {
+        lock (gate)
+        {
+            Log.Add($"extend:{sessionId}");
+            Extended.Add((sessionId, endsAt));
+        }
+
+        if (RefusesToExtend is { } refusal)
+        {
+            return Task.FromResult(refusal);
+        }
+
+        DateTimeOffset granted = endsAt - ExtendsByLessThanAsked;
+
+        return Task.FromResult(DriverCall<SessionSnapshot>.Reached(
+            new SessionSnapshot(
+                sessionId,
+                SessionPurpose.Recording,
+                DeviceId,
+                SessionState.Active,
+                granted.AddMinutes(-1))
+            {
+                EndsAt = granted,
+                OutputRoot = RootName,
+            }));
+    }
 
     public Task<DriverCall<SessionSnapshot>> StopSessionAsync(
         SessionId sessionId,

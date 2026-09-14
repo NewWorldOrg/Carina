@@ -334,6 +334,7 @@ public sealed class RuleRehearsalTests
             Tuning = new TuningByService { Otherwise = Tunable() };
             Scheduling = new ReservationSchedulingService(
                 Reservations,
+                new NoRecordings(),
                 Seating,
                 Tuning,
                 Write,
