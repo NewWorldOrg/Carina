@@ -1,4 +1,5 @@
 using Carina.Domain.Integrity;
+using Carina.Domain.Recordings;
 
 using static Carina.Domain.Tests.Integrity.IntegrityFixtures;
 
@@ -88,5 +89,25 @@ public sealed class IntegrityFindingIdTests
     {
         Assert.ThrowsAny<ArgumentException>(
             () => IntegrityFindingId.Of(IntegrityFault.NoLedgerRow, Primary, path!, null));
+    }
+
+    [Fact]
+    public void TheNameAFindingAgainstARecordingGetsIsThisExactOneAndNoOther()
+    {
+        Assert.Equal(
+            new Guid("f90d8cb6-430d-5cff-a4a8-132174679e63"),
+            IntegrityFindingId.Of(
+                IntegrityFault.FileMissing,
+                Primary,
+                "one.m2ts",
+                new RecordingId(new Guid("00000000-0000-0000-0000-000000000003"))).Value);
+    }
+
+    [Fact]
+    public void TheNameAFindingAgainstNoRecordingGetsIsThisExactOneAndNoOther()
+    {
+        Assert.Equal(
+            new Guid("203af100-950e-59d1-85e5-ab14b7cee622"),
+            IntegrityFindingId.Of(IntegrityFault.NoLedgerRow, Primary, "stray.m2ts", null).Value);
     }
 }
