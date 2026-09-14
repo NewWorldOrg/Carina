@@ -8,16 +8,7 @@ using Microsoft.Extensions.Logging;
 
 namespace Carina.Infrastructure.Quality;
 
-public sealed record SupplyWatchTally(SupplySilence Silence, int Watched, int Quiet);
-
-public sealed record SupplyWatchPass(
-    DateTime At,
-    Threshold Applied,
-    IReadOnlyList<SupplyWatchTally> Tallies,
-    bool TunersWereAsked,
-    int Opened,
-    int Notified,
-    int Resolved)
+public sealed record SupplyWatchPass(SupplyStanding Standing, int Opened, int Notified, int Resolved)
 {
     public bool SaysAnything => Opened > 0 || Notified > 0 || Resolved > 0;
 }
@@ -28,6 +19,7 @@ public sealed class SupplyWatchRound(
     IQualitySupplyReader supply,
     IQualitySignalSampleRepository samples,
     IDriverClient driver,
+    ISupplyStandingBoard board,
     IAppEventPublisher events,
     TimeProvider clock,
     ILogger<SupplyWatchRound> logger)
@@ -62,14 +54,12 @@ public sealed class SupplyWatchRound(
         }
 
         var pass = new SupplyWatchPass(
-            now,
-            standing.Setting,
-            Tallies(readings, quiet),
-            asked,
+            SupplyStanding.Of(now, standing.Setting, asked, Supplies(readings, quiet)),
             opened,
             notified,
             resolved);
 
+        board.Held(pass.Standing);
         Report(pass);
 
         return pass;
@@ -78,12 +68,12 @@ public sealed class SupplyWatchRound(
     private static IReadOnlySet<SupplySilence> Observed(bool asked)
         => asked ? SupplySilences.Every : SupplySilences.TheLedgerAnswersFor;
 
-    private static IReadOnlyList<SupplyWatchTally> Tallies(
+    private static IReadOnlyList<SupplySilenceStanding> Supplies(
         IReadOnlyList<SupplyReading> readings,
         IReadOnlyList<SupplySilenceFinding> quiet)
         =>
         [
-            .. Enum.GetValues<SupplySilence>().Select(silence => new SupplyWatchTally(
+            .. Enum.GetValues<SupplySilence>().Select(silence => new SupplySilenceStanding(
                 silence,
                 readings.Count(reading => reading.Silence == silence),
                 quiet.Count(finding => finding.Silence == silence))),
@@ -206,8 +196,8 @@ public sealed class SupplyWatchRound(
         logger.LogWarning(
             "A supply watch held {Seconds}s of quiet against {Watched} supply reading(s): {Opened} went quiet, "
             + "{Notified} were told about, and {Resolved} started being heard from again.",
-            pass.Applied.Current,
-            pass.Tallies.Sum(tally => tally.Watched),
+            pass.Standing.Applied.Current,
+            pass.Standing.Supplies.Sum(supply => supply.Watched),
             pass.Opened,
             pass.Notified,
             pass.Resolved);

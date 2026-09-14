@@ -51,6 +51,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<EncodeAutoRunService>();
         services.AddScoped<QualityService>();
         services.AddScoped<QualityThresholdService>();
+        services.AddScoped<QualityIncidentService>();
         services.AddScoped<MigrationRecordService>();
         services.AddSingleton<PlaybackTicketGate>();
 

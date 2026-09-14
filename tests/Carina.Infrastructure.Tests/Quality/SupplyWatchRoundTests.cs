@@ -141,7 +141,7 @@ public sealed class SupplyWatchRoundTests
 
         SupplyWatchPass pass = await harness.Round().WatchAsync(Cancel);
 
-        Assert.Equal(60, pass.Applied.Current);
+        Assert.Equal(60, pass.Standing.Applied.Current);
         Assert.Equal(1, pass.Opened);
     }
 
@@ -233,7 +233,7 @@ public sealed class SupplyWatchRoundTests
 
         SupplyWatchPass pass = await harness.Round().WatchAsync(Cancel);
 
-        Assert.False(pass.TunersWereAsked);
+        Assert.False(pass.Standing.TunersWereAsked);
         Assert.Empty(harness.Incidents.Incidents);
     }
 
@@ -255,7 +255,7 @@ public sealed class SupplyWatchRoundTests
 
         SupplyWatchPass second = await harness.Round().WatchAsync(Cancel);
 
-        Assert.False(second.TunersWereAsked);
+        Assert.False(second.Standing.TunersWereAsked);
         Assert.Equal(0, second.Opened);
         Assert.Equal(0, second.Resolved);
         Assert.Same(opened, Assert.Single(harness.Incidents.Incidents));
@@ -275,8 +275,8 @@ public sealed class SupplyWatchRoundTests
 
         SupplyWatchPass pass = await harness.Round().WatchAsync(Cancel);
 
-        Assert.Equal(4, pass.Tallies.Count);
-        Assert.All(pass.Tallies, tally => Assert.Equal(1, tally.Quiet));
+        Assert.Equal(4, pass.Standing.Supplies.Count);
+        Assert.All(pass.Standing.Supplies, supply => Assert.Equal(1, supply.Quiet));
         Assert.Equal(
             [
                 SupplySilence.RecordingProgress,
@@ -285,5 +285,28 @@ public sealed class SupplyWatchRoundTests
                 SupplySilence.GuideVisits,
             ],
             harness.Incidents.Incidents.Select(incident => incident.Silence!.Value).Order());
+    }
+
+    [Fact(DisplayName = "BR-QD-007: what the last pass read is what the supply health answers from")]
+    public async Task WhatTheLastPassReadIsWhatTheSupplyHealthAnswersFrom()
+    {
+        SupplyWatchHarness harness = new();
+
+        Assert.Null(harness.Board.Latest);
+
+        harness.HoldingATuner(Noon - TimeSpan.FromMinutes(30));
+
+        await harness.Round().WatchAsync(Cancel);
+
+        SupplyStanding held = harness.Board.Latest!;
+
+        Assert.NotNull(held);
+
+        Assert.Equal(Noon, held.At);
+        Assert.True(held.TunersWereAsked);
+        Assert.Equal(Shipped.TotalSeconds, held.Applied.Current);
+        Assert.Equal(
+            1,
+            Assert.Single(held.Supplies, supply => supply.Silence is SupplySilence.SignalSamples).Quiet);
     }
 }

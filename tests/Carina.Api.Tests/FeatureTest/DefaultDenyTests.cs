@@ -1,8 +1,10 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Text.Json;
 
 using Carina.Api.Events;
 using Carina.Domain.Channels;
+using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 using Carina.Domain.Scans;
 using Carina.TestSupport;
@@ -29,6 +31,7 @@ internal sealed class SeamProbe : IAsyncDisposable
             services.AddSingleton<IScanRunRepository>(Runs);
             services.AddSingleton<IRecordingDirectory>(Recordings);
             services.AddSingleton<ISatelliteTransportStreamRepository>(SatelliteStreams);
+            services.AddSingleton<IQualityIncidentRepository>(Incidents);
         }));
 
         Client = credentialled ? wired.CreateAuthenticatedClient() : wired.WithTestScheme().CreateClient();
@@ -48,12 +51,17 @@ internal sealed class SeamProbe : IAsyncDisposable
 
     public HeldSatelliteStreams SatelliteStreams { get; } = new();
 
+    public HeldQualityIncidents Incidents { get; } = new();
+
     public static SeamProbe CarryingNoCredentials() => new(credentialled: false);
 
     public static SeamProbe CarryingCredentials() => new(credentialled: true);
 
     public Task<HttpResponseMessage> GetAsync(string path)
         => Client.GetAsync(new Uri(path, UriKind.Relative), HttpCompletionOption.ResponseHeadersRead);
+
+    public Task<HttpResponseMessage> PostAsync(string path)
+        => Client.PostAsJsonAsync(new Uri(path, UriKind.Relative), new { });
 
     public async ValueTask DisposeAsync()
     {
@@ -77,6 +85,9 @@ public sealed class DefaultDenyTests(TestingWebApplicationFactory factory)
         "/api/recordings",
         "/api/encoding/jobs/durations",
         "/api/encoding/settings",
+        "/api/quality/incidents",
+        "/api/quality/incidents?includeAcknowledged=true",
+        "/api/quality/supply-health",
         AppEventStream.Path,
     ];
 
@@ -101,6 +112,18 @@ public sealed class DefaultDenyTests(TestingWebApplicationFactory factory)
         using HttpResponseMessage response = await probe.GetAsync(path);
 
         Assert.NotEqual(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Fact(DisplayName = "acknowledging an anomaly is refused before the caller has signed in")]
+    public async Task AcknowledgingAnAnomalyIsRefusedBeforeTheCallerHasSignedIn()
+    {
+        await using var probe = SeamProbe.CarryingNoCredentials();
+
+        using HttpResponseMessage response = await probe.PostAsync(
+            $"/api/quality/incidents/{Guid.NewGuid()}/acknowledge");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Empty(await response.Content.ReadAsByteArrayAsync());
     }
 
     [Fact]

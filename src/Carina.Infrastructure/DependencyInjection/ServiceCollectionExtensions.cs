@@ -165,6 +165,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IQualitySupplyReader, QualitySupplyReader>();
         services.AddScoped<SignalSampleRound>();
         services.AddScoped<SupplyWatchRound>();
+        services.TryAddSingleton<ISupplyStandingBoard, SupplyStandingBoard>();
         services.AddScoped<QualitySignalRollupRound>();
         services.AddScoped<EncodeScratchFiles>();
         services.AddScoped<EncodeScratchCleaner>();
