@@ -261,6 +261,8 @@ internal sealed class AppSwapFeature : IAsyncDisposable
 
     public CountedNotices Notices { get; } = new();
 
+    public HeldOutcomeLedger Outcomes { get; } = new();
+
     public string RecordingsDirectory => driver.RecordingsDirectory;
 
     public RunningApp App => running
@@ -300,6 +302,7 @@ internal sealed class AppSwapFeature : IAsyncDisposable
                 services.AddSingleton(Impatient);
                 services.AddSingleton<TimeProvider>(Clock);
                 services.AddSingleton<IReservationRecordingContract>(Reservations);
+                services.AddSingleton<IReservationOutcomeRepository>(Outcomes);
                 services.AddSingleton<IRecordingRepository>(Recordings);
                 services.AddSingleton<IAnnouncedProgrammes>(Programmes);
                 services.AddSingleton<IServiceTuningDirectory>(Tuning);

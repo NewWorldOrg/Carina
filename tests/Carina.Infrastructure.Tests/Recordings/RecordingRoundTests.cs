@@ -878,13 +878,15 @@ public sealed class RecordingRoundTests
     {
         var clock = new HeldMoment(at ?? Airs);
         IAnnouncedProgrammes held = programmes ?? new HeldProgrammes();
+        var disks = new DiskPrecheckService(new StorageMonitor(driver, clock, StorageMonitorSettings.Default));
+        RefusalLedger kept = ledger ?? new RefusalLedger();
 
         return new RecordingRound(
             reservations,
             recordings,
             held,
             new ResolvedTuning(resolution ?? Terrestrial),
-            new DiskPrecheckService(new StorageMonitor(driver, clock, StorageMonitorSettings.Default)),
+            disks,
             driver,
             new ProgramExtensionFollower(
                 recordings,
@@ -893,7 +895,8 @@ public sealed class RecordingRoundTests
                 new EndsAlreadyAsked(),
                 Settings,
                 NullLogger<ProgramExtensionFollower>.Instance),
-            (ledger ?? new RefusalLedger()).Reporter,
+            kept.Reporter,
+            kept.Retries(held, disks, Settings),
             Settings,
             clock);
     }

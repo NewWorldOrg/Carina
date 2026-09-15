@@ -131,7 +131,7 @@ public sealed class RecordingRefusalReporterTests
     }
 
     [Fact]
-    public async Task TheSameRefusalTickAfterTickLeavesOneRowInTheLedger()
+    public async Task TheSameRefusalTickAfterTickLeavesOneRowAndIsNotAskedAgainBeforeThePause()
     {
         RecordingTick due = Due(1);
         RefusalLedger ledger = new RefusalLedger().Knowing(due);
@@ -147,7 +147,8 @@ public sealed class RecordingRefusalReporterTests
         await round.RunAsync(CancellationToken.None);
 
         Assert.Single(ledger.Outcomes.Held);
-        Assert.Equal(3, ledger.Tuning.Failures.Count);
+        Assert.Single(driver.Started);
+        Assert.Single(ledger.Tuning.Failures);
     }
 
     [Fact]
@@ -189,13 +190,15 @@ public sealed class RecordingRefusalReporterTests
         HeldRecordings recordings)
     {
         var clock = new HeldMoment(Airs);
+        var disks = new DiskPrecheckService(new StorageMonitor(driver, clock, StorageMonitorSettings.Default));
+        var programmes = new HeldProgrammes();
 
         return new RecordingRound(
             new PlannedReservations().Holding(due),
             recordings,
-            new HeldProgrammes(),
+            programmes,
             new ResolvedTuning(Terrestrial),
-            new DiskPrecheckService(new StorageMonitor(driver, clock, StorageMonitorSettings.Default)),
+            disks,
             driver,
             new ProgramExtensionFollower(
                 recordings,
@@ -205,6 +208,7 @@ public sealed class RecordingRefusalReporterTests
                 Settings,
                 NullLogger<ProgramExtensionFollower>.Instance),
             ledger.Reporter,
+            ledger.Retries(programmes, disks, Settings),
             Settings,
             clock);
     }

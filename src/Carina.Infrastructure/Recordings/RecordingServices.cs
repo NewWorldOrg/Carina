@@ -1,8 +1,10 @@
 using Carina.Domain.Recordings;
+using Carina.Infrastructure.Configuration;
 using Carina.Infrastructure.Persistence.Repositories;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
 
 namespace Carina.Infrastructure.Recordings;
 
@@ -17,6 +19,9 @@ public static class RecordingServices
         services.AddScoped<ProgramExtensionFollower>();
         services.TryAddSingleton<EndsAlreadyAsked>();
         services.AddScoped<RecordingRefusalReporter>();
+        services.TryAddSingleton<RetryPolicy>(provider =>
+            provider.GetRequiredService<IOptions<RecordingRetryOptions>>().Value.Read());
+        services.AddScoped<RecordingRetries>();
         services.AddScoped<RecordingRound>();
         services.TryAddSingleton(RecordingWatchSettings.Default);
         services.TryAddSingleton<IRecordingFileWeigher, LocalRecordingFileWeigher>();
