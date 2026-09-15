@@ -30,6 +30,12 @@ public static class QualitySaying
         => $"A page is asked for by a page number of at least 1, a page size above {mostPerPage} is cut down to it "
            + "and answered as the size that was used, and each measure and ordering is one this domain names.";
 
+    public static string NoSuchTrend()
+        => $"A trend is asked for by a whole number of days from 1 to {QualityTrendFrame.MostDays}, read back from now, "
+           + "and by one of the subjects this domain names: "
+           + string.Join(", ", QualityTrendSubjects.All)
+           + $"; asking for neither reads the last {QualityTrendFrame.ShippedDays} day of {QualityTrendSubject.PacketsLost}.";
+
     public static string NoSuchIncident()
         => "An anomaly is asked for by the identifier the ledger gave it, and nothing is kept under this one.";
 

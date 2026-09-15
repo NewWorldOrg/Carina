@@ -32,6 +32,9 @@ internal sealed class SeamProbe : IAsyncDisposable
             services.AddSingleton<IRecordingDirectory>(Recordings);
             services.AddSingleton<ISatelliteTransportStreamRepository>(SatelliteStreams);
             services.AddSingleton<IQualityIncidentRepository>(Incidents);
+            services.AddSingleton<IQualityLedgerReader>(Ledger);
+            services.AddSingleton<IQualityThresholdRepository>(Thresholds);
+            services.AddSingleton<IQualityThresholdChangeRepository>(Changes);
         }));
 
         Client = credentialled ? wired.CreateAuthenticatedClient() : wired.WithTestScheme().CreateClient();
@@ -52,6 +55,12 @@ internal sealed class SeamProbe : IAsyncDisposable
     public HeldSatelliteStreams SatelliteStreams { get; } = new();
 
     public HeldQualityIncidents Incidents { get; } = new();
+
+    public HeldQualityLedger Ledger { get; } = new();
+
+    public HeldQualityThresholds Thresholds { get; } = new();
+
+    public HeldQualityThresholdChanges Changes { get; } = new();
 
     public static SeamProbe CarryingNoCredentials() => new(credentialled: false);
 
@@ -88,6 +97,7 @@ public sealed class DefaultDenyTests(TestingWebApplicationFactory factory)
         "/api/quality/incidents",
         "/api/quality/incidents?includeAcknowledged=true",
         "/api/quality/supply-health",
+        "/api/quality/trends",
         AppEventStream.Path,
     ];
 

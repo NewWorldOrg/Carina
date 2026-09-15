@@ -1,5 +1,6 @@
 using Carina.Api.Common;
 using Carina.Domain.Base;
+using Carina.Domain.Channels;
 using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 
@@ -8,7 +9,9 @@ namespace Carina.Api.Services;
 public sealed class QualityService(
     IQualityLedgerReader ledger,
     IQualityThresholdRepository thresholds,
+    IQualityThresholdChangeRepository changes,
     IQualitySignalReader signals,
+    IBroadcastStreamDirectory streams,
     TimeProvider clock)
 {
     public async Task<ServiceResult<QualitySummaryView>> SummariseAsync(
@@ -32,6 +35,56 @@ public sealed class QualityService(
             QualityBoard.Whole(rows, QualityMetrics.All, bands),
             QualitySignal.Over(QualitySignalSurvey.Read(figures, Subjects(rows, figures), standings)),
             bands.Provisional));
+    }
+
+    public async Task<ServiceResult<QualityTrendView>> TrendAsync(
+        int? days,
+        QualityTrendSubject? subject,
+        CancellationToken cancellationToken)
+    {
+        QualityTrendSubject asked = subject ?? QualityTrendSubject.PacketsLost;
+
+        if (!Enum.IsDefined(asked)
+            || QualityTrendFrame.Over(days, clock.GetUtcNow().UtcDateTime, QualityTrendSubjects.Finest(asked)) is not { } frame)
+        {
+            return ServiceResult<QualityTrendView>.Failure(QualitySaying.NoSuchTrend());
+        }
+
+        IReadOnlyList<QualityThresholdStanding> standings = await StandingsAsync(cancellationToken);
+        QualityThresholdHistory levels = QualityThresholdHistory.Of(standings, await changes.ListAsync(cancellationToken));
+
+        if (QualityTrendSubjects.SignalKey(asked) is { } key)
+        {
+            IReadOnlyList<QualityTrendSeries> read = QualityTrend.Signal(
+                frame,
+                key,
+                await signals.WindowsAsync(frame, cancellationToken),
+                levels);
+
+            IReadOnlyList<BroadcastStream> carried = read.Count > 1 ? await streams.ListAsync(cancellationToken) : [];
+
+            return ServiceResult<QualityTrendView>.Success(new QualityTrendView(
+                frame,
+                asked,
+                [.. read.Select(series => new QualityTrendRow(series, Carrier(series.Channel, carried)))],
+                standings.First(standing => standing.Key == key).Setting.Provisional));
+        }
+
+        QualityMetric metric = QualityTrendSubjects.Metric(asked)
+                               ?? throw new InvalidOperationException(
+                                   "A trend follows either a measure of the recordings or a reading of the signal.");
+
+        QualityTrendSeries recorded = QualityTrend.Recordings(
+            frame,
+            metric,
+            await ledger.ReadAsync(frame.Period, cancellationToken),
+            levels);
+
+        return ServiceResult<QualityTrendView>.Success(new QualityTrendView(
+            frame,
+            asked,
+            [new QualityTrendRow(recorded, null)],
+            QualityThresholdStanding.Bands(standings).For(metric).Provisional));
     }
 
     public async Task<ServiceResult<QualityGroupPage>> ListChannelsAsync(
@@ -121,6 +174,12 @@ public sealed class QualityService(
             QualityBoard.Whole(rows, query.Metrics, bands),
             bands.Provisional));
     }
+
+    private static BroadcastStream? Carrier(QualityTrendChannel? channel, IReadOnlyList<BroadcastStream> carried)
+        => channel is null
+            ? null
+            : carried.FirstOrDefault(stream => stream.NetworkId.Value == channel.Network.Value
+                                               && stream.Services.Any(service => service.Value == channel.Service.Value));
 
     private static ThresholdSense Sense(QualityMetric metric)
         => QualityThresholdShapes.Of(QualityThresholdShapes.Warning(metric)).Sense;

@@ -38,6 +38,7 @@ internal sealed class QualityFeature : IAsyncDisposable
                 services.AddSingleton<IQualitySignalReader>(Signals);
                 services.AddSingleton<IQualityIncidentRepository>(Incidents);
                 services.AddSingleton<ISupplyStandingBoard>(Board);
+                services.AddSingleton<IBroadcastStreamDirectory>(Streams);
             }));
 
         Client = configured.WithTestScheme().CreateClient();
@@ -62,6 +63,8 @@ internal sealed class QualityFeature : IAsyncDisposable
     public HeldQualityIncidents Incidents { get; } = new();
 
     public StandingHeld Board { get; } = new();
+
+    public HeldStreams Streams { get; } = new([]);
 
     public QualityIncident Quiet(
         SupplySilence silence = SupplySilence.SignalSamples,

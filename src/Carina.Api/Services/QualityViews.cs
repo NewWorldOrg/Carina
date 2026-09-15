@@ -1,4 +1,5 @@
 using Carina.Domain.Base;
+using Carina.Domain.Channels;
 using Carina.Domain.Quality;
 
 namespace Carina.Api.Services;
@@ -26,6 +27,14 @@ public sealed record QualitySummaryView(
     int Recordings,
     IReadOnlyList<QualityMeasure> Measures,
     IReadOnlyList<QualitySignalStanding> Signal,
+    bool Provisional);
+
+public sealed record QualityTrendRow(QualityTrendSeries Series, BroadcastStream? Carrier);
+
+public sealed record QualityTrendView(
+    QualityTrendFrame Frame,
+    QualityTrendSubject Subject,
+    IReadOnlyList<QualityTrendRow> Rows,
     bool Provisional);
 
 public sealed record QualityGroupPage(
