@@ -94,6 +94,7 @@ public sealed class DefaultDenyTests(TestingWebApplicationFactory factory)
         "/api/recordings",
         "/api/encoding/jobs/durations",
         "/api/encoding/settings",
+        "/api/quality/candidate-scores",
         "/api/quality/incidents",
         "/api/quality/supply-health",
         "/api/quality/trends",

@@ -169,6 +169,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "listLiveDepartures",
                 "listLiveProfiles",
                 "listLiveSessions",
+                "listQualityCandidateScores",
                 "listQualityChannels",
                 "listQualityIncidents",
                 "listQualityRecordings",
