@@ -275,6 +275,7 @@ public sealed class ChannelSchemaTests
                 "encode_job",
                 "encode_profile",
                 "encode_scratch_file",
+                "encode_watermark",
                 "integrity_check",
                 "integrity_finding",
                 "local_account",
