@@ -70,7 +70,7 @@ public sealed class SignalSampleIntakeTests
     public void AReadingWithNoTimeOnItCannotBeToldFromAFrozenOneSoItIsNotTaken()
     {
         SignalSample read = SignalSampleIntake.Read(
-            new SignalQualityDto { Lock = SignalLock.Locked, CnrMilliDecibels = 33304 },
+            new SignalQualityDto { Lock = SignalLock.Locked, CnrMilliDecibels = 29000 },
             Asked);
 
         Assert.Equal(SignalNotTaken.NoTimeGiven, read.NotTakenBecause);
@@ -80,7 +80,7 @@ public sealed class SignalSampleIntakeTests
     public void AFigureThatArrivedWithoutTheMomentItWasMeasuredIsNotTakenEither()
     {
         SignalSample read = SignalSampleIntake.Read(
-            new SignalQualityDto { Lock = SignalLock.Locked, CnrMilliDecibels = 33304, LockReadAt = LockRead },
+            new SignalQualityDto { Lock = SignalLock.Locked, CnrMilliDecibels = 29000, LockReadAt = LockRead },
             Asked);
 
         Assert.Equal(SignalNotTaken.NoTimeGiven, read.NotTakenBecause);

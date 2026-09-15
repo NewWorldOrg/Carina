@@ -51,7 +51,7 @@ public sealed class QualitySignalRollupPlanTests
         IReadOnlyList<QualitySignalRollup> rolled = QualitySignalRollupPlan.Over(
             [
                 Sample(Noon, SignalSample.WithLock(Noon, 30000, Noon)),
-                Sample(Noon.AddMinutes(1), SignalSample.WithLock(Noon.AddMinutes(1), 35190, Noon.AddMinutes(1))),
+                Sample(Noon.AddMinutes(1), SignalSample.WithLock(Noon.AddMinutes(1), 31000, Noon.AddMinutes(1))),
             ],
             QualityWindow.Minute);
 
@@ -64,15 +64,15 @@ public sealed class QualitySignalRollupPlanTests
         IReadOnlyList<QualitySignalRollup> rolled = QualitySignalRollupPlan.Over(
             [
                 Sample(Noon, SignalSample.WithLock(Noon, 30000, Noon)),
-                Sample(Noon.AddSeconds(10), SignalSample.WithLock(Noon.AddSeconds(10), 35190, Noon.AddSeconds(10))),
+                Sample(Noon.AddSeconds(10), SignalSample.WithLock(Noon.AddSeconds(10), 31000, Noon.AddSeconds(10))),
             ],
             QualityWindow.Hour);
 
         QualitySignalRollup window = Assert.Single(rolled);
 
         Assert.Equal(30000, window.CarrierToNoiseLowest);
-        Assert.Equal(35190, window.CarrierToNoiseHighest);
-        Assert.Equal(32595.0, window.CarrierToNoiseAverage);
+        Assert.Equal(31000, window.CarrierToNoiseHighest);
+        Assert.Equal(30500.0, window.CarrierToNoiseAverage);
     }
 
     [Fact(DisplayName = "BR-QD-009: a window rolls each broadcast layer up on its own")]

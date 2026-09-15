@@ -24,7 +24,7 @@ public sealed class SignalSampleTests
     [Fact(DisplayName = "BR-QD-004: what the lock said and what the statistics said were read at different moments")]
     public void WhatTheLockSaidAndWhatTheStatisticsSaidWereReadAtDifferentMoments()
     {
-        SignalSample sample = SignalSample.WithLock(LockRead, 33304, StatisticsRead);
+        SignalSample sample = SignalSample.WithLock(LockRead, 29000, StatisticsRead);
 
         Assert.Equal(LockRead, sample.LockReadAt);
         Assert.Equal(StatisticsRead, sample.CarrierToNoiseReadAt);
@@ -36,7 +36,7 @@ public sealed class SignalSampleTests
     {
         SignalSample sample = SignalSample.WithLock(
             LockRead,
-            33304,
+            29000,
             StatisticsRead,
             [new LayerBitErrorCounts(1, 12, 67682304), new LayerBitErrorCounts(0, 3, 1671168)],
             StatisticsRead);
@@ -68,7 +68,7 @@ public sealed class SignalSampleTests
     [Fact(DisplayName = "BR-QV-003: a figure without the time it was read cannot be told from a frozen one")]
     public void AFigureWithoutTheTimeItWasReadCannotBeToldFromAFrozenOne()
     {
-        Assert.Throws<ArgumentException>(() => SignalSample.WithLock(LockRead, 33304));
+        Assert.Throws<ArgumentException>(() => SignalSample.WithLock(LockRead, 29000));
         Assert.Throws<ArgumentException>(() => SignalSample.WithLock(
             LockRead,
             bitErrors: [new LayerBitErrorCounts(0, 1, 8)]));
