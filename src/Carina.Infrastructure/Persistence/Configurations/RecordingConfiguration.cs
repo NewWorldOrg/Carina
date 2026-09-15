@@ -170,6 +170,14 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
                 AND strpos(file_name, replace(id::text, '-', '')) > 0
                 """);
             table.HasCheckConstraint(
+                "ck_recording_left_behind",
+                """
+                (files_left_behind IS NULL OR left_behind_at IS NOT NULL)
+                AND (files_left_behind IS NULL OR files_left_behind > 0)
+                AND (left_behind_at IS NULL OR recording_outcome IS NOT NULL)
+                AND (left_behind_at IS NULL OR left_behind_at >= started_at_actual)
+                """);
+            table.HasCheckConstraint(
                 "ck_recording_counts",
                 """
                 written_duration_ms >= 0
@@ -343,6 +351,9 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
             .HasConversion<string>()
             .HasMaxLength(32)
             .IsRequired();
+
+        builder.Property(recording => recording.LeftBehindAt);
+        builder.Property(recording => recording.FilesLeftBehind);
 
         builder.Property<string>(ProgrammeConfiguration.Searchable)
             .HasColumnName(ProgrammeConfiguration.Searchable)

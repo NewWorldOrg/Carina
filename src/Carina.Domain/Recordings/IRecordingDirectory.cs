@@ -20,8 +20,23 @@ public enum RecordingDiscard
     StillRecording = 3,
 }
 
+public enum RecordingErasureNote
+{
+    Noted = 1,
+
+    NoSuchRecording = 2,
+
+    StillRecording = 3,
+}
+
 public interface IRecordingDirectory
 {
+    Task<RecordingErasureNote> NoteErasureAsync(
+        RecordingId id,
+        RecordingErasure erasure,
+        DateTime at,
+        CancellationToken cancellationToken);
+
     Task<PaginatedList<Recording>> ListAsync(RecordingQuery query, CancellationToken cancellationToken);
 
     Task<Recording?> FindAsync(RecordingId id, CancellationToken cancellationToken);

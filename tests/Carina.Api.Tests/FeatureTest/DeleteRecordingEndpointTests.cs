@@ -130,6 +130,89 @@ public sealed class DeleteRecordingEndpointTests
     }
 
     [Fact]
+    public async Task ADeletionThatLeftFilesOnTheDiskMarksTheRowTheListShowsUntilALaterOneTakesEverything()
+    {
+        using var disk = new ErasableDisk();
+        await using var feature = new RecordingFeature(disk.Eraser);
+        Recording held = Ended(feature);
+        disk.Holding(held);
+        disk.Holding(RecordingId.New());
+        disk.Driver.StandingInForTheDriver = (_, _) => DriverCall<RecordingErasedDto>.Refused(
+            new DriverProblem(SessionRefusalTitles.FileLeftBehind, ["permission denied"]));
+
+        (HttpStatusCode status, JsonElement body) = await feature.DeleteAsync($"/api/recordings/{held.Id.Wire}");
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, status);
+        Assert.Equal("filesLeftBehind", body.GetProperty("data").GetProperty("refusal").GetString());
+        Assert.True(File.Exists(disk.RecordingAt(held.Id)));
+
+        (HttpStatusCode listed, JsonElement shelf) = await feature.GetAsync("/api/recordings");
+        JsonElement row = Assert.Single(shelf.GetProperty("data").GetProperty("items").EnumerateArray());
+        JsonElement mark = row.GetProperty("unfinishedDeletion");
+
+        Assert.Equal(HttpStatusCode.OK, listed);
+        Assert.Equal(held.Id.Wire, row.GetProperty("id").GetString());
+        Assert.Equal(RecordingFeature.Noon.AddMinutes(30), mark.GetProperty("leftBehindAt").GetDateTime());
+        Assert.Equal(2, mark.GetProperty("filesLeft").GetInt32());
+
+        (_, JsonElement detail) = await feature.GetAsync($"/api/recordings/{held.Id.Wire}");
+
+        Assert.Equal(
+            2,
+            detail.GetProperty("data").GetProperty("recording").GetProperty("unfinishedDeletion")
+                .GetProperty("filesLeft").GetInt32());
+
+        disk.Driver.StandingInForTheDriver = disk.TakeItOffTheDisk;
+
+        (HttpStatusCode again, _) = await feature.DeleteAsync($"/api/recordings/{held.Id.Wire}");
+        (_, JsonElement emptied) = await feature.GetAsync("/api/recordings");
+
+        Assert.Equal(HttpStatusCode.OK, again);
+        Assert.False(File.Exists(disk.RecordingAt(held.Id)));
+        Assert.Empty(emptied.GetProperty("data").GetProperty("items").EnumerateArray());
+    }
+
+    [Fact]
+    public async Task ARecordingNobodyTriedToThrowAwayCarriesNoMark()
+    {
+        await using var feature = new RecordingFeature();
+        Ended(feature);
+
+        (_, JsonElement shelf) = await feature.GetAsync("/api/recordings");
+        JsonElement row = Assert.Single(shelf.GetProperty("data").GetProperty("items").EnumerateArray());
+
+        Assert.Equal(JsonValueKind.Null, row.GetProperty("unfinishedDeletion").ValueKind);
+    }
+
+    [Fact]
+    public async Task ADeletionRefusedBeforeAnythingWasTouchedLeavesNoMark()
+    {
+        await using var feature = new RecordingFeature();
+        Recording held = Ended(feature);
+        feature.Eraser.Answer = RecordingErasure.Refused(ErasureFault.RootOutOfReach, "the mount has gone");
+        feature.Events.Signalled.Clear();
+
+        await feature.DeleteAsync($"/api/recordings/{held.Id.Wire}");
+
+        Assert.Null(Assert.Single(feature.Recordings.Recordings).LeftBehindAt);
+        Assert.Empty(feature.Events.Signalled);
+    }
+
+    [Fact]
+    public async Task MarkingWhatADeletionLeftBehindTellsTheScreensTheRecordingsMoved()
+    {
+        await using var feature = new RecordingFeature();
+        Recording held = Ended(feature);
+        feature.Eraser.Answer = RecordingErasure.Refused(ErasureFault.FileLeftBehind, "permission denied", 1);
+        feature.Events.Signalled.Clear();
+
+        await feature.DeleteAsync($"/api/recordings/{held.Id.Wire}");
+
+        Assert.Equal([AppEventName.Recordings], feature.Events.Signalled);
+        Assert.Equal(1, Assert.Single(feature.Recordings.Recordings).FilesLeftBehind);
+    }
+
+    [Fact]
     public async Task OnlyOneDeletionRunsAtATimeAndTheOneWaitingIsToldWhichIsUnderway()
     {
         await using var feature = new RecordingFeature();
@@ -394,7 +477,7 @@ public sealed class DeleteRecordingEndpointTests
 
         public string RecordingAt(RecordingId id) => Path.Combine(root, RecordingFile.Of(id.Wire));
 
-        private DriverCall<RecordingErasedDto> TakeItOffTheDisk(string recordingId, string outputRoot)
+        public DriverCall<RecordingErasedDto> TakeItOffTheDisk(string recordingId, string outputRoot)
         {
             if (Directory.GetFiles(root).Length is 0)
             {

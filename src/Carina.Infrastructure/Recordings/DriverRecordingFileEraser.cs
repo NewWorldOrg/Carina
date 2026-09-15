@@ -34,7 +34,12 @@ public sealed class DriverRecordingFileEraser(
 
         if (!call.TryGetValue(out RecordingErasedDto? erased))
         {
-            return RecordingErasure.Refused(FaultIn(call), Describe(call));
+            ErasureFault fault = FaultIn(call);
+
+            return RecordingErasure.Refused(
+                fault,
+                Describe(call),
+                fault is ErasureFault.FileLeftBehind ? 1 + PicturesStillThere(id) : null);
         }
 
         int removed = erased.FileRemoved ? 1 : 0;
@@ -60,6 +65,11 @@ public sealed class DriverRecordingFileEraser(
 
         return RecordingErasure.Erased(removed);
     }
+
+    private int PicturesStillThere(RecordingId id)
+        => pictures.WrittenTo is { } gallery && File.Exists(Path.Combine(gallery, id.Wire + ThumbnailJob.Extension))
+            ? 1
+            : 0;
 
     private static ErasureFault FaultIn<T>(DriverCall<T> call)
     {
@@ -157,7 +167,8 @@ public sealed class DriverRecordingFileEraser(
             return RecordingErasure.Refused(
                 ErasureFault.FileLeftBehind,
                 "The picture drawn of this recording does not resolve to a file in the directory pictures are "
-                + "kept in, so it is left where it is.");
+                + "kept in, so it is left where it is.",
+                1);
         }
 
         try
@@ -172,7 +183,8 @@ public sealed class DriverRecordingFileEraser(
 
             return RecordingErasure.Refused(
                 ErasureFault.FileLeftBehind,
-                "The picture drawn of this recording could not be removed; the log says why.");
+                "The picture drawn of this recording could not be removed; the log says why.",
+                1);
         }
     }
 }

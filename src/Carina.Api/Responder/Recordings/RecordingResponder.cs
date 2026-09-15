@@ -49,6 +49,18 @@ public sealed record RecordingFaultResponder(
     string Note,
     DateTime NoticedAt);
 
+public sealed record RecordingUnfinishedDeletionResponder(DateTime LeftBehindAt, int? FilesLeft)
+{
+    public static RecordingUnfinishedDeletionResponder? Of(Recording recording)
+    {
+        ArgumentNullException.ThrowIfNull(recording);
+
+        return recording.LeftBehindAt is { } at
+            ? new RecordingUnfinishedDeletionResponder(at, recording.FilesLeftBehind)
+            : null;
+    }
+}
+
 public sealed record RecordingInterruptionResponder(
     RecordingFault Fault,
     DateTime OccurredAt,
@@ -76,7 +88,8 @@ public sealed record RecordingResponder(
     RecordingDropsResponder Drops,
     RecordingThumbnailResponder Thumbnail,
     RecordingBroadcastGroupResponder BroadcastGroup,
-    RecordingEncodeResponder Encode)
+    RecordingEncodeResponder Encode,
+    RecordingUnfinishedDeletionResponder? UnfinishedDeletion)
 {
     public static RecordingResponder Of(RecordingSeen seen)
     {
@@ -135,7 +148,8 @@ public sealed record RecordingResponder(
             new RecordingBroadcastGroupResponder(
                 recording.BroadcastGroupKey?.Value,
                 recording.BroadcastGroupRole),
-            new RecordingEncodeResponder(seen.Encode));
+            new RecordingEncodeResponder(seen.Encode),
+            RecordingUnfinishedDeletionResponder.Of(recording));
     }
 
     internal static RecordingWindowResponder Window(Recording recording)

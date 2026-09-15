@@ -12,6 +12,8 @@ namespace Carina.Infrastructure.Persistence.Repositories;
 
 public sealed class RecordingDirectory(CarinaDbContext context) : IRecordingDirectory
 {
+    private const int MostAttemptsAtANote = 3;
+
     public async Task<PaginatedList<Recording>> ListAsync(
         RecordingQuery query,
         CancellationToken cancellationToken)
@@ -116,6 +118,45 @@ public sealed class RecordingDirectory(CarinaDbContext context) : IRecordingDire
         await context.SaveChangesAsync(cancellationToken);
 
         return RecordingHalt.Written;
+    }
+
+    public async Task<RecordingErasureNote> NoteErasureAsync(
+        RecordingId id,
+        RecordingErasure erasure,
+        DateTime at,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(id);
+        ArgumentNullException.ThrowIfNull(erasure);
+
+        for (int attempt = 1; ; attempt++)
+        {
+            Recording? recording = await context.Set<Recording>()
+                .FirstOrDefaultAsync(held => held.Id == id, cancellationToken);
+
+            if (recording is null)
+            {
+                return RecordingErasureNote.NoSuchRecording;
+            }
+
+            if (recording.IsInFlight)
+            {
+                return RecordingErasureNote.StillRecording;
+            }
+
+            recording.Erased(erasure, at);
+
+            try
+            {
+                await context.SaveChangesAsync(cancellationToken);
+
+                return RecordingErasureNote.Noted;
+            }
+            catch (DbUpdateConcurrencyException) when (attempt < MostAttemptsAtANote)
+            {
+                context.ChangeTracker.Clear();
+            }
+        }
     }
 
     public async Task<RecordingDiscard> DiscardAsync(RecordingId id, CancellationToken cancellationToken)

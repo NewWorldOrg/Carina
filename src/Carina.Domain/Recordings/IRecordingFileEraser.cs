@@ -13,7 +13,7 @@ public enum ErasureFault
 
 public sealed record RecordingErasure
 {
-    private RecordingErasure(ErasureFault? fault, string? note, int filesRemoved)
+    private RecordingErasure(ErasureFault? fault, string? note, int filesRemoved, int? filesLeft)
     {
         if (fault is { } named && !Enum.IsDefined(named))
         {
@@ -35,9 +35,25 @@ public sealed record RecordingErasure
                 "An erasure removes what it removed, never less than none.");
         }
 
+        if (filesLeft is not null && fault is not ErasureFault.FileLeftBehind)
+        {
+            throw new ArgumentException(
+                $"Only an erasure that left a file behind counts what it left, and this one is {fault?.ToString() ?? "a success"}.",
+                nameof(filesLeft));
+        }
+
+        if (filesLeft is < 1)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(filesLeft),
+                filesLeft,
+                "An erasure that left files behind left at least one.");
+        }
+
         Fault = fault;
         Note = note;
         FilesRemoved = filesRemoved;
+        FilesLeft = filesLeft;
     }
 
     public ErasureFault? Fault { get; }
@@ -46,15 +62,19 @@ public sealed record RecordingErasure
 
     public int FilesRemoved { get; }
 
+    public int? FilesLeft { get; }
+
     public bool EverythingIsGone => Fault is null;
 
-    public static RecordingErasure Erased(int filesRemoved) => new(null, null, filesRemoved);
+    public bool LeftFilesBehind => Fault is ErasureFault.FileLeftBehind;
 
-    public static RecordingErasure Refused(ErasureFault fault, string note)
+    public static RecordingErasure Erased(int filesRemoved) => new(null, null, filesRemoved, null);
+
+    public static RecordingErasure Refused(ErasureFault fault, string note, int? filesLeft = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(note);
 
-        return new RecordingErasure(fault, note, 0);
+        return new RecordingErasure(fault, note, 0, filesLeft);
     }
 }
 

@@ -242,6 +242,13 @@ public sealed class RecordingService(
 
         if (erasure.Fault is { } fault)
         {
+            if (erasure.LeftFilesBehind
+                && await recordings.NoteErasureAsync(id, erasure, clock.GetUtcNow().UtcDateTime, cancellationToken)
+                    is RecordingErasureNote.Noted)
+            {
+                events.Signal(AppEventName.Recordings);
+            }
+
             return ServiceResult<RecordingDiscarded, RecordingFailure>.Failure(
                 $"{erasure.Note} {Aftermath(fault, id)}",
                 Failed(fault));
