@@ -105,14 +105,14 @@ public sealed class QualitySignalRollupPlanTests
                     Noon,
                     SignalSample.WithLock(
                         Noon,
-                        bitErrors: [new LayerBitErrorCounts(0, 4, 58490880)],
+                        bitErrors: [new LayerBitErrorCounts(0, 4, 58000000)],
                         bitErrorsReadAt: Noon),
                     session: "live-1"),
                 Sample(
                     Noon.AddSeconds(10),
                     SignalSample.WithLock(
                         Noon.AddSeconds(10),
-                        bitErrors: [new LayerBitErrorCounts(0, 1, 18382848)],
+                        bitErrors: [new LayerBitErrorCounts(0, 1, 18000000)],
                         bitErrorsReadAt: Noon.AddSeconds(10)),
                     session: "live-2"),
             ],
@@ -120,8 +120,8 @@ public sealed class QualitySignalRollupPlanTests
 
         QualitySignalRollup window = Assert.Single(rolled);
 
-        Assert.Equal(((4d / 58490880) + (1d / 18382848)) / 2, window.BitErrors[0].Average, 12);
-        Assert.Equal(4d / 58490880, window.BitErrors[0].Highest, 12);
+        Assert.Equal(((4d / 58000000) + (1d / 18000000)) / 2, window.BitErrors[0].Average, 12);
+        Assert.Equal(4d / 58000000, window.BitErrors[0].Highest, 12);
     }
 
     [Fact]
