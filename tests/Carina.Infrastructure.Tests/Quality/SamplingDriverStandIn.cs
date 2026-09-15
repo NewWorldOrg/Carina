@@ -37,8 +37,11 @@ internal sealed class SamplingDriverStandIn : IDriverClient
         CancellationToken cancellationToken)
         => throw new NotSupportedException();
 
+    public DriverCall<IReadOnlyList<SessionSnapshot>> Sessions { get; set; } =
+        DriverCall<IReadOnlyList<SessionSnapshot>>.Reached([]);
+
     public Task<DriverCall<IReadOnlyList<SessionSnapshot>>> GetActiveSessionsAsync(CancellationToken cancellationToken)
-        => throw new NotSupportedException();
+        => Task.FromResult(Sessions);
 
     public Task<DriverCall<SessionSnapshot>> GetSessionAsync(SessionId sessionId, CancellationToken cancellationToken)
         => throw new NotSupportedException();
