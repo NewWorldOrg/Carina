@@ -169,6 +169,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IQualityThresholdRepository, QualityThresholdRepository>();
         services.AddScoped<IQualityThresholdChangeRepository, QualityThresholdChangeRepository>();
         services.AddScoped<IQualitySignalSampleRepository, QualitySignalSampleRepository>();
+        services.AddScoped<IQualitySessionMeasurementRepository, QualitySessionMeasurementRepository>();
         services.AddScoped<IQualitySignalRollupRepository, QualitySignalRollupRepository>();
         services.AddScoped<IQualitySignalReader, QualitySignalReader>();
         services.AddScoped<IQualityIncidentRepository, QualityIncidentRepository>();
