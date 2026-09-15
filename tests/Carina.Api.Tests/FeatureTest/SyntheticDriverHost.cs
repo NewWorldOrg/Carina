@@ -47,6 +47,8 @@ internal sealed class PacedTuners(TimeSpan between) : ITunerDeviceFactory
     }
 }
 
+internal sealed record HeldSession(SessionState State, SessionStopReason StopReason, long BytesRecorded);
+
 [SupportedOSPlatform("linux")]
 internal sealed class SyntheticDriverHost : IAsyncDisposable
 {
@@ -65,10 +67,11 @@ internal sealed class SyntheticDriverHost : IAsyncDisposable
 
     private readonly string root;
     private readonly string ledger;
-    private readonly DriverConfiguration configuration;
     private readonly IReadOnlyList<string?> inherited;
 
-    private IHost host;
+    private DriverConfiguration configuration;
+    private IHost? host;
+    private Task? stopping;
 
     private SyntheticDriverHost(
         IHost host,
@@ -82,13 +85,15 @@ internal sealed class SyntheticDriverHost : IAsyncDisposable
         this.ledger = ledger;
         this.configuration = configuration;
         this.inherited = inherited;
-        SocketPath = configuration.SocketPath!;
-        RecordingsDirectory = configuration.OutputRoots![0].Path!;
     }
 
-    public string SocketPath { get; }
+    public string SocketPath => configuration.SocketPath!;
 
-    public string RecordingsDirectory { get; }
+    public string RecordingsDirectory => configuration.OutputRoots![0].Path!;
+
+    public DriverConfiguration Configuration => configuration;
+
+    public string LedgerPath => ledger;
 
     public static async Task<SyntheticDriverHost> StartAsync()
     {
@@ -120,6 +125,11 @@ internal sealed class SyntheticDriverHost : IAsyncDisposable
         return new SyntheticDriverHost(host, root, ledger, configuration, inherited);
     }
 
+    public string Beside(string name) => Path.Combine(root, name);
+
+    public void WriteLedger(DriverConfiguration written)
+        => File.WriteAllText(ledger, DriverConfigurationWriter.Serialize(written));
+
     /// <summary>
     /// Puts the driver down and raises another one on the same socket and the same output root. The
     /// new process greets with an instance of its own and holds none of the sessions the one before
@@ -127,10 +137,81 @@ internal sealed class SyntheticDriverHost : IAsyncDisposable
     /// </summary>
     public async Task RaiseAnotherDriverAsync()
     {
-        await host.StopAsync(TimeSpan.FromSeconds(20));
+        await PutDownAsync();
 
-        host.Dispose();
         host = await RaisedAsync(configuration, ledger);
+    }
+
+    /// <summary>
+    /// Asks the driver to stop the way its host is asked when the process receives SIGTERM, and hands
+    /// back the stop while it is still under way. Delivering the signal to a separate process is not
+    /// part of it: the driver here shares the test process.
+    /// </summary>
+    public Task BeginStop()
+    {
+        IHost serving = host ?? throw new InvalidOperationException("No driver is running.");
+
+        stopping ??= serving.StopAsync(CancellationToken.None);
+
+        return stopping;
+    }
+
+    public async Task PutDownAsync()
+    {
+        if (host is not { } going)
+        {
+            return;
+        }
+
+        try
+        {
+            await (stopping ?? going.StopAsync(TimeSpan.FromSeconds(20)));
+        }
+        finally
+        {
+            going.Dispose();
+            host = null;
+            stopping = null;
+        }
+    }
+
+    /// <summary>
+    /// Puts the driver down and starts it again from what the ledger on disk says, the way the
+    /// entry point does: the file is read, the filesystem it names is checked, and a finding stops
+    /// the start with the exit code and the report the process would give. The shape rules that
+    /// want the socket under /run are the one step left out, because a test cannot bind there.
+    /// </summary>
+    public async Task<int> RaiseFromTheLedgerAsync(TextWriter error)
+    {
+        await PutDownAsync();
+
+        DriverConfiguration? written = DriverConfigurationReader.Parse(await File.ReadAllTextAsync(ledger));
+
+        Assert.NotNull(written);
+
+        int exitCode = DriverStartup.Report(DriverConfigurationReader.CheckTheFilesystem(written), error, ledger);
+
+        if (exitCode is not 0)
+        {
+            return exitCode;
+        }
+
+        configuration = written;
+        host = await RaisedAsync(written, ledger);
+
+        return exitCode;
+    }
+
+    public HeldSession Held(SessionId sessionId)
+    {
+        IHost serving = host ?? throw new InvalidOperationException("No driver is running.");
+        TunerSessionManager manager = serving.Services.GetRequiredService<TunerSessionManager>();
+
+        Assert.True(
+            manager.TryGet(sessionId, out TunerSession? session),
+            $"The driver holds no session named {sessionId.Value}.");
+
+        return new HeldSession(session.State, session.StopReason, session.BytesRecorded);
     }
 
     private static async Task<IHost> RaisedAsync(DriverConfiguration configuration, string ledger)
@@ -175,12 +256,10 @@ internal sealed class SyntheticDriverHost : IAsyncDisposable
     {
         try
         {
-            await host.StopAsync(TimeSpan.FromSeconds(20));
+            await PutDownAsync();
         }
         finally
         {
-            host.Dispose();
-
             for (int index = 0; index < SettingsThatWouldBindAPort.Length; index++)
             {
                 Environment.SetEnvironmentVariable(

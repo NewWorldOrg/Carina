@@ -189,12 +189,14 @@ internal sealed class RunningApp : IAsyncDisposable
         return held!;
     }
 
-    public Task UntilConnectedAsync()
+    public Task UntilConnectedAsync() => UntilConnectionIs("connected");
+
+    public Task UntilConnectionIs(string connection)
         => Eventually.Yields(
             StatusAsync,
-            data => data.GetProperty("connection").GetString() == "connected",
-            data => data.GetProperty("connection").GetString() ?? "nothing",
-            "the app reports the driver as connected");
+            data => ConnectionOf(data) == connection,
+            ConnectionOf,
+            $"the app reports the driver as {connection}");
 
     public Task UntilReadoptions(int count)
         => Eventually.Happens(
@@ -209,6 +211,8 @@ internal sealed class RunningApp : IAsyncDisposable
         await configured.DisposeAsync();
         await factory.DisposeAsync();
     }
+
+    private static string ConnectionOf(JsonElement data) => data.GetProperty("connection").GetString() ?? "nothing";
 
     private async Task<JsonElement> StatusAsync()
     {
@@ -263,19 +267,21 @@ internal sealed class AppSwapFeature : IAsyncDisposable
 
     public HeldOutcomeLedger Outcomes { get; } = new();
 
+    public SyntheticDriverHost Driver => driver;
+
     public string RecordingsDirectory => driver.RecordingsDirectory;
 
     public RunningApp App => running
         ?? throw new InvalidOperationException("No app is running against the driver.");
 
-    public static async Task<AppSwapFeature> StartAsync(bool takingRecordingsBack = false)
+    public static async Task<AppSwapFeature> StartAsync(bool takingRecordingsBack = false, TimeSpan? window = null)
     {
         SyntheticDriverHost driver = await SyntheticDriverHost.StartAsync();
         var feature = new AppSwapFeature(driver, DateTimeOffset.UtcNow);
 
-        feature.Reservations.Add(feature.Due());
-
         await feature.StartAppAsync(takingRecordingsBack);
+
+        feature.Reservations.Add(feature.DueFromNow(window ?? Window));
 
         return feature;
     }
@@ -360,8 +366,19 @@ internal sealed class AppSwapFeature : IAsyncDisposable
         await driver.DisposeAsync();
     }
 
-    private RecordingTick Due()
+    /// <summary>
+    /// The programme airs from the moment it is added, on a clock brought up to the real one first,
+    /// because the driver ends a recording on its own clock at the end it was started with.
+    /// </summary>
+    private RecordingTick DueFromNow(TimeSpan window)
     {
+        TimeSpan behind = DateTimeOffset.UtcNow - Clock.GetUtcNow();
+
+        if (behind > TimeSpan.Zero)
+        {
+            Clock.Turn(behind);
+        }
+
         DateTime airs = Clock.GetUtcNow().UtcDateTime;
 
         return new RecordingTick(
@@ -382,7 +399,7 @@ internal sealed class AppSwapFeature : IAsyncDisposable
             null,
             BroadcastGroupRole.Standalone,
             airs,
-            airs + Window,
+            airs + window,
             true,
             TimeSpan.Zero,
             null);
