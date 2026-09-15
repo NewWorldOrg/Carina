@@ -177,6 +177,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<SupplyWatchRound>();
         services.TryAddSingleton<ISupplyStandingBoard, SupplyStandingBoard>();
         services.AddScoped<QualitySignalRollupRound>();
+        services.AddScoped<CandidateScoreRound>();
         services.AddScoped<EncodeScratchFiles>();
         services.AddScoped<EncodeScratchCleaner>();
         services.AddScoped<EncodeArtefactPlacer>();

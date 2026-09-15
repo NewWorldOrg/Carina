@@ -41,6 +41,19 @@ public sealed class QualitySignalRollupJob(
             {
                 logger.LogError(failure, "A signal rollup failed; the next one is unaffected.");
             }
+
+            try
+            {
+                Report(await ScoreAsync(stoppingToken));
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception failure)
+            {
+                logger.LogError(failure, "Writing back what each candidate channel measured failed; the next round is unaffected.");
+            }
         }
     }
 
@@ -49,6 +62,13 @@ public sealed class QualitySignalRollupJob(
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
 
         return await scope.ServiceProvider.GetRequiredService<QualitySignalRollupRound>().RunAsync(cancellationToken);
+    }
+
+    private async Task<int> ScoreAsync(CancellationToken cancellationToken)
+    {
+        await using AsyncServiceScope scope = scopes.CreateAsyncScope();
+
+        return await scope.ServiceProvider.GetRequiredService<CandidateScoreRound>().RunAsync(cancellationToken);
     }
 
     private void Report(QualitySignalSweep sweep)
@@ -65,4 +85,7 @@ public sealed class QualitySignalRollupJob(
             sweep.SamplesForgotten,
             sweep.WindowsForgotten);
     }
+
+    private void Report(int scored)
+        => logger.LogDebug("Wrote back a score for {Scored} candidate channel(s).", scored);
 }
