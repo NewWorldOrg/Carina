@@ -248,24 +248,47 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
     }
 
     [Theory]
-    [InlineData("Notified", "NULL", "NULL", "NULL", "NULL")]
-    [InlineData("Acknowledged", "NULL", Later, "'operator'", "NULL")]
-    [InlineData("Resolved", "NULL", "NULL", "NULL", "NULL")]
-    [InlineData("Detected", Later, "NULL", "NULL", "NULL")]
-    [InlineData("Acknowledged", Later, Later, "NULL", "NULL")]
-    public async Task AnIncidentStandsWhereItsOwnTimesPutIt(
-        string state,
-        string notifiedAt,
-        string acknowledgedAt,
-        string acknowledgedBy,
-        string resolvedAt)
+    [InlineData("Notified", "NULL", "NULL")]
+    [InlineData("Resolved", "NULL", "NULL")]
+    [InlineData("Detected", Later, "NULL")]
+    [InlineData("Notified", Later, Later)]
+    public async Task AnIncidentStandsWhereItsOwnTimesPutIt(string state, string notifiedAt, string resolvedAt)
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
 
         PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
-            () => IncidentAsync(connection, state, notifiedAt, acknowledgedAt, acknowledgedBy, resolvedAt));
+            () => IncidentAsync(connection, state, notifiedAt, resolvedAt));
 
         Assert.Equal("ck_quality_incident_lifecycle", refusal.ConstraintName);
+    }
+
+    [Fact(DisplayName = "BR-QS-002: an incident has no acknowledged state and nowhere to keep who acknowledged it")]
+    public async Task AnIncidentHasNoAcknowledgedStateAndNowhereToKeepWhoAcknowledgedIt()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        await using var columns = new NpgsqlCommand(
+            """
+            SELECT count(*) FROM information_schema.columns
+            WHERE table_name = 'quality_incident' AND column_name LIKE 'acknowledged%'
+            """,
+            connection);
+
+        Assert.Equal(0L, (long)(await columns.ExecuteScalarAsync())!);
+
+        await using var constraints = new NpgsqlCommand(
+            """
+            SELECT string_agg(pg_get_constraintdef(held.oid), ' ')
+            FROM pg_constraint AS held
+            JOIN pg_class AS declaring ON declaring.oid = held.conrelid
+            WHERE declaring.relname = 'quality_incident' AND held.contype = 'c'
+            """,
+            connection);
+
+        string declared = (string)(await constraints.ExecuteScalarAsync())!;
+
+        Assert.DoesNotContain("Acknowledged", declared, StringComparison.Ordinal);
+        Assert.DoesNotContain("acknowledged", declared, StringComparison.Ordinal);
     }
 
     [Fact(DisplayName = "BR-QD-002: an anomaly another domain owns is kept under that domain's own classification")]
@@ -336,7 +359,7 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         Assert.Equal("ck_quality_incident_silence", refusal.ConstraintName);
     }
 
-    [Fact(DisplayName = "BR-QS-002: the lookup for what still stands reads the unsettled index, acknowledged ones included")]
+    [Fact(DisplayName = "BR-QS-002: the lookup for what still stands reads the unsettled index")]
     public async Task TheLookupForWhatStillStandsReadsTheUnsettledIndex()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -371,7 +394,6 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         string declared = (string)(await filtering.ExecuteScalarAsync())!;
 
         Assert.Contains("resolved_at IS NULL", declared, StringComparison.Ordinal);
-        Assert.DoesNotContain("acknowledged_at", declared, StringComparison.Ordinal);
     }
 
     [Fact(DisplayName = "BR-QS-003: the raw samples carry the index a retention sweep reads them by")]
@@ -509,8 +531,6 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         NpgsqlConnection connection,
         string state,
         string notifiedAt = "NULL",
-        string acknowledgedAt = "NULL",
-        string acknowledgedBy = "NULL",
         string resolvedAt = "NULL",
         string owner = "Quality",
         string classification = "NULL",
@@ -523,11 +543,11 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
             INSERT INTO quality_incident (
                 id, detected_at, breached, subject_kind, subject_key, observed, owner, classification, silence,
                 applied_default, applied_current, applied_provisional, applied_observations, applied_updated_at,
-                state, notified_at, acknowledged_at, acknowledged_by, resolved_at)
+                state, notified_at, resolved_at)
             VALUES (
                 '{Guid.NewGuid()}', {Taken}, '{breached}', '{subjectKind}', '{subject ?? Guid.NewGuid().ToString("N")}', 0.004,
                 '{owner}', {classification}, {silence}, 0.0002, 0.0002, true, 0, {Taken},
-                '{state}', {notifiedAt}, {acknowledgedAt}, {acknowledgedBy}, {resolvedAt})
+                '{state}', {notifiedAt}, {resolvedAt})
             """,
             connection).ExecuteNonQueryAsync();
 }

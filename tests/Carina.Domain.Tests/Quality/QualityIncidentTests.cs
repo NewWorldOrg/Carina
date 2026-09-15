@@ -22,51 +22,44 @@ public sealed class QualityIncidentTests
         Assert.False(incident.Restated);
     }
 
-    [Fact(DisplayName = "BR-QS-002: an incident is told about once and then waits to be acknowledged")]
-    public void AnIncidentIsToldAboutOnceAndThenWaitsToBeAcknowledged()
+    [Fact(DisplayName = "BR-QS-002: an incident is told about once and then stands until its condition clears")]
+    public void AnIncidentIsToldAboutOnceAndThenStandsUntilItsConditionClears()
     {
         QualityIncident incident = Detect();
         incident.Notify(Later);
 
         Assert.Equal(QualityIncidentState.Notified, incident.State);
         Assert.Equal(Later, incident.NotifiedAt);
+        Assert.False(incident.HasSettled);
         Assert.Throws<InvalidOperationException>(() => incident.Notify(Later.AddMinutes(1)));
     }
 
-    [Fact(DisplayName = "BR-QS-002: acknowledging says who did it and when, and throws nothing away")]
-    public void AcknowledgingSaysWhoDidItAndWhenAndThrowsNothingAway()
+    [Fact(DisplayName = "BR-QS-002: an incident only ever stands detected, told about, or resolved")]
+    public void AnIncidentOnlyEverStandsDetectedToldAboutOrResolved()
+        => Assert.Equal(
+            [nameof(QualityIncidentState.Detected), nameof(QualityIncidentState.Notified), nameof(QualityIncidentState.Resolved)],
+            Enum.GetNames<QualityIncidentState>());
+
+    [Fact(DisplayName = "BR-QS-002: a resolved incident stays resolved and cannot be told about again")]
+    public void AResolvedIncidentStaysResolvedAndCannotBeToldAboutAgain()
     {
         QualityIncident incident = Detect();
         incident.Notify(Later);
-        incident.Acknowledge(Later.AddMinutes(1), "operator");
-
-        Assert.Equal(QualityIncidentState.Acknowledged, incident.State);
-        Assert.Equal("operator", incident.AcknowledgedBy);
-        Assert.Equal(Later.AddMinutes(1), incident.AcknowledgedAt);
-        Assert.Equal(Detected, incident.DetectedAt);
-    }
-
-    [Fact]
-    public void NobodyAcknowledgesAnIncidentTheyWereNeverToldAbout()
-    {
-        QualityIncident incident = Detect();
-
-        Assert.Throws<InvalidOperationException>(() => incident.Acknowledge(Later, "operator"));
-    }
-
-    [Fact(DisplayName = "BR-QS-002: acknowledging holds for one occurrence and cannot be made to hold for the next")]
-    public void AcknowledgingHoldsForOneOccurrenceAndCannotBeMadeToHoldForTheNext()
-    {
-        QualityIncident incident = Detect();
-        incident.Notify(Later);
-        incident.Acknowledge(Later.AddMinutes(1), "operator");
         incident.Resolve(Later.AddMinutes(2));
 
         Assert.Equal(QualityIncidentState.Resolved, incident.State);
         Assert.True(incident.HasSettled);
         Assert.Throws<InvalidOperationException>(() => incident.Resolve(Later.AddMinutes(3)));
         Assert.Throws<InvalidOperationException>(() => incident.Notify(Later.AddMinutes(3)));
-        Assert.Throws<InvalidOperationException>(() => incident.Acknowledge(Later.AddMinutes(3), "operator"));
+    }
+
+    [Fact]
+    public void AnIncidentIsNotResolvedBeforeItWasToldAbout()
+    {
+        QualityIncident incident = Detect();
+        incident.Notify(Later);
+
+        Assert.Throws<ArgumentException>(() => incident.Resolve(Later.AddMinutes(-1)));
     }
 
     [Fact]
@@ -132,13 +125,11 @@ public sealed class QualityIncidentTests
             null,
             null,
             Applied,
-            QualityIncidentState.Acknowledged,
+            QualityIncidentState.Notified,
             Later,
-            Later.AddMinutes(1),
-            "operator",
             null);
 
-        Assert.Equal(QualityIncidentState.Acknowledged, incident.State);
+        Assert.Equal(QualityIncidentState.Notified, incident.State);
     }
 
     [Fact]
@@ -155,26 +146,6 @@ public sealed class QualityIncidentTests
             Applied,
             QualityIncidentState.Resolved,
             Later,
-            null,
-            null,
-            null));
-
-    [Fact]
-    public void AnIncidentThatSaysItWasAcknowledgedSaysWhoAcknowledgedIt()
-        => Assert.Throws<ArgumentException>(() => QualityIncident.Rehydrate(
-            QualityIncidentId.New(),
-            Detected,
-            QualityThresholdKey.PacketsLostWarning,
-            QualitySubject.Of(QualitySubjectKind.Recording, Guid.NewGuid().ToString("N")),
-            0.004,
-            QualityIncidentOwner.Quality,
-            null,
-            null,
-            Applied,
-            QualityIncidentState.Acknowledged,
-            Later,
-            Later.AddMinutes(1),
-            null,
             null));
 
     [Fact]
