@@ -16,6 +16,7 @@ public sealed class NoChapterDetector : IChapterDetector
         string source,
         ServiceId service,
         EncodeTimeline timeline,
+        WatermarkMask? learnedAhead,
         int cores,
         Func<RunningProgramme, Task> began,
         CancellationToken cancellationToken)

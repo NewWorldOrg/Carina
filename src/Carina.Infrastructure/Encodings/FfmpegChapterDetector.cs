@@ -7,13 +7,26 @@ using Carina.Domain.Machines;
 namespace Carina.Infrastructure.Encodings;
 
 /// <summary>
-/// Looks for the breaks in one source with the ffmpeg this image already carries, in two passes.
+/// Looks for the breaks in one source with the ffmpeg this image already carries, in three passes.
 /// The first listens to the whole of the sound and writes down every stretch that went quiet,
-/// decoding no picture at all; the second looks at six seconds of picture around each of those and
-/// writes down where it went black and by how much it changed. That is what makes this affordable:
-/// the whole length is heard, and only a few seconds either side of a candidate are seen. What the
-/// two passes observed is handed to <see cref="ChapterGrid"/>, which decides — nothing is decided
-/// here.
+/// decoding no picture at all; the second looks at six seconds of picture around each quiet stretch
+/// and writes down where it went black and by how much it changed; the third watches the whole of
+/// the picture for the station's watermark, decoding only the pictures that stand on their own and
+/// one a second of those. That is what makes this affordable: the whole length is heard, only a few
+/// seconds either side of a candidate are seen whole, and the watermark is watched at one picture a
+/// second. What the passes observed is handed to <see cref="ChapterGrid"/>, which decides — nothing
+/// is decided here.
+/// <para>
+/// The watermark only ever takes candidates away, so it is watched last and only in what is left of
+/// <see cref="Patience"/>: a watch that would outlast it never costs the looks their time, and when
+/// nothing is left it is not started at all.
+/// </para>
+/// <para>
+/// The watermark is learned from this source and handed back beside the reading, for the recordings
+/// of the same service read after it; this source is judged only by a watermark learned ahead of it,
+/// from another recording, and with none when there is none (BR-ED2-007). A machine told not to
+/// watch for the watermark runs no second pass at all.
+/// </para>
 /// <para>
 /// This answers, it does not fail. A programme that is not on this machine, one that refused while
 /// listening, one that outlived <see cref="Patience"/> before a word of the sound was read, and a
@@ -24,7 +37,9 @@ namespace Carina.Infrastructure.Encodings;
 /// reading.
 /// </para>
 /// <para>
-/// Only the sound is read whole; looking at the picture is what has a ceiling on it, at
+/// Only the sound is read whole; watching for the watermark and looking at the picture are what can
+/// fall short. A watch that refused, ran out of time or found no time left leaves the reading made
+/// without a watermark and learns nothing. Looking at the picture has a ceiling on it, at
 /// <see cref="MostLooksPerMark"/> looks for every mark the reading is allowed, taking the longest
 /// quiet stretches first. Nothing that happens to one of those looks throws the reading away: one
 /// that refused leaves its own stretch uncorroborated, and running out of time stops the looking
@@ -33,12 +48,12 @@ namespace Carina.Infrastructure.Encodings;
 /// and the answer says on its face that it was made that way.
 /// </para>
 /// <para>
-/// How much of the machine the two passes may take is handed in rather than read here, so that the
+/// How much of the machine the passes may take is handed in rather than read here, so that the
 /// looking and the encode that follows it are bounded by the one cap the operator holds
 /// (BR-ED2-005).
 /// </para>
 /// <para>
-/// Every programme either pass starts is handed to the caller before it is read from, on the same
+/// Every programme any pass starts is handed to the caller before it is read from, on the same
 /// terms the encode's own run is written down on, so that a process killed mid-look does not leave
 /// an ffmpeg nobody has a record of (BR-ED2-011).
 /// </para>
@@ -74,6 +89,7 @@ public sealed class FfmpegChapterDetector(
         string source,
         ServiceId service,
         EncodeTimeline timeline,
+        WatermarkMask? learnedAhead,
         int cores,
         Func<RunningProgramme, Task> began,
         CancellationToken cancellationToken)
@@ -128,8 +144,8 @@ public sealed class FfmpegChapterDetector(
                 $"{outOfReach} of the {heard.Silences.Count} quiet stretches reported fall outside the artefact, so what they were reported against is not the clock they were read on"));
         }
 
-        var seen = new ChapterLog();
         List<string> asides = [];
+        var seen = new ChapterLog();
         int mostToLookAt = MostLooksPerMark * asked.MostChapters;
         int lookedThrough = 0;
         int refused = 0;
@@ -180,6 +196,10 @@ public sealed class FfmpegChapterDetector(
                 $"{refused} of the looks refused, so what lies around those quiet stretches went unseen"));
         }
 
+        WatermarkWatch? watched = asked.Watermark
+            ? await WatchedAsync(source, service, learnedAhead, cores, from, began, asides, cancellationToken)
+            : null;
+
         List<ChapterSpan> blacks = [];
 
         foreach (ChapterSpan dark in seen.Blacks)
@@ -200,10 +220,21 @@ public sealed class FfmpegChapterDetector(
             }
         }
 
-        var evidence = new ChapterEvidence { Silences = silences, Blacks = blacks, Scenes = changes };
+        var evidence = new ChapterEvidence
+        {
+            Silences = silences,
+            Blacks = blacks,
+            Scenes = changes,
+            Sightings = watched is not null && learnedAhead is not null ? watched.Sightings(timeline, artefactLength) : [],
+        };
         ChapterDetection read = ChapterGrid.Mark(evidence, artefactLength, asked);
 
-        return asides.Count is 0 ? read : read.Noting(string.Join("; ", asides));
+        if (asides.Count > 0)
+        {
+            read = read.Noting(string.Join("; ", asides));
+        }
+
+        return watched?.Learned() is { } learned ? read.Learning(learned) : read;
     }
 
     /// <summary>
@@ -231,6 +262,58 @@ public sealed class FfmpegChapterDetector(
                 ? null
                 : string.Create(CultureInfo.InvariantCulture, $"the programme exited {ran.ExitCode} while {doing}"),
         };
+
+    private async Task<WatermarkWatch?> WatchedAsync(
+        string source,
+        ServiceId service,
+        WatermarkMask? learnedAhead,
+        int cores,
+        DateTimeOffset from,
+        Func<RunningProgramme, Task> began,
+        List<string> asides,
+        CancellationToken cancellationToken)
+    {
+        TimeSpan left = patience - (clock.GetUtcNow() - from);
+
+        if (left <= TimeSpan.Zero)
+        {
+            asides.Add("no time was left to watch the picture for the station's watermark, so no watermark was learned or used");
+
+            return null;
+        }
+
+        var watch = new WatermarkWatch(learnedAhead);
+        ChapterRunOutcome watching = await FfmpegChapterRun.PicturedAsync(
+            machine.Programme,
+            FfmpegChapterInvocation.Watching(source, service, cores),
+            WatermarkFrame.Pixels,
+            watch.Pictured,
+            watch.Complained,
+            left,
+            began,
+            clock,
+            cancellationToken);
+
+        if (!watching.Succeeded)
+        {
+            asides.Add(watching.Fault is ChapterRunFault.TookTooLong
+                ? string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"watching the picture for the station's watermark was stopped after {left:c}, so no watermark was learned or used")
+                : string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"watching the picture for the station's watermark ended without a reading ({watching.ExitCode?.ToString(CultureInfo.InvariantCulture) ?? watching.Fault.ToString()}), so no watermark was learned or used"));
+
+            return null;
+        }
+
+        if (learnedAhead is null)
+        {
+            asides.Add("no watermark had been learned ahead from another recording of this service, so none judged this one");
+        }
+
+        return watch;
+    }
 
     private async Task<ChapterRunOutcome> RunAsync(
         IReadOnlyList<string> arguments,

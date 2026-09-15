@@ -86,6 +86,8 @@ internal sealed class EncodeHarness : IDisposable
 
     public HeldEncodeChapters Chapters { get; } = new();
 
+    public HeldStationWatermarks Watermarks { get; } = new();
+
     public MachineSettings Programmes { get; set; } = new();
 
     public StandingEncodeAutoRun AutoRun { get; } = new();
@@ -119,6 +121,7 @@ internal sealed class EncodeHarness : IDisposable
         HeadReader,
         ChapterDetector,
         Chapters,
+        Watermarks,
         Programmes,
         Settings,
         AutoRun,
@@ -363,15 +366,19 @@ internal sealed class ScriptedChapters : IChapterDetector
 
     public List<(string Source, ServiceId Service, int Cores)> Asked { get; } = [];
 
+    public List<WatermarkMask?> LearnedAhead { get; } = [];
+
     public Task<ChapterDetection> MarkAsync(
         string source,
         ServiceId service,
         EncodeTimeline timeline,
+        WatermarkMask? learnedAhead,
         int cores,
         Func<RunningProgramme, Task> began,
         CancellationToken cancellationToken)
     {
         Asked.Add((source, service, cores));
+        LearnedAhead.Add(learnedAhead);
 
         return Task.FromResult(Answers?.Invoke() ?? ChapterDetection.NotAsked);
     }

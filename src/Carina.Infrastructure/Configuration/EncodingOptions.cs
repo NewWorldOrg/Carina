@@ -142,6 +142,8 @@ public sealed class EncodingChapterOptions
 
     public string? Marked { get; set; }
 
+    public string? Watermark { get; set; }
+
     public string? Noise { get; set; }
 
     public string? ShortestSilence { get; set; }
@@ -161,6 +163,7 @@ public sealed class EncodingChapterOptions
         ArgumentNullException.ThrowIfNull(configuration);
 
         Marked = configuration[nameof(Marked)];
+        Watermark = configuration[nameof(Watermark)];
         Noise = configuration[nameof(Noise)];
         ShortestSilence = configuration[nameof(ShortestSilence)];
         Scene = configuration[nameof(Scene)];
@@ -178,6 +181,7 @@ public sealed class EncodingChapterOptions
         return new ChapterSettings
         {
             Marked = Told(Marked, nameof(Marked), unset.Marked),
+            Watermark = Told(Watermark, nameof(Watermark), unset.Watermark),
             Noise = Quietened(Noise, nameof(Noise), unset.Noise),
             ShortestSilence = Timed(ShortestSilence, nameof(ShortestSilence), unset.ShortestSilence),
             Scene = Shared(Scene, nameof(Scene), unset.Scene),

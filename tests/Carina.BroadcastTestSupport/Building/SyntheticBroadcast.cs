@@ -105,6 +105,21 @@ public sealed record SyntheticBroadcast
     /// </summary>
     public TimeSpan StartsAt { get; init; } = TimeSpan.Zero;
 
+    /// <summary>
+    /// Paints the picture flat grey rather than with the test pattern, whose bars never move and so
+    /// look like detail that stays put in every corner.
+    /// </summary>
+    public bool Plain { get; init; }
+
+    /// <summary>
+    /// Draws a station's watermark — a white outline in the top right corner — over the picture,
+    /// except through the stretches named in <see cref="Unbranded"/>, the way a station takes its mark
+    /// off for advertisements.
+    /// </summary>
+    public bool Watermarked { get; init; }
+
+    public IReadOnlyList<(TimeSpan From, TimeSpan Until)> Unbranded { get; init; } = [];
+
     public string Programme { get; init; } = FfmpegProgramme.Default;
 
     private bool CarriesSideInformation => WithCaptions || WithSuperimpose;
@@ -255,6 +270,11 @@ public sealed record SyntheticBroadcast
                 "A break is quiet and dark at once, so it needs a picture to darken and a sound this run encodes itself.");
         }
 
+        if ((Plain || Watermarked) && Picture is SyntheticPicture.None)
+        {
+            throw new InvalidOperationException("A plain picture and a watermark both need a picture to paint.");
+        }
+
         List<string> arguments = [.. Preamble()];
         int inputs = 0;
         int? picture = null;
@@ -263,7 +283,9 @@ public sealed record SyntheticBroadcast
 
         if (Picture is not SyntheticPicture.None)
         {
-            arguments.AddRange(["-f", "lavfi", "-i", Invariant($"testsrc2=size={Size()}:rate={BroadcastRate}")]);
+            arguments.AddRange(["-f", "lavfi", "-i", Plain
+                ? Invariant($"color=c=0x606060:size={Size()}:rate={BroadcastRate}")
+                : Invariant($"testsrc2=size={Size()}:rate={BroadcastRate}")]);
             picture = inputs++;
         }
 
@@ -437,9 +459,26 @@ public sealed record SyntheticBroadcast
         ];
 
     private string Painted()
-        => QuietBreaks.Count is 0
-            ? Interlaced
-            : Invariant($"{Interlaced},drawbox=x=0:y=0:w=iw:h=ih:color=black@1:t=fill:enable={Whenever()}");
+    {
+        List<string> filters = [Interlaced];
+
+        if (Watermarked)
+        {
+            filters.Add(Invariant($"drawbox=x=iw*13/16:y=ih/16:w=iw/8:h=ih/10:color=white@1:t=6{Unless()}"));
+        }
+
+        if (QuietBreaks.Count > 0)
+        {
+            filters.Add(Invariant($"drawbox=x=0:y=0:w=iw:h=ih:color=black@1:t=fill:enable={Whenever()}"));
+        }
+
+        return string.Join(',', filters);
+    }
+
+    private string Unless()
+        => Unbranded.Count is 0
+            ? string.Empty
+            : Invariant($":enable=not({string.Join('+', Unbranded.Select(span => Invariant($"between(t\\,{span.From.TotalSeconds:0.###}\\,{span.Until.TotalSeconds:0.###})")))})");
 
     private IReadOnlyList<string> Offset()
         => StartsAt <= TimeSpan.Zero

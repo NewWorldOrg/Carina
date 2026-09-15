@@ -34,6 +34,13 @@ namespace Carina.Infrastructure.Encodings;
 /// any other: recorded before it is written (BR-ED2-010) and swept when the job ends. The ledger
 /// is what a player is answered from; the file is only what bakes them into the artefact.
 /// </para>
+/// <para>
+/// The look is handed the station's watermark learned ahead — from another recording of the same
+/// service, never from this one — and whatever watermark it learned from this recording is kept
+/// against this recording once the reading is in the ledger, for the recordings of the service read
+/// after it (BR-ED2-007). Neither is allowed to fail the job: a watermark that cannot be read is
+/// looked without, and one that cannot be kept is let go.
+/// </para>
 /// </summary>
 public sealed class EncodeJobRunner(
     IEncodeJobRepository jobs,
@@ -48,6 +55,7 @@ public sealed class EncodeJobRunner(
     ISourceHeadReader heads,
     IChapterDetector detector,
     IEncodeChapterRepository chapters,
+    IStationWatermarkRepository watermarks,
     MachineSettings programmes,
     EncodeSettings settings,
     IEncodeAutoRunReader autoRun,
@@ -158,10 +166,13 @@ public sealed class EncodeJobRunner(
 
         int cores = Math.Min((await autoRun.ReadAsync(cancellationToken)).MostCores, programmes.Cores);
 
+        WatermarkMask? learnedAhead = await LearnedAheadAsync(job, recording, cancellationToken);
+
         ChapterDetection marks = await MarkedAsync(
             source.FullName,
             recording.ServiceId,
             timeline,
+            learnedAhead,
             cores,
             spawned => SpawnedAsync(job, spawned, cancellationToken),
             cancellationToken);
@@ -179,6 +190,11 @@ public sealed class EncodeJobRunner(
 
         job.Judged(ChapterReading.Of(detector.Name, marks, clock.GetUtcNow().UtcDateTime));
         await jobs.SaveAsync(job, cancellationToken);
+
+        if (marks.Learned is { } learned)
+        {
+            await KeepAsync(job, recording, learned, cancellationToken);
+        }
 
         await chapters.RecordAsync(
             job.Id,
@@ -297,18 +313,76 @@ public sealed class EncodeJobRunner(
         string source,
         ServiceId service,
         EncodeTimeline timeline,
+        WatermarkMask? learnedAhead,
         int cores,
         Func<RunningProgramme, Task> began,
         CancellationToken cancellationToken)
     {
         try
         {
-            return await detector.MarkAsync(source, service, timeline, cores, began, cancellationToken);
+            return await detector.MarkAsync(source, service, timeline, learnedAhead, cores, began, cancellationToken);
         }
         catch (Exception failure) when (!cancellationToken.IsCancellationRequested)
         {
             return ChapterDetection.Unreadable(
                 $"looking for the breaks ended in {failure.GetType().Name}: {ProgrammeNote.Of(failure.Message, LongestComplaint)}");
+        }
+    }
+
+    private async Task<WatermarkMask?> LearnedAheadAsync(EncodeJob job, Recording recording, CancellationToken cancellationToken)
+    {
+        if (!settings.Chapters.Watermark || detector.Name is ChapterDetectorName.Nobody)
+        {
+            return null;
+        }
+
+        try
+        {
+            StationWatermark? ahead = await watermarks.FindAheadOfAsync(
+                recording.NetworkId,
+                recording.ServiceId,
+                recording.Id,
+                cancellationToken);
+
+            return ahead?.Mask;
+        }
+        catch (Exception failure) when (!cancellationToken.IsCancellationRequested)
+        {
+            logger.LogWarning(
+                "Job {Job} is looked at with no watermark learned ahead, because the watermarks kept could not be read ({Failure}): {Note}",
+                job.Id.Wire,
+                failure.GetType().Name,
+                ProgrammeNote.Of(failure.Message, LongestComplaint));
+
+            return null;
+        }
+    }
+
+    private async Task KeepAsync(EncodeJob job, Recording recording, WatermarkMask learned, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await watermarks.KeepAsync(
+                StationWatermark.Learn(
+                    recording.NetworkId,
+                    recording.ServiceId,
+                    recording.Id,
+                    learned,
+                    clock.GetUtcNow().UtcDateTime),
+                cancellationToken);
+
+            logger.LogInformation(
+                "Job {Job} learned its service's watermark over {Pixels} pixels, for the recordings of that service read after it.",
+                job.Id.Wire,
+                learned.Pixels);
+        }
+        catch (Exception failure) when (!cancellationToken.IsCancellationRequested)
+        {
+            logger.LogWarning(
+                "Job {Job} learned a watermark that could not be kept ({Failure}): {Note}",
+                job.Id.Wire,
+                failure.GetType().Name,
+                ProgrammeNote.Of(failure.Message, LongestComplaint));
         }
     }
 

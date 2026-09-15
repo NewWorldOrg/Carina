@@ -18,12 +18,14 @@ public sealed record ChapterRunOutcome(int? ExitCode, ChapterRunFault? Fault, st
 }
 
 /// <summary>
-/// One run of the programme that looks for the breaks. Both of its streams are read a line at a
-/// time and handed on as they come, one line at a time and never two at once, because a run that
-/// is asked to talk says thousands of lines and holding them to read at the end would keep a
-/// megabyte of another programme's words in memory and fill the pipe it is writing into while it
-/// waited. Nothing is kept from either stream: the caller is handed the lines and this keeps only
-/// how the run ended, so no word of the source's own can end up written down.
+/// One run of the programme that looks for the breaks. Both of its streams are read as they come
+/// and handed on one piece at a time and never two at once — a line of words, or a whole picture
+/// when the run was asked to hand pictures over — because a run that is asked to talk says
+/// thousands of lines and holding them to read at the end would keep a megabyte of another
+/// programme's words in memory and fill the pipe it is writing into while it waited. Nothing is kept
+/// from either stream: the caller is handed each piece and this keeps only how the run ended, so no
+/// word of the source's own can end up written down. What is left at the end of the pictures that
+/// makes less than a whole one is not handed on.
 /// <para>
 /// The programme is started yielding, at the lowest priority the machine has, because the machine
 /// this runs on is recording. A run that outlives what it was allowed is stopped, children and
@@ -40,7 +42,7 @@ public sealed record ChapterRunOutcome(int? ExitCode, ChapterRunFault? Fault, st
 /// </summary>
 public static class FfmpegChapterRun
 {
-    public static async Task<ChapterRunOutcome> RunAsync(
+    public static Task<ChapterRunOutcome> RunAsync(
         string programme,
         IReadOnlyList<string> arguments,
         Action<string> said,
@@ -51,6 +53,53 @@ public static class FfmpegChapterRun
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(said);
+
+        return RunAsync(
+            programme,
+            arguments,
+            (output, gate) => ReadAsync(output, said, gate),
+            complained,
+            longest,
+            began,
+            clock,
+            cancellationToken);
+    }
+
+    public static Task<ChapterRunOutcome> PicturedAsync(
+        string programme,
+        IReadOnlyList<string> arguments,
+        int pictureBytes,
+        Action<byte[]> pictured,
+        Action<string> complained,
+        TimeSpan longest,
+        Func<RunningProgramme, Task> began,
+        TimeProvider clock,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(pictured);
+        ArgumentOutOfRangeException.ThrowIfLessThan(pictureBytes, 1);
+
+        return RunAsync(
+            programme,
+            arguments,
+            (output, gate) => PicturesAsync(output.BaseStream, pictureBytes, pictured, gate),
+            complained,
+            longest,
+            began,
+            clock,
+            cancellationToken);
+    }
+
+    private static async Task<ChapterRunOutcome> RunAsync(
+        string programme,
+        IReadOnlyList<string> arguments,
+        Func<StreamReader, Lock, Task> readOutput,
+        Action<string> complained,
+        TimeSpan longest,
+        Func<RunningProgramme, Task> began,
+        TimeProvider clock,
+        CancellationToken cancellationToken)
+    {
         ArgumentNullException.ThrowIfNull(complained);
         ArgumentNullException.ThrowIfNull(began);
         ArgumentNullException.ThrowIfNull(clock);
@@ -89,7 +138,7 @@ public static class FfmpegChapterRun
 
         try
         {
-            await ReadAsync(running.StandardOutput, said, gate);
+            await readOutput(running.StandardOutput, gate);
             await complaining;
         }
         catch
@@ -115,6 +164,19 @@ public static class FfmpegChapterRun
             lock (gate)
             {
                 hand(line);
+            }
+        }
+    }
+
+    private static async Task PicturesAsync(Stream stream, int bytes, Action<byte[]> hand, Lock gate)
+    {
+        byte[] picture = new byte[bytes];
+
+        while (await stream.ReadAtLeastAsync(picture, bytes, throwOnEndOfStream: false, CancellationToken.None) == bytes)
+        {
+            lock (gate)
+            {
+                hand(picture);
             }
         }
     }

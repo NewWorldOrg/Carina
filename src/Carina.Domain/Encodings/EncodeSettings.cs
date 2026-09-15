@@ -48,12 +48,17 @@ public sealed record EncodeSettings
 /// laid on and how far off that grid a pair of boundaries may sit and still be taken as a pair —
 /// and two safety valves: <see cref="MostBreakShare"/> throws the whole reading away when it took
 /// more than that much of the recording for breaks, and <see cref="MostChapters"/> throws it away
-/// when it put in more marks than that. Every one of them is a number, a truth or a length of
-/// time; none of them is text a filter could be written in.
+/// when it put in more marks than that. <see cref="Watermark"/> says whether the look also watches
+/// the picture for the station's watermark — learning it from this recording for the ones after it,
+/// and judging this one by the one learned ahead — which costs one more pass over the picture.
+/// Every one of them is a number, a truth or a length of time; none of them is text a filter could
+/// be written in.
 /// </summary>
 public sealed record ChapterSettings
 {
     public bool Marked { get; init; } = true;
+
+    public bool Watermark { get; init; } = true;
 
     public int Noise { get; init; } = -50;
 
