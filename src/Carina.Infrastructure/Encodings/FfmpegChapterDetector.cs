@@ -9,13 +9,18 @@ namespace Carina.Infrastructure.Encodings;
 /// <summary>
 /// Looks for the breaks in one source with the ffmpeg this image already carries, in three passes.
 /// The first listens to the whole of the sound and writes down every stretch that went quiet,
-/// decoding no picture at all; the second watches the whole of the picture for the station's
-/// watermark, decoding only the pictures that stand on their own and one a second of those; the
-/// third looks at six seconds of picture around each quiet stretch and writes down where it went
-/// black and by how much it changed. That is what makes this affordable: the whole length is heard,
-/// the watermark is watched at one picture a second, and only a few seconds either side of a
-/// candidate are seen whole. What the passes observed is handed to <see cref="ChapterGrid"/>, which
-/// decides — nothing is decided here.
+/// decoding no picture at all; the second looks at six seconds of picture around each quiet stretch
+/// and writes down where it went black and by how much it changed; the third watches the whole of
+/// the picture for the station's watermark, decoding only the pictures that stand on their own and
+/// one a second of those. That is what makes this affordable: the whole length is heard, only a few
+/// seconds either side of a candidate are seen whole, and the watermark is watched at one picture a
+/// second. What the passes observed is handed to <see cref="ChapterGrid"/>, which decides — nothing
+/// is decided here.
+/// <para>
+/// The watermark only ever takes candidates away, so it is watched last and only in what is left of
+/// <see cref="Patience"/>: a watch that would outlast it never costs the looks their time, and when
+/// nothing is left it is not started at all.
+/// </para>
 /// <para>
 /// The watermark is learned from this source and handed back beside the reading, for the recordings
 /// of the same service read after it; this source is judged only by a watermark learned ahead of it,
@@ -33,8 +38,8 @@ namespace Carina.Infrastructure.Encodings;
 /// </para>
 /// <para>
 /// Only the sound is read whole; watching for the watermark and looking at the picture are what can
-/// fall short. A watch that refused or ran out of time leaves the reading made without a watermark
-/// and learns nothing. Looking at the picture has a ceiling on it, at
+/// fall short. A watch that refused, ran out of time or found no time left leaves the reading made
+/// without a watermark and learns nothing. Looking at the picture has a ceiling on it, at
 /// <see cref="MostLooksPerMark"/> looks for every mark the reading is allowed, taking the longest
 /// quiet stretches first. Nothing that happens to one of those looks throws the reading away: one
 /// that refused leaves its own stretch uncorroborated, and running out of time stops the looking
@@ -140,10 +145,6 @@ public sealed class FfmpegChapterDetector(
         }
 
         List<string> asides = [];
-        WatermarkWatch? watched = asked.Watermark
-            ? await WatchedAsync(source, service, learnedAhead, cores, from, began, asides, cancellationToken)
-            : null;
-
         var seen = new ChapterLog();
         int mostToLookAt = MostLooksPerMark * asked.MostChapters;
         int lookedThrough = 0;
@@ -194,6 +195,10 @@ public sealed class FfmpegChapterDetector(
                 CultureInfo.InvariantCulture,
                 $"{refused} of the looks refused, so what lies around those quiet stretches went unseen"));
         }
+
+        WatermarkWatch? watched = asked.Watermark
+            ? await WatchedAsync(source, service, learnedAhead, cores, from, began, asides, cancellationToken)
+            : null;
 
         List<ChapterSpan> blacks = [];
 
@@ -268,27 +273,33 @@ public sealed class FfmpegChapterDetector(
         List<string> asides,
         CancellationToken cancellationToken)
     {
-        var watch = new WatermarkWatch(learnedAhead);
         TimeSpan left = patience - (clock.GetUtcNow() - from);
-        ChapterRunOutcome watching = left <= TimeSpan.Zero
-            ? new ChapterRunOutcome(null, ChapterRunFault.TookTooLong, string.Empty)
-            : await FfmpegChapterRun.PicturedAsync(
-                machine.Programme,
-                FfmpegChapterInvocation.Watching(source, service, cores),
-                WatermarkFrame.Pixels,
-                watch.Pictured,
-                watch.Complained,
-                left,
-                began,
-                clock,
-                cancellationToken);
+
+        if (left <= TimeSpan.Zero)
+        {
+            asides.Add("no time was left to watch the picture for the station's watermark, so no watermark was learned or used");
+
+            return null;
+        }
+
+        var watch = new WatermarkWatch(learnedAhead);
+        ChapterRunOutcome watching = await FfmpegChapterRun.PicturedAsync(
+            machine.Programme,
+            FfmpegChapterInvocation.Watching(source, service, cores),
+            WatermarkFrame.Pixels,
+            watch.Pictured,
+            watch.Complained,
+            left,
+            began,
+            clock,
+            cancellationToken);
 
         if (!watching.Succeeded)
         {
             asides.Add(watching.Fault is ChapterRunFault.TookTooLong
                 ? string.Create(
                     CultureInfo.InvariantCulture,
-                    $"watching the picture for the station's watermark was stopped after {patience:c}, so no watermark was learned or used")
+                    $"watching the picture for the station's watermark was stopped after {left:c}, so no watermark was learned or used")
                 : string.Create(
                     CultureInfo.InvariantCulture,
                     $"watching the picture for the station's watermark ended without a reading ({watching.ExitCode?.ToString(CultureInfo.InvariantCulture) ?? watching.Fault.ToString()}), so no watermark was learned or used"));

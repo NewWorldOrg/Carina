@@ -70,8 +70,8 @@ public sealed class FfmpegChapterDetectorTests : IDisposable
         Assert.Equal(Aligned.Expected, read.Segments[^1].Ends);
     }
 
-    [Fact(DisplayName = "the whole of the sound is listened to once, the picture watched once for the watermark, and looked at once for each quiet stretch, in that order")]
-    public async Task TheSoundIsHeardOnceThePictureWatchedOnceAndLookedAtOncePerQuietStretch()
+    [Fact(DisplayName = "the whole of the sound is listened to once, the picture looked at once for each quiet stretch, and watched once for the watermark, in that order")]
+    public async Task TheSoundIsHeardOnceThePictureLookedAtOncePerQuietStretchAndWatchedOnce()
     {
         string calls = tree.Under("calls");
 
@@ -83,11 +83,11 @@ public sealed class FfmpegChapterDetectorTests : IDisposable
         Assert.Equal(4, ran.Length);
         Assert.Contains("silencedetect", ran[0], StringComparison.Ordinal);
         Assert.Contains("-vn", ran[0], StringComparison.Ordinal);
-        Assert.Contains("-skip_frame nokey", ran[1], StringComparison.Ordinal);
-        Assert.Contains("rawvideo", ran[1], StringComparison.Ordinal);
-        Assert.All(ran[2..], line => Assert.Contains("blackdetect", line, StringComparison.Ordinal));
-        Assert.Contains("-ss 297.5 ", ran[2], StringComparison.Ordinal);
-        Assert.Contains("-ss 357.5 ", ran[3], StringComparison.Ordinal);
+        Assert.All(ran[1..3], line => Assert.Contains("blackdetect", line, StringComparison.Ordinal));
+        Assert.Contains("-ss 297.5 ", ran[1], StringComparison.Ordinal);
+        Assert.Contains("-ss 357.5 ", ran[2], StringComparison.Ordinal);
+        Assert.Contains("-skip_frame nokey", ran[3], StringComparison.Ordinal);
+        Assert.Contains("rawvideo", ran[3], StringComparison.Ordinal);
     }
 
     [Fact(DisplayName = "a source nothing went quiet in was looked at and had nothing to mark, which is not the same as nobody having looked")]
@@ -179,11 +179,11 @@ public sealed class FfmpegChapterDetectorTests : IDisposable
         string[] ran = File.ReadAllLines(calls);
 
         Assert.Equal(2 + (FfmpegChapterDetector.MostLooksPerMark * 1), ran.Length);
-        Assert.Contains("rawvideo", ran[1], StringComparison.Ordinal);
-        Assert.Contains("-ss 197.25 ", ran[2], StringComparison.Ordinal);
-        Assert.Contains("-ss 397.2 ", ran[3], StringComparison.Ordinal);
-        Assert.Contains("-ss 497.15 ", ran[4], StringComparison.Ordinal);
-        Assert.Contains("-ss 297.1 ", ran[5], StringComparison.Ordinal);
+        Assert.Contains("-ss 197.25 ", ran[1], StringComparison.Ordinal);
+        Assert.Contains("-ss 397.2 ", ran[2], StringComparison.Ordinal);
+        Assert.Contains("-ss 497.15 ", ran[3], StringComparison.Ordinal);
+        Assert.Contains("-ss 297.1 ", ran[4], StringComparison.Ordinal);
+        Assert.Contains("rawvideo", ran[5], StringComparison.Ordinal);
         Assert.DoesNotContain(ran, line => line.Contains("-ss 97.05 ", StringComparison.Ordinal));
         Assert.Contains("4 longest of the 5", read.Note, StringComparison.Ordinal);
     }
@@ -453,6 +453,82 @@ public sealed class FfmpegChapterDetectorTests : IDisposable
         Assert.Null(read.Learned);
         Assert.Contains("watching the picture for the station's watermark ended without a reading (5)", read.Note, StringComparison.Ordinal);
         Assert.DoesNotContain("cannot decode", read.Note, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "BR-ED2-007: a watch that would outlive the whole look costs the looks at the picture none of their time, so the breaks are still found and the reading says how long the watch was given")]
+    public async Task AWatchThatWouldOutliveTheWholeLookCostsTheLooksNoneOfTheirTime()
+    {
+        var clock = new HandTurnedClock();
+        FfmpegChapterDetector detector = new(
+            new MachineSettings { Programme = Standing($"case \"$*\" in *rawvideo*) sleep 30; exit 0 ;; esac\n{APodOfAdvertisements}") },
+            new EncodeSettings(),
+            clock);
+
+        ChapterDetection read = await detector.MarkAsync(
+            Source,
+            Service,
+            Aligned,
+            LearnedAhead(),
+            Cores,
+            spawned =>
+            {
+                clock.Turn(AskedOf(spawned).Contains("rawvideo", StringComparison.Ordinal)
+                    ? FfmpegChapterDetector.Patience
+                    : TimeSpan.FromMinutes(1));
+
+                return Task.CompletedTask;
+            },
+            Cancel);
+
+        Assert.Equal(ChapterVerdict.Marked, read.Verdict);
+        Assert.Equal(1, read.Breaks);
+        Assert.Null(read.Learned);
+        Assert.Contains("watching the picture for the station's watermark was stopped after 00:02:00", read.Note, StringComparison.Ordinal);
+        Assert.DoesNotContain("looking at the picture was stopped", read.Note, StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "BR-ED2-007: looks at the picture that used up the whole look leave no watch started at all, and the reading is made without a watermark")]
+    public async Task LooksThatUsedUpTheWholeLookLeaveNoWatchStarted()
+    {
+        string calls = tree.Under("calls");
+        var clock = new HandTurnedClock();
+        FfmpegChapterDetector detector = new(
+            new MachineSettings { Programme = Standing($"printf '%s\\n' \"$*\" >> \"{calls}\"\ncase \"$*\" in *blackdetect*) sleep 30; exit 0 ;; esac\n{APodOfAdvertisements}") },
+            new EncodeSettings(),
+            clock);
+
+        ChapterDetection read = await detector.MarkAsync(
+            Source,
+            Service,
+            Aligned,
+            LearnedAhead(),
+            Cores,
+            spawned =>
+            {
+                if (AskedOf(spawned).Contains("blackdetect", StringComparison.Ordinal))
+                {
+                    clock.Turn(FfmpegChapterDetector.Patience);
+                }
+
+                return Task.CompletedTask;
+            },
+            Cancel);
+
+        Assert.DoesNotContain(File.ReadAllLines(calls), line => line.Contains("rawvideo", StringComparison.Ordinal));
+        Assert.Null(read.Learned);
+        Assert.Contains("no time was left to watch the picture for the station's watermark, so no watermark was learned or used", read.Note, StringComparison.Ordinal);
+    }
+
+    private static string AskedOf(RunningProgramme spawned)
+    {
+        try
+        {
+            return File.ReadAllText($"/proc/{spawned.ProcessId.ToString(CultureInfo.InvariantCulture)}/cmdline");
+        }
+        catch (IOException)
+        {
+            return string.Empty;
+        }
     }
 
     private const int MarkLeft = 400;
