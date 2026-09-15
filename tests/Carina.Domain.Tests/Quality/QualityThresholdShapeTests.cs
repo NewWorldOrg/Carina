@@ -82,10 +82,19 @@ public sealed class QualityThresholdShapeTests
         Assert.Equal(QualityThresholdKey.PacketsLostUnwatchable, QualityThresholdShapes.Unwatchable(QualityMetric.PacketsLost));
     }
 
-    [Fact]
-    public void TheOtherMeasuresCarryAWarningLevelAndNoUnwatchableOne()
+    [Fact(DisplayName = "BR-QD-003: the level scrambling makes a recording unwatchable at is one the screen can move")]
+    public void TheLevelsAScrambledShareIsHeldAgainstAreTheWarningAndTheUnwatchableOne()
     {
-        Assert.Null(QualityThresholdShapes.Unwatchable(QualityMetric.PacketsLeftScrambled));
-        Assert.Null(QualityThresholdShapes.Unwatchable(QualityMetric.Overflows));
+        Assert.Equal(QualityThresholdKey.PacketsLeftScrambled, QualityThresholdShapes.Warning(QualityMetric.PacketsLeftScrambled));
+        Assert.Equal(
+            QualityThresholdKey.PacketsLeftScrambledUnwatchable,
+            QualityThresholdShapes.Unwatchable(QualityMetric.PacketsLeftScrambled));
+        Assert.True(QualityThresholdShapes.Of(QualityThresholdKey.PacketsLeftScrambledUnwatchable).Consulted);
+        Assert.Equal(0.0005, QualityThresholdShapes.Of(QualityThresholdKey.PacketsLeftScrambled).Shipped);
+        Assert.Equal(0.01, QualityThresholdShapes.Of(QualityThresholdKey.PacketsLeftScrambledUnwatchable).Shipped);
     }
+
+    [Fact]
+    public void OverflowsCarryAWarningLevelAndNoUnwatchableOne()
+        => Assert.Null(QualityThresholdShapes.Unwatchable(QualityMetric.Overflows));
 }

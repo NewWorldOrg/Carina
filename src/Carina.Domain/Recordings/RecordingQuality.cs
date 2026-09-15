@@ -1,3 +1,5 @@
+using Carina.Domain.Quality;
+
 namespace Carina.Domain.Recordings;
 
 public enum QualityLevel
@@ -11,48 +13,52 @@ public enum QualityLevel
     MayNotBeWatchable = 4,
 }
 
-public sealed record QualityShare(double Warning, double Unwatchable);
-
-public static class QualityShares
+/// <summary>
+/// One recording read against the levels the quality domain keeps. What was lost and what was left scrambled are
+/// judged apart; the scrambling is answered on its own, and the recording as a whole stands at the worse of the two.
+/// </summary>
+public sealed record RecordingQuality
 {
-    public static QualityShare PacketsLost { get; } = new(0.0002, 0.001);
+    private RecordingQuality(QualityLevel overall, QualityLevel scrambled)
+    {
+        Overall = overall;
+        Scrambled = scrambled;
+    }
 
-    public static QualityShare PacketsLeftScrambled { get; } = new(0.0005, 0.01);
-}
+    public QualityLevel Overall { get; }
 
-public static class RecordingQuality
-{
-    public static QualityLevel Of(DropCounters counters, long? scrambledPackets)
+    public QualityLevel Scrambled { get; }
+
+    public static RecordingQuality Of(DropCounters counters, long? scrambledPackets, QualityBands bands)
     {
         ArgumentNullException.ThrowIfNull(counters);
+        ArgumentNullException.ThrowIfNull(bands);
 
         if (counters.Total is not { } total || counters.Dropped is not { } dropped)
         {
-            return QualityLevel.Unmeasured;
+            return new RecordingQuality(QualityLevel.Unmeasured, QualityLevel.Unmeasured);
         }
 
         if (total is 0)
         {
-            return QualityLevel.MayNotBeWatchable;
+            return new RecordingQuality(QualityLevel.MayNotBeWatchable, QualityLevel.Unmeasured);
         }
 
-        QualityLevel lost = Read(dropped, total, QualityShares.PacketsLost);
-        QualityLevel encrypted = scrambledPackets is { } left
-            ? Read(left, total, QualityShares.PacketsLeftScrambled)
+        QualityLevel lost = Read(dropped, total, bands.For(QualityMetric.PacketsLost));
+        QualityLevel scrambled = scrambledPackets is { } left
+            ? Read(left, total, bands.For(QualityMetric.PacketsLeftScrambled))
             : QualityLevel.Unmeasured;
 
-        return lost > encrypted ? lost : encrypted;
+        return new RecordingQuality(lost > scrambled ? lost : scrambled, scrambled);
     }
 
-    private static QualityLevel Read(long counted, long total, QualityShare share)
-    {
-        double of = (double)counted / total;
-
-        if (of >= share.Unwatchable)
+    private static QualityLevel Read(long counted, long total, ThresholdBand band)
+        => ThresholdEvaluator.Judge((double)counted / total, band).Standing switch
         {
-            return QualityLevel.MayNotBeWatchable;
-        }
-
-        return of >= share.Warning ? QualityLevel.Warning : QualityLevel.Good;
-    }
+            QualityStanding.Good => QualityLevel.Good,
+            QualityStanding.Warning => QualityLevel.Warning,
+            QualityStanding.MayNotBeWatchable => QualityLevel.MayNotBeWatchable,
+            QualityStanding standing => throw new InvalidOperationException(
+                $"A share that was counted is judged good, warning or unwatchable, and never {standing}."),
+        };
 }

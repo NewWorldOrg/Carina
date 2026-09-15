@@ -12,6 +12,7 @@ using Carina.Domain.Driver;
 using Carina.Domain.Encodings;
 using Carina.Domain.Events;
 using Carina.Domain.Programmes;
+using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Thumbnails;
@@ -229,6 +230,8 @@ internal sealed class RecordingFeature : IAsyncDisposable
                 services.AddSingleton<IRecordingDirectory>(Recordings);
                 services.AddSingleton<IAppEventPublisher>(Events);
                 services.AddSingleton<IEncodeStandingReader>(Jobs);
+                services.AddSingleton<IQualityThresholdRepository>(Thresholds);
+                services.AddSingleton<IQualityThresholdChangeRepository>(ThresholdChanges);
                 services.AddSingleton<IDriverClient>(Driver);
                 services.AddSingleton<IThumbnailRemaker>(Remaker);
                 services.AddSingleton(erasingWith);
@@ -249,6 +252,10 @@ internal sealed class RecordingFeature : IAsyncDisposable
     public SilentEvents Events { get; } = new();
 
     public HeldEncodeJobs Jobs { get; } = new();
+
+    public HeldQualityThresholds Thresholds { get; } = new();
+
+    public HeldQualityThresholdChanges ThresholdChanges { get; } = new();
 
     public WritingDriver Driver { get; } = new();
 
@@ -344,6 +351,13 @@ internal sealed class RecordingFeature : IAsyncDisposable
         using HttpResponseMessage response = await Client.PostAsJsonAsync(
             new Uri(path, UriKind.Relative),
             body ?? new { });
+
+        return await ReadAsync(response);
+    }
+
+    public async Task<(HttpStatusCode Status, JsonElement Body)> PatchAsync(string path, object body)
+    {
+        using HttpResponseMessage response = await Client.PatchAsJsonAsync(new Uri(path, UriKind.Relative), body);
 
         return await ReadAsync(response);
     }

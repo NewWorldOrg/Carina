@@ -383,6 +383,21 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
         }
     }
 
+    [Fact]
+    public async Task WhatARecordingCountedIsDescribedWithItsScramblingJudgedApartInTheSameVocabulary()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode properties = document["components"]!["schemas"]!["RecordingDropsResponder"]!["properties"]!;
+
+        Assert.Equal(
+            [
+                "quality", "scrambleQuality", "ccMeasured", "ccDroppedPackets", "ccTotalPackets", "scrambledPackets",
+                "eovfCount", "measuredUpdatedAt",
+            ],
+            properties.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.Equal(properties["quality"]!.ToJsonString(), properties["scrambleQuality"]!.ToJsonString());
+    }
+
     private static bool SaysItIsAString(JsonNode? declared)
         => declared switch
         {

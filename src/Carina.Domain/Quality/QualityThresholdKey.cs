@@ -17,4 +17,6 @@ public enum QualityThresholdKey
     BitErrorRateCeiling = 7,
 
     SupplySilence = 8,
+
+    PacketsLeftScrambledUnwatchable = 9,
 }

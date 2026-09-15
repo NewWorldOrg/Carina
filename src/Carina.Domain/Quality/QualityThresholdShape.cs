@@ -30,6 +30,14 @@ public static class QualityThresholdShapes
         new(QualityThresholdKey.PacketsLostWarning, QualityMetric.PacketsLost, ThresholdSense.Ceiling, 0, WholeOfIt, 0.0002, true),
         new(QualityThresholdKey.PacketsLostUnwatchable, QualityMetric.PacketsLost, ThresholdSense.Ceiling, 0, WholeOfIt, 0.001, true),
         new(QualityThresholdKey.PacketsLeftScrambled, QualityMetric.PacketsLeftScrambled, ThresholdSense.Ceiling, 0, WholeOfIt, 0.0005, true),
+        new(
+            QualityThresholdKey.PacketsLeftScrambledUnwatchable,
+            QualityMetric.PacketsLeftScrambled,
+            ThresholdSense.Ceiling,
+            0,
+            WholeOfIt,
+            0.01,
+            true),
         new(QualityThresholdKey.Overflows, QualityMetric.Overflows, ThresholdSense.Ceiling, 0, MostOverflowsCountable, 1, true),
         new(QualityThresholdKey.LockRate, null, ThresholdSense.Floor, 0, WholeOfIt, 0.99, true),
         new(
@@ -58,8 +66,12 @@ public static class QualityThresholdShapes
         _ => throw new ArgumentOutOfRangeException(nameof(metric), metric, "A reading is held against the levels this domain names."),
     };
 
-    public static QualityThresholdKey? Unwatchable(QualityMetric metric)
-        => metric is QualityMetric.PacketsLost ? QualityThresholdKey.PacketsLostUnwatchable : null;
+    public static QualityThresholdKey? Unwatchable(QualityMetric metric) => metric switch
+    {
+        QualityMetric.PacketsLost => QualityThresholdKey.PacketsLostUnwatchable,
+        QualityMetric.PacketsLeftScrambled => QualityThresholdKey.PacketsLeftScrambledUnwatchable,
+        _ => null,
+    };
 
     public static Threshold AsShipped(QualityThresholdKey key, DateTime at)
         => Threshold.Provisionally(Of(key).Shipped, 0, at);

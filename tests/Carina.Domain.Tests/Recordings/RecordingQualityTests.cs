@@ -1,9 +1,14 @@
+using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 
 namespace Carina.Domain.Tests.Recordings;
 
 public sealed class RecordingQualityTests
 {
+    private static readonly DateTime At = new(2026, 9, 15, 12, 0, 0, DateTimeKind.Utc);
+
+    private static readonly QualityBands AsShipped = Bands();
+
     public static TheoryData<long, long, long> TheRecordingsTheCardCouldNotUnlock => new()
     {
         { 0, 8186079, 7849499 },
@@ -16,7 +21,10 @@ public sealed class RecordingQualityTests
     [Fact]
     public void NothingCountedThisSoThereIsNoQualityToRead()
     {
-        Assert.Equal(QualityLevel.Unmeasured, RecordingQuality.Of(DropCounters.Unmeasured, null));
+        RecordingQuality read = Read(DropCounters.Unmeasured, null);
+
+        Assert.Equal(QualityLevel.Unmeasured, read.Overall);
+        Assert.Equal(QualityLevel.Unmeasured, read.Scrambled);
     }
 
     [Fact]
@@ -30,13 +38,16 @@ public sealed class RecordingQualityTests
     [Fact]
     public void ARecordingCountedCleanOnBothSidesIsGood()
     {
-        Assert.Equal(QualityLevel.Good, RecordingQuality.Of(DropCounters.Counted(0, 6889195), 0));
+        RecordingQuality read = Read(DropCounters.Counted(0, 6889195), 0);
+
+        Assert.Equal(QualityLevel.Good, read.Overall);
+        Assert.Equal(QualityLevel.Good, read.Scrambled);
     }
 
     [Fact]
     public void TheOneCleanMeasurementThereIsReadsAsGood()
     {
-        Assert.Equal(QualityLevel.Good, RecordingQuality.Of(DropCounters.Counted(2, 741375), 27));
+        Assert.Equal(QualityLevel.Good, Read(DropCounters.Counted(2, 741375), 27).Overall);
     }
 
     [Theory]
@@ -46,9 +57,7 @@ public sealed class RecordingQualityTests
         long total,
         long scrambled)
     {
-        Assert.Equal(
-            QualityLevel.MayNotBeWatchable,
-            RecordingQuality.Of(DropCounters.Counted(dropped, total), scrambled));
+        Assert.Equal(QualityLevel.MayNotBeWatchable, Read(DropCounters.Counted(dropped, total), scrambled).Overall);
     }
 
     [Theory]
@@ -56,9 +65,12 @@ public sealed class RecordingQualityTests
     [InlineData(500, QualityLevel.Warning)]
     [InlineData(9999, QualityLevel.Warning)]
     [InlineData(10000, QualityLevel.MayNotBeWatchable)]
-    public void WhatIsLeftEncryptedIsReadAgainstTheSharesThisApplicationHolds(long scrambled, QualityLevel read)
+    public void WhatIsLeftEncryptedIsReadAgainstTheLevelsTheQualityDomainShips(long scrambled, QualityLevel level)
     {
-        Assert.Equal(read, RecordingQuality.Of(DropCounters.Counted(0, 1000000), scrambled));
+        RecordingQuality read = Read(DropCounters.Counted(0, 1000000), scrambled);
+
+        Assert.Equal(level, read.Scrambled);
+        Assert.Equal(level, read.Overall);
     }
 
     [Theory]
@@ -66,49 +78,98 @@ public sealed class RecordingQualityTests
     [InlineData(200, QualityLevel.Warning)]
     [InlineData(999, QualityLevel.Warning)]
     [InlineData(1000, QualityLevel.MayNotBeWatchable)]
-    public void WhatWasLostIsReadAgainstSharesOfItsOwn(long dropped, QualityLevel read)
+    public void WhatWasLostIsReadAgainstLevelsOfItsOwn(long dropped, QualityLevel level)
     {
-        Assert.Equal(read, RecordingQuality.Of(DropCounters.Counted(dropped, 1000000), 0));
+        RecordingQuality read = Read(DropCounters.Counted(dropped, 1000000), 0);
+
+        Assert.Equal(level, read.Overall);
+        Assert.Equal(QualityLevel.Good, read.Scrambled);
     }
 
     [Fact]
     public void WhatWasLostIsReadAgainstATighterBarThanWhatWasLeftEncrypted()
     {
-        Assert.Equal(
-            QualityLevel.MayNotBeWatchable,
-            RecordingQuality.Of(DropCounters.Counted(5000, 1000000), 0));
+        Assert.Equal(QualityLevel.MayNotBeWatchable, Read(DropCounters.Counted(5000, 1000000), 0).Overall);
+        Assert.Equal(QualityLevel.Warning, Read(DropCounters.Counted(0, 1000000), 5000).Overall);
+    }
 
-        Assert.Equal(
-            QualityLevel.Warning,
-            RecordingQuality.Of(DropCounters.Counted(0, 1000000), 5000));
+    [Fact]
+    public void ARecordingLeftScrambledBeyondTheUnwatchableLevelSaysScramblingIsWhatMakesItUnwatchable()
+    {
+        RecordingQuality read = Read(DropCounters.Counted(0, 1_000_000), 20_000);
+
+        Assert.Equal(QualityLevel.MayNotBeWatchable, read.Scrambled);
+        Assert.Equal(QualityLevel.MayNotBeWatchable, read.Overall);
+    }
+
+    [Fact]
+    public void ARecordingThatOnlyLostPacketsSaysItsScramblingWasGood()
+    {
+        RecordingQuality read = Read(DropCounters.Counted(50_000, 1_000_000), 0);
+
+        Assert.Equal(QualityLevel.Good, read.Scrambled);
+        Assert.Equal(QualityLevel.MayNotBeWatchable, read.Overall);
     }
 
     [Fact]
     public void ACountedRecordingWithNothingSaidAboutItsEncryptionIsUnmeasuredRatherThanGood()
     {
-        Assert.Equal(QualityLevel.Unmeasured, RecordingQuality.Of(DropCounters.Counted(0, 6889195), null));
+        RecordingQuality read = Read(DropCounters.Counted(0, 6889195), null);
+
+        Assert.Equal(QualityLevel.Unmeasured, read.Overall);
+        Assert.Equal(QualityLevel.Unmeasured, read.Scrambled);
     }
 
     [Fact]
     public void AFaultAlreadyReadIsNotForgottenBecauseTheOtherSideWasNeverCounted()
     {
-        Assert.Equal(
-            QualityLevel.MayNotBeWatchable,
-            RecordingQuality.Of(DropCounters.Counted(100000, 1000000), null));
+        Assert.Equal(QualityLevel.MayNotBeWatchable, Read(DropCounters.Counted(100000, 1000000), null).Overall);
     }
 
     [Fact]
-    public void CountedAndNothingArrivedIsNotSomethingToWatch()
+    public void CountedAndNothingArrivedIsNotSomethingToWatchNorAShareOfScramblingToRead()
     {
-        Assert.Equal(QualityLevel.MayNotBeWatchable, RecordingQuality.Of(DropCounters.Counted(0, 0), 0));
+        RecordingQuality read = Read(DropCounters.Counted(0, 0), 0);
+
+        Assert.Equal(QualityLevel.MayNotBeWatchable, read.Overall);
+        Assert.Equal(QualityLevel.Unmeasured, read.Scrambled);
+    }
+
+    [Fact(DisplayName = "BR-QD-003: moving the level scrambling is held against moves what a recording is read as")]
+    public void MovingTheLevelScramblingIsHeldAgainstMovesWhatARecordingIsReadAs()
+    {
+        DropCounters counted = DropCounters.Counted(0, 1_000_000);
+
+        RecordingQuality read = RecordingQuality.Of(
+            counted,
+            20_000,
+            Bands(Moved(QualityThresholdKey.PacketsLeftScrambledUnwatchable, 0.01, 0.05)));
+
+        Assert.Equal(QualityLevel.Warning, read.Scrambled);
+        Assert.Equal(QualityLevel.Warning, read.Overall);
+    }
+
+    [Fact(DisplayName = "BR-QD-003: moving the level losses are held against moves what a recording is read as")]
+    public void MovingTheLevelLossesAreHeldAgainstMovesWhatARecordingIsReadAs()
+    {
+        RecordingQuality read = RecordingQuality.Of(
+            DropCounters.Counted(5_000, 1_000_000),
+            0,
+            Bands(Moved(QualityThresholdKey.PacketsLostUnwatchable, 0.001, 0.01)));
+
+        Assert.Equal(QualityLevel.Warning, read.Overall);
     }
 
     [Fact]
-    public void TheSharesTheseReadingsAreMadeAgainstAreWrittenDownHere()
-    {
-        Assert.Equal(0.0005, QualityShares.PacketsLeftScrambled.Warning);
-        Assert.Equal(0.01, QualityShares.PacketsLeftScrambled.Unwatchable);
-        Assert.Equal(0.0002, QualityShares.PacketsLost.Warning);
-        Assert.Equal(0.001, QualityShares.PacketsLost.Unwatchable);
-    }
+    public void ARecordingIsNotReadWithoutTheLevelsItIsReadAgainst()
+        => Assert.Throws<ArgumentNullException>(() => RecordingQuality.Of(DropCounters.Counted(0, 1), 0, null!));
+
+    private static RecordingQuality Read(DropCounters counters, long? scrambled)
+        => RecordingQuality.Of(counters, scrambled, AsShipped);
+
+    private static QualityThreshold Moved(QualityThresholdKey key, double shipped, double current)
+        => QualityThreshold.Rehydrate(key, Threshold.Of(shipped, current, provisional: true, 0, At), "operator");
+
+    private static QualityBands Bands(params QualityThreshold[] moved)
+        => QualityThresholdStanding.Bands(QualityThresholdStanding.Over(moved, At));
 }

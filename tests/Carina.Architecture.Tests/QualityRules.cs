@@ -84,7 +84,6 @@ public static partial class QualityRules
         "RecordingOutcome",
         "RecordingQuality",
         "QualityLevel",
-        "QualityShares",
         "CompletionEvaluator",
         "RecordingVerdict",
         "VisitOutcome",

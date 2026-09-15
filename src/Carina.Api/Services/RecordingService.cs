@@ -4,6 +4,7 @@ using Carina.Domain.Base;
 using Carina.Domain.Driver;
 using Carina.Domain.Encodings;
 using Carina.Domain.Events;
+using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Thumbnails;
 
@@ -38,9 +39,9 @@ public enum RecordingFailure
 
 public sealed record ThumbnailRemade(Recording Recording, ThumbnailRemake Remake);
 
-public sealed record RecordingSeen(Recording Recording, EncodeStanding Encode);
+public sealed record RecordingSeen(Recording Recording, EncodeStanding Encode, QualityBands Quality);
 
-public sealed record RecordingPage(PaginatedList<Recording> Found, EncodeStandingBoard Encoding);
+public sealed record RecordingPage(PaginatedList<Recording> Found, EncodeStandingBoard Encoding, QualityBands Quality);
 
 public sealed record RecordingStopAsked(RecordingSeen Seen, RecordingStopReason Reason, DateTime AskedAt);
 
@@ -49,6 +50,7 @@ public sealed record RecordingDiscarded(RecordingId Id, int FilesRemoved);
 public sealed class RecordingService(
     IRecordingDirectory recordings,
     IEncodeStandingReader encoding,
+    IQualityThresholdRepository thresholds,
     IDriverClient driver,
     IThumbnailRemaker thumbnails,
     IRecordingFileEraser eraser,
@@ -65,7 +67,8 @@ public sealed class RecordingService(
             [.. found.Items.Select(recording => recording.Id)],
             cancellationToken);
 
-        return ServiceResult<RecordingPage>.Success(new RecordingPage(found, standings));
+        return ServiceResult<RecordingPage>.Success(
+            new RecordingPage(found, standings, await BandsAsync(cancellationToken)));
     }
 
     public async Task<ServiceResult<RecordingSeen, RecordingFailure>> DetailAsync(
@@ -270,8 +273,12 @@ public sealed class RecordingService(
     {
         EncodeStandingBoard standings = await encoding.ReadAsync([recording.Id], cancellationToken);
 
-        return new RecordingSeen(recording, standings.For(recording.Id));
+        return new RecordingSeen(recording, standings.For(recording.Id), await BandsAsync(cancellationToken));
     }
+
+    private async Task<QualityBands> BandsAsync(CancellationToken cancellationToken)
+        => QualityThresholdStanding.Bands(
+            QualityThresholdStanding.Over(await thresholds.ListAsync(cancellationToken), clock.GetUtcNow().UtcDateTime));
 
     private static string Aftermath(ErasureFault fault, RecordingId id) => fault switch
     {
