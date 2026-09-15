@@ -143,6 +143,13 @@ public sealed class RecordingStreamSupervisor(
             return;
         }
 
+        if (FilledTheDisk(session))
+        {
+            await FailOnAFullDiskAsync(row, now, tally, cancellationToken);
+
+            return;
+        }
+
         if (ItIsOver(row, now))
         {
             if (session is null)
@@ -158,6 +165,43 @@ public sealed class RecordingStreamSupervisor(
         }
 
         await ReopenAsync(row, session, now, tally, cancellationToken);
+    }
+
+    private static bool FilledTheDisk(SessionSnapshot? session)
+        => session is { StopReason: SessionStopReason.RecordingFailed, FailureTitle: SessionRefusalTitles.DiskFull };
+
+    private async Task FailOnAFullDiskAsync(
+        Recording recording,
+        DateTime now,
+        Tally tally,
+        CancellationToken cancellationToken)
+    {
+        long? weighed = await weigher.WeighAsync(recording.OutputRoot, recording.FileName, cancellationToken);
+
+        bool failed = await ApplyAsync(
+            recording.Id,
+            loaded =>
+            {
+                loaded.Note(new OutcomeDetail(RecordingFault.DiskExhausted, null, string.Empty, now));
+                loaded.Settle(RecordingOutcome.Failed, weighed ?? 0, now);
+
+                return true;
+            },
+            tally,
+            cancellationToken);
+
+        if (!failed)
+        {
+            return;
+        }
+
+        tally.Settled++;
+
+        logger.LogWarning(
+            "Recording {Recording} stopped because the disk it is written to is full, so it fails here rather than "
+            + "being opened again onto a disk with no room; its file of {Bytes} byte(s) stays where it is.",
+            recording.Id.Wire,
+            weighed);
     }
 
     private static bool ItIsOver(Recording recording, DateTime now)
