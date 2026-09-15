@@ -190,7 +190,7 @@ public sealed class StartRetryTests
     [Fact]
     public void ThePolicyComesConservative()
     {
-        Assert.Equal(3, RetryPolicy.Default.MostAttempts);
+        Assert.Equal(10, RetryPolicy.Default.MostAttempts);
         Assert.Equal(TimeSpan.FromMinutes(1), RetryPolicy.Default.BetweenAttempts);
     }
 
