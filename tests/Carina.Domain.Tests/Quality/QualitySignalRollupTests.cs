@@ -60,7 +60,7 @@ public sealed class QualitySignalRollupTests
             6,
             0,
             0,
-            33304,
+            29000,
             null,
             null,
             null));

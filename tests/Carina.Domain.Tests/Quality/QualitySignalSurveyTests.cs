@@ -48,9 +48,9 @@ public sealed class QualitySignalSurveyTests
                     Noon,
                     SignalSample.WithLock(
                         Noon,
-                        34779,
+                        30000,
                         Noon,
-                        [new LayerBitErrorCounts(0, 0, 1671168)],
+                        [new LayerBitErrorCounts(0, 0, 1600000)],
                         Noon)),
             ]);
 
@@ -109,7 +109,7 @@ public sealed class QualitySignalSurveyTests
         IReadOnlyList<SignalFigures> figures = QualitySignalSurvey.Figures(
             [],
             [
-                Sample(Noon, SignalSample.WithLock(Noon, 34779, Noon)),
+                Sample(Noon, SignalSample.WithLock(Noon, 30000, Noon)),
                 Sample(Noon.AddSeconds(10), SignalSample.NotTaken(Noon.AddSeconds(10), SignalNotTaken.NothingReported)),
             ]);
 
@@ -148,7 +148,7 @@ public sealed class QualitySignalSurveyTests
         IReadOnlyList<SignalFigures> figures = QualitySignalSurvey.Figures(
             [],
             [
-                Sample(Noon, SignalSample.WithLock(Noon, 34779, Noon)),
+                Sample(Noon, SignalSample.WithLock(Noon, 30000, Noon)),
                 Sample(Noon.AddSeconds(10), SignalSample.NotTaken(Noon.AddSeconds(10), SignalNotTaken.NothingReported)),
             ]);
 
@@ -170,9 +170,9 @@ public sealed class QualitySignalSurveyTests
                     360,
                     0,
                     0,
-                    34779,
-                    34779,
-                    34779,
+                    30000,
+                    30000,
+                    30000,
                     []),
             ],
             []);
@@ -180,7 +180,7 @@ public sealed class QualitySignalSurveyTests
         SignalFigures figure = Assert.Single(figures);
 
         Assert.Equal(360, figure.Samples);
-        Assert.Equal(34779, figure.CarrierToNoiseLowest);
+        Assert.Equal(30000, figure.CarrierToNoiseLowest);
         Assert.Equal(1, figure.LockRate);
         Assert.Equal(Noon.AddHours(-1), figure.LastTakenAt);
     }
@@ -200,9 +200,9 @@ public sealed class QualitySignalSurveyTests
                     360,
                     0,
                     0,
-                    34779,
-                    34779,
-                    34779,
+                    30000,
+                    30000,
+                    30000,
                     []),
             ],
             [Sample(Noon, SignalSample.WithLock(Noon, 12000, Noon))]);

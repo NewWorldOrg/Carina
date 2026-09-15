@@ -80,7 +80,7 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
 
-        await SampleAsync(connection, locked: "true", cnr: "33304", cnrReadAt: Taken);
+        await SampleAsync(connection, locked: "true", cnr: "29000", cnrReadAt: Taken);
     }
 
     [Fact(DisplayName = "BR-QV-003: a figure without the time it was read is refused")]
@@ -89,7 +89,7 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         await using NpgsqlConnection connection = await database.OpenAsync();
 
         PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
-            () => SampleAsync(connection, locked: "true", cnr: "33304", cnrReadAt: "NULL"));
+            () => SampleAsync(connection, locked: "true", cnr: "29000", cnrReadAt: "NULL"));
 
         Assert.Equal("ck_quality_signal_sample_read_at", refusal.ConstraintName);
     }
@@ -102,9 +102,9 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         await SampleAsync(
             connection,
             locked: "true",
-            cnr: "33304",
+            cnr: "29000",
             cnrReadAt: Taken,
-            bitErrors: """'[{"Layer":0,"ErrorBits":3,"TotalBits":1671168},{"Layer":1,"ErrorBits":12,"TotalBits":67682304}]'::jsonb""",
+            bitErrors: """'[{"Layer":0,"ErrorBits":3,"TotalBits":1600000},{"Layer":1,"ErrorBits":12,"TotalBits":64000000}]'::jsonb""",
             bitErrorsReadAt: Taken);
 
         await using var reading = new NpgsqlCommand(
@@ -422,7 +422,7 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         await using NpgsqlConnection connection = await database.OpenAsync();
 
         PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
-            () => NotTakenAsync(connection, "'NothingReported'", locked: "true", cnr: "33304"));
+            () => NotTakenAsync(connection, "'NothingReported'", locked: "true", cnr: "29000"));
 
         Assert.Equal("ck_quality_signal_sample_not_taken", refusal.ConstraintName);
     }

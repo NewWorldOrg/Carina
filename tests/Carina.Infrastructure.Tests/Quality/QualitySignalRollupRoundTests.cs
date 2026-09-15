@@ -109,5 +109,5 @@ public sealed class QualitySignalRollupRoundTests
             new TunerDeviceId("adapter3.frontend0"),
             new NetworkId(32736),
             new ServiceId(1024),
-            SignalSample.WithLock(at, 34779, at));
+            SignalSample.WithLock(at, 30000, at));
 }

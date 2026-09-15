@@ -20,11 +20,11 @@ public sealed class SignalSampleIntakeTests
             new SignalQualityDto
             {
                 Lock = SignalLock.Locked,
-                CnrMilliDecibels = 34779,
+                CnrMilliDecibels = 30000,
                 PostViterbiBitErrors =
                 [
-                    new LayerBitErrorCounts(0, 0, 1671168),
-                    new LayerBitErrorCounts(1, 0, 67682304),
+                    new LayerBitErrorCounts(0, 0, 1600000),
+                    new LayerBitErrorCounts(1, 0, 64000000),
                 ],
                 MeasuredAt = Measured,
                 LockReadAt = LockRead,
@@ -33,7 +33,7 @@ public sealed class SignalSampleIntakeTests
 
         Assert.True(read.WasTaken);
         Assert.True(read.Locked);
-        Assert.Equal(34779, read.CarrierToNoiseMilliDecibels);
+        Assert.Equal(30000, read.CarrierToNoiseMilliDecibels);
         Assert.Equal(LockRead.UtcDateTime, read.LockReadAt);
         Assert.Equal(Measured.UtcDateTime, read.CarrierToNoiseReadAt);
         Assert.Equal([0, 1], read.BitErrors.Select(counts => counts.Layer));
@@ -70,7 +70,7 @@ public sealed class SignalSampleIntakeTests
     public void AReadingWithNoTimeOnItCannotBeToldFromAFrozenOneSoItIsNotTaken()
     {
         SignalSample read = SignalSampleIntake.Read(
-            new SignalQualityDto { Lock = SignalLock.Locked, CnrMilliDecibels = 33304 },
+            new SignalQualityDto { Lock = SignalLock.Locked, CnrMilliDecibels = 29000 },
             Asked);
 
         Assert.Equal(SignalNotTaken.NoTimeGiven, read.NotTakenBecause);
@@ -80,7 +80,7 @@ public sealed class SignalSampleIntakeTests
     public void AFigureThatArrivedWithoutTheMomentItWasMeasuredIsNotTakenEither()
     {
         SignalSample read = SignalSampleIntake.Read(
-            new SignalQualityDto { Lock = SignalLock.Locked, CnrMilliDecibels = 33304, LockReadAt = LockRead },
+            new SignalQualityDto { Lock = SignalLock.Locked, CnrMilliDecibels = 29000, LockReadAt = LockRead },
             Asked);
 
         Assert.Equal(SignalNotTaken.NoTimeGiven, read.NotTakenBecause);

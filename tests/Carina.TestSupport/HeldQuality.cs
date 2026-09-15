@@ -1,8 +1,69 @@
+using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 
 namespace Carina.TestSupport;
+
+public sealed class HeldQualitySessionMeasurements : IQualitySessionMeasurementRepository
+{
+    private readonly List<QualitySessionMeasurement> kept = [];
+
+    public IReadOnlyList<QualitySessionMeasurement> Measurements => [.. kept.Select(Copy)];
+
+    public int FindAsked { get; private set; }
+
+    public Task<QualitySessionMeasurement?> FindAsync(
+        string driverInstanceId,
+        SessionId session,
+        CancellationToken cancellationToken)
+    {
+        FindAsked++;
+
+        return Task.FromResult(kept
+            .Where(held => held.DriverInstanceId == driverInstanceId && held.Session.Equals(session))
+            .Select(Copy)
+            .FirstOrDefault());
+    }
+
+    public Task<IReadOnlyList<QualitySessionMeasurement>> ListOpenAsync(CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<QualitySessionMeasurement>>(
+            [.. kept.Where(held => !held.HasEnded).Select(Copy)]);
+
+    public Task<IReadOnlyList<QualitySessionMeasurement>> ListStartedBetweenAsync(
+        DateTime from,
+        DateTime until,
+        CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<QualitySessionMeasurement>>(
+            [.. kept.Where(held => held.StartedAt >= from && held.StartedAt < until).OrderBy(held => held.StartedAt).Select(Copy)]);
+
+    public Task SaveAsync(QualitySessionMeasurement measurement, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(measurement);
+
+        kept.RemoveAll(held =>
+            held.DriverInstanceId == measurement.DriverInstanceId && held.Session.Equals(measurement.Session));
+        kept.Add(Copy(measurement));
+
+        return Task.CompletedTask;
+    }
+
+    private static QualitySessionMeasurement Copy(QualitySessionMeasurement measurement)
+        => QualitySessionMeasurement.Rehydrate(
+            measurement.DriverInstanceId,
+            measurement.Session,
+            measurement.Purpose,
+            measurement.Tuner,
+            measurement.Network,
+            measurement.Service,
+            measurement.StartedAt,
+            measurement.EndedAt,
+            measurement.CcMeasured,
+            measurement.CcDroppedPackets,
+            measurement.CcTotalPackets,
+            measurement.EovfCount,
+            measurement.MeasuredUpdatedAt);
+}
 
 public sealed class HeldQualityLedger : IQualityLedgerReader
 {

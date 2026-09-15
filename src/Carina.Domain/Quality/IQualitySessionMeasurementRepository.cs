@@ -9,6 +9,8 @@ public interface IQualitySessionMeasurementRepository
         SessionId session,
         CancellationToken cancellationToken);
 
+    Task<IReadOnlyList<QualitySessionMeasurement>> ListOpenAsync(CancellationToken cancellationToken);
+
     Task<IReadOnlyList<QualitySessionMeasurement>> ListStartedBetweenAsync(
         DateTime from,
         DateTime until,
