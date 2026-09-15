@@ -106,6 +106,14 @@ public sealed record SyntheticBroadcast
     public TimeSpan StartsAt { get; init; } = TimeSpan.Zero;
 
     /// <summary>
+    /// How long the sound runs before the first picture comes in, the way a recording started part
+    /// way through a group of pictures hears sound before it holds a picture it can decode. The
+    /// breaks and the captions stay on the broadcast's own clock, so only where the picture begins
+    /// moves.
+    /// </summary>
+    public TimeSpan PictureLateBy { get; init; } = TimeSpan.Zero;
+
+    /// <summary>
     /// Paints the picture flat grey rather than with the test pattern, whose bars never move and so
     /// look like detail that stays put in every corner.
     /// </summary>
@@ -264,6 +272,11 @@ public sealed record SyntheticBroadcast
             throw new InvalidOperationException("A stream's clock begins at or after zero.");
         }
 
+        if (PictureLateBy < TimeSpan.Zero || (PictureLateBy > TimeSpan.Zero && Picture is SyntheticPicture.None))
+        {
+            throw new InvalidOperationException("A picture comes in with the sound or after it, and only a broadcast with a picture has one to come in late.");
+        }
+
         if (QuietBreaks.Count > 0 && (Picture is SyntheticPicture.None || CarriesASoundEncodedAhead))
         {
             throw new InvalidOperationException(
@@ -283,6 +296,7 @@ public sealed record SyntheticBroadcast
 
         if (Picture is not SyntheticPicture.None)
         {
+            arguments.AddRange(Late());
             arguments.AddRange(["-f", "lavfi", "-i", Plain
                 ? Invariant($"color=c=0x606060:size={Size()}:rate={BroadcastRate}")
                 : Invariant($"testsrc2=size={Size()}:rate={BroadcastRate}")]);
@@ -479,6 +493,11 @@ public sealed record SyntheticBroadcast
         => Unbranded.Count is 0
             ? string.Empty
             : Invariant($":enable=not({string.Join('+', Unbranded.Select(span => Invariant($"between(t\\,{span.From.TotalSeconds:0.###}\\,{span.Until.TotalSeconds:0.###})")))})");
+
+    private IReadOnlyList<string> Late()
+        => PictureLateBy <= TimeSpan.Zero
+            ? []
+            : ["-itsoffset", Invariant($"{PictureLateBy.TotalSeconds:0.######}")];
 
     private IReadOnlyList<string> Offset()
         => StartsAt <= TimeSpan.Zero
