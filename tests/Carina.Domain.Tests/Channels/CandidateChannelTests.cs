@@ -105,6 +105,83 @@ public sealed class CandidateChannelTests
     }
 
     [Fact]
+    public void AFreshCandidateHasNoScoreYet()
+        => Assert.Null(Discovered().Score);
+
+    [Fact(DisplayName = "BR-QD-012: writing a score back leaves the selection exactly where it was")]
+    public void WritingAScoreBackLeavesTheSelectionExactlyWhereItWas()
+    {
+        CandidateChannel candidate = Discovered();
+        SignalMeasurement atSelection = SignalMeasurement.WithLock(At, 20_500);
+        candidate.Select(SelectionSource.Manual, atSelection, At);
+        candidate.RecordTuningSuccess(SignalMeasurement.WithLock(At.AddHours(1), 21_000), At.AddHours(1));
+        CandidateScore score = Scored(At.AddDays(1));
+
+        candidate.Evaluated(score);
+
+        Assert.Equal(score, candidate.Score);
+        Assert.True(candidate.IsSelected);
+        Assert.Equal(SelectionSource.Manual, candidate.SelectionSource);
+        Assert.Equal(At, candidate.SelectedAt);
+        Assert.Equal(atSelection, candidate.SelectionMeasurement);
+        Assert.Equal(21_000, candidate.LastMeasurement?.CnrMilliDecibels);
+        Assert.Equal(RotationState.Active, candidate.RotationState);
+        Assert.Equal(0, candidate.ConsecutiveFailures);
+        Assert.Equal(At.AddHours(1), candidate.LastSeenAt);
+    }
+
+    [Fact(DisplayName = "BR-QD-012: a score better than the selected one's does not select the candidate it belongs to")]
+    public void AScoreDoesNotSelectTheCandidateItBelongsTo()
+    {
+        CandidateChannel candidate = Discovered();
+
+        candidate.Evaluated(Scored(At.AddDays(1)));
+
+        Assert.False(candidate.IsSelected);
+        Assert.Null(candidate.SelectionSource);
+        Assert.Null(candidate.SelectedAt);
+    }
+
+    [Fact]
+    public void ALaterScoreTakesThePlaceOfTheEarlierOne()
+    {
+        CandidateChannel candidate = Discovered();
+
+        candidate.Evaluated(Scored(At.AddDays(1)));
+        candidate.Evaluated(Scored(At.AddDays(2)));
+
+        Assert.Equal(At.AddDays(2), candidate.Score?.EvaluatedAt);
+    }
+
+    [Fact]
+    public void ARehydratedCandidateKeepsTheScoreItWasStoredWith()
+    {
+        CandidateScore score = Scored(At.AddDays(1));
+
+        CandidateChannel candidate = CandidateChannel.Rehydrate(
+            CandidateChannelId.New(),
+            new NetworkId(4),
+            new ServiceId(101),
+            TuningParameters.Terrestrial(27),
+            null,
+            false,
+            null,
+            null,
+            null,
+            null,
+            false,
+            RotationState.Active,
+            0,
+            null,
+            null,
+            At,
+            At,
+            score);
+
+        Assert.Equal(score, candidate.Score);
+    }
+
+    [Fact]
     public void ARehydratedSelectionAlwaysNamesWhatSelectedIt()
     {
         Assert.Throws<ArgumentException>(() => Rehydrated(isSelected: true, source: null));
@@ -285,6 +362,9 @@ public sealed class CandidateChannelTests
             TuningParameters.Terrestrial(27),
             new DateTime(2026, 8, 14, 0, 0, 0, DateTimeKind.Local)));
     }
+
+    private static CandidateScore Scored(DateTime evaluatedAt)
+        => CandidateScore.Of(360, 350, 24_000, 0.0001, evaluatedAt.AddDays(-7), evaluatedAt, evaluatedAt);
 
     private static CandidateChannel Rehydrated(bool isSelected, SelectionSource? source)
         => CandidateChannel.Rehydrate(
