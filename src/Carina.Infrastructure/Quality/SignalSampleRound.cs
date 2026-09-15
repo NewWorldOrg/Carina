@@ -39,7 +39,7 @@ public sealed class SignalSampleRound(
         DateTime at = clock.GetUtcNow().UtcDateTime;
         IReadOnlyList<IntendedStream> intended = await streams.ListIntendedAsync(cancellationToken);
         List<QualitySignalSample> taking = [];
-        Dictionary<SessionId, Whereabouts> held = [];
+        var held = new Dictionary<string, Whereabouts>(StringComparer.Ordinal);
         int unnamed = 0;
 
         foreach (TunerSnapshot tuner in tuners)
@@ -60,7 +60,7 @@ public sealed class SignalSampleRound(
             }
 
             var whereabouts = new Whereabouts(new TunerDeviceId(tuner.DeviceId), stream.NetworkId, stream.Services[0]);
-            held[session.SessionId] = whereabouts;
+            held[tuner.DeviceId] = whereabouts;
 
             taking.Add(SignalSampleIntake.Take(
                 new SignalReadingAsk(
@@ -96,7 +96,7 @@ public sealed class SignalSampleRound(
     private async Task<SessionTally> MeasureSessionsAsync(
         DriverHello hello,
         string instance,
-        IReadOnlyDictionary<SessionId, Whereabouts> held,
+        IReadOnlyDictionary<string, Whereabouts> held,
         DateTime at,
         CancellationToken cancellationToken)
     {
@@ -127,7 +127,7 @@ public sealed class SignalSampleRound(
 
             if (measurement is null)
             {
-                if (session.Concluded || !held.TryGetValue(session.SessionId, out Whereabouts? whereabouts))
+                if (session.Concluded || !held.TryGetValue(session.DeviceId, out Whereabouts? whereabouts))
                 {
                     continue;
                 }

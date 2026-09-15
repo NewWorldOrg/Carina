@@ -140,6 +140,30 @@ public sealed class SignalSampleRoundTests
         Assert.Equal(0, taking.Measured);
     }
 
+    [Fact]
+    public async Task ASessionRidingOnARecordingsTunerIsMeasuredWhileTheRecordingIsLeftToItsLedger()
+    {
+        HeldQualitySessionMeasurements measurements = new();
+
+        SignalSampleTaking taking = await Round(
+                new HeldQualitySignalSamples(),
+                Counting(
+                    Session("recording-1", SessionPurpose.Recording, Counted(9000, 12, 3)),
+                    Session("live-1", SessionPurpose.Live, Counted(4000, 2, 1))),
+                measurements: measurements)
+            .TakeAsync(Cancel);
+
+        QualitySessionMeasurement held = Assert.Single(measurements.Measurements);
+
+        Assert.Equal("live-1", held.Session.Value);
+        Assert.Equal("adapter3.frontend0", held.Tuner.Value);
+        Assert.Equal(32736, held.Network.Value);
+        Assert.Equal(1024, held.Service.Value);
+        Assert.Equal(2, held.CcDroppedPackets);
+        Assert.Equal(4002, held.CcTotalPackets);
+        Assert.Equal(1, taking.Measured);
+    }
+
     [Fact(DisplayName = "BR-QD-001: a session the driver cannot count is kept as unmeasured rather than as clean")]
     public async Task ASessionTheDriverCannotCountIsKeptAsUnmeasuredRatherThanAsClean()
     {
@@ -279,7 +303,10 @@ public sealed class SignalSampleRoundTests
             new HandTurnedClock(at ?? Noon),
             NullLogger<SignalSampleRound>.Instance);
 
-    private static SamplingDriverStandIn Held(SignalQualityDto? quality, SessionId? session = null)
+    private static SamplingDriverStandIn Held(
+        SignalQualityDto? quality,
+        SessionId? session = null,
+        SessionPurpose purpose = SessionPurpose.Live)
         => new()
         {
             Tuners = DriverCall<IReadOnlyList<TunerSnapshot>>.Reached(
@@ -289,7 +316,7 @@ public sealed class SignalSampleRoundTests
                     CurrentSession = new CurrentSessionDto
                     {
                         SessionId = session ?? SessionId.Parse("live-1"),
-                        Purpose = SessionPurpose.Live,
+                        Purpose = purpose,
                         Tune = Terrestrial.Typed(),
                     },
                     SignalQuality = quality,
@@ -297,12 +324,12 @@ public sealed class SignalSampleRoundTests
             ]),
         };
 
-    private static SamplingDriverStandIn Counting(SessionSnapshot session)
+    private static SamplingDriverStandIn Counting(SessionSnapshot current, params SessionSnapshot[] alongside)
     {
-        SamplingDriverStandIn driver = Held(Quality(34779), session.SessionId);
+        SamplingDriverStandIn driver = Held(Quality(34779), current.SessionId, current.Purpose);
         driver.Greeting = DriverCall<DriverHello>.Reached(
             new DriverHello(DriverProtocol.Version, "instance-a", [DriverCapabilities.CcMeasurement]));
-        driver.Sessions = DriverCall<IReadOnlyList<SessionSnapshot>>.Reached([session]);
+        driver.Sessions = DriverCall<IReadOnlyList<SessionSnapshot>>.Reached([current, .. alongside]);
 
         return driver;
     }
