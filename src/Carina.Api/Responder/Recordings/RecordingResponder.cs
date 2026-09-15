@@ -33,7 +33,7 @@ public sealed record RecordingDropsResponder(
     long? CcDroppedPackets,
     long? CcTotalPackets,
     long? ScrambledPackets,
-    long EovfCount,
+    long? EovfCount,
     DateTime? MeasuredUpdatedAt);
 
 public sealed record RecordingEncodeResponder(EncodeStanding Standing);
@@ -139,7 +139,7 @@ public sealed record RecordingResponder(
                 recording.Counters.Dropped,
                 recording.Counters.Total,
                 recording.ScrambledPackets,
-                recording.EovfCount,
+                recording.Counters.Measured ? recording.EovfCount : null,
                 recording.MeasuredUpdatedAt),
             new RecordingThumbnailResponder(
                 recording.ThumbnailState,
