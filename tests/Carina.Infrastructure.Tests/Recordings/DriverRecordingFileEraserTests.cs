@@ -106,6 +106,7 @@ public sealed class DriverRecordingFileEraserTests : IDisposable
 
         Assert.Equal(ErasureFault.FileLeftBehind, refused.Fault);
         Assert.Equal(0, refused.FilesRemoved);
+        Assert.Equal(1, refused.FilesLeft);
     }
 
     [Fact]
@@ -162,7 +163,35 @@ public sealed class DriverRecordingFileEraserTests : IDisposable
         RecordingErasure refused = await Eraser().EraseAsync(id, Primary, Cancel);
 
         Assert.Equal(ErasureFault.FileLeftBehind, refused.Fault);
+        Assert.Equal(2, refused.FilesLeft);
         Assert.True(File.Exists(drawn));
+    }
+
+    [Fact]
+    public async Task AFileTheOwningProcessCouldNotRemoveWithNoPictureBesideItIsTheOneFileLeft()
+    {
+        driver.Answer = DriverCall<RecordingErasedDto>.Refused(
+            new DriverProblem(SessionRefusalTitles.FileLeftBehind, ["permission denied"]));
+
+        RecordingErasure refused = await Eraser().EraseAsync(RecordingId.New(), Primary, Cancel);
+
+        Assert.Equal(ErasureFault.FileLeftBehind, refused.Fault);
+        Assert.Equal(1, refused.FilesLeft);
+    }
+
+    [Fact]
+    public async Task AnErasureThatLeftNothingBehindCountsNothingLeft()
+    {
+        driver.Answer = DriverCall<RecordingErasedDto>.Refused(
+            new DriverProblem(SessionRefusalTitles.OutputUnavailable, ["the mount has gone"]));
+
+        RecordingErasure refused = await Eraser().EraseAsync(RecordingId.New(), Primary, Cancel);
+
+        Assert.Null(refused.FilesLeft);
+
+        driver.Answer = DriverCall<RecordingErasedDto>.Reached(new RecordingErasedDto { FileRemoved = true });
+
+        Assert.Null((await Eraser().EraseAsync(RecordingId.New(), Primary, Cancel)).FilesLeft);
     }
 
     [Fact]
