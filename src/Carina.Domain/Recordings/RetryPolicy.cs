@@ -11,7 +11,7 @@ public sealed record RetryPolicy
 
     public static readonly TimeSpan LongestBetween = TimeSpan.FromDays(1);
 
-    public static readonly RetryPolicy Default = new(3, TimeSpan.FromMinutes(1));
+    public static readonly RetryPolicy Default = new(10, TimeSpan.FromMinutes(1));
 
     public RetryPolicy(int mostAttempts, TimeSpan betweenAttempts)
     {

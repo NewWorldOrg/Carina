@@ -13,7 +13,7 @@ public sealed class RecordingRetrySettingsTests
         RetryPolicy read = Read(new Dictionary<string, string?>());
 
         Assert.Equal(RetryPolicy.Default, read);
-        Assert.Equal(3, read.MostAttempts);
+        Assert.Equal(10, read.MostAttempts);
         Assert.Equal(TimeSpan.FromMinutes(1), read.BetweenAttempts);
     }
 
