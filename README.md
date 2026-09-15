@@ -76,6 +76,11 @@ docker compose exec app dotnet build
 API はコンテナの 8080 番で待ち受け、ホストの 8081 番に公開する(`API_PORT` で変える)。
 スキーマは `app` が起動時に当てないので、`task migrate` を先に走らせる。
 
+`docker compose ps` の health は、`driver` では `--probe` の答え、`app` では API が `/api/health` に答えているかを表す。
+`driver` は、ソケットに答えない・排水中・使えるチューナーが 1 本も無いときに unhealthy になる。
+`app` のコンテナは API を自分では起動しないので、`task run:app` で起動するまで unhealthy のままになる。
+health は表示するだけで、unhealthy になっても何も再起動しない。
+
 ## 設定
 
 ### driver

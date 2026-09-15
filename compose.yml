@@ -34,6 +34,11 @@ services:
       Encodings__OutputRoots: encodes=/srv/encodes
       Encodings__Prefer: ${CARINA_ENCODINGS_PREFER:-Software}
       Transcoding__Prefer: ${CARINA_TRANSCODING_PREFER:-Software}
+    healthcheck:
+      test: ['CMD', 'curl', '--fail', '--silent', '--output', '/dev/null', 'http://127.0.0.1:8080/api/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
     depends_on:
       db:
         condition: service_healthy
@@ -54,6 +59,13 @@ services:
       # pcscd replaces the socket inside this directory whenever it restarts, so bind the directory: a bind mount of the socket file would go on pointing at the one that is gone.
       - /run/pcscd:/run/pcscd:ro
     stop_grace_period: 7h
+    healthcheck:
+      test: ['CMD', 'dotnet', '/driver/bin/Carina.Driver/debug/Carina.Driver.dll', '--probe']
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 5m
+      start_interval: 10s
     environment:
       CARINA_DRIVER_CONFIG: /code/docker/driver.development.json
       DOTNET_hostBuilder__reloadConfigOnChange: 'false'
