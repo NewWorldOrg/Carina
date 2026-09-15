@@ -19,7 +19,8 @@ public sealed class IntegrityService(
     IStrayFileEraser strays,
     FindingDisposals disposals,
     IntegritySettings settings,
-    TimeProvider clock)
+    TimeProvider clock,
+    ILogger<IntegrityService> logger)
 {
     public async Task<ServiceResult<IntegrityFindings>> ListAsync(
         IntegrityFindingQuery query,
@@ -127,7 +128,21 @@ public sealed class IntegrityService(
             return Refused(erasure.Note!, Failed(fault));
         }
 
-        await checks.ThrowAwayFindingAsync(latest.Id, id, clock.GetUtcNow().UtcDateTime, cancellationToken);
+        bool thrownAway = await checks.ThrowAwayFindingAsync(
+            latest.Id,
+            id,
+            clock.GetUtcNow().UtcDateTime,
+            CancellationToken.None);
+
+        if (!thrownAway)
+        {
+            logger.LogWarning(
+                "The file '{Path}' under output root '{Root}' was erased, but the finding {FindingId} that "
+                + "named it was not marked thrown away.",
+                finding.Path,
+                finding.Root.Value,
+                id.Value);
+        }
 
         return ServiceResult<FindingThrownAway, FindingDisposalFailure>.Success(
             new FindingThrownAway(finding, erasure.FileRemoved));
