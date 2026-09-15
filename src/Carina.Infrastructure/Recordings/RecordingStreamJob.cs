@@ -11,11 +11,14 @@ public sealed class RecordingStreamJob(
     RecordingStreamSupervisor supervisor,
     IDriverSignals signals,
     RecordingWatchSettings settings,
+    RecordingProgressSettings progress,
     IAppEventPublisher events,
     TimeProvider clock,
     ILogger<RecordingStreamJob> logger) : BackgroundService
 {
     private CancellationTokenSource? waking;
+
+    private DateTimeOffset? countsToldAt;
 
     public static bool WakesOn(string name) => string.Equals(name, DriverEvents.RecordingProgress, StringComparison.Ordinal);
 
@@ -91,7 +94,7 @@ public sealed class RecordingStreamJob(
 
     private RecordingWatch Told(RecordingWatch watch)
     {
-        if (watch.AnythingMoved)
+        if (watch.AnythingMoved || (watch.CountsMoved && CountsAreDue()))
         {
             events.Signal(AppEventName.Recordings);
         }
@@ -102,6 +105,20 @@ public sealed class RecordingStreamJob(
         }
 
         return watch;
+    }
+
+    private bool CountsAreDue()
+    {
+        DateTimeOffset now = clock.GetUtcNow();
+
+        if (countsToldAt is { } told && now >= told && now - told < progress.AtMostEvery)
+        {
+            return false;
+        }
+
+        countsToldAt = now;
+
+        return true;
     }
 
     private void Report(RecordingWatch watch)

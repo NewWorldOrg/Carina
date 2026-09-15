@@ -202,6 +202,19 @@ public sealed class ServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public void ThePaceCountsAreToldToTheScreensAtIsReadFromConfiguration()
+    {
+        Dictionary<string, string?> settings = ValidSettings();
+        settings["RecordingProgress:AtMostEvery"] = "00:01:00";
+
+        using ServiceProvider provider = Build(settings);
+
+        Assert.Equal(
+            TimeSpan.FromMinutes(1),
+            provider.GetRequiredService<RecordingProgressSettings>().AtMostEvery);
+    }
+
+    [Fact]
     public void RegistersEverythingACollectionSweepReachesFor()
     {
         using ServiceProvider provider = Build(ValidSettings());
