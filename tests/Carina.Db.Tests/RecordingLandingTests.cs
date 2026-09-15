@@ -7,6 +7,7 @@ using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Encodings;
 using Carina.Domain.Programmes;
+using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Persistence;
@@ -88,7 +89,7 @@ public sealed class RecordingLandingTests(MigratedScratchDatabase database)
             CancellationToken.None);
 
         JsonElement wire = Wire(RecordingListResponder.Of(
-            new RecordingPage(found, await StandingsAsync(context, found.Items))));
+            new RecordingPage(found, await StandingsAsync(context, found.Items), AsShipped)));
         JsonElement items = wire.GetProperty("items");
 
         Assert.Equal(1, wire.GetProperty("total").GetInt32());
@@ -228,13 +229,15 @@ public sealed class RecordingLandingTests(MigratedScratchDatabase database)
             Noon,
             new TunerDeviceId("pt3-0"));
 
+    private static QualityBands AsShipped => QualityThresholdStanding.Bands(QualityThresholdStanding.Over([], Noon));
+
     private CarinaDbContext Context() => CarinaDbContextFactory.Create(database.ConnectionString);
 
     private static async Task<RecordingSeen> SeenAsync(CarinaDbContext context, Recording recording)
     {
         EncodeStandingBoard standings = await StandingsAsync(context, [recording]);
 
-        return new RecordingSeen(recording, standings.For(recording.Id));
+        return new RecordingSeen(recording, standings.For(recording.Id), AsShipped);
     }
 
     private static async Task<EncodeStandingBoard> StandingsAsync(

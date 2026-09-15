@@ -3,6 +3,7 @@ using Carina.Api.Services;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Encodings;
+using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 
@@ -27,6 +28,7 @@ public sealed record RecordingWindowResponder(DateTime Start, DateTime End, long
 
 public sealed record RecordingDropsResponder(
     QualityLevel Quality,
+    QualityLevel ScrambleQuality,
     bool CcMeasured,
     long? CcDroppedPackets,
     long? CcTotalPackets,
@@ -81,6 +83,7 @@ public sealed record RecordingResponder(
         ArgumentNullException.ThrowIfNull(seen);
 
         Recording recording = seen.Recording;
+        RecordingQuality quality = RecordingQuality.Of(recording.Counters, recording.ScrambledPackets, seen.Quality);
 
         return new RecordingResponder(
             recording.Id.Wire,
@@ -117,7 +120,8 @@ public sealed record RecordingResponder(
             recording.FileName.Value,
             recording.TunerDeviceId?.Value,
             new RecordingDropsResponder(
-                RecordingQuality.Of(recording.Counters, recording.ScrambledPackets),
+                quality.Overall,
+                quality.Scrambled,
                 recording.Counters.Measured,
                 recording.Counters.Dropped,
                 recording.Counters.Total,
@@ -157,7 +161,7 @@ public sealed record RecordingListResponder(
         return new RecordingListResponder(
             [
                 .. found.Items.Select(recording => RecordingResponder.Of(
-                    new RecordingSeen(recording, page.Encoding.For(recording.Id)))),
+                    new RecordingSeen(recording, page.Encoding.For(recording.Id), page.Quality))),
             ],
             found.Total,
             found.CurrentPage,

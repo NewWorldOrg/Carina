@@ -8,7 +8,7 @@ public sealed class QualityThresholdRuleSelfCheckTests
             { "a share written out", "private const double Warning = 0.0002;" },
             { "a share in exponent form", "private const double Warning = 2e-4;" },
             { "a share with a suffix", "private const float Warning = 0.01f;" },
-            { "the numbers the quality domain keeps", "private static readonly QualityShare Share = QualityShares.PacketsLost;" },
+            { "the numbers the quality domain keeps", "private static readonly double Share = QualityThresholdShapes.Of(Key).Shipped;" },
             { "the counters the share is worked out from", "private long Lost(Recording it) => it.CcDroppedPackets ?? 0;" },
             { "the columns those counters sit in", "private const string Sql = \"cc_dropped_packets / cc_total_packets\";" },
         };
@@ -89,8 +89,8 @@ public sealed class QualityThresholdRuleSelfCheckTests
         {
             Write(
                 directory,
-                "Carina.Domain/Recordings/RecordingQuality.cs",
-                Source("Carina.Domain.Recordings", "private const double Warning = 0.0002;"));
+                QualityThresholdRules.WhereTheNumbersLive,
+                Source("Carina.Domain.Quality", "private const double Warning = 0.0002;"));
 
             Assert.Empty(QualityThresholdRules.QualityNumbersInsideTheLibraryFeature(directory.FullName));
         }
@@ -121,6 +121,104 @@ public sealed class QualityThresholdRuleSelfCheckTests
             Write(directory, "Carina.Domain/Library/Reader.cs", Source("Carina.Domain.Library", writes));
 
             Assert.Empty(QualityThresholdRules.QualityNumbersInsideTheLibraryFeature(directory.FullName));
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    public static TheoryData<string> EachWayOfWritingAShareOfScramblingOrLossDown() =>
+        new()
+        {
+            "public static readonly (double Warning, double Unwatchable) Scrambled = (0.0005, 0.01);",
+            "private const double UnwatchableWhenScrambled = 1e-2;",
+            "private static bool Unwatchable(long scrambled, long total) => (double)scrambled / total >= 0.01;",
+            "private static readonly double PacketsLostCeiling = 0.001d;",
+        };
+
+    [Theory]
+    [MemberData(nameof(EachWayOfWritingAShareOfScramblingOrLossDown))]
+    public void AShareOfScramblingOrLossWrittenOutsideTheThresholdTableIsCaughtWhereverTheFileSits(string writes)
+    {
+        DirectoryInfo directory = Directory.CreateTempSubdirectory("carina-threshold-share-");
+
+        try
+        {
+            Write(directory, "Carina.Api/Responder/Recordings/Judge.cs", Source("Carina.Api.Responder.Recordings", writes));
+
+            Assert.NotEmpty(QualityThresholdRules.SharesOfWhatARecordingIsJudgedOnOutsideTheirTable(directory.FullName));
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void AShareOfScramblingIsReportedByTheFileAndTheNumbersItWrites()
+    {
+        DirectoryInfo directory = Directory.CreateTempSubdirectory("carina-threshold-share-named-");
+
+        try
+        {
+            Write(
+                directory,
+                "Carina.Domain/Recordings/Judge.cs",
+                Source("Carina.Domain.Recordings", "public static readonly (double Warning, double Unwatchable) Scrambled = (0.0005, 0.01);"));
+
+            Assert.Equal(
+                ["/Carina.Domain/Recordings/Judge.cs 0.0005", "/Carina.Domain/Recordings/Judge.cs 0.01"],
+                QualityThresholdRules.SharesOfWhatARecordingIsJudgedOnOutsideTheirTable(directory.FullName));
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void TheThresholdTableAndTheMigrationsWalkPastTheShareRule()
+    {
+        DirectoryInfo directory = Directory.CreateTempSubdirectory("carina-threshold-share-table-");
+
+        try
+        {
+            Write(
+                directory,
+                QualityThresholdRules.WhereTheNumbersLive,
+                Source("Carina.Domain.Quality", "private const double PacketsLeftScrambled = 0.01;"));
+            Write(
+                directory,
+                QualityThresholdRules.WhereTheMigrationsLive + "Scrambling.cs",
+                Source("Carina.Db.Migrations", "private const string Column = \"scrambled_packets\";", "private const double Share = 0.5;"));
+
+            Assert.Empty(QualityThresholdRules.SharesOfWhatARecordingIsJudgedOnOutsideTheirTable(directory.FullName));
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    public static TheoryData<string> WaysOfWritingSomethingThatIsNotAShareOfScramblingOrLoss() =>
+        new()
+        {
+            "private const int MostScrambledShown = 200;",
+            "private static readonly TimeSpan Settle = TimeSpan.FromSeconds(0.5);",
+        };
+
+    [Theory]
+    [MemberData(nameof(WaysOfWritingSomethingThatIsNotAShareOfScramblingOrLoss))]
+    public void AWholeNumberBesideScramblingOrAFractionBesideNeitherMeasureIsNotAShare(string writes)
+    {
+        DirectoryInfo directory = Directory.CreateTempSubdirectory("carina-threshold-share-plain-");
+
+        try
+        {
+            Write(directory, "Carina.Domain/Recordings/Judge.cs", Source("Carina.Domain.Recordings", writes));
+
+            Assert.Empty(QualityThresholdRules.SharesOfWhatARecordingIsJudgedOnOutsideTheirTable(directory.FullName));
         }
         finally
         {

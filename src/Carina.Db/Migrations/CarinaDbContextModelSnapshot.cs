@@ -2018,7 +2018,7 @@ namespace Carina.Db.Migrations
 
                             t.HasCheckConstraint("ck_quality_incident_silence", "(breached = 'SupplySilence') = (silence IS NOT NULL)\nAND (silence IS NULL OR silence IN ('RecordingProgress', 'RecordingMeasurement', 'SignalSamples', 'GuideVisits'))");
 
-                            t.HasCheckConstraint("ck_quality_incident_vocabulary", "breached IN ('PacketsLostWarning', 'PacketsLostUnwatchable', 'PacketsLeftScrambled', 'Overflows', 'LockRate', 'CarrierToNoiseFloor', 'BitErrorRateCeiling', 'SupplySilence')\nAND owner IN ('Quality', 'Tuner', 'Guide', 'Reservation', 'Recording')\nAND state IN ('Detected', 'Notified', 'Acknowledged', 'Resolved')\nAND subject_kind IN ('Tuner', 'Channel', 'Recording', 'TransportStream', 'Guide')");
+                            t.HasCheckConstraint("ck_quality_incident_vocabulary", "breached IN ('PacketsLostWarning', 'PacketsLostUnwatchable', 'PacketsLeftScrambled', 'Overflows', 'LockRate', 'CarrierToNoiseFloor', 'BitErrorRateCeiling', 'SupplySilence', 'PacketsLeftScrambledUnwatchable')\nAND owner IN ('Quality', 'Tuner', 'Guide', 'Reservation', 'Recording')\nAND state IN ('Detected', 'Notified', 'Acknowledged', 'Resolved')\nAND subject_kind IN ('Tuner', 'Channel', 'Recording', 'TransportStream', 'Guide')");
                         });
                 });
 
@@ -2318,7 +2318,7 @@ namespace Carina.Db.Migrations
 
                     b.ToTable("quality_threshold", null, t =>
                         {
-                            t.HasCheckConstraint("ck_quality_threshold_key", "threshold_key IN ('PacketsLostWarning', 'PacketsLostUnwatchable', 'PacketsLeftScrambled', 'Overflows', 'LockRate', 'CarrierToNoiseFloor', 'BitErrorRateCeiling', 'SupplySilence')");
+                            t.HasCheckConstraint("ck_quality_threshold_key", "threshold_key IN ('PacketsLostWarning', 'PacketsLostUnwatchable', 'PacketsLeftScrambled', 'Overflows', 'LockRate', 'CarrierToNoiseFloor', 'BitErrorRateCeiling', 'SupplySilence', 'PacketsLeftScrambledUnwatchable')");
 
                             t.HasCheckConstraint("ck_quality_threshold_standing", "observations >= 0\nAND (provisional OR observations > 0)");
                         });
@@ -2361,7 +2361,7 @@ namespace Carina.Db.Migrations
 
                     b.ToTable("quality_threshold_change", null, t =>
                         {
-                            t.HasCheckConstraint("ck_quality_threshold_change_key", "threshold_key IN ('PacketsLostWarning', 'PacketsLostUnwatchable', 'PacketsLeftScrambled', 'Overflows', 'LockRate', 'CarrierToNoiseFloor', 'BitErrorRateCeiling', 'SupplySilence')");
+                            t.HasCheckConstraint("ck_quality_threshold_change_key", "threshold_key IN ('PacketsLostWarning', 'PacketsLostUnwatchable', 'PacketsLeftScrambled', 'Overflows', 'LockRate', 'CarrierToNoiseFloor', 'BitErrorRateCeiling', 'SupplySilence', 'PacketsLeftScrambledUnwatchable')");
                         });
                 });
 
