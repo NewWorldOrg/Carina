@@ -35,6 +35,8 @@ public interface ICandidateChannelRepository
 
     Task ClearSelectionAsync(NetworkId networkId, ServiceId serviceId, CancellationToken cancellationToken);
 
+    Task<bool> ScoreAsync(CandidateChannelId id, CandidateScore score, CancellationToken cancellationToken);
+
     Task RequireRevalidationAsync(CancellationToken cancellationToken);
 
     Task RemoveAsync(CandidateChannelId id, CancellationToken cancellationToken);

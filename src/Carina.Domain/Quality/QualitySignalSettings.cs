@@ -12,6 +12,8 @@ public sealed record QualitySignalSettings
 
     public TimeSpan KeepSamplesFor { get; init; } = TimeSpan.FromDays(7);
 
+    public TimeSpan EvaluateCandidatesOver { get; init; } = TimeSpan.FromDays(7);
+
     public IReadOnlyDictionary<QualityWindow, TimeSpan?> KeepWindowsFor { get; init; } =
         new Dictionary<QualityWindow, TimeSpan?>
         {

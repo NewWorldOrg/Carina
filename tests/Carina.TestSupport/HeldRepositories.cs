@@ -273,6 +273,15 @@ public sealed class HeldCandidates : ICandidateChannelRepository
         return Task.CompletedTask;
     }
 
+    public Task<bool> ScoreAsync(CandidateChannelId id, CandidateScore score, CancellationToken cancellationToken)
+    {
+        CandidateChannel? scored = Candidates.FirstOrDefault(candidate => candidate.Id.Equals(id));
+
+        scored?.Evaluated(score);
+
+        return Task.FromResult(scored is not null);
+    }
+
     public Task RequireRevalidationAsync(CancellationToken cancellationToken)
     {
         foreach (CandidateChannel candidate in Candidates)

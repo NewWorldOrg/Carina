@@ -39,6 +39,7 @@ internal sealed class QualityFeature : IAsyncDisposable
                 services.AddSingleton<IQualityIncidentRepository>(Incidents);
                 services.AddSingleton<ISupplyStandingBoard>(Board);
                 services.AddSingleton<IBroadcastStreamDirectory>(Streams);
+                services.AddSingleton<ICandidateChannelRepository>(Candidates);
             }));
 
         Client = configured.WithTestScheme().CreateClient();
@@ -63,6 +64,22 @@ internal sealed class QualityFeature : IAsyncDisposable
     public HeldQualityIncidents Incidents { get; } = new();
 
     public StandingHeld Board { get; } = new();
+
+    public HeldCandidates Candidates { get; } = new();
+
+    public CandidateChannel Candidate(int service, int channel)
+    {
+        CandidateChannel candidate = CandidateChannel.Discover(
+            CandidateChannelId.New(),
+            new NetworkId(4),
+            new ServiceId(service),
+            TuningParameters.Terrestrial(channel),
+            Noon.AddDays(-60));
+
+        Candidates.Candidates.Add(candidate);
+
+        return candidate;
+    }
 
     public HeldStreams Streams { get; } = new([]);
 

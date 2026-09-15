@@ -28,6 +28,8 @@ public interface IQualitySignalReader
     Task<IReadOnlyList<SignalFigures>> FiguresAsync(QualityPeriod period, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<QualitySignalWindow>> WindowsAsync(QualityTrendFrame frame, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<QualitySignalWindow>> WindowsAsync(QualityPeriod period, CancellationToken cancellationToken);
 }
 
 public static class QualitySignalSurvey

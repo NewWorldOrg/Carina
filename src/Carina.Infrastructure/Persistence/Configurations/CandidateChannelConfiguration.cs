@@ -33,6 +33,23 @@ public sealed class CandidateChannelConfiguration : IEntityTypeConfiguration<Can
                 "ck_candidate_channel_measurement_lock",
                 PersistenceChecks.QualityOnlyWhenLocked("measured_at", "locked", "cnr_milli_decibels"));
             table.HasCheckConstraint(
+                "ck_candidate_channel_score",
+                """
+                (score_evaluated_at IS NULL) = (score_lock_rate IS NULL)
+                AND (score_evaluated_at IS NULL) = (score_samples IS NULL)
+                AND (score_evaluated_at IS NULL) = (score_measured_from IS NULL)
+                AND (score_evaluated_at IS NULL) = (score_measured_until IS NULL)
+                AND (score_lock_rate > 0
+                     OR (score_cnr_lowest_milli_decibels IS NULL AND score_bit_error_rate_highest IS NULL))
+                AND (score_evaluated_at IS NULL
+                     OR (score_samples > 0
+                         AND score_lock_rate >= 0
+                         AND score_lock_rate <= 1
+                         AND score_measured_from < score_measured_until
+                         AND score_measured_until <= score_evaluated_at))
+                AND (score_bit_error_rate_highest IS NULL OR score_bit_error_rate_highest >= 0)
+                """);
+            table.HasCheckConstraint(
                 "ck_candidate_channel_selection_measurement_lock",
                 PersistenceChecks.QualityOnlyWhenLocked(
                     "selected_measured_at", "selected_locked", "selected_cnr_milli_decibels"));
@@ -103,6 +120,20 @@ public sealed class CandidateChannelConfiguration : IEntityTypeConfiguration<Can
             measurement.Property(reading => reading.CnrMilliDecibels).HasColumnName("cnr_milli_decibels");
             measurement.Property(reading => reading.PostViterbiErrorBits).HasColumnName("post_viterbi_error_bits");
             measurement.Property(reading => reading.PostViterbiTotalBits).HasColumnName("post_viterbi_total_bits");
+        });
+
+        builder.ComplexProperty(candidate => candidate.Score, score =>
+        {
+            score.IsRequired(false);
+
+            score.Property(evaluation => evaluation.LockRate).HasColumnName("score_lock_rate");
+            score.Property(evaluation => evaluation.CarrierToNoiseLowestMilliDecibels)
+                .HasColumnName("score_cnr_lowest_milli_decibels");
+            score.Property(evaluation => evaluation.BitErrorRateHighest).HasColumnName("score_bit_error_rate_highest");
+            score.Property(evaluation => evaluation.Samples).HasColumnName("score_samples");
+            score.Property(evaluation => evaluation.MeasuredFrom).HasColumnName("score_measured_from");
+            score.Property(evaluation => evaluation.MeasuredUntil).HasColumnName("score_measured_until");
+            score.Property(evaluation => evaluation.EvaluatedAt).HasColumnName("score_evaluated_at");
         });
 
         builder.Property(candidate => candidate.NeedsRevalidation).IsRequired();

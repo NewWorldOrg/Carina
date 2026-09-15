@@ -27,6 +27,8 @@ public sealed class QualitySignalOptions
 
     public string? KeepHourWindowsFor { get; set; }
 
+    public string? EvaluateCandidatesOver { get; set; }
+
     public void ReadFrom(IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
@@ -40,6 +42,7 @@ public sealed class QualitySignalOptions
         KeepSamplesFor = named[nameof(KeepSamplesFor)];
         KeepMinuteWindowsFor = named[nameof(KeepMinuteWindowsFor)];
         KeepHourWindowsFor = named[nameof(KeepHourWindowsFor)];
+        EvaluateCandidatesOver = named[nameof(EvaluateCandidatesOver)];
     }
 
     public QualitySignalSettings Read()
@@ -64,6 +67,10 @@ public sealed class QualitySignalOptions
                     nameof(KeepHourWindowsFor),
                     unset.KeptFor(QualityWindow.Hour)),
             },
+            EvaluateCandidatesOver = Positive(
+                EvaluateCandidatesOver,
+                nameof(EvaluateCandidatesOver),
+                unset.EvaluateCandidatesOver),
         };
 
         return Agreeing(read);
@@ -87,6 +94,14 @@ public sealed class QualitySignalOptions
                 $"{Section}:{nameof(KeepHourWindowsFor)} is shorter than {Section}:{nameof(KeepMinuteWindowsFor)}, "
                 + "so the layer kept for the long run would go before the one kept for the short one.",
                 nameof(KeepHourWindowsFor));
+        }
+
+        if (read.EvaluateCandidatesOver > QualityPeriod.LongestSpan)
+        {
+            throw new ArgumentException(
+                $"{Section}:{nameof(EvaluateCandidatesOver)} reaches further back than the "
+                + $"{QualityPeriod.LongestSpan.TotalDays} days a quality period may span.",
+                nameof(EvaluateCandidatesOver));
         }
 
         return read;

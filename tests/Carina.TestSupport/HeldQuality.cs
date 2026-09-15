@@ -86,6 +86,18 @@ public sealed class HeldQualitySignals : IQualitySignalReader
         return Task.FromResult<IReadOnlyList<QualitySignalWindow>>(
             [.. Windows.Where(window => frame.Period.Holds(window.Start))]);
     }
+
+    public Task<IReadOnlyList<QualitySignalWindow>> WindowsAsync(
+        QualityPeriod period,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(period);
+
+        Asked.Add(period);
+
+        return Task.FromResult<IReadOnlyList<QualitySignalWindow>>(
+            [.. Windows.Where(window => period.Holds(window.Start))]);
+    }
 }
 
 public sealed class HeldQualitySignalSamples : IQualitySignalSampleRepository

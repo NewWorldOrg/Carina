@@ -60,6 +60,92 @@ public sealed class ChannelRepositoryTests(RepositoryDatabase database)
     }
 
     [Fact]
+    public async Task AScoreComesBackWithEveryFigureItWasWrittenWith()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        await new BroadcastServiceRepository(context).AddAsync(Service(network, 1), Cancel);
+        CandidateChannel candidate = Candidate(network, 1, 27);
+        await new CandidateChannelRepository(context).AddAsync(candidate, Cancel);
+        CandidateScore score = CandidateScore.Of(400, 300, 21_500, 0.0002, At, At.AddDays(7), At.AddDays(7));
+
+        await using CarinaDbContext writing = database.Open();
+        bool written = await new CandidateChannelRepository(writing).ScoreAsync(candidate.Id, score, Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        CandidateChannel? stored = await new CandidateChannelRepository(reading).FindAsync(candidate.Id, Cancel);
+
+        Assert.True(written);
+        Assert.Equal(score, stored?.Score);
+    }
+
+    [Fact]
+    public async Task ACandidateNeverScoredComesBackWithNoScore()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        await new BroadcastServiceRepository(context).AddAsync(Service(network, 1), Cancel);
+        CandidateChannel candidate = Candidate(network, 1, 27);
+        await new CandidateChannelRepository(context).AddAsync(candidate, Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        CandidateChannel? stored = await new CandidateChannelRepository(reading).FindAsync(candidate.Id, Cancel);
+
+        Assert.Null(stored?.Score);
+    }
+
+    [Fact(DisplayName = "BR-QD-012: writing a score back leaves a selection made meanwhile as it was made")]
+    public async Task WritingAScoreBackLeavesASelectionMadeMeanwhileAsItWasMade()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        await new BroadcastServiceRepository(context).AddAsync(Service(network, 1), Cancel);
+        CandidateChannel first = Candidate(network, 1, 27);
+        CandidateChannel second = Candidate(network, 1, 28);
+        var candidates = new CandidateChannelRepository(context);
+        await candidates.AddAsync(first, Cancel);
+        await candidates.AddAsync(second, Cancel);
+        await candidates.SelectAsync(first.Id, SelectionSource.Manual, null, At, Cancel);
+
+        await using CarinaDbContext scoring = database.Open();
+        var scorer = new CandidateChannelRepository(scoring);
+        Assert.NotNull(await scorer.FindAsync(first.Id, Cancel));
+
+        await using CarinaDbContext choosing = database.Open();
+        await new CandidateChannelRepository(choosing)
+            .SelectAsync(second.Id, SelectionSource.Manual, null, At.AddHours(1), Cancel);
+
+        await scorer.ScoreAsync(
+            first.Id,
+            CandidateScore.Of(360, 360, 24_000, 0, At, At.AddDays(7), At.AddDays(7)),
+            Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        IReadOnlyList<CandidateChannel> stored = await new CandidateChannelRepository(reading)
+            .ListForServiceAsync(new NetworkId(network), new ServiceId(1), Cancel);
+
+        CandidateChannel selected = Assert.Single(stored, candidate => candidate.IsSelected);
+        Assert.Equal(second.Id, selected.Id);
+        Assert.Equal(At.AddHours(1), selected.SelectedAt);
+        CandidateChannel scored = Assert.Single(stored, candidate => candidate.Id.Equals(first.Id));
+        Assert.Null(scored.SelectionSource);
+        Assert.NotNull(scored.Score);
+    }
+
+    [Fact]
+    public async Task ScoringACandidateThatIsGoneWritesNothing()
+    {
+        await using CarinaDbContext context = database.Open();
+
+        bool written = await new CandidateChannelRepository(context).ScoreAsync(
+            CandidateChannelId.New(),
+            CandidateScore.Of(360, 360, 24_000, 0, At, At.AddDays(7), At.AddDays(7)),
+            Cancel);
+
+        Assert.False(written);
+    }
+
+    [Fact]
     public async Task ClearingTheSelectionLeavesTheServiceWithNoWayToTuneItAndNoRepair()
     {
         int network = NextNetwork();

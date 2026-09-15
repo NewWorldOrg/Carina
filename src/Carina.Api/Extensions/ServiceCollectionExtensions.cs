@@ -53,6 +53,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<QualityService>();
         services.AddScoped<QualityThresholdService>();
         services.AddScoped<QualityIncidentService>();
+        services.AddScoped<QualityCandidateScoreService>();
         services.AddScoped<MigrationRecordService>();
         services.AddSingleton<PlaybackTicketGate>();
 

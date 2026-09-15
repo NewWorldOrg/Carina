@@ -48,7 +48,7 @@ public sealed class SignalSampleRound(
                 continue;
             }
 
-            if (Named(intended, tune) is not { } channel)
+            if (SignalFiling.StreamFor(intended, tune) is not { } stream)
             {
                 unnamed++;
 
@@ -61,8 +61,8 @@ public sealed class SignalSampleRound(
                     session.SessionId,
                     session.Purpose,
                     new TunerDeviceId(tuner.DeviceId),
-                    channel.Network,
-                    channel.Service,
+                    stream.NetworkId,
+                    stream.Services[0],
                     tuner.SignalQuality),
                 at));
         }
@@ -81,32 +81,4 @@ public sealed class SignalSampleRound(
             taking.Count(sample => !sample.Signal.WasTaken),
             unnamed);
     }
-
-    private static Channel? Named(IReadOnlyList<IntendedStream> intended, TuneParams tune)
-    {
-        foreach (IntendedStream stream in intended)
-        {
-            if (stream.Services.Count > 0 && Same(stream.Tuning, tune))
-            {
-                return new Channel(stream.NetworkId, stream.Services[0]);
-            }
-        }
-
-        return null;
-    }
-
-    private static bool Same(TuningParameters tuning, TuneParams tune)
-        => tuning.System == tune.System
-           && tuning.PhysicalChannel == Slot(tune)
-           && (tune.System is not TuneSystem.IsdbSBs || tuning.TransportStreamId?.Value == tune.IsdbSBs?.Tsid);
-
-    private static int? Slot(TuneParams tune) => tune.System switch
-    {
-        TuneSystem.IsdbT => tune.IsdbT?.PhysicalChannel,
-        TuneSystem.IsdbSBs => tune.IsdbSBs?.BsChannel,
-        TuneSystem.IsdbSCs110 => tune.IsdbSCs110?.CsChannel,
-        _ => null,
-    };
-
-    private readonly record struct Channel(NetworkId Network, ServiceId Service);
 }

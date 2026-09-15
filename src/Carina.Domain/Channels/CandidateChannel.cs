@@ -42,6 +42,8 @@ public sealed class CandidateChannel
 
     public DateTime LastSeenAt { get; private set; }
 
+    public CandidateScore? Score { get; private set; }
+
     public bool IsInRotation => RotationState is not RotationState.NeedsAttention;
 
     public static CandidateChannel Discover(
@@ -86,7 +88,8 @@ public sealed class CandidateChannel
         DateTime? nextAttemptAt,
         DateTime? needsAttentionSince,
         DateTime discoveredAt,
-        DateTime lastSeenAt)
+        DateTime lastSeenAt,
+        CandidateScore? score = null)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(networkId);
@@ -120,7 +123,15 @@ public sealed class CandidateChannel
             NeedsAttentionSince = UtcTimes.Optional(needsAttentionSince, nameof(needsAttentionSince)),
             DiscoveredAt = UtcTimes.Required(discoveredAt, nameof(discoveredAt)),
             LastSeenAt = UtcTimes.Required(lastSeenAt, nameof(lastSeenAt)),
+            Score = score,
         };
+    }
+
+    public void Evaluated(CandidateScore score)
+    {
+        ArgumentNullException.ThrowIfNull(score);
+
+        Score = score;
     }
 
     public void CarriedBy(TransportStreamId? observedStreamId)
