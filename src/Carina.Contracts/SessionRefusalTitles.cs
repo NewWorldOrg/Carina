@@ -42,6 +42,8 @@ public static class SessionRefusalTitles
 
     public const string NoData = "noData";
 
+    public const string DiskFull = "diskFull";
+
     public const string RecordingInProgress = "recordingInProgress";
 
     public const string FileLeftBehind = "fileLeftBehind";

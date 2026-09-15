@@ -68,6 +68,7 @@ internal sealed class SyntheticDriverHost : IAsyncDisposable
     private readonly string root;
     private readonly string ledger;
     private readonly IReadOnlyList<string?> inherited;
+    private readonly Action<IServiceCollection>? reshape;
 
     private DriverConfiguration configuration;
     private IHost? host;
@@ -78,13 +79,15 @@ internal sealed class SyntheticDriverHost : IAsyncDisposable
         string root,
         string ledger,
         DriverConfiguration configuration,
-        IReadOnlyList<string?> inherited)
+        IReadOnlyList<string?> inherited,
+        Action<IServiceCollection>? reshape)
     {
         this.host = host;
         this.root = root;
         this.ledger = ledger;
         this.configuration = configuration;
         this.inherited = inherited;
+        this.reshape = reshape;
     }
 
     public string SocketPath => configuration.SocketPath!;
@@ -95,7 +98,7 @@ internal sealed class SyntheticDriverHost : IAsyncDisposable
 
     public string LedgerPath => ledger;
 
-    public static async Task<SyntheticDriverHost> StartAsync()
+    public static async Task<SyntheticDriverHost> StartAsync(Action<IServiceCollection>? reshape = null)
     {
         string?[] inherited = [.. SettingsThatWouldBindAPort.Select(Environment.GetEnvironmentVariable)];
 
@@ -120,9 +123,9 @@ internal sealed class SyntheticDriverHost : IAsyncDisposable
 
         await File.WriteAllTextAsync(ledger, DriverConfigurationWriter.Serialize(configuration));
 
-        IHost host = await RaisedAsync(configuration, ledger);
+        IHost host = await RaisedAsync(configuration, ledger, reshape);
 
-        return new SyntheticDriverHost(host, root, ledger, configuration, inherited);
+        return new SyntheticDriverHost(host, root, ledger, configuration, inherited, reshape);
     }
 
     public string Beside(string name) => Path.Combine(root, name);
@@ -139,7 +142,7 @@ internal sealed class SyntheticDriverHost : IAsyncDisposable
     {
         await PutDownAsync();
 
-        host = await RaisedAsync(configuration, ledger);
+        host = await RaisedAsync(configuration, ledger, reshape);
     }
 
     /// <summary>
@@ -197,7 +200,7 @@ internal sealed class SyntheticDriverHost : IAsyncDisposable
         }
 
         configuration = written;
-        host = await RaisedAsync(written, ledger);
+        host = await RaisedAsync(written, ledger, reshape);
 
         return exitCode;
     }
@@ -214,12 +217,19 @@ internal sealed class SyntheticDriverHost : IAsyncDisposable
         return new HeldSession(session.State, session.StopReason, session.BytesRecorded);
     }
 
-    private static async Task<IHost> RaisedAsync(DriverConfiguration configuration, string ledger)
+    private static async Task<IHost> RaisedAsync(
+        DriverConfiguration configuration,
+        string ledger,
+        Action<IServiceCollection>? reshape)
     {
         DriverHostResult built = DriverHost.Create(
             [],
             configuration,
-            services => services.AddSingleton<ITunerDeviceFactory>(new PacedTuners(BetweenReads)),
+            services =>
+            {
+                services.AddSingleton<ITunerDeviceFactory>(new PacedTuners(BetweenReads));
+                reshape?.Invoke(services);
+            },
             ledger);
 
         Assert.True(built.TryGetHost(out IHost? host), string.Join(" ", built.Problems));

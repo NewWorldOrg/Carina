@@ -150,6 +150,7 @@ public sealed class RecordingFailureTests : IDisposable
         Assert.Contains("No space left on device", starved.FailureCause, StringComparison.Ordinal);
         Assert.Contains("k-starved.ts", starved.FailureCause, StringComparison.Ordinal);
         Assert.DoesNotContain(output, starved.FailureCause, StringComparison.Ordinal);
+        Assert.Equal(SessionRefusalTitles.DiskFull, starved.FailureTitle);
 
         using HttpResponseMessage diagnosed = await client.GetAsync(
             DriverEndpoints.Diagnostics,

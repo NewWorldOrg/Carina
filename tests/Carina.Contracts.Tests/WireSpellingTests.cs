@@ -208,6 +208,7 @@ public sealed class WireSpellingTests
         Assert.Equal("outputUnavailable", SessionRefusalTitles.OutputUnavailable);
         Assert.Equal("deviceUnavailable", SessionRefusalTitles.DeviceUnavailable);
         Assert.Equal("noLock", SessionRefusalTitles.NoLock);
+        Assert.Equal("diskFull", SessionRefusalTitles.DiskFull);
         Assert.Equal("refused", SessionRefusalTitles.Refused);
     }
 
