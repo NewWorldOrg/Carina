@@ -23,6 +23,7 @@ public sealed class IntegrityFindingConfiguration : IEntityTypeConfiguration<Int
         {
             string named = Vocabulary(IntegrityFaults.ThatNameARecording);
             string weighed = Vocabulary(IntegrityFaults.ThatWeighedTheFile);
+            string unowned = Vocabulary(IntegrityFaults.ThatNameAFileNoRecordingOwns);
 
             table.HasCheckConstraint(
                 "ck_integrity_finding_fault",
@@ -42,6 +43,15 @@ public sealed class IntegrityFindingConfiguration : IEntityTypeConfiguration<Int
             table.HasCheckConstraint(
                 "ck_integrity_finding_path",
                 "length(path) > 0 AND left(path, 1) <> '/'");
+            table.HasCheckConstraint(
+                "ck_integrity_finding_last_written",
+                $"last_written_at IS NULL OR fault IN ({unowned})");
+            table.HasCheckConstraint(
+                "ck_integrity_finding_thrown_away",
+                $"""
+                thrown_away_at IS NULL
+                OR (fault IN ({unowned}) AND last_written_at IS NOT NULL AND thrown_away_at >= noticed_at)
+                """);
         });
 
         builder.HasKey(finding => new { finding.CheckId, finding.Id });
@@ -79,6 +89,8 @@ public sealed class IntegrityFindingConfiguration : IEntityTypeConfiguration<Int
         builder.Property(finding => finding.LedgerSize).HasColumnName("ledger_size");
         builder.Property(finding => finding.ObservedSize).HasColumnName("observed_size");
         builder.Property(finding => finding.NoticedAt).IsRequired();
+        builder.Property(finding => finding.LastWrittenAt).HasColumnName("last_written_at");
+        builder.Property(finding => finding.ThrownAwayAt).HasColumnName("thrown_away_at");
 
         builder.HasOne<IntegrityCheck>()
             .WithMany()

@@ -1,8 +1,11 @@
+using Carina.Contracts;
+using Carina.Domain.Base;
+
 namespace Carina.Domain.Integrity;
 
 public sealed record StoredFile
 {
-    public StoredFile(string path, long sizeBytes)
+    public StoredFile(string path, long sizeBytes, DateTime? lastWrittenAt = null)
     {
         ArgumentException.ThrowIfNullOrEmpty(path);
 
@@ -20,9 +23,14 @@ public sealed record StoredFile
 
         Path = path;
         SizeBytes = sizeBytes;
+        LastWrittenAt = lastWrittenAt is { } written
+            ? StrayFileStamp.Truncated(UtcTimes.Required(written, nameof(lastWrittenAt)))
+            : null;
     }
 
     public string Path { get; }
 
     public long SizeBytes { get; }
+
+    public DateTime? LastWrittenAt { get; }
 }

@@ -79,7 +79,13 @@ public static class IntegrityScan
                 if (!claimed.Contains(Key(listing.Root, file.Path)))
                 {
                     findings.Add(
-                        IntegrityFinding.NoLedgerRow(id, listing.Root, file.Path, file.SizeBytes, startedAt));
+                        IntegrityFinding.NoLedgerRow(
+                            id,
+                            listing.Root,
+                            file.Path,
+                            file.SizeBytes,
+                            startedAt,
+                            file.LastWrittenAt));
                 }
             }
         }

@@ -12,4 +12,15 @@ public interface IIntegrityCheckRepository
         IntegrityCheckId checkId,
         IntegrityFindingQuery query,
         CancellationToken cancellationToken);
+
+    Task<IntegrityFinding?> FindFindingAsync(
+        IntegrityCheckId checkId,
+        IntegrityFindingId findingId,
+        CancellationToken cancellationToken);
+
+    Task<bool> ThrowAwayFindingAsync(
+        IntegrityCheckId checkId,
+        IntegrityFindingId findingId,
+        DateTime at,
+        CancellationToken cancellationToken);
 }

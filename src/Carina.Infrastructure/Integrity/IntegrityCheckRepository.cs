@@ -35,7 +35,7 @@ public sealed class IntegrityCheckRepository(CarinaDbContext context) : IIntegri
 
         IQueryable<IntegrityFinding> found = context.Set<IntegrityFinding>()
             .AsNoTracking()
-            .Where(finding => finding.CheckId == checkId);
+            .Where(finding => finding.CheckId == checkId && finding.ThrownAwayAt == null);
 
         int total = await found.CountAsync(cancellationToken);
         List<IntegrityFinding> page = await found
@@ -46,5 +46,46 @@ public sealed class IntegrityCheckRepository(CarinaDbContext context) : IIntegri
             .ToListAsync(cancellationToken);
 
         return new PaginatedList<IntegrityFinding>(page, total, query.Page, query.PerPage);
+    }
+
+    public async Task<IntegrityFinding?> FindFindingAsync(
+        IntegrityCheckId checkId,
+        IntegrityFindingId findingId,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(checkId);
+        ArgumentNullException.ThrowIfNull(findingId);
+
+        return await context.Set<IntegrityFinding>()
+            .AsNoTracking()
+            .FirstOrDefaultAsync(
+                finding => finding.CheckId == checkId && finding.Id == findingId,
+                cancellationToken);
+    }
+
+    public async Task<bool> ThrowAwayFindingAsync(
+        IntegrityCheckId checkId,
+        IntegrityFindingId findingId,
+        DateTime at,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(checkId);
+        ArgumentNullException.ThrowIfNull(findingId);
+
+        IntegrityFinding? finding = await context.Set<IntegrityFinding>()
+            .FirstOrDefaultAsync(
+                held => held.CheckId == checkId && held.Id == findingId,
+                cancellationToken);
+
+        if (finding is null || StrayFileDisposal.Refusal(finding) is not null)
+        {
+            return false;
+        }
+
+        finding.ThrowAway(at);
+
+        await context.SaveChangesAsync(cancellationToken);
+
+        return true;
     }
 }

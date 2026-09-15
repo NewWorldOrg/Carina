@@ -345,6 +345,112 @@ public sealed class IntegrityCheckRepositoryTests(RepositoryDatabase database)
             () => new IntegrityCheckRepository(context).SaveAsync(null!, Cancel));
     }
 
+    [Fact]
+    public async Task AFileNoRecordingOwnsComesBackWithTheLastWriteTheCheckKeptToTheMicrosecond()
+    {
+        IntegrityCheckId id = IntegrityCheckId.New();
+        DateTime written = At.AddMinutes(-30).AddTicks(1_234_567);
+
+        await SaveAsync(IntegrityReport.Of(
+            IntegrityCheck.Rehydrate(id, At, At, 1, 0, 1, 0, 0, 0, 0),
+            [IntegrityFinding.NoLedgerRow(id, Primary, "leftover.tmp", 64, At, written)]));
+
+        IntegrityFinding back = Assert.Single(await FindingsAsync(id));
+
+        Assert.Equal(At.AddMinutes(-30).AddTicks(1_234_560), back.LastWrittenAt);
+        Assert.Null(back.ThrownAwayAt);
+    }
+
+    [Fact]
+    public async Task AFileThrownAwayIsWrittenDownOnItsFindingAndTheListNoLongerShowsIt()
+    {
+        IntegrityCheckId id = IntegrityCheckId.New();
+        IntegrityFinding gone = IntegrityFinding.NoLedgerRow(id, Primary, "gone.tmp", 64, At, At.AddMinutes(-5));
+        IntegrityFinding stays = IntegrityFinding.NoLedgerRow(id, Primary, "stays.tmp", 64, At, At.AddMinutes(-5));
+
+        await SaveAsync(IntegrityReport.Of(IntegrityCheck.Rehydrate(id, At, At, 1, 0, 2, 0, 0, 0, 0), [gone, stays]));
+
+        bool thrown;
+        bool again;
+
+        await using (CarinaDbContext writing = database.Open())
+        {
+            thrown = await new IntegrityCheckRepository(writing)
+                .ThrowAwayFindingAsync(id, gone.Id, At.AddMinutes(1), Cancel);
+        }
+
+        await using (CarinaDbContext repeating = database.Open())
+        {
+            again = await new IntegrityCheckRepository(repeating)
+                .ThrowAwayFindingAsync(id, gone.Id, At.AddMinutes(2), Cancel);
+        }
+
+        await using CarinaDbContext reading = database.Open();
+        IntegrityFinding? kept = await new IntegrityCheckRepository(reading).FindFindingAsync(id, gone.Id, Cancel);
+
+        Assert.True(thrown);
+        Assert.False(again);
+        Assert.Equal(At.AddMinutes(1), kept?.ThrownAwayAt);
+        Assert.Equal(["stays.tmp"], (await FindingsAsync(id)).Select(finding => finding.Path).ToArray());
+        Assert.Equal(1, (await PageAsync(id, page: 1, perPage: 50)).Total);
+    }
+
+    [Fact]
+    public async Task AFindingAboutARecordingIsNeverWrittenDownAsThrownAway()
+    {
+        IntegrityCheckId id = IntegrityCheckId.New();
+        IntegrityFinding aboutARecording = IntegrityFinding.SizeDisagrees(id, Primary, Id(9), Name, 100, 99, At);
+
+        await SaveAsync(IntegrityReport.Of(IntegrityCheck.Rehydrate(id, At, At, 1, 0, 1, 1, 1, 0, 0), [aboutARecording]));
+
+        await using CarinaDbContext context = database.Open();
+        var checks = new IntegrityCheckRepository(context);
+
+        Assert.False(await checks.ThrowAwayFindingAsync(id, aboutARecording.Id, At.AddMinutes(1), Cancel));
+        Assert.Null((await checks.FindFindingAsync(id, aboutARecording.Id, Cancel))?.ThrownAwayAt);
+    }
+
+    [Fact]
+    public async Task AFindingIsOnlyFoundUnderTheCheckThatMadeIt()
+    {
+        IntegrityCheckId mine = IntegrityCheckId.New();
+        IntegrityCheckId theirs = await AnEmptyCheckAsync();
+        IntegrityFinding finding = IntegrityFinding.NoLedgerRow(mine, Primary, "mine.tmp", 1, At, At);
+
+        await SaveAsync(IntegrityReport.Of(IntegrityCheck.Rehydrate(mine, At, At, 1, 0, 1, 0, 0, 0, 0), [finding]));
+
+        await using CarinaDbContext context = database.Open();
+        var checks = new IntegrityCheckRepository(context);
+
+        Assert.NotNull(await checks.FindFindingAsync(mine, finding.Id, Cancel));
+        Assert.Null(await checks.FindFindingAsync(theirs, finding.Id, Cancel));
+        Assert.False(await checks.ThrowAwayFindingAsync(theirs, finding.Id, At.AddMinutes(1), Cancel));
+    }
+
+    [Theory]
+    [InlineData("'SizeDisagrees', '00000001-0000-0000-0000-000000000002', 5, 1", "timestamptz '2026-08-26 04:00:00+00'", "NULL")]
+    [InlineData("'NoLedgerRow', NULL, NULL, 1", "NULL", "timestamptz '2026-08-26 06:00:00+00'")]
+    [InlineData("'NoLedgerRow', NULL, NULL, 1", "timestamptz '2026-08-26 04:00:00+00'", "timestamptz '2026-08-26 04:59:59+00'")]
+    [InlineData("'FileMissing', '00000001-0000-0000-0000-000000000002', 5, NULL", "timestamptz '2026-08-26 04:00:00+00'", "timestamptz '2026-08-26 06:00:00+00'")]
+    public async Task AThrowingAwayTheShapeOfTheFindingDoesNotAllowIsRefusedByTheDatabase(
+        string values,
+        string lastWrittenAt,
+        string thrownAwayAt)
+    {
+        IntegrityCheckId id = await AnEmptyCheckAsync();
+
+        await using NpgsqlConnection connection = await OpenAsync();
+        await using var writing = new NpgsqlCommand(
+            "INSERT INTO integrity_finding "
+            + "(id, check_id, fault, recording_id, ledger_size, observed_size, output_root, path, noticed_at, "
+            + "last_written_at, thrown_away_at) "
+            + $"VALUES ('{Guid.NewGuid()}', '{id.Value}', {values}, 'primary', 'a.m2ts', "
+            + $"timestamptz '2026-08-26 05:00:00+00', {lastWrittenAt}, {thrownAwayAt})",
+            connection);
+
+        await Assert.ThrowsAsync<PostgresException>(() => writing.ExecuteNonQueryAsync());
+    }
+
     private async Task<IntegrityCheckId> AnEmptyCheckAsync()
     {
         IntegrityCheckId id = IntegrityCheckId.New();

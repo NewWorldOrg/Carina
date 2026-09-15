@@ -117,6 +117,19 @@ internal sealed class HeldChecks : IIntegrityCheckRepository
             query.Page,
             query.PerPage));
     }
+
+    public Task<IntegrityFinding?> FindFindingAsync(
+        IntegrityCheckId checkId,
+        IntegrityFindingId findingId,
+        CancellationToken cancellationToken)
+        => throw new NotSupportedException();
+
+    public Task<bool> ThrowAwayFindingAsync(
+        IntegrityCheckId checkId,
+        IntegrityFindingId findingId,
+        DateTime at,
+        CancellationToken cancellationToken)
+        => throw new NotSupportedException();
 }
 
 internal sealed class ThrowingSurvey : IRecordingFileSurvey

@@ -128,6 +128,16 @@ nothing.
   a directory of its own. One call throws away one recording; there is no call that
   throws away more than one.
 
+  A file that no recording owns goes the same way, and only as something the most
+  recent ledger check found. The caller names the finding, never a path: the app
+  resolves it to the root, the path, the size and the time of the last write the
+  check kept, checks again that nothing claims the file and that it has not changed,
+  and hands exactly those to the driver. The driver refuses a path that leaves the
+  root or passes through a link, the file of a recording a session is writing, a
+  root that holds no file at all, and a file whose size or last write is no longer
+  the one it was handed — which it reads again itself just before it unlinks.
+  A finding about a recording's own file is never a way to remove it.
+
 - **The version is declared once, in `Directory.Build.props`,** so every assembly
   built from this repository carries the same one. The application answers with
   what it was built as rather than with a string written down beside it, and a

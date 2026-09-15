@@ -166,11 +166,13 @@ public sealed class IntegritySchemaTests(MigratedScratchDatabase database)
         Assert.Equal(
             [
                 "ck_integrity_finding_fault",
+                "ck_integrity_finding_last_written",
                 "ck_integrity_finding_ledger_size",
                 "ck_integrity_finding_observed_size",
                 "ck_integrity_finding_path",
                 "ck_integrity_finding_recording",
                 "ck_integrity_finding_sizes",
+                "ck_integrity_finding_thrown_away",
             ],
             await ConstraintsAsync(connection, "integrity_finding"));
     }
@@ -221,6 +223,33 @@ public sealed class IntegritySchemaTests(MigratedScratchDatabase database)
 
         PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
             () => FindingAsync(connection, check, values, "'one.m2ts'"));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
+        Assert.Equal(named, refusal.ConstraintName);
+    }
+
+    [Theory]
+    [InlineData("'SizeDisagrees', " + Recording + ", 100, 99", "timestamptz '2026-08-26 04:00:00+00'", "NULL", "ck_integrity_finding_last_written")]
+    [InlineData("'NoLedgerRow', NULL, NULL, 1", "NULL", "timestamptz '2026-08-26 06:00:00+00'", "ck_integrity_finding_thrown_away")]
+    [InlineData("'NoLedgerRow', NULL, NULL, 1", "timestamptz '2026-08-26 04:00:00+00'", "timestamptz '2026-08-26 04:59:59+00'", "ck_integrity_finding_thrown_away")]
+    public async Task AFindingThatKeepsALastWriteOrAThrowingAwayItsClassCannotHaveIsRefusedByTheNamedCheck(
+        string values,
+        string lastWrittenAt,
+        string thrownAwayAt,
+        string named)
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        Guid check = await CheckAsync(connection);
+
+        await using var writing = new NpgsqlCommand(
+            "INSERT INTO integrity_finding "
+            + "(id, check_id, fault, recording_id, ledger_size, observed_size, output_root, path, noticed_at, "
+            + "last_written_at, thrown_away_at) "
+            + $"VALUES ('{Guid.NewGuid()}', '{check}', {values}, 'primary', 'one.m2ts', {Began}, "
+            + $"{lastWrittenAt}, {thrownAwayAt})",
+            connection);
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(() => writing.ExecuteNonQueryAsync());
 
         Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
         Assert.Equal(named, refusal.ConstraintName);

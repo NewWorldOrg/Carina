@@ -66,6 +66,11 @@ internal sealed class SamplingDriverStandIn : IDriverClient
     public Task<DriverCall<IReadOnlyList<StorageRootDto>>> GetStorageAsync(CancellationToken cancellationToken)
         => throw new NotSupportedException();
 
+    public Task<DriverCall<StrayFileErasedDto>> EraseStrayFileAsync(
+        StrayFileErasureRequest request,
+        CancellationToken cancellationToken)
+        => throw new NotSupportedException();
+
     public Task<DriverCall<RecordingErasedDto>> EraseRecordingAsync(
         string recordingId,
         string outputRoot,
