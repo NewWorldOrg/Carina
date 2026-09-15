@@ -8,6 +8,8 @@ using Carina.Infrastructure.Persistence.Repositories;
 
 using Microsoft.EntityFrameworkCore;
 
+using Npgsql;
+
 namespace Carina.Db.Tests;
 
 [Collection(ConnectionEnvironmentCollection.Name)]
@@ -211,6 +213,102 @@ public sealed class RecordingDirectoryTests(MigratedScratchDatabase database)
         Assert.Equal(
             RecordingHalt.NoSuchRecording,
             await directory.HaltAsync(RecordingId.New(), reason, Noon, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ADeletionThatLeftFilesBehindStaysOnTheRowAndIsReadBackByTheListAndTheDetail()
+    {
+        int network = await StockedAsync(0);
+        Recording ended = await AddAsync(network, 1, outcome: RecordingOutcome.Complete);
+
+        RecordingErasureNote noted;
+
+        await using (CarinaDbContext writing = Context())
+        {
+            noted = await new RecordingDirectory(writing).NoteErasureAsync(
+                ended.Id,
+                RecordingErasure.Refused(ErasureFault.FileLeftBehind, "permission denied", 2),
+                Noon.AddHours(3),
+                CancellationToken.None);
+        }
+
+        await using CarinaDbContext reading = Context();
+        Recording? found = await new RecordingDirectory(reading).FindAsync(ended.Id, CancellationToken.None);
+        Recording listed = Assert.Single((await ListAsync(Query(network))).Items);
+
+        Assert.Equal(RecordingErasureNote.Noted, noted);
+        Assert.NotNull(found);
+        Assert.Equal(Noon.AddHours(3), found.LeftBehindAt);
+        Assert.Equal(2, found.FilesLeftBehind);
+        Assert.Equal(Noon.AddHours(3), listed.LeftBehindAt);
+        Assert.Equal(2, listed.FilesLeftBehind);
+        Assert.Equal(RecordingOutcome.Complete, found.Outcome);
+    }
+
+    [Fact]
+    public async Task ALaterDeletionThatTookEverythingClearsTheMarkOnTheRow()
+    {
+        int network = await StockedAsync(0);
+        Recording ended = await AddAsync(network, 1, outcome: RecordingOutcome.Truncated);
+
+        await using (CarinaDbContext writing = Context())
+        {
+            await new RecordingDirectory(writing).NoteErasureAsync(
+                ended.Id,
+                RecordingErasure.Refused(ErasureFault.FileLeftBehind, "permission denied", 1),
+                Noon.AddHours(3),
+                CancellationToken.None);
+        }
+
+        await using (CarinaDbContext clearing = Context())
+        {
+            await new RecordingDirectory(clearing).NoteErasureAsync(
+                ended.Id,
+                RecordingErasure.Erased(1),
+                Noon.AddHours(4),
+                CancellationToken.None);
+        }
+
+        await using CarinaDbContext reading = Context();
+        Recording read = await reading.Set<Recording>().SingleAsync(held => held.Id == ended.Id);
+
+        Assert.Null(read.LeftBehindAt);
+        Assert.Null(read.FilesLeftBehind);
+    }
+
+    [Fact]
+    public async Task NoDeletionIsNotedOnARecordingStillBeingWrittenOrOnOneNobodyHas()
+    {
+        int network = await StockedAsync(0);
+        Recording writing = await AddAsync(network, 1);
+        RecordingErasure leftBehind = RecordingErasure.Refused(ErasureFault.FileLeftBehind, "permission denied", 1);
+
+        await using CarinaDbContext context = Context();
+        var directory = new RecordingDirectory(context);
+
+        Assert.Equal(
+            RecordingErasureNote.StillRecording,
+            await directory.NoteErasureAsync(writing.Id, leftBehind, Noon.AddHours(3), CancellationToken.None));
+        Assert.Equal(
+            RecordingErasureNote.NoSuchRecording,
+            await directory.NoteErasureAsync(RecordingId.New(), leftBehind, Noon.AddHours(3), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task TheTableRefusesACountOfFilesLeftBehindThatSaysNothingOfWhen()
+    {
+        int network = await StockedAsync(0);
+        Recording ended = await AddAsync(network, 1, outcome: RecordingOutcome.Complete);
+
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        await using var command = new NpgsqlCommand(
+            "UPDATE recording SET files_left_behind = 1 WHERE id = @id",
+            connection);
+        command.Parameters.AddWithValue("id", ended.Id.Value);
+
+        PostgresException refused = await Assert.ThrowsAsync<PostgresException>(() => command.ExecuteNonQueryAsync());
+
+        Assert.Equal("ck_recording_left_behind", refused.ConstraintName);
     }
 
     [Fact]

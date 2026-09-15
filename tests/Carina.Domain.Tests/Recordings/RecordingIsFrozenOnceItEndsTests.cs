@@ -24,7 +24,10 @@ public sealed class RecordingIsFrozenOnceItEndsTests
         ];
 
         Assert.Equal(
-            ["Abort", "Acquire", "Extend", "Illustrate", "Interrupt", "Measure", "Note", "Resume", "Settle", "Wrote"],
+            [
+                "Abort", "Acquire", "Erased", "Extend", "Illustrate", "Interrupt", "Measure", "Note", "Resume",
+                "Settle", "Wrote",
+            ],
             offered);
         Assert.Equal(offered.Length, Declared(BindingFlags.Public | BindingFlags.Instance).Length);
     }
@@ -57,7 +60,7 @@ public sealed class RecordingIsFrozenOnceItEndsTests
             .Where(method => !method.IsSpecialName)];
 
     [Fact]
-    public void EveryOneOfThemButTheOneThatDrawsThePictureRefusesOnceTheRecordingHasEnded()
+    public void EveryOneOfThemButThePictureAndTheErasureRefusesOnceTheRecordingHasEnded()
     {
         Recording recording = Settled();
 
@@ -79,8 +82,29 @@ public sealed class RecordingIsFrozenOnceItEndsTests
         Assert.Throws<InvalidOperationException>(() => recording.Wrote(TimeSpan.FromMinutes(1)));
 
         recording.Illustrate(ThumbnailState.Ready);
+        recording.Erased(RecordingErasure.Refused(ErasureFault.FileLeftBehind, "permission denied", 1), Later);
 
         Assert.Equal(ThumbnailState.Ready, recording.ThumbnailState);
+        Assert.Equal(Later, recording.LeftBehindAt);
+    }
+
+    [Fact]
+    public void KeepingWhatAnErasureLeftBehindMovesTheColumnsThatSaySoAndNoOthers()
+    {
+        Recording recording = Settled();
+        IReadOnlyDictionary<string, string> before = Read(recording);
+
+        recording.Erased(RecordingErasure.Refused(ErasureFault.FileLeftBehind, "permission denied", 2), Later);
+
+        IReadOnlyDictionary<string, string> after = Read(recording);
+        string[] moved =
+        [
+            .. before.Where(held => !string.Equals(after[held.Key], held.Value, StringComparison.Ordinal))
+                .Select(held => held.Key)
+                .Order(StringComparer.Ordinal),
+        ];
+
+        Assert.Equal([nameof(Recording.FilesLeftBehind), nameof(Recording.LeftBehindAt)], moved);
     }
 
     [Theory]
@@ -108,7 +132,7 @@ public sealed class RecordingIsFrozenOnceItEndsTests
         Assert.Empty(moved.Except(
             [nameof(Recording.ThumbnailState), nameof(Recording.ThumbnailFault)],
             StringComparer.Ordinal));
-        Assert.Equal(44, before.Count);
+        Assert.Equal(46, before.Count);
     }
 
     private static Recording Settled()

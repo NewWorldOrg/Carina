@@ -320,10 +320,13 @@ nothing.
   estimated total, cursor paging in place of a page count, or a count that stops
   at a ceiling and answers "more than". None of them is in place.
 
-- **A recording that has ended is frozen except for its picture — as long as it is
-  reached through the aggregate's own methods.** Every public method on `Recording`
-  but one refuses once an outcome is set; `Illustrate` is the exception, and it
-  moves the two thumbnail columns and nothing else. Reflection tests assert the
+- **A recording that has ended is frozen except for its picture and what throwing it
+  away left behind — as long as it is reached through the aggregate's own methods.**
+  Every public method on `Recording` but two refuses once an outcome is set.
+  `Illustrate` moves the two thumbnail columns and nothing else; `Erased` moves the
+  two columns that say a deletion was asked for and left files on the disk, and
+  nothing else — a deletion that took everything removes the row, so those columns
+  are only ever read on a recording that is still there. Reflection tests assert the
   whole set of methods, that no property carries a public setter, and that the only
   static entry points are the two that make a recording — so a new way in cannot
   appear without being accounted for. A database round trip says the outcome, the

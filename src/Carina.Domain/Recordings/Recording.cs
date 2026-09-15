@@ -105,6 +105,10 @@ public sealed class Recording
 
     public BroadcastGroupRole BroadcastGroupRole { get; private set; }
 
+    public DateTime? LeftBehindAt { get; private set; }
+
+    public int? FilesLeftBehind { get; private set; }
+
     public ProgrammeRef Programme => new(NetworkId, ServiceId, EventId, ProgrammeStartsAt);
 
     public bool IsInFlight => Outcome is null;
@@ -186,7 +190,9 @@ public sealed class Recording
         ProgrammeSnapshot snapshot,
         BroadcastGroupKey? broadcastGroupKey,
         BroadcastGroupRole broadcastGroupRole,
-        ThumbnailFault? thumbnailFault = null)
+        ThumbnailFault? thumbnailFault = null,
+        DateTime? leftBehindAt = null,
+        int? filesLeftBehind = null)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(programme);
@@ -303,6 +309,9 @@ public sealed class Recording
             RefuseAnUnreachableOutcome(settled, abortedAt, fileSizeObserved, stoppedAtActual, outcomeDetail);
         }
 
+        RefuseALeftoverThatDoesNotAddUp(outcome, leftBehindAt, filesLeftBehind);
+        RefuseATimeBeforeTheRecordingBegan(startedAtActual, leftBehindAt, nameof(leftBehindAt));
+
         return new Recording
         {
             Id = id,
@@ -343,6 +352,8 @@ public sealed class Recording
             CapturedAt = snapshot.CapturedAt,
             BroadcastGroupKey = broadcastGroupKey,
             BroadcastGroupRole = broadcastGroupRole,
+            LeftBehindAt = UtcTimes.Optional(leftBehindAt, nameof(leftBehindAt)),
+            FilesLeftBehind = filesLeftBehind,
             Interruptions = interruptions,
             OutcomeDetail = outcomeDetail,
         };
@@ -381,6 +392,35 @@ public sealed class Recording
 
         ThumbnailState = thumbnailState;
         ThumbnailFault = thumbnailFault;
+    }
+
+    public void Erased(RecordingErasure erasure, DateTime at)
+    {
+        ArgumentNullException.ThrowIfNull(erasure);
+
+        if (IsInFlight)
+        {
+            throw new InvalidOperationException(
+                "A recording still being written is never thrown away, so no erasure of it is kept.");
+        }
+
+        DateTime attempted = UtcTimes.Required(at, nameof(at));
+
+        RefuseATimeBeforeTheRecordingBegan(StartedAtActual, attempted, nameof(at));
+
+        if (erasure.EverythingIsGone)
+        {
+            LeftBehindAt = null;
+            FilesLeftBehind = null;
+
+            return;
+        }
+
+        if (erasure.LeftFilesBehind)
+        {
+            LeftBehindAt = attempted;
+            FilesLeftBehind = erasure.FilesLeft;
+        }
     }
 
     public void Acquire(TunerDeviceId tunerDeviceId)
@@ -550,6 +590,34 @@ public sealed class Recording
             throw new ArgumentException(
                 $"A recording that ended {outcome} says why, in the classes the ledger holds.",
                 nameof(detail));
+        }
+    }
+
+    private static void RefuseALeftoverThatDoesNotAddUp(
+        RecordingOutcome? outcome,
+        DateTime? leftBehindAt,
+        int? filesLeftBehind)
+    {
+        if (filesLeftBehind is not null && leftBehindAt is null)
+        {
+            throw new ArgumentException(
+                "A count of files a deletion left behind says when that deletion was asked for.",
+                nameof(leftBehindAt));
+        }
+
+        if (filesLeftBehind is < 1)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(filesLeftBehind),
+                filesLeftBehind,
+                "A deletion that left files behind left at least one.");
+        }
+
+        if (leftBehindAt is not null && outcome is null)
+        {
+            throw new ArgumentException(
+                "A recording still being written is never thrown away, so nothing was left behind by it.",
+                nameof(leftBehindAt));
         }
     }
 

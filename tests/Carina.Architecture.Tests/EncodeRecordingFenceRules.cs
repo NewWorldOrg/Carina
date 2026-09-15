@@ -92,7 +92,7 @@ public static partial class EncodeRecordingFenceRules
     [GeneratedRegex(
         @"\.\s*Settle\s*\(\s*RecordingOutcome\s*\."
         + @"|\.\s*Note\s*\(\s*new\s+OutcomeDetail\b"
-        + @"|\b\w*[Rr]ecord\w*\s*\.\s*(?:Settle|Note|Abort|Extend|Wrote|Measure|Interrupt|Resume|Acquire|Illustrate)\s*\("
+        + @"|\b\w*[Rr]ecord\w*\s*\.\s*(?:Settle|Note|Abort|Extend|Wrote|Measure|Interrupt|Resume|Acquire|Illustrate|Erased)\s*\("
         + @"|\bSet\s*<\s*Recording\s*>\s*\(\s*\)[\s\S]{0,200}?\bExecuteUpdate\w*\s*\("
         + @"|(?i:\bUPDATE\s+recording\b)")]
     private static partial Regex MovesARecording();

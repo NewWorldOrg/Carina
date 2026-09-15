@@ -110,6 +110,29 @@ public sealed class HeldRecordings : IRecordingDirectory
         return Task.FromResult(RecordingHalt.Written);
     }
 
+    public Task<RecordingErasureNote> NoteErasureAsync(
+        RecordingId id,
+        RecordingErasure erasure,
+        DateTime at,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(erasure);
+
+        if (Recordings.FirstOrDefault(recording => recording.Id.Equals(id)) is not { } held)
+        {
+            return Task.FromResult(RecordingErasureNote.NoSuchRecording);
+        }
+
+        if (held.IsInFlight)
+        {
+            return Task.FromResult(RecordingErasureNote.StillRecording);
+        }
+
+        held.Erased(erasure, at);
+
+        return Task.FromResult(RecordingErasureNote.Noted);
+    }
+
     public Task<RecordingDiscard> DiscardAsync(RecordingId id, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(id);
@@ -168,7 +191,9 @@ public sealed class HeldRecordings : IRecordingDirectory
                 held.SnapshotSounds),
             held.BroadcastGroupKey,
             held.BroadcastGroupRole,
-            held.ThumbnailFault);
+            held.ThumbnailFault,
+            held.LeftBehindAt,
+            held.FilesLeftBehind);
 
     private static string Folded(Recording recording)
         => ProgrammeSearchText.Folded(
