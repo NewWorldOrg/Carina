@@ -36,17 +36,6 @@ public static class QualitySaying
            + string.Join(", ", QualityTrendSubjects.All)
            + $"; asking for neither reads the last {QualityTrendFrame.ShippedDays} day of {QualityTrendSubject.PacketsLost}.";
 
-    public static string NoSuchIncident()
-        => "An anomaly is asked for by the identifier the ledger gave it, and nothing is kept under this one.";
-
-    public static string AlreadySettled()
-        => "This anomaly has been resolved, and acknowledging is for one that still stands; the same condition "
-           + "coming back is kept as a new occurrence with its own acknowledgement.";
-
-    public static string NotToldAboutYet()
-        => "This anomaly has not been told about yet, and acknowledging follows being told; the next pass of the "
-           + "supply watch tells about it.";
-
     public static string NoPassYet()
         => "The supply watch has not read anything yet, so there is nothing to say about whether the supplies are "
            + "being heard from.";

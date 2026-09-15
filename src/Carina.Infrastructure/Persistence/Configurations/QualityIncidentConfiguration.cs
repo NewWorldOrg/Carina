@@ -43,16 +43,11 @@ public sealed class QualityIncidentConfiguration : IEntityTypeConfiguration<Qual
             table.HasCheckConstraint(
                 "ck_quality_incident_lifecycle",
                 $"""
-                ((acknowledged_at IS NULL) = (acknowledged_by IS NULL))
-                AND (acknowledged_at IS NULL OR notified_at IS NOT NULL)
-                AND (notified_at IS NULL OR notified_at >= detected_at)
-                AND (acknowledged_at IS NULL OR acknowledged_at >= notified_at)
+                (notified_at IS NULL OR notified_at >= detected_at)
                 AND (resolved_at IS NULL OR resolved_at >= detected_at)
                 AND ((state = '{nameof(QualityIncidentState.Resolved)}') = (resolved_at IS NOT NULL))
-                AND ((state = '{nameof(QualityIncidentState.Acknowledged)}')
-                    = (acknowledged_at IS NOT NULL AND resolved_at IS NULL))
                 AND ((state = '{nameof(QualityIncidentState.Notified)}')
-                    = (notified_at IS NOT NULL AND acknowledged_at IS NULL AND resolved_at IS NULL))
+                    = (notified_at IS NOT NULL AND resolved_at IS NULL))
                 AND ((state = '{nameof(QualityIncidentState.Detected)}')
                     = (notified_at IS NULL AND resolved_at IS NULL))
                 """);
@@ -114,11 +109,6 @@ public sealed class QualityIncidentConfiguration : IEntityTypeConfiguration<Qual
             .IsRequired();
 
         builder.Property(incident => incident.NotifiedAt);
-        builder.Property(incident => incident.AcknowledgedAt);
-
-        builder.Property(incident => incident.AcknowledgedBy)
-            .HasMaxLength(QualityIncident.AcknowledgedByMaxLength);
-
         builder.Property(incident => incident.ResolvedAt);
 
         builder.Ignore(incident => incident.Restated);

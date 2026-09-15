@@ -6,14 +6,6 @@ namespace Carina.Infrastructure.Persistence.Repositories;
 
 public sealed class QualityIncidentRepository(CarinaDbContext context) : IQualityIncidentRepository
 {
-    public async Task<QualityIncident?> FindAsync(QualityIncidentId id, CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(id);
-
-        return await context.Set<QualityIncident>()
-            .SingleOrDefaultAsync(incident => incident.Id == id, cancellationToken);
-    }
-
     public async Task<IReadOnlyList<QualityIncident>> ListUnsettledAsync(CancellationToken cancellationToken)
         => await context.Set<QualityIncident>()
             .Where(incident => incident.ResolvedAt == null)

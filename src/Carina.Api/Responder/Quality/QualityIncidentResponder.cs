@@ -17,8 +17,6 @@ public sealed record QualityIncidentResponder(
     string? Classification,
     QualityIncidentState State,
     DateTime? NotifiedAt,
-    DateTime? AcknowledgedAt,
-    string? AcknowledgedBy,
     DateTime? ResolvedAt)
 {
     public static QualityIncidentResponder Of(QualityIncident incident)
@@ -40,8 +38,6 @@ public sealed record QualityIncidentResponder(
             incident.Classification,
             incident.State,
             incident.NotifiedAt,
-            incident.AcknowledgedAt,
-            incident.AcknowledgedBy,
             incident.ResolvedAt);
     }
 }

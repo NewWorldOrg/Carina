@@ -6,9 +6,7 @@ public enum QualityIncidentState
 
     Notified = 2,
 
-    Acknowledged = 3,
-
-    Resolved = 4,
+    Resolved = 3,
 }
 
 public enum QualityIncidentOwner

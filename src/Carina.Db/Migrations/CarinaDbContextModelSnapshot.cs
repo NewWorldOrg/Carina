@@ -1906,15 +1906,6 @@ namespace Carina.Db.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<DateTime?>("AcknowledgedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("acknowledged_at");
-
-                    b.Property<string>("AcknowledgedBy")
-                        .HasMaxLength(128)
-                        .HasColumnType("character varying(128)")
-                        .HasColumnName("acknowledged_by");
-
                     b.Property<string>("Breached")
                         .IsRequired()
                         .HasMaxLength(32)
@@ -2014,11 +2005,11 @@ namespace Carina.Db.Migrations
 
                             t.HasCheckConstraint("ck_quality_incident_classification", "(owner = 'Quality') = (classification IS NULL)");
 
-                            t.HasCheckConstraint("ck_quality_incident_lifecycle", "((acknowledged_at IS NULL) = (acknowledged_by IS NULL))\nAND (acknowledged_at IS NULL OR notified_at IS NOT NULL)\nAND (notified_at IS NULL OR notified_at >= detected_at)\nAND (acknowledged_at IS NULL OR acknowledged_at >= notified_at)\nAND (resolved_at IS NULL OR resolved_at >= detected_at)\nAND ((state = 'Resolved') = (resolved_at IS NOT NULL))\nAND ((state = 'Acknowledged')\n    = (acknowledged_at IS NOT NULL AND resolved_at IS NULL))\nAND ((state = 'Notified')\n    = (notified_at IS NOT NULL AND acknowledged_at IS NULL AND resolved_at IS NULL))\nAND ((state = 'Detected')\n    = (notified_at IS NULL AND resolved_at IS NULL))");
+                            t.HasCheckConstraint("ck_quality_incident_lifecycle", "(notified_at IS NULL OR notified_at >= detected_at)\nAND (resolved_at IS NULL OR resolved_at >= detected_at)\nAND ((state = 'Resolved') = (resolved_at IS NOT NULL))\nAND ((state = 'Notified')\n    = (notified_at IS NOT NULL AND resolved_at IS NULL))\nAND ((state = 'Detected')\n    = (notified_at IS NULL AND resolved_at IS NULL))");
 
                             t.HasCheckConstraint("ck_quality_incident_silence", "(breached = 'SupplySilence') = (silence IS NOT NULL)\nAND (silence IS NULL OR silence IN ('RecordingProgress', 'RecordingMeasurement', 'SignalSamples', 'GuideVisits'))");
 
-                            t.HasCheckConstraint("ck_quality_incident_vocabulary", "breached IN ('PacketsLostWarning', 'PacketsLostUnwatchable', 'PacketsLeftScrambled', 'Overflows', 'LockRate', 'CarrierToNoiseFloor', 'BitErrorRateCeiling', 'SupplySilence', 'PacketsLeftScrambledUnwatchable')\nAND owner IN ('Quality', 'Tuner', 'Guide', 'Reservation', 'Recording')\nAND state IN ('Detected', 'Notified', 'Acknowledged', 'Resolved')\nAND subject_kind IN ('Tuner', 'Channel', 'Recording', 'TransportStream', 'Guide')");
+                            t.HasCheckConstraint("ck_quality_incident_vocabulary", "breached IN ('PacketsLostWarning', 'PacketsLostUnwatchable', 'PacketsLeftScrambled', 'Overflows', 'LockRate', 'CarrierToNoiseFloor', 'BitErrorRateCeiling', 'SupplySilence', 'PacketsLeftScrambledUnwatchable')\nAND owner IN ('Quality', 'Tuner', 'Guide', 'Reservation', 'Recording')\nAND state IN ('Detected', 'Notified', 'Resolved')\nAND subject_kind IN ('Tuner', 'Channel', 'Recording', 'TransportStream', 'Guide')");
                         });
                 });
 

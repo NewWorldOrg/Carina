@@ -16,12 +16,9 @@ public sealed class ListQualityIncidentsAction(QualityIncidentService incidents)
 {
     [HttpGet]
     [ProducesResponseType<BaseResponder<QualityIncidentListResponder>>(StatusCodes.Status200OK)]
-    public async Task<IActionResult> Invoke(
-        [FromQuery] bool includeAcknowledged,
-        CancellationToken cancellationToken)
+    public async Task<IActionResult> Invoke(CancellationToken cancellationToken)
     {
-        ServiceResult<IReadOnlyList<QualityIncident>> read =
-            await incidents.ListAsync(includeAcknowledged, cancellationToken);
+        ServiceResult<IReadOnlyList<QualityIncident>> read = await incidents.ListAsync(cancellationToken);
 
         return Ok(BaseResponder<QualityIncidentListResponder>.Success(
             QualityIncidentListResponder.Of(read.Data!)));

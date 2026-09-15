@@ -6,8 +6,6 @@ public sealed class QualityIncident
 {
     public const int ClassificationMaxLength = 64;
 
-    public const int AcknowledgedByMaxLength = 128;
-
     private QualityIncident()
     {
     }
@@ -33,10 +31,6 @@ public sealed class QualityIncident
     public QualityIncidentState State { get; private set; }
 
     public DateTime? NotifiedAt { get; private set; }
-
-    public DateTime? AcknowledgedAt { get; private set; }
-
-    public string? AcknowledgedBy { get; private set; }
 
     public DateTime? ResolvedAt { get; private set; }
 
@@ -66,8 +60,6 @@ public sealed class QualityIncident
             applied,
             QualityIncidentState.Detected,
             null,
-            null,
-            null,
             null);
 
     public static QualityIncident Rehydrate(
@@ -82,8 +74,6 @@ public sealed class QualityIncident
         Threshold applied,
         QualityIncidentState state,
         DateTime? notifiedAt,
-        DateTime? acknowledgedAt,
-        string? acknowledgedBy,
         DateTime? resolvedAt)
     {
         ArgumentNullException.ThrowIfNull(id);
@@ -118,32 +108,14 @@ public sealed class QualityIncident
             ArgumentOutOfRangeException.ThrowIfGreaterThan(classification.Length, ClassificationMaxLength, nameof(classification));
         }
 
-        if (acknowledgedBy is not null)
-        {
-            ArgumentException.ThrowIfNullOrWhiteSpace(acknowledgedBy);
-            ArgumentOutOfRangeException.ThrowIfGreaterThan(acknowledgedBy.Length, AcknowledgedByMaxLength, nameof(acknowledgedBy));
-        }
-
-        if ((acknowledgedAt is null) != (acknowledgedBy is null))
-        {
-            throw new ArgumentException("Being acknowledged means somebody acknowledged it.", nameof(acknowledgedBy));
-        }
-
         UtcTimes.Required(detectedAt, nameof(detectedAt));
         UtcTimes.Optional(notifiedAt, nameof(notifiedAt));
-        UtcTimes.Optional(acknowledgedAt, nameof(acknowledgedAt));
         UtcTimes.Optional(resolvedAt, nameof(resolvedAt));
 
         Ordered(notifiedAt, detectedAt, nameof(notifiedAt));
-        Ordered(acknowledgedAt, notifiedAt, nameof(acknowledgedAt));
         Ordered(resolvedAt, detectedAt, nameof(resolvedAt));
 
-        if (acknowledgedAt is not null && notifiedAt is null)
-        {
-            throw new ArgumentException("Nobody acknowledges an incident they were never told about.", nameof(acknowledgedAt));
-        }
-
-        if (state != Standing(notifiedAt, acknowledgedAt, resolvedAt))
+        if (state != Standing(notifiedAt, resolvedAt))
         {
             throw new ArgumentException("An incident stands where its own times put it.", nameof(state));
         }
@@ -161,28 +133,19 @@ public sealed class QualityIncident
             Applied = applied,
             State = state,
             NotifiedAt = notifiedAt,
-            AcknowledgedAt = acknowledgedAt,
-            AcknowledgedBy = acknowledgedBy,
             ResolvedAt = resolvedAt,
         };
     }
 
     public void Notify(DateTime at)
     {
-        Refuse(QualityIncidentState.Detected, "told about");
+        if (State is not QualityIncidentState.Detected)
+        {
+            throw new InvalidOperationException($"An incident standing at {State} is not one to be told about.");
+        }
+
         NotifiedAt = Following(at, DetectedAt, nameof(at));
         State = QualityIncidentState.Notified;
-    }
-
-    public void Acknowledge(DateTime at, string by)
-    {
-        Refuse(QualityIncidentState.Notified, "acknowledged");
-        ArgumentException.ThrowIfNullOrWhiteSpace(by);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(by.Length, AcknowledgedByMaxLength, nameof(by));
-
-        AcknowledgedAt = Following(at, NotifiedAt!.Value, nameof(at));
-        AcknowledgedBy = by;
-        State = QualityIncidentState.Acknowledged;
     }
 
     public void Resolve(DateTime at)
@@ -193,13 +156,12 @@ public sealed class QualityIncident
                 "An incident that has been resolved stays resolved, and the same condition coming back is a new one.");
         }
 
-        ResolvedAt = Following(at, AcknowledgedAt ?? NotifiedAt ?? DetectedAt, nameof(at));
+        ResolvedAt = Following(at, NotifiedAt ?? DetectedAt, nameof(at));
         State = QualityIncidentState.Resolved;
     }
 
-    private static QualityIncidentState Standing(DateTime? notifiedAt, DateTime? acknowledgedAt, DateTime? resolvedAt)
+    private static QualityIncidentState Standing(DateTime? notifiedAt, DateTime? resolvedAt)
         => resolvedAt is not null ? QualityIncidentState.Resolved
-            : acknowledgedAt is not null ? QualityIncidentState.Acknowledged
             : notifiedAt is not null ? QualityIncidentState.Notified
             : QualityIncidentState.Detected;
 
@@ -230,13 +192,5 @@ public sealed class QualityIncident
         }
 
         return at;
-    }
-
-    private void Refuse(QualityIncidentState expected, string what)
-    {
-        if (State != expected)
-        {
-            throw new InvalidOperationException($"An incident standing at {State} is not one to be {what}.");
-        }
     }
 }
