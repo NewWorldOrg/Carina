@@ -51,7 +51,7 @@ public sealed class ChapterDetectionMaterialTests : IDisposable
         string broadcast = await Broadcasting(whole, opens, closes);
         EncodeTimeline timeline = await AlignedTo(broadcast);
 
-        ChapterDetection read = await Detecting().MarkAsync(broadcast, Service, timeline, Cores, Unwatched, Cancel);
+        ChapterDetection read = await Detecting().MarkAsync(broadcast, Service, timeline, null, Cores, Unwatched, Cancel);
 
         Assert.Equal(ChapterVerdict.Marked, read.Verdict);
         Assert.Equal(3, read.Segments.Count);
@@ -77,7 +77,7 @@ public sealed class ChapterDetectionMaterialTests : IDisposable
 
         Assert.InRange(timeline.SourceStart, LateInTheDay, LateInTheDay + WhatTheMuxerAddsToTheHead);
 
-        ChapterDetection read = await Detecting().MarkAsync(broadcast, Service, timeline, Cores, Unwatched, Cancel);
+        ChapterDetection read = await Detecting().MarkAsync(broadcast, Service, timeline, null, Cores, Unwatched, Cancel);
 
         Assert.Equal(ChapterVerdict.Marked, read.Verdict);
         Assert.Equal(3, read.Segments.Count);
@@ -96,7 +96,7 @@ public sealed class ChapterDetectionMaterialTests : IDisposable
         string broadcast = await Broadcasting(TimeSpan.FromSeconds(40), TimeSpan.FromSeconds(20));
         EncodeTimeline timeline = await AlignedTo(broadcast);
 
-        ChapterDetection read = await Detecting().MarkAsync(broadcast, Service, timeline, Cores, Unwatched, Cancel);
+        ChapterDetection read = await Detecting().MarkAsync(broadcast, Service, timeline, null, Cores, Unwatched, Cancel);
 
         Assert.Equal(ChapterVerdict.NothingFound, read.Verdict);
         Assert.Empty(read.Segments);

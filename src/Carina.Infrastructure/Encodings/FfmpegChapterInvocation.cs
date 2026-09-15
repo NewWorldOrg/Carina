@@ -110,6 +110,41 @@ public static class FfmpegChapterInvocation
         ];
     }
 
+    /// <summary>
+    /// The run that watches the whole of the picture for the station's watermark. It decodes only
+    /// the pictures that stand on their own, keeps one a second, shrinks it to the size a watermark
+    /// is looked for in and hands it over in grey on the output, and says on the error stream the
+    /// moment each one was shown at. Pictures are handed over exactly as they come out of the
+    /// filters, one for each line said about them, so the n-th picture is the n-th moment.
+    /// </summary>
+    public static IReadOnlyList<string> Watching(string source, ServiceId service, int cores)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(source);
+        ArgumentNullException.ThrowIfNull(service);
+        ArgumentOutOfRangeException.ThrowIfLessThan(cores, 1);
+
+        return
+        [
+            .. Preamble(cores),
+            "-an",
+            "-skip_frame",
+            "nokey",
+            "-i",
+            source,
+            "-map",
+            FfmpegEncodeInvocation.VideoStream(service),
+            "-vf",
+            Shrunk,
+            "-fps_mode",
+            "passthrough",
+            "-f",
+            "rawvideo",
+            "-",
+        ];
+    }
+
+    public const string Shrunk = "fps=1,scale=480:270:flags=area,format=gray,showinfo";
+
     public static TimeSpan From(TimeSpan at) => at > Before ? at - Before : TimeSpan.Zero;
 
     internal static string Quiet(ChapterSettings settings)

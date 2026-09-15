@@ -20,6 +20,13 @@ namespace Carina.Domain.Encodings;
 /// that one left behind by a process that died can be found and stopped by the next; a hand-over
 /// that throws stops the programme and comes back out (BR-ED2-011).
 /// </para>
+/// <para>
+/// <c>learnedAhead</c> is the station's watermark learned from another recording of the same
+/// service, or nothing when none has been. An implementation that watches the picture for it also
+/// learns this source's watermark and hands it back on <see cref="ChapterDetection.Learned"/>, for
+/// the recordings after this one; what it learns from this source never judges this source
+/// (BR-ED2-007).
+/// </para>
 /// </summary>
 public interface IChapterDetector
 {
@@ -34,6 +41,7 @@ public interface IChapterDetector
         string source,
         ServiceId service,
         EncodeTimeline timeline,
+        WatermarkMask? learnedAhead,
         int cores,
         Func<RunningProgramme, Task> began,
         CancellationToken cancellationToken);
