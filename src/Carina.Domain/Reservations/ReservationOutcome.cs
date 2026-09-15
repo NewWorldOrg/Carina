@@ -21,6 +21,10 @@ public enum ReservationOutcomeKind
     ProgrammeGone = 6,
 
     ProgrammeReturned = 7,
+
+    Retried = 8,
+
+    GaveUpRetrying = 9,
 }
 
 /// <summary>
@@ -45,6 +49,8 @@ public static class ReservationOutcomeKinds
         ReservationOutcomeKind.ProgrammeMoved,
         ReservationOutcomeKind.ProgrammeGone,
         ReservationOutcomeKind.ProgrammeReturned,
+        ReservationOutcomeKind.Retried,
+        ReservationOutcomeKind.GaveUpRetrying,
     ];
 }
 
@@ -88,6 +94,10 @@ public sealed class ReservationOutcome
 
     public DateTime OccurredAt { get; private set; }
 
+    public RetryResult? RetryResult { get; private set; }
+
+    public RetryGiveUp? GaveUpBecause { get; private set; }
+
     public static ReservationOutcome Record(
         ReservationOutcomeId id,
         Reservation reservation,
@@ -117,6 +127,67 @@ public sealed class ReservationOutcome
             at);
     }
 
+    public static ReservationOutcome RecordRetry(
+        ReservationOutcomeId id,
+        Reservation reservation,
+        RetryAttempt attempt,
+        DateTime at)
+    {
+        ArgumentNullException.ThrowIfNull(reservation);
+        ArgumentNullException.ThrowIfNull(attempt);
+
+        return Rehydrate(
+            id,
+            reservation.Id,
+            reservation.Programme,
+            reservation.SnapshotName,
+            reservation.EffectiveStartAt,
+            reservation.EffectiveEndAt,
+            reservation.Priority,
+            reservation.RuleId,
+            ReservationOutcomeKind.Retried,
+            attempt.TuneFailure,
+            null,
+            attempt.Faults,
+            [],
+            at,
+            attempt.Result);
+    }
+
+    public static ReservationOutcome RecordGivingUp(
+        ReservationOutcomeId id,
+        Reservation reservation,
+        RetryGiveUp because,
+        TuneFailureKind? structural,
+        DateTime at)
+    {
+        ArgumentNullException.ThrowIfNull(reservation);
+
+        IReadOnlyList<RecordingFault> faults = because switch
+        {
+            RetryGiveUp.NotTransient => [RecordingFault.TuneFailed],
+            RetryGiveUp.PrecheckFailed => [RecordingFault.RefusedByDiskPrecheck],
+            _ => [],
+        };
+
+        return Rehydrate(
+            id,
+            reservation.Id,
+            reservation.Programme,
+            reservation.SnapshotName,
+            reservation.EffectiveStartAt,
+            reservation.EffectiveEndAt,
+            reservation.Priority,
+            reservation.RuleId,
+            ReservationOutcomeKind.GaveUpRetrying,
+            structural,
+            null,
+            faults,
+            [],
+            at,
+            gaveUpBecause: because);
+    }
+
     public static ReservationOutcome Rehydrate(
         ReservationOutcomeId id,
         ReservationId reservationId,
@@ -131,7 +202,9 @@ public sealed class ReservationOutcome
         RecordingOutcome? recordingOutcome,
         IReadOnlyList<RecordingFault> faults,
         IReadOnlyList<Guid> recordedInstead,
-        DateTime occurredAt)
+        DateTime occurredAt,
+        RetryResult? retryResult = null,
+        RetryGiveUp? gaveUpBecause = null)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(reservationId);
@@ -149,6 +222,16 @@ public sealed class ReservationOutcome
         if (tuneFailure is { } named && !Enum.IsDefined(named))
         {
             throw new ArgumentOutOfRangeException(nameof(tuneFailure), tuneFailure, "A tune failure is one of the four kinds.");
+        }
+
+        if (retryResult is { } result && !Enum.IsDefined(result))
+        {
+            throw new ArgumentOutOfRangeException(nameof(retryResult), retryResult, "A retry came to one of the results the ledger holds.");
+        }
+
+        if (gaveUpBecause is { } reason && !Enum.IsDefined(reason))
+        {
+            throw new ArgumentOutOfRangeException(nameof(gaveUpBecause), gaveUpBecause, "Giving up names one of the reasons the ledger holds.");
         }
 
         if (kind is ReservationOutcomeKind.TuneFailure && tuneFailure is null)
@@ -187,6 +270,8 @@ public sealed class ReservationOutcome
                 nameof(faults));
         }
 
+        RefuseARetryThatDoesNotSayWhatCameOfIt(kind, tuneFailure, faults, retryResult, gaveUpBecause);
+
         return new ReservationOutcome
         {
             Id = id,
@@ -206,6 +291,54 @@ public sealed class ReservationOutcome
             Faults = [.. faults],
             RecordedInstead = recordedInstead,
             OccurredAt = UtcTimes.Required(occurredAt, nameof(occurredAt)),
+            RetryResult = retryResult,
+            GaveUpBecause = gaveUpBecause,
         };
+    }
+
+    private static void RefuseARetryThatDoesNotSayWhatCameOfIt(
+        ReservationOutcomeKind kind,
+        TuneFailureKind? tuneFailure,
+        IReadOnlyList<RecordingFault> faults,
+        RetryResult? retryResult,
+        RetryGiveUp? gaveUpBecause)
+    {
+        if ((kind is ReservationOutcomeKind.Retried) != (retryResult is not null))
+        {
+            throw new ArgumentException(
+                "A retry is written down with what came of it, and no other line carries a result.",
+                nameof(retryResult));
+        }
+
+        if ((kind is ReservationOutcomeKind.GaveUpRetrying) != (gaveUpBecause is not null))
+        {
+            throw new ArgumentException(
+                "Giving up on trying again says why, and no other line carries a reason.",
+                nameof(gaveUpBecause));
+        }
+
+        if (retryResult is Recordings.RetryResult.Started && (tuneFailure is not null || faults.Count > 0))
+        {
+            throw new ArgumentException(
+                "A retry that started a session was not refused, so it names no failure.",
+                nameof(faults));
+        }
+
+        if (kind is ReservationOutcomeKind.Retried or ReservationOutcomeKind.GaveUpRetrying
+            && tuneFailure is not null
+            && !faults.Contains(RecordingFault.TuneFailed))
+        {
+            throw new ArgumentException(
+                "A line that names a tune failure names the class the recorder gave it, so the two cannot disagree.",
+                nameof(faults));
+        }
+
+        if (kind is ReservationOutcomeKind.GaveUpRetrying
+            && (gaveUpBecause is RetryGiveUp.NotTransient) != (tuneFailure is not null))
+        {
+            throw new ArgumentException(
+                "Giving up names a tune failure exactly when that failure is the reason.",
+                nameof(tuneFailure));
+        }
     }
 }

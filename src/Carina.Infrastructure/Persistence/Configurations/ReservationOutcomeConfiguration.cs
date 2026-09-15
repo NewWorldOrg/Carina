@@ -18,6 +18,10 @@ public sealed class ReservationOutcomeConfiguration : IEntityTypeConfiguration<R
 
     public const string ReservationIndexName = "ux_reservation_outcome_reservation_kind";
 
+    private const string Retried = nameof(ReservationOutcomeKind.Retried);
+
+    private const string GaveUpRetrying = nameof(ReservationOutcomeKind.GaveUpRetrying);
+
     public void Configure(EntityTypeBuilder<ReservationOutcome> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -26,8 +30,7 @@ public sealed class ReservationOutcomeConfiguration : IEntityTypeConfiguration<R
         {
             table.HasCheckConstraint(
                 "ck_reservation_outcome_kind",
-                "kind IN ('Competing', 'Missed', 'TuneFailure', 'RecordingFailure', 'ProgrammeMoved', "
-                + "'ProgrammeGone', 'ProgrammeReturned')");
+                $"kind IN ({InList<ReservationOutcomeKind>()})");
             table.HasCheckConstraint(
                 "ck_reservation_outcome_tune_failure",
                 """
@@ -49,6 +52,22 @@ public sealed class ReservationOutcomeConfiguration : IEntityTypeConfiguration<R
                 $"""
                 faults <@ '{Vocabulary<RecordingFault>()}'::jsonb
                 AND (kind <> 'TuneFailure' OR faults @> '["{RecordingFault.TuneFailed}"]'::jsonb)
+                """);
+            table.HasCheckConstraint(
+                "ck_reservation_outcome_retry",
+                $"""
+                (retry_result IS NULL OR retry_result IN ({InList<RetryResult>()}))
+                AND (kind = '{Retried}') = (retry_result IS NOT NULL)
+                AND (retry_result IS DISTINCT FROM '{RetryResult.Started}'
+                     OR (tune_failure IS NULL AND jsonb_array_length(faults) = 0))
+                """);
+            table.HasCheckConstraint(
+                "ck_reservation_outcome_gave_up",
+                $"""
+                (gave_up_because IS NULL OR gave_up_because IN ({InList<RetryGiveUp>()}))
+                AND (kind = '{GaveUpRetrying}') = (gave_up_because IS NOT NULL)
+                AND (kind <> '{GaveUpRetrying}'
+                     OR (gave_up_because = '{RetryGiveUp.NotTransient}') = (tune_failure IS NOT NULL))
                 """);
             table.HasCheckConstraint("ck_reservation_outcome_window", "effective_end_at > effective_start_at");
         });
@@ -108,6 +127,14 @@ public sealed class ReservationOutcomeConfiguration : IEntityTypeConfiguration<R
             .HasConversion<string>()
             .HasMaxLength(32);
 
+        builder.Property(outcome => outcome.RetryResult)
+            .HasConversion<string>()
+            .HasMaxLength(32);
+
+        builder.Property(outcome => outcome.GaveUpBecause)
+            .HasConversion<string>()
+            .HasMaxLength(32);
+
         builder.Property(outcome => outcome.Faults)
             .HasConversion(
                 faults => JsonSerializer.Serialize(faults, ProgrammeJson.Options),
@@ -131,12 +158,17 @@ public sealed class ReservationOutcomeConfiguration : IEntityTypeConfiguration<R
         builder.HasIndex(outcome => outcome.OccurredAt).HasDatabaseName(OccurrenceIndexName);
         builder.HasIndex(outcome => new { outcome.ReservationId, outcome.Kind })
             .HasDatabaseName(ReservationIndexName)
+            .HasFilter($"kind <> '{Retried}'")
             .IsUnique();
     }
 
     private static string Vocabulary<T>()
         where T : struct, Enum
         => "[" + string.Join(", ", Enum.GetNames<T>().Select(name => $"\"{name}\"")) + "]";
+
+    private static string InList<T>()
+        where T : struct, Enum
+        => string.Join(", ", Enum.GetNames<T>().Select(name => $"'{name}'"));
 
     private static IReadOnlyList<RecordingFault> ReadFaults(string stored)
         => JsonSerializer.Deserialize<List<RecordingFault>>(stored, ProgrammeJson.Options) ?? [];
