@@ -225,6 +225,11 @@ public sealed class RecordingDriver : IDriverClient
         CancellationToken cancellationToken)
         => throw new NotSupportedException();
 
+    public Task<DriverCall<StrayFileErasedDto>> EraseStrayFileAsync(
+        StrayFileErasureRequest request,
+        CancellationToken cancellationToken)
+        => throw new NotSupportedException();
+
     public Task<DriverCall<RecordingErasedDto>> EraseRecordingAsync(
         string recordingId,
         string outputRoot,

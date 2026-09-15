@@ -22,6 +22,8 @@ public static class DriverEndpoints
 
     public const string Recordings = "/recordings";
 
+    public const string StrayFiles = "/stray-files";
+
     public const string SubscriberQuery = "as";
 
     public const string OutputRootQuery = "root";
@@ -73,5 +75,6 @@ public static class DriverEndpoints
         Restart,
         Storage,
         Recordings,
+        StrayFiles,
     ];
 }

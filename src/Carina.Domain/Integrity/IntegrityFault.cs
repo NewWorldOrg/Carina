@@ -31,6 +31,11 @@ public static class IntegrityFaults
         IntegrityFault.EmptyThoughComplete,
     ];
 
+    public static readonly IReadOnlyList<IntegrityFault> ThatNameAFileNoRecordingOwns =
+    [
+        IntegrityFault.NoLedgerRow,
+    ];
+
     public static IntegrityFault Named(IntegrityFault fault)
         => Enum.IsDefined(fault)
             ? fault

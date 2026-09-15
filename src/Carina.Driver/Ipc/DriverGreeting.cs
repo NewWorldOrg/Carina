@@ -22,6 +22,7 @@ public static class DriverGreeting
         DriverCapabilities.DropPositions,
         DriverCapabilities.Storage,
         DriverCapabilities.RecordingErasure,
+        DriverCapabilities.StrayFileErasure,
         .. SignalQualityMetrics.All.Select(DriverCapabilities.SignalQualityMetric),
         .. SessionPurposes.Capabilities,
     ];

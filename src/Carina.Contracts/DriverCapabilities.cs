@@ -36,6 +36,8 @@ public static class DriverCapabilities
 
     public const string RecordingErasure = "recordingErasure";
 
+    public const string StrayFileErasure = "strayFileErasure";
+
     public const string SignalQualityMetricPrefix = "signalQuality.";
 
     public const string SessionPurposePrefix = "sessionPurpose.";

@@ -40,6 +40,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<RuleService>();
         services.AddSingleton(new RecordingDeletions());
         services.AddScoped<RecordingService>();
+        services.AddSingleton(new FindingDisposals());
         services.AddScoped<IntegrityService>();
         services.AddScoped<PlaybackService>();
         services.AddScoped<PlaybackTicketService>();

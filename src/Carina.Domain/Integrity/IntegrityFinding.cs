@@ -1,3 +1,4 @@
+using Carina.Contracts;
 using Carina.Domain.Base;
 using Carina.Domain.Recordings;
 
@@ -27,6 +28,10 @@ public sealed class IntegrityFinding
 
     public DateTime NoticedAt { get; private set; }
 
+    public DateTime? LastWrittenAt { get; private set; }
+
+    public DateTime? ThrownAwayAt { get; private set; }
+
     public static IntegrityFinding Rehydrate(
         IntegrityFindingId id,
         IntegrityCheckId checkId,
@@ -36,12 +41,38 @@ public sealed class IntegrityFinding
         RecordingId? recordingId,
         long? ledgerSize,
         long? observedSize,
-        DateTime noticedAt)
+        DateTime noticedAt,
+        DateTime? lastWrittenAt = null,
+        DateTime? thrownAwayAt = null)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(checkId);
         ArgumentNullException.ThrowIfNull(root);
         ArgumentException.ThrowIfNullOrEmpty(path);
+
+        bool noRecordingOwnsIt = IntegrityFaults.ThatNameAFileNoRecordingOwns.Contains(IntegrityFaults.Named(fault));
+        DateTime noticed = UtcTimes.Required(noticedAt, nameof(noticedAt));
+
+        if (lastWrittenAt is not null && !noRecordingOwnsIt)
+        {
+            throw new ArgumentException(
+                $"Only a file no recording owns keeps when it was last written, and a {fault} finding is not one.",
+                nameof(lastWrittenAt));
+        }
+
+        if (thrownAwayAt is not null && (!noRecordingOwnsIt || lastWrittenAt is null))
+        {
+            throw new ArgumentException(
+                "Only a file no recording owns, whose last write was kept, is ever thrown away from a finding.",
+                nameof(thrownAwayAt));
+        }
+
+        if (thrownAwayAt is { } thrown && thrown < noticed)
+        {
+            throw new ArgumentException(
+                "A file is thrown away after it was found, never before.",
+                nameof(thrownAwayAt));
+        }
 
         if (ledgerSize is < 0)
         {
@@ -66,8 +97,30 @@ public sealed class IntegrityFinding
             RecordingId = recordingId,
             LedgerSize = ledgerSize,
             ObservedSize = observedSize,
-            NoticedAt = UtcTimes.Required(noticedAt, nameof(noticedAt)),
+            NoticedAt = noticed,
+            LastWrittenAt = lastWrittenAt is { } written
+                ? StrayFileStamp.Truncated(UtcTimes.Required(written, nameof(lastWrittenAt)))
+                : null,
+            ThrownAwayAt = UtcTimes.Optional(thrownAwayAt, nameof(thrownAwayAt)),
         };
+    }
+
+    public void ThrowAway(DateTime at)
+    {
+        if (StrayFileDisposal.Refusal(this) is { } refusal)
+        {
+            throw new InvalidOperationException(
+                $"The file this finding names is not one to throw away from here: {refusal}.");
+        }
+
+        DateTime thrown = UtcTimes.Required(at, nameof(at));
+
+        if (thrown < NoticedAt)
+        {
+            throw new ArgumentException("A file is thrown away after it was found, never before.", nameof(at));
+        }
+
+        ThrownAwayAt = thrown;
     }
 
     public static IntegrityFinding SizeDisagrees(
@@ -146,7 +199,8 @@ public sealed class IntegrityFinding
         OutputRoot root,
         string path,
         long observedSize,
-        DateTime noticedAt)
+        DateTime noticedAt,
+        DateTime? lastWrittenAt = null)
         => Rehydrate(
             IntegrityFindingId.Of(IntegrityFault.NoLedgerRow, root, path, null),
             checkId,
@@ -156,7 +210,8 @@ public sealed class IntegrityFinding
             null,
             null,
             observedSize,
-            noticedAt);
+            noticedAt,
+            lastWrittenAt);
 
     private static IntegrityFinding About(
         IntegrityFault fault,

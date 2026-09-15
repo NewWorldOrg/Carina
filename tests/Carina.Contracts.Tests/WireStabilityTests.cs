@@ -578,8 +578,27 @@ public sealed class WireStabilityTests
     [Fact]
     public void AskingForARecordingToGoTakesItsPlaceAfterEverythingThatCameBefore()
     {
-        Assert.Equal("/recordings", DriverEndpoints.All[^1]);
-        Assert.Equal(EndpointsTheFrontendReaches.Length + 5, DriverEndpoints.All.Count);
+        Assert.Equal("/recordings", DriverEndpoints.All[EndpointsTheFrontendReaches.Length + 4]);
+    }
+
+    [Fact]
+    public void AskingForAFileNobodyOwnsToGoTakesItsPlaceAfterEverythingThatCameBefore()
+    {
+        Assert.Equal("/stray-files", DriverEndpoints.All[^1]);
+        Assert.Equal(EndpointsTheFrontendReaches.Length + 6, DriverEndpoints.All.Count);
+    }
+
+    [Fact]
+    public void AskingForAFileNobodyOwnsToGoCarriesExactlyWhatTheCheckKept()
+    {
+        Assert.Equal(
+            ["outputRoot", "path", "sizeBytes", "lastWrittenAt"],
+            FieldsOf(DriverJson.Serialize(new StrayFileErasureRequest()))
+        );
+        Assert.Equal(
+            ["outputRoot", "path", "fileRemoved"],
+            FieldsOf(DriverJson.Serialize(new StrayFileErasedDto()))
+        );
     }
 
     [Fact]

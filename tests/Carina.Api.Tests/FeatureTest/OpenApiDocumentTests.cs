@@ -123,6 +123,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "createReservation",
                 "createRule",
                 "deleteCandidateChannel",
+                "deleteIntegrityFinding",
                 "deleteRecording",
             "deleteReservation",
                 "deleteRule",

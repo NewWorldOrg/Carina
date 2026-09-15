@@ -45,6 +45,10 @@ public interface IDriverClient
         string outputRoot,
         CancellationToken cancellationToken);
 
+    Task<DriverCall<StrayFileErasedDto>> EraseStrayFileAsync(
+        StrayFileErasureRequest request,
+        CancellationToken cancellationToken);
+
     Task<DriverCall<Stream>> OpenSessionStreamAsync(
         SessionId sessionId,
         string? subscriber,

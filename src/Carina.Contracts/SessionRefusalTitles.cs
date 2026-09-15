@@ -46,5 +46,7 @@ public static class SessionRefusalTitles
 
     public const string FileLeftBehind = "fileLeftBehind";
 
+    public const string StrayFileChanged = "strayFileChanged";
+
     public const string Refused = "refused";
 }

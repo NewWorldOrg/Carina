@@ -19,6 +19,13 @@ public sealed class ErasingDriverClient : IDriverClient
             new StorageRootDto { Name = "bulk", Writable = true },
         ]);
 
+    public DriverCall<StrayFileErasedDto> StrayAnswer { get; set; } =
+        DriverCall<StrayFileErasedDto>.Reached(new StrayFileErasedDto { FileRemoved = true });
+
+    public Func<StrayFileErasureRequest, DriverCall<StrayFileErasedDto>>? StandingInForTheDriverOnStrays { get; set; }
+
+    public List<StrayFileErasureRequest> AskedAboutStrays { get; } = [];
+
     public Task<DriverCall<RecordingErasedDto>> EraseRecordingAsync(
         string recordingId,
         string outputRoot,
@@ -27,6 +34,17 @@ public sealed class ErasingDriverClient : IDriverClient
         Asked.Add((recordingId, outputRoot));
 
         return Task.FromResult(StandingInForTheDriver?.Invoke(recordingId, outputRoot) ?? Answer);
+    }
+
+    public Task<DriverCall<StrayFileErasedDto>> EraseStrayFileAsync(
+        StrayFileErasureRequest request,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        AskedAboutStrays.Add(request);
+
+        return Task.FromResult(StandingInForTheDriverOnStrays?.Invoke(request) ?? StrayAnswer);
     }
 
     public Task<DriverCall<DriverHello>> GetHealthAsync(CancellationToken cancellationToken)

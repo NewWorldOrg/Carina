@@ -29,6 +29,7 @@ public sealed class FileSystemRuleTests
         "/Carina.Driver/Recording/RecordingWriter.cs .Replace(",
         "/Carina.Driver/Recording/RecordingWriter.cs FileMode.",
         "/Carina.Driver/Recording/RecordingWriter.cs newFileStream",
+        "/Carina.Driver/Recording/StrayFileEraser.cs File.Delete",
         "/Carina.Driver/Tuning/Dvb/DvbSystemCalls.cs LibraryImport",
         "/Carina.Driver/Tuning/Dvb/DvbTunerDetector.cs .Replace(",
         "/Carina.Driver/Tuning/TunerLedgerStore.cs .Replace(",

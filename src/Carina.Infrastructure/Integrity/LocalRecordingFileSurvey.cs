@@ -69,7 +69,7 @@ public sealed class LocalRecordingFileSurvey(
 
                 if (found.Exists)
                 {
-                    files.Add(new StoredFile(Under(path, entry), found.Length));
+                    files.Add(new StoredFile(Under(path, entry), found.Length, found.LastWriteTimeUtc));
                 }
             }
 

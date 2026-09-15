@@ -340,6 +340,35 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
         }
     }
 
+    public async Task<DriverCall<StrayFileErasedDto>> EraseStrayFileAsync(
+        StrayFileErasureRequest request,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (await UndeclaredAsync(DriverCapabilities.StrayFileErasure, cancellationToken) is { } undeclared)
+        {
+            return DriverCall<StrayFileErasedDto>.Refused(undeclared);
+        }
+
+        try
+        {
+            using CancellationTokenSource patience = Patience(cancellationToken);
+            using var body = JsonContent.Create(request, DriverJson.Context.StrayFileErasureRequest);
+            using HttpResponseMessage response = await http.PostAsync(DriverEndpoints.StrayFiles, body, patience.Token);
+
+            return await ReadAsync(
+                response,
+                DriverJson.Context.StrayFileErasedDto,
+                bodyRequired: true,
+                patience.Token);
+        }
+        catch (Exception error) when (IsTransport(error, cancellationToken))
+        {
+            return DriverCall<StrayFileErasedDto>.Unreachable(WhyUnreachable(error));
+        }
+    }
+
     public Task<DriverCall<Stream>> OpenSessionStreamAsync(
         SessionId sessionId,
         string? subscriber,

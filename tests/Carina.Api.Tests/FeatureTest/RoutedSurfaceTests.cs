@@ -44,6 +44,7 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
                 "POST /api/auth/password",
                 "POST /api/epg/archive/forget-service",
                 "POST /api/epg/rebuild",
+                "POST /api/recordings/integrity/findings/{findingId}/delete",
                 "POST /api/recordings/{id}/stop",
                 "POST /api/tuners/scan/{scanId:guid}/apply",
                 "PUT /api/auth/oidc-config",
@@ -90,10 +91,22 @@ public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
     }
 
     [Fact]
-    public void NothingUnderTheIntegritySurfaceDeletesAnything()
+    public void NothingUnderTheIntegritySurfaceDeletesARowOrTakesTheDeleteMethod()
     {
         Assert.Empty(EndpointRules.SurfacesThatDeleteUnder(Inventory(), "/api/recordings/integrity"));
         Assert.NotEmpty(EndpointRules.SurfacesThatDeleteUnder(Inventory(), "/api/recordings"));
+    }
+
+    [Fact]
+    public void TheOneWayUnderTheIntegritySurfaceThatThrowsAFileAwayNamesAFindingAndSaysItDestroys()
+    {
+        Assert.Equal(
+            ["POST /api/recordings/integrity/findings/{findingId}/delete"],
+            Inventory()
+                .Where(surface => surface.Pattern.StartsWith("/api/recordings/integrity", StringComparison.Ordinal))
+                .Where(surface => surface.Effect is EndpointEffect.Destructive)
+                .Select(surface => surface.ToString())
+                .ToArray());
     }
 
     [Fact]

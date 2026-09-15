@@ -252,6 +252,7 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IntegritySettings>(provider =>
             provider.GetRequiredService<IOptions<IntegrityOptions>>().Value.Read());
         services.TryAddSingleton<IRecordingFileSurvey, LocalRecordingFileSurvey>();
+        services.TryAddSingleton<IStrayFileEraser, DriverStrayFileEraser>();
         services.TryAddSingleton<IPlaybackFileStore, LocalPlaybackFileStore>();
         services.AddSingleton<IntegrityCheckJob>();
         services.TryAddSingleton<ThumbnailSettings>(provider =>

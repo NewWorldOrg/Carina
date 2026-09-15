@@ -86,6 +86,7 @@ internal sealed class HeldIntegrityChecks : IIntegrityCheckRepository
             .. Saved
                 .Where(report => report.Check.Id.Equals(checkId))
                 .SelectMany(report => report.Findings)
+                .Where(finding => finding.ThrownAwayAt is null)
                 .OrderBy(finding => finding.Root.Value, StringComparer.Ordinal)
                 .ThenBy(finding => finding.Path, StringComparer.Ordinal),
         ];
@@ -96,6 +97,34 @@ internal sealed class HeldIntegrityChecks : IIntegrityCheckRepository
             query.Page,
             query.PerPage));
     }
+
+    public Task<IntegrityFinding?> FindFindingAsync(
+        IntegrityCheckId checkId,
+        IntegrityFindingId findingId,
+        CancellationToken cancellationToken)
+        => Task.FromResult(Of(checkId, findingId));
+
+    public Task<bool> ThrowAwayFindingAsync(
+        IntegrityCheckId checkId,
+        IntegrityFindingId findingId,
+        DateTime at,
+        CancellationToken cancellationToken)
+    {
+        if (Of(checkId, findingId) is not { } held || StrayFileDisposal.Refusal(held) is not null)
+        {
+            return Task.FromResult(false);
+        }
+
+        held.ThrowAway(at);
+
+        return Task.FromResult(true);
+    }
+
+    private IntegrityFinding? Of(IntegrityCheckId checkId, IntegrityFindingId findingId)
+        => Saved
+            .Where(report => report.Check.Id.Equals(checkId))
+            .SelectMany(report => report.Findings)
+            .FirstOrDefault(finding => finding.Id.Equals(findingId));
 }
 
 internal sealed class HeldInFlightRecordings : IRecordingRepository
@@ -207,6 +236,23 @@ internal sealed class StorageDriver : IDriverClient
         string? subscriber,
         CancellationToken cancellationToken)
         => throw new NotSupportedException();
+
+    public Func<StrayFileErasureRequest, DriverCall<StrayFileErasedDto>>? OnStrays { get; set; }
+
+    public List<StrayFileErasureRequest> AskedAboutStrays { get; } = [];
+
+    public Task<DriverCall<StrayFileErasedDto>> EraseStrayFileAsync(
+        StrayFileErasureRequest request,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        AskedAboutStrays.Add(request);
+
+        return Task.FromResult(OnStrays?.Invoke(request)
+            ?? DriverCall<StrayFileErasedDto>.Refused(
+                new DriverProblem(SessionRefusalTitles.CapabilityMissing, ["nothing stands in for the driver"])));
+    }
 
     public Task<DriverCall<RecordingErasedDto>> EraseRecordingAsync(
         string recordingId,

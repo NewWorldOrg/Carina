@@ -21,6 +21,7 @@ public sealed class LiveSupplyTests
                 "/restart",
                 "/storage",
                 "/recordings",
+                "/stray-files",
             ],
             DriverEndpoints.All);
     }

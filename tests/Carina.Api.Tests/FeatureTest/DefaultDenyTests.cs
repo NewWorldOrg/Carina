@@ -112,6 +112,18 @@ public sealed class DefaultDenyTests(TestingWebApplicationFactory factory)
         Assert.Empty(await response.Content.ReadAsByteArrayAsync());
     }
 
+    [Fact]
+    public async Task ThrowingAFindingAwayRefusesAClientCarryingNoCredentialsBeforeAnythingIsRead()
+    {
+        await using var probe = SeamProbe.CarryingNoCredentials();
+
+        using HttpResponseMessage response = await probe.PostAsync(
+            $"/api/recordings/integrity/findings/{Guid.NewGuid()}/delete");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Empty(await response.Content.ReadAsByteArrayAsync());
+    }
+
     [Theory]
     [MemberData(nameof(EveryBusinessSurface))]
     public async Task ASurfaceAnswersAClientCarryingCredentials(string path)
