@@ -124,29 +124,14 @@ public sealed class SupplyWatchTests
         Assert.Empty(plan.ToResolve);
     }
 
-    [Fact(DisplayName = "BR-QS-002: acknowledging one occurrence does not keep the next one from being opened")]
-    public void AcknowledgingOneOccurrenceDoesNotKeepTheNextOneFromBeingOpened()
+    [Fact(DisplayName = "BR-QS-002: a silence that goes on after it was told about does not open a second one for it")]
+    public void ASilenceThatGoesOnAfterItWasToldAboutDoesNotOpenASecondOneForIt()
     {
-        QualityIncident acknowledged = Standing();
+        QualityIncident told = Standing();
 
-        acknowledged.Notify(Noon);
-        acknowledged.Acknowledge(Noon, "someone");
-        acknowledged.Resolve(Noon);
+        told.Notify(Noon);
 
-        SupplyWatchPlan plan = SupplyWatch.Plan([Found()], [acknowledged], SupplySilences.Every);
-
-        Assert.Single(plan.ToOpen);
-    }
-
-    [Fact(DisplayName = "BR-QS-002: acknowledging a silence that goes on does not open a second one for it")]
-    public void AcknowledgingASilenceThatGoesOnDoesNotOpenASecondOneForIt()
-    {
-        QualityIncident acknowledged = Standing();
-
-        acknowledged.Notify(Noon);
-        acknowledged.Acknowledge(Noon, "someone");
-
-        SupplyWatchPlan plan = SupplyWatch.Plan([Found()], [acknowledged], SupplySilences.Every);
+        SupplyWatchPlan plan = SupplyWatch.Plan([Found()], [told], SupplySilences.Every);
 
         Assert.Empty(plan.ToOpen);
         Assert.Empty(plan.ToResolve);

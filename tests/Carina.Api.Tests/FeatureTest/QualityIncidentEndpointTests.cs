@@ -1,7 +1,6 @@
 using System.Net;
 using System.Text.Json;
 
-using Carina.Contracts;
 using Carina.Domain.Quality;
 
 namespace Carina.Api.Tests.FeatureTest;
@@ -46,92 +45,46 @@ public sealed class QualityIncidentEndpointTests
                     && item.GetProperty("classification").GetString() == "NoLock");
     }
 
-    [Fact(DisplayName = "BR-QS-002: an anomaly that was acknowledged leaves the default list without being deleted")]
-    public async Task AnAnomalyThatWasAcknowledgedLeavesTheDefaultListWithoutBeingDeleted()
+    [Fact(DisplayName = "BR-QS-002: an anomaly that has been told about stays on the list for as long as it stands")]
+    public async Task AnAnomalyThatHasBeenToldAboutStaysOnTheListForAsLongAsItStands()
     {
         await using var feature = new QualityFeature();
         QualityIncident standing = feature.Quiet();
 
-        Assert.Equal(
-            HttpStatusCode.OK,
-            (await feature.PostAsync($"/api/quality/incidents/{standing.Id.Value}/acknowledge")).Status);
+        JsonElement listed = Assert.Single(
+            (await feature.GetAsync("/api/quality/incidents")).Body.GetProperty("data").GetProperty("items").EnumerateArray());
 
-        JsonElement plain = (await feature.GetAsync("/api/quality/incidents")).Body.GetProperty("data");
-
-        Assert.Empty(plain.GetProperty("items").EnumerateArray());
-
-        JsonElement shown = (await feature.GetAsync("/api/quality/incidents?includeAcknowledged=true")).Body
-            .GetProperty("data");
-        JsonElement kept = shown.GetProperty("items")[0];
-
-        Assert.Equal("acknowledged", kept.GetProperty("state").GetString());
-        Assert.Equal("tester", kept.GetProperty("acknowledgedBy").GetString());
-        Assert.Equal(Noon, kept.GetProperty("acknowledgedAt").GetDateTime());
+        Assert.Equal(standing.Id.Value.ToString(), listed.GetProperty("id").GetString());
+        Assert.Equal("notified", listed.GetProperty("state").GetString());
+        Assert.False(listed.TryGetProperty("acknowledgedAt", out _));
+        Assert.False(listed.TryGetProperty("acknowledgedBy", out _));
     }
 
-    [Fact(DisplayName = "BR-QS-002: acknowledging the same anomaly twice says the same thing rather than refusing")]
-    public async Task AcknowledgingTheSameAnomalyTwiceSaysTheSameThingRatherThanRefusing()
-    {
-        await using var feature = new QualityFeature();
-        QualityIncident standing = feature.Quiet();
-
-        await feature.PostAsync($"/api/quality/incidents/{standing.Id.Value}/acknowledge");
-        feature.Events.Signalled.Clear();
-
-        (HttpStatusCode status, JsonElement body) =
-            await feature.PostAsync($"/api/quality/incidents/{standing.Id.Value}/acknowledge");
-
-        Assert.Equal(HttpStatusCode.OK, status);
-        Assert.Equal("tester", body.GetProperty("data").GetProperty("acknowledgedBy").GetString());
-        Assert.Empty(feature.Events.Signalled);
-    }
-
-    [Fact(DisplayName = "BR-QS-002: acknowledging is what the screen hears about")]
-    public async Task AcknowledgingIsWhatTheScreenHearsAbout()
-    {
-        await using var feature = new QualityFeature();
-        QualityIncident standing = feature.Quiet();
-
-        await feature.PostAsync($"/api/quality/incidents/{standing.Id.Value}/acknowledge");
-
-        Assert.Equal(AppEventName.Quality, Assert.Single(feature.Events.Signalled));
-    }
-
-    [Fact(DisplayName = "BR-QS-002: an anomaly that has been resolved is not one to acknowledge")]
-    public async Task AnAnomalyThatHasBeenResolvedIsNotOneToAcknowledge()
+    [Fact(DisplayName = "BR-QS-002: an anomaly whose condition has cleared leaves the list and is not deleted")]
+    public async Task AnAnomalyWhoseConditionHasClearedLeavesTheListAndIsNotDeleted()
     {
         await using var feature = new QualityFeature();
         QualityIncident settled = feature.Quiet();
 
         settled.Resolve(Noon.AddMinutes(-5));
 
-        Assert.Equal(
-            HttpStatusCode.Conflict,
-            (await feature.PostAsync($"/api/quality/incidents/{settled.Id.Value}/acknowledge")).Status);
+        JsonElement data = (await feature.GetAsync("/api/quality/incidents")).Body.GetProperty("data");
+
+        Assert.Empty(data.GetProperty("items").EnumerateArray());
+        Assert.Single(feature.Incidents.Incidents);
     }
 
-    [Fact]
-    public async Task AnAnomalyNothingIsKeptUnderIsNotFound()
-    {
-        await using var feature = new QualityFeature();
-
-        Assert.Equal(
-            HttpStatusCode.NotFound,
-            (await feature.PostAsync($"/api/quality/incidents/{Guid.NewGuid()}/acknowledge")).Status);
-        Assert.Equal(
-            HttpStatusCode.NotFound,
-            (await feature.PostAsync("/api/quality/incidents/not-an-identifier/acknowledge")).Status);
-    }
-
-    [Fact(DisplayName = "BR-QS-002: acknowledging is not deleting")]
-    public async Task AcknowledgingIsNotDeleting()
+    [Fact(DisplayName = "BR-QS-002: an anomaly has nothing left to acknowledge it by")]
+    public async Task AnAnomalyHasNothingLeftToAcknowledgeItBy()
     {
         await using var feature = new QualityFeature();
         QualityIncident standing = feature.Quiet();
 
-        await feature.PostAsync($"/api/quality/incidents/{standing.Id.Value}/acknowledge");
+        (HttpStatusCode status, _) = await feature.PostAsync($"/api/quality/incidents/{standing.Id.Value}/acknowledge");
 
-        Assert.Single(feature.Incidents.Incidents);
+        Assert.Equal(HttpStatusCode.NotFound, status);
+        Assert.Equal(QualityIncidentState.Notified, standing.State);
+        Assert.Empty(feature.Events.Signalled);
     }
 
     [Fact(DisplayName = "BR-QD-007: the supply health says what each of the four supplies stands at")]

@@ -6,13 +6,6 @@ public sealed class HeldQualityIncidents : IQualityIncidentRepository
 {
     public List<QualityIncident> Incidents { get; } = [];
 
-    public Task<QualityIncident?> FindAsync(QualityIncidentId id, CancellationToken cancellationToken)
-    {
-        ArgumentNullException.ThrowIfNull(id);
-
-        return Task.FromResult(Incidents.FirstOrDefault(incident => incident.Id.Equals(id)));
-    }
-
     public Task<IReadOnlyList<QualityIncident>> ListUnsettledAsync(CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<QualityIncident>>(
         [

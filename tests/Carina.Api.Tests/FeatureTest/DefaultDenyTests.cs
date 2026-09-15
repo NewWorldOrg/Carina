@@ -95,7 +95,6 @@ public sealed class DefaultDenyTests(TestingWebApplicationFactory factory)
         "/api/encoding/jobs/durations",
         "/api/encoding/settings",
         "/api/quality/incidents",
-        "/api/quality/incidents?includeAcknowledged=true",
         "/api/quality/supply-health",
         "/api/quality/trends",
         AppEventStream.Path,
@@ -122,18 +121,6 @@ public sealed class DefaultDenyTests(TestingWebApplicationFactory factory)
         using HttpResponseMessage response = await probe.GetAsync(path);
 
         Assert.NotEqual(HttpStatusCode.Unauthorized, response.StatusCode);
-    }
-
-    [Fact(DisplayName = "acknowledging an anomaly is refused before the caller has signed in")]
-    public async Task AcknowledgingAnAnomalyIsRefusedBeforeTheCallerHasSignedIn()
-    {
-        await using var probe = SeamProbe.CarryingNoCredentials();
-
-        using HttpResponseMessage response = await probe.PostAsync(
-            $"/api/quality/incidents/{Guid.NewGuid()}/acknowledge");
-
-        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-        Assert.Empty(await response.Content.ReadAsByteArrayAsync());
     }
 
     [Fact]

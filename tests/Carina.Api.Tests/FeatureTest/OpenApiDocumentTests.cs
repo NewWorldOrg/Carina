@@ -110,7 +110,6 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
 
         Assert.Equal(
             [
-                "acknowledgeQualityIncident",
                 "addCandidateChannel",
                 "applyRuleNow",
                 "applyScan",
