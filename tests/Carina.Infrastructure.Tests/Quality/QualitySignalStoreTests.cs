@@ -31,7 +31,7 @@ public sealed class QualitySignalStoreTests(RepositoryDatabase database)
                     Noon,
                     30000,
                     Noon.AddSeconds(-1),
-                    [new LayerBitErrorCounts(0, 0, 1671168), new LayerBitErrorCounts(1, 2, 67682304)],
+                    [new LayerBitErrorCounts(0, 0, 1600000), new LayerBitErrorCounts(1, 2, 64000000)],
                     Noon.AddSeconds(-1))),
         ]);
 

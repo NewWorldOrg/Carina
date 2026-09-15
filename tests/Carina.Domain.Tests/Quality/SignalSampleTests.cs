@@ -38,12 +38,12 @@ public sealed class SignalSampleTests
             LockRead,
             29000,
             StatisticsRead,
-            [new LayerBitErrorCounts(1, 12, 67682304), new LayerBitErrorCounts(0, 3, 1671168)],
+            [new LayerBitErrorCounts(1, 12, 64000000), new LayerBitErrorCounts(0, 3, 1600000)],
             StatisticsRead);
 
         Assert.Equal(2, sample.BitErrors.Count);
-        Assert.Equal(1671168, sample.Layer(0)!.TotalBits);
-        Assert.Equal(67682304, sample.Layer(1)!.TotalBits);
+        Assert.Equal(1600000, sample.Layer(0)!.TotalBits);
+        Assert.Equal(64000000, sample.Layer(1)!.TotalBits);
         Assert.Null(sample.Layer(2));
     }
 

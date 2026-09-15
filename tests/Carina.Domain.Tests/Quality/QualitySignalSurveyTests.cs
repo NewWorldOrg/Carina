@@ -50,7 +50,7 @@ public sealed class QualitySignalSurveyTests
                         Noon,
                         30000,
                         Noon,
-                        [new LayerBitErrorCounts(0, 0, 1671168)],
+                        [new LayerBitErrorCounts(0, 0, 1600000)],
                         Noon)),
             ]);
 

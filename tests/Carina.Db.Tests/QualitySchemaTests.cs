@@ -104,7 +104,7 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
             locked: "true",
             cnr: "29000",
             cnrReadAt: Taken,
-            bitErrors: """'[{"Layer":0,"ErrorBits":3,"TotalBits":1671168},{"Layer":1,"ErrorBits":12,"TotalBits":67682304}]'::jsonb""",
+            bitErrors: """'[{"Layer":0,"ErrorBits":3,"TotalBits":1600000},{"Layer":1,"ErrorBits":12,"TotalBits":64000000}]'::jsonb""",
             bitErrorsReadAt: Taken);
 
         await using var reading = new NpgsqlCommand(

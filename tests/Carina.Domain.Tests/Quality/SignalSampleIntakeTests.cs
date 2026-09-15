@@ -23,8 +23,8 @@ public sealed class SignalSampleIntakeTests
                 CnrMilliDecibels = 30000,
                 PostViterbiBitErrors =
                 [
-                    new LayerBitErrorCounts(0, 0, 1671168),
-                    new LayerBitErrorCounts(1, 0, 67682304),
+                    new LayerBitErrorCounts(0, 0, 1600000),
+                    new LayerBitErrorCounts(1, 0, 64000000),
                 ],
                 MeasuredAt = Measured,
                 LockReadAt = LockRead,
