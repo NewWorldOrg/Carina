@@ -164,6 +164,23 @@ public sealed class SignalSampleRoundTests
         Assert.Equal(1, taking.Measured);
     }
 
+    [Fact]
+    public async Task ASessionThatCannotNewlyOpenIsNotLookedUpEveryRound()
+    {
+        HeldQualitySessionMeasurements measurements = new();
+
+        await Round(
+                new HeldQualitySignalSamples(),
+                Idle(
+                    Session("live-1", SessionPurpose.Live, Counted(9000, 12, 3), concluded: true),
+                    Session("live-2", SessionPurpose.Live, Counted(4000, 2, 1))),
+                measurements: measurements)
+            .TakeAsync(Cancel);
+
+        Assert.Equal(0, measurements.FindAsked);
+        Assert.Empty(measurements.Measurements);
+    }
+
     [Fact(DisplayName = "BR-QD-001: a session the driver cannot count is kept as unmeasured rather than as clean")]
     public async Task ASessionTheDriverCannotCountIsKeptAsUnmeasuredRatherThanAsClean()
     {

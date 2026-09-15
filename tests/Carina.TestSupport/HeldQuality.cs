@@ -11,14 +11,20 @@ public sealed class HeldQualitySessionMeasurements : IQualitySessionMeasurementR
 
     public IReadOnlyList<QualitySessionMeasurement> Measurements => [.. kept.Select(Copy)];
 
+    public int FindAsked { get; private set; }
+
     public Task<QualitySessionMeasurement?> FindAsync(
         string driverInstanceId,
         SessionId session,
         CancellationToken cancellationToken)
-        => Task.FromResult(kept
+    {
+        FindAsked++;
+
+        return Task.FromResult(kept
             .Where(held => held.DriverInstanceId == driverInstanceId && held.Session.Equals(session))
             .Select(Copy)
             .FirstOrDefault());
+    }
 
     public Task<IReadOnlyList<QualitySessionMeasurement>> ListOpenAsync(CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<QualitySessionMeasurement>>(

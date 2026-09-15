@@ -122,8 +122,7 @@ public sealed class SignalSampleRound(
             listedHere.Add(session.SessionId);
 
             QualitySessionMeasurement? measurement =
-                open.FirstOrDefault(row => row.DriverInstanceId == instance && row.Session.Equals(session.SessionId))
-                ?? await measurements.FindAsync(instance, session.SessionId, cancellationToken);
+                open.FirstOrDefault(row => row.DriverInstanceId == instance && row.Session.Equals(session.SessionId));
 
             if (measurement is null)
             {
@@ -132,14 +131,15 @@ public sealed class SignalSampleRound(
                     continue;
                 }
 
-                measurement = QualitySessionMeasurement.Open(
-                    instance,
-                    session.SessionId,
-                    session.Purpose,
-                    whereabouts.Tuner,
-                    whereabouts.Network,
-                    whereabouts.Service,
-                    session.StartedAt.UtcDateTime);
+                measurement = await measurements.FindAsync(instance, session.SessionId, cancellationToken)
+                    ?? QualitySessionMeasurement.Open(
+                        instance,
+                        session.SessionId,
+                        session.Purpose,
+                        whereabouts.Tuner,
+                        whereabouts.Network,
+                        whereabouts.Service,
+                        session.StartedAt.UtcDateTime);
             }
 
             if (measurement.HasEnded)
