@@ -127,7 +127,7 @@ public sealed class TunerStatusTests
                 SignalQuality = new SignalQualityDto
                 {
                     Lock = SignalLock.NotLocked,
-                    CnrMilliDecibels = 17,
+                    CnrMilliDecibels = 20,
                 },
             }
         );

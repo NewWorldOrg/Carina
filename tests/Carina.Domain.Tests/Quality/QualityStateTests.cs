@@ -24,7 +24,7 @@ public sealed class QualityStateTests
 
     [Fact(DisplayName = "BR-QD-001: subjects nothing counted are unmeasured rather than good")]
     public void SubjectsNothingCountedAreUnmeasuredRatherThanGood()
-        => Assert.Equal(QualityState.Unmeasured, QualityStates.Of(QualityReading.Of(subjects: 3514, measured: 0, beyondThreshold: 0)));
+        => Assert.Equal(QualityState.Unmeasured, QualityStates.Of(QualityReading.Of(subjects: 3000, measured: 0, beyondThreshold: 0)));
 
     [Fact]
     public void APeriodHoldingNothingToMeasureIsNotAPeriodThatMeasuredWell()

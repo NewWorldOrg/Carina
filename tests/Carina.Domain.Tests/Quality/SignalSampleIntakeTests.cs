@@ -46,7 +46,7 @@ public sealed class SignalSampleIntakeTests
             new SignalQualityDto
             {
                 Lock = SignalLock.NotLocked,
-                CnrMilliDecibels = -71189,
+                CnrMilliDecibels = -70000,
                 MeasuredAt = Measured,
                 LockReadAt = LockRead,
             },
