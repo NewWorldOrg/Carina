@@ -20,9 +20,10 @@ public sealed record RecordingWatch(
     int Collisions,
     int LeftOpen,
     int StoodDown,
-    int OutOfTouch)
+    int OutOfTouch,
+    int Advanced)
 {
-    public static readonly RecordingWatch Nothing = new(0, 0, 0, 0, 0, 0, 0, 0, 0);
+    public static readonly RecordingWatch Nothing = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 
     public bool SaysAnything
         => Broken > 0 || Resumed > 0 || Settled > 0 || Collisions > 0 || LeftOpen > 0 || StoodDown > 0
@@ -33,6 +34,13 @@ public sealed record RecordingWatch(
     /// where the last pass left it, so they come back every pass and say nothing new.
     /// </summary>
     public bool AnythingMoved => Broken > 0 || Resumed > 0 || Settled > 0;
+
+    /// <summary>
+    /// Raised when a recording still being written wrote more, or counted or placed its losses
+    /// differently, on this pass. A recording that runs well raises it on nearly every pass, so what
+    /// it tells the screens is paced rather than told each time.
+    /// </summary>
+    public bool CountsMoved => Advanced > 0;
 }
 
 public sealed class RecordingStreamSupervisor(
@@ -256,6 +264,7 @@ public sealed class RecordingStreamSupervisor(
         long? scrambled = reading.ScrambledPackets;
         DateTime opened = session.StartedAt.UtcDateTime;
         bool resumed = false;
+        bool advanced = false;
 
         bool kept = await ApplyAsync(
             recording.Id,
@@ -267,8 +276,10 @@ public sealed class RecordingStreamSupervisor(
                 }
 
                 RecordingResumption.Adopt(loaded, session.DeviceId);
-                Advance(loaded, opened, now);
+                bool measured = ReadsDifferently(loaded, counters, positions, scrambled, reading.EovfCount);
+                bool wrote = Advance(loaded, opened, now);
                 loaded.Measure(counters, positions, scrambled, reading.EovfCount, now);
+                advanced = wrote || measured;
                 resumed = RecordingResumption.CloseAnyOpenBreak(loaded, now);
 
                 return true;
@@ -282,6 +293,11 @@ public sealed class RecordingStreamSupervisor(
         }
 
         tally.Kept++;
+
+        if (advanced)
+        {
+            tally.Advanced++;
+        }
 
         if (resumed)
         {
@@ -583,16 +599,33 @@ public sealed class RecordingStreamSupervisor(
     private static DateTime AsFarAsItIsCounted(Recording recording)
         => recording.MeasuredUpdatedAt ?? recording.StartedAtActual;
 
-    private static void Advance(Recording recording, DateTime opened, DateTime now)
+    private static bool Advance(Recording recording, DateTime opened, DateTime now)
     {
         DateTime counted = AsFarAsItIsCounted(recording);
         DateTime from = opened > counted ? opened : counted;
 
-        if (now > from)
+        if (now <= from)
         {
-            recording.Wrote(now - from);
+            return false;
         }
+
+        recording.Wrote(now - from);
+
+        return true;
     }
+
+    private static bool ReadsDifferently(
+        Recording recording,
+        DropCounters counters,
+        DropTimeline positions,
+        long? scrambled,
+        long overflows)
+        => !recording.Counters.Equals(counters)
+           || recording.ScrambledPackets != scrambled
+           || recording.EovfCount != overflows
+           || recording.Positions.AnchorPcr != positions.AnchorPcr
+           || !recording.Positions.Buckets.SequenceEqual(positions.Buckets)
+           || !recording.Positions.Reanchors.SequenceEqual(positions.Reanchors);
 
     private static DropTimeline Placed(DropPositionsDto? positions)
         => positions is null
@@ -622,7 +655,9 @@ public sealed class RecordingStreamSupervisor(
 
         public int OutOfTouch { get; set; }
 
+        public int Advanced { get; set; }
+
         public RecordingWatch Read(int watched)
-            => new(watched, Kept, Broken, Resumed, Settled, Collisions, LeftOpen, StoodDown, OutOfTouch);
+            => new(watched, Kept, Broken, Resumed, Settled, Collisions, LeftOpen, StoodDown, OutOfTouch, Advanced);
     }
 }

@@ -597,7 +597,7 @@ public sealed class RecordingStreamSupervisorTests
     }
 
     [Fact]
-    public async Task AWatchThatOnlyKeptWhatWasAlreadyRunningMovedNothing()
+    public async Task AWatchThatOnlyKeptWhatWasAlreadyRunningMovedItsCountsAndNothingElse()
     {
         Recording recording = InFlight();
         var ledger = new StreamLedger();
@@ -610,6 +610,68 @@ public sealed class RecordingStreamSupervisorTests
 
         Assert.Equal(1, watch.Kept);
         Assert.False(watch.AnythingMoved);
+        Assert.True(watch.CountsMoved);
+    }
+
+    [Fact]
+    public async Task APassAtTheInstantARecordingWasLastCountedMovedNoCounts()
+    {
+        Recording recording = InFlight();
+        var ledger = new StreamLedger();
+        ledger.Hold(recording);
+        var driver = new WatchedDriver();
+        driver.Holding[RecordingSessions.Named(recording.Id)] = Live(recording, Airs);
+        RecordingStreamSupervisor supervisor = Supervisor(ledger, driver, new WatchClock(Airs.AddMinutes(10)));
+
+        RecordingWatch first = await supervisor.WatchAsync(Cancel);
+        RecordingWatch again = await supervisor.WatchAsync(Cancel);
+
+        Assert.True(first.CountsMoved);
+        Assert.False(again.CountsMoved);
+        Assert.False(again.SaysAnything);
+    }
+
+    [Fact]
+    public async Task LossesCountedAfreshOnAStreamOpenedThatInstantMoveTheCountsThoughNothingMoreWasWritten()
+    {
+        (RecordingWatch watch, Recording read) = await ReadAgainOnAStreamOpenedThatInstant(
+            new SessionCounters(Packets: 1000, Drops: 3, CcMeasured: true));
+
+        Assert.True(watch.CountsMoved);
+        Assert.Equal(3, read.CcDroppedPackets);
+        Assert.Equal(TimeSpan.FromMinutes(10), read.Written);
+    }
+
+    [Fact]
+    public async Task TheSameLossesReadOnAStreamOpenedThatInstantMoveNoCounts()
+    {
+        (RecordingWatch watch, Recording read) = await ReadAgainOnAStreamOpenedThatInstant(
+            new SessionCounters(Packets: 1000, Drops: 0, CcMeasured: true));
+
+        Assert.False(watch.CountsMoved);
+        Assert.Equal(1, watch.Kept);
+        Assert.Equal(TimeSpan.FromMinutes(10), read.Written);
+    }
+
+    private static async Task<(RecordingWatch Watch, Recording Read)> ReadAgainOnAStreamOpenedThatInstant(
+        SessionCounters counters)
+    {
+        Recording recording = InFlight();
+        var ledger = new StreamLedger();
+        ledger.Hold(recording);
+        var driver = new WatchedDriver();
+        SessionId named = RecordingSessions.Named(recording.Id);
+        driver.Holding[named] = Live(recording, Airs, new SessionCounters(Packets: 1000, Drops: 0, CcMeasured: true));
+        var clock = new WatchClock(Airs.AddMinutes(10));
+        RecordingStreamSupervisor supervisor = Supervisor(ledger, driver, clock);
+
+        await supervisor.WatchAsync(Cancel);
+
+        driver.Holding[named] = Live(recording, Airs.AddMinutes(20), counters);
+        clock.Now = Airs.AddMinutes(20);
+        RecordingWatch watch = await supervisor.WatchAsync(Cancel);
+
+        return (watch, ledger.Read(recording.Id));
     }
 
     [Fact]
@@ -628,6 +690,8 @@ public sealed class RecordingStreamSupervisorTests
         Assert.True(broke.AnythingMoved);
         Assert.False(still.AnythingMoved);
         Assert.False(again.AnythingMoved);
+        Assert.False(still.CountsMoved);
+        Assert.False(again.CountsMoved);
         Assert.True(still.SaysAnything);
         Assert.True(again.SaysAnything);
     }

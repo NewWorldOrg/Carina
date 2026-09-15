@@ -83,6 +83,11 @@ public static class ServiceCollectionExtensions
             .Configure(options => options.ReadFrom(configuration))
             .ValidateOnStart();
 
+        services.AddSingleton<IValidateOptions<RecordingProgressOptions>, RecordingProgressValidation>();
+        services.AddOptions<RecordingProgressOptions>()
+            .Configure(options => options.ReadFrom(configuration))
+            .ValidateOnStart();
+
         services.AddSingleton<IValidateOptions<ThumbnailOptions>, ThumbnailValidation>();
         services.AddOptions<ThumbnailOptions>()
             .Configure(options => options.ReadFrom(configuration))

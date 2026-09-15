@@ -24,6 +24,8 @@ public static class RecordingServices
         services.AddScoped<RecordingRetries>();
         services.AddScoped<RecordingRound>();
         services.TryAddSingleton(RecordingWatchSettings.Default);
+        services.TryAddSingleton<RecordingProgressSettings>(provider =>
+            provider.GetRequiredService<IOptions<RecordingProgressOptions>>().Value.Read());
         services.TryAddSingleton<IRecordingFileWeigher, LocalRecordingFileWeigher>();
         services.TryAddSingleton<IRecordingFileEraser, DriverRecordingFileEraser>();
         services.AddSingleton<RecordingStreamSupervisor>();
