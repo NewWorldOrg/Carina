@@ -274,9 +274,12 @@ internal sealed class AppSwapFeature : IAsyncDisposable
     public RunningApp App => running
         ?? throw new InvalidOperationException("No app is running against the driver.");
 
-    public static async Task<AppSwapFeature> StartAsync(bool takingRecordingsBack = false, TimeSpan? window = null)
+    public static async Task<AppSwapFeature> StartAsync(
+        bool takingRecordingsBack = false,
+        TimeSpan? window = null,
+        Action<IServiceCollection>? reshapeDriver = null)
     {
-        SyntheticDriverHost driver = await SyntheticDriverHost.StartAsync();
+        SyntheticDriverHost driver = await SyntheticDriverHost.StartAsync(reshapeDriver);
         var feature = new AppSwapFeature(driver, DateTimeOffset.UtcNow);
 
         await feature.StartAppAsync(takingRecordingsBack);
