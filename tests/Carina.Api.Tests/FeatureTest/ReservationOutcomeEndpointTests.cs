@@ -194,6 +194,38 @@ public sealed class ReservationOutcomeEndpointTests
     }
 
     [Fact]
+    public async Task ARetrySaysWhatCameOfItAndGivingUpSaysWhy_BR_QD_012()
+    {
+        await using var feature = new ReservationFeature();
+        Reservation failing = feature.Booked(4001);
+        feature.Outcomes.Written(
+            ReservationOutcome.RecordRetry(
+                ReservationOutcomeId.New(),
+                failing,
+                RetryAttempt.RefusedAgain(RecordingStartFailure.TheTunerWouldNotTune(TuneFailureKind.NoLock)),
+                Noon.AddHours(1)),
+            ReservationOutcome.RecordGivingUp(
+                ReservationOutcomeId.New(),
+                failing,
+                RetryGiveUp.AttemptsSpent,
+                null,
+                Noon.AddHours(2)));
+
+        (_, JsonElement body) = await feature.GetAsync(
+            "/api/reservations/outcomes?kind=retried&kind=gaveUpRetrying");
+        JsonElement[] items = [.. body.GetProperty("data").GetProperty("items").EnumerateArray()];
+
+        Assert.Equal(["gaveUpRetrying", "retried"], items.Select(Kind));
+        Assert.Equal("attemptsSpent", items[0].GetProperty("gaveUpBecause").GetString());
+        Assert.Equal(JsonValueKind.Null, items[0].GetProperty("retryResult").ValueKind);
+        Assert.Equal(JsonValueKind.Null, items[0].GetProperty("tuneFailure").ValueKind);
+        Assert.Equal("refusedAgain", items[1].GetProperty("retryResult").GetString());
+        Assert.Equal("noLock", items[1].GetProperty("tuneFailure").GetString());
+        Assert.Equal(["tuneFailed"], items[1].GetProperty("faults").EnumerateArray().Select(one => one.GetString()));
+        Assert.Equal(JsonValueKind.Null, items[1].GetProperty("gaveUpBecause").ValueKind);
+    }
+
+    [Fact]
     public async Task AScreenReadsWhyARecordingFailedFromTheClassesTheLedgerHolds_BR_RD_012()
     {
         await using var feature = new ReservationFeature();

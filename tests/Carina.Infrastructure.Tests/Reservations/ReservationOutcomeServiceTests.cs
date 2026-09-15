@@ -390,15 +390,29 @@ public sealed class ReservationOutcomeServiceTests
     }
 
     private static ReservationOutcome Noted(Reservation reservation, ReservationOutcomeKind kind)
-        => ReservationOutcome.Record(
-            ReservationOutcomeId.New(),
-            reservation,
-            kind,
-            kind is ReservationOutcomeKind.TuneFailure ? TuneFailureKind.NoLock : null,
-            kind is ReservationOutcomeKind.RecordingFailure ? RecordingOutcome.Failed : null,
-            kind is ReservationOutcomeKind.TuneFailure ? [RecordingFault.TuneFailed] : [],
-            [],
-            reservation.EffectiveStartAt);
+        => kind switch
+        {
+            ReservationOutcomeKind.Retried => ReservationOutcome.RecordRetry(
+                ReservationOutcomeId.New(),
+                reservation,
+                RetryAttempt.Unanswered,
+                reservation.EffectiveStartAt),
+            ReservationOutcomeKind.GaveUpRetrying => ReservationOutcome.RecordGivingUp(
+                ReservationOutcomeId.New(),
+                reservation,
+                RetryGiveUp.AttemptsSpent,
+                null,
+                reservation.EffectiveStartAt),
+            _ => ReservationOutcome.Record(
+                ReservationOutcomeId.New(),
+                reservation,
+                kind,
+                kind is ReservationOutcomeKind.TuneFailure ? TuneFailureKind.NoLock : null,
+                kind is ReservationOutcomeKind.RecordingFailure ? RecordingOutcome.Failed : null,
+                kind is ReservationOutcomeKind.TuneFailure ? [RecordingFault.TuneFailed] : [],
+                [],
+                reservation.EffectiveStartAt),
+        };
 
     private static Recording Settled(Reservation reservation, params RecordingFault[] faults)
     {

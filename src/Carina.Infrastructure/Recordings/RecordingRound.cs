@@ -44,6 +44,10 @@ public sealed record RecordingRun(
     IReadOnlyList<RecordingRefusal> Refused)
 {
     public IReadOnlyList<RecordingFollowed> Followed { get; init; } = [];
+
+    public IReadOnlyList<ReservationId> Retried { get; init; } = [];
+
+    public IReadOnlyList<ReservationId> GaveUp { get; init; } = [];
 }
 
 public sealed class RecordingRound(
@@ -55,6 +59,7 @@ public sealed class RecordingRound(
     IDriverClient driver,
     ProgramExtensionFollower follower,
     RecordingRefusalReporter reporter,
+    RecordingRetries retries,
     RecordingSettings settings,
     TimeProvider clock)
 {
@@ -102,6 +107,8 @@ public sealed class RecordingRound(
         return new RecordingRun(starting.Started, stopped, starting.Unconfirmed, starting.Refused)
         {
             Followed = followed,
+            Retried = starting.Retried,
+            GaveUp = starting.GaveUp,
         };
     }
 
@@ -171,6 +178,14 @@ public sealed class RecordingRound(
                 continue;
             }
 
+            RetryHistory? history = await retries.HistoryAsync(due.Id, cancellationToken);
+
+            if (history is not null
+                && !await TryingAgainAsync(due, history, resolution, running, starting, now, cancellationToken))
+            {
+                continue;
+            }
+
             if (!await reservations.ClaimAsync(due.Id, now, cancellationToken))
             {
                 starting.Refused.Add(new RecordingRefusal(
@@ -182,6 +197,9 @@ public sealed class RecordingRound(
                 continue;
             }
 
+            int startedBefore = starting.Started.Count;
+            int refusedBefore = starting.Refused.Count;
+
             await ClaimedAsync(
                 due,
                 tuning,
@@ -190,9 +208,55 @@ public sealed class RecordingRound(
                 starting,
                 now,
                 cancellationToken);
+
+            if (history is not null)
+            {
+                await retries.TriedAsync(
+                    due.Id,
+                    WhatCameOf(starting, startedBefore, refusedBefore),
+                    now,
+                    cancellationToken);
+
+                starting.Retried.Add(due.Id);
+            }
         }
 
         return starting;
+    }
+
+    /// <summary>
+    /// A reservation whose start failed in a class is weighed before it is claimed, so a reservation
+    /// that is waiting out its pause or has been given up on never takes the claim. One that is to be
+    /// tried again then goes on exactly as a first start does.
+    /// </summary>
+    private async Task<bool> TryingAgainAsync(
+        RecordingTick due,
+        RetryHistory history,
+        TuningResolution resolution,
+        List<Recording> running,
+        Starting starting,
+        DateTime now,
+        CancellationToken cancellationToken)
+    {
+        if (history.GivenUp)
+        {
+            return false;
+        }
+
+        RetryVerdict verdict = await retries.WeighAsync(
+            due,
+            history,
+            resolution,
+            [.. running.Select(AtTheHeaviestRate)],
+            now,
+            cancellationToken);
+
+        if (verdict.Move is RetryMove.GiveUp)
+        {
+            starting.GaveUp.Add(due.Id);
+        }
+
+        return verdict.Move is RetryMove.Retry;
     }
 
     private async Task ClaimedAsync(
@@ -399,6 +463,27 @@ public sealed class RecordingRound(
         };
     }
 
+    /// <summary>
+    /// What came of an attempt is read off what the start itself wrote down: a recording it began, or
+    /// the refusal it added. A refusal the driver gave carries whatever class it named; one where the
+    /// driver could not be reached, or the start was abandoned, is an attempt nothing answered.
+    /// </summary>
+    private static RetryAttempt WhatCameOf(Starting starting, int startedBefore, int refusedBefore)
+    {
+        if (starting.Started.Count > startedBefore)
+        {
+            return RetryAttempt.Started;
+        }
+
+        return starting.Refused.Count > refusedBefore
+               && starting.Refused[^1] is
+               {
+                   Kind: RecordingRefusalKind.DriverRefused or RecordingRefusalKind.TunerContended,
+               } refusal
+            ? RetryAttempt.RefusedAgain(refusal.Reported)
+            : RetryAttempt.Unanswered;
+    }
+
     private static RecordingDemand AtTheHeaviestRate(Recording recording)
         => RecordingDemand.AtTheHeaviestRate(recording.ExpectedWindowStart, recording.ExpectedWindowEnd);
 
@@ -421,5 +506,9 @@ public sealed class RecordingRound(
         public List<RecordingId> Unconfirmed { get; } = [];
 
         public List<RecordingRefusal> Refused { get; } = [];
+
+        public List<ReservationId> Retried { get; } = [];
+
+        public List<ReservationId> GaveUp { get; } = [];
     }
 }

@@ -278,23 +278,31 @@ public sealed class RecordingTickJobTests
         RecordingSettings held = settings ?? RecordingSettings.Default;
         var services = new ServiceCollection();
 
-        services.AddScoped(_ => new RecordingRound(
-            reservations,
-            recordings,
-            new HeldProgrammes(),
-            new ResolvedTuning(Terrestrial),
-            new DiskPrecheckService(new StorageMonitor(driver, clock, StorageMonitorSettings.Default)),
-            driver,
-            new ProgramExtensionFollower(
+        services.AddScoped(_ =>
+        {
+            var disks = new DiskPrecheckService(new StorageMonitor(driver, clock, StorageMonitorSettings.Default));
+            var programmes = new HeldProgrammes();
+            var ledger = new RefusalLedger();
+
+            return new RecordingRound(
+                reservations,
                 recordings,
-                new HeldProgrammes(),
+                programmes,
+                new ResolvedTuning(Terrestrial),
+                disks,
                 driver,
-                new EndsAlreadyAsked(),
+                new ProgramExtensionFollower(
+                    recordings,
+                    new HeldProgrammes(),
+                    driver,
+                    new EndsAlreadyAsked(),
+                    held,
+                    NullLogger<ProgramExtensionFollower>.Instance),
+                ledger.Reporter,
+                ledger.Retries(programmes, disks, held),
                 held,
-                NullLogger<ProgramExtensionFollower>.Instance),
-            new RefusalLedger().Reporter,
-            held,
-            new HeldMoment(Airs)));
+                new HeldMoment(Airs));
+        });
 
         return new RecordingTickJob(
             services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),

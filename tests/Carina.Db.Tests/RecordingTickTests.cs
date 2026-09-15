@@ -195,6 +195,7 @@ public sealed class RecordingTickTests(MigratedScratchDatabase database)
         IReservationRecordingContract? reservations = null)
     {
         var clock = new HeldTick(Airs);
+        var disks = new DiskPrecheckService(new StorageMonitor(driver, clock, StorageMonitorSettings.Default));
 
         return new RecordingRound(
             reservations ?? new ReservationRecordingContract(context),
@@ -204,7 +205,7 @@ public sealed class RecordingTickTests(MigratedScratchDatabase database)
                 new CandidateChannelId(Guid.NewGuid()),
                 TuningParameters.Terrestrial(27),
                 impaired: false)),
-            new DiskPrecheckService(new StorageMonitor(driver, clock, StorageMonitorSettings.Default)),
+            disks,
             driver,
             new ProgramExtensionFollower(
                 new RecordingRepository(context),
@@ -218,6 +219,15 @@ public sealed class RecordingTickTests(MigratedScratchDatabase database)
                 new ReservationOutcomeRepository(context),
                 new RememberedTuneReports(),
                 NullLogger<RecordingRefusalReporter>.Instance),
+            new RecordingRetries(
+                new ReservationRepository(context),
+                new ReservationOutcomeRepository(context),
+                new CandidateChannelRepository(context),
+                new ProgrammeRepository(context),
+                disks,
+                Settings,
+                RetryPolicy.Default,
+                NullLogger<RecordingRetries>.Instance),
             Settings,
             clock);
     }

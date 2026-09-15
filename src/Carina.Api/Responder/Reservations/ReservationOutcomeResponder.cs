@@ -16,9 +16,9 @@ public sealed record ReservationOutcomeProgrammeResponder(
     string Name);
 
 /// <summary>
-/// One line of the ledger, as the ledger wrote it. <c>TuneFailure</c> and <c>RecordingOutcome</c>
-/// are null whenever the ledger holds nothing there: an answer is never filled in from what the
-/// classification would make likely.
+/// One line of the ledger, as the ledger wrote it. <c>TuneFailure</c>, <c>RecordingOutcome</c>,
+/// <c>RetryResult</c> and <c>GaveUpBecause</c> are null whenever the ledger holds nothing there: an
+/// answer is never filled in from what the classification would make likely.
 /// </summary>
 public sealed record ReservationOutcomeResponder(
     Guid Id,
@@ -33,7 +33,9 @@ public sealed record ReservationOutcomeResponder(
     DateTime EffectiveEndAt,
     int Priority,
     Guid? RuleId,
-    DateTime OccurredAt)
+    DateTime OccurredAt,
+    RetryResult? RetryResult,
+    RetryGiveUp? GaveUpBecause)
 {
     public static ReservationOutcomeResponder Of(ReservationOutcome outcome)
     {
@@ -58,7 +60,9 @@ public sealed record ReservationOutcomeResponder(
             outcome.EffectiveEndAt,
             outcome.Priority.Value,
             outcome.RuleId?.Value,
-            outcome.OccurredAt);
+            outcome.OccurredAt,
+            outcome.RetryResult,
+            outcome.GaveUpBecause);
     }
 }
 

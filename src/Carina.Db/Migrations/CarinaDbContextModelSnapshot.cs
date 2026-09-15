@@ -2885,6 +2885,11 @@ namespace Carina.Db.Migrations
                         .HasColumnType("jsonb")
                         .HasColumnName("faults");
 
+                    b.Property<string>("GaveUpBecause")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("gave_up_because");
+
                     b.Property<string>("Kind")
                         .IsRequired()
                         .HasMaxLength(32)
@@ -2921,6 +2926,11 @@ namespace Carina.Db.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("reservation_id");
 
+                    b.Property<string>("RetryResult")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("retry_result");
+
                     b.Property<Guid?>("RuleId")
                         .HasColumnType("uuid")
                         .HasColumnName("rule_id");
@@ -2948,17 +2958,22 @@ namespace Carina.Db.Migrations
 
                     b.HasIndex("ReservationId", "Kind")
                         .IsUnique()
-                        .HasDatabaseName("ux_reservation_outcome_reservation_kind");
+                        .HasDatabaseName("ux_reservation_outcome_reservation_kind")
+                        .HasFilter("kind <> 'Retried'");
 
                     b.ToTable("reservation_outcome", null, t =>
                         {
                             t.HasCheckConstraint("ck_reservation_outcome_faults", "faults <@ '[\"TuneFailed\", \"RefusedByDiskPrecheck\", \"DiskExhausted\", \"DriverLost\", \"DrainGraceExpired\", \"StoppedByHand\", \"TunerContended\", \"ScramblingUnresolved\", \"ShortOfTheWindow\", \"NothingLanded\", \"SizeUnobserved\", \"StoppedUnasked\", \"LighterThanTheStream\", \"HeavierThanTheStream\", \"EndStillUndecided\", \"LeftRunningUnwatched\", \"DriverReplaced\"]'::jsonb\nAND (kind <> 'TuneFailure' OR faults @> '[\"TuneFailed\"]'::jsonb)");
 
-                            t.HasCheckConstraint("ck_reservation_outcome_kind", "kind IN ('Competing', 'Missed', 'TuneFailure', 'RecordingFailure', 'ProgrammeMoved', 'ProgrammeGone', 'ProgrammeReturned')");
+                            t.HasCheckConstraint("ck_reservation_outcome_gave_up", "(gave_up_because IS NULL OR gave_up_because IN ('NotTransient', 'PrecheckFailed', 'CandidateNeedsAttention', 'BroadcastOver', 'AttemptsSpent'))\nAND (kind = 'GaveUpRetrying') = (gave_up_because IS NOT NULL)\nAND (kind <> 'GaveUpRetrying'\n     OR (gave_up_because = 'NotTransient') = (tune_failure IS NOT NULL))");
+
+                            t.HasCheckConstraint("ck_reservation_outcome_kind", "kind IN ('Competing', 'Missed', 'TuneFailure', 'RecordingFailure', 'ProgrammeMoved', 'ProgrammeGone', 'ProgrammeReturned', 'Retried', 'GaveUpRetrying')");
 
                             t.HasCheckConstraint("ck_reservation_outcome_recorded_instead", "kind = 'Competing' OR jsonb_array_length(recorded_instead) = 0");
 
                             t.HasCheckConstraint("ck_reservation_outcome_recording_outcome", "(recording_outcome IS NULL OR recording_outcome IN ('Complete', 'Truncated', 'Failed'))\nAND (kind <> 'RecordingFailure' OR recording_outcome IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_reservation_outcome_retry", "(retry_result IS NULL OR retry_result IN ('Started', 'RefusedAgain', 'NoAnswer'))\nAND (kind = 'Retried') = (retry_result IS NOT NULL)\nAND (retry_result IS DISTINCT FROM 'Started'\n     OR (tune_failure IS NULL AND jsonb_array_length(faults) = 0))");
 
                             t.HasCheckConstraint("ck_reservation_outcome_tune_failure", "(tune_failure IS NULL\n OR tune_failure IN ('NoLock', 'NoData', 'IncompletePsi', 'StreamMismatch'))\nAND (kind <> 'TuneFailure' OR tune_failure IS NOT NULL)");
 

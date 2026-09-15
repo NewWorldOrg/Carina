@@ -77,7 +77,7 @@ public sealed class RecordingTickJob(
             notices.Nudge(RecalculationTrigger.RecordingExtended);
         }
 
-        if (run.Refused.Count > 0)
+        if (run.Refused.Count > 0 || run.Retried.Count > 0 || run.GaveUp.Count > 0)
         {
             events.Signal(AppEventName.Reservations);
         }
@@ -93,6 +93,14 @@ public sealed class RecordingTickJob(
                 "Recording {Recording} now runs until {EndsAt:O} because the programme it is recording does.",
                 followed.Id.Wire,
                 followed.EndsAt);
+        }
+
+        if (run.Retried.Count > 0 || run.GaveUp.Count > 0)
+        {
+            logger.LogInformation(
+                "A recording tick tried {Retried} failed start(s) again and gave up trying on {GaveUp}.",
+                run.Retried.Count,
+                run.GaveUp.Count);
         }
 
         if (run.Started.Count is 0 && run.Stopped.Count is 0 && run.Refused.Count is 0)

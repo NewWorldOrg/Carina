@@ -1,3 +1,5 @@
+using Carina.Domain.Programmes;
+using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Recordings;
 using Carina.Infrastructure.Tests.Reservations;
@@ -15,8 +17,25 @@ internal sealed class RefusalLedger
 
     public RememberedTuneReports Tuning { get; } = new();
 
+    public HeldCandidates Candidates { get; } = new();
+
     public RecordingRefusalReporter Reporter
         => new(Reservations, Outcomes, Tuning, NullLogger<RecordingRefusalReporter>.Instance);
+
+    public RecordingRetries Retries(
+        IAnnouncedProgrammes programmes,
+        DiskPrecheckService disks,
+        RecordingSettings settings,
+        RetryPolicy? policy = null)
+        => new(
+            Reservations,
+            Outcomes,
+            Candidates,
+            programmes,
+            disks,
+            settings,
+            policy ?? RetryPolicy.Default,
+            NullLogger<RecordingRetries>.Instance);
 
     public RefusalLedger Knowing(params RecordingTick[] due)
     {

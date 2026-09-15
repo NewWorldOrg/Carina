@@ -78,6 +78,11 @@ public static class ServiceCollectionExtensions
             .Configure(options => options.ReadFrom(configuration))
             .ValidateOnStart();
 
+        services.AddSingleton<IValidateOptions<RecordingRetryOptions>, RecordingRetryValidation>();
+        services.AddOptions<RecordingRetryOptions>()
+            .Configure(options => options.ReadFrom(configuration))
+            .ValidateOnStart();
+
         services.AddSingleton<IValidateOptions<ThumbnailOptions>, ThumbnailValidation>();
         services.AddOptions<ThumbnailOptions>()
             .Configure(options => options.ReadFrom(configuration))
