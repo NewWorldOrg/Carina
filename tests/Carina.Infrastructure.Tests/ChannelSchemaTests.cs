@@ -39,6 +39,26 @@ public sealed class ChannelSchemaTests
             .. type.GetComplexProperties().SelectMany(property => EveryProperty(property.ComplexType)),
         ];
 
+    [Fact(DisplayName = "BR-QD-012: a candidate keeps its latest score as one reading, not a history of them")]
+    public void ACandidateKeepsItsLatestScoreAsOneReading()
+    {
+        using CarinaDbContext context = Carina();
+        IEntityType candidate = Entity<CandidateChannel>(context);
+
+        Assert.Equal(
+            [
+                "score_bit_error_rate_highest",
+                "score_cnr_lowest_milli_decibels",
+                "score_evaluated_at",
+                "score_lock_rate",
+                "score_measured_from",
+                "score_measured_until",
+                "score_samples",
+            ],
+            ColumnsOf(candidate, nameof(CandidateChannel.Score)).Order(StringComparer.Ordinal));
+        Assert.Contains("ck_candidate_channel_score", candidate.GetCheckConstraints().Select(check => check.Name));
+    }
+
     [Fact]
     public void AServiceIsKeyedByItsBroadcastIdentifiersAlone()
     {

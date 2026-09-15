@@ -155,6 +155,26 @@ public sealed class CandidateChannelRepository(CarinaDbContext context) : ICandi
         await DeselectAsync(networkId, serviceId, cancellationToken);
     }
 
+    public async Task<bool> ScoreAsync(
+        CandidateChannelId id,
+        CandidateScore score,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(id);
+        ArgumentNullException.ThrowIfNull(score);
+
+        CandidateChannel? scored = await FindAsync(id, cancellationToken);
+        if (scored is null)
+        {
+            return false;
+        }
+
+        scored.Evaluated(score);
+        await context.SaveChangesAsync(cancellationToken);
+
+        return true;
+    }
+
     public async Task RequireRevalidationAsync(CancellationToken cancellationToken)
         => await context.Set<CandidateChannel>()
             .ExecuteUpdateAsync(

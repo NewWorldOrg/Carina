@@ -59,6 +59,9 @@ public sealed class RefusingCandidates(ICandidateChannelRepository candidates, F
         CancellationToken cancellationToken)
         => candidates.ClearSelectionAsync(networkId, serviceId, cancellationToken);
 
+    public Task<bool> ScoreAsync(CandidateChannelId id, CandidateScore score, CancellationToken cancellationToken)
+        => candidates.ScoreAsync(id, score, cancellationToken);
+
     public Task RequireRevalidationAsync(CancellationToken cancellationToken)
         => candidates.RequireRevalidationAsync(cancellationToken);
 
