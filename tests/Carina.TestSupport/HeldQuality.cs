@@ -1,3 +1,4 @@
+using Carina.Domain.Channels;
 using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 
@@ -63,6 +64,8 @@ public sealed class HeldQualitySignals : IQualitySignalReader
 {
     public List<SignalFigures> Figures { get; } = [];
 
+    public List<QualitySignalWindow> Windows { get; } = [];
+
     public List<QualityPeriod> Asked { get; } = [];
 
     public Task<IReadOnlyList<SignalFigures>> FiguresAsync(QualityPeriod period, CancellationToken cancellationToken)
@@ -72,6 +75,16 @@ public sealed class HeldQualitySignals : IQualitySignalReader
         Asked.Add(period);
 
         return Task.FromResult<IReadOnlyList<SignalFigures>>([.. Figures]);
+    }
+
+    public Task<IReadOnlyList<QualitySignalWindow>> WindowsAsync(
+        QualityTrendFrame frame,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(frame);
+
+        return Task.FromResult<IReadOnlyList<QualitySignalWindow>>(
+            [.. Windows.Where(window => frame.Period.Holds(window.Start))]);
     }
 }
 
@@ -155,4 +168,56 @@ public sealed class HeldQualitySignalRollups : IQualitySignalRollupRepository
         CancellationToken cancellationToken)
         => Task.FromResult(
             Rollups.RemoveAll(rollup => rollup.Granularity == granularity && rollup.WindowStart < cutoff));
+
+    public Task<IReadOnlyList<QualitySignalWindow>> ListFoldedAsync(
+        QualityWindow granularity,
+        DateTime from,
+        DateTime until,
+        TimeSpan step,
+        DateTime grid,
+        CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<QualitySignalWindow>>(
+        [
+            .. Rollups
+                .Where(rollup => rollup.Granularity == granularity
+                                 && rollup.WindowStart >= from
+                                 && rollup.WindowStart < until)
+                .GroupBy(rollup => (
+                    Start: Binned(rollup.WindowStart, step, grid),
+                    Tuner: rollup.Tuner.Value,
+                    Network: rollup.Network.Value,
+                    Service: rollup.Service.Value))
+                .OrderBy(group => group.Key.Start)
+                .ThenBy(group => group.Key.Tuner, StringComparer.Ordinal)
+                .ThenBy(group => group.Key.Network)
+                .ThenBy(group => group.Key.Service)
+                .Select(group => new QualitySignalWindow(
+                    group.Key.Start,
+                    new TunerDeviceId(group.Key.Tuner),
+                    new NetworkId(group.Key.Network),
+                    new ServiceId(group.Key.Service),
+                    group.Sum(rollup => rollup.Samples),
+                    group.Sum(rollup => rollup.Locked),
+                    group.Sum(rollup => rollup.Unmeasured),
+                    group.Sum(rollup => rollup.Unreachable),
+                    group.Min(rollup => rollup.CarrierToNoiseLowest),
+                    [
+                        .. group
+                            .SelectMany(rollup => rollup.BitErrors)
+                            .GroupBy(rate => rate.Layer)
+                            .OrderBy(layer => layer.Key)
+                            .Select(layer => new LayerErrorPeak(layer.Key, layer.Max(rate => rate.Highest))),
+                    ],
+                    [],
+                    group
+                        .Where(rollup => rollup.CarrierToNoiseLowest is not null || rollup.BitErrors.Count > 0)
+                        .Max(rollup => (DateTime?)rollup.WindowStart))),
+        ]);
+
+    private static DateTime Binned(DateTime at, TimeSpan step, DateTime grid)
+    {
+        long offset = (((at.Ticks - grid.Ticks) % step.Ticks) + step.Ticks) % step.Ticks;
+
+        return new DateTime(at.Ticks - offset, DateTimeKind.Utc);
+    }
 }

@@ -10,6 +10,14 @@ public interface IQualitySignalRollupRepository
         DateTime until,
         CancellationToken cancellationToken);
 
+    Task<IReadOnlyList<QualitySignalWindow>> ListFoldedAsync(
+        QualityWindow granularity,
+        DateTime from,
+        DateTime until,
+        TimeSpan step,
+        DateTime grid,
+        CancellationToken cancellationToken);
+
     Task<DateTime?> LatestWindowStartAsync(QualityWindow granularity, CancellationToken cancellationToken);
 
     Task<int> ForgetStartedBeforeAsync(QualityWindow granularity, DateTime cutoff, CancellationToken cancellationToken);

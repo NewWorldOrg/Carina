@@ -26,6 +26,8 @@ public sealed record QualitySignalRead(QualityThresholdKey Key, QualityReading R
 public interface IQualitySignalReader
 {
     Task<IReadOnlyList<SignalFigures>> FiguresAsync(QualityPeriod period, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<QualitySignalWindow>> WindowsAsync(QualityTrendFrame frame, CancellationToken cancellationToken);
 }
 
 public static class QualitySignalSurvey
@@ -44,40 +46,30 @@ public static class QualitySignalSurvey
         ArgumentNullException.ThrowIfNull(rolled);
         ArgumentNullException.ThrowIfNull(raw);
 
+        return Figures([.. rolled.Select(QualitySignalWindow.Of), .. raw.Select(QualitySignalWindow.Of)]);
+    }
+
+    public static IReadOnlyList<SignalFigures> Figures(IReadOnlyList<QualitySignalWindow> windows)
+    {
+        ArgumentNullException.ThrowIfNull(windows);
+
         Dictionary<string, Gathering> byTuner = [];
 
-        foreach (QualitySignalRollup rollup in rolled)
+        foreach (QualitySignalWindow window in windows)
         {
-            Gathering held = Held(byTuner, rollup.Tuner);
+            Gathering held = Held(byTuner, window.Tuner);
 
-            held.Samples += rollup.Samples;
-            held.Locked += rollup.Locked;
-            held.Unmeasured += rollup.Unmeasured;
-            held.Unreachable += rollup.Unreachable;
-            held.Coldest(rollup.CarrierToNoiseLowest);
-            held.Worst(rollup.BitErrors.Count is 0 ? null : rollup.BitErrors.Max(rate => rate.Highest));
+            held.Samples += window.Samples;
+            held.Locked += window.Locked;
+            held.Unmeasured += window.Unmeasured;
+            held.Unreachable += window.Unreachable;
+            held.Coldest(window.CarrierToNoiseLowest);
+            held.Worst(window.BitErrors.Count is 0 ? null : window.BitErrors.Max(peak => peak.Highest));
+            held.Names(window.MetricsNotRead);
 
-            if (rollup.CarrierToNoiseLowest is not null || rollup.BitErrors.Count > 0)
+            if (window.LastCarriedAt is { } carried)
             {
-                held.Latest(rollup.WindowStart);
-            }
-        }
-
-        foreach (QualitySignalSample sample in raw)
-        {
-            Gathering held = Held(byTuner, sample.Tuner);
-
-            held.Samples++;
-            held.Locked += sample.Signal.Locked ? 1 : 0;
-            held.Unreachable += sample.Signal.WasTaken ? 0 : 1;
-            held.Unmeasured += sample.Signal.WasTaken && !sample.Signal.CarriesAnyValue ? 1 : 0;
-            held.Coldest(sample.Signal.CarrierToNoiseMilliDecibels);
-            held.Worst(Highest(sample.Signal.BitErrors));
-            held.Names(sample.Signal.MetricsNotRead);
-
-            if (sample.Signal.CarriesAnyValue)
-            {
-                held.Latest(sample.TakenAt);
+                held.Latest(carried);
             }
         }
 
@@ -180,27 +172,17 @@ public static class QualitySignalSurvey
         _ => false,
     };
 
-    private static double? Observed(QualityThresholdKey key, SignalFigures figure) => key switch
+    public static double? Observed(QualityThresholdKey key, SignalFigures figure)
     {
-        QualityThresholdKey.LockRate => figure.LockRate,
-        QualityThresholdKey.CarrierToNoiseFloor => figure.CarrierToNoiseLowest,
-        QualityThresholdKey.BitErrorRateCeiling => figure.BitErrorRateHighest,
-        _ => throw new ArgumentOutOfRangeException(nameof(key), key, "A signal reading is one of the ones this domain takes."),
-    };
+        ArgumentNullException.ThrowIfNull(figure);
 
-    private static double? Highest(IReadOnlyList<LayerBitErrorCounts> counts)
-    {
-        double? highest = null;
-
-        foreach (LayerBitErrorCounts layer in counts)
+        return key switch
         {
-            if (layer.ErrorRate is { } rate && (highest is null || rate > highest))
-            {
-                highest = rate;
-            }
-        }
-
-        return highest;
+            QualityThresholdKey.LockRate => figure.LockRate,
+            QualityThresholdKey.CarrierToNoiseFloor => figure.CarrierToNoiseLowest,
+            QualityThresholdKey.BitErrorRateCeiling => figure.BitErrorRateHighest,
+            _ => throw new ArgumentOutOfRangeException(nameof(key), key, "A signal reading is one of the ones this domain takes."),
+        };
     }
 
     private static Gathering Held(Dictionary<string, Gathering> byTuner, TunerDeviceId tuner)

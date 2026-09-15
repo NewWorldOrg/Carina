@@ -142,6 +142,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "getProgrammeGuide",
                 "getQualitySummary",
                 "getQualitySupplyHealth",
+                "getQualityTrends",
                 "getRecording",
                 "getRecordingIntegrity",
                 "getReservation",
