@@ -149,6 +149,7 @@ public static class DriverHost
         ));
 
         builder.Services.AddSingleton<RecordingEraser>();
+        builder.Services.AddSingleton<StrayFileEraser>();
 
         builder.Services.AddSingleton<DriverLifecycle>();
         builder.Services.AddHostedService(provider =>

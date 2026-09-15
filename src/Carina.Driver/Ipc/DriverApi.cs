@@ -103,6 +103,10 @@ public static class DriverApi
 
         RequestDelegate eraseRecording = context => EraseRecording(context, recordingEraser);
 
+        StrayFileEraser strayFileEraser = app.Services.GetRequiredService<StrayFileEraser>();
+
+        RequestDelegate eraseStrayFile = context => EraseStrayFile(context, strayFileEraser);
+
         RequestDelegate events = context => DriverEventStream.Invoke(context, hub);
 
         RequestDelegate storage = context =>
@@ -137,6 +141,7 @@ public static class DriverApi
         app.MapGet(DriverEndpoints.Storage, storage);
         app.MapGet(DriverEndpoints.Events, events);
         app.MapDelete($"{DriverEndpoints.Recordings}/{{id}}", eraseRecording);
+        app.MapPost(DriverEndpoints.StrayFiles, eraseStrayFile);
         app.MapPost(DriverEndpoints.Restart, restart);
     }
 
@@ -656,9 +661,69 @@ public static class DriverApi
         );
     }
 
+    private static async Task EraseStrayFile(HttpContext context, StrayFileEraser eraser)
+    {
+        StrayFileErasureRequest? request;
+
+        try
+        {
+            request = await context.Request.ReadFromJsonAsync(
+                DriverJson.Context.StrayFileErasureRequest,
+                context.RequestAborted
+            );
+        }
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception error)
+            when (error is JsonException or InvalidOperationException or BadHttpRequestException)
+        {
+            await Problem(
+                context,
+                StatusCodes.Status400BadRequest,
+                "malformedRequest",
+                $"The body is not the JSON this driver reads: {error.Message}"
+            );
+
+            return;
+        }
+
+        FileErasure erasure = eraser.Erase(request);
+
+        if (erasure.Refusal is not ErasureRefusal.None)
+        {
+            (int status, string title) = Outcome(erasure.Refusal);
+
+            await Problem(context, status, title, erasure.Detail);
+
+            return;
+        }
+
+        await Write(
+            context,
+            StatusCodes.Status200OK,
+            new StrayFileErasedDto
+            {
+                OutputRoot = request!.OutputRoot,
+                Path = request.Path,
+                FileRemoved = erasure.FileRemoved,
+            },
+            DriverJson.Context.StrayFileErasedDto
+        );
+    }
+
     private static (int Status, string Title) Outcome(ErasureRefusal refusal) =>
         refusal switch
         {
+            ErasureRefusal.NotUnderTheRoot => (
+                StatusCodes.Status400BadRequest,
+                SessionRefusalTitles.Rejected
+            ),
+            ErasureRefusal.FileChanged => (
+                StatusCodes.Status409Conflict,
+                SessionRefusalTitles.StrayFileChanged
+            ),
             ErasureRefusal.NotARecording => (
                 StatusCodes.Status400BadRequest,
                 SessionRefusalTitles.Rejected
