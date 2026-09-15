@@ -11,6 +11,11 @@ namespace Carina.Domain.Encodings;
 /// tripped the safety valve can be found afterwards without reading logs.
 /// <see cref="Noting"/> is how a reading says that it was made from part of what there was to see:
 /// it changes nothing that was read, only what is known about the reading of it.
+/// <para>
+/// <see cref="Learned"/> is the station's watermark the run learned from this source, for judging
+/// the recordings of the same service that come after it. It rides beside the reading whatever the
+/// verdict and is never what this reading was judged by (BR-ED2-007).
+/// </para>
 /// </summary>
 public sealed record ChapterDetection
 {
@@ -18,16 +23,18 @@ public sealed record ChapterDetection
         ChapterVerdict verdict,
         IReadOnlyList<ChapterSegment> segments,
         double breakShare,
-        string note)
+        string note,
+        WatermarkMask? learned)
     {
         Verdict = verdict;
         Segments = segments;
         BreakShare = breakShare;
         Note = note;
+        Learned = learned;
     }
 
     public static ChapterDetection NotAsked { get; } =
-        new(ChapterVerdict.NotAsked, [], 0, string.Empty);
+        new(ChapterVerdict.NotAsked, [], 0, string.Empty, null);
 
     public ChapterVerdict Verdict { get; }
 
@@ -36,6 +43,8 @@ public sealed record ChapterDetection
     public double BreakShare { get; }
 
     public string Note { get; }
+
+    public WatermarkMask? Learned { get; }
 
     public bool Marks => Verdict is ChapterVerdict.Marked;
 
@@ -89,7 +98,7 @@ public sealed record ChapterDetection
                 nameof(segments));
         }
 
-        return new ChapterDetection(ChapterVerdict.Marked, [.. segments], Shared(breakShare), string.Empty);
+        return new ChapterDetection(ChapterVerdict.Marked, [.. segments], Shared(breakShare), string.Empty, null);
     }
 
     /// <summary>
@@ -106,17 +115,30 @@ public sealed record ChapterDetection
             Verdict,
             Segments,
             BreakShare,
-            Shortened(Note.Length is 0 ? note : $"{Note}; {note}"));
+            Shortened(Note.Length is 0 ? note : $"{Note}; {note}"),
+            Learned);
+    }
+
+    public ChapterDetection Learning(WatermarkMask learned)
+    {
+        ArgumentNullException.ThrowIfNull(learned);
+
+        if (Verdict is ChapterVerdict.NotAsked)
+        {
+            throw new InvalidOperationException("Nobody looked at the source, so nothing was learned from it.");
+        }
+
+        return new ChapterDetection(Verdict, Segments, BreakShare, Note, learned);
     }
 
     public static ChapterDetection NothingFound()
-        => new(ChapterVerdict.NothingFound, [], 0, string.Empty);
+        => new(ChapterVerdict.NothingFound, [], 0, string.Empty, null);
 
     public static ChapterDetection Discarded(double breakShare, string note)
-        => new(ChapterVerdict.Discarded, [], Shared(breakShare), Shortened(note));
+        => new(ChapterVerdict.Discarded, [], Shared(breakShare), Shortened(note), null);
 
     public static ChapterDetection Unreadable(string note)
-        => new(ChapterVerdict.Unreadable, [], 0, Shortened(note));
+        => new(ChapterVerdict.Unreadable, [], 0, Shortened(note), null);
 
     private static double Shared(double breakShare)
     {

@@ -17,12 +17,28 @@ namespace Carina.Domain.Encodings;
 /// anything is read, so a grid of no length, a tolerance half that grid or wider, a threshold or a
 /// valve that is no share of the whole, and a reading allowed no marks at all are all refused here
 /// rather than worked around further in.
+/// <para>
+/// A station's watermark is only ever used to take a pod away, never to make one: a pod through
+/// which the mark learned ahead stayed on screen in more than <see cref="WatermarkedShare"/> of the
+/// pictures looked at inside it is programme, not a break (BR-ED2-007). The pictures at either edge
+/// of a pod are left out, because the mark comes and goes around the boundary itself, and a pod with
+/// fewer than <see cref="FewestSightingsInsideABreak"/> pictures inside it is not taken away on their
+/// word. A mark that was on screen in <see cref="WatermarkNearlyEverywhere"/> of all the pictures
+/// looked at tells programme from break nowhere — it is the picture of a programme without
+/// advertisements, or something that is not a watermark at all — and is not used.
+/// </para>
 /// </summary>
 public static class ChapterGrid
 {
     public const int LongestPair = 12;
 
     public const int LongestBreak = 20;
+
+    public const double WatermarkedShare = 0.5;
+
+    public const double WatermarkNearlyEverywhere = 0.95;
+
+    public const int FewestSightingsInsideABreak = 3;
 
     public static readonly TimeSpan Nearby = TimeSpan.FromSeconds(0.5);
 
@@ -40,13 +56,17 @@ public static class ChapterGrid
         Bounded(settings.Scene);
         Bounded(settings.MostBreakShare);
 
+        List<string> asides = [];
         List<ChapterSpan> breaks = Settled(
-            Snapped(Sized(Merged(Paired(Corroborated(evidence, length, settings), settings)), settings), settings, length),
+            Unbranded(
+                Snapped(Sized(Merged(Paired(Corroborated(evidence, length, settings), settings)), settings), settings, length),
+                evidence.Sightings,
+                asides),
             length);
 
         if (breaks.Count is 0)
         {
-            return ChapterDetection.NothingFound();
+            return Noted(ChapterDetection.NothingFound(), asides);
         }
 
         double share = Math.Clamp(
@@ -56,23 +76,30 @@ public static class ChapterGrid
 
         if (share > settings.MostBreakShare)
         {
-            return ChapterDetection.Discarded(
-                share,
-                string.Create(
-                    CultureInfo.InvariantCulture,
-                    $"the breaks came to {share:0.000} of the length, and no more than {settings.MostBreakShare:0.000} of it may be break"));
+            return Noted(
+                ChapterDetection.Discarded(
+                    share,
+                    string.Create(
+                        CultureInfo.InvariantCulture,
+                        $"the breaks came to {share:0.000} of the length, and no more than {settings.MostBreakShare:0.000} of it may be break")),
+                asides);
         }
 
         IReadOnlyList<ChapterSegment> segments = Tiled(breaks, length);
 
-        return segments.Count - 1 > settings.MostChapters
-            ? ChapterDetection.Discarded(
-                share,
-                string.Create(
-                    CultureInfo.InvariantCulture,
-                    $"the reading put in {segments.Count - 1} marks, and no more than {settings.MostChapters} may be put in"))
-            : ChapterDetection.Marked(segments, length, share);
+        return Noted(
+            segments.Count - 1 > settings.MostChapters
+                ? ChapterDetection.Discarded(
+                    share,
+                    string.Create(
+                        CultureInfo.InvariantCulture,
+                        $"the reading put in {segments.Count - 1} marks, and no more than {settings.MostChapters} may be put in"))
+                : ChapterDetection.Marked(segments, length, share),
+            asides);
     }
+
+    private static ChapterDetection Noted(ChapterDetection read, List<string> asides)
+        => asides.Count is 0 ? read : read.Noting(string.Join("; ", asides));
 
     private static void Bounded(double share, [CallerArgumentExpression(nameof(share))] string? named = null)
     {
@@ -184,6 +211,58 @@ public static class ChapterGrid
         }
 
         return laid;
+    }
+
+    private static List<ChapterSpan> Unbranded(
+        List<ChapterSpan> pods,
+        IReadOnlyList<WatermarkSighting> sightings,
+        List<string> asides)
+    {
+        if (sightings.Count is 0 || pods.Count is 0)
+        {
+            return pods;
+        }
+
+        double everywhere = sightings.Count(sighting => sighting.Seen) / (double)sightings.Count;
+
+        if (everywhere >= WatermarkNearlyEverywhere)
+        {
+            asides.Add(string.Create(
+                CultureInfo.InvariantCulture,
+                $"the watermark learned ahead was on screen in {everywhere:0.000} of the pictures looked at, so it told programme from break nowhere and was not used"));
+
+            return pods;
+        }
+
+        List<ChapterSpan> kept = [];
+        int branded = 0;
+
+        foreach (ChapterSpan pod in pods)
+        {
+            WatermarkSighting[] inside =
+            [
+                .. sightings.Where(sighting => sighting.At > pod.Starts + Adjacent && sighting.At < pod.Ends - Adjacent),
+            ];
+
+            if (inside.Length >= FewestSightingsInsideABreak
+                && inside.Count(sighting => sighting.Seen) > inside.Length * WatermarkedShare)
+            {
+                branded++;
+
+                continue;
+            }
+
+            kept.Add(pod);
+        }
+
+        if (branded > 0)
+        {
+            asides.Add(string.Create(
+                CultureInfo.InvariantCulture,
+                $"{branded} of the {pods.Count} candidate breaks were taken away because the watermark learned ahead stayed on screen through them"));
+        }
+
+        return kept;
     }
 
     private static List<ChapterSpan> Settled(List<ChapterSpan> pods, TimeSpan length)
