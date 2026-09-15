@@ -132,6 +132,7 @@ internal static class LedgerCopy
             recording.Interruptions,
             recording.ExpectedWindowStart,
             recording.ExpectedWindowEnd,
+            recording.PromisedWindowEnd,
             recording.Outcome,
             recording.OutcomeDetail,
             recording.Counters,

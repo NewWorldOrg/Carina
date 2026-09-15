@@ -361,6 +361,27 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
             root["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
     }
 
+    [Fact]
+    public async Task WhatARecordingAnswersIsDescribedFieldByFieldWithWhenItWasWeighedAndTheEndItWasPromised()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode properties = document["components"]!["schemas"]!["RecordingResponder"]!["properties"]!;
+
+        Assert.Equal(
+            [
+                "id", "reservationId", "programme", "standing", "outcome", "outcomeDetail", "startedAt", "stoppedAt",
+                "abortedAt", "expectedWindow", "promisedWindowEnd", "writtenDurationMs", "resumeCount", "fileSizeBytes",
+                "observedAt", "outputRoot", "fileName", "tunerDeviceId", "drops", "thumbnail", "broadcastGroup", "encode",
+            ],
+            properties.AsObject().Select(entry => entry.Key).ToArray());
+
+        foreach (string time in new[] { "promisedWindowEnd", "observedAt" })
+        {
+            Assert.True(SaysItIsAString(properties[time]!["type"]), time);
+            Assert.Equal("date-time", properties[time]!["format"]!.GetValue<string>());
+        }
+    }
+
     private static bool SaysItIsAString(JsonNode? declared)
         => declared switch
         {

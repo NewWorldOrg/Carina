@@ -148,6 +148,7 @@ public sealed class HeldRecordings : IRecordingDirectory
             held.Interruptions,
             held.ExpectedWindowStart,
             held.ExpectedWindowEnd,
+            held.PromisedWindowEnd,
             held.Outcome,
             held.OutcomeDetail,
             held.Counters,

@@ -257,6 +257,64 @@ public sealed class RecordingEndpointTests
     }
 
     [Fact]
+    public async Task TheListSaysWhenEachFileWasLastWeighed()
+    {
+        await using var feature = new RecordingFeature();
+        Recording weighed = feature.Held(eventId: 1);
+        weighed.Wrote(TimeSpan.FromMinutes(30));
+        weighed.Note(new OutcomeDetail(RecordingFault.DriverLost, null, string.Empty, RecordingFeature.Noon));
+        weighed.Settle(RecordingOutcome.Truncated, 1_234_567, RecordingFeature.Noon.AddMinutes(30));
+        Recording writing = feature.Held(eventId: 2);
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync("/api/recordings");
+        JsonElement[] items = [.. body.GetProperty("data").GetProperty("items").EnumerateArray()];
+        JsonElement settled = items.Single(item => item.GetProperty("id").GetString() == weighed.Id.Wire);
+        JsonElement unweighed = items.Single(item => item.GetProperty("id").GetString() == writing.Id.Wire);
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(1_234_567, settled.GetProperty("fileSizeBytes").GetInt64());
+        Assert.Equal(RecordingFeature.Noon.AddMinutes(30), settled.GetProperty("observedAt").GetDateTime());
+        Assert.Equal(JsonValueKind.Null, unweighed.GetProperty("fileSizeBytes").ValueKind);
+        Assert.Equal(JsonValueKind.Null, unweighed.GetProperty("observedAt").ValueKind);
+    }
+
+    [Fact]
+    public async Task ARecordingWhoseEndWasFollowedLaterSaysTheEndItWasPromisedOnTheListAndOnTheDetail()
+    {
+        await using var feature = new RecordingFeature();
+        Recording followed = feature.Held();
+        DateTime promised = followed.ExpectedWindowEnd;
+        followed.Extend(promised.AddMinutes(25));
+
+        (_, JsonElement listed) = await feature.GetAsync("/api/recordings");
+        (_, JsonElement detail) = await feature.GetAsync($"/api/recordings/{followed.Id.Wire}");
+        JsonElement item = Assert.Single(listed.GetProperty("data").GetProperty("items").EnumerateArray());
+        JsonElement described = detail.GetProperty("data");
+
+        Assert.Equal(promised, item.GetProperty("promisedWindowEnd").GetDateTime());
+        Assert.Equal(promised.AddMinutes(25), item.GetProperty("expectedWindow").GetProperty("end").GetDateTime());
+        Assert.Equal(promised, described.GetProperty("recording").GetProperty("promisedWindowEnd").GetDateTime());
+        Assert.Equal(
+            promised.AddMinutes(25),
+            described.GetProperty("reconciliation").GetProperty("expectedWindow").GetProperty("end").GetDateTime());
+    }
+
+    [Fact]
+    public async Task ARecordingNobodyFollowedWasPromisedTheEndItHas()
+    {
+        await using var feature = new RecordingFeature();
+        Recording held = feature.Held();
+
+        (_, JsonElement listed) = await feature.GetAsync("/api/recordings");
+        JsonElement item = Assert.Single(listed.GetProperty("data").GetProperty("items").EnumerateArray());
+
+        Assert.Equal(held.ExpectedWindowEnd, item.GetProperty("promisedWindowEnd").GetDateTime());
+        Assert.Equal(
+            item.GetProperty("expectedWindow").GetProperty("end").GetDateTime(),
+            item.GetProperty("promisedWindowEnd").GetDateTime());
+    }
+
+    [Fact]
     public async Task TheDetailSaysHowOftenTheRecordingBrokeAndWhetherItCameBack()
     {
         await using var feature = new RecordingFeature();

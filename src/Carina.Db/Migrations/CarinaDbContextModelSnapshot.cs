@@ -2465,6 +2465,10 @@ namespace Carina.Db.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("programme_start_at");
 
+                    b.Property<DateTime>("PromisedWindowEnd")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("promised_window_end");
+
                     b.Property<Guid?>("ReservationId")
                         .HasColumnType("uuid")
                         .HasColumnName("reservation_id");
@@ -2653,6 +2657,8 @@ namespace Carina.Db.Migrations
                             t.HasCheckConstraint("ck_recording_tuner", "tuner_device_id IS NOT NULL\nOR (NOT cc_measured\n    AND eovf_count = 0\n    AND NOT recording_reasons_name_any(outcome_detail, ARRAY['TuneFailed', 'DriverLost', 'TunerContended', 'ScramblingUnresolved']::text[]))");
 
                             t.HasCheckConstraint("ck_recording_window", "expected_window_end > expected_window_start");
+
+                            t.HasCheckConstraint("ck_recording_window_promised", "promised_window_end > expected_window_start AND promised_window_end <= expected_window_end");
                         });
                 });
 

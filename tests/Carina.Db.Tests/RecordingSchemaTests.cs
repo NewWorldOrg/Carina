@@ -275,6 +275,31 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
     }
 
     [Fact]
+    public async Task TheEndARecordingWasPromisedIsNeverAfterTheEndItHas()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(connection, 40031, promisedEnd: "timestamptz '2026-08-24 21:00:01+00'"));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, refusal.SqlState);
+        Assert.Equal("ck_recording_window_promised", refusal.ConstraintName);
+
+        await Record(connection, 40031, windowEnd: "timestamptz '2026-08-24 21:15:00+00'", promisedEnd: Ends);
+    }
+
+    [Fact]
+    public async Task TheEndARecordingWasPromisedComesAfterItsWindowStarts()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(
+            () => Record(connection, 40032, promisedEnd: Airs));
+
+        Assert.Equal("ck_recording_window_promised", refusal.ConstraintName);
+    }
+
+    [Fact]
     public async Task NothingCountsBackwards()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -729,6 +754,7 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
         string? ccTotal = null,
         string? measuredAt = null,
         string? windowEnd = null,
+        string? promisedEnd = null,
         Guid? reservationId = null,
         string? tuner = null,
         string? thumbnail = null,
@@ -744,7 +770,7 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
                 output_root, file_name, file_size_observed, observed_at,
                 started_at_actual, stopped_at_actual, aborted_at,
                 written_duration_ms, resume_count, interruptions,
-                expected_window_start, expected_window_end,
+                expected_window_start, expected_window_end, promised_window_end,
                 recording_outcome, outcome_detail,
                 scrambled_packets, eovf_count, measured_updated_at,
                 snapshot_name, snapshot_summary, snapshot_extended, snapshot_genres,
@@ -757,7 +783,7 @@ public sealed class RecordingSchemaTests(MigratedScratchDatabase database)
                 'bulk', '{fileName ?? $"{id:N}.m2ts"}', {size ?? "NULL"}, {observedAt ?? "NULL"},
                 {Airs}, {stoppedAt ?? "NULL"}, {abortedAt ?? "NULL"},
                 0, 0, '[]'::jsonb,
-                {Airs}, {windowEnd ?? Ends},
+                {Airs}, {windowEnd ?? Ends}, {promisedEnd ?? windowEnd ?? Ends},
                 {outcome ?? "NULL"}, {detail ?? "'[]'::jsonb"},
                 NULL, 0, {measuredAt ?? "NULL"},
                 'A programme', 'What it is about', '', '[]'::jsonb, 'Undetermined', 0, {Now},

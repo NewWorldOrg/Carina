@@ -20,6 +20,7 @@ public sealed class RecordingUtcTests
     [InlineData("measuredUpdatedAt")]
     [InlineData("expectedWindowStart")]
     [InlineData("expectedWindowEnd")]
+    [InlineData("promisedWindowEnd")]
     public void EveryTimeARehydratedRecordingCarriesIsInUtc(string parameter)
     {
         ArgumentException refusal = Assert.Throws<ArgumentException>(() => Rehydrated(parameter, Local));
@@ -201,6 +202,7 @@ public sealed class RecordingUtcTests
             interruptions,
             parameter is "expectedWindowStart" ? local!.Value : Now.AddMinutes(-5),
             parameter is "expectedWindowEnd" ? local!.Value : Now.AddMinutes(55),
+            parameter is "expectedWindowEnd" or "promisedWindowEnd" ? local!.Value : Now.AddMinutes(55),
             null,
             [],
             DropCounters.Unmeasured,

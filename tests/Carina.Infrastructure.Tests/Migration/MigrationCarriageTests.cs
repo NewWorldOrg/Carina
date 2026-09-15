@@ -220,6 +220,17 @@ public sealed class MigrationCarriageTests
     }
 
     [Fact]
+    public async Task WhatArrivesWasPromisedTheEndItArrivesWith()
+    {
+        await CarryAsync(MigrationPass.ForReal);
+
+        Recording written = recordings.Written.Single();
+
+        Assert.Equal(written.ExpectedWindowEnd, written.PromisedWindowEnd);
+        Assert.Equal(written.StoppedAtActual, written.PromisedWindowEnd);
+    }
+
+    [Fact]
     public async Task TheNameItArrivesUnderIsTheOneTheNewSystemWouldHaveGivenIt()
     {
         await CarryAsync(MigrationPass.ForReal);

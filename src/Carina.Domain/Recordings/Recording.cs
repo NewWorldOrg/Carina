@@ -55,6 +55,8 @@ public sealed class Recording
 
     public DateTime ExpectedWindowEnd { get; private set; }
 
+    public DateTime PromisedWindowEnd { get; private set; }
+
     public RecordingOutcome? Outcome { get; private set; }
 
     public IReadOnlyList<OutcomeDetail> OutcomeDetail
@@ -141,6 +143,7 @@ public sealed class Recording
             [],
             expectedWindowStart,
             expectedWindowEnd,
+            expectedWindowEnd,
             null,
             [],
             DropCounters.Unmeasured,
@@ -170,6 +173,7 @@ public sealed class Recording
         IReadOnlyList<Interruption> interruptions,
         DateTime expectedWindowStart,
         DateTime expectedWindowEnd,
+        DateTime promisedWindowEnd,
         RecordingOutcome? outcome,
         IReadOnlyList<OutcomeDetail> outcomeDetail,
         DropCounters counters,
@@ -204,6 +208,20 @@ public sealed class Recording
         if (expectedWindowEnd <= expectedWindowStart)
         {
             throw new ArgumentException("A recording window ends after it starts.", nameof(expectedWindowEnd));
+        }
+
+        if (promisedWindowEnd <= expectedWindowStart)
+        {
+            throw new ArgumentException(
+                "The end a recording was promised comes after its window starts.",
+                nameof(promisedWindowEnd));
+        }
+
+        if (promisedWindowEnd > expectedWindowEnd)
+        {
+            throw new ArgumentException(
+                "Following a programme only ever moves a recording's end later, so the end it was promised is not after the one it has.",
+                nameof(promisedWindowEnd));
         }
 
         if (writtenDurationMs < 0)
@@ -304,6 +322,7 @@ public sealed class Recording
             ResumeCount = resumeCount,
             ExpectedWindowStart = UtcTimes.Required(expectedWindowStart, nameof(expectedWindowStart)),
             ExpectedWindowEnd = UtcTimes.Required(expectedWindowEnd, nameof(expectedWindowEnd)),
+            PromisedWindowEnd = UtcTimes.Required(promisedWindowEnd, nameof(promisedWindowEnd)),
             Outcome = outcome,
             CcMeasured = counters.Measured,
             CcDroppedPackets = counters.Dropped,
