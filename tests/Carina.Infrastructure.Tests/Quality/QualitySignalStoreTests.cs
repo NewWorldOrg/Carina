@@ -29,7 +29,7 @@ public sealed class QualitySignalStoreTests(RepositoryDatabase database)
                 Noon,
                 SignalSample.WithLock(
                     Noon,
-                    34779,
+                    30000,
                     Noon.AddSeconds(-1),
                     [new LayerBitErrorCounts(0, 0, 1671168), new LayerBitErrorCounts(1, 2, 67682304)],
                     Noon.AddSeconds(-1))),
@@ -43,7 +43,7 @@ public sealed class QualitySignalStoreTests(RepositoryDatabase database)
 
         Assert.Equal(Noon, held.Signal.LockReadAt);
         Assert.Equal(Noon.AddSeconds(-1), held.Signal.CarrierToNoiseReadAt);
-        Assert.Equal(34779, held.Signal.CarrierToNoiseMilliDecibels);
+        Assert.Equal(30000, held.Signal.CarrierToNoiseMilliDecibels);
         Assert.Equal([0, 1], held.Signal.BitErrors.Select(counts => counts.Layer));
         Assert.True(held.Signal.WasTaken);
     }
@@ -177,9 +177,9 @@ public sealed class QualitySignalStoreTests(RepositoryDatabase database)
             locked,
             0,
             0,
-            34779,
-            34779,
-            34779,
+            30000,
+            30000,
+            30000,
             [new LayerErrorRate(0, 0, 0)]);
 
     private async Task AddAsync(IReadOnlyList<QualitySignalSample> samples)

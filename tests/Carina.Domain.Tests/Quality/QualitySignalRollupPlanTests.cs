@@ -14,7 +14,7 @@ public sealed class QualitySignalRollupPlanTests
     {
         IReadOnlyList<QualitySignalRollup> rolled = QualitySignalRollupPlan.Over(
             [
-                Sample(Noon, SignalSample.WithLock(Noon, 34779, Noon)),
+                Sample(Noon, SignalSample.WithLock(Noon, 30000, Noon)),
                 Sample(Noon.AddSeconds(10), SignalSample.WithoutLock(Noon.AddSeconds(10))),
             ],
             QualityWindow.Hour);
@@ -32,7 +32,7 @@ public sealed class QualitySignalRollupPlanTests
     {
         IReadOnlyList<QualitySignalRollup> rolled = QualitySignalRollupPlan.Over(
             [
-                Sample(Noon, SignalSample.WithLock(Noon, 34779, Noon)),
+                Sample(Noon, SignalSample.WithLock(Noon, 30000, Noon)),
                 Sample(Noon.AddSeconds(10), SignalSample.WithoutLock(Noon.AddSeconds(10))),
                 Sample(Noon.AddSeconds(20), SignalSample.NotTaken(Noon.AddSeconds(20), SignalNotTaken.NothingReported)),
             ],
@@ -50,7 +50,7 @@ public sealed class QualitySignalRollupPlanTests
     {
         IReadOnlyList<QualitySignalRollup> rolled = QualitySignalRollupPlan.Over(
             [
-                Sample(Noon, SignalSample.WithLock(Noon, 34779, Noon)),
+                Sample(Noon, SignalSample.WithLock(Noon, 30000, Noon)),
                 Sample(Noon.AddMinutes(1), SignalSample.WithLock(Noon.AddMinutes(1), 35190, Noon.AddMinutes(1))),
             ],
             QualityWindow.Minute);
@@ -63,16 +63,16 @@ public sealed class QualitySignalRollupPlanTests
     {
         IReadOnlyList<QualitySignalRollup> rolled = QualitySignalRollupPlan.Over(
             [
-                Sample(Noon, SignalSample.WithLock(Noon, 34779, Noon)),
+                Sample(Noon, SignalSample.WithLock(Noon, 30000, Noon)),
                 Sample(Noon.AddSeconds(10), SignalSample.WithLock(Noon.AddSeconds(10), 35190, Noon.AddSeconds(10))),
             ],
             QualityWindow.Hour);
 
         QualitySignalRollup window = Assert.Single(rolled);
 
-        Assert.Equal(34779, window.CarrierToNoiseLowest);
+        Assert.Equal(30000, window.CarrierToNoiseLowest);
         Assert.Equal(35190, window.CarrierToNoiseHighest);
-        Assert.Equal(34984.5, window.CarrierToNoiseAverage);
+        Assert.Equal(32595.0, window.CarrierToNoiseAverage);
     }
 
     [Fact(DisplayName = "BR-QD-009: a window rolls each broadcast layer up on its own")]
@@ -129,7 +129,7 @@ public sealed class QualitySignalRollupPlanTests
     {
         IReadOnlyList<QualitySignalRollup> rolled = QualitySignalRollupPlan.Over(
             [
-                Sample(Noon, SignalSample.WithLock(Noon, 34779, Noon), tuner: "adapter0"),
+                Sample(Noon, SignalSample.WithLock(Noon, 30000, Noon), tuner: "adapter0"),
                 Sample(Noon, SignalSample.WithLock(Noon, 20000, Noon), tuner: "adapter1"),
             ],
             QualityWindow.Hour);

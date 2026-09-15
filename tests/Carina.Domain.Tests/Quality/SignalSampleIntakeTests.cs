@@ -20,7 +20,7 @@ public sealed class SignalSampleIntakeTests
             new SignalQualityDto
             {
                 Lock = SignalLock.Locked,
-                CnrMilliDecibels = 34779,
+                CnrMilliDecibels = 30000,
                 PostViterbiBitErrors =
                 [
                     new LayerBitErrorCounts(0, 0, 1671168),
@@ -33,7 +33,7 @@ public sealed class SignalSampleIntakeTests
 
         Assert.True(read.WasTaken);
         Assert.True(read.Locked);
-        Assert.Equal(34779, read.CarrierToNoiseMilliDecibels);
+        Assert.Equal(30000, read.CarrierToNoiseMilliDecibels);
         Assert.Equal(LockRead.UtcDateTime, read.LockReadAt);
         Assert.Equal(Measured.UtcDateTime, read.CarrierToNoiseReadAt);
         Assert.Equal([0, 1], read.BitErrors.Select(counts => counts.Layer));

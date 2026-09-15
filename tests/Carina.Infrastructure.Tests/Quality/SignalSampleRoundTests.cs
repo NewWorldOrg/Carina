@@ -28,7 +28,7 @@ public sealed class SignalSampleRoundTests
     {
         HeldQualitySignalSamples samples = new();
 
-        await Round(samples, Held(Quality(34779))).TakeAsync(Cancel);
+        await Round(samples, Held(Quality(30000))).TakeAsync(Cancel);
 
         QualitySignalSample sample = Assert.Single(samples.Samples);
 
@@ -38,7 +38,7 @@ public sealed class SignalSampleRoundTests
         Assert.Equal(32736, sample.Network.Value);
         Assert.Equal(1024, sample.Service.Value);
         Assert.Equal(Noon, sample.TakenAt);
-        Assert.Equal(34779, sample.Signal.CarrierToNoiseMilliDecibels);
+        Assert.Equal(30000, sample.Signal.CarrierToNoiseMilliDecibels);
     }
 
     [Fact(DisplayName = "BR-QD-004: a tuner holding nothing is left alone rather than tuned to be measured")]
@@ -343,7 +343,7 @@ public sealed class SignalSampleRoundTests
 
     private static SamplingDriverStandIn Counting(SessionSnapshot current, params SessionSnapshot[] alongside)
     {
-        SamplingDriverStandIn driver = Held(Quality(34779), current.SessionId, current.Purpose);
+        SamplingDriverStandIn driver = Held(Quality(30000), current.SessionId, current.Purpose);
         driver.Greeting = DriverCall<DriverHello>.Reached(
             new DriverHello(DriverProtocol.Version, "instance-a", [DriverCapabilities.CcMeasurement]));
         driver.Sessions = DriverCall<IReadOnlyList<SessionSnapshot>>.Reached([current, .. alongside]);
