@@ -205,6 +205,22 @@ public sealed class RecordingWriteThroughTests(MigratedScratchDatabase database)
         return refusal.ConstraintName;
     }
 
+    [Fact]
+    public async Task EveryExtensionWrittenThroughLeavesTheEndARecordingWasPromisedWhereItBegan()
+    {
+        Recording recording = Begin(60109);
+        await Add(recording);
+
+        await Reload(recording.Id, loaded => loaded.Extend(loaded.ExpectedWindowEnd.AddMinutes(15)));
+        await Reload(recording.Id, loaded => loaded.Extend(loaded.ExpectedWindowEnd.AddMinutes(10)));
+
+        await using CarinaDbContext reader = Context();
+        Recording read = await Load(reader, recording.Id);
+
+        Assert.Equal(Now.AddHours(1).AddMinutes(25), read.ExpectedWindowEnd);
+        Assert.Equal(Now.AddHours(1), read.PromisedWindowEnd);
+    }
+
     private static Recording Begin(
         int eventId,
         ReservationId? reservationId = null,

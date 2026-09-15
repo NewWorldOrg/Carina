@@ -143,6 +143,7 @@ public sealed class RecordingPositionTests
             [],
             Now.AddMinutes(-5),
             Now.AddMinutes(55),
+            Now.AddMinutes(55),
             null,
             [],
             DropCounters.Unmeasured,

@@ -290,6 +290,7 @@ public sealed class MigrationCarriage(
             [],
             source.StartAt,
             source.EndAt,
+            source.EndAt,
             RecordingOutcome.Complete,
             [],
             DropCounters.Unmeasured,

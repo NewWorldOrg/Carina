@@ -107,6 +107,9 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
                 "(file_size_observed IS NULL) = (observed_at IS NULL)");
             table.HasCheckConstraint("ck_recording_window", "expected_window_end > expected_window_start");
             table.HasCheckConstraint(
+                "ck_recording_window_promised",
+                "promised_window_end > expected_window_start AND promised_window_end <= expected_window_end");
+            table.HasCheckConstraint(
                 "ck_recording_snapshot_audio",
                 $"snapshot_audio IN ({Vocabulary<AudioMode>(quoted: true)})");
             table.HasCheckConstraint("ck_recording_snapshot_sounds", "snapshot_sounds >= 0");
@@ -237,6 +240,7 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
 
         builder.Property(recording => recording.ExpectedWindowStart).IsRequired();
         builder.Property(recording => recording.ExpectedWindowEnd).IsRequired();
+        builder.Property(recording => recording.PromisedWindowEnd).IsRequired();
 
         builder.Property(recording => recording.Outcome)
             .HasConversion<string>()

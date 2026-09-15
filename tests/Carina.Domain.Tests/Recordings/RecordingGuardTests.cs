@@ -125,6 +125,7 @@ public sealed class RecordingGuardTests
             [],
             Now.AddMinutes(-5),
             Now.AddMinutes(55),
+            Now.AddMinutes(55),
             null,
             [],
             DropCounters.Unmeasured,
