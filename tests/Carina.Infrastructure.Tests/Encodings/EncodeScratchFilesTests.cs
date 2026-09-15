@@ -37,6 +37,21 @@ public sealed class EncodeScratchFilesTests
         Assert.Equal(Path.Combine(harness.Workshop!.Root, "a.chapters"), path);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ANameThatOpensLikeAnOptionIsStillHandedOutAsAPathFromTheTopOfTheTree(bool workingBeside)
+    {
+        using var harness = new EncodeHarness(workingBeside);
+        EncodeJob job = harness.Running();
+
+        string? path = await harness.ScratchFiles.RecordAsync(job, EncodeScratchKind.Chapters, new EncodeFileName("-y.chapters"), Cancel);
+
+        Assert.NotNull(path);
+        Assert.StartsWith("/", path, StringComparison.Ordinal);
+        Assert.Equal("-y.chapters", Path.GetFileName(path));
+    }
+
     [Fact]
     public async Task ARootThisProcessCannotPlaceGivesNoPathAndWritesNothingDown()
     {

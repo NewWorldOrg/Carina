@@ -63,6 +63,24 @@ public sealed class EncodeDestinationTests
     public void AnHourThatIsNotInUtcIsNotWhenADestinationWasRetired()
         => Assert.Throws<ArgumentException>(() => Shelf().Retire(new DateTime(2026, 9, 5, 3, 0, 0, DateTimeKind.Local)));
 
+    [Theory]
+    [InlineData("; rm -rf /")]
+    [InlineData("`whoami`")]
+    [InlineData("$(whoami)")]
+    [InlineData("encodes;reboot")]
+    [InlineData("encodes|sh")]
+    [InlineData("encodes\n-y")]
+    [InlineData("encodes\0")]
+    public void AnOutputRootCarryingTextAShellWouldReadAgainIsNoOutputRoot(string root)
+        => Assert.Throws<ArgumentException>(() => new OutputRoot(root));
+
+    [Theory]
+    [InlineData("Shelf\n-y")]
+    [InlineData("Shelf\0")]
+    [InlineData("Shel\rf")]
+    public void ALabelCarryingALineBreakOrANulIsNoLabel(string label)
+        => Assert.Throws<ArgumentException>(() => new EncodeLabel(label));
+
     private static EncodeDestination Shelf()
         => EncodeDestination.Define(
             new EncodeDestinationId(Guid.NewGuid()),
