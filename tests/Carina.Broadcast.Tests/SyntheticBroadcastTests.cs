@@ -136,6 +136,26 @@ public sealed class SyntheticBroadcastTests
     }
 
     [Fact]
+    public void APictureThatComesInLateIsOffsetOnItsOwnInputAndOnNothingElse()
+    {
+        IReadOnlyList<string> late = (SyntheticBroadcast.AsMeasured() with { PictureLateBy = TimeSpan.FromSeconds(1.5) })
+            .Arguments("side.ts", null, "out.ts");
+        int offset = late.ToList().IndexOf("-itsoffset");
+
+        Assert.Equal(["-itsoffset", "1.5", "-f", "lavfi", "-i", "testsrc2=size=1440x1080:rate=30000/1001"], late.Skip(offset).Take(6));
+        Assert.Single(late, argument => argument is "-itsoffset");
+        Assert.DoesNotContain("-itsoffset", SyntheticBroadcast.AsMeasured().Arguments("side.ts", null, "out.ts"));
+        Assert.Throws<InvalidOperationException>(() => (SyntheticBroadcast.AsMeasured() with { PictureLateBy = TimeSpan.FromSeconds(-1) }).Arguments("side.ts", null, "o"));
+        Assert.Throws<InvalidOperationException>(() => new SyntheticBroadcast
+        {
+            Picture = SyntheticPicture.None,
+            WithCaptions = false,
+            WithSuperimpose = false,
+            PictureLateBy = TimeSpan.FromSeconds(1),
+        }.Arguments(null, null, "o"));
+    }
+
+    [Fact]
     public void TheSideInformationAndTheSoundFileAreHandedOverExactlyWhenTheyAreCalledFor()
     {
         Assert.Throws<ArgumentException>(() => SyntheticBroadcast.AsMeasured().Arguments(null, null, "o"));
