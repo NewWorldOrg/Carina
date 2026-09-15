@@ -9,6 +9,11 @@ public sealed class QualitySignalReader(
     public async Task<IReadOnlyList<SignalFigures>> FiguresAsync(
         QualityPeriod period,
         CancellationToken cancellationToken)
+        => QualitySignalSurvey.Figures(await WindowsAsync(period, cancellationToken));
+
+    public async Task<IReadOnlyList<QualitySignalWindow>> WindowsAsync(
+        QualityPeriod period,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(period);
 
@@ -18,7 +23,9 @@ public sealed class QualitySignalReader(
             ? await rollups.ListAsync(QualityWindow.Hour, period.From, boundary, cancellationToken)
             : [];
 
-        return QualitySignalSurvey.Figures(rolled, await TailAsync(period, boundary, cancellationToken));
+        IReadOnlyList<QualitySignalSample> raw = await TailAsync(period, boundary, cancellationToken);
+
+        return [.. rolled.Select(QualitySignalWindow.Of), .. raw.Select(QualitySignalWindow.Of)];
     }
 
     public async Task<IReadOnlyList<QualitySignalWindow>> WindowsAsync(
