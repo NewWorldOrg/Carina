@@ -51,19 +51,216 @@ public sealed class FfmpegEncodeInvocationTests
         }
     }
 
+    public static TheoryData<EncodeCodec, EncodeResolution, Deinterlace, EncodeEncoder, string, string> EveryShapeOnEveryEncoderWrittenOut
+        => new()
+        {
+            { EncodeCodec.H264, EncodeResolution.AsSource, Deinterlace.Leave, EncodeEncoder.Software, "setsar=1", "libx264" },
+            { EncodeCodec.H264, EncodeResolution.AsSource, Deinterlace.EveryFrame, EncodeEncoder.Software, "bwdif=mode=send_frame,setsar=1", "libx264" },
+            { EncodeCodec.H264, EncodeResolution.AsSource, Deinterlace.EveryField, EncodeEncoder.Software, "bwdif=mode=send_field,setsar=1", "libx264" },
+            { EncodeCodec.H264, EncodeResolution.FullHd, Deinterlace.Leave, EncodeEncoder.Software, "scale=1920:1080:flags=bicubic,setsar=1", "libx264" },
+            { EncodeCodec.H264, EncodeResolution.FullHd, Deinterlace.EveryFrame, EncodeEncoder.Software, "bwdif=mode=send_frame,scale=1920:1080:flags=bicubic,setsar=1", "libx264" },
+            { EncodeCodec.H264, EncodeResolution.FullHd, Deinterlace.EveryField, EncodeEncoder.Software, "bwdif=mode=send_field,scale=1920:1080:flags=bicubic,setsar=1", "libx264" },
+            { EncodeCodec.H264, EncodeResolution.Hd, Deinterlace.Leave, EncodeEncoder.Software, "scale=1280:720:flags=bicubic,setsar=1", "libx264" },
+            { EncodeCodec.H264, EncodeResolution.Hd, Deinterlace.EveryFrame, EncodeEncoder.Software, "bwdif=mode=send_frame,scale=1280:720:flags=bicubic,setsar=1", "libx264" },
+            { EncodeCodec.H264, EncodeResolution.Hd, Deinterlace.EveryField, EncodeEncoder.Software, "bwdif=mode=send_field,scale=1280:720:flags=bicubic,setsar=1", "libx264" },
+            { EncodeCodec.H265, EncodeResolution.AsSource, Deinterlace.Leave, EncodeEncoder.Software, "setsar=1", "libx265" },
+            { EncodeCodec.H265, EncodeResolution.AsSource, Deinterlace.EveryFrame, EncodeEncoder.Software, "bwdif=mode=send_frame,setsar=1", "libx265" },
+            { EncodeCodec.H265, EncodeResolution.AsSource, Deinterlace.EveryField, EncodeEncoder.Software, "bwdif=mode=send_field,setsar=1", "libx265" },
+            { EncodeCodec.H265, EncodeResolution.FullHd, Deinterlace.Leave, EncodeEncoder.Software, "scale=1920:1080:flags=bicubic,setsar=1", "libx265" },
+            { EncodeCodec.H265, EncodeResolution.FullHd, Deinterlace.EveryFrame, EncodeEncoder.Software, "bwdif=mode=send_frame,scale=1920:1080:flags=bicubic,setsar=1", "libx265" },
+            { EncodeCodec.H265, EncodeResolution.FullHd, Deinterlace.EveryField, EncodeEncoder.Software, "bwdif=mode=send_field,scale=1920:1080:flags=bicubic,setsar=1", "libx265" },
+            { EncodeCodec.H265, EncodeResolution.Hd, Deinterlace.Leave, EncodeEncoder.Software, "scale=1280:720:flags=bicubic,setsar=1", "libx265" },
+            { EncodeCodec.H265, EncodeResolution.Hd, Deinterlace.EveryFrame, EncodeEncoder.Software, "bwdif=mode=send_frame,scale=1280:720:flags=bicubic,setsar=1", "libx265" },
+            { EncodeCodec.H265, EncodeResolution.Hd, Deinterlace.EveryField, EncodeEncoder.Software, "bwdif=mode=send_field,scale=1280:720:flags=bicubic,setsar=1", "libx265" },
+            { EncodeCodec.H264, EncodeResolution.AsSource, Deinterlace.Leave, EncodeEncoder.Vaapi, "setsar=1,format=nv12,hwupload", "h264_vaapi" },
+            { EncodeCodec.H264, EncodeResolution.AsSource, Deinterlace.EveryFrame, EncodeEncoder.Vaapi, "bwdif=mode=send_frame,setsar=1,format=nv12,hwupload", "h264_vaapi" },
+            { EncodeCodec.H264, EncodeResolution.AsSource, Deinterlace.EveryField, EncodeEncoder.Vaapi, "bwdif=mode=send_field,setsar=1,format=nv12,hwupload", "h264_vaapi" },
+            { EncodeCodec.H264, EncodeResolution.FullHd, Deinterlace.Leave, EncodeEncoder.Vaapi, "scale=1920:1080:flags=bicubic,setsar=1,format=nv12,hwupload", "h264_vaapi" },
+            { EncodeCodec.H264, EncodeResolution.FullHd, Deinterlace.EveryFrame, EncodeEncoder.Vaapi, "bwdif=mode=send_frame,scale=1920:1080:flags=bicubic,setsar=1,format=nv12,hwupload", "h264_vaapi" },
+            { EncodeCodec.H264, EncodeResolution.FullHd, Deinterlace.EveryField, EncodeEncoder.Vaapi, "bwdif=mode=send_field,scale=1920:1080:flags=bicubic,setsar=1,format=nv12,hwupload", "h264_vaapi" },
+            { EncodeCodec.H264, EncodeResolution.Hd, Deinterlace.Leave, EncodeEncoder.Vaapi, "scale=1280:720:flags=bicubic,setsar=1,format=nv12,hwupload", "h264_vaapi" },
+            { EncodeCodec.H264, EncodeResolution.Hd, Deinterlace.EveryFrame, EncodeEncoder.Vaapi, "bwdif=mode=send_frame,scale=1280:720:flags=bicubic,setsar=1,format=nv12,hwupload", "h264_vaapi" },
+            { EncodeCodec.H264, EncodeResolution.Hd, Deinterlace.EveryField, EncodeEncoder.Vaapi, "bwdif=mode=send_field,scale=1280:720:flags=bicubic,setsar=1,format=nv12,hwupload", "h264_vaapi" },
+            { EncodeCodec.H265, EncodeResolution.AsSource, Deinterlace.Leave, EncodeEncoder.Vaapi, "setsar=1,format=nv12,hwupload", "hevc_vaapi" },
+            { EncodeCodec.H265, EncodeResolution.AsSource, Deinterlace.EveryFrame, EncodeEncoder.Vaapi, "bwdif=mode=send_frame,setsar=1,format=nv12,hwupload", "hevc_vaapi" },
+            { EncodeCodec.H265, EncodeResolution.AsSource, Deinterlace.EveryField, EncodeEncoder.Vaapi, "bwdif=mode=send_field,setsar=1,format=nv12,hwupload", "hevc_vaapi" },
+            { EncodeCodec.H265, EncodeResolution.FullHd, Deinterlace.Leave, EncodeEncoder.Vaapi, "scale=1920:1080:flags=bicubic,setsar=1,format=nv12,hwupload", "hevc_vaapi" },
+            { EncodeCodec.H265, EncodeResolution.FullHd, Deinterlace.EveryFrame, EncodeEncoder.Vaapi, "bwdif=mode=send_frame,scale=1920:1080:flags=bicubic,setsar=1,format=nv12,hwupload", "hevc_vaapi" },
+            { EncodeCodec.H265, EncodeResolution.FullHd, Deinterlace.EveryField, EncodeEncoder.Vaapi, "bwdif=mode=send_field,scale=1920:1080:flags=bicubic,setsar=1,format=nv12,hwupload", "hevc_vaapi" },
+            { EncodeCodec.H265, EncodeResolution.Hd, Deinterlace.Leave, EncodeEncoder.Vaapi, "scale=1280:720:flags=bicubic,setsar=1,format=nv12,hwupload", "hevc_vaapi" },
+            { EncodeCodec.H265, EncodeResolution.Hd, Deinterlace.EveryFrame, EncodeEncoder.Vaapi, "bwdif=mode=send_frame,scale=1280:720:flags=bicubic,setsar=1,format=nv12,hwupload", "hevc_vaapi" },
+            { EncodeCodec.H265, EncodeResolution.Hd, Deinterlace.EveryField, EncodeEncoder.Vaapi, "bwdif=mode=send_field,scale=1280:720:flags=bicubic,setsar=1,format=nv12,hwupload", "hevc_vaapi" },
+        };
+
     private static EncodeProfile Profile(
         EncodeCodec codec = EncodeCodec.H264,
         EncodeResolution resolution = EncodeResolution.AsSource,
-        Deinterlace deinterlace = Deinterlace.EveryFrame)
+        Deinterlace deinterlace = Deinterlace.EveryFrame,
+        string label = "Standard",
+        int rateFactor = 22,
+        int quantiser = 24)
         => EncodeProfile.Define(
             EncodeProfileId.New(),
-            new EncodeLabel("Standard"),
+            new EncodeLabel(label),
             codec,
             resolution,
             deinterlace,
-            new ConstantRateFactor(22),
-            new ConstantQuantiser(24),
+            new ConstantRateFactor(rateFactor),
+            new ConstantQuantiser(quantiser),
             At);
+
+    [Fact]
+    public void TheWrittenOutArgumentsHoldOneRowForEveryShapeOnEveryEncoder()
+    {
+        (EncodeCodec, EncodeResolution, Deinterlace, EncodeEncoder)[] written =
+        [
+            .. EveryShapeOnEveryEncoderWrittenOut.Select(row => ((EncodeCodec)row[0], (EncodeResolution)row[1], (Deinterlace)row[2], (EncodeEncoder)row[3])),
+        ];
+        (EncodeCodec, EncodeResolution, Deinterlace, EncodeEncoder)[] every =
+        [
+            .. EveryShapeOnEveryEncoder.Select(row => ((EncodeCodec)row[0], (EncodeResolution)row[1], (Deinterlace)row[2], (EncodeEncoder)row[3])),
+        ];
+
+        Assert.Equal(every.Order(), written.Order());
+    }
+
+    [Theory]
+    [MemberData(nameof(EveryShapeOnEveryEncoderWrittenOut))]
+    public void EveryShapeOnEitherEncoderAsksForExactlyTheseArguments(
+        EncodeCodec codec,
+        EncodeResolution resolution,
+        Deinterlace deinterlace,
+        EncodeEncoder encoder,
+        string filter,
+        string video)
+    {
+        string[] onTheCard = encoder is EncodeEncoder.Vaapi ? ["-vaapi_device", FfmpegEncodeInvocation.RenderNode] : [];
+        string[] rateControl = encoder is EncodeEncoder.Vaapi ? ["-rc_mode", "CQP", "-qp", "24"] : ["-preset", "medium", "-crf", "22"];
+        string[] expected =
+        [
+            "-nostdin",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-nostats",
+            "-progress",
+            "pipe:1",
+            "-y",
+            "-filter_threads",
+            "2",
+            .. onTheCard,
+            "-threads",
+            "2",
+            "-i",
+            Source,
+            "-ss",
+            "0.5072",
+            "-map",
+            "p:1040:v:0",
+            "-map",
+            "p:1040:a",
+            "-vf",
+            filter,
+            "-c:v",
+            video,
+            .. rateControl,
+            "-threads",
+            "2",
+            "-c:a",
+            "copy",
+            "-bsf:a",
+            "aac_adtstoasc",
+            "-f",
+            "mp4",
+            "-movflags",
+            "faststart",
+            Destination,
+        ];
+        string[] asked =
+        [
+            .. FfmpegEncodeInvocation.Arguments(Service, Profile(codec, resolution, deinterlace), encoder, Source, Cores, HeadSkip, AsItStands),
+            .. FfmpegEncodeInvocation.Delivery(Destination),
+        ];
+
+        Assert.Equal(expected, asked);
+    }
+
+    [Theory]
+    [InlineData(ConstantRateFactor.Finest, ConstantQuantiser.Finest, "0", "0")]
+    [InlineData(ConstantRateFactor.Coarsest, ConstantQuantiser.Coarsest, "51", "51")]
+    public void TheRateControlAtEitherEndOfItsRangeIsWrittenAsItsDigitsAlone(int rateFactor, int quantiser, string onTheProcessor, string onTheCard)
+    {
+        IReadOnlyList<string> software = FfmpegEncodeInvocation.Arguments(
+            Service, Profile(rateFactor: rateFactor, quantiser: quantiser), EncodeEncoder.Software, Source, Cores, HeadSkip, AsItStands);
+        IReadOnlyList<string> vaapi = FfmpegEncodeInvocation.Arguments(
+            Service, Profile(rateFactor: rateFactor, quantiser: quantiser), EncodeEncoder.Vaapi, Source, Cores, HeadSkip, AsItStands);
+
+        Assert.Equal(onTheProcessor, software[software.ToList().IndexOf("-crf") + 1]);
+        Assert.Equal(onTheCard, vaapi[vaapi.ToList().IndexOf("-qp") + 1]);
+    }
+
+    [Theory]
+    [MemberData(nameof(TextAShellWouldReadAgain.Every), MemberType = typeof(TextAShellWouldReadAgain))]
+    public void APathCarryingTextAShellWouldReadAgainIsHandedOverAsOneArgumentInItsOwnPlace(string slipped)
+    {
+        string source = "/srv/recordings/" + slipped + ".ts";
+        string breaks = "/srv/encodes/" + slipped + ".chapters";
+        string destination = "/srv/encodes/" + slipped + ".encoding";
+
+        string[] plain =
+        [
+            .. FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Vaapi, Source, Cores, HeadSkip, TwoLanguagesOnOneSound, Breaks),
+            .. FfmpegEncodeInvocation.Delivery(Destination),
+        ];
+        string[] carrying =
+        [
+            .. FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Vaapi, source, Cores, HeadSkip, TwoLanguagesOnOneSound, breaks),
+            .. FfmpegEncodeInvocation.Delivery(destination),
+        ];
+        string[] expected =
+        [
+            .. plain.Select(argument => argument switch
+            {
+                Source => source,
+                Breaks => breaks,
+                Destination => destination,
+                _ => argument,
+            }),
+        ];
+
+        Assert.Equal(expected, carrying);
+
+        string[] headPlain = [.. FfprobeHeadInvocation.Arguments(Source, Service)];
+        string[] headCarrying = [.. FfprobeHeadInvocation.Arguments(source, Service)];
+        string[] lengthPlain = [.. FfprobeLengthInvocation.Arguments(Source)];
+        string[] lengthCarrying = [.. FfprobeLengthInvocation.Arguments(source)];
+
+        Assert.Equal([.. headPlain.Select(argument => argument == Source ? source : argument)], headCarrying);
+        Assert.Equal([.. lengthPlain.Select(argument => argument == Source ? source : argument)], lengthCarrying);
+    }
+
+    [Theory]
+    [InlineData("; rm -rf /")]
+    [InlineData("`whoami`")]
+    [InlineData("$(whoami)")]
+    public void AProfileLabelledWithTextAShellWouldReadAgainAsksForTheArgumentsAPlainOneDoes(string label)
+    {
+        foreach (object[] shape in EveryShapeOnEveryEncoder)
+        {
+            var codec = (EncodeCodec)shape[0];
+            var resolution = (EncodeResolution)shape[1];
+            var deinterlace = (Deinterlace)shape[2];
+            var encoder = (EncodeEncoder)shape[3];
+
+            IReadOnlyList<string> labelled = FfmpegEncodeInvocation.Arguments(
+                Service, Profile(codec, resolution, deinterlace, label), encoder, Source, Cores, HeadSkip, TwoLanguagesOnOneSound, Breaks);
+
+            Assert.Equal(
+                FfmpegEncodeInvocation.Arguments(Service, Profile(codec, resolution, deinterlace), encoder, Source, Cores, HeadSkip, TwoLanguagesOnOneSound, Breaks),
+                labelled);
+            Assert.DoesNotContain(labelled, argument => argument.Contains(label, StringComparison.Ordinal));
+        }
+    }
 
     [Fact(DisplayName = "BR-PD-008: a broadcast that put two languages on one sound is encoded with the main language in both ears, not with both languages side by side")]
     public void TheArgumentsForTwoLanguagesOnOneSoundAreExactlyThese()

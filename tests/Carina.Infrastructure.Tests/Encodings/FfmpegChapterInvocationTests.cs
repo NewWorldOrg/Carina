@@ -306,6 +306,28 @@ public sealed class FfmpegChapterInvocationTests
                 mark => argument.Contains(mark, StringComparison.Ordinal)));
     }
 
+    [Theory]
+    [MemberData(nameof(TextAShellWouldReadAgain.Every), MemberType = typeof(TextAShellWouldReadAgain))]
+    public void ASourceCarryingTextAShellWouldReadAgainIsHandedOverAsOneArgumentInItsOwnPlace(string slipped)
+    {
+        string source = "/srv/recordings/" + slipped + ".ts";
+
+        string[] plain =
+        [
+            .. FfmpegChapterInvocation.Listening(Source, Service, Cores, AsItStands),
+            .. FfmpegChapterInvocation.Peeking(Source, Service, Cores, TimeSpan.FromSeconds(300.25), AsItStands),
+            .. FfmpegChapterInvocation.Watching(Source, Service, Cores),
+        ];
+        string[] carrying =
+        [
+            .. FfmpegChapterInvocation.Listening(source, Service, Cores, AsItStands),
+            .. FfmpegChapterInvocation.Peeking(source, Service, Cores, TimeSpan.FromSeconds(300.25), AsItStands),
+            .. FfmpegChapterInvocation.Watching(source, Service, Cores),
+        ];
+
+        Assert.Equal([.. plain.Select(argument => argument == Source ? source : argument)], carrying);
+    }
+
     private static ChapterSettings Looking(int noise, int silence, double scene)
         => new()
         {
