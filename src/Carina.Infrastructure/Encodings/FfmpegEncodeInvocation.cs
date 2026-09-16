@@ -96,8 +96,7 @@ public static class FfmpegEncodeInvocation
             headSkip.TotalSeconds.ToString(Seconds, CultureInfo.InvariantCulture),
             .. Mapping(service, sound),
             .. BakingChapters(chapters),
-            "-vf",
-            Filter(profile, encoder),
+            .. Filtering(profile, encoder),
             .. Encoding(profile, encoder),
             "-threads",
             threads,
@@ -186,6 +185,22 @@ public static class FfmpegEncodeInvocation
         return string.Create(CultureInfo.InvariantCulture, $"p:{programNumber}:a:{ordinal}");
     }
 
+    /// <summary>
+    /// The picture is handed to a filter only where there is something to do to it. A profile that
+    /// keeps the source's size, leaves the fields alone and encodes on the processor has nothing to
+    /// do, and an empty <c>-vf</c> is not an empty filter chain to ffmpeg but a filter it cannot
+    /// find, which ends the run.
+    /// </summary>
+    internal static IReadOnlyList<string> Filtering(EncodeProfile profile, EncodeEncoder encoder)
+        => Filter(profile, encoder) is { Length: > 0 } filter ? ["-vf", filter] : [];
+
+    /// <summary>
+    /// The samples are squared up only where the picture has just been resized. Broadcast HD comes
+    /// in 1440 by 1080 with samples 4:3 wide, which is how it fills a 16:9 screen; squaring those
+    /// samples without resizing keeps the 1440 by 1080 and throws the width away, so the artefact
+    /// plays back 4:3 and a 16:9 player pads it either side. A resize to 1920 by 1080 or 1280 by 720
+    /// carries the display aspect across on its own, and squaring up after it holds that result.
+    /// </summary>
     internal static string Filter(EncodeProfile profile, EncodeEncoder encoder)
     {
         ArgumentNullException.ThrowIfNull(profile);
@@ -200,9 +215,8 @@ public static class FfmpegEncodeInvocation
         if (Scaling(profile.Resolution) is { } scaled)
         {
             steps.Add(scaled);
+            steps.Add(SquarePixels);
         }
-
-        steps.Add(SquarePixels);
 
         if (EncodeShapes.Named(encoder) is EncodeEncoder.Vaapi)
         {
