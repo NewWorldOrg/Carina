@@ -21,7 +21,8 @@ public sealed class ThumbnailOptionsTests
         Assert.Equal(3, read.OneOverAShareOf);
         Assert.Equal(TimeSpan.FromSeconds(30), read.LongestRender);
         Assert.Equal(8, read.AtMostAPass);
-        Assert.Equal(960, read.Width);
+        Assert.Equal(1920, read.Width);
+        Assert.Equal(3, read.StepsFromPerfect);
     }
 
     [Fact]
@@ -36,7 +37,8 @@ public sealed class ThumbnailOptionsTests
             ("Thumbnails:OneOverAShareOf", "4"),
             ("Thumbnails:LongestRender", "00:01:00"),
             ("Thumbnails:AtMostAPass", "32"),
-            ("Thumbnails:Width", "1280"));
+            ("Thumbnails:Width", "1280"),
+            ("Thumbnails:StepsFromPerfect", "5"));
 
         Assert.Equal("/srv/thumbnails", read.WrittenTo);
         Assert.Equal("/usr/bin/ffmpeg", read.Programme);
@@ -47,6 +49,7 @@ public sealed class ThumbnailOptionsTests
         Assert.Equal(TimeSpan.FromMinutes(1), read.LongestRender);
         Assert.Equal(32, read.AtMostAPass);
         Assert.Equal(1280, read.Width);
+        Assert.Equal(5, read.StepsFromPerfect);
         Assert.True(read.DrawsAnything);
     }
 
@@ -57,12 +60,14 @@ public sealed class ThumbnailOptionsTests
             ("Thumbnails:OneOverAShareOf", "1"),
             ("Thumbnails:AtMostAPass", "1"),
             ("Thumbnails:Width", "2"),
+            ("Thumbnails:StepsFromPerfect", "2"),
             ("Thumbnails:BeforeFirstPass", "00:00:00.001"),
             ("Thumbnails:NoLaterThan", "00:00:00.001"));
 
         Assert.Equal(1, read.OneOverAShareOf);
         Assert.Equal(1, read.AtMostAPass);
         Assert.Equal(2, read.Width);
+        Assert.Equal(2, read.StepsFromPerfect);
         Assert.Equal(TimeSpan.FromMilliseconds(1), read.BeforeFirstPass);
         Assert.Equal(TimeSpan.FromMilliseconds(1), read.NoLaterThan);
     }
@@ -79,6 +84,9 @@ public sealed class ThumbnailOptionsTests
     [InlineData("Thumbnails:AtMostAPass", "0")]
     [InlineData("Thumbnails:Width", "961")]
     [InlineData("Thumbnails:Width", "0")]
+    [InlineData("Thumbnails:StepsFromPerfect", "1")]
+    [InlineData("Thumbnails:StepsFromPerfect", "32")]
+    [InlineData("Thumbnails:StepsFromPerfect", "best")]
     public void ASettingNothingCouldDoIsRefusedByName(string key, string value)
     {
         ArgumentException refusal = Assert.Throws<ArgumentException>(() => Read((key, value)));
@@ -99,6 +107,10 @@ public sealed class ThumbnailOptionsTests
     [Fact]
     public void ValidatingNothingIsRefused()
         => Assert.Throws<ArgumentNullException>(() => new ThumbnailValidation().Validate(null, null!));
+
+    [Fact]
+    public void TheCoarsestPictureMjpegDrawsIsStillAccepted()
+        => Assert.Equal(31, Read(("Thumbnails:StepsFromPerfect", "31")).StepsFromPerfect);
 
     private static ThumbnailSettings Read(params (string Key, string Value)[] settings)
     {

@@ -1,6 +1,7 @@
 using System.Globalization;
 
 using Carina.Domain.Thumbnails;
+using Carina.Infrastructure.Thumbnails;
 
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
@@ -29,6 +30,8 @@ public sealed class ThumbnailOptions
 
     public string? Width { get; set; }
 
+    public string? StepsFromPerfect { get; set; }
+
     public void ReadFrom(IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
@@ -44,6 +47,7 @@ public sealed class ThumbnailOptions
         LongestRender = named[nameof(LongestRender)];
         AtMostAPass = named[nameof(AtMostAPass)];
         Width = named[nameof(Width)];
+        StepsFromPerfect = named[nameof(StepsFromPerfect)];
     }
 
     public ThumbnailSettings Read()
@@ -61,6 +65,12 @@ public sealed class ThumbnailOptions
             LongestRender = Positive(LongestRender, nameof(LongestRender), unset.LongestRender),
             AtMostAPass = Counted(AtMostAPass, nameof(AtMostAPass), unset.AtMostAPass, 1),
             Width = Even(Width, nameof(Width), unset.Width),
+            StepsFromPerfect = Between(
+                StepsFromPerfect,
+                nameof(StepsFromPerfect),
+                unset.StepsFromPerfect,
+                FfmpegInvocation.BestPictureMjpegDraws,
+                FfmpegInvocation.CoarsestPictureMjpegDraws),
         };
     }
 
@@ -122,6 +132,15 @@ public sealed class ThumbnailOptions
         return read >= lowest
             ? read
             : throw new ArgumentException($"{Section}:{name} is at least {lowest}, and '{setting}' is not.", name);
+    }
+
+    private static int Between(string? setting, string name, int unset, int lowest, int highest)
+    {
+        int read = Counted(setting, name, unset, lowest);
+
+        return read <= highest
+            ? read
+            : throw new ArgumentException($"{Section}:{name} is at most {highest}, and '{setting}' is not.", name);
     }
 
     private static int Even(string? setting, string name, int unset)
