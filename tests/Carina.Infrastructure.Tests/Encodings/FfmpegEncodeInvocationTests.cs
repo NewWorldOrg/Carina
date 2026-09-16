@@ -54,36 +54,36 @@ public sealed class FfmpegEncodeInvocationTests
     public static TheoryData<EncodeCodec, EncodeResolution, Deinterlace, EncodeEncoder, string, string> EveryShapeOnEveryEncoderWrittenOut
         => new()
         {
-            { EncodeCodec.H264, EncodeResolution.AsSource, Deinterlace.Leave, EncodeEncoder.Software, "setsar=1", "libx264" },
-            { EncodeCodec.H264, EncodeResolution.AsSource, Deinterlace.EveryFrame, EncodeEncoder.Software, "bwdif=mode=send_frame,setsar=1", "libx264" },
-            { EncodeCodec.H264, EncodeResolution.AsSource, Deinterlace.EveryField, EncodeEncoder.Software, "bwdif=mode=send_field,setsar=1", "libx264" },
+            { EncodeCodec.H264, EncodeResolution.AsSource, Deinterlace.Leave, EncodeEncoder.Software, "", "libx264" },
+            { EncodeCodec.H264, EncodeResolution.AsSource, Deinterlace.EveryFrame, EncodeEncoder.Software, "bwdif=mode=send_frame", "libx264" },
+            { EncodeCodec.H264, EncodeResolution.AsSource, Deinterlace.EveryField, EncodeEncoder.Software, "bwdif=mode=send_field", "libx264" },
             { EncodeCodec.H264, EncodeResolution.FullHd, Deinterlace.Leave, EncodeEncoder.Software, "scale=1920:1080:flags=bicubic,setsar=1", "libx264" },
             { EncodeCodec.H264, EncodeResolution.FullHd, Deinterlace.EveryFrame, EncodeEncoder.Software, "bwdif=mode=send_frame,scale=1920:1080:flags=bicubic,setsar=1", "libx264" },
             { EncodeCodec.H264, EncodeResolution.FullHd, Deinterlace.EveryField, EncodeEncoder.Software, "bwdif=mode=send_field,scale=1920:1080:flags=bicubic,setsar=1", "libx264" },
             { EncodeCodec.H264, EncodeResolution.Hd, Deinterlace.Leave, EncodeEncoder.Software, "scale=1280:720:flags=bicubic,setsar=1", "libx264" },
             { EncodeCodec.H264, EncodeResolution.Hd, Deinterlace.EveryFrame, EncodeEncoder.Software, "bwdif=mode=send_frame,scale=1280:720:flags=bicubic,setsar=1", "libx264" },
             { EncodeCodec.H264, EncodeResolution.Hd, Deinterlace.EveryField, EncodeEncoder.Software, "bwdif=mode=send_field,scale=1280:720:flags=bicubic,setsar=1", "libx264" },
-            { EncodeCodec.H265, EncodeResolution.AsSource, Deinterlace.Leave, EncodeEncoder.Software, "setsar=1", "libx265" },
-            { EncodeCodec.H265, EncodeResolution.AsSource, Deinterlace.EveryFrame, EncodeEncoder.Software, "bwdif=mode=send_frame,setsar=1", "libx265" },
-            { EncodeCodec.H265, EncodeResolution.AsSource, Deinterlace.EveryField, EncodeEncoder.Software, "bwdif=mode=send_field,setsar=1", "libx265" },
+            { EncodeCodec.H265, EncodeResolution.AsSource, Deinterlace.Leave, EncodeEncoder.Software, "", "libx265" },
+            { EncodeCodec.H265, EncodeResolution.AsSource, Deinterlace.EveryFrame, EncodeEncoder.Software, "bwdif=mode=send_frame", "libx265" },
+            { EncodeCodec.H265, EncodeResolution.AsSource, Deinterlace.EveryField, EncodeEncoder.Software, "bwdif=mode=send_field", "libx265" },
             { EncodeCodec.H265, EncodeResolution.FullHd, Deinterlace.Leave, EncodeEncoder.Software, "scale=1920:1080:flags=bicubic,setsar=1", "libx265" },
             { EncodeCodec.H265, EncodeResolution.FullHd, Deinterlace.EveryFrame, EncodeEncoder.Software, "bwdif=mode=send_frame,scale=1920:1080:flags=bicubic,setsar=1", "libx265" },
             { EncodeCodec.H265, EncodeResolution.FullHd, Deinterlace.EveryField, EncodeEncoder.Software, "bwdif=mode=send_field,scale=1920:1080:flags=bicubic,setsar=1", "libx265" },
             { EncodeCodec.H265, EncodeResolution.Hd, Deinterlace.Leave, EncodeEncoder.Software, "scale=1280:720:flags=bicubic,setsar=1", "libx265" },
             { EncodeCodec.H265, EncodeResolution.Hd, Deinterlace.EveryFrame, EncodeEncoder.Software, "bwdif=mode=send_frame,scale=1280:720:flags=bicubic,setsar=1", "libx265" },
             { EncodeCodec.H265, EncodeResolution.Hd, Deinterlace.EveryField, EncodeEncoder.Software, "bwdif=mode=send_field,scale=1280:720:flags=bicubic,setsar=1", "libx265" },
-            { EncodeCodec.H264, EncodeResolution.AsSource, Deinterlace.Leave, EncodeEncoder.Vaapi, "setsar=1,format=nv12,hwupload", "h264_vaapi" },
-            { EncodeCodec.H264, EncodeResolution.AsSource, Deinterlace.EveryFrame, EncodeEncoder.Vaapi, "bwdif=mode=send_frame,setsar=1,format=nv12,hwupload", "h264_vaapi" },
-            { EncodeCodec.H264, EncodeResolution.AsSource, Deinterlace.EveryField, EncodeEncoder.Vaapi, "bwdif=mode=send_field,setsar=1,format=nv12,hwupload", "h264_vaapi" },
+            { EncodeCodec.H264, EncodeResolution.AsSource, Deinterlace.Leave, EncodeEncoder.Vaapi, "format=nv12,hwupload", "h264_vaapi" },
+            { EncodeCodec.H264, EncodeResolution.AsSource, Deinterlace.EveryFrame, EncodeEncoder.Vaapi, "bwdif=mode=send_frame,format=nv12,hwupload", "h264_vaapi" },
+            { EncodeCodec.H264, EncodeResolution.AsSource, Deinterlace.EveryField, EncodeEncoder.Vaapi, "bwdif=mode=send_field,format=nv12,hwupload", "h264_vaapi" },
             { EncodeCodec.H264, EncodeResolution.FullHd, Deinterlace.Leave, EncodeEncoder.Vaapi, "scale=1920:1080:flags=bicubic,setsar=1,format=nv12,hwupload", "h264_vaapi" },
             { EncodeCodec.H264, EncodeResolution.FullHd, Deinterlace.EveryFrame, EncodeEncoder.Vaapi, "bwdif=mode=send_frame,scale=1920:1080:flags=bicubic,setsar=1,format=nv12,hwupload", "h264_vaapi" },
             { EncodeCodec.H264, EncodeResolution.FullHd, Deinterlace.EveryField, EncodeEncoder.Vaapi, "bwdif=mode=send_field,scale=1920:1080:flags=bicubic,setsar=1,format=nv12,hwupload", "h264_vaapi" },
             { EncodeCodec.H264, EncodeResolution.Hd, Deinterlace.Leave, EncodeEncoder.Vaapi, "scale=1280:720:flags=bicubic,setsar=1,format=nv12,hwupload", "h264_vaapi" },
             { EncodeCodec.H264, EncodeResolution.Hd, Deinterlace.EveryFrame, EncodeEncoder.Vaapi, "bwdif=mode=send_frame,scale=1280:720:flags=bicubic,setsar=1,format=nv12,hwupload", "h264_vaapi" },
             { EncodeCodec.H264, EncodeResolution.Hd, Deinterlace.EveryField, EncodeEncoder.Vaapi, "bwdif=mode=send_field,scale=1280:720:flags=bicubic,setsar=1,format=nv12,hwupload", "h264_vaapi" },
-            { EncodeCodec.H265, EncodeResolution.AsSource, Deinterlace.Leave, EncodeEncoder.Vaapi, "setsar=1,format=nv12,hwupload", "hevc_vaapi" },
-            { EncodeCodec.H265, EncodeResolution.AsSource, Deinterlace.EveryFrame, EncodeEncoder.Vaapi, "bwdif=mode=send_frame,setsar=1,format=nv12,hwupload", "hevc_vaapi" },
-            { EncodeCodec.H265, EncodeResolution.AsSource, Deinterlace.EveryField, EncodeEncoder.Vaapi, "bwdif=mode=send_field,setsar=1,format=nv12,hwupload", "hevc_vaapi" },
+            { EncodeCodec.H265, EncodeResolution.AsSource, Deinterlace.Leave, EncodeEncoder.Vaapi, "format=nv12,hwupload", "hevc_vaapi" },
+            { EncodeCodec.H265, EncodeResolution.AsSource, Deinterlace.EveryFrame, EncodeEncoder.Vaapi, "bwdif=mode=send_frame,format=nv12,hwupload", "hevc_vaapi" },
+            { EncodeCodec.H265, EncodeResolution.AsSource, Deinterlace.EveryField, EncodeEncoder.Vaapi, "bwdif=mode=send_field,format=nv12,hwupload", "hevc_vaapi" },
             { EncodeCodec.H265, EncodeResolution.FullHd, Deinterlace.Leave, EncodeEncoder.Vaapi, "scale=1920:1080:flags=bicubic,setsar=1,format=nv12,hwupload", "hevc_vaapi" },
             { EncodeCodec.H265, EncodeResolution.FullHd, Deinterlace.EveryFrame, EncodeEncoder.Vaapi, "bwdif=mode=send_frame,scale=1920:1080:flags=bicubic,setsar=1,format=nv12,hwupload", "hevc_vaapi" },
             { EncodeCodec.H265, EncodeResolution.FullHd, Deinterlace.EveryField, EncodeEncoder.Vaapi, "bwdif=mode=send_field,scale=1920:1080:flags=bicubic,setsar=1,format=nv12,hwupload", "hevc_vaapi" },
@@ -136,6 +136,7 @@ public sealed class FfmpegEncodeInvocationTests
     {
         string[] onTheCard = encoder is EncodeEncoder.Vaapi ? ["-vaapi_device", FfmpegEncodeInvocation.RenderNode] : [];
         string[] rateControl = encoder is EncodeEncoder.Vaapi ? ["-rc_mode", "CQP", "-qp", "24"] : ["-preset", "medium", "-crf", "22"];
+        string[] looking = filter.Length is 0 ? [] : ["-vf", filter];
         string[] expected =
         [
             "-nostdin",
@@ -159,8 +160,7 @@ public sealed class FfmpegEncodeInvocationTests
             "p:1040:v:0",
             "-map",
             "p:1040:a",
-            "-vf",
-            filter,
+            .. looking,
             "-c:v",
             video,
             .. rateControl,
@@ -287,7 +287,7 @@ public sealed class FfmpegEncodeInvocationTests
                 "-map",
                 "p:1040:a:0",
                 "-vf",
-                "bwdif=mode=send_frame,setsar=1",
+                "bwdif=mode=send_frame",
                 "-c:v",
                 "libx264",
                 "-preset",
@@ -339,7 +339,7 @@ public sealed class FfmpegEncodeInvocationTests
                 "-map",
                 "p:1040:a:0",
                 "-vf",
-                "bwdif=mode=send_frame,setsar=1,format=nv12,hwupload",
+                "bwdif=mode=send_frame,format=nv12,hwupload",
                 "-c:v",
                 "h264_vaapi",
                 "-rc_mode",
@@ -395,7 +395,7 @@ public sealed class FfmpegEncodeInvocationTests
                 "-map_chapters",
                 "1",
                 "-vf",
-                "bwdif=mode=send_frame,setsar=1",
+                "bwdif=mode=send_frame",
                 "-c:v",
                 "libx264",
                 "-preset",
@@ -444,7 +444,7 @@ public sealed class FfmpegEncodeInvocationTests
                 "-map_chapters",
                 "1",
                 "-vf",
-                "bwdif=mode=send_frame,setsar=1,format=nv12,hwupload",
+                "bwdif=mode=send_frame,format=nv12,hwupload",
                 "-c:v",
                 "h264_vaapi",
                 "-rc_mode",
@@ -591,7 +591,7 @@ public sealed class FfmpegEncodeInvocationTests
                 "-map",
                 "p:1040:a",
                 "-vf",
-                "bwdif=mode=send_frame,setsar=1",
+                "bwdif=mode=send_frame",
                 "-c:v",
                 "libx264",
                 "-preset",
@@ -634,7 +634,7 @@ public sealed class FfmpegEncodeInvocationTests
                 "-map",
                 "p:1040:a",
                 "-vf",
-                "bwdif=mode=send_frame,setsar=1,format=nv12,hwupload",
+                "bwdif=mode=send_frame,format=nv12,hwupload",
                 "-c:v",
                 "h264_vaapi",
                 "-rc_mode",
@@ -730,18 +730,17 @@ public sealed class FfmpegEncodeInvocationTests
             "aac",
             "-b:a",
             "192k",
-            "bwdif=mode=send_frame,setsar=1",
-            "bwdif=mode=send_field,setsar=1",
-            "setsar=1",
+            "bwdif=mode=send_frame",
+            "bwdif=mode=send_field",
             "bwdif=mode=send_frame,scale=1920:1080:flags=bicubic,setsar=1",
             "bwdif=mode=send_field,scale=1920:1080:flags=bicubic,setsar=1",
             "scale=1920:1080:flags=bicubic,setsar=1",
             "bwdif=mode=send_frame,scale=1280:720:flags=bicubic,setsar=1",
             "bwdif=mode=send_field,scale=1280:720:flags=bicubic,setsar=1",
             "scale=1280:720:flags=bicubic,setsar=1",
-            "bwdif=mode=send_frame,setsar=1,format=nv12,hwupload",
-            "bwdif=mode=send_field,setsar=1,format=nv12,hwupload",
-            "setsar=1,format=nv12,hwupload",
+            "bwdif=mode=send_frame,format=nv12,hwupload",
+            "bwdif=mode=send_field,format=nv12,hwupload",
+            "format=nv12,hwupload",
             "bwdif=mode=send_frame,scale=1920:1080:flags=bicubic,setsar=1,format=nv12,hwupload",
             "bwdif=mode=send_field,scale=1920:1080:flags=bicubic,setsar=1,format=nv12,hwupload",
             "scale=1920:1080:flags=bicubic,setsar=1,format=nv12,hwupload",
@@ -820,8 +819,10 @@ public sealed class FfmpegEncodeInvocationTests
     [Fact]
     public void AnInterlacedProfileSaysHowItIsUndoneAndOneLeftAloneSaysNothing()
     {
-        Assert.Equal("bwdif=mode=send_field,setsar=1", FilterIn(Profile(deinterlace: Deinterlace.EveryField), EncodeEncoder.Software));
-        Assert.Equal("setsar=1", FilterIn(Profile(deinterlace: Deinterlace.Leave), EncodeEncoder.Software));
+        Assert.Equal("bwdif=mode=send_field", FilterIn(Profile(deinterlace: Deinterlace.EveryField), EncodeEncoder.Software));
+        Assert.DoesNotContain(
+            "-vf",
+            FfmpegEncodeInvocation.Arguments(Service, Profile(deinterlace: Deinterlace.Leave), EncodeEncoder.Software, Source, Cores, HeadSkip, AsItStands));
     }
 
     [Fact]
@@ -830,6 +831,55 @@ public sealed class FfmpegEncodeInvocationTests
             "scale",
             FilterIn(Profile(resolution: EncodeResolution.AsSource), EncodeEncoder.Software),
             StringComparison.Ordinal);
+
+    [Theory(DisplayName = "the samples are squared up only where the picture has just been resized, because a broadcast sends 1440 by 1080 with samples 4:3 wide and squaring those without resizing turns a 16:9 picture into a 4:3 one")]
+    [InlineData(EncodeResolution.AsSource, false)]
+    [InlineData(EncodeResolution.FullHd, true)]
+    [InlineData(EncodeResolution.Hd, true)]
+    public void TheSamplesAreSquaredUpOnlyWhereThePictureIsResized(EncodeResolution resolution, bool squaredUp)
+    {
+        foreach (EncodeEncoder encoder in Enum.GetValues<EncodeEncoder>())
+        {
+            foreach (Deinterlace deinterlace in Enum.GetValues<Deinterlace>())
+            {
+                string[] arguments =
+                [
+                    .. FfmpegEncodeInvocation.Arguments(
+                        Service,
+                        Profile(resolution: resolution, deinterlace: deinterlace),
+                        encoder,
+                        Source,
+                        Cores,
+                        HeadSkip,
+                        AsItStands),
+                ];
+
+                Assert.Equal(
+                    squaredUp,
+                    arguments.Any(argument => argument.Contains("setsar", StringComparison.Ordinal)));
+            }
+        }
+    }
+
+    [Fact(DisplayName = "a run with nothing to do to the picture asks for no -vf at all, because ffmpeg reads an empty one as a filter it cannot find and ends the run there")]
+    public void ARunWithNothingToDoToThePictureAsksForNoFilterAtAll()
+    {
+        string[] arguments =
+        [
+            .. FfmpegEncodeInvocation.Arguments(
+                Service,
+                Profile(resolution: EncodeResolution.AsSource, deinterlace: Deinterlace.Leave),
+                EncodeEncoder.Software,
+                Source,
+                Cores,
+                HeadSkip,
+                AsItStands),
+        ];
+
+        Assert.DoesNotContain("-vf", arguments);
+        Assert.DoesNotContain(arguments, argument => argument.Length is 0);
+        Assert.Equal("libx264", arguments[Array.IndexOf(arguments, "-c:v") + 1]);
+    }
 
     [Fact]
     public void TheCodecPicksTheEncoderNameOnEitherSide()

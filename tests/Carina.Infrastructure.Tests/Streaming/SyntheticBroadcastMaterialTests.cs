@@ -49,6 +49,9 @@ public sealed class SyntheticBroadcastMaterialTests : IDisposable
 
     private const string Counted = "stream=codec_type,nb_read_packets";
 
+    private const string Shape =
+        "stream=codec_type,width,height,sample_aspect_ratio,display_aspect_ratio";
+
     private const int SampleRate = 48_000;
 
     private const int TimesLouder = 8;
@@ -529,6 +532,58 @@ public sealed class SyntheticBroadcastMaterialTests : IDisposable
                 $"the artefact in ear {ear} carried {heard.Main:F5} of the main language and {heard.Secondary:F5} of the other one");
         }
     }
+
+    [Theory(DisplayName = "a broadcast sends 1440 by 1080 with samples 4:3 wide, and the artefact of it is shown at 16:9 whatever size the profile asks for — the picture is never squared up without being resized")]
+    [InlineData(EncodeResolution.AsSource, "1440", "1080")]
+    [InlineData(EncodeResolution.FullHd, "1920", "1080")]
+    [InlineData(EncodeResolution.Hd, "1280", "720")]
+    public async Task TheArtefactIsShownAtTheShapeTheBroadcastWasSentAt(EncodeResolution resolution, string width, string height)
+    {
+        string written = await SyntheticBroadcast.AsMeasured().WriteAsync(Path.Combine(room, $"shaped-{resolution}.m2ts"));
+        string artefact = Path.Combine(room, $"shaped-{resolution}.mp4");
+
+        FfprobeRecord sent = Picture(await ProbedAsync(written, Shape));
+
+        Assert.Equal("1440", sent.Value("width"));
+        Assert.Equal("1080", sent.Value("height"));
+        Assert.Equal("4:3", sent.Value("sample_aspect_ratio"));
+        Assert.Equal("16:9", sent.Value("display_aspect_ratio"));
+
+        await FfmpegProgramme.RunAsync(
+            FfmpegProgramme.Default,
+            [
+                .. FfmpegEncodeInvocation.Arguments(
+                    Service,
+                    Sized(resolution),
+                    EncodeEncoder.Software,
+                    written,
+                    1,
+                    TimeSpan.Zero,
+                    EncodeSound.EveryStreamAsItStands),
+                .. FfmpegEncodeInvocation.Delivery(artefact),
+            ],
+            CancellationToken.None);
+
+        FfprobeRecord made = Picture(await ProbedAsync(artefact, Shape));
+
+        Assert.Equal(width, made.Value("width"));
+        Assert.Equal(height, made.Value("height"));
+        Assert.Equal("16:9", made.Value("display_aspect_ratio"));
+    }
+
+    private static EncodeProfile Sized(EncodeResolution resolution)
+        => EncodeProfile.Define(
+            EncodeProfileId.New(),
+            new EncodeLabel("Sized"),
+            EncodeCodec.H264,
+            resolution,
+            Deinterlace.EveryFrame,
+            new ConstantRateFactor(28),
+            new Carina.Domain.Encodings.ConstantQuantiser(24),
+            new DateTime(2026, 9, 14, 3, 0, 0, DateTimeKind.Utc));
+
+    private static FfprobeRecord Picture(IReadOnlyList<FfprobeRecord> probed)
+        => probed.First(record => record.Value("codec_type") is "video");
 
     private async Task<IReadOnlyList<FfprobeRecord>> PlayedAsync(string written, string name, SoundPlacement sound)
     {
