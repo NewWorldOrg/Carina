@@ -192,7 +192,7 @@ public sealed class DvbFrontendTests
         calls.ReportStatus(FrontendStatus.Signal);
         calls.AnswerWith(
             DvbProperty.CarrierToNoise,
-            [new DvbStatisticLayer(StatisticScale.Decibel, -33_674)]
+            [new DvbStatisticLayer(StatisticScale.Decibel, -45_500)]
         );
 
         using var frontend = DvbFrontend.Open(calls, Path, DvbAccess.Control);
@@ -210,7 +210,7 @@ public sealed class DvbFrontendTests
         calls.ReportStatusesInTurn(Locked, FrontendStatus.Signal);
         calls.AnswerWith(
             DvbProperty.CarrierToNoise,
-            [new DvbStatisticLayer(StatisticScale.Decibel, -33_674)]
+            [new DvbStatisticLayer(StatisticScale.Decibel, -45_500)]
         );
         calls.AnswerWith(
             DvbProperty.PostErrorBitCount,
