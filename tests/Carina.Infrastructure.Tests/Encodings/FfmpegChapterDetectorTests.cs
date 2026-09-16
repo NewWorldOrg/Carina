@@ -621,5 +621,5 @@ public sealed class FfmpegChapterDetectorTests : IDisposable
             TimeProvider.System);
 
     private string Standing(string body)
-        => StandInProgramme.Written(tree.Under($"ffmpeg-{Guid.NewGuid():N}"), body);
+        => StandInProgramme.WrittenToOutliveTheLook(tree.Under($"ffmpeg-{Guid.NewGuid():N}"), body);
 }
