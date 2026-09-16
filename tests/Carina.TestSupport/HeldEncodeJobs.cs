@@ -141,8 +141,7 @@ public sealed class HeldEncodeJobs : IEncodeJobRepository, IEncodeStandingReader
             throw new InvalidOperationException("Only a running job names its artefact.");
         }
 
-        bool held = Jobs.Any(other =>
-            !other.Id.Equals(job.Id) && other.OutputRoot.Equals(job.OutputRoot) && name.Equals(other.ArtefactName));
+        bool held = Jobs.Any(other => StillHolds(other, job, name));
 
         if (held)
         {
@@ -156,6 +155,38 @@ public sealed class HeldEncodeJobs : IEncodeJobRepository, IEncodeStandingReader
 
         return Task.FromResult(ArtefactClaim.Claimed);
     }
+
+    public Task<int> TakeTheNameOverAsync(
+        EncodeJob job,
+        EncodeFileName name,
+        DateTime at,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(job);
+        ArgumentNullException.ThrowIfNull(name);
+
+        if (!job.MakesItAgain)
+        {
+            throw new InvalidOperationException(
+                "Only a job a person asked to make the artefact again takes the name over from an earlier one.");
+        }
+
+        EncodeJob[] holders = [.. Jobs.Where(other => StillHolds(other, job, name))];
+
+        foreach (EncodeJob holder in holders)
+        {
+            holder.GiveUpTheName(at);
+            Moves.Add($"gave up {holder.Id.Wire} {name.Value}");
+        }
+
+        return Task.FromResult(holders.Length);
+    }
+
+    private static bool StillHolds(EncodeJob other, EncodeJob job, EncodeFileName name)
+        => !other.Id.Equals(job.Id)
+            && other.OutputRoot.Equals(job.OutputRoot)
+            && name.Equals(other.ArtefactName)
+            && other.NameGivenUpAt is null;
 
     public Task<IReadOnlyList<EncodeSpell>> RecentSpellsAsync(int most, CancellationToken cancellationToken)
     {

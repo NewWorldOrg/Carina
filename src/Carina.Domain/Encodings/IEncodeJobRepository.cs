@@ -110,6 +110,15 @@ public interface IEncodeJobRepository
     Task<ArtefactClaim> ClaimArtefactAsync(EncodeJob job, EncodeFileName name, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Takes the artefact name over from whichever earlier job still holds it under this root, for
+    /// a job a person asked to make the artefact again. The earlier row keeps what it made and is
+    /// marked as having given the name up, which is what lets the ledger hand the name to this job;
+    /// a job nobody asked for takes nothing over and is refused outright. The answer is how many
+    /// rows gave the name up.
+    /// </summary>
+    Task<int> TakeTheNameOverAsync(EncodeJob job, EncodeFileName name, DateTime at, CancellationToken cancellationToken);
+
+    /// <summary>
     /// How long the last few jobs that ran to their end took, at most <paramref name="most"/> of
     /// them, newest first. Only a job that completed is asked after: one that failed partway and
     /// one a person called off say nothing about how long an encode takes.

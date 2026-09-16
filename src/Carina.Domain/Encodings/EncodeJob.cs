@@ -36,6 +36,19 @@ public sealed class EncodeJob
 
     public EncodeFileName? ArtefactName { get; private set; }
 
+    /// <summary>
+    /// Whether a person asked for the artefact of this recording and profile to be made again. It
+    /// is settled when the job is queued and never worked out afterwards, because it is the one
+    /// thing that lets a run put its artefact where an earlier one already stands.
+    /// </summary>
+    public bool MakesItAgain { get; private set; }
+
+    /// <summary>
+    /// When this job let go of the name it holds, so that a job asked to make the artefact again
+    /// could take it. What this job made is still named here; only the claim moved.
+    /// </summary>
+    public DateTime? NameGivenUpAt { get; private set; }
+
     public EncodeRoute? Route { get; private set; }
 
     public RunningProgramme? Programme { get; private set; }
@@ -61,6 +74,30 @@ public sealed class EncodeJob
         EncodeDestinationId destinationId,
         OutputRoot outputRoot,
         DateTime at)
+        => Waiting(id, recordingId, profileId, destinationId, outputRoot, at, makesItAgain: false);
+
+    /// <summary>
+    /// A job queued because a person asked for an artefact that already exists to be made again.
+    /// It is the only kind that puts what it makes where an earlier artefact stands, and it says so
+    /// from the moment it is queued rather than having the intent worked out at the end of the run.
+    /// </summary>
+    public static EncodeJob QueueAgain(
+        EncodeJobId id,
+        RecordingId recordingId,
+        EncodeProfileId profileId,
+        EncodeDestinationId destinationId,
+        OutputRoot outputRoot,
+        DateTime at)
+        => Waiting(id, recordingId, profileId, destinationId, outputRoot, at, makesItAgain: true);
+
+    private static EncodeJob Waiting(
+        EncodeJobId id,
+        RecordingId recordingId,
+        EncodeProfileId profileId,
+        EncodeDestinationId destinationId,
+        OutputRoot outputRoot,
+        DateTime at,
+        bool makesItAgain)
         => Rehydrate(
             id,
             recordingId,
@@ -78,7 +115,8 @@ public sealed class EncodeJob
             null,
             null,
             null,
-            null);
+            null,
+            makesItAgain);
 
     public static EncodeJob Rehydrate(
         EncodeJobId id,
@@ -97,7 +135,9 @@ public sealed class EncodeJob
         RunningProgramme? programme,
         EncodeHeadway? headway,
         EncodeTimeline? timeline,
-        ChapterReading? chapters)
+        ChapterReading? chapters,
+        bool makesItAgain = false,
+        DateTime? nameGivenUpAt = null)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(recordingId);
@@ -118,6 +158,11 @@ public sealed class EncodeJob
             throw new ArgumentException(
                 "A job's artefact is named for its recording and its profile, and this name is for something else.",
                 nameof(artefactName));
+        }
+
+        if (nameGivenUpAt is not null && artefactName is null)
+        {
+            throw new ArgumentException("A job gives up the name it holds, and this one names nothing.", nameof(nameGivenUpAt));
         }
 
         if (programme is not null && status is not EncodeJobStatus.Running)
@@ -145,6 +190,8 @@ public sealed class EncodeJob
             EndedAt = UtcTimes.Optional(endedAt, nameof(endedAt)),
             Failure = failure,
             ArtefactName = artefactName,
+            MakesItAgain = makesItAgain,
+            NameGivenUpAt = UtcTimes.Optional(nameGivenUpAt, nameof(nameGivenUpAt)),
             Route = route,
             Programme = programme,
             Headway = headway,
@@ -259,6 +306,21 @@ public sealed class EncodeJob
         }
 
         ArtefactName = artefactName;
+    }
+
+    /// <summary>
+    /// Lets go of the name in the ledger, so that a job a person asked to make the artefact again
+    /// can hold it instead. What this job made is left alone and still named here: only the claim
+    /// moves, and the file at that name is replaced by the job that now holds it.
+    /// </summary>
+    public void GiveUpTheName(DateTime at)
+    {
+        if (ArtefactName is null)
+        {
+            throw new InvalidOperationException("A job gives up the name it holds, and this one names nothing.");
+        }
+
+        NameGivenUpAt = UtcTimes.Required(at, nameof(at));
     }
 
     public void Complete(DateTime at)

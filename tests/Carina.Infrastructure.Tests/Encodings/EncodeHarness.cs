@@ -220,7 +220,7 @@ internal sealed class EncodeHarness : IDisposable
         return job;
     }
 
-    public EncodeJob RunningAgainWithItsName(RecordingId recording, EncodeProfileId profile)
+    public EncodeJob RunningAgainWithItsName(RecordingId recording, EncodeProfileId profile, bool madeAgain = false)
     {
         EncodeJob job = EncodeJob.Rehydrate(
             EncodeJobId.New(),
@@ -233,6 +233,47 @@ internal sealed class EncodeHarness : IDisposable
             Queued,
             Started,
             null,
+            null,
+            EncodeFileName.Artefact(recording, profile),
+            null,
+            null,
+            null,
+            null,
+            null,
+            madeAgain);
+        Jobs.Jobs.Add(job);
+
+        return job;
+    }
+
+    public EncodeJob RunningAgain(RecordingId recording, EncodeProfileId profile)
+    {
+        EncodeJob job = EncodeJob.QueueAgain(
+            EncodeJobId.New(),
+            recording,
+            profile,
+            EncodeDestinationId.New(),
+            Encodes,
+            Queued);
+        job.Start(Started);
+        Jobs.Jobs.Add(job);
+
+        return job;
+    }
+
+    public EncodeJob Made(RecordingId recording, EncodeProfileId profile)
+    {
+        EncodeJob job = EncodeJob.Rehydrate(
+            EncodeJobId.New(),
+            recording,
+            profile,
+            EncodeDestinationId.New(),
+            Encodes,
+            EncodeJobStatus.Completed,
+            EncodeJob.FirstAttempt,
+            Queued,
+            Started,
+            Started.AddMinutes(10),
             null,
             EncodeFileName.Artefact(recording, profile),
             null,

@@ -437,6 +437,18 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
             kind["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
     }
 
+    [Fact(DisplayName = "A-エンコード-069: what queues a job names the recording, the profile and the destination, and says whether the artefact is to be made again")]
+    public async Task WhatQueuesAJobSaysWhetherTheArtefactIsToBeMadeAgain()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode properties = document["components"]!["schemas"]!["QueueEncodeJobRequest"]!["properties"]!;
+
+        Assert.Equal(
+            ["recordingId", "profileId", "destinationId", "makeItAgain"],
+            properties.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.Contains("boolean", properties["makeItAgain"]!.ToJsonString(), StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task TheEnvelopeIsDescribedRatherThanLeftOpaque()
     {

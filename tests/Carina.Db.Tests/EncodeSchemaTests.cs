@@ -210,6 +210,54 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
         Assert.Equal(EncodeJobConfiguration.ArtefactIndexName, refusal.ConstraintName);
     }
 
+    [Fact(DisplayName = "A-エンコード-069: the job making the artefact again holds the name once the earlier one has given it up, and not a moment before")]
+    public async Task TheJobMakingItAgainHoldsTheNameOnceTheEarlierOneHasGivenItUp()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        await SeedAsync(connection);
+        await ClearJobsAsync(connection);
+        var recording = Guid.NewGuid();
+        var made = Guid.NewGuid();
+        string name = $"'{recording:N}.{ProfileWire}.mp4'";
+
+        await JobAsync(connection, made, recording, "'Completed'", Started, Ended, "NULL, NULL, NULL", name);
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(() => JobAsync(
+            connection, Guid.NewGuid(), recording, "'Running'", Started, "NULL", "NULL, NULL, NULL", name));
+
+        await using (var givingUp = new NpgsqlCommand(
+            $"UPDATE encode_job SET name_given_up_at = {Ended} WHERE id = '{made}'",
+            connection))
+        {
+            Assert.Equal(1, await givingUp.ExecuteNonQueryAsync());
+        }
+
+        await JobAsync(connection, Guid.NewGuid(), recording, "'Running'", Started, "NULL", "NULL, NULL, NULL", name);
+
+        await using var counting = new NpgsqlCommand(
+            $"SELECT count(*) FROM encode_job WHERE artefact_name = {name}",
+            connection);
+
+        Assert.Equal(EncodeJobConfiguration.ArtefactIndexName, refusal.ConstraintName);
+        Assert.Equal(2L, await counting.ExecuteScalarAsync());
+    }
+
+    [Fact(DisplayName = "A-エンコード-069: a job that named nothing cannot be written down as having given a name up")]
+    public async Task AJobThatNamedNothingCannotHaveGivenANameUp()
+    {
+        await using NpgsqlConnection connection = await database.OpenAsync();
+        await SeedAsync(connection);
+        await ClearJobsAsync(connection);
+        var waiting = Guid.NewGuid();
+        await JobAsync(connection, waiting, Guid.NewGuid(), "'Queued'", "NULL", "NULL", "NULL, NULL, NULL", "NULL");
+
+        PostgresException refusal = await Assert.ThrowsAsync<PostgresException>(() => new NpgsqlCommand(
+            $"UPDATE encode_job SET name_given_up_at = {Ended} WHERE id = '{waiting}'",
+            connection).ExecuteNonQueryAsync());
+
+        Assert.Equal("ck_encode_job_name_given_up", refusal.ConstraintName);
+    }
+
     [Fact(DisplayName = "BR-ED2-005: the ledger holds one running job, and a second is refused by the index")]
     public async Task TheLedgerHoldsOneRunningJob()
     {
@@ -241,7 +289,7 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
             await IndexDefinition(connection, EncodeJobConfiguration.RunningIndexName));
         Assert.Equal(
             "CREATE UNIQUE INDEX ux_encode_job_artefact ON public.encode_job USING btree (output_root, artefact_name) "
-            + "WHERE (artefact_name IS NOT NULL)",
+            + "WHERE ((artefact_name IS NOT NULL) AND (name_given_up_at IS NULL))",
             await IndexDefinition(connection, EncodeJobConfiguration.ArtefactIndexName));
         Assert.Equal(
             "CREATE INDEX ix_encode_job_recording ON public.encode_job USING btree (recording_id, queued_at)",
@@ -431,6 +479,7 @@ public sealed class EncodeSchemaTests(MigratedScratchDatabase database) : IClass
                 "ck_encode_job_chapters",
                 "ck_encode_job_failure",
                 "ck_encode_job_headway",
+                "ck_encode_job_name_given_up",
                 "ck_encode_job_output_root",
                 "ck_encode_job_programme",
                 "ck_encode_job_route",

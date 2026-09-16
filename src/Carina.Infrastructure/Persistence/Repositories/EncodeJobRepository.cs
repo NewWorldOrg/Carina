@@ -216,6 +216,45 @@ public sealed class EncodeJobRepository(CarinaDbContext context) : IEncodeJobRep
         return ArtefactClaim.Claimed;
     }
 
+    /// <summary>
+    /// The earlier holder lets go of the name by a conditional update of its own, so the row this
+    /// job is about to claim is free by the time the unique index looks at it. Only a job a person
+    /// asked to make the artefact again may do this; what the earlier job made stays named on it.
+    /// </summary>
+    public async Task<int> TakeTheNameOverAsync(
+        EncodeJob job,
+        EncodeFileName name,
+        DateTime at,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(job);
+        ArgumentNullException.ThrowIfNull(name);
+
+        if (!job.MakesItAgain)
+        {
+            throw new InvalidOperationException(
+                "Only a job a person asked to make the artefact again takes the name over from an earlier one.");
+        }
+
+        if (at.Kind is not DateTimeKind.Utc)
+        {
+            throw new ArgumentException("A name is given up at a time in UTC.", nameof(at));
+        }
+
+        DateTime when = at;
+        EncodeJobId self = job.Id;
+        OutputRoot root = job.OutputRoot;
+
+        return await context.Set<EncodeJob>()
+            .Where(row => row.Id != self
+                && row.OutputRoot == root
+                && row.ArtefactName == name
+                && row.NameGivenUpAt == null)
+            .ExecuteUpdateAsync(
+                update => update.SetProperty(row => row.NameGivenUpAt, (DateTime?)when),
+                cancellationToken);
+    }
+
     public async Task<IReadOnlyList<EncodeSpell>> RecentSpellsAsync(int most, CancellationToken cancellationToken)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(most, 1);

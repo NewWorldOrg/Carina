@@ -64,6 +64,8 @@ public sealed class EncodeSettingRuleTests
         "/Carina.Domain/Encodings/EncodeJob.cs EncodeJob.Failure EncodeFailureDetail?",
         "/Carina.Domain/Encodings/EncodeJob.cs EncodeJob.Headway EncodeHeadway?",
         "/Carina.Domain/Encodings/EncodeJob.cs EncodeJob.Id EncodeJobId",
+        "/Carina.Domain/Encodings/EncodeJob.cs EncodeJob.MakesItAgain bool",
+        "/Carina.Domain/Encodings/EncodeJob.cs EncodeJob.NameGivenUpAt DateTime?",
         "/Carina.Domain/Encodings/EncodeJob.cs EncodeJob.OutputRoot OutputRoot",
         "/Carina.Domain/Encodings/EncodeJob.cs EncodeJob.ProfileId EncodeProfileId",
         "/Carina.Domain/Encodings/EncodeJob.cs EncodeJob.Programme RunningProgramme?",

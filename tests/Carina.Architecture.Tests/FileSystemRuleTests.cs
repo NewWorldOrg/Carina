@@ -214,7 +214,8 @@ public sealed class FileSystemRuleTests
             "Encodings",
             "EncodeArtefactPlacer.cs"));
 
-        Assert.Contains("File.Move(work, artefact, overwrite: false)", placer, StringComparison.Ordinal);
+        Assert.Contains("File.Move(work, artefact, overwrite: replacing)", placer, StringComparison.Ordinal);
+        Assert.Contains("bool replacing = verdict is EncodePlacementVerdict.Replace;", placer, StringComparison.Ordinal);
         Assert.DoesNotContain("overwrite: true", placer, StringComparison.Ordinal);
     }
 

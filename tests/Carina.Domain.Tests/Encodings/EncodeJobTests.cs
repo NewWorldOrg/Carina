@@ -425,6 +425,64 @@ public sealed class EncodeJobTests
     public void AJobCannotBeMadeWithoutGoingThroughTheOneWayIn()
         => Assert.Empty(typeof(EncodeJob).GetConstructors());
 
+    [Fact(DisplayName = "A-エンコード-069: a job queued the ordinary way makes nothing again, and one queued because a person asked says so from the moment it is queued")]
+    public void AJobQueuedTheOrdinaryWayMakesNothingAgain()
+    {
+        EncodeJob ordinary = Waiting();
+        EncodeJob again = EncodeJob.QueueAgain(
+            EncodeJobId.New(),
+            RecordingId.New(),
+            EncodeProfileId.New(),
+            EncodeDestinationId.New(),
+            Primary,
+            Queued);
+
+        Assert.False(ordinary.MakesItAgain);
+        Assert.Null(ordinary.NameGivenUpAt);
+        Assert.True(again.MakesItAgain);
+        Assert.Null(again.NameGivenUpAt);
+        Assert.Equal(EncodeJobStatus.Queued, again.Status);
+        Assert.Equal(EncodeJob.FirstAttempt, again.Attempt);
+        Assert.Null(again.ArtefactName);
+    }
+
+    [Fact(DisplayName = "A-エンコード-069: a job gives up only a name it holds, and still names what it made afterwards")]
+    public void AJobGivesUpOnlyANameItHolds()
+    {
+        EncodeJob job = Named();
+        EncodeFileName name = job.ArtefactName!;
+
+        Assert.Throws<InvalidOperationException>(() => Waiting().GiveUpTheName(Ended));
+
+        job.GiveUpTheName(Ended);
+
+        Assert.Equal(Ended, job.NameGivenUpAt);
+        Assert.Equal(name, job.ArtefactName);
+    }
+
+    [Fact(DisplayName = "A-エンコード-069: a job that named nothing cannot be read back as having given a name up")]
+    public void AJobThatNamedNothingCannotHaveGivenANameUp()
+        => Assert.Throws<ArgumentException>(() => EncodeJob.Rehydrate(
+            EncodeJobId.New(),
+            RecordingId.New(),
+            EncodeProfileId.New(),
+            EncodeDestinationId.New(),
+            Primary,
+            EncodeJobStatus.Running,
+            1,
+            Queued,
+            Started,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            true,
+            Ended));
+
     [Fact]
     public void AnAttemptBeforeTheFirstIsNotAnAttempt()
         => Assert.Throws<ArgumentOutOfRangeException>(() => EncodeJob.Rehydrate(

@@ -1,3 +1,5 @@
+using System.Text;
+
 using Carina.Domain.Encodings;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Encodings;
@@ -180,5 +182,114 @@ public sealed class EncodeArtefactPlacerTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => harness.Placer.PlaceAsync(job, Cancel));
         Assert.Equal(EncodeJobStatus.Running, job.Status);
+    }
+
+    [Fact(DisplayName = "A-エンコード-069: a job a person asked to make again puts what it made where the earlier artefact stood, and the earlier job gives the name up before anything is moved")]
+    public async Task AJobAskedToMakeItAgainPutsWhatItMadeWhereTheEarlierArtefactStood()
+    {
+        using var harness = new EncodeHarness();
+        var recording = RecordingId.New();
+        var profile = EncodeProfileId.New();
+        EncodeJob made = harness.Made(recording, profile);
+        EncodeJob again = harness.RunningAgain(recording, profile);
+        string work = harness.WorkFileOf(again, "the second picture");
+        string artefact = harness.ArtefactPathOf(again);
+        File.WriteAllText(artefact, "the first picture");
+
+        EncodePlacementOutcome outcome = await harness.Placer.PlaceAsync(again, Cancel);
+
+        Assert.Equal(EncodePlacementOutcome.Replaced, outcome);
+        Assert.Equal("the second picture", File.ReadAllText(artefact));
+        Assert.False(File.Exists(work));
+        Assert.Equal(EncodeJobStatus.Completed, again.Status);
+        Assert.Equal(EncodeFileName.Artefact(recording, profile), again.ArtefactName);
+        Assert.Equal(harness.Clock.GetUtcNow().UtcDateTime, made.NameGivenUpAt);
+        Assert.Equal(EncodeFileName.Artefact(recording, profile), made.ArtefactName);
+        Assert.Equal(EncodeJobStatus.Completed, made.Status);
+        Assert.Equal(
+            [
+                $"gave up {made.Id.Wire} {again.ArtefactName!.Value}",
+                $"claimed {again.Id.Wire} {again.ArtefactName.Value}",
+                $"saved {again.Id.Wire} Completed",
+            ],
+            harness.Jobs.Moves);
+    }
+
+    [Fact(DisplayName = "A-エンコード-069: someone already reading the artefact when it is made again reads the one they opened through to its end, and the name never goes missing")]
+    public async Task SomeoneAlreadyReadingTheArtefactIsNotCutOffWhenItIsMadeAgain()
+    {
+        using var harness = new EncodeHarness();
+        var recording = RecordingId.New();
+        var profile = EncodeProfileId.New();
+        harness.Made(recording, profile);
+        EncodeJob again = harness.RunningAgain(recording, profile);
+        harness.WorkFileOf(again, "the second picture");
+        string artefact = harness.ArtefactPathOf(again);
+        File.WriteAllText(artefact, "the first picture");
+
+        await using var watching = new FileStream(
+            artefact,
+            new FileStreamOptions
+            {
+                Mode = FileMode.Open,
+                Access = FileAccess.Read,
+                Share = FileShare.ReadWrite | FileShare.Delete,
+                BufferSize = 0,
+            });
+
+        byte[] opening = new byte[4];
+        await watching.ReadExactlyAsync(opening, Cancel);
+
+        EncodePlacementOutcome outcome = await harness.Placer.PlaceAsync(again, Cancel);
+
+        byte[] rest = new byte[13];
+        await watching.ReadExactlyAsync(rest, Cancel);
+
+        Assert.Equal(EncodePlacementOutcome.Replaced, outcome);
+        Assert.Equal("the ", Encoding.UTF8.GetString(opening));
+        Assert.Equal("first picture", Encoding.UTF8.GetString(rest));
+        Assert.True(File.Exists(artefact), "the artefact stands at its name throughout");
+        Assert.Equal("the second picture", await File.ReadAllTextAsync(artefact, Cancel));
+    }
+
+    [Fact(DisplayName = "A-エンコード-069: a job making it again that already put its own artefact there on an earlier attempt keeps it, rather than looking for a work file it has already moved")]
+    public async Task AJobMakingItAgainThatAlreadyPutItsOwnArtefactThereKeepsIt()
+    {
+        using var harness = new EncodeHarness();
+        var recording = RecordingId.New();
+        var profile = EncodeProfileId.New();
+        EncodeJob again = harness.RunningAgainWithItsName(recording, profile, madeAgain: true);
+        string artefact = harness.ArtefactPathOf(again);
+        File.WriteAllText(artefact, "the second picture");
+
+        EncodePlacementOutcome outcome = await harness.Placer.PlaceAsync(again, Cancel);
+
+        Assert.Equal(EncodePlacementOutcome.Reconfirmed, outcome);
+        Assert.Equal("the second picture", File.ReadAllText(artefact));
+        Assert.Equal(EncodeJobStatus.Completed, again.Status);
+        Assert.DoesNotContain(harness.Jobs.Moves, move => move.StartsWith("gave up", StringComparison.Ordinal));
+    }
+
+    [Fact(DisplayName = "A-エンコード-069: a job nobody asked to make anything again never takes a name over, and still collides with what the earlier job holds")]
+    public async Task AJobNobodyAskedToMakeAnythingAgainNeverTakesANameOver()
+    {
+        using var harness = new EncodeHarness();
+        var recording = RecordingId.New();
+        var profile = EncodeProfileId.New();
+        EncodeJob made = harness.Made(recording, profile);
+        EncodeJob second = harness.Running(recording, profile);
+        string work = harness.WorkFileOf(second, "the second picture");
+        string artefact = harness.ArtefactPathOf(second);
+        File.WriteAllText(artefact, "the first picture");
+
+        EncodePlacementOutcome outcome = await harness.Placer.PlaceAsync(second, Cancel);
+
+        Assert.Equal(EncodePlacementOutcome.Collided, outcome);
+        Assert.Equal("the first picture", File.ReadAllText(artefact));
+        Assert.Equal("the second picture", File.ReadAllText(work));
+        Assert.Equal(EncodeJobStatus.Failed, second.Status);
+        Assert.Equal(EncodeFailure.DestinationCollision, second.Failure!.Failure);
+        Assert.Null(second.ArtefactName);
+        Assert.Null(made.NameGivenUpAt);
     }
 }

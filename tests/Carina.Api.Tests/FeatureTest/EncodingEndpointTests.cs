@@ -271,6 +271,77 @@ public sealed class EncodingEndpointTests
         Assert.Contains("already encoded", body.GetProperty("message").GetString(), StringComparison.Ordinal);
     }
 
+    [Fact(DisplayName = "A-エンコード-069: a recording already encoded with a profile is encoded with it again when a person asks outright, and the new job says so")]
+    public async Task ARecordingAlreadyEncodedIsEncodedAgainWhenAPersonAsksOutright()
+    {
+        await using var feature = new EncodingFeature();
+        EncodeProfile profile = feature.Defined();
+        EncodeDestination destination = feature.Placed(profile);
+        Recording recording = feature.Recorded();
+        EncodeJob made = feature.Completed(recording, profile, destination);
+
+        (HttpStatusCode status, JsonElement body) = await feature.PostAsync("/api/encoding/jobs", new
+        {
+            recordingId = recording.Id.Wire,
+            destinationId = destination.Id.Value,
+            makeItAgain = true,
+        });
+
+        EncodeJob queued = feature.Jobs.Jobs.Single(job => !job.Id.Equals(made.Id));
+
+        Assert.Equal(HttpStatusCode.Created, status);
+        Assert.Equal(2, feature.Jobs.Jobs.Count);
+        Assert.Equal(queued.Id.Value, body.GetProperty("data").GetProperty("id").GetGuid());
+        Assert.True(queued.MakesItAgain);
+        Assert.Equal(profile.Id, queued.ProfileId);
+        Assert.Equal(EncodeJobStatus.Queued, queued.Status);
+        Assert.Equal(EncodeJobStatus.Completed, made.Status);
+        Assert.Equal(EncodeFileName.Artefact(recording.Id, profile.Id), made.ArtefactName);
+        Assert.Null(made.NameGivenUpAt);
+    }
+
+    [Fact(DisplayName = "A-エンコード-069: saying outright not to make it again is answered exactly as saying nothing is, so the refusal is what it always was")]
+    public async Task SayingNotToMakeItAgainIsRefusedJustAsSayingNothingIs()
+    {
+        await using var feature = new EncodingFeature();
+        EncodeProfile profile = feature.Defined();
+        EncodeDestination destination = feature.Placed(profile);
+        Recording recording = feature.Recorded();
+        feature.Completed(recording, profile, destination);
+
+        (HttpStatusCode status, JsonElement body) = await feature.PostAsync("/api/encoding/jobs", new
+        {
+            recordingId = recording.Id.Wire,
+            destinationId = destination.Id.Value,
+            makeItAgain = false,
+        });
+
+        Assert.Equal(HttpStatusCode.Conflict, status);
+        Assert.Contains("already encoded", body.GetProperty("message").GetString(), StringComparison.Ordinal);
+        Assert.Single(feature.Jobs.Jobs);
+    }
+
+    [Fact(DisplayName = "A-エンコード-069: a recording whose job is still waiting is not queued a second time, even to be made again")]
+    public async Task ARecordingWithAJobUnderwayIsNotMadeAgainEither()
+    {
+        await using var feature = new EncodingFeature();
+        EncodeProfile profile = feature.Defined();
+        EncodeDestination destination = feature.Placed(profile);
+        Recording recording = feature.Recorded();
+        feature.Queued(recording, profile, destination);
+
+        (HttpStatusCode status, JsonElement body) = await feature.PostAsync("/api/encoding/jobs", new
+        {
+            recordingId = recording.Id.Wire,
+            destinationId = destination.Id.Value,
+            makeItAgain = true,
+        });
+
+        Assert.Equal(HttpStatusCode.Conflict, status);
+        Assert.Contains("not queued twice", body.GetProperty("message").GetString(), StringComparison.Ordinal);
+        Assert.Single(feature.Jobs.Jobs);
+    }
+
     [Fact(DisplayName = "BR-ED2-012: a failed job comes back after a second attempt is queued, so a failure can be retried one recording at a time")]
     public async Task AFailedJobDoesNotStopTheRecordingBeingQueuedAgain()
     {
