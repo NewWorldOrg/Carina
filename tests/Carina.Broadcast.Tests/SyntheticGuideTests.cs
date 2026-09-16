@@ -147,6 +147,59 @@ public sealed class SyntheticGuideTests
         Assert.Equal("Synthetic Data", described.Services[1].Name);
     }
 
+    [Theory]
+    [InlineData((int)RunningStatus.Undefined)]
+    [InlineData((int)RunningStatus.Running)]
+    public void WhatIsOnNowIsReadFromThePresentSectionWhateverItSaysAboutRunning(int runningStatus)
+    {
+        SyntheticGuide guide = PresentFollowingGuide(
+            new SyntheticProgramme(1, Airs, TimeSpan.FromMinutes(30))
+            {
+                Name = "Evening Bulletin",
+                RunningStatus = runningStatus,
+            });
+
+        var watch = new PresentFollowingWatch([new WatchedService(SomeNetworkId, FirstServiceId)]);
+        PresentChange? change = SawAll(watch, guide);
+
+        Assert.NotNull(change);
+        Assert.Equal(1, change.Now.EventId);
+        Assert.Equal(Airs, change.Now.StartsAt);
+    }
+
+    [Fact]
+    public void APresentProgrammeSayingNothingAboutRunningIsStillWhatIsOnNow()
+    {
+        SyntheticGuide guide = PresentFollowingGuide(
+            new SyntheticProgramme(1, Airs, TimeSpan.FromMinutes(30))
+            {
+                Name = "Evening Bulletin",
+                RunningStatus = (int)RunningStatus.Undefined,
+            });
+
+        EventInformationTable present = ReadAll(guide).Tables.Single(table =>
+            table.TableId == EventInformationTable.PresentFollowingActualTableId);
+        DescribedEvent carried = Assert.Single(present.Events);
+
+        Assert.Equal(RunningStatus.Undefined, carried.Status);
+        Assert.Equal(PresentFollowingWatch.PresentSectionNumber, present.SectionNumber);
+    }
+
+    private static PresentChange? SawAll(PresentFollowingWatch watch, SyntheticGuide guide)
+    {
+        PresentChange? seen = null;
+
+        foreach (EventInformationTable table in ReadAll(guide).Tables)
+        {
+            seen ??= watch.Saw(table);
+        }
+
+        return seen;
+    }
+
+    private static SyntheticGuide PresentFollowingGuide(params SyntheticProgramme[] programmes)
+        => Guide(programmes) with { PresentFollowing = true };
+
     private static SyntheticGuide Guide(params SyntheticProgramme[] programmes)
         => new()
         {
