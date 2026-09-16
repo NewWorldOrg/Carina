@@ -301,7 +301,7 @@ internal sealed class AppSwapFeature : IAsyncDisposable
             .WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
             {
                 services.RemoveAll<IHostedService>();
-                services.AddHostedService<DriverConnectionSupervisor>();
+                services.AddSingleton<IHostedService>(WatchingTheDriver);
 
                 if (!takingRecordingsBack)
                 {
@@ -330,6 +330,17 @@ internal sealed class AppSwapFeature : IAsyncDisposable
 
         await running.UntilConnectedAsync();
     }
+
+    /// <summary>
+    /// The supervisor's own retry cadence keeps the real clock, while everything the application
+    /// reasons about time with is hand turned. Its pauses are a retry interval rather than
+    /// something a test means to hold still: parked on a clock nothing turns, the app gets one
+    /// look at a driver that went away, and a driver that answered that one look with a refusal
+    /// rather than with silence — which is what a server part way through stopping answers — is
+    /// reported as connected for the rest of the test.
+    /// </summary>
+    private static IHostedService WatchingTheDriver(IServiceProvider provider)
+        => ActivatorUtilities.CreateInstance<DriverConnectionSupervisor>(provider, TimeProvider.System);
 
     public async Task StopAppAsync()
     {
