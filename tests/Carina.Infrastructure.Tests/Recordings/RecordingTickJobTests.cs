@@ -180,6 +180,33 @@ public sealed class RecordingTickJobTests
     }
 
     [Fact]
+    public async Task ATickThatFollowedARecordingPastItsEndAsksForTheAllocationToBeSettledAgain()
+    {
+        var clock = new HurriedTicks();
+        var recordings = new HeldRecordings();
+        ReservationId standingFor = ReservationId.New();
+        Recording running = InFlight(Airs, Airs.AddMinutes(30), reservationId: standingFor);
+        recordings.Rows.Add(running);
+        var notices = new CountedNotices();
+        using RecordingTickJob job = Job(
+            Holding(Due(9, startedAt: Airs) with { Id = standingFor }),
+            recordings,
+            new RecordingDriver(),
+            clock,
+            notices: notices,
+            guide: RunningUntil(Airs.AddMinutes(45)));
+        using var stopping = new CancellationTokenSource();
+
+        await job.StartAsync(stopping.Token);
+        await Eventually.Happens(() => notices.Nudged.Count >= 1, "the tick that followed one asked for nothing");
+        await stopping.CancelAsync();
+        await job.StopAsync(Cancel);
+
+        Assert.Equal([RecalculationTrigger.RecordingExtended], notices.Nudged.Distinct());
+        Assert.Equal(Airs.AddMinutes(45), running.ExpectedWindowEnd);
+    }
+
+    [Fact]
     public async Task ATickThatStartedAndStoppedNothingAsksForNothing()
     {
         var clock = new HurriedTicks();
@@ -273,7 +300,8 @@ public sealed class RecordingTickJobTests
         RecordingSettings? settings = null,
         WhatWasSaid? said = null,
         CountedNotices? notices = null,
-        SilentEvents? events = null)
+        SilentEvents? events = null,
+        HeldProgrammes? guide = null)
     {
         RecordingSettings held = settings ?? RecordingSettings.Default;
         var services = new ServiceCollection();
@@ -293,7 +321,7 @@ public sealed class RecordingTickJobTests
                 driver,
                 new ProgramExtensionFollower(
                     recordings,
-                    new HeldProgrammes(),
+                    guide ?? new HeldProgrammes(),
                     driver,
                     new EndsAlreadyAsked(),
                     held,
