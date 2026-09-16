@@ -23,7 +23,7 @@ public sealed class FfmpegThumbnailRenderer(ThumbnailSettings settings, TimeProv
         }
 
         ThumbnailRender ran = await RunAsync(
-            FfmpegInvocation.Arguments(request, settings.Width),
+            FfmpegInvocation.Arguments(request, settings.Width, settings.StepsFromPerfect),
             keepingWhatItWrote: false,
             cancellationToken);
 
@@ -51,7 +51,7 @@ public sealed class FfmpegThumbnailRenderer(ThumbnailSettings settings, TimeProv
         }
 
         return await RunAsync(
-            FfmpegInvocation.FrameArguments(request, settings.Width),
+            FfmpegInvocation.FrameArguments(request, settings.Width, settings.StepsFromPerfect),
             keepingWhatItWrote: true,
             cancellationToken);
     }

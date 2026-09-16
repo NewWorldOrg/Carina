@@ -9,24 +9,28 @@ public static class FfmpegInvocation
 {
     public const int FramesLookedAt = 100;
 
-    public static IReadOnlyList<string> Arguments(ThumbnailRequest request, int width)
+    public const int BestPictureMjpegDraws = 2;
+
+    public const int CoarsestPictureMjpegDraws = 31;
+
+    public static IReadOnlyList<string> Arguments(ThumbnailRequest request, int width, int stepsFromPerfect)
     {
         ArgumentNullException.ThrowIfNull(request);
 
         return
         [
-            .. Reading(request.Source, request.Service, request.At, MostTypicalOf(width)),
+            .. Reading(request.Source, request.Service, request.At, MostTypicalOf(width), stepsFromPerfect),
             request.Destination,
         ];
     }
 
-    public static IReadOnlyList<string> FrameArguments(ThumbnailFrameRequest request, int width)
+    public static IReadOnlyList<string> FrameArguments(ThumbnailFrameRequest request, int width, int stepsFromPerfect)
     {
         ArgumentNullException.ThrowIfNull(request);
 
         return
         [
-            .. Reading(request.Source, request.Service, request.At, Scaled(width)),
+            .. Reading(request.Source, request.Service, request.At, Scaled(width), stepsFromPerfect),
             "-f",
             "image2pipe",
             "-c:v",
@@ -35,7 +39,12 @@ public static class FfmpegInvocation
         ];
     }
 
-    private static IReadOnlyList<string> Reading(string source, ServiceId service, TimeSpan at, string filter)
+    private static IReadOnlyList<string> Reading(
+        string source,
+        ServiceId service,
+        TimeSpan at,
+        string filter,
+        int stepsFromPerfect)
         =>
         [
             "-nostdin",
@@ -53,7 +62,22 @@ public static class FfmpegInvocation
             "1",
             "-vf",
             filter,
+            "-q:v",
+            Steps(stepsFromPerfect),
         ];
+
+    private static string Steps(int stepsFromPerfect)
+    {
+        if (stepsFromPerfect < BestPictureMjpegDraws || stepsFromPerfect > CoarsestPictureMjpegDraws)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(stepsFromPerfect),
+                stepsFromPerfect,
+                "A picture is drawn between two steps from the best mjpeg can do and thirty-one.");
+        }
+
+        return stepsFromPerfect.ToString(CultureInfo.InvariantCulture);
+    }
 
     private static string Selecting(ServiceId service)
     {
