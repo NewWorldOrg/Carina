@@ -7,6 +7,8 @@ public enum EncodePlacementVerdict
     Reconfirm = 2,
 
     Collision = 3,
+
+    Replace = 4,
 }
 
 /// <summary>
@@ -14,13 +16,22 @@ public enum EncodePlacementVerdict
 /// first, so a file already at that name is either this job's own earlier success — the name was
 /// this job's before this attempt began — or something the ledger never heard of, which is a
 /// collision and is never overwritten (BR-ED2-009).
+/// <para>
+/// The one file that is written over is the one a person asked to have made again: such a job
+/// brings a replacement, and putting it there is the whole point of the asking. A job that brought
+/// none is judged exactly as it was before, so nothing is overwritten unless somebody asked.
+/// </para>
 /// </summary>
 public static class EncodePlacements
 {
     public const EncodeFailure WhatACollisionIsCalled = EncodeFailure.DestinationCollision;
 
-    public static EncodePlacementVerdict Judge(bool somethingIsThere, bool thisJobHadAlreadyClaimedTheName)
+    public static EncodePlacementVerdict Judge(
+        bool somethingIsThere,
+        bool thisJobHadAlreadyClaimedTheName,
+        bool thisJobBroughtAReplacement)
         => !somethingIsThere ? EncodePlacementVerdict.Move
+            : thisJobBroughtAReplacement ? EncodePlacementVerdict.Replace
             : thisJobHadAlreadyClaimedTheName ? EncodePlacementVerdict.Reconfirm
             : EncodePlacementVerdict.Collision;
 }

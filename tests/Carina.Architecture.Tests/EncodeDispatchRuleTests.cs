@@ -82,11 +82,37 @@ public sealed class EncodeDispatchRuleTests
 
         string source = File.ReadAllText(Placer);
         int claimed = source.IndexOf("jobs.ClaimArtefactAsync(job, candidate, cancellationToken)", StringComparison.Ordinal);
-        int moved = source.IndexOf("File.Move(work, artefact, overwrite: false)", StringComparison.Ordinal);
+        int moved = source.IndexOf("File.Move(work, artefact, overwrite: replacing)", StringComparison.Ordinal);
 
         Assert.True(claimed >= 0, "the placer writes the name into the ledger");
         Assert.True(moved > claimed, "the move comes after the ledger is written");
         Assert.Equal(1, source.Split("File.Move(").Length - 1);
+    }
+
+    [Fact(DisplayName = "A-エンコード-069: the one thing that lets a move write over an artefact is the job itself saying a person asked for it to be made again, and the earlier holder gives the name up before the claim")]
+    public void TheOneThingThatLetsAMoveWriteOverAnArtefactIsThePersonsAsking()
+    {
+        string placer = File.ReadAllText(Placer);
+        string placement = File.ReadAllText(Path.Combine(
+            RepositoryLayout.SourceDirectory,
+            "Carina.Domain",
+            "Encodings",
+            "EncodePlacement.cs"));
+
+        Assert.Contains("bool replacing = verdict is EncodePlacementVerdict.Replace;", placer, StringComparison.Ordinal);
+        Assert.Contains("job.MakesItAgain && File.Exists(work)", placer, StringComparison.Ordinal);
+        Assert.DoesNotContain("overwrite: true", placer, StringComparison.Ordinal);
+        Assert.Contains(
+            "thisJobBroughtAReplacement ? EncodePlacementVerdict.Replace",
+            placement,
+            StringComparison.Ordinal);
+        Assert.Equal(1, placement.Split("EncodePlacementVerdict.Replace").Length - 1);
+
+        int gaveUp = placer.IndexOf("jobs.TakeTheNameOverAsync(job, candidate, Now(), cancellationToken)", StringComparison.Ordinal);
+        int claimed = placer.IndexOf("jobs.ClaimArtefactAsync(job, candidate, cancellationToken)", StringComparison.Ordinal);
+
+        Assert.True(gaveUp >= 0, "the earlier holder is asked to give the name up");
+        Assert.True(claimed > gaveUp, "the claim comes after the earlier holder has given the name up");
     }
 
     [Fact(DisplayName = "BR-ED2-009: the artefact's name is worked out in the placer and checked by the job, and nothing else in the feature can spell it")]

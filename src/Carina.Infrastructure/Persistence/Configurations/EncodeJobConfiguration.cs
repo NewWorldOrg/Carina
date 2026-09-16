@@ -104,6 +104,9 @@ public sealed class EncodeJobConfiguration : IEntityTypeConfiguration<EncodeJob>
                         AND strpos(artefact_name, replace(recording_id::text, '-', '')) > 0
                         AND strpos(artefact_name, replace(profile_id::text, '-', '')) > 0))
                 """);
+            table.HasCheckConstraint(
+                "ck_encode_job_name_given_up",
+                "name_given_up_at IS NULL OR artefact_name IS NOT NULL");
         });
 
         builder.Property<uint>(ConcurrencyToken)
@@ -162,6 +165,9 @@ public sealed class EncodeJobConfiguration : IEntityTypeConfiguration<EncodeJob>
         builder.Property(job => job.ArtefactName)
             .HasConversion(name => name!.Value, value => new EncodeFileName(value))
             .HasMaxLength(EncodeFileName.MaxLength);
+
+        builder.Property(job => job.MakesItAgain).IsRequired();
+        builder.Property(job => job.NameGivenUpAt);
 
         builder.ComplexProperty(job => job.Route, route =>
         {
@@ -253,7 +259,7 @@ public sealed class EncodeJobConfiguration : IEntityTypeConfiguration<EncodeJob>
 
         builder.HasIndex(job => new { job.OutputRoot, job.ArtefactName })
             .IsUnique()
-            .HasFilter("artefact_name IS NOT NULL")
+            .HasFilter("artefact_name IS NOT NULL AND name_given_up_at IS NULL")
             .HasDatabaseName(ArtefactIndexName);
 
         builder.HasIndex(job => new { job.RecordingId, job.QueuedAt })

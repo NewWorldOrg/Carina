@@ -57,6 +57,8 @@ public sealed record QueueEncodeJobRequest
     public Guid? ProfileId { get; init; }
 
     public Guid? DestinationId { get; init; }
+
+    public bool? MakeItAgain { get; init; }
 }
 
 public sealed record PutEncodeSettingsRequest

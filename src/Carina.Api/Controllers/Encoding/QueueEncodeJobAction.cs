@@ -13,7 +13,9 @@ namespace Carina.Api.Controllers.Encoding;
 
 /// <summary>
 /// Queues one recording, named by its id, for one destination. There is no way in that takes more
-/// than one recording (BR-ED2-008).
+/// than one recording (BR-ED2-008). A recording already encoded with the profile asked for is
+/// refused unless <c>makeItAgain</c> says outright that the artefact is to be made again; left out,
+/// it is false and the answer is what it always was.
 /// </summary>
 [ApiController]
 [Route("api/encoding/jobs")]
@@ -43,7 +45,11 @@ public sealed class QueueEncodeJobAction(EncodeJobService jobs) : ControllerBase
         }
 
         ServiceResult<EncodeJobView, EncodingFailure> queued = await jobs.QueueAsync(
-            new EncodeJobDraft(recording, EncodingIdText.Profile(request?.ProfileId), destination),
+            new EncodeJobDraft(
+                recording,
+                EncodingIdText.Profile(request?.ProfileId),
+                destination,
+                request?.MakeItAgain ?? false),
             cancellationToken);
 
         return queued.IsSuccess

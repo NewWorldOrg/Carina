@@ -9,7 +9,11 @@ using Carina.Infrastructure.Encodings;
 
 namespace Carina.Api.Services;
 
-public sealed record EncodeJobDraft(RecordingId RecordingId, EncodeProfileId? ProfileId, EncodeDestinationId DestinationId);
+public sealed record EncodeJobDraft(
+    RecordingId RecordingId,
+    EncodeProfileId? ProfileId,
+    EncodeDestinationId DestinationId,
+    bool MakeItAgain);
 
 /// <summary>
 /// A job as read at a moment: what the ledger holds, and what the reader works out from the time
@@ -24,7 +28,10 @@ public sealed record EncodeJobView(EncodeJob Job, TimeSpan? QuietFor, bool Stall
 /// one recording, so there is no way in that takes a list (BR-ED2-008). A recording still being
 /// written, or one that failed, has nothing to encode; a recording with a job already waiting or
 /// running is not queued twice, and one whose artefact for this profile already exists is not made
-/// again, because the second would only collide with the first (BR-ED2-009). Calling a job off is a
+/// again, because the second would only collide with the first (BR-ED2-009) — unless the caller says
+/// outright that it is to be made again, which is the one way a second job for that profile is
+/// queued: what that job makes takes the place of what is at that name rather than colliding with
+/// it, and until it is made the artefact that is there is left exactly as it is. Calling a job off is a
 /// person's act and is kept apart from a failure (BR-ED2-012): the ledger is written first, then the
 /// programme still running for it is stopped, then what the job owes a removal for is swept.
 /// </summary>
@@ -112,20 +119,29 @@ public sealed class EncodeJobService(
                 EncodingFailure.AlreadyInTheQueue);
         }
 
-        if (earlier.FirstOrDefault(job => job.Status is EncodeJobStatus.Completed && job.ProfileId.Equals(profile.Id)) is { } made)
+        if (!draft.MakeItAgain
+            && earlier.FirstOrDefault(job => job.Status is EncodeJobStatus.Completed && job.ProfileId.Equals(profile.Id)) is { } made)
         {
             return Failure(
-                $"Recording {recording.Id.Wire} was already encoded with profile {profile.Id.Wire} by job {made.Id.Wire}, and a second artefact would only collide with the first.",
+                $"Recording {recording.Id.Wire} was already encoded with profile {profile.Id.Wire} by job {made.Id.Wire}, and a second artefact would only collide with the first unless it is asked for again.",
                 EncodingFailure.AlreadyEncoded);
         }
 
-        EncodeJob queued = EncodeJob.Queue(
-            EncodeJobId.New(),
-            recording.Id,
-            profile.Id,
-            destination.Id,
-            destination.OutputRoot,
-            Now());
+        EncodeJob queued = draft.MakeItAgain
+            ? EncodeJob.QueueAgain(
+                EncodeJobId.New(),
+                recording.Id,
+                profile.Id,
+                destination.Id,
+                destination.OutputRoot,
+                Now())
+            : EncodeJob.Queue(
+                EncodeJobId.New(),
+                recording.Id,
+                profile.Id,
+                destination.Id,
+                destination.OutputRoot,
+                Now());
 
         await jobs.AddAsync(queued, cancellationToken);
 

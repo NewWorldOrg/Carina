@@ -13,6 +13,8 @@ public enum EncodePlacementOutcome
     Collided = 3,
 
     Refused = 4,
+
+    Replaced = 5,
 }
 
 /// <summary>
@@ -20,6 +22,13 @@ public enum EncodePlacementOutcome
 /// out now and written into the ledger, and only then is the file looked at and moved. Whatever is
 /// already at that name is this job's own earlier success if the ledger said so before this
 /// attempt, and a collision otherwise — and a collision is a failure, never an overwrite.
+/// <para>
+/// A job a person asked to make the artefact again is the one exception, and it is still the ledger
+/// that decides: the earlier job gives the name up first, this job claims it, and only then is the
+/// artefact written over — by a single rename, so that whoever is watching the old one at that
+/// moment reads the file they opened through to its end while everyone after them gets the new one.
+/// Nothing before the rename touches the artefact, so a run that fails leaves what was there.
+/// </para>
 /// </summary>
 public sealed class EncodeArtefactPlacer(
     IEncodeJobRepository jobs,
@@ -55,6 +64,17 @@ public sealed class EncodeArtefactPlacer(
         string work = Path.Combine(workshop, job.WorkFileName.Value);
         string artefact = Path.Combine(room, candidate.Value);
 
+        if (job.MakesItAgain && !hadAlreadyClaimed)
+        {
+            int gaveItUp = await jobs.TakeTheNameOverAsync(job, candidate, Now(), cancellationToken);
+
+            logger.LogInformation(
+                "Job {Job} was asked to make the artefact again, and took '{Artefact}' over from {Earlier} earlier job(s).",
+                job.Id.Wire,
+                candidate.Value,
+                gaveItUp);
+        }
+
         if (await jobs.ClaimArtefactAsync(job, candidate, cancellationToken) is ArtefactClaim.TakenByAnother)
         {
             await RefuseAsync(
@@ -66,7 +86,12 @@ public sealed class EncodeArtefactPlacer(
             return EncodePlacementOutcome.Collided;
         }
 
-        switch (EncodePlacements.Judge(File.Exists(artefact), hadAlreadyClaimed))
+        EncodePlacementVerdict verdict = EncodePlacements.Judge(
+            File.Exists(artefact),
+            hadAlreadyClaimed,
+            job.MakesItAgain && File.Exists(work));
+
+        switch (verdict)
         {
             case EncodePlacementVerdict.Collision:
                 await RefuseAsync(
@@ -81,7 +106,7 @@ public sealed class EncodeArtefactPlacer(
                 return await ReconfirmAsync(job, artefact, candidate, cancellationToken);
 
             default:
-                return await MoveAsync(job, work, artefact, workshop, room, cancellationToken);
+                return await MoveAsync(job, work, artefact, workshop, room, verdict, cancellationToken);
         }
     }
 
@@ -119,8 +144,11 @@ public sealed class EncodeArtefactPlacer(
         string artefact,
         string workshop,
         string room,
+        EncodePlacementVerdict verdict,
         CancellationToken cancellationToken)
     {
+        bool replacing = verdict is EncodePlacementVerdict.Replace;
+
         if (!File.Exists(work))
         {
             throw new InvalidOperationException(
@@ -136,7 +164,7 @@ public sealed class EncodeArtefactPlacer(
 
         try
         {
-            File.Move(work, artefact, overwrite: false);
+            File.Move(work, artefact, overwrite: replacing);
         }
         catch (IOException refusal) when (refusal.HResult is NoSpaceLeft)
         {
@@ -144,7 +172,7 @@ public sealed class EncodeArtefactPlacer(
         }
         catch (Exception refusal) when (refusal is IOException or UnauthorizedAccessException)
         {
-            if (File.Exists(artefact))
+            if (!replacing && File.Exists(artefact))
             {
                 await RefuseAsync(
                     job,
@@ -162,7 +190,7 @@ public sealed class EncodeArtefactPlacer(
         await jobs.SaveAsync(job, cancellationToken);
         await SettleTheWorkFileAsync(job, cancellationToken);
 
-        return EncodePlacementOutcome.Moved;
+        return replacing ? EncodePlacementOutcome.Replaced : EncodePlacementOutcome.Moved;
     }
 
     private async Task SettleTheWorkFileAsync(EncodeJob job, CancellationToken cancellationToken)
