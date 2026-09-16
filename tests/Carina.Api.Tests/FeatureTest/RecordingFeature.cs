@@ -15,6 +15,7 @@ using Carina.Domain.Programmes;
 using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
+using Carina.Domain.Viewing;
 using Carina.Infrastructure.Thumbnails;
 using Carina.TestSupport;
 
@@ -240,6 +241,7 @@ internal sealed class RecordingFeature : IAsyncDisposable
                 services.AddSingleton<IDriverClient>(Driver);
                 services.AddSingleton<IThumbnailRemaker>(Remaker);
                 services.AddSingleton(erasingWith);
+                services.AddSingleton<IPlaybackPositionRepository>(Positions);
                 services.AddSingleton(new RecordingDeletions(longestDeletion));
                 services.AddSingleton<TimeProvider>(new FixedTimeProvider(Noon.AddMinutes(30)));
             }));
@@ -253,6 +255,8 @@ internal sealed class RecordingFeature : IAsyncDisposable
     public HttpClient Client { get; }
 
     public HeldRecordings Recordings { get; } = new();
+
+    public HeldPlaybackPositions Positions { get; } = new();
 
     public SilentEvents Events { get; } = new();
 

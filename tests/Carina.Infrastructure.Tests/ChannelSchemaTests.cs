@@ -288,6 +288,7 @@ public sealed class ChannelSchemaTests
                 "migration_standing",
                 "migration_tally",
                 "oidc_config",
+                "playback_position",
                 "programme",
                 "quality_incident",
                 "quality_session_measurement",

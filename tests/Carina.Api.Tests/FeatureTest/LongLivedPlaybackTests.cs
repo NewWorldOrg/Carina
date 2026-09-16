@@ -7,6 +7,7 @@ using Carina.Domain.Encodings;
 using Carina.Domain.Playback;
 using Carina.Domain.Recordings;
 using Carina.Domain.Streaming;
+using Carina.Domain.Viewing;
 using Carina.TestSupport;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -269,6 +270,7 @@ public sealed class LongLivedPlaybackTests
             services.AddSingleton<IRecordingDirectory>(recordings);
             services.AddSingleton<IEncodeJobRepository>(new HeldEncodeJobs());
             services.AddSingleton<IEncodeProfileRepository>(new HeldEncodeProfiles());
+            services.AddSingleton<IPlaybackPositionRepository>(new HeldPlaybackPositions());
             services.AddSingleton(files);
             services.AddSingleton(player);
         });

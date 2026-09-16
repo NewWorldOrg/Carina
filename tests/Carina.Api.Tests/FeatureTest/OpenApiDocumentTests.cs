@@ -188,6 +188,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "previewRules",
                 "putEncodeSettings",
                 "putOidcConfig",
+                "putPlaybackPosition",
                 "putSelectedChannel",
                 "putTunerHealthSettings",
                 "putTuners",

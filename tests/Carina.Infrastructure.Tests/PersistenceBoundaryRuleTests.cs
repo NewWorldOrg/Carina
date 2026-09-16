@@ -222,6 +222,26 @@ public sealed class PersistenceBoundaryRuleTests
             pointing);
     }
 
+    [Fact(DisplayName = "BR-KD-013: where the watching got to reaches the recording by value, holding no key into the ledger")]
+    public void WhereTheWatchingGotToReachesTheRecordingByValue()
+    {
+        using CarinaDbContext context = Carina();
+
+        Assert.Equal(
+            ["playback_position"],
+            PersistenceBoundaryRules.TablesOf(context.Model, PersistenceFamily.Viewing));
+
+        IEntityType position = context.Model
+            .GetEntityTypes()
+            .Single(entityType => entityType.GetTableName() == "playback_position");
+
+        Assert.Empty(position.GetForeignKeys());
+        Assert.Contains(
+            "recording_id",
+            position.GetProperties().Select(property => property.GetColumnName()),
+            StringComparer.Ordinal);
+    }
+
     [Fact]
     public void WhatCouldNotBeMigratedIsNeverCountedByAnotherDomain()
     {

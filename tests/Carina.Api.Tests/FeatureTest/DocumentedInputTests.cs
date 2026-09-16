@@ -69,7 +69,11 @@ public sealed class DocumentedInputTests(TestingWebApplicationFactory factory)
         JsonNode profile = Parameter(document, PlayDelivery.Path, PlayDelivery.Quality);
 
         Assert.Equal("number", from["schema"]!["type"]!.GetValue<string>());
-        Assert.Equal(0, from["schema"]!["default"]!.GetValue<double>());
+        Assert.Null(from["schema"]!["default"]);
+        Assert.Contains(
+            "where this reader last left this recording",
+            from["description"]!.GetValue<string>(),
+            StringComparison.Ordinal);
         Assert.Equal("string", profile["schema"]!["type"]!.GetValue<string>());
         Assert.Equal(
             ["1080p60", "1080p30", "720p60", "720p30"],

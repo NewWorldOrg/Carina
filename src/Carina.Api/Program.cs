@@ -15,6 +15,7 @@ using Carina.Domain.Channels;
 using Carina.Domain.Encodings;
 using Carina.Domain.Streaming;
 using Carina.Domain.Thumbnails;
+using Carina.Domain.Viewing;
 using Carina.Infrastructure.DependencyInjection;
 using Carina.Infrastructure.Events;
 
@@ -109,8 +110,9 @@ app.MapGet(
                 string id,
                 PlaybackService playback,
                 IOnTheFlyPlayer player,
-                IEncodeChapterRepository chapters) =>
-            PlayDelivery.Invoke(context, id, playback, player, chapters))
+                IEncodeChapterRepository chapters,
+                IPlaybackPositionRepository positions) =>
+            PlayDelivery.Invoke(context, id, playback, player, chapters, positions))
     .WithName(PlaybackSurfaces.PlayingIsCalled)
     .WithTags(PlaybackSurfaces.Tag)
     .WithSummary(PlaybackSurfaces.HowARecordingIsPlayedInABrowser)

@@ -21,6 +21,7 @@ public sealed class StreamingSurfaceTests(TestingWebApplicationFactory factory)
         "GET /api/videos/{id}",
         "HEAD /api/videos/{id}",
         "GET /api/videos/{id}/play",
+        "PUT /api/videos/{id}/position",
         "GET /api/videos/{id}/scrub",
         "GET /api/videos/{id}/thumbnail",
         "POST /api/videos/{id}/ticket",
@@ -52,7 +53,7 @@ public sealed class StreamingSurfaceTests(TestingWebApplicationFactory factory)
     }
 
     [Fact]
-    public void TheOnlyThingThatChangesStateUnderTheStreamingSurfaceIsATicketBeingIssued()
+    public void TheOnlyThingsThatChangeStateUnderTheStreamingSurfaceAreATicketAndAPositionBeingKept()
     {
         RoutedSurface[] changing =
         [
@@ -64,6 +65,15 @@ public sealed class StreamingSurfaceTests(TestingWebApplicationFactory factory)
             changing,
             surface =>
             {
+                if (surface.Pattern.EndsWith("/position", StringComparison.Ordinal))
+                {
+                    Assert.True(
+                        HttpMethods.IsPut(surface.Method),
+                        $"{surface} keeps where the watching got to on {surface.Method}");
+
+                    return;
+                }
+
                 Assert.True(HttpMethods.IsPost(surface.Method), $"{surface} changes state on {surface.Method}");
                 Assert.EndsWith("/ticket", surface.Pattern, StringComparison.Ordinal);
             });
