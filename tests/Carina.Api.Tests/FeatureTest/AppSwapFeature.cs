@@ -8,6 +8,7 @@ using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.Events;
+using Carina.Domain.Integrity;
 using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
@@ -242,6 +243,19 @@ internal sealed class AppSwapFeature : IAsyncDisposable
 
     private RunningApp? running;
 
+    /// <summary>
+    /// Where this side may read the disk the driver writes to, for the tests that turn on weighing
+    /// what a recording actually left behind. Left unset, nothing tells the app where the output
+    /// root is mounted and a file can only be reported as one that could not be weighed.
+    /// </summary>
+    private IntegritySettings? weighing;
+
+    /// <summary>
+    /// The pace the watch keeps, for the tests that cannot afford the pauses the default keeps: a
+    /// pause is served by the hand-turned clock, which only rings when a test turns it.
+    /// </summary>
+    private RecordingWatchSettings? watching;
+
     private AppSwapFeature(SyntheticDriverHost driver, DateTimeOffset from)
     {
         this.driver = driver;
@@ -277,10 +291,27 @@ internal sealed class AppSwapFeature : IAsyncDisposable
     public static async Task<AppSwapFeature> StartAsync(
         bool takingRecordingsBack = false,
         TimeSpan? window = null,
-        Action<IServiceCollection>? reshapeDriver = null)
+        Action<IServiceCollection>? reshapeDriver = null,
+        bool weighingWhatIsOnTheDisk = false,
+        RecordingWatchSettings? watching = null)
     {
         SyntheticDriverHost driver = await SyntheticDriverHost.StartAsync(reshapeDriver);
         var feature = new AppSwapFeature(driver, DateTimeOffset.UtcNow);
+
+        if (weighingWhatIsOnTheDisk)
+        {
+            feature.weighing = new IntegritySettings
+            {
+                OutputRoots =
+                [
+                    new StorageRootPath(
+                        new OutputRoot(SyntheticDriverHost.RootName),
+                        driver.RecordingsDirectory),
+                ],
+            };
+        }
+
+        feature.watching = watching;
 
         await feature.StartAppAsync(takingRecordingsBack);
 
@@ -309,6 +340,17 @@ internal sealed class AppSwapFeature : IAsyncDisposable
                 }
 
                 services.AddSingleton(Impatient);
+
+                if (weighing is { } mounts)
+                {
+                    services.AddSingleton(mounts);
+                }
+
+                if (watching is { } pace)
+                {
+                    services.AddSingleton(pace);
+                }
+
                 services.AddSingleton<TimeProvider>(Clock);
                 services.AddSingleton<IReservationRecordingContract>(Reservations);
                 services.AddSingleton<IReservationOutcomeRepository>(Outcomes);
