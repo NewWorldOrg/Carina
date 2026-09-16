@@ -7,13 +7,15 @@ public sealed record LiveSessionSettings
         TimeSpan? longestRaise = null,
         TimeSpan? heldAhead = null,
         TimeSpan? betweenHolds = null,
-        TimeSpan? longestWaitToBeFed = null)
+        TimeSpan? longestWaitToBeFed = null,
+        TimeSpan? longestWaitForATunerToComeFree = null)
     {
         TimeSpan outliving = linger ?? TimeSpan.FromSeconds(5);
         TimeSpan raise = longestRaise ?? TimeSpan.FromSeconds(30);
         TimeSpan ahead = heldAhead ?? TimeSpan.FromMinutes(10);
         TimeSpan holds = betweenHolds ?? TimeSpan.FromMinutes(1);
         TimeSpan mouthful = longestWaitToBeFed ?? TimeSpan.FromSeconds(10);
+        TimeSpan coming = longestWaitForATunerToComeFree ?? TimeSpan.FromSeconds(5);
 
         if (outliving <= TimeSpan.Zero)
         {
@@ -55,6 +57,14 @@ public sealed record LiveSessionSettings
                 "A transcoder is given some time to take a mouthful, not none, or the first one is cut.");
         }
 
+        if (coming <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(longestWaitForATunerToComeFree),
+                coming,
+                "A viewer waits some time for a tuner on its way out, not none, or a channel change lands in the gap.");
+        }
+
         if (holds >= ahead)
         {
             throw new ArgumentOutOfRangeException(
@@ -68,6 +78,7 @@ public sealed record LiveSessionSettings
         HeldAhead = ahead;
         BetweenHolds = holds;
         LongestWaitToBeFed = mouthful;
+        LongestWaitForATunerToComeFree = coming;
     }
 
     public TimeSpan Linger { get; }
@@ -97,4 +108,15 @@ public sealed record LiveSessionSettings
     /// same channel through the same reading.
     /// </remarks>
     public TimeSpan LongestWaitToBeFed { get; }
+
+    /// <summary>
+    /// How long a viewer refused for want of a tuner waits for one that is already being let go of.
+    /// </summary>
+    /// <remarks>
+    /// A session leaves the ledger when it is closed and lets the tuner go at the end of its
+    /// teardown, so a viewer arriving between the two finds nothing to give up and a tuner that is
+    /// not free yet. It waits that teardown out rather than being refused, and no longer than this:
+    /// a teardown that will not end is a tuner that never comes free, and the refusal stands.
+    /// </remarks>
+    public TimeSpan LongestWaitForATunerToComeFree { get; }
 }

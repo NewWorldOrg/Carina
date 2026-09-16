@@ -96,4 +96,25 @@ public sealed class LiveSessionSettingsTests
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => new LiveSessionSettings(betweenHolds: TimeSpan.Zero));
     }
+
+    [Fact]
+    public void ByDefaultAViewerWaitsFiveSecondsForATunerAlreadyOnItsWayOut()
+    {
+        Assert.Equal(TimeSpan.FromSeconds(5), new LiveSessionSettings().LongestWaitForATunerToComeFree);
+    }
+
+    [Fact]
+    public void WaitingNoTimeAtAllForATunerOnItsWayOutIsRefused()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => new LiveSessionSettings(longestWaitForATunerToComeFree: TimeSpan.Zero));
+    }
+
+    [Fact]
+    public void AnyPositiveWaitForATunerOnItsWayOutIsKept()
+    {
+        LiveSessionSettings settings = new(longestWaitForATunerToComeFree: TimeSpan.FromSeconds(3));
+
+        Assert.Equal(TimeSpan.FromSeconds(3), settings.LongestWaitForATunerToComeFree);
+    }
 }

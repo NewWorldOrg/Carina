@@ -116,6 +116,12 @@ public sealed class PipedTransportStream : ILiveTransportStream
 
     public bool RefusingToBeHeldOpen { get; set; }
 
+    /// <summary>
+    /// Held here, a stream is one the driver has not let go of yet, which is what a reading being
+    /// torn down looks like to a viewer asking for the one tuner.
+    /// </summary>
+    public TaskCompletionSource? HeldFromBeingLetGo { get; set; }
+
     public bool Disposed => TimesLetGo > 0;
 
     public int TimesLetGo { get; private set; }
@@ -136,12 +142,15 @@ public sealed class PipedTransportStream : ILiveTransportStream
 
     public void NoMore() => Complete();
 
-    public ValueTask DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
+        if (HeldFromBeingLetGo is { } held)
+        {
+            await held.Task;
+        }
+
         TimesLetGo++;
         Complete();
-
-        return ValueTask.CompletedTask;
     }
 
     private void Complete()
