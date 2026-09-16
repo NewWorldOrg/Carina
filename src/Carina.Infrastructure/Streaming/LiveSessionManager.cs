@@ -22,6 +22,8 @@ public sealed class LiveSessionManager(
 
     private readonly Dictionary<(NetworkId Network, ServiceId Service), LiveReception> receptions = [];
 
+    private readonly List<LiveSession> leaving = [];
+
     public IReadOnlyList<LiveSessionKey> Keys
     {
         get
@@ -87,9 +89,10 @@ public sealed class LiveSessionManager(
 
         LiveJoin join = await SeatedAsync(key, cancellationToken);
 
-        return join.Refusal is LiveRefusal.NoTunerFree && await LetGoOfWhatNobodyIsWatchingAsync(key)
-            ? await SeatedAsync(key, cancellationToken)
-            : join;
+        bool freed = join.Refusal is LiveRefusal.NoTunerFree
+                     && await LetGoOfWhatNobodyIsWatchingAsync(key, cancellationToken);
+
+        return freed ? await SeatedAsync(key, cancellationToken) : join;
     }
 
     public async Task<LiveHandover> HandOverAsync(LiveChannelKey channel, CancellationToken cancellationToken)
@@ -168,9 +171,22 @@ public sealed class LiveSessionManager(
             "what the transcoder wrote ended before a viewer could be seated.");
     }
 
-    private async Task<bool> LetGoOfWhatNobodyIsWatchingAsync(LiveSessionKey asked)
+    /// <summary>
+    /// Gives up the readings nobody is watching any more, and waits for the ones already on their
+    /// way out.
+    /// </summary>
+    /// <remarks>
+    /// A session leaves the ledger the moment it is closed, but the tuner behind it is let go of at
+    /// the end of its teardown, by the reading rather than by the session. Between those two points
+    /// the ledger holds nothing to give up and the tuner is not free yet, which is where a viewer
+    /// changing channel on a machine with one tuner was told there was none.
+    /// </remarks>
+    private async Task<bool> LetGoOfWhatNobodyIsWatchingAsync(
+        LiveSessionKey asked,
+        CancellationToken cancellationToken)
     {
         List<LiveSession> given;
+        List<LiveSession> going;
 
         lock (gate)
         {
@@ -178,6 +194,7 @@ public sealed class LiveSessionManager(
             [
                 .. sessions.Values.Where(session => !session.Key.Equals(asked) && session.NobodyIsWatching),
             ];
+            going = [.. StillLettingGo().Where(session => !session.Key.Equals(asked))];
         }
 
         foreach (LiveSession session in given)
@@ -185,14 +202,68 @@ public sealed class LiveSessionManager(
             session.Close();
         }
 
-        await Task.WhenAll(given.Select(session => session.Life));
+        List<LiveSession> letting = [.. given, .. going];
+
+        return letting.Count > 0 && await LetGoOfTheTunerAsync(letting, cancellationToken);
+    }
+
+    /// <summary>
+    /// Waits for what is being let go of to reach the driver, and for no longer than one wait: a
+    /// teardown that will not end is a tuner that never comes free, and the refusal stands.
+    /// </summary>
+    private async Task<bool> LetGoOfTheTunerAsync(
+        IReadOnlyList<LiveSession> letting,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await EndedAsync(letting).WaitAsync(settings.LongestWaitForATunerToComeFree, clock, cancellationToken);
+
+            return true;
+        }
+        catch (TimeoutException)
+        {
+            return false;
+        }
+    }
+
+    private static async Task EndedAsync(IReadOnlyList<LiveSession> letting)
+    {
+        await Task.WhenAll(letting.Select(session => Quietly(session.Life)));
 
         // The tuner is let go of by the reading, not by the session, so the asking viewer waits
         // for the reading to finish rather than being refused by a tuner on its way out.
-        await Task.WhenAll(given.Select(session => session.Reception).Distinct().Select(reading => reading.Life));
-
-        return given.Count > 0;
+        await Task.WhenAll(
+            letting.Select(session => session.Reception).Distinct().Select(reading => Quietly(reading.Life)));
     }
+
+    /// <summary>
+    /// How a teardown ended is that session's own business: what is waited for here is that it is
+    /// over, and the viewer asking for a tuner is not the one to be handed its failure.
+    /// </summary>
+    private static async Task Quietly(Task ending)
+    {
+        try
+        {
+            await ending;
+        }
+        catch (Exception)
+        {
+            return;
+        }
+    }
+
+    /// <summary>
+    /// The sessions that have left the ledger and have not yet let go of what they were reading.
+    /// </summary>
+    private IReadOnlyList<LiveSession> StillLettingGo()
+    {
+        leaving.RemoveAll(HasLetGo);
+
+        return [.. leaving];
+    }
+
+    private static bool HasLetGo(LiveSession gone) => gone.Life.IsCompleted && gone.Reception.Life.IsCompleted;
 
     private LiveSession Expected(LiveSessionKey key)
     {
@@ -267,6 +338,13 @@ public sealed class LiveSessionManager(
             forgotten = sessions.TryGetValue(session.Key, out LiveSession? held)
                         && ReferenceEquals(held, session)
                         && sessions.Remove(session.Key);
+
+            leaving.RemoveAll(HasLetGo);
+
+            if (forgotten)
+            {
+                leaving.Add(session);
+            }
         }
 
         if (forgotten)

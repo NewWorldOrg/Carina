@@ -20,6 +20,8 @@ public sealed class LiveSessionManagerTests
 
     private static readonly TimeSpan HeldAhead = TimeSpan.FromMinutes(10);
 
+    private static readonly TimeSpan WaitForATunerToComeFree = TimeSpan.FromSeconds(5);
+
     private const int TheHoldOnTheSupply = 1;
 
     private static readonly LiveSessionKey EveryFrame = new(new NetworkId(32736), new ServiceId(1024), LiveProfile.Hd30);
@@ -309,6 +311,81 @@ public sealed class LiveSessionManagerTests
         Assert.Equal([AnotherChannel], manager.Keys);
         Assert.Equal(3, supply.Asked);
         Assert.Equal(TheHoldOnTheSupply, clock.Pending);
+    }
+
+    [Fact]
+    public async Task BrPs001AChannelChangeIsNotRefusedWhileTheOneLeftBehindIsStillBeingTornDown()
+    {
+        supply.AsIfThereWereOneTuner = true;
+
+        ILiveViewing watching = await Joined(EveryFrame);
+
+        transcoders.Raised[0].OutputOutlivesIt = true;
+
+        await watching.DisposeAsync();
+
+        clock.Turn(Linger);
+
+        await Eventually.Happens(
+            () => transcoders.Raised[0].Disposed && clock.Pending is TheHoldOnTheSupply + 1,
+            "the teardown is waiting out what the transcoder left behind");
+
+        Assert.Empty(manager.Keys);
+        Assert.False(supply.Opened[0].Disposed, "the reading being torn down has not let the tuner go yet");
+
+        Task<LiveJoin> joining = manager.JoinAsync(AnotherChannel, CancellationToken.None);
+
+        await Eventually.Happens(() => supply.Asked is 2, "the viewer of the other channel reaches the supply");
+
+        clock.Turn(StopGrace);
+
+        await using ILiveViewing next = Seated(await joining);
+
+        Assert.True(supply.Opened[0].Disposed);
+        Assert.Equal([AnotherChannel], manager.Keys);
+        Assert.Equal(3, supply.Asked);
+    }
+
+    [Fact]
+    public async Task BrPs001AChannelChangeIsRefusedWhenTheTunerOnItsWayOutNeverComesFree()
+    {
+        supply.AsIfThereWereOneTuner = true;
+
+        ILiveViewing watching = await Joined(EveryFrame);
+
+        TaskCompletionSource holding = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        supply.Opened[0].HeldFromBeingLetGo = holding;
+
+        await watching.DisposeAsync();
+
+        clock.Turn(Linger);
+
+        await Eventually.Happens(
+            () => manager.Keys.Count is 0,
+            "the session is out of the ledger while the reading behind it will not let the tuner go");
+
+        Assert.False(supply.Opened[0].Disposed);
+
+        Task<LiveJoin> joining = manager.JoinAsync(AnotherChannel, CancellationToken.None);
+
+        await Eventually.Happens(() => supply.Asked is 2, "the viewer of the other channel reaches the supply");
+        await Eventually.Happens(
+            () =>
+            {
+                clock.Turn(WaitForATunerToComeFree);
+
+                return joining.IsCompleted;
+            },
+            "the viewer is answered rather than left waiting on a tuner that never comes free");
+
+        LiveJoin refused = await joining;
+
+        Assert.Equal(LiveRefusal.NoTunerFree, refused.Refusal);
+        Assert.False(supply.Opened[0].Disposed);
+        Assert.Equal(2, supply.Asked);
+
+        holding.SetResult();
     }
 
     [Fact]
@@ -1210,7 +1287,8 @@ public sealed class LiveSessionManagerTests
                 linger: Linger,
                 longestRaise: LongestRaise,
                 heldAhead: HeldAhead,
-                betweenHolds: BetweenHolds),
+                betweenHolds: BetweenHolds,
+                longestWaitForATunerToComeFree: WaitForATunerToComeFree),
             new LiveFanoutSettings(),
             new LiveTranscodeSettings { StopGrace = StopGrace },
             supply,
