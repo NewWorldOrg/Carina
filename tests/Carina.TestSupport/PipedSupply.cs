@@ -14,7 +14,11 @@ public sealed class PipedSupply : ILiveSupply
 
     private int asked;
 
+    private int givenUpOn;
+
     public int Asked => Volatile.Read(ref asked);
+
+    public int GivenUpOn => Volatile.Read(ref givenUpOn);
 
     public IReadOnlyList<PipedTransportStream> Opened
     {
@@ -47,7 +51,16 @@ public sealed class PipedSupply : ILiveSupply
 
         if (HeldUntil is { } held)
         {
-            await held.Task.WaitAsync(cancellationToken);
+            try
+            {
+                await held.Task.WaitAsync(cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                Interlocked.Increment(ref givenUpOn);
+
+                throw;
+            }
         }
 
         if (Refusing is { } why)
