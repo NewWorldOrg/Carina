@@ -76,6 +76,34 @@ public sealed class QualityRuleSelfCheckTests
         Assert.Empty(QualityRules.WhatWritesAnotherDomainsLedger(tree.Root));
     }
 
+    public static TheoryData<string, string> EveryOrdinaryWayOfWritingToAFile => new()
+    {
+        { """File.AppendAllText(path, $"{tuner} {carrierToNoise}");""", "File." },
+        { """await using var log = new StreamWriter(path);""", "StreamWriter" },
+        { """await using var log = new FileStream(path, FileMode.Append);""", "FileStream" },
+        { """Directory.CreateDirectory(root);""", "Directory." },
+        { """Console.WriteLine($"dropped {count}");""", "Console." },
+    };
+
+    [Theory]
+    [MemberData(nameof(EveryOrdinaryWayOfWritingToAFile))]
+    public void DetectsThisWayOfWritingWhatItMeasuredToAFile(string source, string reported)
+    {
+        using var tree = new SourceTree();
+        tree.Write(InTheFeature, source);
+
+        Assert.Contains($"/{InTheFeature} {reported}", QualityRules.WhatWritesWhatItMeasuredToAFile(tree.Root));
+    }
+
+    [Fact(DisplayName = "BR-QD-011: keeping what was measured in the store walks straight past these marks")]
+    public void KeepingWhatWasMeasuredInTheStoreWalksStraightPastTheseMarks()
+    {
+        using var tree = new SourceTree();
+        tree.Write(InTheFeature, """await samples.AddAsync(sample, cancellationToken);""");
+
+        Assert.Empty(QualityRules.WhatWritesWhatItMeasuredToAFile(tree.Root));
+    }
+
     [Theory]
     [MemberData(nameof(EveryOrdinaryWayOfOfferingADeletion))]
     public void DetectsThisWayOfOfferingADeletion(string source, string reported)

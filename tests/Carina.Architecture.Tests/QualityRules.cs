@@ -178,6 +178,16 @@ public static partial class QualityRules
     public static IReadOnlyList<string> WhatDecidesAnAnomalyItDoesNotOwnIn(string source)
         => Found(source, NamesAnAnomalyItDoesNotOwn);
 
+    public static IReadOnlyList<string> WhatWritesWhatItMeasuredToAFile(string directory)
+        => Feature(directory)
+            .SelectMany(file => WhatWritesWhatItMeasuredToAFileIn(file.Source).Select(found => $"{file.Relative} {found}"))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+    public static IReadOnlyList<string> WhatWritesWhatItMeasuredToAFileIn(string source)
+        => Found(source, WritesSomewhereOtherThanTheStore());
+
     public static bool BelongsToTheFeature(string relative, string source)
     {
         ArgumentNullException.ThrowIfNull(relative);
@@ -245,6 +255,9 @@ public static partial class QualityRules
 
     [GeneratedRegex(@"\bHttpDelete\b|\bMapDelete\b|\bEndpointEffect\s*\.\s*Destructive\b")]
     private static partial Regex OffersADeletion();
+
+    [GeneratedRegex(@"\bFile\s*\.|\bDirectory\s*\.|\bFileStream\b|\bStreamWriter\b|\bConsole\s*\.")]
+    private static partial Regex WritesSomewhereOtherThanTheStore();
 
     [GeneratedRegex(@"\s+")]
     private static partial Regex Spaces();
