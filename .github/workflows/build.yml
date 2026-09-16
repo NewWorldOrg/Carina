@@ -78,6 +78,8 @@ jobs:
         with:
           dotnet-version: '10.0.x'
       - run: dotnet restore
+      - name: Room to watch a file for every application these tests start
+        run: sudo sysctl -w fs.inotify.max_user_instances=8192
       - name: The tests that drive the application through its HTTP surface
         run: |
           set -o pipefail
