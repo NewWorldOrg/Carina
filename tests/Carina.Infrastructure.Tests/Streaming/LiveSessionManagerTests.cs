@@ -512,6 +512,9 @@ public sealed class LiveSessionManagerTests
         clock.Turn(Linger);
 
         await Eventually.Happens(() => manager.Keys.Count is 0, "the session nobody waits for is forgotten");
+        await Eventually.Happens(
+            () => supply.GivenUpOn is 1,
+            "the opening nobody waits for is given up on before the supply ever answers");
 
         supply.HeldUntil.SetResult();
 
