@@ -211,17 +211,26 @@ public sealed class LiveSessionManager(
     /// Waits for what is being let go of to reach the driver, and for no longer than one wait: a
     /// teardown that will not end is a tuner that never comes free, and the refusal stands.
     /// </summary>
+    /// <remarks>
+    /// The deadline is held here so that it is let go of with the wait. A timeout handed to
+    /// <c>WaitAsync</c> is disposed of only once the waiter has been let go, which is after the
+    /// viewer has been answered, so the timer it set outlives the wait it was set for.
+    /// </remarks>
     private async Task<bool> LetGoOfTheTunerAsync(
         IReadOnlyList<LiveSession> letting,
         CancellationToken cancellationToken)
     {
+        using CancellationTokenSource deadline = new(settings.LongestWaitForATunerToComeFree, clock);
+        using CancellationTokenSource leash =
+            CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
+
         try
         {
-            await EndedAsync(letting).WaitAsync(settings.LongestWaitForATunerToComeFree, clock, cancellationToken);
+            await EndedAsync(letting).WaitAsync(leash.Token);
 
             return true;
         }
-        catch (TimeoutException)
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             return false;
         }
