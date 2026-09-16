@@ -14,7 +14,9 @@ public sealed record ThumbnailSettings
 
     public int AtMostAPass { get; init; } = 8;
 
-    public int Width { get; init; } = 960;
+    public int Width { get; init; } = 1920;
+
+    public int StepsFromPerfect { get; init; } = 3;
 
     public string Programme { get; init; } = "ffmpeg";
 

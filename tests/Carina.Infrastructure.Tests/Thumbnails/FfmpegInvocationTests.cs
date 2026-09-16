@@ -1,3 +1,5 @@
+using System.Globalization;
+
 using Carina.Domain.Channels;
 using Carina.Domain.Thumbnails;
 using Carina.Infrastructure.Thumbnails;
@@ -6,6 +8,8 @@ namespace Carina.Infrastructure.Tests.Thumbnails;
 
 public sealed class FfmpegInvocationTests
 {
+    private const int StepsFromPerfect = 3;
+
     private static readonly ThumbnailRequest Request =
         new("/srv/recordings/a.m2ts", "/srv/thumbnails/a.jpg", new ServiceId(1032), TimeSpan.FromSeconds(120));
 
@@ -15,7 +19,7 @@ public sealed class FfmpegInvocationTests
     [Fact]
     public void TheSeekComesBeforeTheInputBecauseAfterItTheWholeFileIsDecoded()
     {
-        IReadOnlyList<string> arguments = FfmpegInvocation.Arguments(Request, 960);
+        IReadOnlyList<string> arguments = FfmpegInvocation.Arguments(Request, 960, StepsFromPerfect);
 
         int seek = Index(arguments, "-ss");
         int input = Index(arguments, "-i");
@@ -30,7 +34,8 @@ public sealed class FfmpegInvocationTests
     {
         IReadOnlyList<string> arguments = FfmpegInvocation.Arguments(
             new ThumbnailRequest("/a.m2ts", "/a.jpg", new ServiceId(1032), TimeSpan.FromSeconds(90.5)),
-            960);
+            960,
+            StepsFromPerfect);
 
         Assert.Equal("90.5", arguments[Index(arguments, "-ss") + 1]);
     }
@@ -90,7 +95,7 @@ public sealed class FfmpegInvocationTests
     [Fact]
     public void OneFrameIsAskedForAndItGoesWhereTheRequestSays()
     {
-        IReadOnlyList<string> arguments = FfmpegInvocation.Arguments(Request, 960);
+        IReadOnlyList<string> arguments = FfmpegInvocation.Arguments(Request, 960, StepsFromPerfect);
 
         Assert.Equal("1", arguments[Index(arguments, "-frames:v") + 1]);
         Assert.Equal("/srv/thumbnails/a.jpg", arguments[^1]);
@@ -98,7 +103,7 @@ public sealed class FfmpegInvocationTests
 
     [Fact]
     public void NothingIsReadFromTheTerminalBecauseNobodyIsThere()
-        => Assert.Contains("-nostdin", FfmpegInvocation.Arguments(Request, 960), StringComparer.Ordinal);
+        => Assert.Contains("-nostdin", FfmpegInvocation.Arguments(Request, 960, StepsFromPerfect), StringComparer.Ordinal);
 
     [Theory]
     [InlineData(0)]
@@ -109,7 +114,7 @@ public sealed class FfmpegInvocationTests
         => Assert.Equal(
             "width",
             Assert.Throws<ArgumentOutOfRangeException>(
-                () => FfmpegInvocation.Arguments(Request, width)).ParamName);
+                () => FfmpegInvocation.Arguments(Request, width, StepsFromPerfect)).ParamName);
 
     [Fact]
     public void TheNarrowestPictureThereCanBeIsStillAccepted()
@@ -118,7 +123,7 @@ public sealed class FfmpegInvocationTests
     [Fact]
     public void TheVideoStreamIsTheRecordedServicesOwnAndNotWhicheverFfmpegLikesBest()
     {
-        IReadOnlyList<string> arguments = FfmpegInvocation.Arguments(Request, 960);
+        IReadOnlyList<string> arguments = FfmpegInvocation.Arguments(Request, 960, StepsFromPerfect);
 
         Assert.Equal("p:1032:v:0", arguments[Index(arguments, "-map") + 1]);
     }
@@ -132,7 +137,8 @@ public sealed class FfmpegInvocationTests
     {
         IReadOnlyList<string> arguments = FfmpegInvocation.Arguments(
             new ThumbnailRequest("/a.m2ts", "/a.jpg", new ServiceId(service), TimeSpan.Zero),
-            960);
+            960,
+            StepsFromPerfect);
 
         Assert.Equal(expected, arguments[Index(arguments, "-map") + 1]);
     }
@@ -140,7 +146,7 @@ public sealed class FfmpegInvocationTests
     [Fact]
     public void TheStreamIsNamedAfterTheInputBecauseItIsTheInputItSelectsFrom()
     {
-        IReadOnlyList<string> arguments = FfmpegInvocation.Arguments(Request, 960);
+        IReadOnlyList<string> arguments = FfmpegInvocation.Arguments(Request, 960, StepsFromPerfect);
 
         Assert.True(Index(arguments, "-i") < Index(arguments, "-map"));
     }
@@ -149,12 +155,12 @@ public sealed class FfmpegInvocationTests
     public void NoRequestMeansNoArguments()
         => Assert.Equal(
             "request",
-            Assert.Throws<ArgumentNullException>(() => FfmpegInvocation.Arguments(null!, 960)).ParamName);
+            Assert.Throws<ArgumentNullException>(() => FfmpegInvocation.Arguments(null!, 960, StepsFromPerfect)).ParamName);
 
     [Fact]
     public void AFrameAskedForOnDemandIsHandedBackThroughThePipeAndLeavesNoFileBehind()
     {
-        IReadOnlyList<string> arguments = FfmpegInvocation.FrameArguments(Frame, 960);
+        IReadOnlyList<string> arguments = FfmpegInvocation.FrameArguments(Frame, 960, StepsFromPerfect);
 
         Assert.Equal("-", arguments[^1]);
         Assert.Equal("image2pipe", arguments[Index(arguments, "-f") + 1]);
@@ -165,7 +171,7 @@ public sealed class FfmpegInvocationTests
     [Fact]
     public void AFrameIsReadTheSameWayAStoredPictureIs()
     {
-        IReadOnlyList<string> frame = FfmpegInvocation.FrameArguments(Frame, 960);
+        IReadOnlyList<string> frame = FfmpegInvocation.FrameArguments(Frame, 960, StepsFromPerfect);
 
         Assert.True(Index(frame, "-ss") < Index(frame, "-i"));
         Assert.Equal("42", frame[Index(frame, "-ss") + 1]);
@@ -179,7 +185,7 @@ public sealed class FfmpegInvocationTests
         => Assert.Equal(
             "request",
             Assert.Throws<ArgumentNullException>(
-                () => FfmpegInvocation.FrameArguments(null!, 960)).ParamName);
+                () => FfmpegInvocation.FrameArguments(null!, 960, StepsFromPerfect)).ParamName);
 
     [Theory]
     [InlineData(0)]
@@ -188,18 +194,76 @@ public sealed class FfmpegInvocationTests
         => Assert.Equal(
             "width",
             Assert.Throws<ArgumentOutOfRangeException>(
-                () => FfmpegInvocation.FrameArguments(Frame, width)).ParamName);
+                () => FfmpegInvocation.FrameArguments(Frame, width, StepsFromPerfect)).ParamName);
+
+    [Fact]
+    public void ThePictureIsWrittenAtTheQualityItIsToldAndNotAtWhateverTheProgrammeWouldPick()
+    {
+        IReadOnlyList<string> arguments = FfmpegInvocation.Arguments(Request, 960, StepsFromPerfect);
+
+        Assert.Equal("3", arguments[Index(arguments, "-q:v") + 1]);
+    }
+
+    [Fact]
+    public void TheQualityBelongsToTheOutputAndSoComesAfterTheInputAndBeforeTheDestination()
+    {
+        IReadOnlyList<string> arguments = FfmpegInvocation.Arguments(Request, 960, StepsFromPerfect);
+
+        int input = Index(arguments, "-i");
+        int quality = Index(arguments, "-q:v");
+
+        Assert.True(input < quality, $"-i sits at {input} and -q:v at {quality}");
+        Assert.True(quality + 1 < arguments.Count - 1, $"-q:v sits at {quality} of {arguments.Count}");
+    }
+
+    [Fact]
+    public void AFrameAskedForOnDemandIsWrittenAtTheQualityItIsToldToo()
+    {
+        IReadOnlyList<string> frame = FfmpegInvocation.FrameArguments(Frame, 960, 7);
+
+        Assert.Equal("7", frame[Index(frame, "-q:v") + 1]);
+    }
+
+    [Theory]
+    [InlineData(-3)]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(32)]
+    public void AQualityMjpegCannotDrawIsRefused(int stepsFromPerfect)
+    {
+        Assert.Equal(
+            "stepsFromPerfect",
+            Assert.Throws<ArgumentOutOfRangeException>(
+                () => FfmpegInvocation.Arguments(Request, 960, stepsFromPerfect)).ParamName);
+
+        Assert.Equal(
+            "stepsFromPerfect",
+            Assert.Throws<ArgumentOutOfRangeException>(
+                () => FfmpegInvocation.FrameArguments(Frame, 960, stepsFromPerfect)).ParamName);
+    }
+
+    [Theory]
+    [InlineData(2)]
+    [InlineData(31)]
+    public void TheBestAndTheCoarsestPicturesMjpegDrawsAreBothAccepted(int stepsFromPerfect)
+    {
+        IReadOnlyList<string> arguments = FfmpegInvocation.Arguments(Request, 960, stepsFromPerfect);
+
+        Assert.Equal(
+            stepsFromPerfect.ToString(CultureInfo.InvariantCulture),
+            arguments[Index(arguments, "-q:v") + 1]);
+    }
 
     private static string PosterFilter(int width)
     {
-        IReadOnlyList<string> arguments = FfmpegInvocation.Arguments(Request, width);
+        IReadOnlyList<string> arguments = FfmpegInvocation.Arguments(Request, width, StepsFromPerfect);
 
         return arguments[Index(arguments, "-vf") + 1];
     }
 
     private static string ScrubFilter(int width)
     {
-        IReadOnlyList<string> arguments = FfmpegInvocation.FrameArguments(Frame, width);
+        IReadOnlyList<string> arguments = FfmpegInvocation.FrameArguments(Frame, width, StepsFromPerfect);
 
         return arguments[Index(arguments, "-vf") + 1];
     }

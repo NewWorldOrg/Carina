@@ -121,7 +121,7 @@ public sealed class FfmpegThumbnailRendererTests : IDisposable
     }
 
     [Theory]
-    [InlineData(null, "thumbnail=100,scale=960:trunc(960/dar/2)*2:flags=bicubic,setsar=1")]
+    [InlineData(null, "thumbnail=100,scale=1920:trunc(1920/dar/2)*2:flags=bicubic,setsar=1")]
     [InlineData(640, "thumbnail=100,scale=640:trunc(640/dar/2)*2:flags=bicubic,setsar=1")]
     public async Task TheWidthTheSettingsNameIsTheWidthTheProgrammeIsAskedFor(int? width, string expected)
     {
@@ -246,21 +246,39 @@ public sealed class FfmpegThumbnailRendererTests : IDisposable
             (await Assert.ThrowsAsync<ArgumentNullException>(
                 () => Renderer(Standing("exit 0")).RenderAsync(null!, Cancel))).ParamName);
 
-    private FfmpegThumbnailRenderer Renderer(string programme, TimeProvider? clock = null, int? width = null)
-        => new(
-            width is { } asked
-                ? new ThumbnailSettings
-                {
-                    Programme = programme,
-                    LongestRender = TimeSpan.FromMinutes(5),
-                    Width = asked,
-                }
-                : new ThumbnailSettings
-                {
-                    Programme = programme,
-                    LongestRender = TimeSpan.FromMinutes(5),
-                },
+    [Fact]
+    public async Task TheQualityTheSettingsNameIsTheQualityTheProgrammeIsAskedFor()
+    {
+        string arguments = tree.Under("arguments");
+
+        ThumbnailRender render = await Renderer(Dumping(arguments), stepsFromPerfect: 7)
+            .RenderAsync(Request(), Cancel);
+
+        Assert.True(render.Drew);
+
+        string[] asked = await File.ReadAllLinesAsync(arguments, Cancel);
+
+        Assert.Equal("7", asked[Array.IndexOf(asked, "-q:v") + 1]);
+    }
+
+    private FfmpegThumbnailRenderer Renderer(
+        string programme,
+        TimeProvider? clock = null,
+        int? width = null,
+        int? stepsFromPerfect = null)
+    {
+        ThumbnailSettings unset = new();
+
+        return new FfmpegThumbnailRenderer(
+            new ThumbnailSettings
+            {
+                Programme = programme,
+                LongestRender = TimeSpan.FromMinutes(5),
+                Width = width ?? unset.Width,
+                StepsFromPerfect = stepsFromPerfect ?? unset.StepsFromPerfect,
+            },
             clock ?? TimeProvider.System);
+    }
 
     private string Dumping(string arguments)
         => Standing(
