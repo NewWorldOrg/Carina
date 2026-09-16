@@ -143,7 +143,7 @@ public sealed class RecordingStreamSupervisor(
             return;
         }
 
-        if (FilledTheDisk(session))
+        if (SessionRefusalReading.FilledTheDisk(session))
         {
             await FailOnAFullDiskAsync(row, now, tally, cancellationToken);
 
@@ -166,9 +166,6 @@ public sealed class RecordingStreamSupervisor(
 
         await ReopenAsync(row, session, now, tally, cancellationToken);
     }
-
-    private static bool FilledTheDisk(SessionSnapshot? session)
-        => session is { StopReason: SessionStopReason.RecordingFailed, FailureTitle: SessionRefusalTitles.DiskFull };
 
     private async Task FailOnAFullDiskAsync(
         Recording recording,

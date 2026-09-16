@@ -14,6 +14,8 @@ namespace Carina.Infrastructure.Tests.Recordings;
 
 public sealed class OrphanRecoveryServiceTests
 {
+    private const long WhatLandedBeforeTheDiskFilled = 4_096_000;
+
     private static readonly DateTime Now = Airs.AddMinutes(10);
 
     private static readonly ProgrammeId Broadcast =
@@ -293,6 +295,88 @@ public sealed class OrphanRecoveryServiceTests
         Assert.Equal(1, recovered.Marked);
     }
 
+    [Fact]
+    public async Task BR_KD_004_ARecordingWhoseDiskFilledIsNotPutBackOnAStreamByRecovery()
+    {
+        var ledger = new StreamLedger();
+        Recording running = InFlight(Airs, Airs.AddMinutes(30));
+        ledger.Hold(running);
+
+        var driver = new WatchedDriver { WhenStarted = Live(running, Now) };
+        OrphanRecovered recovered = await Recovery(
+                ledger,
+                driver,
+                new WatchClock(Now),
+                new WeighedFiles { Weighs = WhatLandedBeforeTheDiskFilled })
+            .RecoverAsync(Hello(), [FilledTheDisk(running)], Cancel);
+
+        Recording read = ledger.Read(running.Id);
+
+        Assert.Empty(driver.Started);
+        Assert.Equal(1, recovered.Marked);
+        Assert.False(read.IsInFlight);
+        Assert.Equal(RecordingOutcome.Failed, read.Outcome);
+        Assert.Equal(RecordingFault.DiskExhausted, Assert.Single(read.OutcomeDetail).Fault);
+        Assert.Equal(WhatLandedBeforeTheDiskFilled, read.FileSizeObserved);
+        Assert.Empty(read.Interruptions);
+    }
+
+    [Fact]
+    public async Task ADiskThatFilledIsNamedEvenWhenTheBroadcastWasOverByTheTimeRecoveryLooked()
+    {
+        var ledger = new StreamLedger();
+        Recording running = InFlight(Airs, Now.AddMinutes(-1));
+        ledger.Hold(running);
+
+        var driver = new WatchedDriver();
+
+        await Recovery(
+                ledger,
+                driver,
+                new WatchClock(Now),
+                new WeighedFiles { Weighs = WhatLandedBeforeTheDiskFilled })
+            .RecoverAsync(Hello(), [FilledTheDisk(running)], Cancel);
+
+        Recording read = ledger.Read(running.Id);
+
+        Assert.Empty(driver.Started);
+        Assert.Equal(RecordingOutcome.Failed, read.Outcome);
+        Assert.Equal(RecordingFault.DiskExhausted, Assert.Single(read.OutcomeDetail).Fault);
+    }
+
+    [Theory]
+    [InlineData(SessionStopReason.RecordingFailed, null)]
+    [InlineData(SessionStopReason.DeviceFailed, SessionRefusalTitles.DiskFull)]
+    public async Task ASessionThatDidNotEndOnAFullDiskIsStillOneRecoveryPutsBackOnAStream(
+        SessionStopReason reason,
+        string? title)
+    {
+        var ledger = new StreamLedger();
+        Recording running = InFlight(Airs, Airs.AddMinutes(30));
+        ledger.Hold(running);
+
+        var driver = new WatchedDriver { WhenStarted = Live(running, Now) };
+
+        await Recovery(ledger, driver, new WatchClock(Now))
+            .RecoverAsync(
+                Hello(),
+                [
+                    Concluded(running) with
+                    {
+                        State = SessionState.Failed,
+                        StopReason = reason,
+                        FailureTitle = title,
+                    },
+                ],
+                Cancel);
+
+        Recording read = ledger.Read(running.Id);
+
+        Assert.NotEmpty(driver.Started);
+        Assert.True(read.IsInFlight);
+        Assert.Equal(RecordingFault.LeftRunningUnwatched, Assert.Single(read.Interruptions).Fault);
+    }
+
     private static SessionSnapshot Writing(Recording recording)
         => new(
             RecordingSessions.Named(recording.Id),
@@ -303,6 +387,14 @@ public sealed class OrphanRecoveryServiceTests
         {
             RecordingId = recording.Id.Wire,
             OutputRoot = recording.OutputRoot.Value,
+        };
+
+    private static SessionSnapshot FilledTheDisk(Recording recording)
+        => Concluded(recording) with
+        {
+            State = SessionState.Failed,
+            StopReason = SessionStopReason.RecordingFailed,
+            FailureTitle = SessionRefusalTitles.DiskFull,
         };
 
     private static SessionSnapshot Concluded(Recording recording)

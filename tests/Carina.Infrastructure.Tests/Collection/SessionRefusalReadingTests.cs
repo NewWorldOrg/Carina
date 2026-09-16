@@ -124,6 +124,22 @@ public sealed class SessionRefusalReadingTests
         Assert.False(SessionRefusalReading.IsWorthWaitingOut(null));
     }
 
+    [Theory]
+    [InlineData(SessionStopReason.RecordingFailed, SessionRefusalTitles.DiskFull, true)]
+    [InlineData(SessionStopReason.RecordingFailed, null, false)]
+    [InlineData(SessionStopReason.RecordingFailed, SessionRefusalTitles.NoData, false)]
+    [InlineData(SessionStopReason.DeviceFailed, SessionRefusalTitles.DiskFull, false)]
+    [InlineData(SessionStopReason.EndTimeReached, SessionRefusalTitles.DiskFull, false)]
+    public void OnlyAStreamTheDriverEndedForWantOfRoomSaysTheDiskFilled(
+        SessionStopReason reason,
+        string? title,
+        bool filled)
+        => Assert.Equal(filled, SessionRefusalReading.FilledTheDisk(Failed(title) with { StopReason = reason }));
+
+    [Fact]
+    public void NoSessionAtAllNeverFilledADisk()
+        => Assert.False(SessionRefusalReading.FilledTheDisk(null));
+
     private static DriverProblem Named(string title) => new(title, []);
 
     private static SessionSnapshot Failed(string? title)
