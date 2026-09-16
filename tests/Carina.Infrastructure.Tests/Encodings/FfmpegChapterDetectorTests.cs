@@ -460,9 +460,10 @@ public sealed class FfmpegChapterDetectorTests : IDisposable
     {
         var clock = new HandTurnedClock();
         FfmpegChapterDetector detector = new(
-            new MachineSettings { Programme = Standing($"case \"$*\" in *rawvideo*) sleep 30; exit 0 ;; esac\n{APodOfAdvertisements}") },
+            new MachineSettings { Programme = Standing($"case \"$*\" in *rawvideo*) exec sleep 30 ;; esac\n{APodOfAdvertisements}") },
             new EncodeSettings(),
             clock);
+        int started = 0;
 
         ChapterDetection read = await detector.MarkAsync(
             Source,
@@ -470,9 +471,10 @@ public sealed class FfmpegChapterDetectorTests : IDisposable
             Aligned,
             LearnedAhead(),
             Cores,
-            spawned =>
+            _ =>
             {
-                clock.Turn(AskedOf(spawned).Contains("rawvideo", StringComparison.Ordinal)
+                started++;
+                clock.Turn(started == TheWatchForTheWatermark
                     ? FfmpegChapterDetector.Patience
                     : TimeSpan.FromMinutes(1));
 
@@ -480,6 +482,7 @@ public sealed class FfmpegChapterDetectorTests : IDisposable
             },
             Cancel);
 
+        Assert.Equal(TheWatchForTheWatermark, started);
         Assert.Equal(ChapterVerdict.Marked, read.Verdict);
         Assert.Equal(1, read.Breaks);
         Assert.Null(read.Learned);
@@ -493,9 +496,11 @@ public sealed class FfmpegChapterDetectorTests : IDisposable
         string calls = tree.Under("calls");
         var clock = new HandTurnedClock();
         FfmpegChapterDetector detector = new(
-            new MachineSettings { Programme = Standing($"printf '%s\\n' \"$*\" >> \"{calls}\"\ncase \"$*\" in *blackdetect*) sleep 30; exit 0 ;; esac\n{APodOfAdvertisements}") },
+            new MachineSettings { Programme = Standing($"printf '%s\\n' \"$*\" >> \"{calls}\"\ncase \"$*\" in *blackdetect*) exec sleep 30 ;; esac\n{APodOfAdvertisements}") },
             new EncodeSettings(),
             clock);
+
+        int started = 0;
 
         ChapterDetection read = await detector.MarkAsync(
             Source,
@@ -503,9 +508,11 @@ public sealed class FfmpegChapterDetectorTests : IDisposable
             Aligned,
             LearnedAhead(),
             Cores,
-            spawned =>
+            _ =>
             {
-                if (AskedOf(spawned).Contains("blackdetect", StringComparison.Ordinal))
+                started++;
+
+                if (started == TheFirstLookAtThePicture)
                 {
                     clock.Turn(FfmpegChapterDetector.Patience);
                 }
@@ -514,22 +521,15 @@ public sealed class FfmpegChapterDetectorTests : IDisposable
             },
             Cancel);
 
+        Assert.Equal(TheFirstLookAtThePicture, started);
         Assert.DoesNotContain(File.ReadAllLines(calls), line => line.Contains("rawvideo", StringComparison.Ordinal));
         Assert.Null(read.Learned);
         Assert.Contains("no time was left to watch the picture for the station's watermark, so no watermark was learned or used", read.Note, StringComparison.Ordinal);
     }
 
-    private static string AskedOf(RunningProgramme spawned)
-    {
-        try
-        {
-            return File.ReadAllText($"/proc/{spawned.ProcessId.ToString(CultureInfo.InvariantCulture)}/cmdline");
-        }
-        catch (IOException)
-        {
-            return string.Empty;
-        }
-    }
+    private const int TheFirstLookAtThePicture = 2;
+
+    private const int TheWatchForTheWatermark = 4;
 
     private const int MarkLeft = 400;
 
