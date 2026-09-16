@@ -408,7 +408,10 @@ public sealed class TunerSessionManagerTests : IDisposable
     [Fact]
     public void ManySimultaneousRequestsForOneTuningAllEndUpOnTheOneDevice()
     {
-        TunerSessionManager manager = Manager();
+        TunerSessionManager manager = Manager(
+            Configuration,
+            new OneTunerDeviceFactory(new PacedTunerDevice())
+        );
         var granted = new ConcurrentBag<TunerSession>();
 
         Parallel.For(
