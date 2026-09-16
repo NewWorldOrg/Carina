@@ -10,6 +10,7 @@ namespace Carina.Driver.Tests;
 public sealed class RecordingMeasurementTests
 {
     private const int VideoPid = 0x0100;
+    private const int NullPid = 0x1FFF;
     private const int PacketLength = 188;
     private const long Second = 90_000;
 
@@ -301,6 +302,31 @@ public sealed class RecordingMeasurementTests
             );
 
         public void Dispose() => Disposed = true;
+    }
+
+    [Fact]
+    public void NothingAStreamIsAllowedToDoIsCountedAsALoss()
+    {
+        var stream = new List<byte>();
+
+        stream.AddRange(Packet(VideoPid, 0, pcr: 0));
+        stream.AddRange(Packet(VideoPid, 1));
+        stream.AddRange(Packet(VideoPid, 1));
+        stream.AddRange(Packet(VideoPid, 6, discontinuity: true));
+        stream.AddRange(Packet(NullPid, 11));
+        stream.AddRange(Packet(NullPid, 3));
+        stream.AddRange(Packet(VideoPid, 7));
+
+        using TunerSession session = Ran([.. stream], PacketLength * 100);
+        SessionCounters counters = session.Counters.Snapshot();
+
+        Assert.Equal(0, counters.Drops);
+        Assert.Equal(1, counters.Duplicates);
+        Assert.Equal(1, counters.Discontinuities);
+        Assert.Equal(5, counters.Packets);
+        Assert.True(counters.CcMeasured);
+        Assert.NotNull(counters.Positions);
+        Assert.Empty(counters.Positions.Buckets);
     }
 
     [Fact]

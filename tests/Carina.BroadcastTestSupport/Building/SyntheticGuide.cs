@@ -12,6 +12,8 @@ public sealed record SyntheticProgramme(int EventId, DateTimeOffset StartsAt, Ti
     public IReadOnlyList<(int ServiceId, int EventId)> SharedWith { get; init; } = [];
 
     public IReadOnlyList<(int ServiceId, int EventId)> RelaysTo { get; init; } = [];
+
+    public int RunningStatus { get; init; } = (int)Carina.Broadcast.Tables.RunningStatus.NotRunning;
 }
 
 public sealed record SyntheticGuideService(int ServiceId, string Name)
@@ -36,6 +38,8 @@ public sealed record SyntheticGuide
     public bool WithExtended { get; init; } = true;
 
     public bool WithDescription { get; init; } = true;
+
+    public bool PresentFollowing { get; init; }
 
     public int CorruptSections { get; init; }
 
@@ -73,6 +77,11 @@ public sealed record SyntheticGuide
 
         foreach (SyntheticGuideService service in Services)
         {
+            if (PresentFollowing)
+            {
+                yield return PresentFollowingSection(service);
+            }
+
             yield return EventSection(
                 EventInformationTable.FirstScheduleActualTableId,
                 service,
@@ -109,6 +118,23 @@ public sealed record SyntheticGuide
             }.ToBody(),
         }.ToBytes();
 
+    private byte[] PresentFollowingSection(SyntheticGuideService service)
+        => new SectionWriter
+        {
+            TableId = EventInformationTable.PresentFollowingActualTableId,
+            TableIdExtension = service.ServiceId,
+            VersionNumber = 1,
+            SectionNumber = PresentFollowingWatch.PresentSectionNumber,
+            LastSectionNumber = PresentFollowingWatch.FollowingSectionNumber,
+            Body = new EitWriter
+            {
+                TransportStreamId = TransportStreamId,
+                OriginalNetworkId = NetworkId,
+                LastTableId = EventInformationTable.PresentFollowingActualTableId,
+                Events = [.. service.Programmes.Select(programme => Event(service, programme))],
+            }.ToBody(),
+        }.ToBytes();
+
     private static byte[] Event(SyntheticGuideService service, SyntheticProgramme programme)
     {
         var descriptors = new List<byte[]>();
@@ -136,7 +162,8 @@ public sealed record SyntheticGuide
             programme.EventId,
             programme.StartsAt,
             programme.Runs,
-            DescriptorWriter.Loop([.. descriptors]));
+            DescriptorWriter.Loop([.. descriptors]),
+            programme.RunningStatus);
     }
 
     private byte[] DescriptionSection()
