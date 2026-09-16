@@ -94,7 +94,16 @@ public sealed class OrphanRecoveryService(
         Tally tally,
         CancellationToken cancellationToken)
     {
-        SessionSnapshot? standing = StillWriting(sessions, recording);
+        SessionSnapshot? named = SessionOf(sessions, recording);
+
+        if (SessionRefusalReading.FilledTheDisk(named))
+        {
+            await FailOnAFullDiskAsync(recording, now, tally, cancellationToken);
+
+            return;
+        }
+
+        SessionSnapshot? standing = StillWriting(named);
         var sighting = new OrphanSighting(
             another,
             standing is not null,
@@ -269,6 +278,48 @@ public sealed class OrphanRecoveryService(
             weighed);
     }
 
+    /// <summary>
+    /// A recording the driver stopped writing because the disk it was on had no room left is not
+    /// put back on a stream: the disk is the same one, and a second attempt writes nothing. It ends
+    /// here naming the full disk and keeps the file it has. This is the reading the pass that
+    /// watches a running recording already makes, and recovery has to make it too — a driver that
+    /// is replaced, or an application that is restarted, would otherwise walk past the reason and
+    /// open the recording again on a disk that is still full.
+    /// </summary>
+    private async Task FailOnAFullDiskAsync(
+        Recording recording,
+        DateTime now,
+        Tally tally,
+        CancellationToken cancellationToken)
+    {
+        long? weighed = await weigher.WeighAsync(recording.OutputRoot, recording.FileName, cancellationToken);
+
+        bool failed = await ApplyAsync(
+            recording.Id,
+            loaded =>
+            {
+                loaded.Note(new OutcomeDetail(RecordingFault.DiskExhausted, null, string.Empty, now));
+                loaded.Settle(RecordingOutcome.Failed, weighed ?? 0, now);
+
+                return true;
+            },
+            cancellationToken);
+
+        if (!failed)
+        {
+            return;
+        }
+
+        tally.Marked++;
+
+        logger.LogWarning(
+            "Recording {Recording} was left by a stream the driver ended for want of room on the disk, so it "
+            + "fails here rather than being opened again onto a disk with no room; its file of {Bytes} byte(s) "
+            + "stays where it is.",
+            recording.Id.Wire,
+            weighed);
+    }
+
     private void Report(OrphanRecovered recovered)
     {
         if (!recovered.SaysAnything)
@@ -290,15 +341,13 @@ public sealed class OrphanRecoveryService(
     private static bool WindowIsStillOpen(Recording recording, DateTime now)
         => recording.AbortedAt is null && recording.ExpectedWindowEnd > now;
 
-    private static SessionSnapshot? StillWriting(IReadOnlyList<SessionSnapshot> sessions, Recording recording)
+    private static SessionSnapshot? SessionOf(IReadOnlyList<SessionSnapshot> sessions, Recording recording)
     {
         SessionId named = RecordingSessions.Named(recording.Id);
 
         foreach (SessionSnapshot session in sessions)
         {
-            if (session.SessionId.Equals(named)
-                && !session.Concluded
-                && session.State is SessionState.Requested or SessionState.Active or SessionState.Stopping)
+            if (session.SessionId.Equals(named))
             {
                 return session;
             }
@@ -306,6 +355,15 @@ public sealed class OrphanRecoveryService(
 
         return null;
     }
+
+    private static SessionSnapshot? StillWriting(SessionSnapshot? session)
+        => session is
+        {
+            Concluded: false,
+            State: SessionState.Requested or SessionState.Active or SessionState.Stopping,
+        }
+            ? session
+            : null;
 
     private async Task<GuideStanding> GuideSaysAsync(Recording recording, CancellationToken cancellationToken)
     {
