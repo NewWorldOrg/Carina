@@ -234,6 +234,24 @@ internal static class RecordingTickFixture
         return programmes;
     }
 
+    public static HeldProgrammes RunningUntil(DateTime endsAt)
+    {
+        var programmes = new HeldProgrammes();
+
+        programmes.Programmes.Add(Programme.Discover(
+            new ProgrammeBroadcast(
+                new ProgrammeId(new NetworkId(32736), new ServiceId(1025), new EventId(9)),
+                new TransportStreamId(32736),
+                Airs,
+                endsAt,
+                "A programme",
+                "What it is about",
+                false),
+            Airs.AddHours(-3)));
+
+        return programmes;
+    }
+
     public static Reservation Planned(RecordingTick due, RuleId? ruleId = null)
         => Reservation.Plan(
             due.Id,
