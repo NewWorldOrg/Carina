@@ -300,11 +300,19 @@ public sealed class TunerSessionManager(
             );
         }
 
-        if (TryGet(request.SessionId, out _))
+        if (sessions.ContainsKey(request.SessionId))
         {
             return SessionStart.Refused(
                 SessionRefusal.DuplicateSession,
                 $"The session '{request.SessionId}' already exists."
+            );
+        }
+
+        if (WhatEndedUnder(request.SessionId) is { } before && !CarriesOn(before, request))
+        {
+            return SessionStart.Refused(
+                SessionRefusal.DuplicateSession,
+                $"The session '{request.SessionId}' has already ended, and this is not the recording it was writing."
             );
         }
 
@@ -1036,10 +1044,30 @@ public sealed class TunerSessionManager(
             return true;
         }
 
-        session = ended.FirstOrDefault(candidate => candidate.SessionId == sessionId);
+        session = WhatEndedUnder(sessionId);
 
         return session is not null;
     }
+
+    /// <summary>
+    /// The last session of that name this driver saw end. A recording carried on into the file it
+    /// already has comes back under the name it already has, so one name can have ended more than
+    /// once, and what a caller asks about is the run that ended last.
+    /// </summary>
+    private TunerSession? WhatEndedUnder(SessionId sessionId) =>
+        ended.LastOrDefault(candidate => candidate.SessionId == sessionId);
+
+    /// <summary>
+    /// The driver keeps a session after it ends so that a caller asking about one is told it ended
+    /// rather than that it never was. A recording's session carries the recording's own name, so
+    /// the side that puts a recording back on a stream asks under exactly that name: whether an
+    /// append is a resumption or an accident is the ledger's to decide and not this side's, so the
+    /// name is given back to the recording the ended session was writing, and to nothing else.
+    /// </summary>
+    private static bool CarriesOn(TunerSession ended, StartSessionRequest request) =>
+        request.Purpose is SessionPurpose.Recording
+        && request.RecordingId is { Length: > 0 } recordingId
+        && string.Equals(ended.RecordingId, recordingId, StringComparison.Ordinal);
 
     public SessionExtension Extend(SessionId sessionId, ExtendSessionRequest request)
     {

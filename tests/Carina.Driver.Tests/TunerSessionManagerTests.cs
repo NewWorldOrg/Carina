@@ -62,7 +62,8 @@ public sealed class TunerSessionManagerTests : IDisposable
         TunerKind kind = TunerKind.Terrestrial,
         string? outputRoot = "primary",
         DateTimeOffset? endsAt = null,
-        int channel = 55
+        int channel = 55,
+        string? recordingId = null
     ) =>
         new()
         {
@@ -72,7 +73,7 @@ public sealed class TunerSessionManagerTests : IDisposable
             DeviceId = deviceId,
             OutputRoot = purpose is SessionPurpose.Recording ? outputRoot : null,
             EndsAt = endsAt ?? (purpose is SessionPurpose.Recording ? Start.AddHours(1) : null),
-            RecordingId = purpose is SessionPurpose.Recording ? $"k-{sessionId}" : null,
+            RecordingId = purpose is SessionPurpose.Recording ? recordingId ?? $"k-{sessionId}" : null,
         };
 
     private static TunerSession Begin(
@@ -487,7 +488,7 @@ public sealed class TunerSessionManagerTests : IDisposable
     }
 
     [Fact]
-    public void TheIdentifierOfAFinishedSessionIsNotReused()
+    public void TheIdentifierOfAFinishedSessionIsNotReusedByAnythingButTheRecordingItWasWriting()
     {
         TunerSessionManager manager = Manager();
 
@@ -495,8 +496,27 @@ public sealed class TunerSessionManagerTests : IDisposable
 
         Assert.Equal(
             SessionRefusal.DuplicateSession,
-            RefusalFor(manager, Request("s-1", "adapter3"))
+            RefusalFor(manager, Request("s-1", "adapter3", recordingId: "k-s-2"))
         );
+        Assert.Equal(
+            SessionRefusal.DuplicateSession,
+            RefusalFor(manager, Request("s-1", "adapter3", purpose: SessionPurpose.Live))
+        );
+    }
+
+    [Fact]
+    public void ARecordingIsPutBackOnAStreamUnderTheNameItAlreadyHasOnceItsSessionEnded()
+    {
+        TunerSessionManager manager = Manager();
+
+        StopAndWait(Begin(manager, "rec-1", "adapter0"));
+
+        SessionStart again = manager.Begin(Request("rec-1", "adapter3"));
+
+        Assert.Equal(SessionRefusal.None, again.Refusal);
+        Assert.True(again.TryGetSession(out TunerSession? carried));
+
+        StopAndWait(carried);
     }
 
     [Fact]
