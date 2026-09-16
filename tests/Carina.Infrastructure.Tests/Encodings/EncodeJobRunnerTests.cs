@@ -20,6 +20,21 @@ public sealed class EncodeJobRunnerTests
         printf 'out_time_us=10000000\nspeed=2.0x\nprogress=end\n'
         """;
 
+    /// <summary>
+    /// The same run, made to outlive the look at it. A programme that exits at once can be gone
+    /// before its start time is read, and is handed over as no identity at all when it is; so the
+    /// first thing this one writes is more than a pipe holds, and nothing reads that pipe until the
+    /// programme has been identified and written into the ledger.
+    /// </summary>
+    private const string OutlivesTheLookAndReportsProgress = """
+        head -c 70000 /dev/zero | tr '\0' '.'
+        printf '\n'
+        printf 'out_time_us=0\nspeed=1.0x\nprogress=continue\n'
+        printf 'out_time_us=5000000\nspeed=2.0x\nprogress=continue\n'
+        printf 'the picture' > "$destination"
+        printf 'out_time_us=10000000\nspeed=2.0x\nprogress=end\n'
+        """;
+
     [Fact(DisplayName = "BR-ES-001: a job is run to its end: the programme writes the work file the ledger was told about, the artefact is placed by the ledger, and the job completes")]
     public async Task AJobIsRunToItsEnd()
     {
@@ -454,7 +469,7 @@ public sealed class EncodeJobRunnerTests
     public async Task TheProgrammesIdAndStartAreWrittenIntoTheLedgerBeforeItReportsAnything()
     {
         using var harness = new EncodeHarness();
-        harness.Standing(WritesTheWorkFileAndReportsProgress);
+        harness.Standing(OutlivesTheLookAndReportsProgress);
         EncodeJob job = harness.Running(harness.Recorded().Id, harness.Defined().Id);
         List<(RunningProgramme? Programme, EncodeHeadway? Headway, EncodeJobStatus Status)> saved = [];
         harness.Jobs.WhenSaving = saving => saved.Add((saving.Programme, saving.Headway, saving.Status));
