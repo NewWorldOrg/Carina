@@ -36,6 +36,14 @@ public sealed class QualityRuleTests
     public void NothingInTheQualityFeatureDecidesAnAnomalyAnotherDomainOwns()
         => Assert.Empty(QualityRules.WhatDecidesAnAnomalyItDoesNotOwn(RepositoryLayout.SourceDirectory));
 
+    [Fact(DisplayName = "BR-QD-011: nothing in the quality feature writes what it measured to a file")]
+    public void NothingInTheQualityFeatureWritesWhatItMeasuredToAFile()
+        => Assert.Empty(QualityRules.WhatWritesWhatItMeasuredToAFile(RepositoryLayout.SourceDirectory));
+
+    [Fact]
+    public void TheMarksThatLookForAFileBeingWrittenStillFindOneWhereItIs()
+        => Assert.NotEmpty(QualityRules.WhatWritesWhatItMeasuredToAFileIn(Source("Carina.Infrastructure/Migration/HardLinkMigrationCarrier.cs")));
+
     [Fact]
     public void TheMarksThatLookForAForeignKeyStillFindOneWhereTheyAreDeclared()
         => Assert.NotEmpty(QualityRules.WhatDeclaresAForeignKeyIn(Source("Carina.Infrastructure/Persistence/Configurations/EncodeJobConfiguration.cs")));
