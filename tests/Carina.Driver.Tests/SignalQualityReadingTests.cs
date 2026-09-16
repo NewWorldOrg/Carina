@@ -27,9 +27,9 @@ public sealed class SignalQualityReadingTests
     }
 
     [Theory]
-    [InlineData(17)]
-    [InlineData(-71_189)]
-    [InlineData(-33_674)]
+    [InlineData(40)]
+    [InlineData(-9_000)]
+    [InlineData(-45_500)]
     public void AnUnlockedFrontendsPlausibleLookingCarrierToNoiseIsNotAMeasurement(
         long millidecibels
     )
@@ -78,9 +78,9 @@ public sealed class SignalQualityReadingTests
     }
 
     [Theory]
-    [InlineData(17)]
-    [InlineData(-71_189)]
-    [InlineData(-33_674)]
+    [InlineData(40)]
+    [InlineData(-9_000)]
+    [InlineData(-45_500)]
     public void ACarrierToNoiseReadAcrossALockThatDroppedIsNotAMeasurement(long millidecibels)
     {
         CarrierToNoise reading = SignalQualityReading.CarrierToNoiseFrom(

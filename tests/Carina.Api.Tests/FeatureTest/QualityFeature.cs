@@ -126,7 +126,7 @@ internal sealed class QualityFeature : IAsyncDisposable
         long samples = 360,
         long locked = 360,
         long unreachable = 0,
-        int? carrierToNoise = 34_779,
+        int? carrierToNoise = 31_000,
         double? bitErrorRate = 0,
         IReadOnlyList<string>? notRead = null)
     {
