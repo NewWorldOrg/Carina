@@ -7,6 +7,8 @@ public sealed class TransportStreamWriter
     public const int PayloadCapacity = PacketSize - HeaderSize;
     public const byte SyncByte = 0x47;
     public const byte StuffingByte = 0xFF;
+    public const int ProgrammeClockFieldLength = 7;
+    public const long ProgrammeClockTicksPerSecond = 90_000;
 
     private readonly List<byte[]> packets = [];
     private readonly int pid;
@@ -28,8 +30,26 @@ public sealed class TransportStreamWriter
         int? continuityCounter = null,
         bool transportError = false,
         int scramblingControl = 0,
-        bool unitStart = false)
+        bool unitStart = false,
+        long? programmeClock = null,
+        bool discontinuity = false)
     {
+        if (programmeClock is not null && adaptationFieldLength < ProgrammeClockFieldLength)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(adaptationFieldLength),
+                adaptationFieldLength,
+                $"A packet saying what time it is needs {ProgrammeClockFieldLength} bytes of adaptation field to say it in.");
+        }
+
+        if (discontinuity && adaptationFieldLength < 1)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(adaptationFieldLength),
+                adaptationFieldLength,
+                "A packet declaring a break needs an adaptation field to declare it in.");
+        }
+
         int adaptation = adaptationFieldLength >= 0 ? adaptationFieldLength + 1 : 0;
         int pointer = pointerField is null ? 0 : 1;
         int capacity = PayloadCapacity - adaptation - pointer;
@@ -61,7 +81,13 @@ public sealed class TransportStreamWriter
 
             if (adaptationFieldLength > 0)
             {
-                packet[at] = 0x00;
+                packet[at] = (byte)((discontinuity ? 0x80 : 0x00) | (programmeClock is null ? 0x00 : 0x10));
+
+                if (programmeClock is { } reference)
+                {
+                    WriteProgrammeClock(packet.AsSpan(at + 1), reference);
+                }
+
                 at += adaptationFieldLength;
             }
         }
@@ -75,6 +101,16 @@ public sealed class TransportStreamWriter
         packets.Add(packet);
 
         return this;
+    }
+
+    private static void WriteProgrammeClock(Span<byte> field, long reference)
+    {
+        field[0] = (byte)(reference >> 25);
+        field[1] = (byte)((reference >> 17) & 0xFF);
+        field[2] = (byte)((reference >> 9) & 0xFF);
+        field[3] = (byte)((reference >> 1) & 0xFF);
+        field[4] = (byte)(((reference & 1) << 7) | 0x7E);
+        field[5] = 0x00;
     }
 
     public TransportStreamWriter AdaptationOnlyPacket(int? continuityCounter = null)
