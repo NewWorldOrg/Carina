@@ -401,6 +401,22 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
         Assert.Equal(properties["quality"]!.ToJsonString(), properties["scrambleQuality"]!.ToJsonString());
     }
 
+    [Fact]
+    public async Task WhatARecordingSaysAboutEncodingCarriesWhetherItAsksForOneBesideWhereItStands()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode encode = document["components"]!["schemas"]!["RecordingEncodeResponder"]!;
+        JsonNode properties = encode["properties"]!;
+
+        Assert.Equal(
+            ["standing", "whenRecorded"],
+            properties.AsObject().Select(entry => entry.Key).ToArray());
+        Assert.Equal("boolean", properties["whenRecorded"]!["type"]!.GetValue<string>());
+        Assert.Equal(
+            ["standing", "whenRecorded"],
+            encode["required"]!.AsArray().Select(name => name!.GetValue<string>()).Order(StringComparer.Ordinal).ToArray());
+    }
+
     private static bool SaysItIsAString(JsonNode? declared)
         => declared switch
         {

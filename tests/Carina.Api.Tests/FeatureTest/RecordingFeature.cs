@@ -286,7 +286,8 @@ internal sealed class RecordingFeature : IAsyncDisposable
         string? groupKey = null,
         BroadcastGroupRole groupRole = BroadcastGroupRole.Standalone,
         AudioMode audio = AudioMode.Undetermined,
-        int sounds = ProgrammeSnapshot.SoundsUnannounced)
+        int sounds = ProgrammeSnapshot.SoundsUnannounced,
+        bool encodeWhenRecorded = true)
     {
         DateTime started = startedAt ?? Noon;
 
@@ -302,7 +303,8 @@ internal sealed class RecordingFeature : IAsyncDisposable
             groupKey is null ? null : new BroadcastGroupKey(groupKey),
             groupRole,
             started,
-            new TunerDeviceId("pt3-0"));
+            new TunerDeviceId("pt3-0"),
+            encodeWhenRecorded);
     }
 
     public Recording Held(
@@ -318,7 +320,8 @@ internal sealed class RecordingFeature : IAsyncDisposable
         string? groupKey = null,
         BroadcastGroupRole groupRole = BroadcastGroupRole.Standalone,
         AudioMode audio = AudioMode.Undetermined,
-        int sounds = ProgrammeSnapshot.SoundsUnannounced)
+        int sounds = ProgrammeSnapshot.SoundsUnannounced,
+        bool encodeWhenRecorded = true)
     {
         Recording recording = Begin(
             RecordingId.New(),
@@ -334,7 +337,8 @@ internal sealed class RecordingFeature : IAsyncDisposable
             groupKey,
             groupRole,
             audio,
-            sounds);
+            sounds,
+            encodeWhenRecorded);
 
         Recordings.Recordings.Add(recording);
 
