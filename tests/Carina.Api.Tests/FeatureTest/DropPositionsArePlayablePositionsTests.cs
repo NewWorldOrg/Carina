@@ -9,6 +9,7 @@ using Carina.Domain.Integrity;
 using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 using Carina.Domain.Streaming;
+using Carina.Domain.Viewing;
 using Carina.TestSupport;
 
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -41,6 +42,7 @@ internal sealed class MarkedRecordingFeature : IAsyncDisposable
                 services.AddSingleton<IEncodeStandingReader>(Jobs);
                 services.AddSingleton<IEncodeJobRepository>(Jobs);
                 services.AddSingleton<IEncodeProfileRepository>(Profiles);
+                services.AddSingleton<IPlaybackPositionRepository>(new HeldPlaybackPositions());
                 services.AddSingleton<IQualityThresholdRepository>(Thresholds);
                 services.AddSingleton<IAppEventPublisher>(Events);
                 services.AddSingleton(new IntegritySettings

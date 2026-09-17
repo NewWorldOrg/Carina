@@ -37,6 +37,9 @@ public sealed record QueryInput
     public static QueryInput Seconds(string name, string says)
         => new(name, says, JsonSchemaType.Number, "double", JsonValue.Create(0d), null);
 
+    public static QueryInput SecondsWithNoFixedDefault(string name, string says)
+        => new(name, says, JsonSchemaType.Number, "double", null, null);
+
     public static QueryInput OneOfThese(string name, string says, IReadOnlyList<string> values, string? ordinarily)
     {
         ArgumentNullException.ThrowIfNull(values);

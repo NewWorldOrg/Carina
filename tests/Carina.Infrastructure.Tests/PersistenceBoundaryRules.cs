@@ -14,6 +14,7 @@ public enum PersistenceFamily
     Encodings,
     Quality,
     Migration,
+    Viewing,
 }
 
 public static class PersistenceBoundaryRules
@@ -31,6 +32,7 @@ public static class PersistenceBoundaryRules
             ["Encodings"] = PersistenceFamily.Encodings,
             ["Quality"] = PersistenceFamily.Quality,
             ["Migration"] = PersistenceFamily.Migration,
+            ["Viewing"] = PersistenceFamily.Viewing,
             ["Auth"] = PersistenceFamily.Unrelated,
         };
 

@@ -1,5 +1,6 @@
 using System.Globalization;
 
+using Carina.Api.Authentication;
 using Carina.Api.Common;
 using Carina.Api.Responder;
 using Carina.Api.Responder.Playback;
@@ -9,6 +10,7 @@ using Carina.Domain.Encodings;
 using Carina.Domain.Playback;
 using Carina.Domain.Recordings;
 using Carina.Domain.Streaming;
+using Carina.Domain.Viewing;
 
 using Microsoft.Net.Http.Headers;
 
@@ -56,12 +58,14 @@ public static class PlayDelivery
         string id,
         PlaybackService playback,
         IOnTheFlyPlayer player,
-        IEncodeChapterRepository chapters)
+        IEncodeChapterRepository chapters,
+        IPlaybackPositionRepository positions)
     {
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(playback);
         ArgumentNullException.ThrowIfNull(player);
         ArgumentNullException.ThrowIfNull(chapters);
+        ArgumentNullException.ThrowIfNull(positions);
 
         context.Response.Headers.CacheControl = NeverCached;
         context.Response.Headers.Vary = HeaderNames.Accept;
@@ -73,7 +77,9 @@ public static class PlayDelivery
             return;
         }
 
-        if (Asked(context.Request.Query[Position]) is not { } from)
+        AskedPosition asked = Read(context.Request.Query[Position]);
+
+        if (!asked.Understood)
         {
             await RefuseAsync(context, StatusCodes.Status400BadRequest, ThePositionsThereAre);
 
@@ -98,6 +104,9 @@ public static class PlayDelivery
             return;
         }
 
+        TimeSpan? leftOffAt = await WhereTheWatchingGotToAsync(context, recordingId, positions);
+        TimeSpan from = asked.Named ?? leftOffAt ?? TimeSpan.Zero;
+
         ServiceResult<PlaybackOffer, PlaybackFailure> offered =
             await playback.OfferAsync(recordingId, sound.Track, context.RequestAborted);
 
@@ -113,6 +122,7 @@ public static class PlayDelivery
                     context,
                     narrowed.Plan,
                     narrowed.Handover,
+                    leftOffAt,
                     TheMainSoundAlone,
                     await MarkedAsync(narrowed, chapters, context.RequestAborted));
 
@@ -137,6 +147,7 @@ public static class PlayDelivery
                 context,
                 plan,
                 handover,
+                leftOffAt,
                 await OfferedAsync(plan, handover, service, announced, player, context.RequestAborted),
                 await MarkedAsync(offered.Data!, chapters, context.RequestAborted));
 
@@ -247,6 +258,7 @@ public static class PlayDelivery
         HttpContext context,
         PlaybackPlan plan,
         PlaybackFile handover,
+        TimeSpan? leftOffAt,
         IReadOnlyList<SoundTrack> sounds,
         IReadOnlyList<PlaybackChapterResponder> chapters)
     {
@@ -254,8 +266,29 @@ public static class PlayDelivery
 
         await context.Response.WriteAsJsonAsync(
             BaseResponder<PlaybackPlanResponder>.Success(
-                PlaybackPlanResponder.Of(plan, handover, MediaTypeOf(plan, handover), sounds, chapters)),
+                PlaybackPlanResponder.Of(
+                    plan,
+                    handover,
+                    MediaTypeOf(plan, handover),
+                    leftOffAt,
+                    sounds,
+                    chapters)),
             context.RequestAborted);
+    }
+
+    private static async Task<TimeSpan?> WhereTheWatchingGotToAsync(
+        HttpContext context,
+        RecordingId recording,
+        IPlaybackPositionRepository positions)
+    {
+        if (SessionClaims.SubjectOf(context.User) is not { } viewer)
+        {
+            return null;
+        }
+
+        PlaybackPosition? kept = await positions.FindAsync(recording, viewer, context.RequestAborted);
+
+        return kept?.Position;
     }
 
     private static async Task<IReadOnlyList<PlaybackChapterResponder>> MarkedAsync(
@@ -376,21 +409,21 @@ public static class PlayDelivery
     private static string MediaTypeOf(PlaybackPlan plan, PlaybackFile handover)
         => plan.Transcodes ? PlaybackMediaType.Mp4 : PlaybackMediaType.Of(handover.Name);
 
-    private static TimeSpan? Asked(string? position)
+    private static AskedPosition Read(string? position)
     {
         if (string.IsNullOrWhiteSpace(position))
         {
-            return TimeSpan.Zero;
+            return AskedPosition.Unasked;
         }
 
         if (!double.TryParse(position, NumberStyles.Float, CultureInfo.InvariantCulture, out double seconds))
         {
-            return null;
+            return AskedPosition.NotOneOfThese;
         }
 
         return double.IsFinite(seconds) && seconds >= 0 && seconds <= TimeSpan.MaxValue.TotalSeconds
-            ? TimeSpan.FromSeconds(seconds)
-            : null;
+            ? AskedPosition.At(TimeSpan.FromSeconds(seconds))
+            : AskedPosition.NotOneOfThese;
     }
 
     private static Task RefuseAsync(HttpContext context, int status, string said)
@@ -417,6 +450,15 @@ public static class PlayDelivery
         OnTheFlyRefusal.NothingCameOut => "The transcoder ended without producing a picture of this recording.",
         _ => "The transcoder produced nothing in the time it is given to start.",
     };
+
+    private readonly record struct AskedPosition(bool Understood, TimeSpan? Named)
+    {
+        public static readonly AskedPosition NotOneOfThese = new(false, null);
+
+        public static readonly AskedPosition Unasked = new(true, null);
+
+        public static AskedPosition At(TimeSpan position) => new(true, position);
+    }
 
     private readonly record struct SoundChoice(SoundPlacement? Placement, CarriedSounds? Unreadable)
     {

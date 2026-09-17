@@ -26,6 +26,7 @@ public sealed record PlaybackPlanResponder(
     bool ShowsAsAWholeRecording,
     string MediaType,
     long? Bytes,
+    double? ResumeAtSec,
     IReadOnlyList<SoundTrack> Sounds,
     IReadOnlyList<PlaybackChapterResponder> Chapters)
 {
@@ -33,6 +34,7 @@ public sealed record PlaybackPlanResponder(
         PlaybackPlan plan,
         PlaybackFile handover,
         string mediaType,
+        TimeSpan? resumeAt,
         IReadOnlyList<SoundTrack> sounds,
         IReadOnlyList<PlaybackChapterResponder> chapters)
     {
@@ -50,6 +52,7 @@ public sealed record PlaybackPlanResponder(
             plan.ShowsAsAWholeRecording,
             mediaType,
             plan.Transcodes ? null : handover.Bytes,
+            resumeAt?.TotalSeconds,
             sounds,
             chapters);
     }

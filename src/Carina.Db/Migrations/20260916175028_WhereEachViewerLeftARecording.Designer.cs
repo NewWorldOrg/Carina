@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Carina.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Carina.Db.Migrations
 {
     [DbContext(typeof(CarinaDbContext))]
-    partial class CarinaDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260916175028_WhereEachViewerLeftARecording")]
+    partial class WhereEachViewerLeftARecording
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -753,14 +756,6 @@ namespace Carina.Db.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("ended_at");
 
-                    b.Property<bool>("MakesItAgain")
-                        .HasColumnType("boolean")
-                        .HasColumnName("makes_it_again");
-
-                    b.Property<DateTime?>("NameGivenUpAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("name_given_up_at");
-
                     b.Property<string>("OutputRoot")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -923,7 +918,7 @@ namespace Carina.Db.Migrations
                     b.HasIndex("OutputRoot", "ArtefactName")
                         .IsUnique()
                         .HasDatabaseName("ux_encode_job_artefact")
-                        .HasFilter("artefact_name IS NOT NULL AND name_given_up_at IS NULL");
+                        .HasFilter("artefact_name IS NOT NULL");
 
                     b.HasIndex("RecordingId", "QueuedAt")
                         .HasDatabaseName("ix_encode_job_recording");
@@ -941,8 +936,6 @@ namespace Carina.Db.Migrations
                             t.HasCheckConstraint("ck_encode_job_failure", "((status = 'Failed') = (failure IS NOT NULL))\nAND ((failure IS NULL) = (failure_note IS NULL))\nAND ((failure IS NULL) = (failure_noticed_at IS NULL))\nAND (failure IS NULL OR failure IN ('FfmpegExitedNonZero', 'NotEnoughRoom', 'SourceMissing', 'CapabilityUnavailable', 'TimedOut', 'DestinationCollision', 'HeadTooFar'))");
 
                             t.HasCheckConstraint("ck_encode_job_headway", "(progress_at IS NULL OR status <> 'Queued')\nAND (progress_at IS NULL OR progress_at >= started_at)\nAND (progress_at IS NOT NULL OR (progress_portion IS NULL AND progress_left IS NULL))\nAND (progress_portion IS NULL OR progress_portion BETWEEN 0 AND 1)\nAND (progress_left IS NULL OR progress_left >= interval '0')");
-
-                            t.HasCheckConstraint("ck_encode_job_name_given_up", "name_given_up_at IS NULL OR artefact_name IS NOT NULL");
 
                             t.HasCheckConstraint("ck_encode_job_output_root", "btrim(output_root) = output_root\nAND length(output_root) > 0\nAND output_root <> '.'\nAND strpos(output_root, '/') = 0\nAND strpos(output_root, chr(92)) = 0\nAND strpos(output_root, '..') = 0");
 

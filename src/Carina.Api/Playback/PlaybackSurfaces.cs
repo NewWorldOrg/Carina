@@ -27,11 +27,14 @@ public static class PlaybackSurfaces
         "The second of the recording the frame is taken from, counted from where the recording begins. "
         + "Seconds may be fractional, and asking for none takes the first frame.");
 
-    public static readonly QueryInput WhereThePlayingStarts = QueryInput.Seconds(
+    public static readonly QueryInput WhereThePlayingStarts = QueryInput.SecondsWithNoFixedDefault(
         PlayDelivery.Position,
         "The second of the recording playing starts at, counted from where the recording begins. "
-        + "Seconds may be fractional, and asking for none starts at the beginning. It moves the picture only "
-        + "where the recording is transcoded as it plays; one handed over as it is, is seeked by a byte range.");
+        + "Seconds may be fractional. Asking for none starts where this reader last left this recording, and "
+        + "at the beginning where they have not watched it before; asking for zero starts at the beginning "
+        + "whatever was left. It moves the picture only where the recording is transcoded as it plays; one "
+        + "handed over as it is, is seeked by a byte range, and the plan says where the watching got to so "
+        + "that a player can seek there itself.");
 
     public static readonly QueryInput WhichProfileThePictureIsEncodedIn = QueryInput.OneOfThese(
         PlayDelivery.Quality,

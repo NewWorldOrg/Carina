@@ -11,6 +11,7 @@ using Carina.Domain.Playback;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Domain.Streaming;
+using Carina.Domain.Viewing;
 using Carina.TestSupport;
 
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -146,6 +147,7 @@ internal sealed class PlayFeature : IAsyncDisposable
                 services.AddSingleton<IEncodeProfileRepository>(Profiles);
                 services.RemoveAll<IEncodeChapterRepository>();
                 services.AddSingleton<IEncodeChapterRepository>(Chapters);
+                services.AddSingleton<IPlaybackPositionRepository>(Positions);
             }));
 
         Client = configured.WithTestScheme().CreateClient();
@@ -166,6 +168,8 @@ internal sealed class PlayFeature : IAsyncDisposable
     public HeldEncodeProfiles Profiles { get; } = new();
 
     public HeldEncodeChapters Chapters { get; } = new();
+
+    public HeldPlaybackPositions Positions { get; } = new();
 
     public HeldOnTheFlyPlayer Player { get; } = new();
 

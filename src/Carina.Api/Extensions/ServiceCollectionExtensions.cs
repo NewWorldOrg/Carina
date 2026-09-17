@@ -44,6 +44,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IntegrityService>();
         services.AddScoped<PlaybackService>();
         services.AddScoped<PlaybackTicketService>();
+        services.AddScoped<PlaybackPositionService>();
         services.AddScoped<LiveService>();
         services.AddScoped<StorageService>();
         services.AddScoped<EncodeProfileService>();

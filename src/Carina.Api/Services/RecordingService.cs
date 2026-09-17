@@ -6,6 +6,7 @@ using Carina.Domain.Encodings;
 using Carina.Domain.Events;
 using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
+using Carina.Domain.Viewing;
 using Carina.Infrastructure.Thumbnails;
 
 namespace Carina.Api.Services;
@@ -54,6 +55,7 @@ public sealed class RecordingService(
     IDriverClient driver,
     IThumbnailRemaker thumbnails,
     IRecordingFileEraser eraser,
+    IPlaybackPositionRepository positions,
     RecordingDeletions deletions,
     IAppEventPublisher events,
     TimeProvider clock)
@@ -258,6 +260,7 @@ public sealed class RecordingService(
 
         if (discard is RecordingDiscard.Discarded)
         {
+            await positions.ForgetAsync(id, cancellationToken);
             events.Signal(AppEventName.Recordings);
             events.Signal(AppEventName.Quality);
         }
