@@ -408,6 +408,40 @@ public sealed class StreamingRuleSelfCheckTests
     }
 
     [Fact]
+    public void DetectsADeadlineHandedToAWaitAndLetsOneHeldBesideTheWaitPass()
+    {
+        Assert.Equal(
+            [".WaitAsync(settings.LongestRaise,clock,"],
+            StreamingRules.WhatHandsAWaitADeadlineItCannotLetGoOfIn(
+                "return await raised.Task.WaitAsync(settings.LongestRaise, clock, cancellationToken);"));
+        Assert.Equal(
+            [".WaitAsync(grace,clock)"],
+            StreamingRules.WhatHandsAWaitADeadlineItCannotLetGoOfIn("await EmptiedAsync(from).WaitAsync(grace, clock);"));
+        Assert.Empty(StreamingRules.WhatHandsAWaitADeadlineItCannotLetGoOfIn(
+            "using CancellationTokenSource deadline = new(settings.LongestRaise, clock);"
+            + " return await raised.Task.WaitAsync(leash.Token);"));
+        Assert.Empty(StreamingRules.WhatHandsAWaitADeadlineItCannotLetGoOfIn("await drawing.WaitAsync(deadline.Token);"));
+    }
+
+    [Fact]
+    public void ATokenLeashedToADeadlineOnTheClockIsADeadlineAndOneFromAPlainSourceIsNot()
+    {
+        Assert.Empty(StreamingRules.WhatWaitsWithoutADeadlineIn(
+            "using CancellationTokenSource deadline = new(settings.LongestRaise, clock);"
+            + " using CancellationTokenSource leash = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);"
+            + " return await raised.Task.WaitAsync(leash.Token);"));
+        Assert.Equal(
+            [".Task.WaitAsync(leash.Token)"],
+            StreamingRules.WhatWaitsWithoutADeadlineIn(
+                "using CancellationTokenSource leash = new(); return await raised.Task.WaitAsync(leash.Token);"));
+        Assert.Equal(
+            [".Task.WaitAsync(cancellationToken)"],
+            StreamingRules.WhatWaitsWithoutADeadlineIn(
+                "using CancellationTokenSource deadline = new(settings.LongestRaise, clock);"
+                + " return await raised.Task.WaitAsync(cancellationToken);"));
+    }
+
+    [Fact]
     public void ThisRuleReadsSourceTextAndAWaitSpelledAnotherWayWalksStraightPast()
     {
         Assert.Empty(StreamingRules.WhatWaitsWithoutADeadlineIn("Task<LiveJoin?> answering = raised.Task; await answering;"));

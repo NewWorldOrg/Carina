@@ -146,11 +146,13 @@ public sealed class LiveTranscoder : ILiveTranscoder
     /// </summary>
     private async Task DrawnToTheEndAsync()
     {
+        using CancellationTokenSource deadline = new(stopGrace, clock);
+
         try
         {
-            await drawing.WaitAsync(stopGrace, clock);
+            await drawing.WaitAsync(deadline.Token);
         }
-        catch (Exception gone) when (gone is TimeoutException or IOException or ObjectDisposedException or OperationCanceledException)
+        catch (Exception gone) when (gone is IOException or ObjectDisposedException or OperationCanceledException)
         {
             await stopping.CancelAsync();
             await Quietly(drawing);
