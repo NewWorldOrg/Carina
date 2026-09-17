@@ -9,6 +9,7 @@ using Carina.Domain.Recordings;
 using Carina.Domain.Streaming;
 using Carina.Infrastructure.Playback;
 using Carina.Infrastructure.Streaming;
+using Carina.TestSupport;
 
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -159,6 +160,18 @@ public sealed class OnTheFlyPlayerTests : IDisposable
         byte[] written = File.ReadAllBytes(Path.Combine(standIns.Room, Named.Value));
 
         Assert.Equal(written[1_000..5_000], read);
+    }
+
+    [Fact]
+    public async Task AViewerHandedTheFirstBytesLeavesNoDeadlineOnTheClock()
+    {
+        Recorded(40_000);
+
+        HandTurnedClock clock = new();
+
+        await using IOnTheFlyViewing viewing = await Running(Player("echo ready", clock: clock), TimeSpan.Zero);
+
+        Assert.Equal(0, clock.Pending);
     }
 
     [Fact]
@@ -576,14 +589,16 @@ public sealed class OnTheFlyPlayerTests : IDisposable
         string body,
         int atOnce = 2,
         TimeSpan? waiting = null,
-        LiveEncoder encoder = LiveEncoder.Software)
-        => PlayerRunning(standIns.Script(body), atOnce, waiting, encoder);
+        LiveEncoder encoder = LiveEncoder.Software,
+        TimeProvider? clock = null)
+        => PlayerRunning(standIns.Script(body), atOnce, waiting, encoder, clock);
 
     private OnTheFlyPlayer PlayerRunning(
         string programme,
         int atOnce = 2,
         TimeSpan? waiting = null,
-        LiveEncoder encoder = LiveEncoder.Software)
+        LiveEncoder encoder = LiveEncoder.Software,
+        TimeProvider? clock = null)
     {
         budget = new TranscodeBudget(new TranscodeBudgetSettings { AtOnce = atOnce });
 
@@ -594,7 +609,7 @@ public sealed class OnTheFlyPlayerTests : IDisposable
             Store(),
             new Measured(),
             new AlreadyChosen(encoder),
-            TimeProvider.System);
+            clock ?? TimeProvider.System);
     }
 
     private sealed class Measured : IStreamAttributeReader

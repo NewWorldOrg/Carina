@@ -162,12 +162,42 @@ public static partial class StreamingRules
         return
         [
             .. WaitsOnAPromiseForever().Matches(source)
-                .Concat(WaitsOnAPromiseWithNothingButAToken().Matches(source))
+                .Concat(WaitsOnAPromiseWithNothingButAToken().Matches(source)
+                    .Where(waiting => !LeashedToADeadline(source, waiting.Value)))
                 .Select(match => Squeezed(match.Value))
                 .Distinct(StringComparer.Ordinal)
                 .Order(StringComparer.Ordinal),
         ];
     }
+
+    /// <summary>
+    /// A timeout handed to <c>WaitAsync</c> sets a timer that is disposed of only once the waiter
+    /// has been let go, which is after the caller has been answered, so the alarm outlives the wait
+    /// it was set for and a test counting what the clock is holding reads one too many. A deadline
+    /// held in a <c>using CancellationTokenSource</c> is let go of with the wait instead.
+    /// </summary>
+    public static IReadOnlyList<string> WhatHandsAWaitADeadlineItCannotLetGoOfInsideTheFeature(string directory)
+        => Feature(directory)
+            .SelectMany(file => WhatHandsAWaitADeadlineItCannotLetGoOfIn(file.Source).Select(way => $"{file.Relative} {way}"))
+            .Distinct(StringComparer.Ordinal)
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+
+    public static IReadOnlyList<string> WhatHandsAWaitADeadlineItCannotLetGoOfIn(string source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+
+        return
+        [
+            .. HandsAWaitATimeoutOnTheClock().Matches(source)
+                .Select(match => Squeezed(match.Value))
+                .Distinct(StringComparer.Ordinal)
+                .Order(StringComparer.Ordinal),
+        ];
+    }
+
+    private static bool LeashedToADeadline(string source, string waiting)
+        => WaitsOnALinkedToken().IsMatch(waiting) && HoldsADeadlineOnTheClock().IsMatch(source);
 
     public static IReadOnlyList<string> WhatWritesWhatIsNotItsOwnIn(string source)
     {
@@ -247,6 +277,15 @@ public static partial class StreamingRules
 
     [GeneratedRegex(@"\.Task\s*\.\s*WaitAsync\s*\(\s*[^(),]*\s*\)")]
     private static partial Regex WaitsOnAPromiseWithNothingButAToken();
+
+    [GeneratedRegex(@"\.Task\s*\.\s*WaitAsync\s*\(\s*\w+\s*\.\s*Token\s*\)")]
+    private static partial Regex WaitsOnALinkedToken();
+
+    [GeneratedRegex(@"new\s*(?:CancellationTokenSource\s*)?\(\s*[^,()]+,\s*(?:clock|timeProvider)\s*\)")]
+    private static partial Regex HoldsADeadlineOnTheClock();
+
+    [GeneratedRegex(@"\.\s*WaitAsync\s*\(\s*[^,()]+,\s*(?:clock|timeProvider)\s*[,)]")]
+    private static partial Regex HandsAWaitATimeoutOnTheClock();
 
     [GeneratedRegex(
         @"\(\s*byte\s*\)\s*(LiveRefusal|TuneFailureKind|LiveTunerHolder)\s*\."

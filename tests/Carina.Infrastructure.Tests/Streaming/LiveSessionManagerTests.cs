@@ -486,6 +486,20 @@ public sealed class LiveSessionManagerTests
     }
 
     [Fact]
+    public async Task ATeardownThatDrainsWhatTheTranscoderWroteLeavesNoDeadlineOnTheClock()
+    {
+        ILiveViewing viewing = await Joined(EveryFrame);
+
+        await viewing.DisposeAsync();
+
+        clock.Turn(Linger);
+
+        await Eventually.Happens(() => supply.Opened[0].Disposed, "the stream is let go once the linger is over");
+
+        Assert.Equal(0, clock.Pending);
+    }
+
+    [Fact]
     public async Task ATranscoderThatWillNotStartIsPassedOnAndTheSupplyIsLetGo()
     {
         transcoders.Failing = TranscoderFault.ProgrammeMissing;

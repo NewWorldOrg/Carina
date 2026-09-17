@@ -124,25 +124,26 @@ public sealed class OnTheFlyPlayer(
     {
         byte[] buffer = new byte[FirstChunk];
         Task<int> mouthful = transcoder.Output.ReadAsync(buffer, cancellationToken).AsTask();
-        int read;
+        int? first;
 
         try
         {
-            read = await mouthful.WaitAsync(settings.LongestWaitForTheFirstByte, clock, cancellationToken);
-        }
-        catch (TimeoutException)
-        {
-            await AwayWith(transcoder, mouthful);
-
-            return OnTheFlyStart.Refused(
-                OnTheFlyRefusal.TookTooLong,
-                $"nothing had come out of the transcoder after {settings.LongestWaitForTheFirstByte}.");
+            first = await FirstMouthfulAsync(mouthful, cancellationToken);
         }
         catch (OperationCanceledException)
         {
             await AwayWith(transcoder, mouthful);
 
             throw;
+        }
+
+        if (first is not { } read)
+        {
+            await AwayWith(transcoder, mouthful);
+
+            return OnTheFlyStart.Refused(
+                OnTheFlyRefusal.TookTooLong,
+                $"nothing had come out of the transcoder after {settings.LongestWaitForTheFirstByte}.");
         }
 
         if (read is 0)
@@ -165,6 +166,27 @@ public sealed class OnTheFlyPlayer(
 
         return OnTheFlyStart.Started(
             new OnTheFlyViewing(transcoder, standing, buffer.AsMemory(0, read), bearing.Seat.Dispose));
+    }
+
+    /// <remarks>
+    /// The deadline is held here so that it is let go of with the wait. A timeout handed to
+    /// <c>WaitAsync</c> is disposed of only once the waiter has been let go, which is after the
+    /// viewer has been answered, so the timer it set outlives the wait it was set for.
+    /// </remarks>
+    private async Task<int?> FirstMouthfulAsync(Task<int> mouthful, CancellationToken cancellationToken)
+    {
+        using CancellationTokenSource deadline = new(settings.LongestWaitForTheFirstByte, clock);
+        using CancellationTokenSource leash =
+            CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
+
+        try
+        {
+            return await mouthful.WaitAsync(leash.Token);
+        }
+        catch (OperationCanceledException) when (deadline.IsCancellationRequested)
+        {
+            return null;
+        }
     }
 
     private static string WhatItSaid(TranscoderExit ended)

@@ -147,13 +147,22 @@ internal sealed class LiveSession
         }
     }
 
+    /// <remarks>
+    /// The deadline is held here so that it is let go of with the wait. A timeout handed to
+    /// <c>WaitAsync</c> is disposed of only once the waiter has been let go, which is after the
+    /// viewer has been answered, so the timer it set outlives the wait it was set for.
+    /// </remarks>
     private async Task<LiveJoin?> RaisedAsync(CancellationToken cancellationToken)
     {
+        using CancellationTokenSource deadline = new(settings.LongestRaise, clock);
+        using CancellationTokenSource leash =
+            CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
+
         try
         {
-            return await raised.Task.WaitAsync(settings.LongestRaise, clock, cancellationToken);
+            return await raised.Task.WaitAsync(leash.Token);
         }
-        catch (TimeoutException)
+        catch (OperationCanceledException) when (deadline.IsCancellationRequested)
         {
             Close();
 
@@ -515,11 +524,13 @@ internal sealed class LiveSession
 
     private static async Task DrainAsync(Stream from, TimeSpan grace, TimeProvider clock)
     {
+        using CancellationTokenSource deadline = new(grace, clock);
+
         try
         {
-            await EmptiedAsync(from).WaitAsync(grace, clock);
+            await EmptiedAsync(from).WaitAsync(deadline.Token);
         }
-        catch (TimeoutException)
+        catch (OperationCanceledException)
         {
             return;
         }

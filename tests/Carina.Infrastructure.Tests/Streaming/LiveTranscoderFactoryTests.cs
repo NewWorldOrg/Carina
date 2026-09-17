@@ -97,6 +97,23 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
     }
 
     [Fact]
+    public async Task ATranscoderDrawnToTheEndOfWhatItWroteLeavesNoDeadlineOnTheClock()
+    {
+        HandTurnedClock clock = new();
+
+        await using ILiveTranscoder running = await Started(
+            standIns.Script("cat > /dev/null"),
+            LiveEncoder.Software,
+            captions: CaptionOutlet.Drawn,
+            clock: clock);
+
+        await running.Input.DisposeAsync();
+
+        Assert.True((await running.Completion).RanToTheEnd);
+        Assert.Equal(0, clock.Pending);
+    }
+
+    [Fact]
     public async Task AProgrammeThatIsNotOnThisMachineIsSaidToBeMissingAndNamesNoPath()
     {
         LiveTranscoderStart start = await Starting(standIns.Named("no-such-programme"), LiveEncoder.Software);
@@ -436,9 +453,10 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
         TimeSpan? grace = null,
         CaptionOutlet captions = CaptionOutlet.None,
         StreamAttributes? attributes = null,
-        SoundTrack sound = SoundTrack.Main)
+        SoundTrack sound = SoundTrack.Main,
+        TimeProvider? clock = null)
     {
-        LiveTranscoderStart start = await Starting(programme, encoder, cancellationToken, grace, captions, attributes, sound);
+        LiveTranscoderStart start = await Starting(programme, encoder, cancellationToken, grace, captions, attributes, sound, clock);
 
         Assert.True(start.Running, start.Note);
 
@@ -452,7 +470,8 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
         TimeSpan? grace = null,
         CaptionOutlet captions = CaptionOutlet.None,
         StreamAttributes? attributes = null,
-        SoundTrack sound = SoundTrack.Main)
+        SoundTrack sound = SoundTrack.Main,
+        TimeProvider? clock = null)
     {
         var settings = new LiveTranscodeSettings
         {
@@ -460,7 +479,7 @@ public sealed class LiveTranscoderFactoryTests : IDisposable
             StopGrace = grace ?? TimeSpan.FromSeconds(2),
         };
 
-        var factory = new LiveTranscoderFactory(settings, budget, new AlreadyChosen(encoder), TimeProvider.System);
+        var factory = new LiveTranscoderFactory(settings, budget, new AlreadyChosen(encoder), clock ?? TimeProvider.System);
 
         return factory.StartAsync(
             Service,

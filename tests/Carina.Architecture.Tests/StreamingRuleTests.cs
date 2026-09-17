@@ -125,6 +125,12 @@ public sealed class StreamingRuleTests
     }
 
     [Fact]
+    public void NothingInTheStreamingFeatureHandsAWaitADeadlineItCannotLetGoOf()
+    {
+        Assert.Empty(StreamingRules.WhatHandsAWaitADeadlineItCannotLetGoOfInsideTheFeature(RepositoryLayout.SourceDirectory));
+    }
+
+    [Fact]
     public void TheOnePromiseAViewerWaitsOnIsHandedTheLongestRaiseAndNothingShorterIsSpelledHere()
     {
         string session = File.ReadAllText(Path.Combine(
@@ -133,10 +139,8 @@ public sealed class StreamingRuleTests
             "Streaming",
             "LiveSession.cs"));
 
-        Assert.Contains(
-            "raised.Task.WaitAsync(settings.LongestRaise, clock, cancellationToken)",
-            session,
-            StringComparison.Ordinal);
+        Assert.Contains("new(settings.LongestRaise, clock)", session, StringComparison.Ordinal);
+        Assert.Contains("raised.Task.WaitAsync(leash.Token)", session, StringComparison.Ordinal);
         Assert.Empty(StreamingRules.WhatWaitsWithoutADeadlineIn(session));
         Assert.Equal(
             [".Task.WaitAsync(cancellationToken)"],
