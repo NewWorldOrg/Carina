@@ -44,6 +44,13 @@ public sealed class Reservation
 
     public Margin MarginAfter { get; private set; } = null!;
 
+    /// <summary>
+    /// Whether the recording this reservation turns into is encoded once it ends. A reservation a
+    /// rule made carries what that rule asked for; one made by hand says yes unless told otherwise,
+    /// because until a reservation could say otherwise every recording that ended was queued.
+    /// </summary>
+    public bool EncodeWhenRecorded { get; private set; }
+
     public string SnapshotName { get; private set; } = string.Empty;
 
     public string SnapshotSummary { get; private set; } = string.Empty;
@@ -115,7 +122,8 @@ public sealed class Reservation
         ProgrammeSnapshot snapshot,
         BroadcastGroupKey? broadcastGroupKey,
         BroadcastGroupRole broadcastGroupRole,
-        DateTime at)
+        DateTime at,
+        bool encodeWhenRecorded = true)
     {
         ArgumentNullException.ThrowIfNull(marginBefore);
 
@@ -145,7 +153,8 @@ public sealed class Reservation
             null,
             false,
             null,
-            at);
+            at,
+            encodeWhenRecorded: encodeWhenRecorded);
     }
 
     public static Reservation Rehydrate(
@@ -171,7 +180,8 @@ public sealed class Reservation
         bool receptionUnavailable,
         DateTime? receptionUnavailableSince,
         DateTime createdAt,
-        ReservationCancellation? cancellation = null)
+        ReservationCancellation? cancellation = null,
+        bool encodeWhenRecorded = true)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(programme);
@@ -260,6 +270,7 @@ public sealed class Reservation
             EndAtConfirmed = endAtConfirmed,
             MarginBefore = marginBefore,
             MarginAfter = marginAfter,
+            EncodeWhenRecorded = encodeWhenRecorded,
             SnapshotName = snapshot.Name,
             SnapshotSummary = snapshot.Summary,
             SnapshotExtended = snapshot.Extended,
@@ -378,6 +389,8 @@ public sealed class Reservation
 
         Priority = priority;
     }
+
+    public void Rewish(bool encodeWhenRecorded) => EncodeWhenRecorded = encodeWhenRecorded;
 
     public void Remargin(Margin before, Margin after)
     {

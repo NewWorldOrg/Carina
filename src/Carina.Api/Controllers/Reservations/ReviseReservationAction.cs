@@ -41,13 +41,14 @@ public sealed class ReviseReservationAction(ReservationService reservations) : C
             Priority = ReservationInput.PriorityOf(request?.Priority),
             MarginBefore = ReservationInput.MarginOf(request?.MarginBeforeSeconds),
             MarginAfter = ReservationInput.MarginOf(request?.MarginAfterSeconds),
+            EncodeWhenRecorded = request?.EncodeWhenRecorded,
         };
 
         if (revision.ChangesNothing)
         {
             return BadRequest(BaseResponder<ReservationSettlementResponder>.Error(
-                "A change names what to change: the priority, the margin before, or the margin after. "
-                + ReservationInput.Description));
+                "A change names what to change: the priority, the margin before, the margin after, or "
+                + "whether the recording is encoded once it ends. " + ReservationInput.Description));
         }
 
         ServiceResult<ReservationSettlement, ReservationFailure> revised =

@@ -25,6 +25,12 @@ public sealed class Rule
 
     public Margin MarginAfter { get; private set; } = null!;
 
+    /// <summary>
+    /// Whether a recording this rule brings about is encoded once it ends. A rule that says nothing
+    /// says yes, because until a rule could say otherwise every recording that ended was queued.
+    /// </summary>
+    public bool EncodeWhenRecorded { get; private set; }
+
     public DateTime CreatedAt { get; private set; }
 
     public static Rule Draft(
@@ -35,8 +41,9 @@ public sealed class Rule
         bool enabled,
         Margin marginBefore,
         Margin marginAfter,
-        DateTime at)
-        => Rehydrate(id, name, query, priority, enabled, marginBefore, marginAfter, at);
+        DateTime at,
+        bool encodeWhenRecorded = true)
+        => Rehydrate(id, name, query, priority, enabled, marginBefore, marginAfter, at, encodeWhenRecorded);
 
     public static Rule Rehydrate(
         RuleId id,
@@ -46,7 +53,8 @@ public sealed class Rule
         bool enabled,
         Margin marginBefore,
         Margin marginAfter,
-        DateTime createdAt)
+        DateTime createdAt,
+        bool encodeWhenRecorded = true)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(query);
@@ -63,6 +71,7 @@ public sealed class Rule
             Enabled = enabled,
             MarginBefore = marginBefore,
             MarginAfter = marginAfter,
+            EncodeWhenRecorded = encodeWhenRecorded,
             CreatedAt = UtcTimes.Required(createdAt, nameof(createdAt)),
         };
     }
@@ -71,7 +80,13 @@ public sealed class Rule
 
     public void Disable() => Enabled = false;
 
-    public void Rewrite(string name, RuleQuery query, Priority priority, Margin marginBefore, Margin marginAfter)
+    public void Rewrite(
+        string name,
+        RuleQuery query,
+        Priority priority,
+        Margin marginBefore,
+        Margin marginAfter,
+        bool encodeWhenRecorded)
     {
         ArgumentNullException.ThrowIfNull(query);
         ArgumentNullException.ThrowIfNull(priority);
@@ -83,6 +98,7 @@ public sealed class Rule
         Priority = priority;
         MarginBefore = marginBefore;
         MarginAfter = marginAfter;
+        EncodeWhenRecorded = encodeWhenRecorded;
     }
 
     private static string ValidatedName(string name)

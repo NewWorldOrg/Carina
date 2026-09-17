@@ -140,6 +140,11 @@ public sealed class ReservationSchedulingService(
                 revision.MarginAfter ?? reservation.MarginAfter);
         }
 
+        if (revision.EncodeWhenRecorded is { } encodeWhenRecorded)
+        {
+            reservation.Rewish(encodeWhenRecorded);
+        }
+
         switch (revision.Move)
         {
             case ReservationMove.Cancel:

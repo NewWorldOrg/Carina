@@ -66,6 +66,7 @@ public static class RuleDrafting
                 ReservationInput.PriorityOf(request.Priority) ?? Priority.Default,
                 request.Enabled ?? true,
                 ReservationInput.MarginOf(request.MarginBeforeSeconds) ?? Margin.None,
-                ReservationInput.MarginOf(request.MarginAfterSeconds) ?? Margin.None)
+                ReservationInput.MarginOf(request.MarginAfterSeconds) ?? Margin.None,
+                request.EncodeWhenRecorded ?? true)
             : null;
 }

@@ -132,7 +132,7 @@ public sealed class RecordingIsFrozenOnceItEndsTests
         Assert.Empty(moved.Except(
             [nameof(Recording.ThumbnailState), nameof(Recording.ThumbnailFault)],
             StringComparer.Ordinal));
-        Assert.Equal(46, before.Count);
+        Assert.Equal(47, before.Count);
     }
 
     private static Recording Settled()

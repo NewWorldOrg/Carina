@@ -34,6 +34,49 @@ public sealed class RuleEndpointTests
         Assert.Equal([AppEventName.Rules], feature.Events.Signalled);
     }
 
+    [Fact(DisplayName = "BR-ED2-004: a rule that says nothing about encoding is written asking for one")]
+    public async Task ARuleThatSaysNothingAboutEncodingIsWrittenAskingForOne()
+    {
+        await using var feature = new RuleFeature();
+
+        (HttpStatusCode status, JsonElement body) = await feature.PostAsync(
+            "/api/rules",
+            new { name = "hills", query = "keyword=hill" });
+
+        Assert.Equal(HttpStatusCode.Created, status);
+        Assert.True(body.GetProperty("data").GetProperty("encodeWhenRecorded").GetBoolean());
+        Assert.True(feature.Rules.Rules[0].EncodeWhenRecorded);
+    }
+
+    [Fact(DisplayName = "BR-ED2-004: a rule can be written asking for no encode, and answers that back")]
+    public async Task ARuleCanBeWrittenAskingForNoEncode()
+    {
+        await using var feature = new RuleFeature();
+
+        (HttpStatusCode status, JsonElement body) = await feature.PostAsync(
+            "/api/rules",
+            new { name = "hills", query = "keyword=hill", encodeWhenRecorded = false });
+
+        Assert.Equal(HttpStatusCode.Created, status);
+        Assert.False(body.GetProperty("data").GetProperty("encodeWhenRecorded").GetBoolean());
+        Assert.False(feature.Rules.Rules[0].EncodeWhenRecorded);
+    }
+
+    [Fact(DisplayName = "BR-ED2-004: rewriting a rule carries what the rewrite asked about encoding")]
+    public async Task RewritingARuleCarriesWhatItAskedAboutEncoding()
+    {
+        await using var feature = new RuleFeature();
+        Rule written = feature.Written(name: "hills", query: "keyword=hill");
+
+        (HttpStatusCode status, JsonElement body) = await feature.PutAsync(
+            $"/api/rules/{written.Id.Value}",
+            new { name = "hills", query = "keyword=hill", encodeWhenRecorded = false });
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.False(body.GetProperty("data").GetProperty("encodeWhenRecorded").GetBoolean());
+        Assert.False(feature.Rules.Rules[0].EncodeWhenRecorded);
+    }
+
     [Fact]
     public async Task ARuleWhoseConditionsAreAllEmptyIsRefusedRatherThanWritten()
     {

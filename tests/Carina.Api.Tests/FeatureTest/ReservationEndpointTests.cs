@@ -348,6 +348,68 @@ public sealed class ReservationEndpointTests
         Assert.Equal(Noon.AddHours(3).AddSeconds(30), window.GetProperty("effectiveEndAt").GetDateTime());
     }
 
+    [Fact(DisplayName = "BR-ED2-004: a reservation that says nothing about encoding is made asking for one")]
+    public async Task AReservationThatSaysNothingAboutEncodingIsMadeAskingForOne()
+    {
+        await using var feature = new ReservationFeature();
+        feature.Announced(4001);
+
+        (HttpStatusCode status, JsonElement body) = await feature.PostAsync("/api/reservations", Asking(4001));
+
+        Assert.Equal(HttpStatusCode.Created, status);
+        Assert.True(body.GetProperty("data").GetProperty("reservation")
+            .GetProperty("encodeWhenRecorded").GetBoolean());
+        Assert.True(feature.Reservations.Held[0].EncodeWhenRecorded);
+    }
+
+    [Fact(DisplayName = "BR-ED2-004: a reservation can be made asking for no encode")]
+    public async Task AReservationCanBeMadeAskingForNoEncode()
+    {
+        await using var feature = new ReservationFeature();
+        feature.Announced(4001);
+
+        (HttpStatusCode status, JsonElement body) = await feature.PostAsync(
+            "/api/reservations",
+            new
+            {
+                programme = $"{ReservationFeature.Network}-1024-4001",
+                programmeStartsAt = Noon.AddHours(2),
+                encodeWhenRecorded = false,
+            });
+
+        Assert.Equal(HttpStatusCode.Created, status);
+        Assert.False(body.GetProperty("data").GetProperty("reservation")
+            .GetProperty("encodeWhenRecorded").GetBoolean());
+        Assert.False(feature.Reservations.Held[0].EncodeWhenRecorded);
+    }
+
+    [Fact(DisplayName = "BR-ED2-004: what a reservation asks about encoding is changed on its own, leaving the margins where they were")]
+    public async Task WhatAReservationAsksAboutEncodingIsChangedOnItsOwn()
+    {
+        await using var feature = new ReservationFeature();
+        feature.Announced(4001);
+
+        (_, JsonElement made) = await feature.PostAsync(
+            "/api/reservations",
+            new
+            {
+                programme = $"{ReservationFeature.Network}-1024-4001",
+                programmeStartsAt = Noon.AddHours(2),
+                marginBeforeSeconds = 10,
+                marginAfterSeconds = 30,
+            });
+
+        (HttpStatusCode status, JsonElement revised) = await feature.PatchAsync(
+            $"/api/reservations/{Identifier(made)}",
+            new { encodeWhenRecorded = false });
+        JsonElement reservation = revised.GetProperty("data").GetProperty("reservation");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.False(reservation.GetProperty("encodeWhenRecorded").GetBoolean());
+        Assert.Equal(10, reservation.GetProperty("window").GetProperty("marginBeforeSeconds").GetInt32());
+        Assert.Equal(30, reservation.GetProperty("window").GetProperty("marginAfterSeconds").GetInt32());
+    }
+
     [Fact]
     public async Task ABroadcastTheGuideDoesNotHoldIsNotReserved()
     {

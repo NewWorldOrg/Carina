@@ -11,6 +11,8 @@ public sealed record CreateReservationRequest
     public int? MarginBeforeSeconds { get; init; }
 
     public int? MarginAfterSeconds { get; init; }
+
+    public bool? EncodeWhenRecorded { get; init; }
 }
 
 public sealed record ReviseReservationRequest
@@ -20,4 +22,6 @@ public sealed record ReviseReservationRequest
     public int? MarginBeforeSeconds { get; init; }
 
     public int? MarginAfterSeconds { get; init; }
+
+    public bool? EncodeWhenRecorded { get; init; }
 }

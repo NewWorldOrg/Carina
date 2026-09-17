@@ -99,7 +99,7 @@ public sealed class RuleRepositoryTests(RepositoryDatabase database)
         {
             var repository = new RuleRepository(writing);
             Rule held = (await repository.FindAsync(written.Id, Cancel))!;
-            held.Rewrite("after", new RuleQuery("keyword=river"), new Priority(50), Margin.None, Margin.None);
+            held.Rewrite("after", new RuleQuery("keyword=river"), new Priority(50), Margin.None, Margin.None, true);
             held.Disable();
             await repository.SaveAsync(held, Cancel);
         }

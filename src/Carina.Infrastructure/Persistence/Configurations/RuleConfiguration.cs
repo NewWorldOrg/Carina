@@ -57,6 +57,10 @@ public sealed class RuleConfiguration : IEntityTypeConfiguration<Rule>
             .HasColumnName("margin_after")
             .IsRequired();
 
+        builder.Property(rule => rule.EncodeWhenRecorded)
+            .HasColumnName("encode_when_recorded")
+            .IsRequired();
+
         builder.Property(rule => rule.CreatedAt).IsRequired();
 
         builder.HasIndex(rule => new { rule.Priority, rule.CreatedAt, rule.Id })

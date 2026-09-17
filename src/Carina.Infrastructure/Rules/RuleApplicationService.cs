@@ -468,7 +468,8 @@ public sealed class RuleApplicationService(
                 match.Programme.Sounds),
             null,
             BroadcastGroupRole.Standalone,
-            at);
+            at,
+            match.Rule.EncodeWhenRecorded);
 
     private static bool StillToCome(Programme programme, DateTime at)
         => (programme.EndsAt ?? Provisionally(programme.StartsAt)) > at;

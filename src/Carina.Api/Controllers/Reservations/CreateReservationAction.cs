@@ -49,7 +49,8 @@ public sealed class CreateReservationAction(ReservationService reservations) : C
             startsAt.UtcDateTime,
             ReservationInput.PriorityOf(request.Priority) ?? Priority.Default,
             ReservationInput.MarginOf(request.MarginBeforeSeconds) ?? Margin.None,
-            ReservationInput.MarginOf(request.MarginAfterSeconds) ?? Margin.None);
+            ReservationInput.MarginOf(request.MarginAfterSeconds) ?? Margin.None,
+            request.EncodeWhenRecorded ?? true);
 
         ServiceResult<ReservationSettlement, ReservationFailure> made =
             await reservations.CreateAsync(draft, cancellationToken);

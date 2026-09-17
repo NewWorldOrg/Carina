@@ -355,6 +355,10 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
         builder.Property(recording => recording.LeftBehindAt);
         builder.Property(recording => recording.FilesLeftBehind);
 
+        builder.Property(recording => recording.EncodeWhenRecorded)
+            .HasColumnName("encode_when_recorded")
+            .IsRequired();
+
         builder.Property<string>(ProgrammeConfiguration.Searchable)
             .HasColumnName(ProgrammeConfiguration.Searchable)
             .HasComputedColumnSql(SearchableSql, stored: true);

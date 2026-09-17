@@ -62,7 +62,13 @@ public sealed class RuleTests
         Rule rule = Draft(enabled: false);
         RuleId id = rule.Id;
 
-        rule.Rewrite("Renamed", new RuleQuery("genre=9"), new Priority(30), Margin.OfSeconds(10), Margin.OfSeconds(20));
+        rule.Rewrite(
+            "Renamed",
+            new RuleQuery("genre=9"),
+            new Priority(30),
+            Margin.OfSeconds(10),
+            Margin.OfSeconds(20),
+            true);
 
         Assert.Equal(id, rule.Id);
         Assert.False(rule.Enabled);

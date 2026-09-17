@@ -14,6 +14,7 @@ public sealed record RuleResponder(
     bool Enabled,
     int MarginBeforeSeconds,
     int MarginAfterSeconds,
+    bool EncodeWhenRecorded,
     DateTime CreatedAt)
 {
     public static RuleResponder Of(Rule rule)
@@ -28,6 +29,7 @@ public sealed record RuleResponder(
             rule.Enabled,
             rule.MarginBefore.Seconds,
             rule.MarginAfter.Seconds,
+            rule.EncodeWhenRecorded,
             rule.CreatedAt);
     }
 }

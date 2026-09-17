@@ -19,7 +19,7 @@ public sealed class ReservationRecordingContract(CarinaDbContext context) : IRes
         SELECT id, network_id, service_id, event_id, programme_start_at, snapshot_name, priority,
                broadcast_group_key, broadcast_group_role, effective_start_at, effective_end_at,
                end_at_confirmed, started_at, snapshot_summary, snapshot_extended, snapshot_genres,
-               captured_at, snapshot_audio, snapshot_sounds, margin_after
+               captured_at, snapshot_audio, snapshot_sounds, margin_after, encode_when_recorded
         FROM {View}
         WHERE in_flight OR (effective_start_at <= $1 AND $1 < effective_end_at)
         ORDER BY effective_start_at, id
@@ -115,5 +115,6 @@ public sealed class ReservationRecordingContract(CarinaDbContext context) : IRes
             reader.GetDateTime(10),
             reader.GetBoolean(11),
             TimeSpan.FromSeconds(reader.GetInt32(19)),
-            reader.IsDBNull(12) ? null : reader.GetDateTime(12));
+            reader.IsDBNull(12) ? null : reader.GetDateTime(12),
+            reader.GetBoolean(20));
 }

@@ -70,7 +70,12 @@ public sealed class EncodeIntakeRound(
             [.. ended.Items.Select(recording => recording.Id)],
             cancellationToken);
 
-        Recording[] waiting = [.. ended.Items.Where(recording => !already.Contains(recording.Id))];
+        Recording[] waiting =
+        [
+            .. ended.Items
+                .Where(recording => recording.EncodeWhenRecorded)
+                .Where(recording => !already.Contains(recording.Id)),
+        ];
 
         if (waiting.Length is 0)
         {
