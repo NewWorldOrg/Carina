@@ -65,6 +65,7 @@ public static class RuleRehearsing
                     ReservationInput.PriorityOf(request.Priority) ?? Priority.Default,
                     true,
                     ReservationInput.MarginOf(request.MarginBeforeSeconds) ?? Margin.None,
-                    ReservationInput.MarginOf(request.MarginAfterSeconds) ?? Margin.None))
+                    ReservationInput.MarginOf(request.MarginAfterSeconds) ?? Margin.None,
+                    true))
             : (null, null);
 }

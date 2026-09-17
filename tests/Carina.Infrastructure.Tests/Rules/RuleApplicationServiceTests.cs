@@ -633,7 +633,8 @@ public sealed class RuleApplicationServiceTests
         string name = "a rule",
         bool enabled = true,
         int marginBefore = 0,
-        int marginAfter = 0)
+        int marginAfter = 0,
+        bool encodeWhenRecorded = true)
         => Rule.Draft(
             new RuleId(new Guid($"{identifier:x8}-0000-0000-0000-000000000000")),
             name,
@@ -642,7 +643,32 @@ public sealed class RuleApplicationServiceTests
             enabled,
             Margin.OfSeconds(marginBefore),
             Margin.OfSeconds(marginAfter),
-            Now.AddDays(-30));
+            Now.AddDays(-30),
+            encodeWhenRecorded);
+
+    [Fact(DisplayName = "BR-ED2-004: a reservation a rule made carries what that rule asked about encoding")]
+    public async Task AReservationARuleMadeCarriesWhatTheRuleAskedAboutEncoding()
+    {
+        World world = World.Of();
+        world.Rules.Rules.Add(Written("keyword=hill", encodeWhenRecorded: false));
+        world.Guide(Broadcast(Listed, 1, "hill walking"));
+
+        RuleApplicationRun run = await world.Applying.EverythingAsync(Cancel);
+
+        Assert.False(Assert.Single(run.Made).EncodeWhenRecorded);
+    }
+
+    [Fact(DisplayName = "BR-ED2-004: a rule that says nothing about encoding leaves what it makes asking for one")]
+    public async Task ARuleThatSaysNothingLeavesWhatItMakesAskingForAnEncode()
+    {
+        World world = World.Of();
+        world.Rules.Rules.Add(Written("keyword=hill"));
+        world.Guide(Broadcast(Listed, 1, "hill walking"));
+
+        RuleApplicationRun run = await world.Applying.EverythingAsync(Cancel);
+
+        Assert.True(Assert.Single(run.Made).EncodeWhenRecorded);
+    }
 
     [Fact]
     public async Task AReservationARuleMadeCarriesTheSoundTheBroadcastAnnounced()

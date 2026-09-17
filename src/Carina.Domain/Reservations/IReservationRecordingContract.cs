@@ -17,7 +17,8 @@ public sealed record RecordingTick(
     DateTime EffectiveEndAt,
     bool EndAtConfirmed,
     TimeSpan MarginAfter,
-    DateTime? StartedAt)
+    DateTime? StartedAt,
+    bool EncodeWhenRecorded = true)
 {
     public bool InFlight => StartedAt is not null;
 

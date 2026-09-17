@@ -109,6 +109,14 @@ public sealed class Recording
 
     public int? FilesLeftBehind { get; private set; }
 
+    /// <summary>
+    /// Whether this recording is encoded once it ends, copied from the reservation it was started
+    /// for at the moment it began. It is copied rather than read back through the reservation
+    /// because nothing ties the two rows together: a reservation can be thrown away, and one
+    /// recorded by hand never had one. A recording that says nothing says yes.
+    /// </summary>
+    public bool EncodeWhenRecorded { get; private set; }
+
     public ProgrammeRef Programme => new(NetworkId, ServiceId, EventId, ProgrammeStartsAt);
 
     public bool IsInFlight => Outcome is null;
@@ -130,7 +138,8 @@ public sealed class Recording
         BroadcastGroupKey? broadcastGroupKey,
         BroadcastGroupRole broadcastGroupRole,
         DateTime at,
-        TunerDeviceId? tunerDeviceId = null)
+        TunerDeviceId? tunerDeviceId = null,
+        bool encodeWhenRecorded = true)
         => Rehydrate(
             id,
             reservationId,
@@ -159,7 +168,8 @@ public sealed class Recording
             ThumbnailState.Pending,
             snapshot,
             broadcastGroupKey,
-            broadcastGroupRole);
+            broadcastGroupRole,
+            encodeWhenRecorded: encodeWhenRecorded);
 
     public static Recording Rehydrate(
         RecordingId id,
@@ -192,7 +202,8 @@ public sealed class Recording
         BroadcastGroupRole broadcastGroupRole,
         ThumbnailFault? thumbnailFault = null,
         DateTime? leftBehindAt = null,
-        int? filesLeftBehind = null)
+        int? filesLeftBehind = null,
+        bool encodeWhenRecorded = true)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(programme);
@@ -354,6 +365,7 @@ public sealed class Recording
             BroadcastGroupRole = broadcastGroupRole,
             LeftBehindAt = UtcTimes.Optional(leftBehindAt, nameof(leftBehindAt)),
             FilesLeftBehind = filesLeftBehind,
+            EncodeWhenRecorded = encodeWhenRecorded,
             Interruptions = interruptions,
             OutcomeDetail = outcomeDetail,
         };

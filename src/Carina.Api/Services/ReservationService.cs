@@ -52,7 +52,8 @@ public sealed record ReservationDraft(
     DateTime ProgrammeStartsAt,
     Priority Priority,
     Margin MarginBefore,
-    Margin MarginAfter);
+    Margin MarginAfter,
+    bool EncodeWhenRecorded);
 
 public sealed class ReservationService(
     IReservationRepository reservations,
@@ -134,7 +135,8 @@ public sealed class ReservationService(
             Snapshot(programme, at),
             null,
             BroadcastGroupRole.Standalone,
-            at);
+            at,
+            draft.EncodeWhenRecorded);
 
         SchedulingRun run;
 

@@ -13,6 +13,8 @@ public sealed record SaveRuleRequest
     public int? MarginBeforeSeconds { get; init; }
 
     public int? MarginAfterSeconds { get; init; }
+
+    public bool? EncodeWhenRecorded { get; init; }
 }
 
 public sealed record RuleEnabledRequest

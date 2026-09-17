@@ -26,7 +26,8 @@ public sealed record RuleDraft(
     Priority Priority,
     bool Enabled,
     Margin MarginBefore,
-    Margin MarginAfter);
+    Margin MarginAfter,
+    bool EncodeWhenRecorded);
 
 public sealed record RuleSwitched(Rule Rule, IReadOnlyList<Reservation> Withdrawn);
 
@@ -60,7 +61,8 @@ public sealed class RuleService(
             draft.Enabled,
             draft.MarginBefore,
             draft.MarginAfter,
-            clock.GetUtcNow().UtcDateTime);
+            clock.GetUtcNow().UtcDateTime,
+            draft.EncodeWhenRecorded);
 
         await rules.AddAsync(written, cancellationToken);
 
@@ -86,7 +88,13 @@ public sealed class RuleService(
             return Missing<Rule>(id);
         }
 
-        rule.Rewrite(draft.Name, draft.Query, draft.Priority, draft.MarginBefore, draft.MarginAfter);
+        rule.Rewrite(
+            draft.Name,
+            draft.Query,
+            draft.Priority,
+            draft.MarginBefore,
+            draft.MarginAfter,
+            draft.EncodeWhenRecorded);
 
         await rules.SaveAsync(rule, cancellationToken);
 
@@ -162,7 +170,8 @@ public sealed class RuleService(
             true,
             draft.MarginBefore,
             draft.MarginAfter,
-            clock.GetUtcNow().UtcDateTime);
+            clock.GetUtcNow().UtcDateTime,
+            draft.EncodeWhenRecorded);
 
         if (await applying.RehearsedAsync(rehearsing, cancellationToken) is not { } rehearsed)
         {

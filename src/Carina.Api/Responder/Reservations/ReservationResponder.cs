@@ -69,6 +69,7 @@ public sealed record ReservationResponder(
     ReservationOrigin Origin,
     Guid? RuleId,
     int Priority,
+    bool EncodeWhenRecorded,
     ReservationWindowResponder Window,
     ReservationStanding Standing,
     DateTime? StartedAt,
@@ -98,6 +99,7 @@ public sealed record ReservationResponder(
             reservation.IsRuleBorn ? ReservationOrigin.ByRule : ReservationOrigin.ByHand,
             reservation.RuleId?.Value,
             reservation.Priority.Value,
+            reservation.EncodeWhenRecorded,
             new ReservationWindowResponder(
                 reservation.StartAt,
                 reservation.EndAt,

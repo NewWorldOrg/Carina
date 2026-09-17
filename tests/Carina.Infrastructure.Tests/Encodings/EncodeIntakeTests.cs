@@ -71,6 +71,35 @@ public sealed class EncodeIntakeTests
         Assert.Single(machine.Jobs.Jobs);
     }
 
+    [Fact(DisplayName = "BR-ED2-004: a recording whose reservation asked for no encode is never queued, though it ended with a file like any other")]
+    public async Task ARecordingThatAskedForNoEncodeIsNeverQueued()
+    {
+        var machine = new Machine();
+        Recording unasked = machine.Recorded(RecordingOutcome.Complete, encode: false);
+
+        EncodeIntake took = await machine.Round().TakeAsync(1, Cancel);
+
+        Assert.Equal(0, took.Queued);
+        Assert.Equal(1, took.Looked);
+        Assert.Equal(EncodeUnaskedStanding.Settled, took.Standing);
+        Assert.Equal(RecordingOutcome.Complete, unasked.Outcome);
+        Assert.Empty(machine.Jobs.Jobs);
+        Assert.Empty(machine.Events.Signalled);
+    }
+
+    [Fact(DisplayName = "BR-ED2-004: one recording asking for no encode leaves the ones beside it queued")]
+    public async Task ARecordingThatAskedForNoEncodeLeavesTheOnesBesideItQueued()
+    {
+        var machine = new Machine();
+        machine.Recorded(RecordingOutcome.Complete, encode: false);
+        Recording asked = machine.Recorded(RecordingOutcome.Complete, Began.AddMinutes(1));
+
+        EncodeIntake took = await machine.Round().TakeAsync(1, Cancel);
+
+        Assert.Equal(1, took.Queued);
+        Assert.Equal(asked.Id, Assert.Single(machine.Jobs.Jobs).RecordingId);
+    }
+
     [Fact(DisplayName = "BR-ED2-004: a recording that failed has nothing to encode and is never queued")]
     public async Task ARecordingThatFailedIsNeverQueued()
     {
@@ -309,9 +338,9 @@ public sealed class EncodeIntakeTests
                 new HandTurnedClock(new DateTimeOffset(Now)),
                 NullLogger<EncodeIntakeRound>.Instance);
 
-        public Recording Recorded(RecordingOutcome outcome, DateTime? began = null)
+        public Recording Recorded(RecordingOutcome outcome, DateTime? began = null, bool encode = true)
         {
-            Recording recording = Written(began ?? Began);
+            Recording recording = Written(began ?? Began, encode);
             recording.Abort((began ?? Began).AddMinutes(30));
 
             if (outcome is not RecordingOutcome.Complete)
@@ -333,7 +362,7 @@ public sealed class EncodeIntakeTests
 
         public Recording StillWriting() => Written(Began);
 
-        private Recording Written(DateTime began)
+        private Recording Written(DateTime began, bool encode = true)
         {
             var id = RecordingId.New();
             Recording recording = Recording.Begin(
@@ -355,7 +384,8 @@ public sealed class EncodeIntakeTests
                 null,
                 BroadcastGroupRole.Standalone,
                 began,
-                new TunerDeviceId("synthetic-0"));
+                new TunerDeviceId("synthetic-0"),
+                encode);
             recording.Wrote(TimeSpan.FromMinutes(30));
             Recordings.Recordings.Add(recording);
 

@@ -17,10 +17,16 @@ public sealed record ReservationRevision
 
     public Margin? MarginAfter { get; init; }
 
+    public bool? EncodeWhenRecorded { get; init; }
+
     public ReservationMove Move { get; init; } = ReservationMove.Keep;
 
     public ReservationCancellation Cancellation { get; init; } = ReservationCancellation.ByHand;
 
     public bool ChangesNothing
-        => Priority is null && MarginBefore is null && MarginAfter is null && Move is ReservationMove.Keep;
+        => Priority is null
+           && MarginBefore is null
+           && MarginAfter is null
+           && EncodeWhenRecorded is null
+           && Move is ReservationMove.Keep;
 }

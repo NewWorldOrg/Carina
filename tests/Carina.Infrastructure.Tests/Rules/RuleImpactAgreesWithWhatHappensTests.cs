@@ -340,7 +340,13 @@ public sealed class RuleImpactAgreesWithWhatHappensTests
         public void Rewrite()
             => Rules.Rules
                 .Single(rule => rule.Id.Equals(TheRule))
-                .Rewrite("a rule", new RuleQuery("keyword=heather"), new Priority(Ahead), Margin.None, Margin.None);
+                .Rewrite(
+                    "a rule",
+                    new RuleQuery("keyword=heather"),
+                    new Priority(Ahead),
+                    Margin.None,
+                    Margin.None,
+                    true);
 
         private static Rule Written(RuleId id, string query, int priority)
             => Rule.Draft(

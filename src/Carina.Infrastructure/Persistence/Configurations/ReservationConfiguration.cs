@@ -135,6 +135,10 @@ public sealed class ReservationConfiguration : IEntityTypeConfiguration<Reservat
             .HasColumnName("margin_after")
             .IsRequired();
 
+        builder.Property(reservation => reservation.EncodeWhenRecorded)
+            .HasColumnName("encode_when_recorded")
+            .IsRequired();
+
         builder.Property(reservation => reservation.SnapshotName)
             .HasMaxLength(Reservation.NameMaxLength)
             .IsRequired();

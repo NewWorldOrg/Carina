@@ -321,7 +321,8 @@ public sealed class RecordingRound(
                 due.BroadcastGroupKey,
                 due.BroadcastGroupRole,
                 now,
-                session?.DeviceId is { Length: > 0 } named ? new TunerDeviceId(named) : null);
+                session?.DeviceId is { Length: > 0 } named ? new TunerDeviceId(named) : null,
+                due.EncodeWhenRecorded);
 
             if (!verdict.HasRoom)
             {
