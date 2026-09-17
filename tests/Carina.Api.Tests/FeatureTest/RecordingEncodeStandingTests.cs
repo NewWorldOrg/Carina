@@ -92,9 +92,73 @@ public sealed class RecordingEncodeStandingTests
             retried.GetProperty("data").GetProperty("items")[0].GetProperty("encode").GetProperty("standing").GetString());
     }
 
-    private static Recording Ended(RecordingFeature feature, int eventId)
+    [Fact(DisplayName = "BR-ED2-004: every row of the library says whether its recording asks for an encode, so one the automatic run passed over reads apart from one it has not reached")]
+    public async Task EveryRowOfTheLibrarySaysWhetherItsRecordingAsksForAnEncode()
     {
-        Recording recording = feature.Held(eventId: eventId);
+        await using var feature = new RecordingFeature();
+        Recording asking = Ended(feature, eventId: 6);
+        Recording passedOver = Ended(feature, eventId: 7, encodeWhenRecorded: false);
+
+        (HttpStatusCode status, JsonElement body) = await feature.GetAsync("/api/recordings");
+        Dictionary<string, JsonElement> rows = body
+            .GetProperty("data")
+            .GetProperty("items")
+            .EnumerateArray()
+            .ToDictionary(
+                row => row.GetProperty("id").GetString()!,
+                row => row.GetProperty("encode"),
+                StringComparer.Ordinal);
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.True(rows[asking.Id.Wire].GetProperty("whenRecorded").GetBoolean());
+        Assert.False(rows[passedOver.Id.Wire].GetProperty("whenRecorded").GetBoolean());
+        Assert.Equal("notEncoded", rows[asking.Id.Wire].GetProperty("standing").GetString());
+        Assert.Equal("notEncoded", rows[passedOver.Id.Wire].GetProperty("standing").GetString());
+    }
+
+    [Fact(DisplayName = "BR-ED2-004: one recording's detail says whether it asks for an encode, the same as its row")]
+    public async Task OneRecordingsDetailSaysWhetherItAsksForAnEncode()
+    {
+        await using var feature = new RecordingFeature();
+        Recording passedOver = Ended(feature, eventId: 8, encodeWhenRecorded: false);
+
+        (HttpStatusCode status, JsonElement detail) = await feature.GetAsync($"/api/recordings/{passedOver.Id.Wire}");
+        (_, JsonElement listed) = await feature.GetAsync("/api/recordings");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.False(detail
+            .GetProperty("data")
+            .GetProperty("recording")
+            .GetProperty("encode")
+            .GetProperty("whenRecorded")
+            .GetBoolean());
+        Assert.False(listed
+            .GetProperty("data")
+            .GetProperty("items")[0]
+            .GetProperty("encode")
+            .GetProperty("whenRecorded")
+            .GetBoolean());
+    }
+
+    [Fact(DisplayName = "BR-ED2-004: a recording still being written says it asks for an encode rather than saying nothing")]
+    public async Task ARecordingStillBeingWrittenSaysItAsksForAnEncode()
+    {
+        await using var feature = new RecordingFeature();
+        Recording writing = feature.Held();
+
+        (_, JsonElement body) = await feature.GetAsync($"/api/recordings/{writing.Id.Wire}");
+
+        Assert.True(body
+            .GetProperty("data")
+            .GetProperty("recording")
+            .GetProperty("encode")
+            .GetProperty("whenRecorded")
+            .GetBoolean());
+    }
+
+    private static Recording Ended(RecordingFeature feature, int eventId, bool encodeWhenRecorded = true)
+    {
+        Recording recording = feature.Held(eventId: eventId, encodeWhenRecorded: encodeWhenRecorded);
         recording.Wrote(TimeSpan.FromHours(1));
         recording.Abort(RecordingFeature.Noon.AddHours(1));
         recording.Settle(RecordingOutcome.Complete, 1_000_000, RecordingFeature.Noon.AddHours(1));

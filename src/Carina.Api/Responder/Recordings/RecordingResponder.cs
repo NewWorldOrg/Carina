@@ -36,7 +36,7 @@ public sealed record RecordingDropsResponder(
     long? EovfCount,
     DateTime? MeasuredUpdatedAt);
 
-public sealed record RecordingEncodeResponder(EncodeStanding Standing);
+public sealed record RecordingEncodeResponder(EncodeStanding Standing, bool WhenRecorded);
 
 public sealed record RecordingThumbnailResponder(
     ThumbnailState State,
@@ -148,7 +148,7 @@ public sealed record RecordingResponder(
             new RecordingBroadcastGroupResponder(
                 recording.BroadcastGroupKey?.Value,
                 recording.BroadcastGroupRole),
-            new RecordingEncodeResponder(seen.Encode),
+            new RecordingEncodeResponder(seen.Encode, recording.EncodeWhenRecorded),
             RecordingUnfinishedDeletionResponder.Of(recording));
     }
 
