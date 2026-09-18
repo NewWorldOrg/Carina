@@ -9,13 +9,17 @@ public sealed record PlaybackPlan
         PlaybackStanding standing,
         PlaybackFile? handover,
         PlaybackRefusal? refusal,
-        PlaybackFallback? fellBack)
+        PlaybackFallback? fellBack,
+        PlaybackSource? source,
+        PlaybackSource? alternative)
     {
         Route = route;
         Standing = standing;
         Handover = handover;
         Refusal = refusal;
         FellBack = fellBack;
+        Source = source;
+        Alternative = alternative;
     }
 
     public PlaybackRoute Route { get; }
@@ -27,6 +31,10 @@ public sealed record PlaybackPlan
     public PlaybackRefusal? Refusal { get; }
 
     public PlaybackFallback? FellBack { get; }
+
+    public PlaybackSource? Source { get; }
+
+    public PlaybackSource? Alternative { get; }
 
     public bool PlaysAtAll => Route is not PlaybackRoute.Nothing;
 
@@ -40,40 +48,49 @@ public sealed record PlaybackPlan
         => For(subject, SoundTrack.Main, SoundArrangement.TheMainSoundAlone);
 
     public static PlaybackPlan For(PlaybackSubject subject, SoundTrack wanted, SoundArrangement carried)
+        => For(subject, wanted, carried, PlaybackSource.Artefact);
+
+    public static PlaybackPlan For(
+        PlaybackSubject subject,
+        SoundTrack wanted,
+        SoundArrangement carried,
+        PlaybackSource from)
     {
         ArgumentNullException.ThrowIfNull(subject);
         ArgumentNullException.ThrowIfNull(carried);
+
+        if (!Enum.IsDefined(from))
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(from),
+                from,
+                "A recording is played from the artefact made of it or from the recording itself.");
+        }
 
         PlaybackStanding standing = PlaybackStandings.Of(subject.Outcome);
 
         if (subject.Outcome is null)
         {
-            return Refused(standing, PlaybackRefusal.StillBeingWritten, null);
+            return Refused(standing, PlaybackRefusal.StillBeingWritten, null, null);
         }
 
-        PlaybackFallback? fellBack = null;
+        ArtefactAtHand encoded = TheArtefactAmongThem(subject.BrowserReady);
+        bool theArtefactWouldBeAsked = from is PlaybackSource.Artefact && TheArtefactCarriesIt(wanted, carried);
 
-        if (TheArtefactCarriesIt(wanted, carried))
+        if (theArtefactWouldBeAsked && encoded.File is { } artefact)
         {
-            foreach (PlaybackFileSearch encoded in subject.BrowserReady)
-            {
-                if (encoded.Found is not { } artefact)
-                {
-                    fellBack ??= encoded.Absence is PlaybackFileAbsence.Gone
-                        ? PlaybackFallback.EncodedFileGone
-                        : PlaybackFallback.EncodedFileOutOfReach;
-
-                    continue;
-                }
-
-                if (artefact.HoldsAnything)
-                {
-                    return new PlaybackPlan(PlaybackRoute.Direct, standing, artefact, null, null);
-                }
-
-                fellBack ??= PlaybackFallback.EncodedFileHoldsNothing;
-            }
+            return new PlaybackPlan(
+                PlaybackRoute.Direct,
+                standing,
+                artefact,
+                null,
+                null,
+                PlaybackSource.Artefact,
+                subject.AsRecorded.Found is { HoldsAnything: true } ? PlaybackSource.Recording : null);
         }
+
+        PlaybackFallback? fellBack = theArtefactWouldBeAsked ? encoded.Trouble : null;
+        PlaybackSource? alternative = encoded.File is null ? null : PlaybackSource.Artefact;
 
         if (subject.AsRecorded.Found is not { } recorded)
         {
@@ -82,12 +99,46 @@ public sealed record PlaybackPlan
                 subject.AsRecorded.Absence is PlaybackFileAbsence.Gone
                     ? PlaybackRefusal.FileGone
                     : PlaybackRefusal.FileOutOfReach,
-                fellBack);
+                fellBack,
+                alternative);
         }
 
         return recorded.HoldsAnything
-            ? new PlaybackPlan(PlaybackRoute.OnTheFly, standing, recorded, null, fellBack)
-            : Refused(standing, PlaybackRefusal.NothingWasWritten, fellBack);
+            ? new PlaybackPlan(
+                PlaybackRoute.OnTheFly,
+                standing,
+                recorded,
+                null,
+                fellBack,
+                PlaybackSource.Recording,
+                alternative)
+            : Refused(standing, PlaybackRefusal.NothingWasWritten, fellBack, alternative);
+    }
+
+    private static ArtefactAtHand TheArtefactAmongThem(IReadOnlyList<PlaybackFileSearch> browserReady)
+    {
+        PlaybackFallback? trouble = null;
+
+        foreach (PlaybackFileSearch encoded in browserReady)
+        {
+            if (encoded.Found is not { } artefact)
+            {
+                trouble ??= encoded.Absence is PlaybackFileAbsence.Gone
+                    ? PlaybackFallback.EncodedFileGone
+                    : PlaybackFallback.EncodedFileOutOfReach;
+
+                continue;
+            }
+
+            if (artefact.HoldsAnything)
+            {
+                return new ArtefactAtHand(artefact, null);
+            }
+
+            trouble ??= PlaybackFallback.EncodedFileHoldsNothing;
+        }
+
+        return new ArtefactAtHand(null, trouble);
     }
 
     private static bool TheArtefactCarriesIt(SoundTrack wanted, SoundArrangement carried)
@@ -96,6 +147,9 @@ public sealed record PlaybackPlan
     private static PlaybackPlan Refused(
         PlaybackStanding standing,
         PlaybackRefusal refusal,
-        PlaybackFallback? fellBack)
-        => new(PlaybackRoute.Nothing, standing, null, refusal, fellBack);
+        PlaybackFallback? fellBack,
+        PlaybackSource? alternative)
+        => new(PlaybackRoute.Nothing, standing, null, refusal, fellBack, null, alternative);
+
+    private readonly record struct ArtefactAtHand(PlaybackFile? File, PlaybackFallback? Trouble);
 }

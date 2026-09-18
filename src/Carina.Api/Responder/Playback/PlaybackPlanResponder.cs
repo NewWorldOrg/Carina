@@ -20,6 +20,8 @@ public sealed record PlaybackChapterResponder(double StartsAtSec, double EndsAtS
 public sealed record PlaybackPlanResponder(
     PlaybackStanding Standing,
     PlaybackRoute Route,
+    PlaybackSource Source,
+    PlaybackSource? Alternative,
     PlaybackSeeking? Seeking,
     bool CanSeek,
     bool Transcodes,
@@ -46,6 +48,8 @@ public sealed record PlaybackPlanResponder(
         return new PlaybackPlanResponder(
             plan.Standing,
             plan.Route,
+            plan.Source!.Value,
+            plan.Alternative,
             plan.Seeking,
             plan.Seeking is PlaybackSeeking.ByRange,
             plan.Transcodes,

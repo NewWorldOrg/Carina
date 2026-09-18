@@ -120,7 +120,8 @@ app.MapGet(
     .Reads(
         PlaybackSurfaces.WhereThePlayingStarts,
         PlaybackSurfaces.WhichProfileThePictureIsEncodedIn,
-        PlaybackSurfaces.WhichSoundIsCarried)
+        PlaybackSurfaces.WhichSoundIsCarried,
+        PlaybackSurfaces.WhichOfTheTwoFilesIsPlayed)
     .WithEffect(EndpointEffect.Reading);
 
 app.MapGet(

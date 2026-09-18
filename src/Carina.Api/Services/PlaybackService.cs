@@ -37,6 +37,7 @@ public sealed class PlaybackService(
     public async Task<ServiceResult<PlaybackOffer, PlaybackFailure>> OfferAsync(
         RecordingId id,
         SoundTrack wanted,
+        PlaybackSource from,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(id);
@@ -54,7 +55,8 @@ public sealed class PlaybackService(
         PlaybackPlan plan = PlaybackPlan.For(
             new PlaybackSubject(recording.Outcome, onDisk, encoded.BrowserReady),
             wanted,
-            SoundArrangement.Of(announced));
+            SoundArrangement.Of(announced),
+            from);
 
         if (plan.FellBack is { } fellBack)
         {

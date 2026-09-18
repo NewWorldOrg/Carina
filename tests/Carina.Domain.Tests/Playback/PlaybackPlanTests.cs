@@ -367,6 +367,283 @@ public sealed class PlaybackPlanTests
             null!));
     }
 
+    [Fact(DisplayName = "A-配信-074: asking for no source in particular prefers the artefact, as it always did")]
+    public void AskingForNoSourceInParticularIsAskingForTheArtefact()
+    {
+        PlaybackSubject subject = Both(1_000_000, 4_000_000);
+
+        Assert.Equal(
+            PlaybackPlan.For(subject, SoundTrack.Main, SoundArrangement.TheMainSoundAlone, PlaybackSource.Artefact),
+            PlaybackPlan.For(subject, SoundTrack.Main, SoundArrangement.TheMainSoundAlone));
+    }
+
+    [Fact(DisplayName = "A-配信-074: a recording asked for as it was recorded is transcoded from the recording itself even where an artefact was made of it")]
+    public void ARecordingAskedForAsItWasRecordedIsTakenFromTheRecordingRatherThanFromTheArtefact()
+    {
+        PlaybackPlan plan = AskedFor(Both(1_000_000, 4_000_000), PlaybackSource.Recording);
+
+        Assert.Equal(PlaybackRoute.OnTheFly, plan.Route);
+        Assert.Equal(PlaybackSource.Recording, plan.Source);
+        Assert.Equal(Written(4_000_000), plan.Handover);
+        Assert.True(plan.Transcodes);
+        Assert.Null(plan.FellBack);
+    }
+
+    [Fact(DisplayName = "A-配信-074: the plan of an artefact names the recording itself as the other thing it could be asked for")]
+    public void ThePlanOfAnArtefactOffersTheRecordingItselfAsTheOtherOne()
+    {
+        PlaybackPlan plan = AskedFor(Both(1_000_000, 4_000_000), PlaybackSource.Artefact);
+
+        Assert.Equal(PlaybackRoute.Direct, plan.Route);
+        Assert.Equal(PlaybackSource.Artefact, plan.Source);
+        Assert.Equal(PlaybackSource.Recording, plan.Alternative);
+    }
+
+    [Fact(DisplayName = "A-配信-074: the plan of a recording asked for as it was recorded names the artefact as the other thing it could be asked for")]
+    public void ThePlanOfTheRecordingItselfOffersTheArtefactAsTheOtherOne()
+    {
+        PlaybackPlan plan = AskedFor(Both(1_000_000, 4_000_000), PlaybackSource.Recording);
+
+        Assert.Equal(PlaybackSource.Recording, plan.Source);
+        Assert.Equal(PlaybackSource.Artefact, plan.Alternative);
+    }
+
+    [Fact(DisplayName = "A-配信-074: a recording nothing has encoded has no other thing it could be asked for")]
+    public void ARecordingNothingHasEncodedOffersNoOtherOne()
+    {
+        PlaybackPlan plan = AskedFor(
+            PlaybackSubject.NothingHasBeenEncodedYet(RecordingOutcome.Complete, OnDisk(4_000_000)),
+            PlaybackSource.Artefact);
+
+        Assert.Equal(PlaybackSource.Recording, plan.Source);
+        Assert.Null(plan.Alternative);
+    }
+
+    [Fact(DisplayName = "A-配信-074: an artefact the ledger names and the disk has not is not offered as the other thing it could be asked for")]
+    public void AnArtefactThatIsGoneIsNotOfferedAsTheOtherOne()
+    {
+        PlaybackPlan plan = AskedFor(
+            new PlaybackSubject(RecordingOutcome.Complete, OnDisk(4_000_000), [Gone]),
+            PlaybackSource.Artefact);
+
+        Assert.Equal(PlaybackSource.Recording, plan.Source);
+        Assert.Equal(PlaybackFallback.EncodedFileGone, plan.FellBack);
+        Assert.Null(plan.Alternative);
+    }
+
+    [Fact(DisplayName = "A-配信-074: an artefact holding nothing is not offered as the other thing it could be asked for")]
+    public void AnArtefactHoldingNothingIsNotOfferedAsTheOtherOne()
+    {
+        PlaybackPlan plan = AskedFor(
+            new PlaybackSubject(
+                RecordingOutcome.Complete,
+                OnDisk(4_000_000),
+                [PlaybackFileSearch.Of(Encoded("encoded.mp4", 0))]),
+            PlaybackSource.Artefact);
+
+        Assert.Equal(PlaybackSource.Recording, plan.Source);
+        Assert.Equal(PlaybackFallback.EncodedFileHoldsNothing, plan.FellBack);
+        Assert.Null(plan.Alternative);
+    }
+
+    [Fact(DisplayName = "A-配信-074: an artefact out of reach is not offered as the other thing it could be asked for")]
+    public void AnArtefactOutOfReachIsNotOfferedAsTheOtherOne()
+    {
+        PlaybackPlan plan = AskedFor(
+            new PlaybackSubject(RecordingOutcome.Complete, OnDisk(4_000_000), [OutOfReach]),
+            PlaybackSource.Artefact);
+
+        Assert.Equal(PlaybackFallback.EncodedFileOutOfReach, plan.FellBack);
+        Assert.Null(plan.Alternative);
+    }
+
+    [Fact(DisplayName = "A-配信-074: an artefact whose file is gone was never asked for where the recording itself was, so nothing says the plan fell back to it")]
+    public void AskingForTheRecordingItselfNeverFallsBackFromAnArtefactItDidNotAskFor()
+    {
+        PlaybackPlan plan = AskedFor(
+            new PlaybackSubject(RecordingOutcome.Complete, OnDisk(4_000_000), [Gone]),
+            PlaybackSource.Recording);
+
+        Assert.Equal(PlaybackRoute.OnTheFly, plan.Route);
+        Assert.Null(plan.FellBack);
+        Assert.Null(plan.Alternative);
+    }
+
+    [Fact(DisplayName = "A-配信-074: a recording asked for as it was recorded and no longer on the disk is refused rather than quietly handed the artefact")]
+    public void TheRecordingItselfBeingGoneIsRefusedRatherThanHandingOverTheArtefactInstead()
+    {
+        PlaybackPlan plan = AskedFor(
+            new PlaybackSubject(RecordingOutcome.Complete, Gone, [PlaybackFileSearch.Of(Encoded("encoded.mp4", 1_000_000))]),
+            PlaybackSource.Recording);
+
+        Assert.Equal(PlaybackRoute.Nothing, plan.Route);
+        Assert.Equal(PlaybackRefusal.FileGone, plan.Refusal);
+        Assert.Null(plan.Handover);
+        Assert.Null(plan.Source);
+        Assert.Equal(PlaybackSource.Artefact, plan.Alternative);
+    }
+
+    [Fact(DisplayName = "A-配信-074: a recording asked for as it was recorded and out of reach is told apart from one that is gone")]
+    public void TheRecordingItselfBeingOutOfReachIsToldApartFromOneThatIsGone()
+    {
+        PlaybackPlan plan = AskedFor(
+            new PlaybackSubject(
+                RecordingOutcome.Complete,
+                OutOfReach,
+                [PlaybackFileSearch.Of(Encoded("encoded.mp4", 1_000_000))]),
+            PlaybackSource.Recording);
+
+        Assert.Equal(PlaybackRefusal.FileOutOfReach, plan.Refusal);
+        Assert.Equal(PlaybackSource.Artefact, plan.Alternative);
+    }
+
+    [Fact(DisplayName = "A-配信-074: a recording asked for as it was recorded and holding no bytes is refused rather than quietly handed the artefact")]
+    public void TheRecordingItselfHoldingNothingIsRefusedRatherThanHandingOverTheArtefactInstead()
+    {
+        PlaybackPlan plan = AskedFor(Both(1_000_000, 0), PlaybackSource.Recording);
+
+        Assert.Equal(PlaybackRoute.Nothing, plan.Route);
+        Assert.Equal(PlaybackRefusal.NothingWasWritten, plan.Refusal);
+        Assert.Equal(PlaybackSource.Artefact, plan.Alternative);
+    }
+
+    [Fact(DisplayName = "A-配信-074: an artefact handed over while the recording it was made of is gone has no other thing it could be asked for")]
+    public void AnArtefactWhoseRecordingIsGoneOffersNoOtherOne()
+    {
+        PlaybackPlan plan = AskedFor(
+            new PlaybackSubject(RecordingOutcome.Complete, Gone, [PlaybackFileSearch.Of(Encoded("encoded.mp4", 1_000_000))]),
+            PlaybackSource.Artefact);
+
+        Assert.Equal(PlaybackRoute.Direct, plan.Route);
+        Assert.Equal(PlaybackSource.Artefact, plan.Source);
+        Assert.Null(plan.Alternative);
+    }
+
+    [Fact(DisplayName = "A-配信-074: an artefact handed over while the recording it was made of holds no bytes has no other thing it could be asked for")]
+    public void AnArtefactWhoseRecordingHoldsNothingOffersNoOtherOne()
+    {
+        PlaybackPlan plan = AskedFor(Both(1_000_000, 0), PlaybackSource.Artefact);
+
+        Assert.Equal(PlaybackRoute.Direct, plan.Route);
+        Assert.Null(plan.Alternative);
+    }
+
+    [Fact(DisplayName = "A-配信-074: a second sound sends playback to the recording itself, and the artefact it passed over is still the other thing it could be asked for")]
+    public void ASecondSoundLeavesTheArtefactAsTheOtherOneItCouldBeAskedFor()
+    {
+        PlaybackPlan plan = PlaybackPlan.For(
+            Both(1_000_000, 4_000_000),
+            SoundTrack.Secondary,
+            TwoLanguages,
+            PlaybackSource.Artefact);
+
+        Assert.Equal(PlaybackRoute.OnTheFly, plan.Route);
+        Assert.Equal(PlaybackSource.Recording, plan.Source);
+        Assert.Equal(PlaybackSource.Artefact, plan.Alternative);
+    }
+
+    [Fact(DisplayName = "A-配信-074: a recording still being written says nothing about which of the two files it would play")]
+    public void ARecordingStillBeingWrittenNamesNeitherSourceNorTheOtherOne()
+    {
+        PlaybackPlan plan = AskedFor(
+            PlaybackSubject.NothingHasBeenEncodedYet(null, OnDisk(4_000_000)),
+            PlaybackSource.Recording);
+
+        Assert.Equal(PlaybackRefusal.StillBeingWritten, plan.Refusal);
+        Assert.Null(plan.Source);
+        Assert.Null(plan.Alternative);
+    }
+
+    [Theory]
+    [InlineData(PlaybackSource.Artefact)]
+    [InlineData(PlaybackSource.Recording)]
+    public void APlanNamesWhatItPlaysFromWhereverItHandsSomethingOver(PlaybackSource from)
+    {
+        foreach (PlaybackSubject subject in EveryShelfAndDisk())
+        {
+            PlaybackPlan plan = AskedFor(subject, from);
+
+            Assert.Equal(plan.Handover is null, plan.Source is null);
+        }
+    }
+
+    [Theory]
+    [InlineData(PlaybackSource.Artefact)]
+    [InlineData(PlaybackSource.Recording)]
+    public void WhatIsHandedOverAsItIsIsAlwaysTheArtefactAndWhatIsTranscodedIsAlwaysTheRecording(
+        PlaybackSource from)
+    {
+        foreach (PlaybackSubject subject in EveryShelfAndDisk())
+        {
+            PlaybackPlan plan = AskedFor(subject, from);
+
+            Assert.Equal(
+                plan.Route switch
+                {
+                    PlaybackRoute.Direct => PlaybackSource.Artefact,
+                    PlaybackRoute.OnTheFly => PlaybackSource.Recording,
+                    _ => (PlaybackSource?)null,
+                },
+                plan.Source);
+        }
+    }
+
+    [Theory]
+    [InlineData(PlaybackSource.Artefact)]
+    [InlineData(PlaybackSource.Recording)]
+    public void TheOtherThingAPlanCouldBeAskedForIsNeverTheOneItPlays(PlaybackSource from)
+    {
+        foreach (PlaybackSubject subject in EveryShelfAndDisk())
+        {
+            PlaybackPlan plan = AskedFor(subject, from);
+
+            if (plan.Source is { } played)
+            {
+                Assert.NotEqual(played, plan.Alternative);
+            }
+        }
+    }
+
+    [Fact]
+    public void APlanIsAskedForOneOfTheTwoThingsARecordingCanBePlayedFrom()
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => PlaybackPlan.For(
+            PlaybackSubject.NothingHasBeenEncodedYet(RecordingOutcome.Complete, OnDisk(4_000_000)),
+            SoundTrack.Main,
+            SoundArrangement.TheMainSoundAlone,
+            (PlaybackSource)99));
+    }
+
+    private static PlaybackPlan AskedFor(PlaybackSubject subject, PlaybackSource from)
+        => PlaybackPlan.For(subject, SoundTrack.Main, SoundArrangement.TheMainSoundAlone, from);
+
+    private static PlaybackSubject Both(long artefact, long recorded)
+        => new(
+            RecordingOutcome.Complete,
+            OnDisk(recorded),
+            [PlaybackFileSearch.Of(Encoded("encoded.mp4", artefact))]);
+
+    private static IEnumerable<PlaybackSubject> EveryShelfAndDisk()
+    {
+        PlaybackFileSearch[] shelves =
+        [
+            PlaybackFileSearch.Of(Encoded("encoded.mp4", 1_000_000)),
+            PlaybackFileSearch.Of(Encoded("encoded.mp4", 0)),
+            Gone,
+            OutOfReach,
+        ];
+
+        foreach (PlaybackFileSearch disk in new[] { OnDisk(4_000_000), OnDisk(0), Gone, OutOfReach })
+        {
+            yield return PlaybackSubject.NothingHasBeenEncodedYet(RecordingOutcome.Complete, disk);
+
+            foreach (PlaybackFileSearch shelf in shelves)
+            {
+                yield return new PlaybackSubject(RecordingOutcome.Complete, disk, [shelf]);
+            }
+        }
+    }
+
     private static readonly PlaybackFileSearch Gone = PlaybackFileSearch.Missing(PlaybackFileAbsence.Gone);
 
     private static readonly PlaybackFileSearch OutOfReach = PlaybackFileSearch.Missing(PlaybackFileAbsence.OutOfReach);

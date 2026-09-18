@@ -99,6 +99,33 @@ public sealed class DocumentedInputTests(TestingWebApplicationFactory factory)
         Assert.Equal("main", sound["schema"]!["default"]!.GetValue<string>());
     }
 
+    [Fact(DisplayName = "A-配信-074: the playing says which of the two files it can be played from and that naming none plays the artefact")]
+    public async Task ThePlayingSaysWhichOfTheTwoFilesItPlaysAndThatNamingNonePlaysTheArtefact()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode source = Parameter(document, PlayDelivery.Path, PlayDelivery.Source);
+
+        Assert.Equal("query", source["in"]!.GetValue<string>());
+        Assert.Equal("string", source["schema"]!["type"]!.GetValue<string>());
+        Assert.Equal(
+            ["artefact", "recording"],
+            source["schema"]!["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
+        Assert.Equal("artefact", source["schema"]!["default"]!.GetValue<string>());
+        Assert.Contains(
+            "transcodes the recording itself while playing even where an artefact was made of it",
+            source["description"]!.GetValue<string>(),
+            StringComparison.Ordinal);
+    }
+
+    [Fact(DisplayName = "A-配信-074: the scan that keeps every query in the document sees the one that chooses which of the two files is played")]
+    public void TheScanSeesTheQueryThatChoosesWhichOfTheTwoFilesIsPlayed()
+    {
+        Assert.Contains(
+            $"{PlayDelivery.Path} {PlayDelivery.Source}",
+            QueryInputScan.WhatEachSurfaceReads(QueryInputScan.ApiDirectory).Select(read => read.ToString()),
+            StringComparer.Ordinal);
+    }
+
     [Fact]
     public async Task NoQueryInputIsAskedForAsSomethingTheCallerHasToSend()
     {

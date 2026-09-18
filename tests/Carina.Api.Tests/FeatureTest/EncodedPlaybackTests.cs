@@ -354,6 +354,208 @@ public sealed class EncodedPlaybackTests
         Assert.Empty(read.GetProperty("chapters").EnumerateArray());
     }
 
+    [Fact(DisplayName = "A-配信-074: a recording with an artefact asked for as it was recorded hands the recording itself to the transcoder rather than the artefact")]
+    public async Task ARecordingAskedForAsItWasRecordedIsTranscodedFromTheRecordingAndNotFromTheArtefact()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete, bytes: 3_500);
+        byte[] artefact = feature.Encoded(recording);
+
+        using HttpResponseMessage picture = await feature.PictureAsync(recording, "?source=recording");
+        byte[] body = await picture.Content.ReadAsByteArrayAsync();
+
+        Assert.Equal(HttpStatusCode.OK, picture.StatusCode);
+        Assert.Equal("onTheFly", Header(picture, PlaybackHeaders.Route));
+        Assert.Equal(recording.FileName, Assert.Single(feature.Player.Opened).Name);
+        Assert.Equal(PlayFeature.Root, Assert.Single(feature.Player.Opened).Root);
+        Assert.Equal(feature.Player.Picture, body);
+        Assert.NotEqual(artefact, body);
+    }
+
+    [Fact(DisplayName = "A-配信-074: the plan of a recording asked for as it was recorded says it plays the recording and names the artefact as the other one")]
+    public async Task ThePlanOfARecordingAskedForAsItWasRecordedNamesTheArtefactAsTheOtherOne()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Encoded(recording);
+
+        JsonElement read = (await PlayFeature.PlanOfAsync(
+            await feature.PlanAsync(recording, "?source=recording"))).GetProperty("data");
+
+        Assert.Equal("onTheFly", read.GetProperty("route").GetString());
+        Assert.Equal("recording", read.GetProperty("source").GetString());
+        Assert.Equal("artefact", read.GetProperty("alternative").GetString());
+        Assert.True(read.GetProperty("transcodes").GetBoolean());
+        Assert.False(read.GetProperty("canSeek").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, read.GetProperty("bytes").ValueKind);
+    }
+
+    [Fact(DisplayName = "A-配信-074: the plan of an encoded recording asked for as it is says it plays the artefact and names the recording itself as the other one")]
+    public async Task ThePlanOfAnEncodedRecordingNamesTheRecordingItselfAsTheOtherOne()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        byte[] artefact = feature.Encoded(recording);
+
+        JsonElement read = (await PlayFeature.PlanOfAsync(await feature.PlanAsync(recording))).GetProperty("data");
+
+        Assert.Equal("direct", read.GetProperty("route").GetString());
+        Assert.Equal("artefact", read.GetProperty("source").GetString());
+        Assert.Equal("recording", read.GetProperty("alternative").GetString());
+        Assert.Equal(artefact.Length, read.GetProperty("bytes").GetInt64());
+    }
+
+    [Fact(DisplayName = "A-配信-074: asking outright for the artefact is asking for what playing a recording has always given")]
+    public async Task AskingOutrightForTheArtefactHandsOverTheArtefact()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        byte[] artefact = feature.Encoded(recording);
+
+        using HttpResponseMessage picture = await feature.PictureAsync(recording, "?source=artefact");
+
+        Assert.Equal(HttpStatusCode.OK, picture.StatusCode);
+        Assert.Equal("direct", Header(picture, PlaybackHeaders.Route));
+        Assert.Equal(artefact, await picture.Content.ReadAsByteArrayAsync());
+        Assert.Null(feature.Player.Handed);
+    }
+
+    [Fact(DisplayName = "A-配信-074: an artefact the ledger names and the disk has not is not the other one the plan offers")]
+    public async Task AnArtefactTheDiskHasNotIsNotOfferedAsTheOtherOne()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Encoded(recording, onDisk: false);
+
+        JsonElement read = (await PlayFeature.PlanOfAsync(await feature.PlanAsync(recording))).GetProperty("data");
+
+        Assert.Equal("onTheFly", read.GetProperty("route").GetString());
+        Assert.Equal("recording", read.GetProperty("source").GetString());
+        Assert.Equal(JsonValueKind.Null, read.GetProperty("alternative").ValueKind);
+    }
+
+    [Fact(DisplayName = "A-配信-074: an artefact holding no bytes is not the other one the plan offers")]
+    public async Task AnArtefactHoldingNoBytesIsNotOfferedAsTheOtherOne()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Encoded(recording, bytes: 0);
+
+        JsonElement read = (await PlayFeature.PlanOfAsync(await feature.PlanAsync(recording))).GetProperty("data");
+
+        Assert.Equal("onTheFly", read.GetProperty("route").GetString());
+        Assert.Equal("recording", read.GetProperty("source").GetString());
+        Assert.Equal(JsonValueKind.Null, read.GetProperty("alternative").ValueKind);
+    }
+
+    [Fact(DisplayName = "A-配信-074: an artefact a browser would not decode as it is, is not the other one the plan offers")]
+    public async Task AnArtefactABrowserWouldNotDecodeIsNotOfferedAsTheOtherOne()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Encoded(recording, EncodeCodec.H265);
+
+        JsonElement read = (await PlayFeature.PlanOfAsync(await feature.PlanAsync(recording))).GetProperty("data");
+
+        Assert.Equal("recording", read.GetProperty("source").GetString());
+        Assert.Equal(JsonValueKind.Null, read.GetProperty("alternative").ValueKind);
+    }
+
+    [Fact(DisplayName = "A-配信-074: a recording asked for as it was recorded and no longer on the disk is refused rather than quietly handed its artefact")]
+    public async Task ARecordingAskedForAsItWasRecordedAndNoLongerOnTheDiskIsRefused()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete, onDisk: false);
+        byte[] artefact = feature.Encoded(recording);
+
+        using HttpResponseMessage picture = await feature.PictureAsync(recording, "?source=recording");
+        using HttpResponseMessage plan = await feature.PlanAsync(recording, "?source=recording");
+
+        Assert.Equal(HttpStatusCode.NotFound, picture.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, plan.StatusCode);
+        Assert.NotEqual(artefact, await picture.Content.ReadAsByteArrayAsync());
+        Assert.Null(feature.Player.Handed);
+        Assert.Empty(feature.Player.Opened);
+    }
+
+    [Fact(DisplayName = "A-配信-074: a recording asked for as it was recorded with a second sound is not narrowed to the artefact when the recording is gone")]
+    public async Task ARecordingAskedForAsItWasRecordedIsNotNarrowedToTheArtefactWhenItsSecondSoundIsAskedFor()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(
+            RecordingOutcome.Complete,
+            onDisk: false,
+            audio: AudioMode.DualMono,
+            sounds: 1);
+        feature.Encoded(recording);
+
+        using HttpResponseMessage plan = await feature.PlanAsync(recording, "?source=recording&sound=secondary");
+
+        Assert.Equal(HttpStatusCode.NotFound, plan.StatusCode);
+        Assert.Null(feature.Player.Handed);
+    }
+
+    [Fact(DisplayName = "A-配信-074: a recording asked for as it was recorded and holding no bytes is refused rather than quietly handed its artefact")]
+    public async Task ARecordingAskedForAsItWasRecordedAndHoldingNoBytesIsRefused()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Failed, bytes: 0);
+        feature.Encoded(recording);
+
+        using HttpResponseMessage picture = await feature.PictureAsync(recording, "?source=recording");
+
+        Assert.Equal(HttpStatusCode.NotFound, picture.StatusCode);
+        Assert.Empty(feature.Player.Opened);
+    }
+
+    [Fact(DisplayName = "A-配信-074: a recording asked for as it was recorded is moved about by starting again, because it is transcoded while playing")]
+    public async Task ARecordingAskedForAsItWasRecordedIsMovedAboutByStartingAgainRatherThanByARange()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete, bytes: 2_000);
+        feature.Encoded(recording, bytes: 2_000);
+
+        using HttpResponseMessage picture = await feature.PictureAsync(
+            recording,
+            "?source=recording",
+            "bytes=1000-1099");
+
+        Assert.Equal(HttpStatusCode.OK, picture.StatusCode);
+        Assert.Equal("byStartingAgain", Header(picture, PlaybackHeaders.Seeking));
+        Assert.Equal("none", Assert.Single(picture.Headers.AcceptRanges));
+    }
+
+    [Fact(DisplayName = "A-配信-074: the chapters the ledger holds belong to the artefact, so a recording asked for as it was recorded comes back with none")]
+    public async Task ARecordingAskedForAsItWasRecordedComesBackWithNoneOfTheArtefactsChapters()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Encoded(recording);
+        await feature.MarkedAsync(
+            feature.Jobs.Jobs[0],
+            new ChapterSegment(TimeSpan.Zero, TimeSpan.FromSeconds(90), ChapterKind.Programme));
+
+        JsonElement read = (await PlayFeature.PlanOfAsync(
+            await feature.PlanAsync(recording, "?source=recording"))).GetProperty("data");
+
+        Assert.Equal("recording", read.GetProperty("source").GetString());
+        Assert.Empty(read.GetProperty("chapters").EnumerateArray());
+    }
+
+    [Fact(DisplayName = "A-配信-074: the file of a recording handed to an outside player is the artefact, whatever the browser asked the plan for")]
+    public async Task TheFileHandedToAnOutsidePlayerIsStillTheArtefact()
+    {
+        await using var feature = new PlaybackFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete, PlaybackFeature.Bytes(4_000));
+        byte[] artefact = feature.Encoded(recording);
+
+        using HttpResponseMessage answer = await feature.Client.GetAsync(
+            new Uri($"/api/videos/{recording.Id.Wire}?source=recording", UriKind.Relative));
+
+        Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
+        Assert.Equal(artefact, await answer.Content.ReadAsByteArrayAsync());
+    }
+
     private static string? Header(HttpResponseMessage answer, string named)
         => answer.Headers.TryGetValues(named, out IEnumerable<string>? values) ? values.Single() : null;
 }

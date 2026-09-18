@@ -442,6 +442,45 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
             schemas["PlaybackChapterResponder"]!["properties"]!.AsObject().Select(entry => entry.Key).ToArray());
     }
 
+    [Fact(DisplayName = "A-配信-074: the plan says which of the two files it plays and which other one it could be asked for")]
+    public async Task ThePlanNamesWhatItPlaysAndTheOtherOneItCouldBeAskedFor()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode plan = document["components"]!["schemas"]!["PlaybackPlanResponder"]!;
+        string[] properties = [.. plan["properties"]!.AsObject().Select(entry => entry.Key)];
+        string[] required = [.. plan["required"]!.AsArray().Select(name => name!.GetValue<string>())];
+
+        Assert.Contains("source", properties, StringComparer.Ordinal);
+        Assert.Contains("alternative", properties, StringComparer.Ordinal);
+        Assert.Contains("source", required, StringComparer.Ordinal);
+        Assert.Contains("alternative", required, StringComparer.Ordinal);
+        Assert.EndsWith(
+            "/PlaybackSource",
+            plan["properties"]!["source"]!["$ref"]!.GetValue<string>(),
+            StringComparison.Ordinal);
+
+        string[] otherOne =
+        [
+            .. plan["properties"]!["alternative"]!["oneOf"]!
+                .AsArray()
+                .Select(said => said!["type"]?.GetValue<string>() ?? said!["$ref"]!.GetValue<string>()),
+        ];
+
+        Assert.Contains("null", otherOne, StringComparer.Ordinal);
+        Assert.Contains(otherOne, said => said.EndsWith("/PlaybackSource", StringComparison.Ordinal));
+    }
+
+    [Fact(DisplayName = "A-配信-074: the two things a recording can be played from are spelled in the document the way the plan spells them")]
+    public async Task TheTwoThingsARecordingCanBePlayedFromAreSpelledInTheDocumentTheWayThePlanSpellsThem()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode source = document["components"]!["schemas"]!["PlaybackSource"]!;
+
+        Assert.Equal(
+            ["artefact", "recording"],
+            source["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
+    }
+
     [Fact]
     public async Task TheKindsAChapterCanBeAreSpelledInTheDocumentTheWayThePlanSpellsThem()
     {

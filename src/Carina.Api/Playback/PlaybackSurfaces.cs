@@ -1,4 +1,5 @@
 using Carina.Api.OpenApi;
+using Carina.Domain.Playback;
 using Carina.Domain.Streaming;
 
 namespace Carina.Api.Playback;
@@ -52,4 +53,17 @@ public static class PlaybackSurfaces
         + "for; one handed over as it is names none, because it carries the one sound it was encoded with.",
         SoundTracks.Names,
         SoundTracks.MainIsCalled);
+
+    public static readonly QueryInput WhichOfTheTwoFilesIsPlayed = QueryInput.OneOfThese(
+        PlayDelivery.Source,
+        "Which of the two files a recording can be played from is played. Asking for the artefact hands over "
+        + "the one encoded of this recording where there is one a browser plays, and transcodes the recording "
+        + "itself while playing where there is not; asking for none does the same, as it always did. Asking "
+        + "for the recording transcodes the recording itself while playing even where an artefact was made of "
+        + "it, and is refused where the recording is no longer on the disk rather than quietly handing over "
+        + "the artefact. Either way the transcoder is shared with live channels, so a recording asked for as "
+        + "it was recorded takes one of the few pictures this machine transcodes at once. The plan names the "
+        + "one it plays and the other one it could be asked for.",
+        PlaybackSources.Names,
+        PlaybackSources.ArtefactIsCalled);
 }
