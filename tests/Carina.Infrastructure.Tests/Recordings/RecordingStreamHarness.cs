@@ -501,14 +501,16 @@ internal static class RecordingStreamFixture
     public static DriverCall<SessionSnapshot> Over(
         Recording recording,
         SessionStopReason reason = SessionStopReason.EndTimeReached,
-        string? failureTitle = null)
+        string? failureTitle = null,
+        DateTime? endsAt = null)
         => DriverCall<SessionSnapshot>.Reached(
             new SessionSnapshot(
                 RecordingSessions.Named(recording.Id),
                 SessionPurpose.Recording,
                 "adapter1",
                 SessionState.Stopped,
-                Airs)
+                Airs,
+                endsAt)
             {
                 RecordingId = recording.Id.Wire,
                 Concluded = true,

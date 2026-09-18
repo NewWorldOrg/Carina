@@ -1,3 +1,4 @@
+using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Recordings;
@@ -27,13 +28,156 @@ public sealed class RecordingStreamSettlementTests
     [Fact]
     public async Task AnEndNobodyAskedForCannotBeCompleteHoweverWellItWentOtherwise()
     {
-        Recording read = await Judged(TimeSpan.FromMinutes(30), 3_400_000_000, asked: false);
+        Recording read = await Judged(
+            TimeSpan.FromMinutes(30),
+            3_400_000_000,
+            asked: false,
+            reason: SessionStopReason.DeviceFailed);
 
         OutcomeDetail unasked = Assert.Single(read.OutcomeDetail);
 
         Assert.Equal(RecordingOutcome.Truncated, read.Outcome);
         Assert.Equal(RecordingFault.StoppedUnasked, unasked.Fault);
         Assert.Equal(Ended, unasked.NoticedAt);
+    }
+
+    [Fact]
+    public async Task AnEndTheDriverWasToldAboutIsAnEndThisSideAskedForAndIsWeighedLikeOne()
+    {
+        Recording read = await Judged(TimeSpan.FromMinutes(30), 3_400_000_000, asked: false);
+
+        Assert.Equal(RecordingOutcome.Complete, read.Outcome);
+        Assert.Empty(read.OutcomeDetail);
+        Assert.NotNull(read.AbortedAt);
+    }
+
+    [Fact]
+    public async Task AnEndTheDriverWasToldAboutIsStillCutShortWhenTooLittleOfTheWindowWasCovered()
+    {
+        Recording read = await Judged(TimeSpan.FromSeconds(1750), 3_300_000_000, asked: false);
+
+        Assert.Equal(RecordingOutcome.Truncated, read.Outcome);
+        Assert.Contains(read.OutcomeDetail, detail => detail.Fault is RecordingFault.ShortOfTheWindow);
+        Assert.DoesNotContain(read.OutcomeDetail, detail => detail.Fault is RecordingFault.StoppedUnasked);
+    }
+
+    [Fact]
+    public async Task AnEndTheDriverWasToldAboutIsStillCutShortWhenTheFileIsTooLightForTheClock()
+    {
+        Recording read = await Judged(TimeSpan.FromMinutes(30), 2_000_000_000, asked: false);
+
+        Assert.Equal(RecordingOutcome.Truncated, read.Outcome);
+        Assert.Contains(read.OutcomeDetail, detail => detail.Fault is RecordingFault.LighterThanTheStream);
+        Assert.DoesNotContain(read.OutcomeDetail, detail => detail.Fault is RecordingFault.StoppedUnasked);
+    }
+
+    [Fact]
+    public async Task AnEndTheDriverWasToldAboutIsStillAFailureWhenNothingLanded()
+    {
+        Recording read = await Judged(TimeSpan.FromMinutes(30), 0, asked: false);
+
+        Assert.Equal(RecordingOutcome.Failed, read.Outcome);
+        Assert.Contains(read.OutcomeDetail, detail => detail.Fault is RecordingFault.NothingLanded);
+    }
+
+    [Theory]
+    [InlineData(SessionStopReason.DeviceFailed)]
+    [InlineData(SessionStopReason.RecordingFailed)]
+    [InlineData(SessionStopReason.Preempted)]
+    [InlineData(SessionStopReason.DrainCapReached)]
+    [InlineData(SessionStopReason.Unspecified)]
+    [InlineData(SessionStopReason.Requested)]
+    [InlineData(SessionStopReason.Running)]
+    public async Task AnEndTheDriverGivesAnyOtherReasonForIsStillAnEndNobodyAskedFor(SessionStopReason reason)
+    {
+        Recording read = await Judged(TimeSpan.FromMinutes(30), 3_400_000_000, asked: false, reason: reason);
+
+        Assert.Equal(RecordingOutcome.Truncated, read.Outcome);
+        Assert.Contains(read.OutcomeDetail, detail => detail.Fault is RecordingFault.StoppedUnasked);
+        Assert.Null(read.AbortedAt);
+    }
+
+    [Fact]
+    public async Task TheEndWrittenDownIsTheOneTheDriverWasHoldingRatherThanTheMomentItWasNoticed()
+    {
+        Recording read = await Judged(
+            TimeSpan.FromMinutes(30),
+            3_400_000_000,
+            asked: false,
+            endsAt: Airs.AddMinutes(30));
+
+        Assert.Equal(Airs.AddMinutes(30), read.AbortedAt);
+        Assert.Equal(Ended, read.StoppedAtActual);
+        Assert.True(read.AbortedAt >= read.StartedAtActual, "The end was written down before the recording began.");
+        Assert.True(read.AbortedAt <= read.StoppedAtActual, "The end was written down after the recording stopped.");
+    }
+
+    [Fact]
+    public async Task AnEndAnExtensionMovedIsWrittenDownWhereTheExtensionLeftIt()
+    {
+        Recording read = await Judged(
+            TimeSpan.FromMinutes(30),
+            3_400_000_000,
+            asked: false,
+            endsAt: Airs.AddMinutes(30.5));
+
+        Assert.Equal(Airs.AddMinutes(30.5), read.AbortedAt);
+    }
+
+    [Fact]
+    public async Task ASessionThatNamesNoEndOfItsOwnIsWrittenDownAtTheMomentOfTheJudgement()
+    {
+        Recording read = await Judged(TimeSpan.FromMinutes(30), 3_400_000_000, asked: false);
+
+        Assert.Equal(Ended, read.AbortedAt);
+    }
+
+    [Fact]
+    public async Task AnEndLaterThanTheMomentOfTheJudgementIsNotWrittenDownInTheFuture()
+    {
+        Recording read = await Judged(
+            TimeSpan.FromMinutes(30),
+            3_400_000_000,
+            asked: false,
+            endsAt: Ended.AddMinutes(5));
+
+        Assert.Equal(Ended, read.AbortedAt);
+    }
+
+    [Fact]
+    public async Task AnEndTheDriverNamesAtTheVeryMomentTheRecordingBeganIsStillAnEndItReached()
+    {
+        Recording read = await Judged(TimeSpan.FromMinutes(30), 3_400_000_000, asked: false, endsAt: Airs);
+
+        Assert.Equal(Airs, read.AbortedAt);
+        Assert.Equal(RecordingOutcome.Complete, read.Outcome);
+    }
+
+    [Fact]
+    public async Task AnEndTheDriverNamesBeforeTheRecordingBeganIsNoEndThisSideCanHaveAskedFor()
+    {
+        Recording read = await Judged(
+            TimeSpan.FromMinutes(30),
+            3_400_000_000,
+            asked: false,
+            endsAt: Airs.AddMinutes(-5));
+
+        Assert.Null(read.AbortedAt);
+        Assert.Equal(RecordingOutcome.Truncated, read.Outcome);
+        Assert.Contains(read.OutcomeDetail, detail => detail.Fault is RecordingFault.StoppedUnasked);
+    }
+
+    [Fact]
+    public async Task TheEndThisSideAlreadyWroteDownIsNotMovedByTheOneTheDriverWasHolding()
+    {
+        Recording read = await Judged(
+            TimeSpan.FromMinutes(30),
+            3_400_000_000,
+            asked: true,
+            endsAt: Airs.AddMinutes(30.5));
+
+        Assert.Equal(Airs.AddMinutes(30), read.AbortedAt);
+        Assert.Equal(RecordingOutcome.Complete, read.Outcome);
     }
 
     [Fact]
@@ -202,10 +346,13 @@ public sealed class RecordingStreamSettlementTests
         Assert.Equal("the wrong programme", read.OutcomeDetail[0].Note);
     }
 
-    private static WatchedDriver Concluded(Recording recording)
+    private static WatchedDriver Concluded(
+        Recording recording,
+        SessionStopReason reason = SessionStopReason.EndTimeReached,
+        DateTime? endsAt = null)
     {
         var driver = new WatchedDriver();
-        driver.Holding[RecordingSessions.Named(recording.Id)] = Over(recording);
+        driver.Holding[RecordingSessions.Named(recording.Id)] = Over(recording, reason, endsAt: endsAt);
 
         return driver;
     }
@@ -231,7 +378,9 @@ public sealed class RecordingStreamSettlementTests
         TimeSpan written,
         long? weighs,
         bool asked,
-        TuningResolution? tuning = null)
+        TuningResolution? tuning = null,
+        SessionStopReason reason = SessionStopReason.EndTimeReached,
+        DateTime? endsAt = null)
     {
         Recording recording = Ready(written, asked);
         var ledger = new StreamLedger();
@@ -239,7 +388,7 @@ public sealed class RecordingStreamSettlementTests
 
         await Supervisor(
                 ledger,
-                Concluded(recording),
+                Concluded(recording, reason, endsAt),
                 new WatchClock(Ended),
                 new WeighedFiles { Weighs = weighs },
                 tuning: tuning)

@@ -158,7 +158,7 @@ public sealed class RecordingStreamSupervisor(
             }
             else
             {
-                await SettleAsync(row, now, tally, cancellationToken);
+                await SettleAsync(row, session, now, tally, cancellationToken);
             }
 
             return;
@@ -507,6 +507,7 @@ public sealed class RecordingStreamSupervisor(
 
     private async Task SettleAsync(
         Recording recording,
+        SessionSnapshot session,
         DateTime now,
         Tally tally,
         CancellationToken cancellationToken)
@@ -527,6 +528,11 @@ public sealed class RecordingStreamSupervisor(
                 if (!ItIsOver(loaded, now))
                 {
                     return false;
+                }
+
+                if (TheEndItWasToldAbout(session, loaded, now) is { } reached)
+                {
+                    loaded.Abort(reached);
                 }
 
                 RecordingVerdict verdict = CompletionEvaluator.Judge(
@@ -564,6 +570,33 @@ public sealed class RecordingStreamSupervisor(
             recording.Id.Wire,
             outcome,
             weighed);
+    }
+
+    /// <summary>
+    /// A session the driver ended because it reached the end it was opened with ended where this
+    /// side asked it to: that end was named in the request that opened the session, and the driver
+    /// arriving there first is the same ending as the stop this side asks for once the window has
+    /// closed. Which of the two got there first is a race, so the reading is taken off the reason
+    /// rather than off who moved first.
+    ///
+    /// The moment written down is the end the driver was holding — the one the request named, or
+    /// the later one an extension moved it to — so a recording judged long afterwards is not said
+    /// to have been stopped at the moment somebody looked. An end this side already wrote down
+    /// stands, a session that names no end of its own is read at the moment of the judgement, and
+    /// one that names an end this recording cannot have reached is left as an end nobody asked
+    /// for. Every other reason a session ends is one nobody asked for and goes on reading that way.
+    /// </summary>
+    private static DateTime? TheEndItWasToldAbout(SessionSnapshot session, Recording recording, DateTime now)
+    {
+        if (session.StopReason is not SessionStopReason.EndTimeReached || recording.AbortedAt is not null)
+        {
+            return null;
+        }
+
+        DateTime told = session.EndsAt?.UtcDateTime ?? now;
+        DateTime reached = told > now ? now : told;
+
+        return reached < recording.StartedAtActual ? null : reached;
     }
 
     private async Task<TuneParams?> TuneOfAsync(Recording recording, CancellationToken cancellationToken)

@@ -40,7 +40,7 @@ public sealed class RecordingStreamLedgerTests(RepositoryDatabase database)
         await Add(recording);
 
         var driver = new WatchedDriver();
-        driver.Holding[RecordingSessions.Named(recording.Id)] = Over(recording);
+        driver.Holding[RecordingSessions.Named(recording.Id)] = Over(recording, SessionStopReason.DeviceFailed);
 
         RecordingWatch watch = await Supervisor(
                 driver,
@@ -64,6 +64,44 @@ public sealed class RecordingStreamLedgerTests(RepositoryDatabase database)
         Assert.Equal(3_300_000_000, read.FileSizeObserved);
         Assert.Equal(Ended, read.StoppedAtActual);
         Assert.Equal("Truncated", await Projected(reservation.Id));
+    }
+
+    [Fact]
+    public async Task TheEndTheDriverWasToldAboutReachesTheRowAndLetsItStandComplete()
+    {
+        Reservation reservation = Plan(6203);
+        await Add(reservation);
+        await Claim(reservation.Id);
+
+        Recording recording = Begin(6203, reservation.Id);
+        recording.Wrote(TimeSpan.FromMinutes(30));
+        await Add(recording);
+
+        var driver = new WatchedDriver();
+        driver.Holding[RecordingSessions.Named(recording.Id)] = Over(
+            recording,
+            SessionStopReason.EndTimeReached,
+            endsAt: Airs.AddMinutes(30));
+
+        RecordingWatch watch = await Supervisor(
+                driver,
+                new WeighedFiles { Weighs = 3_400_000_000 },
+                new WatchClock(Ended),
+                recording.Id,
+                null)
+            .WatchAsync(Cancel);
+
+        await using CarinaDbContext reader = database.Open();
+        Recording read = await reader.Set<Recording>().SingleAsync(row => row.Id == recording.Id);
+        DateTime abortedAt = Assert.NotNull(read.AbortedAt);
+
+        Assert.Equal(1, watch.Settled);
+        Assert.Equal(RecordingOutcome.Complete, read.Outcome);
+        Assert.Equal(Airs.AddMinutes(30), abortedAt);
+        Assert.Equal(DateTimeKind.Utc, abortedAt.Kind);
+        Assert.Empty(read.OutcomeDetail);
+        Assert.Equal(Ended, read.StoppedAtActual);
+        Assert.Equal("Complete", await Projected(reservation.Id));
     }
 
     [Fact]
