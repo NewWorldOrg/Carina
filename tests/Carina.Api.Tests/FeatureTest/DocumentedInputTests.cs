@@ -103,7 +103,7 @@ public sealed class DocumentedInputTests(TestingWebApplicationFactory factory)
     public async Task ThePlayingSaysWhichOfTheTwoFilesItPlaysAndThatNamingNonePlaysTheArtefact()
     {
         JsonNode document = await ServedOpenApi.FetchAsync(factory);
-        JsonNode source = Parameter(document, PlayDelivery.Path, PlayDelivery.From);
+        JsonNode source = Parameter(document, PlayDelivery.Path, PlayDelivery.Source);
 
         Assert.Equal("query", source["in"]!.GetValue<string>());
         Assert.Equal("string", source["schema"]!["type"]!.GetValue<string>());
@@ -121,7 +121,7 @@ public sealed class DocumentedInputTests(TestingWebApplicationFactory factory)
     public void TheScanSeesTheQueryThatChoosesWhichOfTheTwoFilesIsPlayed()
     {
         Assert.Contains(
-            $"{PlayDelivery.Path} {PlayDelivery.From}",
+            $"{PlayDelivery.Path} {PlayDelivery.Source}",
             QueryInputScan.WhatEachSurfaceReads(QueryInputScan.ApiDirectory).Select(read => read.ToString()),
             StringComparer.Ordinal);
     }

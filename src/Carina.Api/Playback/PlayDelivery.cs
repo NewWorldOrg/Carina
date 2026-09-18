@@ -26,7 +26,7 @@ public static class PlayDelivery
 
     public const string Sound = "sound";
 
-    public const string From = "source";
+    public const string Source = "source";
 
     public const string Json = "application/json";
 
@@ -110,7 +110,7 @@ public static class PlayDelivery
             return;
         }
 
-        AskedSource source = AskedSource.Read(context.Request.Query[From]);
+        AskedSource source = AskedSource.Read(context.Request.Query[Source]);
 
         if (source.Answer is SourceAnswer.NotOneOfThese)
         {

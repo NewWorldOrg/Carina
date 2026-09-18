@@ -55,7 +55,7 @@ public static class PlaybackSurfaces
         SoundTracks.MainIsCalled);
 
     public static readonly QueryInput WhichOfTheTwoFilesIsPlayed = QueryInput.OneOfThese(
-        PlayDelivery.From,
+        PlayDelivery.Source,
         "Which of the two files a recording can be played from is played. Asking for the artefact hands over "
         + "the one encoded of this recording where there is one a browser plays, and transcodes the recording "
         + "itself while playing where there is not; asking for none does the same, as it always did. Asking "

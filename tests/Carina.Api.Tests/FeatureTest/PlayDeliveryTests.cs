@@ -487,7 +487,6 @@ public sealed class PlayDeliveryTests
         Assert.Equal(recording.FileName, Assert.Single(feature.Player.Opened).Name);
     }
 
-
     [Fact]
     public async Task ThePlanNamesTheSoundsTheRecordingCanBeAskedFor()
     {
