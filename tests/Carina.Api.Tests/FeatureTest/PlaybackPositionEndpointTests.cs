@@ -290,6 +290,43 @@ public sealed class PlaybackPositionEndpointTests
         Assert.Equal(left.Id, only.RecordingId);
     }
 
+    [Fact(DisplayName = "A-配信-074: where the watching got to is kept once for a recording, whichever of the two it is watched from")]
+    public async Task WhereTheWatchingGotToIsTheSameWhicheverOfTheTwoThePlanIsAskedFor()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Encoded(recording);
+
+        await KeepAsync(feature.Client, recording.Id.Wire, new { positionSec = 618.5 });
+
+        using HttpResponseMessage asEncoded = await feature.PlanAsync(recording, "?source=artefact");
+        using HttpResponseMessage asRecorded = await feature.PlanAsync(recording, "?source=recording");
+        JsonElement artefact = (await PlayFeature.PlanOfAsync(asEncoded)).GetProperty("data");
+        JsonElement itself = (await PlayFeature.PlanOfAsync(asRecorded)).GetProperty("data");
+
+        Assert.Equal("artefact", artefact.GetProperty("source").GetString());
+        Assert.Equal("recording", itself.GetProperty("source").GetString());
+        Assert.Equal(618.5, artefact.GetProperty("resumeAtSec").GetDouble());
+        Assert.Equal(618.5, itself.GetProperty("resumeAtSec").GetDouble());
+        Assert.Single(feature.Positions.Positions);
+    }
+
+    [Fact(DisplayName = "A-配信-074: a recording asked for as it was recorded is started where the watching got to, as it is when it is asked for encoded")]
+    public async Task ARecordingAskedForAsItWasRecordedIsStartedWhereTheWatchingGotTo()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Encoded(recording);
+
+        await KeepAsync(feature.Client, recording.Id.Wire, new { positionSec = 300 });
+
+        using HttpResponseMessage answer = await feature.PictureAsync(recording, "?source=recording");
+
+        Assert.Equal(HttpStatusCode.OK, answer.StatusCode);
+        Assert.Equal(TimeSpan.FromSeconds(300), Assert.Single(feature.Player.AskedFrom));
+        Assert.Equal(recording.FileName, Assert.Single(feature.Player.Opened).Name);
+    }
+
     private static Recording Settled(RecordingFeature feature, int eventId = 4_001)
     {
         Recording held = feature.Held(eventId: eventId);

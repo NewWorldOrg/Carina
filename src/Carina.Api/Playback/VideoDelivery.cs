@@ -43,7 +43,7 @@ public static class VideoDelivery
     private static async Task ServeAsync(HttpContext context, RecordingId recordingId, PlaybackService playback)
     {
         ServiceResult<PlaybackOffer, PlaybackFailure> offered =
-            await playback.OfferAsync(recordingId, SoundTrack.Main, context.RequestAborted);
+            await playback.OfferAsync(recordingId, SoundTrack.Main, PlaybackSource.Artefact, context.RequestAborted);
 
         if (!offered.IsSuccess)
         {

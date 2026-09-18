@@ -63,6 +63,8 @@ internal sealed class HeldOnTheFlyPlayer : IOnTheFlyPlayer
 
     public List<SoundPlacement> AskedWith { get; } = [];
 
+    public List<PlaybackFile> Opened { get; } = [];
+
     public int Sounds { get; set; } = 1;
 
     public string? SoundsCannotBeRead { get; set; }
@@ -83,6 +85,7 @@ internal sealed class HeldOnTheFlyPlayer : IOnTheFlyPlayer
         AskedFor.Add(profile?.Name);
         AskedOf.Add(service);
         AskedWith.Add(sound);
+        Opened.Add(file);
 
         if (Refuses is { } refusal)
         {
@@ -413,6 +416,77 @@ public sealed class PlayDeliveryTests
             PlayDelivery.TheSoundsThereAre,
             (await PlayFeature.PlanOfAsync(answer)).GetProperty("message").GetString());
     }
+
+    [Theory]
+    [InlineData("encoded")]
+    [InlineData("Artefact")]
+    [InlineData("1")]
+    [InlineData("../../etc/passwd")]
+    public async Task SomethingThisApplicationCannotPlayARecordingFromIsRefusedAndTheTwoItCanAreNamed(string said)
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+
+        using HttpResponseMessage answer = await feature.PictureAsync(recording, $"?source={said}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, answer.StatusCode);
+        Assert.Empty(feature.Player.Opened);
+        Assert.Equal(
+            PlayDelivery.TheSourcesThereAre,
+            (await PlayFeature.PlanOfAsync(answer)).GetProperty("message").GetString());
+    }
+
+    [Theory]
+    [InlineData("encoded")]
+    [InlineData("Artefact")]
+    public async Task APlanAskedForFromSomethingThisApplicationCannotPlayARecordingFromIsRefusedTheSameWay(
+        string said)
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+
+        using HttpResponseMessage answer = await feature.PlanAsync(recording, $"?source={said}");
+
+        Assert.Equal(HttpStatusCode.BadRequest, answer.StatusCode);
+        Assert.Equal(
+            PlayDelivery.TheSourcesThereAre,
+            (await PlayFeature.PlanOfAsync(answer)).GetProperty("message").GetString());
+    }
+
+    [Theory]
+    [InlineData("?source=recording")]
+    [InlineData("?source=artefact")]
+    [InlineData("")]
+    public async Task ARecordingNothingHasEncodedIsTranscodedFromItselfWhicheverSourceIsAskedFor(string query)
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete, bytes: 2_500);
+
+        using HttpResponseMessage picture = await feature.PictureAsync(recording, query);
+        JsonElement read = (await PlayFeature.PlanOfAsync(
+            await feature.PlanAsync(recording, query))).GetProperty("data");
+
+        Assert.Equal(HttpStatusCode.OK, picture.StatusCode);
+        Assert.Equal("onTheFly", Header(picture, PlaybackHeaders.Route));
+        Assert.Equal(recording.FileName, Assert.Single(feature.Player.Opened).Name);
+        Assert.Equal("recording", read.GetProperty("source").GetString());
+        Assert.Equal(JsonValueKind.Null, read.GetProperty("alternative").ValueKind);
+    }
+
+    [Fact(DisplayName = "A-配信-074: a recording asked for as it was recorded takes one of the few pictures this machine transcodes at once, and is refused when they are all taken")]
+    public async Task ARecordingAskedForAsItWasRecordedIsRefusedWhenAsManyAreBeingTranscodedAsThisMachineAllows()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Encoded(recording);
+        feature.Player.Refuses = OnTheFlyRefusal.TooManyAlready;
+
+        using HttpResponseMessage picture = await feature.PictureAsync(recording, "?source=recording");
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, picture.StatusCode);
+        Assert.Equal(recording.FileName, Assert.Single(feature.Player.Opened).Name);
+    }
+
 
     [Fact]
     public async Task ThePlanNamesTheSoundsTheRecordingCanBeAskedFor()

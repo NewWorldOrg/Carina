@@ -26,6 +26,8 @@ public static class PlayDelivery
 
     public const string Sound = "sound";
 
+    public const string From = "source";
+
     public const string Json = "application/json";
 
     public const string NoSeeking = "none";
@@ -41,6 +43,10 @@ public static class PlayDelivery
     public const string TheSoundsThereAre =
         "A recording is played with the main sound the broadcast carried or with its secondary sound, "
         + "and with no other.";
+
+    public const string TheSourcesThereAre =
+        "A recording is played from the artefact encoded of it or from the recording itself, and from "
+        + "nothing else.";
 
     public const string NothingToChooseFrom =
         "A recording handed over as it is carries the one sound it was encoded with, so there is no sound "
@@ -104,15 +110,25 @@ public static class PlayDelivery
             return;
         }
 
+        AskedSource source = AskedSource.Read(context.Request.Query[From]);
+
+        if (source.Answer is SourceAnswer.NotOneOfThese)
+        {
+            await RefuseAsync(context, StatusCodes.Status400BadRequest, TheSourcesThereAre);
+
+            return;
+        }
+
         TimeSpan? leftOffAt = await WhereTheWatchingGotToAsync(context, recordingId, positions);
         TimeSpan from = asked.Named ?? leftOffAt ?? TimeSpan.Zero;
 
         ServiceResult<PlaybackOffer, PlaybackFailure> offered =
-            await playback.OfferAsync(recordingId, sound.Track, context.RequestAborted);
+            await playback.OfferAsync(recordingId, sound.Track, source.Source, context.RequestAborted);
 
         if (!offered.IsSuccess)
         {
             if (AsksForThePlan(context.Request)
+                && source.Source is PlaybackSource.Artefact
                 && sound.Track is not SoundTrack.Main
                 && await WhatIsStillWithinReachAsync(playback, recordingId, context.RequestAborted) is { } narrowed)
             {
@@ -247,7 +263,7 @@ public static class PlayDelivery
         CancellationToken cancellationToken)
     {
         ServiceResult<PlaybackOffer, PlaybackFailure> asItWasEncoded =
-            await playback.OfferAsync(recording, SoundTrack.Main, cancellationToken);
+            await playback.OfferAsync(recording, SoundTrack.Main, PlaybackSource.Artefact, cancellationToken);
 
         return asItWasEncoded.IsSuccess && !asItWasEncoded.Data!.Plan.Transcodes
             ? asItWasEncoded.Data
