@@ -26,7 +26,8 @@ public sealed class TunerSessionManager(
     TimeSpan? tunerGrace = null,
     TimeSpan? letGoLimit = null,
     TimeSpan? handOverLimit = null,
-    TimeSpan? progressInterval = null
+    TimeSpan? progressInterval = null,
+    ITunerDeviceCheck? deviceCheck = null
 ) : IHostedService
 {
     public const int RetainedSessions = 64;
@@ -66,6 +67,9 @@ public sealed class TunerSessionManager(
     private readonly TimeSpan handOver = handOverLimit ?? HandOverLimit;
     private readonly IRecordingWriterFactory writerFactory =
         recordingWriters ?? new RecordingWriterFactory();
+    private readonly FaultedTunerRecheck? recheck = deviceCheck is null
+        ? null
+        : new FaultedTunerRecheck(deviceCheck, timeProvider, logger);
 
     private readonly Lock drainGate = new();
 
@@ -177,6 +181,7 @@ public sealed class TunerSessionManager(
         finally
         {
             progress?.Dispose();
+            recheck?.Dispose();
         }
     }
 
@@ -458,7 +463,9 @@ public sealed class TunerSessionManager(
             {
                 refusal = SessionStart.Refused(
                     SessionRefusal.FaultedDevice,
-                    $"The device '{named}' is faulted and is not handed out until the driver restarts: {fault}"
+                    recheck?.NextTryOf(named) is { } nextTryAt
+                        ? $"The device '{named}' is faulted and is not handed out until it opens again; it is next tried at {nextTryAt:O}: {fault}"
+                        : $"The device '{named}' is faulted and is not handed out until the driver restarts: {fault}"
                 );
 
                 return false;
@@ -1298,12 +1305,7 @@ public sealed class TunerSessionManager(
 
         if (session.StopReason is SessionStopReason.DeviceFailed)
         {
-            faultedDevices[session.DeviceId] =
-                $"The device failed while serving '{session.SessionId}': "
-                + (session.FailureCause?.Message ?? "no cause was recorded.");
-            healthChangedAt[session.DeviceId] = timeProvider.GetUtcNow();
-
-            pool.Discard(session.DeviceId);
+            FaultAfterFailing(session);
         }
 
         LetGoOfTheRecording(session.RecordingId, session.SessionId);
@@ -1318,6 +1320,68 @@ public sealed class TunerSessionManager(
 
         Announce();
     }
+
+    private void FaultAfterFailing(TunerSession session)
+    {
+        string deviceId = session.DeviceId;
+        string fault =
+            $"The device failed while serving '{session.SessionId}': "
+            + (session.FailureCause?.Message ?? "no cause was recorded.");
+
+        faultedDevices[deviceId] = fault;
+        healthChangedAt[deviceId] = timeProvider.GetUtcNow();
+
+        pool.Discard(deviceId);
+
+        if (recheck is null || draining || DeviceNamed(deviceId) is not { } device)
+        {
+            return;
+        }
+
+        if (recheck.Schedule(device, Restore) is { } nextTryAt)
+        {
+            logger.LogWarning(
+                "The device {DeviceId} failed while serving {SessionId}, so it is not handed out until it opens again; it is tried again at {NextTryAt}.",
+                deviceId,
+                session.SessionId.Value,
+                nextTryAt
+            );
+
+            return;
+        }
+
+        faultedDevices[deviceId] =
+            fault
+            + $" It had been handed back out less than {RelapseMinutes} minutes earlier, so it is not tried again.";
+
+        logger.LogError(
+            "The device {DeviceId} failed again while serving {SessionId} within {RelapseMinutes} minutes of being handed back out, so it is not tried again and stays faulted until the driver restarts.",
+            deviceId,
+            session.SessionId.Value,
+            RelapseMinutes
+        );
+    }
+
+    private static double RelapseMinutes => FaultedTunerRecheck.RelapseWindow.TotalMinutes;
+
+    private void Restore(string deviceId)
+    {
+        faultedDevices.TryRemove(deviceId, out _);
+        healthChangedAt[deviceId] = timeProvider.GetUtcNow();
+
+        logger.LogInformation(
+            "The faulted device {DeviceId} opened when it was tried again, so it is no longer faulted and is handed out again.",
+            deviceId
+        );
+
+        events?.Signal(DriverEvents.TunerHealthChanged);
+        events?.Signal(DriverEvents.Tuners);
+    }
+
+    private DeviceSettings? DeviceNamed(string deviceId) =>
+        (configuration.Devices ?? []).FirstOrDefault(candidate =>
+            string.Equals(candidate?.Id, deviceId, StringComparison.Ordinal)
+        );
 
     private SignalQualityWatch Watch(SessionPurpose purpose) =>
         new(
@@ -1382,6 +1446,7 @@ public sealed class TunerSessionManager(
 
     public void Fault(string deviceId, string detail)
     {
+        recheck?.Forget(deviceId);
         faultedDevices[deviceId] = detail;
         healthChangedAt[deviceId] = timeProvider.GetUtcNow();
 
@@ -1403,9 +1468,7 @@ public sealed class TunerSessionManager(
 
     public bool Turn(string deviceId, bool disabled)
     {
-        DeviceSettings? device = (configuration.Devices ?? []).FirstOrDefault(candidate =>
-            string.Equals(candidate?.Id, deviceId, StringComparison.Ordinal)
-        );
+        DeviceSettings? device = DeviceNamed(deviceId);
 
         if (device is null)
         {

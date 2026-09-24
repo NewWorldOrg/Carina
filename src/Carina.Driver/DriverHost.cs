@@ -124,12 +124,18 @@ public static class DriverHost
                 provider.GetRequiredService<IDescramblerFactory>().Unscrambles
             )
         );
-        builder.Services.AddSingleton<ITunerDeviceFactory>(provider => new TunerDeviceFactory(
+        builder.Services.AddSingleton(provider => new TunerDeviceFactory(
             provider.GetRequiredService<DriverConfiguration>(),
             provider.GetRequiredService<TimeProvider>(),
             provider.GetRequiredService<IDescramblerFactory>(),
             provider.GetRequiredService<ILogger<TunerDeviceFactory>>()
         ));
+        builder.Services.AddSingleton<ITunerDeviceFactory>(provider =>
+            provider.GetRequiredService<TunerDeviceFactory>()
+        );
+        builder.Services.AddSingleton<ITunerDeviceCheck>(provider =>
+            provider.GetRequiredService<TunerDeviceFactory>()
+        );
         builder.Services.AddSingleton(_ => TunerDetectors.For(configuration));
         builder.Services.AddSingleton(_ => new TunerLedgerStore(configuration, configurationPath));
         builder.Services.AddSingleton<IRecordingWriterFactory, RecordingWriterFactory>();
@@ -145,7 +151,8 @@ public static class DriverHost
             provider.GetRequiredService<ILogger<TunerSessionManager>>(),
             events: provider.GetRequiredService<DriverEventHub>(),
             diagnostics: provider.GetRequiredService<DiagnosticsStore>(),
-            recordingWriters: provider.GetRequiredService<IRecordingWriterFactory>()
+            recordingWriters: provider.GetRequiredService<IRecordingWriterFactory>(),
+            deviceCheck: provider.GetRequiredService<ITunerDeviceCheck>()
         ));
 
         builder.Services.AddSingleton<RecordingEraser>();
