@@ -118,6 +118,24 @@ public sealed class DvbTunerDevice : ITunerDevice, ISignalQualitySource
         }
     }
 
+    public static void OpenAndClose(IDvbSystemCalls calls, DvbDevicePaths paths)
+    {
+        using DvbFrontend frontend = DvbFrontend.Open(calls, paths.Frontend, DvbAccess.Control);
+        SyscallOutcome opened = calls.Open(paths.Dvr, DvbAccess.Stream);
+
+        if (opened.Refused)
+        {
+            throw DvbFailure.AtDevice(
+                paths.Dvr,
+                "opening the transport stream reader",
+                opened.Error,
+                "The frontend opened, but the transport stream cannot be taken off this adapter."
+            );
+        }
+
+        calls.Close(opened.Value);
+    }
+
     public byte[] Read(int count, CancellationToken cancellationToken)
     {
         byte[] buffer = new byte[count];

@@ -196,6 +196,67 @@ public sealed class TunerDeviceFactoryDvbTests
     }
 
     [Fact]
+    public void CheckingADeviceOpensItsFrontendAndItsReaderAsASessionWouldAndClosesBoth()
+    {
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
+        var factory = TunerDeviceFactory.Using(Configured(TunerBackend.Dvb), clock, calls);
+
+        factory.Check(Terrestrial());
+
+        Assert.Equal(
+            [
+                ("/dev/dvb/adapter0/frontend0", DvbAccess.Control),
+                ("/dev/dvb/adapter0/dvr0", DvbAccess.Stream),
+            ],
+            calls.Opened.Select(node => (node.Path, node.Access))
+        );
+        Assert.Equal(
+            calls.Opened.Select(node => node.Descriptor).Order(),
+            calls.Closed.Order()
+        );
+        Assert.Empty(calls.PropertiesSet);
+    }
+
+    [Fact]
+    public void ADeviceWhoseReaderWillNotOpenFailsTheCheckAndLeavesNothingOpen()
+    {
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
+        calls.RefuseToOpen("/dev/dvb/adapter0/dvr0", Errno.NoSuchDevice);
+        var factory = TunerDeviceFactory.Using(Configured(TunerBackend.Dvb), clock, calls);
+
+        DvbDeviceException refusal = Assert.Throws<DvbDeviceException>(
+            () => factory.Check(Terrestrial())
+        );
+
+        Assert.Contains("/dev/dvb/adapter0/dvr0", refusal.Message, StringComparison.Ordinal);
+        Assert.Contains("errno 19", refusal.Message, StringComparison.Ordinal);
+        Assert.Equal(calls.Opened.Select(node => node.Descriptor), calls.Closed);
+    }
+
+    [Fact]
+    public void ADeviceWhoseFrontendWillNotOpenFailsTheCheckBeforeItsReaderIsTouched()
+    {
+        (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();
+        calls.RefuseToOpen("/dev/dvb/adapter0/frontend0", Errno.Busy);
+        var factory = TunerDeviceFactory.Using(Configured(TunerBackend.Dvb), clock, calls);
+
+        Assert.Throws<DvbDeviceException>(() => factory.Check(Terrestrial()));
+
+        Assert.Empty(calls.Opened);
+    }
+
+    [Fact]
+    public void CheckingADeviceOnTheSyntheticBackendTouchesNothing()
+    {
+        var calls = new ScriptedDvbSystemCalls();
+        var factory = TunerDeviceFactory.Using(Configured(TunerBackend.Fake), TimeProvider.System, calls);
+
+        factory.Check(new DeviceSettings("fake-terrestrial", DeviceKind.Terrestrial));
+
+        Assert.Empty(calls.Opened);
+    }
+
+    [Fact]
     public void ADvbTunerCanBeAskedForItsQualityWhileTheSessionHoldsIt()
     {
         (ScriptedDvbSystemCalls? calls, ManualTimeProvider? clock) = Ready();

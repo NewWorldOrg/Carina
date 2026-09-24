@@ -21,7 +21,12 @@ public interface ITunerDeviceFactory
     ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune);
 }
 
-public sealed class TunerDeviceFactory : ITunerDeviceFactory
+public interface ITunerDeviceCheck
+{
+    void Check(DeviceSettings device);
+}
+
+public sealed class TunerDeviceFactory : ITunerDeviceFactory, ITunerDeviceCheck
 {
     private readonly TunerBackend backend;
     private readonly TimeProvider time;
@@ -86,25 +91,43 @@ public sealed class TunerDeviceFactory : ITunerDeviceFactory
         {
             TunerBackend.Fake => Synthetic(tune?.ToLegacyRequest() ?? tuning),
             TunerBackend.Dvb => OpenDvb(device, tuning, tune),
-            _ => throw new InvalidOperationException(
-                "The tuner backend was never established; the configuration should have been rejected."
-            ),
+            _ => throw BackendNeverEstablished(),
         };
+
+    public void Check(DeviceSettings device)
+    {
+        switch (backend)
+        {
+            case TunerBackend.Fake:
+                return;
+            case TunerBackend.Dvb:
+                DvbTunerDevice.OpenAndClose(systemCalls.Value, PathsOf(device));
+
+                return;
+            default:
+                throw BackendNeverEstablished();
+        }
+    }
+
+    private static InvalidOperationException BackendNeverEstablished() =>
+        new(
+            "The tuner backend was never established; the configuration should have been rejected."
+        );
+
+    private static DvbDevicePaths PathsOf(DeviceSettings device) =>
+        DvbDevicePaths.TryDerive(device.DevicePath, out DvbDevicePaths? paths, out string? problem)
+            ? paths
+            : throw DvbFailure.Refused($"devices['{device.Id}']: {problem}");
 
     private static ITunerDevice Synthetic(TuningRequest tuning) =>
         new FakeTunerDevice(tuning.PhysicalChannel, tuning.ServiceId);
 
     private ITunerDevice OpenDvb(DeviceSettings device, TuningRequest tuning, TuneParams? tune)
     {
-        if (!DvbDevicePaths.TryDerive(device.DevicePath, out DvbDevicePaths? paths, out string? problem))
-        {
-            throw DvbFailure.Refused($"devices['{device.Id}']: {problem}");
-        }
-
         ITunerDevice opened = DvbTunerDevice.Open(
             systemCalls.Value,
             time,
-            paths,
+            PathsOf(device),
             DvbTuneRequest.Resolve(tune, tuning),
             LnbPower.For(device.Kind, device.LnbPower),
             settings,
