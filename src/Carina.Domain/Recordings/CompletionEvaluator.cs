@@ -35,6 +35,11 @@ public static class CompletionEvaluator
 
         WeighTheFile(evidence, bitrate, tolerance, faults);
 
+        if (evidence.LeftScrambled is QualityLevel.Warning or QualityLevel.MayNotBeWatchable)
+        {
+            faults.Add(RecordingFault.ScramblingUnresolved);
+        }
+
         return RecordingVerdict.Of(Decide(faults, coverage, tolerance), coverage, faults);
     }
 

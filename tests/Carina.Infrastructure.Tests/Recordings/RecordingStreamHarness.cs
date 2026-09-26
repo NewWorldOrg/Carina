@@ -4,6 +4,7 @@ using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.DriverStatus;
 using Carina.Domain.Programmes;
+using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Recordings;
@@ -548,11 +549,13 @@ internal static class RecordingStreamFixture
         HeldStatus? status = null,
         TuningResolution? tuning = null,
         RecordingWatchSettings? settings = null,
-        ILogger<RecordingStreamSupervisor>? logger = null)
+        ILogger<RecordingStreamSupervisor>? logger = null,
+        HeldQualityThresholds? thresholds = null)
     {
         var services = new ServiceCollection();
         services.AddScoped<IRecordingRepository>(_ => ledger);
         services.AddScoped<IServiceTuningDirectory>(_ => new ResolvedTuning(tuning ?? Terrestrial));
+        services.AddScoped<IQualityThresholdRepository>(_ => thresholds ?? new HeldQualityThresholds());
 
         return new RecordingStreamSupervisor(
             services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),

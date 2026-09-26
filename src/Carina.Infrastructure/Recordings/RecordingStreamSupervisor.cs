@@ -2,6 +2,7 @@ using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.DriverStatus;
+using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Collection;
 
@@ -519,6 +520,7 @@ public sealed class RecordingStreamSupervisor(
 
         ExpectedBitrate bitrate = ExpectedBitrate.Of(tune.Kind);
         long? weighed = await weigher.WeighAsync(recording.OutputRoot, recording.FileName, cancellationToken);
+        QualityBands bands = await BandsAsync(now, cancellationToken);
         RecordingOutcome outcome = RecordingOutcome.Failed;
 
         bool settled = await ApplyAsync(
@@ -541,7 +543,8 @@ public sealed class RecordingStreamSupervisor(
                         loaded.Written,
                         loaded.ExpectedWindowStart,
                         loaded.ExpectedWindowEnd,
-                        loaded.AbortedAt),
+                        loaded.AbortedAt,
+                        RecordingQuality.Of(loaded.Counters, loaded.ScrambledPackets, bands).Scrambled),
                     bitrate,
                     CompletionTolerance.Default);
 
@@ -597,6 +600,16 @@ public sealed class RecordingStreamSupervisor(
         DateTime reached = told > now ? now : told;
 
         return reached < recording.StartedAtActual ? null : reached;
+    }
+
+    private async Task<QualityBands> BandsAsync(DateTime now, CancellationToken cancellationToken)
+    {
+        await using AsyncServiceScope scope = scopes.CreateAsyncScope();
+        IReadOnlyList<QualityThreshold> held = await scope.ServiceProvider
+            .GetRequiredService<IQualityThresholdRepository>()
+            .ListAsync(cancellationToken);
+
+        return QualityThresholdStanding.Bands(QualityThresholdStanding.Over(held, now));
     }
 
     private async Task<TuneParams?> TuneOfAsync(Recording recording, CancellationToken cancellationToken)
