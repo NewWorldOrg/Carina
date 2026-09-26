@@ -4,6 +4,7 @@ using System.Text.Json;
 
 using Carina.Contracts;
 using Carina.Domain.Driver;
+using Carina.Domain.Encodings;
 using Carina.Domain.Integrity;
 using Carina.Domain.Recordings;
 using Carina.Domain.Thumbnails;
@@ -57,6 +58,92 @@ public sealed class DeleteRecordingEndpointTests
         Assert.Equal("stillRecording", body.GetProperty("data").GetProperty("refusal").GetString());
         Assert.Empty(feature.Eraser.Asked);
         Assert.Single(feature.Recordings.Recordings);
+    }
+
+    [Fact]
+    public async Task ARecordingWithAnEncodeWaitingOrRunningIsRefusedAndNothingOfItIsTouched()
+    {
+        await using RecordingFeature feature = new();
+        Recording held = Ended(feature);
+        feature.Encodes.UnderWay = true;
+
+        (HttpStatusCode status, JsonElement body) = await feature.DeleteAsync($"/api/recordings/{held.Id.Wire}");
+
+        Assert.Equal(HttpStatusCode.Conflict, status);
+        Assert.False(body.GetProperty("status").GetBoolean());
+        Assert.Equal("beingEncoded", body.GetProperty("data").GetProperty("refusal").GetString());
+        Assert.Empty(feature.Eraser.Asked);
+        Assert.Empty(feature.Encodes.Asked);
+        Assert.Single(feature.Recordings.Recordings);
+    }
+
+    [Fact]
+    public async Task AnEncodeQueuedWhileTheFileWasBeingTakenAwayKeepsTheRowAndItsEncodes()
+    {
+        await using RecordingFeature feature = new();
+        Recording held = Ended(feature);
+        feature.Encodes.UnderWayWhenAsked = () => feature.Eraser.Asked.Count > 0;
+
+        (HttpStatusCode status, JsonElement body) = await feature.DeleteAsync($"/api/recordings/{held.Id.Wire}");
+
+        Assert.Equal(HttpStatusCode.Conflict, status);
+        Assert.Equal("beingEncoded", body.GetProperty("data").GetProperty("refusal").GetString());
+        Assert.Equal([held.Id], feature.Eraser.Asked);
+        Assert.Empty(feature.Encodes.Asked);
+        Assert.Single(feature.Recordings.Recordings);
+    }
+
+    [Fact]
+    public async Task WhatItsEncodesLeftLeavesTheDiskWhileTheRowIsStillThereAndIsCounted()
+    {
+        await using RecordingFeature feature = new();
+        Recording held = Ended(feature);
+        feature.Eraser.Answer = RecordingErasure.Erased(2);
+        feature.Encodes.Answer = new EncodesErased(3, []);
+        int rowsWhenAsked = -1;
+        feature.Encodes.WhenErasing = () => rowsWhenAsked = feature.Recordings.Recordings.Count;
+
+        (HttpStatusCode status, JsonElement body) = await feature.DeleteAsync($"/api/recordings/{held.Id.Wire}");
+
+        Assert.Equal(HttpStatusCode.OK, status);
+        Assert.Equal(5, body.GetProperty("data").GetProperty("filesRemoved").GetInt32());
+        Assert.Equal([held.Id], feature.Encodes.Asked);
+        Assert.Equal(1, rowsWhenAsked);
+        Assert.Empty(feature.Recordings.Recordings);
+    }
+
+    [Fact]
+    public async Task AnEncodeLeftOnTheDiskKeepsTheRowBecauseTheRowIsWhatSaysTheJobIsUnfinished()
+    {
+        await using RecordingFeature feature = new();
+        Recording held = Ended(feature);
+        feature.Encodes.Answer = new EncodesErased(0, [EncodeFileName.Artefact(held.Id, EncodeProfileId.New())]);
+
+        (HttpStatusCode status, JsonElement body) = await feature.DeleteAsync($"/api/recordings/{held.Id.Wire}");
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, status);
+        Assert.Equal("filesLeftBehind", body.GetProperty("data").GetProperty("refusal").GetString());
+        Assert.Single(feature.Recordings.Recordings);
+
+        feature.Encodes.Answer = new EncodesErased(1, []);
+
+        (HttpStatusCode again, _) = await feature.DeleteAsync($"/api/recordings/{held.Id.Wire}");
+
+        Assert.Equal(HttpStatusCode.OK, again);
+        Assert.Empty(feature.Recordings.Recordings);
+    }
+
+    [Fact]
+    public async Task ARecordingWhoseFileStayedOnTheDiskAsksNothingOfItsEncodes()
+    {
+        await using RecordingFeature feature = new();
+        Recording held = Ended(feature);
+        feature.Eraser.Answer = RecordingErasure.Refused(ErasureFault.FileLeftBehind, "permission denied");
+
+        (HttpStatusCode status, _) = await feature.DeleteAsync($"/api/recordings/{held.Id.Wire}");
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, status);
+        Assert.Empty(feature.Encodes.Asked);
     }
 
     [Fact]

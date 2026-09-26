@@ -61,7 +61,7 @@ public sealed class EncodeScratchFile
 
     public EncodeScratchFate? Fate { get; private set; }
 
-    public bool IsOwedARemoval => RemovedAt is null;
+    public bool IsOwedARemoval => RemovedAt is null || Fate is EncodeScratchFate.CouldNotBeRemoved;
 
     public static EncodeScratchFile Record(
         EncodeScratchFileId id,

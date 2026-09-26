@@ -2,6 +2,7 @@ using Carina.Contracts;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
+using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Persistence;
@@ -197,6 +198,8 @@ public sealed class RecordingStreamLedgerTests(RepositoryDatabase database)
             once,
             collide));
         services.AddScoped<IServiceTuningDirectory>(_ => new ResolvedTuning(Terrestrial));
+        services.AddScoped<IQualityThresholdRepository>(provider =>
+            new QualityThresholdRepository(provider.GetRequiredService<CarinaDbContext>()));
 
         return new RecordingStreamSupervisor(
             services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),

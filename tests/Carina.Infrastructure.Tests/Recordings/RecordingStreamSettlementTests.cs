@@ -216,7 +216,7 @@ public sealed class RecordingStreamSettlementTests
 
         Assert.Equal(OrphanRecovery.WhatIsLeftOf(3_400_000_000), read.Outcome);
         Assert.Equal(
-            OrphanRecovery.WhyItEndedWhereItDid(driverIsAnotherInstance: false, 3_400_000_000),
+            OrphanRecovery.WhyItEndedWhereItDid(driverIsAnotherInstance: false, 3_400_000_000, QualityLevel.Unmeasured),
             read.OutcomeDetail.Select(detail => detail.Fault).ToArray());
     }
 

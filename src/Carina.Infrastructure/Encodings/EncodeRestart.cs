@@ -11,16 +11,16 @@ public sealed record EncodeRestartReport(int PutBack, int GivenUp, int Stopped, 
 }
 
 /// <summary>
-/// What the process does about jobs still held as running when it comes up: none of them is
-/// running here, because whatever ran them died with the last process, so each goes back to the
-/// queue to start over or is given up when its attempts are spent. A programme the last process
-/// wrote down against a job is stopped first, if what runs under its id is still that programme;
-/// one that began at another time is somebody else's and is spared. Work files are left where
-/// they are; the next attempt writes under another name (BR-ED2-011).
+/// Handles the jobs the ledger still holds as running when the process comes up. A programme
+/// written down against a job is stopped first when what runs under its id began at the time
+/// written down, and left alone otherwise. Each job then goes back to the queue with its work files
+/// left in place, or is given up when its attempts are spent, with what it still owes a removal for
+/// swept.
 /// </summary>
 public sealed class EncodeRestart(
     IEncodeJobRepository jobs,
     IStrayProgrammes strays,
+    EncodeScratchCleaner cleaner,
     EncodeSettings settings,
     TimeProvider clock,
     ILogger<EncodeRestart> logger)
@@ -60,6 +60,7 @@ public sealed class EncodeRestart(
             else
             {
                 givenUp++;
+                await cleaner.ClearAsync(job, cancellationToken);
                 logger.LogWarning(
                     "Job {Job} was running when this process last stopped, on the last of its {Attempts} attempts, and is given up as {Failure}.",
                     job.Id.Wire,

@@ -39,8 +39,7 @@ public sealed class EncodeScratchFileTests
     [InlineData(EncodeScratchFate.Removed)]
     [InlineData(EncodeScratchFate.AlreadyGone)]
     [InlineData(EncodeScratchFate.BecameTheArtefact)]
-    [InlineData(EncodeScratchFate.CouldNotBeRemoved)]
-    public void EveryFateSettlesTheRemovalOwed(EncodeScratchFate fate)
+    public void EveryFateButOneThatLeftTheFileSettlesTheRemovalOwed(EncodeScratchFate fate)
     {
         EncodeScratchFile scratch = Recorded();
 
@@ -48,6 +47,23 @@ public sealed class EncodeScratchFileTests
 
         Assert.Equal(fate, scratch.Fate);
         Assert.Equal(Removed, scratch.RemovedAt);
+        Assert.False(scratch.IsOwedARemoval);
+    }
+
+    [Fact]
+    public void AFileThatCouldNotBeRemovedIsStillOwedARemovalAndIsSettledAgainOnceItGoes()
+    {
+        EncodeScratchFile scratch = Recorded();
+        scratch.Settle(EncodeScratchFate.CouldNotBeRemoved, Removed);
+
+        Assert.Equal(EncodeScratchFate.CouldNotBeRemoved, scratch.Fate);
+        Assert.Equal(Removed, scratch.RemovedAt);
+        Assert.True(scratch.IsOwedARemoval);
+
+        scratch.Settle(EncodeScratchFate.Removed, Removed.AddHours(1));
+
+        Assert.Equal(EncodeScratchFate.Removed, scratch.Fate);
+        Assert.Equal(Removed.AddHours(1), scratch.RemovedAt);
         Assert.False(scratch.IsOwedARemoval);
     }
 

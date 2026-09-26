@@ -184,6 +184,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<CandidateScoreRound>();
         services.AddScoped<EncodeScratchFiles>();
         services.AddScoped<EncodeScratchCleaner>();
+        services.AddScoped<IRecordingEncodes, RecordingEncodes>();
         services.AddScoped<EncodeArtefactPlacer>();
         services.AddScoped<IEncodeAutoRunReader, EncodeAutoRunReader>();
         services.AddScoped<EncodeJobRunner>();

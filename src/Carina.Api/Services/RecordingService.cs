@@ -36,6 +36,8 @@ public enum RecordingFailure
     OneIsAlreadyBeingDiscarded = 11,
 
     TookTooLong = 12,
+
+    BeingEncoded = 13,
 }
 
 public sealed record ThumbnailRemade(Recording Recording, ThumbnailRemake Remake);
@@ -55,6 +57,7 @@ public sealed class RecordingService(
     IDriverClient driver,
     IThumbnailRemaker thumbnails,
     IRecordingFileEraser eraser,
+    IRecordingEncodes encodes,
     IPlaybackPositionRepository positions,
     RecordingDeletions deletions,
     IAppEventPublisher events,
@@ -213,6 +216,14 @@ public sealed class RecordingService(
                 RecordingFailure.StillRecording);
         }
 
+        if (await encodes.AnyUnderWayAsync(id, cancellationToken))
+        {
+            return ServiceResult<RecordingDiscarded, RecordingFailure>.Failure(
+                $"Recording {id.Wire} has an encode waiting or running, so that is called off before the recording "
+                + "is thrown away.",
+                RecordingFailure.BeingEncoded);
+        }
+
         using IDisposable? turn = deletions.Begin(id);
 
         if (turn is null)
@@ -232,6 +243,19 @@ public sealed class RecordingService(
         try
         {
             erasure = await eraser.EraseAsync(id, recording.OutputRoot, asking.Token);
+
+            if (erasure.EverythingIsGone)
+            {
+                if (await encodes.AnyUnderWayAsync(id, asking.Token))
+                {
+                    return ServiceResult<RecordingDiscarded, RecordingFailure>.Failure(
+                        $"Recording {id.Wire} is off the disk, and an encode of it was queued while it was being "
+                        + "taken away, so its row and its encodes stay until that encode has ended.",
+                        RecordingFailure.BeingEncoded);
+                }
+
+                erasure = AndThen(erasure, await encodes.EraseAsync(id, asking.Token), id);
+            }
         }
         catch (OperationCanceledException) when (GaveUp(limit, cancellationToken))
         {
@@ -275,6 +299,15 @@ public sealed class RecordingService(
             _ => Missing<RecordingDiscarded>(id),
         };
     }
+
+    private static RecordingErasure AndThen(RecordingErasure recording, EncodesErased derived, RecordingId id)
+        => derived.EverythingIsGone
+            ? RecordingErasure.Erased(recording.FilesRemoved + derived.FilesRemoved)
+            : RecordingErasure.Refused(
+                ErasureFault.FileLeftBehind,
+                $"Recording {id.Wire} is off the disk, and what its encodes left could not all be removed: "
+                + $"{string.Join(", ", derived.Left.Select(name => name.Value))}.",
+                derived.Left.Count);
 
     private static bool GaveUp(CancellationTokenSource limit, CancellationToken asked)
         => limit.IsCancellationRequested && !asked.IsCancellationRequested;

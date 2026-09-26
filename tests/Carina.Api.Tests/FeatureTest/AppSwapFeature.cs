@@ -10,6 +10,7 @@ using Carina.Domain.Driver;
 using Carina.Domain.Events;
 using Carina.Domain.Integrity;
 using Carina.Domain.Programmes;
+using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Driver;
@@ -281,6 +282,8 @@ internal sealed class AppSwapFeature : IAsyncDisposable
 
     public HeldOutcomeLedger Outcomes { get; } = new();
 
+    public HeldQualityThresholds Thresholds { get; } = new();
+
     public SyntheticDriverHost Driver => driver;
 
     public string RecordingsDirectory => driver.RecordingsDirectory;
@@ -355,6 +358,7 @@ internal sealed class AppSwapFeature : IAsyncDisposable
                 services.AddSingleton<IReservationRecordingContract>(Reservations);
                 services.AddSingleton<IReservationOutcomeRepository>(Outcomes);
                 services.AddSingleton<IRecordingRepository>(Recordings);
+                services.AddSingleton<IQualityThresholdRepository>(Thresholds);
                 services.AddSingleton<IAnnouncedProgrammes>(Programmes);
                 services.AddSingleton<IServiceTuningDirectory>(Tuning);
                 services.AddSingleton<IAppEventPublisher>(Events);

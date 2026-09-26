@@ -35,6 +35,8 @@ public static class CompletionEvaluator
 
         WeighTheFile(evidence, bitrate, tolerance, faults);
 
+        faults.AddRange(RecordingFaults.OfWhatWasLeftScrambled(evidence.LeftScrambled));
+
         return RecordingVerdict.Of(Decide(faults, coverage, tolerance), coverage, faults);
     }
 

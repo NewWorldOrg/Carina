@@ -342,6 +342,31 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
     }
 
     [Fact]
+    public async Task TheWaysARecordingRequestCanBeRefusedAreSpelledInTheDocument()
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode refusal = document["components"]!["schemas"]!["RecordingFailure"]!;
+
+        Assert.Equal(
+            [
+                "noSuchRecording",
+                "alreadyEnded",
+                "notBeingWritten",
+                "stillRecording",
+                "driverUnreachable",
+                "driverRefused",
+                "nowhereToPutPictures",
+                "fileOutOfReach",
+                "rootOutOfReach",
+                "filesLeftBehind",
+                "oneIsAlreadyBeingDiscarded",
+                "tookTooLong",
+                "beingEncoded",
+            ],
+            refusal["enum"]!.AsArray().Select(value => value!.GetValue<string>()).ToArray());
+    }
+
+    [Fact]
     public async Task TheWaysASweepCanBeRefusedAreSpelledInTheDocument()
     {
         JsonNode document = await ServedOpenApi.FetchAsync(factory);

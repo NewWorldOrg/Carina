@@ -105,8 +105,8 @@ public sealed class OrphanRecoveryTests
     [MemberData(nameof(EverySize))]
     public void WhateverWasLeftBehindAlwaysSaysWhyItEndedThere(long? weighed)
     {
-        Assert.NotEmpty(OrphanRecovery.WhyItEndedWhereItDid(driverIsAnotherInstance: false, weighed));
-        Assert.NotEmpty(OrphanRecovery.WhyItEndedWhereItDid(driverIsAnotherInstance: true, weighed));
+        Assert.NotEmpty(OrphanRecovery.WhyItEndedWhereItDid(driverIsAnotherInstance: false, weighed, QualityLevel.Unmeasured));
+        Assert.NotEmpty(OrphanRecovery.WhyItEndedWhereItDid(driverIsAnotherInstance: true, weighed, QualityLevel.Unmeasured));
     }
 
     [Fact]
@@ -124,19 +124,35 @@ public sealed class OrphanRecoveryTests
     public void AFileNothingCouldBeWeighedAgainstSaysSoOnTopOfWhyNothingWasWritingIt()
         => Assert.Equal(
             [RecordingFault.LeftRunningUnwatched, RecordingFault.SizeUnobserved],
-            OrphanRecovery.WhyItEndedWhereItDid(driverIsAnotherInstance: false, null));
+            OrphanRecovery.WhyItEndedWhereItDid(driverIsAnotherInstance: false, null, QualityLevel.Unmeasured));
 
     [Fact]
     public void AnEmptyFileSaysNothingLandedOnTopOfWhyNothingWasWritingIt()
         => Assert.Equal(
             [RecordingFault.DriverReplaced, RecordingFault.NothingLanded],
-            OrphanRecovery.WhyItEndedWhereItDid(driverIsAnotherInstance: true, 0));
+            OrphanRecovery.WhyItEndedWhereItDid(driverIsAnotherInstance: true, 0, QualityLevel.Unmeasured));
 
     [Fact]
     public void AFileThatWasWeighedSaysOnlyWhyNothingWasWritingIt()
         => Assert.Equal(
             [RecordingFault.LeftRunningUnwatched],
-            OrphanRecovery.WhyItEndedWhereItDid(driverIsAnotherInstance: false, 4_096));
+            OrphanRecovery.WhyItEndedWhereItDid(driverIsAnotherInstance: false, 4_096, QualityLevel.Unmeasured));
+
+    [Theory]
+    [InlineData(QualityLevel.Warning)]
+    [InlineData(QualityLevel.MayNotBeWatchable)]
+    public void WhatWasLeftBehindScrambledPastTheLevelSaysSoToo(QualityLevel leftScrambled)
+        => Assert.Equal(
+            [RecordingFault.LeftRunningUnwatched, RecordingFault.ScramblingUnresolved],
+            OrphanRecovery.WhyItEndedWhereItDid(driverIsAnotherInstance: false, 4_096, leftScrambled));
+
+    [Theory]
+    [InlineData(QualityLevel.Good)]
+    [InlineData(QualityLevel.Unmeasured)]
+    public void WhatWasLeftBehindNotScrambledPastTheLevelSaysNothingOfScrambling(QualityLevel leftScrambled)
+        => Assert.Equal(
+            [RecordingFault.LeftRunningUnwatched],
+            OrphanRecovery.WhyItEndedWhereItDid(driverIsAnotherInstance: false, 4_096, leftScrambled));
 
     [Fact]
     public void NeitherReasonRecoveryWritesNeedsATunerToHaveBeenNamed()

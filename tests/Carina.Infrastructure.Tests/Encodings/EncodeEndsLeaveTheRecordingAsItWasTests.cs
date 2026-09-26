@@ -113,6 +113,11 @@ public sealed class EncodeEndsLeaveTheRecordingAsItWasTests(RepositoryDatabase d
             await new EncodeRestart(
                     new EncodeJobRepository(restarting),
                     new ScriptedStrays(),
+                    new EncodeScratchCleaner(
+                        new EncodeScratchLedger(restarting),
+                        harness.Places,
+                        harness.Clock,
+                        NullLogger<EncodeScratchCleaner>.Instance),
                     new EncodeSettings { MostAttempts = 3 },
                     harness.Clock,
                     NullLogger<EncodeRestart>.Instance)

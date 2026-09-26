@@ -9,7 +9,8 @@ public sealed record RecordingEvidence
         TimeSpan written,
         DateTime windowStart,
         DateTime windowEnd,
-        DateTime? abortedAt)
+        DateTime? abortedAt,
+        QualityLevel leftScrambled = QualityLevel.Unmeasured)
     {
         if (fileSizeBytes is < 0)
         {
@@ -36,6 +37,12 @@ public sealed record RecordingEvidence
         WindowStart = UtcTimes.Required(windowStart, nameof(windowStart));
         WindowEnd = UtcTimes.Required(windowEnd, nameof(windowEnd));
         AbortedAt = UtcTimes.Optional(abortedAt, nameof(abortedAt));
+        LeftScrambled = Enum.IsDefined(leftScrambled)
+            ? leftScrambled
+            : throw new ArgumentOutOfRangeException(
+                nameof(leftScrambled),
+                leftScrambled,
+                "What was left scrambled is read at one of the four levels.");
     }
 
     public long? FileSizeBytes { get; }
@@ -47,6 +54,8 @@ public sealed record RecordingEvidence
     public DateTime WindowEnd { get; }
 
     public DateTime? AbortedAt { get; }
+
+    public QualityLevel LeftScrambled { get; }
 
     public TimeSpan Window => WindowEnd - WindowStart;
 }

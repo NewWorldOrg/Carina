@@ -110,7 +110,14 @@ public sealed class EncodeDispatch(
             EncodeRecovery recovery = job.Recover(settings.MostAttempts, clock.GetUtcNow().UtcDateTime);
             await jobs.SaveAsync(job, cancellationToken);
 
-            return new EncodeLook(claim.Standing, job.Id, recovery is EncodeRecovery.GivenUp ? job.Status : null);
+            if (recovery is EncodeRecovery.PutBack)
+            {
+                return new EncodeLook(claim.Standing, job.Id, null);
+            }
+
+            await scope.ServiceProvider.GetRequiredService<EncodeScratchCleaner>().ClearAsync(job, cancellationToken);
+
+            return new EncodeLook(claim.Standing, job.Id, job.Status);
         }
     }
 
