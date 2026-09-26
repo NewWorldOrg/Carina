@@ -10,6 +10,8 @@ public sealed record TunerFault(TunerDeviceId Tuner, TuneFailureKind Failure)
 
 public static class TunerFaults
 {
+    public const string CannotLockClassification = nameof(TuneFailureKind.NoLock);
+
     /// <summary>
     /// Lists, once each and in the driver's order, the tuners the driver has taken out of service
     /// because their frontend would not lock.
