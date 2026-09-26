@@ -421,12 +421,31 @@ internal sealed class LiveSession
 
         if (given is not null)
         {
-            reception.Drop(given);
+            await LeftTheReadingAsync(given);
         }
 
         if (running is not null)
         {
             await running.DisposeAsync();
+        }
+    }
+
+    /// <summary>
+    /// Takes the seat out of the reading and waits for the write going into the transcoder to end,
+    /// for no longer than the stop grace.
+    /// </summary>
+    private async Task LeftTheReadingAsync(LiveSeat given)
+    {
+        Task writing = reception.Drop(given);
+        using CancellationTokenSource deadline = new(transcoding.StopGrace, clock);
+
+        try
+        {
+            await writing.WaitAsync(deadline.Token);
+        }
+        catch (Exception)
+        {
+            return;
         }
     }
 
@@ -504,7 +523,7 @@ internal sealed class LiveSession
         // Out of the reading first, so nothing is written into a transcoder being taken down.
         if (given is not null)
         {
-            reception.Drop(given);
+            await LeftTheReadingAsync(given);
         }
 
         try

@@ -162,6 +162,20 @@ public sealed class HeldTranscoder : ILiveTranscoder
 
     public bool InputClosed => input.Closed;
 
+    /// <summary>
+    /// Set, a transcoder held from taking bytes goes on holding when the write is called off, as a
+    /// pipe whose write does not honour cancellation does.
+    /// </summary>
+    public bool TakesNoNoticeOfBeingCalledOff
+    {
+        get => input.TakesNoNoticeOfBeingCalledOff;
+        set => input.TakesNoNoticeOfBeingCalledOff = value;
+    }
+
+    public bool Taking => input.Taking;
+
+    public bool DisposedWhileTaking { get; private set; }
+
     public Stream Output => Disposed ? throw new ObjectDisposedException(nameof(HeldTranscoder)) : output;
 
     public ChannelReader<LiveFrame> Captions => captions.Reader;
@@ -212,6 +226,7 @@ public sealed class HeldTranscoder : ILiveTranscoder
         }
 
         Disposed = true;
+        DisposedWhileTaking = input.Taking;
         Complete();
         captions.Writer.TryComplete();
         exit.TrySetResult(TranscoderExit.CalledOff(string.Empty));
@@ -235,6 +250,8 @@ public sealed class HeldTranscoder : ILiveTranscoder
     {
         private long takenIn;
 
+        private int taking;
+
         public override bool CanRead => false;
 
         public override bool CanSeek => false;
@@ -256,6 +273,10 @@ public sealed class HeldTranscoder : ILiveTranscoder
         internal TaskCompletionSource? HeldUntil { get; set; }
 
         internal bool Closed { get; private set; }
+
+        internal bool TakesNoNoticeOfBeingCalledOff { get; set; }
+
+        internal bool Taking => Volatile.Read(ref taking) is not 0;
 
         public override void Flush()
         {
@@ -284,12 +305,21 @@ public sealed class HeldTranscoder : ILiveTranscoder
 
         public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
         {
-            if (HeldUntil is { } held)
-            {
-                await held.Task.WaitAsync(cancellationToken);
-            }
+            Interlocked.Increment(ref taking);
 
-            Write(buffer.Span);
+            try
+            {
+                if (HeldUntil is { } held)
+                {
+                    await (TakesNoNoticeOfBeingCalledOff ? held.Task : held.Task.WaitAsync(cancellationToken));
+                }
+
+                Write(buffer.Span);
+            }
+            finally
+            {
+                Interlocked.Decrement(ref taking);
+            }
         }
 
         protected override void Dispose(bool disposing)

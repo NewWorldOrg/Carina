@@ -162,7 +162,11 @@ internal sealed class LiveReception
         Action<LiveSupplyEnding> ended)
         => Take(into, locked, ended, settings.LongestWaitToBeFed);
 
-    internal void Drop(LiveSeat seat)
+    /// <summary>
+    /// Takes the seat out of the reading and calls off what is being written into it, and hands back
+    /// the task that ends once nothing more is being written.
+    /// </summary>
+    internal Task Drop(LiveSeat seat)
     {
         lock (gate)
         {
@@ -170,6 +174,8 @@ internal sealed class LiveReception
         }
 
         seat.LetGo();
+
+        return seat.Pumping;
     }
 
     internal void Close()

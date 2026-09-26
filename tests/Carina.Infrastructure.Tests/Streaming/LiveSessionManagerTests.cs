@@ -502,6 +502,65 @@ public sealed class LiveSessionManagerTests
     }
 
     [Fact]
+    public async Task ATeardownWaitsForTheWriteStillGoingIntoTheTranscoderBeforeTakingItDown()
+    {
+        ILiveViewing viewing = await Joined(EveryFrame);
+        TaskCompletionSource holding = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        transcoders.Raised[0].TakesNothingUntil = holding;
+        transcoders.Raised[0].TakesNoNoticeOfBeingCalledOff = true;
+
+        await Pour(supply.Opened[0], 1);
+        await Eventually.Happens(() => transcoders.Raised[0].Taking, "a write is going into the transcoder");
+
+        await viewing.DisposeAsync();
+        clock.Turn(Linger);
+
+        await Eventually.Happens(
+            () => clock.Pending is TheHoldOnTheSupply + 1,
+            "the teardown is waiting on the write, and for no longer than the stop grace");
+
+        Assert.False(transcoders.Raised[0].Disposed, "a transcoder is not taken down while a write is still going into it");
+
+        holding.SetResult();
+
+        await Eventually.Happens(() => supply.Opened[0].Disposed, "the teardown goes on once the write has ended");
+
+        Assert.True(transcoders.Raised[0].Disposed);
+        Assert.False(transcoders.Raised[0].DisposedWhileTaking);
+    }
+
+    [Fact]
+    public async Task ATeardownStopsWaitingOnAWriteThatWillNotEndOnceTheStopGraceIsUp()
+    {
+        ILiveViewing viewing = await Joined(EveryFrame);
+        TaskCompletionSource holding = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        transcoders.Raised[0].TakesNothingUntil = holding;
+        transcoders.Raised[0].TakesNoNoticeOfBeingCalledOff = true;
+
+        await Pour(supply.Opened[0], 1);
+        await Eventually.Happens(() => transcoders.Raised[0].Taking, "a write is going into the transcoder");
+
+        await viewing.DisposeAsync();
+        clock.Turn(Linger);
+
+        await Eventually.Happens(
+            () => clock.Pending is TheHoldOnTheSupply + 1,
+            "the teardown is waiting on the write");
+
+        Assert.False(transcoders.Raised[0].Disposed);
+
+        clock.Turn(StopGrace);
+
+        await Eventually.Happens(
+            () => transcoders.Raised[0].Disposed,
+            "the transcoder is taken down although the write into it never ended");
+
+        holding.SetResult();
+    }
+
+    [Fact]
     public async Task BrPs001AProfileAskedForAgainWhileTheOthersAreBeingGivenUpIsNotClosedUnderTheOneWhoAsked()
     {
         supply.AsIfThereWereOneTuner = true;

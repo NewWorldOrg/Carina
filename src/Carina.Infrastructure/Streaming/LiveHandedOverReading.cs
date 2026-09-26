@@ -85,7 +85,7 @@ internal sealed class LiveHandedOverReading : ILiveHandedOver
         }
 
         letGo = true;
-        reading.Drop(seat);
+        await reading.Drop(seat);
 
         await written.DisposeAsync();
         await Bytes.DisposeAsync();
