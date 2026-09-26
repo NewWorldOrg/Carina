@@ -178,8 +178,8 @@ public sealed class QualityService(
     private static BroadcastStream? Carrier(QualityTrendChannel? channel, IReadOnlyList<BroadcastStream> carried)
         => channel is null
             ? null
-            : carried.FirstOrDefault(stream => stream.NetworkId.Value == channel.Network.Value
-                                               && stream.Services.Any(service => service.Value == channel.Service.Value));
+            : carried.FirstOrDefault(stream => stream.NetworkId.Equals(channel.Network)
+                                               && stream.Services.Any(service => service.Equals(channel.Service)));
 
     private static ThresholdSense Sense(QualityMetric metric)
         => QualityThresholdShapes.Of(QualityThresholdShapes.Warning(metric)).Sense;
