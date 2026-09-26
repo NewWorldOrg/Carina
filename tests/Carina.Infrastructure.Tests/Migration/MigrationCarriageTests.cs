@@ -1,5 +1,6 @@
 using Carina.Domain.Encodings;
 using Carina.Domain.Migration;
+using Carina.Domain.Programmes;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Migration;
 using Carina.TestSupport;
@@ -420,7 +421,49 @@ public sealed class MigrationCarriageTests
             carried.Aftermath.ChannelProposals.Single(proposal => proposal.SourcePhysicalChannel is "27").Standing);
     }
 
+    [Fact]
+    public async Task OnlyWhatWasCarriedIsCountedAmongWhatArrivedDiminished()
+    {
+        var ledger = new SourceLedger(
+            Source,
+            [
+                new SourceRecording(7, "an evening walk [字]", Began, Ended, InReach, new EventId(4321)),
+                new SourceRecording(8, "a morning walk [字]", Began, Ended, InReach, null),
+            ],
+            [AsBroadcast(7, "one.m2ts", 100), AsBroadcast(8, "two.m2ts", 100)],
+            [Rule(3, keyword: "hill [字]"), Refused(4, "moor [字]")],
+            [new SourceReservation(5, "a night walk [字]", false)],
+            [new SourceChannelDefinition(11, "a station [字]", SourceBroadcastKind.Terrestrial, InReach, "21")]);
+
+        MigrationCarried carried = await bench.Carriage(carrier, recordings).CarryAsync(
+            Run,
+            ledger,
+            Rescanned(),
+            Rolled(ledger, [OnDisk("one.m2ts", 100), OnDisk("two.m2ts", 100)]),
+            MigrationPass.ForReal,
+            Cancel);
+
+        Assert.Equal(1, carried.Aftermath.RulesRead);
+        Assert.Equal(2, carried.Aftermath.RowsPastRestoring);
+    }
+
     private async Task<MigrationRoll> CarryAsync(MigrationPass pass) => (await CarriedAsync(pass)).Roll;
+
+    private static SourceRule Refused(long id, string name)
+        => new(
+            id,
+            name,
+            true,
+            new SourceRuleTerms(
+                name,
+                string.Empty,
+                SourceRuleFields.Title | SourceRuleFields.ExtendedBody,
+                SourceRuleFields.Title | SourceRuleFields.ExtendedBody,
+                [],
+                [],
+                [],
+                SourceWeek.EveryDay),
+            SourceRuleReach.Plain);
 
     private Task<MigrationCarried> CarriedAsync(MigrationPass pass, SourceLedger? ledger = null)
     {
