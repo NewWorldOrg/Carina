@@ -340,7 +340,14 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
             Programme.Discover(Carried(network, 1050, 3, At.AddHours(2)) with { EndsAt = null }, At),
             Cancel);
 
-        Assert.Equal([1, 2], (await Ended(programmes, network)).Select(programme => programme.EventId.Value));
+        EndedProgramme[] ended =
+        [
+            .. (await programmes.ListEndedBeforeAsync(At.AddHours(10), 5_000, Cancel))
+                .Where(programme => programme.Programme.NetworkId.Value == network),
+        ];
+
+        Assert.Equal([1, 2], ended.Select(programme => programme.Programme.EventId.Value));
+        Assert.Equal([At.AddHours(3), At.AddHours(4)], ended.Select(programme => programme.EndedAt));
     }
 
     [Fact]
@@ -545,6 +552,7 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
 
     private static async Task<Programme[]> Ended(ProgrammeRepository programmes, int network)
         => [.. (await programmes.ListEndedBeforeAsync(At.AddHours(10), 5_000, Cancel))
+            .Select(ended => ended.Programme)
             .Where(programme => programme.NetworkId.Value == network)];
 
     private static ProgrammeBroadcast Broadcast(int network, int carried = 1, DateTime? startsAt = null)

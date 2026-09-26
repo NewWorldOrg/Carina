@@ -108,11 +108,11 @@ public sealed class HeldProgrammes : IProgrammeRepository
                 && programme.ServiceId.Value == serviceId)
             .Max(programme => programme.LastHeardAt));
 
-    public Task<IReadOnlyList<Programme>> ListEndedBeforeAsync(
+    public Task<IReadOnlyList<EndedProgramme>> ListEndedBeforeAsync(
         DateTime at,
         int rows,
         CancellationToken cancellationToken)
-        => Task.FromResult<IReadOnlyList<Programme>>(
+        => Task.FromResult<IReadOnlyList<EndedProgramme>>(
         [
             .. Programmes
                 .Select(programme => (Programme: programme, EndedAt: programme.EndsAt ?? Programmes
@@ -122,7 +122,7 @@ public sealed class HeldProgrammes : IProgrammeRepository
                     .Min(next => (DateTime?)next.StartsAt)))
                 .Where(ended => ended.EndedAt < at)
                 .OrderBy(ended => ended.EndedAt)
-                .Select(ended => ended.Programme)
+                .Select(ended => new EndedProgramme(ended.Programme, ended.EndedAt!.Value))
                 .Take(rows),
         ]);
 

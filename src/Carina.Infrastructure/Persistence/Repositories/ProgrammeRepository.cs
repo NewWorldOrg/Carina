@@ -174,7 +174,7 @@ public sealed class ProgrammeRepository(CarinaDbContext context) : IProgrammeRep
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    public async Task<IReadOnlyList<Programme>> ListEndedBeforeAsync(
+    public async Task<IReadOnlyList<EndedProgramme>> ListEndedBeforeAsync(
         DateTime at,
         int rows,
         CancellationToken cancellationToken)
@@ -193,8 +193,8 @@ public sealed class ProgrammeRepository(CarinaDbContext context) : IProgrammeRep
             })
             .Where(ended => ended.EndedAt < at)
             .OrderBy(ended => ended.EndedAt)
-            .Select(ended => ended.Programme)
             .Take(rows)
+            .Select(ended => new EndedProgramme(ended.Programme, ended.EndedAt!.Value))
             .ToListAsync(cancellationToken);
     }
 

@@ -6,6 +6,8 @@ public sealed record ProgrammeService(int NetworkId, int ServiceId);
 
 public sealed record ProgrammesAbsorbed(int Added, int Updated);
 
+public sealed record EndedProgramme(Programme Programme, DateTime EndedAt);
+
 public interface IAnnouncedProgrammes
 {
     Task<Programme?> FindAsync(ProgrammeId id, CancellationToken cancellationToken);
@@ -38,11 +40,11 @@ public interface IProgrammeRepository : IAnnouncedProgrammes
         CancellationToken cancellationToken);
 
     /// <summary>
-    /// Lists the programmes that ended before <paramref name="at"/>, earliest end first. A programme
-    /// with no end ends where the next programme on its service begins, and has not ended while
-    /// nothing begins after it.
+    /// Lists the programmes that ended before <paramref name="at"/> with the time each ended,
+    /// earliest end first. A programme with no end ends where the next programme on its service
+    /// begins, and has not ended while nothing begins after it.
     /// </summary>
-    Task<IReadOnlyList<Programme>> ListEndedBeforeAsync(
+    Task<IReadOnlyList<EndedProgramme>> ListEndedBeforeAsync(
         DateTime at,
         int rows,
         CancellationToken cancellationToken);

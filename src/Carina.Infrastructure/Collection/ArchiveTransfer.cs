@@ -21,20 +21,20 @@ public sealed class ArchiveTransfer(
     {
         DateTime now = clock.GetUtcNow().UtcDateTime;
         DateTime ended = now - settings.KeepEndedProgrammes;
-        IReadOnlyList<Programme> leaving = await programmes.ListEndedBeforeAsync(
+        IReadOnlyList<EndedProgramme> leaving = await programmes.ListEndedBeforeAsync(
             ended,
             MostPerRun,
             cancellationToken);
         ArchivedProgramme[] keeping =
         [
-            .. leaving.Select(programme => ArchivedProgramme.Of(programme, now)).OfType<ArchivedProgramme>(),
+            .. leaving.Select(ended => ArchivedProgramme.Of(ended, now)).OfType<ArchivedProgramme>(),
         ];
         Transferred moved = leaving.Count == 0
             ? new Transferred(0, 0, 0)
             : await writes.AllOrNothingAsync(
                 async token => new Transferred(
                     await archive.KeepAsync(keeping, token),
-                    await programmes.ForgetAsync(leaving, token),
+                    await programmes.ForgetAsync([.. leaving.Select(ended => ended.Programme)], token),
                     0),
                 cancellationToken);
         int forgotten = settings.ArchiveRetention is { } retention
