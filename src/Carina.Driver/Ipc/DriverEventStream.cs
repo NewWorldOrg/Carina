@@ -59,7 +59,7 @@ public static class DriverEventStream
                 {
                     IReadOnlyList<string> names = await listener.Take(context.RequestAborted);
 
-                    using var leash = CancellationTokenSource.CreateLinkedTokenSource(
+                    using CancellationTokenSource leash = CancellationTokenSource.CreateLinkedTokenSource(
                         context.RequestAborted
                     );
                     leash.CancelAfter(patience);

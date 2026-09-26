@@ -25,7 +25,7 @@ public sealed class LogoVisitor(IDriverClient driver, LogoSweepSettings settings
     {
         ArgumentNullException.ThrowIfNull(stream);
 
-        var sessionId = SessionId.Parse($"logo-{Guid.NewGuid():n}");
+        SessionId sessionId = SessionId.Parse($"logo-{Guid.NewGuid():n}");
         TuneParams tune = stream.Tuning.Typed();
         DriverCall<SessionSnapshot> start = await driver.StartSessionAsync(
             new StartSessionRequest
@@ -78,7 +78,7 @@ public sealed class LogoVisitor(IDriverClient driver, LogoSweepSettings settings
         var harvest = new LogoHarvest();
         byte[] buffer = ArrayPool<byte>.Shared.Rent(ReadBufferSize);
         bool interrupted = false;
-        using var reading = CancellationTokenSource.CreateLinkedTokenSource(abort);
+        using CancellationTokenSource reading = CancellationTokenSource.CreateLinkedTokenSource(abort);
         using ITimer deadline = clock.CreateTimer(
             _ => Stop(reading),
             null,

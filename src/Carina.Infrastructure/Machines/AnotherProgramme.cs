@@ -130,7 +130,7 @@ public static class AnotherProgramme
         Task<string> answer = running.StandardOutput.ReadToEndAsync(CancellationToken.None);
         Task<string> complaint = running.StandardError.ReadToEndAsync(CancellationToken.None);
 
-        using var deadline = new CancellationTokenSource(longest, clock);
+        using CancellationTokenSource deadline = new(longest, clock);
         using CancellationTokenSource waiting =
             CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
 

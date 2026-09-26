@@ -33,7 +33,7 @@ public sealed class DriverConnectionSupervisor(
     {
         while (!stoppingToken.IsCancellationRequested)
         {
-            var serve = Serve.Of(ServeOutcome.NeverReached);
+            Serve serve = Serve.Of(ServeOutcome.NeverReached);
 
             try
             {
@@ -84,7 +84,7 @@ public sealed class DriverConnectionSupervisor(
             .Where(capability => !hello.Supports(capability))
             .ToArray();
 
-        var observation = DriverObservation.Of(hello, missing);
+        DriverObservation observation = DriverObservation.Of(hello, missing);
         monitor.Record(observation);
 
         if (hello.IsDifferentInstanceFrom(adopted))

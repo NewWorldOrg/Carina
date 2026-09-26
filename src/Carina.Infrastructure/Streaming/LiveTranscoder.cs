@@ -186,7 +186,7 @@ public sealed class LiveTranscoder : ILiveTranscoder
 
     private async Task<bool> WaitedOut(TimeSpan grace)
     {
-        using var patience = new CancellationTokenSource(grace, clock);
+        using CancellationTokenSource patience = new(grace, clock);
 
         try
         {

@@ -109,7 +109,7 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
         try
         {
             using CancellationTokenSource patience = Patience(cancellationToken);
-            using var body = JsonContent.Create(tuners, DriverJson.Context.IReadOnlyListTunerConfigEntry);
+            using JsonContent body = JsonContent.Create(tuners, DriverJson.Context.IReadOnlyListTunerConfigEntry);
             using HttpResponseMessage response = await http.PutAsync(DriverEndpoints.Tuners, body, patience.Token);
 
             return await ReadAsync(
@@ -171,7 +171,7 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
         try
         {
             using CancellationTokenSource patience = Patience(cancellationToken);
-            using var body = JsonContent.Create(
+            using JsonContent body = JsonContent.Create(
                 new TunerToggleRequest { Disabled = disabled },
                 DriverJson.Context.TunerToggleRequest);
             using HttpResponseMessage response = await http.PatchAsync(DriverEndpoints.Tuner(deviceId), body, patience.Token);
@@ -238,7 +238,7 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
         try
         {
             using CancellationTokenSource patience = Patience(cancellationToken);
-            using var body = JsonContent.Create(agreed, DriverJson.Context.StartSessionRequest);
+            using JsonContent body = JsonContent.Create(agreed, DriverJson.Context.StartSessionRequest);
             using HttpResponseMessage response = await http.PostAsync(DriverEndpoints.Sessions, body, patience.Token);
 
             return await ReadAsync(
@@ -261,7 +261,7 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
         try
         {
             using CancellationTokenSource patience = Patience(cancellationToken);
-            using var body = JsonContent.Create(
+            using JsonContent body = JsonContent.Create(
                 new ExtendSessionRequest { EndsAt = endsAt },
                 DriverJson.Context.ExtendSessionRequest);
             using HttpResponseMessage response = await http.PatchAsync(
@@ -354,7 +354,7 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
         try
         {
             using CancellationTokenSource patience = Patience(cancellationToken);
-            using var body = JsonContent.Create(request, DriverJson.Context.StrayFileErasureRequest);
+            using JsonContent body = JsonContent.Create(request, DriverJson.Context.StrayFileErasureRequest);
             using HttpResponseMessage response = await http.PostAsync(DriverEndpoints.StrayFiles, body, patience.Token);
 
             return await ReadAsync(
@@ -442,7 +442,7 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
 
     private async Task<DriverCall<Stream>> OpenAsync(string path, CancellationToken cancellationToken)
     {
-        var patience = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        CancellationTokenSource patience = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         bool handedOver = false;
 
         try
@@ -540,7 +540,7 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
 
     private static CancellationTokenSource Patience(CancellationToken cancellationToken)
     {
-        var source = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        CancellationTokenSource source = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         source.CancelAfter(RequestPatience);
 
         return source;

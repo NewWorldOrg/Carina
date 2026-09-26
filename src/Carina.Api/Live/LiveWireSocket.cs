@@ -354,7 +354,7 @@ public sealed class LiveWireSocket(
             return;
         }
 
-        using var patience = new CancellationTokenSource(GoodbyePatience);
+        using CancellationTokenSource patience = new(GoodbyePatience);
 
         try
         {

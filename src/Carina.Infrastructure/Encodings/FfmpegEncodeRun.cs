@@ -62,7 +62,7 @@ public static class FfmpegEncodeRun
         EncodeProgress? reached = null;
         TimeSpan farthest = TimeSpan.Zero;
 
-        using var stall = new CancellationTokenSource(stalledAfter, clock);
+        using CancellationTokenSource stall = new(stalledAfter, clock);
         using CancellationTokenRegistration stopWhenStalled = stall.Token.UnsafeRegister(_ => AnotherProgramme.GiveUpOn(running), null);
         using CancellationTokenRegistration stopWhenCancelled = cancellationToken.UnsafeRegister(_ => AnotherProgramme.GiveUpOn(running), null);
 

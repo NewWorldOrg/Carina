@@ -83,7 +83,7 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
 
         observer.Started(run);
 
-        using var interruption = new CancellationTokenSource();
+        using CancellationTokenSource interruption = new();
         using IDisposable subscription = signals.Subscribe(name =>
         {
             if (string.Equals(name, DriverClientSignals.InstanceChanged, StringComparison.Ordinal))
@@ -102,7 +102,7 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
         CancellationTokenSource interruption,
         CancellationToken cancellationToken)
     {
-        using var walking = CancellationTokenSource.CreateLinkedTokenSource(
+        using CancellationTokenSource walking = CancellationTokenSource.CreateLinkedTokenSource(
             cancellationToken,
             interruption.Token);
 
@@ -228,7 +228,7 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
 
         while (true)
         {
-            using var deadline = new CancellationTokenSource();
+            using CancellationTokenSource deadline = new();
             using ITimer? timer = settings.AttemptsAreBounded
                 ? clock.CreateTimer(
                     _ => Stop(deadline),
@@ -259,7 +259,8 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
         IReadOnlyList<ScanRunAttempt> attempts,
         IReadOnlyDictionary<TuningParameters, StreamProbe> probed)
     {
-        var walked = attempts.ToDictionary(attempt => attempt.Tuning, attempt => attempt);
+        Dictionary<TuningParameters, ScanRunAttempt> walked =
+            attempts.ToDictionary(attempt => attempt.Tuning, attempt => attempt);
         var departures = new List<RotationDeparture>();
         DateTime at = Now;
 
@@ -323,7 +324,7 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
         IReadOnlyList<RotationDeparture> departures)
     {
         Dictionary<(NetworkId, ServiceId), ObservedService> observed = Observe(carried);
-        var reached = carried.Keys.ToHashSet();
+        HashSet<TuningParameters> reached = carried.Keys.ToHashSet();
         var changes = new List<ScanServiceChange>();
 
         foreach (BroadcastService service in await services.ListAsync(CancellationToken.None))

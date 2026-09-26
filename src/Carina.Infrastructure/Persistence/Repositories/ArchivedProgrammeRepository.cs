@@ -29,7 +29,8 @@ public sealed class ArchivedProgrammeRepository(CarinaDbContext context) : IArch
             .OrderBy(programme => programme.StartsAt)
             .ThenBy(programme => programme.EventId)
             .ToListAsync(cancellationToken);
-        var wanted = services.Select(service => (service.NetworkId, service.ServiceId)).ToHashSet();
+        HashSet<(int NetworkId, int ServiceId)> wanted =
+            services.Select(service => (service.NetworkId, service.ServiceId)).ToHashSet();
 
         return [.. found.Where(programme => wanted.Contains((programme.NetworkId.Value, programme.ServiceId.Value)))];
     }

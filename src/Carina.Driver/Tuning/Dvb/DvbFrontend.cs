@@ -131,7 +131,7 @@ public sealed class DvbFrontend : IDisposable
             DvbProperty.PostErrorBitCount,
             DvbProperty.PostTotalBitCount,
         };
-        var answer = DvbPropertyList.Asking(asked);
+        DvbPropertyList answer = DvbPropertyList.Asking(asked);
         SyscallOutcome read = calls.GetProperties(descriptor, answer.Bytes);
 
         if (read.Refused)
@@ -179,7 +179,7 @@ public sealed class DvbFrontend : IDisposable
         systems = [];
         problem = string.Empty;
 
-        var answer = DvbPropertyList.Asking(DvbProperty.EnumerateDeliverySystems);
+        DvbPropertyList answer = DvbPropertyList.Asking(DvbProperty.EnumerateDeliverySystems);
         SyscallOutcome read = calls.GetProperties(descriptor, answer.Bytes);
 
         if (read.Refused)

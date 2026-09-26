@@ -39,7 +39,7 @@ public sealed class StreamVisitor(
     {
         ArgumentNullException.ThrowIfNull(tuning);
 
-        var sessionId = SessionId.Parse($"epg-{Guid.NewGuid():n}");
+        SessionId sessionId = SessionId.Parse($"epg-{Guid.NewGuid():n}");
         TuneParams tune = tuning.Typed();
         DriverCall<SessionSnapshot> start = await driver.StartSessionAsync(
             new StartSessionRequest
@@ -100,7 +100,7 @@ public sealed class StreamVisitor(
         bool anyBytes = false;
         bool interrupted = false;
         byte[] buffer = ArrayPool<byte>.Shared.Rent(64 * 188);
-        using var reading = CancellationTokenSource.CreateLinkedTokenSource(abort);
+        using CancellationTokenSource reading = CancellationTokenSource.CreateLinkedTokenSource(abort);
 
         reading.CancelAfter(settings.LongestVisit);
 
@@ -147,7 +147,7 @@ public sealed class StreamVisitor(
 
         HarvestedStream done = harvest.Conclude(interrupted, anyBytes);
 
-        using var writing = new CancellationTokenSource(settings.LongestVisit);
+        using CancellationTokenSource writing = new(settings.LongestVisit);
 
         ProgrammesWritten written = done.Tables.Count > 0
             ? await writer.WriteAsync(done.Tables, done.Progress.HeardWhole(), writing.Token)

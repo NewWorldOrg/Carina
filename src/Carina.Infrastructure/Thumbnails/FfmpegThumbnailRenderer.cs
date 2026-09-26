@@ -118,12 +118,12 @@ public sealed class FfmpegThumbnailRenderer(ThumbnailSettings settings, TimeProv
         }
 
         using Process running = started;
-        using var written = new MemoryStream();
+        using MemoryStream written = new();
 
         Task read = running.StandardOutput.BaseStream.CopyToAsync(written, CancellationToken.None);
         Task<string> complaint = running.StandardError.ReadToEndAsync(CancellationToken.None);
 
-        using var deadline = new CancellationTokenSource(settings.LongestRender, clock);
+        using CancellationTokenSource deadline = new(settings.LongestRender, clock);
         using CancellationTokenSource waiting =
             CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
 

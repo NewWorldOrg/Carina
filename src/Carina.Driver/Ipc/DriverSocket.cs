@@ -130,7 +130,7 @@ public static class DriverSocket
 
     private static bool IsBeingServed(string path)
     {
-        using var probe = new Socket(
+        using Socket probe = new(
             AddressFamily.Unix,
             SocketType.Stream,
             ProtocolType.Unspecified

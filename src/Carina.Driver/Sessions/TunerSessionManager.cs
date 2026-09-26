@@ -212,7 +212,7 @@ public sealed class TunerSessionManager(
             session.Stop();
         }
 
-        var everyone = Task.WhenAll(running.Select(session => session.Completion));
+        Task everyone = Task.WhenAll(running.Select(session => session.Completion));
 
         if (recordings.Length > 0)
         {
@@ -222,7 +222,7 @@ public sealed class TunerSessionManager(
                 drainCap
             );
 
-            var theRecordings = Task.WhenAll(recordings.Select(session => session.Completion));
+            Task theRecordings = Task.WhenAll(recordings.Select(session => session.Completion));
 
             if (await Settles(theRecordings, drainCap, cancellationToken))
             {

@@ -81,7 +81,7 @@ public sealed class FfprobeStreamAttributeReader(StreamAttributeSettings setting
         Task<string> answer = running.StandardOutput.ReadToEndAsync(CancellationToken.None);
         Task<string> complaint = running.StandardError.ReadToEndAsync(CancellationToken.None);
 
-        using var deadline = new CancellationTokenSource(settings.LongestRead, clock);
+        using CancellationTokenSource deadline = new(settings.LongestRead, clock);
         using CancellationTokenSource waiting =
             CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
 

@@ -366,12 +366,12 @@ public sealed class RuleApplicationService(
         CancellationToken cancellationToken)
     {
         WithdrawalGuard guard = await GuardAsync(cancellationToken);
-        var faulted = run.Faulted.Select(fault => fault.Rule.Id).ToHashSet();
-        var standing = enabled.Where(rule => rule.Enabled).Select(rule => rule.Id).ToHashSet();
+        HashSet<RuleId> faulted = run.Faulted.Select(fault => fault.Rule.Id).ToHashSet();
+        HashSet<RuleId> standing = enabled.Where(rule => rule.Enabled).Select(rule => rule.Id).ToHashSet();
         IReadOnlyList<Reservation> pending = await reservations.ListPendingAsync(Everything(at), cancellationToken);
         HashSet<ProgrammeKey> kept = StandingFor(run.Matches.Select(match => Naming(match.Programme)), pending);
-        var seen = read.Select(Naming).ToHashSet();
-        var leaving = new List<Reservation>();
+        HashSet<ProgrammeKey> seen = read.Select(Naming).ToHashSet();
+        List<Reservation> leaving = [];
 
         foreach (Reservation reservation in pending)
         {

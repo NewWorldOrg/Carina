@@ -63,7 +63,7 @@ public sealed class OidcConfigService(
             return ServiceResult<OidcConfigView>.Failure(AFirstSaveCarriesItsSecret);
         }
 
-        var candidate = OidcSettings.Unconfigured(now);
+        OidcSettings candidate = OidcSettings.Unconfigured(now);
 
         try
         {

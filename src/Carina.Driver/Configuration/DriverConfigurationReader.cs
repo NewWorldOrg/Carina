@@ -248,7 +248,7 @@ public static class DriverConfigurationReader
     {
         var problems = new List<string>();
 
-        using var document = JsonDocument.Parse(
+        using JsonDocument document = JsonDocument.Parse(
             json,
             new JsonDocumentOptions
             {

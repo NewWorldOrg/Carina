@@ -45,7 +45,7 @@ public static class RescanHints
         IReadOnlyList<ServiceId> looking,
         IReadOnlyList<ServiceId> among)
     {
-        var known = among.Select(service => service.Value).ToHashSet();
+        HashSet<int> known = among.Select(service => service.Value).ToHashSet();
 
         return
         [

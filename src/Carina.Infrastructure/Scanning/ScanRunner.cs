@@ -178,7 +178,7 @@ public sealed class ScanRunner(IServiceScopeFactory scopes, ILogger<ScanRunner> 
 
     public ProposalClaim ClaimProposal(ScanRunId id)
     {
-        var hold = Guid.NewGuid();
+        Guid hold = Guid.NewGuid();
 
         if (!claimed.TryAdd(id, hold))
         {

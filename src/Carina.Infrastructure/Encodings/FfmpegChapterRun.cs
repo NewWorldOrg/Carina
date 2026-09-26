@@ -113,7 +113,7 @@ public static class FfmpegChapterRun
         }
 
         using Process running = start.Process;
-        using var late = new CancellationTokenSource(longest, clock);
+        using CancellationTokenSource late = new(longest, clock);
         using CancellationTokenRegistration stopWhenLate =
             late.Token.UnsafeRegister(_ => AnotherProgramme.GiveUpOn(running), null);
         using CancellationTokenRegistration stopWhenCancelled =

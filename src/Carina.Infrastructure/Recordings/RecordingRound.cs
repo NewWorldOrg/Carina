@@ -268,7 +268,7 @@ public sealed class RecordingRound(
         DateTime now,
         CancellationToken cancellationToken)
     {
-        var id = RecordingId.New();
+        RecordingId id = RecordingId.New();
         SessionId? issued = null;
 
         try

@@ -76,7 +76,7 @@ public static class ProgrammeFeedStream
             context.Response.ContentType = ContentType;
             context.Response.Headers[CursorHeader] = page.Next.Text;
 
-            await using var writing = new StreamWriter(context.Response.Body, new UTF8Encoding(false));
+            await using StreamWriter writing = new StreamWriter(context.Response.Body, new UTF8Encoding(false));
 
             if (page.StartOver)
             {

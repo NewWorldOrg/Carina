@@ -145,7 +145,7 @@ public sealed class ChannelCatalogService(
             return refusal;
         }
 
-        var added = CandidateChannel.Discover(
+        CandidateChannel added = CandidateChannel.Discover(
             CandidateChannelId.New(),
             networkId,
             serviceId,

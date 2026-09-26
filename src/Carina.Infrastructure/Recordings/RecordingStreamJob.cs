@@ -69,7 +69,7 @@ public sealed class RecordingStreamJob(
 
     private async Task<bool> WaitAsync(TimeSpan waiting, CancellationToken stoppingToken)
     {
-        using var woken = new CancellationTokenSource();
+        using CancellationTokenSource woken = new();
 
         Volatile.Write(ref waking, woken);
 

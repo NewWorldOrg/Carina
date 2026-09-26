@@ -92,12 +92,13 @@ public sealed record RulePreviewResponder(
     {
         ArgumentNullException.ThrowIfNull(rehearsal);
 
-        var making = rehearsal.Making.ToDictionary(
-            reservation => (
-                reservation.NetworkId.Value,
-                reservation.ServiceId.Value,
-                reservation.EventId.Value,
-                reservation.ProgrammeStartsAt));
+        Dictionary<(int NetworkId, int ServiceId, int EventId, DateTime ProgrammeStartsAt), Reservation> making =
+            rehearsal.Making.ToDictionary(
+                reservation => (
+                    reservation.NetworkId.Value,
+                    reservation.ServiceId.Value,
+                    reservation.EventId.Value,
+                    reservation.ProgrammeStartsAt));
 
         return new RulePreviewResponder(
             [.. rehearsal.Taking.Select(take => Took(take, making, rehearsal.Settled))],

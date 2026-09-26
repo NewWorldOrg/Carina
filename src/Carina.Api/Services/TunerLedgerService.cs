@@ -134,8 +134,9 @@ public sealed class TunerLedgerService(
         TunerLedgerDto document,
         IReadOnlyList<TunerSnapshot> observed)
     {
-        var known = detected.ToDictionary(device => device.DeviceId, StringComparer.Ordinal);
-        var kept = document.Tuners.Select(entry => entry.DeviceId).ToHashSet(StringComparer.Ordinal);
+        Dictionary<string, DetectedDeviceDto> known =
+            detected.ToDictionary(device => device.DeviceId, StringComparer.Ordinal);
+        HashSet<string> kept = document.Tuners.Select(entry => entry.DeviceId).ToHashSet(StringComparer.Ordinal);
 
         return new DetectedTunersView(
             detected,

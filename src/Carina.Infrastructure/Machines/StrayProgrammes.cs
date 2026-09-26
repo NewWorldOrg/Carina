@@ -80,7 +80,7 @@ public sealed class StrayProgrammes(TimeSpan drift, TimeSpan patience) : IStrayP
 
     private bool WaitedOut(int processId)
     {
-        var waited = Stopwatch.StartNew();
+        Stopwatch waited = Stopwatch.StartNew();
 
         while (!IsGone(processId))
         {

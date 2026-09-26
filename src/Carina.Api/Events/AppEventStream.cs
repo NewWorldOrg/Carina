@@ -87,7 +87,7 @@ public static class AppEventStream
         TimeSpan quiet,
         CancellationToken cancellationToken)
     {
-        using var tick = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using CancellationTokenSource tick = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
         Task quiets = Task.Delay(quiet, tick.Token);
         bool signalled = await Task.WhenAny(waiting, quiets) != quiets;
@@ -99,7 +99,8 @@ public static class AppEventStream
 
     private static async Task WriteAsync(HttpContext context, string payload, TimeSpan patience)
     {
-        using var leash = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
+        using CancellationTokenSource leash =
+            CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted);
         leash.CancelAfter(patience);
 
         await context.Response.WriteAsync(payload, leash.Token);

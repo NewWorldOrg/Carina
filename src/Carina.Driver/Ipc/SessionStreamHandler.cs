@@ -117,7 +117,7 @@ public static class SessionStreamHandler
         context.Response.StatusCode = StatusCodes.Status200OK;
         context.Response.ContentType = ContentType;
 
-        using var leash = CancellationTokenSource.CreateLinkedTokenSource(
+        using CancellationTokenSource leash = CancellationTokenSource.CreateLinkedTokenSource(
             context.RequestAborted,
             streamsDetaching
         );

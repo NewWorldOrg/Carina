@@ -234,7 +234,7 @@ public sealed class RecordingService(
                 RecordingFailure.OneIsAlreadyBeingDiscarded);
         }
 
-        using var limit = new CancellationTokenSource(deletions.Longest, clock);
+        using CancellationTokenSource limit = new(deletions.Longest, clock);
         using CancellationTokenSource asking =
             CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, limit.Token);
 

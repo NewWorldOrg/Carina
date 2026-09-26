@@ -11,7 +11,7 @@ public static class SseFrames
         Stream stream,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        using var reader = new StreamReader(
+        using StreamReader reader = new(
             stream,
             Encoding.UTF8,
             detectEncodingFromByteOrderMarks: false,

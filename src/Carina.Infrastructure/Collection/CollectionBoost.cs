@@ -39,7 +39,7 @@ public sealed class CollectionBoost(
     {
         ArgumentNullException.ThrowIfNull(wanted);
 
-        var boostId = Guid.NewGuid();
+        Guid boostId = Guid.NewGuid();
 
         lock (gate)
         {
