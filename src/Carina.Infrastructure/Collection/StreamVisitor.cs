@@ -100,9 +100,9 @@ public sealed class StreamVisitor(
         bool anyBytes = false;
         bool interrupted = false;
         byte[] buffer = ArrayPool<byte>.Shared.Rent(64 * 188);
-        using CancellationTokenSource reading = CancellationTokenSource.CreateLinkedTokenSource(abort);
-
-        reading.CancelAfter(settings.LongestVisit);
+        using CancellationTokenSource deadline = new(settings.LongestVisit, clock);
+        using CancellationTokenSource reading =
+            CancellationTokenSource.CreateLinkedTokenSource(abort, deadline.Token);
 
         try
         {
@@ -147,7 +147,7 @@ public sealed class StreamVisitor(
 
         HarvestedStream done = harvest.Conclude(interrupted, anyBytes);
 
-        using CancellationTokenSource writing = new(settings.LongestVisit);
+        using CancellationTokenSource writing = new(settings.LongestVisit, clock);
 
         ProgrammesWritten written = done.Tables.Count > 0
             ? await writer.WriteAsync(done.Tables, done.Progress.HeardWhole(), writing.Token)

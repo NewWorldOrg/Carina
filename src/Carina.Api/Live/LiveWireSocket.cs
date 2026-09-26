@@ -323,7 +323,7 @@ public sealed class LiveWireSocket(
         Task sending = socket.SendAsync(frame.ToArray(), WebSocketMessageType.Binary, true, cancellationToken);
 
         using CancellationTokenSource ticking = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        Task waited = Task.Delay(settings.WritePatience, ticking.Token);
+        Task waited = Task.Delay(settings.WritePatience, clock, ticking.Token);
 
         if (await Task.WhenAny(sending, waited) == waited)
         {
