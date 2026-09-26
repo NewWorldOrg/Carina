@@ -346,7 +346,7 @@ internal sealed class LiveSeat
     private readonly TimeProvider clock;
 
     private readonly Channel<Offered> backlog = Channel.CreateUnbounded<Offered>(
-        new UnboundedChannelOptions { SingleReader = true, SingleWriter = true });
+        new UnboundedChannelOptions { SingleReader = true });
 
     private readonly CancellationTokenSource letGo = new();
 
