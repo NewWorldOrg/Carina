@@ -40,6 +40,20 @@ public sealed class LiveSessionSettingsTests
         Assert.Throws<ArgumentOutOfRangeException>(() => new LiveSessionSettings(longestWaitToBeFed: TimeSpan.Zero));
     }
 
+    [Theory]
+    [InlineData(0L)]
+    [InlineData(-1L)]
+    public void HoldingNoBytesAtAllForATranscoderIsRefused(long bytes)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new LiveSessionSettings(mostBytesWaitingToBeFed: bytes));
+    }
+
+    [Fact]
+    public void ATranscoderIsHeldThirtyTwoMebibytesItHasNotTakenByDefault()
+    {
+        Assert.Equal(32L * 1024 * 1024, new LiveSessionSettings().MostBytesWaitingToBeFed);
+    }
+
     [Fact]
     public void BeingWatchedHoldsTheSupplyTenMinutesAheadAndSaysSoEveryMinute()
     {

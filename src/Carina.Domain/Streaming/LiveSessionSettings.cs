@@ -8,7 +8,8 @@ public sealed record LiveSessionSettings
         TimeSpan? heldAhead = null,
         TimeSpan? betweenHolds = null,
         TimeSpan? longestWaitToBeFed = null,
-        TimeSpan? longestWaitForATunerToComeFree = null)
+        TimeSpan? longestWaitForATunerToComeFree = null,
+        long? mostBytesWaitingToBeFed = null)
     {
         TimeSpan outliving = linger ?? TimeSpan.FromSeconds(5);
         TimeSpan raise = longestRaise ?? TimeSpan.FromSeconds(30);
@@ -16,6 +17,7 @@ public sealed record LiveSessionSettings
         TimeSpan holds = betweenHolds ?? TimeSpan.FromMinutes(1);
         TimeSpan mouthful = longestWaitToBeFed ?? TimeSpan.FromSeconds(10);
         TimeSpan coming = longestWaitForATunerToComeFree ?? TimeSpan.FromSeconds(5);
+        long held = mostBytesWaitingToBeFed ?? 32L * 1024 * 1024;
 
         if (outliving <= TimeSpan.Zero)
         {
@@ -65,6 +67,14 @@ public sealed record LiveSessionSettings
                 "A viewer waits some time for a tuner on its way out, not none, or a channel change lands in the gap.");
         }
 
+        if (held <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(mostBytesWaitingToBeFed),
+                held,
+                "A transcoder is held some bytes it has not taken yet, not none, or the first mouthful is cut.");
+        }
+
         if (holds >= ahead)
         {
             throw new ArgumentOutOfRangeException(
@@ -79,6 +89,7 @@ public sealed record LiveSessionSettings
         BetweenHolds = holds;
         LongestWaitToBeFed = mouthful;
         LongestWaitForATunerToComeFree = coming;
+        MostBytesWaitingToBeFed = held;
     }
 
     public TimeSpan Linger { get; }
@@ -108,6 +119,11 @@ public sealed record LiveSessionSettings
     /// same channel through the same reading.
     /// </remarks>
     public TimeSpan LongestWaitToBeFed { get; }
+
+    /// <summary>
+    /// How many bytes a transcoder may have not taken yet before it is cut loose.
+    /// </summary>
+    public long MostBytesWaitingToBeFed { get; }
 
     /// <summary>
     /// How long a viewer refused for want of a tuner waits for one that is already being let go of.

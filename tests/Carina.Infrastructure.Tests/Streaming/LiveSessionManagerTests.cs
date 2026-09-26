@@ -502,6 +502,52 @@ public sealed class LiveSessionManagerTests
     }
 
     [Fact]
+    public async Task ATranscoderHoldingMoreUntakenBytesThanItIsAllowedIsCutLooseAsHavingFallenBehind()
+    {
+        const int MouthfulsAllowed = 4;
+
+        await using LiveSessionManager tight = new(
+            new LiveSessionSettings(
+                linger: Linger,
+                longestRaise: LongestRaise,
+                heldAhead: HeldAhead,
+                betweenHolds: BetweenHolds,
+                longestWaitForATunerToComeFree: WaitForATunerToComeFree,
+                mostBytesWaitingToBeFed: (long)Mouthful.Length * MouthfulsAllowed),
+            new LiveFanoutSettings(),
+            new LiveTranscodeSettings { StopGrace = StopGrace },
+            supply,
+            transcoders,
+            clock,
+            events);
+
+        await using ILiveViewing stalled = Seated(await tight.JoinAsync(EveryFrame, CancellationToken.None));
+        await using ILiveViewing flowing = Seated(await tight.JoinAsync(EveryField, CancellationToken.None));
+
+        transcoders.Raised[0].TakesNothingUntil = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        await Pour(supply.Opened[0], MouthfulsAllowed);
+        await Eventually.Happens(
+            () => transcoders.Raised[1].TakenIn >= (long)Mouthful.Length * MouthfulsAllowed,
+            "as many bytes as the stalled transcoder is allowed have been read off the channel");
+
+        Assert.False(transcoders.Raised[0].InputClosed, "bytes up to the limit are still held for the transcoder");
+
+        await Pour(supply.Opened[0], 1);
+        await Eventually.Happens(
+            () => transcoders.Raised[0].InputClosed,
+            "the transcoder holding more than it is allowed is cut loose");
+
+        await transcoders.Raised[0].WriteAsync(Fmp4.Header);
+        transcoders.Raised[0].NoMore();
+
+        await Drained(stalled);
+
+        Assert.Equal(LiveSupplyEnd.TranscoderFellBehind, stalled.Ending!.Current!.Why);
+        Assert.Null(flowing.Ending!.Current);
+    }
+
+    [Fact]
     public async Task ATeardownWaitsForTheWriteStillGoingIntoTheTranscoderBeforeTakingItDown()
     {
         ILiveViewing viewing = await Joined(EveryFrame);

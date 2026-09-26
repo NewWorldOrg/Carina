@@ -154,13 +154,13 @@ internal sealed class LiveReception
     }
 
     internal LiveSeat Take(Stream into, TimeSpan patience)
-        => Take(into, static () => { }, static _ => { }, patience);
+        => Take(into, static () => { }, static _ => { }, patience, settings.MostBytesWaitingToBeFed);
 
     internal LiveSeat Take(
         Stream into,
         Action locked,
         Action<LiveSupplyEnding> ended)
-        => Take(into, locked, ended, settings.LongestWaitToBeFed);
+        => Take(into, locked, ended, settings.LongestWaitToBeFed, settings.MostBytesWaitingToBeFed);
 
     /// <summary>
     /// Takes the seat out of the reading and calls off what is being written into it, and hands back
@@ -198,9 +198,10 @@ internal sealed class LiveReception
         Stream into,
         Action locked,
         Action<LiveSupplyEnding> ended,
-        TimeSpan patience)
+        TimeSpan patience,
+        long mostHeld)
     {
-        LiveSeat seat = new(into, locked, ended, patience, clock);
+        LiveSeat seat = new(into, locked, ended, patience, mostHeld, clock);
 
         lock (gate)
         {
@@ -300,7 +301,7 @@ internal sealed class LiveReception
             {
                 seat.Ended(LiveSupplyEnding.Of(
                     LiveSupplyEnd.TranscoderFellBehind,
-                    $"the transcoder left what it was handed waiting longer than {seat.Patience}."));
+                    $"the transcoder left more than {seat.MostHeld} bytes, or bytes older than {seat.Patience}, untaken."));
             }
 
             seat.NoMore();
@@ -335,7 +336,8 @@ internal sealed class LiveReception
 /// </summary>
 /// <remarks>
 /// The seat is refused further mouthfuls once the oldest one it has not taken has waited longer
-/// than its patience, or once writing into it has failed.
+/// than its patience, once the bytes it has not taken would come to more than it is held, or once
+/// writing into it has failed.
 /// </remarks>
 internal sealed class LiveSeat
 {
@@ -349,6 +351,8 @@ internal sealed class LiveSeat
 
     private readonly TimeSpan patience;
 
+    private readonly long mostHeld;
+
     private readonly TimeProvider clock;
 
     private readonly Channel<Offered> backlog = Channel.CreateUnbounded<Offered>(
@@ -357,6 +361,8 @@ internal sealed class LiveSeat
     private readonly CancellationTokenSource letGo = new();
 
     private long waitingSince = NothingWaiting;
+
+    private long held;
 
     private int refused;
 
@@ -373,12 +379,14 @@ internal sealed class LiveSeat
         Action locked,
         Action<LiveSupplyEnding> ended,
         TimeSpan patience,
+        long mostHeld,
         TimeProvider clock)
     {
         this.into = into;
         this.locked = locked;
         this.ended = ended;
         this.patience = patience;
+        this.mostHeld = mostHeld;
         this.clock = clock;
         Pumping = PumpAsync();
     }
@@ -386,6 +394,8 @@ internal sealed class LiveSeat
     internal Task Pumping { get; }
 
     internal TimeSpan Patience => patience;
+
+    internal long MostHeld => mostHeld;
 
     internal bool FellBehind => Volatile.Read(ref behind) is not 0;
 
@@ -406,12 +416,14 @@ internal sealed class LiveSeat
             return false;
         }
 
-        if (WaitedTooLong)
+        if (WaitedTooLong || Volatile.Read(ref held) + mouthful.Length > mostHeld)
         {
             Interlocked.Exchange(ref behind, 1);
 
             return false;
         }
+
+        Interlocked.Add(ref held, mouthful.Length);
 
         return backlog.Writer.TryWrite(new Offered(mouthful, clock.GetUtcNow().UtcTicks));
     }
@@ -457,6 +469,7 @@ internal sealed class LiveSeat
                     await into.FlushAsync(letGo.Token);
 
                     Volatile.Write(ref waitingSince, NothingWaiting);
+                    Interlocked.Add(ref held, -next.Bytes.Length);
 
                     if (!fed)
                     {
