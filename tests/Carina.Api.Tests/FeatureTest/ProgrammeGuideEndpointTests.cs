@@ -102,12 +102,13 @@ public sealed class ProgrammeGuideEndpointTests(TestingWebApplicationFactory fac
     }
 
     [Fact]
-    public async Task AVisitSinceTheLastReadMakesTheGuideWorthFetchingAgain()
+    public async Task AVisitThatChangedNothingLeavesTheGuideAsItWas()
     {
         await using var feature = new EpgFeature([Terrestrial(4, 32_736, 1049)]);
 
-        using HttpResponseMessage first = await feature.Client.GetAsync(
-            new Uri($"/api/programs{ADay}", UriKind.Relative));
+        feature.Programmes.Programmes.Add(Programme(4, 1049, 1, From.AddHours(9)));
+
+        string? first = await TagAsync(feature);
 
         await feature.Visits.SaveAsync(
             StreamVisit.Record(
@@ -118,10 +119,69 @@ public sealed class ProgrammeGuideEndpointTests(TestingWebApplicationFactory fac
                 TimeSpan.FromSeconds(5)),
             CancellationToken.None);
 
-        using HttpResponseMessage again = await feature.Client.GetAsync(
-            new Uri($"/api/programs{ADay}", UriKind.Relative));
+        Assert.Equal(first, await TagAsync(feature));
+    }
 
-        Assert.NotEqual(first.Headers.ETag?.ToString(), again.Headers.ETag?.ToString());
+    [Fact]
+    public async Task AProgrammeRewrittenWithoutAVisitMakesTheGuideWorthFetchingAgain()
+    {
+        await using var feature = new EpgFeature([Terrestrial(4, 32_736, 1049)]);
+
+        await feature.Programmes.AbsorbAsync(
+            [Broadcast(1, From.AddHours(9), "a programme")],
+            [],
+            From,
+            CancellationToken.None);
+
+        string? first = await TagAsync(feature);
+
+        await feature.Programmes.AbsorbAsync(
+            [Broadcast(1, From.AddHours(9), "a programme, extended")],
+            [],
+            From.AddHours(1),
+            CancellationToken.None);
+
+        Assert.NotEqual(first, await TagAsync(feature));
+    }
+
+    [Fact]
+    public async Task AGuideEmptiedWithoutAVisitMakesTheGuideWorthFetchingAgain()
+    {
+        await using var feature = new EpgFeature([Terrestrial(4, 32_736, 1049)]);
+
+        feature.Programmes.Programmes.Add(Programme(4, 1049, 1, From.AddHours(9)));
+
+        string? first = await TagAsync(feature);
+
+        await feature.Programmes.ForgetEverythingAsync(CancellationToken.None);
+
+        Assert.NotEqual(first, await TagAsync(feature));
+    }
+
+    [Fact]
+    public async Task AKeptProgrammeThatGrewRicherMakesTheGuideWorthFetchingAgain()
+    {
+        await using var feature = new EpgFeature([Terrestrial(4, 32_736, 1049)]);
+        ArchivedProgramme kept = Kept(1, From.AddHours(9));
+
+        feature.Archived.Programmes.Add(kept);
+
+        string? first = await TagAsync(feature);
+
+        kept.AbsorbTheRicherOf(ArchivedProgramme.Rehydrate(
+            new NetworkId(4),
+            new ServiceId(1049),
+            new EventId(1),
+            From.AddHours(9),
+            From.AddHours(9).AddMinutes(30),
+            "a programme that ran",
+            "and what it was about",
+            false,
+            [],
+            [],
+            From.AddHours(10)));
+
+        Assert.NotEqual(first, await TagAsync(feature));
     }
 
     [Fact]
@@ -185,6 +245,24 @@ public sealed class ProgrammeGuideEndpointTests(TestingWebApplicationFactory fac
 
         Assert.False(only.GetProperty("isArchived").GetBoolean());
     }
+
+    private static async Task<string?> TagAsync(EpgFeature feature)
+    {
+        using HttpResponseMessage read = await feature.Client.GetAsync(
+            new Uri($"/api/programs{ADay}", UriKind.Relative));
+
+        return read.Headers.ETag?.ToString();
+    }
+
+    private static ProgrammeBroadcast Broadcast(int carried, DateTime startsAt, string name)
+        => new(
+            new ProgrammeId(new NetworkId(4), new ServiceId(1049), new EventId(carried)),
+            new TransportStreamId(32_736),
+            startsAt,
+            startsAt.AddMinutes(30),
+            name,
+            string.Empty,
+            false);
 
     private static ArchivedProgramme Kept(int carried, DateTime startsAt)
         => ArchivedProgramme.Rehydrate(
