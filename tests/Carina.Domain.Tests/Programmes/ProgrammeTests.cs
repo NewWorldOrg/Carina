@@ -210,6 +210,23 @@ public sealed class ProgrammeTests
     [Theory]
     [InlineData("name")]
     [InlineData("summary")]
+    public void TextLongerThanThisSystemKeepsIsToldApartBeforeItIsCut(string field)
+    {
+        int most = field == "name" ? Programme.NameMaxLength : Programme.SummaryMaxLength;
+        string overlong = new string('あ', most + 1);
+
+        Assert.True(Programme.Clamps(field == "name" ? Broadcast(name: overlong) : Broadcast(summary: overlong)));
+    }
+
+    [Fact]
+    public void TextThatFitsIsNotToldApartAsCut()
+        => Assert.False(Programme.Clamps(Broadcast(
+            name: new string('あ', Programme.NameMaxLength),
+            summary: new string('あ', Programme.SummaryMaxLength))));
+
+    [Theory]
+    [InlineData("name")]
+    [InlineData("summary")]
     public void TextAlreadyCutIsNotSeenAsChangingWhenItArrivesAgain(string field)
     {
         int most = field == "name" ? Programme.NameMaxLength : Programme.SummaryMaxLength;

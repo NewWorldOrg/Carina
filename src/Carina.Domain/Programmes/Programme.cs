@@ -81,6 +81,13 @@ public sealed class Programme
             broadcast.Source);
     }
 
+    public static bool Clamps(ProgrammeBroadcast broadcast)
+    {
+        ArgumentNullException.ThrowIfNull(broadcast);
+
+        return broadcast.Name.Length > NameMaxLength || broadcast.Summary.Length > SummaryMaxLength;
+    }
+
     public static Programme Rehydrate(
         ProgrammeId id,
         TransportStreamId transportStreamId,

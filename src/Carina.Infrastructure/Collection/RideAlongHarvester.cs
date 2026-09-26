@@ -176,10 +176,13 @@ public sealed class RideAlongHarvester(
                 .WriteAsync(gathered.Tables, gathered.HeardWhole, cancellationToken);
 
             logger.LogInformation(
-                "Riding along with {SessionId} added {Added} and updated {Updated} programme(s).",
+                "Riding along with {SessionId} added {Added} and updated {Updated} programme(s), threw away "
+                + "{Discarded} event(s) that could not be taken and cut {Clamped} programme(s) to the length kept.",
                 sessionId.Value,
                 written.Added,
-                written.Updated);
+                written.Updated,
+                written.Discarded,
+                written.Clamped);
         }
         catch (Exception failure) when (failure is not OperationCanceledException)
         {
