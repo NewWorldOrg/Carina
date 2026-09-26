@@ -109,6 +109,46 @@ public sealed class StreamHarvestTests
         Assert.Empty(harvest.Conclude(interrupted: false, anyBytes: true).Tables);
     }
 
+    [Fact]
+    public void WhatIsTakenNamesAServiceHeardWholeOnlyWhenItCarriesTheWholeSchedule()
+    {
+        StreamHarvest harvest = new(Midnight());
+        ScheduledService service = new(0x7FE3, 0x7FE3, SomeService);
+
+        Gather(harvest, FirstBasic, LastBasic);
+
+        Gathered first = harvest.TakeWhatIsGathered();
+
+        Gather(harvest, LastBasic, LastBasic);
+
+        Gathered second = harvest.TakeWhatIsGathered();
+
+        Gather(harvest, FirstBasic, LastBasic);
+        Gather(harvest, LastBasic, LastBasic);
+
+        Gathered third = harvest.TakeWhatIsGathered();
+
+        Assert.Empty(first.HeardWhole);
+        Assert.Equal([service], harvest.Progress.HeardWhole());
+        Assert.Empty(second.HeardWhole);
+        Assert.Equal(4, second.Tables.Count);
+        Assert.Equal([service], third.HeardWhole);
+    }
+
+    [Fact]
+    public void NothingGatheredSinceTheLastTakeHandsOverNothing()
+    {
+        StreamHarvest harvest = new(Midnight());
+
+        Gather(harvest, FirstBasic, FirstBasic);
+        harvest.TakeWhatIsGathered();
+
+        Gathered again = harvest.TakeWhatIsGathered();
+
+        Assert.Empty(again.Tables);
+        Assert.Empty(again.HeardWhole);
+    }
+
     private static HeldClock Midnight() => HeldClock.Broadcasting(2026, 8, 19, 0, 0, 0);
 
     private static void Gather(StreamHarvest harvest, int tableId, int lastTableId, int segments = 4)

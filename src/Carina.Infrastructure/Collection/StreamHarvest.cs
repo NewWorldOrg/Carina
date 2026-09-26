@@ -15,6 +15,10 @@ public sealed record HarvestedStream(
     public IReadOnlyList<ServiceDescriptionTable> Descriptions { get; init; } = [];
 }
 
+public sealed record Gathered(
+    IReadOnlyList<EventInformationTable> Tables,
+    IReadOnlyList<ScheduledService> HeardWhole);
+
 public sealed class StreamHarvest(TimeProvider clock)
 {
     private readonly SectionReader reader = new(EventInformationTable.Pid, ServiceDescriptionTable.Pid);
@@ -22,6 +26,8 @@ public sealed class StreamHarvest(TimeProvider clock)
     private readonly List<EventInformationTable> tables = [];
 
     private readonly ScheduleProgress progress = new(clock);
+
+    private ScheduleProgress sinceTaken = new(clock);
 
     private readonly List<ServiceDescriptionTable> descriptions = [];
 
@@ -96,19 +102,25 @@ public sealed class StreamHarvest(TimeProvider clock)
 
             tables.Add(parsed.Table);
             progress.Saw(parsed.Table);
+            sinceTaken.Saw(parsed.Table);
         }
     }
 
-    public IReadOnlyList<EventInformationTable> TakeWhatIsGathered()
+    /// <summary>
+    /// Hands over the tables read since the last take, with the services whose whole schedule those
+    /// tables alone carry.
+    /// </summary>
+    public Gathered TakeWhatIsGathered()
     {
         if (tables.Count == 0)
         {
-            return [];
+            return new Gathered([], []);
         }
 
-        EventInformationTable[] taken = [.. tables];
+        Gathered taken = new([.. tables], sinceTaken.HeardWhole());
 
         tables.Clear();
+        sinceTaken = new ScheduleProgress(clock);
 
         return taken;
     }
