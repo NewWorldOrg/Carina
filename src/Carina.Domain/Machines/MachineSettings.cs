@@ -14,5 +14,7 @@ public sealed record MachineSettings
 
     public TimeSpan LongestProbe { get; init; } = TimeSpan.FromSeconds(10);
 
+    public TimeSpan AskAgainAfterATimeOut { get; init; } = TimeSpan.FromMinutes(1);
+
     public TimeSpan LongestRead { get; init; } = TimeSpan.FromSeconds(60);
 }
