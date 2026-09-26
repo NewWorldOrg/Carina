@@ -1,8 +1,7 @@
 namespace Carina.Domain.Reservations;
 
 /// <summary>
-/// Thrown when a reservation was changed in the ledger after the writer read it, so the write is
-/// dropped and the ledger's version stands.
+/// Thrown when a reservation was changed in the ledger after the writer read it.
 /// </summary>
 public sealed class ReservationMovedMeanwhileException(IReadOnlyList<ReservationId> reservations)
     : InvalidOperationException(

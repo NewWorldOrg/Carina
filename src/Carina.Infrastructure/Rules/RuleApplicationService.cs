@@ -533,7 +533,7 @@ public sealed class RuleApplicationService(
 
     /// <summary>
     /// Names the reservations that stand for the programmes taken: the one naming a programme's start,
-    /// or, when none does, those of the same broadcast that the guide will move to it.
+    /// or, when none does, those of the same broadcast.
     /// </summary>
     private static HashSet<ProgrammeKey> StandingFor(IEnumerable<ProgrammeKey> taken, IEnumerable<Reservation> held)
     {

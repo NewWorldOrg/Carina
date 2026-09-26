@@ -6,10 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace Carina.Db.Migrations;
 
-/// <summary>
-/// The reservation row's concurrency token is PostgreSQL's own <c>xmin</c>, which every row already
-/// carries, so the model changes and the schema does not.
-/// </summary>
+/// <inheritdoc />
 public partial class ReservationConcurrency : Migration
 {
     /// <inheritdoc />

@@ -85,7 +85,7 @@ public sealed class ReservationRecordingContract(CarinaDbContext context) : IRes
 
     /// <summary>
     /// Carries the row version a claim statement left behind onto the copy of that reservation this
-    /// context tracks, so a later write from the same context is not refused for a change it made itself.
+    /// context tracks.
     /// </summary>
     private bool Moved(ReservationId id, List<long> written)
     {
