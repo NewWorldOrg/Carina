@@ -517,12 +517,11 @@ public sealed class RecordingStreamSupervisor(
         Tally tally,
         CancellationToken cancellationToken)
     {
-        if (await TuneOfAsync(recording, cancellationToken) is not { } tune)
+        if (await RateOfAsync(recording, cancellationToken) is not { } bitrate)
         {
             return;
         }
 
-        ExpectedBitrate bitrate = ExpectedBitrate.Of(tune.Kind);
         long? weighed = await weigher.WeighAsync(recording.OutputRoot, recording.FileName, cancellationToken);
         QualityBands bands = await BandsAsync(now, cancellationToken);
         RecordingOutcome outcome = RecordingOutcome.Failed;
@@ -618,16 +617,13 @@ public sealed class RecordingStreamSupervisor(
 
     private async Task<TuneParams?> TuneOfAsync(Recording recording, CancellationToken cancellationToken)
     {
-        await using AsyncServiceScope scope = scopes.CreateAsyncScope();
-        TuningResolution resolution = await scope.ServiceProvider
-            .GetRequiredService<IServiceTuningDirectory>()
-            .ResolveTuningAsync(recording.NetworkId, recording.ServiceId, cancellationToken);
+        TuningResolution resolution = await ResolveAsync(recording, cancellationToken);
 
         if (resolution.Tuning is not { } tuning)
         {
             logger.LogWarning(
-                "Recording {Recording} is on a service this catalogue can no longer tune ({Refusal}), so neither "
-                + "its stream nor the rate its weight is judged against can be named.",
+                "Recording {Recording} is on a service this catalogue can no longer tune ({Refusal}), so there is "
+                + "no stream to put it back on.",
                 recording.Id.Wire,
                 resolution.Refusal);
 
@@ -635,6 +631,49 @@ public sealed class RecordingStreamSupervisor(
         }
 
         return tuning.Typed();
+    }
+
+    /// <summary>
+    /// Names the rate a recording's weight is judged against: the one measured off the kind its
+    /// service is carried on, or the range every kind falls in when the catalogue can no longer
+    /// tune the service. Nothing is named while the catalogue cannot answer yet.
+    /// </summary>
+    private async Task<ExpectedBitrate?> RateOfAsync(Recording recording, CancellationToken cancellationToken)
+    {
+        TuningResolution resolution = await ResolveAsync(recording, cancellationToken);
+
+        if (resolution.Tuning is { } tuning)
+        {
+            return ExpectedBitrate.Of(tuning.Typed().Kind);
+        }
+
+        if (resolution.Refusal is TuningRefusal.LedgerUnreadable or TuningRefusal.CapacityUnknown)
+        {
+            logger.LogWarning(
+                "Recording {Recording} is over and whether its service can be tuned cannot be answered yet "
+                + "({Refusal}), so it is judged on a later pass.",
+                recording.Id.Wire,
+                resolution.Refusal);
+
+            return null;
+        }
+
+        logger.LogWarning(
+            "Recording {Recording} is on a service this catalogue can no longer tune ({Refusal}), so its weight is "
+            + "judged against the range every kind of broadcast falls in.",
+            recording.Id.Wire,
+            resolution.Refusal);
+
+        return ExpectedBitrate.OfAnyKind;
+    }
+
+    private async Task<TuningResolution> ResolveAsync(Recording recording, CancellationToken cancellationToken)
+    {
+        await using AsyncServiceScope scope = scopes.CreateAsyncScope();
+
+        return await scope.ServiceProvider
+            .GetRequiredService<IServiceTuningDirectory>()
+            .ResolveTuningAsync(recording.NetworkId, recording.ServiceId, cancellationToken);
     }
 
     private async Task<bool> ApplyAsync(
