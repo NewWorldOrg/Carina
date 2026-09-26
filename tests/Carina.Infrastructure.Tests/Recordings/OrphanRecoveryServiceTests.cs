@@ -398,6 +398,29 @@ public sealed class OrphanRecoveryServiceTests
     }
 
     [Theory]
+    [InlineData(null, RecordingFault.SizeUnobserved)]
+    [InlineData(0L, RecordingFault.NothingLanded)]
+    public async Task AFullDiskUnderAFileThatWeighsNothingKnownSaysWhichOfTheTwoItWas(
+        long? weighs,
+        RecordingFault said)
+    {
+        var ledger = new StreamLedger();
+        Recording running = InFlight(Airs, Airs.AddMinutes(30));
+        ledger.Hold(running);
+
+        await Recovery(ledger, new WatchedDriver(), new WatchClock(Now), new WeighedFiles { Weighs = weighs })
+            .RecoverAsync(Hello(), [FilledTheDisk(running)], Cancel);
+
+        Recording read = ledger.Read(running.Id);
+
+        Assert.Equal(RecordingOutcome.Failed, read.Outcome);
+        Assert.Equal(
+            [RecordingFault.DiskExhausted, said],
+            read.OutcomeDetail.Select(detail => detail.Fault).ToArray());
+        Assert.Equal(0, read.FileSizeObserved);
+    }
+
+    [Theory]
     [InlineData(SessionStopReason.RecordingFailed, null)]
     [InlineData(SessionStopReason.DeviceFailed, SessionRefusalTitles.DiskFull)]
     public async Task ASessionThatDidNotEndOnAFullDiskIsStillOneRecoveryPutsBackOnAStream(

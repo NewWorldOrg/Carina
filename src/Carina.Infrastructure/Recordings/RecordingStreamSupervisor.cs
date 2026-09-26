@@ -180,7 +180,11 @@ public sealed class RecordingStreamSupervisor(
             recording.Id,
             loaded =>
             {
-                loaded.Note(new OutcomeDetail(RecordingFault.DiskExhausted, null, string.Empty, now));
+                foreach (RecordingFault fault in RecordingFaults.OfAFullDisk(weighed))
+                {
+                    loaded.Note(new OutcomeDetail(fault, null, string.Empty, now));
+                }
+
                 loaded.Settle(RecordingOutcome.Failed, weighed ?? 0, now);
 
                 return true;

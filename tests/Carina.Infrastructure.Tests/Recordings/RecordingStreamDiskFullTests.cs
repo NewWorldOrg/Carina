@@ -41,6 +41,36 @@ public sealed class RecordingStreamDiskFullTests
         Assert.Empty(read.Interruptions);
     }
 
+    [Theory]
+    [InlineData(null, RecordingFault.SizeUnobserved)]
+    [InlineData(0L, RecordingFault.NothingLanded)]
+    public async Task AFullDiskUnderAFileThatWeighsNothingKnownSaysWhichOfTheTwoItWas(
+        long? weighs,
+        RecordingFault said)
+    {
+        Recording recording = InFlight();
+        var ledger = new StreamLedger();
+        ledger.Hold(recording);
+        var driver = new WatchedDriver();
+        driver.Holding[RecordingSessions.Named(recording.Id)] =
+            Over(recording, SessionStopReason.RecordingFailed, SessionRefusalTitles.DiskFull);
+
+        await Supervisor(
+                ledger,
+                driver,
+                new WatchClock(Airs.AddMinutes(10)),
+                new WeighedFiles { Weighs = weighs })
+            .WatchAsync(Cancel);
+
+        Recording read = ledger.Read(recording.Id);
+
+        Assert.Equal(RecordingOutcome.Failed, read.Outcome);
+        Assert.Equal(
+            [RecordingFault.DiskExhausted, said],
+            read.OutcomeDetail.Select(detail => detail.Fault).ToArray());
+        Assert.Equal(0, read.FileSizeObserved);
+    }
+
     [Fact]
     public async Task ARecordingThatFailedOnAFullDiskIsNotOpenedAgainOnTheNextPass()
     {
@@ -50,7 +80,11 @@ public sealed class RecordingStreamDiskFullTests
         var driver = new WatchedDriver();
         driver.Holding[RecordingSessions.Named(recording.Id)] =
             Over(recording, SessionStopReason.RecordingFailed, SessionRefusalTitles.DiskFull);
-        RecordingStreamSupervisor supervisor = Supervisor(ledger, driver, new WatchClock(Airs.AddMinutes(10)));
+        RecordingStreamSupervisor supervisor = Supervisor(
+            ledger,
+            driver,
+            new WatchClock(Airs.AddMinutes(10)),
+            new WeighedFiles { Weighs = WhatLandedBeforeTheDiskFilled });
 
         await supervisor.WatchAsync(Cancel);
         RecordingWatch again = await supervisor.WatchAsync(Cancel);

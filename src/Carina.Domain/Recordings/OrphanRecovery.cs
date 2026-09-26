@@ -74,12 +74,7 @@ public static class OrphanRecovery
         =>
         [
             WhyNothingWasWritingIt(driverIsAnotherInstance),
-            .. fileSizeBytes switch
-            {
-                null => [RecordingFault.SizeUnobserved],
-                0 => [RecordingFault.NothingLanded],
-                _ => Array.Empty<RecordingFault>(),
-            },
+            .. RecordingFaults.OfTheFileAsWeighed(fileSizeBytes),
             .. RecordingFaults.OfWhatWasLeftScrambled(leftScrambled),
         ];
 }
