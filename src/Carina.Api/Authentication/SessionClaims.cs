@@ -19,7 +19,7 @@ public static class SessionClaims
             [
                 new Claim(ClaimTypes.NameIdentifier, session.Subject.Value),
                 new Claim(ClaimTypes.Name, session.Subject.Value),
-                new Claim(Session, session.Id.Value),
+                new Claim(Session, session.Handle.Value),
                 new Claim(Method, session.Method.ToString()),
             ],
             scheme);
@@ -36,13 +36,13 @@ public static class SessionClaims
         return string.IsNullOrEmpty(carried) ? null : new Subject(carried);
     }
 
-    public static SessionId? SessionOf(ClaimsPrincipal principal)
+    public static SessionHandle? SessionOf(ClaimsPrincipal principal)
     {
         ArgumentNullException.ThrowIfNull(principal);
 
         string? carried = principal.FindFirstValue(Session);
 
-        return string.IsNullOrEmpty(carried) ? null : new SessionId(carried);
+        return string.IsNullOrEmpty(carried) ? null : new SessionHandle(carried);
     }
 
     public static AuthMethod? MethodOf(ClaimsPrincipal principal)

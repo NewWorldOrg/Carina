@@ -2,6 +2,8 @@ using Carina.Domain.Auth;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
 
+using Microsoft.EntityFrameworkCore;
+
 namespace Carina.Infrastructure.Tests;
 
 [Collection(RepositoryDatabaseCollection.Name)]
@@ -13,7 +15,7 @@ public sealed class AuthSessionRepositoryTests(RepositoryDatabase database)
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
     [Fact]
-    public async Task ASessionIsFoundByTheIdentifierTheCookieCarries()
+    public async Task ASessionIsFoundByTheHashOfTheCookieItWasStartedWith()
     {
         AuthSession started = Started(new Subject("carina"), "a device");
 
@@ -23,15 +25,41 @@ public sealed class AuthSessionRepositoryTests(RepositoryDatabase database)
         }
 
         await using CarinaDbContext reading = database.Open();
-        AuthSession? read = await new AuthSessionRepository(reading).FindAsync(started.Id, Cancel);
+        AuthSession? read = await new AuthSessionRepository(reading).FindAsync(started.Handle, Cancel);
 
         Assert.NotNull(read);
-        Assert.Equal(started.Id.Value, read.Id.Value);
+        Assert.Equal(started.Handle, read.Handle);
         Assert.Equal("carina", read.Subject.Value);
         Assert.Equal("carina", read.DisplayName);
         Assert.Equal(AuthMethod.Local, read.Method);
         Assert.Equal("a device", read.DeviceLabel);
         Assert.Null(read.RevokedAt);
+    }
+
+    [Fact]
+    public async Task TheTableKeepsTheHashOfTheCookieAndNeverTheCookie()
+    {
+        SessionId issued = SessionId.Issue();
+        AuthSession started = AuthSession.Start(
+            issued,
+            new Subject("carina"),
+            "carina",
+            AuthMethod.Local,
+            "a device",
+            At);
+
+        await using (CarinaDbContext writing = database.Open())
+        {
+            await new AuthSessionRepository(writing).SaveAsync(started, Cancel);
+        }
+
+        await using CarinaDbContext reading = database.Open();
+        List<string> rows = await reading.Database
+            .SqlQueryRaw<string>("SELECT row_to_json(held)::text AS \"Value\" FROM auth_session AS held")
+            .ToListAsync(Cancel);
+
+        Assert.DoesNotContain(rows, row => row.Contains(issued.Value, StringComparison.Ordinal));
+        Assert.Contains(rows, row => row.Contains(SessionHandle.Of(issued).Value, StringComparison.Ordinal));
     }
 
     [Fact]
@@ -55,8 +83,8 @@ public sealed class AuthSessionRepositoryTests(RepositoryDatabase database)
         await using CarinaDbContext reading = database.Open();
         var after = new AuthSessionRepository(reading);
 
-        Assert.Null(await after.FindAsync(going.Id, Cancel));
-        Assert.NotNull(await after.FindAsync(staying.Id, Cancel));
+        Assert.Null(await after.FindAsync(going.Handle, Cancel));
+        Assert.NotNull(await after.FindAsync(staying.Handle, Cancel));
     }
 
     [Fact]
@@ -72,7 +100,7 @@ public sealed class AuthSessionRepositoryTests(RepositoryDatabase database)
     {
         await using CarinaDbContext reading = database.Open();
 
-        Assert.Null(await new AuthSessionRepository(reading).FindAsync(SessionId.Issue(), Cancel));
+        Assert.Null(await new AuthSessionRepository(reading).FindAsync(SessionHandle.Of(SessionId.Issue()), Cancel));
     }
 
     [Fact]
@@ -92,8 +120,8 @@ public sealed class AuthSessionRepositoryTests(RepositoryDatabase database)
         IReadOnlyList<AuthSession> listed = await new AuthSessionRepository(reading)
             .ListAsync(new Subject("carina"), Cancel);
 
-        Assert.Contains(listed, session => session.Id.Value == mine.Id.Value);
-        Assert.DoesNotContain(listed, session => session.Id.Value == theirs.Id.Value);
+        Assert.Contains(listed, session => session.Handle.Value == mine.Handle.Value);
+        Assert.DoesNotContain(listed, session => session.Handle.Value == theirs.Handle.Value);
     }
 
     [Fact]
@@ -118,8 +146,8 @@ public sealed class AuthSessionRepositoryTests(RepositoryDatabase database)
         await using CarinaDbContext reading = database.Open();
         IReadOnlyList<AuthSession> listed = await new AuthSessionRepository(reading).ListAllAsync(Cancel);
 
-        int ofTheirs = listed.ToList().FindIndex(session => session.Id.Value == theirs.Id.Value);
-        int ofMine = listed.ToList().FindIndex(session => session.Id.Value == mine.Id.Value);
+        int ofTheirs = listed.ToList().FindIndex(session => session.Handle.Value == theirs.Handle.Value);
+        int ofMine = listed.ToList().FindIndex(session => session.Handle.Value == mine.Handle.Value);
 
         Assert.True(ofTheirs >= 0 && ofMine >= 0);
         Assert.True(ofTheirs < ofMine);
@@ -140,7 +168,7 @@ public sealed class AuthSessionRepositoryTests(RepositoryDatabase database)
         await using (CarinaDbContext touching = database.Open())
         {
             var repository = new AuthSessionRepository(touching);
-            AuthSession? held = await repository.FindAsync(started.Id, Cancel);
+            AuthSession? held = await repository.FindAsync(started.Handle, Cancel);
 
             Assert.True(held!.Touch(At.AddHours(1), SessionPolicy.Default));
 
@@ -148,7 +176,7 @@ public sealed class AuthSessionRepositoryTests(RepositoryDatabase database)
         }
 
         await using CarinaDbContext reading = database.Open();
-        AuthSession? read = await new AuthSessionRepository(reading).FindAsync(started.Id, Cancel);
+        AuthSession? read = await new AuthSessionRepository(reading).FindAsync(started.Handle, Cancel);
 
         Assert.Equal(At.AddHours(1), read!.LastUsedAt);
     }
@@ -175,7 +203,7 @@ public sealed class AuthSessionRepositoryTests(RepositoryDatabase database)
 
             foreach (AuthSession session in held)
             {
-                if (!session.Id.Equals(here.Id) && session.Revoke(At.AddMinutes(1)))
+                if (!session.Handle.Equals(here.Handle) && session.Revoke(At.AddMinutes(1)))
                 {
                     ended.Add(session);
                 }
@@ -187,8 +215,8 @@ public sealed class AuthSessionRepositoryTests(RepositoryDatabase database)
         await using CarinaDbContext reading = database.Open();
         var read = new AuthSessionRepository(reading);
 
-        Assert.Null((await read.FindAsync(here.Id, Cancel))!.RevokedAt);
-        Assert.Equal(At.AddMinutes(1), (await read.FindAsync(there.Id, Cancel))!.RevokedAt);
+        Assert.Null((await read.FindAsync(here.Handle, Cancel))!.RevokedAt);
+        Assert.Equal(At.AddMinutes(1), (await read.FindAsync(there.Handle, Cancel))!.RevokedAt);
     }
 
     [Fact]
@@ -203,12 +231,12 @@ public sealed class AuthSessionRepositoryTests(RepositoryDatabase database)
 
         await using (CarinaDbContext deleting = database.Open())
         {
-            await new AuthSessionRepository(deleting).DeleteAsync(started.Id, Cancel);
+            await new AuthSessionRepository(deleting).DeleteAsync(started.Handle, Cancel);
         }
 
         await using CarinaDbContext reading = database.Open();
 
-        Assert.Null(await new AuthSessionRepository(reading).FindAsync(started.Id, Cancel));
+        Assert.Null(await new AuthSessionRepository(reading).FindAsync(started.Handle, Cancel));
     }
 
     [Fact]
@@ -223,12 +251,12 @@ public sealed class AuthSessionRepositoryTests(RepositoryDatabase database)
 
         await using (CarinaDbContext deleting = database.Open())
         {
-            await new AuthSessionRepository(deleting).DeleteAsync(SessionId.Issue(), Cancel);
+            await new AuthSessionRepository(deleting).DeleteAsync(SessionHandle.Of(SessionId.Issue()), Cancel);
         }
 
         await using CarinaDbContext reading = database.Open();
 
-        Assert.NotNull(await new AuthSessionRepository(reading).FindAsync(started.Id, Cancel));
+        Assert.NotNull(await new AuthSessionRepository(reading).FindAsync(started.Handle, Cancel));
     }
 
     private static AuthSession Started(Subject subject, string device)

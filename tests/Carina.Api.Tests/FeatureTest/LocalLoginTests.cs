@@ -52,7 +52,7 @@ public sealed class LocalLoginTests
 
         string carried = cookie[$"{SessionCookie.Name}=".Length..cookie.IndexOf(';', StringComparison.Ordinal)];
 
-        Assert.Equal(started.Id.Value, carried);
+        Assert.Equal(started.Handle, SessionHandle.Of(new SessionId(carried)));
         Assert.DoesNotContain(FirstCredentials.Username, carried, StringComparison.Ordinal);
         Assert.DoesNotContain(AuthProbe.Password, carried, StringComparison.Ordinal);
     }

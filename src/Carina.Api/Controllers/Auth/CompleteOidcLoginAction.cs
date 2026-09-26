@@ -35,7 +35,7 @@ public sealed class CompleteOidcLoginAction(OidcLoginService logins) : Controlle
 
         Response.Cookies.Append(
             SessionCookie.Name,
-            arrival.Session.Id.Value,
+            arrival.Cookie.Value,
             SessionCookie.Carrying(Request.IsHttps, arrival.SessionLifetime));
 
         return Redirect(arrival.ReturnPath);

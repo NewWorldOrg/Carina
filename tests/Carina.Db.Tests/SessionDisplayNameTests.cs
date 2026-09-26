@@ -15,6 +15,8 @@ public sealed class SessionDisplayNameTests
 
     private const string BeforeTheColumn = "20260831111140_ReservationOutcomeLedger";
 
+    private const string TheColumn = "20260905022019_SessionDisplayName";
+
     private const string HeldId = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
@@ -40,7 +42,7 @@ public sealed class SessionDisplayNameTests
             await inserting.ExecuteNonQueryAsync(Cancel);
         }
 
-        await migrator.MigrateAsync(cancellationToken: Cancel);
+        await migrator.MigrateAsync(TheColumn, Cancel);
 
         await using NpgsqlConnection reading = await OpenAsync();
         await using var asking = new NpgsqlCommand(

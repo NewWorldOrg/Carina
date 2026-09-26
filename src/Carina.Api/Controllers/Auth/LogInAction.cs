@@ -45,7 +45,7 @@ public sealed class LogInAction(LocalAccountService accounts, TimeProvider clock
                 BaseResponder<MeResponder>.Error(LocalAccountService.TheRefusalForTooManyAttempts));
         }
 
-        if (outcome.Session is not { } session)
+        if (outcome.Session is not { } session || outcome.Cookie is not { } cookie)
         {
             return Unauthorized(
                 BaseResponder<MeResponder>.Error(LocalAccountService.TheSameRefusalForEveryBadLogin));
@@ -53,7 +53,7 @@ public sealed class LogInAction(LocalAccountService accounts, TimeProvider clock
 
         Response.Cookies.Append(
             SessionCookie.Name,
-            session.Id.Value,
+            cookie.Value,
             SessionCookie.Carrying(Request.IsHttps, outcome.SessionLifetime));
 
         return Ok(BaseResponder<MeResponder>.Success(MeResponder.Of(session)));

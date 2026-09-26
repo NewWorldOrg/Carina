@@ -28,7 +28,7 @@ public sealed class AuthSession
     {
     }
 
-    public SessionId Id { get; private set; } = null!;
+    public SessionHandle Handle { get; private set; } = null!;
 
     public Subject Subject { get; private set; } = null!;
 
@@ -51,10 +51,10 @@ public sealed class AuthSession
         AuthMethod method,
         string deviceLabel,
         DateTime at)
-        => Rehydrate(id, subject, displayName, method, at, at, deviceLabel, null);
+        => Rehydrate(SessionHandle.Of(id), subject, displayName, method, at, at, deviceLabel, null);
 
     public static AuthSession Rehydrate(
-        SessionId id,
+        SessionHandle handle,
         Subject subject,
         string displayName,
         AuthMethod method,
@@ -63,7 +63,7 @@ public sealed class AuthSession
         string deviceLabel,
         DateTime? revokedAt)
     {
-        ArgumentNullException.ThrowIfNull(id);
+        ArgumentNullException.ThrowIfNull(handle);
         ArgumentNullException.ThrowIfNull(subject);
 
         DateTime created = UtcTimes.Required(createdAt, nameof(createdAt));
@@ -79,7 +79,7 @@ public sealed class AuthSession
 
         return new AuthSession
         {
-            Id = id,
+            Handle = handle,
             Subject = subject,
             DisplayName = ValidatedDisplayName(displayName),
             Method = method,
