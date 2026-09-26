@@ -79,19 +79,16 @@ public interface IEncodeJobRepository
     /// </summary>
     Task SaveAsync(EncodeJob job, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Writes a job that has ended over its row, from a hand that did not read that row, when the
+    /// ledger still holds it as running on the same attempt. The answer is false when the row has
+    /// moved on, and the ledger's word then stands.
+    /// </summary>
+    Task<bool> WriteTheEndingAsync(EncodeJob job, CancellationToken cancellationToken);
+
     Task<PaginatedList<EncodeJob>> ListAsync(EncodeJobQuery query, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<EncodeJob>> ListForRecordingAsync(RecordingId recordingId, CancellationToken cancellationToken);
-
-    /// <summary>
-    /// Which of the recordings asked after the ledger already holds a job for, whatever became of
-    /// it. This is what keeps a recording from being queued a second time without anyone asking:
-    /// a job that failed is tried again by a person, and one called off was called off by a person,
-    /// so neither is an invitation to queue another (BR-ED2-004).
-    /// </summary>
-    Task<IReadOnlySet<RecordingId>> WithAJobAsync(
-        IReadOnlyCollection<RecordingId> recordings,
-        CancellationToken cancellationToken);
 
     /// <summary>
     /// Moves the oldest waiting job to running by a conditional update, and hands it back only when

@@ -38,6 +38,33 @@ public sealed class EncodeAutoRunEndpointTests
             body.GetProperty("data").GetProperty("subject").EnumerateArray().Select(each => each.GetString()));
     }
 
+    [Fact(DisplayName = "BR-ED2-004: a machine offering more than one destination says the auto-run cannot settle where an artefact goes")]
+    public async Task AMachineOfferingMoreThanOneDestinationSaysTheAutoRunCannotSettleWhereAnArtefactGoes()
+    {
+        await using var feature = new EncodingFeature();
+        EncodeProfile profile = feature.Defined();
+        feature.Placed(profile);
+        feature.Placed(profile, new OutputRoot("elsewhere"));
+
+        (_, JsonElement body) = await feature.GetAsync("/api/encoding/settings");
+
+        Assert.Equal("moreThanOneIsOffered", body.GetProperty("data").GetProperty("whereArtefactsGo").GetString());
+    }
+
+    [Fact(DisplayName = "BR-ED2-004: one destination settles where an artefact goes, and a machine with none says nothing is defined")]
+    public async Task OneDestinationSettlesWhereAnArtefactGoesAndNoneSaysNothingIsDefined()
+    {
+        await using var nothing = new EncodingFeature();
+        await using var one = new EncodingFeature();
+        one.Placed(one.Defined());
+
+        (_, JsonElement undefined) = await nothing.GetAsync("/api/encoding/settings");
+        (_, JsonElement settled) = await one.PutAsync("/api/encoding/settings", new { automatically = true, mostCores = 2 });
+
+        Assert.Equal("nothingIsDefined", undefined.GetProperty("data").GetProperty("whereArtefactsGo").GetString());
+        Assert.Equal("settled", settled.GetProperty("data").GetProperty("whereArtefactsGo").GetString());
+    }
+
     [Fact(DisplayName = "settling the auto-run writes one row, answers it as settled, and signals")]
     public async Task SettlingTheAutoRunWritesOneRowAndSignals()
     {

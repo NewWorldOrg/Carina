@@ -519,6 +519,80 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         Assert.Null(read.Failure);
     }
 
+    [Fact]
+    public async Task AnEndingTheRunningHandCouldNotSaveIsWrittenByAHandThatNeverReadTheRow()
+    {
+        await ClearAsync();
+        (EncodeProfile profile, EncodeDestination destination) = await DefinedAsync();
+        EncodeJob job = Job(profile, destination);
+
+        await using (CarinaDbContext writing = database.Open())
+        {
+            await new EncodeJobRepository(writing).AddAsync(job, Cancel);
+        }
+
+        EncodeJob ran;
+
+        await using (CarinaDbContext running = database.Open())
+        {
+            ran = (await new EncodeJobRepository(running).ClaimNextAsync(Started, Cancel)).Job!;
+        }
+
+        ran.Fail(EncodeFailure.FfmpegExitedNonZero, "the programme exited 1", Ended);
+
+        await using (CarinaDbContext writing = database.Open())
+        {
+            Assert.True(await new EncodeJobRepository(writing).WriteTheEndingAsync(ran, Cancel));
+        }
+
+        await using CarinaDbContext reading = database.Open();
+        EncodeJob? read = await new EncodeJobRepository(reading).FindAsync(job.Id, Cancel);
+        Assert.Equal(EncodeJobStatus.Failed, read!.Status);
+        Assert.Equal(EncodeFailure.FfmpegExitedNonZero, read.Failure!.Failure);
+        Assert.Equal(Ended, read.EndedAt);
+        Assert.Equal(EncodeClaimStanding.NothingWaiting, (await new EncodeJobRepository(reading).ClaimNextAsync(Ended, Cancel)).Standing);
+    }
+
+    [Fact]
+    public async Task AnEndingIsNotWrittenOverARowThatMovedOnMeanwhile()
+    {
+        await ClearAsync();
+        (EncodeProfile profile, EncodeDestination destination) = await DefinedAsync();
+        EncodeJob job = Job(profile, destination);
+
+        await using (CarinaDbContext writing = database.Open())
+        {
+            await new EncodeJobRepository(writing).AddAsync(job, Cancel);
+        }
+
+        EncodeJob ran;
+
+        await using (CarinaDbContext running = database.Open())
+        {
+            ran = (await new EncodeJobRepository(running).ClaimNextAsync(Started, Cancel)).Job!;
+        }
+
+        await using (CarinaDbContext cancelling = database.Open())
+        {
+            var hand = new EncodeJobRepository(cancelling);
+            EncodeJob calledOff = (await hand.FindAsync(job.Id, Cancel))!;
+            calledOff.Cancel(Ended);
+            await hand.SaveAsync(calledOff, Cancel);
+        }
+
+        ran.Fail(EncodeFailure.FfmpegExitedNonZero, "the programme exited 1", Ended.AddSeconds(1));
+
+        await using (CarinaDbContext writing = database.Open())
+        {
+            Assert.False(await new EncodeJobRepository(writing).WriteTheEndingAsync(ran, Cancel));
+        }
+
+        await using CarinaDbContext reading = database.Open();
+        EncodeJob? read = await new EncodeJobRepository(reading).FindAsync(job.Id, Cancel);
+        Assert.Equal(EncodeJobStatus.Cancelled, read!.Status);
+        Assert.Null(read.Failure);
+    }
+
     [Fact(DisplayName = "the ledger answers how long the jobs that completed took, newest first, and counts nothing else")]
     public async Task TheLedgerAnswersHowLongTheJobsThatCompletedTook()
     {

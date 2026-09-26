@@ -169,6 +169,31 @@ public sealed class MachineCapabilityReaderTests : IDisposable
     }
 
     [Fact]
+    public async Task AnAnswerThatTimedOutIsAskedForAgainOnceThePauseHasPassed()
+    {
+        MachineCapabilityReader reader = SlowTheFirstTime(TimeSpan.Zero, standIns.Named("asked-once"));
+
+        MachineCapabilities first = await reader.ReadAsync(CancellationToken.None);
+        MachineCapabilities second = await reader.ReadAsync(CancellationToken.None);
+
+        Assert.Equal(CardStanding.ProbeTimedOut, first.Card);
+        Assert.Equal(CardStanding.Usable, second.Card);
+        Assert.True(second.Has(Faculty.EncodeH264OnTheCard));
+    }
+
+    [Fact]
+    public async Task AnAnswerThatTimedOutIsKeptUntilThePauseHasPassed()
+    {
+        MachineCapabilityReader reader = SlowTheFirstTime(TimeSpan.FromHours(1), standIns.Named("asked-once"));
+
+        MachineCapabilities first = await reader.ReadAsync(CancellationToken.None);
+        MachineCapabilities second = await reader.ReadAsync(CancellationToken.None);
+
+        Assert.Equal(CardStanding.ProbeTimedOut, first.Card);
+        Assert.Same(first, second);
+    }
+
+    [Fact]
     public async Task ACallerThatStopsWaitingDoesNotStopTheAsking()
     {
         var reader = new MachineCapabilityReader(
@@ -197,6 +222,23 @@ public sealed class MachineCapabilityReaderTests : IDisposable
           *) exit 0 ;;
         esac
         """;
+
+    private MachineCapabilityReader SlowTheFirstTime(TimeSpan pause, string marker)
+        => new(
+            new MachineSettings
+            {
+                Programme = standIns.Script($"""
+                    case "$*" in
+                      *-encoders*) {Listing} ;;
+                      *-decoders*) {CaptionListing} ;;
+                      *) if [ -f {marker} ]; then exit 0; fi; touch {marker}; sleep 60 & wait ;;
+                    esac
+                    """),
+                RenderNode = standIns.Node(),
+                LongestProbe = TimeSpan.FromMilliseconds(250),
+                AskAgainAfterATimeOut = pause,
+            },
+            TimeProvider.System);
 
     private static Task<MachineCapabilities> Reading(string programme, string renderNode, TimeSpan? longest = null)
         => new MachineCapabilityReader(

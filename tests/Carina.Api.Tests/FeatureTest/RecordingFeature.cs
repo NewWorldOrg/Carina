@@ -262,6 +262,7 @@ internal sealed class RecordingFeature : IAsyncDisposable
                 services.AddSingleton<IEncodeStandingReader>(Jobs);
                 services.AddSingleton<IQualityThresholdRepository>(Thresholds);
                 services.AddSingleton<IQualityThresholdChangeRepository>(ThresholdChanges);
+                services.AddSingleton<IAtomicWrite, UnguardedWrites>();
                 services.AddSingleton<IDriverClient>(Driver);
                 services.AddSingleton<IThumbnailRemaker>(Remaker);
                 services.AddSingleton(erasingWith);

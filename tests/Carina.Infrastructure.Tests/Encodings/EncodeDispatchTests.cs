@@ -203,6 +203,105 @@ public sealed class EncodeDispatchTests
         Assert.DoesNotContain(held.Moves, move => move.StartsWith("saved", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public async Task AJobThatEndedAndThenThrewHasItsEndingWrittenRatherThanLeftRunningInTheLedger()
+    {
+        var held = new HeldEncodeJobs();
+        EncodeJob waiting = Waiting();
+        held.Jobs.Add(waiting);
+        var scratch = new HeldEncodeScratch();
+        EncodeScratchFile owed = EncodeScratchFile.Record(
+            EncodeScratchFileId.New(),
+            waiting.Id,
+            EncodeScratchKind.WorkFile,
+            EncodeHarness.Primary,
+            EncodeFileName.Working(waiting.RecordingId, waiting.Id, 1),
+            Now);
+        scratch.Files.Add(owed);
+
+        EncodeLook look = await Dispatch(
+                held,
+                new EncodeSettings { MostAttempts = 3, OutputRoots = [new StorageRootPath(EncodeHarness.Primary, Path.GetTempPath())] },
+                scratch,
+                whenRun: claimed => claimed.Fail(EncodeFailure.FfmpegExitedNonZero, "the programme exited 1", Now))
+            .LookAsync(Cancel);
+
+        Assert.Equal(EncodeJobStatus.Failed, look.Ended);
+        Assert.Equal(1, waiting.Attempt);
+        Assert.Contains($"wrote the ending {waiting.Id.Wire} Failed", held.Moves);
+        Assert.False(owed.IsOwedARemoval, "the work file of a job whose ending was written is still owed a removal");
+    }
+
+    [Fact]
+    public async Task AnEndingTheLedgerCouldNotTakeIsWrittenAtTheNextLookBeforeAnotherJobIsClaimed()
+    {
+        var held = new HeldEncodeJobs();
+        EncodeJob first = Waiting();
+        held.Jobs.Add(first);
+        bool ledgerIsAway = true;
+        held.WhenWritingTheEnding = _ => ledgerIsAway ? throw new TimeoutException("the ledger did not answer") : true;
+        EncodeDispatch dispatch = Dispatch(
+            held,
+            new EncodeSettings { MostAttempts = 3 },
+            whenRun: claimed =>
+            {
+                if (claimed.Id.Equals(first.Id))
+                {
+                    claimed.Name(EncodeFileName.Artefact(claimed.RecordingId, claimed.ProfileId));
+                    claimed.Complete(Now);
+                }
+            });
+
+        await Assert.ThrowsAsync<TimeoutException>(() => dispatch.LookAsync(Cancel));
+        ledgerIsAway = false;
+        held.Jobs.Add(Waiting());
+        await dispatch.LookAsync(Cancel);
+
+        int written = held.Moves.IndexOf($"wrote the ending {first.Id.Wire} Completed");
+        int claimedNext = held.Moves.FindLastIndex(move => move.StartsWith("claimed", StringComparison.Ordinal));
+        Assert.True(written >= 0, "the ending of the job that completed was never written");
+        Assert.True(written < claimedNext, "another job was claimed before the ending of the last one was written");
+    }
+
+    [Fact]
+    public async Task AnEndingTheLedgerNeverTakesIsGivenUpAfterAFewLooksAndTheNextJobIsClaimed()
+    {
+        var held = new HeldEncodeJobs();
+        EncodeJob first = Waiting();
+        held.Jobs.Add(first);
+        held.WhenWritingTheEnding = _ => throw new InvalidOperationException("the row breaks a constraint");
+        EncodeDispatch dispatch = Dispatch(
+            held,
+            new EncodeSettings { MostAttempts = 3 },
+            whenRun: claimed =>
+            {
+                if (claimed.Id.Equals(first.Id))
+                {
+                    claimed.Fail(EncodeFailure.FfmpegExitedNonZero, "the programme exited 1", Now);
+                }
+            });
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => dispatch.LookAsync(Cancel));
+        EncodeJob next = Waiting();
+        held.Jobs.Add(next);
+        EncodeLook? claimedNext = null;
+
+        for (int look = 1; look < EncodeDispatch.MostTriesAtAnEnding && claimedNext is null; look++)
+        {
+            try
+            {
+                EncodeLook answered = await dispatch.LookAsync(Cancel);
+                claimedNext = answered.Standing is EncodeClaimStanding.Claimed ? answered : null;
+            }
+            catch (InvalidOperationException)
+            {
+            }
+        }
+
+        Assert.NotNull(claimedNext);
+        Assert.Equal(next.Id, claimedNext.Job);
+    }
+
     [Fact(DisplayName = "While the card is making a picture for someone watching, a look bound for the card asks the ledger nothing and says why")]
     public async Task WhileSomeoneIsWatchingALookBoundForTheCardAsksTheLedgerNothing()
     {

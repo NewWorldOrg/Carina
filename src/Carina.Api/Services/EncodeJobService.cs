@@ -120,10 +120,10 @@ public sealed class EncodeJobService(
         }
 
         if (!draft.MakeItAgain
-            && earlier.FirstOrDefault(job => job.Status is EncodeJobStatus.Completed && job.ProfileId.Equals(profile.Id)) is { } made)
+            && earlier.LastOrDefault(job => job.Status is EncodeJobStatus.Completed) is { } made)
         {
             return Failure(
-                $"Recording {recording.Id.Wire} was already encoded with profile {profile.Id.Wire} by job {made.Id.Wire}, and a second artefact would only collide with the first unless it is asked for again.",
+                $"Recording {recording.Id.Wire} was already encoded with profile {made.ProfileId.Wire} by job {made.Id.Wire}, and a recording has one artefact at most unless it is asked for again.",
                 EncodingFailure.AlreadyEncoded);
         }
 

@@ -7,12 +7,9 @@ using Microsoft.Extensions.Logging;
 namespace Carina.Infrastructure.Encodings;
 
 /// <summary>
-/// The loop that reads the recording ledger for what has ended and queues it. It sweeps the pages
-/// in the order recordings were made and then stays on the last one, which is where a recording
-/// that ends next will land; a start reads every page again, so a machine that could not settle a
-/// destination earlier picks up everything it passed over once it can. It is a loop of its own and
-/// not a step of the dispatch's, because the dispatch's loop is inside a run and a run lasts as
-/// long as the encode does.
+/// The loop that reads the recording ledger for what has ended and queues it, a look at a time. A
+/// machine that could not settle a destination earlier picks up everything it passed over once it
+/// can. It is a loop of its own and not a step of the dispatch's.
 /// </summary>
 public sealed class EncodeIntakeJob(
     IServiceScopeFactory scopes,
@@ -23,7 +20,6 @@ public sealed class EncodeIntakeJob(
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         bool told = false;
-        int page = 1;
         TimeSpan waiting = settings.BeforeFirstLook;
 
         while (!stoppingToken.IsCancellationRequested)
@@ -41,7 +37,7 @@ public sealed class EncodeIntakeJob(
 
             try
             {
-                EncodeIntake took = await TakeAsync(page, stoppingToken);
+                EncodeIntake took = await TakeAsync(stoppingToken);
 
                 if (!took.Automatically)
                 {
@@ -56,7 +52,6 @@ public sealed class EncodeIntakeJob(
                 }
 
                 told = false;
-                page = took.MorePages ? took.Page + 1 : took.LastPage;
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
@@ -65,15 +60,14 @@ public sealed class EncodeIntakeJob(
             catch (Exception failure)
             {
                 logger.LogError(failure, "A look for recordings to encode failed; the next one is unaffected.");
-                page = 1;
             }
         }
     }
 
-    private async Task<EncodeIntake> TakeAsync(int page, CancellationToken cancellationToken)
+    private async Task<EncodeIntake> TakeAsync(CancellationToken cancellationToken)
     {
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
 
-        return await scope.ServiceProvider.GetRequiredService<EncodeIntakeRound>().TakeAsync(page, cancellationToken);
+        return await scope.ServiceProvider.GetRequiredService<EncodeIntakeRound>().TakeAsync(cancellationToken);
     }
 }

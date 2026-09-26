@@ -72,6 +72,39 @@ public sealed class EncodeIntakeJobTests
         Assert.Single(machine.Jobs.Jobs);
     }
 
+    [Fact(DisplayName = "BR-ED2-004: a recording that started before the others and ended after them is queued, however far the loop has read")]
+    public async Task ARecordingThatStartedBeforeTheOthersAndEndedAfterThemIsQueued()
+    {
+        var machine = new Loop();
+        Recording longer = machine.StillWriting(Began);
+
+        for (int made = 1; made <= EncodeIntakeRound.PerLook + 1; made++)
+        {
+            machine.Recorded(Began.AddMinutes(made));
+        }
+
+        using EncodeIntakeJob job = machine.Job();
+        await job.StartAsync(Cancel);
+        await machine.WaitingAgain("the loop never settled into its first wait");
+
+        machine.Clock.Turn(BeforeFirstLook);
+        await Eventually.Happens(() => machine.Jobs.Jobs.Count is EncodeIntakeRound.PerLook, "the first hundred were never queued");
+        await machine.WaitingAgain("the loop never came back from the first look");
+        machine.Clock.Turn(BetweenLooks);
+        await Eventually.Happens(() => machine.Jobs.Jobs.Count is EncodeIntakeRound.PerLook + 1, "the last one was never queued");
+        await machine.WaitingAgain("the loop never came back from the second look");
+
+        machine.Ended(longer);
+        machine.Clock.Turn(BetweenLooks);
+        await machine.WaitingAgain("the loop never came back from the look after the longer recording ended");
+        machine.Clock.Turn(BetweenLooks);
+        await machine.WaitingAgain("the loop never came back from the look after that");
+
+        await job.StopAsync(Cancel);
+
+        Assert.Contains(machine.Jobs.Jobs, queued => queued.RecordingId.Equals(longer.Id));
+    }
+
     private sealed class Loop
     {
         public Loop()
@@ -111,7 +144,7 @@ public sealed class EncodeIntakeJobTests
         public EncodeIntakeJob Job()
         {
             var services = new ServiceCollection();
-            services.AddScoped<IRecordingDirectory>(_ => Recordings);
+            services.AddScoped<IEncodeIntakeReader>(_ => new HeldEncodeIntake(Recordings, Jobs));
             services.AddScoped<IEncodeJobRepository>(_ => Jobs);
             services.AddScoped<IEncodeDestinationRepository>(_ => Destinations);
             services.AddScoped<IEncodeProfileRepository>(_ => Profiles);
@@ -130,33 +163,41 @@ public sealed class EncodeIntakeJobTests
 
         public Task WaitingAgain(string what) => Eventually.Happens(() => Clock.Pending is 1, what);
 
-        public Recording Recorded()
+        public Recording Recorded(DateTime? began = null) => Ended(StillWriting(began ?? Began));
+
+        public Recording StillWriting(DateTime began)
         {
             var id = RecordingId.New();
             Recording recording = Recording.Begin(
                 id,
                 null,
-                new ProgrammeRef(new NetworkId(32741), new ServiceId(1064), new EventId(8981), Began),
+                new ProgrammeRef(new NetworkId(32741), new ServiceId(1064), new EventId(8981), began),
                 new OutputRoot("primary"),
                 RecordingFileName.For(id, ".ts"),
-                Began,
-                Began.AddMinutes(30),
+                began,
+                began.AddMinutes(30),
                 new ProgrammeSnapshot(
                     "A programme",
                     string.Empty,
                     string.Empty,
                     [],
-                    Began,
+                    began,
                     AudioMode.Undetermined,
                     ProgrammeSnapshot.SoundsUnannounced),
                 null,
                 BroadcastGroupRole.Standalone,
-                Began,
+                began,
                 new TunerDeviceId("synthetic-0"));
-            recording.Wrote(TimeSpan.FromMinutes(30));
-            recording.Abort(Began.AddMinutes(30));
-            recording.Settle(RecordingOutcome.Complete, 1_200_000, Began.AddMinutes(30));
             Recordings.Recordings.Add(recording);
+
+            return recording;
+        }
+
+        public Recording Ended(Recording recording)
+        {
+            recording.Wrote(TimeSpan.FromMinutes(30));
+            recording.Abort(recording.StartedAtActual.AddMinutes(30));
+            recording.Settle(RecordingOutcome.Complete, 1_200_000, recording.StartedAtActual.AddMinutes(30));
 
             return recording;
         }

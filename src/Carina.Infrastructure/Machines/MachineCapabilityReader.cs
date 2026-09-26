@@ -3,37 +3,51 @@ using Carina.Domain.Machines;
 namespace Carina.Infrastructure.Machines;
 
 /// <summary>
-/// Asks this machine what it can do, once, and keeps the answer. Everything that wants to know —
-/// the live path choosing an encoder, a job about to run — reads it from here, so neither works
-/// out for itself whether the card is within reach (A-エンコード-021).
+/// Asks this machine what it can do and keeps the answer. Everything that wants to know — the live
+/// path choosing an encoder, a job about to run — reads it from here. An answer in which a
+/// question ran out of time is kept only for <see cref="MachineSettings.AskAgainAfterATimeOut"/>,
+/// and the first read after that asks again; every other answer is kept for as long as the
+/// process lives.
 /// </summary>
 public sealed class MachineCapabilityReader(MachineSettings settings, TimeProvider clock) : IMachineCapabilityReader
 {
     private readonly Lock asking = new();
 
-    private Task<MachineCapabilities>? asked;
+    private Task<Learned>? asked;
 
-    public Task<MachineCapabilities> ReadAsync(CancellationToken cancellationToken)
+    public async Task<MachineCapabilities> ReadAsync(CancellationToken cancellationToken)
     {
-        Task<MachineCapabilities> answering;
+        Task<Learned> answering;
 
         lock (asking)
         {
-            answering = asked ??= LearnAsync();
+            if (asked is null || IsSpent(asked))
+            {
+                asked = LearnAsync();
+            }
+
+            answering = asked;
         }
 
-        return answering.WaitAsync(cancellationToken);
+        return (await answering.WaitAsync(cancellationToken)).Capabilities;
     }
 
-    private async Task<MachineCapabilities> LearnAsync()
+    private bool IsSpent(Task<Learned> answer)
+        => answer.IsFaulted
+            || (answer.IsCompletedSuccessfully && answer.Result.KeptUntil is { } until && clock.GetUtcNow() >= until);
+
+    private async Task<Learned> LearnAsync()
     {
         ProgrammeSaid encoders = await SayingAsync(FacultyInvocation.Encoders());
         ProgrammeSaid decoders = await SayingAsync(FacultyInvocation.Decoders());
         CardAnswer card = await AskTheCardAsync();
         bool cardEncodesH264 = CardStandings.IsUsable(card.Standing);
-        bool cardEncodesH265 = cardEncodesH264 && await EncodesOnTheCardAsync(FfmpegFaculties.H265OnTheCard);
+        ProgrammeSaid? h265 = cardEncodesH264
+            ? await SayingAsync(VaapiProbeInvocation.Arguments(settings.RenderNode, FfmpegFaculties.H265OnTheCard))
+            : null;
+        bool cardEncodesH265 = h265 is { Ran: true, ExitCode: 0 };
 
-        return MachineCapabilities.Of(
+        MachineCapabilities capabilities = MachineCapabilities.Of(
             card.Standing,
             FfmpegFaculties.Of(
                 FfmpegFaculties.Listed(encoders.Said),
@@ -41,13 +55,11 @@ public sealed class MachineCapabilityReader(MachineSettings settings, TimeProvid
                 cardEncodesH264,
                 cardEncodesH265),
             Together(card.Note, encoders.Ran ? string.Empty : encoders.Complained));
-    }
 
-    private async Task<bool> EncodesOnTheCardAsync(string encoder)
-    {
-        ProgrammeSaid probe = await SayingAsync(VaapiProbeInvocation.Arguments(settings.RenderNode, encoder));
+        bool ranOutOfTime = card.Standing is CardStanding.ProbeTimedOut
+            || new[] { encoders, decoders, h265 }.Any(said => said?.Fault is ProgrammeFault.TimedOut);
 
-        return probe.Ran && probe.ExitCode is 0;
+        return new Learned(capabilities, ranOutOfTime ? clock.GetUtcNow() + settings.AskAgainAfterATimeOut : null);
     }
 
     private async Task<CardAnswer> AskTheCardAsync()
@@ -111,4 +123,6 @@ public sealed class MachineCapabilityReader(MachineSettings settings, TimeProvid
         };
 
     private readonly record struct CardAnswer(CardStanding Standing, string Note);
+
+    private sealed record Learned(MachineCapabilities Capabilities, DateTimeOffset? KeptUntil);
 }

@@ -23,7 +23,7 @@ public sealed class PutEncodeSettingsAction(EncodeAutoRunService autoRun) : Cont
         [FromBody] PutEncodeSettingsRequest? request,
         CancellationToken cancellationToken)
     {
-        ServiceResult<EncodeAutoRunStanding> settled = await autoRun.SettleAsync(
+        ServiceResult<EncodeAutoRunReading> settled = await autoRun.SettleAsync(
             request?.Automatically,
             request?.MostCores,
             cancellationToken);
