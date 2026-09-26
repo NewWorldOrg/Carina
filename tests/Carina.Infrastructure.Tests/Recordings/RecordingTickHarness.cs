@@ -63,8 +63,15 @@ internal sealed class HeldRecordings : IRecordingRepository
         return Task.CompletedTask;
     }
 
+    public Exception? RefusingToSave { get; set; }
+
     public Task SaveAsync(Recording recording, CancellationToken cancellationToken)
     {
+        if (RefusingToSave is { } refusal)
+        {
+            return Task.FromException(refusal);
+        }
+
         Saved.Add(recording.Id);
 
         return Task.CompletedTask;
