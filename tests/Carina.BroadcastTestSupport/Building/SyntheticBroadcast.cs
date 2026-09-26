@@ -90,39 +90,31 @@ public sealed record SyntheticBroadcast
     public TimeSpan Length { get; init; } = DefaultLength;
 
     /// <summary>
-    /// Where the broadcast goes quiet and dark at once, the way it does either side of a pod of
-    /// advertisements. Each moment named here is the start of a stretch <see cref="QuietBreakLasts"/>
-    /// long in which the sound is taken to nothing and the picture is painted over black, so a pair
-    /// of them a whole number of grid steps apart is a pod with a programme either side of it.
+    /// Where the broadcast goes quiet and dark at once. Each moment named here starts a stretch
+    /// <see cref="QuietBreakLasts"/> long in which the sound is silenced and the picture painted black.
     /// </summary>
     public IReadOnlyList<TimeSpan> QuietBreaks { get; init; } = [];
 
     /// <summary>
-    /// Where the written stream's own clock begins. A recorder started in the evening writes a
-    /// broadcast whose first timestamp is the hour of the day it was started in rather than zero,
-    /// which is the magnitude anything reading such a file has to survive; left at zero the stream
-    /// begins where ffmpeg would begin it on its own.
+    /// Where the written stream's own clock begins; left at zero, the stream begins where ffmpeg would
+    /// begin it.
     /// </summary>
     public TimeSpan StartsAt { get; init; } = TimeSpan.Zero;
 
     /// <summary>
-    /// How long the sound runs before the first picture comes in, the way a recording started part
-    /// way through a group of pictures hears sound before it holds a picture it can decode. The
-    /// breaks and the captions stay on the broadcast's own clock, so only where the picture begins
-    /// moves.
+    /// How long the sound runs before the first picture comes in. The breaks and the captions stay on
+    /// the broadcast's own clock.
     /// </summary>
     public TimeSpan PictureLateBy { get; init; } = TimeSpan.Zero;
 
     /// <summary>
-    /// Paints the picture flat grey rather than with the test pattern, whose bars never move and so
-    /// look like detail that stays put in every corner.
+    /// Paints the picture flat grey rather than with the test pattern.
     /// </summary>
     public bool Plain { get; init; }
 
     /// <summary>
-    /// Draws a station's watermark — a white outline in the top right corner — over the picture,
-    /// except through the stretches named in <see cref="Unbranded"/>, the way a station takes its mark
-    /// off for advertisements.
+    /// Draws a station's watermark, a white outline in the top right corner, over the picture, except
+    /// through the stretches named in <see cref="Unbranded"/>.
     /// </summary>
     public bool Watermarked { get; init; }
 

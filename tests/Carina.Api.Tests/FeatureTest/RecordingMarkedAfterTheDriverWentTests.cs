@@ -10,13 +10,8 @@ namespace Carina.Api.Tests.FeatureTest;
 public sealed class RecordingMarkedAfterTheDriverWentTests
 {
     /// <summary>
-    /// Acceptance bar 8, the third of the three branches: nothing is writing the recording and the
-    /// broadcast is over by the time this side comes back. The recording is marked for what was
-    /// left of it, names why nothing was writing it, and keeps its file. An app that has only just
-    /// started has never seen the driver before, so what it can say is that the recording was left
-    /// running unwatched rather than that the driver was replaced. The other two branches are held
-    /// by RecordingAcrossAnAppSwapTests and RecordingTakenBackAfterTheDriverWentTests; none of the
-    /// three may reach complete.
+    /// Nothing is writing the recording and the broadcast is over by the time this side comes back: the
+    /// recording is marked for what was left of it as left running unwatched, and keeps its file.
     /// </summary>
     [Fact]
     public async Task ARecordingWhoseDriverWentAfterItsBroadcastEndedIsMarkedForWhatWasLeftAndKeepsItsFile()

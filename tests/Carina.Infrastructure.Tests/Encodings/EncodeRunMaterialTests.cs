@@ -10,8 +10,8 @@ using Carina.Infrastructure.Machines;
 namespace Carina.Infrastructure.Tests.Encodings;
 
 /// <summary>
-/// Runs a job through the ffmpeg the application itself runs, against a synthetic broadcast, so
-/// that the placement of an artefact by way of a real encode is measured rather than believed.
+/// Runs a job through the ffmpeg the application runs, against a synthetic broadcast, and checks
+/// where the artefact is placed.
 /// </summary>
 [SupportedOSPlatform("linux")]
 [Trait("Category", "Material")]

@@ -12,13 +12,9 @@ using Carina.Infrastructure.Machines;
 namespace Carina.Infrastructure.Tests.Encodings;
 
 /// <summary>
-/// Bakes chapters into an artefact with the ffmpeg the application itself runs, and reads them back
-/// off it, because what ffmpeg does to a chapter it copies is a thing to measure rather than to
-/// believe. Its <c>copy_chapters</c> moves every chapter back by the output seek and throws away
-/// what that puts outside the output, so a file written on the artefact's own clock would arrive a
-/// head skip early. This is where that is measured: a synthetic broadcast with a pod of
-/// advertisements in it is encoded with a head of its own to skip, and the artefact has to carry
-/// its chapters where they were meant to be, with the picture and the sound still in it.
+/// Bakes chapters into an artefact with the ffmpeg the application runs and reads them back off it:
+/// a synthetic broadcast with a pod of advertisements is encoded with a head to skip, and the
+/// artefact carries its chapters where they were meant to be, with the picture and the sound.
 /// </summary>
 [SupportedOSPlatform("linux")]
 [Trait("Category", "Material")]
@@ -166,10 +162,8 @@ public sealed class ChapterEmbeddingMaterialTests
     }
 
     /// <summary>
-    /// A source whose first picture is declared to lie a fixed way into it. A broadcast synthesised
-    /// here starts its picture where the container starts, which would leave nothing for the encode
-    /// to seek past and nothing for ffmpeg to move the chapters by — and the shift is what is being
-    /// measured. Where the source's clock begins is still read off the file itself.
+    /// A source whose first picture is declared to lie a fixed way into it. Where the source's clock
+    /// begins is still read off the file itself.
     /// </summary>
     private sealed class AHeadOfItsOwn(ISourceHeadReader read, TimeSpan skip) : ISourceHeadReader
     {

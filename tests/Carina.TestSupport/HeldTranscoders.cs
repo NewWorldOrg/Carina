@@ -151,8 +151,7 @@ public sealed class HeldTranscoder : ILiveTranscoder
     }
 
     /// <summary>
-    /// Held here, the transcoder takes no bytes until it is let go, as one that has stopped reading
-    /// its input does.
+    /// Set, the transcoder takes no bytes until it is completed.
     /// </summary>
     public TaskCompletionSource? TakesNothingUntil
     {
@@ -163,8 +162,7 @@ public sealed class HeldTranscoder : ILiveTranscoder
     public bool InputClosed => input.Closed;
 
     /// <summary>
-    /// Set, a transcoder held from taking bytes goes on holding when the write is called off, as a
-    /// pipe whose write does not honour cancellation does.
+    /// Set, a transcoder held from taking bytes goes on holding when the write is called off.
     /// </summary>
     public bool TakesNoNoticeOfBeingCalledOff
     {

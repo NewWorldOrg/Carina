@@ -13,10 +13,9 @@ using Npgsql;
 namespace Carina.Infrastructure.Tests.Encodings;
 
 /// <summary>
-/// Encoding is downstream of recording: however a job ends, the recording it read keeps the
-/// result, the reasons, the size and the time that size was read exactly as they were. The row is
-/// read back whole, with the version the store keeps for it, so a write that changed nothing is
-/// caught as surely as one that changed something.
+/// However a job ends, the recording it read keeps its result, reasons, size and the time that size
+/// was read exactly as they were. The row is read back whole, with the version the store keeps for
+/// it.
 /// </summary>
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]

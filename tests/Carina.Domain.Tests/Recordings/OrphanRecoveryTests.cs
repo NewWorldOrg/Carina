@@ -6,8 +6,7 @@ namespace Carina.Domain.Tests.Recordings;
 public sealed class OrphanRecoveryTests
 {
     /// <summary>
-    /// Every reading there is, written out rather than worked out, so the table the rule holds is
-    /// what this test holds and not a second copy of the code under it.
+    /// Every sighting there is, with the treatment each one gets, written out.
     /// </summary>
     public static TheoryData<bool, bool, bool, OrphanTreatment> EverySighting => new()
     {

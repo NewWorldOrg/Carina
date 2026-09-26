@@ -21,10 +21,8 @@ public sealed class EncodeJobRunnerTests
         """;
 
     /// <summary>
-    /// The same run, made to outlive the look at it. A programme that exits at once can be gone
-    /// before its start time is read, and is handed over as no identity at all when it is; so the
-    /// first thing this one writes is more than a pipe holds, and nothing reads that pipe until the
-    /// programme has been identified and written into the ledger.
+    /// The same run, made to outlive the look at it: the first thing it writes is more than a pipe
+    /// holds, so it cannot exit before it has been identified and written into the ledger.
     /// </summary>
     private const string OutlivesTheLookAndReportsProgress = """
         head -c 70000 /dev/zero | tr '\0' '.'

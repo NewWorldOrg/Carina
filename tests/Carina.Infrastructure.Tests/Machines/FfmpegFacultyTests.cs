@@ -6,8 +6,8 @@ namespace Carina.Infrastructure.Tests.Machines;
 public sealed class FfmpegFacultyTests
 {
     /// <summary>
-    /// The shape ffmpeg 6.1.6 actually prints, read off the container on 2026-09-05. The flag
-    /// column and the row of dashes above the entries are what the reading hangs on.
+    /// The encoder listing as ffmpeg 6.1.6 prints it, with the flag column and the row of dashes above
+    /// the entries.
     /// </summary>
     private const string Encoders = """
         Encoders:

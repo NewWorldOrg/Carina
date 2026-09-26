@@ -9,10 +9,8 @@ using Npgsql;
 namespace Carina.Db.Tests;
 
 /// <summary>
-/// The stored composite column and <see cref="Reservation.Standing"/> are two writings of one
-/// derivation — a generated column cannot call into the domain, so the entity has to say the same
-/// thing a second time. They are held equal by measurement rather than by intention: every
-/// combination the table can hold is pushed through both and the two answers are compared.
+/// Pushes every combination the table can hold through both the stored composite column and
+/// <see cref="Reservation.Standing"/>, and compares the two answers.
 /// </summary>
 [Collection(ConnectionEnvironmentCollection.Name)]
 [Trait("Category", "DbIntegration")]

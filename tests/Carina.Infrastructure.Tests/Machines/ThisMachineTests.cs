@@ -6,8 +6,7 @@ using Carina.Infrastructure.Machines;
 namespace Carina.Infrastructure.Tests.Machines;
 
 /// <summary>
-/// Read against the ffmpeg the application itself runs, rather than against a stand-in, so that
-/// what the reader believes about this build stays true when the build changes.
+/// Reads the capabilities of the ffmpeg the application runs.
 /// </summary>
 [SupportedOSPlatform("linux")]
 [Trait("Category", "Material")]

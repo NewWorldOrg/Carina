@@ -5,8 +5,7 @@ using Carina.Domain.Recordings;
 namespace Carina.TestSupport;
 
 /// <summary>
-/// The encode job ledger held in memory, with the one rule the real one gets from its index: one
-/// owner per artefact name under an output root.
+/// The encode job ledger held in memory, holding one owner per artefact name under an output root.
 /// </summary>
 public sealed class HeldEncodeJobs : IEncodeJobRepository, IEncodeStandingReader
 {

@@ -6,10 +6,8 @@ using Carina.Domain.Reservations;
 namespace Carina.Domain.Tests.Reservations;
 
 /// <summary>
-/// The two edges the allocation is decided on that a whole-number example never reaches: a tuner
-/// that serves more than one broadcast type, which is one seat however many types it answers for,
-/// and the gap between one broadcast and the next, which is the gap the margins ask for rather
-/// than the one the schedule shows.
+/// Two edges of the allocation: a tuner that serves more than one broadcast type is one seat, and
+/// the gap between one broadcast and the next is the one the margins ask for.
 /// </summary>
 public sealed class TunerAllocationPlannerBoundaryTests
 {

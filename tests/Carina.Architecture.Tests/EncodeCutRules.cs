@@ -3,15 +3,10 @@ using System.Text.RegularExpressions;
 namespace Carina.Architecture.Tests;
 
 /// <summary>
-/// Reads the encode feature for the one thing it is forbidden from doing outright: shortening what
-/// it writes. A chapter is a label and nothing more, so a break found in a recording has to leave
-/// the artefact the length it would have been had nobody looked — a mark that is wrong costs a viewer
-/// one mark to ignore, where a cut that is wrong costs them the programme, and there is no setting
-/// for cutting and no path that could. What that takes is the absence of the options and filters an
-/// output is shortened with, which is what this reports: the durations and frame counts that stop a
-/// run early, the filters that keep part of a stream, and the muxer that writes a file per stretch.
-/// The feature is its folders plus any file named for it, wherever it sits. Like the other rules
-/// here it reads source text, so it sees the ordinary spellings and no others.
+/// Reads the encode feature for anything that shortens what it writes: the durations and frame
+/// counts that stop a run early, the filters that keep part of a stream, and the muxer that writes a
+/// file per stretch. The feature is its folders plus any file named for it, wherever it sits. It
+/// reads source text, so it sees the ordinary spellings and no others.
 /// </summary>
 public static partial class EncodeCutRules
 {

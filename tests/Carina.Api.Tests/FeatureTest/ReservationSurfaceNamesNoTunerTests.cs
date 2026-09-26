@@ -6,10 +6,7 @@ using Carina.Domain.Channels;
 namespace Carina.Api.Tests.FeatureTest;
 
 /// <summary>
-/// A reservation is answered in broadcast types and counts. Which tuner would carry it is the
-/// application's own business: naming the device on this surface would put a piece of the host's
-/// hardware into a screen about broadcasts, and would make the answer change whenever the seats
-/// are renumbered though nothing about the reservation moved.
+/// A reservation is answered in broadcast types and counts, and never names a tuner.
 /// </summary>
 public sealed class ReservationSurfaceNamesNoTunerTests
 {

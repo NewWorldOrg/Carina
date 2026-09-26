@@ -3,14 +3,12 @@ using System.Text.RegularExpressions;
 namespace Carina.Architecture.Tests;
 
 /// <summary>
-/// Reads the encode feature for a write to the recording it was made from. Encoding is downstream
-/// of recording: a job that fails, is called off or dies with its process leaves how the recording
-/// ended, why, and what its file weighed exactly as the recording left them. So nothing in the
-/// feature tells a recording how it ended, adds a reason to it, moves it along, or hands it back to
-/// the recording port to be written. The feature is its folders plus any file named for it,
-/// wherever it sits. Like the other rules here it reads source text: it sees the ordinary spellings
-/// — a call on something named for a recording, an outcome or a reason spelled at the call, the
-/// write verbs on whatever name the port is held under, raw SQL — and no others.
+/// Reads the encode feature for a write to the recording it was made from: telling a recording how
+/// it ended, adding a reason to it, moving it along, or handing it back to the recording port to be
+/// written. The feature is its folders plus any file named for it, wherever it sits. It reads source
+/// text and sees the ordinary spellings: a call on something named for a recording, an outcome or a
+/// reason spelled at the call, the write verbs on whatever name the port is held under, and raw
+/// SQL.
 /// </summary>
 public static partial class EncodeRecordingFenceRules
 {
