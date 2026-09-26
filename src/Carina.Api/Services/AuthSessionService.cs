@@ -28,11 +28,12 @@ public sealed class AuthSessionService(
         ]);
     }
 
-    public async Task<ServiceResult> RevokeAsync(SessionId target, CancellationToken cancellationToken)
+    public async Task<ServiceResult> RevokeAsync(SessionHandle target, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(target);
 
-        AuthSession? held = await sessions.FindAsync(target, cancellationToken);
+        IReadOnlyList<AuthSession> all = await sessions.ListAllAsync(cancellationToken);
+        AuthSession? held = all.FirstOrDefault(session => SessionHandle.Of(session.Id).Equals(target));
 
         if (held is null)
         {

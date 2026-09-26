@@ -236,6 +236,7 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
                 lease,
                 request,
                 [],
+                default,
                 $"The tuner '{lease.DeviceId}' was being held for whoever came back to {lease.Tuning}; nobody did, so '{request.SessionId}' takes it for {request.Tuning}."
             );
         }
@@ -262,6 +263,7 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
             loser,
             request,
             displaced,
+            loser.Holder,
             $"The tuner '{loser.DeviceId}' goes to '{request.SessionId}' for {request.Purpose.ToString().ToLowerInvariant()} on {request.Tuning}, which outranks '{names}'."
         );
     }
@@ -270,6 +272,7 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
         Lease lease,
         PoolRequest request,
         IReadOnlyList<SessionId> displaced,
+        SessionId outgoing,
         string detail
     )
     {
@@ -299,7 +302,8 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
             request.SessionId,
             NeedsTuning: true,
             displaced,
-            detail
+            detail,
+            outgoing
         );
     }
 
@@ -343,26 +347,28 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
         bySink[request.SessionId] = lease;
     }
 
-    public void Tuned(string deviceId, ITunerDevice device)
+    public bool Tuned(string deviceId, SessionId tuner, ITunerDevice device)
     {
         lock (gate)
         {
-            if (leases.TryGetValue(deviceId, out Lease? lease))
+            if (LeaseStillServing(deviceId, tuner) is { } lease)
             {
                 lease.Device = device;
 
-                return;
+                return true;
             }
         }
 
         device.Dispose();
+
+        return false;
     }
 
-    public void Ready(string deviceId)
+    public void Ready(string deviceId, SessionId holder)
     {
         lock (gate)
         {
-            if (!leases.TryGetValue(deviceId, out Lease? lease))
+            if (LeaseStillServing(deviceId, holder) is not { } lease)
             {
                 return;
             }
@@ -372,11 +378,11 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
         }
     }
 
-    public void TuningFailed(string deviceId, Exception cause)
+    public void TuningFailed(string deviceId, SessionId tuner, Exception cause)
     {
         lock (gate)
         {
-            if (!leases.TryGetValue(deviceId, out Lease? lease))
+            if (LeaseStillServing(deviceId, tuner) is not { } lease)
             {
                 return;
             }
@@ -427,6 +433,13 @@ public sealed class TunerPool(TimeProvider timeProvider, TimeSpan? grace = null)
             return leases.TryGetValue(deviceId, out Lease? lease) && lease.Established;
         }
     }
+
+    private Lease? LeaseStillServing(string deviceId, SessionId sessionId) =>
+        leases.TryGetValue(deviceId, out Lease? lease)
+        && bySink.TryGetValue(sessionId, out Lease? attached)
+        && ReferenceEquals(lease, attached)
+            ? lease
+            : null;
 
     private static TaskCompletionSource Unset() =>
         new(TaskCreationOptions.RunContinuationsAsynchronously);

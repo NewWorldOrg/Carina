@@ -32,7 +32,7 @@ public sealed class SessionId : CommonValueObject<string>
         if (!value.All(IsIssuedCharacter))
         {
             throw new ArgumentException(
-                "A session id travels in a cookie and a URL, so it is base64url and nothing else.",
+                "A session id travels in a cookie, so it is base64url and nothing else.",
                 nameof(value));
         }
 
