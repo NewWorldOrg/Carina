@@ -30,7 +30,11 @@ public sealed class EncodeDispatch(
     TimeProvider clock,
     ILogger<EncodeDispatch> logger) : BackgroundService
 {
+    public const int MostTriesAtAnEnding = 3;
+
     private EncodeJob? unwritten;
+
+    private int triesAtTheEnding;
 
     public async Task<EncodeRestartReport> RecoverAsync(CancellationToken cancellationToken)
     {
@@ -132,21 +136,45 @@ public sealed class EncodeDispatch(
     }
 
     /// <summary>
-    /// Writes the ending a run reached before it threw, which may never have reached the ledger: a
-    /// row left running would hold the queue shut until the next start. The job is kept until the
-    /// ledger has answered, so a write that fails is made again at the next look, before anything
-    /// else is claimed. A row that has moved on meanwhile is read again and its word stands.
+    /// Writes the ending a run reached before it threw. A write that fails throws and is made again
+    /// at the next look, before anything else is claimed; after <see cref="MostTriesAtAnEnding"/>
+    /// failed writes the ending is dropped, and the row is left for the next start to recover. A
+    /// row that has moved on meanwhile is read again and its word stands.
     /// </summary>
     private async Task<EncodeJobStatus?> WriteTheEndingAsync(CancellationToken cancellationToken)
     {
         EncodeJob job = unwritten ?? throw new InvalidOperationException("There is no ending waiting to be written.");
         bool written;
 
-        await using (AsyncServiceScope scope = scopes.CreateAsyncScope())
+        try
         {
+            await using AsyncServiceScope scope = scopes.CreateAsyncScope();
             written = await scope.ServiceProvider.GetRequiredService<IEncodeJobRepository>().WriteTheEndingAsync(job, cancellationToken);
         }
+        catch (Exception failure) when (failure is not OperationCanceledException)
+        {
+            triesAtTheEnding++;
 
+            if (triesAtTheEnding < MostTriesAtAnEnding)
+            {
+                throw;
+            }
+
+            logger.LogError(
+                failure,
+                "Job {Job} ended {Status} on attempt {Attempt} and the ledger refused its ending {Tries} times; it is dropped, and the next start recovers the row.",
+                job.Id.Wire,
+                job.Status,
+                job.Attempt,
+                triesAtTheEnding);
+
+            unwritten = null;
+            triesAtTheEnding = 0;
+
+            return null;
+        }
+
+        triesAtTheEnding = 0;
         unwritten = null;
 
         if (!written)

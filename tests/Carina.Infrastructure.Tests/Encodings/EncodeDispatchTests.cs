@@ -263,6 +263,45 @@ public sealed class EncodeDispatchTests
         Assert.True(written < claimedNext, "another job was claimed before the ending of the last one was written");
     }
 
+    [Fact]
+    public async Task AnEndingTheLedgerNeverTakesIsGivenUpAfterAFewLooksAndTheNextJobIsClaimed()
+    {
+        var held = new HeldEncodeJobs();
+        EncodeJob first = Waiting();
+        held.Jobs.Add(first);
+        held.WhenWritingTheEnding = _ => throw new InvalidOperationException("the row breaks a constraint");
+        EncodeDispatch dispatch = Dispatch(
+            held,
+            new EncodeSettings { MostAttempts = 3 },
+            whenRun: claimed =>
+            {
+                if (claimed.Id.Equals(first.Id))
+                {
+                    claimed.Fail(EncodeFailure.FfmpegExitedNonZero, "the programme exited 1", Now);
+                }
+            });
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => dispatch.LookAsync(Cancel));
+        EncodeJob next = Waiting();
+        held.Jobs.Add(next);
+        EncodeLook? claimedNext = null;
+
+        for (int look = 1; look < EncodeDispatch.MostTriesAtAnEnding && claimedNext is null; look++)
+        {
+            try
+            {
+                EncodeLook answered = await dispatch.LookAsync(Cancel);
+                claimedNext = answered.Standing is EncodeClaimStanding.Claimed ? answered : null;
+            }
+            catch (InvalidOperationException)
+            {
+            }
+        }
+
+        Assert.NotNull(claimedNext);
+        Assert.Equal(next.Id, claimedNext.Job);
+    }
+
     [Fact(DisplayName = "While the card is making a picture for someone watching, a look bound for the card asks the ledger nothing and says why")]
     public async Task WhileSomeoneIsWatchingALookBoundForTheCardAsksTheLedgerNothing()
     {
