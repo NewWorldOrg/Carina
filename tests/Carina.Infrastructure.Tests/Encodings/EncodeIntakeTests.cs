@@ -100,6 +100,19 @@ public sealed class EncodeIntakeTests
         Assert.Equal(asked.Id, Assert.Single(machine.Jobs.Jobs).RecordingId);
     }
 
+    [Fact]
+    public async Task ARecordingWhoseDeletionLeftFilesBehindIsNeverQueued()
+    {
+        var machine = new Machine();
+        Recording halfGone = machine.Recorded(RecordingOutcome.Complete);
+        halfGone.Erased(RecordingErasure.Refused(ErasureFault.FileLeftBehind, "the file could not be removed", 1), Now);
+
+        EncodeIntake took = await machine.Round().TakeAsync(Cancel);
+
+        Assert.Equal(0, took.Queued);
+        Assert.Empty(machine.Jobs.Jobs);
+    }
+
     [Fact(DisplayName = "BR-ED2-004: a recording that failed has nothing to encode and is never queued")]
     public async Task ARecordingThatFailedIsNeverQueued()
     {

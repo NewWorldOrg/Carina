@@ -29,11 +29,13 @@ public sealed class EncodeIntakeReaderTests(RepositoryDatabase database)
         Recording unasked = await EndedAsync(Began.AddMinutes(3), RecordingOutcome.Complete, encode: false);
         Recording queued = await EndedAsync(Began.AddMinutes(4), RecordingOutcome.Complete);
         await QueuedAsync(queued.Id);
+        Recording halfGone = await EndedAsync(Began.AddMinutes(5), RecordingOutcome.Complete);
+        await LeftBehindAsync(halfGone.Id);
 
         await using CarinaDbContext reading = database.Open();
         IReadOnlyList<RecordingId> waiting = await new EncodeIntakeReader(reading).NeverQueuedAsync(All, Cancel);
 
-        RecordingId[] ours = [.. waiting.Where(id => new[] { later, earlier, failed, stillWriting, unasked, queued }.Any(recording => recording.Id.Equals(id)))];
+        RecordingId[] ours = [.. waiting.Where(id => new[] { later, earlier, failed, stillWriting, unasked, queued, halfGone }.Any(recording => recording.Id.Equals(id)))];
         Assert.Equal([earlier.Id, later.Id], ours);
     }
 
@@ -72,6 +74,16 @@ public sealed class EncodeIntakeReaderTests(RepositoryDatabase database)
         await new EncodeJobRepository(writing).AddAsync(
             EncodeJob.Queue(EncodeJobId.New(), recording, profile.Id, destination.Id, destination.OutputRoot, Began),
             Cancel);
+    }
+
+    private async Task LeftBehindAsync(RecordingId id)
+    {
+        await using CarinaDbContext context = database.Open();
+        Recording loaded = await context.FindAsync<Recording>([id], Cancel)
+            ?? throw new InvalidOperationException("The recording that was just written is not there.");
+
+        loaded.Erased(RecordingErasure.Refused(ErasureFault.FileLeftBehind, "the file could not be removed", 1), Began.AddHours(1));
+        await context.SaveChangesAsync(Cancel);
     }
 
     private async Task<Recording> EndedAsync(DateTime began, RecordingOutcome outcome, bool encode = true)

@@ -14,6 +14,7 @@ public sealed class HeldEncodeIntake(HeldRecordings recordings, HeldEncodeJobs j
             .. recordings.Recordings
                 .Where(recording => recording.Outcome is { } outcome && EncodeAutoRun.Subject.Contains(outcome))
                 .Where(recording => recording.EncodeWhenRecorded)
+                .Where(recording => recording.LeftBehindAt is null)
                 .Where(recording => !jobs.Jobs.Any(job => job.RecordingId.Equals(recording.Id)))
                 .OrderBy(recording => recording.StartedAtActual)
                 .ThenBy(recording => recording.Id.Value)

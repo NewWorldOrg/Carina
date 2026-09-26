@@ -17,6 +17,7 @@ public sealed class EncodeIntakeReader(CarinaDbContext context) : IEncodeIntakeR
             .AsNoTracking()
             .Where(recording => recording.Outcome != null && subject.Contains(recording.Outcome.Value))
             .Where(recording => recording.EncodeWhenRecorded)
+            .Where(recording => recording.LeftBehindAt == null)
             .Where(recording => !context.Set<EncodeJob>().Any(job => job.RecordingId == recording.Id))
             .OrderBy(recording => recording.StartedAtActual)
             .ThenBy(recording => recording.Id)
