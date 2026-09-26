@@ -14,6 +14,9 @@ namespace Carina.Infrastructure.Persistence.Repositories;
 
 public sealed class ReservationRepository(CarinaDbContext context) : IReservationRepository
 {
+    private const string ScramblingUnresolved =
+        $$"""[{"fault":"{{nameof(RecordingFault.ScramblingUnresolved)}}"}]""";
+
     private const string MarginAfterProperty = nameof(Reservation.MarginAfter);
 
     public async Task<PaginatedList<Reservation>> ListAsync(
@@ -161,12 +164,19 @@ public sealed class ReservationRepository(CarinaDbContext context) : IReservatio
                 $"A reservation ledger run is a UTC instant, but this one has Kind={through.Kind}.",
                 nameof(through));
 
+        IQueryable<Recording> leftScrambled = context.Set<Recording>()
+            .Where(recording => recording.Outcome != null
+                                && recording.DescrambledAt == null
+                                && EF.Functions.JsonContains(recording.OutcomeDetail, ScramblingUnresolved));
+
         return await context.Set<Reservation>()
             .Where(reservation => !context.Set<ReservationOutcome>()
                 .Any(outcome => outcome.ReservationId == reservation.Id
                                 && ReservationOutcomeKinds.Settling.Contains(outcome.Kind)))
             .Where(reservation => reservation.RecordingOutcome == RecordingOutcome.Failed
                                   || reservation.RecordingOutcome == RecordingOutcome.Truncated
+                                  || (reservation.RecordingOutcome == RecordingOutcome.Complete
+                                      && leftScrambled.Any(recording => recording.ReservationId == reservation.Id))
                                   || (reservation.RecordingOutcome == null
                                       && (reservation.State == ReservationState.Scheduled
                                           || reservation.State == ReservationState.Conflict)
@@ -175,7 +185,8 @@ public sealed class ReservationRepository(CarinaDbContext context) : IReservatio
             .ThenBy(reservation => reservation.Id)
             .Select(reservation => new ReservationAwaitingOutcome(
                 reservation,
-                context.Set<Recording>().Any(recording => recording.ReservationId == reservation.Id)))
+                context.Set<Recording>().Any(recording => recording.ReservationId == reservation.Id),
+                leftScrambled.Any(recording => recording.ReservationId == reservation.Id)))
             .ToListAsync(cancellationToken);
     }
 

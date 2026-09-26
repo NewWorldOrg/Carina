@@ -6,11 +6,11 @@ namespace Carina.Domain.Reservations;
 public sealed record ReservationWindow(DateTime From, DateTime To);
 
 /// <summary>
-/// A reservation whose outcome is not written down yet, together with whether a recording came of it.
-/// The claim and the outcome on the reservation are the recording ledger's to write, so a claim that
+/// A reservation whose outcome is not written down yet, together with whether a recording came of it
+/// and whether that recording is <see cref="Recordings.Recording.LeftScrambled"/>. The claim and the outcome on the reservation are the recording ledger's to write, so a claim that
 /// never became a recording is only visible by looking for the recording that is not there.
 /// </summary>
-public sealed record ReservationAwaitingOutcome(Reservation Reservation, bool Recorded);
+public sealed record ReservationAwaitingOutcome(Reservation Reservation, bool Recorded, bool LeftScrambled);
 
 public enum ReservationDiscard
 {

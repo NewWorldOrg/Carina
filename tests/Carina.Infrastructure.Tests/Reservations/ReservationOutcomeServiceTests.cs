@@ -264,6 +264,51 @@ public sealed class ReservationOutcomeServiceTests
     }
 
     [Fact]
+    public async Task ARecordingThatCameOutWholeButScrambledIsWrittenDownAsAFailureOfTheRecording()
+    {
+        Reservation complete = ReservationFixtures.Rehydrated(
+            ReservationState.Scheduled,
+            startedAt: Opens,
+            outcome: RecordingOutcome.Complete,
+            startAt: Opens);
+        Held held = Standing(AfterItAll, complete);
+        held.Recordings.Rows.Add(Whole(complete, RecordingFault.ScramblingUnresolved));
+        held.Reservations.LeftScrambledAgainst.Add(complete.Id);
+
+        ReservationOutcomeRun run = await Run(held);
+
+        Assert.Equal(
+            [new ReservationOutcomeRecord(complete.Id, ReservationOutcomeKind.RecordingFailure)],
+            run.Recorded);
+        Assert.Equal(ReservationState.Scheduled, complete.State);
+
+        ReservationOutcome recorded = Assert.Single(held.Outcomes.Held);
+
+        Assert.Equal(RecordingOutcome.Complete, recorded.RecordingOutcome);
+        Assert.Equal([RecordingFault.ScramblingUnresolved], recorded.Faults);
+        Assert.True(recorded.LeftScrambled);
+    }
+
+    [Fact]
+    public async Task ARecordingLeftScrambledIsWrittenDownOnce()
+    {
+        Reservation complete = ReservationFixtures.Rehydrated(
+            ReservationState.Scheduled,
+            startedAt: Opens,
+            outcome: RecordingOutcome.Complete,
+            startAt: Opens);
+        Held held = Standing(AfterItAll, complete);
+        held.Recordings.Rows.Add(Whole(complete, RecordingFault.ScramblingUnresolved));
+        held.Reservations.LeftScrambledAgainst.Add(complete.Id);
+
+        await Run(held);
+        ReservationOutcomeRun again = await Run(held);
+
+        Assert.Empty(again.Recorded);
+        Assert.Single(held.Outcomes.Held);
+    }
+
+    [Fact]
     public async Task AReservationIsLeftAloneUntilItsWindowHasClosedAndIsRecordedOnceItHas()
     {
         Reservation waiting = ReservationFixtures.Rehydrated(ReservationState.Scheduled, startAt: Opens);
@@ -427,6 +472,24 @@ public sealed class ReservationOutcomeServiceTests
         }
 
         recording.Settle(RecordingOutcome.Failed, 0, reservation.EffectiveEndAt);
+
+        return recording;
+    }
+
+    private static Recording Whole(Reservation reservation, params RecordingFault[] faults)
+    {
+        Recording recording = RecordingTickFixture.InFlight(
+            reservation.EffectiveStartAt,
+            reservation.EffectiveEndAt,
+            reservationId: reservation.Id);
+
+        foreach (RecordingFault fault in faults)
+        {
+            recording.Note(new OutcomeDetail(fault, null, "as it was found", reservation.EffectiveEndAt));
+        }
+
+        recording.Abort(reservation.EffectiveEndAt);
+        recording.Settle(RecordingOutcome.Complete, 1_200_000, reservation.EffectiveEndAt);
 
         return recording;
     }
