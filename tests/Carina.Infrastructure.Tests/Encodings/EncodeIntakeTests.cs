@@ -26,7 +26,7 @@ public sealed class EncodeIntakeTests
         var machine = new Machine();
         Recording ended = machine.Recorded(RecordingOutcome.Complete);
 
-        EncodeIntake took = await machine.Round().TakeAsync(1, Cancel);
+        EncodeIntake took = await machine.Round().TakeAsync(Cancel);
 
         Assert.Equal(1, took.Queued);
         Assert.Equal(EncodeUnaskedStanding.Settled, took.Standing);
@@ -46,11 +46,11 @@ public sealed class EncodeIntakeTests
         machine.Recorded(RecordingOutcome.Complete);
         machine.AutoRun.Standing = new EncodeAutoRunStanding(false, 2, true, Now);
 
-        EncodeIntake took = await machine.Round().TakeAsync(1, Cancel);
+        EncodeIntake took = await machine.Round().TakeAsync(Cancel);
 
         Assert.False(took.Automatically);
         Assert.Equal(0, took.Queued);
-        Assert.Equal(0, took.Looked);
+        Assert.Equal(0, took.Waiting);
         Assert.Empty(machine.Jobs.Jobs);
         Assert.Empty(machine.Events.Signalled);
     }
@@ -61,10 +61,10 @@ public sealed class EncodeIntakeTests
         var machine = new Machine();
         machine.Recorded(RecordingOutcome.Complete);
         machine.AutoRun.Standing = new EncodeAutoRunStanding(false, 2, true, Now);
-        await machine.Round().TakeAsync(1, Cancel);
+        await machine.Round().TakeAsync(Cancel);
 
         machine.AutoRun.Standing = new EncodeAutoRunStanding(true, 2, true, Now);
-        EncodeIntake took = await machine.Round().TakeAsync(1, Cancel);
+        EncodeIntake took = await machine.Round().TakeAsync(Cancel);
 
         Assert.True(took.Automatically);
         Assert.Equal(1, took.Queued);
@@ -77,10 +77,10 @@ public sealed class EncodeIntakeTests
         var machine = new Machine();
         Recording unasked = machine.Recorded(RecordingOutcome.Complete, encode: false);
 
-        EncodeIntake took = await machine.Round().TakeAsync(1, Cancel);
+        EncodeIntake took = await machine.Round().TakeAsync(Cancel);
 
         Assert.Equal(0, took.Queued);
-        Assert.Equal(1, took.Looked);
+        Assert.Equal(0, took.Waiting);
         Assert.Equal(EncodeUnaskedStanding.Settled, took.Standing);
         Assert.Equal(RecordingOutcome.Complete, unasked.Outcome);
         Assert.Empty(machine.Jobs.Jobs);
@@ -94,7 +94,7 @@ public sealed class EncodeIntakeTests
         machine.Recorded(RecordingOutcome.Complete, encode: false);
         Recording asked = machine.Recorded(RecordingOutcome.Complete, Began.AddMinutes(1));
 
-        EncodeIntake took = await machine.Round().TakeAsync(1, Cancel);
+        EncodeIntake took = await machine.Round().TakeAsync(Cancel);
 
         Assert.Equal(1, took.Queued);
         Assert.Equal(asked.Id, Assert.Single(machine.Jobs.Jobs).RecordingId);
@@ -106,7 +106,7 @@ public sealed class EncodeIntakeTests
         var machine = new Machine();
         machine.Recorded(RecordingOutcome.Failed);
 
-        EncodeIntake took = await machine.Round().TakeAsync(1, Cancel);
+        EncodeIntake took = await machine.Round().TakeAsync(Cancel);
 
         Assert.Equal(0, took.Queued);
         Assert.Empty(machine.Jobs.Jobs);
@@ -118,7 +118,7 @@ public sealed class EncodeIntakeTests
         var machine = new Machine();
         Recording cutShort = machine.Recorded(RecordingOutcome.Truncated);
 
-        EncodeIntake took = await machine.Round().TakeAsync(1, Cancel);
+        EncodeIntake took = await machine.Round().TakeAsync(Cancel);
 
         Assert.Equal(1, took.Queued);
         Assert.Equal(cutShort.Id, Assert.Single(machine.Jobs.Jobs).RecordingId);
@@ -131,7 +131,7 @@ public sealed class EncodeIntakeTests
         var machine = new Machine();
         machine.StillWriting();
 
-        EncodeIntake took = await machine.Round().TakeAsync(1, Cancel);
+        EncodeIntake took = await machine.Round().TakeAsync(Cancel);
 
         Assert.Equal(0, took.Queued);
         Assert.Empty(machine.Jobs.Jobs);
@@ -149,7 +149,7 @@ public sealed class EncodeIntakeTests
         Recording ended = machine.Recorded(RecordingOutcome.Complete);
         machine.Jobs.Jobs.Add(Job(ended.Id, machine.Profile.Id, machine.Destination, status));
 
-        EncodeIntake took = await machine.Round().TakeAsync(1, Cancel);
+        EncodeIntake took = await machine.Round().TakeAsync(Cancel);
 
         Assert.Equal(0, took.Queued);
         Assert.Single(machine.Jobs.Jobs);
@@ -162,8 +162,8 @@ public sealed class EncodeIntakeTests
         machine.Recorded(RecordingOutcome.Complete);
         machine.Recorded(RecordingOutcome.Complete);
 
-        EncodeIntake first = await machine.Round().TakeAsync(1, Cancel);
-        EncodeIntake second = await machine.Round().TakeAsync(1, Cancel);
+        EncodeIntake first = await machine.Round().TakeAsync(Cancel);
+        EncodeIntake second = await machine.Round().TakeAsync(Cancel);
 
         Assert.Equal(2, first.Queued);
         Assert.Equal(0, second.Queued);
@@ -177,7 +177,7 @@ public sealed class EncodeIntakeTests
         machine.Recorded(RecordingOutcome.Complete);
         machine.Destinations.Destinations.Clear();
 
-        EncodeIntake took = await machine.Round().TakeAsync(1, Cancel);
+        EncodeIntake took = await machine.Round().TakeAsync(Cancel);
 
         Assert.Equal(0, took.Queued);
         Assert.Equal(EncodeUnaskedStanding.NothingIsDefined, took.Standing);
@@ -196,7 +196,7 @@ public sealed class EncodeIntakeTests
             machine.Profile.Id,
             Began));
 
-        EncodeIntake took = await machine.Round().TakeAsync(1, Cancel);
+        EncodeIntake took = await machine.Round().TakeAsync(Cancel);
 
         Assert.Equal(0, took.Queued);
         Assert.Equal(EncodeUnaskedStanding.MoreThanOneIsOffered, took.Standing);
@@ -211,16 +211,16 @@ public sealed class EncodeIntakeTests
         EncodeDestination shelf = machine.Destination;
         machine.Destinations.Destinations.Clear();
 
-        EncodeIntake passed = await machine.Round().TakeAsync(1, Cancel);
+        EncodeIntake passed = await machine.Round().TakeAsync(Cancel);
         machine.Destinations.Destinations.Add(shelf);
-        EncodeIntake took = await machine.Round().TakeAsync(1, Cancel);
+        EncodeIntake took = await machine.Round().TakeAsync(Cancel);
 
         Assert.Equal(0, passed.Queued);
         Assert.Equal(1, took.Queued);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: more recordings than one look reads are queued a page at a time, and every one of them ends up in the queue")]
-    public async Task MoreRecordingsThanOneLookReadsAreQueuedAPageAtATime()
+    [Fact(DisplayName = "BR-ED2-004: more recordings than one look reads are queued a look at a time, and every one of them ends up in the queue")]
+    public async Task MoreRecordingsThanOneLookReadsAreQueuedALookAtATime()
     {
         var machine = new Machine();
 
@@ -229,13 +229,13 @@ public sealed class EncodeIntakeTests
             machine.Recorded(RecordingOutcome.Complete, Began.AddMinutes(made));
         }
 
-        EncodeIntake first = await machine.Round().TakeAsync(1, Cancel);
-        EncodeIntake second = await machine.Round().TakeAsync(first.Page + 1, Cancel);
+        EncodeIntake first = await machine.Round().TakeAsync(Cancel);
+        EncodeIntake second = await machine.Round().TakeAsync(Cancel);
+        EncodeIntake third = await machine.Round().TakeAsync(Cancel);
 
-        Assert.True(first.MorePages);
         Assert.Equal(EncodeIntakeRound.PerLook, first.Queued);
-        Assert.False(second.MorePages);
         Assert.Equal(7, second.Queued);
+        Assert.Equal(0, third.Queued);
         Assert.Equal(EncodeIntakeRound.PerLook + 7, machine.Jobs.Jobs.Count);
         Assert.Equal(machine.Jobs.Jobs.Count, machine.Jobs.Jobs.Select(job => job.RecordingId).Distinct().Count());
     }
@@ -246,7 +246,7 @@ public sealed class EncodeIntakeTests
         var machine = new Machine();
         machine.Recorded(RecordingOutcome.Complete);
 
-        await machine.Round().TakeAsync(1, Cancel);
+        await machine.Round().TakeAsync(Cancel);
 
         Assert.Equal([AppEventName.EncodeJobs], machine.Events.Signalled);
     }
@@ -257,7 +257,7 @@ public sealed class EncodeIntakeTests
         var machine = new Machine();
         machine.Recorded(RecordingOutcome.Failed);
 
-        await machine.Round().TakeAsync(1, Cancel);
+        await machine.Round().TakeAsync(Cancel);
 
         Assert.Empty(machine.Events.Signalled);
     }
@@ -329,7 +329,7 @@ public sealed class EncodeIntakeTests
 
         public EncodeIntakeRound Round()
             => new(
-                Recordings,
+                new HeldEncodeIntake(Recordings, Jobs),
                 Jobs,
                 Destinations,
                 Profiles,

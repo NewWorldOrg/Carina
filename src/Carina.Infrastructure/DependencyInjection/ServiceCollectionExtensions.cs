@@ -163,6 +163,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IEncodeProfileRepository, EncodeProfileRepository>();
         services.AddScoped<IEncodeDestinationRepository, EncodeDestinationRepository>();
         services.AddScoped<IEncodeJobRepository, EncodeJobRepository>();
+        services.AddScoped<IEncodeIntakeReader, EncodeIntakeReader>();
         services.AddScoped<IEncodeAutoRunRepository, EncodeAutoRunRepository>();
         services.AddScoped<IEncodeStandingReader, EncodeStandingReader>();
         services.AddScoped<IEncodeScratchLedger, EncodeScratchLedger>();
