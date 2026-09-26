@@ -10,7 +10,6 @@ using Carina.TestSupport;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class ScanEndpointTests
 {
     private const int Terrestrial = 53;

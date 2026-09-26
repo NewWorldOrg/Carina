@@ -5,7 +5,6 @@ using Carina.TestSupport;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class DriverVersionSkewTests
 {
     private const string HelloFromABuildWithoutDraining =

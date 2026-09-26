@@ -74,7 +74,6 @@ internal sealed class ScrubFeature : IAsyncDisposable
     }
 }
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class ScrubDeliveryTests
 {
     private static readonly byte[] Picture = [0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43];

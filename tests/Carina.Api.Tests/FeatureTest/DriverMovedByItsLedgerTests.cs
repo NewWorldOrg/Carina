@@ -9,7 +9,6 @@ using driver::Carina.Driver.Configuration;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 [SupportedOSPlatform("linux")]
 public sealed class DriverMovedByItsLedgerTests
 {

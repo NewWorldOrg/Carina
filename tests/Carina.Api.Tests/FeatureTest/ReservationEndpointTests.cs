@@ -13,7 +13,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class ReservationEndpointTests
 {
     private static readonly DateTime Noon = ReservationFeature.Noon;

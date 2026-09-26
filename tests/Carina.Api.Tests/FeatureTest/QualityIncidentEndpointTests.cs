@@ -5,7 +5,6 @@ using Carina.Domain.Quality;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class QualityIncidentEndpointTests
 {
     private static readonly DateTime Noon = QualityFeature.Noon;

@@ -11,7 +11,6 @@ namespace Carina.Api.Tests.FeatureTest;
 /// hardware into a screen about broadcasts, and would make the answer change whenever the seats
 /// are renumbered though nothing about the reservation moved.
 /// </summary>
-[Collection(FeatureTestCollection.Name)]
 public sealed class ReservationSurfaceNamesNoTunerTests
 {
     private const string Seat = "adapter-of-this-host";

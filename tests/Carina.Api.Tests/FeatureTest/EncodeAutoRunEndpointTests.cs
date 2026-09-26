@@ -7,7 +7,6 @@ using Carina.Domain.Recordings;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class EncodeAutoRunEndpointTests
 {
     [Fact(DisplayName = "a machine nobody has settled answers what it was deployed with, and says nobody settled it")]

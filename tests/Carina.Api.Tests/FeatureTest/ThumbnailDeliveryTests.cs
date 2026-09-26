@@ -85,7 +85,6 @@ internal sealed class DrawnFeature : IAsyncDisposable
     }
 }
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class ThumbnailDeliveryTests
 {
     [Fact]

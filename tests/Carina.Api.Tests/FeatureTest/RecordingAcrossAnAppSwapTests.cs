@@ -9,7 +9,6 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 [SupportedOSPlatform("linux")]
 public sealed class RecordingAcrossAnAppSwapTests
 {

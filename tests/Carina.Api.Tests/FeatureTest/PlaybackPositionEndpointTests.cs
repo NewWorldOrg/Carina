@@ -11,7 +11,6 @@ using Carina.Domain.Viewing;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class PlaybackPositionEndpointTests
 {
     private static readonly DateTime Noon = new(2026, 9, 16, 12, 0, 0, DateTimeKind.Utc);

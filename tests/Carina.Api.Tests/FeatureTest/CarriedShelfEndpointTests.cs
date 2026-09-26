@@ -11,7 +11,6 @@ using Carina.Domain.Reservations;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class CarriedShelfEndpointTests
 {
     private const int Shelf = 53;

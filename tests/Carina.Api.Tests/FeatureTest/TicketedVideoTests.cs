@@ -132,7 +132,6 @@ internal sealed class TicketedFeature : IAsyncDisposable
     }
 }
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class TicketedVideoTests
 {
     [Fact]

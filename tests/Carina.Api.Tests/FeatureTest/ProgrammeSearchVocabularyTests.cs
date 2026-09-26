@@ -6,7 +6,6 @@ using Carina.Infrastructure.Programmes;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class ProgrammeSearchVocabularyTests(TestingWebApplicationFactory factory)
     : IClassFixture<TestingWebApplicationFactory>
 {

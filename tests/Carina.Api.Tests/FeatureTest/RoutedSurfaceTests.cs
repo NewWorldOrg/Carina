@@ -11,7 +11,6 @@ using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class RoutedSurfaceTests(TestingWebApplicationFactory factory)
     : IClassFixture<TestingWebApplicationFactory>
 {

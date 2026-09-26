@@ -10,7 +10,6 @@ using Carina.Infrastructure.Thumbnails;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class RecordingEndpointTests
 {
     private static readonly SessionId Session = SessionId.Parse("session-a");

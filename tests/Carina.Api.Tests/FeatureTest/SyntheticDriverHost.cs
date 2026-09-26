@@ -58,16 +58,8 @@ internal sealed class SyntheticDriverHost : IAsyncDisposable
 
     private static readonly TimeSpan BetweenReads = TimeSpan.FromMilliseconds(25);
 
-    private static readonly string[] SettingsThatWouldBindAPort =
-    [
-        .. TcpBindingGate.Variables,
-        "DOTNET_URLS",
-        "URLS",
-    ];
-
     private readonly string root;
     private readonly string ledger;
-    private readonly IReadOnlyList<string?> inherited;
     private readonly Action<IServiceCollection>? reshape;
 
     private DriverConfiguration configuration;
@@ -79,14 +71,12 @@ internal sealed class SyntheticDriverHost : IAsyncDisposable
         string root,
         string ledger,
         DriverConfiguration configuration,
-        IReadOnlyList<string?> inherited,
         Action<IServiceCollection>? reshape)
     {
         this.host = host;
         this.root = root;
         this.ledger = ledger;
         this.configuration = configuration;
-        this.inherited = inherited;
         this.reshape = reshape;
     }
 
@@ -100,13 +90,6 @@ internal sealed class SyntheticDriverHost : IAsyncDisposable
 
     public static async Task<SyntheticDriverHost> StartAsync(Action<IServiceCollection>? reshape = null)
     {
-        string?[] inherited = [.. SettingsThatWouldBindAPort.Select(Environment.GetEnvironmentVariable)];
-
-        foreach (string name in SettingsThatWouldBindAPort)
-        {
-            Environment.SetEnvironmentVariable(name, null);
-        }
-
         string root = Directory.CreateTempSubdirectory("carina-app-swap-").FullName;
         string recordings = Path.Combine(root, "recordings");
 
@@ -125,7 +108,7 @@ internal sealed class SyntheticDriverHost : IAsyncDisposable
 
         IHost host = await RaisedAsync(configuration, ledger, reshape);
 
-        return new SyntheticDriverHost(host, root, ledger, configuration, inherited, reshape);
+        return new SyntheticDriverHost(host, root, ledger, configuration, reshape);
     }
 
     public string Beside(string name) => Path.Combine(root, name);
@@ -270,13 +253,6 @@ internal sealed class SyntheticDriverHost : IAsyncDisposable
         }
         finally
         {
-            for (int index = 0; index < SettingsThatWouldBindAPort.Length; index++)
-            {
-                Environment.SetEnvironmentVariable(
-                    SettingsThatWouldBindAPort[index],
-                    inherited[index]);
-            }
-
             if (Directory.Exists(root))
             {
                 Directory.Delete(root, recursive: true);

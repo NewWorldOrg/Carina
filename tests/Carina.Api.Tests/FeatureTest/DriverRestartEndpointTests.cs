@@ -9,7 +9,6 @@ using Microsoft.AspNetCore.Http;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class DriverRestartEndpointTests
 {
     private static readonly Uri Restart = new("/api/driver/restart", UriKind.Relative);

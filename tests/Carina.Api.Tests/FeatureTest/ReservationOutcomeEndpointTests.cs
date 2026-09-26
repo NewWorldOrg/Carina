@@ -8,7 +8,6 @@ using Carina.Domain.Rules;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class ReservationOutcomeEndpointTests
 {
     private static readonly DateTime Noon = ReservationFeature.Noon;

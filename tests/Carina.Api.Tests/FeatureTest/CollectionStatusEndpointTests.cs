@@ -7,7 +7,6 @@ using Carina.Domain.Programmes;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class CollectionStatusEndpointTests
 {
     private static readonly DateTime At = new(2026, 8, 18, 6, 0, 0, DateTimeKind.Utc);

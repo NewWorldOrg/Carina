@@ -8,7 +8,6 @@ namespace Carina.Api.Tests.FeatureTest;
 /// nothing waits in between for one: the answer to the asking already says which broadcast is
 /// recorded and which one lost, and reading the reservation back afterwards says the same thing.
 /// </summary>
-[Collection(FeatureTestCollection.Name)]
 public sealed class ReservationSettlesInOneAskingTests
 {
     [Fact]

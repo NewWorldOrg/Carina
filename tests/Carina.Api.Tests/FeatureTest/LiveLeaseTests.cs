@@ -16,7 +16,6 @@ using Microsoft.Net.Http.Headers;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class LiveLeaseTests
 {
     private static readonly TimeSpan Linger = TimeSpan.FromMilliseconds(400);

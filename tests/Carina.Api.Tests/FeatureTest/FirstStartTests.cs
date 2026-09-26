@@ -83,7 +83,6 @@ internal sealed class RefusingLocalAccounts : ILocalAccountRepository
         => Task.FromException(new InvalidOperationException("The store is out of reach."));
 }
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class FirstStartTests
 {
     private static readonly Uri Login = new("/api/auth/login", UriKind.Relative);

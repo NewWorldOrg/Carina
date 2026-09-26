@@ -6,7 +6,6 @@ using Carina.Infrastructure.Recordings;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 [SupportedOSPlatform("linux")]
 public sealed class RecordingAcrossADriverStopTests
 {

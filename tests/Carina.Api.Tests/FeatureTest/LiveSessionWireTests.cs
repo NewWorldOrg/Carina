@@ -12,7 +12,6 @@ using Microsoft.Net.Http.Headers;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class LiveSessionWireTests
 {
     private static readonly LiveSessionKey EveryFrame = new(new NetworkId(32736), new ServiceId(1024), LiveProfile.Hd30);

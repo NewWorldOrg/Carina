@@ -8,7 +8,6 @@ using Carina.TestSupport;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class TunerHealthEndpointTests
 {
     private static readonly Uri Health = new("/api/tuners/health", UriKind.Relative);

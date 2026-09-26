@@ -6,7 +6,6 @@ using Carina.Domain.Recordings;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class EncodingDefinitionChangeTests
 {
     private static object AProfile(string label = "Viewing", int rateFactor = 20) => new

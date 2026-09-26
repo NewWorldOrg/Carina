@@ -9,7 +9,6 @@ using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class AnonymousReachTests(TestingWebApplicationFactory factory)
     : IClassFixture<TestingWebApplicationFactory>
 {

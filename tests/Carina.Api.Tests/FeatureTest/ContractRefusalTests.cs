@@ -53,7 +53,6 @@ internal static class ContractAgreement
         => string.Join(", ", answers.Select(answer => answer.Key).Order(StringComparer.Ordinal));
 }
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class ContractRefusalTests
 {
     private const string Password = "/api/auth/password";

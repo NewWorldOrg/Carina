@@ -7,7 +7,6 @@ using Carina.Domain.Auth;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class LocalLoginTests
 {
     [Fact]
