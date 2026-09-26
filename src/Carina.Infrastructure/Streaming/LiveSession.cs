@@ -540,7 +540,6 @@ internal sealed class LiveSession
             seat = null;
         }
 
-        // Out of the reading first, so nothing is written into a transcoder being taken down.
         if (given is not null)
         {
             await LeftTheReadingAsync(given);

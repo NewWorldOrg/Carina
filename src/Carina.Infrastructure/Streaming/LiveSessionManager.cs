@@ -248,8 +248,6 @@ public sealed class LiveSessionManager(
     {
         await Task.WhenAll(letting.Select(session => QuietlyAsync(session.Life)));
 
-        // The tuner is let go of by the reading, not by the session, so the asking viewer waits
-        // for the reading to finish rather than being refused by a tuner on its way out.
         await Task.WhenAll(
             letting.Select(session => session.Reception).Distinct().Select(reading => QuietlyAsync(reading.Life)));
     }
