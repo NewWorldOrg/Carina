@@ -66,6 +66,41 @@ public sealed class TuningResolutionTests
     }
 
     [Fact]
+    public void AResolvedServiceNamesTheChannelTuningToo()
+    {
+        TuningParameters tuning = TuningParameters.Terrestrial(27);
+
+        Assert.Equal(tuning, TuningResolution.Tunable(Candidate, tuning, impaired: false).ChannelTuning);
+    }
+
+    [Theory]
+    [InlineData(TuningRefusal.NoTunerForSystem)]
+    [InlineData(TuningRefusal.CapacityUnknown)]
+    [InlineData(TuningRefusal.LedgerUnreadable)]
+    public void ARefusalAfterAChannelWasSelectedCarriesThatChannelsTuningWithoutNamingItTunable(
+        TuningRefusal refusal)
+    {
+        TuningParameters tuning = TuningParameters.Terrestrial(27);
+
+        TuningResolution refused = TuningResolution.Refused(refusal, tuning);
+
+        Assert.False(refused.CanTune);
+        Assert.Null(refused.Tuning);
+        Assert.Equal(tuning, refused.ChannelTuning);
+    }
+
+    [Theory]
+    [InlineData(TuningRefusal.NoSuchService)]
+    [InlineData(TuningRefusal.NoSelectedChannel)]
+    public void ARefusalBeforeAnyChannelWasSelectedCannotCarryAChannelsTuning(TuningRefusal refusal)
+    {
+        ArgumentException thrown = Assert.Throws<ArgumentException>(
+            () => TuningResolution.Refused(refusal, TuningParameters.Terrestrial(27)));
+
+        Assert.Equal("channelTuning", thrown.ParamName);
+    }
+
+    [Fact]
     public void RefusingWithNoReasonIsRefused()
     {
         ArgumentOutOfRangeException thrown = Assert.Throws<ArgumentOutOfRangeException>(

@@ -303,7 +303,6 @@ public sealed class RecordingStreamSettlementTests
     [Theory]
     [InlineData(TuningRefusal.NoSuchService)]
     [InlineData(TuningRefusal.NoSelectedChannel)]
-    [InlineData(TuningRefusal.NoTunerForSystem)]
     public async Task ARecordingOnAServiceNothingCanTuneAnyMoreIsWeighedAgainstTheRangeEveryKindFallsIn(
         TuningRefusal refusal)
     {
@@ -332,8 +331,26 @@ public sealed class RecordingStreamSettlementTests
     }
 
     [Theory]
-    [InlineData(TuningRefusal.LedgerUnreadable)]
+    [InlineData(TuningRefusal.NoTunerForSystem)]
     [InlineData(TuningRefusal.CapacityUnknown)]
+    [InlineData(TuningRefusal.LedgerUnreadable)]
+    public async Task ARecordingWhoseTunerIsUnavailableIsStillWeighedAgainstTheKindItsChannelIsCarriedOn(
+        TuningRefusal refusal)
+    {
+        TuningResolution unavailable = TuningResolution.Refused(refusal, TuningParameters.Terrestrial(27));
+
+        Recording light = await Judged(TimeSpan.FromMinutes(30), 2_480_000_000, asked: true, tuning: unavailable);
+        Recording right = await Judged(TimeSpan.FromMinutes(30), 3_400_000_000, asked: true, tuning: unavailable);
+
+        Assert.Equal(RecordingOutcome.Truncated, light.Outcome);
+        Assert.Equal(RecordingFault.LighterThanTheStream, Assert.Single(light.OutcomeDetail).Fault);
+        Assert.Equal(RecordingOutcome.Complete, right.Outcome);
+    }
+
+    [Theory]
+    [InlineData(TuningRefusal.NoTunerForSystem)]
+    [InlineData(TuningRefusal.CapacityUnknown)]
+    [InlineData(TuningRefusal.LedgerUnreadable)]
     public async Task ARecordingWhoseServiceCannotBeAnsweredForYetIsLeftInFlightForTheNextPass(TuningRefusal refusal)
     {
         Recording recording = Ready(TimeSpan.FromMinutes(30), asked: true);

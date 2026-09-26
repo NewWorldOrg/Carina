@@ -639,23 +639,23 @@ public sealed class RecordingStreamSupervisor(
 
     /// <summary>
     /// Names the rate a recording's weight is judged against: the one measured off the kind its
-    /// service is carried on, or the range every kind falls in when the catalogue can no longer
-    /// tune the service. Nothing is named while the catalogue cannot answer yet.
+    /// selected channel is carried on, or the range every kind falls in when the service or its
+    /// selected channel is gone. Nothing is named for any other refusal that names no channel.
     /// </summary>
     private async Task<ExpectedBitrate?> RateOfAsync(Recording recording, CancellationToken cancellationToken)
     {
         TuningResolution resolution = await ResolveAsync(recording, cancellationToken);
 
-        if (resolution.Tuning is { } tuning)
+        if (resolution.ChannelTuning is { } tuning)
         {
             return ExpectedBitrate.Of(tuning.Typed().Kind);
         }
 
-        if (resolution.Refusal is TuningRefusal.LedgerUnreadable or TuningRefusal.CapacityUnknown)
+        if (resolution.Refusal is not (TuningRefusal.NoSuchService or TuningRefusal.NoSelectedChannel))
         {
             logger.LogWarning(
-                "Recording {Recording} is over and whether its service can be tuned cannot be answered yet "
-                + "({Refusal}), so it is judged on a later pass.",
+                "Recording {Recording} is over and the catalogue named no channel for its service ({Refusal}), "
+                + "so it is judged on a later pass.",
                 recording.Id.Wire,
                 resolution.Refusal);
 
