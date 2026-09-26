@@ -8,6 +8,7 @@ set -eu
 : "${DB_INTEGRATION_FILTER:?}"
 : "${SCALE_FILTER:?}"
 : "${MATERIAL_FILTER:?}"
+: "${MATERIAL_PROJECT:?}"
 
 held="$(mktemp -d)"
 trap 'rm -rf "${held}"' EXIT
@@ -91,7 +92,10 @@ for project in ${projects}; do
 
   listed "${project}" --filter "${DB_INTEGRATION_FILTER}" >> "${held}/selected-by-a-job"
   listed "${project}" --filter "${SCALE_FILTER}" >> "${held}/selected-by-a-job"
-  listed "${project}" --filter "${MATERIAL_FILTER}" >> "${held}/selected-by-a-job"
+
+  if [ "${project}" = "${MATERIAL_PROJECT}" ]; then
+    listed "${project}" --filter "${MATERIAL_FILTER}" >> "${held}/selected-by-a-job"
+  fi
 done
 
 LC_ALL=C sort -u -o "${held}/every-test" "${held}/every-test"

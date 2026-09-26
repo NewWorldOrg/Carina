@@ -20,6 +20,7 @@ env:
   DB_INTEGRATION_FILTER: 'FullyQualifiedName~DbIntegration|Category=DbIntegration'
   SCALE_FILTER: 'Category=Scale'
   MATERIAL_FILTER: 'Category=Material'
+  MATERIAL_PROJECT: tests/Carina.Infrastructure.Tests/Carina.Infrastructure.Tests.csproj
 
 jobs:
   checks:
@@ -175,7 +176,7 @@ jobs:
         run: |
           set -o pipefail
           docker run --rm -v "${PWD}:/code" -w /code -e DOTNET_NOLOGO -e DOTNET_SKIP_FIRST_TIME_EXPERIENCE carina:develop \
-            dotnet test --filter "${MATERIAL_FILTER}" --logger trx --results-directory results | tee material.log
+            dotnet test "${MATERIAL_PROJECT}" --filter "${MATERIAL_FILTER}" --logger trx --results-directory results | tee material.log
       - name: The tests that failed, named from the result files rather than the interleaved output
         if: failure()
         run: .github/failed-tests.sh results
