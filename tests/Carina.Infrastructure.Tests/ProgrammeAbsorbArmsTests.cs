@@ -125,6 +125,24 @@ public sealed class ProgrammeAbsorbArmsTests(RepositoryDatabase database)
         ["a source that changed"] = new(
             network => [Broadcast(network)],
             network => [Broadcast(network) with { Source = ProgrammeSource.PresentFollowing }]),
+        ["a detailed table after the basic one"] = new(
+            network => [Broadcast(network) with { HasSubtitles = true }],
+            network =>
+            [
+                Broadcast(network) with
+                {
+                    Name = string.Empty,
+                    Summary = string.Empty,
+                    Items = [new ProgrammeItem("番組内容", "きょうの内容")],
+                    Source = ProgrammeSource.ScheduleExtended,
+                },
+            ]),
+        ["a detailed table for one nobody held"] = new(
+            _ => [],
+            network => [Broadcast(network) with { Name = string.Empty, Source = ProgrammeSource.ScheduleExtended }]),
+        ["the basic table after a detailed one"] = new(
+            network => [Broadcast(network) with { Name = string.Empty, Source = ProgrammeSource.ScheduleExtended }],
+            network => [Broadcast(network) with { HasSubtitles = true }]),
         ["a name longer than the column"] = new(
             network => [Broadcast(network)],
             network => [Broadcast(network) with { Name = new string('長', Programme.NameMaxLength + 40) }]),

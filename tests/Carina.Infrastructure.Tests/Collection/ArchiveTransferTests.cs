@@ -182,6 +182,29 @@ public sealed class ArchiveTransferTests(RepositoryDatabase database)
     }
 
     [Fact]
+    public async Task AProgrammeWhoseEndWasNeverToldIsKeptEndingWhereTheOneAfterItBegan()
+    {
+        int network = BroadcastIds.NextNetwork();
+        await using CarinaDbContext context = database.Open();
+
+        await Empty(context);
+        await Add(context, network, 1, Now.AddDays(-3), endIsUndecided: true);
+        await Add(context, network, 2, Now.AddDays(-3).AddHours(1));
+
+        Transferred moved = await Transfer(context).RunAsync(Cancel);
+
+        Assert.Equal(2, moved.Kept);
+        Assert.Equal(2, moved.Discarded);
+
+        await using CarinaDbContext reading = database.Open();
+        ArchivedProgramme kept = await reading.Set<ArchivedProgramme>()
+            .SingleAsync(programme => programme.EventId == new EventId(1), Cancel);
+
+        Assert.Equal(0, await reading.Set<Programme>().CountAsync(Cancel));
+        Assert.Equal(Now.AddDays(-3).AddHours(1), kept.EndsAt);
+    }
+
+    [Fact]
     public async Task WhenTheGuideCannotLetGoTheArchiveKeepsNothingEither()
     {
         int network = BroadcastIds.NextNetwork();
@@ -305,7 +328,7 @@ internal sealed class StubbornProgrammes(IProgrammeRepository held) : IProgramme
         CancellationToken cancellationToken)
         => held.AbsorbAsync(broadcasts, heardWhole, at, cancellationToken);
 
-    public Task<IReadOnlyList<Programme>> ListEndedBeforeAsync(
+    public Task<IReadOnlyList<EndedProgramme>> ListEndedBeforeAsync(
         DateTime at,
         int rows,
         CancellationToken cancellationToken)

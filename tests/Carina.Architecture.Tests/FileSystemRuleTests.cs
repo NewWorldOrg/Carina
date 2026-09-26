@@ -51,6 +51,7 @@ public sealed class FileSystemRuleTests
         "/Carina.Infrastructure/Migration/HardLinkMigrationCarrier.cs File.Delete",
         "/Carina.Infrastructure/Programmes/ProgrammeSearchQuery.cs .Replace(",
         "/Carina.Infrastructure/Recordings/DriverRecordingFileEraser.cs File.Delete",
+        "/Carina.Infrastructure/Scanning/TableHarvest.cs .CopyTo(",
         "/Carina.Infrastructure/Streaming/FfprobeStreamAttributeReader.cs Process.Start",
         "/Carina.Infrastructure/Streaming/FfprobeStreamAttributeReader.cs ProcessStartInfo",
         "/Carina.Infrastructure/Streaming/LiveHandedOverReading.cs .CopyTo(",

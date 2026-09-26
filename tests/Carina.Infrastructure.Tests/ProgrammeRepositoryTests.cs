@@ -5,6 +5,9 @@ using Carina.Infrastructure.Persistence.Repositories;
 
 using Carina.TestSupport;
 
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+
 namespace Carina.Infrastructure.Tests;
 
 [Collection(RepositoryDatabaseCollection.Name)]
@@ -226,6 +229,39 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
     }
 
     [Fact]
+    public async Task AReaderFollowingTheRevisionsMissesNoWriteThatCommittedLate()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext before = database.Open();
+        long cursor = (await new ProgrammeRepository(before).ListAfterAsync(0, int.MaxValue, Cancel))
+            .Select(programme => programme.Revision)
+            .DefaultIfEmpty(0)
+            .Max();
+        await using CarinaDbContext slow = database.Open();
+        await using CarinaDbContext quick = database.Open();
+        await using IDbContextTransaction held = await slow.Database.BeginTransactionAsync(Cancel);
+
+        await new ProgrammeRepository(slow).AbsorbAsync([Broadcast(network, 1)], [], At, Cancel);
+
+        Task<int> following = new DatabaseAtomicWrite(quick).AllOrNothingAsync(
+            async token => (await new ProgrammeRepository(quick).AbsorbAsync([Broadcast(network, 2)], [], At, token)).Added,
+            Cancel);
+
+        await UntilWaitingOrDoneAsync(following);
+
+        List<Programme> read = [.. await ReadAfterAsync(cursor)];
+
+        cursor = read.Select(programme => programme.Revision).DefaultIfEmpty(cursor).Max();
+        await held.CommitAsync(Cancel);
+        await following;
+        read.AddRange(await ReadAfterAsync(cursor));
+
+        Assert.Equal(
+            [1, 2],
+            read.Where(programme => programme.NetworkId.Value == network).Select(programme => programme.EventId.Value).Order());
+    }
+
+    [Fact]
     public async Task AVisitThatCarriesNothingWritesNothing()
     {
         await using CarinaDbContext context = database.Open();
@@ -268,7 +304,7 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
     }
 
     [Fact]
-    public async Task AProgrammeWhoseEndWasNeverToldIsNeverAmongWhatEnded()
+    public async Task AProgrammeWhoseEndWasNeverToldHasNotEndedBeforeTheNextOneOnItsServiceBegins()
     {
         int network = NextNetwork();
         await using CarinaDbContext context = database.Open();
@@ -287,6 +323,31 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
 
         Assert.NotNull(await new ProgrammeRepository(reading).FindAsync(Id(network, 1), Cancel));
         Assert.NotNull(await new ProgrammeRepository(reading).FindAsync(Id(network, 2), Cancel));
+    }
+
+    [Fact]
+    public async Task AProgrammeWhoseEndWasNeverToldEndedWhereTheNextOneOnItsServiceBegan()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        var programmes = new ProgrammeRepository(context);
+
+        await programmes.AddAsync(
+            Programme.Discover(Broadcast(network, 1, At.AddHours(1)) with { EndsAt = null }, At),
+            Cancel);
+        await programmes.AddAsync(Programme.Discover(Broadcast(network, 2, At.AddHours(3)), At), Cancel);
+        await programmes.AddAsync(
+            Programme.Discover(Carried(network, 1050, 3, At.AddHours(2)) with { EndsAt = null }, At),
+            Cancel);
+
+        EndedProgramme[] ended =
+        [
+            .. (await programmes.ListEndedBeforeAsync(At.AddHours(10), 5_000, Cancel))
+                .Where(programme => programme.Programme.NetworkId.Value == network),
+        ];
+
+        Assert.Equal([1, 2], ended.Select(programme => programme.Programme.EventId.Value));
+        Assert.Equal([At.AddHours(3), At.AddHours(4)], ended.Select(programme => programme.EndedAt));
     }
 
     [Fact]
@@ -458,6 +519,32 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
         Assert.Equal(At, (await asked.FindAsync(Id(network), Cancel))!.LastHeardAt);
     }
 
+    private async Task<IReadOnlyList<Programme>> ReadAfterAsync(long cursor)
+    {
+        await using CarinaDbContext reading = database.Open();
+
+        return await new ProgrammeRepository(reading).ListAfterAsync(cursor, int.MaxValue, Cancel);
+    }
+
+    private async Task UntilWaitingOrDoneAsync(Task write)
+    {
+        await using CarinaDbContext watching = database.Open();
+
+        for (int look = 0; look < 200 && !write.IsCompleted; look++)
+        {
+            bool waiting = await watching.Database
+                .SqlQueryRaw<bool>("SELECT EXISTS (SELECT 1 FROM pg_locks WHERE NOT granted) AS \"Value\"")
+                .SingleAsync(Cancel);
+
+            if (waiting)
+            {
+                return;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(50), Cancel);
+        }
+    }
+
     private static int NextNetwork() => BroadcastIds.NextNetwork();
 
     private static ProgrammeId Id(int network, int carried = 1)
@@ -465,6 +552,7 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
 
     private static async Task<Programme[]> Ended(ProgrammeRepository programmes, int network)
         => [.. (await programmes.ListEndedBeforeAsync(At.AddHours(10), 5_000, Cancel))
+            .Select(ended => ended.Programme)
             .Where(programme => programme.NetworkId.Value == network)];
 
     private static ProgrammeBroadcast Broadcast(int network, int carried = 1, DateTime? startsAt = null)

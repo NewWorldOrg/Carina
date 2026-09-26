@@ -9,15 +9,26 @@ public sealed class ArchivedProgrammeTests
 
     [Fact]
     public void AProgrammeThatEndedIsKept()
-        => Assert.NotNull(ArchivedProgramme.Of(Programme(endsAt: At.AddMinutes(30)), At));
+        => Assert.NotNull(ArchivedProgramme.Of(
+            new EndedProgramme(Programme(endsAt: At.AddMinutes(30)), At.AddMinutes(30)),
+            At));
 
     [Fact]
-    public void AProgrammeWhoseEndIsStillOpenIsNotKeptYet()
-        => Assert.Null(ArchivedProgramme.Of(Programme(endsAt: null), At));
+    public void AProgrammeWhoseEndWasNeverToldIsKeptWithTheEndItWasFoundToHave()
+    {
+        ArchivedProgramme? kept = ArchivedProgramme.Of(
+            new EndedProgramme(Programme(endsAt: null), At.AddMinutes(45)),
+            At);
+
+        Assert.NotNull(kept);
+        Assert.Equal(At.AddMinutes(45), kept.EndsAt);
+    }
 
     [Fact]
     public void AShadowIsNotKept()
-        => Assert.Null(ArchivedProgramme.Of(Programme(endsAt: At.AddMinutes(30), isShadow: true), At));
+        => Assert.Null(ArchivedProgramme.Of(
+            new EndedProgramme(Programme(endsAt: At.AddMinutes(30), isShadow: true), At.AddMinutes(30)),
+            At));
 
     [Fact]
     public void TheFullerNameWins()

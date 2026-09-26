@@ -134,6 +134,66 @@ public sealed class ScanRotationTests
     }
 
     [Fact]
+    public async Task AChannelThatLockedAndDeliveredNothingIsCountedAsAFailure()
+    {
+        var harness = new ScanHarness(
+            new ScriptedDriverClient().Script(Channel53, ChannelScript.Silent()),
+            settings: BacksOffTwice);
+        Store(harness);
+
+        await harness.Orchestrator.RunAsync(ScanScope.Over([Channel53]), Cancel);
+
+        Assert.Equal(1, harness.Candidates.Candidates[0].ConsecutiveFailures);
+    }
+
+    [Theory]
+    [InlineData("tables that never completed")]
+    [InlineData("tables that disagree with each other")]
+    public async Task AChannelThatWasReceivedIsNotBlamedForWhatTheTablesSaid(string heard)
+    {
+        var harness = new ScanHarness(
+            new ScriptedDriverClient().Script(Channel53, ChannelScript.Carrying(new SyntheticStream
+            {
+                NetworkId = SomeNetworkId,
+                TransportStreamId = SomeStreamId,
+                TransportStreamIdInNetwork = heard == "tables that disagree with each other" ? SomeStreamId + 1 : null,
+                Services = [new SyntheticService(SomeServiceId, "Carina One")],
+                WithoutDescription = heard == "tables that never completed",
+            }.ToBytes())),
+            settings: BacksOffTwice);
+        Store(harness);
+
+        await harness.Orchestrator.RunAsync(ScanScope.Over([Channel53]), Cancel);
+
+        CandidateChannel candidate = harness.Candidates.Candidates[0];
+
+        Assert.Equal(0, candidate.ConsecutiveFailures);
+        Assert.Equal(RotationState.Active, candidate.RotationState);
+    }
+
+    [Fact]
+    public async Task ASlotThatCarriesAnotherStreamThanItWasTunedForIsCountedAsAFailure()
+    {
+        var slot = TuningParameters.Bs(1, new TransportStreamId(SomeStreamId));
+        var harness = new ScanHarness(
+            new ScriptedDriverClient().Script(slot, ChannelScript.Carrying(SyntheticStream.Carrying(
+                SomeStreamId + 1,
+                new SyntheticService(SomeServiceId, "Carina One")).ToBytes())),
+            settings: BacksOffTwice);
+        var networkId = new NetworkId(SomeNetworkId);
+        var serviceId = new ServiceId(SomeServiceId);
+
+        harness.Services.Services.Add(
+            BroadcastService.Discover(networkId, serviceId, "Carina One", ServiceCategory.Television, At));
+        harness.Candidates.Candidates.Add(
+            CandidateChannel.Discover(CandidateChannelId.New(), networkId, serviceId, slot, At));
+
+        await harness.Orchestrator.RunAsync(ScanScope.Over([slot]), Cancel);
+
+        Assert.Equal(1, harness.Candidates.Candidates[0].ConsecutiveFailures);
+    }
+
+    [Fact]
     public async Task AChannelNoScanWalkedIsLeftWhereItWas()
     {
         ScanHarness harness = Failing();

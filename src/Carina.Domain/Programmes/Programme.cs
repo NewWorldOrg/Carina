@@ -175,6 +175,9 @@ public sealed class Programme
         int sounds = Kept(Sounds, broadcast.Sounds);
         VideoMode video = Kept(Video, broadcast.Video);
         AspectRatio aspect = Kept(Aspect, broadcast.Aspect);
+        bool detailOnly = broadcast.Source is ProgrammeSource.ScheduleExtended;
+        bool hasSubtitles = detailOnly ? HasSubtitles : broadcast.HasSubtitles;
+        ProgrammeSource source = detailOnly ? Source : broadcast.Source;
 
         if (TransportStreamId.Equals(broadcast.TransportStreamId)
             && StartsAt == startsAt
@@ -182,12 +185,12 @@ public sealed class Programme
             && Name == name
             && Summary == summary
             && IsShadow == broadcast.IsShadow
-            && HasSubtitles == broadcast.HasSubtitles
+            && HasSubtitles == hasSubtitles
             && Audio == audio
             && Sounds == sounds
             && Video == video
             && Aspect == aspect
-            && Source == broadcast.Source
+            && Source == source
             && Genres.SequenceEqual(genres)
             && Items.SequenceEqual(items)
             && Related.SequenceEqual(related))
@@ -204,12 +207,12 @@ public sealed class Programme
         Genres = genres;
         Items = items;
         Related = related;
-        HasSubtitles = broadcast.HasSubtitles;
+        HasSubtitles = hasSubtitles;
         Audio = audio;
         Sounds = sounds;
         Video = video;
         Aspect = aspect;
-        Source = broadcast.Source;
+        Source = source;
         UpdatedAt = at;
 
         return true;

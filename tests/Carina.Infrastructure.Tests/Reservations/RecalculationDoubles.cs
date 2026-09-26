@@ -83,7 +83,7 @@ internal sealed class WatchedProgrammes : IProgrammeRepository
         CancellationToken cancellationToken)
         => held.AbsorbAsync(broadcasts, heardWhole, at, cancellationToken);
 
-    public Task<IReadOnlyList<Programme>> ListEndedBeforeAsync(
+    public Task<IReadOnlyList<EndedProgramme>> ListEndedBeforeAsync(
         DateTime at,
         int rows,
         CancellationToken cancellationToken)
