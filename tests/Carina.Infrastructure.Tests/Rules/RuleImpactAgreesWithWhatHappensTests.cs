@@ -238,6 +238,7 @@ public sealed class RuleImpactAgreesWithWhatHappensTests
                 Reservations,
                 Outcomes,
                 Visits,
+                new HeldEpochs(),
                 Streams,
                 new ReservationSchedulingService(
                     Reservations,

@@ -133,17 +133,19 @@ public sealed class RuleApplicationServiceTests
     }
 
     [Fact]
-    public async Task AnEventNumberUsedAgainAWeekLaterGetsItsOwnReservation()
+    public async Task AnEventNumberUsedAgainAfterItsBroadcastWasRecordedGetsItsOwnReservation()
     {
         World world = World.Of();
-        world.Rules.Rules.Add(Written("keyword=hill"));
-        world.Guide(
-            Broadcast(Listed, 7, "hill walking", startsAt: Now.AddHours(2)),
-            Broadcast(Listed, 7, "hillside", startsAt: Now.AddDays(7)));
+        Rule rule = Written("keyword=hill");
+        world.Rules.Rules.Add(rule);
+        Programme recorded = Broadcast(Listed, 7, "hill walking", startsAt: Now.AddMinutes(-30));
+        world.Reservations.Standing(
+            Standing(recorded, ReservationState.Scheduled, rule.Id, startedAt: recorded.StartsAt));
+        world.Guide(Broadcast(Listed, 7, "hillside", startsAt: Now.AddDays(7)));
 
         RuleApplicationRun run = await world.Applying.EverythingAsync(Cancel);
 
-        Assert.Equal(2, run.Made.Count);
+        Assert.Equal(["hillside"], [.. run.Made.Select(reservation => reservation.SnapshotName)]);
         Assert.Equal(["hill walking", "hillside"], Named(world));
     }
 
@@ -294,6 +296,29 @@ public sealed class RuleApplicationServiceTests
 
         Assert.Equal(["river fishing"], [.. run.Withdrawn.Select(reservation => reservation.SnapshotName)]);
         Assert.Equal(["hill walking"], Named(world));
+    }
+
+    [Fact]
+    public async Task ASweepOverAGuideDiscardedSinceTheStreamWasLastCollectedTakesNothingOut()
+    {
+        World world = Vanished();
+        await DiscardedAsync(world, Now.AddMinutes(-30));
+
+        RuleApplicationRun run = await world.Applying.EverythingAsync(Cancel);
+
+        Assert.Empty(run.Withdrawn);
+        Assert.Equal(["hill walking"], Named(world));
+    }
+
+    [Fact]
+    public async Task ASweepAfterTheStreamWasCollectedAgainTakesOutWhatTheNewGuideNoLongerCarries()
+    {
+        World world = Vanished();
+        await DiscardedAsync(world, Now.AddHours(-2));
+
+        RuleApplicationRun run = await world.Applying.EverythingAsync(Cancel);
+
+        Assert.Equal(["hill walking"], [.. run.Withdrawn.Select(reservation => reservation.SnapshotName)]);
     }
 
     [Fact]
@@ -599,6 +624,15 @@ public sealed class RuleApplicationServiceTests
     private static string[] Named(World world)
         => [.. world.Reservations.Held.Select(reservation => reservation.SnapshotName).Order(StringComparer.Ordinal)];
 
+    private static async Task DiscardedAsync(World world, DateTime at)
+    {
+        CollectionEpoch epoch = await world.Epochs.ReadAsync(at, Cancel);
+
+        epoch.Advance(at);
+
+        await world.Epochs.SaveAsync(epoch, Cancel);
+    }
+
     private static World Vanished(VisitOutcome outcome = VisitOutcome.Complete)
     {
         World world = World.Of();
@@ -782,6 +816,7 @@ public sealed class RuleApplicationServiceTests
                 Reservations,
                 Outcomes,
                 Visits,
+                Epochs,
                 Streams,
                 new ReservationSchedulingService(
                     Reservations,
@@ -810,6 +845,8 @@ public sealed class RuleApplicationServiceTests
         public HeldReservations Reservations { get; }
 
         public HeldStreamVisits Visits { get; } = new();
+
+        public HeldEpochs Epochs { get; } = new();
 
         public CountedStreams Streams { get; }
 

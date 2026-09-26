@@ -153,6 +153,7 @@ public sealed class RuleApplyNowAnswersTheRunItAskedForTests
             services.AddSingleton<IRecordingRepository>(new NoRecordings());
             services.AddSingleton<IReservationOutcomeRepository>(Outcomes);
             services.AddSingleton<IStreamVisitRepository>(Visits);
+            services.AddSingleton<ICollectionEpochRepository>(new HeldEpochs());
             services.AddSingleton<IBroadcastStreamDirectory>(Streams);
             services.AddSingleton<IBroadcastServiceRepository>(Services);
             services.AddSingleton<ITunerCapacityDirectory>(Seating);

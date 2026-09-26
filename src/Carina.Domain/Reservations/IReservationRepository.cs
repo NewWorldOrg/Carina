@@ -33,6 +33,10 @@ public interface IReservationRepository
 
     Task<Reservation?> FindAsync(ReservationId id, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Finds the reservation of the broadcast: the one naming that start, or else the one of the same
+    /// event that is still waiting to be recorded, whatever start it names.
+    /// </summary>
     Task<Reservation?> FindByProgrammeAsync(ProgrammeRef programme, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<Reservation>> ListPendingAsync(ReservationWindow window, CancellationToken cancellationToken);

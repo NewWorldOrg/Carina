@@ -16,6 +16,11 @@ public sealed class CollectionEpoch
 
     public DateTime AdvancedAt { get; private set; }
 
+    /// <summary>
+    /// When the guide was last discarded as a whole, or <see langword="null"/> when it never was.
+    /// </summary>
+    public DateTime? GuideDiscardedAt => Generation > 1 ? AdvancedAt : null;
+
     public static CollectionEpoch Begin(DateTime at) => Rehydrate(TheOnlyRow, 1, at);
 
     public static CollectionEpoch Rehydrate(int id, int generation, DateTime advancedAt)

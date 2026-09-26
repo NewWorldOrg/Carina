@@ -130,13 +130,13 @@ public sealed class ProgramExtensionFollower(
             new DateTimeOffset(move.EndsAt, TimeSpan.Zero),
             cancellationToken);
 
-        if (answer.Outcome is not DriverCallOutcome.Unreachable)
-        {
-            asked.Answered(recording.Id, move.EndsAt);
-        }
-
         if (!answer.TryGetValue(out SessionSnapshot? session))
         {
+            if (answer.Outcome is not DriverCallOutcome.Unreachable)
+            {
+                asked.Answered(recording.Id, move.EndsAt);
+            }
+
             logger.LogWarning(
                 "Recording {Recording} runs past {Held:O} and the driver would not hold its tuner that long "
                 + "({Outcome}); the window it was promised stands and is what stops it.",
@@ -153,6 +153,8 @@ public sealed class ProgramExtensionFollower(
 
         if (granted <= recording.ExpectedWindowEnd)
         {
+            asked.Answered(recording.Id, move.EndsAt);
+
             logger.LogInformation(
                 "Recording {Recording} asked to run until {Asked:O} and the driver promised {Granted:O}, which is "
                 + "no later than the window it already holds.",
@@ -171,6 +173,8 @@ public sealed class ProgramExtensionFollower(
         }
 
         await recordings.SaveAsync(recording, cancellationToken);
+
+        asked.Answered(recording.Id, move.EndsAt);
 
         logger.LogInformation(
             "Recording {Recording} follows its programme to {Granted:O}{Undecided}.",

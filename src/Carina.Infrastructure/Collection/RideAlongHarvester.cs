@@ -1,7 +1,6 @@
 using System.Buffers;
 using System.Collections.Concurrent;
 
-using Carina.Broadcast.Tables;
 using Carina.Contracts;
 using Carina.Domain.Driver;
 using Carina.Domain.Programmes;
@@ -162,9 +161,9 @@ public sealed class RideAlongHarvester(
 
     private async Task SaveAsync(StreamHarvest harvest, SessionId sessionId, CancellationToken cancellationToken)
     {
-        IReadOnlyList<EventInformationTable> gathered = harvest.TakeWhatIsGathered();
+        Gathered gathered = harvest.TakeWhatIsGathered();
 
-        if (gathered.Count == 0)
+        if (gathered.Tables.Count == 0)
         {
             return;
         }
@@ -174,7 +173,7 @@ public sealed class RideAlongHarvester(
             await using AsyncServiceScope scope = scopes.CreateAsyncScope();
             ProgrammesWritten written = await scope.ServiceProvider
                 .GetRequiredService<ProgrammeWriter>()
-                .WriteAsync(gathered, harvest.Progress.HeardWhole(), cancellationToken);
+                .WriteAsync(gathered.Tables, gathered.HeardWhole, cancellationToken);
 
             logger.LogInformation(
                 "Riding along with {SessionId} added {Added} and updated {Updated} programme(s).",

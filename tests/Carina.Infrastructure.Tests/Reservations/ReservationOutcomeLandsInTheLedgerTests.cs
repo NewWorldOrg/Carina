@@ -259,6 +259,53 @@ public sealed class ReservationOutcomeLandsInTheLedgerTests(RepositoryDatabase d
         Assert.Equal(ReservationState.Missed, await StateOfAsync(followed.Id));
     }
 
+    [Fact]
+    public async Task AReservationChangedElsewhereMidPassCostsOnlyThatStageAndTheNextOneOnTheSameContextLandsBoth()
+    {
+        DateTime opens = LongBefore.AddHours(200);
+        Reservation changed = await LaidDownAsync(ReservationState.Scheduled, opens, opens.AddHours(1));
+        Reservation after = await LaidDownAsync(ReservationState.Scheduled, opens.AddHours(1), opens.AddHours(2));
+        DateTime at = opens.AddHours(3);
+
+        await using CarinaDbContext pass = database.Open();
+        MeddlingOutcomes meddling = new(
+            new ReservationOutcomeRepository(pass),
+            changed.Id,
+            async () =>
+            {
+                await using CarinaDbContext elsewhere = database.Open();
+                ReservationRepository repository = new(elsewhere);
+                Reservation found = (await repository.FindAsync(changed.Id, Cancel))!;
+                found.Reprioritise(new Priority(55));
+                await repository.SaveAllAsync([found], Cancel);
+            });
+
+        await Assert.ThrowsAsync<ReservationMovedMeanwhileException>(
+            () => RecordingOver(pass, meddling, at).RecordAsync(Cancel));
+
+        ReservationOutcomeRun next = await RecordingOver(pass, new ReservationOutcomeRepository(pass), at)
+            .RecordAsync(Cancel);
+
+        Assert.Contains(new ReservationOutcomeRecord(changed.Id, ReservationOutcomeKind.Missed), next.Recorded);
+        Assert.Contains(new ReservationOutcomeRecord(after.Id, ReservationOutcomeKind.Missed), next.Recorded);
+        Assert.Equal(ReservationState.Missed, await StateOfAsync(changed.Id));
+        Assert.Equal(ReservationState.Missed, await StateOfAsync(after.Id));
+    }
+
+    private static ReservationOutcomeService RecordingOver(
+        CarinaDbContext context,
+        IReservationOutcomeRepository outcomes,
+        DateTime at)
+        => new(
+            new ReservationRepository(context),
+            outcomes,
+            new ReservationRecordingContract(context),
+            new RecordingRepository(context),
+            new DatabaseAtomicWrite(context),
+            new ReservationOutcomeSettings { Grace = Grace },
+            new Carina.TestSupport.SilentEvents(),
+            new FixedClock(at));
+
     private async Task<ReservationOutcomeRun> RecordingAsync(DateTime at)
     {
         await using CarinaDbContext context = database.Open();
@@ -378,5 +425,37 @@ public sealed class ReservationOutcomeLandsInTheLedgerTests(RepositoryDatabase d
 
         await using var running = new NpgsqlCommand(sql, connection);
         await running.ExecuteNonQueryAsync(Cancel);
+    }
+
+    private sealed class MeddlingOutcomes(
+        IReservationOutcomeRepository outcomes,
+        ReservationId meddledWith,
+        Func<Task> meddle) : IReservationOutcomeRepository
+    {
+        private bool meddled;
+
+        public async Task AddAsync(ReservationOutcome outcome, CancellationToken cancellationToken)
+        {
+            await outcomes.AddAsync(outcome, cancellationToken);
+
+            if (!meddled && outcome.ReservationId.Equals(meddledWith))
+            {
+                meddled = true;
+                await meddle();
+            }
+        }
+
+        public Task<IReadOnlyList<ReservationOutcome>> ListAsync(OutcomeSpan span, CancellationToken cancellationToken)
+            => outcomes.ListAsync(span, cancellationToken);
+
+        public Task<PaginatedList<ReservationOutcome>> ListAsync(
+            ReservationOutcomeQuery query,
+            CancellationToken cancellationToken)
+            => outcomes.ListAsync(query, cancellationToken);
+
+        public Task<IReadOnlyList<ReservationOutcome>> ListForReservationAsync(
+            ReservationId reservationId,
+            CancellationToken cancellationToken)
+            => outcomes.ListForReservationAsync(reservationId, cancellationToken);
     }
 }

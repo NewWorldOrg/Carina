@@ -110,6 +110,42 @@ public sealed class RecordingRepositoryTests(RepositoryDatabase database)
         Assert.Empty(await repository.ListForReservationAsync(ReservationId.New(), Cancel));
     }
 
+    [Fact]
+    public async Task AWriteRefusedForARowThatMovedMeanwhileDoesNotRideAlongWithTheNextWrite()
+    {
+        Recording moved = Begin(4301, Airs, Airs.AddMinutes(30));
+        Recording next = Begin(4302, Airs, Airs.AddMinutes(30));
+
+        await using (CarinaDbContext writing = database.Open())
+        {
+            await new RecordingRepository(writing).AddAsync(moved, Cancel);
+        }
+
+        await using CarinaDbContext round = database.Open();
+        RecordingRepository repository = new(round);
+        Recording held = (await repository.FindAsync(moved.Id, Cancel))!;
+
+        await using (CarinaDbContext meanwhile = database.Open())
+        {
+            RecordingRepository other = new(meanwhile);
+            Recording landed = (await other.FindAsync(moved.Id, Cancel))!;
+            landed.Extend(Airs.AddMinutes(40));
+            await other.SaveAsync(landed, Cancel);
+        }
+
+        held.Extend(Airs.AddMinutes(50));
+
+        await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => repository.SaveAsync(held, Cancel));
+
+        await repository.AddAsync(next, Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        RecordingRepository read = new(reading);
+
+        Assert.Equal(Airs.AddMinutes(40), (await read.FindAsync(moved.Id, Cancel))?.ExpectedWindowEnd);
+        Assert.NotNull(await read.FindAsync(next.Id, Cancel));
+    }
+
     private async Task Clear()
     {
         await using CarinaDbContext context = database.Open();

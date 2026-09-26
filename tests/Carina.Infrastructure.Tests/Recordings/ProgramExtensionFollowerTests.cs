@@ -315,6 +315,22 @@ public sealed class ProgramExtensionFollowerTests
     }
 
     [Fact]
+    public async Task AnEndTheLedgerCouldNotWriteDownIsAskedForAgainOnTheNextTick()
+    {
+        HeldRecordings recordings = new() { RefusingToSave = new InvalidOperationException("moved meanwhile") };
+        Recording running = InFlight(Airs, Airs.AddMinutes(30));
+        recordings.Rows.Add(running);
+
+        RecordingDriver driver = new();
+        EndsAlreadyAsked asked = new();
+        HeldProgrammes guide = Announcing(Airs.AddMinutes(45));
+
+        Assert.Empty(await Tick(Follower(recordings, driver, guide, asked), running));
+        Assert.Single(driver.Extended);
+        Assert.False(asked.AlreadyPut(running.Id, Airs.AddMinutes(45)));
+    }
+
+    [Fact]
     public async Task ARecordingThatIsNoLongerRunningIsForgottenRatherThanRememberedForever()
     {
         var recordings = new HeldRecordings();

@@ -55,6 +55,72 @@ public sealed class ReservationRepositoryTests(RepositoryDatabase database)
     }
 
     [Fact]
+    public async Task AReservationStillAheadIsFoundForItsBroadcastAfterTheGuideMovedTheStart()
+    {
+        Reservation planned = ReservationFixtures.Planned();
+        await AddAsync(planned);
+
+        await using CarinaDbContext context = database.Open();
+        Reservation? found = await new ReservationRepository(context)
+            .FindByProgrammeAsync(Later(planned, minutes: 2), Cancel);
+
+        Assert.NotNull(found);
+        Assert.Equal(planned.Id, found.Id);
+    }
+
+    [Fact]
+    public async Task AReservationNoLongerAheadIsNotTakenForTheBroadcastAtAnotherStart()
+    {
+        Reservation cancelled = ReservationFixtures.Rehydrated(ReservationState.Cancelled);
+        Reservation recorded = ReservationFixtures.Planned();
+        await AddAsync(cancelled, recorded);
+        await ClaimAsync(recorded.Id, Now);
+
+        await using CarinaDbContext context = database.Open();
+        ReservationRepository repository = new(context);
+
+        Assert.Null(await repository.FindByProgrammeAsync(
+            Later(cancelled, minutes: 2),
+            Cancel));
+        Assert.Null(await repository.FindByProgrammeAsync(
+            Later(recorded, minutes: 2),
+            Cancel));
+    }
+
+    [Fact]
+    public async Task AWriteFromAReadingAnotherHandHasSinceChangedIsRefusedRatherThanWrittenOver()
+    {
+        Reservation planned = ReservationFixtures.Planned();
+        await AddAsync(planned);
+
+        await using CarinaDbContext stale = database.Open();
+        ReservationRepository staleRepository = new(stale);
+        Reservation held = (await staleRepository.FindAsync(planned.Id, Cancel))!;
+
+        await using (CarinaDbContext meanwhile = database.Open())
+        {
+            ReservationRepository repository = new(meanwhile);
+            Reservation changed = (await repository.FindAsync(planned.Id, Cancel))!;
+            changed.Reprioritise(new Priority(55));
+            await repository.SaveAllAsync([changed], Cancel);
+        }
+
+        held.Rewish(false);
+
+        await Assert.ThrowsAsync<ReservationMovedMeanwhileException>(
+            () => staleRepository.SaveAllAsync([held], Cancel));
+
+        Reservation? readAgain = await staleRepository.FindAsync(planned.Id, Cancel);
+
+        await using CarinaDbContext reading = database.Open();
+        Reservation? stored = await new ReservationRepository(reading).FindAsync(planned.Id, Cancel);
+
+        Assert.Equal(new Priority(55), stored?.Priority);
+        Assert.True(stored?.EncodeWhenRecorded);
+        Assert.Equal(new Priority(55), readAgain?.Priority);
+    }
+
+    [Fact]
     public async Task WhatIsPendingLeavesOutWhatWasCancelledOrMissed()
     {
         Reservation standing = ReservationFixtures.Planned();
@@ -212,4 +278,11 @@ public sealed class ReservationRepositoryTests(RepositoryDatabase database)
 
         await settling.ExecuteNonQueryAsync(Cancel);
     }
+
+    private static ProgrammeRef Later(Reservation reservation, int minutes)
+        => new(
+            reservation.NetworkId,
+            reservation.ServiceId,
+            reservation.EventId,
+            reservation.ProgrammeStartsAt.AddMinutes(minutes));
 }

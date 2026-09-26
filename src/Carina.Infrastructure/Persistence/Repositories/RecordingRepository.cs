@@ -45,6 +45,15 @@ public sealed class RecordingRepository(CarinaDbContext context) : IRecordingRep
     {
         context.Update(recording);
 
-        await context.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            context.Entry(recording).State = EntityState.Detached;
+
+            throw;
+        }
     }
 }

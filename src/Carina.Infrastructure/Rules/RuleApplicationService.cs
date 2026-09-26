@@ -49,6 +49,7 @@ public sealed class RuleApplicationService(
     IReservationRepository reservations,
     IReservationOutcomeRepository outcomes,
     IStreamVisitRepository visits,
+    ICollectionEpochRepository epochs,
     IBroadcastStreamDirectory directory,
     ReservationSchedulingService scheduling,
     RuleMatcher matcher,
@@ -69,7 +70,10 @@ public sealed class RuleApplicationService(
     {
         ArgumentNullException.ThrowIfNull(ruleId);
 
-        return await DroppedAsync(ruleId, Moment(), await GuardAsync(cancellationToken), cancellationToken);
+        DateTime at = Moment();
+        WithdrawalGuard guard = await GuardAsync(cancellationToken);
+
+        return await OnceMoreIfMovedAsync(() => DroppedAsync(ruleId, at, guard, cancellationToken));
     }
 
     public async Task<RuleRetirement?> RetiredAsync(RuleId ruleId, CancellationToken cancellationToken)
@@ -83,9 +87,10 @@ public sealed class RuleApplicationService(
 
         DateTime at = Moment();
         WithdrawalGuard guard = await GuardAsync(cancellationToken);
-        IReadOnlyList<Reservation> withdrawn = await DroppedAsync(ruleId, at, guard, cancellationToken);
+        IReadOnlyList<Reservation> withdrawn =
+            await OnceMoreIfMovedAsync(() => DroppedAsync(ruleId, at, guard, cancellationToken));
 
-        IReadOnlyList<Reservation> swept = await write.AllOrNothingAsync(
+        IReadOnlyList<Reservation> swept = await OnceMoreIfMovedAsync(() => write.AllOrNothingAsync(
             async token =>
             {
                 IReadOnlyList<Reservation> standing = await reservations.ListForRuleAsync(ruleId, token);
@@ -112,7 +117,7 @@ public sealed class RuleApplicationService(
 
                 return left;
             },
-            cancellationToken);
+            cancellationToken));
 
         if (swept.Count > 0)
         {
@@ -172,10 +177,11 @@ public sealed class RuleApplicationService(
 
         WithdrawalGuard guard = await GuardAsync(cancellationToken);
         IReadOnlyList<Reservation> held = await reservations.ListForRuleAsync(draft.Id, cancellationToken);
+        HashSet<ProgrammeKey> standing = StandingFor(taken, held);
         Reservation[] withdrawing =
         [
             .. held
-                .Where(reservation => !taken.Contains(Naming(reservation)))
+                .Where(reservation => !standing.Contains(Naming(reservation)))
                 .Where(reservation => guard.Lets(reservation, RuleWithdrawal.WhileTheRuleStands, at)),
         ];
         Reservation[] sweeping =
@@ -208,6 +214,22 @@ public sealed class RuleApplicationService(
         await WithdrawAsync(leaving, cancellationToken);
 
         return leaving;
+    }
+
+    /// <summary>
+    /// Runs <paramref name="writing"/>, and runs it once more when a reservation it wrote had changed
+    /// in the store since it was read.
+    /// </summary>
+    private static async Task<T> OnceMoreIfMovedAsync<T>(Func<Task<T>> writing)
+    {
+        try
+        {
+            return await writing();
+        }
+        catch (ReservationMovedMeanwhileException)
+        {
+            return await writing();
+        }
     }
 
     private async Task<RuleApplicationRun> ApplyAsync(
@@ -346,11 +368,12 @@ public sealed class RuleApplicationService(
         WithdrawalGuard guard = await GuardAsync(cancellationToken);
         var faulted = run.Faulted.Select(fault => fault.Rule.Id).ToHashSet();
         var standing = enabled.Where(rule => rule.Enabled).Select(rule => rule.Id).ToHashSet();
-        var kept = run.Matches.Select(match => Naming(match.Programme)).ToHashSet();
+        IReadOnlyList<Reservation> pending = await reservations.ListPendingAsync(Everything(at), cancellationToken);
+        HashSet<ProgrammeKey> kept = StandingFor(run.Matches.Select(match => Naming(match.Programme)), pending);
         var seen = read.Select(Naming).ToHashSet();
         var leaving = new List<Reservation>();
 
-        foreach (Reservation reservation in await reservations.ListPendingAsync(Everything(at), cancellationToken))
+        foreach (Reservation reservation in pending)
         {
             RuleId? ruleId = reservation.RuleId;
 
@@ -410,9 +433,16 @@ public sealed class RuleApplicationService(
         }
 
         Dictionary<ServiceKey, VisitOutcome> settled = [];
+        CollectionEpoch epoch = await epochs.ReadAsync(Moment(), cancellationToken);
 
         foreach (StreamVisit visit in await visits.ListAsync(cancellationToken))
         {
+            if (epoch.GuideDiscardedAt is { } discarded
+                && (visit.LastCompletedAt is not { } completed || completed <= discarded))
+            {
+                continue;
+            }
+
             settled[new ServiceKey(visit.NetworkId.Value, visit.TransportStreamId.Value)] = visit.Outcome;
         }
 
@@ -501,6 +531,32 @@ public sealed class RuleApplicationService(
             reservation.EventId.Value,
             reservation.ProgrammeStartsAt);
 
+    /// <summary>
+    /// Names the reservations that stand for the programmes taken: the one naming a programme's start,
+    /// or, when none does, those of the same broadcast.
+    /// </summary>
+    private static HashSet<ProgrammeKey> StandingFor(IEnumerable<ProgrammeKey> taken, IEnumerable<Reservation> held)
+    {
+        ILookup<BroadcastKey, ProgrammeKey> holding = held.Select(Naming).Distinct().ToLookup(key => key.Broadcast);
+        HashSet<ProgrammeKey> standing = [];
+
+        foreach (ProgrammeKey programme in taken)
+        {
+            IEnumerable<ProgrammeKey> ofTheBroadcast = holding[programme.Broadcast];
+
+            if (ofTheBroadcast.Contains(programme))
+            {
+                standing.Add(programme);
+
+                continue;
+            }
+
+            standing.UnionWith(ofTheBroadcast);
+        }
+
+        return standing;
+    }
+
     private DateTime Moment() => clock.GetUtcNow().UtcDateTime;
 
     private readonly record struct Making(
@@ -508,7 +564,12 @@ public sealed class RuleApplicationService(
         IReadOnlyList<Reservation> Refused,
         IReadOnlyList<Reservation> Revived);
 
-    private readonly record struct ProgrammeKey(int NetworkId, int ServiceId, int EventId, DateTime StartsAt);
+    private readonly record struct ProgrammeKey(int NetworkId, int ServiceId, int EventId, DateTime StartsAt)
+    {
+        public BroadcastKey Broadcast => new(NetworkId, ServiceId, EventId);
+    }
+
+    private readonly record struct BroadcastKey(int NetworkId, int ServiceId, int EventId);
 
     private readonly record struct ServiceKey(int NetworkId, int Carried);
 

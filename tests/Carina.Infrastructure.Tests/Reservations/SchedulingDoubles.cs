@@ -149,6 +149,8 @@ internal sealed class HeldReservations(IAtomicWrite? write = null, HeldOutcomes?
 
     public Exception? RefuseToAdd { get; set; }
 
+    public Exception? RefuseToSave { get; set; }
+
     public List<Reservation> ArrivesAfterTheFirstList { get; } = [];
 
     public int Lists { get; private set; }
@@ -165,7 +167,13 @@ internal sealed class HeldReservations(IAtomicWrite? write = null, HeldOutcomes?
         => Task.FromResult(held.FirstOrDefault(reservation => reservation.Id.Equals(id)));
 
     public Task<Reservation?> FindByProgrammeAsync(ProgrammeRef programme, CancellationToken cancellationToken)
-        => Task.FromResult(held.FirstOrDefault(reservation => reservation.Programme.Equals(programme)));
+        => Task.FromResult(
+            held.FirstOrDefault(reservation => reservation.Programme.Equals(programme))
+            ?? held.FirstOrDefault(reservation => reservation.Programme.Id.Equals(programme.Id)
+                                                  && reservation.StartedAt is null
+                                                  && reservation.RecordingOutcome is null
+                                                  && reservation.State
+                                                      is ReservationState.Scheduled or ReservationState.Conflict));
 
     public Task<IReadOnlyList<Reservation>> ListPendingAsync(
         ReservationWindow window,
@@ -274,6 +282,11 @@ internal sealed class HeldReservations(IAtomicWrite? write = null, HeldOutcomes?
 
     public Task SaveAllAsync(IReadOnlyList<Reservation> reservations, CancellationToken cancellationToken)
     {
+        if (RefuseToSave is { } refusal)
+        {
+            throw refusal;
+        }
+
         foreach (Reservation reservation in reservations)
         {
             Note($"save {reservation.Id.Value}");
