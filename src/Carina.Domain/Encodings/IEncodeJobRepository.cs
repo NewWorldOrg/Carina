@@ -79,6 +79,13 @@ public interface IEncodeJobRepository
     /// </summary>
     Task SaveAsync(EncodeJob job, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Writes a job that has ended over its row, from a hand that did not read that row, when the
+    /// ledger still holds it as running on the same attempt. The answer is false when the row has
+    /// moved on, and the ledger's word then stands.
+    /// </summary>
+    Task<bool> WriteTheEndingAsync(EncodeJob job, CancellationToken cancellationToken);
+
     Task<PaginatedList<EncodeJob>> ListAsync(EncodeJobQuery query, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<EncodeJob>> ListForRecordingAsync(RecordingId recordingId, CancellationToken cancellationToken);

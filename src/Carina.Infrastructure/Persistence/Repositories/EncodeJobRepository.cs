@@ -44,6 +44,48 @@ public sealed class EncodeJobRepository(CarinaDbContext context) : IEncodeJobRep
         }
     }
 
+    public async Task<bool> WriteTheEndingAsync(EncodeJob job, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(job);
+
+        if (!job.HasEnded)
+        {
+            throw new InvalidOperationException($"Only a job that has ended has an ending to write, and this one stands at {job.Status}.");
+        }
+
+        var held = await context.Set<EncodeJob>()
+            .AsNoTracking()
+            .Where(row => row.Id == job.Id)
+            .Select(row => new
+            {
+                row.Status,
+                row.Attempt,
+                Version = EF.Property<uint>(row, EncodeJobConfiguration.ConcurrencyToken),
+            })
+            .SingleOrDefaultAsync(cancellationToken);
+
+        if (held is null || held.Status is not EncodeJobStatus.Running || held.Attempt != job.Attempt)
+        {
+            return false;
+        }
+
+        EntityEntry<EncodeJob> entry = context.Update(job);
+        entry.Property<uint>(EncodeJobConfiguration.ConcurrencyToken).OriginalValue = held.Version;
+
+        try
+        {
+            await context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            entry.State = EntityState.Detached;
+
+            return false;
+        }
+
+        return true;
+    }
+
     public async Task<PaginatedList<EncodeJob>> ListAsync(EncodeJobQuery query, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);

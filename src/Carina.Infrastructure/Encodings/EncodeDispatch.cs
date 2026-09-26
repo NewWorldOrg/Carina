@@ -30,6 +30,8 @@ public sealed class EncodeDispatch(
     TimeProvider clock,
     ILogger<EncodeDispatch> logger) : BackgroundService
 {
+    private EncodeJob? unwritten;
+
     public async Task<EncodeRestartReport> RecoverAsync(CancellationToken cancellationToken)
     {
         await using AsyncServiceScope scope = scopes.CreateAsyncScope();
@@ -60,6 +62,12 @@ public sealed class EncodeDispatch(
 
     private async Task<EncodeLook> LookedAsync(CancellationToken cancellationToken)
     {
+        if (unwritten is not null)
+        {
+            await WriteTheEndingAsync(cancellationToken);
+            events.Signal(AppEventName.EncodeJobs);
+        }
+
         if (await turn.YieldsToAViewerAsync(cancellationToken))
         {
             return new EncodeLook(EncodeClaimStanding.AViewerHoldsTheCard, null, null);
@@ -104,7 +112,9 @@ public sealed class EncodeDispatch(
 
             if (job.Status is not EncodeJobStatus.Running)
             {
-                return new EncodeLook(claim.Standing, job.Id, job.Status);
+                unwritten = job;
+
+                return new EncodeLook(claim.Standing, job.Id, await WriteTheEndingAsync(cancellationToken));
             }
 
             EncodeRecovery recovery = job.Recover(settings.MostAttempts, clock.GetUtcNow().UtcDateTime);
@@ -119,6 +129,41 @@ public sealed class EncodeDispatch(
 
             return new EncodeLook(claim.Standing, job.Id, job.Status);
         }
+    }
+
+    /// <summary>
+    /// Writes the ending a run reached before it threw, which may never have reached the ledger: a
+    /// row left running would hold the queue shut until the next start. The job is kept until the
+    /// ledger has answered, so a write that fails is made again at the next look, before anything
+    /// else is claimed. A row that has moved on meanwhile is read again and its word stands.
+    /// </summary>
+    private async Task<EncodeJobStatus?> WriteTheEndingAsync(CancellationToken cancellationToken)
+    {
+        EncodeJob job = unwritten ?? throw new InvalidOperationException("There is no ending waiting to be written.");
+        bool written;
+
+        await using (AsyncServiceScope scope = scopes.CreateAsyncScope())
+        {
+            written = await scope.ServiceProvider.GetRequiredService<IEncodeJobRepository>().WriteTheEndingAsync(job, cancellationToken);
+        }
+
+        unwritten = null;
+
+        if (!written)
+        {
+            return await SweptAsync(job.Id, cancellationToken);
+        }
+
+        logger.LogWarning(
+            "Job {Job} ended {Status} on attempt {Attempt} and the ledger had not taken it; it is written now.",
+            job.Id.Wire,
+            job.Status,
+            job.Attempt);
+
+        await using AsyncServiceScope sweeping = scopes.CreateAsyncScope();
+        await sweeping.ServiceProvider.GetRequiredService<EncodeScratchCleaner>().ClearAsync(job, cancellationToken);
+
+        return job.Status;
     }
 
     /// <summary>
