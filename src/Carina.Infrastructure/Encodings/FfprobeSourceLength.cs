@@ -8,8 +8,7 @@ namespace Carina.Infrastructure.Encodings;
 
 /// <summary>
 /// Reads how long a source is by asking ffprobe for one key and reading that key back out of the
-/// answer. ffprobe complains about a broadcast recording all the way through and still exits 0,
-/// measured on 2026-09-05, so what it said on the error stream decides nothing here.
+/// answer. What ffprobe says on the error stream is ignored.
 /// </summary>
 public sealed class FfprobeSourceLength(MachineSettings settings, TimeProvider clock) : ISourceLengthReader
 {

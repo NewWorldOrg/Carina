@@ -310,11 +310,9 @@ public sealed class RuleApplicationService(
     }
 
     /// <summary>
-    /// A broadcaster that drops a programme from the guide and puts it back at the same hour leaves
-    /// a cancelled reservation sitting on the one key that names that broadcast, and a rule taking
-    /// the programme again cannot write a second row on top of it. So the row that is already there
-    /// is the one brought back. Only a reservation a rule made and the guide took out comes back
-    /// this way: a person who cancels means it, and nothing here overrules that.
+    /// Brings back the cancelled reservation already standing on the key of a broadcast a rule takes
+    /// again. Only a reservation a rule made and the guide took out comes back; one a person cancelled
+    /// does not.
     /// </summary>
     private async Task<bool> RevivedAsync(
         Reservation already,

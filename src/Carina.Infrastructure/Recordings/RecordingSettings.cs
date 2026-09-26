@@ -97,9 +97,8 @@ public sealed record RecordingSettings
     public OutputRoot OutputRoot { get; }
 
     /// <summary>
-    /// How far ahead of now a recording is promised while the programme it is recording announces
-    /// no end. It is the recording's own horizon and not the one the allocation rolls a tuner seat
-    /// on: the seat has to outlast the window it is held for, so this is the shorter of the two.
+    /// How far ahead of now a recording is promised while the programme it is recording announces no
+    /// end. It is shorter than the horizon the allocation holds a tuner seat on.
     /// </summary>
     public TimeSpan UndecidedEndAhead { get; }
 }

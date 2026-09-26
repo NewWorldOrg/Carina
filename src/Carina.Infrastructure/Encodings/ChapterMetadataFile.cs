@@ -6,14 +6,9 @@ using Carina.Domain.Encodings;
 namespace Carina.Infrastructure.Encodings;
 
 /// <summary>
-/// The chapters of one artefact written out in the one shape ffmpeg reads chapters from. Every
-/// moment goes down in whole milliseconds on the clock the encode's own seek is measured against,
-/// which <see cref="ChapterClock.InTheMetadata"/> is where the artefact's clock is turned into.
-/// <para>
-/// A chapter is titled from two constants and from nothing else: what a broadcaster wrote never
-/// reaches a file this domain writes, and a title taken from a programme would put
-/// it in the artefact for anyone who opens it.
-/// </para>
+/// Writes the chapters of one artefact in the shape ffmpeg reads chapters from. Every moment goes
+/// down in whole milliseconds on the clock <see cref="ChapterClock.InTheMetadata"/> puts it on, and
+/// every chapter is titled from two constants.
 /// </summary>
 public static class ChapterMetadataFile
 {

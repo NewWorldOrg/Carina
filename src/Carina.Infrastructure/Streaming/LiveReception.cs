@@ -11,12 +11,8 @@ namespace Carina.Infrastructure.Streaming;
 /// One reading of one channel off the tuner, shared by every profile being made from it.
 /// </summary>
 /// <remarks>
-/// A viewer changing quality is a new session on a new key, and the key carries the profile, so
-/// for a moment two sessions want the same channel. Asked for the same channel twice, the driver
-/// gives the second one a seat on the first one's stream, and cuts it when the first one ends —
-/// which is exactly what changing quality does to the session left behind. The profile decides
-/// how the picture is encoded and nothing about how it is received, so the reception is held per
-/// channel and the transcoders hang off it.
+/// The reception is held per channel and the transcoders hang off it, so a viewer changing quality
+/// on a new session key reuses the same reading.
 /// </remarks>
 internal sealed class LiveReception
 {
@@ -238,11 +234,6 @@ internal sealed class LiveReception
     /// <summary>
     /// Says, for as long as this reading is attached to, that what it is reading is still being read.
     /// </summary>
-    /// <remarks>
-    /// The reading is let go of within one linger of the last viewer leaving, so a supply that is
-    /// still being asked for is one somebody is still behind, and one that stops being asked for is
-    /// let go of by the driver a window later even if this app never says so.
-    /// </remarks>
     private async Task HoldOpenAsync(ILiveTransportStream held)
     {
         try

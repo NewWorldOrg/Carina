@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Carina.Infrastructure.Persistence.Repositories;
 
 /// <summary>
-/// The escape is what keeps a title's own <c>%</c> or <c>_</c> from being read as a wildcard.
+/// Escapes a title's own <c>%</c> and <c>_</c> so that a search does not read them as wildcards.
 /// </summary>
 internal static class SearchableText
 {

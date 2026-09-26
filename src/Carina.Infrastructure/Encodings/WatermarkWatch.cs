@@ -4,11 +4,9 @@ namespace Carina.Infrastructure.Encodings;
 
 /// <summary>
 /// What the run that watches the picture for a station's watermark saw, one picture at a time and
-/// holding none of them: each picture is handed to the learner, and to the mark learned ahead when
-/// there is one, and the moment each was shown at is read off the line the filter that describes it
-/// wrote. The pictures and the lines arrive on separate streams in the same order, one line for each
-/// picture, so the n-th moment belongs to the n-th picture; whatever one stream got further with at
-/// the end of a run is left unmatched rather than guessed at.
+/// holding none of them. Each picture is handed to the learner and to the mark learned ahead, and
+/// is paired in order with the moment read off the filter's line for it; whatever one stream got
+/// further with at the end of a run is left unmatched.
 /// </summary>
 public sealed class WatermarkWatch(WatermarkMask? learnedAhead)
 {

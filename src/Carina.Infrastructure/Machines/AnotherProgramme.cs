@@ -19,11 +19,9 @@ public sealed record ProgrammeSaid(int? ExitCode, ProgrammeFault? Fault, string 
 }
 
 /// <summary>
-/// A programme that was asked to start: the process when it did, and how the operating system
-/// knows it, so that whoever started it can write that down; otherwise the reason it could not be
-/// started on this machine, with any path on it already taken out. A programme that started and
-/// had already exited by the time it was looked at has a process and no identity: the kernel's
-/// record of it went with it, and nothing of it is left to write down or to stop.
+/// A programme that was asked to start: the process and how the operating system knows it when it
+/// started, and otherwise the reason it could not be started, with any path taken out. A programme
+/// that had already exited when it was looked at has a process and no identity.
 /// </summary>
 public sealed record ProgrammeStart(Process? Process, RunningProgramme? Began, string Complained)
 {
@@ -31,11 +29,9 @@ public sealed record ProgrammeStart(Process? Process, RunningProgramme? Began, s
 }
 
 /// <summary>
-/// How this application starts another programme: the arguments go over as an array, no shell sees
-/// them, and the environment is built here rather than inherited, so nothing this
-/// process was handed — a database password among it — reaches the one it starts.
-/// A programme started yielding runs at the lowest scheduling priority from its first instruction,
-/// under <c>nice</c>, so that whatever else this machine is doing is served first.
+/// Starts another programme. The arguments go over as an array with no shell, and the environment
+/// is built here rather than inherited. A programme started yielding runs under <c>nice</c> at the
+/// lowest scheduling priority.
 /// </summary>
 public static class AnotherProgramme
 {
@@ -159,9 +155,8 @@ public static class AnotherProgramme
     }
 
     /// <summary>
-    /// Whether the programme would be found the way the process would find it: as the path it is,
-    /// or by name in the one search path a started programme is given. Asked before wrapping a
-    /// programme in <c>nice</c>, because <c>nice</c> starts either way and only then finds nothing.
+    /// Whether the programme would be found the way the process would find it: as the path it is, or by
+    /// name in the search path a started programme is given.
     /// </summary>
     public static bool IsOnThisMachine(string programme)
     {

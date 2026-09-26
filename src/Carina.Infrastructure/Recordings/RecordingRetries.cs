@@ -10,9 +10,8 @@ namespace Carina.Infrastructure.Recordings;
 /// <summary>
 /// The ledger's half of trying a failed start again. It reads what the ledger holds about one
 /// reservation's starts, sets that beside the guide, the disk and the channel's rotation, asks the
-/// decision, and writes down every attempt and the giving up. It starts nothing: an attempt is the
-/// tick's ordinary start, through the same claim, the same precheck and the same request to the
-/// driver as the first one, so it can only have a tuner the first one could have had.
+/// decision, and writes down every attempt and the giving up. It starts nothing; an attempt is the
+/// tick's ordinary start.
 /// </summary>
 public sealed class RecordingRetries(
     IReservationRepository reservations,
@@ -129,8 +128,7 @@ public sealed class RecordingRetries(
     }
 
     /// <summary>
-    /// A guide that cannot be read says nothing about the programme, which is what a guide that has
-    /// never heard of it says too, and the window the reservation promised is then what is left to go on.
+    /// What the guide says about the programme. A guide that cannot be read says nothing about it.
     /// </summary>
     private async Task<GuideStanding> GuideSaysAsync(RecordingTick due, CancellationToken cancellationToken)
     {
@@ -152,9 +150,7 @@ public sealed class RecordingRetries(
     }
 
     /// <summary>
-    /// A disk that cannot be weighed is not a disk found to have no room. The attempt goes ahead, weighs
-    /// it again the way every start does, and a start that cannot weigh it is abandoned and written down
-    /// as an attempt nothing answered.
+    /// Whether the disk was found to have no room. A disk that cannot be weighed is not.
     /// </summary>
     private async Task<bool> FoundNoRoomAsync(
         RecordingTick due,

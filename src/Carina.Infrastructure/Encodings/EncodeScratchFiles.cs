@@ -3,8 +3,8 @@ using Carina.Domain.Encodings;
 namespace Carina.Infrastructure.Encodings;
 
 /// <summary>
-/// The one way a job gets a path to write a scratch file to: the ledger is written first, and the
-/// path comes back only once it is. A root this process cannot place gives no path.
+/// Gives a job a path to write a scratch file to, once the ledger is written. A root this process
+/// cannot place gives no path.
 /// </summary>
 public sealed class EncodeScratchFiles(IEncodeScratchLedger ledger, EncodePlaces places, TimeProvider clock)
 {

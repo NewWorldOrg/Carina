@@ -11,22 +11,16 @@ namespace Carina.Infrastructure.Recordings;
 public sealed record RecordingFollowed(RecordingId Id, DateTime EndsAt, bool EndUndecided);
 
 /// <summary>
-/// Keeps a recording that is already running on the programme it is recording. The guide is read
-/// through the port that only reads it, so nothing here parses a section or writes a programme
-/// row: what the EPG heard on present/following is already in the row it keeps, and this is a
-/// reader of that row.
-///
-/// The driver is asked first and the ledger is written second, and the ledger is written with the
-/// time the driver actually promised rather than the time that was asked for. The driver holds
-/// ends to limits of its own, so a window written from the asking rather than the answer would be
-/// a promise nothing made. An end the driver has already answered is not put to it again until the
-/// guide announces a later one, so an answer that grants nothing is asked for once and not once
-/// per tick.
-///
-/// One recording failing to be followed says nothing about the next, so each is followed inside
-/// its own guard: an unreadable guide row or a driver that throws leaves that recording on the
-/// window it already holds and the rest of the round untouched.
+/// Keeps a recording that is already running on the programme it is recording, reading the guide
+/// through its read-only port.
 /// </summary>
+/// <remarks>
+/// The driver is asked first and the ledger is written second, with the end the driver actually
+/// granted. An end the driver has already answered is not put to it again until the guide announces
+/// a later one. Each recording is followed inside its own guard: an unreadable guide row or a driver
+/// that throws leaves that recording on the window it already holds and the rest of the round
+/// untouched.
+/// </remarks>
 public sealed class ProgramExtensionFollower(
     IRecordingRepository recordings,
     IAnnouncedProgrammes programmes,

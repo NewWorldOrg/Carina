@@ -21,9 +21,7 @@ public static class SessionRefusalReading
         => Named(session?.FailureTitle);
 
     /// <summary>
-    /// A stream the driver ended because the disk it writes to had no room left. Opening the
-    /// recording again lands it on the same full disk, so every side that reads a session has to
-    /// tell this ending apart from the ones a stream is put back together after.
+    /// Whether the driver ended the stream because the disk it writes to had no room left.
     /// </summary>
     public static bool FilledTheDisk(SessionSnapshot? session)
         => session is { StopReason: SessionStopReason.RecordingFailed, FailureTitle: SessionRefusalTitles.DiskFull };

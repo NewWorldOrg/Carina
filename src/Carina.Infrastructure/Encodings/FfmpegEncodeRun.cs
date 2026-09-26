@@ -20,17 +20,16 @@ public sealed record EncodeRunOutcome(int? ExitCode, EncodeRunFault? Fault, stri
 }
 
 /// <summary>
-/// One run of the encoder for one job. The programme is started yielding, and who it is — its id
-/// and when it began — is handed to the caller before a line of its progress is read, so the
-/// ledger knows the programme before the programme has done anything; a caller that cannot write
-/// that down stops the programme rather than run it unrecorded; one already gone by
-/// then is not handed over, there being nothing left of it to stop. Progress is read as
-/// it comes and handed on block by block. A run that makes no headway for longer than it is
-/// allowed is stopped and said to have stalled — reporting the same place again is not headway —
-/// and a run cut short by the caller is stopped and left for the caller to deal with, as is one
-/// whose progress the caller can no longer write down. What was said on the error stream is kept
-/// as a note with the paths taken out.
+/// One run of the encoder for one job.
 /// </summary>
+/// <remarks>
+/// The programme is started yielding, and its id and start are handed to the caller before its
+/// progress is read; a caller that cannot write them down stops the programme, and one already gone
+/// by then is not handed over. Progress is read as it comes and handed on block by block. A run that
+/// makes no headway for longer than allowed is stopped as stalled, and a run cut short by the caller,
+/// or whose progress the caller can no longer write down, is stopped and left to the caller. What
+/// was said on the error stream is kept as a note with the paths taken out.
+/// </remarks>
 public static class FfmpegEncodeRun
 {
     public static async Task<EncodeRunOutcome> RunAsync(

@@ -3,8 +3,7 @@ using System.Linq.Expressions;
 namespace Carina.Infrastructure.Persistence.Repositories;
 
 /// <summary>
-/// Joins one predicate per asked-for value into a single <c>OR</c> the store can read, so a list of
-/// channels or standings becomes one <c>WHERE</c> rather than a query per value.
+/// Joins one predicate per asked-for value into a single <c>OR</c> the store can translate.
 /// </summary>
 internal static class AnyOf
 {
