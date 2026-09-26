@@ -33,7 +33,7 @@ public sealed class LocalAccountService(
     {
         ArgumentNullException.ThrowIfNull(attempt);
 
-        if (throttle.RefusesUntil(attempt.Caller) is { } until)
+        if (throttle.TakeTry(attempt.Caller) is { } until)
         {
             return ServiceResult<LoginOutcome>.Success(
                 LoginOutcome.HeldOff(until, sessionPolicy.AbsoluteLifetime));
@@ -43,8 +43,6 @@ public sealed class LocalAccountService(
 
         if (!Admits(account, attempt.Username, attempt.Password))
         {
-            throttle.Failed(attempt.Caller);
-
             return ServiceResult<LoginOutcome>.Success(LoginOutcome.Refused(sessionPolicy.AbsoluteLifetime));
         }
 
