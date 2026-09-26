@@ -78,6 +78,22 @@ public sealed class DeleteRecordingEndpointTests
     }
 
     [Fact]
+    public async Task AnEncodeQueuedWhileTheFileWasBeingTakenAwayKeepsTheRowAndItsEncodes()
+    {
+        await using RecordingFeature feature = new();
+        Recording held = Ended(feature);
+        feature.Encodes.UnderWayWhenAsked = () => feature.Eraser.Asked.Count > 0;
+
+        (HttpStatusCode status, JsonElement body) = await feature.DeleteAsync($"/api/recordings/{held.Id.Wire}");
+
+        Assert.Equal(HttpStatusCode.Conflict, status);
+        Assert.Equal("beingEncoded", body.GetProperty("data").GetProperty("refusal").GetString());
+        Assert.Equal([held.Id], feature.Eraser.Asked);
+        Assert.Empty(feature.Encodes.Asked);
+        Assert.Single(feature.Recordings.Recordings);
+    }
+
+    [Fact]
     public async Task WhatItsEncodesLeftLeavesTheDiskWhileTheRowIsStillThereAndIsCounted()
     {
         await using RecordingFeature feature = new();

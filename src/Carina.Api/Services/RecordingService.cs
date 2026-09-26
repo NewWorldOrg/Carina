@@ -246,6 +246,14 @@ public sealed class RecordingService(
 
             if (erasure.EverythingIsGone)
             {
+                if (await encodes.AnyUnderWayAsync(id, asking.Token))
+                {
+                    return ServiceResult<RecordingDiscarded, RecordingFailure>.Failure(
+                        $"Recording {id.Wire} is off the disk, and an encode of it was queued while it was being "
+                        + "taken away, so its row and its encodes stay until that encode has ended.",
+                        RecordingFailure.BeingEncoded);
+                }
+
                 erasure = AndThen(erasure, await encodes.EraseAsync(id, asking.Token), id);
             }
         }

@@ -183,6 +183,8 @@ internal sealed class HeldRecordingEncodes : IRecordingEncodes
 {
     public bool UnderWay { get; set; }
 
+    public Func<bool>? UnderWayWhenAsked { get; set; }
+
     public EncodesErased Answer { get; set; } = new(0, []);
 
     public Action? WhenErasing { get; set; }
@@ -190,7 +192,7 @@ internal sealed class HeldRecordingEncodes : IRecordingEncodes
     public List<RecordingId> Asked { get; } = [];
 
     public Task<bool> AnyUnderWayAsync(RecordingId recordingId, CancellationToken cancellationToken)
-        => Task.FromResult(UnderWay);
+        => Task.FromResult(UnderWayWhenAsked?.Invoke() ?? UnderWay);
 
     public Task<EncodesErased> EraseAsync(RecordingId recordingId, CancellationToken cancellationToken)
     {
