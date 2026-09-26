@@ -227,8 +227,10 @@ internal sealed class LiveReception
             stream = bytes;
         }
 
-        Holding = HoldOpenAsync(bytes);
-        Life = CarryAsync(bytes);
+        Task holding = HoldOpenAsync(bytes);
+
+        Holding = holding;
+        Life = CarryAsync(bytes, holding);
 
         return opened;
     }
@@ -247,7 +249,7 @@ internal sealed class LiveReception
         {
             while (true)
             {
-                await Task.Delay(settings.BetweenHolds, clock, stopping.Token);
+                await BetweenHoldsAsync();
                 await held.HoldOpenUntilAsync(clock.GetUtcNow() + settings.HeldAhead, stopping.Token);
             }
         }
@@ -256,7 +258,31 @@ internal sealed class LiveReception
         }
     }
 
-    private async Task CarryAsync(ILiveTransportStream from)
+    /// <summary>
+    /// Waits one interval between holds on a deadline of its own, which is let go of before the wait
+    /// ends, whether it ran out or was called off.
+    /// </summary>
+    private async Task BetweenHoldsAsync()
+    {
+        using CancellationTokenSource interval = new(settings.BetweenHolds, clock);
+        using CancellationTokenSource either =
+            CancellationTokenSource.CreateLinkedTokenSource(interval.Token, stopping.Token);
+
+        try
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, either.Token);
+        }
+        catch (OperationCanceledException) when (!stopping.IsCancellationRequested)
+        {
+            return;
+        }
+    }
+
+    /// <summary>
+    /// Hands what is read to every seat, and lets the supply go only once the holding beside it has
+    /// ended.
+    /// </summary>
+    private async Task CarryAsync(ILiveTransportStream from, Task holding)
     {
         byte[] mouthful = ArrayPool<byte>.Shared.Rent(LiveFeed.Mouthful);
 
@@ -282,6 +308,7 @@ internal sealed class LiveReception
         {
             ArrayPool<byte>.Shared.Return(mouthful);
             Close();
+            await Task.WhenAny(holding);
             await from.DisposeAsync();
         }
     }
