@@ -52,9 +52,36 @@ public sealed class TunerStatusTests
         };
 
         Assert.Equal(
-            """{"level":"faulted","disablePending":false,"lnbPowered":true,"detail":"the kind on this adapter is not the kind the ledger names","changedAt":null}""",
+            """{"level":"faulted","disablePending":false,"lnbPowered":true,"detail":"the kind on this adapter is not the kind the ledger names","changedAt":null,"faultTitle":null}""",
             DriverJson.Serialize(health)
         );
+    }
+
+    [Fact]
+    public void AHealthFaultedByTuningNamesTheWayTheTuningFailed()
+    {
+        TunerHealthDto health = new()
+        {
+            Level = TunerHealthLevel.Faulted,
+            FaultTitle = SessionRefusalTitles.NoLock,
+        };
+
+        TunerHealthDto? read = DriverJson.Deserialize(DriverJson.Serialize(health), DriverJson.Context.TunerHealthDto);
+
+        Assert.NotNull(read);
+        Assert.Equal(SessionRefusalTitles.NoLock, read.FaultTitle);
+    }
+
+    [Fact]
+    public void AHealthFromADriverThatNamesNoFaultTitleReadsAsNamingNone()
+    {
+        TunerHealthDto? health = DriverJson.Deserialize(
+            """{"level":"faulted","detail":"the frontend stopped answering"}""",
+            DriverJson.Context.TunerHealthDto
+        );
+
+        Assert.NotNull(health);
+        Assert.Null(health.FaultTitle);
     }
 
     [Fact]
