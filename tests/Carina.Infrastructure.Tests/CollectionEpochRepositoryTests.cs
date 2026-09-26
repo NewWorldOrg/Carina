@@ -2,6 +2,8 @@ using Carina.Domain.Programmes;
 using Carina.Infrastructure.Persistence;
 using Carina.Infrastructure.Persistence.Repositories;
 
+using Microsoft.EntityFrameworkCore;
+
 namespace Carina.Infrastructure.Tests;
 
 [Collection(RepositoryDatabaseCollection.Name)]
@@ -15,6 +17,8 @@ public sealed class CollectionEpochRepositoryTests(RepositoryDatabase database)
     [Fact]
     public async Task TheFirstReadBeginsTheEpochAndKeepsIt()
     {
+        await ForgetTheEpochAsync();
+
         await using CarinaDbContext context = database.Open();
         CollectionEpoch begun = await new CollectionEpochRepository(context).ReadAsync(At, Cancel);
 
@@ -30,6 +34,8 @@ public sealed class CollectionEpochRepositoryTests(RepositoryDatabase database)
     [Fact]
     public async Task AnAdvancedEpochIsStillAdvancedWhenItIsReadBack()
     {
+        await ForgetTheEpochAsync();
+
         await using CarinaDbContext context = database.Open();
         var repository = new CollectionEpochRepository(context);
         CollectionEpoch epoch = await repository.ReadAsync(At, Cancel);
@@ -43,5 +49,11 @@ public sealed class CollectionEpochRepositoryTests(RepositoryDatabase database)
 
         Assert.Equal(2, read.Generation);
         Assert.Equal(At.AddHours(1), read.AdvancedAt);
+    }
+
+    private async Task ForgetTheEpochAsync()
+    {
+        await using CarinaDbContext context = database.Open();
+        await context.Set<CollectionEpoch>().ExecuteDeleteAsync(Cancel);
     }
 }

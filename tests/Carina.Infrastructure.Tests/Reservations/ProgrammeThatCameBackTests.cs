@@ -219,6 +219,7 @@ public sealed class ProgrammeThatCameBackTests
                 Reservations,
                 Outcomes,
                 new HeldStreamVisits(),
+                new HeldEpochs(),
                 Streams,
                 Scheduling,
                 new RuleMatcher(new ProgrammeSearchScope(Streams, new CountedServices()), clock),

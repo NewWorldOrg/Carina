@@ -605,6 +605,7 @@ public sealed class ReservationRecalculationHostedServiceTests
             services.AddSingleton<IReservationOutcomeRepository>(Outcomes);
             services.AddSingleton<IRecordingRepository>(new Recordings.HeldRecordings());
             services.AddSingleton<IStreamVisitRepository>(Visits);
+            services.AddSingleton<ICollectionEpochRepository>(new HeldEpochs());
             services.AddSingleton<IBroadcastStreamDirectory>(Streams);
             services.AddSingleton<IBroadcastServiceRepository>(Services);
             services.AddSingleton<ITunerCapacityDirectory>(Seating);

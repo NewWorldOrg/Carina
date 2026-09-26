@@ -287,6 +287,7 @@ public sealed class RuleRetirementTests
                 Reservations,
                 Outcomes,
                 Visits,
+                new HeldEpochs(),
                 Streams,
                 new ReservationSchedulingService(
                     Reservations,

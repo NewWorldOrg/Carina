@@ -299,6 +299,29 @@ public sealed class RuleApplicationServiceTests
     }
 
     [Fact]
+    public async Task ASweepOverAGuideDiscardedSinceTheStreamWasLastCollectedTakesNothingOut()
+    {
+        World world = Vanished();
+        await DiscardedAsync(world, Now.AddMinutes(-30));
+
+        RuleApplicationRun run = await world.Applying.EverythingAsync(Cancel);
+
+        Assert.Empty(run.Withdrawn);
+        Assert.Equal(["hill walking"], Named(world));
+    }
+
+    [Fact]
+    public async Task ASweepAfterTheStreamWasCollectedAgainTakesOutWhatTheNewGuideNoLongerCarries()
+    {
+        World world = Vanished();
+        await DiscardedAsync(world, Now.AddHours(-2));
+
+        RuleApplicationRun run = await world.Applying.EverythingAsync(Cancel);
+
+        Assert.Equal(["hill walking"], [.. run.Withdrawn.Select(reservation => reservation.SnapshotName)]);
+    }
+
+    [Fact]
     public async Task APassThatWithdrewAReservationTellsTheScreensTheReservationsMoved()
     {
         World world = Vanished();
@@ -601,6 +624,15 @@ public sealed class RuleApplicationServiceTests
     private static string[] Named(World world)
         => [.. world.Reservations.Held.Select(reservation => reservation.SnapshotName).Order(StringComparer.Ordinal)];
 
+    private static async Task DiscardedAsync(World world, DateTime at)
+    {
+        CollectionEpoch epoch = await world.Epochs.ReadAsync(at, Cancel);
+
+        epoch.Advance(at);
+
+        await world.Epochs.SaveAsync(epoch, Cancel);
+    }
+
     private static World Vanished(VisitOutcome outcome = VisitOutcome.Complete)
     {
         World world = World.Of();
@@ -784,6 +816,7 @@ public sealed class RuleApplicationServiceTests
                 Reservations,
                 Outcomes,
                 Visits,
+                Epochs,
                 Streams,
                 new ReservationSchedulingService(
                     Reservations,
@@ -812,6 +845,8 @@ public sealed class RuleApplicationServiceTests
         public HeldReservations Reservations { get; }
 
         public HeldStreamVisits Visits { get; } = new();
+
+        public HeldEpochs Epochs { get; } = new();
 
         public CountedStreams Streams { get; }
 

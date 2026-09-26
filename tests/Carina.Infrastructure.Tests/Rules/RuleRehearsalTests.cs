@@ -348,6 +348,7 @@ public sealed class RuleRehearsalTests
                 Reservations,
                 Outcomes,
                 Visits,
+                new HeldEpochs(),
                 Streams,
                 Scheduling,
                 new RuleMatcher(new ProgrammeSearchScope(Streams, Services), new FixedClock(Now)),

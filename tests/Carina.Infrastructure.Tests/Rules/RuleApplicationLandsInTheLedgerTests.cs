@@ -170,6 +170,7 @@ public sealed class RuleApplicationLandsInTheLedgerTests(RepositoryDatabase data
             reservations,
             new ReservationOutcomeRepository(context),
             new StreamVisitRepository(context),
+            new CollectionEpochRepository(context),
             streams,
             new ReservationSchedulingService(
                 reservations,

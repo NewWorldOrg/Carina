@@ -164,6 +164,7 @@ internal sealed class RuleFeature : IAsyncDisposable
                 services.AddSingleton<IRecordingRepository>(new NoRecordings());
                 services.AddSingleton<IProgrammeRepository>(Programmes);
                 services.AddSingleton<IStreamVisitRepository>(Visits);
+                services.AddSingleton<ICollectionEpochRepository>(new HeldEpochs());
                 services.AddSingleton<IBroadcastStreamDirectory>(Streams);
                 services.AddSingleton<IBroadcastServiceRepository>(Services);
                 services.AddSingleton<ITunerCapacityDirectory>(Seating);

@@ -49,6 +49,7 @@ public sealed class RuleApplicationService(
     IReservationRepository reservations,
     IReservationOutcomeRepository outcomes,
     IStreamVisitRepository visits,
+    ICollectionEpochRepository epochs,
     IBroadcastStreamDirectory directory,
     ReservationSchedulingService scheduling,
     RuleMatcher matcher,
@@ -412,9 +413,16 @@ public sealed class RuleApplicationService(
         }
 
         Dictionary<ServiceKey, VisitOutcome> settled = [];
+        CollectionEpoch epoch = await epochs.ReadAsync(Moment(), cancellationToken);
 
         foreach (StreamVisit visit in await visits.ListAsync(cancellationToken))
         {
+            if (epoch.GuideDiscardedAt is { } discarded
+                && (visit.LastCompletedAt is not { } completed || completed <= discarded))
+            {
+                continue;
+            }
+
             settled[new ServiceKey(visit.NetworkId.Value, visit.TransportStreamId.Value)] = visit.Outcome;
         }
 

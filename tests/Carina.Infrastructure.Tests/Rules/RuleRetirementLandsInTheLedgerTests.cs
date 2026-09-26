@@ -151,6 +151,7 @@ public sealed class RuleRetirementLandsInTheLedgerTests(RepositoryDatabase datab
             reservations,
             new ReservationOutcomeRepository(context),
             new StreamVisitRepository(context),
+            new CollectionEpochRepository(context),
             streams,
             new ReservationSchedulingService(
                 reservations,
