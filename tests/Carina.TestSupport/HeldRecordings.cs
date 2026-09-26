@@ -194,7 +194,8 @@ public sealed class HeldRecordings : IRecordingDirectory
             held.ThumbnailFault,
             held.LeftBehindAt,
             held.FilesLeftBehind,
-            held.EncodeWhenRecorded);
+            held.EncodeWhenRecorded,
+            held.DescrambledAt);
 
     private static string Folded(Recording recording)
         => ProgrammeSearchText.Folded(
