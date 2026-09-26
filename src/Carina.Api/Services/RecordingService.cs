@@ -67,13 +67,13 @@ public sealed class RecordingService(
         RecordingQuery query,
         CancellationToken cancellationToken)
     {
-        PaginatedList<Recording> found = await recordings.ListAsync(query, cancellationToken);
+        QualityBands bands = await BandsAsync(cancellationToken);
+        PaginatedList<Recording> found = await recordings.ListAsync(query, bands, cancellationToken);
         EncodeStandingBoard standings = await encoding.ReadAsync(
             [.. found.Items.Select(recording => recording.Id)],
             cancellationToken);
 
-        return ServiceResult<RecordingPage>.Success(
-            new RecordingPage(found, standings, await BandsAsync(cancellationToken)));
+        return ServiceResult<RecordingPage>.Success(new RecordingPage(found, standings, bands));
     }
 
     public async Task<ServiceResult<RecordingSeen, RecordingFailure>> DetailAsync(

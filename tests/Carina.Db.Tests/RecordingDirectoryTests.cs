@@ -1,6 +1,7 @@
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
+using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Persistence;
@@ -81,7 +82,7 @@ public sealed class RecordingDirectoryTests(MigratedScratchDatabase database)
     {
         int network = await StockedAsync(0);
         Recording lost = await AddAsync(network, 1, counters: DropCounters.Counted(3, 1000));
-        Recording clean = await AddAsync(network, 2, counters: DropCounters.Counted(0, 1000));
+        Recording clean = await AddAsync(network, 2, counters: DropCounters.Counted(0, 1000), scrambled: 0);
         Recording uncounted = await AddAsync(network, 3);
 
         PaginatedList<Recording> dropped = await ListAsync(Query(network, drops: DropReading.Dropped));
@@ -91,6 +92,20 @@ public sealed class RecordingDirectoryTests(MigratedScratchDatabase database)
         Assert.Equal(lost.Id, Assert.Single(dropped.Items).Id);
         Assert.Equal(clean.Id, Assert.Single(spotless.Items).Id);
         Assert.Equal(uncounted.Id, Assert.Single(unmeasured.Items).Id);
+    }
+
+    [Fact]
+    public async Task ARecordingThatLostNothingButWasLeftScrambledIsNotAnsweredAsClean()
+    {
+        int network = await StockedAsync(0);
+        Recording unlocked = await AddAsync(network, 1, counters: DropCounters.Counted(0, 741375), scrambled: 27);
+        await AddAsync(network, 2, counters: DropCounters.Counted(0, 1000), scrambled: 900);
+        await AddAsync(network, 3, counters: DropCounters.Counted(0, 1000));
+        await AddAsync(network, 4, counters: DropCounters.Counted(0, 0), scrambled: 0);
+
+        PaginatedList<Recording> spotless = await ListAsync(Query(network, drops: DropReading.Clean));
+
+        Assert.Equal(unlocked.Id, Assert.Single(spotless.Items).Id);
     }
 
     [Fact]
@@ -517,13 +532,15 @@ public sealed class RecordingDirectoryTests(MigratedScratchDatabase database)
         return query ?? throw new InvalidOperationException("The query this test asks for is one the guard takes.");
     }
 
+    private static QualityBands AsShipped => QualityThresholdStanding.Bands(QualityThresholdStanding.Over([], Noon));
+
     private CarinaDbContext Context() => CarinaDbContextFactory.Create(database.ConnectionString);
 
     private async Task<PaginatedList<Recording>> ListAsync(RecordingQuery query)
     {
         await using CarinaDbContext context = Context();
 
-        return await new RecordingDirectory(context).ListAsync(query, CancellationToken.None);
+        return await new RecordingDirectory(context).ListAsync(query, AsShipped, CancellationToken.None);
     }
 
     private async Task FloodAsync(int network, int rows)
@@ -615,6 +632,7 @@ public sealed class RecordingDirectoryTests(MigratedScratchDatabase database)
         DateTime? programmeStartsAt = null,
         RecordingOutcome? outcome = null,
         DropCounters? counters = null,
+        long? scrambled = null,
         string name = "A programme",
         string summary = "",
         string extended = "")
@@ -649,7 +667,7 @@ public sealed class RecordingDirectoryTests(MigratedScratchDatabase database)
 
         if (counters is { } counted)
         {
-            recording.Measure(counted, DropTimeline.Unlocated, null, 0, started.AddMinutes(1));
+            recording.Measure(counted, DropTimeline.Unlocated, scrambled, 0, started.AddMinutes(1));
         }
 
         if (outcome is { } settled)

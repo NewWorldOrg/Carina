@@ -1,5 +1,6 @@
 using Carina.Domain.Base;
 using Carina.Domain.Programmes;
+using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 
@@ -13,9 +14,13 @@ public sealed class HeldRecordings : IRecordingDirectory
 
     public Action? WhenDiscarding { get; set; }
 
-    public Task<PaginatedList<Recording>> ListAsync(RecordingQuery query, CancellationToken cancellationToken)
+    public Task<PaginatedList<Recording>> ListAsync(
+        RecordingQuery query,
+        QualityBands bands,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
+        ArgumentNullException.ThrowIfNull(bands);
 
         IEnumerable<Recording> found = Recordings;
 
@@ -38,7 +43,8 @@ public sealed class HeldRecordings : IRecordingDirectory
 
         if (query.Drops is { } drops)
         {
-            found = found.Where(recording => Reads(recording, drops));
+            Func<Recording, bool> clean = RecordingQuality.CountedClean(bands).Compile();
+            found = found.Where(recording => Reads(recording, drops, clean));
         }
 
         if (query.Channels.Count > 0)
@@ -204,11 +210,11 @@ public sealed class HeldRecordings : IRecordingDirectory
             + ProgrammeSearchText.BetweenNameAndSummary
             + recording.SnapshotExtended);
 
-    private static bool Reads(Recording recording, DropReading drops)
+    private static bool Reads(Recording recording, DropReading drops, Func<Recording, bool> clean)
         => drops switch
         {
             DropReading.Dropped => recording.Counters.Measured && recording.Counters.Dropped > 0,
-            DropReading.Clean => recording.Counters.Measured && recording.Counters.Dropped == 0,
+            DropReading.Clean => clean(recording),
             _ => !recording.Counters.Measured,
         };
 }
