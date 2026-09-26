@@ -39,6 +39,12 @@ public sealed record TunerHealthDto
     public string? Detail { get; init; }
 
     public DateTimeOffset? ChangedAt { get; init; }
+
+    /// <summary>
+    /// The <see cref="SessionRefusalTitles"/> title of the tuning failure that faulted the device,
+    /// or <see langword="null"/> when the device is not faulted or was faulted for another cause.
+    /// </summary>
+    public string? FaultTitle { get; init; }
 }
 
 public sealed record CurrentSessionDto

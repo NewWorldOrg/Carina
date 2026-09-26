@@ -64,6 +64,29 @@ internal sealed class SupplyWatchHarness
             },
         ]);
 
+    public void Answering(params TunerSnapshot[] tuners)
+        => Driver.Tuners = DriverCall<IReadOnlyList<TunerSnapshot>>.Reached(tuners);
+
+    public static TunerSnapshot NotLocking(string deviceId)
+        => new(deviceId, TunerKind.Satellite, TunerState.Faulted, Detail: "the device failed to receive")
+        {
+            Health = new TunerHealthDto
+            {
+                Level = TunerHealthLevel.Faulted,
+                Detail = "the device failed to receive",
+                FaultTitle = SessionRefusalTitles.NoLock,
+            },
+        };
+
+    public static TunerSnapshot TurnedOff(string deviceId)
+        => NotLocking(deviceId) with { State = TunerState.Disabled };
+
+    public static TunerSnapshot Idle(string deviceId)
+        => new(deviceId, TunerKind.Satellite, TunerState.Idle)
+        {
+            Health = new TunerHealthDto { Level = TunerHealthLevel.Healthy },
+        };
+
     public void HoldingNothing()
         => Driver.Tuners = DriverCall<IReadOnlyList<TunerSnapshot>>.Reached(
             [new TunerSnapshot(Device, TunerKind.Terrestrial, TunerState.Idle)]);

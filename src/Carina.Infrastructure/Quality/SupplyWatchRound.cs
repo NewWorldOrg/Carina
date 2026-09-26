@@ -1,4 +1,5 @@
 using Carina.Contracts;
+using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.Events;
 using Carina.Domain.Quality;
@@ -27,25 +28,29 @@ public sealed class SupplyWatchRound(
     public async Task<SupplyWatchPass> WatchAsync(CancellationToken cancellationToken)
     {
         DateTime now = clock.GetUtcNow().UtcDateTime;
-        QualityThresholdStanding standing = QualityThresholdStanding
-            .Over(await thresholds.ListAsync(cancellationToken), now)
-            .First(held => held.Key == QualityThresholdKey.SupplySilence);
+        IReadOnlyList<QualityThresholdStanding> levels =
+            QualityThresholdStanding.Over(await thresholds.ListAsync(cancellationToken), now);
+        QualityThresholdStanding standing = levels.First(held => held.Key == QualityThresholdKey.SupplySilence);
+        QualityThresholdStanding lockRate = levels.First(held => held.Key == QualityThresholdKey.LockRate);
         TimeSpan longest = TimeSpan.FromSeconds(standing.Setting.Current);
 
         List<SupplyReading> readings = [];
 
         readings.AddRange(await supply.ReadAsync(cancellationToken));
 
-        (bool asked, IReadOnlyList<SupplyReading> tuners) = await TunersAsync(now, cancellationToken);
+        (bool asked, IReadOnlyList<SupplyReading> tuners, IReadOnlyList<TunerFault> cannotLock) =
+            await TunersAsync(now, cancellationToken);
 
         readings.AddRange(tuners);
 
         IReadOnlyList<SupplySilenceFinding> quiet = SupplyWatch.Quiet(readings, longest, now);
         IReadOnlyList<QualityIncident> unsettled = await incidents.ListUnsettledAsync(cancellationToken);
         SupplyWatchPlan plan = SupplyWatch.Plan(quiet, unsettled, Observed(asked));
+        LockWatchPlan locks = asked ? LockWatch.Plan(cannotLock, unsettled) : new LockWatchPlan([], []);
 
-        int opened = await OpenAsync(plan.ToOpen, standing.Setting, now, cancellationToken);
-        int resolved = await ResolveAsync(plan.ToResolve, now, cancellationToken);
+        int opened = await OpenAsync(plan.ToOpen, standing.Setting, now, cancellationToken)
+            + await RestateAsync(locks.ToOpen, lockRate.Setting, now, cancellationToken);
+        int resolved = await ResolveAsync([.. plan.ToResolve, .. locks.ToResolve], now, cancellationToken);
         int notified = await NotifyAsync(now, cancellationToken);
 
         if (notified > 0 || resolved > 0)
@@ -79,7 +84,7 @@ public sealed class SupplyWatchRound(
                 quiet.Count(finding => finding.Silence == silence))),
         ];
 
-    private async Task<(bool Asked, IReadOnlyList<SupplyReading> Readings)> TunersAsync(
+    private async Task<TunerReadings> TunersAsync(
         DateTime now,
         CancellationToken cancellationToken)
     {
@@ -91,7 +96,7 @@ public sealed class SupplyWatchRound(
                 "The driver would not say what tuners it holds, so this pass leaves every signal sample silence "
                 + "where the last pass that could see them left it.");
 
-            return (false, []);
+            return new TunerReadings(false, [], []);
         }
 
         IReadOnlyDictionary<TunerDeviceId, DateTime> latest =
@@ -123,7 +128,7 @@ public sealed class SupplyWatchRound(
                 since));
         }
 
-        return (true, read);
+        return new TunerReadings(true, read, TunerFaults.ThatCannotLock(tuners));
     }
 
     private async Task<int> OpenAsync(
@@ -147,6 +152,20 @@ public sealed class SupplyWatchRound(
         }
 
         return opening.Count;
+    }
+
+    private async Task<int> RestateAsync(
+        IReadOnlyList<TunerFault> cannotLock,
+        Threshold applied,
+        DateTime now,
+        CancellationToken cancellationToken)
+    {
+        foreach (TunerFault fault in cannotLock)
+        {
+            await incidents.AddAsync(LockWatch.Restate(QualityIncidentId.New(), fault, now, applied), cancellationToken);
+        }
+
+        return cannotLock.Count;
     }
 
     private async Task<int> ResolveAsync(
@@ -194,12 +213,17 @@ public sealed class SupplyWatchRound(
         }
 
         logger.LogWarning(
-            "A supply watch held {Seconds}s of quiet against {Watched} supply reading(s): {Opened} went quiet, "
-            + "{Notified} were told about, and {Resolved} started being heard from again.",
+            "A supply watch held {Seconds}s of quiet against {Watched} supply reading(s): {Opened} went quiet or "
+            + "stopped locking, {Notified} were told about, and {Resolved} cleared.",
             pass.Standing.Applied.Current,
             pass.Standing.Supplies.Sum(supply => supply.Watched),
             pass.Opened,
             pass.Notified,
             pass.Resolved);
     }
+
+    private sealed record TunerReadings(
+        bool Asked,
+        IReadOnlyList<SupplyReading> Readings,
+        IReadOnlyList<TunerFault> CannotLock);
 }
