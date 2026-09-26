@@ -150,6 +150,18 @@ public sealed class HeldTranscoder : ILiveTranscoder
         set => input.Failing = value;
     }
 
+    /// <summary>
+    /// Held here, the transcoder takes no bytes until it is let go, as one that has stopped reading
+    /// its input does.
+    /// </summary>
+    public TaskCompletionSource? TakesNothingUntil
+    {
+        get => input.HeldUntil;
+        set => input.HeldUntil = value;
+    }
+
+    public bool InputClosed => input.Closed;
+
     public Stream Output => Disposed ? throw new ObjectDisposedException(nameof(HeldTranscoder)) : output;
 
     public ChannelReader<LiveFrame> Captions => captions.Reader;
@@ -241,6 +253,10 @@ public sealed class HeldTranscoder : ILiveTranscoder
 
         internal Exception? Failing { get; set; }
 
+        internal TaskCompletionSource? HeldUntil { get; set; }
+
+        internal bool Closed { get; private set; }
+
         public override void Flush()
         {
         }
@@ -266,11 +282,21 @@ public sealed class HeldTranscoder : ILiveTranscoder
             Interlocked.Add(ref takenIn, buffer.Length);
         }
 
-        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
         {
-            Write(buffer.Span);
+            if (HeldUntil is { } held)
+            {
+                await held.Task.WaitAsync(cancellationToken);
+            }
 
-            return ValueTask.CompletedTask;
+            Write(buffer.Span);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            Closed = true;
+
+            base.Dispose(disposing);
         }
     }
 }

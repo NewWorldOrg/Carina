@@ -14,7 +14,7 @@ namespace Carina.Infrastructure.Streaming;
 /// terrestrial multiplex, and about four megabytes at the mouthful the reading reads with. Writing
 /// into it never blocks, so the patience the seat is given can never be spent; it is set well
 /// inside the driver's own headroom all the same, so that a queue which somehow did block would
-/// cost this reader its seat rather than cost every viewer of the channel their bytes.
+/// cost this reader its seat.
 /// </remarks>
 internal sealed class LiveHandedOverReading : ILiveHandedOver
 {

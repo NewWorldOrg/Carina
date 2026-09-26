@@ -100,7 +100,7 @@ public sealed record LiveSessionSettings
     public TimeSpan BetweenHolds { get; }
 
     /// <summary>
-    /// How long one transcoder may keep the reading of the channel waiting before it is cut loose.
+    /// How long the oldest bytes a transcoder has not taken yet may wait before it is cut loose.
     /// </summary>
     /// <remarks>
     /// Bytes into a transcoder cannot be dropped the way frames to a viewer can, so a transcoder

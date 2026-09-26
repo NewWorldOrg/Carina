@@ -25,6 +25,12 @@ public sealed class LiveSessionManagerTests
 
     private const int TheHoldOnTheSupply = 1;
 
+    private const int MouthfulsPoured = 8;
+
+    private static readonly TimeSpan SoonerThanATranscoderIsCutLooseFor = TimeSpan.FromSeconds(5);
+
+    private static readonly byte[] Mouthful = new byte[64 * 1024];
+
     private static readonly LiveSessionKey EveryFrame = new(new NetworkId(32736), new ServiceId(1024), LiveProfile.Hd30);
 
     private static readonly LiveSessionKey EveryField = new(new NetworkId(32736), new ServiceId(1024), LiveProfile.Hd60);
@@ -402,6 +408,67 @@ public sealed class LiveSessionManagerTests
         Assert.False(supply.Opened[0].Disposed);
         Assert.Equal([EveryFrame], manager.Keys);
         Assert.Equal(2, supply.Asked);
+    }
+
+    [Fact]
+    public async Task BrPs001ATranscoderThatStopsTakingBytesDoesNotHoldUpTheOtherProfileOfTheChannel()
+    {
+        await using ILiveViewing stalled = await Joined(EveryFrame);
+        await using ILiveViewing flowing = await Joined(EveryField);
+
+        TaskCompletionSource holding = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        transcoders.Raised[0].TakesNothingUntil = holding;
+
+        long poured = (long)Mouthful.Length * MouthfulsPoured;
+        Task pouring = Pour(supply.Opened[0], MouthfulsPoured);
+
+        await Sooner(
+            () => transcoders.Raised[1].TakenIn >= poured,
+            "the profile still taking bytes is fed everything while the other takes nothing");
+        await pouring.WaitAsync(Eventually.Patience);
+
+        Assert.Equal(0, transcoders.Raised[0].TakenIn);
+        Assert.False(transcoders.Raised[0].InputClosed, "a transcoder is not cut loose before its patience is spent");
+
+        holding.SetResult();
+
+        await Eventually.Happens(
+            () => transcoders.Raised[0].TakenIn >= poured,
+            "the transcoder that took nothing for a while is handed what came in meanwhile");
+    }
+
+    [Fact]
+    public async Task ATranscoderWhoseOldestUntakenBytesHaveWaitedPastItsPatienceIsCutLooseAndTheOtherGoesOn()
+    {
+        await using ILiveViewing stalled = await Joined(EveryFrame);
+        await using ILiveViewing flowing = await Joined(EveryField);
+
+        transcoders.Raised[0].TakesNothingUntil = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        await Pour(supply.Opened[0], 1);
+        await Eventually.Happens(
+            () => transcoders.Raised[1].TakenIn >= Mouthful.Length,
+            "the first mouthful has been read off the channel");
+
+        clock.Turn(new LiveSessionSettings().LongestWaitToBeFed);
+
+        await Pour(supply.Opened[0], 1);
+        await Eventually.Happens(
+            () => transcoders.Raised[1].TakenIn >= Mouthful.Length * 2,
+            "the second mouthful has been read off the channel");
+
+        Assert.False(transcoders.Raised[0].InputClosed, "bytes that have waited exactly the patience are still waited for");
+
+        clock.Turn(TimeSpan.FromMilliseconds(1));
+
+        await Pour(supply.Opened[0], 1);
+        await Eventually.Happens(
+            () => transcoders.Raised[0].InputClosed,
+            "the transcoder that has fallen behind is cut loose");
+        await Eventually.Happens(
+            () => transcoders.Raised[1].TakenIn >= Mouthful.Length * 3,
+            "the other profile goes on being fed");
     }
 
     [Fact]
@@ -1370,6 +1437,32 @@ public sealed class LiveSessionManagerTests
 
     private async Task<ILiveViewing> Joined(LiveSessionKey key)
         => Seated(await manager.JoinAsync(key, CancellationToken.None));
+
+    private static Task Pour(PipedTransportStream into, int mouthfuls)
+        => Task.Run(async () =>
+        {
+            for (int at = 0; at < mouthfuls; at++)
+            {
+                await into.WriteAsync(Mouthful);
+            }
+        });
+
+    private static async Task Sooner(Func<bool> condition, string what)
+    {
+        long start = Environment.TickCount64;
+
+        while (Environment.TickCount64 - start < SoonerThanATranscoderIsCutLooseFor.TotalMilliseconds)
+        {
+            if (condition())
+            {
+                return;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(10));
+        }
+
+        throw new TimeoutException($"Did not happen within {SoonerThanATranscoderIsCutLooseFor.TotalSeconds}s: {what}.");
+    }
 
     private sealed class HookedEvents : IAppEventPublisher
     {
