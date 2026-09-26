@@ -354,6 +354,8 @@ internal sealed class LiveSeat
 
     private int refused;
 
+    private int behind;
+
     private int noMore;
 
     private int emptied;
@@ -379,7 +381,9 @@ internal sealed class LiveSeat
 
     internal TimeSpan Patience => patience;
 
-    internal bool FellBehind
+    internal bool FellBehind => Volatile.Read(ref behind) is not 0;
+
+    private bool WaitedTooLong
     {
         get
         {
@@ -393,6 +397,13 @@ internal sealed class LiveSeat
     {
         if (letGo.IsCancellationRequested || Volatile.Read(ref refused) is not 0 || FellBehind)
         {
+            return false;
+        }
+
+        if (WaitedTooLong)
+        {
+            Interlocked.Exchange(ref behind, 1);
+
             return false;
         }
 
