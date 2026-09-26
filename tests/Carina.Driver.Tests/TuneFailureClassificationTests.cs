@@ -17,6 +17,14 @@ public sealed class TuneFailureClassificationTests
 
     private static readonly TimeSpan Deadlock = TimeSpan.FromSeconds(30);
 
+    private static readonly DriverConfiguration Configuration = new(
+        "/run/carina/driver.sock",
+        [],
+        6,
+        new TunerSettings(TunerBackend.Fake),
+        [new DeviceSettings("adapter0", DeviceKind.Terrestrial)]
+    );
+
     private readonly ManualTimeProvider clock = new(Start);
 
     [Fact]
@@ -210,6 +218,79 @@ public sealed class TuneFailureClassificationTests
         Assert.Contains("channel 14", detail, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void ATunerFaultedForNotLockingSaysSoInItsHealth()
+    {
+        TunerSessionManager manager = Manager(new ThrowingDeviceFactory(() => DvbFailure.NoLock(
+            "the frontend did not lock within 5 seconds."
+        )));
+
+        for (int attempt = 1; attempt <= TunerSessionManager.RepeatedTuneFailureCeiling; attempt++)
+        {
+            manager.Begin(Request($"scan-{attempt}", 14));
+
+            clock.Advance(TimeSpan.FromSeconds(6));
+        }
+
+        TunerSnapshot tuner = Assert.Single(SessionViews.Tuners(Configuration, manager));
+
+        Assert.Equal(TunerState.Faulted, tuner.State);
+        Assert.Equal(SessionRefusalTitles.NoLock, tuner.Health?.FaultTitle);
+    }
+
+    [Fact]
+    public void ATunerFaultedForDeliveringNothingAfterLockingSaysSoInItsHealth()
+    {
+        TunerSessionManager manager = Manager(new QueuedDeviceFactory(new ConcurrentQueue<ITunerDevice>(
+            [new SilentAfterLockDevice(), new SilentAfterLockDevice(), new SilentAfterLockDevice()]
+        )));
+
+        for (int attempt = 1; attempt <= TunerSessionManager.RepeatedTuneFailureCeiling; attempt++)
+        {
+            Assert.True(manager.Begin(Request($"scan-{attempt}", 14)).TryGetSession(out TunerSession? session));
+
+            session.WaitForEnd(Deadlock);
+
+            clock.Advance(TimeSpan.FromSeconds(6));
+        }
+
+        TunerSnapshot tuner = Assert.Single(SessionViews.Tuners(Configuration, manager));
+
+        Assert.Equal(TunerState.Faulted, tuner.State);
+        Assert.Equal(SessionRefusalTitles.NoData, tuner.Health?.FaultTitle);
+    }
+
+    [Fact]
+    public void ATunerFaultedForAnotherCauseNamesNoTuningFailure()
+    {
+        TunerSessionManager manager = Manager(new ThrowingDeviceFactory(() => DvbFailure.NoLock(
+            "the frontend did not lock within 5 seconds."
+        )));
+
+        manager.Begin(Request("scan-1", 14));
+        manager.Fault("adapter0", "the kind on this adapter is not the kind the ledger names");
+
+        TunerSnapshot tuner = Assert.Single(SessionViews.Tuners(Configuration, manager));
+
+        Assert.Equal(TunerState.Faulted, tuner.State);
+        Assert.Null(tuner.Health?.FaultTitle);
+    }
+
+    [Fact]
+    public void ATunerThatHasNotFaultedNamesNoTuningFailureEvenAfterFailingToLock()
+    {
+        TunerSessionManager manager = Manager(new ThrowingDeviceFactory(() => DvbFailure.NoLock(
+            "the frontend did not lock within 5 seconds."
+        )));
+
+        manager.Begin(Request("scan-1", 14));
+
+        TunerSnapshot tuner = Assert.Single(SessionViews.Tuners(Configuration, manager));
+
+        Assert.Equal(TunerState.Idle, tuner.State);
+        Assert.Null(tuner.Health?.FaultTitle);
+    }
+
     private sealed class FailingChannelDeviceFactory(int deadChannel) : ITunerDeviceFactory
     {
         public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune) =>
@@ -220,13 +301,7 @@ public sealed class TuneFailureClassificationTests
 
     private TunerSessionManager Manager(ITunerDeviceFactory factory) =>
         new(
-            new DriverConfiguration(
-                "/run/carina/driver.sock",
-                [],
-                6,
-                new TunerSettings(TunerBackend.Fake),
-                [new DeviceSettings("adapter0", DeviceKind.Terrestrial)]
-            ),
+            Configuration,
             factory,
             clock,
             NullLogger<TunerSessionManager>.Instance

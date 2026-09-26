@@ -44,7 +44,7 @@ public sealed class TunerSessionManager(
     private readonly ConcurrentDictionary<SessionId, TunerSession> sessions = [];
     private readonly ConcurrentDictionary<SessionId, TaskCompletionSource> starting = [];
     private readonly TunerPool pool = new(timeProvider, tunerGrace);
-    private readonly ConcurrentDictionary<string, string> faultedDevices = new(
+    private readonly ConcurrentDictionary<string, DeviceFault> faultedDevices = new(
         StringComparer.Ordinal
     );
     private readonly ConcurrentDictionary<string, bool> toggledDevices = new(
@@ -485,7 +485,7 @@ public sealed class TunerSessionManager(
                 return false;
             }
 
-            if (faultedDevices.TryGetValue(named, out string? fault))
+            if (IsFaulted(named, out string? fault))
             {
                 refusal = SessionStart.Refused(
                     SessionRefusal.FaultedDevice,
@@ -704,10 +704,10 @@ public sealed class TunerSessionManager(
                 error is DvbDeviceException
                 {
                     Failure: TuningFailure.NoLock or TuningFailure.LockedWithoutData
-                }
+                } failed
             )
             {
-                RecordTuneFailure(deviceId, TuningKey.Of(request), error.Message);
+                RecordTuneFailure(deviceId, TuningKey.Of(request), failed);
             }
 
             refusal = error switch
@@ -1359,7 +1359,7 @@ public sealed class TunerSessionManager(
                 } channel
             )
             {
-                RecordTuneFailure(session.DeviceId, tuning, channel.Message);
+                RecordTuneFailure(session.DeviceId, tuning, channel);
             }
         }
 
@@ -1388,7 +1388,7 @@ public sealed class TunerSessionManager(
             $"The device failed while serving '{session.SessionId}': "
             + (session.FailureCause?.Message ?? "no cause was recorded.");
 
-        faultedDevices[deviceId] = fault;
+        faultedDevices[deviceId] = new DeviceFault(fault, null);
         healthChangedAt[deviceId] = timeProvider.GetUtcNow();
 
         pool.Discard(deviceId);
@@ -1410,9 +1410,10 @@ public sealed class TunerSessionManager(
             return;
         }
 
-        faultedDevices[deviceId] =
+        faultedDevices[deviceId] = new DeviceFault(
             fault
-            + $" It had been handed back out less than {RelapseMinutes} minutes earlier, so it is not tried again.";
+            + $" It had been handed back out less than {RelapseMinutes} minutes earlier, so it is not tried again.",
+            null);
 
         logger.LogError(
             "The device {DeviceId} failed again while serving {SessionId} within {RelapseMinutes} minutes of being handed back out, so it is not tried again and stays faulted until the driver restarts.",
@@ -1468,7 +1469,7 @@ public sealed class TunerSessionManager(
         events?.Signal(DriverEvents.Tuners);
     }
 
-    private void RecordTuneFailure(string deviceId, TuningKey tuning, string cause)
+    private void RecordTuneFailure(string deviceId, TuningKey tuning, DvbDeviceException cause)
     {
         int streak;
 
@@ -1491,8 +1492,11 @@ public sealed class TunerSessionManager(
 
         Fault(
             deviceId,
-            $"The device failed to receive {tuning} {streak} times in a row without delivering"
-                + $" anything in between; the last failure was: {cause}"
+            new DeviceFault(
+                $"The device failed to receive {tuning} {streak} times in a row without delivering"
+                    + $" anything in between; the last failure was: {cause.Message}",
+                TuningFailureTitles.Of(cause.Failure)
+            )
         );
     }
 
@@ -1504,10 +1508,12 @@ public sealed class TunerSessionManager(
         }
     }
 
-    public void Fault(string deviceId, string detail)
+    public void Fault(string deviceId, string detail) => Fault(deviceId, new DeviceFault(detail, null));
+
+    private void Fault(string deviceId, DeviceFault fault)
     {
         recheck?.Forget(deviceId);
-        faultedDevices[deviceId] = detail;
+        faultedDevices[deviceId] = fault;
         healthChangedAt[deviceId] = timeProvider.GetUtcNow();
 
         events?.Signal(DriverEvents.TunerHealthChanged);
@@ -1547,8 +1553,22 @@ public sealed class TunerSessionManager(
     public DateTimeOffset? HealthChangedAt(string deviceId) =>
         healthChangedAt.TryGetValue(deviceId, out DateTimeOffset changed) ? changed : null;
 
-    public bool IsFaulted(string deviceId, [NotNullWhen(true)] out string? detail) =>
-        faultedDevices.TryGetValue(deviceId, out detail);
+    public bool IsFaulted(string deviceId, [NotNullWhen(true)] out string? detail)
+    {
+        if (faultedDevices.TryGetValue(deviceId, out DeviceFault? fault))
+        {
+            detail = fault.Detail;
+
+            return true;
+        }
+
+        detail = null;
+
+        return false;
+    }
+
+    public string? FaultTitleOf(string deviceId) =>
+        faultedDevices.TryGetValue(deviceId, out DeviceFault? fault) ? fault.Title : null;
 
     private static TunerKind KindOf(StartSessionRequest request) =>
         request.Tune?.Kind ?? request.Tuning.Kind;
@@ -1560,4 +1580,6 @@ public sealed class TunerSessionManager(
             (DeviceKind.Satellite, TunerKind.Satellite) => true,
             _ => false,
         };
+
+    private sealed record DeviceFault(string Detail, string? Title);
 }
