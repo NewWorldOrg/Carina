@@ -1,6 +1,7 @@
 using Carina.Contracts;
 using Carina.Driver.Configuration;
 using Carina.Driver.Sessions;
+using Carina.Driver.Tuning;
 
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -103,5 +104,129 @@ public sealed class SessionStartRaceTests : IDisposable
 
         recording.Stop();
         recording.WaitForEnd(Deadlock);
+    }
+
+    [Fact]
+    public void ARecordingThatTakesATunerStillBeingTunedWaitsForThatTuneAndThenTunesItItself()
+    {
+        OneFrontendDeviceFactory factory = new();
+        TunerSessionManager manager = new(
+            Configuration(),
+            factory,
+            clock,
+            NullLogger<TunerSessionManager>.Instance,
+            recordingWriters: new CountingRecordingWriterFactory(),
+            tunerGrace: TimeSpan.FromSeconds(5)
+        );
+
+        SessionStart? sweep = null;
+        Thread sweeping = Background(() => sweep = manager.Begin(Request("s-1", SessionPurpose.Survey)));
+
+        Assert.True(factory.FirstTuning.Wait(Deadlock), "The sweep never reached the tuner.");
+
+        SessionStart? recording = null;
+        ManualResetEventSlim answered = new(false);
+        Thread recordingThread = Background(() =>
+        {
+            recording = manager.Begin(Request("r-1", SessionPurpose.Recording, channel: 57));
+            answered.Set();
+        });
+
+        AwaitAnsweredOrWaitingOnTheClock(answered);
+        factory.LetTheFirstFinish.Set();
+
+        Assert.True(sweeping.Join(Deadlock));
+        Assert.True(recordingThread.Join(Deadlock));
+
+        Assert.Equal(SessionRefusal.DeviceBusy, sweep!.Refusal);
+        Assert.True(recording!.TryGetSession(out TunerSession? recorder), recording.Detail);
+        Assert.Equal(2, factory.Devices.Count);
+        Assert.True(factory.Devices[0].Disposed);
+        Assert.False(factory.Devices[1].Disposed);
+        Assert.True(manager.IsClaimed("adapter0"));
+        Assert.False(manager.IsFaulted("adapter0", out _));
+
+        recorder.Stop();
+        recorder.WaitForEnd(Deadlock);
+
+        Assert.Equal(SessionStopReason.Requested, recorder.StopReason);
+    }
+
+    private sealed class OneFrontendDeviceFactory : ITunerDeviceFactory
+    {
+        private readonly Lock gate = new();
+        private readonly List<FrontendTunerDevice> devices = [];
+
+        private int holding;
+        private int opened;
+
+        public ManualResetEventSlim FirstTuning { get; } = new(false);
+
+        public ManualResetEventSlim LetTheFirstFinish { get; } = new(false);
+
+        public IReadOnlyList<FrontendTunerDevice> Devices
+        {
+            get
+            {
+                lock (gate)
+                {
+                    return [.. devices];
+                }
+            }
+        }
+
+        public ITunerDevice Create(DeviceSettings device, TuningRequest tuning, TuneParams? tune)
+        {
+            if (Interlocked.Increment(ref holding) > 1)
+            {
+                Interlocked.Decrement(ref holding);
+
+                throw new IOException("Device or resource busy");
+            }
+
+            if (Interlocked.Increment(ref opened) is 1)
+            {
+                FirstTuning.Set();
+                LetTheFirstFinish.Wait(Deadlock);
+            }
+
+            FrontendTunerDevice created = new(() => Interlocked.Decrement(ref holding));
+
+            lock (gate)
+            {
+                devices.Add(created);
+            }
+
+            return created;
+        }
+    }
+
+    private sealed class FrontendTunerDevice(Action released) : ITunerDevice
+    {
+        private readonly FakeTunerDevice inner = new(55, 50001);
+
+        private int disposed;
+
+        public long Overflows => 0;
+
+        public bool Disposed => Volatile.Read(ref disposed) is 1;
+
+        public byte[] Read(int count, CancellationToken cancellationToken)
+        {
+            if (Disposed)
+            {
+                throw new IOException("Bad file descriptor");
+            }
+
+            return inner.Read(count, cancellationToken);
+        }
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref disposed, 1) is 0)
+            {
+                released();
+            }
+        }
     }
 }
