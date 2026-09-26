@@ -124,6 +124,11 @@ public sealed class OrphanRecoveryService(
 
                 break;
 
+            case OrphanTreatment.MarkWhatWasLeftBehind when ReachedTheEndItWasOpenedWith(named):
+                LeaveForTheWatch(recording);
+
+                break;
+
             default:
                 await MarkAsync(recording, another, now, tally, cancellationToken);
 
@@ -238,6 +243,19 @@ public sealed class OrphanRecoveryService(
             answer.Outcome,
             answer.Problem?.Title);
     }
+
+    /// <summary>
+    /// Leaves a recording whose session the driver ended at the end it was opened with to the pass
+    /// that watches the stream, which judges it against its file instead of marking it.
+    /// </summary>
+    private void LeaveForTheWatch(Recording recording)
+        => logger.LogInformation(
+            "Recording {Recording} was stopped by the driver at the end it was opened with, so it is left for "
+            + "the pass that watches the stream to judge rather than marked for what was left of it.",
+            recording.Id.Wire);
+
+    private static bool ReachedTheEndItWasOpenedWith(SessionSnapshot? session)
+        => session is { StopReason: SessionStopReason.EndTimeReached };
 
     private async Task MarkAsync(
         Recording recording,
