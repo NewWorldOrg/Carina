@@ -150,6 +150,32 @@ public sealed class HeldTranscoder : ILiveTranscoder
         set => input.Failing = value;
     }
 
+    /// <summary>
+    /// Held here, the transcoder takes no bytes until it is let go, as one that has stopped reading
+    /// its input does.
+    /// </summary>
+    public TaskCompletionSource? TakesNothingUntil
+    {
+        get => input.HeldUntil;
+        set => input.HeldUntil = value;
+    }
+
+    public bool InputClosed => input.Closed;
+
+    /// <summary>
+    /// Set, a transcoder held from taking bytes goes on holding when the write is called off, as a
+    /// pipe whose write does not honour cancellation does.
+    /// </summary>
+    public bool TakesNoNoticeOfBeingCalledOff
+    {
+        get => input.TakesNoNoticeOfBeingCalledOff;
+        set => input.TakesNoNoticeOfBeingCalledOff = value;
+    }
+
+    public bool Taking => input.Taking;
+
+    public bool DisposedWhileTaking { get; private set; }
+
     public Stream Output => Disposed ? throw new ObjectDisposedException(nameof(HeldTranscoder)) : output;
 
     public ChannelReader<LiveFrame> Captions => captions.Reader;
@@ -200,6 +226,7 @@ public sealed class HeldTranscoder : ILiveTranscoder
         }
 
         Disposed = true;
+        DisposedWhileTaking = input.Taking;
         Complete();
         captions.Writer.TryComplete();
         exit.TrySetResult(TranscoderExit.CalledOff(string.Empty));
@@ -223,6 +250,8 @@ public sealed class HeldTranscoder : ILiveTranscoder
     {
         private long takenIn;
 
+        private int taking;
+
         public override bool CanRead => false;
 
         public override bool CanSeek => false;
@@ -240,6 +269,14 @@ public sealed class HeldTranscoder : ILiveTranscoder
         internal long TakenIn => Interlocked.Read(ref takenIn);
 
         internal Exception? Failing { get; set; }
+
+        internal TaskCompletionSource? HeldUntil { get; set; }
+
+        internal bool Closed { get; private set; }
+
+        internal bool TakesNoNoticeOfBeingCalledOff { get; set; }
+
+        internal bool Taking => Volatile.Read(ref taking) is not 0;
 
         public override void Flush()
         {
@@ -266,11 +303,30 @@ public sealed class HeldTranscoder : ILiveTranscoder
             Interlocked.Add(ref takenIn, buffer.Length);
         }
 
-        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
+        public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
         {
-            Write(buffer.Span);
+            Interlocked.Increment(ref taking);
 
-            return ValueTask.CompletedTask;
+            try
+            {
+                if (HeldUntil is { } held)
+                {
+                    await (TakesNoNoticeOfBeingCalledOff ? held.Task : held.Task.WaitAsync(cancellationToken));
+                }
+
+                Write(buffer.Span);
+            }
+            finally
+            {
+                Interlocked.Decrement(ref taking);
+            }
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            Closed = true;
+
+            base.Dispose(disposing);
         }
     }
 }

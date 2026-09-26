@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Threading.Channels;
 
 using Carina.Contracts;
 using Carina.Domain.Channels;
@@ -153,15 +154,19 @@ internal sealed class LiveReception
     }
 
     internal LiveSeat Take(Stream into, TimeSpan patience)
-        => Take(into, static () => { }, static _ => { }, patience);
+        => Take(into, static () => { }, static _ => { }, patience, settings.MostBytesWaitingToBeFed);
 
     internal LiveSeat Take(
         Stream into,
         Action locked,
         Action<LiveSupplyEnding> ended)
-        => Take(into, locked, ended, settings.LongestWaitToBeFed);
+        => Take(into, locked, ended, settings.LongestWaitToBeFed, settings.MostBytesWaitingToBeFed);
 
-    internal void Drop(LiveSeat seat)
+    /// <summary>
+    /// Takes the seat out of the reading and calls off what is being written into it, and hands back
+    /// the task that ends once nothing more is being written.
+    /// </summary>
+    internal Task Drop(LiveSeat seat)
     {
         lock (gate)
         {
@@ -169,6 +174,8 @@ internal sealed class LiveReception
         }
 
         seat.LetGo();
+
+        return seat.Pumping;
     }
 
     internal void Close()
@@ -191,9 +198,10 @@ internal sealed class LiveReception
         Stream into,
         Action locked,
         Action<LiveSupplyEnding> ended,
-        TimeSpan patience)
+        TimeSpan patience,
+        long mostHeld)
     {
-        LiveSeat seat = new(into, locked, ended, patience);
+        LiveSeat seat = new(into, locked, ended, patience, mostHeld, clock);
 
         lock (gate)
         {
@@ -219,8 +227,10 @@ internal sealed class LiveReception
             stream = bytes;
         }
 
-        Holding = HoldOpenAsync(bytes);
-        Life = CarryAsync(bytes);
+        Task holding = HoldOpenAsync(bytes);
+
+        Holding = holding;
+        Life = CarryAsync(bytes, holding);
 
         return opened;
     }
@@ -239,7 +249,7 @@ internal sealed class LiveReception
         {
             while (true)
             {
-                await Task.Delay(settings.BetweenHolds, clock, stopping.Token);
+                await BetweenHoldsAsync();
                 await held.HoldOpenUntilAsync(clock.GetUtcNow() + settings.HeldAhead, stopping.Token);
             }
         }
@@ -248,7 +258,31 @@ internal sealed class LiveReception
         }
     }
 
-    private async Task CarryAsync(ILiveTransportStream from)
+    /// <summary>
+    /// Waits one interval between holds on a deadline of its own, which is let go of before the wait
+    /// ends, whether it ran out or was called off.
+    /// </summary>
+    private async Task BetweenHoldsAsync()
+    {
+        using CancellationTokenSource interval = new(settings.BetweenHolds, clock);
+        using CancellationTokenSource either =
+            CancellationTokenSource.CreateLinkedTokenSource(interval.Token, stopping.Token);
+
+        try
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, either.Token);
+        }
+        catch (OperationCanceledException) when (!stopping.IsCancellationRequested)
+        {
+            return;
+        }
+    }
+
+    /// <summary>
+    /// Hands what is read to every seat, and lets the supply go only once the holding beside it has
+    /// ended.
+    /// </summary>
+    private async Task CarryAsync(ILiveTransportStream from, Task holding)
     {
         byte[] mouthful = ArrayPool<byte>.Shared.Rent(LiveFeed.Mouthful);
 
@@ -258,7 +292,7 @@ internal sealed class LiveReception
 
             while ((read = await from.Bytes.ReadAsync(mouthful, stopping.Token)) > 0)
             {
-                await FeedAsync(mouthful.AsMemory(0, read));
+                Feed(mouthful.AsSpan(0, read).ToArray());
             }
 
             EndEverySeat(from.Ending ?? LiveSupplyEnding.Of(
@@ -274,20 +308,30 @@ internal sealed class LiveReception
         {
             ArrayPool<byte>.Shared.Return(mouthful);
             Close();
+            await Task.WhenAny(holding);
             await from.DisposeAsync();
         }
     }
 
-    private async Task FeedAsync(ReadOnlyMemory<byte> mouthful)
+    private void Feed(ReadOnlyMemory<byte> mouthful)
     {
         foreach (LiveSeat seat in Seated())
         {
-            if (!await seat.OfferAsync(mouthful, stopping.Token))
+            if (seat.Offer(mouthful))
             {
-                // One transcoder that will not take bytes is not a reason to stop the others.
-                Drop(seat);
-                seat.NoMore();
+                continue;
             }
+
+            Drop(seat);
+
+            if (seat.FellBehind)
+            {
+                seat.Ended(LiveSupplyEnding.Of(
+                    LiveSupplyEnd.TranscoderFellBehind,
+                    $"the transcoder left more than {seat.MostHeld} bytes, or bytes older than {seat.Patience}, untaken."));
+            }
+
+            seat.NoMore();
         }
     }
 
@@ -314,55 +358,177 @@ internal sealed class LiveReception
 }
 
 /// <summary>
-/// One transcoder's place at a reading of the channel.
+/// One transcoder's place at a reading of the channel, with the mouthfuls it has not taken yet
+/// queued in front of it.
 /// </summary>
-internal sealed class LiveSeat(
-    Stream into,
-    Action locked,
-    Action<LiveSupplyEnding> ended,
-    TimeSpan patience)
+/// <remarks>
+/// The seat is refused further mouthfuls once the oldest one it has not taken has waited longer
+/// than its patience, once the bytes it has not taken would come to more than it is held, or once
+/// writing into it has failed.
+/// </remarks>
+internal sealed class LiveSeat
 {
-    private bool fed;
+    private const long NothingWaiting = long.MinValue;
 
-    private volatile bool letGo;
+    private readonly Stream into;
 
-    internal void LetGo() => letGo = true;
+    private readonly Action locked;
 
-    internal async Task<bool> OfferAsync(ReadOnlyMemory<byte> mouthful, CancellationToken cancellationToken)
+    private readonly Action<LiveSupplyEnding> ended;
+
+    private readonly TimeSpan patience;
+
+    private readonly long mostHeld;
+
+    private readonly TimeProvider clock;
+
+    private readonly Channel<Offered> backlog = Channel.CreateUnbounded<Offered>(
+        new UnboundedChannelOptions { SingleReader = true });
+
+    private readonly CancellationTokenSource letGo = new();
+
+    private long waitingSince = NothingWaiting;
+
+    private long held;
+
+    private int refused;
+
+    private int behind;
+
+    private int noMore;
+
+    private int emptied;
+
+    private int closed;
+
+    internal LiveSeat(
+        Stream into,
+        Action locked,
+        Action<LiveSupplyEnding> ended,
+        TimeSpan patience,
+        long mostHeld,
+        TimeProvider clock)
     {
-        if (letGo)
+        this.into = into;
+        this.locked = locked;
+        this.ended = ended;
+        this.patience = patience;
+        this.mostHeld = mostHeld;
+        this.clock = clock;
+        Pumping = PumpAsync();
+    }
+
+    internal Task Pumping { get; }
+
+    internal TimeSpan Patience => patience;
+
+    internal long MostHeld => mostHeld;
+
+    internal bool FellBehind => Volatile.Read(ref behind) is not 0;
+
+    private bool WaitedTooLong
+    {
+        get
+        {
+            long since = Volatile.Read(ref waitingSince);
+
+            return since is not NothingWaiting && clock.GetUtcNow().UtcTicks - since > patience.Ticks;
+        }
+    }
+
+    internal bool Offer(ReadOnlyMemory<byte> mouthful)
+    {
+        if (letGo.IsCancellationRequested || Volatile.Read(ref refused) is not 0 || FellBehind)
         {
             return false;
         }
 
-        try
+        if (WaitedTooLong || Volatile.Read(ref held) + mouthful.Length > mostHeld)
         {
-            using CancellationTokenSource deadline = new(patience);
-            using CancellationTokenSource leash =
-                CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token);
+            Interlocked.Exchange(ref behind, 1);
 
-            await into.WriteAsync(mouthful, leash.Token);
-            await into.FlushAsync(leash.Token);
-
-            if (!fed)
-            {
-                fed = true;
-                locked();
-            }
-
-            return true;
-        }
-        catch (Exception gone)
-            when (gone is IOException or ObjectDisposedException or OperationCanceledException or InvalidOperationException)
-        {
             return false;
         }
+
+        Interlocked.Add(ref held, mouthful.Length);
+
+        return backlog.Writer.TryWrite(new Offered(mouthful, clock.GetUtcNow().UtcTicks));
+    }
+
+    internal void LetGo()
+    {
+        letGo.Cancel();
+        backlog.Writer.TryComplete();
     }
 
     internal void Ended(LiveSupplyEnding why) => ended(why);
 
+    /// <summary>
+    /// Closes what the transcoder reads from once the mouthfuls already queued have been written,
+    /// or at once if nothing more is being written into it.
+    /// </summary>
     internal void NoMore()
     {
+        Interlocked.Exchange(ref noMore, 1);
+        backlog.Writer.TryComplete();
+
+        if (Volatile.Read(ref emptied) is not 0)
+        {
+            Close();
+        }
+    }
+
+    private async Task PumpAsync()
+    {
+        bool fed = false;
+
+        try
+        {
+            ChannelReader<Offered> queued = backlog.Reader;
+
+            while (await queued.WaitToReadAsync(letGo.Token))
+            {
+                while (queued.TryRead(out Offered next))
+                {
+                    Volatile.Write(ref waitingSince, next.At);
+
+                    await into.WriteAsync(next.Bytes, letGo.Token);
+                    await into.FlushAsync(letGo.Token);
+
+                    Volatile.Write(ref waitingSince, NothingWaiting);
+                    Interlocked.Add(ref held, -next.Bytes.Length);
+
+                    if (!fed)
+                    {
+                        fed = true;
+                        locked();
+                    }
+                }
+            }
+        }
+        catch (Exception gone)
+            when (gone is IOException or ObjectDisposedException or OperationCanceledException or InvalidOperationException)
+        {
+            Interlocked.Exchange(ref refused, 1);
+        }
+        finally
+        {
+            Interlocked.Exchange(ref emptied, 1);
+
+            if (Volatile.Read(ref noMore) is not 0)
+            {
+                Close();
+            }
+        }
+    }
+
+    private void Close()
+    {
+        if (Interlocked.Exchange(ref closed, 1) is not 0)
+        {
+            return;
+        }
+
         try
         {
             into.Close();
@@ -372,4 +538,6 @@ internal sealed class LiveSeat(
             return;
         }
     }
+
+    private readonly record struct Offered(ReadOnlyMemory<byte> Bytes, long At);
 }

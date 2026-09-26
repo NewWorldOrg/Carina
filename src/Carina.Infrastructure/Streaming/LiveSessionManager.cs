@@ -3,6 +3,8 @@ using Carina.Domain.Channels;
 using Carina.Domain.Events;
 using Carina.Domain.Streaming;
 
+using Microsoft.Extensions.Logging;
+
 namespace Carina.Infrastructure.Streaming;
 
 public sealed class LiveSessionManager(
@@ -12,7 +14,8 @@ public sealed class LiveSessionManager(
     ILiveSupply supply,
     ILiveTranscoderFactory transcoders,
     TimeProvider clock,
-    IAppEventPublisher events) : ILiveSessionManager, ILiveSessionLedger, IAsyncDisposable
+    IAppEventPublisher events,
+    ILogger<LiveSessionManager> logger) : ILiveSessionManager, ILiveSessionLedger, IAsyncDisposable
 {
     public const int Attempts = 2;
 
@@ -185,21 +188,26 @@ public sealed class LiveSessionManager(
         LiveSessionKey asked,
         CancellationToken cancellationToken)
     {
-        List<LiveSession> given;
+        List<LiveSession> candidates;
         List<LiveSession> going;
 
         lock (gate)
         {
-            given =
+            candidates =
             [
                 .. sessions.Values.Where(session => !session.Key.Equals(asked) && session.NobodyIsWatching),
             ];
             going = [.. StillLettingGo().Where(session => !session.Key.Equals(asked))];
         }
 
-        foreach (LiveSession session in given)
+        List<LiveSession> given = [];
+
+        foreach (LiveSession session in candidates)
         {
-            session.Close();
+            if (session.CloseIfNobodyIsWatching())
+            {
+                given.Add(session);
+            }
         }
 
         List<LiveSession> letting = [.. given, .. going];
@@ -293,6 +301,7 @@ public sealed class LiveSessionManager(
                 Receiving(key.Network, key.Service),
                 transcoders,
                 clock,
+                logger,
                 Forget);
 
             sessions[key] = raised;

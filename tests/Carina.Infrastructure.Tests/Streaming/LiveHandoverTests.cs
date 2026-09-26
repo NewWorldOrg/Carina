@@ -3,6 +3,8 @@ using Carina.Domain.Streaming;
 using Carina.Infrastructure.Streaming;
 using Carina.TestSupport;
 
+using Microsoft.Extensions.Logging.Abstractions;
+
 namespace Carina.Infrastructure.Tests.Streaming;
 
 public sealed class LiveHandoverTests
@@ -40,7 +42,8 @@ public sealed class LiveHandoverTests
             supply,
             transcoders,
             clock,
-            events);
+            events,
+            NullLogger<LiveSessionManager>.Instance);
     }
 
     [Fact]

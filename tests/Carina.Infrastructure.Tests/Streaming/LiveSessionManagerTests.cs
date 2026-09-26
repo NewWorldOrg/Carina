@@ -2,9 +2,12 @@ using System.Reflection;
 
 using Carina.Contracts;
 using Carina.Domain.Channels;
+using Carina.Domain.Events;
 using Carina.Domain.Streaming;
 using Carina.Infrastructure.Streaming;
 using Carina.TestSupport;
+
+using Microsoft.Extensions.Logging;
 
 namespace Carina.Infrastructure.Tests.Streaming;
 
@@ -24,6 +27,12 @@ public sealed class LiveSessionManagerTests
 
     private const int TheHoldOnTheSupply = 1;
 
+    private const int MouthfulsPoured = 8;
+
+    private static readonly TimeSpan SoonerThanATranscoderIsCutLooseFor = TimeSpan.FromSeconds(5);
+
+    private static readonly byte[] Mouthful = new byte[64 * 1024];
+
     private static readonly LiveSessionKey EveryFrame = new(new NetworkId(32736), new ServiceId(1024), LiveProfile.Hd30);
 
     private static readonly LiveSessionKey EveryField = new(new NetworkId(32736), new ServiceId(1024), LiveProfile.Hd60);
@@ -42,6 +51,8 @@ public sealed class LiveSessionManagerTests
     private readonly HeldTranscoders transcoders;
 
     private readonly SilentEvents events = new();
+
+    private readonly RecordedWarnings warnings = new();
 
     private readonly LiveSessionManager manager;
 
@@ -401,6 +412,292 @@ public sealed class LiveSessionManagerTests
         Assert.False(supply.Opened[0].Disposed);
         Assert.Equal([EveryFrame], manager.Keys);
         Assert.Equal(2, supply.Asked);
+    }
+
+    [Fact]
+    public async Task BrPs001ATranscoderThatStopsTakingBytesDoesNotHoldUpTheOtherProfileOfTheChannel()
+    {
+        await using ILiveViewing stalled = await Joined(EveryFrame);
+        await using ILiveViewing flowing = await Joined(EveryField);
+
+        TaskCompletionSource holding = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        transcoders.Raised[0].TakesNothingUntil = holding;
+
+        long poured = (long)Mouthful.Length * MouthfulsPoured;
+        Task pouring = Pour(supply.Opened[0], MouthfulsPoured);
+
+        await Sooner(
+            () => transcoders.Raised[1].TakenIn >= poured,
+            "the profile still taking bytes is fed everything while the other takes nothing");
+        await pouring.WaitAsync(Eventually.Patience);
+
+        Assert.Equal(0, transcoders.Raised[0].TakenIn);
+        Assert.False(transcoders.Raised[0].InputClosed, "a transcoder is not cut loose before its patience is spent");
+
+        holding.SetResult();
+
+        await Eventually.Happens(
+            () => transcoders.Raised[0].TakenIn >= poured,
+            "the transcoder that took nothing for a while is handed what came in meanwhile");
+    }
+
+    [Fact]
+    public async Task ATranscoderWhoseOldestUntakenBytesHaveWaitedPastItsPatienceIsCutLooseAndTheOtherGoesOn()
+    {
+        await using ILiveViewing stalled = await Joined(EveryFrame);
+        await using ILiveViewing flowing = await Joined(EveryField);
+
+        transcoders.Raised[0].TakesNothingUntil = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        await Pour(supply.Opened[0], 1);
+        await Eventually.Happens(
+            () => transcoders.Raised[1].TakenIn >= Mouthful.Length,
+            "the first mouthful has been read off the channel");
+
+        clock.Turn(new LiveSessionSettings().LongestWaitToBeFed);
+
+        await Pour(supply.Opened[0], 1);
+        await Eventually.Happens(
+            () => transcoders.Raised[1].TakenIn >= Mouthful.Length * 2,
+            "the second mouthful has been read off the channel");
+
+        Assert.False(transcoders.Raised[0].InputClosed, "bytes that have waited exactly the patience are still waited for");
+
+        clock.Turn(TimeSpan.FromMilliseconds(1));
+
+        await Pour(supply.Opened[0], 1);
+        await Eventually.Happens(
+            () => transcoders.Raised[0].InputClosed,
+            "the transcoder that has fallen behind is cut loose");
+        await Eventually.Happens(
+            () => transcoders.Raised[1].TakenIn >= Mouthful.Length * 3,
+            "the other profile goes on being fed");
+    }
+
+    [Fact]
+    public async Task ATranscoderCutLooseForFallingBehindLeavesItsSessionSayingSoRatherThanThatItWasLetGoOf()
+    {
+        await using ILiveViewing stalled = await Joined(EveryFrame);
+        await using ILiveViewing flowing = await Joined(EveryField);
+
+        transcoders.Raised[0].TakesNothingUntil = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        await Pour(supply.Opened[0], 1);
+        await Eventually.Happens(
+            () => transcoders.Raised[1].TakenIn >= Mouthful.Length,
+            "the first mouthful has been read off the channel");
+
+        clock.Turn(new LiveSessionSettings().LongestWaitToBeFed + TimeSpan.FromMilliseconds(1));
+
+        await Pour(supply.Opened[0], 1);
+        await Eventually.Happens(
+            () => transcoders.Raised[0].InputClosed,
+            "the transcoder that has fallen behind is cut loose");
+
+        await transcoders.Raised[0].WriteAsync(Fmp4.Header);
+        transcoders.Raised[0].NoMore();
+
+        await Drained(stalled);
+
+        Assert.Equal(LiveSupplyEnd.TranscoderFellBehind, stalled.Ending!.Current!.Why);
+        Assert.Null(flowing.Ending!.Current);
+        Assert.Null(supply.Opened[0].Ending);
+    }
+
+    [Fact]
+    public async Task ATranscoderHoldingMoreUntakenBytesThanItIsAllowedIsCutLooseAsHavingFallenBehind()
+    {
+        const int MouthfulsAllowed = 4;
+
+        await using LiveSessionManager tight = new(
+            new LiveSessionSettings(
+                linger: Linger,
+                longestRaise: LongestRaise,
+                heldAhead: HeldAhead,
+                betweenHolds: BetweenHolds,
+                longestWaitForATunerToComeFree: WaitForATunerToComeFree,
+                mostBytesWaitingToBeFed: (long)Mouthful.Length * MouthfulsAllowed),
+            new LiveFanoutSettings(),
+            new LiveTranscodeSettings { StopGrace = StopGrace },
+            supply,
+            transcoders,
+            clock,
+            events,
+            warnings);
+
+        await using ILiveViewing stalled = Seated(await tight.JoinAsync(EveryFrame, CancellationToken.None));
+        await using ILiveViewing flowing = Seated(await tight.JoinAsync(EveryField, CancellationToken.None));
+
+        transcoders.Raised[0].TakesNothingUntil = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        await Pour(supply.Opened[0], MouthfulsAllowed);
+        await Eventually.Happens(
+            () => transcoders.Raised[1].TakenIn >= (long)Mouthful.Length * MouthfulsAllowed,
+            "as many bytes as the stalled transcoder is allowed have been read off the channel");
+
+        Assert.False(transcoders.Raised[0].InputClosed, "bytes up to the limit are still held for the transcoder");
+
+        await Pour(supply.Opened[0], 1);
+        await Eventually.Happens(
+            () => transcoders.Raised[0].InputClosed,
+            "the transcoder holding more than it is allowed is cut loose");
+
+        await transcoders.Raised[0].WriteAsync(Fmp4.Header);
+        transcoders.Raised[0].NoMore();
+
+        await Drained(stalled);
+
+        Assert.Equal(LiveSupplyEnd.TranscoderFellBehind, stalled.Ending!.Current!.Why);
+        Assert.Null(flowing.Ending!.Current);
+    }
+
+    [Fact]
+    public async Task ATeardownWaitsForTheWriteStillGoingIntoTheTranscoderBeforeTakingItDown()
+    {
+        ILiveViewing viewing = await Joined(EveryFrame);
+        TaskCompletionSource holding = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        transcoders.Raised[0].TakesNothingUntil = holding;
+        transcoders.Raised[0].TakesNoNoticeOfBeingCalledOff = true;
+
+        await Pour(supply.Opened[0], 1);
+        await Eventually.Happens(() => transcoders.Raised[0].Taking, "a write is going into the transcoder");
+
+        await viewing.DisposeAsync();
+        clock.Turn(Linger);
+
+        await Eventually.Happens(
+            () => clock.Pending is TheHoldOnTheSupply + 1,
+            "the teardown is waiting on the write, and for no longer than the stop grace");
+
+        Assert.False(transcoders.Raised[0].Disposed, "a transcoder is not taken down while a write is still going into it");
+
+        holding.SetResult();
+
+        await Eventually.Happens(() => supply.Opened[0].Disposed, "the teardown goes on once the write has ended");
+
+        Assert.True(transcoders.Raised[0].Disposed);
+        Assert.False(transcoders.Raised[0].DisposedWhileTaking);
+    }
+
+    [Fact]
+    public async Task ATeardownStopsWaitingOnAWriteThatWillNotEndOnceTheStopGraceIsUp()
+    {
+        ILiveViewing viewing = await Joined(EveryFrame);
+        TaskCompletionSource holding = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        transcoders.Raised[0].TakesNothingUntil = holding;
+        transcoders.Raised[0].TakesNoNoticeOfBeingCalledOff = true;
+
+        await Pour(supply.Opened[0], 1);
+        await Eventually.Happens(() => transcoders.Raised[0].Taking, "a write is going into the transcoder");
+
+        await viewing.DisposeAsync();
+        clock.Turn(Linger);
+
+        await Eventually.Happens(
+            () => clock.Pending is TheHoldOnTheSupply + 1,
+            "the teardown is waiting on the write");
+
+        Assert.False(transcoders.Raised[0].Disposed);
+
+        clock.Turn(StopGrace);
+
+        await Eventually.Happens(
+            () => transcoders.Raised[0].Disposed,
+            "the transcoder is taken down although the write into it never ended");
+
+        holding.SetResult();
+    }
+
+    [Fact]
+    public async Task AWriteGivenUpOnThatLaterFailsInAWayNobodyNamedIsLoggedRatherThanLeftUnobserved()
+    {
+        ILiveViewing viewing = await Joined(EveryFrame);
+        TaskCompletionSource holding = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        transcoders.Raised[0].TakesNothingUntil = holding;
+        transcoders.Raised[0].TakesNoNoticeOfBeingCalledOff = true;
+
+        await Pour(supply.Opened[0], 1);
+        await Eventually.Happens(() => transcoders.Raised[0].Taking, "a write is going into the transcoder");
+
+        await viewing.DisposeAsync();
+        clock.Turn(Linger);
+
+        await Eventually.Happens(() => clock.Pending is TheHoldOnTheSupply + 1, "the teardown is waiting on the write");
+
+        clock.Turn(StopGrace);
+
+        await Eventually.Happens(() => transcoders.Raised[0].Disposed, "the teardown gave up on the write");
+
+        NotSupportedException failure = new("the write failed in a way nobody named.");
+
+        transcoders.Raised[0].FailingToTake = failure;
+        holding.SetResult();
+
+        await Eventually.Happens(
+            () => warnings.Failures.Any(logged => ReferenceEquals(logged, failure)),
+            "how the write that was given up on ended is logged");
+    }
+
+    [Fact]
+    public async Task BrPs001AProfileAskedForAgainWhileTheOthersAreBeingGivenUpIsNotClosedUnderTheOneWhoAsked()
+    {
+        supply.AsIfThereWereOneTuner = true;
+
+        HookedEvents hook = new();
+        await using LiveSessionManager hooked = new(
+            new LiveSessionSettings(
+                linger: Linger,
+                longestRaise: LongestRaise,
+                heldAhead: HeldAhead,
+                betweenHolds: BetweenHolds,
+                longestWaitForATunerToComeFree: WaitForATunerToComeFree),
+            new LiveFanoutSettings(),
+            new LiveTranscodeSettings { StopGrace = StopGrace },
+            supply,
+            transcoders,
+            clock,
+            hook,
+            warnings);
+
+        await Seated(await hooked.JoinAsync(EveryFrame, CancellationToken.None)).DisposeAsync();
+        await Seated(await hooked.JoinAsync(EveryField, CancellationToken.None)).DisposeAsync();
+
+        LiveSessionKey? askedAgain = null;
+        Task<LiveJoin>? back = null;
+
+        hook.Signalled = () =>
+        {
+            if (back is null && hooked.Keys.Count is 1)
+            {
+                askedAgain = hooked.Keys[0];
+                back = hooked.JoinAsync(askedAgain, CancellationToken.None);
+            }
+        };
+
+        Task<LiveJoin> asking = hooked.JoinAsync(AnotherChannel, CancellationToken.None);
+
+        await Eventually.Happens(() => back is not null, "a profile is asked for again between the other being given up and it");
+
+        await using ILiveViewing returned = Seated(await back!);
+
+        Assert.Equal([askedAgain!], hooked.Keys);
+        Assert.False(supply.Opened[0].Disposed, "the reading the returning viewer is watching through is still open");
+
+        await Eventually.Happens(
+            () =>
+            {
+                clock.Turn(WaitForATunerToComeFree);
+
+                return asking.IsCompleted;
+            },
+            "the viewer of the other channel is refused, since somebody is watching the one tuner again");
+
+        Assert.Equal(LiveRefusal.NoTunerFree, (await asking).Refusal);
+        Assert.Equal([askedAgain!], hooked.Keys);
     }
 
     [Fact]
@@ -893,7 +1190,8 @@ public sealed class LiveSessionManagerTests
             supply,
             transcoders,
             clock,
-            events);
+            events,
+            warnings);
 
         await using ILiveViewing slow = Seated(await crowded.JoinAsync(EveryFrame, CancellationToken.None));
 
@@ -1143,7 +1441,8 @@ public sealed class LiveSessionManagerTests
             supply,
             transcoders,
             clock,
-            events);
+            events,
+            warnings);
 
         await using ILiveViewing slow = Seated(await crowded.JoinAsync(EveryFrame, CancellationToken.None));
 
@@ -1308,8 +1607,84 @@ public sealed class LiveSessionManagerTests
             supply,
             raising ?? new HeldTranscoders(counting),
             clock,
-            events);
+            events,
+            warnings);
 
     private async Task<ILiveViewing> Joined(LiveSessionKey key)
         => Seated(await manager.JoinAsync(key, CancellationToken.None));
+
+    private static Task Pour(PipedTransportStream into, int mouthfuls)
+        => Task.Run(async () =>
+        {
+            for (int at = 0; at < mouthfuls; at++)
+            {
+                await into.WriteAsync(Mouthful);
+            }
+        });
+
+    private static async Task Sooner(Func<bool> condition, string what)
+    {
+        long start = Environment.TickCount64;
+
+        while (Environment.TickCount64 - start < SoonerThanATranscoderIsCutLooseFor.TotalMilliseconds)
+        {
+            if (condition())
+            {
+                return;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(10));
+        }
+
+        throw new TimeoutException($"Did not happen within {SoonerThanATranscoderIsCutLooseFor.TotalSeconds}s: {what}.");
+    }
+
+    private sealed class RecordedWarnings : ILogger<LiveSessionManager>
+    {
+        private readonly Lock gate = new();
+
+        private readonly List<Exception> failures = [];
+
+        public IReadOnlyList<Exception> Failures
+        {
+            get
+            {
+                lock (gate)
+                {
+                    return [.. failures];
+                }
+            }
+        }
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull
+            => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel < LogLevel.Warning || exception is null)
+            {
+                return;
+            }
+
+            lock (gate)
+            {
+                failures.Add(exception);
+            }
+        }
+    }
+
+    private sealed class HookedEvents : IAppEventPublisher
+    {
+        public Action Signalled { get; set; } = static () => { };
+
+        public void Signal(AppEventName name) => Signalled();
+    }
 }
