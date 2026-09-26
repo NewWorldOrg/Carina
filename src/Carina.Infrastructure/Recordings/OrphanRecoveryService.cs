@@ -246,7 +246,7 @@ public sealed class OrphanRecoveryService(
 
     /// <summary>
     /// Leaves a recording whose session the driver ended at the end it was opened with to the pass
-    /// that watches the stream, which judges it against its file instead of marking it.
+    /// that watches the stream.
     /// </summary>
     private void LeaveForTheWatch(Recording recording)
         => logger.LogInformation(

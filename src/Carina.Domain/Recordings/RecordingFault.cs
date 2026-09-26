@@ -96,11 +96,6 @@ public static class RecordingFaults
         RecordingFault.ScramblingUnresolved,
     ];
 
-    /// <summary>
-    /// Names what the weighed size of a file says on its own: nothing when something landed,
-    /// <see cref="RecordingFault.NothingLanded"/> for an empty file and
-    /// <see cref="RecordingFault.SizeUnobserved"/> for one that could not be weighed.
-    /// </summary>
     public static IReadOnlyList<RecordingFault> OfTheFileAsWeighed(long? fileSizeBytes)
         => fileSizeBytes switch
         {
