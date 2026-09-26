@@ -1,5 +1,6 @@
 using Carina.Contracts;
 using Carina.Domain.Channels;
+using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 using Carina.Infrastructure.Reservations;
 using Carina.TestSupport;
@@ -669,6 +670,75 @@ public sealed class ReservationSchedulingServiceTests
         Assert.Equal(ReservationState.Conflict, wanting.State);
     }
 
+    [Fact]
+    public async Task ARecordingWhoseServiceCannotBeTunedAnyMoreKeepsTheTunerItIsRunningOn()
+    {
+        WatchedWrite write = new();
+        HeldReservations ledger = new(write);
+        TuningByService directory = new();
+        directory.Answer(1032, Terrestrial29);
+        RunningRecordings recordings = new();
+
+        Reservation running = RunningSince(Now.AddMinutes(-10), Now.AddMinutes(50));
+        ledger.Standing(running);
+        recordings.Running(running, "seat0", Now.AddMinutes(50));
+
+        Reservation wanting = Wanting(Now, Now.AddMinutes(30));
+
+        SchedulingRun run = await Scheduler(
+                ledger,
+                directory,
+                write,
+                Seats(TunerKind.Terrestrial, TunerKind.Satellite),
+                recordings)
+            .CreateAsync(wanting, Cancel);
+
+        Assert.Equal(AllocationVerdict.Pinned, run.Plan.For(running.Id).Verdict);
+        Assert.Equal(AllocationVerdict.Contended, run.Plan.For(wanting.Id).Verdict);
+        Assert.Equal(ReservationState.Conflict, wanting.State);
+    }
+
+    [Fact]
+    public async Task ARecordingWhoseServiceCannotBeTunedAnyMoreLeavesTheTunersItIsNotOnFree()
+    {
+        WatchedWrite write = new();
+        HeldReservations ledger = new(write);
+        TuningByService directory = new();
+        directory.Answer(1032, Terrestrial29);
+        RunningRecordings recordings = new();
+
+        Reservation running = RunningSince(Now.AddMinutes(-10), Now.AddMinutes(50));
+        ledger.Standing(running);
+        recordings.Running(running, "seat1", Now.AddMinutes(50));
+
+        Reservation wanting = Wanting(Now, Now.AddMinutes(30));
+
+        SchedulingRun run = await Scheduler(
+                ledger,
+                directory,
+                write,
+                Seats(TunerKind.Terrestrial, TunerKind.Satellite),
+                recordings)
+            .CreateAsync(wanting, Cancel);
+
+        Assert.Equal(AllocationVerdict.Secured, run.Plan.For(wanting.Id).Verdict);
+        Assert.Equal(ReservationState.Scheduled, wanting.State);
+    }
+
+    private static Reservation RunningSince(DateTime from, DateTime to)
+        => ReservationFixtures.Rehydrated(
+            ReservationState.Scheduled,
+            startedAt: from,
+            programme: ReservationFixtures.Programme(ReservationFixtures.NextEventId()),
+            startAt: from,
+            endAt: to);
+
+    private static Reservation Wanting(DateTime from, DateTime to)
+        => ReservationFixtures.Planned(
+            programme: ReservationFixtures.Programme(ReservationFixtures.NextEventId(), serviceId: 1032),
+            startAt: from,
+            endAt: to);
+
     private static TunerCapacity Unplaceable(params string[] deviceIds)
         => new(
             [new TunerSeat("seat0", BroadcastReception.Of(TunerKind.Terrestrial), Faulted: false)],
@@ -695,13 +765,22 @@ public sealed class ReservationSchedulingServiceTests
         WatchedWrite write,
         TunerCapacity? capacity,
         SilentEvents events)
+        => Scheduler(ledger, directory, write, capacity, new NoRecordings(), events);
+
+    private static ReservationSchedulingService Scheduler(
+        HeldReservations ledger,
+        TuningByService directory,
+        WatchedWrite write,
+        TunerCapacity? capacity,
+        IRecordingRepository recordings,
+        SilentEvents? events = null)
         => new(
             ledger,
-            new NoRecordings(),
+            recordings,
             new HeldSeating(capacity),
             directory,
             write,
             RollingHorizon.Default,
-            events,
+            events ?? new SilentEvents(),
             new FixedClock(Now));
 }

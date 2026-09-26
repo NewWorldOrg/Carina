@@ -1,6 +1,7 @@
 using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
+using Carina.Domain.Recordings;
 using Carina.Domain.Reservations;
 
 namespace Carina.Domain.Tests.Reservations;
@@ -424,7 +425,7 @@ public sealed class TunerAllocationPlannerTests
     public void WhatIsBeingRecordedKeepsItsTunerHoweverLowItsPriority()
     {
         AllocationCandidate recording = Candidate(Terrestrial27, priority: 1, pinned: true, eventId: 4001);
-        AllocationCandidate wanted = Candidate(Terrestrial29, priority: 99, eventId: 4002);
+        AllocationCandidate wanted = Candidate(Terrestrial29, eventId: 4002);
 
         AllocationPlan plan = Planned([recording, wanted], Capacity(TunerKind.Terrestrial));
 
@@ -477,15 +478,71 @@ public sealed class TunerAllocationPlannerTests
     }
 
     [Fact]
-    public void ARecordingWhoseChannelCannotBeResolvedIsStillRecording()
+    public void ARecordingWhoseChannelCannotBeResolvedIsStillRecordingOnTheTunerItHolds()
     {
-        AllocationCandidate recording = Candidate(null, pinned: true, eventId: 4001);
+        AllocationCandidate recording = Candidate(null, pinned: true, eventId: 4001, heldOn: "seat0");
         AllocationCandidate wanted = Candidate(Terrestrial29, eventId: 4002);
 
         AllocationPlan plan = Planned([recording, wanted], Capacity(TunerKind.Terrestrial));
 
         Assert.Equal(AllocationVerdict.Pinned, Verdict(plan, recording));
+        Assert.Equal(AllocationVerdict.Contended, Verdict(plan, wanted));
+        Assert.Equal([recording.Id], plan.For(wanted.Id).Instead);
+    }
+
+    [Fact]
+    public void ARecordingWhoseChannelCannotBeResolvedLeavesTheOtherTunersFree()
+    {
+        AllocationCandidate recording = Candidate(null, pinned: true, eventId: 4001, heldOn: "seat1");
+        AllocationCandidate wanted = Candidate(Terrestrial29, eventId: 4002);
+
+        AllocationPlan plan = Planned([recording, wanted], Capacity(TunerKind.Terrestrial, TunerKind.Satellite));
+
         Assert.Equal(AllocationVerdict.Secured, Verdict(plan, wanted));
+    }
+
+    [Fact]
+    public void ARecordingWhoseChannelCannotBeResolvedHoldsItsTunerOnlyUntilItEnds()
+    {
+        AllocationCandidate recording = Candidate(
+            null,
+            from: Now.AddMinutes(-30),
+            to: Now.AddMinutes(10),
+            pinned: true,
+            eventId: 4001,
+            heldOn: "seat0");
+        AllocationCandidate after = Candidate(Terrestrial29, fromMinutes: 10, eventId: 4002);
+
+        AllocationPlan plan = Planned([recording, after], Capacity(TunerKind.Terrestrial));
+
+        Assert.Equal(AllocationVerdict.Secured, Verdict(plan, after));
+    }
+
+    [Fact]
+    public void ARecordingOnATunerTheCapacityDoesNotCountTakesNoSeatFromIt()
+    {
+        AllocationCandidate recording = Candidate(null, pinned: true, eventId: 4001, heldOn: "switched-off");
+        AllocationCandidate wanted = Candidate(Terrestrial29, eventId: 4002);
+
+        AllocationPlan plan = Planned([recording, wanted], Capacity(TunerKind.Terrestrial));
+
+        Assert.Equal(AllocationVerdict.Secured, Verdict(plan, wanted));
+    }
+
+    [Fact]
+    public void ARecordingWhoseChannelAndTunerAreBothUnknownIsCountedAgainstWhicheverSeatItMightHold()
+    {
+        AllocationCandidate recording = Candidate(null, pinned: true, eventId: 4001);
+        AllocationCandidate terrestrial = Candidate(Terrestrial29, eventId: 4002);
+        AllocationCandidate satellite = Candidate(BsSlotOneStream, eventId: 4003);
+
+        AllocationPlan plan = Planned(
+            [recording, terrestrial, satellite],
+            Capacity(TunerKind.Terrestrial, TunerKind.Satellite));
+
+        Assert.Equal(AllocationVerdict.Contended, Verdict(plan, terrestrial));
+        Assert.Equal(AllocationVerdict.Contended, Verdict(plan, satellite));
+        Assert.Equal([recording.Id], plan.For(terrestrial.Id).Instead);
     }
 
     [Fact]
@@ -1334,7 +1391,8 @@ public sealed class TunerAllocationPlannerTests
         ReservationId? id = null,
         ProgrammeRef? programme = null,
         int eventId = 4001,
-        DateTime? heldUntil = null)
+        DateTime? heldUntil = null,
+        string? heldOn = null)
     {
         DateTime opens = from ?? Now.AddMinutes(fromMinutes);
 
@@ -1347,6 +1405,7 @@ public sealed class TunerAllocationPlannerTests
             to ?? opens.AddMinutes(forMinutes),
             endAtConfirmed,
             pinned,
-            heldUntil);
+            heldUntil,
+            heldOn is null ? null : new TunerDeviceId(heldOn));
     }
 }

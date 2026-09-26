@@ -1,5 +1,6 @@
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
+using Carina.Domain.Recordings;
 
 namespace Carina.Domain.Reservations;
 
@@ -14,7 +15,8 @@ public sealed record AllocationCandidate
         DateTime effectiveEndAt,
         bool endAtConfirmed,
         bool pinned,
-        DateTime? heldUntil = null)
+        DateTime? heldUntil = null,
+        TunerDeviceId? heldOn = null)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(programme);
@@ -39,6 +41,7 @@ public sealed record AllocationCandidate
         EndAtConfirmed = endAtConfirmed;
         Pinned = pinned;
         HeldUntil = heldUntil is { } held ? UtcTimes.Required(held, nameof(heldUntil)) : null;
+        HeldOn = heldOn;
     }
 
     public ReservationId Id { get; }
@@ -66,10 +69,17 @@ public sealed record AllocationCandidate
     /// </summary>
     public DateTime? HeldUntil { get; }
 
+    /// <summary>
+    /// The tuner the recording this reservation has already started is running on, when the
+    /// recording has named one.
+    /// </summary>
+    public TunerDeviceId? HeldOn { get; }
+
     public static AllocationCandidate Of(
         Reservation reservation,
         TuningParameters? tuning,
-        DateTime? heldUntil = null)
+        DateTime? heldUntil = null,
+        TunerDeviceId? heldOn = null)
     {
         ArgumentNullException.ThrowIfNull(reservation);
 
@@ -82,6 +92,7 @@ public sealed record AllocationCandidate
             reservation.EffectiveEndAt,
             reservation.EndAtConfirmed,
             reservation.IsPinned,
-            heldUntil);
+            heldUntil,
+            heldOn);
     }
 }
