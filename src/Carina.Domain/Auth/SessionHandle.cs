@@ -7,8 +7,8 @@ using Carina.Domain.Base;
 namespace Carina.Domain.Auth;
 
 /// <summary>
-/// Names a session in the store, in the session list and in the request that ends it: the SHA-256 of its
-/// session id, which cannot be turned back into the id the cookie carries.
+/// Names a session in the store, in the session list and in the request that ends it: the base64url
+/// SHA-256 of its session id.
 /// </summary>
 public sealed class SessionHandle : CommonValueObject<string>
 {
