@@ -6,6 +6,7 @@ using Carina.Domain.Recordings;
 using Carina.Domain.Streaming;
 using Carina.Infrastructure.Encodings;
 using Carina.Infrastructure.Streaming;
+using Carina.Infrastructure.Tests.Integrity;
 using Carina.TestSupport;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -103,6 +104,66 @@ public sealed class EncodeDispatchTests
 
         Assert.Equal(EncodeJobStatus.Failed, look.Ended);
         Assert.Equal(EncodeFailure.TimedOut, waiting.Failure!.Failure);
+    }
+
+    [Fact]
+    public async Task AJobGivenUpAfterItsRunThrewHasWhatItStillOwesARemovalForSwept()
+    {
+        using TempTree shelf = new();
+        HeldEncodeJobs held = new();
+        EncodeJob waiting = Waiting();
+        held.Jobs.Add(waiting);
+        HeldEncodeScratch scratch = new();
+        EncodeFileName work = EncodeFileName.Working(waiting.RecordingId, waiting.Id, 1);
+        File.WriteAllText(shelf.Under(work.Value), "half a picture");
+        EncodeScratchFile owed = EncodeScratchFile.Record(
+            EncodeScratchFileId.New(),
+            waiting.Id,
+            EncodeScratchKind.WorkFile,
+            EncodeHarness.Primary,
+            work,
+            Now);
+        scratch.Files.Add(owed);
+
+        EncodeLook look = await Dispatch(
+                held,
+                new EncodeSettings { MostAttempts = 1, OutputRoots = [new StorageRootPath(EncodeHarness.Primary, shelf.Root)] },
+                scratch)
+            .LookAsync(Cancel);
+
+        Assert.Equal(EncodeJobStatus.Failed, look.Ended);
+        Assert.False(File.Exists(shelf.Under(work.Value)), "the work file of a job given up was left on the disk");
+        Assert.Equal(EncodeScratchFate.Removed, owed.Fate);
+    }
+
+    [Fact]
+    public async Task AJobPutBackAfterItsRunThrewKeepsItsWorkFileOwedUntilItEnds()
+    {
+        using TempTree shelf = new();
+        HeldEncodeJobs held = new();
+        EncodeJob waiting = Waiting();
+        held.Jobs.Add(waiting);
+        HeldEncodeScratch scratch = new();
+        EncodeFileName work = EncodeFileName.Working(waiting.RecordingId, waiting.Id, 1);
+        File.WriteAllText(shelf.Under(work.Value), "half a picture");
+        EncodeScratchFile owed = EncodeScratchFile.Record(
+            EncodeScratchFileId.New(),
+            waiting.Id,
+            EncodeScratchKind.WorkFile,
+            EncodeHarness.Primary,
+            work,
+            Now);
+        scratch.Files.Add(owed);
+
+        EncodeLook look = await Dispatch(
+                held,
+                new EncodeSettings { MostAttempts = 3, OutputRoots = [new StorageRootPath(EncodeHarness.Primary, shelf.Root)] },
+                scratch)
+            .LookAsync(Cancel);
+
+        Assert.Null(look.Ended);
+        Assert.True(File.Exists(shelf.Under(work.Value)));
+        Assert.True(owed.IsOwedARemoval);
     }
 
     [Fact(DisplayName = "BR-ED2-012: a job called off while it ran is left as the ledger says, and what it still owes a removal for is swept")]
@@ -323,7 +384,13 @@ public sealed class EncodeDispatchTests
         var clock = new HandTurnedClock(new DateTimeOffset(Now));
         var services = new ServiceCollection();
         services.AddScoped<IEncodeJobRepository>(_ => held);
-        services.AddScoped(_ => new EncodeRestart(held, new ScriptedStrays(), settings, clock, NullLogger<EncodeRestart>.Instance));
+        services.AddScoped(provider => new EncodeRestart(
+            held,
+            new ScriptedStrays(),
+            provider.GetRequiredService<EncodeScratchCleaner>(),
+            settings,
+            clock,
+            NullLogger<EncodeRestart>.Instance));
         services.AddScoped(_ => new EncodeScratchCleaner(
             scratch ?? new HeldEncodeScratch(),
             new EncodePlaces(new IntegritySettings(), settings),

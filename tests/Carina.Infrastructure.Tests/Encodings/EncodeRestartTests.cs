@@ -1,4 +1,5 @@
 using Carina.Domain.Encodings;
+using Carina.Domain.Integrity;
 using Carina.Domain.Machines;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Encodings;
@@ -84,6 +85,44 @@ public sealed class EncodeRestartTests
         Assert.Null(job.Programme);
     }
 
+    [Fact]
+    public async Task AJobGivenUpHasWhatItStillOwesARemovalForSwept()
+    {
+        using EncodeHarness harness = new();
+        EncodeJob job = harness.Running();
+        string work = harness.WorkFileOf(job, "half a picture");
+
+        EncodeRestartReport report = await Restart(harness, mostAttempts: 1).RecoverAsync(Cancel);
+
+        Assert.Equal(1, report.GivenUp);
+        Assert.Equal(EncodeJobStatus.Failed, job.Status);
+        Assert.False(File.Exists(work), "the work file of a job given up was left on the disk");
+        Assert.Equal(EncodeScratchFate.Removed, Assert.Single(harness.Scratch.Files).Fate);
+    }
+
+    [Fact]
+    public async Task AJobPutBackKeepsItsWorkFileOwedUntilItEnds()
+    {
+        using EncodeHarness harness = new();
+        EncodeJob job = harness.Running();
+        string work = harness.WorkFileOf(job, "half a picture");
+
+        EncodeRestartReport report = await Restart(harness, mostAttempts: 3).RecoverAsync(Cancel);
+
+        Assert.Equal(1, report.PutBack);
+        Assert.True(File.Exists(work));
+        Assert.True(Assert.Single(harness.Scratch.Files).IsOwedARemoval);
+    }
+
+    private static EncodeRestart Restart(EncodeHarness harness, int mostAttempts)
+        => new(
+            harness.Jobs,
+            new ScriptedStrays(),
+            harness.Cleaner,
+            new EncodeSettings { MostAttempts = mostAttempts },
+            new HandTurnedClock(new DateTimeOffset(Now)),
+            NullLogger<EncodeRestart>.Instance);
+
     private static EncodeJob Running(RunningProgramme? programme, int attempt = 1)
         => EncodeJob.Rehydrate(
             EncodeJobId.New(),
@@ -108,6 +147,11 @@ public sealed class EncodeRestartTests
         => new(
             held,
             strays,
+            new EncodeScratchCleaner(
+                new HeldEncodeScratch(),
+                new EncodePlaces(new IntegritySettings(), new EncodeSettings()),
+                new HandTurnedClock(new DateTimeOffset(Now)),
+                NullLogger<EncodeScratchCleaner>.Instance),
             new EncodeSettings { MostAttempts = mostAttempts },
             new HandTurnedClock(new DateTimeOffset(Now)),
             NullLogger<EncodeRestart>.Instance);
