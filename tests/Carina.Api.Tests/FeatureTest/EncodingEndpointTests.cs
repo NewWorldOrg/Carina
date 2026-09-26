@@ -271,6 +271,28 @@ public sealed class EncodingEndpointTests
         Assert.Contains("already encoded", body.GetProperty("message").GetString(), StringComparison.Ordinal);
     }
 
+    [Fact(DisplayName = "BR-ED2-001: a recording already encoded with one profile is not given a second artefact with another")]
+    public async Task ARecordingAlreadyEncodedWithOneProfileIsNotGivenASecondArtefactWithAnother()
+    {
+        await using var feature = new EncodingFeature();
+        EncodeProfile first = feature.Defined();
+        EncodeProfile another = feature.Defined("Smaller");
+        EncodeDestination destination = feature.Placed(first);
+        Recording recording = feature.Recorded();
+        feature.Completed(recording, first, destination);
+
+        (HttpStatusCode status, JsonElement body) = await feature.PostAsync("/api/encoding/jobs", new
+        {
+            recordingId = recording.Id.Wire,
+            destinationId = destination.Id.Value,
+            profileId = another.Id.Value,
+        });
+
+        Assert.Equal(HttpStatusCode.Conflict, status);
+        Assert.Contains("already encoded", body.GetProperty("message").GetString(), StringComparison.Ordinal);
+        Assert.Single(feature.Jobs.Jobs);
+    }
+
     [Fact(DisplayName = "A-エンコード-069: a recording already encoded with a profile is encoded with it again when a person asks outright, and the new job says so")]
     public async Task ARecordingAlreadyEncodedIsEncodedAgainWhenAPersonAsksOutright()
     {
