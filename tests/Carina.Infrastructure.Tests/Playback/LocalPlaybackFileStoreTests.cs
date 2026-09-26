@@ -1,3 +1,7 @@
+using System.Reflection;
+using System.Runtime.CompilerServices;
+
+using Carina.Domain.Base;
 using Carina.Domain.Encodings;
 using Carina.Domain.Integrity;
 using Carina.Domain.Playback;
@@ -183,6 +187,23 @@ public sealed class LocalPlaybackFileStoreTests : IDisposable
     }
 
     [Fact]
+    public void ANameThatWouldLeadOutOfItsRootIsNeitherFoundNorOpenedNorHandedOn()
+    {
+        string room = Directory.CreateDirectory(Path.Combine(mounted.FullName, "room")).FullName;
+        File.WriteAllBytes(Path.Combine(mounted.FullName, "escaped.m2ts"), new byte[16]);
+        RecordingFileName forged = ForgedPast("../escaped.m2ts");
+        LocalPlaybackFileStore store = Store(new IntegritySettings
+        {
+            OutputRoots = [new StorageRootPath(Root, room)],
+        });
+        var named = new PlaybackFile(Root, forged, 16);
+
+        Assert.Equal(PlaybackFileAbsence.OutOfReach, store.Find(Root, forged).Absence);
+        Assert.Equal(PlaybackFileAbsence.OutOfReach, store.OpenRead(named).Absence);
+        Assert.Null(store.SourceOf(named));
+    }
+
+    [Fact]
     public void TheStoreIsAskedForSomethingRatherThanNothing()
     {
         Assert.Throws<ArgumentNullException>(() => Store().Find(null!, Named));
@@ -197,6 +218,17 @@ public sealed class LocalPlaybackFileStoreTests : IDisposable
         {
             mounted.Delete(recursive: true);
         }
+    }
+
+    private static RecordingFileName ForgedPast(string value)
+    {
+        var forged = (RecordingFileName)RuntimeHelpers.GetUninitializedObject(typeof(RecordingFileName));
+
+        typeof(CommonValueObject<string>)
+            .GetField("<Value>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .SetValue(forged, value);
+
+        return forged;
     }
 
     private PlaybackFile Found()

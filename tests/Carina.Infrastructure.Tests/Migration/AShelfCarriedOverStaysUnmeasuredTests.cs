@@ -160,6 +160,7 @@ public sealed class AShelfCarriedOverStaysUnmeasuredTests : IDisposable
                 null,
                 perPage: RecordingQuery.MostPerPage,
                 conditions: new RecordingConditions { Drops = drops })!,
+            ShippedBands(),
             Cancel);
     }
 

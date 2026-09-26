@@ -135,6 +135,31 @@ public sealed class LocalAccountServiceTests
     }
 
     [Fact]
+    public async Task TriesSentTogetherCannotOutnumberThePolicyWhileTheirPasswordsAreStillBeingChecked()
+    {
+        Seed();
+        using var checking = new HeldUpPasswordHasher(new QuickPasswordHasher());
+        LocalAccountService service = Service(accounts, checking);
+        int allowed = LoginRatePolicy.Default.FailuresBeforeRefusing;
+        int sent = allowed + 3;
+
+        Task<ServiceResult<LoginOutcome>>[] tries =
+        [
+            .. Enumerable.Range(0, sent).Select(_ => Task.Run(() => service.LogInAsync(
+                new LoginAttempt(FirstCredentials.Username, "the wrong password", "a device", Caller),
+                Cancel))),
+        ];
+
+        await checking.UntilAsync(() => checking.Entered + tries.Count(attempt => attempt.IsCompleted) == sent);
+        checking.Release();
+
+        LoginOutcome[] answered = [.. (await Task.WhenAll(tries)).Select(result => result.Data!)];
+
+        Assert.Equal(allowed, checking.Entered);
+        Assert.Equal(sent - allowed, answered.Count(outcome => outcome.RetryAt is not null));
+    }
+
+    [Fact]
     public async Task AGoodSignInUnderAHashWeakerThanThePolicyLeavesTheStoredHashMeetingIt()
     {
         SeedUnder(WeakerThanTheCurrentPolicy);
@@ -292,11 +317,13 @@ public sealed class LocalAccountServiceTests
 
     private LocalAccountService Service() => Service(accounts);
 
-    private LocalAccountService Service(ILocalAccountRepository repository) => new(
+    private LocalAccountService Service(ILocalAccountRepository repository) => Service(repository, hasher);
+
+    private LocalAccountService Service(ILocalAccountRepository repository, IPasswordHasher checking) => new(
         repository,
         sessions,
         grants,
-        hasher,
+        checking,
         new LoginThrottle(LoginRatePolicy.Default, clock),
         PasswordHashPolicy.Default,
         SessionPolicy.Default,
@@ -353,5 +380,38 @@ public sealed class LocalAccountServiceTests
 
             throw new InvalidOperationException("the account row cannot be written just now");
         }
+    }
+
+    private sealed class HeldUpPasswordHasher(IPasswordHasher inner) : IPasswordHasher, IDisposable
+    {
+        private readonly ManualResetEventSlim gate = new(false);
+
+        private int entered;
+
+        public int Entered => Volatile.Read(ref entered);
+
+        public PasswordHash Hash(string password, PasswordHashPolicy policy) => inner.Hash(password, policy);
+
+        public bool Matches(string password, PasswordHash hash)
+        {
+            Interlocked.Increment(ref entered);
+            gate.Wait(TimeSpan.FromSeconds(30));
+
+            return inner.Matches(password, hash);
+        }
+
+        public void Release() => gate.Set();
+
+        public async Task UntilAsync(Func<bool> settled)
+        {
+            using var giveUp = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+
+            while (!settled())
+            {
+                await Task.Delay(10, giveUp.Token);
+            }
+        }
+
+        public void Dispose() => gate.Dispose();
     }
 }

@@ -477,12 +477,14 @@ public sealed class ServiceCollectionExtensionsTests
         Dictionary<string, string?> settings = ValidSettings();
         settings["Auth:SessionAbsoluteLifetime"] = "10.00:00:00";
         settings["Auth:SessionIdleTimeout"] = "1.00:00:00";
+        settings["Auth:SessionBetweenLastUsedWrites"] = "00:10:00";
         using ServiceProvider provider = Build(settings);
 
         SessionPolicy read = provider.GetRequiredService<SessionPolicy>();
 
         Assert.Equal(TimeSpan.FromDays(10), read.AbsoluteLifetime);
         Assert.Equal(TimeSpan.FromDays(1), read.IdleTimeout);
+        Assert.Equal(TimeSpan.FromMinutes(10), read.BetweenLastUsedWrites);
     }
 
     [Fact]

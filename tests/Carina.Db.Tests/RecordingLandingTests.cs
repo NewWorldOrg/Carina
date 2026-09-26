@@ -86,6 +86,7 @@ public sealed class RecordingLandingTests(MigratedScratchDatabase database)
         await using CarinaDbContext context = Context();
         PaginatedList<Recording> found = await new RecordingDirectory(context).ListAsync(
             OnlyThisOne(written),
+            AsShipped,
             CancellationToken.None);
 
         JsonElement wire = Wire(RecordingListResponder.Of(

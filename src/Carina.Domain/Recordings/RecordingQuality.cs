@@ -1,3 +1,5 @@
+using System.Linq.Expressions;
+
 using Carina.Domain.Quality;
 
 namespace Carina.Domain.Recordings;
@@ -50,6 +52,30 @@ public sealed record RecordingQuality
             : QualityLevel.Unmeasured;
 
         return new RecordingQuality(lost > scrambled ? lost : scrambled, scrambled);
+    }
+
+    /// <summary>
+    /// The recordings that lost no packet out of at least one counted and whose packets left scrambled stay under the
+    /// warning level, as a condition a store can search by.
+    /// </summary>
+    public static Expression<Func<Recording, bool>> CountedClean(QualityBands bands)
+    {
+        ArgumentNullException.ThrowIfNull(bands);
+
+        ThresholdBand band = bands.For(QualityMetric.PacketsLeftScrambled);
+
+        if (band.Sense is not ThresholdSense.Ceiling)
+        {
+            throw new InvalidOperationException("Packets left scrambled are read against a level they stay under.");
+        }
+
+        double warning = band.Warning.Current;
+
+        return recording => recording.CcMeasured
+            && recording.CcTotalPackets > 0
+            && recording.CcDroppedPackets == 0
+            && recording.ScrambledPackets != null
+            && recording.ScrambledPackets < warning * recording.CcTotalPackets;
     }
 
     private static QualityLevel Read(long counted, long total, ThresholdBand band)

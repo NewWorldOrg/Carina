@@ -1,4 +1,5 @@
 using Carina.Domain.Base;
+using Carina.Domain.Quality;
 
 namespace Carina.Domain.Recordings;
 
@@ -37,7 +38,10 @@ public interface IRecordingDirectory
         DateTime at,
         CancellationToken cancellationToken);
 
-    Task<PaginatedList<Recording>> ListAsync(RecordingQuery query, CancellationToken cancellationToken);
+    Task<PaginatedList<Recording>> ListAsync(
+        RecordingQuery query,
+        QualityBands bands,
+        CancellationToken cancellationToken);
 
     Task<Recording?> FindAsync(RecordingId id, CancellationToken cancellationToken);
 

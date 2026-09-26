@@ -164,8 +164,54 @@ public sealed class RecordingQualityTests
     public void ARecordingIsNotReadWithoutTheLevelsItIsReadAgainst()
         => Assert.Throws<ArgumentNullException>(() => RecordingQuality.Of(DropCounters.Counted(0, 1), 0, null!));
 
+    [Fact]
+    public void ARecordingThatLostNothingAndWasUnlockedIsCountedClean()
+        => Assert.True(CountedClean(DropCounters.Counted(0, 741375), 27));
+
+    [Fact]
+    public void ARecordingThatLostNothingButWasLeftScrambledIsNotCountedClean()
+        => Assert.False(CountedClean(DropCounters.Counted(0, 1000), 900));
+
+    [Fact]
+    public void ARecordingWhoseScramblingNothingCountedIsNotCountedClean()
+        => Assert.False(CountedClean(DropCounters.Counted(0, 1000), null));
+
+    [Fact]
+    public void ARecordingThatCarriedNoPacketsIsNotCountedClean()
+        => Assert.False(CountedClean(DropCounters.Counted(0, 0), 0));
+
+    [Fact]
+    public void ARecordingThatLostAPacketIsNotCountedClean()
+        => Assert.False(CountedClean(DropCounters.Counted(1, 1000), 0));
+
+    [Fact]
+    public void ARecordingNothingCountedIsNotCountedClean()
+        => Assert.False(CountedClean(DropCounters.Unmeasured, null));
+
+    [Fact]
+    public void WhatIsCountedCleanFollowsTheScramblingLevelWhereverItIsMoved()
+    {
+        QualityBands tighter = Bands(Moved(QualityThresholdKey.PacketsLeftScrambled, 0.0005, 0.00001));
+        Recording recording = RecordingFactory.Started();
+        recording.Measure(DropCounters.Counted(0, 741375), DropTimeline.Unlocated, 27, 0, RecordingFactory.Now);
+
+        Assert.False(RecordingQuality.CountedClean(tighter).Compile()(recording));
+    }
+
     private static RecordingQuality Read(DropCounters counters, long? scrambled)
         => RecordingQuality.Of(counters, scrambled, AsShipped);
+
+    private static bool CountedClean(DropCounters counters, long? scrambled)
+    {
+        Recording recording = RecordingFactory.Started();
+
+        if (counters.Measured)
+        {
+            recording.Measure(counters, DropTimeline.Unlocated, scrambled, 0, RecordingFactory.Now);
+        }
+
+        return RecordingQuality.CountedClean(AsShipped).Compile()(recording);
+    }
 
     private static QualityThreshold Moved(QualityThresholdKey key, double shipped, double current)
         => QualityThreshold.Rehydrate(key, Threshold.Of(shipped, current, provisional: true, 0, At), "operator");

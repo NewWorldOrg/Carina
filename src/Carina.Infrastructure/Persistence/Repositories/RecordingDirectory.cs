@@ -3,6 +3,7 @@ using System.Linq.Expressions;
 using Carina.Domain.Base;
 using Carina.Domain.Channels;
 using Carina.Domain.Programmes;
+using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Persistence;
 
@@ -16,9 +17,11 @@ public sealed class RecordingDirectory(CarinaDbContext context) : IRecordingDire
 
     public async Task<PaginatedList<Recording>> ListAsync(
         RecordingQuery query,
+        QualityBands bands,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
+        ArgumentNullException.ThrowIfNull(bands);
 
         IQueryable<Recording> found = SearchableText.Carrying(
             context.Set<Recording>().AsNoTracking(),
@@ -42,8 +45,7 @@ public sealed class RecordingDirectory(CarinaDbContext context) : IRecordingDire
             {
                 DropReading.Dropped => found.Where(recording =>
                     recording.CcMeasured && recording.CcDroppedPackets > 0),
-                DropReading.Clean => found.Where(recording =>
-                    recording.CcMeasured && recording.CcDroppedPackets == 0),
+                DropReading.Clean => found.Where(RecordingQuality.CountedClean(bands)),
                 _ => found.Where(recording => !recording.CcMeasured),
             };
         }

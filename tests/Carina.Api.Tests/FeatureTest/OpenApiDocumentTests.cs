@@ -20,6 +20,16 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
             document["info"]!["version"]!.GetValue<string>());
     }
 
+    [Theory]
+    [InlineData("TunerLedgerRequest")]
+    [InlineData("TunerEntryRequest")]
+    public async Task TheTunerLedgerSaysItTakesNothingBeyondWhatItNames(string schema)
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+
+        Assert.False(document["components"]!["schemas"]![schema]!["additionalProperties"]!.GetValue<bool>());
+    }
+
     [Fact]
     public async Task EveryDescribedResponseIsJsonOnly()
     {

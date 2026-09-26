@@ -28,10 +28,38 @@ public sealed class AuthOptionsTests
     }
 
     [Fact]
-    public void HowOftenASessionWritesDownThatItWasUsedIsNotUpForConfiguration()
+    public void HowOftenASessionWritesDownThatItWasUsedIsReadAsWritten()
+        => Assert.Equal(
+            TimeSpan.FromMinutes(15),
+            ReadSession(("SessionBetweenLastUsedWrites", "00:15:00")).BetweenLastUsedWrites);
+
+    [Fact]
+    public void NothingConfiguredLeavesTheWritesThatSayASessionWasUsedAsOftenAsTheyWere()
         => Assert.Equal(
             SessionPolicy.Default.BetweenLastUsedWrites,
             ReadSession(("SessionIdleTimeout", "2.00:00:00")).BetweenLastUsedWrites);
+
+    [Theory]
+    [InlineData("00:00:00")]
+    [InlineData("-00:01:00")]
+    public void WritingThatASessionWasUsedWithNoTimeBetweenIsRefused(string setting)
+        => Assert.Contains(
+            "longer than nothing",
+            Refused(("SessionBetweenLastUsedWrites", setting)),
+            StringComparison.Ordinal);
+
+    [Fact]
+    public void WritingThatASessionWasUsedLessOftenThanItIsForgottenIsRefused()
+        => Assert.Contains(
+            "was used",
+            Refused(("SessionIdleTimeout", "01:00:00"), ("SessionBetweenLastUsedWrites", "01:00:00")),
+            StringComparison.Ordinal);
+
+    [Fact]
+    public void ASessionForgottenJustAfterTheConfiguredWriteIsRead()
+        => Assert.Equal(
+            TimeSpan.FromHours(1) + TimeSpan.FromSeconds(1),
+            ReadSession(("SessionIdleTimeout", "01:00:01"), ("SessionBetweenLastUsedWrites", "01:00:00")).IdleTimeout);
 
     [Fact]
     public void BothHalvesOfTheLoginLimitAreReadAsWritten()
