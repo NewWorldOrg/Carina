@@ -399,6 +399,37 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         Assert.True(owed[0].IsOwedARemoval);
     }
 
+    [Fact]
+    public async Task AFileThatCouldNotBeRemovedIsListedAsOwedAgain()
+    {
+        await ClearAsync();
+        (EncodeProfile profile, EncodeDestination destination) = await DefinedAsync();
+        EncodeJob job = Job(profile, destination);
+        EncodeScratchFile stuck = Scratch(job, 1, Queued);
+        EncodeScratchFile gone = Scratch(job, 2, Queued.AddMinutes(1));
+
+        await using (CarinaDbContext writing = database.Open())
+        {
+            await new EncodeJobRepository(writing).AddAsync(job, Cancel);
+
+            EncodeScratchLedger ledger = new(writing);
+            await ledger.RecordAsync(stuck, Cancel);
+            await ledger.RecordAsync(gone, Cancel);
+
+            stuck.Settle(EncodeScratchFate.CouldNotBeRemoved, Ended);
+            await ledger.SaveAsync(stuck, Cancel);
+            gone.Settle(EncodeScratchFate.Removed, Ended);
+            await ledger.SaveAsync(gone, Cancel);
+        }
+
+        await using CarinaDbContext reading = database.Open();
+        IReadOnlyList<EncodeScratchFile> owed = await new EncodeScratchLedger(reading).ListOwedAsync(job.Id, Cancel);
+
+        EncodeScratchFile listed = Assert.Single(owed);
+        Assert.Equal(stuck.Id, listed.Id);
+        Assert.Equal(EncodeScratchFate.CouldNotBeRemoved, listed.Fate);
+    }
+
     [Fact(DisplayName = "BR-ES-002: a page of the ledger comes newest first, narrowed to the standings asked for, and says how many there are")]
     public async Task APageOfTheLedgerComesNewestFirstNarrowedToTheStandingsAskedFor()
     {

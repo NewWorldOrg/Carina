@@ -120,6 +120,41 @@ public sealed class RecordingEncodesTests
     }
 
     [Fact]
+    public async Task AFileThatCouldNotBeRemovedWhenItsJobEndedIsTriedAgain()
+    {
+        using EncodeHarness harness = new();
+        RecordingId recording = RecordingId.New();
+        EncodeJob failed = harness.Running(recording);
+        string work = harness.WorkFileOf(failed, "half a picture");
+        failed.Fail(EncodeFailure.FfmpegExitedNonZero, "exit 1", Ended);
+        harness.Scratch.Files[0].Settle(EncodeScratchFate.CouldNotBeRemoved, Ended);
+
+        EncodesErased erasure = await Encodes(harness).EraseAsync(recording, Cancel);
+
+        Assert.True(erasure.EverythingIsGone);
+        Assert.Equal(1, erasure.FilesRemoved);
+        Assert.False(File.Exists(work));
+        Assert.Equal(EncodeScratchFate.Removed, harness.Scratch.Files[0].Fate);
+    }
+
+    [Fact]
+    public async Task AFileThatStillCannotBeRemovedIsLeftBehindEveryTimeItIsAskedFor()
+    {
+        using EncodeHarness harness = new();
+        RecordingId recording = RecordingId.New();
+        EncodeJob failed = harness.Running(recording);
+        harness.WorkFileOf(failed, "half a picture");
+        failed.Fail(EncodeFailure.FfmpegExitedNonZero, "exit 1", Ended);
+        harness.Settings = new EncodeSettings { OutputRoots = [new StorageRootPath(new OutputRoot("elsewhere"), harness.Shelf.Root)] };
+
+        EncodesErased first = await Encodes(harness).EraseAsync(recording, Cancel);
+        EncodesErased again = await Encodes(harness).EraseAsync(recording, Cancel);
+
+        Assert.Equal([failed.WorkFileName], first.Left);
+        Assert.Equal([failed.WorkFileName], again.Left);
+    }
+
+    [Fact]
     public async Task AnArtefactAlreadyGoneIsNotAFileLeftBehind()
     {
         using EncodeHarness harness = new();

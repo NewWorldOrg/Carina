@@ -20,7 +20,8 @@ public sealed class EncodeScratchLedger(CarinaDbContext context) : IEncodeScratc
         ArgumentNullException.ThrowIfNull(jobId);
 
         return await context.Set<EncodeScratchFile>()
-            .Where(scratch => scratch.JobId == jobId && scratch.RemovedAt == null)
+            .Where(scratch => scratch.JobId == jobId
+                && (scratch.RemovedAt == null || scratch.Fate == EncodeScratchFate.CouldNotBeRemoved))
             .OrderBy(scratch => scratch.WrittenAt)
             .ThenBy(scratch => scratch.Id)
             .ToListAsync(cancellationToken);
