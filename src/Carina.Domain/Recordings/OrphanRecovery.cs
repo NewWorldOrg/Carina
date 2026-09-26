@@ -31,7 +31,8 @@ public readonly record struct OrphanSighting(
 /// only reading that does not reach for a second writer on it — which instance the driver says it
 /// is changes nothing about that. Only where nothing stands does the broadcast matter: one still
 /// on the air carries on into the file it already has, and one that is over is marked for what was
-/// left of it.
+/// left of it — except one whose session the driver ended at the end it was opened with, which
+/// recovery leaves in flight for the pass that watches the stream to judge.
 ///
 /// Nothing here can say a recording is complete. Completion is a thing this side asked for, and
 /// recovery is the case where nobody asked: the outcomes it can write are the two that say so.
@@ -74,12 +75,7 @@ public static class OrphanRecovery
         =>
         [
             WhyNothingWasWritingIt(driverIsAnotherInstance),
-            .. fileSizeBytes switch
-            {
-                null => [RecordingFault.SizeUnobserved],
-                0 => [RecordingFault.NothingLanded],
-                _ => Array.Empty<RecordingFault>(),
-            },
+            .. RecordingFaults.OfTheFileAsWeighed(fileSizeBytes),
             .. RecordingFaults.OfWhatWasLeftScrambled(leftScrambled),
         ];
 }

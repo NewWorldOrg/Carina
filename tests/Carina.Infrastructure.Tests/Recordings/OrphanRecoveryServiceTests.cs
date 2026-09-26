@@ -275,6 +275,59 @@ public sealed class OrphanRecoveryServiceTests
     }
 
     [Fact]
+    public async Task ARecordingTheDriverStoppedAtTheEndItWasOpenedWithIsLeftForThePassThatJudgesIt()
+    {
+        var ledger = new StreamLedger();
+        DateTime told = Now.AddMinutes(-1);
+        Recording running = InFlight(Airs, told);
+
+        running.Wrote(told - Airs);
+        ledger.Hold(running);
+
+        var driver = new WatchedDriver();
+        driver.Holding[RecordingSessions.Named(running.Id)] = Over(running, endsAt: told);
+        var files = new WeighedFiles { Weighs = 1_030_000_000 };
+
+        OrphanRecovered recovered = await Recovery(ledger, driver, new WatchClock(Now), files)
+            .RecoverAsync(
+                Hello(),
+                [Concluded(running) with { StopReason = SessionStopReason.EndTimeReached, EndsAt = told }],
+                Cancel);
+
+        Assert.Equal(new OrphanRecovered(1, 0, 0, 0, 0), recovered);
+        Assert.True(ledger.Read(running.Id).IsInFlight);
+
+        await Supervisor(ledger, driver, new WatchClock(Now), files).WatchAsync(Cancel);
+
+        Recording read = ledger.Read(running.Id);
+
+        Assert.Equal(RecordingOutcome.Complete, read.Outcome);
+        Assert.Empty(read.OutcomeDetail);
+        Assert.Equal(told, read.AbortedAt);
+        Assert.Empty(driver.Started);
+    }
+
+    [Theory]
+    [InlineData(SessionStopReason.DeviceFailed)]
+    [InlineData(SessionStopReason.Preempted)]
+    public async Task ASessionThatEndedForAnyOtherReasonIsStillMarkedForWhatWasLeftOfIt(SessionStopReason reason)
+    {
+        var ledger = new StreamLedger();
+        Recording running = InFlight(Airs, Now.AddMinutes(-1));
+        ledger.Hold(running);
+
+        OrphanRecovered recovered = await Recovery(
+                ledger,
+                new WatchedDriver(),
+                new WatchClock(Now),
+                new WeighedFiles { Weighs = 900_000_000 })
+            .RecoverAsync(Hello(), [Concluded(running) with { StopReason = reason }], Cancel);
+
+        Assert.Equal(new OrphanRecovered(1, 0, 0, 1, 0), recovered);
+        Assert.Equal(RecordingOutcome.Truncated, ledger.Read(running.Id).Outcome);
+    }
+
+    [Fact]
     public async Task OneRecordingThatCannotBeTakenBackDoesNotStopTheNextFromBeing()
     {
         var ledger = new StreamLedger();
@@ -342,6 +395,29 @@ public sealed class OrphanRecoveryServiceTests
         Assert.Empty(driver.Started);
         Assert.Equal(RecordingOutcome.Failed, read.Outcome);
         Assert.Equal(RecordingFault.DiskExhausted, Assert.Single(read.OutcomeDetail).Fault);
+    }
+
+    [Theory]
+    [InlineData(null, RecordingFault.SizeUnobserved)]
+    [InlineData(0L, RecordingFault.NothingLanded)]
+    public async Task AFullDiskUnderAFileThatWeighsNothingKnownSaysWhichOfTheTwoItWas(
+        long? weighs,
+        RecordingFault said)
+    {
+        var ledger = new StreamLedger();
+        Recording running = InFlight(Airs, Airs.AddMinutes(30));
+        ledger.Hold(running);
+
+        await Recovery(ledger, new WatchedDriver(), new WatchClock(Now), new WeighedFiles { Weighs = weighs })
+            .RecoverAsync(Hello(), [FilledTheDisk(running)], Cancel);
+
+        Recording read = ledger.Read(running.Id);
+
+        Assert.Equal(RecordingOutcome.Failed, read.Outcome);
+        Assert.Equal(
+            [RecordingFault.DiskExhausted, said],
+            read.OutcomeDetail.Select(detail => detail.Fault).ToArray());
+        Assert.Equal(0, read.FileSizeObserved);
     }
 
     [Theory]

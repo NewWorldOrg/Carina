@@ -8,6 +8,14 @@ public sealed record ExpectedBitrate
 
     public static readonly ExpectedBitrate Satellite = new(11_100_000, 12_200_000);
 
+    /// <summary>
+    /// The range that holds the rates of every named kind, for a recording whose kind can no longer
+    /// be read off the catalogue.
+    /// </summary>
+    public static readonly ExpectedBitrate OfAnyKind = new(
+        Math.Min(Terrestrial.LeastBitsPerSecond, Satellite.LeastBitsPerSecond),
+        Math.Max(Terrestrial.MostBitsPerSecond, Satellite.MostBitsPerSecond));
+
     public ExpectedBitrate(long leastBitsPerSecond, long mostBitsPerSecond)
     {
         if (leastBitsPerSecond <= 0)
