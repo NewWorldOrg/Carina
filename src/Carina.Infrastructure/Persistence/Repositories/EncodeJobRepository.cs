@@ -53,15 +53,10 @@ public sealed class EncodeJobRepository(CarinaDbContext context) : IEncodeJobRep
             throw new InvalidOperationException($"Only a job that has ended has an ending to write, and this one stands at {job.Status}.");
         }
 
-        var held = await context.Set<EncodeJob>()
+        HeldRow? held = await context.Set<EncodeJob>()
             .AsNoTracking()
             .Where(row => row.Id == job.Id)
-            .Select(row => new
-            {
-                row.Status,
-                row.Attempt,
-                Version = EF.Property<uint>(row, EncodeJobConfiguration.ConcurrencyToken),
-            })
+            .Select(row => new HeldRow(row.Status, row.Attempt, EF.Property<uint>(row, EncodeJobConfiguration.ConcurrencyToken)))
             .SingleOrDefaultAsync(cancellationToken);
 
         if (held is null || held.Status is not EncodeJobStatus.Running || held.Attempt != job.Attempt)
@@ -359,4 +354,6 @@ public sealed class EncodeJobRepository(CarinaDbContext context) : IEncodeJobRep
             SqlState: PostgresErrorCodes.UniqueViolation,
             ConstraintName: EncodeJobConfiguration.ArtefactIndexName,
         };
+
+    private sealed record HeldRow(EncodeJobStatus Status, int Attempt, uint Version);
 }
