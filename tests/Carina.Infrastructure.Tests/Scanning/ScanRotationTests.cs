@@ -172,6 +172,28 @@ public sealed class ScanRotationTests
     }
 
     [Fact]
+    public async Task ASlotThatCarriesAnotherStreamThanItWasTunedForIsCountedAsAFailure()
+    {
+        var slot = TuningParameters.Bs(1, new TransportStreamId(SomeStreamId));
+        var harness = new ScanHarness(
+            new ScriptedDriverClient().Script(slot, ChannelScript.Carrying(SyntheticStream.Carrying(
+                SomeStreamId + 1,
+                new SyntheticService(SomeServiceId, "Carina One")).ToBytes())),
+            settings: BacksOffTwice);
+        var networkId = new NetworkId(SomeNetworkId);
+        var serviceId = new ServiceId(SomeServiceId);
+
+        harness.Services.Services.Add(
+            BroadcastService.Discover(networkId, serviceId, "Carina One", ServiceCategory.Television, At));
+        harness.Candidates.Candidates.Add(
+            CandidateChannel.Discover(CandidateChannelId.New(), networkId, serviceId, slot, At));
+
+        await harness.Orchestrator.RunAsync(ScanScope.Over([slot]), Cancel);
+
+        Assert.Equal(1, harness.Candidates.Candidates[0].ConsecutiveFailures);
+    }
+
+    [Fact]
     public async Task AChannelNoScanWalkedIsLeftWhereItWas()
     {
         ScanHarness harness = Failing();

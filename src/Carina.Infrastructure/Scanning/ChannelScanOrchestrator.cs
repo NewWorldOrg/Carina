@@ -272,8 +272,7 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
 
             foreach (CandidateChannel candidate in stored)
             {
-                if (!walked.TryGetValue(candidate.Tuning, out ScanRunAttempt? attempt)
-                    || attempt.Outcome is ScanAttemptOutcome.IncompleteTables or ScanAttemptOutcome.UnexpectedStream)
+                if (!walked.TryGetValue(candidate.Tuning, out ScanRunAttempt? attempt) || SaysNothingOfReception(attempt))
                 {
                     continue;
                 }
@@ -309,6 +308,15 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
 
         return departures;
     }
+
+    private static bool SaysNothingOfReception(ScanRunAttempt attempt)
+        => attempt.Outcome switch
+        {
+            ScanAttemptOutcome.IncompleteTables => true,
+            ScanAttemptOutcome.UnexpectedStream => attempt.Tuning.TransportStreamId is not { } wanted
+                || wanted.Equals(attempt.ObservedTransportStreamId),
+            _ => false,
+        };
 
     private async Task<ScanDifference> DifferenceAsync(
         IReadOnlyDictionary<TuningParameters, StreamProbe> carried,
