@@ -33,6 +33,21 @@ public sealed class TunerCapacity
     public bool SharesSeats(TuneSystem first, TuneSystem second) =>
         seats.Any(seat => seat.Serves.Contains(first) && seat.Serves.Contains(second));
 
+    /// <summary>
+    /// The capacities that may be left once a tuner is taken by something the plan cannot tune: the
+    /// named seat alone when this capacity counts it, none when it does not, and each seat in turn
+    /// when no tuner is named.
+    /// </summary>
+    public IReadOnlyList<TunerCapacity> LeftWhenTaken(string? deviceId)
+    {
+        if (deviceId is not null)
+        {
+            return seats.Any(seat => seat.DeviceId == deviceId) ? [Without(deviceId)] : [this];
+        }
+
+        return seats.Count is 0 ? [this] : [.. seats.Select(seat => Without(seat.DeviceId))];
+    }
+
     public bool CanSeat(IReadOnlyDictionary<TuneSystem, int> demand)
     {
         ArgumentNullException.ThrowIfNull(demand);
@@ -60,6 +75,9 @@ public sealed class TunerCapacity
 
         return true;
     }
+
+    private TunerCapacity Without(string deviceId)
+        => new([.. seats.Where(seat => seat.DeviceId != deviceId)], Undetermined);
 }
 
 public static class BroadcastReception

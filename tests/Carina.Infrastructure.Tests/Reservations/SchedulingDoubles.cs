@@ -37,6 +37,52 @@ internal sealed class HeldClaims : IReservationRecordingContract
     }
 }
 
+/// <summary>
+/// A recording ledger holding the recordings a test says are running, each begun for its
+/// reservation on the tuner it names.
+/// </summary>
+internal sealed class RunningRecordings : IRecordingRepository
+{
+    private readonly List<Recording> running = [];
+
+    public void Running(Reservation reservation, string tuner, DateTime until)
+    {
+        RecordingId id = RecordingId.New();
+
+        running.Add(Recording.Begin(
+            id,
+            reservation.Id,
+            reservation.Programme,
+            new OutputRoot("bulk"),
+            RecordingFileName.For(id, ".m2ts"),
+            reservation.EffectiveStartAt,
+            until,
+            ReservationFixtures.Snapshot(),
+            null,
+            BroadcastGroupRole.Standalone,
+            reservation.EffectiveStartAt,
+            new TunerDeviceId(tuner)));
+    }
+
+    public Task<Recording?> FindAsync(RecordingId id, CancellationToken cancellationToken)
+        => Task.FromResult(running.FirstOrDefault(recording => recording.Id.Equals(id)));
+
+    public Task<IReadOnlyList<Recording>> ListInFlightAsync(CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<Recording>>([.. running]);
+
+    public Task<IReadOnlyList<Recording>> ListForReservationAsync(
+        ReservationId reservationId,
+        CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<Recording>>(
+            [.. running.Where(recording => reservationId.Equals(recording.ReservationId))]);
+
+    public Task AddAsync(Recording recording, CancellationToken cancellationToken)
+        => throw new NotSupportedException("A scheduling run does not start recordings.");
+
+    public Task SaveAsync(Recording recording, CancellationToken cancellationToken)
+        => throw new NotSupportedException("A scheduling run does not write recordings.");
+}
+
 internal sealed class FixedClock(DateTime now) : TimeProvider
 {
     public override DateTimeOffset GetUtcNow() => new(now, TimeSpan.Zero);
