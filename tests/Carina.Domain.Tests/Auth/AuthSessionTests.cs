@@ -277,11 +277,30 @@ public sealed class AuthSessionTests
     }
 
     [Fact]
+    public void AStartedSessionIsNamedByTheHashOfItsCookieAndHoldsNoCookie()
+    {
+        SessionId cookie = SessionId.Issue();
+
+        AuthSession session = AuthSession.Start(
+            cookie,
+            new Subject("alice"),
+            "alice",
+            AuthMethod.Local,
+            "Firefox on Linux",
+            Started);
+
+        Assert.Equal(SessionHandle.Of(cookie), session.Handle);
+        Assert.DoesNotContain(
+            typeof(AuthSession).GetProperties(),
+            property => property.PropertyType == typeof(SessionId));
+    }
+
+    [Fact]
     public void ARehydratedSessionCarriesBackEverythingTheRowHeld()
     {
-        SessionId id = SessionId.Issue();
+        SessionHandle handle = SessionHandle.Of(SessionId.Issue());
         AuthSession session = AuthSession.Rehydrate(
-            id,
+            handle,
             new Subject("alice"),
             "Alice",
             AuthMethod.Local,
@@ -290,7 +309,7 @@ public sealed class AuthSessionTests
             "Firefox on Linux",
             Started.AddHours(4));
 
-        Assert.Equal(id, session.Id);
+        Assert.Equal(handle, session.Handle);
         Assert.Equal(new Subject("alice"), session.Subject);
         Assert.Equal("Alice", session.DisplayName);
         Assert.Equal(Started.AddHours(3), session.LastUsedAt);
@@ -302,7 +321,7 @@ public sealed class AuthSessionTests
     {
         Assert.Throws<ArgumentOutOfRangeException>(
             () => AuthSession.Rehydrate(
-                SessionId.Issue(),
+                SessionHandle.Of(SessionId.Issue()),
                 new Subject("alice"),
                 "alice",
                 AuthMethod.Local,
@@ -317,7 +336,7 @@ public sealed class AuthSessionTests
     {
         Assert.Throws<ArgumentOutOfRangeException>(
             () => AuthSession.Rehydrate(
-                SessionId.Issue(),
+                SessionHandle.Of(SessionId.Issue()),
                 new Subject("alice"),
                 "alice",
                 AuthMethod.Local,

@@ -14,7 +14,7 @@ public sealed record OidcArrivalAttempt(
     string ArrivedAt,
     string DeviceLabel);
 
-public sealed record OidcArrival(AuthSession Session, string ReturnPath, TimeSpan SessionLifetime);
+public sealed record OidcArrival(SessionId Cookie, AuthSession Session, string ReturnPath, TimeSpan SessionLifetime);
 
 public sealed record OidcConfigChange(
     string? DiscoveryUrl,

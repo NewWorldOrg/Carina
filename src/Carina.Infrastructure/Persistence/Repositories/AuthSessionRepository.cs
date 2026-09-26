@@ -6,12 +6,12 @@ namespace Carina.Infrastructure.Persistence.Repositories;
 
 public sealed class AuthSessionRepository(CarinaDbContext context) : IAuthSessionRepository
 {
-    public async Task<AuthSession?> FindAsync(SessionId id, CancellationToken cancellationToken)
+    public async Task<AuthSession?> FindAsync(SessionHandle handle, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(id);
+        ArgumentNullException.ThrowIfNull(handle);
 
         return await context.Set<AuthSession>()
-            .FirstOrDefaultAsync(session => session.Id == id, cancellationToken);
+            .FirstOrDefaultAsync(session => session.Handle == handle, cancellationToken);
     }
 
     public async Task<IReadOnlyList<AuthSession>> ListAsync(Subject subject, CancellationToken cancellationToken)
@@ -50,11 +50,11 @@ public sealed class AuthSessionRepository(CarinaDbContext context) : IAuthSessio
         await context.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task DeleteAsync(SessionId id, CancellationToken cancellationToken)
+    public async Task DeleteAsync(SessionHandle handle, CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(id);
+        ArgumentNullException.ThrowIfNull(handle);
 
-        AuthSession? held = await FindAsync(id, cancellationToken);
+        AuthSession? held = await FindAsync(handle, cancellationToken);
 
         if (held is null)
         {

@@ -337,7 +337,7 @@ public sealed class LocalAccountServiceTests
         string current,
         string replacement)
         => Held.ChangePasswordAsync(
-            new PasswordChange(here.Subject, here.Id, current, replacement),
+            new PasswordChange(here.Subject, here.Handle, current, replacement),
             Cancel);
 
     private sealed class RefusingLocalAccount(LocalAccount held) : ILocalAccountRepository

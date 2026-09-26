@@ -101,7 +101,7 @@ public sealed class SessionEndpointTests
 
         ended.Revoke(DateTime.UtcNow);
 
-        using HttpClient client = probe.Relaying($"{SessionCookie.Name}={ended.Id.Value}");
+        using HttpClient client = probe.Relaying($"{SessionCookie.Name}={probe.Sessions.CookieOf(ended).Value}");
         using HttpResponseMessage response = await client.GetAsync(Me);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
@@ -113,7 +113,7 @@ public sealed class SessionEndpointTests
     {
         await using AuthProbe probe = AuthProbe.OverHttp().WithAnAccount();
 
-        using HttpClient client = probe.Relaying($"{SessionCookie.Name}={Lapsed(probe).Id.Value}");
+        using HttpClient client = probe.Relaying($"{SessionCookie.Name}={probe.Sessions.CookieOf(Lapsed(probe)).Value}");
         using HttpResponseMessage response = await client.GetAsync(Me);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
@@ -156,10 +156,10 @@ public sealed class SessionEndpointTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal(2, listed.GetArrayLength());
-        Assert.True(Only(listed, here.Id).GetProperty("current").GetBoolean());
-        Assert.False(Only(listed, there.Id).GetProperty("current").GetBoolean());
-        Assert.Equal("another device", Only(listed, there.Id).GetProperty("deviceLabel").GetString());
-        Assert.Equal(FirstCredentials.Username, Only(listed, there.Id).GetProperty("displayName").GetString());
+        Assert.True(Only(listed, here.Handle).GetProperty("current").GetBoolean());
+        Assert.False(Only(listed, there.Handle).GetProperty("current").GetBoolean());
+        Assert.Equal("another device", Only(listed, there.Handle).GetProperty("deviceLabel").GetString());
+        Assert.Equal(FirstCredentials.Username, Only(listed, there.Handle).GetProperty("displayName").GetString());
     }
 
     [Fact]
@@ -175,12 +175,12 @@ public sealed class SessionEndpointTests
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal(2, listed.GetArrayLength());
-        Assert.Equal("somebody@example.test", Only(listed, theirs.Id).GetProperty("displayName").GetString());
-        Assert.Equal("oidc", Only(listed, theirs.Id).GetProperty("method").GetString());
-        Assert.False(Only(listed, theirs.Id).GetProperty("current").GetBoolean());
-        Assert.Equal(FirstCredentials.Username, Only(listed, here.Id).GetProperty("displayName").GetString());
-        Assert.Equal("local", Only(listed, here.Id).GetProperty("method").GetString());
-        Assert.True(Only(listed, here.Id).GetProperty("current").GetBoolean());
+        Assert.Equal("somebody@example.test", Only(listed, theirs.Handle).GetProperty("displayName").GetString());
+        Assert.Equal("oidc", Only(listed, theirs.Handle).GetProperty("method").GetString());
+        Assert.False(Only(listed, theirs.Handle).GetProperty("current").GetBoolean());
+        Assert.Equal(FirstCredentials.Username, Only(listed, here.Handle).GetProperty("displayName").GetString());
+        Assert.Equal("local", Only(listed, here.Handle).GetProperty("method").GetString());
+        Assert.True(Only(listed, here.Handle).GetProperty("current").GetBoolean());
     }
 
     [Fact]
@@ -195,9 +195,9 @@ public sealed class SessionEndpointTests
         string body = await response.Content.ReadAsStringAsync();
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.DoesNotContain(here.Id.Value, body, StringComparison.Ordinal);
-        Assert.DoesNotContain(there.Id.Value, body, StringComparison.Ordinal);
-        Assert.DoesNotContain(theirs.Id.Value, body, StringComparison.Ordinal);
+        Assert.DoesNotContain(probe.Sessions.CookieOf(here).Value, body, StringComparison.Ordinal);
+        Assert.DoesNotContain(probe.Sessions.CookieOf(there).Value, body, StringComparison.Ordinal);
+        Assert.DoesNotContain(probe.Sessions.CookieOf(theirs).Value, body, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -226,7 +226,7 @@ public sealed class SessionEndpointTests
         await probe.SignedInAsync();
         AuthSession theirs = SomebodyElseSitting(probe);
 
-        using HttpResponseMessage response = await EndingAsync(probe, theirs.Id.Value);
+        using HttpResponseMessage response = await EndingAsync(probe, probe.Sessions.CookieOf(theirs).Value);
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.Equal(SessionStatus.Active, theirs.StatusAt(DateTime.UtcNow, SessionPolicy.Default));
@@ -239,7 +239,7 @@ public sealed class SessionEndpointTests
         await probe.SignedInAsync();
         AuthSession there = probe.Sitting("another device");
 
-        using HttpResponseMessage ended = await EndingAsync(probe, SessionHandle.Of(there.Id));
+        using HttpResponseMessage ended = await EndingAsync(probe, there.Handle);
         using HttpResponseMessage after = await probe.Client.GetAsync(Me);
 
         Assert.Equal(HttpStatusCode.NoContent, ended.StatusCode);
@@ -254,7 +254,7 @@ public sealed class SessionEndpointTests
         await probe.SignedInAsync();
         AuthSession theirs = SomebodyElseSitting(probe);
 
-        using HttpResponseMessage response = await EndingAsync(probe, SessionHandle.Of(theirs.Id));
+        using HttpResponseMessage response = await EndingAsync(probe, theirs.Handle);
         using HttpResponseMessage after = await probe.Client.GetAsync(Me);
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
@@ -279,7 +279,7 @@ public sealed class SessionEndpointTests
         await using AuthProbe probe = AuthProbe.OverHttp();
         AuthSession here = await probe.SignedInAsync();
 
-        using HttpResponseMessage ended = await EndingAsync(probe, SessionHandle.Of(here.Id));
+        using HttpResponseMessage ended = await EndingAsync(probe, here.Handle);
         using HttpResponseMessage after = await probe.Client.GetAsync(Me);
 
         Assert.Equal(HttpStatusCode.NoContent, ended.StatusCode);
@@ -419,8 +419,9 @@ public sealed class SessionEndpointTests
     private static AuthSession Lapsed(AuthProbe probe)
     {
         DateTime now = DateTime.UtcNow;
+        SessionId cookie = SessionId.Issue();
         AuthSession lapsed = AuthSession.Rehydrate(
-            SessionId.Issue(),
+            SessionHandle.Of(cookie),
             new Subject(FirstCredentials.Username),
             FirstCredentials.Username,
             AuthMethod.Local,
@@ -429,27 +430,25 @@ public sealed class SessionEndpointTests
             "a device that stopped asking",
             null);
 
-        probe.Sessions.Sessions.Add(lapsed);
-
-        return lapsed;
+        return probe.Sessions.Seat(cookie, lapsed);
     }
 
     private static AuthSession SomebodyElseSitting(AuthProbe probe)
     {
-        AuthSession theirs = AuthSession.Start(
-            SessionId.Issue(),
-            new Subject("108204329581372"),
-            "somebody@example.test",
-            AuthMethod.Oidc,
-            "a stranger's device",
-            DateTime.UtcNow);
+        SessionId cookie = SessionId.Issue();
 
-        probe.Sessions.Sessions.Add(theirs);
-
-        return theirs;
+        return probe.Sessions.Seat(
+            cookie,
+            AuthSession.Start(
+                cookie,
+                new Subject("108204329581372"),
+                "somebody@example.test",
+                AuthMethod.Oidc,
+                "a stranger's device",
+                DateTime.UtcNow));
     }
 
-    private static JsonElement Only(JsonElement listed, SessionId id)
+    private static JsonElement Only(JsonElement listed, SessionHandle handle)
         => listed.EnumerateArray()
-            .Single(session => session.GetProperty("id").GetString() == SessionHandle.Of(id).Value);
+            .Single(session => session.GetProperty("id").GetString() == handle.Value);
 }
