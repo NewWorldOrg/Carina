@@ -272,7 +272,8 @@ public sealed class ChannelScanOrchestrator : IChannelScanOrchestrator
 
             foreach (CandidateChannel candidate in stored)
             {
-                if (!walked.TryGetValue(candidate.Tuning, out ScanRunAttempt? attempt))
+                if (!walked.TryGetValue(candidate.Tuning, out ScanRunAttempt? attempt)
+                    || attempt.Outcome is ScanAttemptOutcome.IncompleteTables or ScanAttemptOutcome.UnexpectedStream)
                 {
                     continue;
                 }
