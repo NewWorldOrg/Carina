@@ -142,11 +142,7 @@ public sealed class Programme
 
     /// <summary>
     /// Writes down that this programme was named again by a reading that heard the whole of its
-    /// service's announced schedule. It is the one mark that separates "still announced" from "no
-    /// longer announced": the row itself never goes away on its own, and <c>UpdatedAt</c> stands
-    /// still while nothing about the programme changes, so neither of them can tell the two apart.
-    /// No mark at all means no whole reading has ever named this programme, which says nothing
-    /// either way.
+    /// service's announced schedule. No mark means no whole reading has ever named it.
     /// </summary>
     public void Heard(DateTime at)
     {

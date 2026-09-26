@@ -11,9 +11,9 @@ public enum ArtefactClaim
 }
 
 /// <summary>
-/// How an attempt to start the next job ended. Four of these are the ledger's word on a claim.
-/// <see cref="AViewerHoldsTheCard"/> is the machine's own: the card was making a picture for
-/// someone watching, so the ledger was not asked at all.
+/// How an attempt to start the next job ended. <see cref="AViewerHoldsTheCard"/> means the ledger
+/// was not asked because the card was making a picture for someone watching; the others are the
+/// ledger's answer to a claim.
 /// </summary>
 public enum EncodeClaimStanding
 {
@@ -29,9 +29,8 @@ public enum EncodeClaimStanding
 }
 
 /// <summary>
-/// What a look at the queue came back with. The job is there only when this caller now holds it
-/// as running; the other three answers say why not, so a caller can tell an empty queue from a
-/// queue somebody else is working through.
+/// What a look at the queue came back with. The job is there only when this caller now holds it as
+/// running; the other answers say why not.
 /// </summary>
 public sealed record EncodeClaim
 {
@@ -73,17 +72,16 @@ public interface IEncodeJobRepository
     Task AddAsync(EncodeJob job, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Writes the job as it stands. A row that moved under this hand since it was read — called off
-    /// while it ran, as a rule — is not written over: the save throws
-    /// <see cref="EncodeJobMovedMeanwhileException"/> and the ledger's word stands.
+    /// Writes the job as it stands.
     /// </summary>
+    /// <exception cref="EncodeJobMovedMeanwhileException">The row changed since it was read.</exception>
     Task SaveAsync(EncodeJob job, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Writes a job that has ended over its row, from a hand that did not read that row, when the
-    /// ledger still holds it as running on the same attempt. The answer is false when the row has
-    /// moved on, and the ledger's word then stands.
+    /// Writes a job that has ended over its row, without having read that row, when the ledger still
+    /// holds it as running on the same attempt.
     /// </summary>
+    /// <returns><see langword="false"/> when the row has moved on and was left as it was.</returns>
     Task<bool> WriteTheEndingAsync(EncodeJob job, CancellationToken cancellationToken);
 
     Task<PaginatedList<EncodeJob>> ListAsync(EncodeJobQuery query, CancellationToken cancellationToken);
@@ -92,33 +90,31 @@ public interface IEncodeJobRepository
 
     /// <summary>
     /// Moves the oldest waiting job to running by a conditional update, and hands it back only when
-    /// that update changed one row. One running job is all the ledger holds, so a second claim while
-    /// one runs is refused by the ledger itself, never by anything this process remembers.
+    /// that update changed one row. The ledger holds at most one running job, so a second claim while
+    /// one runs is refused by the ledger.
     /// </summary>
     Task<EncodeClaim> ClaimNextAsync(DateTime at, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<EncodeJob>> ListRunningAsync(CancellationToken cancellationToken);
 
     /// <summary>
-    /// Writes the job's artefact name into the ledger before anything is renamed. The ledger holds
-    /// one owner per name under a root, so the answer is the claim or the news that another job
-    /// already holds that name; the job itself is saved as it stands either way.
+    /// Writes the job's artefact name into the ledger before anything is renamed, and saves the job as
+    /// it stands. The ledger holds one owner per name under a root.
     /// </summary>
+    /// <returns>The claim, or that another job already holds the name.</returns>
     Task<ArtefactClaim> ClaimArtefactAsync(EncodeJob job, EncodeFileName name, CancellationToken cancellationToken);
 
     /// <summary>
-    /// Takes the artefact name over from whichever earlier job still holds it under this root, for
-    /// a job a person asked to make the artefact again. The earlier row keeps what it made and is
-    /// marked as having given the name up, which is what lets the ledger hand the name to this job;
-    /// a job nobody asked for takes nothing over and is refused outright. The answer is how many
-    /// rows gave the name up.
+    /// Takes the artefact name over from whichever earlier job still holds it under this root, for a job
+    /// asked to make the artefact again. The earlier row keeps what it made and is marked as having
+    /// given the name up; a job not asked to make it again is refused.
     /// </summary>
+    /// <returns>How many rows gave the name up.</returns>
     Task<int> TakeTheNameOverAsync(EncodeJob job, EncodeFileName name, DateTime at, CancellationToken cancellationToken);
 
     /// <summary>
-    /// How long the last few jobs that ran to their end took, at most <paramref name="most"/> of
-    /// them, newest first. Only a job that completed is asked after: one that failed partway and
-    /// one a person called off say nothing about how long an encode takes.
+    /// How long the last jobs that completed took, at most <paramref name="most"/> of them, newest
+    /// first. Jobs that failed or were called off are not counted.
     /// </summary>
     Task<IReadOnlyList<EncodeSpell>> RecentSpellsAsync(int most, CancellationToken cancellationToken);
 

@@ -61,11 +61,8 @@ public sealed record AllocationCandidate
     public bool Pinned { get; }
 
     /// <summary>
-    /// How far the recording this reservation has already started is actually promised, when that
-    /// is further than the reservation's own end. A recording that followed its programme past the
-    /// end the reservation was planned for holds its tuner for the window it was granted, not the
-    /// one the reservation still says: without this the planner would seat the next reservation on
-    /// a tuner that is not free yet and call it secured until the moment it is refused.
+    /// How far the recording this reservation has already started is actually promised, when that is
+    /// further than the reservation's own end. The planner treats the tuner as held until then.
     /// </summary>
     public DateTime? HeldUntil { get; }
 

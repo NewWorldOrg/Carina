@@ -80,8 +80,7 @@ public static class RecordingFaults
 
     /// <summary>
     /// Reasons that say how long the recording was promised rather than how it ran or how it ended.
-    /// They are written while it is still running, by whatever set the window, and they are still
-    /// there afterwards to explain a window nobody could have read off the guide.
+    /// They are written while it is still running, by whatever set the window.
     /// </summary>
     public static readonly IReadOnlyList<RecordingFault> ThatExplainTheWindow =
     [

@@ -3,18 +3,18 @@ using Carina.Domain.Integrity;
 namespace Carina.Domain.Encodings;
 
 /// <summary>
-/// How jobs are run on this machine. <see cref="OutputRoots"/> names the roots this process holds
-/// for writing and where each is mounted: an artefact is placed only under one of these, never
-/// under a root the recordings are read from, which this process holds read-only. Left unset,
-/// nothing can be encoded and the check at startup says so. A work file is written beside the
-/// artefact it will become, under the same root, so the rename that finishes the job never crosses
-/// a mount; set, <see cref="WorkedIn"/> names one directory for every root, and the check at
-/// startup refuses a directory on another mount than any root. The rest says
-/// whether a recording that has ended is queued without anyone asking, which encoder a job asks
-/// for first, how many of the machine's cores a run may use, how often the queue is looked at, how
-/// long a job may go without making headway, and how many attempts it gets before it is given up.
-/// <see cref="Chapters"/> is the separate matter of looking for the breaks in a recording first.
+/// How jobs are run on this machine.
 /// </summary>
+/// <remarks>
+/// <see cref="OutputRoots"/> names the roots this process holds for writing and where each is
+/// mounted; an artefact is placed only under one of these. Left unset, nothing can be encoded and
+/// the check at startup says so. A work file is written beside the artefact it will become, unless
+/// <see cref="WorkedIn"/> names one directory for every root, which must be on the same mount as a
+/// root. The rest says whether a recording that has ended is queued without anyone asking, which
+/// encoder a job asks for first, how many cores a run may use, how often the queue is looked at, how
+/// long a job may go without headway, and how many attempts it gets. <see cref="Chapters"/> says how
+/// the breaks in a recording are looked for first.
+/// </remarks>
 public sealed record EncodeSettings
 {
     public IReadOnlyList<StorageRootPath> OutputRoots { get; init; } = [];
@@ -41,19 +41,17 @@ public sealed record EncodeSettings
 }
 
 /// <summary>
-/// How a run looks for the breaks in a recording before it encodes it. <see cref="Marked"/> is the
-/// switch: turned off, nothing looks and a run's command line is what it was before. The rest is
-/// what the look is made of — how quiet a stretch has to be to count as quiet and for how long,
-/// how much the picture has to change to count as a change, the grid a pod of advertisements is
-/// laid on and how far off that grid a pair of boundaries may sit and still be taken as a pair —
-/// and two safety valves: <see cref="MostBreakShare"/> throws the whole reading away when it took
-/// more than that much of the recording for breaks, and <see cref="MostChapters"/> throws it away
-/// when it put in more marks than that. <see cref="Watermark"/> says whether the look also watches
-/// the picture for the station's watermark — learning it from this recording for the ones after it,
-/// and judging this one by the one learned ahead — which costs one more pass over the picture.
-/// Every one of them is a number, a truth or a length of time; none of them is text a filter could
-/// be written in.
+/// How a run looks for the breaks in a recording before it encodes it.
 /// </summary>
+/// <remarks>
+/// <see cref="Marked"/> turns the look on. The rest sets how quiet a stretch has to be and for how
+/// long, how much the picture has to change, the grid a pod of advertisements is laid on and how far
+/// off it a pair of boundaries may sit. <see cref="MostBreakShare"/> and <see cref="MostChapters"/>
+/// throw the whole reading away when it took more of the recording for breaks, or put in more marks,
+/// than that. <see cref="Watermark"/> also watches the picture for the station's watermark, learning
+/// it from this recording and judging this one by the one learned ahead, at the cost of one more
+/// pass over the picture.
+/// </remarks>
 public sealed record ChapterSettings
 {
     public bool Marked { get; init; } = true;

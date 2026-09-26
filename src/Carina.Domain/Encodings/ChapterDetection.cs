@@ -3,20 +3,16 @@ using Carina.Domain.Base;
 namespace Carina.Domain.Encodings;
 
 /// <summary>
-/// What a run has to say about where the breaks in one artefact are. A marked reading carries the
-/// whole artefact laid out end to end with no gap, from its zero to its length, turning from
-/// programme to break and back at every mark, and every other verdict carries nothing to mark: a
-/// reading that was thrown away leaves no half of itself behind. <see cref="BreakShare"/> is how
-/// much of the length the reading took for breaks, kept whatever the verdict, so the run that
-/// tripped the safety valve can be found afterwards without reading logs.
-/// <see cref="Noting"/> is how a reading says that it was made from part of what there was to see:
-/// it changes nothing that was read, only what is known about the reading of it.
-/// <para>
-/// <see cref="Learned"/> is the station's watermark the run learned from this source, for judging
-/// the recordings of the same service that come after it. It rides beside the reading whatever the
-/// verdict and is never what this reading was judged by.
-/// </para>
+/// Where one run put the breaks in one artefact. A marked reading covers the whole artefact end to
+/// end with no gap, turning from programme to break and back at every mark; every other verdict
+/// carries no segments.
 /// </summary>
+/// <remarks>
+/// <see cref="BreakShare"/> is the share of the length the reading took for breaks, kept whatever
+/// the verdict. <see cref="Noting"/> records that the reading was made from part of the evidence.
+/// <see cref="Learned"/> is the station watermark the run learned from this source, for judging
+/// later recordings of the same service; this reading is never judged by it.
+/// </remarks>
 public sealed record ChapterDetection
 {
     private ChapterDetection(
@@ -102,10 +98,8 @@ public sealed record ChapterDetection
     }
 
     /// <summary>
-    /// The same reading with something further said about how it was made — that only part of what
-    /// there was to see was looked at, and why. A reading made from part of the evidence is still
-    /// the reading that evidence gives; what is added here is the standing to doubt it, kept
-    /// whatever the verdict so that it is read wherever the reading is.
+    /// The same reading with a note that only part of the evidence was looked at, and why. The note is
+    /// kept whatever the verdict.
     /// </summary>
     public ChapterDetection Noting(string note)
     {

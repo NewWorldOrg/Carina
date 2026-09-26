@@ -3,9 +3,9 @@ using Carina.Domain.Recordings;
 namespace Carina.Domain.Encodings;
 
 /// <summary>
-/// The recordings that ended the way an encode is made from, were asked to be encoded when they
-/// were recorded, whose deletion has left no files behind, and that the ledger holds no job for,
-/// whatever became of one: the oldest start first, and at most as many as asked for.
+/// Reads the recordings to queue for an encode: those that ended the way an encode is made from,
+/// were asked to be encoded when they were recorded, have no files left behind by a deletion, and
+/// have no job in the ledger. The oldest start comes first, at most as many as asked for.
 /// </summary>
 public interface IEncodeIntakeReader
 {

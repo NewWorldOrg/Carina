@@ -1,11 +1,9 @@
 namespace Carina.Domain.Encodings;
 
 /// <summary>
-/// One chapter of one job's artefact, as the ledger holds it: on the artefact's own clock, because
-/// that is the clock a player of the artefact is on. It belongs to the job rather than to the
-/// recording, so a recording encoded twice carries the reading each run made of it and a player is
-/// answered with the one belonging to the artefact it was handed. Where the chapter sits among its
-/// neighbours is kept as its own number rather than left to the order rows come back in.
+/// One chapter of one job's artefact, as the ledger holds it, on the artefact's own clock. It
+/// belongs to the job rather than to the recording, and carries its own position among its
+/// neighbours.
 /// </summary>
 public sealed class EncodeChapter
 {

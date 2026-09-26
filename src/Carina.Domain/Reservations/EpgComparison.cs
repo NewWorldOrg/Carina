@@ -4,8 +4,7 @@ namespace Carina.Domain.Reservations;
 
 /// <summary>
 /// What a reservation says about its broadcast, held against what the guide says now. Only a
-/// difference worth telling somebody about is returned: broadcasts slip by seconds all the time and
-/// the margins already absorb that, so a mark on every one of them would make the mark worthless.
+/// difference beyond what the margins already absorb is returned.
 /// </summary>
 public static class EpgComparison
 {

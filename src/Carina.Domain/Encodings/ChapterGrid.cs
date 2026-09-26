@@ -4,30 +4,23 @@ using System.Runtime.CompilerServices;
 namespace Carina.Domain.Encodings;
 
 /// <summary>
-/// Where the breaks in a recording are, worked out from what was observed of it and from nothing
-/// else. A pod of advertisements is laid out in whole multiples of the grid, so no boundary is
-/// ever taken on its own: only a pair of corroborated boundaries a whole number of grid steps
-/// apart makes a break, which is what leaves a programme carrying no advertisements marked
-/// nowhere. Pods that overlap are one pod, a pod is pulled onto the grid if it sits within the
-/// tolerance of it, and a sliver of programme too short to be worth a mark is given to the break
-/// beside it. Two safety valves follow, and both throw the reading away whole rather than leave
-/// half of it believed: one for a reading that took more of the length for breaks than it is
-/// allowed to, one for a reading that put in more marks than it is allowed to. What comes back
-/// covers the whole length end to end with no gap. What it was told to read by is checked before
-/// anything is read, so a grid of no length, a tolerance half that grid or wider, a threshold or a
-/// valve that is no share of the whole, and a reading allowed no marks at all are all refused here
-/// rather than worked around further in.
-/// <para>
-/// A station's watermark is only ever used to take a pod away, never to make one: a pod through
-/// which the mark learned ahead stayed on screen in more than <see cref="WatermarkedShare"/> of the
-/// pictures looked at inside it is programme, not a break. The pictures at either edge
-/// of a pod are left out, because the mark comes and goes around the boundary itself, and a pod with
-/// fewer than <see cref="FewestSightingsInsideABreak"/> pictures inside it is not taken away on their
-/// word. A mark that was on screen in <see cref="WatermarkNearlyEverywhere"/> of all the pictures
-/// looked at tells programme from break nowhere — it is the picture of a programme without
-/// advertisements, or something that is not a watermark at all — and is not used.
-/// </para>
+/// Works out where the breaks in a recording are from what was observed of it.
 /// </summary>
+/// <remarks>
+/// Only a pair of corroborated boundaries a whole number of grid steps apart makes a break.
+/// Overlapping pods merge, a pod within the tolerance of the grid is pulled onto it, and a sliver of
+/// programme too short to mark is given to the break beside it. The reading is thrown away whole
+/// when it takes more of the length for breaks, or more marks, than allowed. What comes back covers
+/// the whole length with no gap. A grid of no length, a tolerance of half the grid or wider, a
+/// threshold or valve that is no share of the whole, and no marks allowed are refused.
+/// <para>
+/// A station watermark only takes a pod away: a pod in which the mark stayed on screen in more than
+/// <see cref="WatermarkedShare"/> of the pictures looked at inside it is programme. Pictures at a
+/// pod's edges are not counted, a pod with fewer than <see cref="FewestSightingsInsideABreak"/>
+/// pictures inside it is not judged by the mark, and a mark on screen in
+/// <see cref="WatermarkNearlyEverywhere"/> of all pictures looked at is not used.
+/// </para>
+/// </remarks>
 public static class ChapterGrid
 {
     public const int LongestPair = 12;

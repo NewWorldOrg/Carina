@@ -1,8 +1,8 @@
 namespace Carina.Domain.Encodings;
 
 /// <summary>
-/// Where a running job has got to. The portion cannot be more than all of it and nothing left can
-/// be less than none, because both are worked out here rather than by whoever draws them.
+/// Where a running job has got to. The portion done is at most all of it, and the time left is at
+/// least none.
 /// </summary>
 public sealed record EncodeProgress
 {
