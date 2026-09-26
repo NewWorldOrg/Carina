@@ -246,19 +246,19 @@ public sealed class LiveSessionManager(
 
     private static async Task EndedAsync(IReadOnlyList<LiveSession> letting)
     {
-        await Task.WhenAll(letting.Select(session => Quietly(session.Life)));
+        await Task.WhenAll(letting.Select(session => QuietlyAsync(session.Life)));
 
         // The tuner is let go of by the reading, not by the session, so the asking viewer waits
         // for the reading to finish rather than being refused by a tuner on its way out.
         await Task.WhenAll(
-            letting.Select(session => session.Reception).Distinct().Select(reading => Quietly(reading.Life)));
+            letting.Select(session => session.Reception).Distinct().Select(reading => QuietlyAsync(reading.Life)));
     }
 
     /// <summary>
     /// How a teardown ended is that session's own business: what is waited for here is that it is
     /// over, and the viewer asking for a tuner is not the one to be handed its failure.
     /// </summary>
-    private static async Task Quietly(Task ending)
+    private static async Task QuietlyAsync(Task ending)
     {
         try
         {

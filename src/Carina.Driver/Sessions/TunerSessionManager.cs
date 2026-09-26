@@ -165,7 +165,7 @@ public sealed class TunerSessionManager(
     {
         lock (drainGate)
         {
-            drain ??= Drain(cancellationToken);
+            drain ??= DrainOnceAsync(cancellationToken);
 
             return drain;
         }
@@ -173,11 +173,11 @@ public sealed class TunerSessionManager(
 
     public Task StopAsync(CancellationToken cancellationToken) => DrainAsync(cancellationToken);
 
-    private async Task Drain(CancellationToken cancellationToken)
+    private async Task DrainOnceAsync(CancellationToken cancellationToken)
     {
         try
         {
-            await DrainEverySession(cancellationToken);
+            await DrainEverySessionAsync(cancellationToken);
         }
         finally
         {
@@ -186,7 +186,7 @@ public sealed class TunerSessionManager(
         }
     }
 
-    private async Task DrainEverySession(CancellationToken cancellationToken)
+    private async Task DrainEverySessionAsync(CancellationToken cancellationToken)
     {
         TunerSession[] running;
 
@@ -224,9 +224,9 @@ public sealed class TunerSessionManager(
 
             Task theRecordings = Task.WhenAll(recordings.Select(session => session.Completion));
 
-            if (await Settles(theRecordings, drainCap, cancellationToken))
+            if (await SettlesAsync(theRecordings, drainCap, cancellationToken))
             {
-                if (!await Settles(everyone, hardStop, CancellationToken.None))
+                if (!await SettlesAsync(everyone, hardStop, CancellationToken.None))
                 {
                     GiveUpOn(running);
                 }
@@ -249,7 +249,7 @@ public sealed class TunerSessionManager(
             }
         }
 
-        if (!await Settles(everyone, hardStop, CancellationToken.None))
+        if (!await SettlesAsync(everyone, hardStop, CancellationToken.None))
         {
             GiveUpOn(running);
         }
@@ -270,7 +270,7 @@ public sealed class TunerSessionManager(
         }
     }
 
-    private async Task<bool> Settles(
+    private async Task<bool> SettlesAsync(
         Task everyone,
         TimeSpan limit,
         CancellationToken cancellationToken

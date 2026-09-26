@@ -86,7 +86,7 @@ public sealed class ReservationRecalculationHostedService(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        if (!await Waited(settings.BeforeFirstPass, stoppingToken))
+        if (!await WaitedAsync(settings.BeforeFirstPass, stoppingToken))
         {
             return;
         }
@@ -226,8 +226,8 @@ public sealed class ReservationRecalculationHostedService(
     private async Task<bool> WaitAsync(TimeSpan waiting, CancellationToken stoppingToken)
     {
         using CancellationTokenSource linked = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
-        Task<bool> rung = Rung(linked.Token);
-        Task<bool> due = Waited(waiting, linked.Token);
+        Task<bool> rung = RungAsync(linked.Token);
+        Task<bool> due = WaitedAsync(waiting, linked.Token);
 
         await Task.WhenAny(rung, due);
         await linked.CancelAsync();
@@ -243,7 +243,7 @@ public sealed class ReservationRecalculationHostedService(
         return !stoppingToken.IsCancellationRequested;
     }
 
-    private async Task<bool> Rung(CancellationToken cancellationToken)
+    private async Task<bool> RungAsync(CancellationToken cancellationToken)
     {
         try
         {
@@ -255,7 +255,7 @@ public sealed class ReservationRecalculationHostedService(
         }
     }
 
-    private async Task<bool> Waited(TimeSpan waiting, CancellationToken cancellationToken)
+    private async Task<bool> WaitedAsync(TimeSpan waiting, CancellationToken cancellationToken)
     {
         try
         {

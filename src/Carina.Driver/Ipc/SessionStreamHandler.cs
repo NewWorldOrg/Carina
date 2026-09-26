@@ -92,7 +92,7 @@ public static class SessionStreamHandler
 
         try
         {
-            await Pump(
+            await PumpAsync(
                 context,
                 session,
                 subscription,
@@ -106,7 +106,7 @@ public static class SessionStreamHandler
         }
     }
 
-    private static async Task Pump(
+    private static async Task PumpAsync(
         HttpContext context,
         TunerSession session,
         SessionSubscription subscription,
@@ -143,7 +143,7 @@ public static class SessionStreamHandler
             return;
         }
 
-        if (!await EndedCleanly(session, subscription, conclusionGrace))
+        if (!await EndedCleanlyAsync(session, subscription, conclusionGrace))
         {
             context.Abort();
 
@@ -160,7 +160,7 @@ public static class SessionStreamHandler
         }
     }
 
-    private static async Task<bool> EndedCleanly(
+    private static async Task<bool> EndedCleanlyAsync(
         TunerSession session,
         SessionSubscription subscription,
         TimeSpan conclusionGrace

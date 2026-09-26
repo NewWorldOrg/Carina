@@ -458,7 +458,7 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
             {
                 using (response)
                 {
-                    return DriverCall<Stream>.Refused(await ProblemIn(response, patience.Token));
+                    return DriverCall<Stream>.Refused(await ProblemInAsync(response, patience.Token));
                 }
             }
 
@@ -493,7 +493,7 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
 
         if (!response.IsSuccessStatusCode)
         {
-            return DriverCall<T>.Refused(await ProblemIn(response, cancellationToken));
+            return DriverCall<T>.Refused(await ProblemInAsync(response, cancellationToken));
         }
 
         byte[] body = await response.Content.ReadAsByteArrayAsync(cancellationToken);
@@ -513,7 +513,7 @@ public sealed class DriverIpcClient : IDriverClient, IDisposable
             : DriverCall<T>.Reached(value);
     }
 
-    private static async Task<DriverProblem> ProblemIn(
+    private static async Task<DriverProblem> ProblemInAsync(
         HttpResponseMessage response,
         CancellationToken cancellationToken)
     {

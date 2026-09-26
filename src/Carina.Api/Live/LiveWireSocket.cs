@@ -43,12 +43,12 @@ public sealed class LiveWireSocket(
         {
             await GoodbyeAsync(departure, listening);
             await leash.CancelAsync();
-            await Swallow(listening);
+            await SwallowAsync(listening);
         }
         else
         {
             await leash.CancelAsync();
-            await Swallow(carrying);
+            await SwallowAsync(carrying);
             await GoodbyeAsync(departure, null);
         }
 
@@ -96,7 +96,7 @@ public sealed class LiveWireSocket(
             or ObjectDisposedException
             or InvalidOperationException;
 
-    private static async Task Swallow(Task running)
+    private static async Task SwallowAsync(Task running)
     {
         try
         {
@@ -167,19 +167,19 @@ public sealed class LiveWireSocket(
         {
             Task advanced = startup?.Advanced ?? Never;
 
-            await SayWhereWeAre(cancellationToken);
+            await SayWhereWeAreAsync(cancellationToken);
 
             Task<bool> waiting = frames.WaitToReadAsync(cancellationToken).AsTask();
             int quiets = 0;
 
             while (true)
             {
-                switch (await FirstOf(waiting, advanced, settings.BetweenPings, clock, cancellationToken))
+                switch (await FirstOfAsync(waiting, advanced, settings.BetweenPings, clock, cancellationToken))
                 {
                     case Woken.ByProgress:
                         quiets = 0;
                         advanced = startup!.Advanced;
-                        await SayWhatMoved(cancellationToken);
+                        await SayWhatMovedAsync(cancellationToken);
 
                         continue;
                     case Woken.ByQuiet:
@@ -187,12 +187,12 @@ public sealed class LiveWireSocket(
 
                         if (++quiets > settings.QuietsBeforeTheCeiling)
                         {
-                            await SayWhyItEnded(LiveDeparture.SourceWentQuiet, cancellationToken);
+                            await SayWhyItEndedAsync(LiveDeparture.SourceWentQuiet, cancellationToken);
 
                             return LiveDeparture.SourceWentQuiet;
                         }
 
-                        if (!await SayWhereWeAre(cancellationToken))
+                        if (!await SayWhereWeAreAsync(cancellationToken))
                         {
                             await SendAsync(LiveControls.Frame(LiveControl.Ping), cancellationToken);
                         }
@@ -205,7 +205,7 @@ public sealed class LiveWireSocket(
 
                 if (!await waiting)
                 {
-                    await SayWhyItEnded(LiveDeparture.SourceEnded, cancellationToken);
+                    await SayWhyItEndedAsync(LiveDeparture.SourceEnded, cancellationToken);
 
                     return LiveDeparture.SourceEnded;
                 }
@@ -234,24 +234,24 @@ public sealed class LiveWireSocket(
         }
         catch (Exception)
         {
-            await SayWhyItEndedIfItCan(LiveDeparture.SourceBroke, cancellationToken);
+            await SayWhyItEndedIfItCanAsync(LiveDeparture.SourceBroke, cancellationToken);
 
             return LiveDeparture.SourceBroke;
         }
     }
 
-    private async Task SayWhyItEndedIfItCan(LiveDeparture departure, CancellationToken cancellationToken)
+    private async Task SayWhyItEndedIfItCanAsync(LiveDeparture departure, CancellationToken cancellationToken)
     {
         try
         {
-            await SayWhyItEnded(departure, cancellationToken);
+            await SayWhyItEndedAsync(departure, cancellationToken);
         }
         catch (Exception gone) when (TheWireIsGone(gone) || gone is ViewerTooSlow)
         {
         }
     }
 
-    private async Task SayWhyItEnded(LiveDeparture departure, CancellationToken cancellationToken)
+    private async Task SayWhyItEndedAsync(LiveDeparture departure, CancellationToken cancellationToken)
     {
         if ((ending?.Current?.Why ?? LiveDepartures.Ending(departure)) is not { } why)
         {
@@ -263,29 +263,29 @@ public sealed class LiveWireSocket(
             cancellationToken);
     }
 
-    private async Task<bool> SayWhereWeAre(CancellationToken cancellationToken)
+    private async Task<bool> SayWhereWeAreAsync(CancellationToken cancellationToken)
     {
         if (startup?.Current is not { InProgress: true } where)
         {
             return false;
         }
 
-        await Tell(where, cancellationToken);
+        await TellAsync(where, cancellationToken);
 
         return true;
     }
 
-    private async Task SayWhatMoved(CancellationToken cancellationToken)
+    private async Task SayWhatMovedAsync(CancellationToken cancellationToken)
     {
         if (startup?.Current is not { } where || ReferenceEquals(where, said))
         {
             return;
         }
 
-        await Tell(where, cancellationToken);
+        await TellAsync(where, cancellationToken);
     }
 
-    private async Task Tell(LiveStartup where, CancellationToken cancellationToken)
+    private async Task TellAsync(LiveStartup where, CancellationToken cancellationToken)
     {
         said = where;
 
@@ -294,7 +294,7 @@ public sealed class LiveWireSocket(
             cancellationToken);
     }
 
-    private static async Task<Woken> FirstOf(
+    private static async Task<Woken> FirstOfAsync(
         Task<bool> waiting,
         Task advanced,
         TimeSpan quiet,

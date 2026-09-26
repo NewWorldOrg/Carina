@@ -11,7 +11,7 @@ public sealed class DriverEventHubTests
     {
         using var deadline = new CancellationTokenSource(Soon);
 
-        return await listener.Take(deadline.Token);
+        return await listener.TakeAsync(deadline.Token);
     }
 
     [Fact]

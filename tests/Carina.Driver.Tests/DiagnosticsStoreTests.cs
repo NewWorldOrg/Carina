@@ -65,7 +65,7 @@ public sealed class DiagnosticsStoreTests
         {
             store.Report(DiagnosticReason.TuningLost, "the carrier vanished");
 
-            IReadOnlyList<string> heard = await listener.Take(
+            IReadOnlyList<string> heard = await listener.TakeAsync(
                 new CancellationTokenSource(TimeSpan.FromSeconds(5)).Token
             );
 

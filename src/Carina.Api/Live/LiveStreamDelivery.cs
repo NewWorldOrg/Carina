@@ -77,7 +77,7 @@ public static class LiveStreamDelivery
 
             await context.Response.StartAsync(context.RequestAborted);
             await context.Response.Body.FlushAsync(context.RequestAborted);
-            await Quietly(carrying.Bytes, context.Response, context.RequestAborted);
+            await QuietlyAsync(carrying.Bytes, context.Response, context.RequestAborted);
         }
 
         return true;
@@ -98,7 +98,7 @@ public static class LiveStreamDelivery
         }
     }
 
-    private static async Task Quietly(Stream from, HttpResponse into, CancellationToken cancellationToken)
+    private static async Task QuietlyAsync(Stream from, HttpResponse into, CancellationToken cancellationToken)
     {
         byte[] mouthful = ArrayPool<byte>.Shared.Rent(Mouthful);
 

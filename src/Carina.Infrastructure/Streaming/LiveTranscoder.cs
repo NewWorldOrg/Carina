@@ -128,7 +128,7 @@ public sealed class LiveTranscoder : ILiveTranscoder
         catch (OperationCanceledException)
         {
             await GiveUpAsync();
-            await Quietly(drawing);
+            await QuietlyAsync(drawing);
 
             return TranscoderExit.CalledOff(Complaint);
         }
@@ -155,11 +155,11 @@ public sealed class LiveTranscoder : ILiveTranscoder
         catch (Exception gone) when (gone is IOException or ObjectDisposedException or OperationCanceledException)
         {
             await stopping.CancelAsync();
-            await Quietly(drawing);
+            await QuietlyAsync(drawing);
         }
     }
 
-    private static async Task Quietly(Task task)
+    private static async Task QuietlyAsync(Task task)
     {
         try
         {
@@ -174,17 +174,17 @@ public sealed class LiveTranscoder : ILiveTranscoder
     {
         Hush();
 
-        if (await WaitedOut(stopGrace))
+        if (await WaitedOutAsync(stopGrace))
         {
             return;
         }
 
         Kill();
 
-        await WaitedOut(stopGrace);
+        await WaitedOutAsync(stopGrace);
     }
 
-    private async Task<bool> WaitedOut(TimeSpan grace)
+    private async Task<bool> WaitedOutAsync(TimeSpan grace)
     {
         using CancellationTokenSource patience = new(grace, clock);
 
