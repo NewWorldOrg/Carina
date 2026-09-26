@@ -297,7 +297,8 @@ nothing.
   store as one `INSERT ... ON CONFLICT DO UPDATE ... WHERE (...) IS DISTINCT FROM (...)`,
   and the `CASE` expressions in it are `Programme.Absorb` written out in SQL: an
   empty name or summary keeps the one held, an end that is not after the start is no
-  end and keeps the one held, an empty set keeps the one held, and a row whose
+  end and keeps the one held, an empty set keeps the one held, a row read from the
+  detailed schedule alone keeps the subtitles and the source held, and a row whose
   answer would be the same takes no new revision. `Programme.Absorb` is what the
   in-memory stand-in runs, so the two are held equal the way the search's two arms
   are — `ProgrammeAbsorbArmsTests` pushes the same visits through both and compares
