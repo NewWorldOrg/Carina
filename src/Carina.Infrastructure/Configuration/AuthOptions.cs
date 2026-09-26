@@ -21,6 +21,8 @@ public sealed class AuthOptions
 
     public string? SessionIdleTimeout { get; set; }
 
+    public string? SessionBetweenLastUsedWrites { get; set; }
+
     public string? LoginFailuresBeforeRefusing { get; set; }
 
     public string? LoginWindow { get; set; }
@@ -33,6 +35,7 @@ public sealed class AuthOptions
 
         SessionAbsoluteLifetime = named[nameof(SessionAbsoluteLifetime)];
         SessionIdleTimeout = named[nameof(SessionIdleTimeout)];
+        SessionBetweenLastUsedWrites = named[nameof(SessionBetweenLastUsedWrites)];
         LoginFailuresBeforeRefusing = named[nameof(LoginFailuresBeforeRefusing)];
         LoginWindow = named[nameof(LoginWindow)];
     }
@@ -63,16 +66,23 @@ public sealed class AuthOptions
                 nameof(SessionIdleTimeout));
         }
 
-        if (idle <= unset.BetweenLastUsedWrites)
+        TimeSpan between = Spanning(
+            SessionBetweenLastUsedWrites,
+            nameof(SessionBetweenLastUsedWrites),
+            unset.BetweenLastUsedWrites,
+            LongestSession,
+            "which is as long as a session may sit in the ledger before anything forgets it");
+
+        if (idle <= between)
         {
             throw new ArgumentException(
                 $"{Section}:{nameof(SessionIdleTimeout)} has to be longer than the "
-                + $"{unset.BetweenLastUsedWrites} between the writes that say a session was used, "
+                + $"{between} between the writes that say a session was used, "
                 + "or a session somebody is still asking with would be forgotten under them.",
                 nameof(SessionIdleTimeout));
         }
 
-        return new SessionPolicy(lifetime, idle, unset.BetweenLastUsedWrites);
+        return new SessionPolicy(lifetime, idle, between);
     }
 
     public LoginRatePolicy ReadLogin()

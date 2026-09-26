@@ -119,7 +119,8 @@ health は表示するだけで、unhealthy になっても何も再起動しな
 | `ProgrammeFeed__ConcurrentReaders` | 一括番組表を同時に何本まで配るか。既定は 4 で、超えた要求はその場で断る |
 | `ProgrammeFeed__StatementTimeout` | 一括番組表の 1 文に与える時間。既定は 30 秒、上限は `24.20:31:23.647`。超えたら何も送らず、どこから読み直すかを添えて断る |
 | `Auth__SessionAbsoluteLifetime` | ログインしてからその席が終わるまでの長さ。既定は 30 日、上限は 365 日 |
-| `Auth__SessionIdleTimeout` | 最後に使われてからその席が終わるまでの長さ。既定は 7 日。`Auth__SessionAbsoluteLifetime` より長くはできず、席が使われたと書き留める間隔の 5 分より短くもできない |
+| `Auth__SessionIdleTimeout` | 最後に使われてからその席が終わるまでの長さ。既定は 7 日。`Auth__SessionAbsoluteLifetime` より長くはできず、`Auth__SessionBetweenLastUsedWrites` より長くなければならない |
+| `Auth__SessionBetweenLastUsedWrites` | 席が使われたと書き留める最短の間隔。既定は 5 分。これより短い間に続いた要求では書き留め直さない |
 | `Auth__LoginFailuresBeforeRefusing` | 断りに入るまでに数える、間違ったパスワードの回数。既定は 5、上限は 100 |
 | `Auth__LoginWindow` | 間違ったパスワードを数えている間の長さ。既定は 5 分、上限は 1 日 |
 
