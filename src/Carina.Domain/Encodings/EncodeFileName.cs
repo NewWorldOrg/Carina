@@ -6,10 +6,9 @@ using Carina.Domain.Recordings;
 namespace Carina.Domain.Encodings;
 
 /// <summary>
-/// The name of a file this domain writes under an output root. A work file is named for the
-/// recording, the job and the attempt, so two jobs on one recording, or two attempts of one job,
-/// cannot write into the same file, and the chapters an attempt reads are named the same way; the
-/// artefact is named for the recording and the profile, and for nothing a broadcaster wrote.
+/// The name of a file this domain writes under an output root. A work file, and the chapters an
+/// attempt reads, are named for the recording, the job and the attempt; the artefact is named for
+/// the recording and the profile.
 /// </summary>
 public sealed class EncodeFileName : CommonValueObject<string>
 {

@@ -2,16 +2,10 @@ namespace Carina.Domain.Encodings;
 
 /// <summary>
 /// Learns a station's watermark from the pictures of one recording, one picture at a time and
-/// holding none of them: a pixel in a corner that was an edge in at least <see cref="SteadyShare"/>
-/// of the pictures is part of the mark, because the programme moves behind a mark and the mark does
-/// not. Advertisements carry no mark, which is why the share asked for is not higher. What comes out
-/// is nothing when there were too few pictures to tell steady from moving, when too little of the
-/// corners stayed put to be a mark, and when so much of them stayed put that what was learned is the
-/// picture rather than a mark laid over it.
-/// <para>
-/// A recording is never judged by the mark learned from itself: the one that judges it
-/// was learned ahead, from another recording of the same service.
-/// </para>
+/// holding none of them: a corner pixel that was an edge in at least <see cref="SteadyShare"/> of
+/// the pictures is part of the mark. Nothing is learned from fewer than <see cref="FewestFrames"/>
+/// pictures, or when fewer than <see cref="FewestPixels"/> pixels, or more than
+/// <see cref="MostOfTheCorners"/> of the corner pixels, stayed put.
 /// </summary>
 public sealed class WatermarkLearner
 {

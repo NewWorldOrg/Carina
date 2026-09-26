@@ -3,9 +3,9 @@ using System.Text.RegularExpressions;
 namespace Carina.Architecture.Tests;
 
 /// <summary>
-/// Reads the encode feature for the two things it is forbidden from doing: walking a directory to
-/// find what to remove, and removing anywhere but where the ledger is read. Like the other rules here it
-/// reads source text, so it sees the ordinary spellings and no others.
+/// Reads the encode feature for walking a directory to find what to remove, and for removing
+/// anywhere but where the ledger is read. It reads source text, so it sees the ordinary spellings
+/// and no others.
 /// </summary>
 public static partial class EncodeScratchRules
 {

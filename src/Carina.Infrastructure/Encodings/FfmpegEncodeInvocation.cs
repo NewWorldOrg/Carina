@@ -26,27 +26,14 @@ public static class FfmpegEncodeInvocation
     public const string Seconds = "0.######";
 
     /// <summary>
-    /// Where the chapters stand among the inputs, which is what says which input the run is told
-    /// to take them from.
+    /// Where the chapters stand among the inputs.
     /// </summary>
     public const string ChaptersInput = "1";
 
     /// <summary>
-    /// The arguments for one run. The core cap is written three times because ffmpeg counts
-    /// threads per stage: once before the input for the decoder, once for the filters, and once
-    /// for the encoder. The stages are a pipeline, so the run as a whole is bounded
-    /// by the slowest of them rather than by their sum.
-    /// <para>
-    /// Chapters to bake into the artefact come in as a second input, and it goes <em>after</em> the
-    /// recording. A stream is asked for here by its programme — <c>p:1040:v:0</c> — and a specifier
-    /// that opens with no file number is read as naming the first input, so a metadata file put in
-    /// front of the recording would quietly take the picture and the sound with it. What holds the
-    /// order is a test, not this paragraph.
-    /// </para>
-    /// <para>
-    /// With nothing to bake in, not one argument is added and the run is the run it was before,
-    /// which is what makes the looking switchable off.
-    /// </para>
+    /// The arguments for one run. The core cap is written for the decoder, the filters and the encoder.
+    /// Chapters to bake into the artefact come in as a second input, after the recording; with none,
+    /// no argument is added.
     /// </summary>
     public static IReadOnlyList<string> Arguments(
         ServiceId service,
@@ -186,20 +173,14 @@ public static class FfmpegEncodeInvocation
     }
 
     /// <summary>
-    /// The picture is handed to a filter only where there is something to do to it. A profile that
-    /// keeps the source's size, leaves the fields alone and encodes on the processor has nothing to
-    /// do, and an empty <c>-vf</c> is not an empty filter chain to ffmpeg but a filter it cannot
-    /// find, which ends the run.
+    /// The filter arguments for the picture, or none when the profile keeps the source's size, leaves
+    /// the fields alone and encodes on the processor.
     /// </summary>
     internal static IReadOnlyList<string> Filtering(EncodeProfile profile, EncodeEncoder encoder)
         => Filter(profile, encoder) is { Length: > 0 } filter ? ["-vf", filter] : [];
 
     /// <summary>
-    /// The samples are squared up only where the picture has just been resized. Broadcast HD comes
-    /// in 1440 by 1080 with samples 4:3 wide, which is how it fills a 16:9 screen; squaring those
-    /// samples without resizing keeps the 1440 by 1080 and throws the width away, so the artefact
-    /// plays back 4:3 and a 16:9 player pads it either side. A resize to 1920 by 1080 or 1280 by 720
-    /// carries the display aspect across on its own, and squaring up after it holds that result.
+    /// The filter chain for the picture. The samples are squared up only after a resize.
     /// </summary>
     internal static string Filter(EncodeProfile profile, EncodeEncoder encoder)
     {

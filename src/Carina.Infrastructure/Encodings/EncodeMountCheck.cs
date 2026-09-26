@@ -7,12 +7,10 @@ using Microsoft.Extensions.Logging;
 namespace Carina.Infrastructure.Encodings;
 
 /// <summary>
-/// Confirms at startup that a rename from where a job works to where its artefact goes is a rename
-///, for each root this process holds for writing. The roots the recordings are
-/// read from are not looked at: nothing is ever written into them. A working directory on another
-/// mount than a held root stops the process, because every job into that root would otherwise end
-/// in a copy that an interruption makes look complete. A held root this process cannot write, and
-/// a process that holds no root at all, are reported and left to the jobs to refuse one by one.
+/// Confirms at startup, for each root this process holds for writing, that moving a file from where
+/// a job works to where its artefact goes is a rename. A working directory on another mount than a
+/// held root stops the process. A held root this process cannot write, and holding no root at all,
+/// are reported.
 /// </summary>
 public sealed class EncodeMountCheck(
     EncodeSettings settings,

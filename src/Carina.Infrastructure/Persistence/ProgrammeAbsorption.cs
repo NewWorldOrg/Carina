@@ -108,10 +108,8 @@ public static class ProgrammeAbsorption
         """;
 
     /// <summary>
-    /// Marks the programmes a reading named, and only for the services whose whole announced
-    /// schedule that reading heard. It is a statement of its own rather than a column on the
-    /// upsert above, because the upsert deliberately stands still when nothing about a programme
-    /// changed, and this mark has to move every time the programme is heard.
+    /// Marks the programmes a reading named, only for the services whose whole announced schedule that
+    /// reading heard. It runs on its own, apart from the upsert, and moves the mark every time.
     /// </summary>
     public static readonly string HeardSql = $"""
         UPDATE programme SET last_heard_at = @{HeardAtParameter}

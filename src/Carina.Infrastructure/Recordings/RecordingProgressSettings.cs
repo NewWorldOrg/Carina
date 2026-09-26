@@ -1,9 +1,9 @@
 namespace Carina.Infrastructure.Recordings;
 
 /// <summary>
-/// How often the screens are told that a recording in progress has moved on when all that moved is
-/// what it counts: the time written, the packets lost or left scrambled, and where the losses fell.
-/// A recording that starts, stops, breaks or ends is told at once and is not paced by this.
+/// How often the screens are told that a recording in progress has moved on when only its counts
+/// moved: the time written, the packets lost or left scrambled, and where the losses fell. A
+/// recording that starts, stops, breaks or ends is told at once.
 /// </summary>
 public sealed record RecordingProgressSettings
 {

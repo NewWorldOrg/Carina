@@ -3,12 +3,11 @@ using System.Text.RegularExpressions;
 namespace Carina.Architecture.Tests;
 
 /// <summary>
-/// Reads the encode feature for the three ways a job could get away from the ledger: a job moved
-/// to running anywhere but by the ledger's conditional update, a file moved or copied into place
-/// anywhere but by the placer that writes the ledger first, and a programme started anywhere but
-/// by the one run that hands the ledger the programme's identity before reading a line from it.
-/// The feature is its folders plus any file named for it, wherever it sits. Like the other rules
-/// here it reads source text, so it sees the ordinary spellings and no others.
+/// Reads the encode feature for a job moved to running anywhere but by the ledger's conditional
+/// update, a file moved or copied into place anywhere but by the placer, and a programme started
+/// anywhere but by the one run that hands the ledger the programme's identity before reading from
+/// it. The feature is its folders plus any file named for it, wherever it sits. It reads source
+/// text, so it sees the ordinary spellings and no others.
 /// </summary>
 public static partial class EncodeDispatchRules
 {

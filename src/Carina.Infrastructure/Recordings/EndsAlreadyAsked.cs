@@ -5,13 +5,9 @@ using Carina.Domain.Recordings;
 namespace Carina.Infrastructure.Recordings;
 
 /// <summary>
-/// The latest end each running recording has already put to the driver and had an answer to. The
-/// ledger only moves when the driver grants something later than the window already held, so an
-/// answer of "no" and an answer of "less than you asked" both leave the recording exactly where it
-/// was; without a memory of the asking, the next tick reads the same announcement, works out the
-/// same end, and puts it again every <c>BetweenTicks</c> for as long as the guide keeps saying it.
-/// A call that never reached the driver is not remembered: nothing was answered, and the next tick
-/// is the retry.
+/// The latest end each running recording has already put to the driver and had an answer to, so
+/// that the same end is not asked for again. A call that never reached the driver is not
+/// remembered.
 /// </summary>
 public sealed class EndsAlreadyAsked
 {

@@ -117,9 +117,8 @@ internal sealed class SyntheticDriverHost : IAsyncDisposable
         => File.WriteAllText(ledger, DriverConfigurationWriter.Serialize(written));
 
     /// <summary>
-    /// Puts the driver down and raises another one on the same socket and the same output root. The
-    /// new process greets with an instance of its own and holds none of the sessions the one before
-    /// it did, which is the whole of what a recording left running has to be recovered from.
+    /// Puts the driver down and raises another one on the same socket and the same output root. The new
+    /// process greets with an instance of its own and holds none of the earlier sessions.
     /// </summary>
     public async Task RaiseAnotherDriverAsync()
     {
@@ -129,9 +128,8 @@ internal sealed class SyntheticDriverHost : IAsyncDisposable
     }
 
     /// <summary>
-    /// Asks the driver to stop the way its host is asked when the process receives SIGTERM, and hands
-    /// back the stop while it is still under way. Delivering the signal to a separate process is not
-    /// part of it: the driver here shares the test process.
+    /// Asks the driver to stop the way its host is asked on SIGTERM, and hands back the stop while it
+    /// is still under way. No signal is delivered.
     /// </summary>
     public Task BeginStop()
     {
@@ -162,10 +160,10 @@ internal sealed class SyntheticDriverHost : IAsyncDisposable
     }
 
     /// <summary>
-    /// Puts the driver down and starts it again from what the ledger on disk says, the way the
-    /// entry point does: the file is read, the filesystem it names is checked, and a finding stops
-    /// the start with the exit code and the report the process would give. The shape rules that
-    /// want the socket under /run are the one step left out, because a test cannot bind there.
+    /// Puts the driver down and starts it again from what the ledger on disk says, the way the entry
+    /// point does: the file is read, the filesystem it names is checked, and a finding stops the start
+    /// with the exit code and the report the process would give. The rules on where the socket lives
+    /// are not applied.
     /// </summary>
     public async Task<int> RaiseFromTheLedgerAsync(TextWriter error)
     {

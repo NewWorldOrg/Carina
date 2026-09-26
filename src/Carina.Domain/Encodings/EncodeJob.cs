@@ -37,15 +37,14 @@ public sealed class EncodeJob
     public EncodeFileName? ArtefactName { get; private set; }
 
     /// <summary>
-    /// Whether a person asked for the artefact of this recording and profile to be made again. It
-    /// is settled when the job is queued and never worked out afterwards, because it is the one
-    /// thing that lets a run put its artefact where an earlier one already stands.
+    /// Whether a person asked for the artefact of this recording and profile to be made again. It is
+    /// settled when the job is queued.
     /// </summary>
     public bool MakesItAgain { get; private set; }
 
     /// <summary>
-    /// When this job let go of the name it holds, so that a job asked to make the artefact again
-    /// could take it. What this job made is still named here; only the claim moved.
+    /// When this job let go of the name it holds to a job asked to make the artefact again. What this
+    /// job made is still named here.
     /// </summary>
     public DateTime? NameGivenUpAt { get; private set; }
 
@@ -77,9 +76,8 @@ public sealed class EncodeJob
         => Waiting(id, recordingId, profileId, destinationId, outputRoot, at, makesItAgain: false);
 
     /// <summary>
-    /// A job queued because a person asked for an artefact that already exists to be made again.
-    /// It is the only kind that puts what it makes where an earlier artefact stands, and it says so
-    /// from the moment it is queued rather than having the intent worked out at the end of the run.
+    /// A job queued because a person asked for an artefact that already exists to be made again. It is
+    /// the only kind that puts what it makes where an earlier artefact stands.
     /// </summary>
     public static EncodeJob QueueAgain(
         EncodeJobId id,
@@ -241,9 +239,8 @@ public sealed class EncodeJob
     }
 
     /// <summary>
-    /// What the run made of where the breaks in this job's recording are, written down before the
-    /// encode that bakes them in starts. It is written whatever the answer, so that a job nobody
-    /// looked at says so rather than looking like one from before anything looked.
+    /// Writes down what the run made of where the breaks in this job's recording are, before the encode
+    /// that bakes them in starts. It is written whatever the answer.
     /// </summary>
     public void Judged(ChapterReading reading)
     {
@@ -284,8 +281,7 @@ public sealed class EncodeJob
     }
 
     /// <summary>
-    /// A running job that has made no headway for as long as a run is allowed to go quiet. The
-    /// ledger says running; this is what says it should not be read that way.
+    /// Whether a running job has made no headway for as long as a run is allowed to go quiet.
     /// </summary>
     public bool IsStalled(DateTime now, TimeSpan stalledAfter)
     {
@@ -309,9 +305,9 @@ public sealed class EncodeJob
     }
 
     /// <summary>
-    /// Lets go of the name in the ledger, so that a job a person asked to make the artefact again
-    /// can hold it instead. What this job made is left alone and still named here: only the claim
-    /// moves, and the file at that name is replaced by the job that now holds it.
+    /// Lets go of the name in the ledger so that a job asked to make the artefact again can hold it.
+    /// What this job made is still named here; the file at that name is replaced by the job that now
+    /// holds it.
     /// </summary>
     public void GiveUpTheName(DateTime at)
     {
@@ -375,9 +371,9 @@ public sealed class EncodeJob
     }
 
     /// <summary>
-    /// What happens to a job the ledger still holds as running when the process comes up: the run
-    /// it was on died with the process, so it goes back to the queue to start over, unless it has
-    /// already had as many attempts as it gets.
+    /// Puts a job the ledger holds as running back in the queue to start over, or gives it up when it
+    /// has already had as many attempts as it gets. Called when the process comes up and when a run
+    /// throws.
     /// </summary>
     public EncodeRecovery Recover(int mostAttempts, DateTime at)
     {

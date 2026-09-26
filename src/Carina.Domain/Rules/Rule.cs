@@ -26,8 +26,7 @@ public sealed class Rule
     public Margin MarginAfter { get; private set; } = null!;
 
     /// <summary>
-    /// Whether a recording this rule brings about is encoded once it ends. A rule that says nothing
-    /// says yes, because until a rule could say otherwise every recording that ended was queued.
+    /// Whether a recording this rule brings about is encoded once it ends. Defaults to true.
     /// </summary>
     public bool EncodeWhenRecorded { get; private set; }
 

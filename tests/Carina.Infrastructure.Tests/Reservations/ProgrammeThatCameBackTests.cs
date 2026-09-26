@@ -13,10 +13,9 @@ using Carina.TestSupport;
 namespace Carina.Infrastructure.Tests.Reservations;
 
 /// <summary>
-/// A broadcaster that drops a programme from the guide and announces it again leaves a cancelled
-/// reservation sitting on the one key that names that broadcast. Read end to end: the rule makes
-/// the reservation, the guide takes it out when the programme goes, and the rule brings that same
-/// row back when the programme is announced again.
+/// A programme dropped from the guide and announced again, end to end: the rule makes the
+/// reservation, the guide takes it out when the programme goes, and the rule brings that same row
+/// back when the programme is announced again.
 /// </summary>
 public sealed class ProgrammeThatCameBackTests
 {
@@ -278,9 +277,9 @@ public sealed class ProgrammeThatCameBackTests
         }
 
         /// <summary>
-        /// What a whole reading of the service looks like from the outside once the broadcaster has
-        /// stopped announcing this programme: the programme is not there, and what is still
-        /// announced beside it comes away marked by a later reading than the one that named it.
+        /// A whole reading of the service after the broadcaster stopped announcing this programme: the
+        /// programme is gone, and what is still announced beside it carries a later mark than the one that
+        /// named it.
         /// </summary>
         public void Dropped(int carried)
         {
@@ -303,9 +302,7 @@ public sealed class ProgrammeThatCameBackTests
         }
 
         /// <summary>
-        /// A reservation a rule made and the guide then took out, put on the shelf as it would be
-        /// read back from the ledger, so a window that has since closed can be held against a
-        /// programme the guide is announcing again.
+        /// A reservation a rule made and the guide then took out, as it would be read back from the ledger.
         /// </summary>
         public Reservation StandingCancelled(int carried, DateTime startAt, DateTime endAt)
         {

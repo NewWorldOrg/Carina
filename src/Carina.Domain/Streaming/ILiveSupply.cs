@@ -20,11 +20,7 @@ public interface ILiveTransportStream : IAsyncDisposable
 
     /// <summary>
     /// Asks that the supply be held open at least until the given time, and answers whether it now is.
+    /// A supply already held that far is not asked again.
     /// </summary>
-    /// <remarks>
-    /// The window a viewing is given exists so that a supply nobody is behind any more is let go of;
-    /// asking again is how a viewing that is still being watched says it is still there. A supply
-    /// already held that far is left alone rather than asked again.
-    /// </remarks>
     Task<bool> HoldOpenUntilAsync(DateTimeOffset until, CancellationToken cancellationToken);
 }

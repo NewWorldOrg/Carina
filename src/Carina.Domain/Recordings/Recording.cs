@@ -110,10 +110,8 @@ public sealed class Recording
     public int? FilesLeftBehind { get; private set; }
 
     /// <summary>
-    /// Whether this recording is encoded once it ends, copied from the reservation it was started
-    /// for at the moment it began. It is copied rather than read back through the reservation
-    /// because nothing ties the two rows together: a reservation can be thrown away, and one
-    /// recorded by hand never had one. A recording that says nothing says yes.
+    /// Whether this recording is encoded once it ends, copied from the reservation it was started for
+    /// at the moment it began. Defaults to true.
     /// </summary>
     public bool EncodeWhenRecorded { get; private set; }
 

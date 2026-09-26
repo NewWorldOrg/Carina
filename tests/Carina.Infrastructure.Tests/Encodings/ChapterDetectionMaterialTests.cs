@@ -10,15 +10,11 @@ using Carina.Infrastructure.Tests.Integrity;
 namespace Carina.Infrastructure.Tests.Encodings;
 
 /// <summary>
-/// Runs the detector against a broadcast synthesised with the ffmpeg the application itself runs,
-/// so that what its filters say and where they say it happened is measured rather than believed.
-/// One broadcast carries a pod of advertisements — two stretches quiet and dark at once, a whole
-/// number of grid steps apart — and one carries a single such stretch, which is the shape a
-/// programme without advertisements has and which must be marked nowhere. The third is the first
-/// one again with the stream's clock started seventeen hours into the day, which is where a
-/// recorder actually starts one: the runs keep that clock, so every moment comes back at five
-/// figures and is printed a tenth of a second at a time, and the same pod has to be found in the
-/// same place all the same.
+/// Runs the detector against broadcasts synthesised with the ffmpeg the application runs. One
+/// carries a pod of advertisements, two stretches quiet and dark at once a whole number of grid
+/// steps apart, and is marked there; one carries a single such stretch and is marked nowhere; the
+/// third is the first with the stream's clock started seventeen hours into the day, and is marked in
+/// the same place.
 /// </summary>
 [SupportedOSPlatform("linux")]
 [Trait("Category", "Material")]

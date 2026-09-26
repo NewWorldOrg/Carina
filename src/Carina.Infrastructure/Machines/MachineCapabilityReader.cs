@@ -3,11 +3,9 @@ using Carina.Domain.Machines;
 namespace Carina.Infrastructure.Machines;
 
 /// <summary>
-/// Asks this machine what it can do and keeps the answer. Everything that wants to know — the live
-/// path choosing an encoder, a job about to run — reads it from here. An answer in which a
-/// question ran out of time is kept only for <see cref="MachineSettings.AskAgainAfterATimeOut"/>,
-/// and the first read after that asks again; every other answer is kept for as long as the
-/// process lives.
+/// Asks this machine what it can do and keeps the answer. An answer in which a question ran out of
+/// time is kept only for <see cref="MachineSettings.AskAgainAfterATimeOut"/>; every other answer is
+/// kept for as long as the process lives.
 /// </summary>
 public sealed class MachineCapabilityReader(MachineSettings settings, TimeProvider clock) : IMachineCapabilityReader
 {

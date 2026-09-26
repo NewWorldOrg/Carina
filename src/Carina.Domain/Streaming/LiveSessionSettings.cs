@@ -97,12 +97,9 @@ public sealed record LiveSessionSettings
     public TimeSpan LongestRaise { get; }
 
     /// <summary>
-    /// How far ahead of now the supply is asked to be held open while it is being watched.
+    /// How far ahead of now the supply is asked to be held open while it is being watched. The driver
+    /// lets go of a supply this long after it was last asked to hold on to it.
     /// </summary>
-    /// <remarks>
-    /// This is what a viewing that is still there is worth once nothing more is heard from it: the
-    /// driver lets go of a supply this long after the last time it was asked to hold on to it.
-    /// </remarks>
     public TimeSpan HeldAhead { get; }
 
     /// <summary>
@@ -111,13 +108,9 @@ public sealed record LiveSessionSettings
     public TimeSpan BetweenHolds { get; }
 
     /// <summary>
-    /// How long the oldest bytes a transcoder has not taken yet may wait before it is cut loose.
+    /// How long the oldest bytes a transcoder has not taken yet may wait before the transcoder is cut
+    /// loose.
     /// </summary>
-    /// <remarks>
-    /// Bytes into a transcoder cannot be dropped the way frames to a viewer can, so a transcoder
-    /// that has stopped reading is let go of rather than waited for: the others are watching the
-    /// same channel through the same reading.
-    /// </remarks>
     public TimeSpan LongestWaitToBeFed { get; }
 
     /// <summary>
@@ -127,12 +120,7 @@ public sealed record LiveSessionSettings
 
     /// <summary>
     /// How long a viewer refused for want of a tuner waits for one that is already being let go of.
+    /// When the wait runs out, the refusal stands.
     /// </summary>
-    /// <remarks>
-    /// A session leaves the ledger when it is closed and lets the tuner go at the end of its
-    /// teardown, so a viewer arriving between the two finds nothing to give up and a tuner that is
-    /// not free yet. It waits that teardown out rather than being refused, and no longer than this:
-    /// a teardown that will not end is a tuner that never comes free, and the refusal stands.
-    /// </remarks>
     public TimeSpan LongestWaitForATunerToComeFree { get; }
 }

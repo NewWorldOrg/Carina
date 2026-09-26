@@ -11,37 +11,21 @@ using Microsoft.Extensions.Logging;
 namespace Carina.Infrastructure.Encodings;
 
 /// <summary>
-/// Takes one job the ledger holds as running through to its end: the recording is found and looked
-/// at, the encoder is chosen against what this machine can do, ffmpeg writes the work file the
-/// ledger was told about, and the artefact is placed by the ledger or the job fails for one of the
-/// seven reasons the ledger holds. Whatever the end, what the job still owes a removal for is swept.
-/// A stop asked for by the caller is the one thing that leaves the job as it was: it stays running
-/// in the ledger for the next start to put back.
-/// <para>
-/// Three things about the run are written on the job as it goes: where it ran, so a degraded run
-/// is in the ledger; the programme's id and start, before its first line of progress
-/// is read, so the next process can stop it if this one dies — which is the same row the look for
-/// the breaks writes each of its own programmes on, one at a time, the two never overlapping
-///; and its headway, at
-/// every tenth and at least every <see cref="HeartbeatEvery"/>, so a job that has stopped getting
-/// on can be told from one that is.
-/// </para>
-/// <para>
-/// What the run made of where the breaks are goes into the ledger before the encode starts, and
-/// goes in whatever the answer, so a job nobody looked at says so rather than looking like one
-/// from before anything looked. When there were breaks to mark they are written down as chapters
-/// of the artefact-to-be and handed to the encode as a metadata file, which is a scratch file like
-/// any other: recorded before it is written and swept when the job ends. The ledger
-/// is what a player is answered from; the file is only what bakes them into the artefact.
-/// </para>
-/// <para>
-/// The look is handed the station's watermark learned ahead — from another recording of the same
-/// service, never from this one — and whatever watermark it learned from this recording is kept
-/// against this recording once the reading is in the ledger, for the recordings of the service read
-/// after it. Neither is allowed to fail the job: a watermark that cannot be read is
-/// looked without, and one that cannot be kept is let go.
-/// </para>
+/// Takes one job the ledger holds as running through to its end: finds the recording, chooses the
+/// encoder against what this machine can do, has ffmpeg write the work file, and places the
+/// artefact, or fails the job for one of the reasons the ledger holds. Whatever the end, what the
+/// job still owes a removal for is swept; a stop asked for by the caller leaves the job running in
+/// the ledger.
 /// </summary>
+/// <remarks>
+/// The run writes on the job where it ran, each programme's id and start before its output is read,
+/// and its headway at every tenth and at least every <see cref="HeartbeatEvery"/>. The chapter
+/// reading goes into the ledger before the encode starts, whatever the answer; any chapters are
+/// handed to the encode as a metadata file recorded as a scratch file. The look is handed the
+/// station watermark learned ahead from another recording of the same service, and the watermark it
+/// learns from this recording is kept once the reading is in the ledger; failing to read or keep a
+/// watermark does not fail the job.
+/// </remarks>
 public sealed class EncodeJobRunner(
     IEncodeJobRepository jobs,
     IEncodeProfileRepository profiles,
@@ -305,9 +289,8 @@ public sealed class EncodeJobRunner(
             : $"the head of the source could not be read ({head.Fault}), so nothing says where the artefact's clock would begin: {head.Note}";
 
     /// <summary>
-    /// Asks where the breaks are and comes back with an answer whatever happens, because a job
-    /// that would have encoded without anyone looking is not failed by the looking. A stop the
-    /// caller asked for is the one thing that is let through.
+    /// Asks where the breaks are and comes back with an answer whatever happens, except for a stop the
+    /// caller asked for.
     /// </summary>
     private async Task<ChapterDetection> MarkedAsync(
         string source,

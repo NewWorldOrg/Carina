@@ -169,9 +169,7 @@ public sealed class OnTheFlyPlayer(
     }
 
     /// <remarks>
-    /// The deadline is held here so that it is let go of with the wait. A timeout handed to
-    /// <c>WaitAsync</c> is disposed of only once the waiter has been let go, which is after the
-    /// viewer has been answered, so the timer it set outlives the wait it was set for.
+    /// Holds its own deadline, disposed of with the wait.
     /// </remarks>
     private async Task<int?> FirstMouthfulAsync(Task<int> mouthful, CancellationToken cancellationToken)
     {

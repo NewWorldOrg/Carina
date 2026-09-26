@@ -12,11 +12,9 @@ public enum OrphanTreatment
 }
 
 /// <summary>
-/// What was seen of one recording the ledger still calls running, at the moment the driver
-/// greeted this side. The instance is the driver's boot identity and the standing is read off the
-/// session list that same instance answered with: a connection that dropped and came back is not
-/// in here at all, because the driver keeps writing across one and a recording torn down on the
-/// strength of a lost socket would be a recording this side broke.
+/// What was seen of one recording the ledger still calls running, at the moment the driver greeted
+/// this side: the driver's boot identity, and the standing read off the session list that instance
+/// answered with.
 /// </summary>
 public readonly record struct OrphanSighting(
     bool DriverIsAnotherInstance,
@@ -24,19 +22,15 @@ public readonly record struct OrphanSighting(
     bool StillOnAir);
 
 /// <summary>
-/// The three things that may be done with a recording nobody was watching, and nothing else.
-///
-/// What is asked first is whether a session of this recording's own name stands on the driver that
-/// answered. If one does, something is writing the file, and taking that session back up is the
-/// only reading that does not reach for a second writer on it — which instance the driver says it
-/// is changes nothing about that. Only where nothing stands does the broadcast matter: one still
-/// on the air carries on into the file it already has, and one that is over is marked for what was
-/// left of it — except one whose session the driver ended at the end it was opened with, which
-/// recovery leaves in flight for the pass that watches the stream to judge.
-///
-/// Nothing here can say a recording is complete. Completion is a thing this side asked for, and
-/// recovery is the case where nobody asked: the outcomes it can write are the two that say so.
+/// Decides which of three things is done with a recording nobody was watching.
 /// </summary>
+/// <remarks>
+/// A session of the recording's own name standing on the driver is taken back up, whichever
+/// instance the driver says it is. Where none stands, a broadcast still on the air carries on into
+/// the file it already has, and one that is over is marked for what was left of it, except one whose
+/// session the driver ended at its opened end, which is left in flight for the stream watcher to
+/// judge. Recovery never marks a recording complete.
+/// </remarks>
 public static class OrphanRecovery
 {
     public static readonly IReadOnlyList<RecordingOutcome> OutcomesItCanWrite =
@@ -54,8 +48,8 @@ public static class OrphanRecovery
 
     /// <summary>
     /// A broadcast is still on the air while the guide has not withdrawn it and the window this
-    /// recording was promised has not closed. A guide that knows nothing about it says nothing
-    /// either way, so the window is what is left to go on, and that is the promise this side made.
+    /// recording was promised has not closed. A guide that knows nothing about it leaves the window to
+    /// decide.
     /// </summary>
     public static bool StillOnAir(GuideStanding guide, bool windowIsStillOpen)
         => guide is not GuideStanding.NoLongerAnnounced && windowIsStillOpen;

@@ -120,10 +120,9 @@ public sealed class EncodeJobRepository(CarinaDbContext context) : IEncodeJobRep
     }
 
     /// <summary>
-    /// The oldest waiting job is moved to running by a conditional update, and only when that update
-    /// changed one row is the job read back and handed over. The unique index over the running
-    /// status is what refuses a second job while one runs, so a claim that hits it is answered as
-    /// such rather than thrown; a row another claim took first changes nothing and says so.
+    /// Moves the oldest waiting job to running by a conditional update, and reads the job back only when
+    /// that update changed one row. A claim refused by the unique index over the running status, and a
+    /// row another claim took first, are answered rather than thrown.
     /// </summary>
     public async Task<EncodeClaim> ClaimNextAsync(DateTime at, CancellationToken cancellationToken)
     {
@@ -189,9 +188,9 @@ public sealed class EncodeJobRepository(CarinaDbContext context) : IEncodeJobRep
             .ToListAsync(cancellationToken);
 
     /// <summary>
-    /// The name goes into the row by a conditional update rather than through the change tracker,
-    /// so that a refusal leaves the job in memory exactly as it was: the unique index over the root
-    /// and the name is the one thing that decides who owns it, and a refusal is read off that index.
+    /// Writes the name into the row by a conditional update, bypassing the change tracker; the unique
+    /// index over the root and the name decides who owns it, and a refusal leaves the job in memory as
+    /// it was.
     /// </summary>
     public async Task<ArtefactClaim> ClaimArtefactAsync(
         EncodeJob job,
@@ -231,9 +230,9 @@ public sealed class EncodeJobRepository(CarinaDbContext context) : IEncodeJobRep
     }
 
     /// <summary>
-    /// The earlier holder lets go of the name by a conditional update of its own, so the row this
-    /// job is about to claim is free by the time the unique index looks at it. Only a job a person
-    /// asked to make the artefact again may do this; what the earlier job made stays named on it.
+    /// Has the earlier holder let go of the name by a conditional update of its own, before this job
+    /// claims it. Only a job asked to make the artefact again may do this; what the earlier job made
+    /// stays named on it.
     /// </summary>
     public async Task<int> TakeTheNameOverAsync(
         EncodeJob job,
@@ -311,9 +310,7 @@ public sealed class EncodeJobRepository(CarinaDbContext context) : IEncodeJobRep
     }
 
     /// <summary>
-    /// A conditional update moves the row's version on without the tracker seeing it, so a tracked
-    /// job's version is read again afterwards; otherwise the next save would take the job's own
-    /// update for another hand's.
+    /// Reads a tracked job's row version again after a conditional update has moved it on.
     /// </summary>
     private async Task CatchUpWithTheRowAsync(EncodeJob job, CancellationToken cancellationToken)
     {

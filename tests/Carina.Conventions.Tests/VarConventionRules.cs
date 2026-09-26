@@ -3,14 +3,9 @@ using System.Text.RegularExpressions;
 namespace Carina.Conventions.Tests;
 
 /// <summary>
-/// Reads production source for a local declared <c>var</c> whose initializer is not one this
-/// codebase treats as self-explanatory: an object, array or collection creation, or a cast. A
-/// factory call (<c>Guid.NewGuid()</c>, <c>Type.Parse(...)</c>, a LINQ terminal such as
-/// <c>.ToList()</c>), a <c>using</c> declaration, or a bare method chain names its result only in
-/// the type the declaration spells out, so <c>var</c> there hides it instead of showing it. An
-/// anonymous type is the one shape nothing else can name, so a declaration whose statement holds
-/// one is left alone. Like the other rules here it reads source text, so it sees the ordinary
-/// spellings and no others.
+/// Reads production source for a local declared <c>var</c> whose initializer is not an object,
+/// array or collection creation, or a cast. A declaration whose statement holds an anonymous type
+/// is left alone. It reads source text, so it sees the ordinary spellings and no others.
 /// </summary>
 public static partial class VarConventionRules
 {

@@ -12,10 +12,9 @@ using Microsoft.AspNetCore.Mvc;
 namespace Carina.Api.Controllers.Encoding;
 
 /// <summary>
-/// Queues one recording, named by its id, for one destination. There is no way in that takes more
-/// than one recording. A recording already encoded with the profile asked for is
-/// refused unless <c>makeItAgain</c> says outright that the artefact is to be made again; left out,
-/// it is false and the answer is what it always was.
+/// Queues one recording, named by its id, for one destination. A recording that already has a
+/// completed job, with any profile, is refused unless <c>makeItAgain</c> is true, which it is not by
+/// default.
 /// </summary>
 [ApiController]
 [Route("api/encoding/jobs")]

@@ -5,9 +5,8 @@ using Carina.Domain.Machines;
 namespace Carina.Infrastructure.Machines;
 
 /// <summary>
-/// Reads what an ffmpeg build was compiled with out of its own listing. A name in the listing is
-/// a property of the build alone: the card being listed is not the card being reachable, so the
-/// two are put together here and nowhere else.
+/// Reads what an ffmpeg build was compiled with out of its own listing, and puts that together with
+/// what the card was found to accept.
 /// </summary>
 public static partial class FfmpegFaculties
 {
@@ -51,9 +50,8 @@ public static partial class FfmpegFaculties
     }
 
     /// <summary>
-    /// The card's two faculties are each answered by a frame actually encoded with that encoder:
-    /// the build listing <c>hevc_vaapi</c> says nothing about the driver behind the node, which on
-    /// one measured machine encodes H.264 and has no entrypoint for H.265 at all.
+    /// The faculties of this machine. Each of the card's two faculties is answered by a frame actually
+    /// encoded with that encoder, not by the build listing it.
     /// </summary>
     public static IReadOnlyList<Faculty> Of(
         IReadOnlyList<string> encoders,

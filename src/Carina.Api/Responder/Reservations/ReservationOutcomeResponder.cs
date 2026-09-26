@@ -17,8 +17,7 @@ public sealed record ReservationOutcomeProgrammeResponder(
 
 /// <summary>
 /// One line of the ledger, as the ledger wrote it. <c>TuneFailure</c>, <c>RecordingOutcome</c>,
-/// <c>RetryResult</c> and <c>GaveUpBecause</c> are null whenever the ledger holds nothing there: an
-/// answer is never filled in from what the classification would make likely.
+/// <c>RetryResult</c> and <c>GaveUpBecause</c> are null whenever the ledger holds nothing there.
 /// </summary>
 public sealed record ReservationOutcomeResponder(
     Guid Id,

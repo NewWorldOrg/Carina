@@ -10,9 +10,8 @@ using Npgsql;
 namespace Carina.Infrastructure.Tests.Reservations;
 
 /// <summary>
-/// The counts are over the whole table, and the table is shared with every other test in the
-/// collection, so each test reads the counts before and after what it lays down and asserts on
-/// the difference.
+/// The counts are over the whole shared table, so each test asserts on the difference between the
+/// counts before and after what it lays down.
 /// </summary>
 [Collection(RepositoryDatabaseCollection.Name)]
 [Trait("Category", "DbIntegration")]

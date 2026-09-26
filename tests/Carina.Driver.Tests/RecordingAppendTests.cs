@@ -9,10 +9,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace Carina.Driver.Tests;
 
 /// <summary>
-/// A recording that lost the session it was being written on is put back on a stream under its own
-/// name, and what makes that carry on rather than start over is that the writer opens the file it
-/// already has and writes on the end of it. Nothing in the driver's own vocabulary says "resume",
-/// so this is what holds it.
+/// A recording put back on a stream under its own name has the writer open the file it already has
+/// and write on the end of it.
 /// </summary>
 public sealed class RecordingAppendTests : IDisposable
 {

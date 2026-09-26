@@ -14,19 +14,15 @@ public sealed record EncodeIntake(
     bool Automatically);
 
 /// <summary>
-/// One look at the recording ledger for what has ended and has never been offered to the queue.
-/// The ledger is asked for those recordings and nothing else, at most a look's worth at a time.
-/// <para>
-/// A machine whose auto-run is turned off looks at nothing at all, and the answer says so, because
-/// the setting is read on every look rather than at a start: turning it back on is in force at the
-/// next one. A recording that failed has nothing to encode and is left out by the question itself; one cut
-/// short has a file and is queued like any other, and what says it was cut short is the recording,
-/// not the job. A recording the ledger already holds any job for is passed over, whatever became
-/// of that job. Where the artefact goes and what shape it takes is what the machine settles when
-/// nobody asked, and a machine that cannot settle it queues nothing and says which of the three
-/// things is missing.
-/// </para>
+/// One look at the recording ledger for recordings that have ended and have never been offered to
+/// the queue, at most a look's worth at a time.
 /// </summary>
+/// <remarks>
+/// With the auto-run turned off, nothing is looked at and the answer says so; the setting is read on
+/// every look. A recording that failed is left out, and one the ledger already holds any job for is
+/// passed over. When the machine cannot settle where the artefact goes and what shape it takes,
+/// nothing is queued and the answer says what is missing.
+/// </remarks>
 public sealed class EncodeIntakeRound(
     IEncodeIntakeReader intake,
     IEncodeJobRepository jobs,

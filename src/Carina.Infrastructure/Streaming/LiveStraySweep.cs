@@ -11,14 +11,8 @@ namespace Carina.Infrastructure.Streaming;
 /// Lets go of the live sessions the driver holds that no viewer in this app is behind.
 /// </summary>
 /// <remarks>
-/// The driver deliberately outlives the app so a recording in progress survives a deployment. A
-/// live session has no file to finish, so the same independence leaves it holding a tuner for a
-/// viewer that went away with the app that seated them, until its own window closes hours later.
-/// Nothing else clears it: the ledger this app answers from is what it raised itself, so it does
-/// not even list one it did not raise.
-///
-/// This assumes one app to a driver, which is what the unix socket between them gives. A second
-/// app against the same driver would read the first one's sessions as strays.
+/// It assumes one app to a driver; a second app against the same driver would have its sessions
+/// read as strays.
 /// </remarks>
 public sealed class LiveStraySweep(
     IDriverClient driver,

@@ -139,10 +139,8 @@ public sealed class LiveTranscoder : ILiveTranscoder
     }
 
     /// <summary>
-    /// The pipe's write end is inheritable for the moment between opening it and starting the
-    /// programme, so a process started on another thread in that moment holds a copy and the pipe
-    /// does not end when the programme does. What the programme wrote is readable at once after
-    /// it exits, so the reader is given the stop grace and then called off.
+    /// Waits for the programme's output to be read to its end after the programme exits, for no longer
+    /// than the stop grace.
     /// </summary>
     private async Task DrawnToTheEndAsync()
     {

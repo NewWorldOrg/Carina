@@ -8,8 +8,7 @@ using Carina.Domain.Rules;
 namespace Carina.Infrastructure.Tests.Reservations;
 
 /// <summary>
-/// The claim columns the recording ledger owns. Only the release is exercised here: what settles a
-/// reservation whose claim came to nothing has to let go of that claim as well as move the state.
+/// The claim columns the recording ledger owns. Only the release is exercised.
 /// </summary>
 internal sealed class HeldClaims : IReservationRecordingContract
 {

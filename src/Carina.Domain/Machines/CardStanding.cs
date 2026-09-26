@@ -2,7 +2,7 @@ namespace Carina.Domain.Machines;
 
 /// <summary>
 /// Where the card stands on this machine. <see cref="Usable"/> means a frame was actually encoded
-/// on it, not that a device node happened to be there.
+/// on it.
 /// </summary>
 public enum CardStanding
 {

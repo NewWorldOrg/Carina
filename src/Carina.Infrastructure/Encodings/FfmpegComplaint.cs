@@ -3,9 +3,8 @@ using Carina.Domain.Encodings;
 namespace Carina.Infrastructure.Encodings;
 
 /// <summary>
-/// Which of the ledger's reasons a non-zero exit is: the one the disk explains is told apart, and
-/// everything else is the programme refusing. The words themselves go into the note beside the
-/// classification, never in its place.
+/// Which of the ledger's reasons a non-zero exit is: the one the disk explains, or the programme
+/// refusing. The words themselves go into the note beside the classification.
 /// </summary>
 public static class FfmpegComplaint
 {

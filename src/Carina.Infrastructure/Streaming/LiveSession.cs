@@ -154,9 +154,7 @@ internal sealed class LiveSession
     }
 
     /// <remarks>
-    /// The deadline is held here so that it is let go of with the wait. A timeout handed to
-    /// <c>WaitAsync</c> is disposed of only once the waiter has been let go, which is after the
-    /// viewer has been answered, so the timer it set outlives the wait it was set for.
+    /// Holds its own deadline, disposed of with the wait.
     /// </remarks>
     private async Task<LiveJoin?> RaisedAsync(CancellationToken cancellationToken)
     {
@@ -351,9 +349,9 @@ internal sealed class LiveSession
     }
 
     /// <summary>
-    /// A service without a caption stream makes ffmpeg refuse the whole command, picture included,
-    /// so a transcoder that ends before writing anything for that reason is started again without
-    /// captions, and the reading remembers so that the next profile of this channel does not try.
+    /// The transcoder's output, starting the transcoder again without captions when it ended before
+    /// writing anything because the service carries no caption stream. The reading remembers this for
+    /// the next profile of the channel.
     /// </summary>
     private async Task<Stream?> OutputOrRestartAsync(CancellationToken cancellationToken)
     {

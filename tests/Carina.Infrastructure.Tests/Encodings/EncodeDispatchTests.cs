@@ -418,8 +418,7 @@ public sealed class EncodeDispatchTests
             null);
 
     /// <summary>
-    /// A dispatch over the held ledger. The runner is built from nothing, so a claimed job's run
-    /// throws at once: what these tests look at is what the dispatch does around a run, not the run.
+    /// A look that claims a job tells the screens the jobs moved.
     /// </summary>
     [Fact]
     public async Task ALookThatStartedAJobTellsTheScreensTheJobsMoved()

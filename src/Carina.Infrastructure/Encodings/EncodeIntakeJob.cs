@@ -7,9 +7,7 @@ using Microsoft.Extensions.Logging;
 namespace Carina.Infrastructure.Encodings;
 
 /// <summary>
-/// The loop that reads the recording ledger for what has ended and queues it, a look at a time. A
-/// machine that could not settle a destination earlier picks up everything it passed over once it
-/// can. It is a loop of its own and not a step of the dispatch's.
+/// The loop that reads the recording ledger for what has ended and queues it, one look at a time.
 /// </summary>
 public sealed class EncodeIntakeJob(
     IServiceScopeFactory scopes,
