@@ -516,6 +516,37 @@ public sealed class PlayDeliveryTests
     }
 
     [Fact]
+    public async Task ThePlanOfARecordingWhoseSoundsCouldNotBeReadNamesTheMainSoundItPlaysRatherThanNone()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Player.SoundsCannotBeRead = "the programme was still reading the stream";
+
+        JsonElement read = (await PlayFeature.PlanOfAsync(await feature.PlanAsync(recording))).GetProperty("data");
+
+        Assert.Equal(
+            ["main"],
+            read.GetProperty("sounds").EnumerateArray().Select(sound => sound.GetString()!).ToArray());
+    }
+
+    [Fact]
+    public async Task ThePlanOfASecondSoundThatCouldNotBeReadIsRefusedAsThePictureOfItIs()
+    {
+        await using var feature = new PlayFeature();
+        Recording recording = feature.Ended(RecordingOutcome.Complete);
+        feature.Player.SoundsCannotBeRead = "the programme was still reading the stream";
+
+        using HttpResponseMessage plan = await feature.PlanAsync(recording, "?sound=secondary");
+        using HttpResponseMessage picture = await feature.PictureAsync(recording, "?sound=secondary");
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, plan.StatusCode);
+        Assert.Equal(picture.StatusCode, plan.StatusCode);
+        Assert.Equal(
+            (await PlayFeature.PlanOfAsync(picture)).GetProperty("message").GetString(),
+            (await PlayFeature.PlanOfAsync(plan)).GetProperty("message").GetString());
+    }
+
+    [Fact]
     public async Task BrPd008ARecordingWhoseBroadcastPutTwoLanguagesOnOneSoundIsPlayedWithOneOfThemInBothEars()
     {
         await using var feature = new PlayFeature();
