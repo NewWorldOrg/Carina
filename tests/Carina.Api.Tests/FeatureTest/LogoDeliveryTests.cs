@@ -15,7 +15,6 @@ using Microsoft.Extensions.Hosting;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class LogoDeliveryTests
 {
     private const int SomeNetworkId = 32741;

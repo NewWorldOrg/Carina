@@ -6,7 +6,6 @@ using Microsoft.AspNetCore.Http;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class DeletionTakesOneRecordingWholeTests(TestingWebApplicationFactory factory)
     : IClassFixture<TestingWebApplicationFactory>
 {

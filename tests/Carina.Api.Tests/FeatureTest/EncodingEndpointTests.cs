@@ -9,7 +9,6 @@ using Carina.Domain.Streaming;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class EncodingEndpointTests
 {
     [Fact(DisplayName = "BR-EV-001: a profile is defined out of enumerated values and numbers, and comes back on the list")]

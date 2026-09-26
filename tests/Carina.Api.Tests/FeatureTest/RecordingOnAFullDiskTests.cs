@@ -53,7 +53,6 @@ internal sealed class WriterOnAFillingDisk(IRecordingWriter inner, long room) : 
     public void Dispose() => inner.Dispose();
 }
 
-[Collection(FeatureTestCollection.Name)]
 [SupportedOSPlatform("linux")]
 public sealed class RecordingOnAFullDiskTests
 {

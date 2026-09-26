@@ -17,7 +17,6 @@ using Microsoft.Net.Http.Headers;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class LiveTicketReachTests
 {
     private static readonly DateTime At = new(2026, 9, 3, 0, 0, 0, DateTimeKind.Utc);

@@ -5,7 +5,6 @@ using Carina.Domain.Channels;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class QualityCandidateScoreEndpointTests
 {
     private static readonly DateTime Noon = QualityFeature.Noon;

@@ -319,7 +319,6 @@ internal sealed class PlayFeature : IAsyncDisposable
     }
 }
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class PlayDeliveryTests
 {
     [Theory]

@@ -69,7 +69,6 @@ internal sealed class StreamThatEndsItselfOnce(long after) : ITunerDeviceFactory
     }
 }
 
-[Collection(FeatureTestCollection.Name)]
 [SupportedOSPlatform("linux")]
 public sealed class RecordingAcrossACleanEndOfStreamTests
 {

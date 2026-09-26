@@ -7,7 +7,6 @@ using Carina.Domain.Reservations;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class ServiceCatalogEndpointTests
 {
     private const int Terrestrial = 53;

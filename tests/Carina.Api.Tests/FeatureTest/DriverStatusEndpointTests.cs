@@ -18,7 +18,6 @@ using Microsoft.Extensions.Options;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class DriverStatusEndpointTests
 {
     private const string SchemeName = "Test";

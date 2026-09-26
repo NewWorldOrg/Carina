@@ -12,7 +12,6 @@ using Microsoft.Net.Http.Headers;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class LiveWireTests
 {
     private static readonly Uri Wire = new(LiveWire.Path, UriKind.Relative);

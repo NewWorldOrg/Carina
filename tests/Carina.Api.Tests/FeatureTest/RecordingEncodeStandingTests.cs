@@ -7,7 +7,6 @@ using Carina.Domain.Recordings;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class RecordingEncodeStandingTests
 {
     private static readonly OutputRoot Shelf = new("encodes");

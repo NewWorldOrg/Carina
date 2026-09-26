@@ -5,7 +5,6 @@ using Carina.Domain.Migration;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class MigrationRecordEndpointTests
 {
     private const string Record = "/api/migration/record";

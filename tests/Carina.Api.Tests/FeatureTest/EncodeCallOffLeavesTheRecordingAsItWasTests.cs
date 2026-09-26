@@ -7,7 +7,6 @@ using Carina.Domain.Recordings;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class EncodeCallOffLeavesTheRecordingAsItWasTests
 {
     private static readonly CancellationToken Cancel = CancellationToken.None;

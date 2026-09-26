@@ -7,7 +7,6 @@ using Carina.Domain.Auth;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class SessionEndpointTests
 {
     private static readonly Uri Me = new("/api/auth/me", UriKind.Relative);

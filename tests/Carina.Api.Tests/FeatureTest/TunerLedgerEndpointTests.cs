@@ -13,7 +13,6 @@ using Microsoft.AspNetCore.Http;
 
 namespace Carina.Api.Tests.FeatureTest;
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class TunerLedgerEndpointTests
 {
     private static readonly Uri Tuners = new("/api/tuners", UriKind.Relative);

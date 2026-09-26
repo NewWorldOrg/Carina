@@ -42,7 +42,6 @@ internal sealed class CookieAppendingHandler(
     }
 }
 
-[Collection(FeatureTestCollection.Name)]
 public sealed class StateChangingRequestTests(TestingWebApplicationFactory factory)
     : IClassFixture<TestingWebApplicationFactory>
 {
