@@ -3,6 +3,8 @@ using Carina.Domain.Channels;
 using Carina.Domain.Events;
 using Carina.Domain.Streaming;
 
+using Microsoft.Extensions.Logging;
+
 namespace Carina.Infrastructure.Streaming;
 
 public sealed class LiveSessionManager(
@@ -12,7 +14,8 @@ public sealed class LiveSessionManager(
     ILiveSupply supply,
     ILiveTranscoderFactory transcoders,
     TimeProvider clock,
-    IAppEventPublisher events) : ILiveSessionManager, ILiveSessionLedger, IAsyncDisposable
+    IAppEventPublisher events,
+    ILogger<LiveSessionManager> logger) : ILiveSessionManager, ILiveSessionLedger, IAsyncDisposable
 {
     public const int Attempts = 2;
 
@@ -298,6 +301,7 @@ public sealed class LiveSessionManager(
                 Receiving(key.Network, key.Service),
                 transcoders,
                 clock,
+                logger,
                 Forget);
 
             sessions[key] = raised;

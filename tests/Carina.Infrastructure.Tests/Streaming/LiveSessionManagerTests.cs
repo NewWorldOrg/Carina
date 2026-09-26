@@ -7,6 +7,8 @@ using Carina.Domain.Streaming;
 using Carina.Infrastructure.Streaming;
 using Carina.TestSupport;
 
+using Microsoft.Extensions.Logging;
+
 namespace Carina.Infrastructure.Tests.Streaming;
 
 public sealed class LiveSessionManagerTests
@@ -49,6 +51,8 @@ public sealed class LiveSessionManagerTests
     private readonly HeldTranscoders transcoders;
 
     private readonly SilentEvents events = new();
+
+    private readonly RecordedWarnings warnings = new();
 
     private readonly LiveSessionManager manager;
 
@@ -519,7 +523,8 @@ public sealed class LiveSessionManagerTests
             supply,
             transcoders,
             clock,
-            events);
+            events,
+            warnings);
 
         await using ILiveViewing stalled = Seated(await tight.JoinAsync(EveryFrame, CancellationToken.None));
         await using ILiveViewing flowing = Seated(await tight.JoinAsync(EveryField, CancellationToken.None));
@@ -607,6 +612,37 @@ public sealed class LiveSessionManagerTests
     }
 
     [Fact]
+    public async Task AWriteGivenUpOnThatLaterFailsInAWayNobodyNamedIsLoggedRatherThanLeftUnobserved()
+    {
+        ILiveViewing viewing = await Joined(EveryFrame);
+        TaskCompletionSource holding = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        transcoders.Raised[0].TakesNothingUntil = holding;
+        transcoders.Raised[0].TakesNoNoticeOfBeingCalledOff = true;
+
+        await Pour(supply.Opened[0], 1);
+        await Eventually.Happens(() => transcoders.Raised[0].Taking, "a write is going into the transcoder");
+
+        await viewing.DisposeAsync();
+        clock.Turn(Linger);
+
+        await Eventually.Happens(() => clock.Pending is TheHoldOnTheSupply + 1, "the teardown is waiting on the write");
+
+        clock.Turn(StopGrace);
+
+        await Eventually.Happens(() => transcoders.Raised[0].Disposed, "the teardown gave up on the write");
+
+        NotSupportedException failure = new("the write failed in a way nobody named.");
+
+        transcoders.Raised[0].FailingToTake = failure;
+        holding.SetResult();
+
+        await Eventually.Happens(
+            () => warnings.Failures.Any(logged => ReferenceEquals(logged, failure)),
+            "how the write that was given up on ended is logged");
+    }
+
+    [Fact]
     public async Task BrPs001AProfileAskedForAgainWhileTheOthersAreBeingGivenUpIsNotClosedUnderTheOneWhoAsked()
     {
         supply.AsIfThereWereOneTuner = true;
@@ -624,7 +660,8 @@ public sealed class LiveSessionManagerTests
             supply,
             transcoders,
             clock,
-            hook);
+            hook,
+            warnings);
 
         await Seated(await hooked.JoinAsync(EveryFrame, CancellationToken.None)).DisposeAsync();
         await Seated(await hooked.JoinAsync(EveryField, CancellationToken.None)).DisposeAsync();
@@ -1153,7 +1190,8 @@ public sealed class LiveSessionManagerTests
             supply,
             transcoders,
             clock,
-            events);
+            events,
+            warnings);
 
         await using ILiveViewing slow = Seated(await crowded.JoinAsync(EveryFrame, CancellationToken.None));
 
@@ -1403,7 +1441,8 @@ public sealed class LiveSessionManagerTests
             supply,
             transcoders,
             clock,
-            events);
+            events,
+            warnings);
 
         await using ILiveViewing slow = Seated(await crowded.JoinAsync(EveryFrame, CancellationToken.None));
 
@@ -1568,7 +1607,8 @@ public sealed class LiveSessionManagerTests
             supply,
             raising ?? new HeldTranscoders(counting),
             clock,
-            events);
+            events,
+            warnings);
 
     private async Task<ILiveViewing> Joined(LiveSessionKey key)
         => Seated(await manager.JoinAsync(key, CancellationToken.None));
@@ -1597,6 +1637,48 @@ public sealed class LiveSessionManagerTests
         }
 
         throw new TimeoutException($"Did not happen within {SoonerThanATranscoderIsCutLooseFor.TotalSeconds}s: {what}.");
+    }
+
+    private sealed class RecordedWarnings : ILogger<LiveSessionManager>
+    {
+        private readonly Lock gate = new();
+
+        private readonly List<Exception> failures = [];
+
+        public IReadOnlyList<Exception> Failures
+        {
+            get
+            {
+                lock (gate)
+                {
+                    return [.. failures];
+                }
+            }
+        }
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull
+            => null;
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            LogLevel logLevel,
+            EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel < LogLevel.Warning || exception is null)
+            {
+                return;
+            }
+
+            lock (gate)
+            {
+                failures.Add(exception);
+            }
+        }
     }
 
     private sealed class HookedEvents : IAppEventPublisher

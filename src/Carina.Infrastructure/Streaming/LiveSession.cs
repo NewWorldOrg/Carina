@@ -4,6 +4,8 @@ using System.Threading.Channels;
 using Carina.Contracts;
 using Carina.Domain.Streaming;
 
+using Microsoft.Extensions.Logging;
+
 namespace Carina.Infrastructure.Streaming;
 
 internal sealed class LiveSession
@@ -21,6 +23,8 @@ internal sealed class LiveSession
     private readonly ILiveTranscoderFactory transcoders;
 
     private readonly TimeProvider clock;
+
+    private readonly ILogger logger;
 
     private readonly Action<LiveSession> forget;
 
@@ -56,6 +60,7 @@ internal sealed class LiveSession
         LiveReception reception,
         ILiveTranscoderFactory transcoders,
         TimeProvider clock,
+        ILogger logger,
         Action<LiveSession> forget)
     {
         Key = key;
@@ -66,6 +71,7 @@ internal sealed class LiveSession
         this.reception = reception;
         this.transcoders = transcoders;
         this.clock = clock;
+        this.logger = logger;
         this.forget = forget;
     }
 
@@ -432,20 +438,34 @@ internal sealed class LiveSession
 
     /// <summary>
     /// Takes the seat out of the reading and waits for the write going into the transcoder to end,
-    /// for no longer than the stop grace.
+    /// for no longer than the stop grace. However the write ends, a failure is logged, whether it
+    /// ends within the grace or after it has been given up on.
     /// </summary>
     private async Task LeftTheReadingAsync(LiveSeat given)
     {
-        Task writing = reception.Drop(given);
+        Task ended = reception.Drop(given).ContinueWith(
+            LogFailure,
+            logger,
+            CancellationToken.None,
+            TaskContinuationOptions.ExecuteSynchronously,
+            TaskScheduler.Default);
         using CancellationTokenSource deadline = new(transcoding.StopGrace, clock);
 
         try
         {
-            await writing.WaitAsync(deadline.Token);
+            await ended.WaitAsync(deadline.Token);
         }
-        catch (Exception)
+        catch (OperationCanceledException) when (deadline.IsCancellationRequested)
         {
             return;
+        }
+    }
+
+    private static void LogFailure(Task writing, object? state)
+    {
+        if (writing.Exception is { } failure)
+        {
+            ((ILogger)state!).LogWarning(failure.GetBaseException(), "Writing into a live transcoder being taken down failed.");
         }
     }
 
