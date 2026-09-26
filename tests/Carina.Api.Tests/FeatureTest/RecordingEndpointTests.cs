@@ -124,7 +124,7 @@ public sealed class RecordingEndpointTests
     {
         await using var feature = new RecordingFeature();
         Recording counted = feature.Held(eventId: 1);
-        counted.Measure(DropCounters.Counted(0, 1000), DropTimeline.Unlocated, null, 0, RecordingFeature.Noon);
+        counted.Measure(DropCounters.Counted(0, 1000), DropTimeline.Unlocated, 0, 0, RecordingFeature.Noon);
         feature.Held(eventId: 2);
 
         (_, JsonElement clean) = await feature.GetAsync("/api/recordings?drops=clean");
@@ -140,6 +140,20 @@ public sealed class RecordingEndpointTests
         Assert.False(uncountedDrops.GetProperty("ccMeasured").GetBoolean());
         Assert.Equal(JsonValueKind.Null, uncountedDrops.GetProperty("ccDroppedPackets").ValueKind);
         Assert.Equal(JsonValueKind.Null, uncountedDrops.GetProperty("ccTotalPackets").ValueKind);
+    }
+
+    [Fact]
+    public async Task ARecordingThatLostNothingButWasLeftScrambledIsNotAnsweredAsClean()
+    {
+        await using var feature = new RecordingFeature();
+        Recording unlocked = feature.Held(eventId: 1);
+        unlocked.Measure(DropCounters.Counted(0, 1000), DropTimeline.Unlocated, 0, 0, RecordingFeature.Noon);
+        Recording locked = feature.Held(eventId: 2);
+        locked.Measure(DropCounters.Counted(0, 1000), DropTimeline.Unlocated, 900, 0, RecordingFeature.Noon);
+
+        (_, JsonElement body) = await feature.GetAsync("/api/recordings?drops=clean");
+
+        Assert.Equal(unlocked.Id.Wire, Only(body).GetProperty("id").GetString());
     }
 
     [Fact]
