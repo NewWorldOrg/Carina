@@ -233,6 +233,20 @@ public sealed class SessionEndpointTests
     }
 
     [Fact]
+    public async Task TheHandleTheListShowsSignsNobodyInWhenItIsCarriedAsTheCookie()
+    {
+        await using AuthProbe probe = AuthProbe.OverHttp();
+        await probe.SignedInAsync();
+        AuthSession there = probe.Sitting("another device");
+
+        using HttpClient client = probe.Relaying($"{SessionCookie.Name}={there.Handle.Value}");
+        using HttpResponseMessage response = await client.GetAsync(Me);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal(SessionStatus.Active, there.StatusAt(DateTime.UtcNow, SessionPolicy.Default));
+    }
+
+    [Fact]
     public async Task EndingAnotherDeviceLeavesThisOneSignedIn()
     {
         await using AuthProbe probe = AuthProbe.OverHttp();
