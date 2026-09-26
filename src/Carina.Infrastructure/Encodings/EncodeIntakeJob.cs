@@ -9,9 +9,7 @@ namespace Carina.Infrastructure.Encodings;
 /// <summary>
 /// The loop that reads the recording ledger for what has ended and queues it, a look at a time. A
 /// machine that could not settle a destination earlier picks up everything it passed over once it
-/// can, because what was passed over is still in the answer. It is a loop of its own and not a
-/// step of the dispatch's, because the dispatch's loop is inside a run and a run lasts as long as
-/// the encode does.
+/// can. It is a loop of its own and not a step of the dispatch's.
 /// </summary>
 public sealed class EncodeIntakeJob(
     IServiceScopeFactory scopes,

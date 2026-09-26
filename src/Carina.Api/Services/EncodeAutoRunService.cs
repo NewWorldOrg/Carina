@@ -15,7 +15,7 @@ public sealed record EncodeAutoRunReading(EncodeAutoRunStanding Standing, Encode
 /// anything about this host. What the auto-run takes is not a choice (BR-ED2-004) and is stated
 /// rather than asked for; nor is giving way to someone watching, which no setting reaches. Each
 /// answer also says whether the destinations and profiles defined let the auto-run settle where an
-/// artefact goes, since a machine that cannot queues nothing.
+/// artefact goes.
 /// </summary>
 public sealed class EncodeAutoRunService(
     IEncodeAutoRunRepository rows,

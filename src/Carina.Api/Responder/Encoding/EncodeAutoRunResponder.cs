@@ -10,8 +10,7 @@ namespace Carina.Api.Responder.Encoding;
 /// file like any other, and nothing narrows the rest (BR-ED2-004). <c>stored</c> says whether
 /// somebody settled these or whether they are what the machine was deployed with.
 /// <c>whereArtefactsGo</c> says whether the destinations and profiles defined settle where an
-/// artefact goes when nobody asked, and which of them is missing when they do not; the auto-run
-/// queues nothing until it is settled.
+/// artefact goes when nobody asked, and which of them is missing when they do not.
 /// </summary>
 public sealed record EncodeAutoRunResponder(
     bool Automatically,

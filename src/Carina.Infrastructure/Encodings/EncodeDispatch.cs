@@ -138,8 +138,8 @@ public sealed class EncodeDispatch(
     /// <summary>
     /// Writes the ending a run reached before it threw. A write that fails throws and is made again
     /// at the next look, before anything else is claimed; after <see cref="MostTriesAtAnEnding"/>
-    /// failed writes the ending is dropped, and the row is left for the next start to recover. A
-    /// row that has moved on meanwhile is read again and its word stands.
+    /// failed writes the ending is dropped and the row is left as it is. A row that has moved on
+    /// meanwhile is read again and its word stands.
     /// </summary>
     private async Task<EncodeJobStatus?> WriteTheEndingAsync(CancellationToken cancellationToken)
     {
