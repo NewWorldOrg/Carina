@@ -72,6 +72,27 @@ public sealed class ProgrammeRepository(CarinaDbContext context) : IProgrammeRep
             throw new ArgumentException("One visit names the same programme twice; bundle them first.", nameof(broadcasts));
         }
 
+        if (context.Database.CurrentTransaction is not null)
+        {
+            return await WriteInTurnAsync(broadcasts, heardWhole, at, cancellationToken);
+        }
+
+        await using IDbContextTransaction transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+        ProgrammesAbsorbed absorbed = await WriteInTurnAsync(broadcasts, heardWhole, at, cancellationToken);
+
+        await transaction.CommitAsync(cancellationToken);
+
+        return absorbed;
+    }
+
+    private async Task<ProgrammesAbsorbed> WriteInTurnAsync(
+        IReadOnlyList<ProgrammeBroadcast> broadcasts,
+        IReadOnlyList<ProgrammeService> heardWhole,
+        DateTime at,
+        CancellationToken cancellationToken)
+    {
+        await context.Database.ExecuteSqlRawAsync(ProgrammeRevisions.TakeTurnSql, cancellationToken);
+
         await using DbCommand command = context.Database.GetDbConnection().CreateCommand();
 
         command.CommandText = ProgrammeAbsorption.Sql;

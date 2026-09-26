@@ -306,6 +306,12 @@ nothing.
   guide (8,727 rows), re-ingesting the same visit fell from about 3 s row by row to
   0.4 s, and a visit that changed every row from 80 s to about 1.2 s.
 
+  Before that statement every visit takes one transaction-scoped advisory lock, so
+  two visits never hold revisions at the same time. Revisions are drawn from a
+  sequence inside the writing transaction, and without the lock a visit that drew
+  lower numbers could commit after one that drew higher ones; a reader following
+  `revision > cursor` would already have moved past it.
+
 - **Which rule takes a programme is decided by weight, never by age or identifier
   alone.** Rules are read in falling priority, then oldest first, then by identifier
   as the last resort, and the first one to take a programme keeps it. A rule whose
