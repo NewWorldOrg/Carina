@@ -183,11 +183,42 @@ internal sealed class LiveSession
     {
         lock (gate)
         {
-            closed = true;
-            linger?.Dispose();
-            linger = null;
+            Closing();
         }
 
+        LetGo();
+    }
+
+    /// <summary>
+    /// Closes the session if no viewer is expected on it, and says whether it did. Whether anybody is
+    /// expected is read under the same lock that marks the session closed.
+    /// </summary>
+    internal bool CloseIfNobodyIsWatching()
+    {
+        lock (gate)
+        {
+            if (expected > 0 || closed)
+            {
+                return false;
+            }
+
+            Closing();
+        }
+
+        LetGo();
+
+        return true;
+    }
+
+    private void Closing()
+    {
+        closed = true;
+        linger?.Dispose();
+        linger = null;
+    }
+
+    private void LetGo()
+    {
         forget(this);
         stopping.Cancel();
     }
@@ -235,18 +266,7 @@ internal sealed class LiveSession
         }
     }
 
-    private void LingerOver()
-    {
-        lock (gate)
-        {
-            if (expected > 0 || closed)
-            {
-                return;
-            }
-        }
-
-        Close();
-    }
+    private void LingerOver() => CloseIfNobodyIsWatching();
 
     private async Task LiveAsync()
     {

@@ -185,21 +185,26 @@ public sealed class LiveSessionManager(
         LiveSessionKey asked,
         CancellationToken cancellationToken)
     {
-        List<LiveSession> given;
+        List<LiveSession> candidates;
         List<LiveSession> going;
 
         lock (gate)
         {
-            given =
+            candidates =
             [
                 .. sessions.Values.Where(session => !session.Key.Equals(asked) && session.NobodyIsWatching),
             ];
             going = [.. StillLettingGo().Where(session => !session.Key.Equals(asked))];
         }
 
-        foreach (LiveSession session in given)
+        List<LiveSession> given = [];
+
+        foreach (LiveSession session in candidates)
         {
-            session.Close();
+            if (session.CloseIfNobodyIsWatching())
+            {
+                given.Add(session);
+            }
         }
 
         List<LiveSession> letting = [.. given, .. going];

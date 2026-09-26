@@ -2,6 +2,7 @@ using System.Reflection;
 
 using Carina.Contracts;
 using Carina.Domain.Channels;
+using Carina.Domain.Events;
 using Carina.Domain.Streaming;
 using Carina.Infrastructure.Streaming;
 using Carina.TestSupport;
@@ -401,6 +402,63 @@ public sealed class LiveSessionManagerTests
         Assert.False(supply.Opened[0].Disposed);
         Assert.Equal([EveryFrame], manager.Keys);
         Assert.Equal(2, supply.Asked);
+    }
+
+    [Fact]
+    public async Task BrPs001AProfileAskedForAgainWhileTheOthersAreBeingGivenUpIsNotClosedUnderTheOneWhoAsked()
+    {
+        supply.AsIfThereWereOneTuner = true;
+
+        HookedEvents hook = new();
+        await using LiveSessionManager hooked = new(
+            new LiveSessionSettings(
+                linger: Linger,
+                longestRaise: LongestRaise,
+                heldAhead: HeldAhead,
+                betweenHolds: BetweenHolds,
+                longestWaitForATunerToComeFree: WaitForATunerToComeFree),
+            new LiveFanoutSettings(),
+            new LiveTranscodeSettings { StopGrace = StopGrace },
+            supply,
+            transcoders,
+            clock,
+            hook);
+
+        await Seated(await hooked.JoinAsync(EveryFrame, CancellationToken.None)).DisposeAsync();
+        await Seated(await hooked.JoinAsync(EveryField, CancellationToken.None)).DisposeAsync();
+
+        LiveSessionKey? askedAgain = null;
+        Task<LiveJoin>? back = null;
+
+        hook.Signalled = () =>
+        {
+            if (back is null && hooked.Keys.Count is 1)
+            {
+                askedAgain = hooked.Keys[0];
+                back = hooked.JoinAsync(askedAgain, CancellationToken.None);
+            }
+        };
+
+        Task<LiveJoin> asking = hooked.JoinAsync(AnotherChannel, CancellationToken.None);
+
+        await Eventually.Happens(() => back is not null, "a profile is asked for again between the other being given up and it");
+
+        await using ILiveViewing returned = Seated(await back!);
+
+        Assert.Equal([askedAgain!], hooked.Keys);
+        Assert.False(supply.Opened[0].Disposed, "the reading the returning viewer is watching through is still open");
+
+        await Eventually.Happens(
+            () =>
+            {
+                clock.Turn(WaitForATunerToComeFree);
+
+                return asking.IsCompleted;
+            },
+            "the viewer of the other channel is refused, since somebody is watching the one tuner again");
+
+        Assert.Equal(LiveRefusal.NoTunerFree, (await asking).Refusal);
+        Assert.Equal([askedAgain!], hooked.Keys);
     }
 
     [Fact]
@@ -1312,4 +1370,11 @@ public sealed class LiveSessionManagerTests
 
     private async Task<ILiveViewing> Joined(LiveSessionKey key)
         => Seated(await manager.JoinAsync(key, CancellationToken.None));
+
+    private sealed class HookedEvents : IAppEventPublisher
+    {
+        public Action Signalled { get; set; } = static () => { };
+
+        public void Signal(AppEventName name) => Signalled();
+    }
 }
