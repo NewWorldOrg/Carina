@@ -126,7 +126,12 @@ public sealed class ReservationOutcomeService(
             .. awaiting
                 .Select(one => (
                     one.Reservation,
-                    Kind: ReservationOutcomeJudgement.Of(one.Reservation, one.Recorded, settings.Grace, at)))
+                    Kind: ReservationOutcomeJudgement.Of(
+                        one.Reservation,
+                        one.Recorded,
+                        one.LeftScrambled,
+                        settings.Grace,
+                        at)))
                 .Where(pair => pair.Kind is not null)
                 .Select(pair => new Judged(pair.Reservation, pair.Kind!.Value))
                 .OrderBy(judged => judged.Reservation.EffectiveStartAt)

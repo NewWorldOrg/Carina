@@ -110,6 +110,12 @@ public sealed class Recording
     public int? FilesLeftBehind { get; private set; }
 
     /// <summary>
+    /// When the file of a recording that ended with <see cref="RecordingFault.ScramblingUnresolved"/>
+    /// was descrambled, or null while it has not been.
+    /// </summary>
+    public DateTime? DescrambledAt { get; private set; }
+
+    /// <summary>
     /// Whether this recording is encoded once it ends, copied from the reservation it was started
     /// for at the moment it began. It is copied rather than read back through the reservation
     /// because nothing ties the two rows together: a reservation can be thrown away, and one
@@ -120,6 +126,12 @@ public sealed class Recording
     public ProgrammeRef Programme => new(NetworkId, ServiceId, EventId, ProgrammeStartsAt);
 
     public bool IsInFlight => Outcome is null;
+
+    /// <summary>
+    /// Whether the recording ended with <see cref="RecordingFault.ScramblingUnresolved"/> in its outcome
+    /// detail and has not been descrambled since.
+    /// </summary>
+    public bool LeftScrambled => !IsInFlight && EndedScrambled(outcomeDetail) && DescrambledAt is null;
 
     public bool ThumbnailShowsAnUnfinishedRecording
         => ThumbnailState is ThumbnailState.Ready && Outcome is RecordingOutcome.Truncated;
@@ -203,7 +215,8 @@ public sealed class Recording
         ThumbnailFault? thumbnailFault = null,
         DateTime? leftBehindAt = null,
         int? filesLeftBehind = null,
-        bool encodeWhenRecorded = true)
+        bool encodeWhenRecorded = true,
+        DateTime? descrambledAt = null)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(programme);
@@ -322,6 +335,7 @@ public sealed class Recording
 
         RefuseALeftoverThatDoesNotAddUp(outcome, leftBehindAt, filesLeftBehind);
         RefuseATimeBeforeTheRecordingBegan(startedAtActual, leftBehindAt, nameof(leftBehindAt));
+        RefuseADescramblingThatDoesNotAddUp(outcome, outcomeDetail, stoppedAtActual, descrambledAt);
 
         return new Recording
         {
@@ -365,6 +379,7 @@ public sealed class Recording
             BroadcastGroupRole = broadcastGroupRole,
             LeftBehindAt = UtcTimes.Optional(leftBehindAt, nameof(leftBehindAt)),
             FilesLeftBehind = filesLeftBehind,
+            DescrambledAt = UtcTimes.Optional(descrambledAt, nameof(descrambledAt)),
             EncodeWhenRecorded = encodeWhenRecorded,
             Interruptions = interruptions,
             OutcomeDetail = outcomeDetail,
@@ -433,6 +448,31 @@ public sealed class Recording
             LeftBehindAt = attempted;
             FilesLeftBehind = erasure.FilesLeft;
         }
+    }
+
+    /// <summary>
+    /// Lifts <see cref="LeftScrambled"/> from a recording that ended with
+    /// <see cref="RecordingFault.ScramblingUnresolved"/>, keeping its outcome and outcome detail as they are.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// The recording is still being written, or it is not <see cref="LeftScrambled"/>.
+    /// </exception>
+    /// <exception cref="ArgumentException"><paramref name="at"/> is not UTC or is before the recording stopped.</exception>
+    public void Descrambled(DateTime at)
+    {
+        if (!LeftScrambled)
+        {
+            throw new InvalidOperationException(
+                IsInFlight
+                    ? "A recording still being written has not ended scrambled."
+                    : "Only a recording that ended with its scrambling unresolved, and has not been descrambled since, is descrambled.");
+        }
+
+        DateTime descrambled = UtcTimes.Required(at, nameof(at));
+
+        RefuseATimeBeforeTheRecordingBegan(StoppedAtActual!.Value, descrambled, nameof(at));
+
+        DescrambledAt = descrambled;
     }
 
     public void Acquire(TunerDeviceId tunerDeviceId)
@@ -810,6 +850,35 @@ public sealed class Recording
             throw new ArgumentException(
                 $"A recording runs forwards, so nothing about it happens before {began:O}.",
                 parameterName);
+        }
+    }
+
+    private static bool EndedScrambled(IReadOnlyList<OutcomeDetail> detail)
+        => detail.Any(one => one.Fault is RecordingFault.ScramblingUnresolved);
+
+    private static void RefuseADescramblingThatDoesNotAddUp(
+        RecordingOutcome? outcome,
+        IReadOnlyList<OutcomeDetail> detail,
+        DateTime? stoppedAtActual,
+        DateTime? descrambledAt)
+    {
+        if (descrambledAt is not { } descrambled)
+        {
+            return;
+        }
+
+        if (outcome is null || !EndedScrambled(detail))
+        {
+            throw new ArgumentException(
+                "Only a recording that ended with its scrambling unresolved says when it was descrambled.",
+                nameof(descrambledAt));
+        }
+
+        if (stoppedAtActual is { } stopped && descrambled < stopped)
+        {
+            throw new ArgumentException(
+                $"A recording is descrambled after it stopped at {stopped:O}.",
+                nameof(descrambledAt));
         }
     }
 

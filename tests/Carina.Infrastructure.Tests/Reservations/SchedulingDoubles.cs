@@ -214,6 +214,8 @@ internal sealed class HeldReservations(IAtomicWrite? write = null, HeldOutcomes?
                                           && ReservationOutcomeKinds.Settling.Contains(outcome.Kind)))
                 .Where(reservation => reservation.RecordingOutcome
                                           is RecordingOutcome.Failed or RecordingOutcome.Truncated
+                                      || (reservation.RecordingOutcome is RecordingOutcome.Complete
+                                          && LeftScrambledAgainst.Contains(reservation.Id))
                                       || (reservation.RecordingOutcome is null
                                           && reservation.State
                                               is ReservationState.Scheduled or ReservationState.Conflict
@@ -222,11 +224,15 @@ internal sealed class HeldReservations(IAtomicWrite? write = null, HeldOutcomes?
                 .ThenBy(reservation => reservation.Id.Value)
                 .Select(reservation => new ReservationAwaitingOutcome(
                     reservation,
-                    RecordedAgainst.Contains(reservation.Id))),
+                    RecordedAgainst.Contains(reservation.Id),
+                    LeftScrambledAgainst.Contains(reservation.Id))),
         ]);
 
     /// <summary>Which reservations a recording is written down against.</summary>
     public HashSet<ReservationId> RecordedAgainst { get; } = [];
+
+    /// <summary>Which reservations a recording that is left scrambled is written down against.</summary>
+    public HashSet<ReservationId> LeftScrambledAgainst { get; } = [];
 
     public Task<IReadOnlyList<Reservation>> ListClaimedOverAsync(
         ReservationWindow window,

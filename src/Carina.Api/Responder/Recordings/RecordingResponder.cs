@@ -89,7 +89,9 @@ public sealed record RecordingResponder(
     RecordingThumbnailResponder Thumbnail,
     RecordingBroadcastGroupResponder BroadcastGroup,
     RecordingEncodeResponder Encode,
-    RecordingUnfinishedDeletionResponder? UnfinishedDeletion)
+    RecordingUnfinishedDeletionResponder? UnfinishedDeletion,
+    bool LeftScrambled,
+    DateTime? DescrambledAt)
 {
     public static RecordingResponder Of(RecordingSeen seen)
     {
@@ -149,7 +151,9 @@ public sealed record RecordingResponder(
                 recording.BroadcastGroupKey?.Value,
                 recording.BroadcastGroupRole),
             new RecordingEncodeResponder(seen.Encode, recording.EncodeWhenRecorded),
-            RecordingUnfinishedDeletionResponder.Of(recording));
+            RecordingUnfinishedDeletionResponder.Of(recording),
+            recording.LeftScrambled,
+            recording.DescrambledAt);
     }
 
     internal static RecordingWindowResponder Window(Recording recording)

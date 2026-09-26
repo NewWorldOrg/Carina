@@ -98,6 +98,18 @@ public sealed class ReservationOutcome
 
     public RetryGiveUp? GaveUpBecause { get; private set; }
 
+    /// <summary>
+    /// When the recording this line names as <see cref="RecordingFault.ScramblingUnresolved"/> was
+    /// descrambled, or null while it has not been.
+    /// </summary>
+    public DateTime? DescrambledAt { get; private set; }
+
+    /// <summary>
+    /// Whether this line names <see cref="RecordingFault.ScramblingUnresolved"/> and has not been
+    /// descrambled since.
+    /// </summary>
+    public bool LeftScrambled => NamesScrambling(Faults) && DescrambledAt is null;
+
     public static ReservationOutcome Record(
         ReservationOutcomeId id,
         Reservation reservation,
@@ -204,7 +216,8 @@ public sealed class ReservationOutcome
         IReadOnlyList<Guid> recordedInstead,
         DateTime occurredAt,
         RetryResult? retryResult = null,
-        RetryGiveUp? gaveUpBecause = null)
+        RetryGiveUp? gaveUpBecause = null,
+        DateTime? descrambledAt = null)
     {
         ArgumentNullException.ThrowIfNull(id);
         ArgumentNullException.ThrowIfNull(reservationId);
@@ -270,6 +283,23 @@ public sealed class ReservationOutcome
                 nameof(faults));
         }
 
+        if (kind is ReservationOutcomeKind.RecordingFailure
+            && recordingOutcome is Recordings.RecordingOutcome.Complete
+            && !NamesScrambling(faults))
+        {
+            throw new ArgumentException(
+                "A recording that came out whole is a failure only when it was left scrambled, and says so.",
+                nameof(faults));
+        }
+
+        if (descrambledAt is { } descrambled
+            && (!NamesScrambling(faults) || descrambled < occurredAt))
+        {
+            throw new ArgumentException(
+                "Only a line that named the scrambling says when it was descrambled, and that is after the line was written.",
+                nameof(descrambledAt));
+        }
+
         RefuseARetryThatDoesNotSayWhatCameOfIt(kind, tuneFailure, faults, retryResult, gaveUpBecause);
 
         return new ReservationOutcome
@@ -293,8 +323,38 @@ public sealed class ReservationOutcome
             OccurredAt = UtcTimes.Required(occurredAt, nameof(occurredAt)),
             RetryResult = retryResult,
             GaveUpBecause = gaveUpBecause,
+            DescrambledAt = UtcTimes.Optional(descrambledAt, nameof(descrambledAt)),
         };
     }
+
+    /// <summary>
+    /// Lifts <see cref="LeftScrambled"/> from a line that names
+    /// <see cref="RecordingFault.ScramblingUnresolved"/>, keeping everything else the line says.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The line is not <see cref="LeftScrambled"/>.</exception>
+    /// <exception cref="ArgumentException"><paramref name="at"/> is not UTC or is before the line was written.</exception>
+    public void Descrambled(DateTime at)
+    {
+        if (!LeftScrambled)
+        {
+            throw new InvalidOperationException(
+                "Only a line that names the scrambling, and has not been descrambled since, is descrambled.");
+        }
+
+        DateTime descrambled = UtcTimes.Required(at, nameof(at));
+
+        if (descrambled < OccurredAt)
+        {
+            throw new ArgumentException(
+                $"A line is descrambled after it was written at {OccurredAt:O}.",
+                nameof(at));
+        }
+
+        DescrambledAt = descrambled;
+    }
+
+    private static bool NamesScrambling(IReadOnlyList<RecordingFault> faults)
+        => faults.Contains(RecordingFault.ScramblingUnresolved);
 
     private static void RefuseARetryThatDoesNotSayWhatCameOfIt(
         ReservationOutcomeKind kind,

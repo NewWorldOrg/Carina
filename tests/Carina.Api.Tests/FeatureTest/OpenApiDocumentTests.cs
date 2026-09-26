@@ -400,7 +400,7 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
                 "id", "reservationId", "programme", "standing", "outcome", "outcomeDetail", "startedAt", "stoppedAt",
                 "abortedAt", "expectedWindow", "promisedWindowEnd", "writtenDurationMs", "resumeCount", "fileSizeBytes",
                 "observedAt", "outputRoot", "fileName", "tunerDeviceId", "drops", "thumbnail", "broadcastGroup", "encode",
-                "unfinishedDeletion",
+                "unfinishedDeletion", "leftScrambled", "descrambledAt",
             ],
             properties.AsObject().Select(entry => entry.Key).ToArray());
 
@@ -440,6 +440,24 @@ public sealed class OpenApiDocumentTests(TestingWebApplicationFactory factory)
         Assert.Equal(
             ["standing", "whenRecorded"],
             encode["required"]!.AsArray().Select(name => name!.GetValue<string>()).Order(StringComparer.Ordinal).ToArray());
+    }
+
+    [Theory]
+    [InlineData("RecordingResponder")]
+    [InlineData("ReservationOutcomeResponder")]
+    public async Task WhatWasLeftScrambledIsAlwaysAnsweredBesideWhenItWasDescrambled(string schema)
+    {
+        JsonNode document = await ServedOpenApi.FetchAsync(factory);
+        JsonNode described = document["components"]!["schemas"]!.AsObject()[schema]!;
+        JsonNode properties = described["properties"]!;
+        string[] required = [.. described["required"]!.AsArray().Select(name => name!.GetValue<string>())];
+
+        Assert.Equal("boolean", properties["leftScrambled"]!["type"]!.GetValue<string>());
+        Assert.True(SaysItIsAString(properties["descrambledAt"]!["type"]));
+        Assert.Equal("date-time", properties["descrambledAt"]!["format"]!.GetValue<string>());
+        Assert.Contains("null", properties["descrambledAt"]!["type"]!.AsArray().Select(type => type!.GetValue<string>()));
+        Assert.Contains("leftScrambled", required);
+        Assert.Contains("descrambledAt", required);
     }
 
     private static bool SaysItIsAString(JsonNode? declared)

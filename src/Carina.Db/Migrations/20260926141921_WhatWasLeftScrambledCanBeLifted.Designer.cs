@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Carina.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Carina.Db.Migrations
 {
     [DbContext(typeof(CarinaDbContext))]
-    partial class CarinaDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260926141921_WhatWasLeftScrambledCanBeLifted")]
+    partial class WhatWasLeftScrambledCanBeLifted
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -27,10 +30,10 @@ namespace Carina.Db.Migrations
 
             modelBuilder.Entity("Carina.Domain.Auth.AuthSession", b =>
                 {
-                    b.Property<string>("Handle")
+                    b.Property<string>("Id")
                         .HasMaxLength(43)
                         .HasColumnType("character varying(43)")
-                        .HasColumnName("handle");
+                        .HasColumnName("id");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -68,7 +71,7 @@ namespace Carina.Db.Migrations
                         .HasColumnType("character varying(255)")
                         .HasColumnName("subject");
 
-                    b.HasKey("Handle")
+                    b.HasKey("Id")
                         .HasName("pk_auth_session");
 
                     b.HasIndex("LastUsedAt")

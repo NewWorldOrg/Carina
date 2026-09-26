@@ -178,6 +178,14 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
                 AND (left_behind_at IS NULL OR left_behind_at >= started_at_actual)
                 """);
             table.HasCheckConstraint(
+                "ck_recording_descrambled",
+                $"""
+                descrambled_at IS NULL
+                OR (recording_outcome IS NOT NULL
+                    AND recording_reasons_name_any(outcome_detail, ARRAY['{RecordingFault.ScramblingUnresolved}']::text[])
+                    AND descrambled_at >= stopped_at_actual)
+                """);
+            table.HasCheckConstraint(
                 "ck_recording_counts",
                 """
                 written_duration_ms >= 0
@@ -354,6 +362,7 @@ public sealed class RecordingConfiguration : IEntityTypeConfiguration<Recording>
 
         builder.Property(recording => recording.LeftBehindAt);
         builder.Property(recording => recording.FilesLeftBehind);
+        builder.Property(recording => recording.DescrambledAt);
 
         builder.Property(recording => recording.EncodeWhenRecorded)
             .HasColumnName("encode_when_recorded")
