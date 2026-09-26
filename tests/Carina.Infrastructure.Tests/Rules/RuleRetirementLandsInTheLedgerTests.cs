@@ -107,6 +107,46 @@ public sealed class RuleRetirementLandsInTheLedgerTests(RepositoryDatabase datab
     }
 
     [Fact]
+    public async Task RetiringARuleWhoseReservationChangedElsewhereAfterItWasReadStillTakesItAway()
+    {
+        Rule going = Written(0x76);
+        await AddAsync(going);
+        Reservation standing = await StandingAsync(9241, going.Id);
+
+        await using (CarinaDbContext context = database.Open())
+        {
+            await new ReservationRepository(context).FindAsync(standing.Id, Cancel);
+            await ChangedElsewhereAsync(standing.Id);
+
+            Assert.NotNull(await RetiringOver(context).RetiredAsync(going.Id, Cancel));
+        }
+
+        Assert.Null(await FindAsync(standing.Id));
+        Assert.Null(await ReadRuleAsync(going.Id));
+    }
+
+    [Fact]
+    public async Task SwitchingARuleOffWhenItsReservationChangedElsewhereAfterItWasReadStillPullsItBack()
+    {
+        Rule going = Written(0x77);
+        await AddAsync(going);
+        Reservation standing = await StandingAsync(9251, going.Id);
+        await VisitedAsync();
+
+        await using (CarinaDbContext context = database.Open())
+        {
+            await new ReservationRepository(context).FindAsync(standing.Id, Cancel);
+            await ChangedElsewhereAsync(standing.Id);
+
+            IReadOnlyList<Reservation> dropped = await RetiringOver(context).DroppedAsync(going.Id, Cancel);
+
+            Assert.Equal([standing.Id], dropped.Select(reservation => reservation.Id));
+        }
+
+        Assert.Null(await FindAsync(standing.Id));
+    }
+
+    [Fact]
     public async Task ARuleThatIsNotThereLeavesTheLedgerAsItWas()
     {
         Rule staying = Written(0x74);
@@ -227,6 +267,28 @@ public sealed class RuleRetirementLandsInTheLedgerTests(RepositoryDatabase datab
         await new ReservationRepository(context).AddAsync(reservation, Cancel);
 
         return reservation;
+    }
+
+    private async Task ChangedElsewhereAsync(ReservationId id)
+    {
+        await using CarinaDbContext elsewhere = database.Open();
+        ReservationRepository repository = new(elsewhere);
+        Reservation found = (await repository.FindAsync(id, Cancel))!;
+        found.Reprioritise(new Priority(55));
+        await repository.SaveAllAsync([found], Cancel);
+    }
+
+    private async Task VisitedAsync()
+    {
+        await using CarinaDbContext context = database.Open();
+        await new StreamVisitRepository(context).SaveAsync(
+            StreamVisit.Record(
+                new NetworkId(Network),
+                new TransportStreamId(Carried),
+                VisitOutcome.Complete,
+                Now.AddHours(-1),
+                TimeSpan.FromSeconds(30)),
+            Cancel);
     }
 
     private async Task AddAsync(Rule rule)

@@ -70,7 +70,10 @@ public sealed class RuleApplicationService(
     {
         ArgumentNullException.ThrowIfNull(ruleId);
 
-        return await DroppedAsync(ruleId, Moment(), await GuardAsync(cancellationToken), cancellationToken);
+        DateTime at = Moment();
+        WithdrawalGuard guard = await GuardAsync(cancellationToken);
+
+        return await OnceMoreIfMovedAsync(() => DroppedAsync(ruleId, at, guard, cancellationToken));
     }
 
     public async Task<RuleRetirement?> RetiredAsync(RuleId ruleId, CancellationToken cancellationToken)
@@ -84,9 +87,10 @@ public sealed class RuleApplicationService(
 
         DateTime at = Moment();
         WithdrawalGuard guard = await GuardAsync(cancellationToken);
-        IReadOnlyList<Reservation> withdrawn = await DroppedAsync(ruleId, at, guard, cancellationToken);
+        IReadOnlyList<Reservation> withdrawn =
+            await OnceMoreIfMovedAsync(() => DroppedAsync(ruleId, at, guard, cancellationToken));
 
-        IReadOnlyList<Reservation> swept = await write.AllOrNothingAsync(
+        IReadOnlyList<Reservation> swept = await OnceMoreIfMovedAsync(() => write.AllOrNothingAsync(
             async token =>
             {
                 IReadOnlyList<Reservation> standing = await reservations.ListForRuleAsync(ruleId, token);
@@ -113,7 +117,7 @@ public sealed class RuleApplicationService(
 
                 return left;
             },
-            cancellationToken);
+            cancellationToken));
 
         if (swept.Count > 0)
         {
@@ -210,6 +214,22 @@ public sealed class RuleApplicationService(
         await WithdrawAsync(leaving, cancellationToken);
 
         return leaving;
+    }
+
+    /// <summary>
+    /// Runs <paramref name="writing"/>, and runs it once more when a reservation it wrote had changed
+    /// in the store since it was read.
+    /// </summary>
+    private static async Task<T> OnceMoreIfMovedAsync<T>(Func<Task<T>> writing)
+    {
+        try
+        {
+            return await writing();
+        }
+        catch (ReservationMovedMeanwhileException)
+        {
+            return await writing();
+        }
     }
 
     private async Task<RuleApplicationRun> ApplyAsync(
