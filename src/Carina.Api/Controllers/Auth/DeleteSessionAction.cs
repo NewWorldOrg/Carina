@@ -19,11 +19,11 @@ public sealed class DeleteSessionAction(AuthSessionService sessions) : Controlle
     [ProducesResponseType<BaseResponder<string>>(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Invoke(string id, CancellationToken cancellationToken)
     {
-        SessionId target;
+        SessionHandle target;
 
         try
         {
-            target = new SessionId(id);
+            target = new SessionHandle(id);
         }
         catch (ArgumentException)
         {

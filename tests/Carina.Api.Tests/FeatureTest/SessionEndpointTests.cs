@@ -184,13 +184,62 @@ public sealed class SessionEndpointTests
     }
 
     [Fact]
+    public async Task TheSessionListNeverHandsOutTheCookieOfAnySessionItShows()
+    {
+        await using AuthProbe probe = AuthProbe.OverHttp();
+        AuthSession here = await probe.SignedInAsync();
+        AuthSession there = probe.Sitting("another device");
+        AuthSession theirs = SomebodyElseSitting(probe);
+
+        using HttpResponseMessage response = await probe.Client.GetAsync(Sessions);
+        string body = await response.Content.ReadAsStringAsync();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.DoesNotContain(here.Id.Value, body, StringComparison.Ordinal);
+        Assert.DoesNotContain(there.Id.Value, body, StringComparison.Ordinal);
+        Assert.DoesNotContain(theirs.Id.Value, body, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheHandleTheListShowsIsWhatEndsThatSession()
+    {
+        await using AuthProbe probe = AuthProbe.OverHttp();
+        await probe.SignedInAsync();
+        AuthSession theirs = SomebodyElseSitting(probe);
+
+        using HttpResponseMessage listing = await probe.Client.GetAsync(Sessions);
+        using var body = JsonDocument.Parse(await listing.Content.ReadAsStringAsync());
+        string handle = body.RootElement.GetProperty("data").EnumerateArray()
+            .Single(session => !session.GetProperty("current").GetBoolean())
+            .GetProperty("id").GetString()!;
+
+        using HttpResponseMessage ended = await EndingAsync(probe, handle);
+
+        Assert.Equal(HttpStatusCode.NoContent, ended.StatusCode);
+        Assert.Equal(SessionStatus.Revoked, theirs.StatusAt(DateTime.UtcNow, SessionPolicy.Default));
+    }
+
+    [Fact]
+    public async Task TheCookieOfASessionDoesNotEndIt()
+    {
+        await using AuthProbe probe = AuthProbe.OverHttp();
+        await probe.SignedInAsync();
+        AuthSession theirs = SomebodyElseSitting(probe);
+
+        using HttpResponseMessage response = await EndingAsync(probe, theirs.Id.Value);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Equal(SessionStatus.Active, theirs.StatusAt(DateTime.UtcNow, SessionPolicy.Default));
+    }
+
+    [Fact]
     public async Task EndingAnotherDeviceLeavesThisOneSignedIn()
     {
         await using AuthProbe probe = AuthProbe.OverHttp();
         await probe.SignedInAsync();
         AuthSession there = probe.Sitting("another device");
 
-        using HttpResponseMessage ended = await EndingAsync(probe, there.Id);
+        using HttpResponseMessage ended = await EndingAsync(probe, SessionHandle.Of(there.Id));
         using HttpResponseMessage after = await probe.Client.GetAsync(Me);
 
         Assert.Equal(HttpStatusCode.NoContent, ended.StatusCode);
@@ -205,7 +254,7 @@ public sealed class SessionEndpointTests
         await probe.SignedInAsync();
         AuthSession theirs = SomebodyElseSitting(probe);
 
-        using HttpResponseMessage response = await EndingAsync(probe, theirs.Id);
+        using HttpResponseMessage response = await EndingAsync(probe, SessionHandle.Of(theirs.Id));
         using HttpResponseMessage after = await probe.Client.GetAsync(Me);
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
@@ -219,7 +268,7 @@ public sealed class SessionEndpointTests
         await using AuthProbe probe = AuthProbe.OverHttp();
         await probe.SignedInAsync();
 
-        using HttpResponseMessage response = await EndingAsync(probe, SessionId.Issue());
+        using HttpResponseMessage response = await EndingAsync(probe, SessionHandle.Of(SessionId.Issue()));
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
@@ -230,7 +279,7 @@ public sealed class SessionEndpointTests
         await using AuthProbe probe = AuthProbe.OverHttp();
         AuthSession here = await probe.SignedInAsync();
 
-        using HttpResponseMessage ended = await EndingAsync(probe, here.Id);
+        using HttpResponseMessage ended = await EndingAsync(probe, SessionHandle.Of(here.Id));
         using HttpResponseMessage after = await probe.Client.GetAsync(Me);
 
         Assert.Equal(HttpStatusCode.NoContent, ended.StatusCode);
@@ -349,11 +398,14 @@ public sealed class SessionEndpointTests
         Assert.Equal(HttpStatusCode.Unauthorized, changed.StatusCode);
     }
 
-    private static async Task<HttpResponseMessage> EndingAsync(AuthProbe probe, SessionId id)
+    private static Task<HttpResponseMessage> EndingAsync(AuthProbe probe, SessionHandle handle)
+        => EndingAsync(probe, handle.Value);
+
+    private static async Task<HttpResponseMessage> EndingAsync(AuthProbe probe, string named)
     {
         using var asking = new HttpRequestMessage(
             HttpMethod.Delete,
-            new Uri($"/api/auth/sessions/{id.Value}", UriKind.Relative))
+            new Uri($"/api/auth/sessions/{named}", UriKind.Relative))
         {
             Content = AuthProbe.Json(),
         };
@@ -398,5 +450,6 @@ public sealed class SessionEndpointTests
     }
 
     private static JsonElement Only(JsonElement listed, SessionId id)
-        => listed.EnumerateArray().Single(session => session.GetProperty("id").GetString() == id.Value);
+        => listed.EnumerateArray()
+            .Single(session => session.GetProperty("id").GetString() == SessionHandle.Of(id).Value);
 }

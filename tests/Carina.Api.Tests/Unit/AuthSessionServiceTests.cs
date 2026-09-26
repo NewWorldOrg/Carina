@@ -28,8 +28,8 @@ public sealed class AuthSessionServiceTests
 
         IReadOnlyList<SessionView> views = List(here);
 
-        Assert.True(Assert.Single(views, view => view.Id.Equals(here.Id)).Current);
-        Assert.False(Assert.Single(views, view => view.Id.Equals(there.Id)).Current);
+        Assert.True(Assert.Single(views, view => view.Handle.Equals(SessionHandle.Of(here.Id))).Current);
+        Assert.False(Assert.Single(views, view => view.Handle.Equals(SessionHandle.Of(there.Id))).Current);
     }
 
     [Fact]
@@ -53,9 +53,9 @@ public sealed class AuthSessionServiceTests
 
         IReadOnlyList<SessionView> views = List(here);
 
-        Assert.DoesNotContain(views, view => view.Id.Equals(ended.Id));
-        Assert.DoesNotContain(views, view => view.Id.Equals(stale.Id));
-        Assert.Equal([here.Id.Value], views.Select(view => view.Id.Value));
+        Assert.DoesNotContain(views, view => view.Handle.Equals(SessionHandle.Of(ended.Id)));
+        Assert.DoesNotContain(views, view => view.Handle.Equals(SessionHandle.Of(stale.Id)));
+        Assert.Equal([SessionHandle.Of(here.Id)], views.Select(view => view.Handle));
     }
 
     [Fact]
@@ -66,8 +66,8 @@ public sealed class AuthSessionServiceTests
 
         IReadOnlyList<SessionView> views = List(here);
 
-        Assert.Contains(views, view => view.Id.Equals(theirs.Id));
-        Assert.Contains(views, view => view.Id.Equals(here.Id));
+        Assert.Contains(views, view => view.Handle.Equals(SessionHandle.Of(theirs.Id)));
+        Assert.Contains(views, view => view.Handle.Equals(SessionHandle.Of(here.Id)));
     }
 
     [Fact]
@@ -78,8 +78,8 @@ public sealed class AuthSessionServiceTests
 
         IReadOnlyList<SessionView> views = List(here);
 
-        SessionView mine = Assert.Single(views, view => view.Id.Equals(here.Id));
-        SessionView other = Assert.Single(views, view => view.Id.Equals(theirs.Id));
+        SessionView mine = Assert.Single(views, view => view.Handle.Equals(SessionHandle.Of(here.Id)));
+        SessionView other = Assert.Single(views, view => view.Handle.Equals(SessionHandle.Of(theirs.Id)));
 
         Assert.Equal("carina", mine.DisplayName);
         Assert.Equal(AuthMethod.Local, mine.Method);
@@ -95,8 +95,8 @@ public sealed class AuthSessionServiceTests
 
         IReadOnlyList<SessionView> views = List(here);
 
-        Assert.True(Assert.Single(views, view => view.Id.Equals(here.Id)).Current);
-        Assert.False(Assert.Single(views, view => view.Id.Equals(theirs.Id)).Current);
+        Assert.True(Assert.Single(views, view => view.Handle.Equals(SessionHandle.Of(here.Id))).Current);
+        Assert.False(Assert.Single(views, view => view.Handle.Equals(SessionHandle.Of(theirs.Id))).Current);
     }
 
     [Fact]
@@ -105,7 +105,7 @@ public sealed class AuthSessionServiceTests
         AuthSession here = Started(Owner, "this device");
         AuthSession there = Started(Owner, "another device");
 
-        ServiceResult ended = await Service().RevokeAsync(there.Id, Cancel);
+        ServiceResult ended = await Service().RevokeAsync(SessionHandle.Of(there.Id), Cancel);
 
         Assert.True(ended.IsSuccess);
         Assert.Equal(SessionStatus.Revoked, there.StatusAt(Now(), SessionPolicy.Default));
@@ -118,7 +118,7 @@ public sealed class AuthSessionServiceTests
         AuthSession here = Started(Owner, "this device");
         AuthSession theirs = StartedThroughTheProvider(Stranger, "somebody@example.test", "a stranger's device");
 
-        ServiceResult ended = await Service().RevokeAsync(theirs.Id, Cancel);
+        ServiceResult ended = await Service().RevokeAsync(SessionHandle.Of(theirs.Id), Cancel);
 
         Assert.True(ended.IsSuccess);
         Assert.Equal(SessionStatus.Revoked, theirs.StatusAt(Now(), SessionPolicy.Default));
@@ -129,7 +129,7 @@ public sealed class AuthSessionServiceTests
     [Fact]
     public async Task ASessionThatWasNeverIssuedIsNotFoundAndNobodysPlaybackIsTouched()
     {
-        ServiceResult onNothing = await Service().RevokeAsync(SessionId.Issue(), Cancel);
+        ServiceResult onNothing = await Service().RevokeAsync(SessionHandle.Of(SessionId.Issue()), Cancel);
 
         Assert.False(onNothing.IsSuccess);
         Assert.Equal(AuthSessionService.NoSuchSession, onNothing.ErrorMessage);
@@ -137,11 +137,35 @@ public sealed class AuthSessionServiceTests
     }
 
     [Fact]
+    public async Task TheCookieOfASessionIsNotAHandleThatEndsIt()
+    {
+        AuthSession there = Started(Owner, "another device");
+
+        ServiceResult onTheCookie = await Service().RevokeAsync(new SessionHandle(there.Id.Value), Cancel);
+
+        Assert.False(onTheCookie.IsSuccess);
+        Assert.Equal(AuthSessionService.NoSuchSession, onTheCookie.ErrorMessage);
+        Assert.Equal(SessionStatus.Active, there.StatusAt(Now(), SessionPolicy.Default));
+    }
+
+    [Fact]
+    public void NoRowOfTheListCarriesTheCookieOfTheSessionItShows()
+    {
+        AuthSession here = Started(Owner, "this device");
+        AuthSession theirs = StartedThroughTheProvider(Stranger, "somebody@example.test", "a stranger's device");
+
+        IReadOnlyList<SessionView> views = List(here);
+
+        Assert.DoesNotContain(views, view => view.Handle.Value == here.Id.Value);
+        Assert.DoesNotContain(views, view => view.Handle.Value == theirs.Id.Value);
+    }
+
+    [Fact]
     public async Task EndingTheSessionThatIsAskingIsAllowedAndLeavesItRevokedRatherThanDeleted()
     {
         AuthSession here = Started(Owner, "this device");
 
-        ServiceResult ended = await Service().RevokeAsync(here.Id, Cancel);
+        ServiceResult ended = await Service().RevokeAsync(SessionHandle.Of(here.Id), Cancel);
 
         Assert.True(ended.IsSuccess);
         Assert.Equal(SessionStatus.Revoked, here.StatusAt(Now(), SessionPolicy.Default));

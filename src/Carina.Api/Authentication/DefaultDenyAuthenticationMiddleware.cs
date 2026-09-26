@@ -1,5 +1,3 @@
-using Microsoft.AspNetCore.Authentication;
-
 namespace Carina.Api.Authentication;
 
 public sealed class DefaultDenyAuthenticationMiddleware
@@ -13,12 +11,11 @@ public sealed class DefaultDenyAuthenticationMiddleware
         anonymous = AnonymousSurfaces.For(environment);
     }
 
-    public async Task InvokeAsync(HttpContext context, IAuthenticationSchemeProvider schemes)
+    public async Task InvokeAsync(HttpContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
-        ArgumentNullException.ThrowIfNull(schemes);
 
-        if (await AdmitsAsync(context, schemes))
+        if (Admits(context))
         {
             await next(context);
 
@@ -42,7 +39,7 @@ public sealed class DefaultDenyAuthenticationMiddleware
             $"{context.Request.Path}{context.Request.QueryString}");
     }
 
-    private async Task<bool> AdmitsAsync(HttpContext context, IAuthenticationSchemeProvider schemes)
+    private bool Admits(HttpContext context)
     {
         if (anonymous.Admit(context.Request.Method, context.Request.Path.ToString()))
         {
@@ -54,13 +51,6 @@ public sealed class DefaultDenyAuthenticationMiddleware
             return true;
         }
 
-        if (context.GetEndpoint().IsTicketed() && PlaybackTicketCarrier.OfferedBy(context.Request) is not null)
-        {
-            return true;
-        }
-
-        IEnumerable<AuthenticationScheme> registered = await schemes.GetAllSchemesAsync();
-
-        return !registered.Any();
+        return context.GetEndpoint().IsTicketed() && PlaybackTicketCarrier.OfferedBy(context.Request) is not null;
     }
 }

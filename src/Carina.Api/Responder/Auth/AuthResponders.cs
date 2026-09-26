@@ -27,7 +27,7 @@ public sealed record SessionResponder(
         ArgumentNullException.ThrowIfNull(view);
 
         return new SessionResponder(
-            view.Id.Value,
+            view.Handle.Value,
             view.DisplayName,
             view.Method,
             view.CreatedAt,
