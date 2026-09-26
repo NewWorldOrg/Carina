@@ -7,9 +7,8 @@ namespace Carina.Infrastructure.Encodings;
 
 /// <summary>
 /// Removes what a job that has ended still owes a removal for, and the artefact a completed job
-/// made. What to remove is read off the ledger and nothing else: a walk of the directory would take
-/// another job's work file with it. A file that is not there any more is written down
-/// as such, not as an error.
+/// made. What is removed is read off the ledger. A file that is not there any more is settled as
+/// already gone.
 /// </summary>
 public sealed class EncodeScratchCleaner(
     IEncodeScratchLedger ledger,
