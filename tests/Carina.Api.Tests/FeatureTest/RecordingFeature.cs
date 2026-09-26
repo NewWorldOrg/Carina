@@ -179,6 +179,28 @@ internal sealed class ScriptedRemaker(HeldRecordings recordings) : IThumbnailRem
     }
 }
 
+internal sealed class HeldRecordingEncodes : IRecordingEncodes
+{
+    public bool UnderWay { get; set; }
+
+    public EncodesErased Answer { get; set; } = new(0, []);
+
+    public Action? WhenErasing { get; set; }
+
+    public List<RecordingId> Asked { get; } = [];
+
+    public Task<bool> AnyUnderWayAsync(RecordingId recordingId, CancellationToken cancellationToken)
+        => Task.FromResult(UnderWay);
+
+    public Task<EncodesErased> EraseAsync(RecordingId recordingId, CancellationToken cancellationToken)
+    {
+        Asked.Add(recordingId);
+        WhenErasing?.Invoke();
+
+        return Task.FromResult(Answer);
+    }
+}
+
 internal sealed class ScriptedEraser : IRecordingFileEraser
 {
     public RecordingErasure Answer { get; set; } = RecordingErasure.Erased(1);
@@ -241,6 +263,7 @@ internal sealed class RecordingFeature : IAsyncDisposable
                 services.AddSingleton<IDriverClient>(Driver);
                 services.AddSingleton<IThumbnailRemaker>(Remaker);
                 services.AddSingleton(erasingWith);
+                services.AddSingleton<IRecordingEncodes>(Encodes);
                 services.AddSingleton<IPlaybackPositionRepository>(Positions);
                 services.AddSingleton(new RecordingDeletions(longestDeletion));
                 services.AddSingleton<TimeProvider>(new FixedTimeProvider(Noon.AddMinutes(30)));
@@ -271,6 +294,8 @@ internal sealed class RecordingFeature : IAsyncDisposable
     public ScriptedRemaker Remaker { get; }
 
     public ScriptedEraser Eraser { get; } = new();
+
+    public HeldRecordingEncodes Encodes { get; } = new();
 
     public static Recording Begin(
         RecordingId id,

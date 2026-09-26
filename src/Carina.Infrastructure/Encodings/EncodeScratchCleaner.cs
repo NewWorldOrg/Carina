@@ -1,13 +1,15 @@
 using Carina.Domain.Encodings;
+using Carina.Domain.Recordings;
 
 using Microsoft.Extensions.Logging;
 
 namespace Carina.Infrastructure.Encodings;
 
 /// <summary>
-/// Removes what a job that has ended still owes a removal for. What to remove is read off the
-/// ledger and nothing else: a walk of the directory would take another job's work file with it
-/// (BR-ED2-010). A file that is not there any more is written down as such, not as an error.
+/// Removes what a job that has ended still owes a removal for, and the artefact a completed job
+/// made. What to remove is read off the ledger and nothing else: a walk of the directory would take
+/// another job's work file with it. A file that is not there any more is written down
+/// as such, not as an error.
 /// </summary>
 public sealed class EncodeScratchCleaner(
     IEncodeScratchLedger ledger,
@@ -30,8 +32,8 @@ public sealed class EncodeScratchCleaner(
         foreach (EncodeScratchFile scratch in owed)
         {
             EncodeScratchFate fate = places.WhereTheWorkGoes(scratch.OutputRoot) is { } room
-                ? Remove(Path.Combine(room, scratch.FileName.Value), scratch)
-                : Unplaceable(scratch);
+                ? Remove(room, scratch.FileName, scratch.JobId, scratch.OutputRoot)
+                : Unplaceable(scratch.FileName, scratch.JobId, scratch.OutputRoot);
 
             scratch.Settle(fate, clock.GetUtcNow().UtcDateTime);
 
@@ -41,19 +43,40 @@ public sealed class EncodeScratchCleaner(
         return owed;
     }
 
-    private EncodeScratchFate Unplaceable(EncodeScratchFile scratch)
+    /// <summary>
+    /// Removes the artefact the ledger says a completed job made, from under the root that job
+    /// placed it in.
+    /// </summary>
+    public EncodeScratchFate RemoveArtefact(EncodeJob job)
+    {
+        ArgumentNullException.ThrowIfNull(job);
+
+        if (job.Status is not EncodeJobStatus.Completed || job.ArtefactName is not { } artefact)
+        {
+            throw new InvalidOperationException(
+                $"An artefact is removed for a job that completed and named it, and this one stands at {job.Status}.");
+        }
+
+        return places.WhereTheArtefactGoes(job.OutputRoot) is { } room
+            ? Remove(room, artefact, job.Id, job.OutputRoot)
+            : Unplaceable(artefact, job.Id, job.OutputRoot);
+    }
+
+    private EncodeScratchFate Unplaceable(EncodeFileName file, EncodeJobId job, OutputRoot root)
     {
         logger.LogWarning(
-            "Scratch file {File} of job {Job} is under output root {Root}, and nothing tells this process where that is mounted.",
-            scratch.FileName.Value,
-            scratch.JobId.Wire,
-            scratch.OutputRoot.Value);
+            "File {File} of job {Job} is under output root {Root}, and nothing tells this process where that is mounted.",
+            file.Value,
+            job.Wire,
+            root.Value);
 
         return EncodeScratchFate.CouldNotBeRemoved;
     }
 
-    private EncodeScratchFate Remove(string path, EncodeScratchFile scratch)
+    private EncodeScratchFate Remove(string room, EncodeFileName file, EncodeJobId job, OutputRoot root)
     {
+        string path = Path.Combine(room, file.Value);
+
         if (!File.Exists(path))
         {
             return EncodeScratchFate.AlreadyGone;
@@ -69,10 +92,10 @@ public sealed class EncodeScratchCleaner(
         {
             logger.LogWarning(
                 refusal,
-                "Scratch file {File} of job {Job} under output root {Root} could not be removed.",
-                scratch.FileName.Value,
-                scratch.JobId.Wire,
-                scratch.OutputRoot.Value);
+                "File {File} of job {Job} under output root {Root} could not be removed.",
+                file.Value,
+                job.Wire,
+                root.Value);
 
             return EncodeScratchFate.CouldNotBeRemoved;
         }

@@ -20,6 +20,7 @@ public sealed class RecordingStatusTests
     [InlineData(RecordingFailure.FilesLeftBehind, StatusCodes.Status503ServiceUnavailable)]
     [InlineData(RecordingFailure.OneIsAlreadyBeingDiscarded, StatusCodes.Status409Conflict)]
     [InlineData(RecordingFailure.TookTooLong, StatusCodes.Status409Conflict)]
+    [InlineData(RecordingFailure.BeingEncoded, StatusCodes.Status409Conflict)]
     public void EveryWayARecordingRequestCanFailIsAnsweredWithTheStatusItWasGiven(
         RecordingFailure failure,
         int status)
@@ -42,6 +43,7 @@ public sealed class RecordingStatusTests
             RecordingFailure.FilesLeftBehind,
             RecordingFailure.OneIsAlreadyBeingDiscarded,
             RecordingFailure.TookTooLong,
+            RecordingFailure.BeingEncoded,
         ];
 
         Assert.Equal(Enum.GetValues<RecordingFailure>().Order().ToArray(), named.Order().ToArray());
