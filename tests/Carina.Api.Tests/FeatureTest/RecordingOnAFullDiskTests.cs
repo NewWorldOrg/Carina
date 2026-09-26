@@ -57,13 +57,16 @@ internal sealed class WriterOnAFillingDisk(IRecordingWriter inner, long room) : 
 [SupportedOSPlatform("linux")]
 public sealed class RecordingOnAFullDiskTests
 {
-    [Fact]
-    public async Task ADiskThatFillsUpFailsTheRecordingWithItsClassAndOpensNothingAgain()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ADiskThatFillsUpFailsTheRecordingWithItsClassAndOpensNothingAgain(bool weighed)
     {
         var disk = new DiskThatFillsUp(SyntheticDriverHost.AChunkOrThree);
 
         await using AppSwapFeature feature = await AppSwapFeature.StartAsync(
-            reshapeDriver: services => services.AddSingleton<IRecordingWriterFactory>(disk));
+            reshapeDriver: services => services.AddSingleton<IRecordingWriterFactory>(disk),
+            weighingWhatIsOnTheDisk: weighed);
 
         RecordingRun begun = await feature.App.TickAsync();
         RecordingId started = Assert.Single(begun.Started);
@@ -94,7 +97,12 @@ public sealed class RecordingOnAFullDiskTests
         Assert.Equal(0, first.Broken);
         Assert.Equal(0, second.Watched);
         Assert.Equal(RecordingOutcome.Failed, failed.Outcome);
-        Assert.Equal(RecordingFault.DiskExhausted, Assert.Single(failed.OutcomeDetail).Fault);
+        Assert.Equal(
+            weighed
+                ? [RecordingFault.DiskExhausted]
+                : [RecordingFault.DiskExhausted, RecordingFault.SizeUnobserved],
+            failed.OutcomeDetail.Select(detail => detail.Fault).ToArray());
+        Assert.Equal(weighed ? new FileInfo(file).Length : 0, failed.FileSizeObserved);
         Assert.Empty(later.Started);
         Assert.Equal(1, disk.Opened);
         Assert.Single(await feature.App.SessionsAsync());
