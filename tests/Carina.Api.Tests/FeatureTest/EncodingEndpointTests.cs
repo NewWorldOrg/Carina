@@ -12,7 +12,7 @@ namespace Carina.Api.Tests.FeatureTest;
 [Collection(FeatureTestCollection.Name)]
 public sealed class EncodingEndpointTests
 {
-    [Fact(DisplayName = "BR-EV-001: a profile is defined out of enumerated values and numbers, and comes back on the list")]
+    [Fact(DisplayName = "a profile is defined out of enumerated values and numbers, and comes back on the list")]
     public async Task AProfileIsDefinedAndComesBackOnTheList()
     {
         await using var feature = new EncodingFeature();
@@ -56,7 +56,7 @@ public sealed class EncodingEndpointTests
         Assert.Empty(feature.Profiles.Profiles);
     }
 
-    [Fact(DisplayName = "BR-EV-001: a destination names a root out of the declared set that this process holds, and comes back on the list")]
+    [Fact(DisplayName = "a destination names a root out of the declared set that this process holds, and comes back on the list")]
     public async Task ADestinationNamingAHeldRootIsDefined()
     {
         await using var feature = new EncodingFeature();
@@ -76,7 +76,7 @@ public sealed class EncodingEndpointTests
         Assert.Single(listed.GetProperty("data").GetProperty("items").EnumerateArray());
     }
 
-    [Fact(DisplayName = "BR-EV-001: a destination naming the root the recordings are read from is refused at saving")]
+    [Fact(DisplayName = "a destination naming the root the recordings are read from is refused at saving")]
     public async Task ADestinationNamingTheRootTheRecordingsAreReadFromIsRefused()
     {
         await using var feature = new EncodingFeature();
@@ -94,7 +94,7 @@ public sealed class EncodingEndpointTests
         Assert.Empty(feature.Destinations.Destinations);
     }
 
-    [Fact(DisplayName = "BR-EV-001: a destination naming a root nobody declares is refused")]
+    [Fact(DisplayName = "a destination naming a root nobody declares is refused")]
     public async Task ADestinationNamingARootNobodyDeclaresIsRefused()
     {
         await using var feature = new EncodingFeature();
@@ -111,7 +111,7 @@ public sealed class EncodingEndpointTests
         Assert.Contains("outputRoot", body.GetProperty("message").GetString(), StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "BR-EV-001: while the driver cannot say what it declares, no destination is saved")]
+    [Fact(DisplayName = "while the driver cannot say what it declares, no destination is saved")]
     public async Task WhileTheDriverCannotSayWhatItDeclaresNoDestinationIsSaved()
     {
         await using var feature = new EncodingFeature();
@@ -129,7 +129,7 @@ public sealed class EncodingEndpointTests
         Assert.Empty(feature.Destinations.Destinations);
     }
 
-    [Fact(DisplayName = "BR-ES-001: a recording that has ended is queued by hand and stands as queued on attempt 1")]
+    [Fact(DisplayName = "a recording that has ended is queued by hand and stands as queued on attempt 1")]
     public async Task ARecordingThatHasEndedIsQueuedByHand()
     {
         await using var feature = new EncodingFeature();
@@ -212,7 +212,7 @@ public sealed class EncodingEndpointTests
         Assert.Empty(feature.Jobs.Jobs);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: a recording that failed has nothing to encode")]
+    [Fact(DisplayName = "a recording that failed has nothing to encode")]
     public async Task ARecordingThatFailedIsNotQueued()
     {
         await using var feature = new EncodingFeature();
@@ -229,7 +229,7 @@ public sealed class EncodingEndpointTests
         Assert.Empty(feature.Jobs.Jobs);
     }
 
-    [Fact(DisplayName = "BR-ED2-009: a recording with a job waiting or running is not queued a second time")]
+    [Fact(DisplayName = "a recording with a job waiting or running is not queued a second time")]
     public async Task ARecordingWithAJobUnderwayIsNotQueuedTwice()
     {
         await using var feature = new EncodingFeature();
@@ -249,7 +249,7 @@ public sealed class EncodingEndpointTests
         Assert.Single(feature.Jobs.Jobs);
     }
 
-    [Fact(DisplayName = "BR-ED2-009: a recording already encoded with a profile is not encoded with it again, because the artefact would collide")]
+    [Fact(DisplayName = "a recording already encoded with a profile is not encoded with it again, because the artefact would collide")]
     public async Task ARecordingAlreadyEncodedWithAProfileIsNotEncodedWithItAgain()
     {
         await using var feature = new EncodingFeature();
@@ -271,7 +271,7 @@ public sealed class EncodingEndpointTests
         Assert.Contains("already encoded", body.GetProperty("message").GetString(), StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "BR-ED2-001: a recording already encoded with one profile is not given a second artefact with another")]
+    [Fact(DisplayName = "a recording already encoded with one profile is not given a second artefact with another")]
     public async Task ARecordingAlreadyEncodedWithOneProfileIsNotGivenASecondArtefactWithAnother()
     {
         await using var feature = new EncodingFeature();
@@ -293,7 +293,7 @@ public sealed class EncodingEndpointTests
         Assert.Single(feature.Jobs.Jobs);
     }
 
-    [Fact(DisplayName = "A-エンコード-069: a recording already encoded with a profile is encoded with it again when a person asks outright, and the new job says so")]
+    [Fact(DisplayName = "a recording already encoded with a profile is encoded with it again when a person asks outright, and the new job says so")]
     public async Task ARecordingAlreadyEncodedIsEncodedAgainWhenAPersonAsksOutright()
     {
         await using var feature = new EncodingFeature();
@@ -322,7 +322,7 @@ public sealed class EncodingEndpointTests
         Assert.Null(made.NameGivenUpAt);
     }
 
-    [Fact(DisplayName = "A-エンコード-069: saying outright not to make it again is answered exactly as saying nothing is, so the refusal is what it always was")]
+    [Fact(DisplayName = "saying outright not to make it again is answered exactly as saying nothing is, so the refusal is what it always was")]
     public async Task SayingNotToMakeItAgainIsRefusedJustAsSayingNothingIs()
     {
         await using var feature = new EncodingFeature();
@@ -343,7 +343,7 @@ public sealed class EncodingEndpointTests
         Assert.Single(feature.Jobs.Jobs);
     }
 
-    [Fact(DisplayName = "A-エンコード-069: a recording whose job is still waiting is not queued a second time, even to be made again")]
+    [Fact(DisplayName = "a recording whose job is still waiting is not queued a second time, even to be made again")]
     public async Task ARecordingWithAJobUnderwayIsNotMadeAgainEither()
     {
         await using var feature = new EncodingFeature();
@@ -364,7 +364,7 @@ public sealed class EncodingEndpointTests
         Assert.Single(feature.Jobs.Jobs);
     }
 
-    [Fact(DisplayName = "BR-ED2-012: a failed job comes back after a second attempt is queued, so a failure can be retried one recording at a time")]
+    [Fact(DisplayName = "a failed job comes back after a second attempt is queued, so a failure can be retried one recording at a time")]
     public async Task AFailedJobDoesNotStopTheRecordingBeingQueuedAgain()
     {
         await using var feature = new EncodingFeature();
@@ -402,7 +402,7 @@ public sealed class EncodingEndpointTests
         Assert.Contains(field, await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "BR-ED2-008: the job surface takes one recording at a time and has no way in that takes a list")]
+    [Fact(DisplayName = "the job surface takes one recording at a time and has no way in that takes a list")]
     public async Task TheJobSurfaceTakesOneRecordingAtATime()
     {
         await using var feature = new EncodingFeature();
@@ -418,7 +418,7 @@ public sealed class EncodingEndpointTests
         Assert.Empty(feature.Jobs.Jobs);
     }
 
-    [Fact(DisplayName = "BR-ED2-014: the list says of each job where it stands, how it ran, how far it got, how long it has been quiet, whether that is a stall, and why it failed")]
+    [Fact(DisplayName = "the list says of each job where it stands, how it ran, how far it got, how long it has been quiet, whether that is a stall, and why it failed")]
     public async Task TheListSaysWhereEachJobStands()
     {
         await using var feature = new EncodingFeature();
@@ -547,7 +547,7 @@ public sealed class EncodingEndpointTests
         Assert.Equal(HttpStatusCode.BadRequest, refused);
     }
 
-    [Fact(DisplayName = "BR-ES-002: the ledger is asked about one recording, and answers with that recording's jobs only")]
+    [Fact(DisplayName = "the ledger is asked about one recording, and answers with that recording's jobs only")]
     public async Task TheLedgerIsAskedAboutOneRecordingAndAnswersWithThatRecordingsJobsOnly()
     {
         await using var feature = new EncodingFeature();
@@ -567,7 +567,7 @@ public sealed class EncodingEndpointTests
         Assert.Equal(asked.Id.Wire, item.GetProperty("recordingId").GetString());
     }
 
-    [Fact(DisplayName = "BR-ES-002: a recording the ledger holds no job for is an empty page, not a refusal")]
+    [Fact(DisplayName = "a recording the ledger holds no job for is an empty page, not a refusal")]
     public async Task ARecordingTheLedgerHoldsNoJobForIsAnEmptyPage()
     {
         await using var feature = new EncodingFeature();
@@ -596,7 +596,7 @@ public sealed class EncodingEndpointTests
         Assert.Contains("hexadecimal", body.GetProperty("message").GetString(), StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "BR-ES-002: naming a recording and a standing together narrows by both")]
+    [Fact(DisplayName = "naming a recording and a standing together narrows by both")]
     public async Task NamingARecordingAndAStandingTogetherNarrowsByBoth()
     {
         await using var feature = new EncodingFeature();
@@ -614,7 +614,7 @@ public sealed class EncodingEndpointTests
         Assert.Equal(0, running.GetProperty("data").GetProperty("total").GetInt32());
     }
 
-    [Fact(DisplayName = "BR-ED2-012: calling a waiting job off is a person's act and is kept apart from a failure")]
+    [Fact(DisplayName = "calling a waiting job off is a person's act and is kept apart from a failure")]
     public async Task CallingAWaitingJobOffIsKeptApartFromAFailure()
     {
         await using var feature = new EncodingFeature();
@@ -631,7 +631,7 @@ public sealed class EncodingEndpointTests
         Assert.Empty(feature.Strays.Stopped);
     }
 
-    [Fact(DisplayName = "BR-ED2-012: calling a running job off writes the ledger first, then stops the programme written against it")]
+    [Fact(DisplayName = "calling a running job off writes the ledger first, then stops the programme written against it")]
     public async Task CallingARunningJobOffStopsTheProgrammeWrittenAgainstIt()
     {
         await using var feature = new EncodingFeature();
@@ -670,7 +670,7 @@ public sealed class EncodingEndpointTests
         Assert.Equal(HttpStatusCode.NotFound, unknown);
     }
 
-    [Fact(DisplayName = "BR-EA2-003: no job is deleted, and what the two definition surfaces reach is the definition and nothing the ledger holds")]
+    [Fact(DisplayName = "no job is deleted, and what the two definition surfaces reach is the definition and nothing the ledger holds")]
     public async Task NoJobIsDeletedAndTheDefinitionSurfacesReachNothingTheLedgerHolds()
     {
         await using var feature = new EncodingFeature();

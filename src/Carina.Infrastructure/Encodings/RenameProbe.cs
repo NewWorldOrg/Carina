@@ -19,7 +19,7 @@ public sealed record RenameVerdict(RenameStanding Standing, string Note)
 /// <summary>
 /// Asks whether moving something from one directory to another would be a rename, which is the
 /// only kind of move that is all or nothing. Across two mounts the kernel refuses and the runtime
-/// quietly copies instead, and a copy interrupted half way looks exactly like success (BR-ED2-009).
+/// quietly copies instead, and a copy interrupted half way looks exactly like success.
 /// </summary>
 public interface IRenameProbe
 {

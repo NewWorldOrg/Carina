@@ -20,7 +20,7 @@ namespace Carina.Domain.Encodings;
 /// <para>
 /// A station's watermark is only ever used to take a pod away, never to make one: a pod through
 /// which the mark learned ahead stayed on screen in more than <see cref="WatermarkedShare"/> of the
-/// pictures looked at inside it is programme, not a break (BR-ED2-007). The pictures at either edge
+/// pictures looked at inside it is programme, not a break. The pictures at either edge
 /// of a pod are left out, because the mark comes and goes around the boundary itself, and a pod with
 /// fewer than <see cref="FewestSightingsInsideABreak"/> pictures inside it is not taken away on their
 /// word. A mark that was on screen in <see cref="WatermarkNearlyEverywhere"/> of all the pictures

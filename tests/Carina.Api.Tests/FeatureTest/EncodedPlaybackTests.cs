@@ -77,7 +77,7 @@ public sealed class EncodedPlaybackTests
         Assert.Equal(artefact, await picture.Content.ReadAsByteArrayAsync());
     }
 
-    [Fact(DisplayName = "BR-PD-008: an encoded recording of a broadcast that announced two sounds still offers both of them")]
+    [Fact(DisplayName = "an encoded recording of a broadcast that announced two sounds still offers both of them")]
     public async Task ThePlanOfAnEncodedRecordingStillNamesTheSoundsTheBroadcastAnnounced()
     {
         await using var feature = new PlayFeature();
@@ -94,7 +94,7 @@ public sealed class EncodedPlaybackTests
         Assert.Equal(0, feature.Player.AskedWhatItCarries);
     }
 
-    [Fact(DisplayName = "BR-PD-008: the secondary sound of an encoded recording is transcoded from the recording, because the artefact was baked with the main one")]
+    [Fact(DisplayName = "the secondary sound of an encoded recording is transcoded from the recording, because the artefact was baked with the main one")]
     public async Task AskingAnEncodedRecordingForItsSecondSoundGoesBackToTheRecordingItself()
     {
         await using var feature = new PlayFeature();
@@ -111,7 +111,7 @@ public sealed class EncodedPlaybackTests
         Assert.NotEqual(artefact, body);
     }
 
-    [Fact(DisplayName = "BR-PD-008: the main sound of an encoded recording is the artefact itself, whatever the broadcast announced")]
+    [Fact(DisplayName = "the main sound of an encoded recording is the artefact itself, whatever the broadcast announced")]
     public async Task AskingAnEncodedRecordingForItsMainSoundHandsOverTheArtefact()
     {
         await using var feature = new PlayFeature();
@@ -142,7 +142,7 @@ public sealed class EncodedPlaybackTests
         Assert.Equal("byStartingAgain", read.GetProperty("seeking").GetString());
     }
 
-    [Fact(DisplayName = "BR-PD-008: when the recording itself is out of reach, the plan of an encoded recording asked for its second sound offers the artefact and the one sound it carries")]
+    [Fact(DisplayName = "when the recording itself is out of reach, the plan of an encoded recording asked for its second sound offers the artefact and the one sound it carries")]
     public async Task ThePlanNarrowsToTheArtefactWhenTheSoundAskedForCannotBeReachedAnyMore()
     {
         await using var feature = new PlayFeature();
@@ -165,7 +165,7 @@ public sealed class EncodedPlaybackTests
             read.GetProperty("sounds").EnumerateArray().Select(sound => sound.GetString()!).ToArray());
     }
 
-    [Fact(DisplayName = "BR-PD-008: a picture asked for a sound that cannot be reached is refused rather than quietly handed the artefact of another sound")]
+    [Fact(DisplayName = "a picture asked for a sound that cannot be reached is refused rather than quietly handed the artefact of another sound")]
     public async Task ThePictureOfASoundThatCannotBeReachedIsRefusedRatherThanQuietlyHandedTheArtefact()
     {
         await using var feature = new PlayFeature();
@@ -354,7 +354,7 @@ public sealed class EncodedPlaybackTests
         Assert.Empty(read.GetProperty("chapters").EnumerateArray());
     }
 
-    [Fact(DisplayName = "A-配信-074: a recording with an artefact asked for as it was recorded hands the recording itself to the transcoder rather than the artefact")]
+    [Fact(DisplayName = "a recording with an artefact asked for as it was recorded hands the recording itself to the transcoder rather than the artefact")]
     public async Task ARecordingAskedForAsItWasRecordedIsTranscodedFromTheRecordingAndNotFromTheArtefact()
     {
         await using var feature = new PlayFeature();
@@ -372,7 +372,7 @@ public sealed class EncodedPlaybackTests
         Assert.NotEqual(artefact, body);
     }
 
-    [Fact(DisplayName = "A-配信-074: the plan of a recording asked for as it was recorded says it plays the recording and names the artefact as the other one")]
+    [Fact(DisplayName = "the plan of a recording asked for as it was recorded says it plays the recording and names the artefact as the other one")]
     public async Task ThePlanOfARecordingAskedForAsItWasRecordedNamesTheArtefactAsTheOtherOne()
     {
         await using var feature = new PlayFeature();
@@ -390,7 +390,7 @@ public sealed class EncodedPlaybackTests
         Assert.Equal(JsonValueKind.Null, read.GetProperty("bytes").ValueKind);
     }
 
-    [Fact(DisplayName = "A-配信-074: the plan of an encoded recording asked for as it is says it plays the artefact and names the recording itself as the other one")]
+    [Fact(DisplayName = "the plan of an encoded recording asked for as it is says it plays the artefact and names the recording itself as the other one")]
     public async Task ThePlanOfAnEncodedRecordingNamesTheRecordingItselfAsTheOtherOne()
     {
         await using var feature = new PlayFeature();
@@ -405,7 +405,7 @@ public sealed class EncodedPlaybackTests
         Assert.Equal(artefact.Length, read.GetProperty("bytes").GetInt64());
     }
 
-    [Fact(DisplayName = "A-配信-074: asking outright for the artefact is asking for what playing a recording has always given")]
+    [Fact(DisplayName = "asking outright for the artefact is asking for what playing a recording has always given")]
     public async Task AskingOutrightForTheArtefactHandsOverTheArtefact()
     {
         await using var feature = new PlayFeature();
@@ -420,7 +420,7 @@ public sealed class EncodedPlaybackTests
         Assert.Null(feature.Player.Handed);
     }
 
-    [Fact(DisplayName = "A-配信-074: an artefact the ledger names and the disk has not is not the other one the plan offers")]
+    [Fact(DisplayName = "an artefact the ledger names and the disk has not is not the other one the plan offers")]
     public async Task AnArtefactTheDiskHasNotIsNotOfferedAsTheOtherOne()
     {
         await using var feature = new PlayFeature();
@@ -434,7 +434,7 @@ public sealed class EncodedPlaybackTests
         Assert.Equal(JsonValueKind.Null, read.GetProperty("alternative").ValueKind);
     }
 
-    [Fact(DisplayName = "A-配信-074: an artefact holding no bytes is not the other one the plan offers")]
+    [Fact(DisplayName = "an artefact holding no bytes is not the other one the plan offers")]
     public async Task AnArtefactHoldingNoBytesIsNotOfferedAsTheOtherOne()
     {
         await using var feature = new PlayFeature();
@@ -448,7 +448,7 @@ public sealed class EncodedPlaybackTests
         Assert.Equal(JsonValueKind.Null, read.GetProperty("alternative").ValueKind);
     }
 
-    [Fact(DisplayName = "A-配信-074: an artefact a browser would not decode as it is, is not the other one the plan offers")]
+    [Fact(DisplayName = "an artefact a browser would not decode as it is, is not the other one the plan offers")]
     public async Task AnArtefactABrowserWouldNotDecodeIsNotOfferedAsTheOtherOne()
     {
         await using var feature = new PlayFeature();
@@ -461,7 +461,7 @@ public sealed class EncodedPlaybackTests
         Assert.Equal(JsonValueKind.Null, read.GetProperty("alternative").ValueKind);
     }
 
-    [Fact(DisplayName = "A-配信-074: a recording asked for as it was recorded and no longer on the disk is refused rather than quietly handed its artefact")]
+    [Fact(DisplayName = "a recording asked for as it was recorded and no longer on the disk is refused rather than quietly handed its artefact")]
     public async Task ARecordingAskedForAsItWasRecordedAndNoLongerOnTheDiskIsRefused()
     {
         await using var feature = new PlayFeature();
@@ -478,7 +478,7 @@ public sealed class EncodedPlaybackTests
         Assert.Empty(feature.Player.Opened);
     }
 
-    [Fact(DisplayName = "A-配信-074: a recording asked for as it was recorded with a second sound is not narrowed to the artefact when the recording is gone")]
+    [Fact(DisplayName = "a recording asked for as it was recorded with a second sound is not narrowed to the artefact when the recording is gone")]
     public async Task ARecordingAskedForAsItWasRecordedIsNotNarrowedToTheArtefactWhenItsSecondSoundIsAskedFor()
     {
         await using var feature = new PlayFeature();
@@ -495,7 +495,7 @@ public sealed class EncodedPlaybackTests
         Assert.Null(feature.Player.Handed);
     }
 
-    [Fact(DisplayName = "A-配信-074: a recording asked for as it was recorded and holding no bytes is refused rather than quietly handed its artefact")]
+    [Fact(DisplayName = "a recording asked for as it was recorded and holding no bytes is refused rather than quietly handed its artefact")]
     public async Task ARecordingAskedForAsItWasRecordedAndHoldingNoBytesIsRefused()
     {
         await using var feature = new PlayFeature();
@@ -508,7 +508,7 @@ public sealed class EncodedPlaybackTests
         Assert.Empty(feature.Player.Opened);
     }
 
-    [Fact(DisplayName = "A-配信-074: a recording asked for as it was recorded is moved about by starting again, because it is transcoded while playing")]
+    [Fact(DisplayName = "a recording asked for as it was recorded is moved about by starting again, because it is transcoded while playing")]
     public async Task ARecordingAskedForAsItWasRecordedIsMovedAboutByStartingAgainRatherThanByARange()
     {
         await using var feature = new PlayFeature();
@@ -525,7 +525,7 @@ public sealed class EncodedPlaybackTests
         Assert.Equal("none", Assert.Single(picture.Headers.AcceptRanges));
     }
 
-    [Fact(DisplayName = "A-配信-074: the chapters the ledger holds belong to the artefact, so a recording asked for as it was recorded comes back with none")]
+    [Fact(DisplayName = "the chapters the ledger holds belong to the artefact, so a recording asked for as it was recorded comes back with none")]
     public async Task ARecordingAskedForAsItWasRecordedComesBackWithNoneOfTheArtefactsChapters()
     {
         await using var feature = new PlayFeature();
@@ -542,7 +542,7 @@ public sealed class EncodedPlaybackTests
         Assert.Empty(read.GetProperty("chapters").EnumerateArray());
     }
 
-    [Fact(DisplayName = "A-配信-074: the file of a recording handed to an outside player is the artefact, whatever the browser asked the plan for")]
+    [Fact(DisplayName = "the file of a recording handed to an outside player is the artefact, whatever the browser asked the plan for")]
     public async Task TheFileHandedToAnOutsidePlayerIsStillTheArtefact()
     {
         await using var feature = new PlaybackFeature();

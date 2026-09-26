@@ -11,7 +11,7 @@ namespace Carina.Infrastructure.Encodings;
 /// which <see cref="ChapterClock.InTheMetadata"/> is where the artefact's clock is turned into.
 /// <para>
 /// A chapter is titled from two constants and from nothing else: what a broadcaster wrote never
-/// reaches a file this domain writes (BR-ED2-009), and a title taken from a programme would put
+/// reaches a file this domain writes, and a title taken from a programme would put
 /// it in the artefact for anyone who opens it.
 /// </para>
 /// </summary>

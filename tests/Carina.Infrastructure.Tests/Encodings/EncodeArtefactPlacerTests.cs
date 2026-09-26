@@ -10,7 +10,7 @@ public sealed class EncodeArtefactPlacerTests
 {
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
-    [Fact(DisplayName = "BR-ED2-009: the name is in the ledger before anything is at the destination, and the work file is the artefact afterwards")]
+    [Fact(DisplayName = "the name is in the ledger before anything is at the destination, and the work file is the artefact afterwards")]
     public async Task TheNameIsInTheLedgerBeforeAnythingIsAtTheDestination()
     {
         using var harness = new EncodeHarness();
@@ -34,7 +34,7 @@ public sealed class EncodeArtefactPlacerTests
             harness.Jobs.Moves);
     }
 
-    [Fact(DisplayName = "BR-ED2-010: the work file that became the artefact is settled as such in the ledger, not left owed")]
+    [Fact(DisplayName = "the work file that became the artefact is settled as such in the ledger, not left owed")]
     public async Task TheWorkFileThatBecameTheArtefactIsSettledAsSuch()
     {
         using var harness = new EncodeHarness();
@@ -49,7 +49,7 @@ public sealed class EncodeArtefactPlacerTests
         Assert.Contains($"settled {job.WorkFileName.Value} BecameTheArtefact", harness.Scratch.Moves);
     }
 
-    [Fact(DisplayName = "BR-ED2-009: a work file written in a working directory of its own is moved from there")]
+    [Fact(DisplayName = "a work file written in a working directory of its own is moved from there")]
     public async Task AWorkFileWrittenInAWorkingDirectoryOfItsOwnIsMovedFromThere()
     {
         using var harness = new EncodeHarness(workingBeside: false);
@@ -66,7 +66,7 @@ public sealed class EncodeArtefactPlacerTests
         Assert.Empty(harness.Workshop.Snapshot());
     }
 
-    [Fact(DisplayName = "BR-ED2-009: a file already at the name this job wrote into the ledger before this attempt is its own success, kept and not overwritten")]
+    [Fact(DisplayName = "a file already at the name this job wrote into the ledger before this attempt is its own success, kept and not overwritten")]
     public async Task AFileAtTheNameThisJobWroteBeforeThisAttemptIsItsOwnSuccess()
     {
         using var harness = new EncodeHarness();
@@ -86,7 +86,7 @@ public sealed class EncodeArtefactPlacerTests
         Assert.True(Assert.Single(harness.Scratch.Files).IsOwedARemoval);
     }
 
-    [Fact(DisplayName = "BR-ED2-009: a file already at a name this job has only just claimed belongs to nobody the ledger knows: a collision, and nothing is overwritten")]
+    [Fact(DisplayName = "a file already at a name this job has only just claimed belongs to nobody the ledger knows: a collision, and nothing is overwritten")]
     public async Task AFileAtANameThisJobHasOnlyJustClaimedIsACollision()
     {
         using var harness = new EncodeHarness();
@@ -105,7 +105,7 @@ public sealed class EncodeArtefactPlacerTests
         Assert.DoesNotContain(harness.Room.Root, job.Failure.Note, StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "BR-ED2-009: a name another job holds in the ledger is a collision before the disk is even looked at")]
+    [Fact(DisplayName = "a name another job holds in the ledger is a collision before the disk is even looked at")]
     public async Task ANameAnotherJobHoldsInTheLedgerIsACollisionBeforeTheDiskIsLookedAt()
     {
         using var harness = new EncodeHarness();
@@ -129,7 +129,7 @@ public sealed class EncodeArtefactPlacerTests
         Assert.Null(second.ArtefactName);
     }
 
-    [Fact(DisplayName = "BR-ED2-009: a move that would cross a mount is refused, and the work file stays where it is")]
+    [Fact(DisplayName = "a move that would cross a mount is refused, and the work file stays where it is")]
     public async Task AMoveThatWouldCrossAMountIsRefused()
     {
         using var harness = new EncodeHarness(workingBeside: false);
@@ -184,7 +184,7 @@ public sealed class EncodeArtefactPlacerTests
         Assert.Equal(EncodeJobStatus.Running, job.Status);
     }
 
-    [Fact(DisplayName = "A-エンコード-069: a job a person asked to make again puts what it made where the earlier artefact stood, and the earlier job gives the name up before anything is moved")]
+    [Fact(DisplayName = "a job a person asked to make again puts what it made where the earlier artefact stood, and the earlier job gives the name up before anything is moved")]
     public async Task AJobAskedToMakeItAgainPutsWhatItMadeWhereTheEarlierArtefactStood()
     {
         using var harness = new EncodeHarness();
@@ -215,7 +215,7 @@ public sealed class EncodeArtefactPlacerTests
             harness.Jobs.Moves);
     }
 
-    [Fact(DisplayName = "A-エンコード-069: someone already reading the artefact when it is made again reads the one they opened through to its end, and the name never goes missing")]
+    [Fact(DisplayName = "someone already reading the artefact when it is made again reads the one they opened through to its end, and the name never goes missing")]
     public async Task SomeoneAlreadyReadingTheArtefactIsNotCutOffWhenItIsMadeAgain()
     {
         using var harness = new EncodeHarness();
@@ -252,7 +252,7 @@ public sealed class EncodeArtefactPlacerTests
         Assert.Equal("the second picture", await File.ReadAllTextAsync(artefact, Cancel));
     }
 
-    [Fact(DisplayName = "A-エンコード-069: a job making it again that already put its own artefact there on an earlier attempt keeps it, rather than looking for a work file it has already moved")]
+    [Fact(DisplayName = "a job making it again that already put its own artefact there on an earlier attempt keeps it, rather than looking for a work file it has already moved")]
     public async Task AJobMakingItAgainThatAlreadyPutItsOwnArtefactThereKeepsIt()
     {
         using var harness = new EncodeHarness();
@@ -270,7 +270,7 @@ public sealed class EncodeArtefactPlacerTests
         Assert.DoesNotContain(harness.Jobs.Moves, move => move.StartsWith("gave up", StringComparison.Ordinal));
     }
 
-    [Fact(DisplayName = "A-エンコード-069: a job nobody asked to make anything again never takes a name over, and still collides with what the earlier job holds")]
+    [Fact(DisplayName = "a job nobody asked to make anything again never takes a name over, and still collides with what the earlier job holds")]
     public async Task AJobNobodyAskedToMakeAnythingAgainNeverTakesANameOver()
     {
         using var harness = new EncodeHarness();

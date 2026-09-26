@@ -20,7 +20,7 @@ public sealed class EncodeIntakeTests
 
     private static readonly DateTime Now = new(2026, 9, 4, 5, 0, 0, DateTimeKind.Utc);
 
-    [Fact(DisplayName = "BR-ED2-004: a recording that has ended is put in the queue without anyone asking")]
+    [Fact(DisplayName = "a recording that has ended is put in the queue without anyone asking")]
     public async Task ARecordingThatHasEndedIsPutInTheQueueWithoutAnyoneAsking()
     {
         var machine = new Machine();
@@ -39,7 +39,7 @@ public sealed class EncodeIntakeTests
         Assert.Equal(Now, queued.QueuedAt);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: with the auto-run turned off in the ledger, a recording that ended is left where it is")]
+    [Fact(DisplayName = "with the auto-run turned off in the ledger, a recording that ended is left where it is")]
     public async Task WithTheAutoRunTurnedOffARecordingThatEndedIsLeftWhereItIs()
     {
         var machine = new Machine();
@@ -55,7 +55,7 @@ public sealed class EncodeIntakeTests
         Assert.Empty(machine.Events.Signalled);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: turning the auto-run back on takes hold at the next look, without a restart")]
+    [Fact(DisplayName = "turning the auto-run back on takes hold at the next look, without a restart")]
     public async Task TurningTheAutoRunBackOnTakesHoldAtTheNextLook()
     {
         var machine = new Machine();
@@ -71,7 +71,7 @@ public sealed class EncodeIntakeTests
         Assert.Single(machine.Jobs.Jobs);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: a recording whose reservation asked for no encode is never queued, though it ended with a file like any other")]
+    [Fact(DisplayName = "a recording whose reservation asked for no encode is never queued, though it ended with a file like any other")]
     public async Task ARecordingThatAskedForNoEncodeIsNeverQueued()
     {
         var machine = new Machine();
@@ -87,7 +87,7 @@ public sealed class EncodeIntakeTests
         Assert.Empty(machine.Events.Signalled);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: one recording asking for no encode leaves the ones beside it queued")]
+    [Fact(DisplayName = "one recording asking for no encode leaves the ones beside it queued")]
     public async Task ARecordingThatAskedForNoEncodeLeavesTheOnesBesideItQueued()
     {
         var machine = new Machine();
@@ -113,7 +113,7 @@ public sealed class EncodeIntakeTests
         Assert.Empty(machine.Jobs.Jobs);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: a recording that failed has nothing to encode and is never queued")]
+    [Fact(DisplayName = "a recording that failed has nothing to encode and is never queued")]
     public async Task ARecordingThatFailedIsNeverQueued()
     {
         var machine = new Machine();
@@ -125,7 +125,7 @@ public sealed class EncodeIntakeTests
         Assert.Empty(machine.Jobs.Jobs);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: a recording cut short is queued like any other, and what says it was cut short is the recording")]
+    [Fact(DisplayName = "a recording cut short is queued like any other, and what says it was cut short is the recording")]
     public async Task ARecordingCutShortIsQueuedLikeAnyOther()
     {
         var machine = new Machine();
@@ -138,7 +138,7 @@ public sealed class EncodeIntakeTests
         Assert.Equal(RecordingOutcome.Truncated, cutShort.Outcome);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: a recording still being written is not queued until it has ended")]
+    [Fact(DisplayName = "a recording still being written is not queued until it has ended")]
     public async Task ARecordingStillBeingWrittenIsNotQueued()
     {
         var machine = new Machine();
@@ -150,7 +150,7 @@ public sealed class EncodeIntakeTests
         Assert.Empty(machine.Jobs.Jobs);
     }
 
-    [Theory(DisplayName = "BR-ED2-004: a recording the ledger already holds a job for is not queued a second time, whatever became of that job")]
+    [Theory(DisplayName = "a recording the ledger already holds a job for is not queued a second time, whatever became of that job")]
     [InlineData(EncodeJobStatus.Queued)]
     [InlineData(EncodeJobStatus.Running)]
     [InlineData(EncodeJobStatus.Completed)]
@@ -168,7 +168,7 @@ public sealed class EncodeIntakeTests
         Assert.Single(machine.Jobs.Jobs);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: a second look over a queue this one filled adds nothing")]
+    [Fact(DisplayName = "a second look over a queue this one filled adds nothing")]
     public async Task ASecondLookOverAQueueThisOneFilledAddsNothing()
     {
         var machine = new Machine();
@@ -183,7 +183,7 @@ public sealed class EncodeIntakeTests
         Assert.Equal(2, machine.Jobs.Jobs.Count);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: a machine that cannot settle where an artefact goes queues nothing and says what is missing")]
+    [Fact(DisplayName = "a machine that cannot settle where an artefact goes queues nothing and says what is missing")]
     public async Task AMachineThatCannotSettleWhereAnArtefactGoesQueuesNothing()
     {
         var machine = new Machine();
@@ -197,7 +197,7 @@ public sealed class EncodeIntakeTests
         Assert.Empty(machine.Jobs.Jobs);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: a machine offering more than one destination queues nothing and says so")]
+    [Fact(DisplayName = "a machine offering more than one destination queues nothing and says so")]
     public async Task AMachineOfferingMoreThanOneDestinationQueuesNothing()
     {
         var machine = new Machine();
@@ -216,7 +216,7 @@ public sealed class EncodeIntakeTests
         Assert.Empty(machine.Jobs.Jobs);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: a machine that could not settle a destination queues what it passed over once it can")]
+    [Fact(DisplayName = "a machine that could not settle a destination queues what it passed over once it can")]
     public async Task AMachineThatCouldNotSettleADestinationQueuesWhatItPassedOverOnceItCan()
     {
         var machine = new Machine();
@@ -232,7 +232,7 @@ public sealed class EncodeIntakeTests
         Assert.Equal(1, took.Queued);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: more recordings than one look reads are queued a look at a time, and every one of them ends up in the queue")]
+    [Fact(DisplayName = "more recordings than one look reads are queued a look at a time, and every one of them ends up in the queue")]
     public async Task MoreRecordingsThanOneLookReadsAreQueuedALookAtATime()
     {
         var machine = new Machine();

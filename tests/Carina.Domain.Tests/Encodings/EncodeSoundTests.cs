@@ -7,7 +7,7 @@ namespace Carina.Domain.Tests.Encodings;
 
 public sealed class EncodeSoundTests
 {
-    [Fact(DisplayName = "BR-PD-008: a broadcast that put two languages on one sound is baked from the channel the main language sits on")]
+    [Fact(DisplayName = "a broadcast that put two languages on one sound is baked from the channel the main language sits on")]
     public void TwoLanguagesOnOneSoundAreBakedFromTheChannelTheMainOneSitsOn()
     {
         EncodeSound sound = EncodeSound.Of(AudioMode.DualMono, 1);

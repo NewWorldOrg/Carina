@@ -6,7 +6,7 @@ public sealed class ThresholdTests
 {
     private static readonly DateTime Changed = new(2026, 8, 21, 3, 0, 0, DateTimeKind.Utc);
 
-    [Fact(DisplayName = "BR-QD-003: a threshold carries what it shipped as, what it is now, and how much stands behind it")]
+    [Fact(DisplayName = "a threshold carries what it shipped as, what it is now, and how much stands behind it")]
     public void AThresholdCarriesWhatItShippedAsAndWhatItIsNow()
     {
         Threshold threshold = Threshold.Of(0.0002, 0.0005, provisional: false, observations: 412, Changed);
@@ -19,7 +19,7 @@ public sealed class ThresholdTests
         Assert.False(threshold.IsAsShipped);
     }
 
-    [Fact(DisplayName = "BR-QD-003: a number nobody has measured against is provisional and says so")]
+    [Fact(DisplayName = "a number nobody has measured against is provisional and says so")]
     public void ANumberNobodyHasMeasuredAgainstIsProvisionalAndSaysSo()
     {
         Threshold threshold = Threshold.Provisionally(0.0002, observations: 0, Changed);
@@ -29,7 +29,7 @@ public sealed class ThresholdTests
         Assert.True(threshold.IsAsShipped);
     }
 
-    [Fact(DisplayName = "BR-QD-003: a threshold that no longer calls itself provisional stands on measurement")]
+    [Fact(DisplayName = "a threshold that no longer calls itself provisional stands on measurement")]
     public void AThresholdThatNoLongerCallsItselfProvisionalStandsOnMeasurement()
         => Assert.Throws<ArgumentException>(() => Threshold.Of(0.0002, 0.0002, provisional: false, observations: 0, Changed));
 

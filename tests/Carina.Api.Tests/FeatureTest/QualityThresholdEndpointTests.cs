@@ -110,7 +110,7 @@ public sealed class QualityThresholdEndpointTests
             (await feature.PatchAsync("/api/quality/thresholds/somethingElse", new { value = 0.5 })).Status);
     }
 
-    [Fact(DisplayName = "BR-QD-003: the level a supply watch holds silence against is offered and can be moved")]
+    [Fact(DisplayName = "the level a supply watch holds silence against is offered and can be moved")]
     public async Task TheLevelASupplyWatchHoldsSilenceAgainstIsOfferedAndCanBeMoved()
     {
         await using var feature = new QualityFeature();

@@ -63,7 +63,7 @@ public sealed class ThresholdBandTests
             QualityThresholdKey.PacketsLostWarning,
             QualityFactory.Provisional(0.0002)));
 
-    [Fact(DisplayName = "BR-QD-003: a band standing on any provisional level is a provisional band")]
+    [Fact(DisplayName = "a band standing on any provisional level is a provisional band")]
     public void ABandStandingOnAnyProvisionalLevelIsAProvisionalBand()
     {
         ThresholdBand halfSettled = ThresholdBand.Of(

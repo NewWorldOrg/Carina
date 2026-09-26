@@ -32,10 +32,10 @@ public sealed record ProgrammeStart(Process? Process, RunningProgramme? Began, s
 
 /// <summary>
 /// How this application starts another programme: the arguments go over as an array, no shell sees
-/// them (BR-EV-002), and the environment is built here rather than inherited, so nothing this
-/// process was handed — a database password among it — reaches the one it starts (BR-EV-003).
+/// them, and the environment is built here rather than inherited, so nothing this
+/// process was handed — a database password among it — reaches the one it starts.
 /// A programme started yielding runs at the lowest scheduling priority from its first instruction,
-/// under <c>nice</c>, so that whatever else this machine is doing is served first (BR-ED2-005).
+/// under <c>nice</c>, so that whatever else this machine is doing is served first.
 /// </summary>
 public static class AnotherProgramme
 {

@@ -43,7 +43,7 @@ public sealed class ReservationOutcomeEndpointTests
     [InlineData("channel=nonsense")]
     [InlineData("rule=00000000-0000-0000-0000-000000000000")]
     [InlineData("rule=nonsense")]
-    public async Task ARequestOutsideWhatTheLedgerAnswersIsRefused_BR_RV_003(string query)
+    public async Task ARequestOutsideWhatTheLedgerAnswersIsRefused(string query)
     {
         await using var feature = new ReservationFeature();
         feature.Recorded(feature.Booked(4001), ReservationOutcomeKind.Missed);
@@ -54,7 +54,7 @@ public sealed class ReservationOutcomeEndpointTests
     }
 
     [Fact]
-    public async Task APageSizeOverTheCeilingIsCutDownToItAndAnsweredAsTheSizeThatWasUsed_BR_RV_003()
+    public async Task APageSizeOverTheCeilingIsCutDownToItAndAnsweredAsTheSizeThatWasUsed()
     {
         await using var feature = new ReservationFeature();
 
@@ -138,7 +138,7 @@ public sealed class ReservationOutcomeEndpointTests
     }
 
     [Fact]
-    public async Task AnOutcomeIsAnsweredAsTheLedgerWroteItDown_BR_RD_012()
+    public async Task AnOutcomeIsAnsweredAsTheLedgerWroteItDown()
     {
         await using var feature = new ReservationFeature();
         Guid[] instead = [Guid.NewGuid(), Guid.NewGuid()];
@@ -169,7 +169,7 @@ public sealed class ReservationOutcomeEndpointTests
     }
 
     [Fact]
-    public async Task WhatTheLedgerDidNotWriteDownIsAnsweredAsNothingRatherThanGuessed_BR_RD_012()
+    public async Task WhatTheLedgerDidNotWriteDownIsAnsweredAsNothingRatherThanGuessed()
     {
         await using var feature = new ReservationFeature();
         feature.Recorded(
@@ -194,7 +194,7 @@ public sealed class ReservationOutcomeEndpointTests
     }
 
     [Fact]
-    public async Task ARetrySaysWhatCameOfItAndGivingUpSaysWhy_BR_QD_012()
+    public async Task ARetrySaysWhatCameOfItAndGivingUpSaysWhy()
     {
         await using var feature = new ReservationFeature();
         Reservation failing = feature.Booked(4001);
@@ -226,7 +226,7 @@ public sealed class ReservationOutcomeEndpointTests
     }
 
     [Fact]
-    public async Task AScreenReadsWhyARecordingFailedFromTheClassesTheLedgerHolds_BR_RD_012()
+    public async Task AScreenReadsWhyARecordingFailedFromTheClassesTheLedgerHolds()
     {
         await using var feature = new ReservationFeature();
         feature.Recorded(
@@ -305,7 +305,7 @@ public sealed class ReservationOutcomeEndpointTests
     [Theory]
     [InlineData("/api/reservations/outcomes")]
     [InlineData("/api/reservations/health")]
-    public async Task NeitherSurfaceIsReachedWithoutASession_BR_RA_002(string path)
+    public async Task NeitherSurfaceIsReachedWithoutASession(string path)
     {
         await using var feature = new ReservationFeature();
         feature.Client.DefaultRequestHeaders.Authorization = null;

@@ -19,7 +19,7 @@ public sealed class EncodeIntakeReaderTests(RepositoryDatabase database)
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
-    [Fact(DisplayName = "BR-ED2-004: the recordings that ended with a file, asked to be encoded and hold no job are the ones answered, oldest start first")]
+    [Fact(DisplayName = "the recordings that ended with a file, asked to be encoded and hold no job are the ones answered, oldest start first")]
     public async Task TheRecordingsThatEndedWithAFileAskedToBeEncodedAndHoldNoJobAreAnsweredOldestStartFirst()
     {
         Recording later = await EndedAsync(Began.AddMinutes(10), RecordingOutcome.Complete);

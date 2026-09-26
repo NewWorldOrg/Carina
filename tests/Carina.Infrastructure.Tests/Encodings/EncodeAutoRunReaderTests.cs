@@ -40,7 +40,7 @@ public sealed class EncodeAutoRunReaderTests
         Assert.Equal(Settled, standing.UpdatedAt);
     }
 
-    [Fact(DisplayName = "BR-ED2-005: a deployed cap larger than this machine is answered as what will actually run")]
+    [Fact(DisplayName = "a deployed cap larger than this machine is answered as what will actually run")]
     public async Task ADeployedCapLargerThanThisMachineIsAnsweredAsWhatWillRun()
     {
         EncodeAutoRunStanding standing = await Reader(new HeldEncodeAutoRun(), new EncodeSettings { MostCores = 40 }).ReadAsync(Cancel);
@@ -48,7 +48,7 @@ public sealed class EncodeAutoRunReaderTests
         Assert.Equal(6, standing.MostCores);
     }
 
-    [Fact(DisplayName = "BR-ED2-005: a settled cap larger than this machine is answered as what will actually run")]
+    [Fact(DisplayName = "a settled cap larger than this machine is answered as what will actually run")]
     public async Task ASettledCapLargerThanThisMachineIsAnsweredAsWhatWillRun()
     {
         var rows = new HeldEncodeAutoRun();

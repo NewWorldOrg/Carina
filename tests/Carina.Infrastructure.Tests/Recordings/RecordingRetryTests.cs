@@ -20,7 +20,7 @@ public sealed class RecordingRetryTests
     private static readonly DriverCall<SessionSnapshot> WouldNotLock =
         DriverCall<SessionSnapshot>.Refused(new DriverProblem(SessionRefusalTitles.NoLock, []));
 
-    [Fact(DisplayName = "BR-QD-012: a start that did not lock is started again once the pause has passed, while the programme is on")]
+    [Fact(DisplayName = "a start that did not lock is started again once the pause has passed, while the programme is on")]
     public async Task AStartThatDidNotLockIsStartedAgainOnceThePauseHasPassedWhileTheProgrammeIsOn()
     {
         var scene = new Scene(Due(1));
@@ -46,7 +46,7 @@ public sealed class RecordingRetryTests
         Assert.Empty(scene.Lines(ReservationOutcomeKind.GaveUpRetrying));
     }
 
-    [Fact(DisplayName = "BR-QD-012: nothing is started again before the pause, and no claim is taken while waiting")]
+    [Fact(DisplayName = "nothing is started again before the pause, and no claim is taken while waiting")]
     public async Task NothingIsStartedAgainBeforeThePauseAndNoClaimIsTakenWhileWaiting()
     {
         var scene = new Scene(Due(1));
@@ -66,7 +66,7 @@ public sealed class RecordingRetryTests
         Assert.Empty(scene.Lines(ReservationOutcomeKind.Retried));
     }
 
-    [Fact(DisplayName = "BR-QD-012: each attempt refused again is written down with its class, and the ceiling holds")]
+    [Fact(DisplayName = "each attempt refused again is written down with its class, and the ceiling holds")]
     public async Task EachAttemptRefusedAgainIsWrittenDownWithItsClassAndTheCeilingHolds()
     {
         var scene = new Scene(Due(1));
@@ -98,7 +98,7 @@ public sealed class RecordingRetryTests
         Assert.Empty(after.Refused);
     }
 
-    [Fact(DisplayName = "BR-QD-012: a stream that is not the one expected is never started again, and giving up is written once")]
+    [Fact(DisplayName = "a stream that is not the one expected is never started again, and giving up is written once")]
     public async Task AStreamThatIsNotTheOneExpectedIsNeverStartedAgainAndGivingUpIsWrittenOnce()
     {
         var scene = new Scene(Due(1));
@@ -118,7 +118,7 @@ public sealed class RecordingRetryTests
         Assert.Empty(scene.Lines(ReservationOutcomeKind.Retried));
     }
 
-    [Fact(DisplayName = "BR-QD-012: a programme that has ended is not started again, though the margin after it is still open")]
+    [Fact(DisplayName = "a programme that has ended is not started again, though the margin after it is still open")]
     public async Task AProgrammeThatHasEndedIsNotStartedAgainThoughTheMarginAfterItIsStillOpen()
     {
         var scene = new Scene(Due(1, until: Airs.AddMinutes(30), marginAfter: TimeSpan.FromMinutes(5)));
@@ -133,7 +133,7 @@ public sealed class RecordingRetryTests
             Assert.Single(scene.Lines(ReservationOutcomeKind.GaveUpRetrying)).GaveUpBecause);
     }
 
-    [Fact(DisplayName = "BR-QD-012: a programme the guide has withdrawn is not started again")]
+    [Fact(DisplayName = "a programme the guide has withdrawn is not started again")]
     public async Task AProgrammeTheGuideHasWithdrawnIsNotStartedAgain()
     {
         var scene = new Scene(Due(1));
@@ -159,7 +159,7 @@ public sealed class RecordingRetryTests
             Assert.Single(scene.Lines(ReservationOutcomeKind.GaveUpRetrying)).GaveUpBecause);
     }
 
-    [Fact(DisplayName = "BR-QD-012 / BR-TS-002: a channel already set aside as needing attention is not pulled back")]
+    [Fact(DisplayName = "a channel already set aside as needing attention is not pulled back")]
     public async Task AChannelAlreadySetAsideAsNeedingAttentionIsNotPulledBack()
     {
         CandidateChannel candidate = Candidate();
@@ -181,7 +181,7 @@ public sealed class RecordingRetryTests
             Assert.Single(scene.Lines(ReservationOutcomeKind.GaveUpRetrying)).GaveUpBecause);
     }
 
-    [Fact(DisplayName = "BR-QD-012 / D-9: a channel that is backing off is waited for past the pause")]
+    [Fact(DisplayName = "a channel that is backing off is waited for past the pause")]
     public async Task AChannelThatIsBackingOffIsWaitedForPastThePause()
     {
         CandidateChannel candidate = Candidate();
@@ -200,7 +200,7 @@ public sealed class RecordingRetryTests
         Assert.Single(scene.Driver.Started);
     }
 
-    [Fact(DisplayName = "BR-QD-012: a start the disk precheck finds no room for is not tried again")]
+    [Fact(DisplayName = "a start the disk precheck finds no room for is not tried again")]
     public async Task AStartTheDiskPrecheckFindsNoRoomForIsNotTriedAgain()
     {
         var scene = new Scene(Due(1));

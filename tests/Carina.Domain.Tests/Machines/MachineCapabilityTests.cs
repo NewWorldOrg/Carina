@@ -33,7 +33,7 @@ public sealed class MachineCapabilityTests
         Assert.Single(Enum.GetValues<CardStanding>(), CardStandings.IsUsable);
     }
 
-    [Fact(DisplayName = "BR-EV-004: a card that cannot be reached cannot be listed as able to encode on")]
+    [Fact(DisplayName = "a card that cannot be reached cannot be listed as able to encode on")]
     public void ACardThatCannotBeReachedCannotBeListedAsAbleToEncodeOn()
         => Assert.Throws<ArgumentException>(() => MachineCapabilities.Of(
             CardStanding.NodeMissing,

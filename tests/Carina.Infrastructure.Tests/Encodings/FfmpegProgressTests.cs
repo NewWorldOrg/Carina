@@ -43,7 +43,7 @@ public sealed class FfmpegProgressTests
 
     private static readonly TimeSpan Whole = TimeSpan.FromSeconds(2097.502489);
 
-    [Fact(DisplayName = "BR-ED2-013: how far along is read by key and never by position")]
+    [Fact(DisplayName = "how far along is read by key and never by position")]
     public void HowFarAlongIsReadByKeyAndNeverByPosition()
     {
         var reading = new FfmpegProgressReading(Whole);
@@ -152,7 +152,7 @@ public sealed class FfmpegProgressTests
         Assert.Null(reading.Read("progress=continue"));
     }
 
-    [Fact(DisplayName = "BR-ED2-013: the job asks ffmpeg for the block form of progress and not for its status line")]
+    [Fact(DisplayName = "the job asks ffmpeg for the block form of progress and not for its status line")]
     public void TheJobAsksFfmpegForTheBlockFormOfProgressAndNotForItsStatusLine()
     {
         string[] arguments = [.. FfmpegEncodeInvocation.Arguments(

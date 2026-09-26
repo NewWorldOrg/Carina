@@ -12,7 +12,7 @@ public sealed class RecordingEncodeStandingTests
 {
     private static readonly OutputRoot Shelf = new("encodes");
 
-    [Fact(DisplayName = "BR-ES-002: every row of the library says where its recording stands with the encoder")]
+    [Fact(DisplayName = "every row of the library says where its recording stands with the encoder")]
     public async Task EveryRowOfTheLibrarySaysWhereItsRecordingStandsWithTheEncoder()
     {
         await using var feature = new RecordingFeature();
@@ -38,7 +38,7 @@ public sealed class RecordingEncodeStandingTests
         Assert.Equal("notEncoded", standings[untouched.Id.Wire]);
     }
 
-    [Fact(DisplayName = "BR-ES-002: a recording still being written stands unencoded rather than saying nothing")]
+    [Fact(DisplayName = "a recording still being written stands unencoded rather than saying nothing")]
     public async Task ARecordingStillBeingWrittenStandsUnencoded()
     {
         await using var feature = new RecordingFeature();
@@ -51,7 +51,7 @@ public sealed class RecordingEncodeStandingTests
             body.GetProperty("data").GetProperty("recording").GetProperty("encode").GetProperty("standing").GetString());
     }
 
-    [Fact(DisplayName = "BR-ES-002: one recording's detail says what its row in the list says")]
+    [Fact(DisplayName = "one recording's detail says what its row in the list says")]
     public async Task OneRecordingsDetailSaysWhatItsRowInTheListSays()
     {
         await using var feature = new RecordingFeature();
@@ -71,7 +71,7 @@ public sealed class RecordingEncodeStandingTests
             detail.GetProperty("data").GetProperty("recording").GetProperty("encode").GetProperty("standing").GetString());
     }
 
-    [Fact(DisplayName = "BR-ES-002: a job that failed shows on the row until something is queued in its place")]
+    [Fact(DisplayName = "a job that failed shows on the row until something is queued in its place")]
     public async Task AJobThatFailedShowsOnTheRowUntilSomethingIsQueuedInItsPlace()
     {
         await using var feature = new RecordingFeature();
@@ -92,7 +92,7 @@ public sealed class RecordingEncodeStandingTests
             retried.GetProperty("data").GetProperty("items")[0].GetProperty("encode").GetProperty("standing").GetString());
     }
 
-    [Fact(DisplayName = "BR-ED2-004: every row of the library says whether its recording asks for an encode, so one the automatic run passed over reads apart from one it has not reached")]
+    [Fact(DisplayName = "every row of the library says whether its recording asks for an encode, so one the automatic run passed over reads apart from one it has not reached")]
     public async Task EveryRowOfTheLibrarySaysWhetherItsRecordingAsksForAnEncode()
     {
         await using var feature = new RecordingFeature();
@@ -116,7 +116,7 @@ public sealed class RecordingEncodeStandingTests
         Assert.Equal("notEncoded", rows[passedOver.Id.Wire].GetProperty("standing").GetString());
     }
 
-    [Fact(DisplayName = "BR-ED2-004: one recording's detail says whether it asks for an encode, the same as its row")]
+    [Fact(DisplayName = "one recording's detail says whether it asks for an encode, the same as its row")]
     public async Task OneRecordingsDetailSaysWhetherItAsksForAnEncode()
     {
         await using var feature = new RecordingFeature();
@@ -140,7 +140,7 @@ public sealed class RecordingEncodeStandingTests
             .GetBoolean());
     }
 
-    [Fact(DisplayName = "BR-ED2-004: a recording still being written says it asks for an encode rather than saying nothing")]
+    [Fact(DisplayName = "a recording still being written says it asks for an encode rather than saying nothing")]
     public async Task ARecordingStillBeingWrittenSaysItAsksForAnEncode()
     {
         await using var feature = new RecordingFeature();

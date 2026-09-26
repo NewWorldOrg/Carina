@@ -2,13 +2,13 @@ namespace Carina.Architecture.Tests;
 
 public sealed class EncodeScratchRuleTests
 {
-    [Fact(DisplayName = "BR-ED2-010: nothing in the encode feature walks a directory, so nothing there can find a file the ledger did not name")]
+    [Fact(DisplayName = "nothing in the encode feature walks a directory, so nothing there can find a file the ledger did not name")]
     public void NothingInTheEncodeFeatureWalksADirectory()
     {
         Assert.Empty(EncodeScratchRules.WhatWalksADirectory(RepositoryLayout.SourceDirectory));
     }
 
-    [Fact(DisplayName = "BR-ED2-010: the one place the encode feature deletes a file is the sweep that reads the ledger, and the probe takes back only its own empty directory")]
+    [Fact(DisplayName = "the one place the encode feature deletes a file is the sweep that reads the ledger, and the probe takes back only its own empty directory")]
     public void TheOnePlaceTheEncodeFeatureDeletesAFileIsTheSweepThatReadsTheLedger()
     {
         Assert.Equal(

@@ -7,17 +7,17 @@ namespace Carina.Infrastructure.Tests.Configuration;
 
 public sealed class QualitySignalRetentionOptionsTests
 {
-    [Fact(DisplayName = "BR-QD-006: raw samples are kept for a week unless the settings say otherwise")]
+    [Fact(DisplayName = "raw samples are kept for a week unless the settings say otherwise")]
     public void RawSamplesAreKeptForAWeekUnlessTheSettingsSayOtherwise()
         => Assert.Equal(TimeSpan.FromDays(7), new QualitySignalOptions().Read().KeepSamplesFor);
 
-    [Fact(DisplayName = "BR-QD-006: how long raw samples are kept is read as a duration")]
+    [Fact(DisplayName = "how long raw samples are kept is read as a duration")]
     public void HowLongRawSamplesAreKeptIsReadAsADuration()
         => Assert.Equal(
             TimeSpan.FromDays(3),
             new QualitySignalOptions { KeepSamplesFor = "3.00:00:00" }.Read().KeepSamplesFor);
 
-    [Fact(DisplayName = "BR-QS-003: the minute windows are kept for ninety days and the hourly ones for as long as there is a system")]
+    [Fact(DisplayName = "the minute windows are kept for ninety days and the hourly ones for as long as there is a system")]
     public void TheMinuteWindowsAreKeptForNinetyDaysAndTheHourlyOnesForAsLongAsThereIsASystem()
     {
         QualitySignalSettings read = new QualitySignalOptions().Read();
@@ -26,7 +26,7 @@ public sealed class QualitySignalRetentionOptionsTests
         Assert.Null(read.KeptFor(QualityWindow.Hour));
     }
 
-    [Fact(DisplayName = "BR-QS-003: how long each window layer is kept is read as a duration")]
+    [Fact(DisplayName = "how long each window layer is kept is read as a duration")]
     public void HowLongEachWindowLayerIsKeptIsReadAsADuration()
     {
         QualitySignalSettings read = new QualitySignalOptions
@@ -39,7 +39,7 @@ public sealed class QualitySignalRetentionOptionsTests
         Assert.Equal(TimeSpan.FromDays(400), read.KeptFor(QualityWindow.Hour));
     }
 
-    [Fact(DisplayName = "BR-QS-003: a window layer told to be kept forever is kept for as long as there is a system")]
+    [Fact(DisplayName = "a window layer told to be kept forever is kept for as long as there is a system")]
     public void AWindowLayerToldToBeKeptForeverIsKeptForAsLongAsThereIsASystem()
     {
         QualitySignalSettings read = new QualitySignalOptions
@@ -52,7 +52,7 @@ public sealed class QualitySignalRetentionOptionsTests
         Assert.Null(read.KeptFor(QualityWindow.Hour));
     }
 
-    [Fact(DisplayName = "BR-QS-003: minute windows kept for less time than the samples they hold are refused")]
+    [Fact(DisplayName = "minute windows kept for less time than the samples they hold are refused")]
     public void MinuteWindowsKeptForLessTimeThanTheSamplesTheyHoldAreRefused()
         => Assert.Throws<ArgumentException>(() => new QualitySignalOptions
         {
@@ -60,7 +60,7 @@ public sealed class QualitySignalRetentionOptionsTests
             KeepMinuteWindowsFor = "1.00:00:00",
         }.Read());
 
-    [Fact(DisplayName = "BR-QS-003: hour windows kept for less time than the minute ones are refused")]
+    [Fact(DisplayName = "hour windows kept for less time than the minute ones are refused")]
     public void HourWindowsKeptForLessTimeThanTheMinuteOnesAreRefused()
         => Assert.Throws<ArgumentException>(() => new QualitySignalOptions
         {
@@ -68,15 +68,15 @@ public sealed class QualitySignalRetentionOptionsTests
             KeepHourWindowsFor = "30.00:00:00",
         }.Read());
 
-    [Fact(DisplayName = "BR-QD-006: samples kept for no time at all are refused")]
+    [Fact(DisplayName = "samples kept for no time at all are refused")]
     public void SamplesKeptForNoTimeAtAllAreRefused()
         => Assert.Throws<ArgumentException>(() => new QualitySignalOptions { KeepSamplesFor = "00:00:00" }.Read());
 
-    [Fact(DisplayName = "BR-QD-006: a retention that is not a duration is refused")]
+    [Fact(DisplayName = "a retention that is not a duration is refused")]
     public void ARetentionThatIsNotADurationIsRefused()
         => Assert.Throws<ArgumentException>(() => new QualitySignalOptions { KeepSamplesFor = "a week" }.Read());
 
-    [Fact(DisplayName = "BR-QD-006: a retention the settings could not hold is named at startup")]
+    [Fact(DisplayName = "a retention the settings could not hold is named at startup")]
     public void ARetentionTheSettingsCouldNotHoldIsNamedAtStartup()
     {
         ValidateOptionsResult refused = new QualitySignalValidation().Validate(

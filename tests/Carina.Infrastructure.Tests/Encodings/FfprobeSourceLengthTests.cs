@@ -15,7 +15,7 @@ public sealed class FfprobeSourceLengthTests : IDisposable
 
     public void Dispose() => standIns.Dispose();
 
-    [Fact(DisplayName = "BR-ED2-013: the whole is asked for by key and read back by key")]
+    [Fact(DisplayName = "the whole is asked for by key and read back by key")]
     public void TheWholeIsAskedForByKeyAndReadBackByKey()
     {
         string[] arguments = [.. FfprobeLengthInvocation.Arguments(Source)];
@@ -25,7 +25,7 @@ public sealed class FfprobeSourceLengthTests : IDisposable
         Assert.Equal(Source, arguments[arguments.IndexOf("-i") + 1]);
     }
 
-    [Fact(DisplayName = "BR-ED2-013: a source that measures 2097.502489 seconds is 2097.502489 seconds")]
+    [Fact(DisplayName = "a source that measures 2097.502489 seconds is 2097.502489 seconds")]
     public async Task ASourceThatMeasuresIsTheLengthItMeasured()
     {
         SourceLengthReading reading = await Reading(standIns.Script("printf 'duration=2097.502489\\n'"));
@@ -34,7 +34,7 @@ public sealed class FfprobeSourceLengthTests : IDisposable
         Assert.Equal(2097.502489, reading.Length!.Value.TotalSeconds, 6);
     }
 
-    [Fact(DisplayName = "BR-ED2-013: what ffprobe complained about while exiting 0 does not make the reading a failure")]
+    [Fact(DisplayName = "what ffprobe complained about while exiting 0 does not make the reading a failure")]
     public async Task WhatFfprobeComplainedAboutWhileExitingZeroDoesNotMakeTheReadingAFailure()
     {
         SourceLengthReading reading = await Reading(standIns.Script(

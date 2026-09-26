@@ -59,7 +59,7 @@ public sealed class ThresholdEvaluatorTests
         Assert.Equal(QualityStanding.MayNotBeWatchable, ThresholdEvaluator.Judge(0.0, band).Standing);
     }
 
-    [Fact(DisplayName = "BR-QD-001: nothing measured is not the same answer as nothing wrong")]
+    [Fact(DisplayName = "nothing measured is not the same answer as nothing wrong")]
     public void NothingMeasuredIsNotTheSameAnswerAsNothingWrong()
     {
         ThresholdVerdict verdict = ThresholdEvaluator.Judge(null, QualityFactory.PacketsLost());
@@ -82,7 +82,7 @@ public sealed class ThresholdEvaluatorTests
     public void AVerdictIsReachedAgainstABand()
         => Assert.Throws<ArgumentNullException>(() => ThresholdEvaluator.Judge(0.1, null!));
 
-    [Fact(DisplayName = "BR-QV-002: a verdict keeps the level that decided it, as that level stood")]
+    [Fact(DisplayName = "a verdict keeps the level that decided it, as that level stood")]
     public void AVerdictKeepsTheLevelThatDecidedItAsThatLevelStood()
     {
         ThresholdBand band = ThresholdBand.Of(
@@ -108,7 +108,7 @@ public sealed class ThresholdEvaluatorTests
         Assert.Equal(0.001, unwatchable.Applied.Current, 12);
     }
 
-    [Fact(DisplayName = "BR-QV-002: a level that moves afterwards does not reach back into a verdict already reached")]
+    [Fact(DisplayName = "a level that moves afterwards does not reach back into a verdict already reached")]
     public void ALevelThatMovesAfterwardsDoesNotReachBackIntoAVerdictAlreadyReached()
     {
         ThresholdVerdict asItStood = ThresholdEvaluator.Judge(0.0003, QualityFactory.PacketsLost(warning: 0.0002));
@@ -120,7 +120,7 @@ public sealed class ThresholdEvaluatorTests
         Assert.Equal(0.0002, asItStood.Applied.Current, 12);
     }
 
-    [Fact(DisplayName = "BR-QV-002: an incident carries the level that decided it rather than the one in force later")]
+    [Fact(DisplayName = "an incident carries the level that decided it rather than the one in force later")]
     public void AnIncidentCarriesTheLevelThatDecidedItRatherThanTheOneInForceLater()
     {
         ThresholdVerdict verdict = ThresholdEvaluator.Judge(0.0003, QualityFactory.PacketsLost(warning: 0.0002));
@@ -139,7 +139,7 @@ public sealed class ThresholdEvaluatorTests
         Assert.Equal(0.05, loosened.Warning.Current, 12);
     }
 
-    [Fact(DisplayName = "BR-QD-003: a verdict says the level that decided it is provisional and how little stands behind it")]
+    [Fact(DisplayName = "a verdict says the level that decided it is provisional and how little stands behind it")]
     public void AVerdictSaysTheLevelThatDecidedItIsProvisionalAndHowLittleStandsBehindIt()
     {
         ThresholdVerdict verdict = ThresholdEvaluator.Judge(0.0003, QualityFactory.PacketsLost());

@@ -5,7 +5,7 @@ namespace Carina.Domain.Encodings;
 /// <summary>
 /// The last thing a running job reported and when: how much of the source is done and how long
 /// the rest should take. The time is the part a reader cannot do without — it is what tells a
-/// job that is getting on from one that has stopped and still says "running" (BR-ED2-014).
+/// job that is getting on from one that has stopped and still says "running".
 /// </summary>
 public sealed record EncodeHeadway
 {

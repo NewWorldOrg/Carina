@@ -26,7 +26,7 @@ public sealed class EncodeAutoRunEndpointTests
         Assert.Equal(JsonValueKind.Null, data.GetProperty("updatedAt").ValueKind);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: what the auto-run takes is stated, and it is what ended with a file")]
+    [Fact(DisplayName = "what the auto-run takes is stated, and it is what ended with a file")]
     public async Task WhatTheAutoRunTakesIsStated()
     {
         await using var feature = new EncodingFeature();
@@ -38,7 +38,7 @@ public sealed class EncodeAutoRunEndpointTests
             body.GetProperty("data").GetProperty("subject").EnumerateArray().Select(each => each.GetString()));
     }
 
-    [Fact(DisplayName = "BR-ED2-004: a machine offering more than one destination says the auto-run cannot settle where an artefact goes")]
+    [Fact(DisplayName = "a machine offering more than one destination says the auto-run cannot settle where an artefact goes")]
     public async Task AMachineOfferingMoreThanOneDestinationSaysTheAutoRunCannotSettleWhereAnArtefactGoes()
     {
         await using var feature = new EncodingFeature();
@@ -51,7 +51,7 @@ public sealed class EncodeAutoRunEndpointTests
         Assert.Equal("moreThanOneIsOffered", body.GetProperty("data").GetProperty("whereArtefactsGo").GetString());
     }
 
-    [Fact(DisplayName = "BR-ED2-004: one destination settles where an artefact goes, and a machine with none says nothing is defined")]
+    [Fact(DisplayName = "one destination settles where an artefact goes, and a machine with none says nothing is defined")]
     public async Task OneDestinationSettlesWhereAnArtefactGoesAndNoneSaysNothingIsDefined()
     {
         await using var nothing = new EncodingFeature();
@@ -86,7 +86,7 @@ public sealed class EncodeAutoRunEndpointTests
         Assert.Contains(AppEventName.EncodeJobs, feature.Events.Signalled);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: turning the auto-run off stops making jobs, and leaves the one already running alone")]
+    [Fact(DisplayName = "turning the auto-run off stops making jobs, and leaves the one already running alone")]
     public async Task TurningTheAutoRunOffLeavesTheJobAlreadyRunningAlone()
     {
         await using var feature = new EncodingFeature();

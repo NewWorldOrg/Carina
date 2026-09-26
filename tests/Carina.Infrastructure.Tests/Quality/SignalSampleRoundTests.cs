@@ -23,7 +23,7 @@ public sealed class SignalSampleRoundTests
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
-    [Fact(DisplayName = "BR-QD-004: what the driver reports while it holds a session is kept")]
+    [Fact(DisplayName = "what the driver reports while it holds a session is kept")]
     public async Task WhatTheDriverReportsWhileItHoldsASessionIsKept()
     {
         HeldQualitySignalSamples samples = new();
@@ -41,7 +41,7 @@ public sealed class SignalSampleRoundTests
         Assert.Equal(30000, sample.Signal.CarrierToNoiseMilliDecibels);
     }
 
-    [Fact(DisplayName = "BR-QD-004: a tuner holding nothing is left alone rather than tuned to be measured")]
+    [Fact(DisplayName = "a tuner holding nothing is left alone rather than tuned to be measured")]
     public async Task ATunerHoldingNothingIsLeftAloneRatherThanTunedToBeMeasured()
     {
         HeldQualitySignalSamples samples = new();
@@ -52,7 +52,7 @@ public sealed class SignalSampleRoundTests
         Assert.Empty(samples.Samples);
     }
 
-    [Fact(DisplayName = "BR-QV-003: a tuner the driver said nothing about is kept as one that could not be taken")]
+    [Fact(DisplayName = "a tuner the driver said nothing about is kept as one that could not be taken")]
     public async Task ATunerTheDriverSaidNothingAboutIsKeptAsOneThatCouldNotBeTaken()
     {
         HeldQualitySignalSamples samples = new();
@@ -78,7 +78,7 @@ public sealed class SignalSampleRoundTests
         Assert.Empty(measurements.Measurements);
     }
 
-    [Fact(DisplayName = "BR-QD-013: a session on a multiplex no candidate names has no channel to be filed under")]
+    [Fact(DisplayName = "a session on a multiplex no candidate names has no channel to be filed under")]
     public async Task ASessionOnAMultiplexNoCandidateNamesHasNoChannelToBeFiledUnder()
     {
         HeldQualitySignalSamples samples = new();
@@ -96,7 +96,7 @@ public sealed class SignalSampleRoundTests
         Assert.Empty(measurements.Measurements);
     }
 
-    [Fact(DisplayName = "決定4: what a session that is not a recording counted is kept under that session")]
+    [Fact(DisplayName = "what a session that is not a recording counted is kept under that session")]
     public async Task WhatASessionThatIsNotARecordingCountedIsKeptUnderThatSession()
     {
         HeldQualitySessionMeasurements measurements = new();
@@ -125,7 +125,7 @@ public sealed class SignalSampleRoundTests
         Assert.Equal(1, taking.Measured);
     }
 
-    [Fact(DisplayName = "決定4: what a recording session counted is left to the recording ledger")]
+    [Fact(DisplayName = "what a recording session counted is left to the recording ledger")]
     public async Task WhatARecordingSessionCountedIsLeftToTheRecordingLedger()
     {
         HeldQualitySessionMeasurements measurements = new();
@@ -181,7 +181,7 @@ public sealed class SignalSampleRoundTests
         Assert.Empty(measurements.Measurements);
     }
 
-    [Fact(DisplayName = "BR-QD-001: a session the driver cannot count is kept as unmeasured rather than as clean")]
+    [Fact(DisplayName = "a session the driver cannot count is kept as unmeasured rather than as clean")]
     public async Task ASessionTheDriverCannotCountIsKeptAsUnmeasuredRatherThanAsClean()
     {
         HeldQualitySessionMeasurements measurements = new();
@@ -199,7 +199,7 @@ public sealed class SignalSampleRoundTests
         Assert.Null(held.MeasuredUpdatedAt);
     }
 
-    [Fact(DisplayName = "BR-QD-005: a later round moves the counts of the same session rather than adding a row")]
+    [Fact(DisplayName = "a later round moves the counts of the same session rather than adding a row")]
     public async Task ALaterRoundMovesTheCountsOfTheSameSessionRatherThanAddingARow()
     {
         HeldQualitySessionMeasurements measurements = new();
@@ -224,7 +224,7 @@ public sealed class SignalSampleRoundTests
         Assert.Equal(TenSecondsOn, held.MeasuredUpdatedAt);
     }
 
-    [Fact(DisplayName = "BR-QD-005: a session the driver has concluded is closed with the last counts it gave")]
+    [Fact(DisplayName = "a session the driver has concluded is closed with the last counts it gave")]
     public async Task ASessionTheDriverHasConcludedIsClosedWithTheLastCountsItGave()
     {
         HeldQualitySessionMeasurements measurements = new();
@@ -249,7 +249,7 @@ public sealed class SignalSampleRoundTests
         Assert.Equal(1, taking.Closed);
     }
 
-    [Fact(DisplayName = "BR-QD-005: a session the driver no longer lists is closed where it was found gone")]
+    [Fact(DisplayName = "a session the driver no longer lists is closed where it was found gone")]
     public async Task ASessionTheDriverNoLongerListsIsClosedWhereItWasFoundGone()
     {
         HeldQualitySessionMeasurements measurements = new();
@@ -278,7 +278,7 @@ public sealed class SignalSampleRoundTests
         Assert.Equal(1, taking.Closed);
     }
 
-    [Fact(DisplayName = "BR-QD-007: a session list that did not arrive closes nothing and leaves the signal to be sampled")]
+    [Fact(DisplayName = "a session list that did not arrive closes nothing and leaves the signal to be sampled")]
     public async Task ASessionListThatDidNotArriveClosesNothingAndLeavesTheSignalToBeSampled()
     {
         HeldQualitySignalSamples samples = new();

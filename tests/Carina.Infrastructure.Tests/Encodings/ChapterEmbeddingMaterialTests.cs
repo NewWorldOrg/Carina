@@ -36,7 +36,7 @@ public sealed class ChapterEmbeddingMaterialTests
 
     private static readonly TimeSpan PodCloses = TimeSpan.FromSeconds(25);
 
-    [Fact(DisplayName = "A-エンコード-057: an artefact carries its chapters where the ledger says they are on its own clock, and still carries its picture and its sound")]
+    [Fact(DisplayName = "an artefact carries its chapters where the ledger says they are on its own clock, and still carries its picture and its sound")]
     public async Task AnArtefactCarriesItsChaptersWhereTheLedgerSaysTheyAre()
     {
         using var harness = new EncodeHarness();
@@ -108,7 +108,7 @@ public sealed class ChapterEmbeddingMaterialTests
         Assert.False(File.Exists(harness.ChaptersPathOf(job)), "the chapters file is swept once the job has ended");
     }
 
-    [Fact(DisplayName = "A-エンコード-057: an artefact of a run that marked nothing carries no chapters at all, and the streams in it are the ones a run without chapters always made")]
+    [Fact(DisplayName = "an artefact of a run that marked nothing carries no chapters at all, and the streams in it are the ones a run without chapters always made")]
     public async Task AnArtefactOfARunThatMarkedNothingCarriesNoChapters()
     {
         using var harness = new EncodeHarness();

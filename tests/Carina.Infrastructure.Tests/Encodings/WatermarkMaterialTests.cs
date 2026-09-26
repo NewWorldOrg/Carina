@@ -38,7 +38,7 @@ public sealed class WatermarkMaterialTests : IDisposable
 
     public void Dispose() => tree.Dispose();
 
-    [Fact(DisplayName = "BR-ED2-007: a watermark learned from one recording takes away, in the next recording of the service, the pod it stayed on screen through, and leaves the pod it was taken off for")]
+    [Fact(DisplayName = "a watermark learned from one recording takes away, in the next recording of the service, the pod it stayed on screen through, and leaves the pod it was taken off for")]
     public async Task AWatermarkLearnedFromOneRecordingJudgesTheNext()
     {
         string taught = await WritingAsync("taught", new SyntheticBroadcast

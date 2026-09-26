@@ -27,7 +27,7 @@ public sealed class QualitySignalRollupPlanTests
         Assert.Equal(0.5, window.LockRate);
     }
 
-    [Fact(DisplayName = "BR-QD-001: a window counts what could not be taken apart from what was measured")]
+    [Fact(DisplayName = "a window counts what could not be taken apart from what was measured")]
     public void AWindowCountsWhatCouldNotBeTakenApartFromWhatWasMeasured()
     {
         IReadOnlyList<QualitySignalRollup> rolled = QualitySignalRollupPlan.Over(
@@ -75,7 +75,7 @@ public sealed class QualitySignalRollupPlanTests
         Assert.Equal(30500.0, window.CarrierToNoiseAverage);
     }
 
-    [Fact(DisplayName = "BR-QD-009: a window rolls each broadcast layer up on its own")]
+    [Fact(DisplayName = "a window rolls each broadcast layer up on its own")]
     public void AWindowRollsEachBroadcastLayerUpOnItsOwn()
     {
         IReadOnlyList<QualitySignalRollup> rolled = QualitySignalRollupPlan.Over(
@@ -96,7 +96,7 @@ public sealed class QualitySignalRollupPlanTests
         Assert.Equal(0.03, window.BitErrors[1].Average);
     }
 
-    [Fact(DisplayName = "BR-QD-005: a counter that rewound at a session boundary is never differenced across it")]
+    [Fact(DisplayName = "a counter that rewound at a session boundary is never differenced across it")]
     public void ACounterThatRewoundAtASessionBoundaryIsNeverDifferencedAcrossIt()
     {
         IReadOnlyList<QualitySignalRollup> rolled = QualitySignalRollupPlan.Over(
@@ -141,7 +141,7 @@ public sealed class QualitySignalRollupPlanTests
     public void ARunWithNoSamplesInItWritesNoWindows()
         => Assert.Empty(QualitySignalRollupPlan.Over([], QualityWindow.Hour));
 
-    [Fact(DisplayName = "BR-QS-003: the window a rollup resumes from is the one after the last it wrote")]
+    [Fact(DisplayName = "the window a rollup resumes from is the one after the last it wrote")]
     public void TheWindowARollupResumesFromIsTheOneAfterTheLastItWrote()
     {
         QualityRollupSpan span = Assert.IsType<QualityRollupSpan>(

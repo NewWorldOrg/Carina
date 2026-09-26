@@ -8,7 +8,7 @@ public sealed class EncodeCutRuleTests
         "Encodings",
         "FfmpegChapterInvocation.cs");
 
-    [Fact(DisplayName = "BR-ED2-007: nothing in the encode feature shortens what it writes — the one bound it asks for is the window the look decodes around a moment, which is read and thrown away rather than written, so a break that was marked leaves the artefact the length it would have been had nobody looked")]
+    [Fact(DisplayName = "nothing in the encode feature shortens what it writes — the one bound it asks for is the window the look decodes around a moment, which is read and thrown away rather than written, so a break that was marked leaves the artefact the length it would have been had nobody looked")]
     public void TheOnlyBoundTheEncodeFeatureAsksForIsTheWindowTheLookDecodes()
     {
         Assert.Equal(

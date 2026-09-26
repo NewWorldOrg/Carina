@@ -7,7 +7,7 @@ public sealed class EncodeScratchFilesTests
 {
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
-    [Fact(DisplayName = "BR-ED2-010: the ledger is written before a path to write to is handed out")]
+    [Fact(DisplayName = "the ledger is written before a path to write to is handed out")]
     public async Task TheLedgerIsWrittenBeforeAPathIsHandedOut()
     {
         using var harness = new EncodeHarness();

@@ -2,7 +2,7 @@ namespace Carina.Domain.Encodings;
 
 /// <summary>
 /// Which encoder a run asked for and which it ran on, kept with the job so that a run that was
-/// degraded says so in the ledger and not only in a log (BR-EV-004). A swerve is present exactly
+/// degraded says so in the ledger and not only in a log. A swerve is present exactly
 /// when the two differ.
 /// </summary>
 public sealed record EncodeRoute

@@ -11,7 +11,7 @@ public sealed class QualityTrendTests
     private static readonly QualityThresholdHistory AsShipped =
         QualityThresholdHistory.Of(QualityThresholdStanding.Over([], Now), []);
 
-    [Fact(DisplayName = "BR-QD-001: a period holding no recording gives every point as nothing measured, never as a clean share")]
+    [Fact(DisplayName = "a period holding no recording gives every point as nothing measured, never as a clean share")]
     public void APeriodHoldingNoRecordingGivesEveryPointAsNothingMeasured()
     {
         QualityTrendFrame frame = Days(7);
@@ -28,7 +28,7 @@ public sealed class QualityTrendTests
         });
     }
 
-    [Fact(DisplayName = "BR-QD-001: a day whose recordings were none of them measured says unmeasured, and how many")]
+    [Fact(DisplayName = "a day whose recordings were none of them measured says unmeasured, and how many")]
     public void ADayWhoseRecordingsWereNoneOfThemMeasuredSaysUnmeasuredAndHowMany()
     {
         QualityTrendFrame frame = Days(3);
@@ -53,7 +53,7 @@ public sealed class QualityTrendTests
         Assert.Equal(QualityState.NothingToMeasure, series.Points[0].State);
     }
 
-    [Fact(DisplayName = "BR-QD-003: the first day past the warning level is where the trend turns")]
+    [Fact(DisplayName = "the first day past the warning level is where the trend turns")]
     public void TheFirstDayPastTheWarningLevelIsWhereTheTrendTurns()
     {
         QualityTrendFrame frame = Days(5);
@@ -86,7 +86,7 @@ public sealed class QualityTrendTests
         Assert.All(series.Points, point => Assert.Equal(0.0002, point.Level));
     }
 
-    [Fact(DisplayName = "BR-QD-001: an hour nobody tuned the multiplex is nothing measured, between hours that were")]
+    [Fact(DisplayName = "an hour nobody tuned the multiplex is nothing measured, between hours that were")]
     public void AnHourNobodyTunedTheMultiplexIsNothingMeasuredBetweenHoursThatWere()
     {
         QualityTrendFrame frame = Hours();
@@ -108,7 +108,7 @@ public sealed class QualityTrendTests
         Assert.Equal(QualityState.Good, whole.Points[5].State);
     }
 
-    [Fact(DisplayName = "BR-QD-003: an hour whose carrier to noise fell under the floor is past the level")]
+    [Fact(DisplayName = "an hour whose carrier to noise fell under the floor is past the level")]
     public void AnHourWhoseCarrierToNoiseFellUnderTheFloorIsPastTheLevel()
     {
         QualityTrendFrame frame = Hours();
@@ -131,7 +131,7 @@ public sealed class QualityTrendTests
         Assert.Equal(1, whole.Points[1].Reading.BeyondThreshold);
     }
 
-    [Fact(DisplayName = "BR-QD-009: bit errors stay apart by layer in every point")]
+    [Fact(DisplayName = "bit errors stay apart by layer in every point")]
     public void BitErrorsStayApartByLayerInEveryPoint()
     {
         QualityTrendFrame frame = Hours();
@@ -171,7 +171,7 @@ public sealed class QualityTrendTests
         Assert.Equal(2, series[2].Points[0].Reading.Subjects);
     }
 
-    [Fact(DisplayName = "BR-QD-014: a tuner that took nothing makes the hour unreachable, and the one that measured is still counted")]
+    [Fact(DisplayName = "a tuner that took nothing makes the hour unreachable, and the one that measured is still counted")]
     public void ATunerThatTookNothingMakesTheHourUnreachableAndTheOneThatMeasuredIsStillCounted()
     {
         QualityTrendFrame frame = Hours();
@@ -190,7 +190,7 @@ public sealed class QualityTrendTests
         Assert.Equal(1, point.Reading.Measured);
     }
 
-    [Fact(DisplayName = "BR-QV-002: each day is judged against the level that stood when it closed")]
+    [Fact(DisplayName = "each day is judged against the level that stood when it closed")]
     public void EachDayIsJudgedAgainstTheLevelThatStoodWhenItClosed()
     {
         QualityTrendFrame frame = Days(5);

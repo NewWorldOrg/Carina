@@ -7,7 +7,7 @@ namespace Carina.Domain.Encodings;
 /// <summary>
 /// A station's watermark as it was learned from one recording of one service, kept so that the
 /// recordings of that service which are read after it are judged by a mark learned ahead of them
-/// (BR-ED2-007). It names the recording it was learned from, and it never judges that recording:
+///. It names the recording it was learned from, and it never judges that recording:
 /// the first recording of a service is judged with no watermark at all rather than with the one
 /// learned from itself.
 /// </summary>

@@ -14,7 +14,7 @@ public sealed class QualityThresholdHistoryTests
         Assert.Equal(0.0004, Level(history.At(Noon.AddDays(-30))));
     }
 
-    [Fact(DisplayName = "BR-QV-002: a moment before a change is judged against the level the change replaced")]
+    [Fact(DisplayName = "a moment before a change is judged against the level the change replaced")]
     public void AMomentBeforeAChangeIsJudgedAgainstTheLevelTheChangeReplaced()
     {
         QualityThresholdHistory history = QualityThresholdHistory.Of(

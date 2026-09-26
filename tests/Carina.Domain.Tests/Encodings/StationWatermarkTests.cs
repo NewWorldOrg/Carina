@@ -12,7 +12,7 @@ public sealed class StationWatermarkTests
 
     private static readonly DateTime LearnedAt = new(2026, 9, 5, 4, 0, 0, DateTimeKind.Utc);
 
-    [Fact(DisplayName = "BR-ED2-007: a watermark is kept against the service and the recording it was learned from")]
+    [Fact(DisplayName = "a watermark is kept against the service and the recording it was learned from")]
     public void AWatermarkIsKeptAgainstTheServiceAndTheRecordingItWasLearnedFrom()
     {
         RecordingId from = RecordingId.New();
@@ -27,7 +27,7 @@ public sealed class StationWatermarkTests
         Assert.Equal(mask.Packed(), kept.Mask.Packed());
     }
 
-    [Fact(DisplayName = "BR-ED2-007: a watermark never judges the recording it was learned from, nor a recording of another service")]
+    [Fact(DisplayName = "a watermark never judges the recording it was learned from, nor a recording of another service")]
     public void AWatermarkNeverJudgesItsOwnRecordingNorAnotherService()
     {
         RecordingId from = RecordingId.New();
@@ -39,7 +39,7 @@ public sealed class StationWatermarkTests
         Assert.True(kept.MayJudge(Network, Service, RecordingId.New()));
     }
 
-    [Fact(DisplayName = "BR-ED2-007: a pattern read back that is no watermark is refused rather than believed")]
+    [Fact(DisplayName = "a pattern read back that is no watermark is refused rather than believed")]
     public void APatternThatIsNoWatermarkIsRefused()
     {
         Assert.Throws<ArgumentException>(() => StationWatermark.Rehydrate(
@@ -50,7 +50,7 @@ public sealed class StationWatermarkTests
             new byte[WatermarkMask.PackedBytes]));
     }
 
-    [Fact(DisplayName = "BR-ED2-007: the pattern handed in is copied, so changing it afterwards changes nothing kept")]
+    [Fact(DisplayName = "the pattern handed in is copied, so changing it afterwards changes nothing kept")]
     public void ThePatternHandedInIsCopied()
     {
         byte[] pattern = WatermarkPictures.Learned().Packed();

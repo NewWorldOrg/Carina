@@ -12,7 +12,7 @@ public sealed class EncodeWatermarkSchemaTests(MigratedScratchDatabase database)
 {
     private static readonly byte[] APattern = WatermarkMask.Covering([0, 1, 2]).Packed();
 
-    [Fact(DisplayName = "BR-ED2-007: a watermark names the recording it was learned from by value, so throwing the recording away never has to wait on it")]
+    [Fact(DisplayName = "a watermark names the recording it was learned from by value, so throwing the recording away never has to wait on it")]
     public async Task AWatermarkNamesItsRecordingByValue()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -20,7 +20,7 @@ public sealed class EncodeWatermarkSchemaTests(MigratedScratchDatabase database)
         await KeepAsync(connection, 1040, Guid.NewGuid(), APattern);
     }
 
-    [Fact(DisplayName = "BR-ED2-007: one recording teaches a service one watermark")]
+    [Fact(DisplayName = "one recording teaches a service one watermark")]
     public async Task OneRecordingTeachesAServiceOneWatermark()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -32,7 +32,7 @@ public sealed class EncodeWatermarkSchemaTests(MigratedScratchDatabase database)
         Assert.Equal("pk_encode_watermark", refusal.ConstraintName);
     }
 
-    [Fact(DisplayName = "BR-ED2-007: a pattern of any other length than a watermark takes is refused")]
+    [Fact(DisplayName = "a pattern of any other length than a watermark takes is refused")]
     public async Task APatternOfAnyOtherLengthIsRefused()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -43,7 +43,7 @@ public sealed class EncodeWatermarkSchemaTests(MigratedScratchDatabase database)
         Assert.Equal("ck_encode_watermark_pattern", refusal.ConstraintName);
     }
 
-    [Fact(DisplayName = "BR-ED2-007: a service no broadcast can carry is refused")]
+    [Fact(DisplayName = "a service no broadcast can carry is refused")]
     public async Task AServiceNoBroadcastCanCarryIsRefused()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();

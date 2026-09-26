@@ -15,7 +15,7 @@ public sealed record EncodeLook(EncodeClaimStanding Standing, EncodeJobId? Job, 
 /// stopped, then looks at the queue: a claim is a conditional update in the ledger, one job is run
 /// to its end, and the queue is looked at again at once, or after a pause when nothing was waiting.
 /// Two of these looking at the same ledger cannot both start a job, because the ledger holds one
-/// running job and refuses the second claim (BR-ED2-005).
+/// running job and refuses the second claim.
 /// <para>
 /// Before it asks the ledger for anything, a look gives way to someone watching: while the card is
 /// making a picture for a viewer, a job bound for the card is left where it is and the next look

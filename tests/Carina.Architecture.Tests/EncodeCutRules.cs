@@ -3,9 +3,9 @@ using System.Text.RegularExpressions;
 namespace Carina.Architecture.Tests;
 
 /// <summary>
-/// Reads the encode feature for the thing BR-ED2-007 forbids it outright: shortening what it
-/// writes. A chapter is a label and nothing more, so a break found in a recording has to leave the
-/// artefact the length it would have been had nobody looked — a mark that is wrong costs a viewer
+/// Reads the encode feature for the one thing it is forbidden from doing outright: shortening what
+/// it writes. A chapter is a label and nothing more, so a break found in a recording has to leave
+/// the artefact the length it would have been had nobody looked — a mark that is wrong costs a viewer
 /// one mark to ignore, where a cut that is wrong costs them the programme, and there is no setting
 /// for cutting and no path that could. What that takes is the absence of the options and filters an
 /// output is shortened with, which is what this reports: the durations and frame counts that stop a

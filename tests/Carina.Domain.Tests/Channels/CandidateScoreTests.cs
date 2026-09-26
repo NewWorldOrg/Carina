@@ -22,7 +22,7 @@ public sealed class CandidateScoreTests
         Assert.Equal(Until, score.EvaluatedAt);
     }
 
-    [Fact(DisplayName = "BR-QD-001: a score rests on at least one sample, because nothing read is not a clean reading")]
+    [Fact(DisplayName = "a score rests on at least one sample, because nothing read is not a clean reading")]
     public void AScoreRestsOnAtLeastOneSample()
         => Assert.Throws<ArgumentOutOfRangeException>(() => CandidateScore.Of(0, 0, null, null, From, Until, Until));
 

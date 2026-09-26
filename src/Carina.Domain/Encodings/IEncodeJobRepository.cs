@@ -93,7 +93,7 @@ public interface IEncodeJobRepository
     /// <summary>
     /// Moves the oldest waiting job to running by a conditional update, and hands it back only when
     /// that update changed one row. One running job is all the ledger holds, so a second claim while
-    /// one runs is refused by the ledger itself, never by anything this process remembers (BR-ED2-005).
+    /// one runs is refused by the ledger itself, never by anything this process remembers.
     /// </summary>
     Task<EncodeClaim> ClaimNextAsync(DateTime at, CancellationToken cancellationToken);
 
@@ -102,7 +102,7 @@ public interface IEncodeJobRepository
     /// <summary>
     /// Writes the job's artefact name into the ledger before anything is renamed. The ledger holds
     /// one owner per name under a root, so the answer is the claim or the news that another job
-    /// already holds that name; the job itself is saved as it stands either way (BR-ED2-009).
+    /// already holds that name; the job itself is saved as it stands either way.
     /// </summary>
     Task<ArtefactClaim> ClaimArtefactAsync(EncodeJob job, EncodeFileName name, CancellationToken cancellationToken);
 

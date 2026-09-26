@@ -10,7 +10,7 @@ public sealed class QualityIncidentEndpointTests
 {
     private static readonly DateTime Noon = QualityFeature.Noon;
 
-    [Fact(DisplayName = "BR-QD-008: an anomaly is listed with the classification it was kept under")]
+    [Fact(DisplayName = "an anomaly is listed with the classification it was kept under")]
     public async Task AnAnomalyIsListedWithTheClassificationItWasKeptUnder()
     {
         await using var feature = new QualityFeature();
@@ -28,7 +28,7 @@ public sealed class QualityIncidentEndpointTests
         Assert.False(incident.GetProperty("restated").GetBoolean());
     }
 
-    [Fact(DisplayName = "BR-QD-002: an anomaly another domain owns is listed as a restatement and counted apart")]
+    [Fact(DisplayName = "an anomaly another domain owns is listed as a restatement and counted apart")]
     public async Task AnAnomalyAnotherDomainOwnsIsListedAsARestatementAndCountedApart()
     {
         await using var feature = new QualityFeature();
@@ -45,7 +45,7 @@ public sealed class QualityIncidentEndpointTests
                     && item.GetProperty("classification").GetString() == "NoLock");
     }
 
-    [Fact(DisplayName = "BR-QS-002: an anomaly that has been told about stays on the list for as long as it stands")]
+    [Fact(DisplayName = "an anomaly that has been told about stays on the list for as long as it stands")]
     public async Task AnAnomalyThatHasBeenToldAboutStaysOnTheListForAsLongAsItStands()
     {
         await using var feature = new QualityFeature();
@@ -60,7 +60,7 @@ public sealed class QualityIncidentEndpointTests
         Assert.False(listed.TryGetProperty("acknowledgedBy", out _));
     }
 
-    [Fact(DisplayName = "BR-QS-002: an anomaly whose condition has cleared leaves the list and is not deleted")]
+    [Fact(DisplayName = "an anomaly whose condition has cleared leaves the list and is not deleted")]
     public async Task AnAnomalyWhoseConditionHasClearedLeavesTheListAndIsNotDeleted()
     {
         await using var feature = new QualityFeature();
@@ -74,7 +74,7 @@ public sealed class QualityIncidentEndpointTests
         Assert.Single(feature.Incidents.Incidents);
     }
 
-    [Fact(DisplayName = "BR-QS-002: an anomaly has nothing left to acknowledge it by")]
+    [Fact(DisplayName = "an anomaly has nothing left to acknowledge it by")]
     public async Task AnAnomalyHasNothingLeftToAcknowledgeItBy()
     {
         await using var feature = new QualityFeature();
@@ -87,7 +87,7 @@ public sealed class QualityIncidentEndpointTests
         Assert.Empty(feature.Events.Signalled);
     }
 
-    [Fact(DisplayName = "BR-QD-007: the supply health says what each of the four supplies stands at")]
+    [Fact(DisplayName = "the supply health says what each of the four supplies stands at")]
     public async Task TheSupplyHealthSaysWhatEachOfTheFourSuppliesStandsAt()
     {
         await using var feature = new QualityFeature();
@@ -112,7 +112,7 @@ public sealed class QualityIncidentEndpointTests
             data.GetProperty("supplies").EnumerateArray().Select(supply => supply.GetProperty("state").GetString()));
     }
 
-    [Fact(DisplayName = "BR-QD-007: a driver that could not be asked leaves the samples as could-not-be-read")]
+    [Fact(DisplayName = "a driver that could not be asked leaves the samples as could-not-be-read")]
     public async Task ADriverThatCouldNotBeAskedLeavesTheSamplesAsCouldNotBeRead()
     {
         await using var feature = new QualityFeature();
@@ -130,7 +130,7 @@ public sealed class QualityIncidentEndpointTests
             data.GetProperty("supplies")[0].GetProperty("state").GetString());
     }
 
-    [Fact(DisplayName = "BR-QD-007: a watch that has not read anything yet says so rather than saying all is well")]
+    [Fact(DisplayName = "a watch that has not read anything yet says so rather than saying all is well")]
     public async Task AWatchThatHasNotReadAnythingYetSaysSoRatherThanSayingAllIsWell()
     {
         await using var feature = new QualityFeature();

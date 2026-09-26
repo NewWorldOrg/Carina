@@ -39,7 +39,7 @@ public sealed class EncodeDispatchRuleTests
         "Encodings",
         "FfmpegChapterRun.cs");
 
-    [Fact(DisplayName = "BR-ED2-005: the two places a job is moved to running are the entity's own move and the ledger's conditional update, and nothing beside them")]
+    [Fact(DisplayName = "the two places a job is moved to running are the entity's own move and the ledger's conditional update, and nothing beside them")]
     public void TheTwoPlacesAJobIsMovedToRunningAreTheEntityAndTheLedgersConditionalUpdate()
     {
         Assert.Equal(
@@ -50,7 +50,7 @@ public sealed class EncodeDispatchRuleTests
             EncodeDispatchRules.WhatMovesAJobToRunning(RepositoryLayout.SourceDirectory));
     }
 
-    [Fact(DisplayName = "BR-ED2-005: the ledger's move to running changes a row only while it is still queued, and a second running row is read off the unique index")]
+    [Fact(DisplayName = "the ledger's move to running changes a row only while it is still queued, and a second running row is read off the unique index")]
     public void TheLedgersMoveToRunningIsConditionalAndReadsTheIndex()
     {
         string source = File.ReadAllText(Repository);
@@ -65,7 +65,7 @@ public sealed class EncodeDispatchRuleTests
         Assert.DoesNotContain(".Start(", source, StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "BR-ED2-005: the word the database knows a running job by is spelt in the table's configuration and nowhere else in the feature")]
+    [Fact(DisplayName = "the word the database knows a running job by is spelt in the table's configuration and nowhere else in the feature")]
     public void TheWordTheDatabaseKnowsARunningJobByIsSpeltInTheConfigurationAlone()
     {
         Assert.Equal(
@@ -73,7 +73,7 @@ public sealed class EncodeDispatchRuleTests
             EncodeDispatchRules.WhatSpellsRunningForTheDatabase(RepositoryLayout.SourceDirectory));
     }
 
-    [Fact(DisplayName = "BR-ED2-009: the one place the encode feature puts a file somewhere is the placer, and it writes the ledger before it moves anything")]
+    [Fact(DisplayName = "the one place the encode feature puts a file somewhere is the placer, and it writes the ledger before it moves anything")]
     public void TheOnePlaceTheEncodeFeaturePutsAFileSomewhereIsThePlacer()
     {
         Assert.Equal(
@@ -89,7 +89,7 @@ public sealed class EncodeDispatchRuleTests
         Assert.Equal(1, source.Split("File.Move(").Length - 1);
     }
 
-    [Fact(DisplayName = "A-エンコード-069: the one thing that lets a move write over an artefact is the job itself saying a person asked for it to be made again, and the earlier holder gives the name up before the claim")]
+    [Fact(DisplayName = "the one thing that lets a move write over an artefact is the job itself saying a person asked for it to be made again, and the earlier holder gives the name up before the claim")]
     public void TheOneThingThatLetsAMoveWriteOverAnArtefactIsThePersonsAsking()
     {
         string placer = File.ReadAllText(Placer);
@@ -115,7 +115,7 @@ public sealed class EncodeDispatchRuleTests
         Assert.True(claimed > gaveUp, "the claim comes after the earlier holder has given the name up");
     }
 
-    [Fact(DisplayName = "BR-ED2-009: the artefact's name is worked out in the placer and checked by the job, and nothing else in the feature can spell it")]
+    [Fact(DisplayName = "the artefact's name is worked out in the placer and checked by the job, and nothing else in the feature can spell it")]
     public void TheArtefactsNameIsWorkedOutInThePlacerAndCheckedByTheJob()
     {
         Assert.Equal(
@@ -126,7 +126,7 @@ public sealed class EncodeDispatchRuleTests
             EncodeDispatchRules.WhatNamesTheArtefact(RepositoryLayout.SourceDirectory));
     }
 
-    [Fact(DisplayName = "BR-ED2-011: the encode feature starts a programme in four places — the run, which hands the ledger the programme's identity, the look for the breaks, and the two probes of the source's head and length, each bounded by a deadline and unable to outlive the process by more than that — and nowhere else")]
+    [Fact(DisplayName = "the encode feature starts a programme in four places — the run, which hands the ledger the programme's identity, the look for the breaks, and the two probes of the source's head and length, each bounded by a deadline and unable to outlive the process by more than that — and nowhere else")]
     public void TheEncodeFeatureStartsAProgrammeInFourPlacesAndNowhereElse()
     {
         Assert.Equal(
@@ -139,7 +139,7 @@ public sealed class EncodeDispatchRuleTests
             EncodeDispatchRules.WhatStartsAProgramme(RepositoryLayout.SourceDirectory));
     }
 
-    [Fact(DisplayName = "BR-ED2-006: the encode moves the clock in one place only, the -ss its invocation writes after the input; the look for the breaks seeks before its input and keeps the source's own clock, and nothing in the feature spells -output_ts_offset, -start_at_zero, -avoid_negative_ts or -itsoffset")]
+    [Fact(DisplayName = "the encode moves the clock in one place only, the -ss its invocation writes after the input; the look for the breaks seeks before its input and keeps the source's own clock, and nothing in the feature spells -output_ts_offset, -start_at_zero, -avoid_negative_ts or -itsoffset")]
     public void TheOnlyPlacesTheEncodeFeatureMovesTheClockAreTheTwoItBuildsCommandsIn()
     {
         Assert.Equal(
@@ -167,7 +167,7 @@ public sealed class EncodeDispatchRuleTests
         Assert.Equal(1, peeking.Split("\"-copyts\"").Length - 1);
     }
 
-    [Fact(DisplayName = "BR-ED2-011: the look hands over who its programme is before it reads a line of either stream, and stops the programme when that cannot be written down")]
+    [Fact(DisplayName = "the look hands over who its programme is before it reads a line of either stream, and stops the programme when that cannot be written down")]
     public void TheLookHandsOverWhoItsProgrammeIsBeforeItReadsALine()
     {
         string source = File.ReadAllText(Look);
@@ -182,7 +182,7 @@ public sealed class EncodeDispatchRuleTests
         Assert.True(read > handedOver, "neither stream is read until the identity is handed over");
     }
 
-    [Fact(DisplayName = "BR-ED2-005: the look for the breaks starts its programme yielding, reads both of its streams as they come, and starts nothing else")]
+    [Fact(DisplayName = "the look for the breaks starts its programme yielding, reads both of its streams as they come, and starts nothing else")]
     public void TheLookForTheBreaksStartsItsProgrammeYielding()
     {
         string source = File.ReadAllText(Look);
@@ -198,7 +198,7 @@ public sealed class EncodeDispatchRuleTests
         Assert.Equal(1, source.Split("AnotherProgramme.Start(").Length - 1);
     }
 
-    [Fact(DisplayName = "BR-ED2-011: the run hands over who the programme is before it reads a line of progress, stops the programme when that cannot be written down, and starts it yielding")]
+    [Fact(DisplayName = "the run hands over who the programme is before it reads a line of progress, stops the programme when that cannot be written down, and starts it yielding")]
     public void TheRunHandsOverWhoTheProgrammeIsBeforeItReadsALineOfProgress()
     {
         string source = File.ReadAllText(Run);

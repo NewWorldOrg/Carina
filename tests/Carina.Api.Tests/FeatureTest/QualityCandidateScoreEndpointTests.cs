@@ -37,7 +37,7 @@ public sealed class QualityCandidateScoreEndpointTests
         Assert.Equal(Noon, item.GetProperty("evaluatedAt").GetDateTimeOffset().UtcDateTime);
     }
 
-    [Fact(DisplayName = "BR-QD-001: a candidate never scored is listed with no score rather than a score of nothing")]
+    [Fact(DisplayName = "a candidate never scored is listed with no score rather than a score of nothing")]
     public async Task ACandidateNeverScoredIsListedWithNoScoreRatherThanAScoreOfNothing()
     {
         await using var feature = new QualityFeature();

@@ -16,7 +16,7 @@ public enum EncodeUnaskedStanding
 /// still offered has no choice to make, and that destination already names the profile it encodes
 /// with unless another is asked for; a machine with several has a choice nothing here is entitled
 /// to make for a person, so it makes none and says why. The standing is what a caller shows or
-/// logs, so a run that queues nothing is never silent about what is missing (BR-ED2-004).
+/// logs, so a run that queues nothing is never silent about what is missing.
 /// </summary>
 public sealed record EncodeUnasked
 {

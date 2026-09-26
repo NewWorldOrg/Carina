@@ -6,7 +6,7 @@ namespace Carina.Api.Tests.FeatureTest;
 public sealed class SignalStrengthIsNowhereOnThePublicSurfaceTests(TestingWebApplicationFactory factory)
     : IClassFixture<TestingWebApplicationFactory>
 {
-    [Fact(DisplayName = "BR-QD-009: nothing the application describes names a signal strength")]
+    [Fact(DisplayName = "nothing the application describes names a signal strength")]
     public async Task NothingTheApplicationDescribesNamesASignalStrength()
     {
         JsonNode document = await ServedOpenApi.FetchAsync(factory);
@@ -17,7 +17,7 @@ public sealed class SignalStrengthIsNowhereOnThePublicSurfaceTests(TestingWebApp
         Assert.DoesNotContain("signal_strength", served, StringComparison.OrdinalIgnoreCase);
     }
 
-    [Fact(DisplayName = "BR-QD-009: the statistics this system does take are named in the same document")]
+    [Fact(DisplayName = "the statistics this system does take are named in the same document")]
     public async Task TheStatisticsThisSystemDoesTakeAreNamedInTheSameDocument()
     {
         JsonNode document = await ServedOpenApi.FetchAsync(factory);

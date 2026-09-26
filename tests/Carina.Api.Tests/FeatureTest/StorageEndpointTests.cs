@@ -30,7 +30,7 @@ public sealed class StorageEndpointTests
         Assert.Equal(JsonValueKind.Null, root.GetProperty("shortfall").ValueKind);
     }
 
-    [Fact(DisplayName = "BR-EV-001: a root this process holds for encoding is answered after the driver's, measured here")]
+    [Fact(DisplayName = "a root this process holds for encoding is answered after the driver's, measured here")]
     public async Task ARootThisProcessHoldsForEncodingIsAnsweredAfterTheDrivers()
     {
         using var shelf = new RecordingStore();
@@ -53,7 +53,7 @@ public sealed class StorageEndpointTests
         Assert.Empty(shelf.Fingerprint());
     }
 
-    [Fact(DisplayName = "BR-EV-001: a held root named like one the driver declares is the driver's in the answer")]
+    [Fact(DisplayName = "a held root named like one the driver declares is the driver's in the answer")]
     public async Task AHeldRootNamedLikeOneTheDriverDeclaresIsTheDriversInTheAnswer()
     {
         using var shelf = new RecordingStore();

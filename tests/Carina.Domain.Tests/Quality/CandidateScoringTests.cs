@@ -12,7 +12,7 @@ public sealed class CandidateScoringTests
 
     private static readonly NetworkId Network = new(4);
 
-    [Fact(DisplayName = "FL-07-05: a selected candidate is scored from the windows filed under its stream")]
+    [Fact(DisplayName = "a selected candidate is scored from the windows filed under its stream")]
     public void ASelectedCandidateIsScoredFromTheWindowsFiledUnderItsStream()
     {
         CandidateChannel candidate = Selected(101, 27, At.AddDays(-30));
@@ -37,7 +37,7 @@ public sealed class CandidateScoringTests
         Assert.Equal(At, scored.Score.EvaluatedAt);
     }
 
-    [Fact(DisplayName = "BR-QD-001: a candidate nothing was sampled on in the period is given no score")]
+    [Fact(DisplayName = "a candidate nothing was sampled on in the period is given no score")]
     public void ACandidateNothingWasSampledOnIsGivenNoScore()
         => Assert.Empty(CandidateScoring.Over(
             [Selected(101, 27, At.AddDays(-30))],
@@ -46,7 +46,7 @@ public sealed class CandidateScoringTests
             Week,
             At));
 
-    [Fact(DisplayName = "BR-QD-001: samples that could not be read are not a score of nothing locked")]
+    [Fact(DisplayName = "samples that could not be read are not a score of nothing locked")]
     public void SamplesThatCouldNotBeReadAreNotAScoreOfNothingLocked()
         => Assert.Empty(CandidateScoring.Over(
             [Selected(101, 27, At.AddDays(-30))],
@@ -188,7 +188,7 @@ public sealed class CandidateScoringTests
             Week,
             At));
 
-    [Fact(DisplayName = "BR-QD-012: scoring selects nothing and deselects nothing")]
+    [Fact(DisplayName = "scoring selects nothing and deselects nothing")]
     public void ScoringSelectsNothingAndDeselectsNothing()
     {
         CandidateChannel selected = Selected(101, 27, At.AddDays(-30));

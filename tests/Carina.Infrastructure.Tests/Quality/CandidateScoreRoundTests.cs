@@ -15,7 +15,7 @@ public sealed class CandidateScoreRoundTests
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
-    [Fact(DisplayName = "FL-07-05: what was measured on a candidate's channel is written back to the candidate")]
+    [Fact(DisplayName = "what was measured on a candidate's channel is written back to the candidate")]
     public async Task WhatWasMeasuredOnACandidatesChannelIsWrittenBackToTheCandidate()
     {
         HeldCandidates candidates = new();
@@ -32,7 +32,7 @@ public sealed class CandidateScoreRoundTests
         Assert.Equal(At, candidate.Score?.EvaluatedAt);
     }
 
-    [Fact(DisplayName = "BR-QD-012: writing scores back leaves every selection as it was")]
+    [Fact(DisplayName = "writing scores back leaves every selection as it was")]
     public async Task WritingScoresBackLeavesEverySelectionAsItWas()
     {
         HeldCandidates candidates = new();
@@ -52,7 +52,7 @@ public sealed class CandidateScoreRoundTests
         Assert.Equal(At.AddDays(-20), selectedElsewhere.SelectedAt);
     }
 
-    [Fact(DisplayName = "BR-QD-001: a candidate nothing was sampled on keeps the score it had")]
+    [Fact(DisplayName = "a candidate nothing was sampled on keeps the score it had")]
     public async Task ACandidateNothingWasSampledOnKeepsTheScoreItHad()
     {
         HeldCandidates candidates = new();

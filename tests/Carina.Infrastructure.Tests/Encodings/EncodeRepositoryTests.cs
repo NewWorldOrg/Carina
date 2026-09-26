@@ -51,7 +51,7 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         Assert.Contains(await new EncodeDestinationRepository(reading).ListAsync(Cancel), listed => listed.Id.Equals(destination.Id));
     }
 
-    [Fact(DisplayName = "BR-ED2-012: a job that failed comes back with its classification, its note and the time, and one that did not with none of them")]
+    [Fact(DisplayName = "a job that failed comes back with its classification, its note and the time, and one that did not with none of them")]
     public async Task AJobComesBackAsItWasWrittenFailureAndAll()
     {
         await ClearAsync();
@@ -87,7 +87,7 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         Assert.Null(readWaiting.StartedAt);
     }
 
-    [Fact(DisplayName = "BR-ED2-011: where a job ran, the programme it started and how far it got go into the ledger and come back with the job, and go when the job's moves let them go")]
+    [Fact(DisplayName = "where a job ran, the programme it started and how far it got go into the ledger and come back with the job, and go when the job's moves let them go")]
     public async Task WhereAJobRanItsProgrammeAndItsHeadwayComeBackWithTheJob()
     {
         await ClearAsync();
@@ -133,7 +133,7 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         Assert.True(ended.Timeline.LengthsAgree);
     }
 
-    [Fact(DisplayName = "BR-ED2-009: the name goes into the ledger and is read back with the job")]
+    [Fact(DisplayName = "the name goes into the ledger and is read back with the job")]
     public async Task TheNameGoesIntoTheLedgerAndIsReadBackWithTheJob()
     {
         await ClearAsync();
@@ -159,7 +159,7 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         Assert.Equal(EncodeJobStatus.Running, read.Status);
     }
 
-    [Fact(DisplayName = "BR-ED2-009: two jobs on one recording with one profile — the second to claim the name is refused, and left as it was")]
+    [Fact(DisplayName = "two jobs on one recording with one profile — the second to claim the name is refused, and left as it was")]
     public async Task TheSecondJobToClaimTheSameNameIsRefusedAndLeftAsItWas()
     {
         await ClearAsync();
@@ -198,7 +198,7 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         Assert.Null(read.ArtefactName);
     }
 
-    [Fact(DisplayName = "BR-ED2-009: a job claiming the name it already holds is not refused, which is what lets a later attempt recognise its own success")]
+    [Fact(DisplayName = "a job claiming the name it already holds is not refused, which is what lets a later attempt recognise its own success")]
     public async Task AJobClaimingTheNameItAlreadyHoldsIsNotRefused()
     {
         await ClearAsync();
@@ -222,7 +222,7 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         Assert.Equal(2, job.Attempt);
     }
 
-    [Fact(DisplayName = "BR-ED2-009: a job the ledger does not hold as running cannot name an artefact")]
+    [Fact(DisplayName = "a job the ledger does not hold as running cannot name an artefact")]
     public async Task AJobTheLedgerDoesNotHoldAsRunningCannotNameAnArtefact()
     {
         await ClearAsync();
@@ -238,7 +238,7 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         Assert.Null(job.ArtefactName);
     }
 
-    [Fact(DisplayName = "BR-ES-001: the oldest waiting job is claimed by a conditional update, and comes back running with the time it started")]
+    [Fact(DisplayName = "the oldest waiting job is claimed by a conditional update, and comes back running with the time it started")]
     public async Task TheOldestWaitingJobIsClaimedAndComesBackRunning()
     {
         await ClearAsync();
@@ -269,7 +269,7 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         Assert.Equal([earlier.Id], (await new EncodeJobRepository(reading).ListRunningAsync(Cancel)).Select(job => job.Id));
     }
 
-    [Fact(DisplayName = "BR-ED2-005: while the ledger holds a running job, a claim is refused by the index and answers that another is running")]
+    [Fact(DisplayName = "while the ledger holds a running job, a claim is refused by the index and answers that another is running")]
     public async Task WhileTheLedgerHoldsARunningJobAClaimIsRefusedByTheIndex()
     {
         await ClearAsync();
@@ -295,7 +295,7 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         Assert.Equal(EncodeJobStatus.Queued, (await new EncodeJobRepository(reading).FindAsync(waiting.Id, Cancel))!.Status);
     }
 
-    [Fact(DisplayName = "BR-ED2-005: twenty claims at once start exactly one job; the rest are refused by the ledger, not by anything in memory")]
+    [Fact(DisplayName = "twenty claims at once start exactly one job; the rest are refused by the ledger, not by anything in memory")]
     public async Task TwentyClaimsAtOnceStartExactlyOneJob()
     {
         await ClearAsync();
@@ -327,7 +327,7 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         Assert.Single(await new EncodeJobRepository(reading).ListRunningAsync(Cancel));
     }
 
-    [Fact(DisplayName = "BR-ED2-005: an empty queue answers that nothing is waiting")]
+    [Fact(DisplayName = "an empty queue answers that nothing is waiting")]
     public async Task AnEmptyQueueAnswersThatNothingIsWaiting()
     {
         await ClearAsync();
@@ -339,7 +339,7 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         Assert.Empty(await new EncodeJobRepository(claiming).ListRunningAsync(Cancel));
     }
 
-    [Fact(DisplayName = "BR-ED2-011: a running job put back by a restart is claimed again on its next attempt")]
+    [Fact(DisplayName = "a running job put back by a restart is claimed again on its next attempt")]
     public async Task ARunningJobPutBackByARestartIsClaimedAgain()
     {
         await ClearAsync();
@@ -364,7 +364,7 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         Assert.Equal(Ended.AddMinutes(1), again.Job.StartedAt);
     }
 
-    [Fact(DisplayName = "BR-ED2-010: what a job still owes a removal for is exactly what the ledger holds unsettled for that job")]
+    [Fact(DisplayName = "what a job still owes a removal for is exactly what the ledger holds unsettled for that job")]
     public async Task WhatAJobStillOwesARemovalForIsWhatTheLedgerHoldsUnsettledForIt()
     {
         await ClearAsync();
@@ -430,7 +430,7 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         Assert.Equal(EncodeScratchFate.CouldNotBeRemoved, listed.Fate);
     }
 
-    [Fact(DisplayName = "BR-ES-002: a page of the ledger comes newest first, narrowed to the standings asked for, and says how many there are")]
+    [Fact(DisplayName = "a page of the ledger comes newest first, narrowed to the standings asked for, and says how many there are")]
     public async Task APageOfTheLedgerComesNewestFirstNarrowedToTheStandingsAskedFor()
     {
         await ClearAsync();
@@ -484,7 +484,7 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         Assert.Equal([first.Id, second.Id], listed.Select(job => job.Id));
     }
 
-    [Fact(DisplayName = "BR-ED2-012: a job called off under the hand that runs it is not written over by that hand; the save says the row moved")]
+    [Fact(DisplayName = "a job called off under the hand that runs it is not written over by that hand; the save says the row moved")]
     public async Task AJobCalledOffUnderTheHandThatRunsItIsNotWrittenOver()
     {
         await ClearAsync();
@@ -639,7 +639,7 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         Assert.Equal(TimeSpan.FromMinutes(7), spells[1].Took);
     }
 
-    [Fact(DisplayName = "A-エンコード-057: the chapters a run marked come back in the order they were marked, on the artefact's clock, and only the ones belonging to the job asked for")]
+    [Fact(DisplayName = "the chapters a run marked come back in the order they were marked, on the artefact's clock, and only the ones belonging to the job asked for")]
     public async Task TheChaptersARunMarkedComeBackInTheOrderTheyWereMarked()
     {
         await ClearAsync();
@@ -681,7 +681,7 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
             (await new EncodeChapterRepository(reading).ListForJobAsync(other.Id, Cancel)).Select(chapter => chapter.Kind));
     }
 
-    [Fact(DisplayName = "A-エンコード-057: a reading of nothing writes nothing, and what a run made of the breaks comes back on the job as it was written")]
+    [Fact(DisplayName = "a reading of nothing writes nothing, and what a run made of the breaks comes back on the job as it was written")]
     public async Task WhatARunMadeOfTheBreaksComesBackOnTheJobAsItWasWritten()
     {
         await ClearAsync();
@@ -711,7 +711,7 @@ public sealed class EncodeRepositoryTests(RepositoryDatabase database)
         Assert.Empty(await new EncodeChapterRepository(reading).ListForJobAsync(judged.Id, Cancel));
     }
 
-    [Fact(DisplayName = "A-エンコード-057: a job read a second time holds what the second reading marked and nothing of the first, and a second reading that marked nothing leaves it holding none")]
+    [Fact(DisplayName = "a job read a second time holds what the second reading marked and nothing of the first, and a second reading that marked nothing leaves it holding none")]
     public async Task AJobReadASecondTimeHoldsWhatTheSecondReadingMarked()
     {
         await ClearAsync();

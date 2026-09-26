@@ -9,7 +9,7 @@ public sealed class SignalSampleTests
 
     private static readonly DateTime StatisticsRead = new(2026, 8, 8, 10, 59, 58, DateTimeKind.Utc);
 
-    [Fact(DisplayName = "BR-QD-004: a frontend that never locked hands over no carrier to noise figure at all")]
+    [Fact(DisplayName = "a frontend that never locked hands over no carrier to noise figure at all")]
     public void AFrontendThatNeverLockedHandsOverNoCarrierToNoiseFigureAtAll()
     {
         SignalSample sample = SignalSample.WithoutLock(LockRead);
@@ -21,7 +21,7 @@ public sealed class SignalSampleTests
         Assert.False(sample.CarriesAnyValue);
     }
 
-    [Fact(DisplayName = "BR-QD-004: what the lock said and what the statistics said were read at different moments")]
+    [Fact(DisplayName = "what the lock said and what the statistics said were read at different moments")]
     public void WhatTheLockSaidAndWhatTheStatisticsSaidWereReadAtDifferentMoments()
     {
         SignalSample sample = SignalSample.WithLock(LockRead, 29000, StatisticsRead);
@@ -31,7 +31,7 @@ public sealed class SignalSampleTests
         Assert.NotEqual(sample.LockReadAt, sample.CarrierToNoiseReadAt);
     }
 
-    [Fact(DisplayName = "BR-QD-009: the two layers a terrestrial multiplex counts stay two")]
+    [Fact(DisplayName = "the two layers a terrestrial multiplex counts stay two")]
     public void TheTwoLayersATerrestrialMultiplexCountsStayTwo()
     {
         SignalSample sample = SignalSample.WithLock(
@@ -58,14 +58,14 @@ public sealed class SignalSampleTests
         Assert.Equal([0, 1], sample.BitErrors.Select(counts => counts.Layer));
     }
 
-    [Fact(DisplayName = "BR-QD-009: two counts for one layer would lose which layer failed")]
+    [Fact(DisplayName = "two counts for one layer would lose which layer failed")]
     public void TwoCountsForOneLayerWouldLoseWhichLayerFailed()
         => Assert.Throws<ArgumentException>(() => SignalSample.WithLock(
             LockRead,
             bitErrors: [new LayerBitErrorCounts(0, 1, 8), new LayerBitErrorCounts(0, 2, 8)],
             bitErrorsReadAt: StatisticsRead));
 
-    [Fact(DisplayName = "BR-QV-003: a figure without the time it was read cannot be told from a frozen one")]
+    [Fact(DisplayName = "a figure without the time it was read cannot be told from a frozen one")]
     public void AFigureWithoutTheTimeItWasReadCannotBeToldFromAFrozenOne()
     {
         Assert.Throws<ArgumentException>(() => SignalSample.WithLock(LockRead, 29000));
@@ -78,7 +78,7 @@ public sealed class SignalSampleTests
     public void ATimeWithNoFigureBesideItIsNoMoreOfAReadingThanAFigureWithNoTime()
         => Assert.Throws<ArgumentException>(() => SignalSample.WithLock(LockRead, null, StatisticsRead));
 
-    [Fact(DisplayName = "BR-QD-009: a statistic that could not be read is named rather than left out")]
+    [Fact(DisplayName = "a statistic that could not be read is named rather than left out")]
     public void AStatisticThatCouldNotBeReadIsNamedRatherThanLeftOut()
     {
         SignalSample sample = SignalSample.WithoutLock(LockRead, [SignalQualityMetrics.Cnr, SignalQualityMetrics.Cnr]);
@@ -98,7 +98,7 @@ public sealed class SignalSampleTests
             bitErrors: [new LayerBitErrorCounts(0, -1, 8)],
             bitErrorsReadAt: StatisticsRead));
 
-    [Fact(DisplayName = "BR-QV-003: a reading that could not be taken at all is kept as one that could not be taken")]
+    [Fact(DisplayName = "a reading that could not be taken at all is kept as one that could not be taken")]
     public void AReadingThatCouldNotBeTakenAtAllIsKeptAsOneThatCouldNotBeTaken()
     {
         SignalSample sample = SignalSample.NotTaken(LockRead, SignalNotTaken.NothingReported);
@@ -111,7 +111,7 @@ public sealed class SignalSampleTests
         Assert.Empty(sample.MetricsNotRead);
     }
 
-    [Fact(DisplayName = "BR-QD-008: why a reading could not be taken is kept as a class of its own")]
+    [Fact(DisplayName = "why a reading could not be taken is kept as a class of its own")]
     public void WhyAReadingCouldNotBeTakenIsKeptAsAClassOfItsOwn()
     {
         SignalNotTaken[] reasons = Enum.GetValues<SignalNotTaken>();

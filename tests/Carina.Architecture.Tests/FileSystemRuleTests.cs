@@ -195,7 +195,7 @@ public sealed class FileSystemRuleTests
             Inventory.Where(entry => entry.Contains("/Thumbnails/", StringComparison.Ordinal)).ToArray());
     }
 
-    [Fact(DisplayName = "BR-ED2-009/010: the encode feature moves a work file once, deletes only by the ledger, and probes a rename with an empty directory")]
+    [Fact(DisplayName = "the encode feature moves a work file once, deletes only by the ledger, and probes a rename with an empty directory")]
     public void TheEncodeFeatureMovesOnceDeletesByTheLedgerAndProbesARenameWithAnEmptyDirectory()
     {
         Assert.Equal(

@@ -22,7 +22,7 @@ public sealed class StationWatermarkRepositoryTests(RepositoryDatabase database)
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
-    [Fact(DisplayName = "BR-ED2-007: a recording is found the watermark learned most recently from another recording of its service, never the one learned from itself")]
+    [Fact(DisplayName = "a recording is found the watermark learned most recently from another recording of its service, never the one learned from itself")]
     public async Task ARecordingIsFoundTheWatermarkLearnedAheadNeverItsOwn()
     {
         await ClearAsync();
@@ -47,7 +47,7 @@ public sealed class StationWatermarkRepositoryTests(RepositoryDatabase database)
         Assert.Null(forTheFirst);
     }
 
-    [Fact(DisplayName = "BR-ED2-007: a watermark learned again from the same recording replaces the one it learned before")]
+    [Fact(DisplayName = "a watermark learned again from the same recording replaces the one it learned before")]
     public async Task AWatermarkLearnedAgainFromTheSameRecordingReplacesTheOneBefore()
     {
         await ClearAsync();
@@ -62,7 +62,7 @@ public sealed class StationWatermarkRepositoryTests(RepositoryDatabase database)
         Assert.Equal(Learned(Service, from, First, 6).Pattern, kept.Pattern);
     }
 
-    [Fact(DisplayName = "BR-ED2-007: a service keeps only its most recent watermarks, and another service's are left alone")]
+    [Fact(DisplayName = "a service keeps only its most recent watermarks, and another service's are left alone")]
     public async Task AServiceKeepsOnlyItsMostRecentWatermarks()
     {
         await ClearAsync();

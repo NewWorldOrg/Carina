@@ -74,7 +74,7 @@ public sealed class PlaybackPositionSchemaTests(MigratedScratchDatabase database
         Assert.Equal("pk_playback_position", refusal.ConstraintName);
     }
 
-    [Fact(DisplayName = "BR-KD-013: a place in a recording the ledger does not hold is not kept for nothing")]
+    [Fact(DisplayName = "a place in a recording the ledger does not hold is not kept for nothing")]
     public async Task APlaceInARecordingTheLedgerDoesNotHoldIsNotKept()
     {
         var nowhere = new RecordingId(Guid.NewGuid());
@@ -86,7 +86,7 @@ public sealed class PlaybackPositionSchemaTests(MigratedScratchDatabase database
         Assert.Equal(0, await KeptForAsync(connection, nowhere));
     }
 
-    [Fact(DisplayName = "A-配信-073: forgetting a recording takes every viewer's place in it and leaves the others alone")]
+    [Fact(DisplayName = "forgetting a recording takes every viewer's place in it and leaves the others alone")]
     public async Task ForgettingARecordingTakesEveryViewersPlaceInIt()
     {
         RecordingId recording = await RecordedAsync(50_005);

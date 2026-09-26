@@ -9,7 +9,7 @@ namespace Carina.Domain.Encodings;
 /// corners stayed put to be a mark, and when so much of them stayed put that what was learned is the
 /// picture rather than a mark laid over it.
 /// <para>
-/// A recording is never judged by the mark learned from itself (BR-ED2-007): the one that judges it
+/// A recording is never judged by the mark learned from itself: the one that judges it
 /// was learned ahead, from another recording of the same service.
 /// </para>
 /// </summary>

@@ -30,7 +30,7 @@ public sealed class ReservationOutcomeQueryTests
     [InlineData(0, ReservationOutcomeQuery.DefaultPerPage)]
     [InlineData(-1, ReservationOutcomeQuery.DefaultPerPage)]
     [InlineData(null, ReservationOutcomeQuery.DefaultPerPage)]
-    public void APageSizeIsClampedToTheCeilingRatherThanRefused_BR_RV_003(int? asked, int carried)
+    public void APageSizeIsClampedToTheCeilingRatherThanRefused(int? asked, int carried)
     {
         ReservationOutcomeQuery query = Assert.IsType<ReservationOutcomeQuery>(
             ReservationOutcomeQuery.For(null, null, perPage: asked));
@@ -47,7 +47,7 @@ public sealed class ReservationOutcomeQueryTests
     }
 
     [Fact]
-    public void ASpanRunsForwardsAndReachesAtMostAYear_BR_RV_003()
+    public void ASpanRunsForwardsAndReachesAtMostAYear()
     {
         Assert.NotNull(ReservationOutcomeQuery.For(Noon, Noon.AddDays(366)));
         Assert.Null(ReservationOutcomeQuery.For(Noon, Noon.AddDays(366).AddSeconds(1)));
@@ -96,7 +96,7 @@ public sealed class ReservationOutcomeQueryTests
     }
 
     [Fact]
-    public void MoreChannelsThanTheCeilingAreRefused_BR_RV_003()
+    public void MoreChannelsThanTheCeilingAreRefused()
     {
         ProgrammeService[] tooMany =
         [

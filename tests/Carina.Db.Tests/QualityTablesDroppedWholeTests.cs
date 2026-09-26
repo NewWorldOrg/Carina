@@ -16,7 +16,7 @@ public sealed class QualityTablesDroppedWholeTests(MigratedScratchDatabase datab
 
     private const string TheQualityTables = "quality\\_%";
 
-    [Fact(DisplayName = "BR-QD-013: dropping every quality table leaves every other ledger where it was")]
+    [Fact(DisplayName = "dropping every quality table leaves every other ledger where it was")]
     public async Task DroppingEveryQualityTableLeavesEveryOtherLedgerWhereItWas()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();

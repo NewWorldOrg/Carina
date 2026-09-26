@@ -12,7 +12,7 @@ public sealed class EncodeCallOffLeavesTheRecordingAsItWasTests
 {
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
-    [Theory(DisplayName = "BR-ED2-012: calling a running job off leaves the result of the recording it was made from as it was")]
+    [Theory(DisplayName = "calling a running job off leaves the result of the recording it was made from as it was")]
     [InlineData(RecordingOutcome.Complete)]
     [InlineData(RecordingOutcome.Failed)]
     public async Task CallingARunningJobOffLeavesTheRecordingsResultAsItWas(RecordingOutcome outcome)

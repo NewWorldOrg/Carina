@@ -4,7 +4,7 @@ namespace Carina.Domain.Tests.Quality;
 
 public sealed class QualityStandingTests
 {
-    [Fact(DisplayName = "BR-QS-001: one subject has six answers and the three grades sit inside them")]
+    [Fact(DisplayName = "one subject has six answers and the three grades sit inside them")]
     public void OneSubjectHasSixAnswersAndTheThreeGradesSitInsideThem()
     {
         Assert.Equal(6, QualityStandings.All.Count);
@@ -20,7 +20,7 @@ public sealed class QualityStandingTests
             [QualityStanding.Warning, QualityStanding.MayNotBeWatchable],
             QualityStandings.All.Where(QualityStandings.WentBeyond));
 
-    [Fact(DisplayName = "BR-QD-001: nothing counted, nothing to count, no such statistic and no supply are four answers")]
+    [Fact(DisplayName = "nothing counted, nothing to count, no such statistic and no supply are four answers")]
     public void NothingCountedNothingToCountNoSuchStatisticAndNoSupplyAreFourAnswers()
         => Assert.Equal(
             [QualityStanding.Unmeasured, QualityStanding.Unsupported, QualityStanding.Unreachable],

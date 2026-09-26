@@ -22,7 +22,7 @@ public sealed class EncodeScratchFileTests
             EncodeFileName.Working(Recording, Job, 1),
             Written);
 
-    [Fact(DisplayName = "BR-ED2-010: a scratch file is written into the ledger before it exists, and is then still owed a removal")]
+    [Fact(DisplayName = "a scratch file is written into the ledger before it exists, and is then still owed a removal")]
     public void AScratchFileIsWrittenIntoTheLedgerBeforeItExistsAndIsOwedARemoval()
     {
         EncodeScratchFile scratch = Recorded();
@@ -67,7 +67,7 @@ public sealed class EncodeScratchFileTests
         Assert.False(scratch.IsOwedARemoval);
     }
 
-    [Fact(DisplayName = "BR-ED2-010: a removal is owed once and settled once")]
+    [Fact(DisplayName = "a removal is owed once and settled once")]
     public void ARemovalIsOwedOnceAndSettledOnce()
     {
         EncodeScratchFile scratch = Recorded();

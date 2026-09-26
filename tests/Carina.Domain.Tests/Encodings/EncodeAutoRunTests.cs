@@ -10,7 +10,7 @@ public sealed class EncodeAutoRunTests
 
     private static readonly MachineSettings SixCores = new() { Cores = 6 };
 
-    [Fact(DisplayName = "BR-ED2-004 / BR-ED2-005: the auto-run settles on whether it runs and how many cores a run may take")]
+    [Fact(DisplayName = "the auto-run settles on whether it runs and how many cores a run may take")]
     public void TheAutoRunSettlesOnWhetherItRunsAndHowManyCores()
     {
         EncodeAutoRun settled = EncodeAutoRun.Settled(false, 3, Noon);
@@ -33,7 +33,7 @@ public sealed class EncodeAutoRunTests
         => Assert.Throws<ArgumentException>(
             () => EncodeAutoRun.Settled(true, 2, new DateTime(2026, 9, 14, 12, 0, 0, DateTimeKind.Unspecified)));
 
-    [Fact(DisplayName = "BR-ED2-004: what the auto-run takes is a recording that completed and one cut short, and nothing narrows it")]
+    [Fact(DisplayName = "what the auto-run takes is a recording that completed and one cut short, and nothing narrows it")]
     public void WhatTheAutoRunTakesIsWhatEndedWithAFile()
         => Assert.Equal([RecordingOutcome.Complete, RecordingOutcome.Truncated], EncodeAutoRun.Subject);
 
@@ -73,7 +73,7 @@ public sealed class EncodeAutoRunTests
         Assert.Equal(Noon, standing.UpdatedAt);
     }
 
-    [Fact(DisplayName = "BR-ED2-005: a deployed cap above what this machine has stands as what will actually run")]
+    [Fact(DisplayName = "a deployed cap above what this machine has stands as what will actually run")]
     public void ADeployedCapAboveWhatThisMachineHasStandsAsWhatWillRun()
     {
         EncodeAutoRunStanding standing = EncodeAutoRunStanding.Over(
@@ -85,7 +85,7 @@ public sealed class EncodeAutoRunTests
         Assert.False(standing.Stored);
     }
 
-    [Fact(DisplayName = "BR-ED2-005: a settled cap above what this machine has stands as what will actually run")]
+    [Fact(DisplayName = "a settled cap above what this machine has stands as what will actually run")]
     public void ASettledCapAboveWhatThisMachineHasStandsAsWhatWillRun()
     {
         EncodeAutoRunStanding standing = EncodeAutoRunStanding.Over(

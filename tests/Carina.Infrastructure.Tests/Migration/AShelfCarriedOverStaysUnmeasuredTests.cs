@@ -56,7 +56,7 @@ public sealed class AShelfCarriedOverStaysUnmeasuredTests : IDisposable
         Directory.Delete(into, recursive: true);
     }
 
-    [Fact(DisplayName = "BR-LD-007: every recording a migration carried reads unmeasured on the library's list, never good")]
+    [Fact(DisplayName = "every recording a migration carried reads unmeasured on the library's list, never good")]
     public async Task EveryRecordingAMigrationCarriedReadsUnmeasuredOnTheLibrarysListNeverGood()
     {
         await RunAsync();
@@ -87,7 +87,7 @@ public sealed class AShelfCarriedOverStaysUnmeasuredTests : IDisposable
         });
     }
 
-    [Fact(DisplayName = "BR-LD-007: the drop reading finds the whole carried shelf unmeasured and none of it clean or dropped")]
+    [Fact(DisplayName = "the drop reading finds the whole carried shelf unmeasured and none of it clean or dropped")]
     public async Task TheDropReadingFindsTheWholeCarriedShelfUnmeasuredAndNoneOfItCleanOrDropped()
     {
         await RunAsync();
@@ -97,7 +97,7 @@ public sealed class AShelfCarriedOverStaysUnmeasuredTests : IDisposable
         Assert.Equal(0, (await ListAsync(DropReading.Dropped)).Total);
     }
 
-    [Fact(DisplayName = "BR-QD-001: a period holding only what a migration carried reads unmeasured on every measure, with no share at all")]
+    [Fact(DisplayName = "a period holding only what a migration carried reads unmeasured on every measure, with no share at all")]
     public async Task APeriodHoldingOnlyWhatAMigrationCarriedReadsUnmeasuredOnEveryMeasure()
     {
         await RunAsync();
@@ -120,7 +120,7 @@ public sealed class AShelfCarriedOverStaysUnmeasuredTests : IDisposable
         });
     }
 
-    [Fact(DisplayName = "BR-QD-001: nothing a migration carried is listed as beyond a level or given a place when channels are put worst first")]
+    [Fact(DisplayName = "nothing a migration carried is listed as beyond a level or given a place when channels are put worst first")]
     public async Task NothingAMigrationCarriedIsListedAsBeyondALevelOrGivenAPlaceWhenChannelsArePutWorstFirst()
     {
         await RunAsync();

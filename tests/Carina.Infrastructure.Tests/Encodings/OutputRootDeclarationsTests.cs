@@ -17,7 +17,7 @@ public sealed class OutputRootDeclarationsTests
 
     private static readonly StorageRootDto Primary = new() { Name = "primary", FreeBytes = 10, TotalBytes = 20, Writable = true };
 
-    [Fact(DisplayName = "BR-EV-001: the roots this process holds are declared after the driver's, measured on this machine")]
+    [Fact(DisplayName = "the roots this process holds are declared after the driver's, measured on this machine")]
     public async Task TheRootsThisProcessHoldsAreDeclaredAfterTheDriversMeasuredOnThisMachine()
     {
         using var shelf = new TempTree();
@@ -34,7 +34,7 @@ public sealed class OutputRootDeclarationsTests
         Assert.Empty(shelf.Snapshot());
     }
 
-    [Fact(DisplayName = "BR-EV-001: a held root a rename does not land in is declared as not writable")]
+    [Fact(DisplayName = "a held root a rename does not land in is declared as not writable")]
     public async Task AHeldRootARenameDoesNotLandInIsDeclaredAsNotWritable()
     {
         using var shelf = new TempTree();
@@ -63,7 +63,7 @@ public sealed class OutputRootDeclarationsTests
         Assert.False(declared[1].Writable);
     }
 
-    [Fact(DisplayName = "BR-EV-001: a held root named like one the driver declares is left out, and the warning names it")]
+    [Fact(DisplayName = "a held root named like one the driver declares is left out, and the warning names it")]
     public async Task AHeldRootNamedLikeOneTheDriverDeclaresIsLeftOut()
     {
         using var shelf = new TempTree();
@@ -79,7 +79,7 @@ public sealed class OutputRootDeclarationsTests
         Assert.Contains("left out", warning, StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "BR-EV-001: a driver that cannot be reached leaves the set unanswered rather than answered with half of it")]
+    [Fact(DisplayName = "a driver that cannot be reached leaves the set unanswered rather than answered with half of it")]
     public async Task ADriverThatCannotBeReachedLeavesTheSetUnanswered()
     {
         using var shelf = new TempTree();

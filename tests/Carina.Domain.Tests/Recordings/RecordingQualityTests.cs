@@ -135,7 +135,7 @@ public sealed class RecordingQualityTests
         Assert.Equal(QualityLevel.Unmeasured, read.Scrambled);
     }
 
-    [Fact(DisplayName = "BR-QD-003: moving the level scrambling is held against moves what a recording is read as")]
+    [Fact(DisplayName = "moving the level scrambling is held against moves what a recording is read as")]
     public void MovingTheLevelScramblingIsHeldAgainstMovesWhatARecordingIsReadAs()
     {
         DropCounters counted = DropCounters.Counted(0, 1_000_000);
@@ -149,7 +149,7 @@ public sealed class RecordingQualityTests
         Assert.Equal(QualityLevel.Warning, read.Overall);
     }
 
-    [Fact(DisplayName = "BR-QD-003: moving the level losses are held against moves what a recording is read as")]
+    [Fact(DisplayName = "moving the level losses are held against moves what a recording is read as")]
     public void MovingTheLevelLossesAreHeldAgainstMovesWhatARecordingIsReadAs()
     {
         RecordingQuality read = RecordingQuality.Of(

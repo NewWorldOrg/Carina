@@ -7,7 +7,7 @@ namespace Carina.Api.Responder.Encoding;
 /// <summary>
 /// How the queue runs when nobody asked. <c>subject</c> is what the auto-run takes, and it is
 /// stated rather than offered: a recording that failed has nothing to encode, one cut short has a
-/// file like any other, and nothing narrows the rest (BR-ED2-004). <c>stored</c> says whether
+/// file like any other, and nothing narrows the rest. <c>stored</c> says whether
 /// somebody settled these or whether they are what the machine was deployed with.
 /// <c>whereArtefactsGo</c> says whether the destinations and profiles defined settle where an
 /// artefact goes when nobody asked, and which of them is missing when they do not.

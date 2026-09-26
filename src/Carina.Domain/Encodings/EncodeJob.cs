@@ -285,7 +285,7 @@ public sealed class EncodeJob
 
     /// <summary>
     /// A running job that has made no headway for as long as a run is allowed to go quiet. The
-    /// ledger says running; this is what says it should not be read that way (BR-ED2-014).
+    /// ledger says running; this is what says it should not be read that way.
     /// </summary>
     public bool IsStalled(DateTime now, TimeSpan stalledAfter)
     {
@@ -377,7 +377,7 @@ public sealed class EncodeJob
     /// <summary>
     /// What happens to a job the ledger still holds as running when the process comes up: the run
     /// it was on died with the process, so it goes back to the queue to start over, unless it has
-    /// already had as many attempts as it gets (BR-ED2-011).
+    /// already had as many attempts as it gets.
     /// </summary>
     public EncodeRecovery Recover(int mostAttempts, DateTime at)
     {

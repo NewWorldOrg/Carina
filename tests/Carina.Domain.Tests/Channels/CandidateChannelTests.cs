@@ -108,7 +108,7 @@ public sealed class CandidateChannelTests
     public void AFreshCandidateHasNoScoreYet()
         => Assert.Null(Discovered().Score);
 
-    [Fact(DisplayName = "BR-QD-012: writing a score back leaves the selection exactly where it was")]
+    [Fact(DisplayName = "writing a score back leaves the selection exactly where it was")]
     public void WritingAScoreBackLeavesTheSelectionExactlyWhereItWas()
     {
         CandidateChannel candidate = Discovered();
@@ -130,7 +130,7 @@ public sealed class CandidateChannelTests
         Assert.Equal(At.AddHours(1), candidate.LastSeenAt);
     }
 
-    [Fact(DisplayName = "BR-QD-012: a score better than the selected one's does not select the candidate it belongs to")]
+    [Fact(DisplayName = "a score better than the selected one's does not select the candidate it belongs to")]
     public void AScoreDoesNotSelectTheCandidateItBelongsTo()
     {
         CandidateChannel candidate = Discovered();

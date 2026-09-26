@@ -27,7 +27,7 @@ public sealed class RecordingKeylessRuleTests
     private static IEntityType TableOf(CarinaDbContext context, string table)
         => context.Model.GetEntityTypes().Single(entityType => entityType.GetTableName() == table);
 
-    [Fact(DisplayName = "BR-KD-013: the ledger declares no foreign key at all")]
+    [Fact(DisplayName = "the ledger declares no foreign key at all")]
     public void TheLedgerDeclaresNoForeignKeyAtAll()
     {
         using CarinaDbContext context = Carina();
@@ -38,7 +38,7 @@ public sealed class RecordingKeylessRuleTests
             .Order(StringComparer.Ordinal));
     }
 
-    [Fact(DisplayName = "BR-KD-013: rebuilding the guide or dropping a channel definition drags no recording away")]
+    [Fact(DisplayName = "rebuilding the guide or dropping a channel definition drags no recording away")]
     public void RebuildingTheGuideOrDroppingAChannelDefinitionDragsNoRecordingAway()
     {
         using CarinaDbContext context = Carina();
@@ -52,7 +52,7 @@ public sealed class RecordingKeylessRuleTests
             .Order(StringComparer.Ordinal));
     }
 
-    [Fact(DisplayName = "BR-KD-013: the three tables it must not point at are in the model, for the rule to have weighed them")]
+    [Fact(DisplayName = "the three tables it must not point at are in the model, for the rule to have weighed them")]
     public void TheThreeTablesItMustNotPointAtAreInTheModel()
     {
         using CarinaDbContext context = Carina();
@@ -69,7 +69,7 @@ public sealed class RecordingKeylessRuleTests
         }
     }
 
-    [Fact(DisplayName = "BR-KD-013: what the ledger keeps of the guide is a copy it took, not a key it holds")]
+    [Fact(DisplayName = "what the ledger keeps of the guide is a copy it took, not a key it holds")]
     public void WhatTheLedgerKeepsOfTheGuideIsACopyItTook()
     {
         using CarinaDbContext context = Carina();

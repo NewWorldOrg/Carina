@@ -24,7 +24,7 @@ public sealed class EncodeIntakeJobTests
 
     private static readonly TimeSpan BetweenLooks = TimeSpan.FromSeconds(30);
 
-    [Fact(DisplayName = "BR-ED2-004: the loop looks at nothing while the auto-run is off, and queues at the look after it is turned back on")]
+    [Fact(DisplayName = "the loop looks at nothing while the auto-run is off, and queues at the look after it is turned back on")]
     public async Task TheLoopQueuesNothingWhileTheAutoRunIsOffAndQueuesOnceItIsBackOn()
     {
         var machine = new Loop();
@@ -50,7 +50,7 @@ public sealed class EncodeIntakeJobTests
         Assert.Contains(AppEventName.EncodeJobs, machine.Events.Signalled);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: a look that queued a recording does not queue it again at the next one")]
+    [Fact(DisplayName = "a look that queued a recording does not queue it again at the next one")]
     public async Task ALookThatQueuedARecordingDoesNotQueueItAgain()
     {
         var machine = new Loop();
@@ -72,7 +72,7 @@ public sealed class EncodeIntakeJobTests
         Assert.Single(machine.Jobs.Jobs);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: a recording that started before the others and ended after them is queued, however far the loop has read")]
+    [Fact(DisplayName = "a recording that started before the others and ended after them is queued, however far the loop has read")]
     public async Task ARecordingThatStartedBeforeTheOthersAndEndedAfterThemIsQueued()
     {
         var machine = new Loop();

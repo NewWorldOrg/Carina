@@ -29,7 +29,7 @@ public sealed class PlaybackPositionEndpointTests
         Assert.Equal("0", Header(answer, PlaybackHeaders.StartsAt));
     }
 
-    [Fact(DisplayName = "A-配信-073: playing without saying where starts where this viewer left this recording")]
+    [Fact(DisplayName = "playing without saying where starts where this viewer left this recording")]
     public async Task PlayingWithoutSayingWhereStartsWhereThisViewerLeftIt()
     {
         await using var feature = new PlayFeature();
@@ -45,7 +45,7 @@ public sealed class PlaybackPositionEndpointTests
         Assert.Equal("600", Header(answer, PlaybackHeaders.StartsAt));
     }
 
-    [Fact(DisplayName = "A-配信-073: saying where to start wins over where the watching was left")]
+    [Fact(DisplayName = "saying where to start wins over where the watching was left")]
     public async Task SayingWhereToStartWinsOverWhereTheWatchingWasLeft()
     {
         await using var feature = new PlayFeature();
@@ -59,7 +59,7 @@ public sealed class PlaybackPositionEndpointTests
         Assert.Equal(TimeSpan.FromSeconds(30), Assert.Single(feature.Player.AskedFrom));
     }
 
-    [Fact(DisplayName = "A-配信-073: asking to start at the beginning is not the same as asking for nothing")]
+    [Fact(DisplayName = "asking to start at the beginning is not the same as asking for nothing")]
     public async Task AskingToStartAtTheBeginningIsNotTheSameAsAskingForNothing()
     {
         await using var feature = new PlayFeature();
@@ -73,7 +73,7 @@ public sealed class PlaybackPositionEndpointTests
         Assert.Equal(TimeSpan.Zero, Assert.Single(feature.Player.AskedFrom));
     }
 
-    [Fact(DisplayName = "A-配信-073: where another viewer left a recording is not where this one is taken to")]
+    [Fact(DisplayName = "where another viewer left a recording is not where this one is taken to")]
     public async Task WhereAnotherViewerLeftARecordingIsNotWhereThisOneIsTakenTo()
     {
         await using var feature = new PlayFeature();
@@ -91,7 +91,7 @@ public sealed class PlaybackPositionEndpointTests
         Assert.Equal(TimeSpan.Zero, Assert.Single(feature.Player.AskedFrom));
     }
 
-    [Fact(DisplayName = "A-配信-073: the plan says where the watching got to, so a player that seeks itself can go there")]
+    [Fact(DisplayName = "the plan says where the watching got to, so a player that seeks itself can go there")]
     public async Task ThePlanSaysWhereTheWatchingGotTo()
     {
         await using var feature = new PlayFeature();
@@ -112,7 +112,7 @@ public sealed class PlaybackPositionEndpointTests
         Assert.Equal(612.5, plan.GetProperty("resumeAtSec").GetDouble());
     }
 
-    [Fact(DisplayName = "A-配信-073: a player sending where it has got to over and over leaves one place, the last one")]
+    [Fact(DisplayName = "a player sending where it has got to over and over leaves one place, the last one")]
     public async Task APlayerSendingWhereItHasGotToOverAndOverLeavesOnePlace()
     {
         await using var feature = new PlayFeature();
@@ -134,7 +134,7 @@ public sealed class PlaybackPositionEndpointTests
         Assert.Equal(recording.Id, only.RecordingId);
     }
 
-    [Fact(DisplayName = "A-配信-073: the answer says what was kept and when it was kept")]
+    [Fact(DisplayName = "the answer says what was kept and when it was kept")]
     public async Task TheAnswerSaysWhatWasKeptAndWhenItWasKept()
     {
         await using var feature = new PlayFeature();
@@ -257,7 +257,7 @@ public sealed class PlaybackPositionEndpointTests
         Assert.Empty(feature.Positions.Positions);
     }
 
-    [Fact(DisplayName = "A-配信-073: throwing a recording away leaves nobody's place in it")]
+    [Fact(DisplayName = "throwing a recording away leaves nobody's place in it")]
     public async Task ThrowingARecordingAwayLeavesNobodysPlaceInIt()
     {
         await using var feature = new RecordingFeature();
@@ -290,7 +290,7 @@ public sealed class PlaybackPositionEndpointTests
         Assert.Equal(left.Id, only.RecordingId);
     }
 
-    [Fact(DisplayName = "A-配信-074: where the watching got to is kept once for a recording, whichever of the two it is watched from")]
+    [Fact(DisplayName = "where the watching got to is kept once for a recording, whichever of the two it is watched from")]
     public async Task WhereTheWatchingGotToIsTheSameWhicheverOfTheTwoThePlanIsAskedFor()
     {
         await using var feature = new PlayFeature();
@@ -311,7 +311,7 @@ public sealed class PlaybackPositionEndpointTests
         Assert.Single(feature.Positions.Positions);
     }
 
-    [Fact(DisplayName = "A-配信-074: a recording asked for as it was recorded is started where the watching got to, as it is when it is asked for encoded")]
+    [Fact(DisplayName = "a recording asked for as it was recorded is started where the watching got to, as it is when it is asked for encoded")]
     public async Task ARecordingAskedForAsItWasRecordedIsStartedWhereTheWatchingGotTo()
     {
         await using var feature = new PlayFeature();

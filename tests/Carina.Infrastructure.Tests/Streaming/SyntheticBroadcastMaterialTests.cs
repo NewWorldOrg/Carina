@@ -495,7 +495,7 @@ public sealed class SyntheticBroadcastMaterialTests : IDisposable
         }
     }
 
-    [Fact(DisplayName = "BR-PD-008: the artefact of a recording that carried two languages on one sound holds the main language in both ears and not the other one")]
+    [Fact(DisplayName = "the artefact of a recording that carried two languages on one sound holds the main language in both ears and not the other one")]
     public async Task BrPd008TheEncodeOfARecordingCarryingTwoLanguagesOnOneSoundBakesInTheMainOne()
     {
         string written = await (SyntheticBroadcast.Sounding(SyntheticSound.TwoLanguagesOnOneSound) with { Length = PastTheProbe })

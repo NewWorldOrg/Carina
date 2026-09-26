@@ -26,7 +26,7 @@ public sealed class QualityIncidentAcknowledgementMigrationTests
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
-    [Fact(DisplayName = "BR-QS-002: an incident acknowledged while acknowledging was kept stands as told about, or resolved if it was")]
+    [Fact(DisplayName = "an incident acknowledged while acknowledging was kept stands as told about, or resolved if it was")]
     public async Task AnIncidentAcknowledgedWhileAcknowledgingWasKeptStandsAsToldAboutOrResolvedIfItWas()
     {
         await using CarinaDbContext context = CarinaDbContextFactory.Create(Scratch());

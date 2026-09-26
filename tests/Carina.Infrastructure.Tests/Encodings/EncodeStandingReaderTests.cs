@@ -26,7 +26,7 @@ public sealed class EncodeStandingReaderTests(RepositoryDatabase database)
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
-    [Fact(DisplayName = "BR-ES-002: a whole page of the library is answered by one look at the ledger")]
+    [Fact(DisplayName = "a whole page of the library is answered by one look at the ledger")]
     public async Task AWholePageOfTheLibraryIsAnsweredByOneLookAtTheLedger()
     {
         await ClearAsync();
@@ -52,7 +52,7 @@ public sealed class EncodeStandingReaderTests(RepositoryDatabase database)
         Assert.All(page, recording => Assert.Equal(EncodeStanding.Completed, board.For(recording)));
     }
 
-    [Fact(DisplayName = "BR-ES-002: a recording the ledger holds nothing for stands unencoded rather than missing")]
+    [Fact(DisplayName = "a recording the ledger holds nothing for stands unencoded rather than missing")]
     public async Task ARecordingTheLedgerHoldsNothingForStandsUnencoded()
     {
         await ClearAsync();
@@ -77,7 +77,7 @@ public sealed class EncodeStandingReaderTests(RepositoryDatabase database)
         Assert.Equal(EncodeStanding.NotEncoded, board.For(RecordingId.New()));
     }
 
-    [Fact(DisplayName = "BR-ES-002: two artefacts made and a third job running is a recording that stands encoded")]
+    [Fact(DisplayName = "two artefacts made and a third job running is a recording that stands encoded")]
     public async Task TwoArtefactsMadeAndAThirdJobRunningIsARecordingThatStandsEncoded()
     {
         await ClearAsync();
@@ -102,7 +102,7 @@ public sealed class EncodeStandingReaderTests(RepositoryDatabase database)
         Assert.Equal(EncodeStanding.NotEncoded, board.For(beside));
     }
 
-    [Fact(DisplayName = "BR-ES-002: a job called off leaves the recording where it was, and a retry waiting speaks over the failure before it")]
+    [Fact(DisplayName = "a job called off leaves the recording where it was, and a retry waiting speaks over the failure before it")]
     public async Task AJobCalledOffLeavesTheRecordingWhereItWasAndARetryWaitingSpeaksOverTheFailure()
     {
         await ClearAsync();

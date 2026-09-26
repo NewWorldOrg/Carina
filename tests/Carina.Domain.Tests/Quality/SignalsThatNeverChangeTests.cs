@@ -16,7 +16,7 @@ public sealed class SignalsThatNeverChangeTests
     private static readonly IReadOnlyList<QualityThresholdStanding> Levels =
         QualityThresholdStanding.Over([], Noon);
 
-    [Fact(DisplayName = "BR-QD-004: a frontend answering the same figure for a minute is read a minute's worth of times, and the newest moment is the one the tuner says")]
+    [Fact(DisplayName = "a frontend answering the same figure for a minute is read a minute's worth of times, and the newest moment is the one the tuner says")]
     public void AFrontendAnsweringTheSameFigureForAMinuteIsReadAMinutesWorthOfTimes()
     {
         SignalFigures figures = Assert.Single(QualitySignalSurvey.Figures([], Frozen(6, 30_000)));
@@ -27,7 +27,7 @@ public sealed class SignalsThatNeverChangeTests
         Assert.Equal(Noon + (Between * 5), figures.LastTakenAt);
     }
 
-    [Fact(DisplayName = "BR-QD-001: the same cold figure repeated is the one reading it was, not a tuner that measured well six times")]
+    [Fact(DisplayName = "the same cold figure repeated is the one reading it was, not a tuner that measured well six times")]
     public void TheSameColdFigureRepeatedIsTheOneReadingItWas()
     {
         QualitySignalRead read = QualitySignalSurvey
@@ -39,7 +39,7 @@ public sealed class SignalsThatNeverChangeTests
         Assert.Equal(1, read.Reading.BeyondThreshold);
     }
 
-    [Fact(DisplayName = "BR-QD-004: a figure the frontend never took again keeps the moment it was taken, however often it was asked for")]
+    [Fact(DisplayName = "a figure the frontend never took again keeps the moment it was taken, however often it was asked for")]
     public void AFigureTheFrontendNeverTookAgainKeepsTheMomentItWasTaken()
     {
         IReadOnlyList<QualitySignalSample> asked =
@@ -57,7 +57,7 @@ public sealed class SignalsThatNeverChangeTests
         Assert.Equal(Between * 5, asked[^1].TakenAt - asked[^1].Signal.CarrierToNoiseReadAt);
     }
 
-    [Fact(DisplayName = "BR-QD-005: counters that began again at a lower number are not differenced across the session that started them over")]
+    [Fact(DisplayName = "counters that began again at a lower number are not differenced across the session that started them over")]
     public void CountersThatBeganAgainAtALowerNumberAreNotDifferencedAcrossTheSession()
     {
         IReadOnlyList<QualitySignalSample> across =
@@ -75,7 +75,7 @@ public sealed class SignalsThatNeverChangeTests
         Assert.Equal(6e-6, figures.BitErrorRateHighest.GetValueOrDefault(), 12);
     }
 
-    [Fact(DisplayName = "BR-QD-005: a session that started over is filed beside the one before it, and neither loses which session it was")]
+    [Fact(DisplayName = "a session that started over is filed beside the one before it, and neither loses which session it was")]
     public void ASessionThatStartedOverIsFiledBesideTheOneBeforeIt()
     {
         QualitySignalSample before = Sample(Noon, "live-1", Counted(Noon, 8, 4_000_000));

@@ -47,7 +47,7 @@ public sealed class ProgrammeNoteTests
         Assert.Equal($"{ProgrammeNote.InsteadOfAPath} is gone", ProgrammeNote.Of(said, 20));
     }
 
-    [Fact(DisplayName = "BR-ED2-012: what an encode failure keeps names no path on this machine, as the live side already did")]
+    [Fact(DisplayName = "what an encode failure keeps names no path on this machine, as the live side already did")]
     public void WhatAnEncodeFailureKeepsNamesNoPathOnThisMachine()
     {
         const string said = "[out#0 @ 0x1] Error opening output /srv/encoded/k-1.mp4: No space left on device";

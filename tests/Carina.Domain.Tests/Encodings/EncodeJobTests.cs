@@ -48,7 +48,7 @@ public sealed class EncodeJobTests
         return job;
     }
 
-    [Fact(DisplayName = "BR-ES-002: a job stands at one of five places and there is no sixth")]
+    [Fact(DisplayName = "a job stands at one of five places and there is no sixth")]
     public void AJobStandsAtOneOfFivePlacesAndThereIsNoSixth()
     {
         Assert.Equal(
@@ -62,7 +62,7 @@ public sealed class EncodeJobTests
             Enum.GetValues<EncodeJobStatus>());
     }
 
-    [Fact(DisplayName = "BR-ES-002: what the library is shown is a fifth answer for a recording no job ever touched")]
+    [Fact(DisplayName = "what the library is shown is a fifth answer for a recording no job ever touched")]
     public void WhatTheLibraryIsShownHasARoomForARecordingNoJobEverTouched()
     {
         Assert.Equal(
@@ -78,14 +78,14 @@ public sealed class EncodeJobTests
         Assert.Equal(EncodeStanding.NotEncoded, EncodeStandings.Of(null));
     }
 
-    [Fact(DisplayName = "BR-ES-002: a job that was called off leaves the recording unencoded, not failed")]
+    [Fact(DisplayName = "a job that was called off leaves the recording unencoded, not failed")]
     public void AJobThatWasCalledOffLeavesTheRecordingUnencodedRatherThanFailed()
     {
         Assert.Equal(EncodeStanding.NotEncoded, EncodeStandings.Of(EncodeJobStatus.Cancelled));
         Assert.Equal(EncodeStanding.Failed, EncodeStandings.Of(EncodeJobStatus.Failed));
     }
 
-    [Fact(DisplayName = "BR-ES-001: a job begins waiting, on its first attempt, and has ended nothing")]
+    [Fact(DisplayName = "a job begins waiting, on its first attempt, and has ended nothing")]
     public void AJobBeginsWaitingOnItsFirstAttempt()
     {
         EncodeJob job = Waiting();
@@ -99,7 +99,7 @@ public sealed class EncodeJobTests
         Assert.False(job.HasEnded);
     }
 
-    [Fact(DisplayName = "BR-ES-001: waiting becomes running, and running becomes finished")]
+    [Fact(DisplayName = "waiting becomes running, and running becomes finished")]
     public void WaitingBecomesRunningAndRunningBecomesFinished()
     {
         EncodeJob job = Named();
@@ -114,7 +114,7 @@ public sealed class EncodeJobTests
         Assert.True(job.HasEnded);
     }
 
-    [Fact(DisplayName = "BR-ES-001: a job that has ended cannot be moved again")]
+    [Fact(DisplayName = "a job that has ended cannot be moved again")]
     public void AJobThatHasEndedCannotBeMovedAgain()
     {
         EncodeJob job = Named();
@@ -128,7 +128,7 @@ public sealed class EncodeJobTests
         Assert.Throws<InvalidOperationException>(() => job.Name(EncodeFileName.Artefact(job.RecordingId, job.ProfileId)));
     }
 
-    [Fact(DisplayName = "BR-ED2-009: a job keeps the output root it was queued into, so the destination may move without it")]
+    [Fact(DisplayName = "a job keeps the output root it was queued into, so the destination may move without it")]
     public void AJobKeepsTheOutputRootItWasQueuedInto()
     {
         EncodeJob job = Waiting();
@@ -137,7 +137,7 @@ public sealed class EncodeJobTests
         Assert.Null(job.ArtefactName);
     }
 
-    [Fact(DisplayName = "BR-ED2-009: the work file is named for the job and the attempt it is on")]
+    [Fact(DisplayName = "the work file is named for the job and the attempt it is on")]
     public void TheWorkFileIsNamedForTheJobAndTheAttemptItIsOn()
     {
         EncodeJob job = Running();
@@ -149,7 +149,7 @@ public sealed class EncodeJobTests
         Assert.Equal(EncodeFileName.Working(job.RecordingId, job.Id, 2), job.WorkFileName);
     }
 
-    [Fact(DisplayName = "BR-ED2-009: the artefact is named while the job runs, and only then")]
+    [Fact(DisplayName = "the artefact is named while the job runs, and only then")]
     public void TheArtefactIsNamedWhileTheJobRunsAndOnlyThen()
     {
         EncodeJob waiting = Waiting();
@@ -164,7 +164,7 @@ public sealed class EncodeJobTests
         Assert.Equal(its, running.ArtefactName);
     }
 
-    [Fact(DisplayName = "BR-ED2-009: a job cannot finish without having said what it made")]
+    [Fact(DisplayName = "a job cannot finish without having said what it made")]
     public void AJobCannotFinishWithoutHavingSaidWhatItMade()
     {
         EncodeJob job = Running();
@@ -173,7 +173,7 @@ public sealed class EncodeJobTests
         Assert.Equal(EncodeJobStatus.Running, job.Status);
     }
 
-    [Fact(DisplayName = "BR-ED2-009: naming the artefact again by the same name is its own success seen again, not a second claim")]
+    [Fact(DisplayName = "naming the artefact again by the same name is its own success seen again, not a second claim")]
     public void NamingTheArtefactAgainByTheSameNameIsNotASecondClaim()
     {
         EncodeJob job = Named();
@@ -184,7 +184,7 @@ public sealed class EncodeJobTests
         Assert.Equal(same, job.ArtefactName);
     }
 
-    [Fact(DisplayName = "BR-ED2-009: a job that has named its artefact cannot be talked into another name")]
+    [Fact(DisplayName = "a job that has named its artefact cannot be talked into another name")]
     public void AJobThatHasNamedItsArtefactCannotBeTalkedIntoAnotherName()
     {
         EncodeJob job = Named();
@@ -192,7 +192,7 @@ public sealed class EncodeJobTests
         Assert.Throws<InvalidOperationException>(() => job.Name(EncodeFileName.Artefact(job.RecordingId, EncodeProfileId.New())));
     }
 
-    [Fact(DisplayName = "BR-ED2-009: the name survives a requeue, so the next attempt can recognise its own success")]
+    [Fact(DisplayName = "the name survives a requeue, so the next attempt can recognise its own success")]
     public void TheNameSurvivesARequeue()
     {
         EncodeJob job = Named();
@@ -204,7 +204,7 @@ public sealed class EncodeJobTests
         Assert.Equal(named, job.ArtefactName);
     }
 
-    [Fact(DisplayName = "BR-ED2-009: the artefact is named for the recording and the profile the job was queued with")]
+    [Fact(DisplayName = "the artefact is named for the recording and the profile the job was queued with")]
     public void TheArtefactIsNamedForTheRecordingAndTheProfileTheJobWasQueuedWith()
     {
         EncodeJob job = Running();
@@ -213,7 +213,7 @@ public sealed class EncodeJobTests
         Assert.Throws<InvalidOperationException>(() => job.Name(EncodeFileName.Working(job.RecordingId, job.Id, 1)));
     }
 
-    [Fact(DisplayName = "BR-ES-001: a job that is still waiting cannot finish without having run")]
+    [Fact(DisplayName = "a job that is still waiting cannot finish without having run")]
     public void AJobThatIsStillWaitingCannotFinishWithoutHavingRun()
     {
         EncodeJob job = Waiting();
@@ -223,7 +223,7 @@ public sealed class EncodeJobTests
         Assert.Throws<InvalidOperationException>(() => job.Requeue(Ended));
     }
 
-    [Fact(DisplayName = "BR-ES-001: a job picked up again is put back to waiting with its attempt counted")]
+    [Fact(DisplayName = "a job picked up again is put back to waiting with its attempt counted")]
     public void AJobPickedUpAgainIsPutBackToWaitingWithItsAttemptCounted()
     {
         EncodeJob job = Running();
@@ -236,7 +236,7 @@ public sealed class EncodeJobTests
         Assert.Null(job.StartedAt);
     }
 
-    [Fact(DisplayName = "BR-ED2-011: a job found running when the process comes up goes back to the queue with its attempt counted")]
+    [Fact(DisplayName = "a job found running when the process comes up goes back to the queue with its attempt counted")]
     public void AJobFoundRunningWhenTheProcessComesUpGoesBackToTheQueue()
     {
         EncodeJob job = Running();
@@ -251,7 +251,7 @@ public sealed class EncodeJobTests
         Assert.Null(job.Failure);
     }
 
-    [Fact(DisplayName = "BR-ED2-011: a job on its last attempt when the process comes up is given up as timed out, not put back")]
+    [Fact(DisplayName = "a job on its last attempt when the process comes up is given up as timed out, not put back")]
     public void AJobOnItsLastAttemptWhenTheProcessComesUpIsGivenUp()
     {
         EncodeJob job = EncodeJob.Rehydrate(
@@ -283,14 +283,14 @@ public sealed class EncodeJobTests
         Assert.Equal(Ended, job.EndedAt);
     }
 
-    [Fact(DisplayName = "BR-ED2-011: only a job the ledger holds as running is picked up again, and it gets at least one attempt")]
+    [Fact(DisplayName = "only a job the ledger holds as running is picked up again, and it gets at least one attempt")]
     public void OnlyARunningJobIsPickedUpAgain()
     {
         Assert.Throws<InvalidOperationException>(() => Waiting().Recover(3, Ended));
         Assert.Throws<ArgumentOutOfRangeException>(() => Running().Recover(0, Ended));
     }
 
-    [Fact(DisplayName = "BR-ED2-005: a claim carries a job only when the ledger holds it as running")]
+    [Fact(DisplayName = "a claim carries a job only when the ledger holds it as running")]
     public void AClaimCarriesAJobOnlyWhenTheLedgerHoldsItAsRunning()
     {
         EncodeClaim claimed = EncodeClaim.Of(Running());
@@ -303,7 +303,7 @@ public sealed class EncodeJobTests
         Assert.Equal(EncodeClaimStanding.TakenMeanwhile, EncodeClaim.TakenMeanwhile().Standing);
     }
 
-    [Fact(DisplayName = "BR-ED2-012: a failure is a classification, and the words beside it are not the reason")]
+    [Fact(DisplayName = "a failure is a classification, and the words beside it are not the reason")]
     public void AFailureIsAClassificationAndTheWordsBesideItAreNotTheReason()
     {
         EncodeJob job = Running();
@@ -317,7 +317,7 @@ public sealed class EncodeJobTests
         Assert.Equal(Ended, job.Failure.NoticedAt);
     }
 
-    [Fact(DisplayName = "BR-ED2-012: the seven reasons a job fails for are these and no other")]
+    [Fact(DisplayName = "the seven reasons a job fails for are these and no other")]
     public void TheSevenReasonsAJobFailsForAreTheseAndNoOther()
     {
         Assert.Equal(
@@ -333,7 +333,7 @@ public sealed class EncodeJobTests
             Enum.GetValues<EncodeFailure>());
     }
 
-    [Fact(DisplayName = "BR-ED2-006: a running job is aligned once before its run and measured once after it, and the two together say where its clock stands")]
+    [Fact(DisplayName = "a running job is aligned once before its run and measured once after it, and the two together say where its clock stands")]
     public void ARunningJobIsAlignedBeforeItsRunAndMeasuredAfterIt()
     {
         EncodeJob job = Running();
@@ -348,7 +348,7 @@ public sealed class EncodeJobTests
         Assert.True(job.Timeline.LengthsAgree);
     }
 
-    [Fact(DisplayName = "BR-ED2-006: only a running job is aligned or measured, a job is measured against the clock it was aligned to, and a job put back in the queue starts over unaligned")]
+    [Fact(DisplayName = "only a running job is aligned or measured, a job is measured against the clock it was aligned to, and a job put back in the queue starts over unaligned")]
     public void OnlyARunningJobIsAlignedOrMeasuredAndARequeuedJobStartsOverUnaligned()
     {
         var timeline = new EncodeTimeline(TimeSpan.FromSeconds(30499.474078), TimeSpan.FromSeconds(0.5072), null, null);
@@ -384,7 +384,7 @@ public sealed class EncodeJobTests
             null));
     }
 
-    [Fact(DisplayName = "BR-ED2-012: a reason nobody named cannot be recorded as one")]
+    [Fact(DisplayName = "a reason nobody named cannot be recorded as one")]
     public void AReasonNobodyNamedCannotBeRecordedAsOne()
     {
         EncodeJob job = Running();
@@ -392,7 +392,7 @@ public sealed class EncodeJobTests
         Assert.Throws<ArgumentOutOfRangeException>(() => job.Fail((EncodeFailure)99, "who knows", Ended));
     }
 
-    [Fact(DisplayName = "BR-ED2-012: only the tail of what the programme said is kept")]
+    [Fact(DisplayName = "only the tail of what the programme said is kept")]
     public void OnlyTheTailOfWhatTheProgrammeSaidIsKept()
     {
         string said = new string('a', EncodeNote.Longest) + "the part that matters";
@@ -401,7 +401,7 @@ public sealed class EncodeJobTests
         Assert.EndsWith("the part that matters", EncodeNote.Of(said), StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "BR-ED2-012: calling a job off is a different move from failing it")]
+    [Fact(DisplayName = "calling a job off is a different move from failing it")]
     public void CallingAJobOffIsADifferentMoveFromFailingIt()
     {
         EncodeJob calledOff = Running();
@@ -425,7 +425,7 @@ public sealed class EncodeJobTests
     public void AJobCannotBeMadeWithoutGoingThroughTheOneWayIn()
         => Assert.Empty(typeof(EncodeJob).GetConstructors());
 
-    [Fact(DisplayName = "A-エンコード-069: a job queued the ordinary way makes nothing again, and one queued because a person asked says so from the moment it is queued")]
+    [Fact(DisplayName = "a job queued the ordinary way makes nothing again, and one queued because a person asked says so from the moment it is queued")]
     public void AJobQueuedTheOrdinaryWayMakesNothingAgain()
     {
         EncodeJob ordinary = Waiting();
@@ -446,7 +446,7 @@ public sealed class EncodeJobTests
         Assert.Null(again.ArtefactName);
     }
 
-    [Fact(DisplayName = "A-エンコード-069: a job gives up only a name it holds, and still names what it made afterwards")]
+    [Fact(DisplayName = "a job gives up only a name it holds, and still names what it made afterwards")]
     public void AJobGivesUpOnlyANameItHolds()
     {
         EncodeJob job = Named();
@@ -460,7 +460,7 @@ public sealed class EncodeJobTests
         Assert.Equal(name, job.ArtefactName);
     }
 
-    [Fact(DisplayName = "A-エンコード-069: a job that named nothing cannot be read back as having given a name up")]
+    [Fact(DisplayName = "a job that named nothing cannot be read back as having given a name up")]
     public void AJobThatNamedNothingCannotHaveGivenANameUp()
         => Assert.Throws<ArgumentException>(() => EncodeJob.Rehydrate(
             EncodeJobId.New(),
@@ -542,7 +542,7 @@ public sealed class EncodeJobRunMarkTests
         return job;
     }
 
-    [Fact(DisplayName = "BR-EV-004: where a run went is written on the job, so a degraded run is in the ledger and not only in a log")]
+    [Fact(DisplayName = "where a run went is written on the job, so a degraded run is in the ledger and not only in a log")]
     public void WhereARunWentIsWrittenOnTheJob()
     {
         EncodeJob job = Running();
@@ -555,7 +555,7 @@ public sealed class EncodeJobRunMarkTests
         Assert.True(job.Route.WasDegraded);
     }
 
-    [Fact(DisplayName = "BR-ED2-011: the programme a run started is written on the job as its id and when it began, together")]
+    [Fact(DisplayName = "the programme a run started is written on the job as its id and when it began, together")]
     public void TheProgrammeARunStartedIsWrittenOnTheJob()
     {
         EncodeJob job = Running();
@@ -566,7 +566,7 @@ public sealed class EncodeJobRunMarkTests
         Assert.Equal(Started.AddSeconds(1), job.Programme.StartedAt);
     }
 
-    [Fact(DisplayName = "BR-ED2-014: headway is written on the job as the portion done, what is left and when that was reported")]
+    [Fact(DisplayName = "headway is written on the job as the portion done, what is left and when that was reported")]
     public void HeadwayIsWrittenOnTheJobWithWhenItWasReported()
     {
         EncodeJob job = Running();
@@ -578,7 +578,7 @@ public sealed class EncodeJobRunMarkTests
         Assert.Equal(Later, job.Headway.At);
     }
 
-    [Fact(DisplayName = "BR-ED2-014: a running job is quiet for as long as it has been since its last headway, and before any headway since it started")]
+    [Fact(DisplayName = "a running job is quiet for as long as it has been since its last headway, and before any headway since it started")]
     public void ARunningJobIsQuietForAsLongAsSinceItsLastHeadway()
     {
         EncodeJob fresh = Running();
@@ -590,7 +590,7 @@ public sealed class EncodeJobRunMarkTests
         Assert.Null(Waiting().QuietFor(Later));
     }
 
-    [Fact(DisplayName = "BR-ED2-014: a running job that has made no headway for as long as a run may go quiet is stalled, and the ledger's 'running' is not to be read as such")]
+    [Fact(DisplayName = "a running job that has made no headway for as long as a run may go quiet is stalled, and the ledger's 'running' is not to be read as such")]
     public void ARunningJobWithNoHeadwayForTooLongIsStalled()
     {
         EncodeJob job = Marked();
@@ -600,7 +600,7 @@ public sealed class EncodeJobRunMarkTests
         Assert.True(job.IsStalled(Later.AddHours(3), TenMinutes));
     }
 
-    [Fact(DisplayName = "BR-ED2-014: a job that has yet to report anything is stalled from its start, not never")]
+    [Fact(DisplayName = "a job that has yet to report anything is stalled from its start, not never")]
     public void AJobThatHasReportedNothingIsStalledFromItsStart()
     {
         EncodeJob job = Running();
@@ -609,7 +609,7 @@ public sealed class EncodeJobRunMarkTests
         Assert.True(job.IsStalled(Started.AddMinutes(10), TenMinutes));
     }
 
-    [Fact(DisplayName = "BR-ED2-014: only a running job can be stalled; a job that ended quiet is not, and a job cannot be asked about a quiet of no length")]
+    [Fact(DisplayName = "only a running job can be stalled; a job that ended quiet is not, and a job cannot be asked about a quiet of no length")]
     public void OnlyARunningJobCanBeStalled()
     {
         EncodeJob ended = Marked();
@@ -620,7 +620,7 @@ public sealed class EncodeJobRunMarkTests
         Assert.Throws<ArgumentOutOfRangeException>(() => Running().IsStalled(Later, TimeSpan.Zero));
     }
 
-    [Fact(DisplayName = "BR-ED2-011: a job put back in the queue carries nothing of the run it was on: no route, no programme, no headway")]
+    [Fact(DisplayName = "a job put back in the queue carries nothing of the run it was on: no route, no programme, no headway")]
     public void AJobPutBackCarriesNothingOfTheRunItWasOn()
     {
         EncodeJob job = Marked();
@@ -632,7 +632,7 @@ public sealed class EncodeJobRunMarkTests
         Assert.Null(job.Headway);
     }
 
-    [Fact(DisplayName = "BR-ED2-011: a job that ends keeps where it ran and how far it got, and lets go of the programme, which has exited")]
+    [Fact(DisplayName = "a job that ends keeps where it ran and how far it got, and lets go of the programme, which has exited")]
     public void AJobThatEndsKeepsTheRouteAndTheHeadwayAndLetsGoOfTheProgramme()
     {
         EncodeJob failed = Marked();
@@ -652,7 +652,7 @@ public sealed class EncodeJobRunMarkTests
         }
     }
 
-    [Fact(DisplayName = "BR-ES-001: only a running job runs somewhere, has a programme, or makes headway")]
+    [Fact(DisplayName = "only a running job runs somewhere, has a programme, or makes headway")]
     public void OnlyARunningJobIsMarked()
     {
         EncodeJob waiting = Waiting();
@@ -663,7 +663,7 @@ public sealed class EncodeJobRunMarkTests
         Assert.Throws<InvalidOperationException>(() => waiting.Reached(progress, Later));
     }
 
-    [Fact(DisplayName = "BR-ED2-011: a row that says a waiting job has a programme, or ran somewhere, is not one the ledger can hold")]
+    [Fact(DisplayName = "a row that says a waiting job has a programme, or ran somewhere, is not one the ledger can hold")]
     public void ARowThatSaysAWaitingJobHasAProgrammeIsRefused()
     {
         Assert.Throws<ArgumentException>(() => Rehydrated(EncodeJobStatus.Queued, null, programme: Ffmpeg));

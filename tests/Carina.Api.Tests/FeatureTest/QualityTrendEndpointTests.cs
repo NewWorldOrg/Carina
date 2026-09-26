@@ -9,7 +9,7 @@ namespace Carina.Api.Tests.FeatureTest;
 
 public sealed class QualityTrendEndpointTests
 {
-    [Fact(DisplayName = "BR-QD-001: packets lost come back a point a day, the day holding an unmeasured recording counting it beside the share")]
+    [Fact(DisplayName = "packets lost come back a point a day, the day holding an unmeasured recording counting it beside the share")]
     public async Task PacketsLostComeBackAPointADay()
     {
         await using var feature = new QualityFeature();
@@ -89,7 +89,7 @@ public sealed class QualityTrendEndpointTests
         Assert.Equal(0, past.GetProperty("layers").GetArrayLength());
     }
 
-    [Fact(DisplayName = "BR-QD-001: a signal nothing sampled still answers every point, as nothing measured")]
+    [Fact(DisplayName = "a signal nothing sampled still answers every point, as nothing measured")]
     public async Task ASignalNothingSampledStillAnswersEveryPointAsNothingMeasured()
     {
         await using var feature = new QualityFeature();
@@ -112,7 +112,7 @@ public sealed class QualityTrendEndpointTests
             });
     }
 
-    [Theory(DisplayName = "BR-QV-001: a day count outside the range or a subject nobody names is refused")]
+    [Theory(DisplayName = "a day count outside the range or a subject nobody names is refused")]
     [InlineData("/api/quality/trends?days=0")]
     [InlineData("/api/quality/trends?days=366")]
     [InlineData("/api/quality/trends?subject=99")]

@@ -15,7 +15,7 @@ public enum PlaybackPositionKeep
 /// carries on where it was left on another. One row stands per viewer per recording: a player that
 /// sends where it has got to every few seconds moves that row rather than writing a history of it,
 /// and the last thing written is what the next player is told. It names the recording by value and
-/// holds no key into the ledger (BR-KD-013), so a place is only kept while the ledger still holds
+/// holds no key into the ledger, so a place is only kept while the ledger still holds
 /// the recording it is a place in, and throwing that recording away forgets it.
 /// </summary>
 public interface IPlaybackPositionRepository

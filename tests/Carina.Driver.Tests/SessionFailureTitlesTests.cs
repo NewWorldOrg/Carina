@@ -12,7 +12,7 @@ public sealed class SessionFailureTitlesTests
     private const int InputOutputError = 5;
 
     [Fact]
-    public void BR_KD_004_AWriteTheDiskHadNoRoomForIsNamedAsAFullDisk()
+    public void AWriteTheDiskHadNoRoomForIsNamedAsAFullDisk()
         => Assert.Equal(SessionRefusalTitles.DiskFull, SessionFailureTitles.Of(WrittenToAFullDevice()));
 
     [Fact]

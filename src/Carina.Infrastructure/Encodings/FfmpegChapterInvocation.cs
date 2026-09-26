@@ -29,7 +29,7 @@ namespace Carina.Infrastructure.Encodings;
 /// <para>
 /// Every argument is an option name, a constant written here, or a number this repository holds
 /// rendered the same way whatever language the machine is set to, beside the path of the source
-/// (BR-EV-002). Nothing a broadcaster wrote reaches one, and there is no setting a filter could be
+///. Nothing a broadcaster wrote reaches one, and there is no setting a filter could be
 /// written in: the filter chains below are built from the numbers and from nothing else.
 /// </para>
 /// </summary>

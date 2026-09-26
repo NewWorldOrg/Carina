@@ -13,7 +13,7 @@ public sealed class AnotherProgrammeTests : IDisposable
 
     public void Dispose() => tree.Dispose();
 
-    [Fact(DisplayName = "BR-ED2-011: a programme that started is handed back with its id and when it began, as the operating system has them")]
+    [Fact(DisplayName = "a programme that started is handed back with its id and when it began, as the operating system has them")]
     public void AProgrammeThatStartedIsHandedBackWithItsIdAndStart()
     {
         DateTime before = DateTime.UtcNow.AddSeconds(-2);
@@ -28,7 +28,7 @@ public sealed class AnotherProgrammeTests : IDisposable
         AnotherProgramme.GiveUpOn(running);
     }
 
-    [Fact(DisplayName = "BR-ED2-005: a programme started yielding runs under nice at the lowest priority, keeps its own id, and is otherwise described the same")]
+    [Fact(DisplayName = "a programme started yielding runs under nice at the lowest priority, keeps its own id, and is otherwise described the same")]
     public void AProgrammeStartedYieldingRunsUnderNiceAtTheLowestPriority()
     {
         ProcessStartInfo yielding = AnotherProgramme.Describe("ffmpeg", ["-version"], ProgrammePriority.Yielding);
@@ -43,7 +43,7 @@ public sealed class AnotherProgrammeTests : IDisposable
         Assert.Throws<ArgumentOutOfRangeException>(() => AnotherProgramme.Describe("ffmpeg", [], (ProgrammePriority)3));
     }
 
-    [Fact(DisplayName = "BR-ED2-005: a yielding programme is what the id names — nice gives way to the programme rather than sitting beside it")]
+    [Fact(DisplayName = "a yielding programme is what the id names — nice gives way to the programme rather than sitting beside it")]
     public async Task AYieldingProgrammeIsWhatTheIdNames()
     {
         string script = Standing("echo $$; nice");
@@ -58,7 +58,7 @@ public sealed class AnotherProgrammeTests : IDisposable
         Assert.Equal("19", lines[1].Trim());
     }
 
-    [Fact(DisplayName = "BR-EV-004: a programme that is not on this machine is missing whether it is started yielding or not, and the note says so without the path")]
+    [Fact(DisplayName = "a programme that is not on this machine is missing whether it is started yielding or not, and the note says so without the path")]
     public void AProgrammeNotOnThisMachineIsMissingEitherWay()
     {
         string absent = tree.Under("no-such-programme");

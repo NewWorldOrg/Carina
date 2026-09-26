@@ -8,7 +8,7 @@ namespace Carina.Domain.Encodings;
 /// The one row that says how the queue runs when nobody asked: whether a recording that ends is
 /// queued at all, and how many of the machine's cores a run may take. Both start as the machine was
 /// deployed and stay that way until somebody settles them, which is why a machine nobody has
-/// touched holds no row at all (BR-ED2-004 / BR-ED2-005).
+/// touched holds no row at all.
 /// <para>
 /// What the auto-run takes is not among them. A recording that failed has nothing to encode and one
 /// cut short has a file like any other, and nothing else narrows it — no genre, no list, no third
@@ -78,7 +78,7 @@ public sealed class EncodeAutoRun
 /// <see cref="MostCores"/> is what a run will actually take rather than what was asked for, because
 /// neither side is held to this machine: a deployment can name more cores than the host has, and a
 /// row settled on one host outlives a move to a smaller one. Answering the number that will not run
-/// would offer a screen a value it cannot send back (BR-ED2-005).
+/// would offer a screen a value it cannot send back.
 /// </para>
 /// </summary>
 public sealed record EncodeAutoRunStanding(bool Automatically, int MostCores, bool Stored, DateTime? UpdatedAt)

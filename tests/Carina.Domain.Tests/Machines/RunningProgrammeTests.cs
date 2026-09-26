@@ -6,7 +6,7 @@ public sealed class RunningProgrammeTests
 {
     private static readonly DateTime Began = new(2026, 9, 5, 3, 0, 5, DateTimeKind.Utc);
 
-    [Fact(DisplayName = "BR-ED2-011: a programme is its id and when it began together; an id below the first or a time not in UTC is no programme")]
+    [Fact(DisplayName = "a programme is its id and when it began together; an id below the first or a time not in UTC is no programme")]
     public void AProgrammeIsItsIdAndWhenItBeganTogether()
     {
         var programme = new RunningProgramme(4242, Began);
@@ -17,7 +17,7 @@ public sealed class RunningProgrammeTests
         Assert.Throws<ArgumentException>(() => new RunningProgramme(4242, DateTime.SpecifyKind(Began, DateTimeKind.Local)));
     }
 
-    [Fact(DisplayName = "BR-ED2-011: what runs under the id now is the written programme when it began within the tolerance of when the written one did, on either side, and not otherwise")]
+    [Fact(DisplayName = "what runs under the id now is the written programme when it began within the tolerance of when the written one did, on either side, and not otherwise")]
     public void WhatRunsUnderTheIdIsTheSameWhenItBeganWithinTheTolerance()
     {
         var programme = new RunningProgramme(4242, Began);

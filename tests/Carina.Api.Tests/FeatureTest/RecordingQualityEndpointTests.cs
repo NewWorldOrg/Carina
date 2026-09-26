@@ -94,7 +94,7 @@ public sealed class RecordingQualityEndpointTests
         Assert.Equal("mayNotBeWatchable", drops.GetProperty("scrambleQuality").GetString());
     }
 
-    [Fact(DisplayName = "BR-QD-003: moving the level scrambling is held against moves what every recording says")]
+    [Fact(DisplayName = "moving the level scrambling is held against moves what every recording says")]
     public async Task MovingTheLevelScramblingIsHeldAgainstMovesWhatEveryRecordingSays()
     {
         await using var feature = new RecordingFeature();

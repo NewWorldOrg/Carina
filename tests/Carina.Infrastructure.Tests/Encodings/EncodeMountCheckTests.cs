@@ -13,7 +13,7 @@ public sealed class EncodeMountCheckTests
 
     private static readonly OutputRoot Encodes = new("encodes");
 
-    [Fact(DisplayName = "A-エンコード-024: with no working directory named, work is written beside the artefact and there is nothing to compare")]
+    [Fact(DisplayName = "with no working directory named, work is written beside the artefact and there is nothing to compare")]
     public async Task WithNoWorkingDirectoryNamedThereIsNothingToCompare()
     {
         using var shelf = new TempTree();
@@ -28,7 +28,7 @@ public sealed class EncodeMountCheckTests
         Assert.Empty(log.Warnings);
     }
 
-    [Fact(DisplayName = "A-エンコード-024: a working directory on the same mount as every held root lets the process start")]
+    [Fact(DisplayName = "a working directory on the same mount as every held root lets the process start")]
     public async Task AWorkingDirectoryOnTheSameMountAsEveryRootLetsTheProcessStart()
     {
         using var workshop = new TempTree();
@@ -43,7 +43,7 @@ public sealed class EncodeMountCheckTests
         Assert.Empty(shelf.Snapshot());
     }
 
-    [Fact(DisplayName = "A-エンコード-024: a working directory on another mount than a held root stops the process, naming the setting")]
+    [Fact(DisplayName = "a working directory on another mount than a held root stops the process, naming the setting")]
     public async Task AWorkingDirectoryOnAnotherMountThanARootStopsTheProcess()
     {
         using var workshop = new TempTree();
@@ -59,7 +59,7 @@ public sealed class EncodeMountCheckTests
         Assert.Equal([(workshop.Root, shelf.Root)], probe.Asked);
     }
 
-    [Fact(DisplayName = "A-エンコード-024: a working directory that is not there stops the process before anything is probed")]
+    [Fact(DisplayName = "a working directory that is not there stops the process before anything is probed")]
     public async Task AWorkingDirectoryThatIsNotThereStopsTheProcess()
     {
         using var shelf = new TempTree();
@@ -72,7 +72,7 @@ public sealed class EncodeMountCheckTests
         Assert.Empty(probe.Asked);
     }
 
-    [Fact(DisplayName = "A-エンコード-024: a working directory this process cannot write stops the process")]
+    [Fact(DisplayName = "a working directory this process cannot write stops the process")]
     public async Task AWorkingDirectoryThisProcessCannotWriteStopsTheProcess()
     {
         using var workshop = new TempTree();
@@ -85,7 +85,7 @@ public sealed class EncodeMountCheckTests
         Assert.Contains("Permission denied", refusal.Message, StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "A-エンコード-024: a held root this process cannot write is reported and does not stop the process")]
+    [Fact(DisplayName = "a held root this process cannot write is reported and does not stop the process")]
     public async Task ARootThisProcessCannotWriteIsReportedAndDoesNotStopTheProcess()
     {
         using var workshop = new TempTree();
@@ -112,7 +112,7 @@ public sealed class EncodeMountCheckTests
         Assert.Empty(shelf.Snapshot());
     }
 
-    [Fact(DisplayName = "BR-EV-001: a process that holds no root says nothing can be encoded, and probes nothing")]
+    [Fact(DisplayName = "a process that holds no root says nothing can be encoded, and probes nothing")]
     public async Task AProcessThatHoldsNoRootSaysNothingCanBeEncoded()
     {
         var probe = new ScriptedProbe(new RenameVerdict(RenameStanding.WouldBeARename, string.Empty));
@@ -126,7 +126,7 @@ public sealed class EncodeMountCheckTests
         Assert.Empty(probe.Asked);
     }
 
-    [Fact(DisplayName = "BR-EV-001: the roots the recordings are read from are not probed, because nothing is written into them")]
+    [Fact(DisplayName = "the roots the recordings are read from are not probed, because nothing is written into them")]
     public async Task TheRootsTheRecordingsAreReadFromAreNotProbed()
     {
         using var shelf = new TempTree();

@@ -28,7 +28,7 @@ public sealed class QualityWindowsTests
             new DateTime(2026, 9, 8, 13, 0, 0, DateTimeKind.Utc),
             QualityWindows.EndOf(QualityWindows.StartOf(Sometime, QualityWindow.Hour), QualityWindow.Hour));
 
-    [Fact(DisplayName = "決定2: the two layers this domain keeps are a minute and an hour")]
+    [Fact(DisplayName = "the two layers this domain keeps are a minute and an hour")]
     public void TheTwoLayersThisDomainKeepsAreAMinuteAndAnHour()
         => Assert.Equal([QualityWindow.Minute, QualityWindow.Hour], QualityWindows.All);
 

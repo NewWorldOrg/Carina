@@ -4,7 +4,7 @@ namespace Carina.Domain.Tests.Quality;
 
 public sealed class QualitySubjectTests
 {
-    [Fact(DisplayName = "BR-QD-013: a subject is named by value, whichever of the four it is")]
+    [Fact(DisplayName = "a subject is named by value, whichever of the four it is")]
     public void ASubjectIsNamedByValueWhicheverOfTheFourItIs()
     {
         QualitySubject subject = QualitySubject.Of(QualitySubjectKind.Channel, "32736-1024");

@@ -8,7 +8,7 @@ using Carina.Infrastructure.Encodings;
 namespace Carina.Api.Services;
 
 /// <summary>
-/// A destination names a root out of the set the storage surface declares (BR-EV-001), so the set
+/// A destination names a root out of the set the storage surface declares, so the set
 /// is read at the moment of saving and nothing is saved while the driver cannot say what it
 /// declares. Of that set, only a root this process holds for writing is accepted.
 /// </summary>

@@ -13,7 +13,7 @@ public sealed class RecordingStreamDiskFullTests
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
     [Fact]
-    public async Task BR_KD_004_ARecordingWhoseDiskFilledFailsThereRatherThanBeingOpenedAgain()
+    public async Task ARecordingWhoseDiskFilledFailsThereRatherThanBeingOpenedAgain()
     {
         Recording recording = InFlight();
         var ledger = new StreamLedger();

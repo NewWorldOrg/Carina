@@ -7,7 +7,7 @@ public sealed class DirectoryRenameProbeTests
 {
     private readonly DirectoryRenameProbe probe = new();
 
-    [Fact(DisplayName = "BR-ED2-009: within one directory a move is a rename, and the probe leaves nothing behind")]
+    [Fact(DisplayName = "within one directory a move is a rename, and the probe leaves nothing behind")]
     public void WithinOneDirectoryAMoveIsARenameAndTheProbeLeavesNothingBehind()
     {
         using var room = new TempTree();
@@ -19,7 +19,7 @@ public sealed class DirectoryRenameProbeTests
         Assert.Equal(["file kept.txt 3 " + Sha("kept.txt", 3)], room.Snapshot().Select(entry => entry[..entry.LastIndexOf(' ')] + " " + entry[(entry.LastIndexOf(' ') + 1)..]));
     }
 
-    [Fact(DisplayName = "BR-ED2-009: between two directories on one mount a move is a rename, and neither side keeps the probe")]
+    [Fact(DisplayName = "between two directories on one mount a move is a rename, and neither side keeps the probe")]
     public void BetweenTwoDirectoriesOnOneMountAMoveIsARename()
     {
         using var workshop = new TempTree();
@@ -32,7 +32,7 @@ public sealed class DirectoryRenameProbeTests
         Assert.Empty(room.Snapshot());
     }
 
-    [Fact(DisplayName = "BR-ED2-009: the kernel's refusal to rename across mounts is read as exactly that")]
+    [Fact(DisplayName = "the kernel's refusal to rename across mounts is read as exactly that")]
     public void TheKernelsRefusalToRenameAcrossMountsIsReadAsExactlyThat()
     {
         RenameVerdict verdict = DirectoryRenameProbe.Read(new IOException("Invalid cross-device link", DirectoryRenameProbe.CrossDeviceLink));

@@ -7,7 +7,7 @@ public sealed class QualityTrendFrameTests
 {
     private static readonly DateTime Now = new(2026, 9, 8, 12, 34, 56, DateTimeKind.Utc);
 
-    [Fact(DisplayName = "BR-QV-001: a day read by the hour holds a point for each hour, the one in progress cut at now")]
+    [Fact(DisplayName = "a day read by the hour holds a point for each hour, the one in progress cut at now")]
     public void ADayReadByTheHourHoldsAPointForEachHour()
     {
         QualityTrendFrame frame = QualityTrendFrame.Over(1, Now, QualityTrendStep.Hour)!;
@@ -20,7 +20,7 @@ public sealed class QualityTrendFrameTests
         Assert.Equal(Now, frame.Buckets[^1].Until);
     }
 
-    [Theory(DisplayName = "BR-QV-001: a longer period widens the step rather than returning more points")]
+    [Theory(DisplayName = "a longer period widens the step rather than returning more points")]
     [InlineData(8, QualityTrendStep.Hour)]
     [InlineData(9, QualityTrendStep.ThreeHours)]
     [InlineData(40, QualityTrendStep.SixHours)]
@@ -35,7 +35,7 @@ public sealed class QualityTrendFrameTests
         Assert.InRange(frame.Buckets.Count, 1, QualityTrendFrame.MostPoints);
     }
 
-    [Fact(DisplayName = "BR-QV-001: no period that can be asked for returns more points than the cap, at any finest step")]
+    [Fact(DisplayName = "no period that can be asked for returns more points than the cap, at any finest step")]
     public void NoPeriodThatCanBeAskedForReturnsMorePointsThanTheCap()
     {
         for (int days = 1; days <= QualityTrendFrame.MostDays; days++)
@@ -58,7 +58,7 @@ public sealed class QualityTrendFrameTests
         Assert.True(frame.Period.Span <= QualityPeriod.LongestSpan);
     }
 
-    [Theory(DisplayName = "BR-QV-001: a day count outside the range is refused")]
+    [Theory(DisplayName = "a day count outside the range is refused")]
     [InlineData(0)]
     [InlineData(-1)]
     [InlineData(366)]

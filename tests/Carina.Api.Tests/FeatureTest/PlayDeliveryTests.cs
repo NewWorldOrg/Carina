@@ -473,7 +473,7 @@ public sealed class PlayDeliveryTests
         Assert.Equal(JsonValueKind.Null, read.GetProperty("alternative").ValueKind);
     }
 
-    [Fact(DisplayName = "A-配信-074: a recording asked for as it was recorded takes one of the few pictures this machine transcodes at once, and is refused when they are all taken")]
+    [Fact(DisplayName = "a recording asked for as it was recorded takes one of the few pictures this machine transcodes at once, and is refused when they are all taken")]
     public async Task ARecordingAskedForAsItWasRecordedIsRefusedWhenAsManyAreBeingTranscodedAsThisMachineAllows()
     {
         await using var feature = new PlayFeature();

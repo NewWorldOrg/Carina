@@ -10,7 +10,7 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
 
     private const string Later = "timestamptz '2026-08-08 03:05:00+00'";
 
-    [Fact(DisplayName = "BR-QD-013: no quality table holds a foreign key into another domain's table")]
+    [Fact(DisplayName = "no quality table holds a foreign key into another domain's table")]
     public async Task NoQualityTableHoldsAForeignKeyIntoAnotherDomainsTable()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -37,7 +37,7 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         Assert.Empty(pointing);
     }
 
-    [Fact(DisplayName = "BR-QD-013: nothing anywhere holds a foreign key into a quality table either")]
+    [Fact(DisplayName = "nothing anywhere holds a foreign key into a quality table either")]
     public async Task NothingAnywhereHoldsAForeignKeyIntoAQualityTable()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -64,7 +64,7 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         Assert.Empty(pointing);
     }
 
-    [Fact(DisplayName = "BR-QD-004: a frontend that never locked cannot leave a carrier to noise figure behind")]
+    [Fact(DisplayName = "a frontend that never locked cannot leave a carrier to noise figure behind")]
     public async Task AFrontendThatNeverLockedCannotLeaveACarrierToNoiseFigureBehind()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -75,7 +75,7 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         Assert.Equal("ck_quality_signal_sample_lock_gate", refusal.ConstraintName);
     }
 
-    [Fact(DisplayName = "BR-QD-004: a locked frontend's figures are stored with the time each was read")]
+    [Fact(DisplayName = "a locked frontend's figures are stored with the time each was read")]
     public async Task ALockedFrontendsFiguresAreStoredWithTheTimeEachWasRead()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -83,7 +83,7 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         await SampleAsync(connection, locked: "true", cnr: "29000", cnrReadAt: Taken);
     }
 
-    [Fact(DisplayName = "BR-QV-003: a figure without the time it was read is refused")]
+    [Fact(DisplayName = "a figure without the time it was read is refused")]
     public async Task AFigureWithoutTheTimeItWasReadIsRefused()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -94,7 +94,7 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         Assert.Equal("ck_quality_signal_sample_read_at", refusal.ConstraintName);
     }
 
-    [Fact(DisplayName = "BR-QD-009: a sample keeps a count for each broadcast layer")]
+    [Fact(DisplayName = "a sample keeps a count for each broadcast layer")]
     public async Task ASampleKeepsACountForEachBroadcastLayer()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -114,7 +114,7 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         Assert.Equal(2, (int)(await reading.ExecuteScalarAsync())!);
     }
 
-    [Fact(DisplayName = "決定4: what a recording session measured has no home in this table")]
+    [Fact(DisplayName = "what a recording session measured has no home in this table")]
     public async Task WhatARecordingSessionMeasuredHasNoHomeInThisTable()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -125,7 +125,7 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         Assert.Equal("ck_quality_session_measurement_purpose", refusal.ConstraintName);
     }
 
-    [Fact(DisplayName = "BR-QD-001: an unmeasured session carries no counts that could be read as none lost")]
+    [Fact(DisplayName = "an unmeasured session carries no counts that could be read as none lost")]
     public async Task AnUnmeasuredSessionCarriesNoCountsThatCouldBeReadAsNoneLost()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -136,7 +136,7 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         Assert.Equal("ck_quality_session_measurement_counts", refusal.ConstraintName);
     }
 
-    [Fact(DisplayName = "決定4: a session that is not a recording keeps what it measured after the session is gone")]
+    [Fact(DisplayName = "a session that is not a recording keeps what it measured after the session is gone")]
     public async Task ASessionThatIsNotARecordingKeepsWhatItMeasured()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -167,7 +167,7 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         Assert.False(await reading.ReadAsync());
     }
 
-    [Fact(DisplayName = "BR-QD-003: a threshold that no longer calls itself provisional stands on measurement")]
+    [Fact(DisplayName = "a threshold that no longer calls itself provisional stands on measurement")]
     public async Task AThresholdThatNoLongerCallsItselfProvisionalStandsOnMeasurement()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -229,7 +229,7 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         Assert.Equal(0.0002, row.GetDouble(0));
     }
 
-    [Fact(DisplayName = "BR-QV-002: the threshold an incident was judged against is kept on the incident")]
+    [Fact(DisplayName = "the threshold an incident was judged against is kept on the incident")]
     public async Task TheThresholdAnIncidentWasJudgedAgainstIsKeptOnTheIncident()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -262,7 +262,7 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         Assert.Equal("ck_quality_incident_lifecycle", refusal.ConstraintName);
     }
 
-    [Fact(DisplayName = "BR-QS-002: an incident has no acknowledged state and nowhere to keep who acknowledged it")]
+    [Fact(DisplayName = "an incident has no acknowledged state and nowhere to keep who acknowledged it")]
     public async Task AnIncidentHasNoAcknowledgedStateAndNowhereToKeepWhoAcknowledgedIt()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -291,7 +291,7 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         Assert.DoesNotContain("acknowledged", declared, StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "BR-QD-002: an anomaly another domain owns is kept under that domain's own classification")]
+    [Fact(DisplayName = "an anomaly another domain owns is kept under that domain's own classification")]
     public async Task AnAnomalyAnotherDomainOwnsIsKeptUnderThatDomainsOwnClassification()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -304,7 +304,7 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         Assert.Equal("ck_quality_incident_classification", refusal.ConstraintName);
     }
 
-    [Fact(DisplayName = "BR-QD-008: a supply that went quiet names which of the four supplies it was")]
+    [Fact(DisplayName = "a supply that went quiet names which of the four supplies it was")]
     public async Task ASupplyThatWentQuietNamesWhichOfTheFourSuppliesItWas()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -326,7 +326,7 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         Assert.Equal("ck_quality_incident_silence", unasked.ConstraintName);
     }
 
-    [Fact(DisplayName = "BR-QD-007: the visit ledger is a subject of its own rather than one stream standing in for it")]
+    [Fact(DisplayName = "the visit ledger is a subject of its own rather than one stream standing in for it")]
     public async Task TheVisitLedgerIsASubjectOfItsOwn()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -344,7 +344,7 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         Assert.Equal("ck_quality_incident_vocabulary", refusal.ConstraintName);
     }
 
-    [Fact(DisplayName = "BR-QD-008: a supply named outside this domain's vocabulary is refused")]
+    [Fact(DisplayName = "a supply named outside this domain's vocabulary is refused")]
     public async Task ASupplyNamedOutsideThisDomainsVocabularyIsRefused()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -359,7 +359,7 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         Assert.Equal("ck_quality_incident_silence", refusal.ConstraintName);
     }
 
-    [Fact(DisplayName = "BR-QS-002: the lookup for what still stands reads the unsettled index")]
+    [Fact(DisplayName = "the lookup for what still stands reads the unsettled index")]
     public async Task TheLookupForWhatStillStandsReadsTheUnsettledIndex()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -396,7 +396,7 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         Assert.Contains("resolved_at IS NULL", declared, StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "BR-QS-003: the raw samples carry the index a retention sweep reads them by")]
+    [Fact(DisplayName = "the raw samples carry the index a retention sweep reads them by")]
     public async Task TheRawSamplesCarryTheIndexARetentionSweepReadsThemBy()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -408,7 +408,7 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         Assert.Contains("taken_at", (string)(await reading.ExecuteScalarAsync())!, StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "BR-QV-003: a reading that could not be taken is kept with the way it could not be")]
+    [Fact(DisplayName = "a reading that could not be taken is kept with the way it could not be")]
     public async Task AReadingThatCouldNotBeTakenIsKeptWithTheWayItCouldNotBe()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -416,7 +416,7 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         await NotTakenAsync(connection, "'NothingReported'");
     }
 
-    [Fact(DisplayName = "BR-QV-003: a reading that could not be taken carries no figure that could be read as one")]
+    [Fact(DisplayName = "a reading that could not be taken carries no figure that could be read as one")]
     public async Task AReadingThatCouldNotBeTakenCarriesNoFigureThatCouldBeReadAsOne()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -427,7 +427,7 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         Assert.Equal("ck_quality_signal_sample_not_taken", refusal.ConstraintName);
     }
 
-    [Fact(DisplayName = "BR-QD-008: a reading cannot fail for a reason this domain does not name")]
+    [Fact(DisplayName = "a reading cannot fail for a reason this domain does not name")]
     public async Task AReadingCannotFailForAReasonThisDomainDoesNotName()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();
@@ -438,7 +438,7 @@ public sealed class QualitySchemaTests(MigratedScratchDatabase database) : IClas
         Assert.Equal("ck_quality_signal_sample_not_taken", refusal.ConstraintName);
     }
 
-    [Fact(DisplayName = "BR-QD-009: a statistic the tuner does not keep is not the same as a reading that failed")]
+    [Fact(DisplayName = "a statistic the tuner does not keep is not the same as a reading that failed")]
     public async Task AStatisticTheTunerDoesNotKeepIsNotTheSameAsAReadingThatFailed()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();

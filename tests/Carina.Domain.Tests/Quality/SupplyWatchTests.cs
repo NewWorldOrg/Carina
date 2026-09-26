@@ -10,7 +10,7 @@ public sealed class SupplyWatchTests
 
     private static readonly QualitySubject Adapter = QualitySubject.Of(QualitySubjectKind.Tuner, "adapter0");
 
-    [Theory(DisplayName = "BR-QS-002: what a pass does about one supply follows whether it read it, whether it is quiet and whether one already stands")]
+    [Theory(DisplayName = "what a pass does about one supply follows whether it read it, whether it is quiet and whether one already stands")]
     [InlineData(true, true, false, SupplyWatchStep.Open)]
     [InlineData(true, true, true, SupplyWatchStep.Nothing)]
     [InlineData(true, false, true, SupplyWatchStep.Resolve)]
@@ -26,7 +26,7 @@ public sealed class SupplyWatchTests
         SupplyWatchStep expected)
         => Assert.Equal(expected, SupplyWatch.NextStep(observed, quiet, standing));
 
-    [Fact(DisplayName = "BR-QD-007: every supply is answered for by the driver or by the ledger, and by only one of them")]
+    [Fact(DisplayName = "every supply is answered for by the driver or by the ledger, and by only one of them")]
     public void EverySupplyIsAnsweredForByTheDriverOrByTheLedgerAndByOnlyOneOfThem()
     {
         Assert.Equal(
@@ -36,7 +36,7 @@ public sealed class SupplyWatchTests
         Assert.Contains(SupplySilence.SignalSamples, SupplySilences.TheDriverAnswersFor);
     }
 
-    [Fact(DisplayName = "BR-QS-002: a supply this pass could not read is neither opened nor resolved")]
+    [Fact(DisplayName = "a supply this pass could not read is neither opened nor resolved")]
     public void ASupplyThisPassCouldNotReadIsNeitherOpenedNorResolved()
     {
         QualityIncident standing = Standing();
@@ -48,14 +48,14 @@ public sealed class SupplyWatchTests
         Assert.Equal(QualityIncidentState.Detected, standing.State);
     }
 
-    [Fact(DisplayName = "BR-QD-007: a supply heard from within the threshold is not quiet")]
+    [Fact(DisplayName = "a supply heard from within the threshold is not quiet")]
     public void ASupplyHeardFromWithinTheThresholdIsNotQuiet()
         => Assert.Empty(SupplyWatch.Quiet(
             [SupplyReading.Of(SupplySilence.SignalSamples, Adapter, Noon - FiveMinutes + TimeSpan.FromSeconds(1))],
             FiveMinutes,
             Noon));
 
-    [Fact(DisplayName = "BR-QD-007: a supply last heard from a whole threshold ago is quiet")]
+    [Fact(DisplayName = "a supply last heard from a whole threshold ago is quiet")]
     public void ASupplyLastHeardFromAWholeThresholdAgoIsQuiet()
     {
         SupplySilenceFinding found = Assert.Single(SupplyWatch.Quiet(
@@ -68,7 +68,7 @@ public sealed class SupplyWatchTests
         Assert.Equal(FiveMinutes.TotalSeconds, found.Seconds);
     }
 
-    [Fact(DisplayName = "BR-QD-008: the four supplies are told apart rather than counted as one silence")]
+    [Fact(DisplayName = "the four supplies are told apart rather than counted as one silence")]
     public void TheFourSuppliesAreToldApartRatherThanCountedAsOneSilence()
     {
         QualitySubject recording = QualitySubject.Of(QualitySubjectKind.Recording, "a-recording");
@@ -90,7 +90,7 @@ public sealed class SupplyWatchTests
             plan.ToOpen.Select(finding => finding.Silence));
     }
 
-    [Fact(DisplayName = "BR-QS-002: a silence that is already standing is not opened a second time")]
+    [Fact(DisplayName = "a silence that is already standing is not opened a second time")]
     public void ASilenceThatIsAlreadyStandingIsNotOpenedASecondTime()
     {
         SupplyWatchPlan plan = SupplyWatch.Plan([Found()], [Standing()], SupplySilences.Every);
@@ -99,7 +99,7 @@ public sealed class SupplyWatchTests
         Assert.Empty(plan.ToResolve);
     }
 
-    [Fact(DisplayName = "BR-QS-002: a supply heard from again resolves the one that stands for it")]
+    [Fact(DisplayName = "a supply heard from again resolves the one that stands for it")]
     public void ASupplyHeardFromAgainResolvesTheOneThatStandsForIt()
     {
         QualityIncident standing = Standing();
@@ -110,7 +110,7 @@ public sealed class SupplyWatchTests
         Assert.Same(standing, Assert.Single(plan.ToResolve));
     }
 
-    [Fact(DisplayName = "BR-QS-002: the same condition after a resolution is a new occurrence")]
+    [Fact(DisplayName = "the same condition after a resolution is a new occurrence")]
     public void TheSameConditionAfterAResolutionIsANewOccurrence()
     {
         QualityIncident settled = Standing();
@@ -124,7 +124,7 @@ public sealed class SupplyWatchTests
         Assert.Empty(plan.ToResolve);
     }
 
-    [Fact(DisplayName = "BR-QS-002: a silence that goes on after it was told about does not open a second one for it")]
+    [Fact(DisplayName = "a silence that goes on after it was told about does not open a second one for it")]
     public void ASilenceThatGoesOnAfterItWasToldAboutDoesNotOpenASecondOneForIt()
     {
         QualityIncident told = Standing();
@@ -137,7 +137,7 @@ public sealed class SupplyWatchTests
         Assert.Empty(plan.ToResolve);
     }
 
-    [Fact(DisplayName = "BR-QD-002: an anomaly another domain owns is left where its owner put it")]
+    [Fact(DisplayName = "an anomaly another domain owns is left where its owner put it")]
     public void AnAnomalyAnotherDomainOwnsIsLeftWhereItsOwnerPutIt()
     {
         QualityIncident elsewhere = QualityIncident.Detect(

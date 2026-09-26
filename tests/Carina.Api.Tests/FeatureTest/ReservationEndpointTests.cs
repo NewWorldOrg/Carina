@@ -348,7 +348,7 @@ public sealed class ReservationEndpointTests
         Assert.Equal(Noon.AddHours(3).AddSeconds(30), window.GetProperty("effectiveEndAt").GetDateTime());
     }
 
-    [Fact(DisplayName = "BR-ED2-004: a reservation that says nothing about encoding is made asking for one")]
+    [Fact(DisplayName = "a reservation that says nothing about encoding is made asking for one")]
     public async Task AReservationThatSaysNothingAboutEncodingIsMadeAskingForOne()
     {
         await using var feature = new ReservationFeature();
@@ -362,7 +362,7 @@ public sealed class ReservationEndpointTests
         Assert.True(feature.Reservations.Held[0].EncodeWhenRecorded);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: a reservation can be made asking for no encode")]
+    [Fact(DisplayName = "a reservation can be made asking for no encode")]
     public async Task AReservationCanBeMadeAskingForNoEncode()
     {
         await using var feature = new ReservationFeature();
@@ -383,7 +383,7 @@ public sealed class ReservationEndpointTests
         Assert.False(feature.Reservations.Held[0].EncodeWhenRecorded);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: what a reservation asks about encoding is changed on its own, leaving the margins where they were")]
+    [Fact(DisplayName = "what a reservation asks about encoding is changed on its own, leaving the margins where they were")]
     public async Task WhatAReservationAsksAboutEncodingIsChangedOnItsOwn()
     {
         await using var feature = new ReservationFeature();
