@@ -41,6 +41,7 @@ public sealed class LiveEndingReportTests
     [InlineData(LiveSupplyEnd.StoppedByAnother)]
     [InlineData(LiveSupplyEnd.DriverLost)]
     [InlineData(LiveSupplyEnd.WentQuiet)]
+    [InlineData(LiveSupplyEnd.TranscoderFellBehind)]
     public void WhatIsWrittenIsReadBack(LiveSupplyEnd why)
     {
         LiveEndingReading read = LiveEndingReport.Read(LiveEndingReport.Of(LiveSupplyEnding.Of(why, "because.")).ToPayload());
@@ -81,7 +82,7 @@ public sealed class LiveEndingReportTests
 
     [Theory]
     [InlineData(0x00)]
-    [InlineData(0x09)]
+    [InlineData(0x0a)]
     [InlineData(0xff)]
     public void AReasonNoSupplyEndsForIsRefusedAsSuch(byte why)
     {

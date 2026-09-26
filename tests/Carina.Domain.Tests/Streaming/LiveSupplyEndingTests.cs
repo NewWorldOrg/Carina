@@ -13,6 +13,8 @@ public sealed class LiveSupplyEndingTests
     [InlineData(LiveSupplyEnd.TunerFailed)]
     [InlineData(LiveSupplyEnd.StoppedByAnother)]
     [InlineData(LiveSupplyEnd.DriverLost)]
+    [InlineData(LiveSupplyEnd.WentQuiet)]
+    [InlineData(LiveSupplyEnd.TranscoderFellBehind)]
     public void AnEndingCarriesOneOfTheReasonsNamedAndItsNote(LiveSupplyEnd why)
     {
         LiveSupplyEnding ending = LiveSupplyEnding.Of(why, "  because of the test  ");

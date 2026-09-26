@@ -283,11 +283,21 @@ internal sealed class LiveReception
     {
         foreach (LiveSeat seat in Seated())
         {
-            if (!seat.Offer(mouthful))
+            if (seat.Offer(mouthful))
             {
-                Drop(seat);
-                seat.NoMore();
+                continue;
             }
+
+            Drop(seat);
+
+            if (seat.FellBehind)
+            {
+                seat.Ended(LiveSupplyEnding.Of(
+                    LiveSupplyEnd.TranscoderFellBehind,
+                    $"the transcoder left what it was handed waiting longer than {seat.Patience}."));
+            }
+
+            seat.NoMore();
         }
     }
 
@@ -366,6 +376,8 @@ internal sealed class LiveSeat
     }
 
     internal Task Pumping { get; }
+
+    internal TimeSpan Patience => patience;
 
     internal bool FellBehind
     {

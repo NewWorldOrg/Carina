@@ -472,6 +472,36 @@ public sealed class LiveSessionManagerTests
     }
 
     [Fact]
+    public async Task ATranscoderCutLooseForFallingBehindLeavesItsSessionSayingSoRatherThanThatItWasLetGoOf()
+    {
+        await using ILiveViewing stalled = await Joined(EveryFrame);
+        await using ILiveViewing flowing = await Joined(EveryField);
+
+        transcoders.Raised[0].TakesNothingUntil = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        await Pour(supply.Opened[0], 1);
+        await Eventually.Happens(
+            () => transcoders.Raised[1].TakenIn >= Mouthful.Length,
+            "the first mouthful has been read off the channel");
+
+        clock.Turn(new LiveSessionSettings().LongestWaitToBeFed + TimeSpan.FromMilliseconds(1));
+
+        await Pour(supply.Opened[0], 1);
+        await Eventually.Happens(
+            () => transcoders.Raised[0].InputClosed,
+            "the transcoder that has fallen behind is cut loose");
+
+        await transcoders.Raised[0].WriteAsync(Fmp4.Header);
+        transcoders.Raised[0].NoMore();
+
+        await Drained(stalled);
+
+        Assert.Equal(LiveSupplyEnd.TranscoderFellBehind, stalled.Ending!.Current!.Why);
+        Assert.Null(flowing.Ending!.Current);
+        Assert.Null(supply.Opened[0].Ending);
+    }
+
+    [Fact]
     public async Task BrPs001AProfileAskedForAgainWhileTheOthersAreBeingGivenUpIsNotClosedUnderTheOneWhoAsked()
     {
         supply.AsIfThereWereOneTuner = true;
