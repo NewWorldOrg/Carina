@@ -304,7 +304,7 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
     }
 
     [Fact]
-    public async Task AProgrammeWhoseEndWasNeverToldIsNeverAmongWhatEnded()
+    public async Task AProgrammeWhoseEndWasNeverToldHasNotEndedBeforeTheNextOneOnItsServiceBegins()
     {
         int network = NextNetwork();
         await using CarinaDbContext context = database.Open();
@@ -323,6 +323,24 @@ public sealed class ProgrammeRepositoryTests(RepositoryDatabase database)
 
         Assert.NotNull(await new ProgrammeRepository(reading).FindAsync(Id(network, 1), Cancel));
         Assert.NotNull(await new ProgrammeRepository(reading).FindAsync(Id(network, 2), Cancel));
+    }
+
+    [Fact]
+    public async Task AProgrammeWhoseEndWasNeverToldEndedWhereTheNextOneOnItsServiceBegan()
+    {
+        int network = NextNetwork();
+        await using CarinaDbContext context = database.Open();
+        var programmes = new ProgrammeRepository(context);
+
+        await programmes.AddAsync(
+            Programme.Discover(Broadcast(network, 1, At.AddHours(1)) with { EndsAt = null }, At),
+            Cancel);
+        await programmes.AddAsync(Programme.Discover(Broadcast(network, 2, At.AddHours(3)), At), Cancel);
+        await programmes.AddAsync(
+            Programme.Discover(Carried(network, 1050, 3, At.AddHours(2)) with { EndsAt = null }, At),
+            Cancel);
+
+        Assert.Equal([1, 2], (await Ended(programmes, network)).Select(programme => programme.EventId.Value));
     }
 
     [Fact]

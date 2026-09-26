@@ -178,11 +178,25 @@ public sealed class ProgrammeRepository(CarinaDbContext context) : IProgrammeRep
         DateTime at,
         int rows,
         CancellationToken cancellationToken)
-        => await context.Set<Programme>()
-            .Where(programme => programme.EndsAt != null && programme.EndsAt < at)
-            .OrderBy(programme => programme.EndsAt)
+    {
+        IQueryable<Programme> held = context.Set<Programme>();
+
+        return await held
+            .Select(programme => new
+            {
+                Programme = programme,
+                EndedAt = programme.EndsAt ?? held
+                    .Where(next => next.NetworkId == programme.NetworkId
+                        && next.ServiceId == programme.ServiceId
+                        && next.StartsAt > programme.StartsAt)
+                    .Min(next => (DateTime?)next.StartsAt),
+            })
+            .Where(ended => ended.EndedAt < at)
+            .OrderBy(ended => ended.EndedAt)
+            .Select(ended => ended.Programme)
             .Take(rows)
             .ToListAsync(cancellationToken);
+    }
 
     public async Task<int> ForgetAsync(IReadOnlyList<Programme> programmes, CancellationToken cancellationToken)
     {

@@ -37,6 +37,11 @@ public interface IProgrammeRepository : IAnnouncedProgrammes
         DateTime at,
         CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Lists the programmes that ended before <paramref name="at"/>, earliest end first. A programme
+    /// with no end ends where the next programme on its service begins, and has not ended while
+    /// nothing begins after it.
+    /// </summary>
     Task<IReadOnlyList<Programme>> ListEndedBeforeAsync(
         DateTime at,
         int rows,

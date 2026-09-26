@@ -182,6 +182,26 @@ public sealed class ArchiveTransferTests(RepositoryDatabase database)
     }
 
     [Fact]
+    public async Task AProgrammeWhoseEndWasNeverToldIsLetGoOfOnceTheOneAfterItHasLongBegun()
+    {
+        int network = BroadcastIds.NextNetwork();
+        await using CarinaDbContext context = database.Open();
+
+        await Empty(context);
+        await Add(context, network, 1, Now.AddDays(-3), endIsUndecided: true);
+        await Add(context, network, 2, Now.AddDays(-3).AddHours(1));
+
+        Transferred moved = await Transfer(context).RunAsync(Cancel);
+
+        Assert.Equal(1, moved.Kept);
+        Assert.Equal(2, moved.Discarded);
+
+        await using CarinaDbContext reading = database.Open();
+
+        Assert.Equal(0, await reading.Set<Programme>().CountAsync(Cancel));
+    }
+
+    [Fact]
     public async Task WhenTheGuideCannotLetGoTheArchiveKeepsNothingEither()
     {
         int network = BroadcastIds.NextNetwork();

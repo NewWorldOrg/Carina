@@ -115,8 +115,14 @@ public sealed class HeldProgrammes : IProgrammeRepository
         => Task.FromResult<IReadOnlyList<Programme>>(
         [
             .. Programmes
-                .Where(programme => programme.EndsAt is { } endsAt && endsAt < at)
-                .OrderBy(programme => programme.EndsAt)
+                .Select(programme => (Programme: programme, EndedAt: programme.EndsAt ?? Programmes
+                    .Where(next => next.Id.NetworkId.Equals(programme.Id.NetworkId)
+                        && next.Id.ServiceId.Equals(programme.Id.ServiceId)
+                        && next.StartsAt > programme.StartsAt)
+                    .Min(next => (DateTime?)next.StartsAt)))
+                .Where(ended => ended.EndedAt < at)
+                .OrderBy(ended => ended.EndedAt)
+                .Select(ended => ended.Programme)
                 .Take(rows),
         ]);
 

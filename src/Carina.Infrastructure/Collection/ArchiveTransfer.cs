@@ -25,23 +25,16 @@ public sealed class ArchiveTransfer(
             ended,
             MostPerRun,
             cancellationToken);
-        (Programme Leaving, ArchivedProgramme? Kept)[] offered =
+        ArchivedProgramme[] keeping =
         [
-            .. leaving.Select(programme => (programme, ArchivedProgramme.Of(programme, now))),
-        ];
-        ArchivedProgramme[] keeping = [.. offered.Select(pair => pair.Kept).OfType<ArchivedProgramme>()];
-        Programme[] discarding =
-        [
-            .. offered
-                .Where(pair => pair.Kept is not null || pair.Leaving.IsShadow)
-                .Select(pair => pair.Leaving),
+            .. leaving.Select(programme => ArchivedProgramme.Of(programme, now)).OfType<ArchivedProgramme>(),
         ];
         Transferred moved = leaving.Count == 0
             ? new Transferred(0, 0, 0)
             : await writes.AllOrNothingAsync(
                 async token => new Transferred(
                     await archive.KeepAsync(keeping, token),
-                    await programmes.ForgetAsync(discarding, token),
+                    await programmes.ForgetAsync(leaving, token),
                     0),
                 cancellationToken);
         int forgotten = settings.ArchiveRetention is { } retention
