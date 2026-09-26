@@ -15,7 +15,7 @@ public sealed class EncodeRetirementRuleTests
         typeof(CommonValueObject<>).Assembly,
     ];
 
-    [Fact(DisplayName = "BR-ED2-015: one place takes a profile out of the ledger, and it is the one that retires a used profile instead")]
+    [Fact(DisplayName = "one place takes a profile out of the ledger, and it is the one that retires a used profile instead")]
     public void OnlyOnePlaceTakesAProfileOutOfTheLedger()
     {
         Assert.Equal(
@@ -23,7 +23,7 @@ public sealed class EncodeRetirementRuleTests
             CallSiteCensus.CallersOf(Production, typeof(IEncodeProfileRepository), nameof(IEncodeProfileRepository.RemoveAsync)));
     }
 
-    [Fact(DisplayName = "BR-ED2-015: one place takes a destination out of the ledger")]
+    [Fact(DisplayName = "one place takes a destination out of the ledger")]
     public void OnlyOnePlaceTakesADestinationOutOfTheLedger()
     {
         Assert.Equal(
@@ -34,7 +34,7 @@ public sealed class EncodeRetirementRuleTests
                 nameof(IEncodeDestinationRepository.RemoveAsync)));
     }
 
-    [Fact(DisplayName = "BR-EA2-003: the job ledger has no way in that takes a row out of it")]
+    [Fact(DisplayName = "the job ledger has no way in that takes a row out of it")]
     public void TheJobLedgerHasNoWayInThatTakesARowOutOfIt()
     {
         Assert.DoesNotContain(

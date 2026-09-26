@@ -82,7 +82,6 @@ public sealed record RecordingSessionDto
 
     public long? CcDropped { get; init; }
 
-    // received + missing: the packets the stream should have carried, not the packets that arrived.
     public long? CcTotal { get; init; }
 
     public bool CcMeasured { get; init; }

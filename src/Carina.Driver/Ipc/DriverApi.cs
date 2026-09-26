@@ -62,10 +62,10 @@ public static class DriverApi
                 DriverJson.Context.TunerLedgerDto
             );
 
-        RequestDelegate saveLedger = context => SaveLedger(context, ledger, detector);
+        RequestDelegate saveLedger = context => SaveLedgerAsync(context, ledger, detector);
 
         RequestDelegate toggleTuner = context =>
-            ToggleTuner(context, configuration, manager);
+            ToggleTunerAsync(context, configuration, manager);
 
         RequestDelegate sessions = context =>
             Write(
@@ -75,13 +75,13 @@ public static class DriverApi
                 DriverJson.Context.IReadOnlyListSessionSnapshot
             );
 
-        RequestDelegate session = context => ShowSession(context, manager, hello);
+        RequestDelegate session = context => ShowSessionAsync(context, manager, hello);
 
-        RequestDelegate startSession = context => StartSession(context, manager, hello);
+        RequestDelegate startSession = context => StartSessionAsync(context, manager, hello);
 
-        RequestDelegate stopSession = context => StopSession(context, manager, hub, hello);
+        RequestDelegate stopSession = context => StopSessionAsync(context, manager, hub, hello);
 
-        RequestDelegate extendSession = context => ExtendSession(context, manager, hello);
+        RequestDelegate extendSession = context => ExtendSessionAsync(context, manager, hello);
 
         DriverLifecycle lifecycle = app.Services.GetRequiredService<DriverLifecycle>();
 
@@ -97,15 +97,15 @@ public static class DriverApi
         DriverStopRequest stopRequest = app.Services.GetRequiredService<DriverStopRequest>();
 
         RequestDelegate restart = context =>
-            Restart(context, manager, hello, lifetime, clock, stopRequest);
+            RestartAsync(context, manager, hello, lifetime, clock, stopRequest);
 
         RecordingEraser recordingEraser = app.Services.GetRequiredService<RecordingEraser>();
 
-        RequestDelegate eraseRecording = context => EraseRecording(context, recordingEraser);
+        RequestDelegate eraseRecording = context => EraseRecordingAsync(context, recordingEraser);
 
         StrayFileEraser strayFileEraser = app.Services.GetRequiredService<StrayFileEraser>();
 
-        RequestDelegate eraseStrayFile = context => EraseStrayFile(context, strayFileEraser);
+        RequestDelegate eraseStrayFile = context => EraseStrayFileAsync(context, strayFileEraser);
 
         RequestDelegate events = context => DriverEventStream.Invoke(context, hub);
 
@@ -170,7 +170,7 @@ public static class DriverApi
             DriverJson.Context.DriverProblem
         );
 
-    private static async Task StartSession(
+    private static async Task StartSessionAsync(
         HttpContext context,
         TunerSessionManager manager,
         DriverHello hello
@@ -235,7 +235,7 @@ public static class DriverApi
         );
     }
 
-    private static async Task SaveLedger(
+    private static async Task SaveLedgerAsync(
         HttpContext context,
         TunerLedgerStore ledger,
         ITunerDetector detector
@@ -298,7 +298,7 @@ public static class DriverApi
         );
     }
 
-    private static async Task ToggleTuner(
+    private static async Task ToggleTunerAsync(
         HttpContext context,
         DriverConfiguration configuration,
         TunerSessionManager manager
@@ -375,7 +375,7 @@ public static class DriverApi
         );
     }
 
-    private static async Task Restart(
+    private static async Task RestartAsync(
         HttpContext context,
         TunerSessionManager manager,
         DriverHello hello,
@@ -433,7 +433,7 @@ public static class DriverApi
             $"This driver holds no tuner called '{deviceId}'."
         );
 
-    private static async Task ShowSession(
+    private static async Task ShowSessionAsync(
         HttpContext context,
         TunerSessionManager manager,
         DriverHello hello
@@ -471,7 +471,7 @@ public static class DriverApi
         );
     }
 
-    private static async Task ExtendSession(
+    private static async Task ExtendSessionAsync(
         HttpContext context,
         TunerSessionManager manager,
         DriverHello hello
@@ -564,7 +564,7 @@ public static class DriverApi
             _ => (StatusCodes.Status400BadRequest, SessionRefusalTitles.NotAnExtension),
         };
 
-    private static async Task StopSession(
+    private static async Task StopSessionAsync(
         HttpContext context,
         TunerSessionManager manager,
         DriverEventHub hub,
@@ -633,7 +633,7 @@ public static class DriverApi
         );
     }
 
-    private static async Task EraseRecording(HttpContext context, RecordingEraser eraser)
+    private static async Task EraseRecordingAsync(HttpContext context, RecordingEraser eraser)
     {
         string recordingId = context.Request.RouteValues["id"] as string ?? string.Empty;
         string outputRoot = context.Request.Query[DriverEndpoints.OutputRootQuery].ToString();
@@ -661,7 +661,7 @@ public static class DriverApi
         );
     }
 
-    private static async Task EraseStrayFile(HttpContext context, StrayFileEraser eraser)
+    private static async Task EraseStrayFileAsync(HttpContext context, StrayFileEraser eraser)
     {
         StrayFileErasureRequest? request;
 

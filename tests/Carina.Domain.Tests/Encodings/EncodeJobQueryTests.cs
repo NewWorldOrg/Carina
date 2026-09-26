@@ -32,7 +32,7 @@ public sealed class EncodeJobQueryTests
         Assert.Null(EncodeJobQuery.For(null, null, -1, null));
     }
 
-    [Fact(DisplayName = "BR-ES-002: the standings asked for are the ledger's own, once each, and nothing cast in from outside")]
+    [Fact(DisplayName = "the standings asked for are the ledger's own, once each, and nothing cast in from outside")]
     public void TheStandingsAskedForAreTheLedgersOwnOnceEach()
     {
         EncodeJobQuery? asked = EncodeJobQuery.For([EncodeJobStatus.Running, EncodeJobStatus.Queued, EncodeJobStatus.Running], null, null, null);
@@ -42,7 +42,7 @@ public sealed class EncodeJobQueryTests
         Assert.Null(EncodeJobQuery.For([(EncodeJobStatus)99], null, null, null));
     }
 
-    [Fact(DisplayName = "BR-ES-002: a page of the ledger can be asked for one recording, and names none unless it is asked to")]
+    [Fact(DisplayName = "a page of the ledger can be asked for one recording, and names none unless it is asked to")]
     public void APageOfTheLedgerCanBeAskedForOneRecording()
     {
         var recording = RecordingId.New();

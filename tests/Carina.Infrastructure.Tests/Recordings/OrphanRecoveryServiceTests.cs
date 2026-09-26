@@ -349,7 +349,7 @@ public sealed class OrphanRecoveryServiceTests
     }
 
     [Fact]
-    public async Task BR_KD_004_ARecordingWhoseDiskFilledIsNotPutBackOnAStreamByRecovery()
+    public async Task ARecordingWhoseDiskFilledIsNotPutBackOnAStreamByRecovery()
     {
         var ledger = new StreamLedger();
         Recording running = InFlight(Airs, Airs.AddMinutes(30));

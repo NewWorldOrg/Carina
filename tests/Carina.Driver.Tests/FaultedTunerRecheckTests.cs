@@ -207,7 +207,7 @@ public sealed class FaultedTunerRecheckTests
             || !signalled.Contains(DriverEvents.Tuners, StringComparer.Ordinal)
         )
         {
-            signalled.AddRange(await listener.Take(deadline.Token));
+            signalled.AddRange(await listener.TakeAsync(deadline.Token));
         }
 
         listener.Dispose();

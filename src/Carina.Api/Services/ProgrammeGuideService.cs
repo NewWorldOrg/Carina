@@ -48,7 +48,7 @@ public sealed class ProgrammeGuideService(
             window.From,
             window.To,
             cancellationToken);
-        var already = found
+        HashSet<(int NetworkId, int ServiceId, int EventId, DateTime StartsAt)> already = found
             .Select(programme => (
                 programme.NetworkId.Value,
                 programme.ServiceId.Value,

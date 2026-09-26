@@ -6,7 +6,7 @@ public sealed class ChapterReadingTests
 {
     private static readonly DateTime At = new(2026, 9, 14, 3, 0, 0, DateTimeKind.Utc);
 
-    [Fact(DisplayName = "BR-ED2-011: a reading carries who read it, what they answered and how much of the length they took for breaks, whatever the answer was")]
+    [Fact(DisplayName = "a reading carries who read it, what they answered and how much of the length they took for breaks, whatever the answer was")]
     public void AReadingCarriesWhoReadItAndWhatTheyAnswered()
     {
         ChapterReading discarded = ChapterReading.Of(

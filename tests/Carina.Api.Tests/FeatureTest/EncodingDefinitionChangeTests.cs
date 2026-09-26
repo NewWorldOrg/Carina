@@ -18,7 +18,7 @@ public sealed class EncodingDefinitionChangeTests
         quantiser = 24,
     };
 
-    [Fact(DisplayName = "BR-EV-006: a profile is changed in every field at once and the list answers with what it now says")]
+    [Fact(DisplayName = "a profile is changed in every field at once and the list answers with what it now says")]
     public async Task AProfileIsChangedInEveryFieldAtOnce()
     {
         await using var feature = new EncodingFeature();
@@ -37,7 +37,7 @@ public sealed class EncodingDefinitionChangeTests
         Assert.Null(item.GetProperty("retiredAt").GetString());
     }
 
-    [Fact(DisplayName = "BR-EV-006: what a change leaves out is refused, so a change cannot reach a shape a definition could not")]
+    [Fact(DisplayName = "what a change leaves out is refused, so a change cannot reach a shape a definition could not")]
     public async Task AChangeThatLeavesAFieldOutIsRefused()
     {
         await using var feature = new EncodingFeature();
@@ -51,7 +51,7 @@ public sealed class EncodingDefinitionChangeTests
         Assert.Equal(22, feature.Profiles.Profiles.Single().SoftwareRateControl.RateFactor);
     }
 
-    [Theory(DisplayName = "BR-EV-006: a change and a definition are refused in the same words")]
+    [Theory(DisplayName = "a change and a definition are refused in the same words")]
     [InlineData("rateFactor", "52")]
     [InlineData("quantiser", "-1")]
     [InlineData("label", "\"\"")]
@@ -76,7 +76,7 @@ public sealed class EncodingDefinitionChangeTests
         Assert.Equal(await defined.Content.ReadAsStringAsync(), await changed.Content.ReadAsStringAsync());
     }
 
-    [Fact(DisplayName = "BR-ES-003: a profile a waiting job names does not move")]
+    [Fact(DisplayName = "a profile a waiting job names does not move")]
     public async Task AProfileAWaitingJobNamesDoesNotMove()
     {
         await using var feature = new EncodingFeature();
@@ -93,7 +93,7 @@ public sealed class EncodingDefinitionChangeTests
         Assert.Equal(22, feature.Profiles.Profiles.Single().SoftwareRateControl.RateFactor);
     }
 
-    [Fact(DisplayName = "BR-ES-003: a profile a running job names is not taken away either")]
+    [Fact(DisplayName = "a profile a running job names is not taken away either")]
     public async Task AProfileARunningJobNamesIsNotTakenAway()
     {
         await using var feature = new EncodingFeature();
@@ -109,7 +109,7 @@ public sealed class EncodingDefinitionChangeTests
         Assert.Single(feature.Profiles.Profiles);
     }
 
-    [Fact(DisplayName = "BR-ES-003: a destination a waiting job names does not move")]
+    [Fact(DisplayName = "a destination a waiting job names does not move")]
     public async Task ADestinationAWaitingJobNamesDoesNotMove()
     {
         await using var feature = new EncodingFeature();
@@ -125,7 +125,7 @@ public sealed class EncodingDefinitionChangeTests
         Assert.Equal("Shelf", feature.Destinations.Destinations.Single().Label.Value);
     }
 
-    [Fact(DisplayName = "BR-ED2-015: a profile no job names is gone from the ledger when it is removed")]
+    [Fact(DisplayName = "a profile no job names is gone from the ledger when it is removed")]
     public async Task AProfileNoJobNamesIsGoneWhenItIsRemoved()
     {
         await using var feature = new EncodingFeature();
@@ -141,7 +141,7 @@ public sealed class EncodingDefinitionChangeTests
         Assert.DoesNotContain(unused, feature.Profiles.Profiles);
     }
 
-    [Fact(DisplayName = "BR-ED2-015: a profile an artefact was made with is retired rather than removed, and still answers by id")]
+    [Fact(DisplayName = "a profile an artefact was made with is retired rather than removed, and still answers by id")]
     public async Task AProfileAnArtefactWasMadeWithIsRetiredRatherThanRemoved()
     {
         await using var feature = new EncodingFeature();
@@ -162,7 +162,7 @@ public sealed class EncodingDefinitionChangeTests
         Assert.Contains(older, feature.Profiles.Profiles);
     }
 
-    [Fact(DisplayName = "BR-ED2-015: a retired profile is not changed, because what was encoded with it must keep reading true")]
+    [Fact(DisplayName = "a retired profile is not changed, because what was encoded with it must keep reading true")]
     public async Task ARetiredProfileIsNotChanged()
     {
         await using var feature = new EncodingFeature();
@@ -182,7 +182,7 @@ public sealed class EncodingDefinitionChangeTests
         Assert.Equal(HttpStatusCode.Conflict, again);
     }
 
-    [Fact(DisplayName = "BR-ED2-015: a retired destination takes no new job")]
+    [Fact(DisplayName = "a retired destination takes no new job")]
     public async Task ARetiredDestinationTakesNoNewJob()
     {
         await using var feature = new EncodingFeature();
@@ -205,7 +205,7 @@ public sealed class EncodingDefinitionChangeTests
         Assert.Contains("takes nothing new", body.GetProperty("message").GetString(), StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "BR-ED2-016: the profile a destination encodes with unless another is asked for is not removed")]
+    [Fact(DisplayName = "the profile a destination encodes with unless another is asked for is not removed")]
     public async Task TheProfileADestinationEncodesWithIsNotRemoved()
     {
         await using var feature = new EncodingFeature();
@@ -219,7 +219,7 @@ public sealed class EncodingDefinitionChangeTests
         Assert.Single(feature.Profiles.Profiles);
     }
 
-    [Fact(DisplayName = "BR-ED2-016: a destination cannot name a retired profile as the one it encodes with")]
+    [Fact(DisplayName = "a destination cannot name a retired profile as the one it encodes with")]
     public async Task ADestinationCannotNameARetiredProfile()
     {
         await using var feature = new EncodingFeature();
@@ -244,7 +244,7 @@ public sealed class EncodingDefinitionChangeTests
         Assert.Equal(HttpStatusCode.BadRequest, defined);
     }
 
-    [Fact(DisplayName = "BR-ED2-016: the last destination left is not removed, because a machine with nowhere to write encodes nothing")]
+    [Fact(DisplayName = "the last destination left is not removed, because a machine with nowhere to write encodes nothing")]
     public async Task TheLastDestinationLeftIsNotRemoved()
     {
         await using var feature = new EncodingFeature();
@@ -258,7 +258,7 @@ public sealed class EncodingDefinitionChangeTests
         Assert.Single(feature.Destinations.Destinations);
     }
 
-    [Fact(DisplayName = "BR-ED2-016: the one destination left is put right by changing it, since it cannot be removed")]
+    [Fact(DisplayName = "the one destination left is put right by changing it, since it cannot be removed")]
     public async Task TheOneDestinationLeftIsPutRightByChangingIt()
     {
         await using var feature = new EncodingFeature();
@@ -274,7 +274,7 @@ public sealed class EncodingDefinitionChangeTests
         Assert.Equal("The shelf, spelled right", feature.Destinations.Destinations.Single().Label.Value);
     }
 
-    [Fact(DisplayName = "BR-ED2-015: a destination no job names is gone from the ledger when it is removed")]
+    [Fact(DisplayName = "a destination no job names is gone from the ledger when it is removed")]
     public async Task ADestinationNoJobNamesIsGoneWhenItIsRemoved()
     {
         await using var feature = new EncodingFeature();
@@ -289,7 +289,7 @@ public sealed class EncodingDefinitionChangeTests
         Assert.DoesNotContain(spare, feature.Destinations.Destinations);
     }
 
-    [Fact(DisplayName = "BR-EV-006: a destination that names a root nobody declares is refused when it is changed as well")]
+    [Fact(DisplayName = "a destination that names a root nobody declares is refused when it is changed as well")]
     public async Task ADestinationChangedToARootNobodyDeclaresIsRefused()
     {
         await using var feature = new EncodingFeature();
@@ -305,7 +305,7 @@ public sealed class EncodingDefinitionChangeTests
         Assert.Equal("encodes", feature.Destinations.Destinations.Single().OutputRoot.Value);
     }
 
-    [Fact(DisplayName = "BR-EV-006: while the driver cannot say what it declares, no destination is changed")]
+    [Fact(DisplayName = "while the driver cannot say what it declares, no destination is changed")]
     public async Task WhileTheDriverCannotSayWhatItDeclaresNoDestinationIsChanged()
     {
         await using var feature = new EncodingFeature();
@@ -321,7 +321,7 @@ public sealed class EncodingDefinitionChangeTests
         Assert.Equal("Shelf", feature.Destinations.Destinations.Single().Label.Value);
     }
 
-    [Theory(DisplayName = "BR-EA2-001: a definition nobody defined answers that it is not there")]
+    [Theory(DisplayName = "a definition nobody defined answers that it is not there")]
     [InlineData("profiles")]
     [InlineData("destinations")]
     public async Task ADefinitionNobodyDefinedIsNotThere(string surface)
@@ -333,7 +333,7 @@ public sealed class EncodingDefinitionChangeTests
         Assert.Equal(HttpStatusCode.NotFound, removed);
     }
 
-    [Theory(DisplayName = "BR-EA2-001: an id of nothing but zeroes names no definition")]
+    [Theory(DisplayName = "an id of nothing but zeroes names no definition")]
     [InlineData("profiles")]
     [InlineData("destinations")]
     public async Task AnIdOfNothingButZeroesNamesNoDefinition(string surface)

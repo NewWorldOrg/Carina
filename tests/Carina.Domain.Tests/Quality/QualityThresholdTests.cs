@@ -6,7 +6,7 @@ public sealed class QualityThresholdTests
 {
     private static readonly DateTime Declared = new(2026, 8, 21, 3, 0, 0, DateTimeKind.Utc);
 
-    [Fact(DisplayName = "BR-QD-003: every threshold this domain judges by is kept under a key it names")]
+    [Fact(DisplayName = "every threshold this domain judges by is kept under a key it names")]
     public void EveryThresholdThisDomainJudgesByIsKeptUnderAKeyItNames()
     {
         QualityThreshold threshold = QualityThreshold.Declare(

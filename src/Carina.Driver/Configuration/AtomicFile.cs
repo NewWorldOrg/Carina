@@ -35,7 +35,7 @@ public static class AtomicFile
 
         try
         {
-            using var stream = new FileStream(
+            using FileStream stream = new FileStream(
                 staged,
                 FileMode.CreateNew,
                 FileAccess.Write,

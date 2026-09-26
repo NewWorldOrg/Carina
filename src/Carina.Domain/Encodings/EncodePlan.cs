@@ -15,7 +15,7 @@ public enum EncodeSwerve
 /// <summary>
 /// Which encoder a job will actually run on, worked out against what this machine turned out to
 /// be able to do. A shortfall degrades the run and is written down; it never refuses the profile,
-/// which was already saved (BR-EV-004). The one refusal is a codec neither side has.
+/// which was already saved. The one refusal is a codec neither side has.
 /// </summary>
 public sealed record EncodePlan
 {

@@ -104,7 +104,7 @@ public sealed class IntegrityService(
                 FindingDisposalFailure.FileChanged);
         }
 
-        using var limit = new CancellationTokenSource(disposals.Longest, clock);
+        using CancellationTokenSource limit = new(disposals.Longest, clock);
         using CancellationTokenSource asking =
             CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, limit.Token);
 

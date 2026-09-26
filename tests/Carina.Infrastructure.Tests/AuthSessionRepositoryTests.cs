@@ -120,8 +120,8 @@ public sealed class AuthSessionRepositoryTests(RepositoryDatabase database)
         IReadOnlyList<AuthSession> listed = await new AuthSessionRepository(reading)
             .ListAsync(new Subject("carina"), Cancel);
 
-        Assert.Contains(listed, session => session.Handle.Value == mine.Handle.Value);
-        Assert.DoesNotContain(listed, session => session.Handle.Value == theirs.Handle.Value);
+        Assert.Contains(listed, session => session.Handle.Equals(mine.Handle));
+        Assert.DoesNotContain(listed, session => session.Handle.Equals(theirs.Handle));
     }
 
     [Fact]
@@ -146,8 +146,8 @@ public sealed class AuthSessionRepositoryTests(RepositoryDatabase database)
         await using CarinaDbContext reading = database.Open();
         IReadOnlyList<AuthSession> listed = await new AuthSessionRepository(reading).ListAllAsync(Cancel);
 
-        int ofTheirs = listed.ToList().FindIndex(session => session.Handle.Value == theirs.Handle.Value);
-        int ofMine = listed.ToList().FindIndex(session => session.Handle.Value == mine.Handle.Value);
+        int ofTheirs = listed.ToList().FindIndex(session => session.Handle.Equals(theirs.Handle));
+        int ofMine = listed.ToList().FindIndex(session => session.Handle.Equals(mine.Handle));
 
         Assert.True(ofTheirs >= 0 && ofMine >= 0);
         Assert.True(ofTheirs < ofMine);

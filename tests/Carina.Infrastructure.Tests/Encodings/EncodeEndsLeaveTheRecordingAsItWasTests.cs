@@ -30,7 +30,7 @@ public sealed class EncodeEndsLeaveTheRecordingAsItWasTests(RepositoryDatabase d
 
     public Task DisposeAsync() => ClearAsync();
 
-    [Fact(DisplayName = "BR-ED2-012: a job whose programme fails leaves the recording's row exactly as it was")]
+    [Fact(DisplayName = "a job whose programme fails leaves the recording's row exactly as it was")]
     public async Task AJobWhoseProgrammeFailsLeavesTheRecordingRowAsItWas()
     {
         using var harness = new EncodeHarness();
@@ -50,7 +50,7 @@ public sealed class EncodeEndsLeaveTheRecordingAsItWasTests(RepositoryDatabase d
         Assert.Equal(before, await RowAsync(recording.Id));
     }
 
-    [Fact(DisplayName = "BR-ED2-012: a job refused before its programme starts leaves the recording's row exactly as it was")]
+    [Fact(DisplayName = "a job refused before its programme starts leaves the recording's row exactly as it was")]
     public async Task AJobRefusedBeforeItsProgrammeStartsLeavesTheRecordingRowAsItWas()
     {
         using var harness = new EncodeHarness();
@@ -69,7 +69,7 @@ public sealed class EncodeEndsLeaveTheRecordingAsItWasTests(RepositoryDatabase d
         Assert.Equal(before, await RowAsync(recording.Id));
     }
 
-    [Fact(DisplayName = "BR-ED2-012: a job called off while it runs leaves the recording's row exactly as it was")]
+    [Fact(DisplayName = "a job called off while it runs leaves the recording's row exactly as it was")]
     public async Task AJobCalledOffWhileItRunsLeavesTheRecordingRowAsItWas()
     {
         using var harness = new EncodeHarness();
@@ -99,7 +99,7 @@ public sealed class EncodeEndsLeaveTheRecordingAsItWasTests(RepositoryDatabase d
             (await new EncodeJobRepository(reading).FindAsync(written.Id, Cancel))!.Status);
     }
 
-    [Theory(DisplayName = "BR-ED2-011: a job whose process died, put back or given up, leaves the recording's row exactly as it was")]
+    [Theory(DisplayName = "a job whose process died, put back or given up, leaves the recording's row exactly as it was")]
     [InlineData(EncodeJob.FirstAttempt, EncodeJobStatus.Queued)]
     [InlineData(3, EncodeJobStatus.Failed)]
     public async Task AJobWhoseProcessDiedLeavesTheRecordingRowAsItWas(int attempt, EncodeJobStatus becomes)

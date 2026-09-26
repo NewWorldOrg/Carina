@@ -16,29 +16,29 @@ namespace Carina.Infrastructure.Encodings;
 /// ledger was told about, and the artefact is placed by the ledger or the job fails for one of the
 /// seven reasons the ledger holds. Whatever the end, what the job still owes a removal for is swept.
 /// A stop asked for by the caller is the one thing that leaves the job as it was: it stays running
-/// in the ledger for the next start to put back (BR-ED2-011).
+/// in the ledger for the next start to put back.
 /// <para>
 /// Three things about the run are written on the job as it goes: where it ran, so a degraded run
-/// is in the ledger (BR-EV-004); the programme's id and start, before its first line of progress
+/// is in the ledger; the programme's id and start, before its first line of progress
 /// is read, so the next process can stop it if this one dies — which is the same row the look for
 /// the breaks writes each of its own programmes on, one at a time, the two never overlapping
-/// (BR-ED2-011); and its headway, at
+///; and its headway, at
 /// every tenth and at least every <see cref="HeartbeatEvery"/>, so a job that has stopped getting
-/// on can be told from one that is (BR-ED2-014).
+/// on can be told from one that is.
 /// </para>
 /// <para>
 /// What the run made of where the breaks are goes into the ledger before the encode starts, and
 /// goes in whatever the answer, so a job nobody looked at says so rather than looking like one
 /// from before anything looked. When there were breaks to mark they are written down as chapters
 /// of the artefact-to-be and handed to the encode as a metadata file, which is a scratch file like
-/// any other: recorded before it is written (BR-ED2-010) and swept when the job ends. The ledger
+/// any other: recorded before it is written and swept when the job ends. The ledger
 /// is what a player is answered from; the file is only what bakes them into the artefact.
 /// </para>
 /// <para>
 /// The look is handed the station's watermark learned ahead — from another recording of the same
 /// service, never from this one — and whatever watermark it learned from this recording is kept
 /// against this recording once the reading is in the ledger, for the recordings of the service read
-/// after it (BR-ED2-007). Neither is allowed to fail the job: a watermark that cannot be read is
+/// after it. Neither is allowed to fail the job: a watermark that cannot be read is
 /// looked without, and one that cannot be kept is let go.
 /// </para>
 /// </summary>

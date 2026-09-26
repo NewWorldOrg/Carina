@@ -20,7 +20,7 @@ public sealed class TunedStreamProbe(IDriverClient driver, ScanSettings settings
     {
         ArgumentNullException.ThrowIfNull(tuning);
 
-        var sessionId = SessionId.Parse($"scan-{Guid.NewGuid():n}");
+        SessionId sessionId = SessionId.Parse($"scan-{Guid.NewGuid():n}");
         TuneParams tune = tuning.Typed();
         DriverCall<SessionSnapshot> start = await driver.StartSessionAsync(
             new StartSessionRequest
@@ -132,7 +132,7 @@ public sealed class TunedStreamProbe(IDriverClient driver, ScanSettings settings
         CancellationToken deadline,
         CancellationToken abort)
     {
-        using var reading = CancellationTokenSource.CreateLinkedTokenSource(deadline, abort);
+        using CancellationTokenSource reading = CancellationTokenSource.CreateLinkedTokenSource(deadline, abort);
         byte[] buffer = ArrayPool<byte>.Shared.Rent(settings.ReadBufferSize);
 
         try

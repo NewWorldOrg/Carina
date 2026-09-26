@@ -22,7 +22,7 @@ public sealed class FfmpegEncodeRunTests : IDisposable
 
     public void Dispose() => tree.Dispose();
 
-    [Fact(DisplayName = "BR-ED2-013: every progress block the programme writes is handed on as it comes, and the last one is kept with the exit code")]
+    [Fact(DisplayName = "every progress block the programme writes is handed on as it comes, and the last one is kept with the exit code")]
     public async Task EveryProgressBlockIsHandedOnAsItComes()
     {
         List<EncodeProgress> told = [];
@@ -54,7 +54,7 @@ public sealed class FfmpegEncodeRunTests : IDisposable
         Assert.Equal("a complaint about the source at …", ran.Complained);
     }
 
-    [Fact(DisplayName = "BR-ED2-012: a non-zero exit comes back as the code and the complaint, not as an exception")]
+    [Fact(DisplayName = "a non-zero exit comes back as the code and the complaint, not as an exception")]
     public async Task ANonZeroExitComesBackAsTheCodeAndTheComplaint()
     {
         EncodeRunOutcome ran = await FfmpegEncodeRun.RunAsync(
@@ -74,7 +74,7 @@ public sealed class FfmpegEncodeRunTests : IDisposable
         Assert.Null(ran.Reached);
     }
 
-    [Fact(DisplayName = "BR-EV-004: a programme that is not on this machine is a fault of its own, named without the path")]
+    [Fact(DisplayName = "a programme that is not on this machine is a fault of its own, named without the path")]
     public async Task AProgrammeNotOnThisMachineIsAFaultOfItsOwn()
     {
         EncodeRunOutcome ran = await FfmpegEncodeRun.RunAsync(
@@ -92,7 +92,7 @@ public sealed class FfmpegEncodeRunTests : IDisposable
         Assert.DoesNotContain(tree.Root, ran.Complained, StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "BR-ED2-014: a programme that goes quiet for longer than allowed is stopped, children and all, and said to have stalled")]
+    [Fact(DisplayName = "a programme that goes quiet for longer than allowed is stopped, children and all, and said to have stalled")]
     public async Task AProgrammeThatGoesQuietIsStoppedAndSaidToHaveStalled()
     {
         TimeSpan allowed = TimeSpan.FromMilliseconds(300);
@@ -124,7 +124,7 @@ public sealed class FfmpegEncodeRunTests : IDisposable
         Assert.False(File.Exists(marker));
     }
 
-    [Fact(DisplayName = "BR-ED2-014: a programme that keeps reporting is never taken for stalled, however long it runs")]
+    [Fact(DisplayName = "a programme that keeps reporting is never taken for stalled, however long it runs")]
     public async Task AProgrammeThatKeepsReportingIsNeverTakenForStalled()
     {
         TimeSpan allowed = TimeSpan.FromMilliseconds(600);
@@ -155,7 +155,7 @@ public sealed class FfmpegEncodeRunTests : IDisposable
         Assert.True(clock.GetUtcNow() - started > allowed * 5, "the run outlived its allowance many times over without going quiet");
     }
 
-    [Fact(DisplayName = "BR-ED2-011: a stop asked for by the caller stops the programme and is thrown, so the caller knows nothing ended")]
+    [Fact(DisplayName = "a stop asked for by the caller stops the programme and is thrown, so the caller knows nothing ended")]
     public async Task AStopAskedForByTheCallerStopsTheProgrammeAndIsThrown()
     {
         using var stopping = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
@@ -180,7 +180,7 @@ public sealed class FfmpegEncodeRunTests : IDisposable
         Assert.False(File.Exists(marker));
     }
 
-    [Fact(DisplayName = "BR-ED2-011: who the programme is — its id and when it began — is handed over before a line of its progress is read, and it is the programme that was started")]
+    [Fact(DisplayName = "who the programme is — its id and when it began — is handed over before a line of its progress is read, and it is the programme that was started")]
     public async Task WhoTheProgrammeIsIsHandedOverBeforeItsProgressIsRead()
     {
         RunningProgramme? began = null;
@@ -225,7 +225,7 @@ public sealed class FfmpegEncodeRunTests : IDisposable
         Assert.Equal(began.ProcessId, int.Parse(File.ReadAllText(wroteItsOwnId).Trim(), System.Globalization.CultureInfo.InvariantCulture));
     }
 
-    [Fact(DisplayName = "BR-ED2-011: a programme whose identity cannot be written down is stopped rather than run unrecorded")]
+    [Fact(DisplayName = "a programme whose identity cannot be written down is stopped rather than run unrecorded")]
     public async Task AProgrammeWhoseIdentityCannotBeWrittenDownIsStopped()
     {
         string marker = tree.Under("woke");
@@ -249,7 +249,7 @@ public sealed class FfmpegEncodeRunTests : IDisposable
         Assert.False(File.Exists(marker));
     }
 
-    [Fact(DisplayName = "BR-ED2-012: a programme whose progress cannot be written down any more is stopped rather than left running unwatched")]
+    [Fact(DisplayName = "a programme whose progress cannot be written down any more is stopped rather than left running unwatched")]
     public async Task AProgrammeWhoseProgressCannotBeWrittenDownIsStopped()
     {
         string marker = tree.Under("woke");
@@ -274,7 +274,7 @@ public sealed class FfmpegEncodeRunTests : IDisposable
         Assert.False(File.Exists(marker));
     }
 
-    [Fact(DisplayName = "BR-ED2-005: the programme runs yielding, at the lowest priority the scheduler has, from its first instruction")]
+    [Fact(DisplayName = "the programme runs yielding, at the lowest priority the scheduler has, from its first instruction")]
     public async Task TheProgrammeRunsYieldingFromItsFirstInstruction()
     {
         string niceness = tree.Under("niceness");
@@ -293,7 +293,7 @@ public sealed class FfmpegEncodeRunTests : IDisposable
         Assert.Equal("19", File.ReadAllText(niceness).Trim());
     }
 
-    [Fact(DisplayName = "BR-ED2-014: a programme that keeps reporting the same place is making no headway, and is stopped as stalled like one that says nothing")]
+    [Fact(DisplayName = "a programme that keeps reporting the same place is making no headway, and is stopped as stalled like one that says nothing")]
     public async Task AProgrammeThatKeepsReportingTheSamePlaceIsStalled()
     {
         TimeSpan allowed = TimeSpan.FromMilliseconds(700);

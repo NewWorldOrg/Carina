@@ -7,7 +7,7 @@ namespace Carina.Infrastructure.Encodings;
 /// <summary>
 /// Reads what ffmpeg writes to <c>-progress pipe:1</c>, one line at a time, and hands back where
 /// the job has got to at the end of each block. Every value is looked up by its key: reading by
-/// position is what turned a whole programme into 1.4 seconds once already (BR-ED2-013).
+/// position is what turned a whole programme into 1.4 seconds once already.
 /// <para>
 /// <c>out_time_ms</c> is not read. Measured on ffmpeg 6.1.6 it holds microseconds, the same number
 /// as <c>out_time_us</c>, so a reader that trusted its name would be a thousand times out.

@@ -23,7 +23,7 @@ public sealed class QualitySupplyReaderTests(RepositoryDatabase database)
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
-    [Fact(DisplayName = "BR-QD-007: a recording in flight is read as two supplies, not one")]
+    [Fact(DisplayName = "a recording in flight is read as two supplies, not one")]
     public async Task ARecordingInFlightIsReadAsTwoSuppliesNotOne()
     {
         await ClearAsync();
@@ -39,7 +39,7 @@ public sealed class QualitySupplyReaderTests(RepositoryDatabase database)
         Assert.Equal(Airs.AddMinutes(12), read[1].LastHeardAt);
     }
 
-    [Fact(DisplayName = "BR-QD-007: a recording nothing has measured yet is heard from when it began")]
+    [Fact(DisplayName = "a recording nothing has measured yet is heard from when it began")]
     public async Task ARecordingNothingHasMeasuredYetIsHeardFromWhenItBegan()
     {
         await ClearAsync();
@@ -50,7 +50,7 @@ public sealed class QualitySupplyReaderTests(RepositoryDatabase database)
         Assert.All(read, reading => Assert.Equal(Airs, reading.LastHeardAt));
     }
 
-    [Fact(DisplayName = "BR-QD-007: a recording that has ended is not a supply that went quiet")]
+    [Fact(DisplayName = "a recording that has ended is not a supply that went quiet")]
     public async Task ARecordingThatHasEndedIsNotASupplyThatWentQuiet()
     {
         await ClearAsync();
@@ -67,7 +67,7 @@ public sealed class QualitySupplyReaderTests(RepositoryDatabase database)
         Assert.Empty(await ReadAsync());
     }
 
-    [Fact(DisplayName = "BR-QD-007: the visit ledger is heard from when the back-off says the first visit is due again")]
+    [Fact(DisplayName = "the visit ledger is heard from when the back-off says the first visit is due again")]
     public async Task TheVisitLedgerIsHeardFromWhenTheBackOffSaysTheFirstVisitIsDueAgain()
     {
         await ClearAsync();
@@ -80,7 +80,7 @@ public sealed class QualitySupplyReaderTests(RepositoryDatabase database)
         Assert.Equal(Airs + new CollectionSettings().BetweenVisits, read.LastHeardAt);
     }
 
-    [Fact(DisplayName = "BR-QD-007: the whole visit ledger is one supply rather than one for each stream")]
+    [Fact(DisplayName = "the whole visit ledger is one supply rather than one for each stream")]
     public async Task TheWholeVisitLedgerIsOneSupplyRatherThanOneForEachStream()
     {
         await ClearAsync();
@@ -91,7 +91,7 @@ public sealed class QualitySupplyReaderTests(RepositoryDatabase database)
         Assert.Single(await ReadAsync());
     }
 
-    [Fact(DisplayName = "BR-QD-007: a ledger something was attempted on within the threshold is not quiet, overdue visit or not")]
+    [Fact(DisplayName = "a ledger something was attempted on within the threshold is not quiet, overdue visit or not")]
     public async Task ALedgerSomethingWasAttemptedOnWithinTheThresholdIsNotQuiet()
     {
         await ClearAsync();
@@ -104,7 +104,7 @@ public sealed class QualitySupplyReaderTests(RepositoryDatabase database)
         Assert.Empty(SupplyWatch.Quiet([read], FiveMinutes, Now));
     }
 
-    [Fact(DisplayName = "BR-QD-007: a ledger with a visit overdue and nothing attempted for longer than the threshold is quiet")]
+    [Fact(DisplayName = "a ledger with a visit overdue and nothing attempted for longer than the threshold is quiet")]
     public async Task ALedgerWithAVisitOverdueAndNothingAttemptedForLongerThanTheThresholdIsQuiet()
     {
         await ClearAsync();
@@ -117,7 +117,7 @@ public sealed class QualitySupplyReaderTests(RepositoryDatabase database)
         Assert.Single(SupplyWatch.Quiet([read], FiveMinutes, Now));
     }
 
-    [Fact(DisplayName = "BR-QD-007: a ledger whose visits the sweep all broke off is not one the back-off has made due")]
+    [Fact(DisplayName = "a ledger whose visits the sweep all broke off is not one the back-off has made due")]
     public async Task ALedgerWhoseVisitsTheSweepAllBrokeOffIsNotOneTheBackOffHasMadeDue()
     {
         await ClearAsync();

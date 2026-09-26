@@ -84,7 +84,7 @@ public sealed class AuthUpkeepJob(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        using var pace = new PeriodicTimer(BetweenRounds, clock);
+        using PeriodicTimer pace = new(BetweenRounds, clock);
 
         do
         {

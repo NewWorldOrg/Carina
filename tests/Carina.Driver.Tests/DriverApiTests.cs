@@ -873,7 +873,7 @@ public sealed class DriverApiTests
 
             Assert.Equal(HttpStatusCode.OK, stopped.StatusCode);
 
-            IReadOnlyList<string> taken = await listener.Take(
+            IReadOnlyList<string> taken = await listener.TakeAsync(
                 new CancellationTokenSource(TimeSpan.FromSeconds(5)).Token
             );
 

@@ -8,7 +8,7 @@ namespace Carina.Infrastructure.Encodings;
 
 /// <summary>
 /// Confirms at startup that a rename from where a job works to where its artefact goes is a rename
-/// (A-エンコード-024), for each root this process holds for writing. The roots the recordings are
+///, for each root this process holds for writing. The roots the recordings are
 /// read from are not looked at: nothing is ever written into them. A working directory on another
 /// mount than a held root stops the process, because every job into that root would otherwise end
 /// in a copy that an interruption makes look complete. A held root this process cannot write, and

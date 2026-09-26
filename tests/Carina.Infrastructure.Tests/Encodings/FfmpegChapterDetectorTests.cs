@@ -302,7 +302,7 @@ public sealed class FfmpegChapterDetectorTests : IDisposable
         Assert.False(File.Exists(marker));
     }
 
-    [Fact(DisplayName = "BR-ED2-005: the runs are allowed the cores the caller worked out, which is the cap the ledger holds, and nothing here reads the machine or the settings for a number of its own")]
+    [Fact(DisplayName = "the runs are allowed the cores the caller worked out, which is the cap the ledger holds, and nothing here reads the machine or the settings for a number of its own")]
     public async Task TheRunsAreAllowedTheCoresTheCallerWorkedOut()
     {
         string calls = tree.Under("calls");
@@ -330,7 +330,7 @@ public sealed class FfmpegChapterDetectorTests : IDisposable
         => await Assert.ThrowsAsync<ArgumentOutOfRangeException>(
             () => Looking(APodOfAdvertisements).MarkAsync(Source, Service, Aligned, NothingLearned, 0, Unwatched, Cancel));
 
-    [Fact(DisplayName = "BR-ED2-011: every programme the look starts is handed over before it says anything, so a process that dies mid-look leaves nothing nobody can find")]
+    [Fact(DisplayName = "every programme the look starts is handed over before it says anything, so a process that dies mid-look leaves nothing nobody can find")]
     public async Task EveryProgrammeTheLookStartsIsHandedOverBeforeItSaysAnything()
     {
         string ownIds = tree.Under("own-ids");
@@ -362,7 +362,7 @@ public sealed class FfmpegChapterDetectorTests : IDisposable
             DateTime.UtcNow + TimeSpan.FromMinutes(5)));
     }
 
-    [Fact(DisplayName = "BR-ED2-011: a programme whose identity cannot be written down is stopped rather than left running unrecorded")]
+    [Fact(DisplayName = "a programme whose identity cannot be written down is stopped rather than left running unrecorded")]
     public async Task AProgrammeWhoseIdentityCannotBeWrittenDownIsStopped()
     {
         string marker = tree.Under("woke");
@@ -379,7 +379,7 @@ public sealed class FfmpegChapterDetectorTests : IDisposable
         Assert.False(File.Exists(marker));
     }
 
-    [Fact(DisplayName = "BR-ED2-007: a source with no watermark learned ahead is judged without one, and the watermark it carries is learned from it and handed back beside the reading")]
+    [Fact(DisplayName = "a source with no watermark learned ahead is judged without one, and the watermark it carries is learned from it and handed back beside the reading")]
     public async Task ASourceWithNoWatermarkLearnedAheadIsJudgedWithoutOneAndTeachesItsOwn()
     {
         ChapterDetection read = await Looking(WatchedThrough(unbrandedFrom: 0, unbrandedUntil: 0))
@@ -392,7 +392,7 @@ public sealed class FfmpegChapterDetectorTests : IDisposable
         Assert.Contains("no watermark had been learned ahead", read.Note, StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "BR-ED2-007: a pod the watermark learned ahead stayed on screen through is programme, and the reading says it was taken away")]
+    [Fact(DisplayName = "a pod the watermark learned ahead stayed on screen through is programme, and the reading says it was taken away")]
     public async Task APodTheWatermarkLearnedAheadStayedOnScreenThroughIsProgramme()
     {
         ChapterDetection read = await Looking(WatchedThrough(unbrandedFrom: WatchedFrom, unbrandedUntil: WatchedFrom + 9))
@@ -403,7 +403,7 @@ public sealed class FfmpegChapterDetectorTests : IDisposable
         Assert.NotNull(read.Learned);
     }
 
-    [Fact(DisplayName = "BR-ED2-007: a pod the watermark learned ahead was taken off for stands as a break")]
+    [Fact(DisplayName = "a pod the watermark learned ahead was taken off for stands as a break")]
     public async Task APodTheWatermarkWasTakenOffForStands()
     {
         ChapterDetection read = await Looking(WatchedThrough(unbrandedFrom: 1300, unbrandedUntil: 1361))
@@ -416,7 +416,7 @@ public sealed class FfmpegChapterDetectorTests : IDisposable
         Assert.DoesNotContain("taken away", read.Note, StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "BR-ED2-007: a machine told not to watch for the watermark runs no watch, learns nothing and uses none, whatever it is handed")]
+    [Fact(DisplayName = "a machine told not to watch for the watermark runs no watch, learns nothing and uses none, whatever it is handed")]
     public async Task AMachineToldNotToWatchRunsNoWatch()
     {
         string calls = tree.Under("calls");
@@ -435,7 +435,7 @@ public sealed class FfmpegChapterDetectorTests : IDisposable
         Assert.DoesNotContain("watermark", read.Note, StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "BR-ED2-007: a watch that refused leaves the reading made without a watermark, learns nothing, and says so without a word of what the programme said")]
+    [Fact(DisplayName = "a watch that refused leaves the reading made without a watermark, learns nothing, and says so without a word of what the programme said")]
     public async Task AWatchThatRefusedLeavesTheReadingMadeWithoutAWatermark()
     {
         ChapterDetection read = await Looking($$"""
@@ -455,7 +455,7 @@ public sealed class FfmpegChapterDetectorTests : IDisposable
         Assert.DoesNotContain("cannot decode", read.Note, StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "BR-ED2-007: a watch that would outlive the whole look costs the looks at the picture none of their time, so the breaks are still found and the reading says how long the watch was given")]
+    [Fact(DisplayName = "a watch that would outlive the whole look costs the looks at the picture none of their time, so the breaks are still found and the reading says how long the watch was given")]
     public async Task AWatchThatWouldOutliveTheWholeLookCostsTheLooksNoneOfTheirTime()
     {
         var clock = new HandTurnedClock();
@@ -490,7 +490,7 @@ public sealed class FfmpegChapterDetectorTests : IDisposable
         Assert.DoesNotContain("looking at the picture was stopped", read.Note, StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "BR-ED2-007: looks at the picture that used up the whole look leave no watch started at all, and the reading is made without a watermark")]
+    [Fact(DisplayName = "looks at the picture that used up the whole look leave no watch started at all, and the reading is made without a watermark")]
     public async Task LooksThatUsedUpTheWholeLookLeaveNoWatchStarted()
     {
         string calls = tree.Under("calls");

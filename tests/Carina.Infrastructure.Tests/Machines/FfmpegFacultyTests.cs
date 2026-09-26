@@ -56,7 +56,7 @@ public sealed class FfmpegFacultyTests
     public void AListingThatIsNotThereNamesNothing()
         => Assert.Empty(FfmpegFaculties.Listed(string.Empty));
 
-    [Fact(DisplayName = "BR-EV-004: this build has no libx265, so H.265 is on the card and nowhere else")]
+    [Fact(DisplayName = "this build has no libx265, so H.265 is on the card and nowhere else")]
     public void ThisBuildHasNoLibx265SoH265IsOnTheCardAndNowhereElse()
         => Assert.Equal(
             [
@@ -67,13 +67,13 @@ public sealed class FfmpegFacultyTests
             ],
             FfmpegFaculties.Of(FfmpegFaculties.Listed(Encoders), FfmpegFaculties.Listed(Decoders), cardEncodesH264: true, cardEncodesH265: true));
 
-    [Fact(DisplayName = "BR-EV-004: a card that encoded an H.264 frame and refused an H.265 one has H.264 on the card alone, whatever the build lists")]
+    [Fact(DisplayName = "a card that encoded an H.264 frame and refused an H.265 one has H.264 on the card alone, whatever the build lists")]
     public void ACardThatRefusedAnH265FrameHasH264OnTheCardAlone()
         => Assert.Equal(
             [Faculty.EncodeH264OnTheProcessor, Faculty.EncodeH264OnTheCard, Faculty.DecodeAribCaptions],
             FfmpegFaculties.Of(FfmpegFaculties.Listed(Encoders), FfmpegFaculties.Listed(Decoders), cardEncodesH264: true, cardEncodesH265: false));
 
-    [Fact(DisplayName = "BR-EV-004: a build that lists an encoder for the card is not a card that can be reached")]
+    [Fact(DisplayName = "a build that lists an encoder for the card is not a card that can be reached")]
     public void ABuildThatListsAnEncoderForTheCardIsNotACardThatCanBeReached()
         => Assert.Equal(
             [Faculty.EncodeH264OnTheProcessor, Faculty.DecodeAribCaptions],

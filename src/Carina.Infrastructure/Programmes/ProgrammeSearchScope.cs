@@ -10,7 +10,8 @@ public sealed record ProgrammeSearchBounds(
 {
     public IReadOnlyList<BroadcastStream> Listed(TuneSystem system)
     {
-        var withheld = Withheld.Select(service => (service.NetworkId, service.ServiceId)).ToHashSet();
+        HashSet<(int NetworkId, int ServiceId)> withheld =
+            Withheld.Select(service => (service.NetworkId, service.ServiceId)).ToHashSet();
 
         return
         [

@@ -27,7 +27,7 @@ public sealed class EncodeDispatchTests
 
     private static readonly EncodeSettings OnTheCard = new() { Prefer = EncodeEncoder.Vaapi, MostAttempts = 3 };
 
-    [Fact(DisplayName = "BR-ED2-011: when the process comes up, every job the ledger holds as running goes back to the queue or is given up, and nothing else is touched")]
+    [Fact(DisplayName = "when the process comes up, every job the ledger holds as running goes back to the queue or is given up, and nothing else is touched")]
     public async Task WhenTheProcessComesUpEveryRunningJobIsPutBackOrGivenUp()
     {
         var held = new HeldEncodeJobs();
@@ -53,7 +53,7 @@ public sealed class EncodeDispatchTests
             held.Moves);
     }
 
-    [Fact(DisplayName = "BR-ED2-005: a look at an empty queue starts nothing and says so")]
+    [Fact(DisplayName = "a look at an empty queue starts nothing and says so")]
     public async Task ALookAtAnEmptyQueueStartsNothing()
     {
         var held = new HeldEncodeJobs();
@@ -65,7 +65,7 @@ public sealed class EncodeDispatchTests
         Assert.Null(look.Ended);
     }
 
-    [Fact(DisplayName = "BR-ED2-005: while the ledger holds a running job, a look starts nothing and says another is running")]
+    [Fact(DisplayName = "while the ledger holds a running job, a look starts nothing and says another is running")]
     public async Task WhileTheLedgerHoldsARunningJobALookStartsNothing()
     {
         var held = new HeldEncodeJobs();
@@ -77,7 +77,7 @@ public sealed class EncodeDispatchTests
         Assert.Single(held.Jobs, job => job.Status is EncodeJobStatus.Running);
     }
 
-    [Fact(DisplayName = "BR-ED2-011: a job whose run throws is put back in the queue with its attempt counted, so it never sits as running with nobody running it")]
+    [Fact(DisplayName = "a job whose run throws is put back in the queue with its attempt counted, so it never sits as running with nobody running it")]
     public async Task AJobWhoseRunThrowsIsPutBackInTheQueue()
     {
         var held = new HeldEncodeJobs();
@@ -93,7 +93,7 @@ public sealed class EncodeDispatchTests
         Assert.Equal(2, waiting.Attempt);
     }
 
-    [Fact(DisplayName = "BR-ED2-011: a job whose run throws on its last attempt is given up as timed out")]
+    [Fact(DisplayName = "a job whose run throws on its last attempt is given up as timed out")]
     public async Task AJobWhoseRunThrowsOnItsLastAttemptIsGivenUp()
     {
         var held = new HeldEncodeJobs();
@@ -166,7 +166,7 @@ public sealed class EncodeDispatchTests
         Assert.True(owed.IsOwedARemoval);
     }
 
-    [Fact(DisplayName = "BR-ED2-012: a job called off while it ran is left as the ledger says, and what it still owes a removal for is swept")]
+    [Fact(DisplayName = "a job called off while it ran is left as the ledger says, and what it still owes a removal for is swept")]
     public async Task AJobCalledOffWhileItRanIsLeftAsTheLedgerSays()
     {
         var held = new HeldEncodeJobs();

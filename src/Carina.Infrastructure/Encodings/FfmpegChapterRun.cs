@@ -36,7 +36,7 @@ public sealed record ChapterRunOutcome(int? ExitCode, ChapterRunFault? Fault, st
 /// Who the programme is — its id and when it began — is handed to the caller before either stream
 /// is read, so that a process which dies mid-look leaves behind a programme the next one can find
 /// and stop; a caller that cannot write it down stops the programme rather than run it unrecorded
-/// (BR-ED2-011). One already gone by then is not handed over, there being nothing left of it to
+///. One already gone by then is not handed over, there being nothing left of it to
 /// stop.
 /// </para>
 /// </summary>
@@ -113,7 +113,7 @@ public static class FfmpegChapterRun
         }
 
         using Process running = start.Process;
-        using var late = new CancellationTokenSource(longest, clock);
+        using CancellationTokenSource late = new(longest, clock);
         using CancellationTokenRegistration stopWhenLate =
             late.Token.UnsafeRegister(_ => AnotherProgramme.GiveUpOn(running), null);
         using CancellationTokenRegistration stopWhenCancelled =

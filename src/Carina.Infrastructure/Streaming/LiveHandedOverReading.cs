@@ -195,7 +195,7 @@ internal sealed class LiveHandedOverReading : ILiveHandedOver
                     break;
                 }
 
-                if (!await Waiting(cancellationToken))
+                if (!await WaitingAsync(cancellationToken))
                 {
                     return 0;
                 }
@@ -215,7 +215,7 @@ internal sealed class LiveHandedOverReading : ILiveHandedOver
 
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
 
-        private async ValueTask<bool> Waiting(CancellationToken cancellationToken)
+        private async ValueTask<bool> WaitingAsync(CancellationToken cancellationToken)
         {
             try
             {

@@ -8,8 +8,8 @@ namespace Carina.Infrastructure.Encodings;
 /// Where, on this machine, a job reads and writes. The recording is read from under the root the
 /// driver wrote it into, which this process holds read-only; the artefact goes under one of the
 /// roots this process holds for writing, and the work goes beside it unless a working directory is
-/// named, in which case every root shares that one (A-エンコード-024 checks that the two are one
-/// mount). The two sets of roots are never the same set.
+/// named, in which case every root shares that one (checked to be one mount). The two sets of
+/// roots are never the same set.
 /// </summary>
 public sealed class EncodePlaces(IntegritySettings mounts, EncodeSettings settings)
 {

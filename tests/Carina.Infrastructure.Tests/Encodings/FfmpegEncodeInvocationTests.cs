@@ -262,7 +262,7 @@ public sealed class FfmpegEncodeInvocationTests
         }
     }
 
-    [Fact(DisplayName = "BR-PD-008: a broadcast that put two languages on one sound is encoded with the main language in both ears, not with both languages side by side")]
+    [Fact(DisplayName = "a broadcast that put two languages on one sound is encoded with the main language in both ears, not with both languages side by side")]
     public void TheArgumentsForTwoLanguagesOnOneSoundAreExactlyThese()
         => Assert.Equal(
             [
@@ -312,7 +312,7 @@ public sealed class FfmpegEncodeInvocationTests
                 HeadSkip,
                 TwoLanguagesOnOneSound));
 
-    [Fact(DisplayName = "BR-PD-008: the card puts the main language in both ears exactly as the processor does, because the real machine encodes on the card")]
+    [Fact(DisplayName = "the card puts the main language in both ears exactly as the processor does, because the real machine encodes on the card")]
     public void TheArgumentsForTwoLanguagesOnOneSoundOnTheCardAreExactlyThese()
         => Assert.Equal(
             [
@@ -364,7 +364,7 @@ public sealed class FfmpegEncodeInvocationTests
                 HeadSkip,
                 TwoLanguagesOnOneSound));
 
-    [Fact(DisplayName = "A-エンコード-057: the chapters are read from an input of their own and baked into the output, and the arguments are exactly these")]
+    [Fact(DisplayName = "the chapters are read from an input of their own and baked into the output, and the arguments are exactly these")]
     public void TheArgumentsWithChaptersToBakeInAreExactlyThese()
         => Assert.Equal(
             [
@@ -411,7 +411,7 @@ public sealed class FfmpegEncodeInvocationTests
             ],
             FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, Source, Cores, HeadSkip, AsItStands, Breaks));
 
-    [Fact(DisplayName = "A-エンコード-057: the card bakes the chapters in exactly as the processor does, because the real machine encodes on the card")]
+    [Fact(DisplayName = "the card bakes the chapters in exactly as the processor does, because the real machine encodes on the card")]
     public void TheCardsArgumentsWithChaptersToBakeInAreExactlyThese()
         => Assert.Equal(
             [
@@ -460,7 +460,7 @@ public sealed class FfmpegEncodeInvocationTests
             ],
             FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Vaapi, Source, Cores, HeadSkip, AsItStands, Breaks));
 
-    [Theory(DisplayName = "A-エンコード-057: a run with nothing to bake in is the run it was before, argument for argument, on either encoder")]
+    [Theory(DisplayName = "a run with nothing to bake in is the run it was before, argument for argument, on either encoder")]
     [InlineData(EncodeEncoder.Software)]
     [InlineData(EncodeEncoder.Vaapi)]
     public void ARunWithNothingToBakeInIsTheRunItWasBefore(EncodeEncoder encoder)
@@ -478,7 +478,7 @@ public sealed class FfmpegEncodeInvocationTests
         Assert.DoesNotContain("ffmetadata", withoutSaying);
     }
 
-    [Fact(DisplayName = "A-エンコード-057: the chapters stand after the recording among the inputs, because a stream asked for by its programme with no file number in front of it names the first input")]
+    [Fact(DisplayName = "the chapters stand after the recording among the inputs, because a stream asked for by its programme with no file number in front of it names the first input")]
     public void TheChaptersStandAfterTheRecordingAmongTheInputs()
     {
         string[] arguments =
@@ -529,7 +529,7 @@ public sealed class FfmpegEncodeInvocationTests
                 HeadSkip,
                 TwoLanguagesOnOneSound));
 
-    [Theory(DisplayName = "BR-PD-008: a sound that stands on a stream of its own is copied over exactly as it was before any language was chosen")]
+    [Theory(DisplayName = "a sound that stands on a stream of its own is copied over exactly as it was before any language was chosen")]
     [InlineData(AudioMode.Undetermined, ProgrammeSnapshot.SoundsUnannounced)]
     [InlineData(AudioMode.Mono, 1)]
     [InlineData(AudioMode.Stereo, 1)]
@@ -650,7 +650,7 @@ public sealed class FfmpegEncodeInvocationTests
             ],
             FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Vaapi, Source, Cores, HeadSkip, AsItStands));
 
-    [Fact(DisplayName = "BR-EV-004: the card is only ever given a quantiser, and the processor only a rate factor")]
+    [Fact(DisplayName = "the card is only ever given a quantiser, and the processor only a rate factor")]
     public void TheCardIsOnlyEverGivenAQuantiserAndTheProcessorOnlyARateFactor()
     {
         IReadOnlyList<string> onTheCard =
@@ -671,7 +671,7 @@ public sealed class FfmpegEncodeInvocationTests
         Assert.DoesNotContain("-b:v", onTheProcessor);
     }
 
-    [Theory(DisplayName = "BR-EV-002: nothing that reaches an argument was written by anyone but this repository")]
+    [Theory(DisplayName = "nothing that reaches an argument was written by anyone but this repository")]
     [MemberData(nameof(EveryShapeOnEveryEncoder))]
     public void EveryArgumentIsAnOptionNameAConstantOrThePathItWasHandedIn(
         EncodeCodec codec,
@@ -773,7 +773,7 @@ public sealed class FfmpegEncodeInvocationTests
         Assert.All(arguments, argument => Assert.Contains(argument, known, StringComparer.Ordinal));
     }
 
-    [Theory(DisplayName = "BR-EV-002: an argument is never one piece of text carrying another")]
+    [Theory(DisplayName = "an argument is never one piece of text carrying another")]
     [MemberData(nameof(EveryShapeOnEveryEncoder))]
     public void AnArgumentIsNeverOnePieceOfTextCarryingAnother(
         EncodeCodec codec,
@@ -906,7 +906,7 @@ public sealed class FfmpegEncodeInvocationTests
         => Assert.Throws<ArgumentOutOfRangeException>(
             () => FfmpegEncodeInvocation.Arguments(Service, Profile(), (EncodeEncoder)7, Source, Cores, HeadSkip, AsItStands));
 
-    [Fact(DisplayName = "BR-ED2-005: the core cap is handed to every stage that counts threads — the decoder, the filters and the encoder — and never as none")]
+    [Fact(DisplayName = "the core cap is handed to every stage that counts threads — the decoder, the filters and the encoder — and never as none")]
     public void TheCoreCapIsHandedToEveryStageThatCountsThreads()
     {
         string[] arguments = [.. FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, Source, 3, HeadSkip, AsItStands)];
@@ -926,7 +926,7 @@ public sealed class FfmpegEncodeInvocationTests
         => Assert.Throws<ArgumentException>(
             () => FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, string.Empty, Cores, HeadSkip, AsItStands));
 
-    [Fact(DisplayName = "BR-ED2-006: the head skip is the one -ss, it stands after the input as a trim and not before it as a seek, it is written to the microsecond, and neither -output_ts_offset nor -copyts is anywhere near it")]
+    [Fact(DisplayName = "the head skip is the one -ss, it stands after the input as a trim and not before it as a seek, it is written to the microsecond, and neither -output_ts_offset nor -copyts is anywhere near it")]
     public void TheHeadSkipIsTheOneSsAndItStandsAfterTheInput()
     {
         string[] arguments = [.. FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, Source, Cores, TimeSpan.FromSeconds(0.507200), AsItStands)];
@@ -950,7 +950,7 @@ public sealed class FfmpegEncodeInvocationTests
                 .SkipWhile(argument => argument != "-ss").Skip(1).First());
     }
 
-    [Fact(DisplayName = "BR-ED2-006: a head skip beyond the five seconds a run accepts, or before nothing, is refused before a run is built — a broadcast clock handed in as a skip is the seventeen hours")]
+    [Fact(DisplayName = "a head skip beyond the five seconds a run accepts, or before nothing, is refused before a run is built — a broadcast clock handed in as a skip is the seventeen hours")]
     public void AHeadSkipBeyondReachIsRefusedBeforeARunIsBuilt()
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, Source, Cores, TimeSpan.FromSeconds(5.5), AsItStands));
@@ -959,7 +959,7 @@ public sealed class FfmpegEncodeInvocationTests
         _ = FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, Source, Cores, TimeSpan.FromSeconds(5), AsItStands);
     }
 
-    [Fact(DisplayName = "BR-ED2-006: every audio stream of the programme is mapped and copied, not the first alone")]
+    [Fact(DisplayName = "every audio stream of the programme is mapped and copied, not the first alone")]
     public void EveryAudioStreamOfTheProgrammeIsMappedAndCopied()
     {
         string[] arguments = [.. FfmpegEncodeInvocation.Arguments(Service, Profile(), EncodeEncoder.Software, Source, Cores, HeadSkip, AsItStands)];

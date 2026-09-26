@@ -140,7 +140,8 @@ public sealed class ProgrammeRepository(CarinaDbContext context) : IProgrammeRep
         DateTime at,
         CancellationToken cancellationToken)
     {
-        var whole = heardWhole.Select(service => (service.NetworkId, service.ServiceId)).ToHashSet();
+        HashSet<(int NetworkId, int ServiceId)> whole =
+            heardWhole.Select(service => (service.NetworkId, service.ServiceId)).ToHashSet();
         ProgrammeId[] named =
         [
             .. broadcasts
@@ -236,7 +237,8 @@ public sealed class ProgrammeRepository(CarinaDbContext context) : IProgrammeRep
             .OrderBy(programme => programme.StartsAt)
             .ThenBy(programme => programme.EventId)
             .ToListAsync(cancellationToken);
-        var wanted = services.Select(service => (service.NetworkId, service.ServiceId)).ToHashSet();
+        HashSet<(int NetworkId, int ServiceId)> wanted =
+            services.Select(service => (service.NetworkId, service.ServiceId)).ToHashSet();
 
         return [.. found.Where(programme => wanted.Contains((programme.NetworkId.Value, programme.ServiceId.Value)))];
     }

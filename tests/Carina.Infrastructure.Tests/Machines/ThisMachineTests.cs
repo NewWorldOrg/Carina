@@ -16,19 +16,19 @@ public sealed class ThisMachineTests
     private static Task<MachineCapabilities> Reading()
         => new MachineCapabilityReader(new MachineSettings(), TimeProvider.System).ReadAsync(CancellationToken.None);
 
-    [Fact(DisplayName = "BR-EV-004: the build the application runs encodes H.264 on the processor")]
+    [Fact(DisplayName = "the build the application runs encodes H.264 on the processor")]
     public async Task TheBuildTheApplicationRunsEncodesH264OnTheProcessor()
         => Assert.True((await Reading()).Has(Faculty.EncodeH264OnTheProcessor));
 
-    [Fact(DisplayName = "BR-EV-004: the build the application runs has no libx265, so H.265 is the card's alone")]
+    [Fact(DisplayName = "the build the application runs has no libx265, so H.265 is the card's alone")]
     public async Task TheBuildTheApplicationRunsHasNoSoftwareH265()
         => Assert.False((await Reading()).Has(Faculty.EncodeH265OnTheProcessor));
 
-    [Fact(DisplayName = "A-エンコード-000e: the build the application runs decodes ARIB captions")]
+    [Fact(DisplayName = "the build the application runs decodes ARIB captions")]
     public async Task TheBuildTheApplicationRunsDecodesAribCaptions()
         => Assert.True((await Reading()).Has(Faculty.DecodeAribCaptions));
 
-    [Fact(DisplayName = "BR-EV-004: a machine with no card handed to it reads as one, rather than failing")]
+    [Fact(DisplayName = "a machine with no card handed to it reads as one, rather than failing")]
     public async Task AMachineWithNoCardHandedToItReadsAsOneRatherThanFailing()
     {
         MachineCapabilities can = await Reading();
@@ -45,7 +45,7 @@ public sealed class ThisMachineTests
         }
     }
 
-    [Fact(DisplayName = "BR-EV-004: H.265 on the card is claimed exactly when a frame is actually encoded with hevc_vaapi on this machine")]
+    [Fact(DisplayName = "H.265 on the card is claimed exactly when a frame is actually encoded with hevc_vaapi on this machine")]
     public async Task H265OnTheCardIsClaimedExactlyWhenAFrameIsEncodedWithIt()
     {
         MachineCapabilities can = await Reading();

@@ -34,7 +34,7 @@ public sealed class RuleEndpointTests
         Assert.Equal([AppEventName.Rules], feature.Events.Signalled);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: a rule that says nothing about encoding is written asking for one")]
+    [Fact(DisplayName = "a rule that says nothing about encoding is written asking for one")]
     public async Task ARuleThatSaysNothingAboutEncodingIsWrittenAskingForOne()
     {
         await using var feature = new RuleFeature();
@@ -48,7 +48,7 @@ public sealed class RuleEndpointTests
         Assert.True(feature.Rules.Rules[0].EncodeWhenRecorded);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: a rule can be written asking for no encode, and answers that back")]
+    [Fact(DisplayName = "a rule can be written asking for no encode, and answers that back")]
     public async Task ARuleCanBeWrittenAskingForNoEncode()
     {
         await using var feature = new RuleFeature();
@@ -62,7 +62,7 @@ public sealed class RuleEndpointTests
         Assert.False(feature.Rules.Rules[0].EncodeWhenRecorded);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: rewriting a rule carries what the rewrite asked about encoding")]
+    [Fact(DisplayName = "rewriting a rule carries what the rewrite asked about encoding")]
     public async Task RewritingARuleCarriesWhatItAskedAboutEncoding()
     {
         await using var feature = new RuleFeature();

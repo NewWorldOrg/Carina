@@ -18,7 +18,7 @@ public sealed class FfprobeSourceHeadTests : IDisposable
 
     public void Dispose() => standIns.Dispose();
 
-    [Fact(DisplayName = "BR-ED2-013: the head is asked for by key, on the programme's own video, over a little more than the longest skip, and read back by key")]
+    [Fact(DisplayName = "the head is asked for by key, on the programme's own video, over a little more than the longest skip, and read back by key")]
     public void TheHeadIsAskedForByKeyOnTheProgrammesOwnVideo()
     {
         string[] arguments = [.. FfprobeHeadInvocation.Arguments(Source, Service)];
@@ -34,7 +34,7 @@ public sealed class FfprobeSourceHeadTests : IDisposable
         Assert.True(FfprobeHeadInvocation.ReadFor > EncodeTimeline.MostHeadSkip, "a first picture just beyond the longest skip is read, so it can be refused with its number");
     }
 
-    [Fact(DisplayName = "BR-ED2-006: the first picture ffprobe decoded, not the first packet, is the head — a source that begins at 30499.474078 with its first I frame at 30499.981278 is skipped by 0.5072")]
+    [Fact(DisplayName = "the first picture ffprobe decoded, not the first packet, is the head — a source that begins at 30499.474078 with its first I frame at 30499.981278 is skipped by 0.5072")]
     public async Task TheFirstPictureDecodedIsTheHead()
     {
         SourceHeadReading reading = await Reading(standIns.Script(
@@ -51,7 +51,7 @@ public sealed class FfprobeSourceHeadTests : IDisposable
         Assert.Equal(TimeSpan.FromSeconds(0.5072), reading.HeadSkip);
     }
 
-    [Fact(DisplayName = "BR-ED2-013: a picture whose timestamp ffprobe could not work out is passed over for the next, and what it complained about while exiting 0 decides nothing")]
+    [Fact(DisplayName = "a picture whose timestamp ffprobe could not work out is passed over for the next, and what it complained about while exiting 0 decides nothing")]
     public async Task APictureWithoutATimestampIsPassedOverAndComplaintsDecideNothing()
     {
         SourceHeadReading reading = await Reading(standIns.Script(
@@ -66,7 +66,7 @@ public sealed class FfprobeSourceHeadTests : IDisposable
         Assert.Equal(TimeSpan.FromSeconds(0.5072), reading.HeadSkip);
     }
 
-    [Fact(DisplayName = "BR-ED2-006: a head with no picture in reach, or no start, is said nothing about rather than skipped by nothing")]
+    [Fact(DisplayName = "a head with no picture in reach, or no start, is said nothing about rather than skipped by nothing")]
     public async Task AHeadWithNoPictureOrNoStartIsSaidNothingAbout()
     {
         SourceHeadReading noPicture = await Reading(standIns.Script("printf 'start_time=30499.474078\\n'"));

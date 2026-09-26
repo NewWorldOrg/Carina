@@ -5,7 +5,7 @@ namespace Carina.Domain.Machines;
 /// <summary>
 /// A programme this process started, as the operating system knows it: the process id and the
 /// moment it began. The id alone is not an identity — the kernel hands it out again once the
-/// programme is gone — so the two are only ever kept and compared together (BR-ED2-011).
+/// programme is gone — so the two are only ever kept and compared together.
 /// </summary>
 public sealed record RunningProgramme
 {

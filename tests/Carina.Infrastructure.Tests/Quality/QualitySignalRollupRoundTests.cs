@@ -13,7 +13,7 @@ public sealed class QualitySignalRollupRoundTests
 
     private static readonly CancellationToken Cancel = CancellationToken.None;
 
-    [Fact(DisplayName = "BR-QD-006: what the samples of a finished window said is kept in both layers")]
+    [Fact(DisplayName = "what the samples of a finished window said is kept in both layers")]
     public async Task WhatTheSamplesOfAFinishedWindowSaidIsKeptInBothLayers()
     {
         HeldQualitySignalSamples samples = new();
@@ -43,7 +43,7 @@ public sealed class QualitySignalRollupRoundTests
         Assert.Equal(2, rollups.Rollups.Count);
     }
 
-    [Fact(DisplayName = "BR-QS-003: a sample no window has taken in yet is not deleted")]
+    [Fact(DisplayName = "a sample no window has taken in yet is not deleted")]
     public async Task ASampleNoWindowHasTakenInYetIsNotDeleted()
     {
         HeldQualitySignalSamples samples = new();
@@ -57,7 +57,7 @@ public sealed class QualitySignalRollupRoundTests
         Assert.Single(samples.Samples);
     }
 
-    [Fact(DisplayName = "BR-QS-003: a sample past its retention goes once its windows are written")]
+    [Fact(DisplayName = "a sample past its retention goes once its windows are written")]
     public async Task ASamplePastItsRetentionGoesOnceItsWindowsAreWritten()
     {
         HeldQualitySignalSamples samples = new();
@@ -74,7 +74,7 @@ public sealed class QualitySignalRollupRoundTests
         Assert.NotEmpty(rollups.Rollups);
     }
 
-    [Fact(DisplayName = "決定2: the minute windows go at their retention and the hourly ones stay")]
+    [Fact(DisplayName = "the minute windows go at their retention and the hourly ones stay")]
     public async Task TheMinuteWindowsGoAtTheirRetentionAndTheHourlyOnesStay()
     {
         HeldQualitySignalSamples samples = new();

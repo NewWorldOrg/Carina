@@ -11,7 +11,7 @@ public sealed class StrayProgrammesTests
 
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(10);
 
-    [Fact(DisplayName = "BR-ED2-011: a programme written down as it was started is found under its id, is the same programme, and is stopped")]
+    [Fact(DisplayName = "a programme written down as it was started is found under its id, is the same programme, and is stopped")]
     public void AProgrammeWrittenDownAsItWasStartedIsStopped()
     {
         ProgrammeStart start = AnotherProgramme.Start("sleep", ["30"]);
@@ -24,7 +24,7 @@ public sealed class StrayProgrammesTests
         Assert.True(running.WaitForExit(5000), "the programme is gone");
     }
 
-    [Fact(DisplayName = "BR-ED2-011: a programme under the written id that began at another time is somebody else's, and is left running")]
+    [Fact(DisplayName = "a programme under the written id that began at another time is somebody else's, and is left running")]
     public void AProgrammeThatBeganAtAnotherTimeIsLeftRunning()
     {
         ProgrammeStart start = AnotherProgramme.Start("sleep", ["30"]);
@@ -38,7 +38,7 @@ public sealed class StrayProgrammesTests
         AnotherProgramme.GiveUpOn(running);
     }
 
-    [Fact(DisplayName = "BR-ED2-011: a programme that has already exited is already gone, whether or not its id has been handed on")]
+    [Fact(DisplayName = "a programme that has already exited is already gone, whether or not its id has been handed on")]
     public void AProgrammeThatHasAlreadyExitedIsAlreadyGone()
     {
         ProgrammeStart start = AnotherProgramme.Start("sleep", ["30"]);
@@ -52,7 +52,7 @@ public sealed class StrayProgrammesTests
         Assert.Equal(StrayFate.AlreadyGone, fate);
     }
 
-    [Fact(DisplayName = "BR-ED2-011: an id nothing runs under is already gone")]
+    [Fact(DisplayName = "an id nothing runs under is already gone")]
     public void AnIdNothingRunsUnderIsAlreadyGone()
     {
         var written = new RunningProgramme(int.MaxValue - 7, DateTime.UtcNow);
@@ -60,7 +60,7 @@ public sealed class StrayProgrammesTests
         Assert.Equal(StrayFate.AlreadyGone, new StrayProgrammes(Drift, Patience).Stop(written));
     }
 
-    [Fact(DisplayName = "BR-ED2-011: the start time the kernel keeps for a programme reads the same, within the drift allowed, however many times it is read")]
+    [Fact(DisplayName = "the start time the kernel keeps for a programme reads the same, within the drift allowed, however many times it is read")]
     public void TheStartTimeReadsTheSameWithinTheDriftHoweverManyTimesItIsRead()
     {
         ProgrammeStart start = AnotherProgramme.Start("sleep", ["30"]);

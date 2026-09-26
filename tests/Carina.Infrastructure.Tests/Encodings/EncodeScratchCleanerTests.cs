@@ -10,7 +10,7 @@ public sealed class EncodeScratchCleanerTests
 
     private static readonly DateTime Ended = new(2026, 9, 5, 3, 30, 0, DateTimeKind.Utc);
 
-    [Fact(DisplayName = "BR-ED2-010: what is removed is what the ledger names for the job, and nothing beside it")]
+    [Fact(DisplayName = "what is removed is what the ledger names for the job, and nothing beside it")]
     public async Task WhatIsRemovedIsWhatTheLedgerNamesForTheJobAndNothingBesideIt()
     {
         using var harness = new EncodeHarness();
@@ -33,7 +33,7 @@ public sealed class EncodeScratchCleanerTests
         Assert.Equal([$"settled {failed.WorkFileName.Value} Removed"], harness.Scratch.Moves);
     }
 
-    [Fact(DisplayName = "BR-ED2-010: a file that is already gone is written down as gone, not as an error")]
+    [Fact(DisplayName = "a file that is already gone is written down as gone, not as an error")]
     public async Task AFileThatIsAlreadyGoneIsWrittenDownAsGone()
     {
         using var harness = new EncodeHarness();
@@ -48,7 +48,7 @@ public sealed class EncodeScratchCleanerTests
         Assert.Empty(harness.CleanerLog.Warnings);
     }
 
-    [Fact(DisplayName = "BR-ED2-010: what was already settled is not owed again")]
+    [Fact(DisplayName = "what was already settled is not owed again")]
     public async Task WhatWasAlreadySettledIsNotOwedAgain()
     {
         using var harness = new EncodeHarness();
@@ -62,7 +62,7 @@ public sealed class EncodeScratchCleanerTests
         Assert.Empty(harness.Scratch.Moves);
     }
 
-    [Fact(DisplayName = "BR-ED2-010: scratch is cleared once a job has ended, never while it runs")]
+    [Fact(DisplayName = "scratch is cleared once a job has ended, never while it runs")]
     public async Task ScratchIsClearedOnceAJobHasEndedNeverWhileItRuns()
     {
         using var harness = new EncodeHarness();

@@ -19,7 +19,7 @@ public sealed class EncodeRestartTests
 
     private static readonly RunningProgramme Another = new(31338, EncodeHarness.Started.AddSeconds(2));
 
-    [Fact(DisplayName = "BR-ED2-011: the programme a running job wrote down is stopped before the job is put back, and the job carries it no longer")]
+    [Fact(DisplayName = "the programme a running job wrote down is stopped before the job is put back, and the job carries it no longer")]
     public async Task TheProgrammeARunningJobWroteDownIsStoppedBeforeTheJobIsPutBack()
     {
         var held = new HeldEncodeJobs();
@@ -40,7 +40,7 @@ public sealed class EncodeRestartTests
         Assert.Null(job.Programme);
     }
 
-    [Fact(DisplayName = "BR-ED2-011: a programme under the written id that began at another time is spared, and the job is put back all the same")]
+    [Fact(DisplayName = "a programme under the written id that began at another time is spared, and the job is put back all the same")]
     public async Task AProgrammeThatBeganAtAnotherTimeIsSparedAndTheJobIsPutBackAllTheSame()
     {
         var held = new HeldEncodeJobs();
@@ -55,7 +55,7 @@ public sealed class EncodeRestartTests
         Assert.Equal(EncodeJobStatus.Queued, job.Status);
     }
 
-    [Fact(DisplayName = "BR-ED2-011: a running job that wrote no programme down asks nothing to be stopped")]
+    [Fact(DisplayName = "a running job that wrote no programme down asks nothing to be stopped")]
     public async Task ARunningJobThatWroteNoProgrammeDownAsksNothingToBeStopped()
     {
         var held = new HeldEncodeJobs();
@@ -68,7 +68,7 @@ public sealed class EncodeRestartTests
         Assert.Equal(1, report.PutBack);
     }
 
-    [Fact(DisplayName = "BR-ED2-011: a job given up on its last attempt still has its programme stopped first")]
+    [Fact(DisplayName = "a job given up on its last attempt still has its programme stopped first")]
     public async Task AJobGivenUpStillHasItsProgrammeStopped()
     {
         var held = new HeldEncodeJobs();

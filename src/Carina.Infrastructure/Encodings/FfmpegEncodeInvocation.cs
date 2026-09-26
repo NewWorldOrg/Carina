@@ -34,7 +34,7 @@ public static class FfmpegEncodeInvocation
     /// <summary>
     /// The arguments for one run. The core cap is written three times because ffmpeg counts
     /// threads per stage: once before the input for the decoder, once for the filters, and once
-    /// for the encoder (BR-ED2-005). The stages are a pipeline, so the run as a whole is bounded
+    /// for the encoder. The stages are a pipeline, so the run as a whole is bounded
     /// by the slowest of them rather than by their sum.
     /// <para>
     /// Chapters to bake into the artefact come in as a second input, and it goes <em>after</em> the

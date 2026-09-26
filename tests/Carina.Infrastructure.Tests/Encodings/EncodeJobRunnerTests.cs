@@ -35,7 +35,7 @@ public sealed class EncodeJobRunnerTests
         printf 'out_time_us=10000000\nspeed=2.0x\nprogress=end\n'
         """;
 
-    [Fact(DisplayName = "BR-ES-001: a job is run to its end: the programme writes the work file the ledger was told about, the artefact is placed by the ledger, and the job completes")]
+    [Fact(DisplayName = "a job is run to its end: the programme writes the work file the ledger was told about, the artefact is placed by the ledger, and the job completes")]
     public async Task AJobIsRunToItsEnd()
     {
         using var harness = new EncodeHarness();
@@ -57,7 +57,7 @@ public sealed class EncodeJobRunnerTests
         Assert.Equal([(harness.SourcePathOf(recording), recording.ServiceId)], harness.Heads.Asked);
     }
 
-    [Fact(DisplayName = "BR-ED2-006: the head skip read off the source is the one -ss the programme is handed, after the input, and the job keeps it beside the source's start as the shift a caption takes")]
+    [Fact(DisplayName = "the head skip read off the source is the one -ss the programme is handed, after the input, and the job keeps it beside the source's start as the shift a caption takes")]
     public async Task TheHeadSkipReadOffTheSourceIsTheOneSsTheProgrammeIsHanded()
     {
         using var harness = new EncodeHarness();
@@ -81,7 +81,7 @@ public sealed class EncodeJobRunnerTests
         Assert.Contains(harness.RunnerLog.Said, line => line.Contains("skipping 0.5072 s of head", StringComparison.Ordinal) && line.Contains("30499.981278 s on the source's clock", StringComparison.Ordinal));
     }
 
-    [Fact(DisplayName = "BR-ED2-006: the whole the job measures its headway against is what the source has left after the head skip, not the source entire")]
+    [Fact(DisplayName = "the whole the job measures its headway against is what the source has left after the head skip, not the source entire")]
     public async Task TheWholeIsWhatTheSourceHasLeftAfterTheHeadSkip()
     {
         using var harness = new EncodeHarness();
@@ -95,7 +95,7 @@ public sealed class EncodeJobRunnerTests
         Assert.Contains(" 62% of the way through", told[1], StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "BR-ED2-006: a first picture further than five seconds into the source fails the job as head too far, with the number, and the programme is never started")]
+    [Fact(DisplayName = "a first picture further than five seconds into the source fails the job as head too far, with the number, and the programme is never started")]
     public async Task AFirstPictureFurtherThanFiveSecondsInFailsAsHeadTooFar()
     {
         using var harness = new EncodeHarness();
@@ -114,7 +114,7 @@ public sealed class EncodeJobRunnerTests
         Assert.Null(job.Timeline);
     }
 
-    [Fact(DisplayName = "BR-ED2-006: a head with no picture to read is head too far, a head the prober refused is the programme's own refusal, and a head the prober could not be asked about is capability unavailable; none of them runs the programme")]
+    [Fact(DisplayName = "a head with no picture to read is head too far, a head the prober refused is the programme's own refusal, and a head the prober could not be asked about is capability unavailable; none of them runs the programme")]
     public async Task AHeadThatCannotBeReadFailsBeforeTheProgrammeStarts()
     {
         using var harness = new EncodeHarness();
@@ -142,7 +142,7 @@ public sealed class EncodeJobRunnerTests
         Assert.False(File.Exists(marker));
     }
 
-    [Fact(DisplayName = "BR-ED2-006: the artefact is measured before it is placed and its length kept beside the source's; one that came out further than a second from what the source had left is a note on a completed job, not a failure")]
+    [Fact(DisplayName = "the artefact is measured before it is placed and its length kept beside the source's; one that came out further than a second from what the source had left is a note on a completed job, not a failure")]
     public async Task TheArtefactIsMeasuredAndADisagreementIsANoteNotAFailure()
     {
         using var harness = new EncodeHarness();
@@ -165,7 +165,7 @@ public sealed class EncodeJobRunnerTests
         Assert.True(File.Exists(harness.ArtefactPathOf(job)));
     }
 
-    [Fact(DisplayName = "BR-ED2-006: an artefact whose length cannot be measured completes with its clock unchecked, and says so")]
+    [Fact(DisplayName = "an artefact whose length cannot be measured completes with its clock unchecked, and says so")]
     public async Task AnArtefactThatCannotBeMeasuredCompletesUnchecked()
     {
         using var harness = new EncodeHarness();
@@ -184,7 +184,7 @@ public sealed class EncodeJobRunnerTests
         Assert.Contains(harness.RunnerLog.Said, line => line.Contains("could not be measured", StringComparison.Ordinal));
     }
 
-    [Fact(DisplayName = "BR-ED2-013: how far the job has got is told from 0 to 100 as the programme reports it")]
+    [Fact(DisplayName = "how far the job has got is told from 0 to 100 as the programme reports it")]
     public async Task HowFarTheJobHasGotIsToldFromNoughtToAHundred()
     {
         using var harness = new EncodeHarness();
@@ -200,7 +200,7 @@ public sealed class EncodeJobRunnerTests
         Assert.Contains(" 100% of the way through", told[2], StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "BR-ED2-010: the work file is written into the ledger before the programme is started, and only then does the programme get its path")]
+    [Fact(DisplayName = "the work file is written into the ledger before the programme is started, and only then does the programme get its path")]
     public async Task TheWorkFileIsInTheLedgerBeforeTheProgrammeStarts()
     {
         using var harness = new EncodeHarness();
@@ -217,7 +217,7 @@ public sealed class EncodeJobRunnerTests
         Assert.Equal(job.WorkFileName, Assert.Single(harness.Scratch.Files).FileName);
     }
 
-    [Fact(DisplayName = "BR-ED2-012: a recording that is not where the ledger says fails as source missing, and the programme is never started")]
+    [Fact(DisplayName = "a recording that is not where the ledger says fails as source missing, and the programme is never started")]
     public async Task ARecordingNotWhereTheLedgerSaysIsSourceMissing()
     {
         using var harness = new EncodeHarness();
@@ -236,7 +236,7 @@ public sealed class EncodeJobRunnerTests
         Assert.DoesNotContain(harness.Room.Root, job.Failure.Note, StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "BR-ED2-012: a recording file that holds nothing is source missing too, and a recording the ledger does not hold at all")]
+    [Fact(DisplayName = "a recording file that holds nothing is source missing too, and a recording the ledger does not hold at all")]
     public async Task ARecordingThatHoldsNothingIsSourceMissingToo()
     {
         using var harness = new EncodeHarness();
@@ -254,7 +254,7 @@ public sealed class EncodeJobRunnerTests
         Assert.Equal(EncodeFailure.SourceMissing, unknown.Failure!.Failure);
     }
 
-    [Fact(DisplayName = "BR-ED2-012: a programme that exits non-zero fails the job as such, with the tail of what it said beside the classification and no path in it, and the work file is swept by the ledger")]
+    [Fact(DisplayName = "a programme that exits non-zero fails the job as such, with the tail of what it said beside the classification and no path in it, and the work file is swept by the ledger")]
     public async Task AProgrammeThatExitsNonZeroFailsTheJobWithWhatItSaid()
     {
         using var harness = new EncodeHarness();
@@ -280,7 +280,7 @@ public sealed class EncodeJobRunnerTests
         Assert.True(File.Exists(harness.SourcePathOf(recording)), "the recording is never touched");
     }
 
-    [Fact(DisplayName = "BR-ED2-012: a programme that ran out of room is told apart from one that refused")]
+    [Fact(DisplayName = "a programme that ran out of room is told apart from one that refused")]
     public async Task AProgrammeThatRanOutOfRoomIsToldApartFromOneThatRefused()
     {
         using var harness = new EncodeHarness();
@@ -295,7 +295,7 @@ public sealed class EncodeJobRunnerTests
         Assert.Equal(EncodeFailure.NotEnoughRoom, job.Failure!.Failure);
     }
 
-    [Fact(DisplayName = "BR-ED2-014: a programme that stops reporting progress is stopped where it stands and the job fails as timed out")]
+    [Fact(DisplayName = "a programme that stops reporting progress is stopped where it stands and the job fails as timed out")]
     public async Task AProgrammeThatStopsReportingProgressIsStoppedAndTheJobTimesOut()
     {
         using var harness = new EncodeHarness();
@@ -319,7 +319,7 @@ public sealed class EncodeJobRunnerTests
         Assert.False(File.Exists(marker));
     }
 
-    [Fact(DisplayName = "BR-EV-004: a codec this machine cannot encode anywhere fails the job as capability unavailable, and the programme is never started")]
+    [Fact(DisplayName = "a codec this machine cannot encode anywhere fails the job as capability unavailable, and the programme is never started")]
     public async Task ACodecThisMachineCannotEncodeAnywhereIsCapabilityUnavailable()
     {
         using var harness = new EncodeHarness();
@@ -335,7 +335,7 @@ public sealed class EncodeJobRunnerTests
         Assert.Empty(harness.Scratch.Files);
     }
 
-    [Fact(DisplayName = "BR-EV-004: a card asked for and out of reach degrades to the processor, the run is written down as degraded, and the job still completes")]
+    [Fact(DisplayName = "a card asked for and out of reach degrades to the processor, the run is written down as degraded, and the job still completes")]
     public async Task ACardAskedForAndOutOfReachDegradesToTheProcessor()
     {
         using var harness = new EncodeHarness();
@@ -354,7 +354,7 @@ public sealed class EncodeJobRunnerTests
         Assert.Contains(harness.RunnerLog.Warnings, line => line.Contains("TheCardIsOutOfReach", StringComparison.Ordinal));
     }
 
-    [Fact(DisplayName = "BR-EV-002: the programme is handed the recording as one argument and the work file as the last, and nothing a broadcaster wrote")]
+    [Fact(DisplayName = "the programme is handed the recording as one argument and the work file as the last, and nothing a broadcaster wrote")]
     public async Task TheProgrammeIsHandedTheRecordingAndTheWorkFileAsArguments()
     {
         using var harness = new EncodeHarness();
@@ -372,7 +372,7 @@ public sealed class EncodeJobRunnerTests
         Assert.DoesNotContain(handed, argument => argument.Contains("A programme", StringComparison.Ordinal));
     }
 
-    [Fact(DisplayName = "BR-PD-008: a recording of a broadcast that put two languages on one sound is encoded with the main language in both ears")]
+    [Fact(DisplayName = "a recording of a broadcast that put two languages on one sound is encoded with the main language in both ears")]
     public async Task ARecordingOfTwoLanguagesOnOneSoundIsEncodedWithTheMainLanguageInBothEars()
     {
         using var harness = new EncodeHarness();
@@ -392,7 +392,7 @@ public sealed class EncodeJobRunnerTests
         Assert.DoesNotContain("aac_adtstoasc", handed);
     }
 
-    [Fact(DisplayName = "BR-PD-008: a recording whose broadcast announced nothing about its sound is encoded with every sound copied over as it stands")]
+    [Fact(DisplayName = "a recording whose broadcast announced nothing about its sound is encoded with every sound copied over as it stands")]
     public async Task ARecordingThatAnnouncedNothingIsEncodedWithEverySoundCopiedOver()
     {
         using var harness = new EncodeHarness();
@@ -409,7 +409,7 @@ public sealed class EncodeJobRunnerTests
         Assert.DoesNotContain(handed, argument => argument.StartsWith("pan=", StringComparison.Ordinal));
     }
 
-    [Fact(DisplayName = "BR-ED2-011: a stop asked for while the programme runs stops the programme and leaves the job running in the ledger, programme and all, for the next start to put back")]
+    [Fact(DisplayName = "a stop asked for while the programme runs stops the programme and leaves the job running in the ledger, programme and all, for the next start to put back")]
     public async Task AStopWhileTheProgrammeRunsLeavesTheJobRunningInTheLedger()
     {
         using var harness = new EncodeHarness();
@@ -441,7 +441,7 @@ public sealed class EncodeJobRunnerTests
         Assert.False(File.Exists(finished));
     }
 
-    [Fact(DisplayName = "BR-ED2-009: a job whose source is under a root this process cannot place is refused without touching anything")]
+    [Fact(DisplayName = "a job whose source is under a root this process cannot place is refused without touching anything")]
     public async Task AJobWhoseSourceIsUnderARootOutOfReachIsRefused()
     {
         using var harness = new EncodeHarness();
@@ -456,7 +456,7 @@ public sealed class EncodeJobRunnerTests
         Assert.Contains("'bulk'", job.Failure.Note, StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "BR-ES-001: only a job the ledger holds as running is run")]
+    [Fact(DisplayName = "only a job the ledger holds as running is run")]
     public async Task OnlyARunningJobIsRun()
     {
         using var harness = new EncodeHarness();
@@ -465,7 +465,7 @@ public sealed class EncodeJobRunnerTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => harness.Runner.RunAsync(waiting, Cancel));
     }
 
-    [Fact(DisplayName = "BR-ED2-011: the programme's id and start are written into the ledger before it has reported anything, and let go of once the job has ended")]
+    [Fact(DisplayName = "the programme's id and start are written into the ledger before it has reported anything, and let go of once the job has ended")]
     public async Task TheProgrammesIdAndStartAreWrittenIntoTheLedgerBeforeItReportsAnything()
     {
         using var harness = new EncodeHarness();
@@ -488,7 +488,7 @@ public sealed class EncodeJobRunnerTests
         Assert.Equal(EncodeJobStatus.Completed, job.Status);
     }
 
-    [Fact(DisplayName = "BR-EV-004: where the run went is written on the job — asked for the card, ran on the processor — and stays written once it has ended")]
+    [Fact(DisplayName = "where the run went is written on the job — asked for the card, ran on the processor — and stays written once it has ended")]
     public async Task WhereTheRunWentIsWrittenOnTheJob()
     {
         using var harness = new EncodeHarness();
@@ -503,7 +503,7 @@ public sealed class EncodeJobRunnerTests
         Assert.Contains(harness.Jobs.Moves, move => move.StartsWith("saved", StringComparison.Ordinal));
     }
 
-    [Fact(DisplayName = "BR-EV-004: a run that went where it was sent is written down as such, with no swerve")]
+    [Fact(DisplayName = "a run that went where it was sent is written down as such, with no swerve")]
     public async Task ARunThatWentWhereItWasSentIsWrittenDownAsSuch()
     {
         using var harness = new EncodeHarness();
@@ -515,7 +515,7 @@ public sealed class EncodeJobRunnerTests
         Assert.Equal(new EncodeRoute(EncodeEncoder.Software, EncodeEncoder.Software, null), job.Route);
     }
 
-    [Fact(DisplayName = "BR-ED2-014: headway is written into the ledger as the programme reports it — the portion, what is left and when — and the last of it stays with the job that ended")]
+    [Fact(DisplayName = "headway is written into the ledger as the programme reports it — the portion, what is left and when — and the last of it stays with the job that ended")]
     public async Task HeadwayIsWrittenIntoTheLedgerAsTheProgrammeReportsIt()
     {
         using var harness = new EncodeHarness();
@@ -539,7 +539,7 @@ public sealed class EncodeJobRunnerTests
         Assert.Equal(TimeSpan.Zero, job.Headway.Left);
     }
 
-    [Fact(DisplayName = "BR-ED2-014: a programme that reports often is written into the ledger at every tenth and at least every heartbeat, not at every report")]
+    [Fact(DisplayName = "a programme that reports often is written into the ledger at every tenth and at least every heartbeat, not at every report")]
     public async Task AProgrammeThatReportsOftenIsWrittenAtEveryTenthAndEveryHeartbeat()
     {
         using var harness = new EncodeHarness();
@@ -568,7 +568,7 @@ public sealed class EncodeJobRunnerTests
         Assert.InRange(heartbeats, 2, 5);
     }
 
-    [Fact(DisplayName = "BR-ED2-005: the programme is handed the cap the ledger holds, and no more cores than this machine has")]
+    [Fact(DisplayName = "the programme is handed the cap the ledger holds, and no more cores than this machine has")]
     public async Task TheProgrammeIsHandedTheCoreCap()
     {
         using var harness = new EncodeHarness();
@@ -596,7 +596,7 @@ public sealed class EncodeJobRunnerTests
         Assert.Equal([1, 4], looked.Asked.Select(look => look.Cores));
     }
 
-    [Fact(DisplayName = "BR-ED2-005: a machine nobody has settled runs on the cap it was deployed with")]
+    [Fact(DisplayName = "a machine nobody has settled runs on the cap it was deployed with")]
     public async Task AMachineNobodyHasSettledRunsOnTheCapItWasDeployedWith()
     {
         using var harness = new EncodeHarness();
@@ -612,7 +612,7 @@ public sealed class EncodeJobRunnerTests
         Assert.Equal("3", handed[Array.IndexOf(handed, "-threads") + 1]);
     }
 
-    [Fact(DisplayName = "BR-EV-004: a programme that is not on this machine fails the job as capability unavailable rather than blaming the recording")]
+    [Fact(DisplayName = "a programme that is not on this machine fails the job as capability unavailable rather than blaming the recording")]
     public async Task AProgrammeNotOnThisMachineIsCapabilityUnavailable()
     {
         using var harness = new EncodeHarness();
@@ -626,7 +626,7 @@ public sealed class EncodeJobRunnerTests
         Assert.DoesNotContain(harness.Room.Root, job.Failure.Note, StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "BR-ED2-011: a detector that throws does not fail the encode; the job runs on and the reading written down is that the source could not be read")]
+    [Fact(DisplayName = "a detector that throws does not fail the encode; the job runs on and the reading written down is that the source could not be read")]
     public async Task ADetectorThatThrowsDoesNotFailTheEncode()
     {
         using var harness = new EncodeHarness();
@@ -647,7 +647,7 @@ public sealed class EncodeJobRunnerTests
         Assert.DoesNotContain("/srv/recordings", told, StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "BR-ED2-011: a stop the caller asked for while the source was being read for its breaks is a stop, not a source that could not be read")]
+    [Fact(DisplayName = "a stop the caller asked for while the source was being read for its breaks is a stop, not a source that could not be read")]
     public async Task AStopAskedForWhileTheSourceIsReadForItsBreaksIsAStop()
     {
         using var harness = new EncodeHarness();
@@ -670,7 +670,7 @@ public sealed class EncodeJobRunnerTests
         Assert.DoesNotContain(harness.RunnerLog.Said, line => line.Contains("read for the breaks", StringComparison.Ordinal));
     }
 
-    [Fact(DisplayName = "BR-ED2-011: what the reading said is written down beside its verdict, and nobody having looked is not written down at all")]
+    [Fact(DisplayName = "what the reading said is written down beside its verdict, and nobody having looked is not written down at all")]
     public async Task WhatTheReadingSaidIsWrittenDownBesideItsVerdict()
     {
         using var harness = new EncodeHarness();
@@ -696,7 +696,7 @@ public sealed class EncodeJobRunnerTests
         Assert.DoesNotContain(unasked.RunnerLog.Said, line => line.Contains("read for the breaks", StringComparison.Ordinal));
     }
 
-    [Fact(DisplayName = "A-エンコード-057: a reading that marked something is written into the ledger as chapters on the artefact's clock, written out as a file the ledger was told about first, and handed to the programme as a second input")]
+    [Fact(DisplayName = "a reading that marked something is written into the ledger as chapters on the artefact's clock, written out as a file the ledger was told about first, and handed to the programme as a second input")]
     public async Task AReadingThatMarkedSomethingIsWrittenIntoTheLedgerAndHandedToTheProgramme()
     {
         using var harness = new EncodeHarness();
@@ -741,7 +741,7 @@ public sealed class EncodeJobRunnerTests
         Assert.True(breaks > Array.IndexOf(handed, harness.SourcePathOf(harness.Recordings.Rows[0])), "the chapters are the input after the recording");
     }
 
-    [Fact(DisplayName = "A-エンコード-057: what the chapters file holds is the artefact's chapters with the head the encode skips added back on, so ffmpeg's own shift lands them where they were meant to be")]
+    [Fact(DisplayName = "what the chapters file holds is the artefact's chapters with the head the encode skips added back on, so ffmpeg's own shift lands them where they were meant to be")]
     public async Task WhatTheChaptersFileHoldsIsTheArtefactsChaptersWithTheHeadSkipAddedBackOn()
     {
         using var harness = new EncodeHarness();
@@ -758,7 +758,7 @@ public sealed class EncodeJobRunnerTests
         Assert.Contains("END=5500", File.ReadAllText(kept), StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "A-エンコード-057: a reading that marked nothing writes no chapters, no file and not one argument, and the programme is handed the run it was handed before")]
+    [Fact(DisplayName = "a reading that marked nothing writes no chapters, no file and not one argument, and the programme is handed the run it was handed before")]
     public async Task AReadingThatMarkedNothingWritesNothingAndAddsNoArgument()
     {
         foreach (ChapterDetection nothing in ToMarkNothingBy)
@@ -781,7 +781,7 @@ public sealed class EncodeJobRunnerTests
         }
     }
 
-    [Fact(DisplayName = "A-エンコード-057: what the run made of the breaks goes onto the job whatever it was, so a job nobody looked at says who it was that did not look")]
+    [Fact(DisplayName = "what the run made of the breaks goes onto the job whatever it was, so a job nobody looked at says who it was that did not look")]
     public async Task WhatTheRunMadeOfTheBreaksGoesOntoTheJobWhateverItWas()
     {
         using var harness = new EncodeHarness();
@@ -810,7 +810,7 @@ public sealed class EncodeJobRunnerTests
         Assert.Empty(unasked.Chapters.Chapters);
     }
 
-    [Fact(DisplayName = "A-エンコード-057: the reading is in the ledger before the programme that bakes it in is started, and what was marked is in the ledger before the file it is written to exists")]
+    [Fact(DisplayName = "the reading is in the ledger before the programme that bakes it in is started, and what was marked is in the ledger before the file it is written to exists")]
     public async Task TheReadingIsInTheLedgerBeforeTheProgrammeStarts()
     {
         using var harness = new EncodeHarness();
@@ -831,7 +831,7 @@ public sealed class EncodeJobRunnerTests
         Assert.True(File.Exists(marker), "the programme ran");
     }
 
-    [Fact(DisplayName = "BR-ED2-010: the chapters file is swept by the ledger when the job ends, the same as any other scratch")]
+    [Fact(DisplayName = "the chapters file is swept by the ledger when the job ends, the same as any other scratch")]
     public async Task TheChaptersFileIsSweptByTheLedgerWhenTheJobEnds()
     {
         using var harness = new EncodeHarness();

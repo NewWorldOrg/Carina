@@ -24,7 +24,7 @@ namespace Carina.Infrastructure.Encodings;
 /// <para>
 /// The watermark is learned from this source and handed back beside the reading, for the recordings
 /// of the same service read after it; this source is judged only by a watermark learned ahead of it,
-/// from another recording, and with none when there is none (BR-ED2-007). A machine told not to
+/// from another recording, and with none when there is none. A machine told not to
 /// watch for the watermark runs no second pass at all.
 /// </para>
 /// <para>
@@ -49,13 +49,12 @@ namespace Carina.Infrastructure.Encodings;
 /// </para>
 /// <para>
 /// How much of the machine the passes may take is handed in rather than read here, so that the
-/// looking and the encode that follows it are bounded by the one cap the operator holds
-/// (BR-ED2-005).
+/// looking and the encode that follows it are bounded by the one cap the operator holds.
 /// </para>
 /// <para>
 /// Every programme any pass starts is handed to the caller before it is read from, on the same
 /// terms the encode's own run is written down on, so that a process killed mid-look does not leave
-/// an ffmpeg nobody has a record of (BR-ED2-011).
+/// an ffmpeg nobody has a record of.
 /// </para>
 /// </summary>
 public sealed class FfmpegChapterDetector(

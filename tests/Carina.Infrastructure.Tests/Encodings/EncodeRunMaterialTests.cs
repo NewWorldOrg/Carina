@@ -21,7 +21,7 @@ public sealed class EncodeRunMaterialTests
 
     private static readonly TimeSpan Tolerance = TimeSpan.FromMilliseconds(500);
 
-    [Fact(DisplayName = "BR-ES-001: a synthetic broadcast is encoded to an artefact as long as the source, named for the recording and the profile, and the job completes")]
+    [Fact(DisplayName = "a synthetic broadcast is encoded to an artefact as long as the source, named for the recording and the profile, and the job completes")]
     public async Task ASyntheticBroadcastIsEncodedToAnArtefactAsLongAsTheSource()
     {
         using EncodeHarness harness = OnThisMachine();
@@ -56,7 +56,7 @@ public sealed class EncodeRunMaterialTests
         Assert.True(timeline.LengthsAgree, $"the artefact came out {timeline.Drift} from what the source had left");
     }
 
-    [Fact(DisplayName = "BR-ED2-012: a file that is no broadcast at all fails the job with ffmpeg's exit code and its words, without a path in them, and leaves nothing behind but the recording")]
+    [Fact(DisplayName = "a file that is no broadcast at all fails the job with ffmpeg's exit code and its words, without a path in them, and leaves nothing behind but the recording")]
     public async Task AFileThatIsNoBroadcastFailsTheJobWithFfmpegsWords()
     {
         using EncodeHarness harness = OnThisMachine();
@@ -76,7 +76,7 @@ public sealed class EncodeRunMaterialTests
         Assert.Empty(harness.Shelf.Snapshot());
     }
 
-    [Fact(DisplayName = "BR-EV-004: H.265 runs on the card when this machine has one and is refused as capability unavailable when it has not, without the profile being touched")]
+    [Fact(DisplayName = "H.265 runs on the card when this machine has one and is refused as capability unavailable when it has not, without the profile being touched")]
     public async Task H265RunsOnTheCardOrIsRefusedAsCapabilityUnavailable()
     {
         using EncodeHarness harness = OnThisMachine();

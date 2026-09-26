@@ -196,7 +196,8 @@ nothing.
   tracker, writes SQL, changes a file on disk, or names the writers of the ledger,
   the tuners or the guide. Reading any of them is allowed and a test says so. Over
   the HTTP surface, nothing under `/api/live` or `/api/videos` deletes or declares
-  itself destructive, and the only thing there that changes state issues a ticket.
+  itself destructive; the only things there that change state are a ticket being
+  issued and a played position being kept.
   **Trip wires, not proof:** a stride written `4 + 180 + 4`, a seat asked for as a
   literal, a write behind a verb the rule does not know or a delegate handed in
   from the composition root, and a count done inside ffmpeg all walk past, and the

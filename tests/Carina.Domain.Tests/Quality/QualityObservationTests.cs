@@ -17,7 +17,7 @@ public sealed class QualityObservationTests
         Assert.Equal(0.00004, observation.Observed!.Value, 12);
     }
 
-    [Fact(DisplayName = "BR-QD-001: an observation nothing counted carries no figure to average")]
+    [Fact(DisplayName = "an observation nothing counted carries no figure to average")]
     public void AnObservationNothingCountedCarriesNoFigureToAverage()
     {
         QualityObservation observation = QualityFactory.Unmeasured();

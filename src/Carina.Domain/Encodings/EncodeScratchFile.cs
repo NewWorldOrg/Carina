@@ -37,7 +37,7 @@ public static class EncodeScratchShapes
 /// <summary>
 /// A file a job writes on the way and owes a removal for. It is written into the ledger before it
 /// exists on disk, and when the job has ended the ledger — never a walk of the directory — says
-/// what there is to remove (BR-ED2-010).
+/// what there is to remove.
 /// </summary>
 public sealed class EncodeScratchFile
 {

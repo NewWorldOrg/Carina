@@ -63,7 +63,7 @@ public sealed class ChapterMetadataFileTests
             """.ReplaceLineEndings("\n"),
             ChapterMetadataFile.Written(ThreeChapters, TimeSpan.Zero));
 
-    [Fact(DisplayName = "BR-ED2-009: a chapter is titled from two constants, so nothing a broadcaster wrote reaches the artefact")]
+    [Fact(DisplayName = "a chapter is titled from two constants, so nothing a broadcaster wrote reaches the artefact")]
     public void AChapterIsTitledFromTwoConstants()
     {
         string[] titles =

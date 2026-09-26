@@ -109,8 +109,7 @@ public static class QualitySignalSurvey
 
         foreach (TunerDeviceId subject in subjects)
         {
-            SignalFigures? figure = figures.FirstOrDefault(
-                held => string.Equals(held.Tuner.Value, subject.Value, StringComparison.Ordinal));
+            SignalFigures? figure = figures.FirstOrDefault(held => held.Tuner.Equals(subject));
 
             if (figure is null)
             {

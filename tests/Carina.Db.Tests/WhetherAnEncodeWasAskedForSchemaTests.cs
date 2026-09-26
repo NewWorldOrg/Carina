@@ -7,7 +7,7 @@ namespace Carina.Db.Tests;
 public sealed class WhetherAnEncodeWasAskedForSchemaTests(MigratedScratchDatabase database)
     : IClassFixture<MigratedScratchDatabase>
 {
-    [Theory(DisplayName = "BR-ED2-004: a row written without saying anything about encoding asks for one, which is what every row did before one could say otherwise")]
+    [Theory(DisplayName = "a row written without saying anything about encoding asks for one, which is what every row did before one could say otherwise")]
     [InlineData("rule")]
     [InlineData("reservation")]
     [InlineData("recording")]
@@ -34,7 +34,7 @@ public sealed class WhetherAnEncodeWasAskedForSchemaTests(MigratedScratchDatabas
                 """));
     }
 
-    [Fact(DisplayName = "BR-ED2-004: what a reservation asks about encoding reaches the recorder, because the recording copies it as it begins")]
+    [Fact(DisplayName = "what a reservation asks about encoding reaches the recorder, because the recording copies it as it begins")]
     public async Task WhatAReservationAsksReachesTheRecorder()
     {
         await using NpgsqlConnection connection = await database.OpenAsync();

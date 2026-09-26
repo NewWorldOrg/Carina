@@ -12,7 +12,7 @@ public sealed record EncodeAutoRunReading(EncodeAutoRunStanding Standing, Encode
 /// How the queue runs when nobody asked, read and settled. Two things are a person's to choose —
 /// whether a recording that ends is queued at all, and how many cores a run may take — and both are
 /// answered together with what the machine has, so a screen can offer the choice without knowing
-/// anything about this host. What the auto-run takes is not a choice (BR-ED2-004) and is stated
+/// anything about this host. What the auto-run takes is not a choice and is stated
 /// rather than asked for; nor is giving way to someone watching, which no setting reaches. Each
 /// answer also says whether the destinations and profiles defined let the auto-run settle where an
 /// artefact goes.

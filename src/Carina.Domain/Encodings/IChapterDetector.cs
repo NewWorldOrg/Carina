@@ -13,19 +13,18 @@ namespace Carina.Domain.Encodings;
 /// <para>
 /// How much of the machine the looking may take is the caller's to work out and not the
 /// implementation's to read for itself, because it is the same cap the encode that follows runs
-/// under: one number, held by the operator, spent by both (BR-ED2-005).
+/// under: one number, held by the operator, spent by both.
 /// </para>
 /// <para>
 /// Every programme an implementation starts is handed to <c>began</c> before it is read from, so
 /// that one left behind by a process that died can be found and stopped by the next; a hand-over
-/// that throws stops the programme and comes back out (BR-ED2-011).
+/// that throws stops the programme and comes back out.
 /// </para>
 /// <para>
 /// <c>learnedAhead</c> is the station's watermark learned from another recording of the same
 /// service, or nothing when none has been. An implementation that watches the picture for it also
 /// learns this source's watermark and hands it back on <see cref="ChapterDetection.Learned"/>, for
-/// the recordings after this one; what it learns from this source never judges this source
-/// (BR-ED2-007).
+/// the recordings after this one; what it learns from this source never judges this source.
 /// </para>
 /// </summary>
 public interface IChapterDetector

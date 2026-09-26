@@ -17,7 +17,7 @@ public sealed record EncodeJobDraft(
 
 /// <summary>
 /// A job as read at a moment: what the ledger holds, and what the reader works out from the time
-/// beside it — how long the job has gone without headway and whether that is a stall (BR-ED2-014),
+/// beside it — how long the job has gone without headway and whether that is a stall,
 /// and, for a job still waiting, whether what holds it there is the card being used for someone
 /// watching rather than anything wrong with the job.
 /// </summary>
@@ -25,14 +25,14 @@ public sealed record EncodeJobView(EncodeJob Job, TimeSpan? QuietFor, bool Stall
 
 /// <summary>
 /// Puts one recording in the queue by hand and calls one job off. One job is queued at a time, for
-/// one recording, so there is no way in that takes a list (BR-ED2-008). A recording still being
+/// one recording, so there is no way in that takes a list. A recording still being
 /// written, or one that failed, has nothing to encode; a recording with a job already waiting or
 /// running is not queued twice, and one whose artefact for this profile already exists is not made
-/// again, because the second would only collide with the first (BR-ED2-009) — unless the caller says
+/// again, because the second would only collide with the first — unless the caller says
 /// outright that it is to be made again, which is the one way a second job for that profile is
 /// queued: what that job makes takes the place of what is at that name rather than colliding with
 /// it, and until it is made the artefact that is there is left exactly as it is. Calling a job off is a
-/// person's act and is kept apart from a failure (BR-ED2-012): the ledger is written first, then the
+/// person's act and is kept apart from a failure: the ledger is written first, then the
 /// programme still running for it is stopped, then what the job owes a removal for is swept.
 /// </summary>
 public sealed class EncodeJobService(

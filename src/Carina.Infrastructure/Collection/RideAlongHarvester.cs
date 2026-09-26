@@ -90,7 +90,7 @@ public sealed class RideAlongHarvester(
 
     private void ForgetSessionsThatHaveEnded(IReadOnlyList<SessionSnapshot> open)
     {
-        var live = open.Select(session => session.SessionId).ToHashSet();
+        HashSet<SessionId> live = open.Select(session => session.SessionId).ToHashSet();
 
         foreach (SessionId sessionId in ridden.Keys.Where(known => !live.Contains(known)))
         {

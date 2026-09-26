@@ -67,7 +67,7 @@ public sealed class EncodingOptionsTests
         Assert.True(validated.Failed);
     }
 
-    [Fact(DisplayName = "BR-ED2-004: a recording that ends is queued for encoding unless this machine was told otherwise")]
+    [Fact(DisplayName = "a recording that ends is queued for encoding unless this machine was told otherwise")]
     public void ARecordingThatEndsIsQueuedUnlessThisMachineWasToldOtherwise()
     {
         Assert.True(Read().Automatically);

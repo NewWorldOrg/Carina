@@ -50,7 +50,7 @@ public sealed class Argon2idPasswordHasher : IPasswordHasher
         byte[] salt,
         int digestLength)
     {
-        using var argon = new Argon2id(Encoding.UTF8.GetBytes(password))
+        using Argon2id argon = new(Encoding.UTF8.GetBytes(password))
         {
             Salt = salt,
             MemorySize = memoryKibibytes,

@@ -43,7 +43,7 @@ public sealed record EncodeTimelineResponder(
 /// <summary>
 /// One job as the ledger holds it, read at a moment: the standing is the ledger's five-valued word,
 /// and beside it stands what the reader works out from the time — how long the job has gone without
-/// making headway, and whether that is long enough to call it stalled (BR-ED2-014). A job still
+/// making headway, and whether that is long enough to call it stalled. A job still
 /// waiting also says whether what keeps it waiting is the card being used for someone watching, so
 /// a queue that is standing still on purpose can be told from one that is stuck. The programme's id
 /// stays in the ledger; it is not a thing a caller does anything with.

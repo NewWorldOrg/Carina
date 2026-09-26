@@ -11,7 +11,7 @@ public sealed class EncodeRootDeclarationsTests
         new() { Name = "bulk", FreeBytes = 3, TotalBytes = 4, Writable = false },
     ];
 
-    [Fact(DisplayName = "BR-EV-001: the declared set is the driver's roots followed by the ones this process holds")]
+    [Fact(DisplayName = "the declared set is the driver's roots followed by the ones this process holds")]
     public void TheDeclaredSetIsTheDriversRootsFollowedByTheOnesThisProcessHolds()
     {
         DeclaredOutputRoots merged = EncodeRootDeclarations.Merged(
@@ -23,7 +23,7 @@ public sealed class EncodeRootDeclarationsTests
         Assert.Empty(merged.Shadowed);
     }
 
-    [Fact(DisplayName = "BR-EV-001: a name both sides declare stays the driver's and is reported")]
+    [Fact(DisplayName = "a name both sides declare stays the driver's and is reported")]
     public void ANameBothSidesDeclareStaysTheDriversAndIsReported()
     {
         DeclaredOutputRoots merged = EncodeRootDeclarations.Merged(
@@ -38,7 +38,7 @@ public sealed class EncodeRootDeclarationsTests
         Assert.Equal(["primary"], merged.Shadowed);
     }
 
-    [Fact(DisplayName = "BR-EV-001: a driver that declares nothing leaves only what this process holds")]
+    [Fact(DisplayName = "a driver that declares nothing leaves only what this process holds")]
     public void ADriverThatDeclaresNothingLeavesOnlyWhatThisProcessHolds()
     {
         DeclaredOutputRoots merged = EncodeRootDeclarations.Merged(

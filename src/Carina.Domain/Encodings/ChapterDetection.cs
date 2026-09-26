@@ -14,7 +14,7 @@ namespace Carina.Domain.Encodings;
 /// <para>
 /// <see cref="Learned"/> is the station's watermark the run learned from this source, for judging
 /// the recordings of the same service that come after it. It rides beside the reading whatever the
-/// verdict and is never what this reading was judged by (BR-ED2-007).
+/// verdict and is never what this reading was judged by.
 /// </para>
 /// </summary>
 public sealed record ChapterDetection

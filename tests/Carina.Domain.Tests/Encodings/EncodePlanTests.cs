@@ -26,7 +26,7 @@ public sealed class EncodePlanTests
         [Faculty.EncodeH264OnTheProcessor, Faculty.DecodeAribCaptions],
         "no render node was handed to this container");
 
-    [Fact(DisplayName = "BR-EV-004: what was asked for is what runs when this machine can do it")]
+    [Fact(DisplayName = "what was asked for is what runs when this machine can do it")]
     public void WhatWasAskedForIsWhatRunsWhenThisMachineCanDoIt()
     {
         EncodePlan plan = EncodePlans.For(Profile(EncodeCodec.H264), EncodeEncoder.Vaapi, AsThisMachineIs);
@@ -37,7 +37,7 @@ public sealed class EncodePlanTests
         Assert.Null(plan.Refused);
     }
 
-    [Fact(DisplayName = "BR-EV-004: a card that is out of reach is not a refusal, it is the processor instead")]
+    [Fact(DisplayName = "a card that is out of reach is not a refusal, it is the processor instead")]
     public void ACardThatIsOutOfReachIsNotARefusalItIsTheProcessorInstead()
     {
         EncodePlan plan = EncodePlans.For(Profile(EncodeCodec.H264), EncodeEncoder.Vaapi, WithNoCard);
@@ -48,7 +48,7 @@ public sealed class EncodePlanTests
         Assert.Contains("no render node", plan.Note, StringComparison.Ordinal);
     }
 
-    [Fact(DisplayName = "BR-EV-004: a build with no libx265 sends H.265 to the card rather than failing it")]
+    [Fact(DisplayName = "a build with no libx265 sends H.265 to the card rather than failing it")]
     public void ABuildWithNoSoftwareH265SendsItToTheCard()
     {
         EncodePlan plan = EncodePlans.For(Profile(EncodeCodec.H265), EncodeEncoder.Software, AsThisMachineIs);
@@ -58,7 +58,7 @@ public sealed class EncodePlanTests
         Assert.Equal(EncodeSwerve.TheProcessorCannotDoThisCodec, plan.Swerved);
     }
 
-    [Fact(DisplayName = "BR-EV-004: a codec neither the processor nor the card can do is the one thing that refuses")]
+    [Fact(DisplayName = "a codec neither the processor nor the card can do is the one thing that refuses")]
     public void ACodecNeitherSideCanDoIsTheOneThingThatRefuses()
     {
         EncodePlan plan = EncodePlans.For(Profile(EncodeCodec.H265), EncodeEncoder.Software, WithNoCard);
@@ -69,7 +69,7 @@ public sealed class EncodePlanTests
         Assert.NotEmpty(plan.Note);
     }
 
-    [Fact(DisplayName = "BR-EV-004: a card that cannot do the codec falls to the processor, not to a refusal")]
+    [Fact(DisplayName = "a card that cannot do the codec falls to the processor, not to a refusal")]
     public void ACardThatCannotDoTheCodecFallsToTheProcessor()
     {
         MachineCapabilities cardWithoutH265 = MachineCapabilities.Of(
@@ -84,7 +84,7 @@ public sealed class EncodePlanTests
         Assert.Equal(EncodeSwerve.TheCardCannotDoThisCodec, plan.Swerved);
     }
 
-    [Fact(DisplayName = "BR-EV-004: a card that is there and a codec neither side can do still refuses")]
+    [Fact(DisplayName = "a card that is there and a codec neither side can do still refuses")]
     public void ACardThatIsThereAndACodecNeitherSideCanDoStillRefuses()
     {
         MachineCapabilities neitherDoesH265 = MachineCapabilities.Of(
@@ -98,7 +98,7 @@ public sealed class EncodePlanTests
         Assert.Equal(EncodeFailure.CapabilityUnavailable, plan.Refused);
     }
 
-    [Fact(DisplayName = "BR-EV-004: the card is not asked for when the processor was, and can do it")]
+    [Fact(DisplayName = "the card is not asked for when the processor was, and can do it")]
     public void TheCardIsNotAskedForWhenTheProcessorWasAndCanDoIt()
     {
         EncodePlan plan = EncodePlans.For(Profile(EncodeCodec.H264), EncodeEncoder.Software, AsThisMachineIs);

@@ -20,7 +20,7 @@ public sealed class MachineCapabilityReaderTests : IDisposable
 
     public void Dispose() => standIns.Dispose();
 
-    [Fact(DisplayName = "BR-EV-004: what this machine can do is asked for once and the answer is kept")]
+    [Fact(DisplayName = "what this machine can do is asked for once and the answer is kept")]
     public async Task WhatThisMachineCanDoIsAskedForOnceAndTheAnswerIsKept()
     {
         string counted = standIns.Named("counted");
@@ -40,7 +40,7 @@ public sealed class MachineCapabilityReaderTests : IDisposable
         Assert.Equal(4, File.ReadAllLines(counted).Length);
     }
 
-    [Fact(DisplayName = "BR-EV-004: a card that encodes an H.264 frame and refuses an H.265 one is a usable card with H.264 on it alone")]
+    [Fact(DisplayName = "a card that encodes an H.264 frame and refuses an H.265 one is a usable card with H.264 on it alone")]
     public async Task ACardThatRefusesAnH265FrameIsAUsableCardWithH264Alone()
     {
         MachineCapabilities can = await Reading(
@@ -61,7 +61,7 @@ public sealed class MachineCapabilityReaderTests : IDisposable
             can.Faculties);
     }
 
-    [Fact(DisplayName = "BR-EV-004: a card that refuses H.264 is not asked about H.265 at all")]
+    [Fact(DisplayName = "a card that refuses H.264 is not asked about H.265 at all")]
     public async Task ACardThatRefusesH264IsNotAskedAboutH265()
     {
         string asked = standIns.Named("asked");
@@ -82,7 +82,7 @@ public sealed class MachineCapabilityReaderTests : IDisposable
         Assert.DoesNotContain(File.ReadAllLines(asked), line => line.Contains("hevc_vaapi", StringComparison.Ordinal));
     }
 
-    [Fact(DisplayName = "BR-EV-004: a machine with a card that works says it can encode on it")]
+    [Fact(DisplayName = "a machine with a card that works says it can encode on it")]
     public async Task AMachineWithACardThatWorksSaysItCanEncodeOnIt()
     {
         MachineCapabilities can = await Reading(standIns.Script(Answering), standIns.Node());
@@ -98,7 +98,7 @@ public sealed class MachineCapabilityReaderTests : IDisposable
             can.Faculties);
     }
 
-    [Fact(DisplayName = "BR-EV-004: no render node is not an error, it is a machine that encodes on its processor")]
+    [Fact(DisplayName = "no render node is not an error, it is a machine that encodes on its processor")]
     public async Task NoRenderNodeIsNotAnErrorItIsAMachineThatEncodesOnItsProcessor()
     {
         MachineCapabilities can = await Reading(standIns.Script(Answering), standIns.Named("no-such-node"));

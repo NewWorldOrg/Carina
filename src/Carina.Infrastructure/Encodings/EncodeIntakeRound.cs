@@ -15,8 +15,7 @@ public sealed record EncodeIntake(
 
 /// <summary>
 /// One look at the recording ledger for what has ended and has never been offered to the queue.
-/// The ledger is asked for those recordings and nothing else, at most a look's worth at a time
-/// (BR-ED2-004).
+/// The ledger is asked for those recordings and nothing else, at most a look's worth at a time.
 /// <para>
 /// A machine whose auto-run is turned off looks at nothing at all, and the answer says so, because
 /// the setting is read on every look rather than at a start: turning it back on is in force at the

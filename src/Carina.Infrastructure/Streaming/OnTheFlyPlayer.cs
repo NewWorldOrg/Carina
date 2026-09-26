@@ -132,14 +132,14 @@ public sealed class OnTheFlyPlayer(
         }
         catch (OperationCanceledException)
         {
-            await AwayWith(transcoder, mouthful);
+            await AwayWithAsync(transcoder, mouthful);
 
             throw;
         }
 
         if (first is not { } read)
         {
-            await AwayWith(transcoder, mouthful);
+            await AwayWithAsync(transcoder, mouthful);
 
             return OnTheFlyStart.Refused(
                 OnTheFlyRefusal.TookTooLong,
@@ -194,7 +194,7 @@ public sealed class OnTheFlyPlayer(
             ? "the transcoder ended without writing a picture."
             : ended.Note;
 
-    private static async Task AwayWith(ILiveTranscoder transcoder, Task<int> mouthful)
+    private static async Task AwayWithAsync(ILiveTranscoder transcoder, Task<int> mouthful)
     {
         await transcoder.DisposeAsync();
 

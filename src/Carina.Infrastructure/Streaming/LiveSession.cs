@@ -244,7 +244,7 @@ internal sealed class LiveSession
         }
     }
 
-    private static async Task Quietly(Task task)
+    private static async Task QuietlyAsync(Task task)
     {
         try
         {
@@ -540,7 +540,6 @@ internal sealed class LiveSession
             seat = null;
         }
 
-        // Out of the reading first, so nothing is written into a transcoder being taken down.
         if (given is not null)
         {
             await LeftTheReadingAsync(given);
@@ -569,12 +568,12 @@ internal sealed class LiveSession
 
         if (carried is not null)
         {
-            await Quietly(carried);
+            await QuietlyAsync(carried);
         }
 
         if (captioned is not null)
         {
-            await Quietly(captioned);
+            await QuietlyAsync(captioned);
         }
 
         await DrainAsync(output, transcoding.StopGrace, clock);

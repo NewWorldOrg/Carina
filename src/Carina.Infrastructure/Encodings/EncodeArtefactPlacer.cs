@@ -18,7 +18,7 @@ public enum EncodePlacementOutcome
 }
 
 /// <summary>
-/// Turns a finished work file into the artefact, in the order BR-ED2-009 fixes: the name is worked
+/// Turns a finished work file into the artefact, in the fixed order: the name is worked
 /// out now and written into the ledger, and only then is the file looked at and moved. Whatever is
 /// already at that name is this job's own earlier success if the ledger said so before this
 /// attempt, and a collision otherwise — and a collision is a failure, never an overwrite.

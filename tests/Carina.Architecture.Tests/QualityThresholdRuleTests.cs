@@ -15,7 +15,7 @@ public sealed class QualityThresholdRuleTests
     public void TheOnePlaceThoseNumbersDoLiveIsStillFoundByTheSameMarks()
         => Assert.NotEmpty(QualityThresholdRules.NumbersIn(TheThresholdTable()));
 
-    [Fact(DisplayName = "BR-QD-003: a share scrambling or loss is judged against is written down in the threshold table and nowhere else")]
+    [Fact(DisplayName = "a share scrambling or loss is judged against is written down in the threshold table and nowhere else")]
     public void AShareScramblingOrLossIsJudgedAgainstIsWrittenDownInTheThresholdTableAndNowhereElse()
         => Assert.Empty(
             QualityThresholdRules.SharesOfWhatARecordingIsJudgedOnOutsideTheirTable(RepositoryLayout.SourceDirectory));

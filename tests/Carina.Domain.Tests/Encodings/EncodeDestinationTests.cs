@@ -17,7 +17,7 @@ public sealed class EncodeDestinationTests
             property => property.SetMethod is { IsPublic: true });
     }
 
-    [Fact(DisplayName = "BR-EV-006: a change replaces every field the destination was made of")]
+    [Fact(DisplayName = "a change replaces every field the destination was made of")]
     public void AChangeReplacesEveryFieldTheDestinationWasMadeOf()
     {
         var another = new EncodeProfileId(Guid.NewGuid());
@@ -31,7 +31,7 @@ public sealed class EncodeDestinationTests
         Assert.Equal(At, destination.DefinedAt);
     }
 
-    [Fact(DisplayName = "BR-ED2-015: a destination that has not been retired says so, and says when once it has")]
+    [Fact(DisplayName = "a destination that has not been retired says so, and says when once it has")]
     public void ADestinationSaysWhenItWasRetired()
     {
         EncodeDestination destination = Shelf();
@@ -45,7 +45,7 @@ public sealed class EncodeDestinationTests
         Assert.Equal(At.AddDays(1), destination.RetiredAt);
     }
 
-    [Fact(DisplayName = "BR-ED2-015: a retired destination is neither changed nor retired a second time")]
+    [Fact(DisplayName = "a retired destination is neither changed nor retired a second time")]
     public void ARetiredDestinationIsNeitherChangedNorRetiredASecondTime()
     {
         EncodeDestination destination = Shelf();

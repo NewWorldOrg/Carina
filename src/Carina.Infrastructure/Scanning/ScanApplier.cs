@@ -29,7 +29,7 @@ public sealed class ScanApplier(
         ArgumentNullException.ThrowIfNull(difference);
         ArgumentNullException.ThrowIfNull(systems);
 
-        var covered = systems.ToHashSet();
+        HashSet<TuneSystem> covered = systems.ToHashSet();
 
         Tally tally = await writes.AllOrNothingAsync(
             async token =>
@@ -153,7 +153,7 @@ public sealed class ScanApplier(
                 continue;
             }
 
-            var candidate = CandidateChannel.Discover(
+            CandidateChannel candidate = CandidateChannel.Discover(
                 CandidateChannelId.New(),
                 change.NetworkId,
                 change.ServiceId,

@@ -26,7 +26,7 @@ public sealed class DriverEventListener : IDisposable
 
     internal void Close() => doorbell.Writer.TryComplete();
 
-    public async Task<IReadOnlyList<string>> Take(CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<string>> TakeAsync(CancellationToken cancellationToken)
     {
         await doorbell.Reader.ReadAsync(cancellationToken);
 
