@@ -57,6 +57,62 @@ public sealed class RecordingStreamScramblingTests
         Assert.Empty(raised.OutcomeDetail);
     }
 
+    [Fact]
+    public async Task ARecordingOverAndUnknownToTheDriverCarriesTheClassWhenItWasLeftScrambled()
+    {
+        Recording recording = Scrambled(600_000);
+        StreamLedger ledger = new();
+        ledger.Hold(recording);
+
+        await Supervisor(ledger, new WatchedDriver(), new WatchClock(Ended), new WeighedFiles { Weighs = 3_400_000_000 })
+            .WatchAsync(Cancel);
+
+        Recording read = ledger.Read(recording.Id);
+
+        Assert.Equal(RecordingOutcome.Truncated, read.Outcome);
+        Assert.Contains(read.OutcomeDetail, detail => detail.Fault is RecordingFault.ScramblingUnresolved);
+    }
+
+    [Fact]
+    public async Task ARecordingRecoveryMarksCarriesTheClassWhenItWasLeftScrambled()
+    {
+        Recording recording = Scrambled(600_000);
+        StreamLedger ledger = new();
+        ledger.Hold(recording);
+
+        await Recovery(ledger, new WatchedDriver(), new WatchClock(Ended), new WeighedFiles { Weighs = 3_400_000_000 })
+            .RecoverAsync(Greeting(), [], Cancel);
+
+        Recording read = ledger.Read(recording.Id);
+
+        Assert.Equal(RecordingOutcome.Truncated, read.Outcome);
+        Assert.Contains(read.OutcomeDetail, detail => detail.Fault is RecordingFault.ScramblingUnresolved);
+    }
+
+    [Fact]
+    public async Task ARecordingRecoveryMarksCarriesNoClassWhenItsScramblingStayedUnderTheLevel()
+    {
+        Recording recording = Scrambled(10);
+        StreamLedger ledger = new();
+        ledger.Hold(recording);
+
+        await Recovery(ledger, new WatchedDriver(), new WatchClock(Ended), new WeighedFiles { Weighs = 3_400_000_000 })
+            .RecoverAsync(Greeting(), [], Cancel);
+
+        Assert.DoesNotContain(
+            ledger.Read(recording.Id).OutcomeDetail,
+            detail => detail.Fault is RecordingFault.ScramblingUnresolved);
+    }
+
+    private static Recording Scrambled(long scrambled)
+    {
+        Recording recording = InFlight();
+        recording.Wrote(TimeSpan.FromMinutes(30));
+        recording.Measure(DropCounters.Counted(0, Packets), DropTimeline.Unlocated, scrambled, 0, Airs.AddMinutes(29));
+
+        return recording;
+    }
+
     private static QualityThreshold Set(QualityThresholdKey key, double level)
         => QualityThreshold.Declare(key, Threshold.Of(level, level, provisional: true, 0, Airs));
 

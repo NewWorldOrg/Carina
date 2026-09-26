@@ -69,11 +69,17 @@ public static class OrphanRecovery
 
     public static IReadOnlyList<RecordingFault> WhyItEndedWhereItDid(
         bool driverIsAnotherInstance,
-        long? fileSizeBytes)
-        => fileSizeBytes switch
-        {
-            null => [WhyNothingWasWritingIt(driverIsAnotherInstance), RecordingFault.SizeUnobserved],
-            0 => [WhyNothingWasWritingIt(driverIsAnotherInstance), RecordingFault.NothingLanded],
-            _ => [WhyNothingWasWritingIt(driverIsAnotherInstance)],
-        };
+        long? fileSizeBytes,
+        QualityLevel leftScrambled)
+        =>
+        [
+            WhyNothingWasWritingIt(driverIsAnotherInstance),
+            .. fileSizeBytes switch
+            {
+                null => [RecordingFault.SizeUnobserved],
+                0 => [RecordingFault.NothingLanded],
+                _ => Array.Empty<RecordingFault>(),
+            },
+            .. RecordingFaults.OfWhatWasLeftScrambled(leftScrambled),
+        ];
 }

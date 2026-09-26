@@ -526,12 +526,14 @@ internal static class RecordingStreamFixture
         WeighedFiles? files = null,
         IAnnouncedProgrammes? guide = null,
         TuningResolution? tuning = null,
-        ILogger<OrphanRecoveryService>? logger = null)
+        ILogger<OrphanRecoveryService>? logger = null,
+        HeldQualityThresholds? thresholds = null)
     {
         var services = new ServiceCollection();
         services.AddScoped<IRecordingRepository>(_ => ledger);
         services.AddScoped<IServiceTuningDirectory>(_ => new ResolvedTuning(tuning ?? Terrestrial));
         services.AddScoped<IAnnouncedProgrammes>(_ => guide ?? new HeldProgrammes());
+        services.AddScoped<IQualityThresholdRepository>(_ => thresholds ?? new HeldQualityThresholds());
 
         return new OrphanRecoveryService(
             services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>(),

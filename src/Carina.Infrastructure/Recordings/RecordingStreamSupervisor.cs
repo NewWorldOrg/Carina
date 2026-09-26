@@ -468,6 +468,7 @@ public sealed class RecordingStreamSupervisor(
         CancellationToken cancellationToken)
     {
         long? weighed = await weigher.WeighAsync(recording.OutputRoot, recording.FileName, cancellationToken);
+        QualityBands bands = await BandsAsync(now, cancellationToken);
         RecordingOutcome outcome = OrphanRecovery.WhatIsLeftOf(weighed);
 
         bool marked = await ApplyAsync(
@@ -479,7 +480,10 @@ public sealed class RecordingStreamSupervisor(
                     return false;
                 }
 
-                foreach (RecordingFault fault in OrphanRecovery.WhyItEndedWhereItDid(false, weighed))
+                foreach (RecordingFault fault in OrphanRecovery.WhyItEndedWhereItDid(
+                             false,
+                             weighed,
+                             RecordingQuality.Of(loaded.Counters, loaded.ScrambledPackets, bands).Scrambled))
                 {
                     loaded.Note(new OutcomeDetail(fault, null, string.Empty, now));
                 }

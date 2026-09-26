@@ -96,6 +96,11 @@ public static class RecordingFaults
         RecordingFault.ScramblingUnresolved,
     ];
 
+    public static IReadOnlyList<RecordingFault> OfWhatWasLeftScrambled(QualityLevel leftScrambled)
+        => leftScrambled is QualityLevel.Warning or QualityLevel.MayNotBeWatchable
+            ? [RecordingFault.ScramblingUnresolved]
+            : [];
+
     internal static RecordingFault BreaksARecording(RecordingFault fault)
         => ThatCanInterrupt.Contains(Named(fault))
             ? fault

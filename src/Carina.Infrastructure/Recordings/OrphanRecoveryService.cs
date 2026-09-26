@@ -2,6 +2,7 @@ using Carina.Contracts;
 using Carina.Domain.Channels;
 using Carina.Domain.Driver;
 using Carina.Domain.Programmes;
+using Carina.Domain.Quality;
 using Carina.Domain.Recordings;
 using Carina.Infrastructure.Collection;
 
@@ -246,13 +247,17 @@ public sealed class OrphanRecoveryService(
         CancellationToken cancellationToken)
     {
         long? weighed = await weigher.WeighAsync(recording.OutputRoot, recording.FileName, cancellationToken);
+        QualityBands bands = await BandsAsync(now, cancellationToken);
         RecordingOutcome outcome = OrphanRecovery.WhatIsLeftOf(weighed);
 
         bool marked = await ApplyAsync(
             recording.Id,
             loaded =>
             {
-                foreach (RecordingFault fault in OrphanRecovery.WhyItEndedWhereItDid(another, weighed))
+                foreach (RecordingFault fault in OrphanRecovery.WhyItEndedWhereItDid(
+                             another,
+                             weighed,
+                             RecordingQuality.Of(loaded.Counters, loaded.ScrambledPackets, bands).Scrambled))
                 {
                     loaded.Note(new OutcomeDetail(fault, null, string.Empty, now));
                 }
@@ -364,6 +369,16 @@ public sealed class OrphanRecoveryService(
         }
             ? session
             : null;
+
+    private async Task<QualityBands> BandsAsync(DateTime now, CancellationToken cancellationToken)
+    {
+        await using AsyncServiceScope scope = scopes.CreateAsyncScope();
+        IReadOnlyList<QualityThreshold> held = await scope.ServiceProvider
+            .GetRequiredService<IQualityThresholdRepository>()
+            .ListAsync(cancellationToken);
+
+        return QualityThresholdStanding.Bands(QualityThresholdStanding.Over(held, now));
+    }
 
     private async Task<GuideStanding> GuideSaysAsync(Recording recording, CancellationToken cancellationToken)
     {
