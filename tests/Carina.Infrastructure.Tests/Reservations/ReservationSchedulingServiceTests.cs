@@ -547,6 +547,24 @@ public sealed class ReservationSchedulingServiceTests
     }
 
     [Fact]
+    public async Task AReservationChangedByAnotherHandWhileTheRunWasWritingStopsTheRunRatherThanBeingWrittenOver()
+    {
+        WatchedWrite write = new();
+        HeldReservations ledger = new(write);
+        TuningByService directory = new(write);
+        directory.Answer(1024, Terrestrial27);
+        Reservation standing = ReservationFixtures.Planned();
+        ledger.Standing(standing);
+        ledger.RefuseToSave = new ReservationMovedMeanwhileException([standing.Id]);
+
+        SchedulingRun run = await Scheduler(ledger, directory, write, Seats(TunerKind.Terrestrial))
+            .CreateAsync(ReservationFixtures.Planned(), Cancel);
+
+        Assert.False(run.Settled);
+        Assert.Equal(SchedulingRefusal.SomethingArrivedWhileReading, run.Refusal);
+    }
+
+    [Fact]
     public async Task AServiceThatArrivedAfterTheDriverWasAskedStopsTheRunRatherThanBeingGuessedAt()
     {
         WatchedWrite write = new();

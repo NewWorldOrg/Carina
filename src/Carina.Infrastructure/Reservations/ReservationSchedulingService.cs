@@ -83,40 +83,49 @@ public sealed class ReservationSchedulingService(
 
         int moved = 0;
 
-        SchedulingRun written = await write.AllOrNothingAsync(
-            async token =>
-            {
-                IReadOnlyList<Reservation> standing = await reservations.ListPendingAsync(Reaching(at), token);
+        SchedulingRun written;
 
-                if (Foreseen(standing, joining, revised).Any(
-                        reservation => !selections.ContainsKey(Naming(reservation))))
+        try
+        {
+            written = await write.AllOrNothingAsync(
+                async token =>
                 {
-                    return SchedulingRun.Refused(SchedulingRefusal.SomethingArrivedWhileReading);
-                }
+                    IReadOnlyList<Reservation> standing = await reservations.ListPendingAsync(Reaching(at), token);
 
-                Reservation[] considered = revised is null
-                    ? [.. standing, .. joining]
-                    : Alongside(standing, joining, revised, Applied(revised, revision!));
+                    if (Foreseen(standing, joining, revised).Any(
+                            reservation => !selections.ContainsKey(Naming(reservation))))
+                    {
+                        return SchedulingRun.Refused(SchedulingRefusal.SomethingArrivedWhileReading);
+                    }
 
-                SchedulingRun run = Weigh(considered, selections, capacity, at, held);
+                    Reservation[] considered = revised is null
+                        ? [.. standing, .. joining]
+                        : Alongside(standing, joining, revised, Applied(revised, revision!));
 
-                if (!run.Settled)
-                {
+                    SchedulingRun run = Weigh(considered, selections, capacity, at, held);
+
+                    if (!run.Settled)
+                    {
+                        return run;
+                    }
+
+                    moved = Apply(run.Plan, considered, at);
+
+                    await reservations.SaveAllAsync(Touched(standing, revised), token);
+
+                    foreach (Reservation joined in joining)
+                    {
+                        await reservations.AddAsync(joined, token);
+                    }
+
                     return run;
-                }
-
-                moved = Apply(run.Plan, considered, at);
-
-                await reservations.SaveAllAsync(Touched(standing, revised), token);
-
-                foreach (Reservation joined in joining)
-                {
-                    await reservations.AddAsync(joined, token);
-                }
-
-                return run;
-            },
-            cancellationToken);
+                },
+                cancellationToken);
+        }
+        catch (ReservationMovedMeanwhileException)
+        {
+            return SchedulingRun.Refused(SchedulingRefusal.SomethingArrivedWhileReading);
+        }
 
         if (written.Settled && (moved > 0 || joining.Count > 0 || revised is not null))
         {

@@ -8,6 +8,7 @@ using Carina.Domain.Reservations;
 using Carina.Infrastructure.Persistence.Configurations;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace Carina.Infrastructure.Persistence.Repositories;
 
@@ -60,11 +61,12 @@ public sealed class ReservationRecordingContract(CarinaDbContext context) : IRes
 
         DateTime moment = InUtc(at);
 
-        int claimed = await context.Database.ExecuteSqlInterpolatedAsync(
-            $"UPDATE reservation SET started_at = {moment} WHERE id = {id.Value} AND started_at IS NULL AND state = 'Scheduled'",
-            cancellationToken);
+        List<long> claimed = await context.Database
+            .SqlQuery<long>(
+                $"UPDATE reservation SET started_at = {moment} WHERE id = {id.Value} AND started_at IS NULL AND state = 'Scheduled' RETURNING xmin::text::bigint AS \"Value\"")
+            .ToListAsync(cancellationToken);
 
-        return claimed is 1;
+        return Moved(id, claimed);
     }
 
     public async Task<bool> ReleaseAsync(ReservationId id, DateTime claimedAt, CancellationToken cancellationToken)
@@ -73,11 +75,39 @@ public sealed class ReservationRecordingContract(CarinaDbContext context) : IRes
 
         DateTime moment = InUtc(claimedAt);
 
-        int released = await context.Database.ExecuteSqlInterpolatedAsync(
-            $"UPDATE reservation SET started_at = NULL WHERE id = {id.Value} AND started_at = {moment} AND recording_outcome IS NULL",
-            cancellationToken);
+        List<long> released = await context.Database
+            .SqlQuery<long>(
+                $"UPDATE reservation SET started_at = NULL WHERE id = {id.Value} AND started_at = {moment} AND recording_outcome IS NULL RETURNING xmin::text::bigint AS \"Value\"")
+            .ToListAsync(cancellationToken);
 
-        return released is 1;
+        return Moved(id, released);
+    }
+
+    /// <summary>
+    /// Carries the row version a claim statement left behind onto the copy of that reservation this
+    /// context tracks, so a later write from the same context is not refused for a change it made itself.
+    /// </summary>
+    private bool Moved(ReservationId id, List<long> written)
+    {
+        if (written is not [long version])
+        {
+            return false;
+        }
+
+        foreach (EntityEntry<Reservation> tracked in context.ChangeTracker.Entries<Reservation>())
+        {
+            if (!tracked.Entity.Id.Equals(id))
+            {
+                continue;
+            }
+
+            PropertyEntry token = tracked.Property(ReservationConfiguration.ConcurrencyToken);
+
+            token.OriginalValue = (uint)version;
+            token.CurrentValue = (uint)version;
+        }
+
+        return true;
     }
 
     private static DateTime InUtc(DateTime at)

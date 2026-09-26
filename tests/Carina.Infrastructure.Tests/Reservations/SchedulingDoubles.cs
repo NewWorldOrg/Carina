@@ -149,6 +149,8 @@ internal sealed class HeldReservations(IAtomicWrite? write = null, HeldOutcomes?
 
     public Exception? RefuseToAdd { get; set; }
 
+    public Exception? RefuseToSave { get; set; }
+
     public List<Reservation> ArrivesAfterTheFirstList { get; } = [];
 
     public int Lists { get; private set; }
@@ -280,6 +282,11 @@ internal sealed class HeldReservations(IAtomicWrite? write = null, HeldOutcomes?
 
     public Task SaveAllAsync(IReadOnlyList<Reservation> reservations, CancellationToken cancellationToken)
     {
+        if (RefuseToSave is { } refusal)
+        {
+            throw refusal;
+        }
+
         foreach (Reservation reservation in reservations)
         {
             Note($"save {reservation.Id.Value}");

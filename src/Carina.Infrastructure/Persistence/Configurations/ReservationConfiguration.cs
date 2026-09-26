@@ -26,6 +26,8 @@ public sealed class ReservationConfiguration : IEntityTypeConfiguration<Reservat
 
     public const string CompositeState = "composite_state";
 
+    public const string ConcurrencyToken = "xmin";
+
     public const string ClaimColumn = "started_at";
 
     public const string OutcomeColumn = "recording_outcome";
@@ -89,6 +91,12 @@ public sealed class ReservationConfiguration : IEntityTypeConfiguration<Reservat
                 AND (acknowledged_at IS NULL OR epg_diverged OR epg_missing)
                 """);
         });
+
+        builder.Property<uint>(ConcurrencyToken)
+            .HasColumnName(ConcurrencyToken)
+            .HasColumnType("xid")
+            .ValueGeneratedOnAddOrUpdate()
+            .IsConcurrencyToken();
 
         builder.HasKey(reservation => reservation.Id);
 

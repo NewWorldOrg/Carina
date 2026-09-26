@@ -9,6 +9,7 @@ using Carina.Domain.Rules;
 using Carina.Infrastructure.Persistence.Configurations;
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace Carina.Infrastructure.Persistence.Repositories;
 
@@ -230,7 +231,7 @@ public sealed class ReservationRepository(CarinaDbContext context) : IReservatio
     {
         context.Update(reservation);
 
-        await context.SaveChangesAsync(cancellationToken);
+        await WrittenAsync(cancellationToken);
     }
 
     public async Task SaveAllAsync(IReadOnlyList<Reservation> reservations, CancellationToken cancellationToken)
@@ -242,7 +243,7 @@ public sealed class ReservationRepository(CarinaDbContext context) : IReservatio
             context.Update(reservation);
         }
 
-        await context.SaveChangesAsync(cancellationToken);
+        await WrittenAsync(cancellationToken);
     }
 
     public async Task WithdrawAsync(IReadOnlyList<Reservation> reservations, CancellationToken cancellationToken)
@@ -251,7 +252,29 @@ public sealed class ReservationRepository(CarinaDbContext context) : IReservatio
 
         context.RemoveRange(reservations);
 
-        await context.SaveChangesAsync(cancellationToken);
+        await WrittenAsync(cancellationToken);
+    }
+
+    private async Task WrittenAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException moved)
+        {
+            ReservationId[] stale =
+            [
+                .. moved.Entries.Select(entry => entry.Entity).OfType<Reservation>().Select(reservation => reservation.Id),
+            ];
+
+            foreach (EntityEntry<Reservation> held in context.ChangeTracker.Entries<Reservation>().ToList())
+            {
+                held.State = EntityState.Detached;
+            }
+
+            throw new ReservationMovedMeanwhileException(stale);
+        }
     }
 
     public async Task<ReservationDiscard> DiscardAsync(
