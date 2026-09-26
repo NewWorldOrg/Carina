@@ -31,7 +31,7 @@ public sealed record RecordingWatch(
            || OutOfTouch > 0;
 
     /// <summary>
-    /// Whether a recording moved on this pass. LeftOpen and OutOfTouch are not counted.
+    /// Whether any recording broke, resumed or settled on this pass.
     /// </summary>
     public bool AnythingMoved => Broken > 0 || Resumed > 0 || Settled > 0;
 

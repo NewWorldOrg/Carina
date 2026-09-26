@@ -7,18 +7,20 @@ namespace Carina.Domain.Encodings;
 /// Works out where the breaks in a recording are from what was observed of it.
 /// </summary>
 /// <remarks>
-/// Only a pair of corroborated boundaries a whole number of grid steps apart makes a break.
-/// Overlapping pods merge, a pod within the tolerance of the grid is pulled onto it, and a sliver of
-/// programme too short to mark is given to the break beside it. The reading is thrown away whole
-/// when it takes more of the length for breaks, or more marks, than allowed. What comes back covers
-/// the whole length with no gap. A grid of no length, a tolerance of half the grid or wider, a
+/// A pod is a pair of corroborated boundaries between one and <see cref="LongestPair"/> grid steps
+/// apart, off a whole number of steps by no more than the tolerance. Overlapping pods merge, a pod
+/// shorter than one grid step or longer than <see cref="LongestBreak"/> steps is dropped, a pod within
+/// the tolerance of the grid is pulled onto it, and programme within <see cref="Adjacent"/> of either
+/// end or of another break is given to the break beside it. The reading is thrown away whole when it
+/// takes more of the length for breaks, or more marks, than allowed. What comes back covers the whole
+/// length with no gap. A grid of no length, a negative tolerance or one of half the grid or wider, a
 /// threshold or valve that is no share of the whole, and no marks allowed are refused.
 /// <para>
 /// A station watermark only takes a pod away: a pod in which the mark stayed on screen in more than
-/// <see cref="WatermarkedShare"/> of the pictures looked at inside it is programme. Pictures at a
-/// pod's edges are not counted, a pod with fewer than <see cref="FewestSightingsInsideABreak"/>
-/// pictures inside it is not judged by the mark, and a mark on screen in
-/// <see cref="WatermarkNearlyEverywhere"/> of all pictures looked at is not used.
+/// <see cref="WatermarkedShare"/> of the pictures looked at inside it is programme. Pictures within
+/// <see cref="Adjacent"/> of a pod's edges are not counted, a pod with fewer than
+/// <see cref="FewestSightingsInsideABreak"/> pictures inside it is not judged by the mark, and a mark
+/// on screen in at least <see cref="WatermarkNearlyEverywhere"/> of all pictures looked at is not used.
 /// </para>
 /// </remarks>
 public static class ChapterGrid

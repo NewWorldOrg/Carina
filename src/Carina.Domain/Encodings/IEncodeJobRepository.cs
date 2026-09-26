@@ -98,8 +98,8 @@ public interface IEncodeJobRepository
     Task<IReadOnlyList<EncodeJob>> ListRunningAsync(CancellationToken cancellationToken);
 
     /// <summary>
-    /// Writes the job's artefact name into the ledger before anything is renamed, and saves the job as
-    /// it stands. The ledger holds one owner per name under a root.
+    /// Writes the job's artefact name, and nothing else, into its running row before anything is
+    /// renamed. The ledger holds one owner per name under a root; a refusal leaves the job as it was.
     /// </summary>
     /// <returns>The claim, or that another job already holds the name.</returns>
     Task<ArtefactClaim> ClaimArtefactAsync(EncodeJob job, EncodeFileName name, CancellationToken cancellationToken);

@@ -6,20 +6,22 @@ using Carina.Domain.Encodings;
 namespace Carina.Infrastructure.Encodings;
 
 /// <summary>
-/// The arguments for the two runs that look for the breaks in one source: the first listens to the
-/// whole of it and decodes no picture, and the second decodes six seconds of picture around one
-/// moment the first found. Neither asks for the card.
+/// The arguments for the three runs that look for the breaks in one source:
+/// <see cref="Listening"/> hears the whole of the sound and decodes no picture,
+/// <see cref="Peeking"/> decodes <see cref="Window"/> of picture from <see cref="Before"/> ahead of
+/// one moment the first found, and <see cref="Watching"/> watches the key frames for the station's
+/// watermark. None of them asks for the card.
 /// </summary>
 /// <remarks>
-/// Both runs keep the source's own clock, which <see cref="ChapterClock"/> converts. Every argument
+/// All three keep the source's own clock, which <see cref="ChapterClock"/> converts. Every argument
 /// is an option name, a constant written here, or a number rendered the same way in any culture,
 /// beside the path of the source.
 /// </remarks>
 public static class FfmpegChapterInvocation
 {
     /// <summary>
-    /// Reports a stretch of dark once it lasts longer than the tenth of a second a moment is printed to
-    /// on the source's own clock.
+    /// The dark detector: a stretch of at least 0.15 seconds (<c>d</c>) in which the picture is black,
+    /// a pixel counting as black at or below 0.10 of full brightness (<c>pix_th</c>).
     /// </summary>
     public const string Blackness = "blackdetect=d=0.15:pix_th=0.10";
 

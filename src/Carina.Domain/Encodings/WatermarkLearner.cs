@@ -3,9 +3,9 @@ namespace Carina.Domain.Encodings;
 /// <summary>
 /// Learns a station's watermark from the pictures of one recording, one picture at a time and
 /// holding none of them: a corner pixel that was an edge in at least <see cref="SteadyShare"/> of
-/// the pictures is part of the mark. Nothing is learned when there were too few pictures, when too
-/// little of the corners stayed put, or when so much stayed put that it is the picture rather than a
-/// mark.
+/// the pictures is part of the mark. Nothing is learned from fewer than <see cref="FewestFrames"/>
+/// pictures, or when fewer than <see cref="FewestPixels"/> pixels, or more than
+/// <see cref="MostOfTheCorners"/> of the corner pixels, stayed put.
 /// </summary>
 public sealed class WatermarkLearner
 {

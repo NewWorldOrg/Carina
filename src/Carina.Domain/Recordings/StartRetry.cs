@@ -69,11 +69,10 @@ public sealed record RetryHistory(
 /// </summary>
 /// <remarks>
 /// Only the two passing failures, a tuner that did not lock and a lock that brought no data, are
-/// tried again, and only while the programme is still on the air. A stream that is not the one
-/// expected, a disk the precheck found no room on, and a channel already set aside as needing
-/// attention are given up on at once; the reasons are asked in that order. After that come the count
-/// and the pause since the last attempt, and a channel that is backing off is waited for however
-/// short the pause is.
+/// tried again. The reasons to give up are asked in this order: a failure of any other class, a disk
+/// the precheck found no room on, a channel set aside as needing attention, a programme no longer on
+/// the air, and the attempts spent. Otherwise the next attempt waits out the pause since the last
+/// one, or the channel's backing off when that ends later.
 /// </remarks>
 public static class StartRetry
 {

@@ -371,8 +371,9 @@ public sealed class EncodeJob
     }
 
     /// <summary>
-    /// What happens to a job the ledger still holds as running when the process comes up: it goes back
-    /// to the queue to start over, unless it has already had as many attempts as it gets.
+    /// Puts a job the ledger holds as running back in the queue to start over, or gives it up when it
+    /// has already had as many attempts as it gets. Called when the process comes up and when a run
+    /// throws.
     /// </summary>
     public EncodeRecovery Recover(int mostAttempts, DateTime at)
     {
