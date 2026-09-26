@@ -23,7 +23,7 @@ public enum PasswordRefusal
 }
 
 public sealed record SessionView(
-    SessionId Id,
+    SessionHandle Handle,
     string DisplayName,
     AuthMethod Method,
     DateTime CreatedAt,
@@ -37,7 +37,7 @@ public sealed record SessionView(
         ArgumentNullException.ThrowIfNull(current);
 
         return new SessionView(
-            session.Id,
+            SessionHandle.Of(session.Id),
             session.DisplayName,
             session.Method,
             session.CreatedAt,

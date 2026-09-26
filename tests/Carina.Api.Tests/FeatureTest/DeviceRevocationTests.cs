@@ -19,7 +19,7 @@ public sealed class DeviceRevocationTests
 
         using HttpClient there = await probe.RelayingAsync();
         using HttpClient here = await probe.RelayingAsync();
-        SessionId ended = probe.Sessions.Sessions[0].Id;
+        SessionHandle ended = SessionHandle.Of(probe.Sessions.Sessions[0].Id);
 
         using var asking = new HttpRequestMessage(
             HttpMethod.Delete,
