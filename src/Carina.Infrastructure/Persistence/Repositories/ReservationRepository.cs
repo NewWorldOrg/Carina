@@ -9,7 +9,6 @@ using Carina.Domain.Rules;
 using Carina.Infrastructure.Persistence.Configurations;
 
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace Carina.Infrastructure.Persistence.Repositories;
 
@@ -255,27 +254,8 @@ public sealed class ReservationRepository(CarinaDbContext context) : IReservatio
         await WrittenAsync(cancellationToken);
     }
 
-    private async Task WrittenAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            await context.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateConcurrencyException moved)
-        {
-            ReservationId[] stale =
-            [
-                .. moved.Entries.Select(entry => entry.Entity).OfType<Reservation>().Select(reservation => reservation.Id),
-            ];
-
-            foreach (EntityEntry<Reservation> held in context.ChangeTracker.Entries<Reservation>().ToList())
-            {
-                held.State = EntityState.Detached;
-            }
-
-            throw new ReservationMovedMeanwhileException(stale);
-        }
-    }
+    private Task WrittenAsync(CancellationToken cancellationToken)
+        => ReservationWrites.SaveAsync(context, cancellationToken);
 
     public async Task<ReservationDiscard> DiscardAsync(
         ReservationId id,

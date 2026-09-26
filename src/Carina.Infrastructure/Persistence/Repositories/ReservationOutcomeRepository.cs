@@ -15,7 +15,7 @@ public sealed class ReservationOutcomeRepository(CarinaDbContext context) : IRes
     {
         context.Add(outcome);
 
-        await context.SaveChangesAsync(cancellationToken);
+        await ReservationWrites.SaveAsync(context, cancellationToken);
     }
 
     public async Task<IReadOnlyList<ReservationOutcome>> ListAsync(
