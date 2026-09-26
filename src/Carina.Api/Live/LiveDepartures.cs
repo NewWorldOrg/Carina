@@ -24,14 +24,9 @@ public static class LiveDepartures
         };
 
     /// <summary>
-    /// What a viewer is told the supply ended for when the supply itself named no reason.
+    /// What a viewer is told the supply ended for when the supply itself named no reason, or null
+    /// when the departure was not the supply ending.
     /// </summary>
-    /// <remarks>
-    /// The four ways that are not the supply ending name nothing: a viewer that left is not owed an
-    /// explanation of its own leaving, a viewer that has stopped reading cannot be sent a frame at
-    /// all, and a viewer that said something the wire does not take is told so in the close itself
-    /// while the supply behind it goes on running.
-    /// </remarks>
     public static LiveSupplyEnd? Ending(LiveDeparture departure)
         => departure switch
         {

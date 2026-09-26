@@ -16,25 +16,22 @@ public sealed record EncodeJobDraft(
     bool MakeItAgain);
 
 /// <summary>
-/// A job as read at a moment: what the ledger holds, and what the reader works out from the time
-/// beside it — how long the job has gone without headway and whether that is a stall,
-/// and, for a job still waiting, whether what holds it there is the card being used for someone
-/// watching rather than anything wrong with the job.
+/// A job as read at a moment: what the ledger holds, how long the job has gone without headway and
+/// whether that is a stall, and, for a waiting job, whether it is held back by the card being used
+/// for someone watching.
 /// </summary>
 public sealed record EncodeJobView(EncodeJob Job, TimeSpan? QuietFor, bool Stalled, bool WaitingForAViewer);
 
 /// <summary>
-/// Puts one recording in the queue by hand and calls one job off. One job is queued at a time, for
-/// one recording, so there is no way in that takes a list. A recording still being
-/// written, or one that failed, has nothing to encode; a recording with a job already waiting or
-/// running is not queued twice, and one whose artefact for this profile already exists is not made
-/// again, because the second would only collide with the first — unless the caller says
-/// outright that it is to be made again, which is the one way a second job for that profile is
-/// queued: what that job makes takes the place of what is at that name rather than colliding with
-/// it, and until it is made the artefact that is there is left exactly as it is. Calling a job off is a
-/// person's act and is kept apart from a failure: the ledger is written first, then the
-/// programme still running for it is stopped, then what the job owes a removal for is swept.
+/// Queues one recording by hand and calls one job off.
 /// </summary>
+/// <remarks>
+/// A recording still being written, or one that failed, is refused. A recording with a job already
+/// waiting or running is not queued twice, and one whose artefact for this profile already exists
+/// is refused unless the caller asks for it to be made again; such a job replaces the artefact at
+/// that name once it is made. Calling a job off writes the ledger first, then stops the programme
+/// running for it, then sweeps the files the job owes a removal for.
+/// </remarks>
 public sealed class EncodeJobService(
     IEncodeJobRepository jobs,
     IEncodeProfileRepository profiles,

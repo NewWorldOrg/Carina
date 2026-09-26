@@ -25,13 +25,8 @@ public sealed class PlaybackTicketGate(IPlaybackTicketStore tickets, IPlaybackGr
 
     /// <summary>
     /// Admits one request the way <see cref="AdmitOnceAsync"/> does, and hands the ticket back
-    /// unspent when what it was for could not be served at all.
+    /// unspent when what it was for could not be served.
     /// </summary>
-    /// <remarks>
-    /// A live channel is refused for reasons that have nothing to do with the reader — every tuner
-    /// busy is the ordinary answer on a machine recording something — and a reader whose one use
-    /// was burnt on that answer has to go and ask for another ticket to try again.
-    /// </remarks>
     public async Task AdmitOnceUnlessItIsHandedBackAsync(
         HttpContext context,
         PlaybackTarget target,
